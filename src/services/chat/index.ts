@@ -71,7 +71,7 @@ interface GetChatCompletionPayload extends Partial<Omit<ChatStreamPayload, 'mess
   messages: UIChatMessage[];
   /**
    * Pre-resolved agent config from AgentRuntime layer.
-   * Required to ensure config consistency and proper isSubTask filtering.
+   * Required to ensure config consistency and proper isSubAgent filtering.
    */
   resolvedAgentConfig: ResolvedAgentConfig;
   topicId?: string;
@@ -141,7 +141,7 @@ class ChatService {
 
     // =================== 1. use pre-resolved agent config =================== //
     // Config is resolved in AgentRuntime layer (internal_createAgentState)
-    // which handles isSubTask filtering, disableTools, and tools generation
+    // which handles isSubAgent filtering, disableTools, and tools generation
 
     const targetAgentId = getTargetAgentId(agentId);
 

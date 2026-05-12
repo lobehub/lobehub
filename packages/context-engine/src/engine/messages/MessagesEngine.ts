@@ -37,8 +37,6 @@ import {
   ForceFinishSummaryInjector,
   GroupAgentBuilderContextInjector,
   GroupContextInjector,
-  GTDPlanInjector,
-  GTDTodoInjector,
   HistorySummaryProvider,
   KnowledgeInjector,
   LocalSystemToolSnapshotInjector,
@@ -47,11 +45,13 @@ import {
   OnboardingSyntheticStateInjector,
   PageEditorContextInjector,
   PageSelectionsInjector,
+  PlanInjector,
   SelectedSkillInjector,
   SkillContextProvider,
   SystemDateProvider,
   SystemRoleInjector,
   TaskManagerContextInjector,
+  TodoInjector,
   ToolDiscoveryProvider,
   ToolSystemRoleProvider,
   TopicReferenceContextInjector,
@@ -162,7 +162,7 @@ export class MessagesEngine {
       groupAgentBuilderContext,
       agentGroup,
       agentDocuments,
-      gtd,
+      planTodo,
       userMemory,
       initialContext,
       stepContext,
@@ -187,9 +187,9 @@ export class MessagesEngine {
     // Page editor is enabled if either direct pageContentContext or initialContext.pageEditor is provided
     const isPageEditorEnabled = !!pageContentContext || !!initialContext?.pageEditor;
     const hasActiveTopicDocument = !!initialContext?.activeTopicDocument;
-    // GTD is enabled if gtd.enabled is true and either plan or todos is provided
-    const isGTDPlanEnabled = gtd?.enabled && gtd?.plan;
-    const isGTDTodoEnabled = gtd?.enabled && gtd?.todos;
+    // Plan/Todo is enabled if planTodo.enabled is true and either plan or todos is provided
+    const isPlanEnabled = planTodo?.enabled && planTodo?.plan;
+    const isTodoEnabled = planTodo?.enabled && planTodo?.todos;
 
     // System date is redundant when web-browsing or memory tools are enabled,
     // as they already include current date in their system prompts
@@ -276,8 +276,8 @@ export class MessagesEngine {
       }),
       // Discord context (channel/guild info)
       new DiscordContextProvider({ context: discordContext, enabled: !!discordContext }),
-      // GTD Plan
-      new GTDPlanInjector({ enabled: !!isGTDPlanEnabled, plan: gtd?.plan }),
+      // Plan (high-level plan document)
+      new PlanInjector({ enabled: !!isPlanEnabled, plan: planTodo?.plan }),
       // Knowledge (agent files + knowledge bases)
       new KnowledgeInjector({
         fileContents: knowledge?.fileContents,
@@ -354,8 +354,8 @@ export class MessagesEngine {
         contextPrompt: initialContext?.taskManager?.contextPrompt,
         enabled: !!initialContext?.taskManager?.contextPrompt,
       }),
-      // GTD Todo (at end of last user message)
-      new GTDTodoInjector({ enabled: !!isGTDTodoEnabled, todos: gtd?.todos }),
+      // Todo list (at end of last user message)
+      new TodoInjector({ enabled: !!isTodoEnabled, todos: planTodo?.todos }),
       // Topic Reference context (referenced topic summaries to last user message)
       new TopicReferenceContextInjector({
         enabled: !!(topicReferences && topicReferences.length > 0),

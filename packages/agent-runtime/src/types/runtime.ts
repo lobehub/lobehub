@@ -7,7 +7,7 @@ export type InstructionExecutor = (
   state: AgentState,
   /**
    * Runtime context for this step
-   * Contains stepContext with dynamic state like GTD todos
+   * Contains stepContext with dynamic state like lobe-agent todos
    */
   context?: AgentRuntimeContext,
 ) => Promise<{

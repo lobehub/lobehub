@@ -9,7 +9,6 @@
     "@lobechat/builtin-tool-agent-management": "workspace:*",
     "@lobechat/builtin-tool-group-agent-builder": "workspace:*",
     "@lobechat/builtin-tool-group-management": "workspace:*",
-    "@lobechat/builtin-tool-gtd": "workspace:*",
     "@lobechat/builtin-tool-notebook": "workspace:*",
     "@lobechat/builtin-tool-task": "workspace:*",
     "@lobechat/builtin-tool-user-interaction": "workspace:*",

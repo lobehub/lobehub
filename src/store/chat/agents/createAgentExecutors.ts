@@ -4,10 +4,10 @@ import type {
   AgentInstructionCallLlm,
   AgentInstructionCallTool,
   AgentInstructionCompressContext,
-  AgentInstructionExecClientTask,
-  AgentInstructionExecClientTasks,
-  AgentInstructionExecTask,
-  AgentInstructionExecTasks,
+  AgentInstructionExecClientSubAgent,
+  AgentInstructionExecClientSubAgents,
+  AgentInstructionExecSubAgent,
+  AgentInstructionExecSubAgents,
   AgentRuntimeContext,
   GeneralAgentCallingToolInstructionPayload,
   GeneralAgentCallLLMInstructionPayload,
@@ -15,8 +15,8 @@ import type {
   GeneralAgentCallToolResultPayload,
   GeneralAgentCompressionResultPayload,
   InstructionExecutor,
-  TaskResultPayload,
-  TasksBatchResultPayload,
+  SubAgentResultPayload,
+  SubAgentsBatchResultPayload,
 } from '@lobechat/agent-runtime';
 import { calculateMessageTokens, UsageCounter } from '@lobechat/agent-runtime';
 import { isDesktop } from '@lobechat/const';
@@ -144,7 +144,7 @@ const localizeError = (error: ChatMessageError): ChatMessageError => {
  * @param context.skipCreateFirstMessage - Skip first message creation
  */
 export const createAgentExecutors = (context: {
-  /** Pre-resolved agent config with isSubTask filtering applied */
+  /** Pre-resolved agent config with isSubAgent filtering applied */
   agentConfig: ResolvedAgentConfig;
   get: () => ChatStore;
   messageKey: string;
@@ -1004,10 +1004,17 @@ export const createAgentExecutors = (context: {
 
           const stateType = result.state?.type;
 
-          // GTD async tasks need to be passed to Agent for exec_task/exec_tasks instruction
-          // Includes both server-side (execTask/execTasks) and client-side (execClientTask/execClientTasks)
-          const execTaskStateTypes = ['execTask', 'execTasks', 'execClientTask', 'execClientTasks'];
-          if (execTaskStateTypes.includes(stateType)) {
+          // Sub-agent dispatches need to be forwarded to the Agent runtime as an
+          // exec_sub_agent / exec_sub_agents instruction. Covers both server-side
+          // (execSubAgent / execSubAgents) and client-side (execClientSubAgent /
+          // execClientSubAgents) wire-level state types.
+          const subAgentStateTypes = [
+            'execSubAgent',
+            'execSubAgents',
+            'execClientSubAgent',
+            'execClientSubAgents',
+          ];
+          if (subAgentStateTypes.includes(stateType)) {
             log(
               '[%s][call_tool] Detected %s state, passing to Agent for decision',
               sessionLogId,
@@ -1298,23 +1305,23 @@ export const createAgentExecutors = (context: {
     },
 
     /**
-     * exec_task executor
-     * Executes a single async task
+     * exec_sub_agent executor
+     * Dispatches a single sub-agent
      *
      * Flow:
      * 1. Create a task message (role: 'task') as placeholder
      * 2. Call execSubAgentTask API (backend creates thread)
-     * 3. Poll for task completion
+     * 3. Poll for sub-agent completion
      * 4. Update task message content with result on completion
-     * 5. Return task_result phase with result
+     * 5. Return sub_agent_result phase with result
      */
-    exec_task: async (instruction, state) => {
-      const { parentMessageId, task } = (instruction as AgentInstructionExecTask).payload;
+    exec_sub_agent: async (instruction, state) => {
+      const { parentMessageId, task } = (instruction as AgentInstructionExecSubAgent).payload;
 
       const events: AgentEvent[] = [];
       const sessionLogId = `${state.operationId}:${state.stepCount}`;
 
-      log('[%s][exec_task] Starting execution of task: %s', sessionLogId, task.description);
+      log('[%s][exec_sub_agent] Starting execution of task: %s', sessionLogId, task.description);
 
       // Get context from operation
       const opContext = getOperationContext();
@@ -1325,7 +1332,7 @@ export const createAgentExecutors = (context: {
       const executionAgentId = targetAgentId || agentId;
 
       if (!agentId || !topicId || !executionAgentId) {
-        log('[%s][exec_task] No valid context, cannot execute task', sessionLogId);
+        log('[%s][exec_sub_agent] No valid context, cannot execute task', sessionLogId);
         return {
           events,
           newState: state,
@@ -1338,8 +1345,8 @@ export const createAgentExecutors = (context: {
                 taskMessageId: '',
                 threadId: '',
               },
-            } as TaskResultPayload,
-            phase: 'task_result',
+            } as SubAgentResultPayload,
+            phase: 'sub_agent_result',
             session: {
               messageCount: state.messages.length,
               sessionId: state.operationId,
@@ -1352,7 +1359,7 @@ export const createAgentExecutors = (context: {
 
       if (targetAgentId) {
         log(
-          '[%s][exec_task] callAgent mode - current agent: %s, target agent: %s',
+          '[%s][exec_sub_agent] callAgent mode - current agent: %s, target agent: %s',
           sessionLogId,
           agentId,
           targetAgentId,
@@ -1396,8 +1403,8 @@ export const createAgentExecutors = (context: {
                   taskMessageId: '',
                   threadId: '',
                 },
-              } as TaskResultPayload,
-              phase: 'task_result',
+              } as SubAgentResultPayload,
+              phase: 'sub_agent_result',
               session: {
                 messageCount: state.messages.length,
                 sessionId: state.operationId,
@@ -1416,7 +1423,7 @@ export const createAgentExecutors = (context: {
         // This ensures the task executes with the correct agent's config
         log('[%s] Using server-side execution with agentId: %s', taskLogId, executionAgentId);
         const createResult = await aiAgentService.execSubAgentTask({
-          agentId: executionAgentId, // Use targetAgentId for callAgent, or current agentId for GTD
+          agentId: executionAgentId, // Use targetAgentId for callAgent, or current agentId for sub-agent dispatch
           instruction: task.instruction,
           parentMessageId: taskMessageId,
           title: task.description,
@@ -1445,8 +1452,8 @@ export const createAgentExecutors = (context: {
                   taskMessageId,
                   threadId: '',
                 },
-              } as TaskResultPayload,
-              phase: 'task_result',
+              } as SubAgentResultPayload,
+              phase: 'sub_agent_result',
               session: {
                 messageCount: state.messages.length,
                 sessionId: state.operationId,
@@ -1501,8 +1508,8 @@ export const createAgentExecutors = (context: {
                     taskMessageId,
                     threadId: createResult.threadId,
                   },
-                } as TaskResultPayload,
-                phase: 'task_result',
+                } as SubAgentResultPayload,
+                phase: 'sub_agent_result',
                 session: {
                   messageCount: updatedMessages.length,
                   sessionId: state.operationId,
@@ -1552,8 +1559,8 @@ export const createAgentExecutors = (context: {
                     taskMessageId,
                     threadId: createResult.threadId,
                   },
-                } as TaskResultPayload,
-                phase: 'task_result',
+                } as SubAgentResultPayload,
+                phase: 'sub_agent_result',
                 session: {
                   messageCount: updatedMessages.length,
                   sessionId: state.operationId,
@@ -1589,8 +1596,8 @@ export const createAgentExecutors = (context: {
                     taskMessageId,
                     threadId: createResult.threadId,
                   },
-                } as TaskResultPayload,
-                phase: 'task_result',
+                } as SubAgentResultPayload,
+                phase: 'sub_agent_result',
                 session: {
                   messageCount: updatedMessages.length,
                   sessionId: state.operationId,
@@ -1623,8 +1630,8 @@ export const createAgentExecutors = (context: {
                     taskMessageId,
                     threadId: createResult.threadId,
                   },
-                } as TaskResultPayload,
-                phase: 'task_result',
+                } as SubAgentResultPayload,
+                phase: 'sub_agent_result',
                 session: {
                   messageCount: updatedMessages.length,
                   sessionId: state.operationId,
@@ -1672,8 +1679,8 @@ export const createAgentExecutors = (context: {
                 taskMessageId,
                 threadId: createResult.threadId,
               },
-            } as TaskResultPayload,
-            phase: 'task_result',
+            } as SubAgentResultPayload,
+            phase: 'sub_agent_result',
             session: {
               messageCount: updatedMessages.length,
               sessionId: state.operationId,
@@ -1696,8 +1703,8 @@ export const createAgentExecutors = (context: {
                 taskMessageId: '',
                 threadId: '',
               },
-            } as TaskResultPayload,
-            phase: 'task_result',
+            } as SubAgentResultPayload,
+            phase: 'sub_agent_result',
             session: {
               messageCount: state.messages.length,
               sessionId: state.operationId,
@@ -1710,30 +1717,30 @@ export const createAgentExecutors = (context: {
     },
 
     /**
-     * exec_tasks executor
-     * Executes one or more async tasks in parallel
+     * exec_sub_agents executor
+     * Dispatches one or more sub-agents in parallel
      *
      * Flow:
-     * 1. For each task, create a task message (role: 'task') as placeholder
+     * 1. For each sub-agent, create a task message (role: 'task') as placeholder
      * 2. Call execSubAgentTask API (backend creates thread)
-     * 3. Poll for task completion
+     * 3. Poll for sub-agent completion
      * 4. Update task message content with result on completion
-     * 5. Return tasks_batch_result phase with all results
+     * 5. Return sub_agents_batch_result phase with all results
      */
-    exec_tasks: async (instruction, state) => {
-      const { parentMessageId, tasks } = (instruction as AgentInstructionExecTasks).payload;
+    exec_sub_agents: async (instruction, state) => {
+      const { parentMessageId, tasks } = (instruction as AgentInstructionExecSubAgents).payload;
 
       const events: AgentEvent[] = [];
       const sessionLogId = `${state.operationId}:${state.stepCount}`;
 
-      log('[%s][exec_tasks] Starting execution of %d tasks', sessionLogId, tasks.length);
+      log('[%s][exec_sub_agents] Starting execution of %d tasks', sessionLogId, tasks.length);
 
       // Get context from operation
       const opContext = getOperationContext();
       const { agentId, topicId } = opContext;
 
       if (!agentId || !topicId) {
-        log('[%s][exec_tasks] No valid context, cannot execute tasks', sessionLogId);
+        log('[%s][exec_sub_agents] No valid context, cannot execute tasks', sessionLogId);
         return {
           events,
           newState: state,
@@ -1746,8 +1753,8 @@ export const createAgentExecutors = (context: {
                 taskMessageId: '',
                 threadId: '',
               })),
-            } as TasksBatchResultPayload,
-            phase: 'tasks_batch_result',
+            } as SubAgentsBatchResultPayload,
+            phase: 'sub_agents_batch_result',
             session: {
               messageCount: state.messages.length,
               sessionId: state.operationId,
@@ -1977,13 +1984,13 @@ export const createAgentExecutors = (context: {
         { concurrency: 15 }, // Limit concurrent tasks
       );
 
-      log('[%s][exec_tasks] All tasks completed, results: %O', sessionLogId, results);
+      log('[%s][exec_sub_agents] All tasks completed, results: %O', sessionLogId, results);
 
       // Get latest messages from store
       const updatedMessages = context.get().dbMessagesMap[context.messageKey] || [];
       const newState = { ...state, messages: updatedMessages };
 
-      // Return tasks_batch_result phase
+      // Return sub_agents_batch_result phase
       return {
         events,
         newState,
@@ -1991,8 +1998,8 @@ export const createAgentExecutors = (context: {
           payload: {
             parentMessageId,
             results,
-          } as TasksBatchResultPayload,
-          phase: 'tasks_batch_result',
+          } as SubAgentsBatchResultPayload,
+          phase: 'sub_agents_batch_result',
           session: {
             messageCount: newState.messages.length,
             sessionId: state.operationId,
@@ -2004,9 +2011,9 @@ export const createAgentExecutors = (context: {
     },
 
     /**
-     * exec_client_task executor
-     * Executes a single async task on the client side (desktop only)
-     * Used when task requires local tools like file system or shell commands
+     * exec_client_sub_agent executor
+     * Dispatches a single sub-agent on the client side (desktop only)
+     * Used when the sub-agent requires local tools like file system or shell commands
      *
      * Flow:
      * 1. Create a task message (role: 'task') as placeholder
@@ -2014,16 +2021,16 @@ export const createAgentExecutors = (context: {
      * 3. Execute using executeClientAgent (client-side)
      * 4. Update Thread status via API on completion
      * 5. Update task message content with result
-     * 6. Return task_result phase with result
+     * 6. Return sub_agent_result phase with result
      */
-    exec_client_task: async (instruction, state) => {
-      const { parentMessageId, task } = (instruction as AgentInstructionExecClientTask).payload;
+    exec_client_sub_agent: async (instruction, state) => {
+      const { parentMessageId, task } = (instruction as AgentInstructionExecClientSubAgent).payload;
 
       const events: AgentEvent[] = [];
       const sessionLogId = `${state.operationId}:${state.stepCount}`;
 
       log(
-        '[%s][exec_client_task] Starting client-side execution of task: %s',
+        '[%s][exec_client_sub_agent] Starting client-side execution of task: %s',
         sessionLogId,
         task.description,
       );
@@ -2031,7 +2038,7 @@ export const createAgentExecutors = (context: {
       // Check if we're on desktop - if not, this executor shouldn't have been called
       if (!isDesktop) {
         log(
-          '[%s][exec_client_task] ERROR: Not on desktop, cannot execute client-side task',
+          '[%s][exec_client_sub_agent] ERROR: Not on desktop, cannot execute client-side task',
           sessionLogId,
         );
         return {
@@ -2046,8 +2053,8 @@ export const createAgentExecutors = (context: {
                 taskMessageId: '',
                 threadId: '',
               },
-            } as TaskResultPayload,
-            phase: 'task_result',
+            } as SubAgentResultPayload,
+            phase: 'sub_agent_result',
             session: {
               messageCount: state.messages.length,
               sessionId: state.operationId,
@@ -2063,7 +2070,7 @@ export const createAgentExecutors = (context: {
       const { agentId, topicId } = opContext;
 
       if (!agentId || !topicId) {
-        log('[%s][exec_client_task] No valid context, cannot execute task', sessionLogId);
+        log('[%s][exec_client_sub_agent] No valid context, cannot execute task', sessionLogId);
         return {
           events,
           newState: state,
@@ -2076,8 +2083,8 @@ export const createAgentExecutors = (context: {
                 taskMessageId: '',
                 threadId: '',
               },
-            } as TaskResultPayload,
-            phase: 'task_result',
+            } as SubAgentResultPayload,
+            phase: 'sub_agent_result',
             session: {
               messageCount: state.messages.length,
               sessionId: state.operationId,
@@ -2125,8 +2132,8 @@ export const createAgentExecutors = (context: {
                   taskMessageId: '',
                   threadId: '',
                 },
-              } as TaskResultPayload,
-              phase: 'task_result',
+              } as SubAgentResultPayload,
+              phase: 'sub_agent_result',
               session: {
                 messageCount: state.messages.length,
                 sessionId: state.operationId,
@@ -2138,7 +2145,7 @@ export const createAgentExecutors = (context: {
         }
 
         const taskMessageId = taskMessageResult.id;
-        log('[%s][exec_client_task] Created task message: %s', taskLogId, taskMessageId);
+        log('[%s][exec_client_sub_agent] Created task message: %s', taskLogId, taskMessageId);
 
         // 2. Create Thread via API first (to get threadId for operation context)
         const threadResult = await aiAgentService.createClientTaskThread({
@@ -2150,7 +2157,7 @@ export const createAgentExecutors = (context: {
         });
 
         if (!threadResult.success) {
-          log('[%s][exec_client_task] Failed to create client task thread', taskLogId);
+          log('[%s][exec_client_sub_agent] Failed to create client task thread', taskLogId);
           await context
             .get()
             .optimisticUpdateMessageContent(
@@ -2171,8 +2178,8 @@ export const createAgentExecutors = (context: {
                   taskMessageId,
                   threadId: '',
                 },
-              } as TaskResultPayload,
-              phase: 'task_result',
+              } as SubAgentResultPayload,
+              phase: 'sub_agent_result',
               session: {
                 messageCount: state.messages.length,
                 sessionId: state.operationId,
@@ -2195,7 +2202,7 @@ export const createAgentExecutors = (context: {
 
         // 4. Create a child operation for task execution (now with threadId)
         const { operationId: taskOperationId } = context.get().startOperation({
-          type: 'execClientTask',
+          type: 'execClientSubAgent',
           context: subContext,
           parentOperationId: state.operationId,
           metadata: {
@@ -2206,7 +2213,7 @@ export const createAgentExecutors = (context: {
           },
         });
         log(
-          '[%s][exec_client_task] Created thread: %s, userMessageId: %s, threadMessages: %d',
+          '[%s][exec_client_sub_agent] Created thread: %s, userMessageId: %s, threadMessages: %d',
           taskLogId,
           threadId,
           userMessageId,
@@ -2231,7 +2238,7 @@ export const createAgentExecutors = (context: {
         }
 
         // 7. Execute using executeClientAgent (client-side with local tools access)
-        log('[%s][exec_client_task] Starting client-side AgentRuntime execution', taskLogId);
+        log('[%s][exec_client_sub_agent] Starting client-side AgentRuntime execution', taskLogId);
 
         const runtimeResult = await context.get().executeClientAgent({
           context: subContext,
@@ -2240,10 +2247,10 @@ export const createAgentExecutors = (context: {
           parentMessageType: 'user',
           operationId: taskOperationId,
           parentOperationId: state.operationId,
-          isSubTask: true, // Disable lobe-gtd tools to prevent nested sub-tasks
+          isSubAgent: true, // Disable lobe-agent tool to prevent nested sub-agents
         });
 
-        log('[%s][exec_client_task] Client-side AgentRuntime execution completed', taskLogId);
+        log('[%s][exec_client_sub_agent] Client-side AgentRuntime execution completed', taskLogId);
 
         // 8. Get execution result from sub-task messages
         const subMessageKey = messageMapKey(subContext);
@@ -2252,7 +2259,7 @@ export const createAgentExecutors = (context: {
         const resultContent = lastAssistant?.content || 'Task completed';
 
         log(
-          '[%s][exec_client_task] Got result from sub-task: %d chars',
+          '[%s][exec_client_sub_agent] Got result from sub-task: %d chars',
           taskLogId,
           resultContent.length,
         );
@@ -2264,7 +2271,7 @@ export const createAgentExecutors = (context: {
         const { usage, cost } = runtimeResult || {};
 
         log(
-          '[%s][exec_client_task] Runtime usage: tokens=%d, cost=%s, model=%s',
+          '[%s][exec_client_sub_agent] Runtime usage: tokens=%d, cost=%s, model=%s',
           taskLogId,
           usage?.llm?.tokens?.total,
           cost?.total,
@@ -2318,8 +2325,8 @@ export const createAgentExecutors = (context: {
                 taskMessageId,
                 threadId,
               },
-            } as TaskResultPayload,
-            phase: 'task_result',
+            } as SubAgentResultPayload,
+            phase: 'sub_agent_result',
             session: {
               messageCount: updatedMessages.length,
               sessionId: state.operationId,
@@ -2329,7 +2336,7 @@ export const createAgentExecutors = (context: {
           } as AgentRuntimeContext,
         };
       } catch (error) {
-        log('[%s][exec_client_task] Error executing client task: %O', taskLogId, error);
+        log('[%s][exec_client_sub_agent] Error executing client task: %O', taskLogId, error);
 
         // Update task message with error
         // Note: taskMessageId may not exist if error occurred before message creation
@@ -2347,8 +2354,8 @@ export const createAgentExecutors = (context: {
                 taskMessageId: '',
                 threadId: '',
               },
-            } as TaskResultPayload,
-            phase: 'task_result',
+            } as SubAgentResultPayload,
+            phase: 'sub_agent_result',
             session: {
               messageCount: state.messages.length,
               sessionId: state.operationId,
@@ -2361,26 +2368,27 @@ export const createAgentExecutors = (context: {
     },
 
     /**
-     * exec_client_tasks executor
-     * Executes multiple async tasks on the client side in parallel (desktop only)
-     * Used when tasks require local tools like file system or shell commands
+     * exec_client_sub_agents executor
+     * Dispatches multiple sub-agents on the client side in parallel (desktop only)
+     * Used when sub-agents require local tools like file system or shell commands
      *
      * Flow:
-     * 1. For each task, create a task message (role: 'task') as placeholder
+     * 1. For each sub-agent, create a task message (role: 'task') as placeholder
      * 2. Create Thread via API (for isolation)
      * 3. Execute using executeClientAgent (client-side)
      * 4. Update Thread status via API on completion
      * 5. Update task message content with result
-     * 6. Return tasks_batch_result phase with all results
+     * 6. Return sub_agents_batch_result phase with all results
      */
-    exec_client_tasks: async (instruction, state) => {
-      const { parentMessageId, tasks } = (instruction as AgentInstructionExecClientTasks).payload;
+    exec_client_sub_agents: async (instruction, state) => {
+      const { parentMessageId, tasks } = (instruction as AgentInstructionExecClientSubAgents)
+        .payload;
 
       const events: AgentEvent[] = [];
       const sessionLogId = `${state.operationId}:${state.stepCount}`;
 
       log(
-        '[%s][exec_client_tasks] Starting client-side execution of %d tasks',
+        '[%s][exec_client_sub_agents] Starting client-side execution of %d tasks',
         sessionLogId,
         tasks.length,
       );
@@ -2388,7 +2396,7 @@ export const createAgentExecutors = (context: {
       // Check if we're on desktop - if not, this executor shouldn't have been called
       if (!isDesktop) {
         log(
-          '[%s][exec_client_tasks] ERROR: Not on desktop, cannot execute client-side tasks',
+          '[%s][exec_client_sub_agents] ERROR: Not on desktop, cannot execute client-side tasks',
           sessionLogId,
         );
         return {
@@ -2403,8 +2411,8 @@ export const createAgentExecutors = (context: {
                 taskMessageId: '',
                 threadId: '',
               })),
-            } as TasksBatchResultPayload,
-            phase: 'tasks_batch_result',
+            } as SubAgentsBatchResultPayload,
+            phase: 'sub_agents_batch_result',
             session: {
               messageCount: state.messages.length,
               sessionId: state.operationId,
@@ -2420,7 +2428,7 @@ export const createAgentExecutors = (context: {
       const { agentId, topicId } = opContext;
 
       if (!agentId || !topicId) {
-        log('[%s][exec_client_tasks] No valid context, cannot execute tasks', sessionLogId);
+        log('[%s][exec_client_sub_agents] No valid context, cannot execute tasks', sessionLogId);
         return {
           events,
           newState: state,
@@ -2433,8 +2441,8 @@ export const createAgentExecutors = (context: {
                 taskMessageId: '',
                 threadId: '',
               })),
-            } as TasksBatchResultPayload,
-            phase: 'tasks_batch_result',
+            } as SubAgentsBatchResultPayload,
+            phase: 'sub_agents_batch_result',
             session: {
               messageCount: state.messages.length,
               sessionId: state.operationId,
@@ -2526,7 +2534,7 @@ export const createAgentExecutors = (context: {
 
             // 4. Create a child operation for task execution (now with threadId)
             const { operationId: taskOperationId } = context.get().startOperation({
-              type: 'execClientTask',
+              type: 'execClientSubAgent',
               context: subContext,
               parentOperationId: state.operationId,
               metadata: {
@@ -2565,7 +2573,7 @@ export const createAgentExecutors = (context: {
               parentMessageType: 'user',
               operationId: taskOperationId,
               parentOperationId: state.operationId,
-              isSubTask: true, // Disable lobe-gtd tools to prevent nested sub-tasks
+              isSubAgent: true, // Disable lobe-agent tool to prevent nested sub-agents
             });
 
             log('[%s] Client-side AgentRuntime execution completed', taskLogId);
@@ -2614,7 +2622,7 @@ export const createAgentExecutors = (context: {
         { concurrency: 15 },
       );
 
-      log('[%s][exec_client_tasks] All tasks completed, results: %O', sessionLogId, results);
+      log('[%s][exec_client_sub_agents] All tasks completed, results: %O', sessionLogId, results);
 
       // Get latest messages from store
       const updatedMessages = context.get().dbMessagesMap[context.messageKey] || [];
@@ -2631,8 +2639,8 @@ export const createAgentExecutors = (context: {
             // Use last task message as parent so subsequent messages are created after the tasks
             parentMessageId: lastSuccessfulTaskId || parentMessageId,
             results,
-          } as TasksBatchResultPayload,
-          phase: 'tasks_batch_result',
+          } as SubAgentsBatchResultPayload,
+          phase: 'sub_agents_batch_result',
           session: {
             messageCount: newState.messages.length,
             sessionId: state.operationId,
