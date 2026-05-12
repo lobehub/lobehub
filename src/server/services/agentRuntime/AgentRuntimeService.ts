@@ -29,8 +29,11 @@ import { ToolExecutionService } from '@/server/services/toolExecution';
 import { BuiltinToolsExecutor } from '@/server/services/toolExecution/builtin';
 
 import { isAbortError, throwIfAborted } from './abort';
+import { CompletionLifecycle } from './CompletionLifecycle';
 import { hookDispatcher } from './hooks';
+import { HumanInterventionHandler } from './HumanInterventionHandler';
 import { OperationTraceRecorder } from './OperationTraceRecorder';
+import { buildStepPresentation, formatTokenCount } from './stepPresentation';
 import {
   type AgentExecutionParams,
   type AgentExecutionResult,
@@ -41,7 +44,6 @@ import {
   type StartExecutionParams,
   type StartExecutionResult,
   type StepCompletionReason,
-  type StepPresentationData,
 } from './types';
 
 if (process.env.VERCEL) {
@@ -151,7 +153,9 @@ export interface AgentRuntimeServiceOptions {
  */
 export class AgentRuntimeService {
   private agentFactory?: (config: GeneralAgentConfig) => Agent;
+  private completionLifecycle: CompletionLifecycle;
   private coordinator: AgentRuntimeCoordinator;
+  private humanIntervention: HumanInterventionHandler;
   private streamManager: IStreamEventManager;
   private queueService: QueueService | null;
   private traceRecorder: OperationTraceRecorder;
@@ -184,6 +188,8 @@ export class AgentRuntimeService {
     this.serverDB = db;
     this.userId = userId;
     this.messageModel = new MessageModel(db, this.userId);
+    this.completionLifecycle = new CompletionLifecycle(db, userId, this.messageModel);
+    this.humanIntervention = new HumanInterventionHandler(db, this.messageModel);
 
     // Initialize ToolExecutionService with dependencies
     const builtinToolsExecutor = new BuiltinToolsExecutor(db, userId);
@@ -518,10 +524,10 @@ export class AgentRuntimeService {
 
         const reason = this.determineCompletionReason(agentState);
 
-        await this.emitCompletionSignalEvents(operationId, agentState, reason);
+        await this.completionLifecycle.emitSignalEvents(operationId, agentState, reason);
 
         // Dispatch completion hooks so consumers (e.g., bot local-mode promise) can finalize
-        await this.dispatchCompletionHooks(operationId, agentState, reason);
+        await this.completionLifecycle.dispatchHooks(operationId, agentState, reason);
 
         return {
           nextStepScheduled: false,
@@ -588,7 +594,7 @@ export class AgentRuntimeService {
       let currentState = agentState;
 
       if (humanInput || approvedToolCall || rejectionReason) {
-        const interventionResult = await this.handleHumanIntervention(runtime, currentState, {
+        const interventionResult = await this.humanIntervention.process(currentState, {
           approvedToolCall,
           humanInput,
           rejectAndContinue,
@@ -655,166 +661,25 @@ export class AgentRuntimeService {
       });
 
       // Build enhanced step completion log & presentation data
-      const { usage, cost } = stepResult.newState;
-      const phase = stepResult.nextContext?.phase;
-      const isToolPhase = phase === 'tool_result' || phase === 'tools_batch_result';
+      const { presentation: stepPresentationData, summary: stepSummary } = buildStepPresentation(
+        stepResult,
+        Date.now() - startAt,
+      );
 
-      // --- Extract presentation fields from step result ---
-      let content: string | undefined;
-      let reasoning: string | undefined;
-      let toolsCalling:
-        | Array<{ apiName: string; arguments?: string; identifier: string }>
-        | undefined;
-      let toolsResult:
-        | Array<{ apiName: string; identifier: string; isSuccess?: boolean; output?: string }>
-        | undefined;
-      let stepSummary: string;
-
-      if (phase === 'tool_result') {
-        const toolPayload = stepResult.nextContext?.payload as any;
-        const toolCall = toolPayload?.toolCall;
-        const identifier = toolCall?.identifier || 'unknown';
-        const apiName = toolCall?.apiName || 'unknown';
-        const output = toolPayload?.data;
-        toolsResult = [
-          {
-            apiName,
-            identifier,
-            isSuccess: toolPayload?.isSuccess !== false,
-            output:
-              typeof output === 'string'
-                ? output
-                : output != null
-                  ? JSON.stringify(output)
-                  : undefined,
-          },
-        ];
-        stepSummary = `[tool] ${identifier}/${apiName}`;
-      } else if (phase === 'tools_batch_result') {
-        const nextPayload = stepResult.nextContext?.payload as any;
-        const toolCount = nextPayload?.toolCount || 0;
-        const rawToolResults = nextPayload?.toolResults || [];
-        const mappedResults: Array<{
-          apiName: string;
-          identifier: string;
-          isSuccess?: boolean;
-          output?: string;
-        }> = rawToolResults.map((r: any) => {
-          const tc = r.toolCall;
-          const output = r.data;
-          return {
-            apiName: tc?.apiName || 'unknown',
-            identifier: tc?.identifier || 'unknown',
-            isSuccess: r?.isSuccess !== false,
-            output:
-              typeof output === 'string'
-                ? output
-                : output != null
-                  ? JSON.stringify(output)
-                  : undefined,
-          };
-        });
-        toolsResult = mappedResults;
-        const toolNames = mappedResults.map((r) => `${r.identifier}/${r.apiName}`);
-        stepSummary = `[tools×${toolCount}] ${toolNames.join(', ')}`;
-      } else {
-        // Check for done event first (finish step with no next context)
-        const doneEvent = stepResult.events?.find((e) => e.type === 'done') as
-          | { reason?: string; reasonDetail?: string; type: 'done' }
-          | undefined;
-
-        if (doneEvent) {
-          stepSummary = `[done] reason=${doneEvent.reason ?? 'unknown'}`;
-        } else {
-          // LLM result
-          const llmEvent = stepResult.events?.find((e) => e.type === 'llm_result');
-          content = (llmEvent as any)?.result?.content || undefined;
-          reasoning = (llmEvent as any)?.result?.reasoning || undefined;
-
-          // Use parsed ChatToolPayload from payload (has identifier + apiName)
-          const payloadToolsCalling = (stepResult.nextContext?.payload as any)?.toolsCalling as
-            | Array<{ apiName: string; arguments: string; identifier: string }>
-            | undefined;
-          const hasToolCalls = Array.isArray(payloadToolsCalling) && payloadToolsCalling.length > 0;
-
-          if (hasToolCalls) {
-            toolsCalling = payloadToolsCalling.map((tc) => ({
-              apiName: tc.apiName,
-              arguments: tc.arguments,
-              identifier: tc.identifier,
-            }));
-          }
-
-          const parts: string[] = [];
-          if (reasoning) {
-            const thinkPreview = reasoning.length > 30 ? reasoning.slice(0, 30) + '...' : reasoning;
-            parts.push(`💭 "${thinkPreview}"`);
-          }
-          if (!content && hasToolCalls) {
-            parts.push(
-              `→ call tools: ${toolsCalling!.map((tc) => `${tc.identifier}|${tc.apiName}`).join(', ')}`,
-            );
-          } else if (content) {
-            const preview = content.length > 20 ? content.slice(0, 20) + '...' : content;
-            parts.push(`"${preview}"`);
-          }
-          if (parts.length > 0) {
-            stepSummary = `[llm] ${parts.join(' | ')}`;
-          } else {
-            stepSummary = `[llm] (empty) phase=${stepResult.nextContext?.phase ?? 'none'} events=${stepResult.events?.length ?? 0}`;
-          }
-        }
-      }
-
-      // --- Step-level usage from nextContext.stepUsage ---
-      const stepUsage = stepResult.nextContext?.stepUsage as Record<string, number> | undefined;
-
-      // --- Cumulative usage ---
-      const tokens = usage?.llm?.tokens;
-      const totalInputTokens = tokens?.input ?? 0;
-      const totalOutputTokens = tokens?.output ?? 0;
-      const totalTokensNum = tokens?.total ?? 0;
-      const totalCostNum = cost?.total ?? 0;
-
-      const totalTokensStr =
-        totalTokensNum >= 1_000_000
-          ? `${(totalTokensNum / 1_000_000).toFixed(1)}m`
-          : totalTokensNum >= 1000
-            ? `${(totalTokensNum / 1000).toFixed(1)}k`
-            : String(totalTokensNum);
-      const llmCalls = usage?.llm?.apiCalls ?? 0;
-      const toolCallCount = usage?.tools?.totalCalls ?? 0;
-
+      const { usage } = stepResult.newState;
       log(
         '[%s][%d] completed %s | total: %s tokens / $%s | llm×%d | tools×%d',
         operationId,
         stepIndex,
         stepSummary,
-        totalTokensStr,
-        totalCostNum.toFixed(4),
-        llmCalls,
-        toolCallCount,
+        formatTokenCount(stepPresentationData.totalTokens),
+        stepPresentationData.totalCost.toFixed(4),
+        usage?.llm?.apiCalls ?? 0,
+        usage?.tools?.totalCalls ?? 0,
       );
 
-      // Build presentation data object for callbacks and webhooks
-      const stepPresentationData: StepPresentationData = {
-        content,
-        executionTimeMs: Date.now() - startAt,
-        reasoning,
-        stepCost: stepUsage?.cost ?? undefined,
-        stepInputTokens: stepUsage?.totalInputTokens ?? undefined,
-        stepOutputTokens: stepUsage?.totalOutputTokens ?? undefined,
-        stepTotalTokens: stepUsage?.totalTokens ?? undefined,
-        stepType: isToolPhase ? ('call_tool' as const) : ('call_llm' as const),
-        thinking: !isToolPhase,
-        toolsCalling,
-        toolsResult,
-        totalCost: totalCostNum,
-        totalInputTokens,
-        totalOutputTokens,
-        totalSteps: stepResult.newState.stepCount ?? 0,
-        totalTokens: totalTokensNum,
-      };
+      const toolsCalling = stepPresentationData.toolsCalling;
+      const content = stepPresentationData.content;
 
       let afterStepSignalEvents: Array<{ [key: string]: unknown; type: string }> = [];
 
@@ -957,14 +822,14 @@ export class AgentRuntimeService {
       if (!shouldContinue) {
         const reason = this.determineCompletionReason(stepResult.newState);
 
-        const completionSignalEvents = await this.emitCompletionSignalEvents(
+        const completionSignalEvents = await this.completionLifecycle.emitSignalEvents(
           operationId,
           stepResult.newState,
           reason,
         );
 
         // Dispatch completion hooks
-        await this.dispatchCompletionHooks(operationId, stepResult.newState, reason);
+        await this.completionLifecycle.dispatchHooks(operationId, stepResult.newState, reason);
 
         // Finalize tracing snapshot. The error catch below uses the same
         // recorder so propagated failures still write the canonical S3
@@ -975,7 +840,7 @@ export class AgentRuntimeService {
           error: stepResult.newState.error
             ? {
                 message:
-                  this.extractErrorMessage(stepResult.newState.error) ??
+                  this.completionLifecycle.extractErrorMessage(stepResult.newState.error) ??
                   JSON.stringify(stepResult.newState.error),
                 type: String(
                   stepResult.newState.error.type ??
@@ -1050,10 +915,10 @@ export class AgentRuntimeService {
         log('[%s] Failed to save error state (infra may be down): %O', operationId, saveError);
       }
 
-      await this.emitCompletionSignalEvents(operationId, finalStateWithError, 'error');
+      await this.completionLifecycle.emitSignalEvents(operationId, finalStateWithError, 'error');
 
       // Dispatch onComplete + onError hooks
-      await this.dispatchCompletionHooks(operationId, finalStateWithError, 'error');
+      await this.completionLifecycle.dispatchHooks(operationId, finalStateWithError, 'error');
 
       // Finalize the partial snapshot into the canonical S3 path so the
       // failed op is observable in the same place as a successful run.
@@ -1553,372 +1418,6 @@ export class AgentRuntimeService {
   }
 
   /**
-   * Handle human intervention logic.
-   *
-   * Mirrors the client-side flow in `conversationControl.ts`:
-   * - `approveToolCalling` → write intervention=approved, resume via
-   *   `phase: 'human_approved_tool'` so the runtime short-circuits into
-   *   `call_tool` with `skipCreateToolMessage: true`.
-   * - `rejectToolCalling` → write intervention=rejected and halt
-   *   (`status='interrupted'`, `interruption.reason='human_rejected'`).
-   * - `rejectAndContinueToolCalling` → write intervention=rejected and
-   *   resume via `phase: 'user_input'` so the next LLM call treats the
-   *   rejection content as user feedback.
-   */
-  private async handleHumanIntervention(
-    runtime: AgentRuntime,
-    state: any,
-    intervention: {
-      approvedToolCall?: any;
-      humanInput?: any;
-      rejectAndContinue?: boolean;
-      rejectionReason?: string;
-      toolMessageId?: string;
-    },
-  ) {
-    const { humanInput, approvedToolCall, rejectAndContinue, rejectionReason, toolMessageId } =
-      intervention;
-
-    // ---- A. approve ----
-    if (approvedToolCall && state.status === 'waiting_for_human') {
-      if (!toolMessageId) {
-        log('[handleHumanIntervention] approve requires toolMessageId, got undefined');
-        return { newState: state, nextContext: undefined };
-      }
-
-      await this.messageModel.updateMessagePlugin(toolMessageId, {
-        intervention: { status: 'approved' },
-      });
-
-      const newState = structuredClone(state);
-      newState.lastModified = new Date().toISOString();
-      newState.pendingToolsCalling = (state.pendingToolsCalling ?? []).filter(
-        (t: any) => t.id !== approvedToolCall.id,
-      );
-      // Keep waiting_for_human while other tools remain pending; resume to
-      // running when this was the last one.
-      newState.status = newState.pendingToolsCalling.length > 0 ? 'waiting_for_human' : 'running';
-
-      // Dispatch afterHumanIntervention hook (approved)
-      hookDispatcher
-        .dispatch(
-          state.metadata?.operationId ?? '',
-          'afterHumanIntervention',
-          {
-            action: 'approve',
-            operationId: state.metadata?.operationId ?? '',
-            toolCallId: approvedToolCall.id,
-            userId: state.metadata?.userId,
-          },
-          state.metadata?._hooks,
-        )
-        .catch(() => {});
-
-      const nextContext: AgentRuntimeContext = {
-        payload: {
-          approvedToolCall,
-          parentMessageId: toolMessageId,
-          skipCreateToolMessage: true,
-        },
-        phase: 'human_approved_tool',
-      };
-
-      return { newState, nextContext };
-    }
-
-    // ---- B / C. reject ----
-    if (rejectionReason && state.status === 'waiting_for_human') {
-      if (!toolMessageId) {
-        log('[handleHumanIntervention] reject requires toolMessageId, got undefined');
-        return { newState: state, nextContext: undefined };
-      }
-
-      const rejectionContent = rejectionReason
-        ? `User reject this tool calling with reason: ${rejectionReason}`
-        : 'User reject this tool calling without reason';
-
-      await this.messageModel.updateToolMessage(toolMessageId, { content: rejectionContent });
-      await this.messageModel.updateMessagePlugin(toolMessageId, {
-        intervention: { rejectedReason: rejectionReason, status: 'rejected' },
-      });
-
-      // Find the tool_call_id for this tool message so we can drop it from
-      // pendingToolsCalling. pendingToolsCalling holds ChatToolPayload[] whose
-      // id === tool_call_id; the mapping lives in messagePlugins (plugin id
-      // === message id, toolCallId is a separate column).
-      let rejectedToolCallId: string | undefined;
-      try {
-        const plugin = await this.serverDB.query.messagePlugins.findFirst({
-          where: (mp: any, { eq }: any) => eq(mp.id, toolMessageId),
-        });
-        rejectedToolCallId = (plugin as any)?.toolCallId ?? undefined;
-      } catch (error) {
-        log('[handleHumanIntervention] failed to look up tool plugin: %O', error);
-      }
-
-      const newState = structuredClone(state);
-      newState.lastModified = new Date().toISOString();
-      newState.pendingToolsCalling = rejectedToolCallId
-        ? (state.pendingToolsCalling ?? []).filter((t: any) => t.id !== rejectedToolCallId)
-        : (state.pendingToolsCalling ?? []);
-
-      if (rejectAndContinue) {
-        // C: persist the rejection, then either (a) wait for the remaining
-        // pending tools to be resolved or (b) resume LLM once this is the
-        // last one. Returning a `phase: 'user_input'` nextContext while
-        // pendingToolsCalling is non-empty would cause executeStep to run
-        // runtime.step immediately, resuming the LLM with an unresolved
-        // batch — see LOBE-7151 review P1.
-
-        // Dispatch afterHumanIntervention hook (rejectAndContinue)
-        hookDispatcher
-          .dispatch(
-            state.metadata?.operationId ?? '',
-            'afterHumanIntervention',
-            {
-              action: 'rejectAndContinue',
-              operationId: state.metadata?.operationId ?? '',
-              rejectionReason,
-              toolCallId: rejectedToolCallId,
-              userId: state.metadata?.userId,
-            },
-            state.metadata?._hooks,
-          )
-          .catch(() => {});
-
-        if (newState.pendingToolsCalling.length > 0) {
-          newState.status = 'waiting_for_human';
-          return { newState, nextContext: undefined };
-        }
-        newState.status = 'running';
-        const nextContext: AgentRuntimeContext = { phase: 'user_input' };
-        return { newState, nextContext };
-      }
-
-      // B: halt. Use interrupted + reason='human_rejected' to reuse the
-      // existing terminal-state plumbing (early-exit, completion hooks, etc).
-
-      // Dispatch onStopByHumanIntervention hook
-      hookDispatcher
-        .dispatch(
-          state.metadata?.operationId ?? '',
-          'onStopByHumanIntervention',
-          {
-            operationId: state.metadata?.operationId ?? '',
-            rejectionReason,
-            toolCallId: rejectedToolCallId,
-            userId: state.metadata?.userId,
-          },
-          state.metadata?._hooks,
-        )
-        .catch(() => {});
-
-      newState.status = 'interrupted';
-      newState.interruption = {
-        canResume: false,
-        interruptedAt: new Date().toISOString(),
-        reason: 'human_rejected',
-      };
-      return { newState, nextContext: undefined };
-    }
-
-    // ---- human_prompt / human_select (submitToolInteraction) — out of scope
-    //      for this change; wire up in a follow-up issue.
-    if (humanInput) {
-      return { newState: state, nextContext: undefined };
-    }
-
-    return { newState: state, nextContext: undefined };
-  }
-
-  private buildCompletionLifecycleEvent(operationId: string, state: any, reason: string) {
-    const metadata = state?.metadata || {};
-    const lastAssistantContent = state?.messages
-      ?.slice()
-      .reverse()
-      .find(
-        (m: { content?: string; role: string }) => m.role === 'assistant' && m.content,
-      )?.content;
-    const duration = state?.createdAt
-      ? Date.now() - new Date(state.createdAt).getTime()
-      : undefined;
-
-    return {
-      event: {
-        agentId: metadata?.agentId || '',
-        cost: state?.cost?.total,
-        duration,
-        errorDetail: state?.error,
-        errorMessage: this.extractErrorMessage?.(state?.error) || String(state?.error || ''),
-        errorType: this.extractErrorType?.(state?.error),
-        finalState: state,
-        lastAssistantContent,
-        llmCalls: state?.usage?.llm?.apiCalls,
-        operationId,
-        reason,
-        status: state?.status || reason,
-        steps: state?.stepCount || 0,
-        toolCalls: state?.usage?.tools?.totalCalls,
-        topicId: metadata?.topicId,
-        totalTokens: state?.usage?.llm?.tokens?.total,
-        userId: metadata?.userId || this.userId,
-      },
-      metadata,
-    };
-  }
-
-  /**
-   * Emits completion AgentSignal source events and returns compact snapshot events.
-   * Fire-and-forget: errors are logged but never thrown.
-   */
-  private async emitCompletionSignalEvents(
-    operationId: string,
-    state: any,
-    reason: string,
-  ): Promise<Array<{ [key: string]: unknown; type: string }>> {
-    try {
-      const { metadata } = this.buildCompletionLifecycleEvent(operationId, state, reason);
-      const completionSignalEmission =
-        reason === 'error'
-          ? await emitAgentSignalSourceEvent(
-              {
-                payload: {
-                  agentId: metadata?.agentId,
-                  errorMessage: this.extractErrorMessage?.(state?.error),
-                  operationId,
-                  reason,
-                  serializedContext: undefined,
-                  topicId: metadata?.topicId,
-                  turnCount: state?.stepCount || 0,
-                },
-                sourceId: `${operationId}:complete:${reason}`,
-                sourceType: 'agent.execution.failed',
-              },
-              {
-                agentId: metadata?.agentId,
-                db: this.serverDB,
-                userId: metadata?.userId || this.userId,
-              },
-              { ignoreError: true },
-            )
-          : await emitAgentSignalSourceEvent(
-              {
-                payload: {
-                  agentId: metadata?.agentId,
-                  operationId,
-                  serializedContext: undefined,
-                  steps: state?.stepCount || 0,
-                  topicId: metadata?.topicId,
-                  turnCount: state?.stepCount || 0,
-                },
-                sourceId: `${operationId}:complete:${reason}`,
-                sourceType: 'agent.execution.completed',
-              },
-              {
-                agentId: metadata?.agentId,
-                db: this.serverDB,
-                userId: metadata?.userId || this.userId,
-              },
-              { ignoreError: true },
-            );
-
-      return toAgentSignalSnapshotEvents(completionSignalEmission);
-    } catch (error) {
-      log('[%s] Completion signal emission error (non-fatal): %O', operationId, error);
-      return [];
-    }
-  }
-
-  /**
-   * Dispatch onComplete (and onError) hooks via HookDispatcher.
-   * Fire-and-forget: errors are logged but never thrown.
-   */
-  private async dispatchCompletionHooks(operationId: string, state: any, reason: string) {
-    try {
-      const { event, metadata } = this.buildCompletionLifecycleEvent(operationId, state, reason);
-
-      await hookDispatcher.dispatch(operationId, 'onComplete', event, metadata._hooks);
-
-      if (reason === 'error') {
-        await hookDispatcher.dispatch(operationId, 'onError', event, metadata._hooks);
-
-        const assistantMessageId = metadata?.assistantMessageId;
-        if (assistantMessageId && state?.error) {
-          const errorMessage = this.extractErrorMessage(state.error) || String(state.error);
-          try {
-            await this.messageModel.update(assistantMessageId, {
-              error: {
-                body: { message: errorMessage },
-                message: errorMessage,
-                type: 'AgentRuntimeError',
-              },
-            });
-          } catch (updateError) {
-            log(
-              '[%s] Failed to update assistant message with error (non-fatal): %O',
-              operationId,
-              updateError,
-            );
-          }
-        }
-      }
-    } catch (error) {
-      log('[%s] Hook dispatch error (non-fatal): %O', operationId, error);
-    } finally {
-      hookDispatcher.unregister(operationId);
-    }
-  }
-
-  /**
-   * Extract a human-readable error message from the agent state error object.
-   * Handles both raw ChatCompletionErrorPayload (from runtime.step catch) and
-   * formatted ChatMessageError (from executeStep catch).
-   */
-  private extractErrorMessage(error: any): string | undefined {
-    if (!error) return undefined;
-
-    // Path B: formatted ChatMessageError — { body, message, type }
-    // Try to extract meaningful info from body first
-    if (error.body) {
-      const body = error.body;
-      // OpenAI-style: body.error.message
-      if (body.error?.message) return body.error.message;
-      // Direct message on body
-      if (body.message) return body.message;
-    }
-
-    // Path A: raw ChatCompletionErrorPayload — { errorType, error: {...}, provider }
-    if (error.error) {
-      const inner = error.error;
-      if (inner.error?.message) return inner.error.message;
-      if (inner.message) return inner.message;
-    }
-
-    // Fallback to message or type
-    if (error.message && error.message !== 'error') return error.message;
-    if (error.type || error.errorType) return String(error.type || error.errorType);
-
-    return undefined;
-  }
-
-  /**
-   * Extract a stable error code (e.g. `NoAvailableProvider`,
-   * `InvalidProviderAPIKey`) from the agent state error object. Used by
-   * downstream consumers (bot reply rendering, observability) to dispatch on
-   * the error kind without pattern-matching free-form messages.
-   */
-  private extractErrorType(error: any): string | undefined {
-    if (!error) return undefined;
-
-    // ChatCompletionErrorPayload / ChatMessageError both expose the code as
-    // `errorType` or `type` at the top level.
-    const errorType = error.errorType || error.type;
-    if (errorType) return String(errorType);
-
-    return undefined;
-  }
-
-  /**
    * Decide whether to continue execution
    */
   private shouldContinueExecution(state: any, context?: any): boolean {
@@ -2100,8 +1599,8 @@ export class AgentRuntimeService {
       // If stopped due to executeSync's maxSteps limit, need to manually dispatch onComplete hooks
       // Note: If stopped due to state.maxSteps being reached, onComplete has already been called in executeStep
       if (state.status !== 'done' && state.status !== 'error') {
-        await this.emitCompletionSignalEvents(operationId, state, 'max_steps');
-        await this.dispatchCompletionHooks(operationId, state, 'max_steps');
+        await this.completionLifecycle.emitSignalEvents(operationId, state, 'max_steps');
+        await this.completionLifecycle.dispatchHooks(operationId, state, 'max_steps');
       }
     }
 
