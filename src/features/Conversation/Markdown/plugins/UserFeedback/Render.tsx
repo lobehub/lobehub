@@ -8,12 +8,9 @@ import { type ParsedUserFeedbackComment, parseUserFeedback } from './parseUserFe
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
-    padding-block: 8px;
-    padding-inline: 12px;
+    padding-block: 2px;
+    padding-inline-start: 12px;
     border-inline-start: 2px solid ${cssVar.colorBorderSecondary};
-    border-radius: 4px;
-
-    background: ${cssVar.colorFillQuaternary};
   `,
   comment: css`
     font-size: 13px;
