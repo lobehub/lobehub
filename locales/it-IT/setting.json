@@ -492,6 +492,8 @@
   "plugin.settings.tooltip": "Configurazione Competenza",
   "plugin.store": "Skill Store",
   "publishToCommunity": "Pubblica nella Community",
+  "serviceModel.modelAssignments.title": "Assegnazioni modello",
+  "serviceModel.optionalFeatures.title": "Funzionalità opzionali",
   "settingAgent.avatar.sizeExceeded": "La dimensione dell'immagine supera il limite di 1MB, scegli un'immagine più piccola",
   "settingAgent.avatar.title": "Avatar",
   "settingAgent.backgroundColor.title": "Colore di Sfondo",

@@ -492,6 +492,8 @@
   "plugin.settings.tooltip": "기능 설정",
   "plugin.store": "기능 스토어",
   "publishToCommunity": "커뮤니티에 게시",
+  "serviceModel.modelAssignments.title": "모델 할당",
+  "serviceModel.optionalFeatures.title": "선택적 기능",
   "settingAgent.avatar.sizeExceeded": "이미지 크기가 1MB를 초과했습니다. 더 작은 이미지를 선택해 주세요.",
   "settingAgent.avatar.title": "도우미 아바타",
   "settingAgent.backgroundColor.title": "아바타 배경색",

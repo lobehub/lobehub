@@ -492,6 +492,8 @@
   "plugin.settings.tooltip": "Konfiguracja umiejętności",
   "plugin.store": "Sklep Umiejętności",
   "publishToCommunity": "Opublikuj w społeczności",
+  "serviceModel.modelAssignments.title": "Przypisania modeli",
+  "serviceModel.optionalFeatures.title": "Funkcje opcjonalne",
   "settingAgent.avatar.sizeExceeded": "Rozmiar obrazu przekracza limit 1 MB, wybierz mniejszy obraz",
   "settingAgent.avatar.title": "Awatar",
   "settingAgent.backgroundColor.title": "Kolor tła",

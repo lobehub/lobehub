@@ -265,6 +265,7 @@
   "builtins.lobe-task.apiName.listTasks": "Aufgaben auflisten",
   "builtins.lobe-task.apiName.runTask": "Aufgabe ausführen",
   "builtins.lobe-task.apiName.runTasks": "Aufgaben ausführen",
+  "builtins.lobe-task.apiName.setTaskSchedule": "Zeitplan festlegen",
   "builtins.lobe-task.apiName.updateTaskComment": "Kommentar aktualisieren",
   "builtins.lobe-task.apiName.updateTaskStatus": "Status aktualisieren",
   "builtins.lobe-task.apiName.viewTask": "Aufgabe anzeigen",

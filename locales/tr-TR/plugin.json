@@ -265,6 +265,7 @@
   "builtins.lobe-task.apiName.listTasks": "Görevleri listele",
   "builtins.lobe-task.apiName.runTask": "Görevi çalıştır",
   "builtins.lobe-task.apiName.runTasks": "Görevleri çalıştır",
+  "builtins.lobe-task.apiName.setTaskSchedule": "Zamanlama ayarla",
   "builtins.lobe-task.apiName.updateTaskComment": "Yorumu güncelle",
   "builtins.lobe-task.apiName.updateTaskStatus": "Durumu güncelle",
   "builtins.lobe-task.apiName.viewTask": "Görevi görüntüle",

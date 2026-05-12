@@ -492,6 +492,8 @@
   "plugin.settings.tooltip": "Yetenek Yapılandırması",
   "plugin.store": "Yetenek Mağazası",
   "publishToCommunity": "Topluluğa Yayınla",
+  "serviceModel.modelAssignments.title": "Model Atamaları",
+  "serviceModel.optionalFeatures.title": "İsteğe Bağlı Özellikler",
   "settingAgent.avatar.sizeExceeded": "Görsel boyutu 1MB sınırını aşıyor, lütfen daha küçük bir görsel seçin",
   "settingAgent.avatar.title": "Avatar",
   "settingAgent.backgroundColor.title": "Arka Plan Rengi",
