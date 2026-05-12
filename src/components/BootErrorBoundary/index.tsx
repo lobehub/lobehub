@@ -63,7 +63,7 @@ class BootErrorBoundary extends Component<BootErrorBoundaryProps, BootErrorBound
       window.sessionStorage.removeItem(RELOAD_SESSION_KEY);
     } catch (error) {
       // Access to sessionStorage can fail in restricted environments; ignore.
-      if (process.env.NODE_ENV === 'development') {
+      if (__DEV__) {
         console.warn('BootErrorBoundary failed to reset reload attempts', error);
       }
     }
@@ -90,7 +90,7 @@ class BootErrorBoundary extends Component<BootErrorBoundaryProps, BootErrorBound
       window.sessionStorage.setItem(RELOAD_SESSION_KEY, String(attempts + 1));
     } catch (error) {
       // If sessionStorage is unavailable, we still attempt a reload once.
-      if (process.env.NODE_ENV === 'development') {
+      if (__DEV__) {
         console.warn('BootErrorBoundary failed to persist reload attempts', error);
       }
     }

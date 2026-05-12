@@ -36,10 +36,7 @@ import {
   lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
-import {
-  type LobeToolMetaWithAvailability,
-  USER_HIDDEN_BUILTIN_TOOL_IDS,
-} from '@/store/tool/slices/builtin/selectors';
+import { type LobeToolMetaWithAvailability } from '@/store/tool/slices/builtin/selectors';
 
 import PluginTag from './PluginTag';
 import PopoverContent from './PopoverContent';
@@ -975,10 +972,7 @@ const AgentTool = memo<AgentToolProps>(
       if (showWebBrowsing && isSearchEnabled && !tools.includes(WEB_BROWSING_IDENTIFIER)) {
         tools.unshift(WEB_BROWSING_IDENTIFIER);
       }
-      return tools.filter(
-        (toolId) =>
-          !USER_HIDDEN_BUILTIN_TOOL_IDS.has(toolId) && !USER_HIDDEN_BUILTIN_SKILLS.has(toolId),
-      );
+      return tools.filter((toolId) => !USER_HIDDEN_BUILTIN_SKILLS.has(toolId));
     }, [plugins, isSearchEnabled, showWebBrowsing]);
 
     return (

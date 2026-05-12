@@ -127,6 +127,28 @@ describe('SettingsAction', () => {
         expect.any(AbortSignal),
       );
     });
+
+    it('should persist default agent model and provider together', async () => {
+      const { result } = renderHook(() => useUserStore());
+
+      await act(async () => {
+        await result.current.updateDefaultAgent({
+          config: { model: 'claude-opus-4-6' },
+        });
+      });
+
+      expect(userService.updateUserSettings).toHaveBeenLastCalledWith(
+        {
+          defaultAgent: {
+            config: {
+              model: 'claude-opus-4-6',
+              provider: DEFAULT_SETTINGS.defaultAgent.config.provider,
+            },
+          },
+        },
+        expect.any(AbortSignal),
+      );
+    });
   });
 
   describe('updateSystemAgent', () => {

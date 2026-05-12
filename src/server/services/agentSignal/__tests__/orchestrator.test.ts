@@ -5,13 +5,9 @@ import { BriefModel } from '@/database/models/brief';
 
 import type { AgentSignalEmitOptions } from '../emitter';
 import { withServerAgentSignalPolicyDefaults } from '../orchestrator';
-import { createBriefMaintenanceService } from '../services/maintenance/brief';
-import type { NightlyReviewContext } from '../services/maintenance/nightlyCollector';
-import {
-  MaintenanceActionStatus,
-  MaintenanceReviewScope,
-  ReviewRunStatus,
-} from '../services/maintenance/types';
+import { createBriefSelfReviewService } from '../services/selfIteration/review/brief';
+import type { NightlyReviewContext } from '../services/selfIteration/review/collect';
+import { ActionStatus, ReviewRunStatus, Scope } from '../services/selfIteration/types';
 
 const createNightlyReviewContext = (): NightlyReviewContext => ({
   agentId: 'agent-1',
@@ -26,7 +22,7 @@ const createNightlyReviewContext = (): NightlyReviewContext => ({
     notSatisfied: [],
     satisfied: [],
   },
-  maintenanceSignals: [],
+  selfReviewSignals: [],
   managedSkills: [],
   proposalActivity: {
     active: [],
@@ -46,6 +42,7 @@ const createNightlyReviewContext = (): NightlyReviewContext => ({
   relevantMemories: [],
   reviewWindowEnd: '2026-05-04T14:30:00.000Z',
   reviewWindowStart: '2026-05-03T16:00:00.000Z',
+  selfFeedbackCandidates: [],
   toolActivity: [],
   topics: [],
   userId: 'user-1',
@@ -57,7 +54,7 @@ const createNightlyReviewOptions = (): NonNullable<
   acquireReviewGuard: vi.fn(async () => true),
   canRunReview: vi.fn(async () => true),
   collectContext: vi.fn(async () => createNightlyReviewContext()),
-  runMaintenanceReviewAgent: vi.fn(async () => ({
+  runSelfReviewAgent: vi.fn(async () => ({
     execution: {
       actions: [],
       status: ReviewRunStatus.Completed,
@@ -65,7 +62,7 @@ const createNightlyReviewOptions = (): NonNullable<
     projectionPlan: {
       actions: [],
       plannerVersion: 'test',
-      reviewScope: MaintenanceReviewScope.Nightly,
+      reviewScope: Scope.Nightly,
       summary: 'Quiet night.',
     },
   })),
@@ -100,7 +97,7 @@ describe('Agent Signal orchestrator policy defaults', () => {
       id: 'brief-1',
       metadata: {},
       priority: 'info',
-      summary: '1 maintenance update applied.',
+      summary: '1 self-iteration update applied.',
       title: 'Agent self-review updated resources',
       trigger: 'agent-signal:nightly-review',
       type: 'insight',
@@ -112,7 +109,7 @@ describe('Agent Signal orchestrator policy defaults', () => {
       },
       { db: {} as never, userId: 'user-1' },
     );
-    const brief = createBriefMaintenanceService().projectNightlyReviewBrief({
+    const brief = createBriefSelfReviewService().projectNightlyReviewBrief({
       agentId: 'agent-1',
       localDate: '2026-05-04',
       result: {
@@ -120,7 +117,7 @@ describe('Agent Signal orchestrator policy defaults', () => {
           {
             idempotencyKey: 'source:write_memory:memory:concise',
             receiptId: 'receipt-1',
-            status: MaintenanceActionStatus.Applied,
+            status: ActionStatus.Applied,
             summary: 'Saved concise PR summary preference.',
           },
         ],

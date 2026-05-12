@@ -70,7 +70,6 @@ const getKlavisMetasWithAvailability = (s: ToolStoreState): LobeToolMetaWithAvai
 
 // Set form for O(1) lookup inside the filter loop.
 const RUNTIME_MANAGED_TOOL_IDS = new Set(runtimeManagedToolIds);
-const USER_HIDDEN_BUILTIN_TOOL_IDS = new Set(['lobe-task']);
 
 /**
  * Shared list builder for the chat-input Tools popover.
@@ -103,8 +102,6 @@ const buildVisibleMetaList = (
       // (their enabled state is forced by AgentToolsEngine rules; user toggles would
       // be a no-op and create UI/state mismatch).
       if (includeHidden && RUNTIME_MANAGED_TOOL_IDS.has(item.identifier)) return false;
-      // Task tools are enabled by scenario/page context and should not be user-toggleable.
-      if (includeHidden && USER_HIDDEN_BUILTIN_TOOL_IDS.has(item.identifier)) return false;
 
       // Filter platform-specific tools (e.g., LocalSystem desktop-only)
       if (!isBuiltinToolAvailableInCurrentEnv(item.identifier)) return false;
@@ -192,7 +189,6 @@ const installedAllMetaList = (s: ToolStoreState): LobeToolMetaWithAvailability[]
   const builtinMetas = s.builtinTools
     .filter((item) => {
       if (EXCLUDED_TOOLS.has(item.identifier)) return false;
-      if (USER_HIDDEN_BUILTIN_TOOL_IDS.has(item.identifier)) return false;
       if (uninstalledBuiltinTools.includes(item.identifier)) return false;
 
       return true;
@@ -233,5 +229,3 @@ export const builtinToolSelectors = {
   metaListIncludingHidden,
   uninstalledBuiltinTools,
 };
-
-export { USER_HIDDEN_BUILTIN_TOOL_IDS };

@@ -17,7 +17,7 @@ import {
   remapIdsToPaths,
   remapPathsToIds,
 } from '../adapter';
-import { extractName } from '../adapter/path';
+import { extractName, toCanonicalTreePath } from '../adapter/path';
 import type {
   ExplorerTreeHandle,
   ExplorerTreeMoveEvent,
@@ -44,9 +44,11 @@ const getComposedPath = (event: ExplorerTreeHostEvent): EventTarget[] => {
   );
 };
 
-const getItemPathFromHostEvent = (event: ExplorerTreeHostEvent): string | null => {
-  for (const target of getComposedPath(event)) {
+export const getItemPathFromEventPath = (path: EventTarget[]): string | null => {
+  for (const target of path) {
     if (!isHTMLElement(target)) continue;
+    const flattenedSegmentPath = target.getAttribute('data-item-flattened-subitem');
+    if (flattenedSegmentPath) return flattenedSegmentPath;
     if (target.dataset.type !== 'item') continue;
     const path = target.dataset.itemPath;
     if (path) return path;
@@ -54,6 +56,9 @@ const getItemPathFromHostEvent = (event: ExplorerTreeHostEvent): string | null =
 
   return null;
 };
+
+const getItemPathFromHostEvent = (event: ExplorerTreeHostEvent): string | null =>
+  getItemPathFromEventPath(getComposedPath(event));
 
 function ExplorerTreeInner<TData>(
   props: ExplorerTreeProps<TData>,
@@ -169,9 +174,8 @@ function ExplorerTreeInner<TData>(
       paths: initial.paths,
       renaming: {
         canRename: (item) => {
-          const node = adapterRef.current.nodeById.get(
-            adapterRef.current.idByPath.get(item.path) ?? '',
-          );
+          const path = toCanonicalTreePath(item.path, item.isFolder);
+          const node = adapterRef.current.nodeById.get(adapterRef.current.idByPath.get(path) ?? '');
           if (!node) return false;
           const fn = propsRef.current.canRename;
           return fn ? fn(node) : !!propsRef.current.onCommitRename;
@@ -180,9 +184,9 @@ function ExplorerTreeInner<TData>(
           const node = renamingNodeRef.current;
           if (node) propsRef.current.onRenameError?.(error, node);
         },
-        onRename: ({ sourcePath, destinationPath }) => {
+        onRename: ({ sourcePath, destinationPath, isFolder }) => {
           const a = adapterRef.current;
-          const id = a.idByPath.get(sourcePath);
+          const id = a.idByPath.get(toCanonicalTreePath(sourcePath, isFolder));
           if (!id) return;
           const node = a.nodeById.get(id);
           if (!node) return;

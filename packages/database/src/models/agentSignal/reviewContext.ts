@@ -136,7 +136,7 @@ export class AgentSignalReviewContextModel {
       .limit(options.limit);
   };
 
-  /** Lists grouped review-window tool activity for nightly maintenance context. */
+  /** Lists grouped review-window tool activity for nightly self-iteration context. */
   listToolActivity = (options: ListAgentSignalActivityWindowOptions) => {
     const effectiveAgentId = sql<string>`COALESCE(${messages.agentId}, ${topics.agentId})`;
 
@@ -158,7 +158,7 @@ export class AgentSignalReviewContextModel {
         `,
         sampleArgs: sql<string[]>`
           COALESCE(
-            jsonb_agg(DISTINCT left(${messagePlugins.arguments}::text, 500))
+            jsonb_agg(DISTINCT left(${messagePlugins.arguments}::text, 2000))
               FILTER (WHERE ${messagePlugins.arguments} IS NOT NULL),
             '[]'::jsonb
           )
@@ -197,7 +197,7 @@ export class AgentSignalReviewContextModel {
       .limit(20);
   };
 
-  /** Lists review-window agent document activity for nightly maintenance context. */
+  /** Lists review-window agent document activity for nightly self-iteration context. */
   listDocumentActivity = (options: ListAgentSignalActivityWindowOptions) => {
     return this.db
       .select({
