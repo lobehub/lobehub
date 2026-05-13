@@ -5,7 +5,7 @@ import {
   RecommendedSkillType,
 } from '@lobechat/const';
 import type { ItemType } from '@lobehub/ui';
-import { Avatar, Icon, SearchBar, stopPropagation } from '@lobehub/ui';
+import { Avatar, Icon, Popover, SearchBar, stopPropagation } from '@lobehub/ui';
 import { McpIcon, SkillsIcon } from '@lobehub/ui/icons';
 import { Switch } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
@@ -303,35 +303,54 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
     (id: string) => {
       const mode: SkillPolicyMode = checkedSet.has(id) ? 'pinned' : 'auto';
       const renderCheck = (value: SkillPolicyMode) =>
-        mode === value ? <Icon icon={Check} size={14} /> : null;
+        mode === value ? (
+          <span className={cx(styles.policyCheck)}>
+            <Icon icon={Check} size={14} />
+          </span>
+        ) : (
+          <span className={cx(styles.policyCheck)} />
+        );
+
+      const renderPolicyItem = (value: SkillPolicyMode, icon: ReactNode) => (
+        <button
+          className={cx(styles.policyItem)}
+          type="button"
+          onClick={async (event) => {
+            event.stopPropagation();
+            setPolicyOpenId(null);
+            await updateSkillPolicy(id, value);
+          }}
+        >
+          <span className={cx(styles.policyItemIcon)}>{icon}</span>
+          <span className={cx(styles.policyText)}>{t(`tools.activation.${value}`)}</span>
+          {renderCheck(value)}
+        </button>
+      );
+
+      const content = (
+        <div
+          className={cx(styles.policyPanel)}
+          onClick={(event) => event.stopPropagation()}
+          onContextMenu={(event) => event.stopPropagation()}
+        >
+          {renderPolicyItem(
+            'pinned',
+            <Icon className={cx(styles.iconPinned)} icon={Pin} size={15} />,
+          )}
+          {renderPolicyItem('auto', <Icon className={cx(styles.iconAuto)} icon={Zap} size={15} />)}
+        </div>
+      );
 
       return (
-        <DropdownMenu
+        <Popover
+          arrow={false}
+          content={content}
+          open={policyOpenId === id}
           placement="rightTop"
-          popupProps={{ style: { minWidth: 132 } }}
+          positionerProps={{ sideOffset: 8 }}
+          styles={{ content: { padding: 0 } }}
           trigger="click"
-          items={[
-            {
-              extra: renderCheck('pinned'),
-              icon: <Icon className={cx(styles.iconPinned)} icon={Pin} size={15} />,
-              key: 'pinned',
-              label: t('tools.activation.pinned'),
-              onClick: async (info) => {
-                info.domEvent.stopPropagation();
-                await updateSkillPolicy(id, 'pinned');
-              },
-            },
-            {
-              extra: renderCheck('auto'),
-              icon: <Icon className={cx(styles.iconAuto)} icon={Zap} size={15} />,
-              key: 'auto',
-              label: t('tools.activation.auto'),
-              onClick: async (info) => {
-                info.domEvent.stopPropagation();
-                await updateSkillPolicy(id, 'auto');
-              },
-            },
-          ]}
+          onOpenChange={(open) => setPolicyOpenId(open ? id : null)}
         >
           <button
             aria-label={t('tools.skillActivateMode.title')}
@@ -340,18 +359,30 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
             onClick={(event) => {
               event.stopPropagation();
             }}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              setPolicyOpenId(id);
+            }}
           >
             <Icon icon={MoreHorizontal} size={15} />
           </button>
-        </DropdownMenu>
+        </Popover>
       );
     },
-    [checkedSet, t, updateSkillPolicy],
+    [checkedSet, policyOpenId, t, updateSkillPolicy],
   );
 
   const renderToolLabel = useCallback(
-    (label: ReactNode, action: ReactNode) => (
-      <span className={cx(styles.toolRow)}>
+    (id: string, label: ReactNode, action: ReactNode) => (
+      <span
+        className={cx(styles.toolRow)}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setPolicyOpenId(id);
+        }}
+      >
         <span className={cx(styles.toolLabel)}>{label}</span>
         {action}
       </span>
@@ -377,7 +408,7 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
         closeOnClick: false,
         icon,
         key: id,
-        label: renderToolLabel(title, renderPolicyMenu(id)),
+        label: renderToolLabel(id, title, renderPolicyMenu(id)),
         popoverContent,
         searchText: searchText || String(title || id),
       }) as SkillMenuItem,
