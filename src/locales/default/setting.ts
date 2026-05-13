@@ -184,6 +184,7 @@ export default {
   'agentTab.opening': 'Opening Settings',
   'agentTab.plugin': 'Skill Settings',
   'agentTab.prompt': 'Agent Profile',
+  'agentTab.selfIteration': 'Self-Iteration',
   'agentTab.tts': 'Voice Service',
   'agentDocuments.createSuccess': 'Documents created from template',
   'agentDocuments.createWithTemplate': 'Create with this template',
@@ -625,10 +626,6 @@ export default {
   'settingChat.inputTemplate.placeholder':
     'Preprocessing template {{text}} will be replaced with real-time input information',
   'settingChat.inputTemplate.title': 'User Input Preprocessing',
-  'settingChat.selfIteration.enabled.desc':
-    'Allow this assistant to review recent signals and improve its own skills when the lab workflow runs',
-  'settingChat.selfIteration.enabled.title': 'Enable Self-Iteration',
-  'settingChat.selfIteration.title': 'Advanced Labs',
   'settingChat.submit': 'Update Chat Preferences',
   'settingChat.title': 'Chat Settings',
   'settingChatAppearance.autoScrollOnStreaming.desc':
@@ -776,6 +773,12 @@ export default {
   'settingOpening.openingQuestions.title': 'Opening Questions',
   'settingOpening.title': 'Opening Settings',
   'settingPlugin.title': 'Skill List',
+  'settingSelfIteration.enabled.desc':
+    'Allow this assistant to review recent signals and improve its own skills when the self-iteration workflow runs.',
+  'settingSelfIteration.enabled.managedDesc':
+    'Always on for Lobe AI while Self-Iteration is available.',
+  'settingSelfIteration.enabled.title': 'Enable Self-Iteration',
+  'settingSelfIteration.title': 'Self-Iteration',
   'settingSystem.oauth.info.desc': 'Logged in',
   'settingSystem.oauth.info.title': 'Account Information',
   'settingSystem.oauth.signin.action': 'Sign In',

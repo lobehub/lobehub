@@ -68,7 +68,11 @@ import { hookDispatcher } from '@/server/services/agentRuntime/hooks';
 import type { AgentHook } from '@/server/services/agentRuntime/hooks/types';
 import type { StepLifecycleCallbacks } from '@/server/services/agentRuntime/types';
 import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
-import { isAgentSignalEnabledForUser } from '@/server/services/agentSignal/featureGate';
+import {
+  isAgentSignalEnabledForUser,
+  isLobeAiAgentSlug,
+  resolveAgentSelfIterationCapability,
+} from '@/server/services/agentSignal/featureGate';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
@@ -1174,24 +1178,33 @@ export class AiAgentService {
       );
 
       const agentSelfIterationEnabled = agentConfig.chatConfig?.selfIteration?.enabled === true;
+      const isLobeAiAgent = isLobeAiAgentSlug(agentSlug);
       const shouldCheckUserSelfIterationGate =
-        agentSelfIterationEnabled && !params.disableSelfFeedbackIntentTool;
-      if (
-        shouldCheckUserSelfIterationGate &&
-        shouldExposeSelfFeedbackIntentTool({
+        !params.disableSelfFeedbackIntentTool && (agentSelfIterationEnabled || isLobeAiAgent);
+      if (shouldCheckUserSelfIterationGate) {
+        const featureUserEnabled = await isAgentSignalEnabledForUser(this.db, this.userId);
+        const effectiveAgentSelfIterationEnabled = resolveAgentSelfIterationCapability({
           agentSelfIterationEnabled,
-          disableSelfFeedbackIntentTool: params.disableSelfFeedbackIntentTool,
-          featureUserEnabled: await isAgentSignalEnabledForUser(this.db, this.userId),
-        })
-      ) {
-        tools = tools ?? [];
-        injectSelfFeedbackIntentTool({
-          enabledToolIds: toolsResult.enabledToolIds,
-          manifestMap: toolManifestMap,
-          sourceMap: toolSourceMap,
-          tools,
+          isAgentSelfIterationFeatureEnabled: featureUserEnabled,
+          isLobeAiAgent,
         });
-        log('execAgent: injected self-feedback intent declaration tool');
+
+        if (
+          shouldExposeSelfFeedbackIntentTool({
+            agentSelfIterationEnabled: effectiveAgentSelfIterationEnabled,
+            disableSelfFeedbackIntentTool: params.disableSelfFeedbackIntentTool,
+            featureUserEnabled,
+          })
+        ) {
+          tools = tools ?? [];
+          injectSelfFeedbackIntentTool({
+            enabledToolIds: toolsResult.enabledToolIds,
+            manifestMap: toolManifestMap,
+            sourceMap: toolSourceMap,
+            tools,
+          });
+          log('execAgent: injected self-feedback intent declaration tool');
+        }
       }
     }
 
