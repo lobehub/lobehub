@@ -5,6 +5,7 @@ import type {
   NightlyReviewTopicDigest,
   ReceiptActivityDigest,
   SelfReviewSignal,
+  SkillDocumentEventDigest,
   ToolActivityDigest,
 } from './collect';
 
@@ -29,6 +30,16 @@ const createFeedbackFeatures = (feedbackActivity: FeedbackActivityDigest) =>
     result: item.result,
     type: 'feedback_satisfaction' as const,
   }));
+
+const isPrimarySkillDocument = (item: SkillDocumentEventDigest) => {
+  // Managed skills can surface both the bundle document and the SKILL.md index document in one
+  // review window. Only primary skill documents should count as separate skills for overlap
+  // detection; otherwise one managed skill looks like a consolidation candidate.
+  if (item.skillFileType === 'skills/index') return false;
+  if (item.title === 'SKILL.md') return false;
+
+  return true;
+};
 
 /**
  * Derives conservative nightly self-review signals from bounded context buckets.
@@ -133,16 +144,18 @@ export const deriveSelfReviewSignals = (
     }
   }
 
-  if (input.documentActivity.skillBucket.length >= 2) {
+  const primarySkillDocuments = input.documentActivity.skillBucket.filter(isPrimarySkillDocument);
+
+  if (primarySkillDocuments.length >= 2) {
     signals.push({
-      evidenceRefs: input.documentActivity.skillBucket
+      evidenceRefs: primarySkillDocuments
         .slice(0, 5)
         .map((item) => ({ id: item.agentDocumentId, type: 'agent_document' })),
       features: [
         {
-          documentCount: input.documentActivity.skillBucket.length,
-          eventCount: input.documentActivity.skillBucket.length,
-          hintIsSkill: input.documentActivity.skillBucket.some((item) => item.hintIsSkill),
+          documentCount: primarySkillDocuments.length,
+          eventCount: primarySkillDocuments.length,
+          hintIsSkill: primarySkillDocuments.some((item) => item.hintIsSkill),
           type: 'document_hint',
         },
       ],
