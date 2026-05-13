@@ -1,8 +1,12 @@
 import { type AgentStreamEvent } from '@lobechat/agent-gateway-client';
-import { type AgentRuntimeContext } from '@lobechat/agent-runtime';
 import { parse } from '@lobechat/conversation-flow';
 import { type TaskCurrentActivity, type TaskStatusResult } from '@lobechat/types';
-import { ThreadStatus, ThreadType, UserInterventionConfigSchema } from '@lobechat/types';
+import {
+  RequestTrigger,
+  ThreadStatus,
+  ThreadType,
+  UserInterventionConfigSchema,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import pMap from 'p-map';
@@ -20,7 +24,6 @@ import { AiAgentService } from '@/server/services/aiAgent';
 import { AiChatService } from '@/server/services/aiChat';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
 import { TaskLifecycleService } from '@/server/services/taskLifecycle';
-import { nanoid } from '@/utils/uuid';
 
 const log = debug('lobe-server:ai-agent-router');
 
@@ -71,23 +74,6 @@ const formatTaskError = (error: unknown): Record<string, unknown> | undefined =>
 
   return message ? { ...taskError, message } : taskError;
 };
-
-// Zod schemas for agent operation
-const CreateAgentOperationSchema = z.object({
-  agentConfig: z.record(z.any()).optional().default({}),
-  agentId: z.string().optional(),
-  autoStart: z.boolean().optional().default(true),
-  messages: z.array(z.any()).optional().default([]),
-  modelRuntimeConfig: z.object({
-    model: z.string(),
-    provider: z.string(),
-  }),
-  threadId: z.string().optional().nullable(),
-  toolManifestMap: z.record(z.string(), z.any()).default({}),
-  tools: z.array(z.any()).optional(),
-  topicId: z.string().optional().nullable(),
-  userId: z.string().optional(),
-});
 
 const GetOperationStatusSchema = z.object({
   historyLimit: z.number().optional().default(10),
@@ -196,6 +182,13 @@ const ExecAgentSchema = z
       .optional(),
     /** The agent slug to run (either agentId or slug is required) */
     slug: z.string().optional(),
+    /**
+     * What initiated this operation, persisted to `agent_operations.trigger`.
+     * Defaults to `'chat'` when omitted — first-party SPA / desktop user
+     * messages are the dominant caller. Pass a more specific value (`'cli'`,
+     * `'openapi'`, `'eval'`, …) to override.
+     */
+    trigger: z.string().optional(),
     /**
      * User intervention configuration for tool approvals.
      * Pass `{ approvalMode: 'headless' }` from headless clients (CLI, cron, bots)
@@ -612,93 +605,6 @@ export const aiAgentRouter = router({
       }
     }),
 
-  createOperation: aiAgentProcedure
-    .input(CreateAgentOperationSchema)
-    .mutation(async ({ input, ctx }) => {
-      const {
-        agentConfig = {},
-        agentId,
-        autoStart = true,
-        messages = [],
-        modelRuntimeConfig,
-        threadId,
-        topicId,
-        tools,
-        toolManifestMap,
-      } = input;
-      log('input: %O', input);
-
-      // Validate required parameters
-      if (!modelRuntimeConfig.model || !modelRuntimeConfig.provider) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: 'modelRuntimeConfig.model and modelRuntimeConfig.provider are required',
-        });
-      }
-
-      // Generate runtime operation ID: agt_{timestamp}_{agentId}_{topicId}_{random}
-      const timestamp = Date.now();
-      const operationId = `agt_${timestamp}_${agentId || 'unknown'}_${topicId || 'none'}_${nanoid(8)}`;
-
-      log(`Creating operation ${operationId} for user ${ctx.userId}`);
-
-      // Create initial context
-      const initialContext: AgentRuntimeContext = {
-        payload: {},
-        phase: 'user_input' as const,
-        session: {
-          messageCount: messages.length,
-          sessionId: operationId,
-          status: 'idle' as const,
-          stepCount: 0,
-        },
-      };
-
-      // Create operation using AgentRuntimeService
-      const result = await ctx.agentRuntimeService.createOperation({
-        agentConfig,
-        appContext: {
-          agentId,
-          threadId,
-          topicId,
-        },
-        autoStart,
-        initialContext,
-        initialMessages: messages,
-        modelRuntimeConfig,
-        operationId,
-        toolSet: {
-          manifestMap: toolManifestMap,
-          tools,
-        },
-        userId: ctx.userId,
-      });
-
-      let firstStepResult;
-      if (result.autoStarted) {
-        firstStepResult = {
-          context: initialContext,
-          messageId: result.messageId,
-          scheduled: true,
-        };
-
-        log(
-          `Operation ${operationId} created and first step scheduled (messageId: ${result.messageId})`,
-        );
-      } else {
-        log(`Operation ${operationId} created without auto-start`);
-      }
-
-      return {
-        autoStart,
-        createdAt: new Date().toISOString(),
-        firstStep: firstStepResult,
-        operationId,
-        status: 'created',
-        success: true,
-      };
-    }),
-
   execAgent: aiAgentProcedure.input(ExecAgentSchema).mutation(async ({ input, ctx }) => {
     const {
       agentId,
@@ -712,6 +618,7 @@ export const aiAgentRouter = router({
       fileIds,
       parentMessageId,
       resumeApproval,
+      trigger,
       userInterventionConfig,
     } = input;
 
@@ -733,6 +640,7 @@ export const aiAgentRouter = router({
         resume: !!parentMessageId,
         resumeApproval,
         slug,
+        trigger: trigger ?? RequestTrigger.Chat,
         userInterventionConfig,
       });
     } catch (error: any) {
@@ -780,6 +688,7 @@ export const aiAgentRouter = router({
         deviceId,
         existingMessageIds = [],
         parentMessageId,
+        trigger,
       } = task;
 
       try {
@@ -794,6 +703,7 @@ export const aiAgentRouter = router({
           // When parentMessageId is provided, this is a regeneration/continue — skip user message creation
           resume: !!parentMessageId,
           slug,
+          trigger: trigger ?? RequestTrigger.Chat,
         });
 
         return {
