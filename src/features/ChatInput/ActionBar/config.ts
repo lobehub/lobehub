@@ -5,6 +5,7 @@ import Memory from './Memory';
 import Mention from './Mention';
 import Model from './Model';
 import Params from './Params';
+import Plus from './Plus';
 import PromptTransform from './PromptTransform';
 import SaveTopic from './SaveTopic';
 import Search from './Search';
@@ -18,6 +19,7 @@ export const actionMap = {
   agentMode: AgentMode,
   clear: Clear,
   fileUpload: Upload,
+  plus: Plus,
   history: History,
   mainToken: MainToken,
   memory: Memory,

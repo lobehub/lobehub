@@ -63,6 +63,7 @@ export function resolveCeSnapshot(
 /** @deprecated Use resolveCeSnapshot instead. */
 export const resolveCeEvent = resolveCeSnapshot;
 
+
 /**
  * Resolve messages for a step, supporting both legacy (full) and incremental (delta) formats.
  */

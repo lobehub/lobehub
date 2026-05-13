@@ -34,19 +34,7 @@ const MainChatInput = memo(() => {
   const supportsImageOutput = useModelSupportImageOutput(model, provider);
   const rightActions = supportsImageOutput ? promptTransformRightActions : emptyRightActions;
 
-  const leftActions: ActionKeys[] = useMemo(
-    () => [
-      'model',
-      'search',
-      'memory',
-      'fileUpload',
-      'tools',
-      'typo',
-      ...(isDevMode ? (['params'] as ActionKeys[]) : []),
-      'mainToken',
-    ],
-    [isDevMode],
-  );
+  const leftActions: ActionKeys[] = useMemo(() => ['model', 'plus', 'mainToken'], []);
 
   return (
     <ChatInput

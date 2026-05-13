@@ -25,6 +25,7 @@ import { useUpdateAgentConfig } from '../hooks/useUpdateAgentConfig';
 import ApprovalMode from './ApprovalMode';
 import CloudRepoSwitcher from './CloudRepoSwitcher';
 import GitStatus from './GitStatus';
+import ModeSelector from './ModeSelector';
 import { useRepoType } from './useRepoType';
 import WorkingDirectory from './WorkingDirectory';
 
@@ -105,10 +106,11 @@ const RuntimeConfig = memo(() => {
   const [dirPopoverOpen, setDirPopoverOpen] = useState(false);
   const [modePopoverOpen, setModePopoverOpen] = useState(false);
 
-  const [isLoading, runtimeMode, isHeterogeneous] = useAgentStore((s) => [
+  const [isLoading, runtimeMode, isHeterogeneous, enableAgentMode] = useAgentStore((s) => [
     agentByIdSelectors.isAgentConfigLoadingById(agentId)(s),
     chatConfigByIdSelectors.getRuntimeModeById(agentId)(s),
     agentId ? agentByIdSelectors.isAgentHeterogeneousById(agentId)(s) : false,
+    agentByIdSelectors.getAgentEnableModeById(agentId)(s),
   ]);
 
   const topicWorkingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
@@ -275,29 +277,34 @@ const RuntimeConfig = memo(() => {
 
   return (
     <Flexbox horizontal align={'center'} className={styles.bar} justify={'space-between'}>
-      {/* Left: Runtime env + working directory */}
+      {/* Left: Chat mode switcher + (agent-only) runtime env + working directory */}
       <Flexbox horizontal align={'center'} gap={4}>
-        <Popover
-          content={modeContent}
-          open={modePopoverOpen}
-          placement="top"
-          styles={{ content: { padding: 4 } }}
-          trigger="click"
-          onOpenChange={setModePopoverOpen}
-        >
-          <div>
-            {modePopoverOpen ? (
-              modeButton
-            ) : (
-              <Tooltip title={t('runtimeEnv.selectMode')}>{modeButton}</Tooltip>
-            )}
-          </div>
-        </Popover>
-        {rightContent()}
+        <ModeSelector />
+        {enableAgentMode && (
+          <>
+            <Popover
+              content={modeContent}
+              open={modePopoverOpen}
+              placement="top"
+              styles={{ content: { padding: 4 } }}
+              trigger="click"
+              onOpenChange={setModePopoverOpen}
+            >
+              <div>
+                {modePopoverOpen ? (
+                  modeButton
+                ) : (
+                  <Tooltip title={t('runtimeEnv.selectMode')}>{modeButton}</Tooltip>
+                )}
+              </div>
+            </Popover>
+            {rightContent()}
+          </>
+        )}
       </Flexbox>
 
-      {/* Right: Permission control */}
-      <ApprovalMode />
+      {/* Right: Permission control (agent mode only) */}
+      {enableAgentMode && <ApprovalMode />}
     </Flexbox>
   );
 });

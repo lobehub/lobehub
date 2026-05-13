@@ -1,7 +1,7 @@
-import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { PanelRightCloseIcon } from 'lucide-react';
-import { memo } from 'react';
+import { lazy, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
@@ -17,6 +17,8 @@ import Files from './Files';
 import ProgressSection from './ProgressSection';
 import ResourcesSection from './ResourcesSection';
 import Review from './Review';
+
+const ParamsSection = lazy(() => import('./ParamsSection'));
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   body: css`
@@ -67,10 +69,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-type Tab = 'review' | 'resources' | 'files';
+type Tab = 'files' | 'params' | 'review' | 'resources';
 
 const AgentWorkingSidebar = memo(() => {
-  const { t } = useTranslation('chat');
+  const { t } = useTranslation(['chat', 'setting']);
   const toggleRightPanel = useGlobalStore((s) => s.toggleRightPanel);
   const setWorkingSidebarTab = useGlobalStore((s) => s.setWorkingSidebarTab);
   const storedTab = useGlobalStore((s) => s.status.workingSidebarTab);
@@ -87,10 +89,8 @@ const AgentWorkingSidebar = memo(() => {
 
   const filesAvailable = isLocalSystemEnabled && !!workingDirectory;
   const reviewAvailable = isLocalSystemEnabled && !!workingDirectory && !!repoType;
-  // Topic metadata is preferred for resuming a coding session, but Review and
-  // Files are project-scoped and should also work before a topic has bound
-  // metadata. Fall back to a still-visible tab when the stored choice is gone.
   const resolveActiveTab = (): Tab => {
+    if (storedTab === 'params') return 'params';
     if (storedTab === 'review' && reviewAvailable) return 'review';
     if (storedTab === 'files' && filesAvailable) return 'files';
     if (storedTab === 'resources') return 'resources';
@@ -138,11 +138,31 @@ const AgentWorkingSidebar = memo(() => {
                   {t('workingPanel.files.title')}
                 </button>
               )}
+              <button
+                className={`${styles.tab} ${activeTab === 'params' ? styles.tabActive : ''}`}
+                type="button"
+                onClick={() => setWorkingSidebarTab('params')}
+              >
+                {t('settingModel.params.panel.tab', { ns: 'setting' })}
+              </button>
             </div>
           ) : (
-            <Flexbox paddingInline={8}>
-              <Text strong>{t('workingPanel.space')}</Text>
-            </Flexbox>
+            <div className={styles.tabs}>
+              <button
+                className={`${styles.tab} ${activeTab === 'resources' ? styles.tabActive : ''}`}
+                type="button"
+                onClick={() => setWorkingSidebarTab('resources')}
+              >
+                {t('workingPanel.space')}
+              </button>
+              <button
+                className={`${styles.tab} ${activeTab === 'params' ? styles.tabActive : ''}`}
+                type="button"
+                onClick={() => setWorkingSidebarTab('params')}
+              >
+                {t('settingModel.params.panel.tab', { ns: 'setting' })}
+              </button>
+            </div>
           )}
           <ActionIcon
             icon={PanelRightCloseIcon}
@@ -151,6 +171,11 @@ const AgentWorkingSidebar = memo(() => {
           />
         </Flexbox>
         <Flexbox className={styles.body} width={'100%'}>
+          {activeTab === 'params' && (
+            <Flexbox className={styles.pane}>
+              <ParamsSection />
+            </Flexbox>
+          )}
           {reviewAvailable && (
             <Flexbox className={activeTab === 'review' ? styles.pane : styles.paneHidden}>
               <Review workingDirectory={workingDirectory} />
