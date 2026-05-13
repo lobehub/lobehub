@@ -6,6 +6,35 @@ import { reconstructMessages } from '../utils/reconstruct';
 export { analyzeAgentSignal, renderAgentSignal } from './agentSignal';
 
 /**
+ * Resolve the context_engine_result event for a step, reconstructing missing
+ * `input`/`output` fields by walking back through previous steps (delta format).
+ * Returns undefined if no CE event exists on this step.
+ */
+export function resolveCeEvent(
+  step: StepSnapshot,
+  allSteps?: StepSnapshot[],
+): Record<string, unknown> | undefined {
+  const localCe = step.events?.find((e) => e.type === 'context_engine_result') as any;
+  if (!localCe) return undefined;
+  if (!allSteps || (localCe.input !== undefined && localCe.output !== undefined)) return localCe;
+
+  let resolvedInput = localCe.input;
+  let resolvedOutput = localCe.output;
+
+  for (let i = step.stepIndex - 1; i >= 0; i--) {
+    const prevStep = allSteps.find((s) => s.stepIndex === i);
+    if (!prevStep) continue;
+    const prevCe = prevStep.events?.find((e) => e.type === 'context_engine_result') as any;
+    if (!prevCe) continue;
+    if (resolvedInput === undefined && prevCe.input !== undefined) resolvedInput = prevCe.input;
+    if (resolvedOutput === undefined && prevCe.output !== undefined) resolvedOutput = prevCe.output;
+    if (resolvedInput !== undefined && resolvedOutput !== undefined) break;
+  }
+
+  return { ...localCe, input: resolvedInput, output: resolvedOutput };
+}
+
+/**
  * Resolve messages for a step, supporting both legacy (full) and incremental (delta) formats.
  */
 function resolveStepMessages(

@@ -19,6 +19,21 @@ export interface AnalyzeVisualMediaParams {
   urls?: string[];
 }
 
+export interface AnalyzeVisualMediaFileSummary {
+  id?: string;
+  name: string;
+  ref: string;
+  type: 'image' | 'video';
+}
+
+export interface AnalyzeVisualMediaState {
+  files?: AnalyzeVisualMediaFileSummary[];
+  model?: string;
+  provider?: string;
+  trigger?: string;
+  usage?: unknown;
+}
+
 // ==================== Sub-Agent Tasks ====================
 
 /**

@@ -51,6 +51,10 @@ export default {
   'builtins.lobe-agent-management.render.installPlugin.plugin': 'Plugin',
   'builtins.lobe-agent-management.render.installPlugin.success': 'Installed successfully',
   'builtins.lobe-agent-management.title': 'Agent Manager',
+  'builtins.lobe-agent.apiName.analyzeVisualMedia': 'Analyze visual media',
+  'builtins.lobe-agent.apiName.analyzeVisualMedia.mediaCount': '{{count}} media',
+  'builtins.lobe-agent.apiName.analyzeVisualMedia.result':
+    'Analyze visual media: <question>{{question}}</question>',
   'builtins.lobe-agent.apiName.callSubAgent': 'Call sub-agent',
   'builtins.lobe-agent.apiName.callSubAgent.completed': 'Sub-agent dispatched: ',
   'builtins.lobe-agent.apiName.callSubAgent.loading': 'Dispatching sub-agent: ',

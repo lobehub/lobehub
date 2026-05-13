@@ -74,7 +74,9 @@ export class OperationTraceRecorder {
       this.initPartialHeader(partial, params.agentState);
 
       if (!partial.steps) partial.steps = [];
-      partial.steps.push(this.buildStepSnapshot(params));
+      const newStep = this.buildStepSnapshot(params);
+      this.deduplicateCeEvent(newStep, partial.steps);
+      partial.steps.push(newStep);
 
       await this.store.savePartial(operationId, partial);
     } catch (e) {
@@ -108,15 +110,10 @@ export class OperationTraceRecorder {
         // existing record instead of pushing a duplicate stepIndex —
         // duplicates corrupt ordering and per-step metrics in trace
         // reconstruction.
-        const existing = partial.steps.find(
-          (s) => s.stepIndex === params.failedStep!.stepIndex,
-        );
+        const existing = partial.steps.find((s) => s.stepIndex === params.failedStep!.stepIndex);
         if (existing) {
           if (params.error) {
-            existing.events = [
-              ...(existing.events ?? []),
-              { error: params.error, type: 'error' },
-            ];
+            existing.events = [...(existing.events ?? []), { error: params.error, type: 'error' }];
           }
         } else {
           const now = Date.now();
@@ -171,6 +168,44 @@ export class OperationTraceRecorder {
       await this.store.removePartial(operationId);
     } catch (e) {
       log('[%s] snapshot finalize failed (reason=%s): %O', operationId, params.completionReason, e);
+    }
+  }
+
+  /**
+   * Strip `context_engine_result` input/output fields that are identical to the
+   * most-recently stored values in previous steps. The viewer reconstructs the
+   * full event by walking back through the step list (same pattern as
+   * messagesBaseline + messagesDelta).
+   */
+  private deduplicateCeEvent(step: StepSnapshot, prevSteps: StepSnapshot[]): void {
+    const ceEvent = (step.events as any[] | undefined)?.find(
+      (e: any) => e.type === 'context_engine_result',
+    );
+    if (!ceEvent) return;
+
+    // Walk backwards to find the last stored input and output.
+    let lastInputJson: string | undefined;
+    let lastOutputJson: string | undefined;
+
+    for (let i = prevSteps.length - 1; i >= 0; i--) {
+      const prevCe = (prevSteps[i].events as any[] | undefined)?.find(
+        (e: any) => e.type === 'context_engine_result',
+      );
+      if (!prevCe) continue;
+      if (lastInputJson === undefined && prevCe.input !== undefined) {
+        lastInputJson = JSON.stringify(prevCe.input);
+      }
+      if (lastOutputJson === undefined && prevCe.output !== undefined) {
+        lastOutputJson = JSON.stringify(prevCe.output);
+      }
+      if (lastInputJson !== undefined && lastOutputJson !== undefined) break;
+    }
+
+    if (lastInputJson !== undefined && JSON.stringify(ceEvent.input) === lastInputJson) {
+      delete ceEvent.input;
+    }
+    if (lastOutputJson !== undefined && JSON.stringify(ceEvent.output) === lastOutputJson) {
+      delete ceEvent.output;
     }
   }
 
