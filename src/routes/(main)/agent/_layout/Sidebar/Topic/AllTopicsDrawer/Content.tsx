@@ -159,7 +159,7 @@ const Content = memo<ContentProps>(({ open, searchKeyword }) => {
       onScroll={handleScroll}
     >
       {activeTopicList?.map((topic) => (
-        <Flexbox gap={1} key={topic.id} padding={'4px 8px'}>
+        <Flexbox gap={1} key={topic.id} paddingInline={4}>
           <TopicItem
             active={activeTopicId === topic.id}
             fav={topic.favorite}
