@@ -352,7 +352,11 @@ export class MessengerRouter {
     const platform = creds.platform;
     const tenantId = creds.tenantId;
 
-    const handle = async (thread: any, message: Message): Promise<void> => {
+    const handle = async (
+      thread: any,
+      message: Message,
+      bridgeMethod: 'handleMention' | 'handleSubscribedMessage',
+    ): Promise<void> => {
       if (message.author.isBot === true) return;
 
       const senderId = message.author.userId;
@@ -456,7 +460,15 @@ export class MessengerRouter {
           return;
         }
 
-        await this.dispatchToAgent(thread, message, client, link, link.activeAgentId, platform);
+        await this.dispatchToAgent(
+          thread,
+          message,
+          client,
+          link,
+          link.activeAgentId,
+          platform,
+          bridgeMethod,
+        );
       } catch (error) {
         log('handle: handler error: %O', error);
         try {
@@ -482,7 +494,11 @@ export class MessengerRouter {
       } catch {
         /* idempotent — first contact creates the subscription, later calls no-op */
       }
-      await handle(thread, message);
+      // First touch on a DM thread — no cached topicId yet, so treat as a
+      // fresh conversation. `handleMention` writes the new topicId into
+      // chat-sdk thread state; subsequent messages hit `onSubscribedMessage`
+      // and continue inside that topic via `handleSubscribedMessage`.
+      await handle(thread, message, 'handleMention');
     });
 
     // Subscribed-thread follow-ups. DMs are 1:1, so every follow-up is for
@@ -501,7 +517,11 @@ export class MessengerRouter {
         );
         return;
       }
-      await handle(thread, message);
+      // Follow-up on a subscribed thread (DM after the first touch, or a
+      // subscribed channel thread). `handleSubscribedMessage` reads the
+      // cached topicId from chat-sdk thread state and continues that topic;
+      // it falls back to `handleMention` internally if no topicId is cached.
+      await handle(thread, message, 'handleSubscribedMessage');
     });
 
     // First-touch `@mention` in a non-DM thread (Slack channel today). For an
@@ -522,7 +542,9 @@ export class MessengerRouter {
         (message as any).id,
         thread.id,
       );
-      await handle(thread, message);
+      // First-touch @mention — start a fresh conversation. Mirrors
+      // BotMessageRouter's `onNewMention` → `handleMention` mapping.
+      await handle(thread, message, 'handleMention');
     });
 
     // Native slash commands — wired only for platforms that opt in by
@@ -995,6 +1017,7 @@ export class MessengerRouter {
     link: MessengerAccountLinkItem,
     agentId: string,
     platform: MessengerPlatform,
+    bridgeMethod: 'handleMention' | 'handleSubscribedMessage',
   ): Promise<void> {
     log(
       'dispatchToAgent: platform=%s, tenant=%s, sender=%s, agent=%s, user=%s',
@@ -1013,7 +1036,18 @@ export class MessengerRouter {
     // `isOwner` is true iff the inbound message's `author.userId` matches
     // the linked `platformUserId`. `buildBotContext` enforces the
     // fail-closed default (never trust when either side is missing).
-    await bridge.handleMention(thread, message, {
+    //
+    // `bridgeMethod` is chosen by the caller per entry point, mirroring
+    // BotMessageRouter:
+    // - `handleMention`           — first-touch DMs and channel @mentions;
+    //                               opens a fresh topic and writes its id
+    //                               to chat-sdk thread state.
+    // - `handleSubscribedMessage` — DM follow-ups (after `thread.subscribe()`
+    //                               in `onDirectMessage`); reads the cached
+    //                               topicId and continues in the same topic.
+    //                               Falls back to `handleMention` internally
+    //                               if no topicId is cached (defensive).
+    const bridgeOpts = {
       agentId,
       botContext: {
         ...buildBotContext({
@@ -1037,7 +1071,9 @@ export class MessengerRouter {
           : `${platform}:singleton`,
       },
       client,
-    });
+    };
+
+    await bridge[bridgeMethod](thread, message, bridgeOpts);
   }
 }
 

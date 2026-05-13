@@ -72,10 +72,14 @@ vi.mock('@chat-adapter/state-ioredis', () => ({
 
 // AgentBridgeService transitively pulls chat-adapter-feishu / others which
 // fail to transform in this test env. We capture every constructed
-// instance + every `handleMention` call on the static so tests can assert
-// the linked-user dispatch path fired without instantiating the real
-// agent runtime.
+// instance + every call on the static so tests can assert the
+// linked-user dispatch path fired without instantiating the real agent
+// runtime. Dispatch is split by entry kind: first-touch DMs and channel
+// @mentions go through `handleMention`, DM follow-ups on a subscribed
+// thread go through `handleSubscribedMessage` so the cached topicId is
+// reused — see the comment in `MessengerRouter.dispatchToAgent`.
 const mockHandleMention = vi.fn();
+const mockHandleSubscribed = vi.fn();
 vi.mock('@/server/services/bot/AgentBridgeService', () => ({
   AgentBridgeService: class {
     static clearActiveThread = vi.fn();
@@ -83,6 +87,7 @@ vi.mock('@/server/services/bot/AgentBridgeService', () => ({
     static isThreadActive = vi.fn();
     static requestStop = vi.fn();
     handleMention = mockHandleMention;
+    handleSubscribedMessage = mockHandleSubscribed;
   },
 }));
 
@@ -171,6 +176,7 @@ beforeEach(() => {
   };
   mockFindLink.mockReset();
   mockHandleMention.mockReset();
+  mockHandleSubscribed.mockReset();
   mockOpenDM.mockReset();
   mockSlackBinder.handleUnlinkedMessage.mockReset();
   mockSlackBinder.replyEphemeral.mockReset();
@@ -402,9 +408,12 @@ describe('MessengerRouter channel @mention', () => {
 
     // Linked → AgentBridgeService.handleMention is invoked with the
     // user-active agent and the channel thread (chat-adapter-slack handles
-    // thread_ts on the underlying chat.postMessage).
+    // thread_ts on the underlying chat.postMessage). `onNewMention` is a
+    // first-touch entry, so dispatch goes through `handleMention` (mirrors
+    // BotMessageRouter).
     expect(mockHandleMention).toHaveBeenCalledTimes(1);
     expect(mockHandleMention.mock.calls[0][2]).toMatchObject({ agentId: 'agt_main' });
+    expect(mockHandleSubscribed).not.toHaveBeenCalled();
     // We deliberately do NOT subscribe channel threads — see comment in
     // `onNewMention`.
     expect(thread.subscribe).not.toHaveBeenCalled();
@@ -431,6 +440,7 @@ describe('MessengerRouter channel @mention', () => {
       chatId: 'C_GENERAL',
     });
     expect(mockHandleMention).not.toHaveBeenCalled();
+    expect(mockHandleSubscribed).not.toHaveBeenCalled();
   });
 
   it('replies ephemerally when a linked user has no active agent in a channel mention', async () => {
@@ -479,7 +489,11 @@ describe('MessengerRouter DM dispatch (regression)', () => {
     await handler(thread, fakeMessage({ text: 'hi' }));
 
     expect(thread.subscribe).toHaveBeenCalledTimes(1);
+    // First-touch DM → handleMention. Subsequent messages will hit
+    // onSubscribedMessage and continue in the cached topic via
+    // handleSubscribedMessage.
     expect(mockHandleMention).toHaveBeenCalledTimes(1);
+    expect(mockHandleSubscribed).not.toHaveBeenCalled();
     expect(mockSlackBinder.handleUnlinkedMessage).not.toHaveBeenCalled();
   });
 
@@ -636,7 +650,11 @@ describe('MessengerRouter onSubscribedMessage gating', () => {
     ) => Promise<void>;
     await handler(fakeDmThread(), fakeMessage({ isMention: false }));
 
-    expect(mockHandleMention).toHaveBeenCalledTimes(1);
+    // Follow-up message on a subscribed DM → handleSubscribedMessage so the
+    // cached topicId is reused. (Falls back to handleMention internally if
+    // no topicId is cached, but that's a separate path.)
+    expect(mockHandleSubscribed).toHaveBeenCalledTimes(1);
+    expect(mockHandleMention).not.toHaveBeenCalled();
   });
 
   it('drops a non-mention follow-up in a subscribed channel thread', async () => {
@@ -657,6 +675,7 @@ describe('MessengerRouter onSubscribedMessage gating', () => {
     await handler(fakeChannelThread(), fakeMessage({ isMention: false, text: 'random chatter' }));
 
     expect(mockHandleMention).not.toHaveBeenCalled();
+    expect(mockHandleSubscribed).not.toHaveBeenCalled();
     expect(mockFindLink).not.toHaveBeenCalled();
   });
 
@@ -679,6 +698,9 @@ describe('MessengerRouter onSubscribedMessage gating', () => {
       fakeMessage({ isMention: true, text: '<@U_BOT> follow up' }),
     );
 
-    expect(mockHandleMention).toHaveBeenCalledTimes(1);
+    // Subscribed-thread @-mention → handleSubscribedMessage continues the
+    // cached topic.
+    expect(mockHandleSubscribed).toHaveBeenCalledTimes(1);
+    expect(mockHandleMention).not.toHaveBeenCalled();
   });
 });
