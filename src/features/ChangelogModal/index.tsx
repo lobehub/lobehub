@@ -34,7 +34,7 @@ const ChangelogModal = memo<{ currentId?: string }>(({ currentId: propCurrentId 
       }
     }, 1000);
     return () => clearTimeout(timer);
-  }, [currentId]);
+  }, [currentId, latestChangelogId, updateSystemStatus, navigate]);
 
   return null;
 });
