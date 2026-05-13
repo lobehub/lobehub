@@ -103,6 +103,7 @@ interface CreateAssistantMessageStream extends FetchSSEOptions {
   historySummary?: string;
   /** Initial context for page editor (captured at operation start) */
   initialContext?: RuntimeInitialContext;
+  metadata?: FetchOptions['metadata'];
   params: GetChatCompletionPayload;
   /** Step context for page editor (updated each step) */
   stepContext?: RuntimeStepContext;
@@ -332,6 +333,7 @@ class ChatService {
     onMessageHandle,
     onErrorHandle,
     onFinish,
+    metadata,
     trace,
     historySummary,
     initialContext,
@@ -344,6 +346,7 @@ class ChatService {
       onErrorHandle,
       onFinish,
       onMessageHandle,
+      metadata,
       signal: abortController?.signal,
       stepContext,
       trace: this.mapTrace(trace, TraceTagMap.Chat),
@@ -351,7 +354,8 @@ class ChatService {
   };
 
   getChatCompletion = async (params: Partial<ChatStreamPayload>, options?: FetchOptions) => {
-    const { agentId, requestTrigger, signal, responseAnimation, topicId } = options ?? {};
+    const { agentId, metadata, signal, responseAnimation, topicId } = options ?? {};
+    const requestTrigger = metadata?.trigger;
 
     const { provider = ModelProvider.OpenAI, ...res } = params;
 

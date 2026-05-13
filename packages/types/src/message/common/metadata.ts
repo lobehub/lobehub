@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import type { RequestTrigger } from '../../agentRuntime';
 import type { PageSelection } from './pageSelection';
 import { PageSelectionSchema } from './pageSelection';
 
@@ -330,6 +331,10 @@ export interface MessageMetadata {
   totalTokens?: number;
   /** @deprecated use `metadata.performance` instead */
   tps?: number;
+  /**
+   * Request source used by runtime routing, billing, and logs.
+   */
+  trigger?: RequestTrigger;
   /** @deprecated use `metadata.performance` instead */
   ttft?: number;
   usage?: ModelUsage;

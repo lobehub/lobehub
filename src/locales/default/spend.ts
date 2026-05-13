@@ -23,6 +23,7 @@ export default {
   'table.columns.trigger.enums.image': 'Image Generation',
   'table.columns.trigger.enums.memory': 'Memory Extraction',
   'table.columns.trigger.enums.notify': 'Notification',
+  'table.columns.trigger.enums.onboarding': 'Onboarding',
   'table.columns.trigger.enums.openapi': 'OpenAPI',
   'table.columns.trigger.enums.semantic_search': 'Knowledge Search',
   'table.columns.trigger.enums.topic': 'Topic Summary',

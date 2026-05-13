@@ -1705,7 +1705,7 @@ describe('ChatService', () => {
       };
 
       await chatService.getChatCompletion(params, {
-        requestTrigger: RequestTrigger.VisualAnalysis,
+        metadata: { trigger: RequestTrigger.VisualAnalysis },
       });
 
       expect(mockFetchSSE).toHaveBeenCalledWith(
@@ -1719,6 +1719,7 @@ describe('ChatService', () => {
 
       const payload = JSON.parse(mockFetchSSE.mock.calls[0][1].body);
       expect(payload).not.toHaveProperty('requestTrigger');
+      expect(payload).not.toHaveProperty('metadata');
     });
 
     it('should make a POST request with chatCompletion apiMode in non-openai provider payload', async () => {
