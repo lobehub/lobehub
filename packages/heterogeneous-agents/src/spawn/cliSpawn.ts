@@ -1,4 +1,4 @@
-import type { ChildProcess, SpawnOptionsWithoutStdio } from 'node:child_process';
+import type { ChildProcess, SpawnOptions } from 'node:child_process';
 import { execFile, spawn } from 'node:child_process';
 import { access, readFile } from 'node:fs/promises';
 import { platform } from 'node:os';
@@ -50,6 +50,12 @@ const execFileString = async (command: string, args: string[]): Promise<string> 
 const pickWindowsExecutable = (candidates: string[]): string | undefined =>
   candidates.find((candidate) => WINDOWS_EXE_EXT_PATTERN.test(candidate));
 
+const pickWindowsNodeExecutable = (candidates: string[]): string | undefined =>
+  candidates.find(
+    (candidate) =>
+      WINDOWS_EXE_EXT_PATTERN.test(candidate) && WINDOWS_NODE_EXE_PATTERN.test(candidate),
+  );
+
 const joinShimRelativePath = (shimPath: string, relativePath: string) =>
   path.win32.join(
     path.win32.dirname(shimPath),
@@ -85,10 +91,30 @@ const getExistingShimPathToken = async (
   return (await fileExists(resolvedPath)) ? resolvedPath : undefined;
 };
 
-const getNodeCommand = async (shimPath: string, token: string): Promise<string | undefined> => {
-  if (/^node(?:\.exe)?$/i.test(token.trim())) return process.execPath;
+const resolveWindowsNodeCommand = async (shimPath: string): Promise<string | undefined> => {
+  const localNodePath = path.win32.join(path.win32.dirname(shimPath), 'node.exe');
+  if (await fileExists(localNodePath)) return localNodePath;
 
-  const resolvedPath = await getExistingShimPathToken(shimPath, token);
+  try {
+    const stdout = await execFileString('where', ['node']);
+    const candidates = stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    return pickWindowsNodeExecutable(candidates);
+  } catch {
+    return;
+  }
+};
+
+const getNodeCommand = async (shimPath: string, token: string): Promise<string | undefined> => {
+  const trimmedToken = token.trim().replaceAll(/^['"]|['"]$/g, '');
+  if (/^node(?:\.exe)?$/i.test(trimmedToken) || /^%_prog%$/i.test(trimmedToken)) {
+    return resolveWindowsNodeCommand(shimPath);
+  }
+
+  const resolvedPath = await getExistingShimPathToken(shimPath, trimmedToken);
   if (!resolvedPath) return;
 
   return WINDOWS_NODE_EXE_PATTERN.test(resolvedPath) ? resolvedPath : undefined;
@@ -116,6 +142,7 @@ const inferWindowsNodeScriptFromShim = async (
     /exec\s+"(\$basedir[^"]*node(?:\.exe)?)"\s+"([^"]+)"/i,
     /exec\s+(node(?:\.exe)?)\s+"([^"]+)"/i,
     /"(%dp0%[^"]*node(?:\.exe)?)"\s+"([^"]+)"/i,
+    /"(%_prog%)"\s+"([^"]+)"/i,
     [/(?:^|\r?\n)\s*(node(?:\.exe)?)\s+"([^"]+)"/i, 'node'],
   ];
 
@@ -211,7 +238,7 @@ export const resolveCliSpawnPlan = async (
 export const spawnCli = async (
   command: string,
   args: string[],
-  options: SpawnOptionsWithoutStdio,
+  options: SpawnOptions,
 ): Promise<ChildProcess> => {
   const plan = await resolveCliSpawnPlan(command, args);
   return spawn(plan.command, plan.args, options);

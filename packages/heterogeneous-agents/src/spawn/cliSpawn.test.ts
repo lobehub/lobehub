@@ -159,18 +159,47 @@ describe('cliSpawn', () => {
     });
   });
 
-  it('uses the current Node executable when a shim invokes bare node plus a JS bin', async () => {
+  it('uses the node executable from PATH when a shim invokes bare node plus a JS bin', async () => {
     platformMock.mockReturnValue('win32');
     const shimPath = 'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\example-cli.cmd';
+    const nodePath = 'C:\\Program Files\\nodejs\\node.exe';
     const scriptPath =
       'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\node_modules\\example-cli\\bin\\cli.js';
     existingPaths(shimPath, scriptPath);
+    callExecFile(`${nodePath}\r\n`);
     readFileMock.mockResolvedValue('node "%dp0%\\node_modules\\example-cli\\bin\\cli.js" %*\r\n');
 
     const { resolveCliSpawnPlan } = await import('./cliSpawn');
     await expect(resolveCliSpawnPlan(shimPath, ['--help'])).resolves.toEqual({
       args: [scriptPath, '--help'],
-      command: process.execPath,
+      command: nodePath,
+    });
+  });
+
+  it('resolves the npm generated %_prog% .cmd shim form used by Codex and Gemini', async () => {
+    platformMock.mockReturnValue('win32');
+    const shimPath = 'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\codex.cmd';
+    const nodePath = 'C:\\Program Files\\nodejs\\node.exe';
+    const scriptPath =
+      'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\bin\\codex.js';
+    existingPaths(shimPath, scriptPath);
+    callExecFile(`${nodePath}\r\n`);
+    readFileMock.mockResolvedValue(
+      [
+        '@ECHO off',
+        'IF EXIST "%dp0%\\node.exe" (',
+        '  SET "_prog=%dp0%\\node.exe"',
+        ') ELSE (',
+        '  SET "_prog=node"',
+        ')',
+        'endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\\node_modules\\@openai\\codex\\bin\\codex.js" %*',
+      ].join('\r\n'),
+    );
+
+    const { resolveCliSpawnPlan } = await import('./cliSpawn');
+    await expect(resolveCliSpawnPlan(shimPath, ['--version'])).resolves.toEqual({
+      args: [scriptPath, '--version'],
+      command: nodePath,
     });
   });
 
