@@ -14,6 +14,7 @@ import type { BotProviderItem } from '@/store/agent/slices/bot/action';
 
 import { BOT_RUNTIME_STATUSES, type BotRuntimeStatus } from '../../../../types/botRuntimeStatus';
 import { getPlatformIcon } from './const';
+import MessengerPromo from './MessengerPromo';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   item: css`
@@ -283,6 +284,7 @@ const PlatformList = memo<PlatformListProps>(
             );
           })}
         </div>
+        <MessengerPromo />
         <div
           style={{
             alignItems: 'center',
