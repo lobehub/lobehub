@@ -477,6 +477,9 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     if (thinkingCompletion) {
       events.push(this.makeChunkEvent({ chunkType: 'reasoning', reasoning: thinkingCompletion }));
     }
+    if (messageId && (textParts.length > 0 || reasoningParts.length > 0)) {
+      this.clearStreamedBuffers(messageId);
+    }
     events.push(...this.emitToolChunk(newToolCalls, messageId));
 
     return events;
@@ -786,6 +789,8 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       : this.makeEvent('agent_runtime_end', {});
 
     this.pendingRateLimitInfo = undefined;
+    this.streamedTextByMessageId.clear();
+    this.streamedThinkingByMessageId.clear();
 
     return [...events, this.makeEvent('stream_end', {}), finalEvent];
   }
@@ -914,6 +919,11 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       const suffix = fullContent.slice(streamed.length);
       return suffix || undefined;
     }
+  }
+
+  private clearStreamedBuffers(messageId: string): void {
+    this.streamedTextByMessageId.delete(messageId);
+    this.streamedThinkingByMessageId.delete(messageId);
   }
 
   // ─── Event factories ───

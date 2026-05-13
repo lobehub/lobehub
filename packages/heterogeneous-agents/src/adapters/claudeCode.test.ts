@@ -1226,6 +1226,7 @@ describe('ClaudeCodeAdapter', () => {
       );
       expect(textChunks).toHaveLength(1);
       expect(textChunks[0].data.content).toBe('复完成');
+      expect((adapter as any).streamedTextByMessageId.has('msg_1')).toBe(false);
     });
 
     it('suppresses handleAssistant thinking emission when thinking_delta already streamed', () => {
