@@ -8,8 +8,8 @@ import { PptxLoader } from './index';
 
 // Import PptxLoader
 
-// 确保你已经在 fixtures 目录下放置了 test.pptx 文件
-// 这个 PPTX 文件最好包含多个幻灯片 (slides) 以便测试
+// Ensure you have placed a test.pptx file in the fixtures directory
+// This PPTX file should ideally contain multiple slides for testing
 const fixturePath = (filename: string) => path.join(__dirname, `./fixtures/${filename}`);
 
 let loader: FileLoaderInterface;
@@ -25,23 +25,23 @@ describe('PptxLoader', () => {
   // Describe PptxLoader
   it('should load pages correctly from a PPTX file (one page per slide)', async () => {
     const pages = await loader.loadPages(testFile);
-    // PPTX 文件有多少个 slide，就应该有多少个 page
+    // There should be one page per slide in the PPTX file
     expect(pages.length).toBeGreaterThan(1);
 
-    // 直接对整个 pages 数组进行快照测试 (会包含 slideNumber)
+    // Run a snapshot test directly on the entire pages array (includes slideNumber)
     expect(pages).toMatchSnapshot();
   });
 
   it('should aggregate content correctly (joining slides)', async () => {
     const pages = await loader.loadPages(testFile);
     const content = await loader.aggregateContent(pages);
-    // 默认聚合是以换行符连接各 slide 内容
+    // Default aggregation joins slide contents with newlines
     expect(content).toMatchSnapshot('aggregated_content');
   });
 
   it('should handle file read errors in loadPages', async () => {
     const pages = await loader.loadPages(nonExistentFile);
-    expect(pages).toHaveLength(1); // 即使失败也返回一个包含错误信息的页面
+    expect(pages).toHaveLength(1); // Returns one page containing error info even on failure
     expect(pages[0].pageContent).toBe('');
     expect(pages[0].metadata.error).toContain('Failed to load or process PPTX file:'); // Update error message check
   });
@@ -58,7 +58,7 @@ describe('PptxLoader', () => {
     const corruptedFile = fixturePath('corrupted-slides.pptx');
     const pages = await loader.loadPages(corruptedFile);
     const content = await loader.aggregateContent(pages);
-    expect(content).toBe(''); // 所有页面都是错误页面时返回空字符串
+    expect(content).toBe(''); // Returns empty string when all pages are error pages
   });
 
   it('should handle empty PPTX file with no slides', async () => {
