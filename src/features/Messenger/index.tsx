@@ -11,9 +11,15 @@ import useSWR from 'swr';
 import { messengerService } from '@/services/messenger';
 
 import { type MessengerPlatform, PlatformAvatar } from './constants';
-import { getSlackInstallErrorReason } from './i18n';
+import { getDiscordInstallErrorReason, getSlackInstallErrorReason } from './i18n';
 import IntegrationDetail from './IntegrationDetail';
 import IntegrationList from './IntegrationList';
+
+interface BlockedInstall {
+  // Empty string sentinel = open modal even when the tenant name is unknown.
+  name: string;
+  platform: 'slack' | 'discord';
+}
 
 const VALID_PLATFORMS: ReadonlySet<MessengerPlatform> = new Set(['slack', 'telegram', 'discord']);
 
@@ -42,10 +48,11 @@ const MessengerSettings = memo(() => {
   const navigate = useNavigate();
   const params = useParams<{ sub?: string }>();
   const selected: MessengerPlatform | null = isMessengerPlatform(params.sub) ? params.sub : null;
-  // Workspace name from `?slack_workspace=...`. When set, render the takeover
-  // explainer modal — toast is too transient for a flow where the user just
-  // round-tripped through Slack OAuth and needs clear next-step guidance.
-  const [blockedWorkspace, setBlockedWorkspace] = useState<string | null>(null);
+  // Tenant name from `?workspace=...` plus the platform it belongs to. When
+  // set, render the takeover explainer modal — toast is too transient for a
+  // flow where the user just round-tripped through OAuth and needs clear
+  // next-step guidance.
+  const [blocked, setBlocked] = useState<BlockedInstall | null>(null);
 
   const platformsSWR = useSWR('messenger:availablePlatforms', () =>
     messengerService.availablePlatforms(),
@@ -63,7 +70,7 @@ const MessengerSettings = memo(() => {
   // Surface OAuth callback outcomes for the currently-selected platform. The
   // callback redirects to `/settings/messenger/<platform>?installed=ok` (or
   // `?error=...&workspace=...`); we toast success/generic-failure and escalate
-  // Slack's "already installed by another user" to a modal — the user just
+  // "already installed by another user" to a modal — the user just
   // round-tripped through OAuth and needs clear next-step guidance.
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -77,12 +84,21 @@ const MessengerSettings = memo(() => {
     if (installed && selected === 'slack') {
       message.success(t('messenger.slack.installResult.success'));
     } else if (error === 'already_installed' && selected === 'slack') {
-      // Empty string sentinel = open modal even when workspace name is unknown.
-      setBlockedWorkspace(workspace ?? '');
+      setBlocked({ name: workspace ?? '', platform: 'slack' });
     } else if (error && selected === 'slack') {
       message.error(
         t('messenger.slack.installResult.failed', {
           reason: getSlackInstallErrorReason(t, error),
+        }),
+      );
+    } else if (installed && selected === 'discord') {
+      message.success(t('messenger.discord.installResult.success'));
+    } else if (error === 'already_installed' && selected === 'discord') {
+      setBlocked({ name: workspace ?? '', platform: 'discord' });
+    } else if (error && selected === 'discord') {
+      message.error(
+        t('messenger.discord.installResult.failed', {
+          reason: getDiscordInstallErrorReason(t, error),
         }),
       );
     }
@@ -126,27 +142,33 @@ const MessengerSettings = memo(() => {
 
       <Modal
         footer={null}
-        open={blockedWorkspace !== null}
-        title={t('messenger.slack.installBlocked.title')}
+        open={blocked !== null}
         width={480}
-        onCancel={() => setBlockedWorkspace(null)}
+        title={
+          blocked ? t(`messenger.${blocked.platform}.installBlocked.title` as const) : undefined
+        }
+        onCancel={() => setBlocked(null)}
       >
-        <Flexbox align="center" gap={20} style={{ paddingBlock: 16 }}>
-          <PlatformAvatar platform="slack" size={56} />
-          <Flexbox align="center" gap={8}>
-            <Text strong style={{ fontSize: 16, textAlign: 'center' }}>
-              {blockedWorkspace
-                ? t('messenger.slack.installBlocked.withName', { workspace: blockedWorkspace })
-                : t('messenger.slack.installBlocked.withoutName')}
-            </Text>
-            <Text style={{ textAlign: 'center' }} type="secondary">
-              {t('messenger.slack.installBlocked.suggestion')}
-            </Text>
+        {blocked && (
+          <Flexbox align="center" gap={20} style={{ paddingBlock: 16 }}>
+            <PlatformAvatar platform={blocked.platform} size={56} />
+            <Flexbox align="center" gap={8}>
+              <Text strong style={{ fontSize: 16, textAlign: 'center' }}>
+                {blocked.name
+                  ? t(`messenger.${blocked.platform}.installBlocked.withName` as const, {
+                      workspace: blocked.name,
+                    })
+                  : t(`messenger.${blocked.platform}.installBlocked.withoutName` as const)}
+              </Text>
+              <Text style={{ textAlign: 'center' }} type="secondary">
+                {t(`messenger.${blocked.platform}.installBlocked.suggestion` as const)}
+              </Text>
+            </Flexbox>
+            <Button block size="large" type="primary" onClick={() => setBlocked(null)}>
+              {t(`messenger.${blocked.platform}.installBlocked.dismiss` as const)}
+            </Button>
           </Flexbox>
-          <Button block size="large" type="primary" onClick={() => setBlockedWorkspace(null)}>
-            {t('messenger.slack.installBlocked.dismiss')}
-          </Button>
-        </Flexbox>
+        )}
       </Modal>
     </div>
   );

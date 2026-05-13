@@ -74,6 +74,30 @@ export default {
   'messenger.discord.connections.disconnectFailed': 'Failed to remove server.',
   'messenger.discord.connections.disconnectSuccess': 'Server removed.',
   'messenger.discord.connections.disconnectTitle': 'Remove server',
+  'messenger.discord.installBlocked.dismiss': 'Got it',
+  'messenger.discord.installBlocked.suggestion':
+    "DM the LobeHub bot in Discord to link your personal account — you don't need to add the bot again. Or ask the original installer to remove this server in LobeHub Settings → Messenger before re-adding it.",
+  'messenger.discord.installBlocked.title': 'Server already connected',
+  'messenger.discord.installBlocked.withName':
+    '"{{workspace}}" is already connected to LobeHub by another user.',
+  'messenger.discord.installBlocked.withoutName':
+    'This Discord server is already connected to LobeHub by another user.',
+  'messenger.discord.installResult.failed':
+    'Discord install failed ({{reason}}). Please try again or contact support.',
+  'messenger.discord.installResult.reasons.accessDenied': 'authorization was cancelled',
+  'messenger.discord.installResult.reasons.exchangeFailed': 'Discord authorization failed',
+  'messenger.discord.installResult.reasons.generic': 'an unknown error occurred',
+  'messenger.discord.installResult.reasons.invalidState': 'the install session expired',
+  'messenger.discord.installResult.reasons.missingAppId':
+    'Discord returned incomplete app information',
+  'messenger.discord.installResult.reasons.missingCodeOrState':
+    'Discord returned incomplete install parameters',
+  'messenger.discord.installResult.reasons.missingTenant':
+    'Discord did not return a server identifier',
+  'messenger.discord.installResult.reasons.missingToken': 'Discord did not return an access token',
+  'messenger.discord.installResult.reasons.persistFailed':
+    'the server connection could not be saved',
+  'messenger.discord.installResult.success': 'Discord server connected.',
   'messenger.discord.userPending.cta': 'Open in Discord',
   'messenger.discord.userPending.hint':
     'Open the bot in Discord and send any message to finish linking your account.',
