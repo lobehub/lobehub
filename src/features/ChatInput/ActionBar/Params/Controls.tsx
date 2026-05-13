@@ -1,3 +1,4 @@
+import { DEFAULT_AGENT_CONFIG } from '@lobechat/const';
 import { Flexbox, Icon, SliderWithInput } from '@lobehub/ui';
 import { Form as AntdForm, Switch } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
@@ -502,7 +503,10 @@ const Controls = memo<ControlsProps>(({ setUpdating, updating, variant = 'popove
   const agentId = useAgentId();
   const { updateAgentConfig } = useUpdateAgentConfig();
 
-  const config = useAgentStore((s) => agentByIdSelectors.getAgentConfigById(agentId)(s), isEqual);
+  const config = useAgentStore(
+    (s) => agentByIdSelectors.getAgentConfigById(agentId)(s) || DEFAULT_AGENT_CONFIG,
+    isEqual,
+  );
   const agentModel = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
   const agentProvider = useAgentStore((s) =>
     agentByIdSelectors.getAgentModelProviderById(agentId)(s),

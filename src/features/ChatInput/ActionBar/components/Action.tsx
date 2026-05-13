@@ -63,8 +63,8 @@ const Action = memo<ActionProps>(
         {...rest}
         size={
           actionSize ?? {
-            blockSize: 36,
-            size: 20,
+            blockSize: 32,
+            size: 18,
           }
         }
       />

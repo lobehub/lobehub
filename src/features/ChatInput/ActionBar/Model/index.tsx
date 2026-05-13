@@ -31,7 +31,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 const ModelSwitch = memo(() => {
-  const { dropdownPlacement } = useActionBarContext();
+  const { actionSize, dropdownPlacement } = useActionBarContext();
+  const blockSize = actionSize?.blockSize ?? 32;
+  const iconSize = actionSize?.size ?? 20;
 
   const agentId = useAgentId();
   const [model, provider, updateAgentConfigById] = useAgentStore((s) => [
@@ -54,9 +56,9 @@ const ModelSwitch = memo(() => {
       provider={provider}
       onModelChange={handleModelChange}
     >
-      <Center className={styles.model} height={36} width={36}>
+      <Center className={styles.model} height={blockSize} width={blockSize}>
         <div className={styles.icon}>
-          <ModelIcon model={model} size={22} />
+          <ModelIcon model={model} size={iconSize} />
         </div>
       </Center>
     </ModelSwitchPanel>

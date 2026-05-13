@@ -1,10 +1,10 @@
 'use client';
 
 import { validateVideoFileSize } from '@lobechat/utils/client';
-import { Icon } from '@lobehub/ui';
+import { Icon, type IconProps } from '@lobehub/ui';
 import { BrainOffIcon, GlobeOffIcon } from '@lobehub/ui/icons';
 import { Upload } from 'antd';
-import { css, cx } from 'antd-style';
+import { css, cssVar, cx } from 'antd-style';
 import {
   Blocks,
   Brain,
@@ -51,13 +51,24 @@ const hotArea = css`
 
 const activeLabel = css`
   display: flex;
+  gap: 8px;
   align-items: center;
   justify-content: space-between;
 
   width: 100%;
 
   color: inherit;
+
+  span {
+    overflow: hidden;
+    min-width: 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 `;
+
+const activeIcon = (icon: IconProps['icon'], active?: boolean): IconProps['icon'] =>
+  active ? <Icon color={cssVar.colorInfo} icon={icon} size={16} /> : icon;
 
 const PlusAction = memo(() => {
   const { t } = useTranslation('chat');
@@ -183,6 +194,19 @@ const PlusAction = memo(() => {
       },
     ];
 
+    const toolsItems: ActionDropdownMenuItems =
+      isAgentModeEnabled && enableFC
+        ? [
+            { type: 'divider' },
+            {
+              icon: Blocks,
+              key: 'tools',
+              label: tSetting('tools.title'),
+              onClick: handleOpenTools,
+            },
+          ]
+        : [];
+
     const capabilityItems: ActionDropdownMenuItems = [
       { type: 'divider' },
       // Rich text toolbar toggle
@@ -191,16 +215,16 @@ const PlusAction = memo(() => {
         key: 'typo',
         label: renderActive(
           tEditor(showTypoBar ? 'actions.typobar.off' : 'actions.typobar.on'),
-          showTypoBar,
+          Boolean(showTypoBar),
         ),
         onClick: () => setShowTypoBar(!showTypoBar),
       },
       { type: 'divider' },
       // Memory toggle
       {
-        icon: isMemoryEnabled ? Brain : BrainOffIcon,
+        icon: activeIcon(isMemoryEnabled ? Brain : BrainOffIcon, Boolean(isMemoryEnabled)),
         key: 'memory',
-        label: renderActive(t('memory.title'), isMemoryEnabled),
+        label: renderActive(t('memory.title'), Boolean(isMemoryEnabled)),
         onClick: handleToggleMemory,
       },
       // Web search: simple toggle when 2 options, submenu when 3
@@ -215,13 +239,13 @@ const PlusAction = memo(() => {
                   onClick: () => handleSelectSearch('off'),
                 },
                 {
-                  icon: SparkleIcon,
+                  icon: activeIcon(SparkleIcon, activeSearchOption === 'app'),
                   key: 'search-app',
                   label: renderActive(t('plus.search.appSearch'), activeSearchOption === 'app'),
                   onClick: () => handleSelectSearch('app'),
                 },
                 {
-                  icon: WandSparklesIcon,
+                  icon: activeIcon(WandSparklesIcon, activeSearchOption === 'provider'),
                   key: 'search-provider',
                   label: renderActive(
                     t('plus.search.modelSearch'),
@@ -230,31 +254,26 @@ const PlusAction = memo(() => {
                   onClick: () => handleSelectSearch('provider'),
                 },
               ],
-              icon: activeSearchOption === 'off' ? GlobeOffIcon : Globe,
+              icon: activeIcon(
+                activeSearchOption === 'off' ? GlobeOffIcon : Globe,
+                activeSearchOption !== 'off',
+              ),
               key: 'search-group',
               label: t('search.title'),
             } as ActionDropdownMenuItems[number],
           ]
         : [
             {
-              icon: activeSearchOption === 'off' ? GlobeOffIcon : Globe,
+              icon: activeIcon(
+                activeSearchOption === 'off' ? GlobeOffIcon : Globe,
+                activeSearchOption !== 'off',
+              ),
               key: 'search-toggle',
               label: renderActive(t('search.title'), activeSearchOption !== 'off'),
               onClick: () => handleSelectSearch(activeSearchOption === 'off' ? 'app' : 'off'),
             } as ActionDropdownMenuItems[number],
           ]),
-      // Tools (agent mode + FC support only)
-      ...(isAgentModeEnabled && enableFC
-        ? [
-            { type: 'divider' as const },
-            {
-              icon: Blocks,
-              key: 'tools',
-              label: tSetting('tools.title'),
-              onClick: handleOpenTools,
-            } as ActionDropdownMenuItems[number],
-          ]
-        : []),
+      ...toolsItems,
     ];
 
     return [...uploadItems, ...capabilityItems];

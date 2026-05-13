@@ -13,8 +13,8 @@ import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import { useSendMenuItems } from './useSendMenuItems';
 
-const emptyRightActions: ActionKeys[] = [];
-const promptTransformRightActions: ActionKeys[] = ['promptTransform'];
+const tokenRightActions: ActionKeys[] = ['mainToken'];
+const promptTransformRightActions: ActionKeys[] = ['promptTransform', 'mainToken'];
 
 /**
  * MainChatInput
@@ -32,9 +32,9 @@ const MainChatInput = memo(() => {
   const provider = useAgentStore(agentSelectors.currentAgentModelProvider);
   const isAgentConfigLoading = useAgentStore(agentSelectors.isAgentConfigLoading);
   const supportsImageOutput = useModelSupportImageOutput(model, provider);
-  const rightActions = supportsImageOutput ? promptTransformRightActions : emptyRightActions;
+  const rightActions = supportsImageOutput ? promptTransformRightActions : tokenRightActions;
 
-  const leftActions: ActionKeys[] = useMemo(() => ['model', 'plus', 'mainToken'], []);
+  const leftActions: ActionKeys[] = useMemo(() => ['model', 'plus'], []);
 
   return (
     <ChatInput
