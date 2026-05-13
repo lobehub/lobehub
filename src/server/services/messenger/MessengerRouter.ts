@@ -572,6 +572,19 @@ export class MessengerRouter {
       {
         description: 'Bind your account to LobeHub',
         handler: async (ctx) => {
+          // Already-linked short-circuit: re-running `/start` while bound
+          // would issue a fresh verify-im token and, on completion,
+          // overwrite the user's `messenger_account_links` row via
+          // `confirmLink` → `upsertForPlatform`. That desyncs the cached
+          // chat-sdk thread state (topicId / agent runtime) from the new
+          // active agent and the conversation hangs at "typing…" with no
+          // reply. Treat `/start` as the unbound-only onboarding command.
+          if (ctx.link) {
+            await ctx.reply(
+              'Your account is already linked to LobeHub. Send /agents to switch the active agent, or /new to start a fresh conversation.',
+            );
+            return;
+          }
           // The verify-im URL is one-shot and account-binding — never post
           // it to a public channel. Anything outside a 1:1 DM (slash from a
           // public channel, or `@LobeHub /start` typed inside a channel
