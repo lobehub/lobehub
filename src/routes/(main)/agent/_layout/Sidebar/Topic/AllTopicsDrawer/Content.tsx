@@ -13,7 +13,7 @@ import { topicSelectors } from '@/store/chat/selectors';
 
 import TopicItem from '../List/Item';
 
-const ITEM_HEIGHT = 44; // Each topic item height
+const ITEM_HEIGHT = 36; // Each topic item height (NavItem height, no vertical padding)
 
 interface ContentProps {
   open: boolean;
