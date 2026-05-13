@@ -1650,7 +1650,11 @@ export class AiAgentService {
         });
     if (userMessageRecord) {
       log('execAgent: created user message %s', userMessageRecord.id);
-      await enqueueAgentSignalSourceEvent(
+      // Agent Signal is a governance side-channel for feedback and self-iteration.
+      // It must not block the primary agent execution path; local Workflow/QStash
+      // stalls would otherwise leave the conversation with only the user message
+      // persisted and no assistant placeholder or operation row.
+      void enqueueAgentSignalSourceEvent(
         {
           payload: {
             agentId: resolvedAgentId,
@@ -1667,7 +1671,9 @@ export class AiAgentService {
           agentId: resolvedAgentId,
           userId: this.userId,
         },
-      );
+      ).catch((error) => {
+        log('execAgent: failed to enqueue user message Agent Signal source event: %O', error);
+      });
     }
 
     // 14. Create assistant message placeholder in database
