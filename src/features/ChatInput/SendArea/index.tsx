@@ -19,7 +19,10 @@ const SendArea = memo(() => {
   const rightActions = useChatInputStore((s) => s.rightActions, isEqual);
 
   const items = useMemo(
-    () => mapActionsToItems((rightActions as ActionKey[]) || []),
+    () =>
+      mapActionsToItems(
+        ((rightActions as ActionKey[]) || []).filter((actionKey) => actionKey !== 'contextWindow'),
+      ),
     [rightActions],
   );
 

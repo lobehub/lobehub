@@ -9,18 +9,19 @@ import {
   Blocks,
   Brain,
   CheckIcon,
+  CloudCog,
   FileUp,
   Globe,
-  ImageUp,
+  LibraryBig,
   PlusIcon,
-  SparkleIcon,
+  SearchCheck,
   TypeIcon,
-  WandSparklesIcon,
 } from 'lucide-react';
 import { memo, Suspense, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { message } from '@/components/AntdStaticMethods';
+import { openAttachKnowledgeModal } from '@/features/LibraryModal';
 import { createSkillStoreModal } from '@/features/SkillStore';
 import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
 import { useVisualMediaUploadAbility } from '@/hooks/useVisualMediaUploadAbility';
@@ -32,12 +33,14 @@ import {
 } from '@/store/agent/selectors';
 import { aiModelSelectors, aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useFileStore } from '@/store/file';
+import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
 import { useChatInputStore } from '../../store';
 import Action from '../components/Action';
 import { type ActionDropdownMenuItems } from '../components/ActionDropdown';
+import { useControls as useKnowledgeControls } from '../Knowledge/useControls';
 import { useMemoryEnabled } from '../Memory/useMemoryEnabled';
 
 const hotArea = css`
@@ -67,6 +70,53 @@ const activeLabel = css`
   }
 `;
 
+const optionLabel = css`
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+
+  width: 100%;
+  min-width: 220px;
+
+  .title {
+    line-height: 1.25;
+  }
+
+  .desc {
+    margin-block-start: 3px;
+
+    font-size: 12px;
+    line-height: 1.35;
+    color: ${cssVar.colorTextDescription};
+    white-space: normal;
+  }
+`;
+
+const labelWithChip = css`
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+`;
+
+const countChip = css`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-width: 18px;
+  height: 18px;
+  padding-block: 0;
+  padding-inline: 6px;
+  border-radius: 9px;
+
+  font-size: 11px;
+  line-height: 18px;
+  color: ${cssVar.colorTextSecondary};
+
+  background: ${cssVar.colorFillSecondary};
+`;
+
 const activeIcon = (icon: IconProps['icon'], active?: boolean): IconProps['icon'] =>
   active ? <Icon color={cssVar.colorInfo} icon={icon} size={16} /> : icon;
 
@@ -77,8 +127,10 @@ const PlusAction = memo(() => {
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [updating, setUpdating] = useState(false);
 
   const upload = useFileStore((s) => s.uploadChatFiles);
+  const { enableKnowledgeBase } = useServerConfigStore(featureFlagsSelectors);
 
   const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
   const provider = useAgentStore((s) => agentByIdSelectors.getAgentModelProviderById(agentId)(s));
@@ -92,6 +144,10 @@ const PlusAction = memo(() => {
   const [showTypoBar, setShowTypoBar] = useChatInputStore((s) => [s.showTypoBar, s.setShowTypoBar]);
   const { canUploadImage, canUploadVideo } = useVisualMediaUploadAbility(model, provider);
   const enableFC = useModelSupportToolUse(model, provider);
+  const { enabledCount: knowledgeEnabledCount, items: knowledgeItems } = useKnowledgeControls({
+    openAttachKnowledgeModal,
+    setUpdating,
+  });
 
   const isModelBuiltinSearchInternal = useAiInfraStore(
     aiModelSelectors.isModelBuiltinSearchInternal(model, provider),
@@ -142,33 +198,31 @@ const PlusAction = memo(() => {
         label
       );
 
+    const renderOption = (title: string, description: string, active: boolean) => (
+      <div className={cx(optionLabel)}>
+        <div>
+          <div className="title">{title}</div>
+          <div className="desc">{description}</div>
+        </div>
+        {active && <Icon icon={CheckIcon} size={14} />}
+      </div>
+    );
+
+    const renderLibraryLabel = () =>
+      knowledgeEnabledCount > 0 ? (
+        <span className={cx(labelWithChip)}>
+          <span>{t('knowledgeBase.title')}</span>
+          <span className={cx(countChip)}>{knowledgeEnabledCount}</span>
+        </span>
+      ) : (
+        t('knowledgeBase.title')
+      );
+
     const uploadItems: ActionDropdownMenuItems = [
       {
         closeOnClick: false,
-        disabled: !canUploadImage,
-        icon: ImageUp,
-        key: 'upload-image',
-        label: canUploadImage ? (
-          <Upload
-            multiple
-            accept={'image/*'}
-            showUploadList={false}
-            beforeUpload={async (file) => {
-              setDropdownOpen(false);
-              await upload([file]);
-              return false;
-            }}
-          >
-            <div className={cx(hotArea)}>{t('upload.action.imageUpload')}</div>
-          </Upload>
-        ) : (
-          <div className={cx(hotArea)}>{t('upload.action.imageUpload')}</div>
-        ),
-      },
-      {
-        closeOnClick: false,
         icon: FileUp,
-        key: 'upload-file',
+        key: 'upload-file-or-image',
         label: (
           <Upload
             multiple
@@ -188,7 +242,7 @@ const PlusAction = memo(() => {
               return false;
             }}
           >
-            <div className={cx(hotArea)}>{t('upload.action.fileUpload')}</div>
+            <div className={cx(hotArea)}>{t('upload.action.fileOrImageUpload')}</div>
           </Upload>
         ),
       },
@@ -235,20 +289,29 @@ const PlusAction = memo(() => {
                 {
                   icon: GlobeOffIcon,
                   key: 'search-off',
-                  label: renderActive(t('plus.search.off'), activeSearchOption === 'off'),
+                  label: renderOption(
+                    t('plus.search.off'),
+                    t('plus.search.offDesc'),
+                    activeSearchOption === 'off',
+                  ),
                   onClick: () => handleSelectSearch('off'),
                 },
                 {
-                  icon: activeIcon(SparkleIcon, activeSearchOption === 'app'),
+                  icon: activeIcon(SearchCheck, activeSearchOption === 'app'),
                   key: 'search-app',
-                  label: renderActive(t('plus.search.appSearch'), activeSearchOption === 'app'),
+                  label: renderOption(
+                    t('plus.search.appSearch'),
+                    t('plus.search.appSearchDesc'),
+                    activeSearchOption === 'app',
+                  ),
                   onClick: () => handleSelectSearch('app'),
                 },
                 {
-                  icon: activeIcon(WandSparklesIcon, activeSearchOption === 'provider'),
+                  icon: activeIcon(CloudCog, activeSearchOption === 'provider'),
                   key: 'search-provider',
-                  label: renderActive(
+                  label: renderOption(
                     t('plus.search.modelSearch'),
+                    t('plus.search.modelSearchDesc'),
                     activeSearchOption === 'provider',
                   ),
                   onClick: () => handleSelectSearch('provider'),
@@ -276,20 +339,34 @@ const PlusAction = memo(() => {
       ...toolsItems,
     ];
 
-    return [...uploadItems, ...capabilityItems];
+    const knowledgeSectionItems: ActionDropdownMenuItems = enableKnowledgeBase
+      ? [
+          {
+            children: knowledgeItems,
+            icon: activeIcon(LibraryBig, knowledgeEnabledCount > 0),
+            key: 'knowledge-base',
+            label: renderLibraryLabel(),
+          } as ActionDropdownMenuItems[number],
+        ]
+      : [];
+
+    return [...uploadItems, ...knowledgeSectionItems, ...capabilityItems];
   }, [
     activeSearchOption,
     canUploadImage,
     canUploadVideo,
     enableFC,
+    enableKnowledgeBase,
     handleOpenTools,
     handleSelectSearch,
     handleToggleMemory,
     isAgentModeEnabled,
     isMemoryEnabled,
+    knowledgeEnabledCount,
     setShowTypoBar,
     showProviderSearch,
     showTypoBar,
+    knowledgeItems,
     t,
     tEditor,
     tSetting,
@@ -299,7 +376,9 @@ const PlusAction = memo(() => {
   return (
     <Action
       icon={PlusIcon}
+      loading={updating}
       open={dropdownOpen}
+      size={{ blockSize: 32, borderRadius: 16, size: 18 }}
       title={t('plus.tooltip')}
       tooltipProps={{ placement: 'top' }}
       dropdown={{
@@ -315,7 +394,16 @@ const PlusAction = memo(() => {
 PlusAction.displayName = 'PlusAction';
 
 const Plus = memo(() => (
-  <Suspense fallback={<Action disabled icon={PlusIcon} title="" />}>
+  <Suspense
+    fallback={
+      <Action
+        disabled
+        icon={PlusIcon}
+        size={{ blockSize: 32, borderRadius: 16, size: 18 }}
+        title=""
+      />
+    }
+  >
     <PlusAction />
   </Suspense>
 ));

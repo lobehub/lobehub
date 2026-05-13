@@ -12,6 +12,13 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useAgentId } from '../../hooks/useAgentId';
 import CheckboxItem from '../components/CheckboxWithLoading';
 
+const labelMaxWidth = 'min(400px, 56vw)';
+
+export interface KnowledgeControls {
+  enabledCount: number;
+  items: ItemType[];
+}
+
 export const useControls = ({
   openAttachKnowledgeModal,
   setUpdating,
@@ -32,53 +39,64 @@ export const useControls = ({
     s.toggleFile,
     s.toggleKnowledgeBase,
   ]);
+  const enabledCount =
+    files.filter((item) => item.enabled).length +
+    knowledgeBases.filter((item) => item.enabled).length;
+
+  const relatedItems = [
+    // first the files
+    ...files.map((item) => ({
+      icon: <FileIcon fileName={item.name} fileType={item.type} size={20} />,
+      key: item.id,
+      label: (
+        <CheckboxItem
+          checked={item.enabled}
+          id={item.id}
+          label={item.name}
+          labelMaxWidth={labelMaxWidth}
+          onUpdate={async (id, enabled) => {
+            setUpdating(true);
+            await toggleFile(id, enabled);
+            setUpdating(false);
+          }}
+        />
+      ),
+    })),
+
+    // then the knowledge bases
+    ...knowledgeBases.map((item) => ({
+      icon: <RepoIcon />,
+      key: item.id,
+      label: (
+        <CheckboxItem
+          checked={item.enabled}
+          id={item.id}
+          label={item.name}
+          labelMaxWidth={labelMaxWidth}
+          onUpdate={async (id, enabled) => {
+            setUpdating(true);
+            await toggleKnowledgeBase(id, enabled);
+            setUpdating(false);
+          }}
+        />
+      ),
+    })),
+  ];
 
   const items: ItemType[] = [
-    {
-      children: [
-        // first the files
-        ...files.map((item) => ({
-          icon: <FileIcon fileName={item.name} fileType={item.type} size={20} />,
-          key: item.id,
-          label: (
-            <CheckboxItem
-              checked={item.enabled}
-              id={item.id}
-              label={item.name}
-              onUpdate={async (id, enabled) => {
-                setUpdating(true);
-                await toggleFile(id, enabled);
-                setUpdating(false);
-              }}
-            />
-          ),
-        })),
-
-        // then the knowledge bases
-        ...knowledgeBases.map((item) => ({
-          icon: <RepoIcon />,
-          key: item.id,
-          label: (
-            <CheckboxItem
-              checked={item.enabled}
-              id={item.id}
-              label={item.name}
-              onUpdate={async (id, enabled) => {
-                setUpdating(true);
-                await toggleKnowledgeBase(id, enabled);
-                setUpdating(false);
-              }}
-            />
-          ),
-        })),
-      ],
-      key: 'relativeFilesOrLibraries',
-      label: t('knowledgeBase.relativeFilesOrLibraries'),
-      type: 'group',
-    },
-    {
-      type: 'divider',
-    },
+    ...(relatedItems.length > 0
+      ? [
+          {
+            children: relatedItems,
+            key: 'relativeFilesOrLibraries',
+            label: t('knowledgeBase.relativeFilesOrLibraries'),
+            type: 'group' as const,
+          },
+          {
+            type: 'divider' as const,
+          },
+        ]
+      : []),
     {
       extra: <Icon icon={ArrowRight} />,
       icon: LibraryBig,
@@ -90,5 +108,5 @@ export const useControls = ({
     },
   ];
 
-  return items;
+  return { enabledCount, items } satisfies KnowledgeControls;
 };

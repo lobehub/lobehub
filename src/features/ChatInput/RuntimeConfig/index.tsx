@@ -20,8 +20,10 @@ import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selec
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 
+import ContextWindow from '../ActionBar/Token';
 import { useAgentId } from '../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../hooks/useUpdateAgentConfig';
+import { useChatInputStore } from '../store';
 import ApprovalMode from './ApprovalMode';
 import CloudRepoSwitcher from './CloudRepoSwitcher';
 import GitStatus from './GitStatus';
@@ -105,6 +107,9 @@ const RuntimeConfig = memo(() => {
   const { updateAgentChatConfig } = useUpdateAgentConfig();
   const [dirPopoverOpen, setDirPopoverOpen] = useState(false);
   const [modePopoverOpen, setModePopoverOpen] = useState(false);
+  const showContextWindow = useChatInputStore((s) =>
+    s.rightActions.flat().includes('contextWindow'),
+  );
 
   const [isLoading, runtimeMode, isHeterogeneous, enableAgentMode] = useAgentStore((s) => [
     agentByIdSelectors.isAgentConfigLoadingById(agentId)(s),
@@ -303,8 +308,10 @@ const RuntimeConfig = memo(() => {
         )}
       </Flexbox>
 
-      {/* Right: Permission control (agent mode only) */}
-      {enableAgentMode && <ApprovalMode />}
+      <Flexbox horizontal align={'center'} gap={4}>
+        {enableAgentMode && <ApprovalMode />}
+        {showContextWindow && <ContextWindow />}
+      </Flexbox>
     </Flexbox>
   );
 });

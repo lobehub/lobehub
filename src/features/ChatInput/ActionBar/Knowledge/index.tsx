@@ -23,7 +23,7 @@ const Knowledge = memo(() => {
   ]);
   const [updating, setUpdating] = useState(false);
 
-  const items = useControls({ openAttachKnowledgeModal, setUpdating });
+  const { items } = useControls({ openAttachKnowledgeModal, setUpdating });
 
   if (!enableKnowledgeBase) return null;
   if (!enableKnowledge)

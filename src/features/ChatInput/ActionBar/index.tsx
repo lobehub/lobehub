@@ -24,7 +24,7 @@ const mapActionsToItems = (keys: ActionKeys[]): ChatInputActionsProps['items'] =
       }
       const Render = actionMap[actionKey];
       return {
-        alwaysDisplay: actionKey === 'mainToken',
+        alwaysDisplay: actionKey === 'contextWindow',
         children: <Render key={actionKey} />,
         key: actionKey,
       };

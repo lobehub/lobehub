@@ -23,7 +23,7 @@ const leftActions: ActionKeys[] = ['typo', 'fileUpload', '---', ['tools', 'param
 
 const dmLeftActions: ActionKeys[] = ['typo', 'fileUpload', '---', ['stt']];
 
-const rightActions: ActionKeys[] = ['mainToken'];
+const rightActions: ActionKeys[] = ['contextWindow'];
 
 /**
  * Message Editor for Group Chat along with DM Portal

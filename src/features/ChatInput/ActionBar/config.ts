@@ -10,7 +10,7 @@ import PromptTransform from './PromptTransform';
 import SaveTopic from './SaveTopic';
 import Search from './Search';
 import STT from './STT';
-import { MainToken, PortalToken } from './Token';
+import ContextWindow from './Token';
 import Tools from './Tools';
 import Typo from './Typo';
 import Upload from './Upload';
@@ -18,15 +18,14 @@ import Upload from './Upload';
 export const actionMap = {
   agentMode: AgentMode,
   clear: Clear,
+  contextWindow: ContextWindow,
   fileUpload: Upload,
   plus: Plus,
   history: History,
-  mainToken: MainToken,
   memory: Memory,
   mention: Mention,
   model: Model,
   params: Params,
-  portalToken: PortalToken,
   promptTransform: PromptTransform,
   saveTopic: SaveTopic,
   search: Search,
