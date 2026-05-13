@@ -8,7 +8,6 @@ import useSWR from 'swr';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import { useSession } from '@/libs/better-auth/auth-client';
-import { lambdaClient } from '@/libs/trpc/client';
 import { messengerService } from '@/services/messenger';
 
 import { type MessengerPlatform } from '../constants';
@@ -29,15 +28,6 @@ const MessengerVerifyPage = memo(() => {
 
   const { data: session, isPending: sessionPending } = useSession();
   const isSignedIn = !!session?.user;
-
-  // Messenger is a Labs-gated feature: don't let a user bind a new account
-  // unless they've explicitly opted in. (Existing bindings keep working — the
-  // bot's webhook doesn't consult this flag — but forming new ones requires
-  // a deliberate Labs toggle.)
-  const userStateSWR = useSWR(isSignedIn ? ['user:state'] : null, () =>
-    lambdaClient.user.getUserState.query(),
-  );
-  const labMessengerEnabled = !!userStateSWR.data?.preference?.lab?.enableMessenger;
 
   // Used in the success state to deep-link the user back to the bot.
   const platformsSWR = useSWR('messenger:availablePlatforms', () =>
@@ -86,7 +76,6 @@ const MessengerVerifyPage = memo(() => {
 
   if (
     sessionPending ||
-    userStateSWR.isLoading ||
     // Wait for the token peek so the existing-link lookup below can scope by
     // tenantId (otherwise a Slack workspace-A link short-circuits workspace-B
     // verification). isSignedIn is required for tokenSWR to fire at all.
@@ -107,23 +96,6 @@ const MessengerVerifyPage = memo(() => {
         <Heading subtitle={t('verify.signInRequired')} title={t('verify.confirm.title')} />
         <Button block href={signInUrl} size="large" type="primary">
           {t('verify.signInCta')}
-        </Button>
-      </Flexbox>
-    );
-  }
-
-  // Lab gate: Messenger is opt-in. If the user already linked, we let them
-  // through to the success state below — disabling the lab shouldn't strand
-  // someone mid-flow on a binding they already started.
-  if (!labMessengerEnabled && !existingLinkSWR.data) {
-    return (
-      <Flexbox align="center" className={styles.card} gap={24}>
-        <Heading
-          subtitle={t('verify.labRequired.description')}
-          title={t('verify.labRequired.title')}
-        />
-        <Button block href="/settings/advanced" size="large" type="primary">
-          {t('verify.labRequired.openSettings')}
         </Button>
       </Flexbox>
     );
