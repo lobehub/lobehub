@@ -1246,6 +1246,32 @@ describe('ClaudeCodeAdapter', () => {
       expect(reasoningChunks).toHaveLength(0);
     });
 
+    it('keeps the other modality dedupe state when assistant blocks reconcile separately', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(messageStart('msg_1'));
+      adapter.adapt(delta('text_delta', 'text', 'hello'));
+      adapter.adapt(delta('thinking_delta', 'thinking', 'pondering'));
+
+      const textEvents = adapter.adapt({
+        message: { id: 'msg_1', content: [{ text: 'hello', type: 'text' }] },
+        type: 'assistant',
+      });
+      const thinkingEvents = adapter.adapt({
+        message: { id: 'msg_1', content: [{ thinking: 'pondering', type: 'thinking' }] },
+        type: 'assistant',
+      });
+
+      expect(
+        textEvents.filter((e) => e.type === 'stream_chunk' && e.data.chunkType === 'text'),
+      ).toHaveLength(0);
+      expect(
+        thinkingEvents.filter((e) => e.type === 'stream_chunk' && e.data.chunkType === 'reasoning'),
+      ).toHaveLength(0);
+      expect((adapter as any).streamedTextByMessageId.has('msg_1')).toBe(false);
+      expect((adapter as any).streamedThinkingByMessageId.has('msg_1')).toBe(false);
+    });
+
     it('still emits tool_use from assistant event even when text was streamed via deltas', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt(init);
