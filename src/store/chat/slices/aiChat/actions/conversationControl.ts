@@ -1,7 +1,11 @@
 // Disable the auto sort key eslint rule to make the code more logic and readable
 import { type AgentRuntimeContext } from '@lobechat/agent-runtime';
 import { MESSAGE_CANCEL_FLAT } from '@lobechat/const';
-import { type ConversationContext } from '@lobechat/types';
+import {
+  type ConversationContext,
+  type MessageMetadata,
+  type UIChatMessage,
+} from '@lobechat/types';
 
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -86,6 +90,20 @@ export class ConversationControlActionImpl {
       (op) =>
         op.type === 'execServerAgentRuntime' && op.status === 'running' && !op.metadata?.isAborting,
     );
+  };
+
+  /**
+   * Local tool-interaction resumes are continuations of the original request.
+   * Preserve the request trigger so downstream chat requests keep the same
+   * headers after a human-intervention pause.
+   */
+  #getRequestMetadataFromMessages = (
+    messages: UIChatMessage[],
+  ): Pick<MessageMetadata, 'trigger'> | undefined => {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const trigger = messages[index]?.metadata?.trigger;
+      if (trigger) return { trigger };
+    }
   };
 
   /**
@@ -265,6 +283,7 @@ export class ConversationControlActionImpl {
     // 3. Get current messages for state construction using context
     const chatKey = messageMapKey({ agentId, topicId, threadId, scope });
     const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
+    const requestMetadata = this.#getRequestMetadataFromMessages(currentMessages);
 
     // 4. Create agent state and context with user intervention config
     const { state, context: initialContext } = this.#get().internal_createAgentState({
@@ -296,6 +315,7 @@ export class ConversationControlActionImpl {
         parentMessageType: 'tool', // Type is 'tool'
         initialState: state,
         initialContext: agentRuntimeContext,
+        metadata: requestMetadata,
         // Pass parent operation ID to establish parent-child relationship
         // This ensures proper cancellation propagation
         parentOperationId: operationId,
@@ -379,6 +399,7 @@ export class ConversationControlActionImpl {
     // tool result, not a fake user turn.
     if (!shouldCreateUserMessage) {
       const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
+      const requestMetadata = this.#getRequestMetadataFromMessages(currentMessages);
 
       const { state, context: initialContext } = this.#get().internal_createAgentState({
         messages: currentMessages,
@@ -411,6 +432,7 @@ export class ConversationControlActionImpl {
           parentMessageType: 'tool',
           initialState: state,
           initialContext: agentRuntimeContext,
+          metadata: requestMetadata,
           parentOperationId: operationId,
         });
         completeOperation(operationId);
@@ -450,6 +472,7 @@ export class ConversationControlActionImpl {
 
     // 3. Resume agent from user message (not tool re-execution)
     const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
+    const requestMetadata = this.#getRequestMetadataFromMessages(currentMessages);
 
     const { state, context: initialContext } = this.#get().internal_createAgentState({
       messages: currentMessages,
@@ -468,6 +491,7 @@ export class ConversationControlActionImpl {
         parentMessageType: 'user',
         initialState: state,
         initialContext,
+        metadata: requestMetadata,
         parentOperationId: operationId,
       });
       completeOperation(operationId);
@@ -553,6 +577,7 @@ export class ConversationControlActionImpl {
     // 3. Resume agent from user message
     const chatKey = messageMapKey({ agentId, topicId, threadId, scope });
     const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
+    const requestMetadata = this.#getRequestMetadataFromMessages(currentMessages);
 
     const { state, context: initialContext } = this.#get().internal_createAgentState({
       messages: currentMessages,
@@ -571,6 +596,7 @@ export class ConversationControlActionImpl {
         parentMessageType: 'user',
         initialState: state,
         initialContext,
+        metadata: requestMetadata,
         parentOperationId: operationId,
       });
       completeOperation(operationId);
@@ -1015,6 +1041,7 @@ export class ConversationControlActionImpl {
     // Get current messages for state construction using context
     const chatKey = messageMapKey({ agentId, topicId, threadId, scope });
     const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
+    const requestMetadata = this.#getRequestMetadataFromMessages(currentMessages);
 
     // Create agent state and context to continue from rejected tool message
     const { state, context: initialContext } = this.#get().internal_createAgentState({
@@ -1041,6 +1068,7 @@ export class ConversationControlActionImpl {
         parentMessageType: 'tool',
         initialState: state,
         initialContext: agentRuntimeContext,
+        metadata: requestMetadata,
         // Pass parent operation ID to establish parent-child relationship
         parentOperationId: operationId,
       });
