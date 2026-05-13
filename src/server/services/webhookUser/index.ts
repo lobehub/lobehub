@@ -1,6 +1,5 @@
 import { type LobeChatDatabase } from '@lobechat/database';
 import { and, eq } from 'drizzle-orm';
-import { NextResponse } from 'next/server';
 
 import { UserModel } from '@/database/models/user';
 import { type UserItem } from '@/database/schemas';
@@ -76,7 +75,7 @@ export class WebhookUserService {
       );
     }
 
-    return NextResponse.json({ message: 'user updated', success: true }, { status: 200 });
+    return Response.json({ message: 'user updated', success: true }, { status: 200 });
   };
 
   /**
@@ -101,6 +100,6 @@ export class WebhookUserService {
       );
     }
 
-    return NextResponse.json({ message: 'user signed out', success: true }, { status: 200 });
+    return Response.json({ message: 'user signed out', success: true }, { status: 200 });
   };
 }

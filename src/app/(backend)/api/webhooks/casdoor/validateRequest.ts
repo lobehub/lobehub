@@ -1,5 +1,3 @@
-import { headers } from 'next/headers';
-
 import { authEnv } from '@/envs/auth';
 
 export type CasdoorUserEntity = {
@@ -18,8 +16,7 @@ interface CasdoorWebhookPayload {
 
 export const validateRequest = async (request: Request, secret?: string) => {
   const payloadString = await request.text();
-  const headerPayload = await headers();
-  const casdoorSecret = headerPayload.get('casdoor-secret')!;
+  const casdoorSecret = request.headers.get('casdoor-secret');
   try {
     if (casdoorSecret === secret) {
       return JSON.parse(payloadString, (k, v) =>

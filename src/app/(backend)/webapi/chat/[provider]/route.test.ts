@@ -89,7 +89,7 @@ describe('POST handler', () => {
         body: JSON.stringify(mockChatPayload),
       });
 
-      const mockChatResponse: any = { success: true, message: 'Reply from agent' };
+      const mockChatResponse = Response.json({ success: true, message: 'Reply from agent' });
       const mockRuntime: LobeRuntimeAI = {
         baseURL: 'abc',
         chat: vi.fn().mockResolvedValue(mockChatResponse),
@@ -99,7 +99,8 @@ describe('POST handler', () => {
 
       const response = await POST(request as unknown as Request, { params: mockParams });
 
-      expect(response).toEqual(mockChatResponse);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ success: true, message: 'Reply from agent' });
       expect(mockRuntime.chat).toHaveBeenCalledWith(mockChatPayload, {
         user: 'test-user-id',
         signal: expect.anything(),

@@ -1,7 +1,6 @@
 import { type LobeToolManifest } from '@lobechat/context-engine';
 import { MarketSDK } from '@lobehub/market-sdk';
 import debug from 'debug';
-import { type NextRequest } from 'next/server';
 
 import { type TrustedClientUserInfo } from '@/libs/trusted-client';
 import { generateTrustedClientToken, getTrustedClientTokenForSession } from '@/libs/trusted-client';
@@ -15,7 +14,7 @@ const MARKET_BASE_URL = process.env.MARKET_BASE_URL || 'https://market.lobehub.c
 /**
  * Extract access token from Authorization header
  */
-export function extractAccessToken(req: NextRequest): string | undefined {
+export function extractAccessToken(req: Request): string | undefined {
   const authHeader = req.headers.get('authorization');
   if (authHeader?.startsWith('Bearer ')) {
     return authHeader.slice(7);
@@ -107,10 +106,10 @@ export class MarketService {
   // ============================== Factory Methods ==============================
 
   /**
-   * Create MarketService from Next.js request (server-side only)
+   * Create MarketService from a standard request (server-side only)
    * Extracts accessToken from Authorization header and trustedClientToken from session
    */
-  static async createFromRequest(req: NextRequest): Promise<MarketService> {
+  static async createFromRequest(req: Request): Promise<MarketService> {
     const accessToken = extractAccessToken(req);
     const trustedClientToken = await getTrustedClientTokenForSession();
 

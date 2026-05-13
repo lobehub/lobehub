@@ -1,13 +1,6 @@
-import { NextResponse } from 'next/server';
+import { createNextAPIRouteHandler } from '@/server/api-runtime/next';
+import { versionAPIHandler } from '@/server/api-runtime/version';
 
-import pkg from '../../../../../package.json';
+export type { VersionResponseData } from '@/server/api-runtime/version';
 
-export interface VersionResponseData {
-  version: string;
-}
-
-export async function GET() {
-  return NextResponse.json({
-    version: pkg.version,
-  } satisfies VersionResponseData);
-}
+export const GET = createNextAPIRouteHandler('api-version', versionAPIHandler);

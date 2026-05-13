@@ -1,8 +1,6 @@
 import { type IncomingMessage, type ServerResponse } from 'node:http';
 
 import debug from 'debug';
-import { cookies } from 'next/headers';
-import { type NextRequest } from 'next/server';
 import urlJoin from 'url-join';
 
 import { appEnv } from '@/envs/app';
@@ -24,7 +22,7 @@ export const convertHeadersToNodeHeaders = (nextHeaders: Headers): Record<string
  * Create a Node.js HTTP request object for OIDC Provider
  * @param req Next.js request object
  */
-export const createNodeRequest = async (req: NextRequest): Promise<IncomingMessage> => {
+export const createNodeRequest = async (req: Request): Promise<IncomingMessage> => {
   // Build URL object
   const url = new URL(req.url);
 
@@ -117,6 +115,23 @@ export interface ResponseCollector {
   readonly responseHeaders: Record<string, string | string[]>;
   readonly responseStatus: number;
 }
+
+const parseCookieHeader = (cookieHeader: string | null): Record<string, string> => {
+  if (!cookieHeader) return {};
+
+  return Object.fromEntries(
+    cookieHeader
+      .split(';')
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((part) => {
+        const separatorIndex = part.indexOf('=');
+        if (separatorIndex < 0) return [part, ''];
+
+        return [part.slice(0, separatorIndex), decodeURIComponent(part.slice(separatorIndex + 1))];
+      }),
+  );
+};
 
 /**
  * Create a Node.js HTTP response object for OIDC Provider
@@ -230,6 +245,7 @@ export const createNodeResponse = (resolvePromise: () => void): ResponseCollecto
  */
 export const createContextForInteractionDetails = async (
   uid: string,
+  sourceRequest?: Request,
 ): Promise<{ req: IncomingMessage; res: ServerResponse }> => {
   log('Creating context for interaction details for uid: %s', uid);
   const baseUrl = appEnv.APP_URL!;
@@ -240,12 +256,17 @@ export const createContextForInteractionDetails = async (
   const hostName = parsedUrl.host;
   const protocol = parsedUrl.protocol.replace(':', '');
 
-  // 1. Get real cookies
-  const cookieStore = await cookies();
-  const realCookies: Record<string, string> = {};
-  cookieStore.getAll().forEach((cookie) => {
-    realCookies[cookie.name] = cookie.value;
-  });
+  const realCookies = sourceRequest
+    ? parseCookieHeader(sourceRequest.headers.get('cookie'))
+    : await (async () => {
+        const { cookies } = await import('next/headers');
+        const cookieStore = await cookies();
+        const cookieEntries: Record<string, string> = {};
+        cookieStore.getAll().forEach((cookie) => {
+          cookieEntries[cookie.name] = cookie.value;
+        });
+        return cookieEntries;
+      })();
   log('Real cookies found: %o', Object.keys(realCookies));
 
   // Specifically check for interaction session cookie
@@ -272,33 +293,18 @@ export const createContextForInteractionDetails = async (
     log('No cookies found to set in header');
   }
 
-  // 3. Create mock NextRequest
+  // 3. Create mock request
   // Note: IP, geo, ua and other fields here may be required by certain oidc-provider features.
   // If related issues arise, they may need to be extracted from real request headers (e.g., 'x-forwarded-for', 'user-agent')
   const interactionUrl = urlJoin(baseUrl, `/oauth/consent/${uid}`);
   log('Creating interaction URL: %s', interactionUrl);
 
-  const mockNextRequest = {
-    cookies: {
-      // Simulate NextRequestCookies interface
-      get: (name: string) => cookieStore.get(name)?.value,
-      getAll: () => cookieStore.getAll(),
-      has: (name: string) => cookieStore.has(name),
-    },
-    geo: {},
-    headers,
-    ip: '127.0.0.1',
-    method: 'GET',
-    nextUrl: new URL(interactionUrl),
-    page: { name: undefined, params: undefined },
-    ua: undefined,
-    url: new URL(interactionUrl),
-  } as unknown as NextRequest;
-  log('Mock NextRequest created for url: %s', mockNextRequest.url);
+  const mockRequest = new Request(interactionUrl, { headers, method: 'GET' });
+  log('Mock request created for url: %s', mockRequest.url);
 
   // 4. Use createNodeRequest to create a mock Node.js IncomingMessage
   // pathPrefix is set to '/' because our URL is already in the path format expected by the Provider: /interaction/:uid
-  const req: IncomingMessage = await createNodeRequest(mockNextRequest);
+  const req: IncomingMessage = await createNodeRequest(mockRequest);
   // @ts-ignore - Attach parsed cookies to the mock Node.js request
   req.cookies = realCookies;
   log('Node.js IncomingMessage created, attached real cookies');

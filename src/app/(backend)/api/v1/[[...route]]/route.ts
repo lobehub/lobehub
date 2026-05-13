@@ -1,6 +1,7 @@
-import lobeOpenApi from '@lobechat/openapi';
+import { createNextAPIRouteHandler } from '@/server/api-runtime/next';
+import { openAPIHandler } from '@/server/api-runtime/openapi';
 
-const handler = (request: Request) => lobeOpenApi.fetch(request);
+const handler = createNextAPIRouteHandler('api-v1', openAPIHandler);
 
 // Export all required HTTP method handlers
 export const GET = handler;

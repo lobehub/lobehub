@@ -1,7 +1,5 @@
 import { createHmac } from 'node:crypto';
 
-import { headers } from 'next/headers';
-
 import { authEnv } from '@/envs/auth';
 
 export type LogtToUserEntity = {
@@ -27,8 +25,7 @@ interface LogtoWebhookPayload {
 
 export const validateRequest = async (request: Request, signingKey: string) => {
   const payloadString = await request.text();
-  const headerPayload = await headers();
-  const logtoHeaderSignature = headerPayload.get('logto-signature-sha-256')!;
+  const logtoHeaderSignature = request.headers.get('logto-signature-sha-256');
   try {
     const hmac = createHmac('sha256', signingKey);
     hmac.update(payloadString);
