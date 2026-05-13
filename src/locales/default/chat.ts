@@ -373,6 +373,7 @@ export default {
   'plus.search.modelSearch': 'Model Search',
   'plus.search.off': 'Off',
   'plus.title': 'Add',
+  'plus.tooltip': 'Add files, skills, and more',
   'chatMode.agentCap.env': 'Runtime env',
   'chatMode.agentCap.files': 'File access',
   'chatMode.agentCap.memory': 'Memory',

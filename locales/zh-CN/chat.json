@@ -341,6 +341,7 @@
   "plus.search.modelSearch": "模型联网",
   "plus.search.off": "关闭",
   "plus.title": "添加",
+  "plus.tooltip": "添加文件、技能等",
   "rag.referenceChunks": "引用源",
   "rag.userQuery.actions.delete": "删除 Query 重写",
   "rag.userQuery.actions.regenerate": "重新生成 Query",

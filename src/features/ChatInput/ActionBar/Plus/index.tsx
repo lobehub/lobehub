@@ -300,7 +300,8 @@ const PlusAction = memo(() => {
     <Action
       icon={PlusIcon}
       open={dropdownOpen}
-      title={t('plus.title')}
+      title={t('plus.tooltip')}
+      tooltipProps={{ placement: 'top' }}
       dropdown={{
         menu: { items },
         minWidth: 220,

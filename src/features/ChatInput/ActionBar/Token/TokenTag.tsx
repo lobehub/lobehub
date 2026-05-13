@@ -188,6 +188,10 @@ const Token = memo<TokenTagProps>(({ total: messageString }) => {
         maxValue={maxTokens}
         mode={'used'}
         value={totalToken}
+        size={{
+          blockSize: 32,
+          size: 18,
+        }}
         text={{
           overload: t('tokenTag.overload'),
           remained: t('tokenTag.remained'),

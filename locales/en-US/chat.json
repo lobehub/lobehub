@@ -341,6 +341,7 @@
   "plus.search.modelSearch": "Model Search",
   "plus.search.off": "Off",
   "plus.title": "Add",
+  "plus.tooltip": "Add files, skills, and more",
   "rag.referenceChunks": "Reference Source",
   "rag.userQuery.actions.delete": "Delete Query Rewrite",
   "rag.userQuery.actions.regenerate": "Regenerate Query",
