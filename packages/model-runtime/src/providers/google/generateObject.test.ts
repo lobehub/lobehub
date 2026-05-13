@@ -384,6 +384,136 @@ describe('Google generateObject', () => {
       expect(sanitizeGeminiSchema(null)).toBeNull();
       expect(sanitizeGeminiSchema(undefined)).toBeUndefined();
     });
+
+    // LOBE-8661: nullable string enums should be preserved
+    it('should preserve enum on nullable STRING types (type: array with string)', () => {
+      const schema = {
+        properties: {
+          status: {
+            enum: ['active', 'inactive', null],
+            type: ['string', 'null'],
+          },
+        },
+        type: 'object',
+      };
+
+      const result = sanitizeGeminiSchema(schema);
+
+      expect(result).toEqual({
+        properties: {
+          status: {
+            enum: ['active', 'inactive', null],
+            type: ['string', 'null'],
+          },
+        },
+        type: 'object',
+      });
+    });
+
+    // LOBE-8661: nullable object required should be preserved
+    it('should preserve required on nullable OBJECT types (type: array with object)', () => {
+      const schema = {
+        properties: {
+          config: {
+            properties: { key: { type: 'string' } },
+            required: ['key'],
+            type: ['object', 'null'],
+          },
+        },
+        type: 'object',
+      };
+
+      const result = sanitizeGeminiSchema(schema);
+
+      expect(result).toEqual({
+        properties: {
+          config: {
+            properties: { key: { type: 'string' } },
+            required: ['key'],
+            type: ['object', 'null'],
+          },
+        },
+        type: 'object',
+      });
+    });
+
+    // LOBE-8661: should strip enum from nullable non-STRING types
+    it('should strip enum from nullable non-STRING types (type: array without string)', () => {
+      const schema = {
+        properties: {
+          count: {
+            enum: [1, 2, 3],
+            type: ['integer', 'null'],
+          },
+        },
+        type: 'object',
+      };
+
+      const result = sanitizeGeminiSchema(schema);
+
+      expect(result).toEqual({
+        properties: {
+          count: {
+            type: ['integer', 'null'],
+          },
+        },
+        type: 'object',
+      });
+    });
+
+    // LOBE-8661: recurse into definitions/$defs
+    it('should sanitize schemas under definitions', () => {
+      const schema = {
+        definitions: {
+          Priority: { enum: [1, 2, 3], type: 'number' },
+          Status: { enum: ['active', 'inactive'], type: 'string' },
+        },
+        properties: {
+          priority: { $ref: '#/definitions/Priority' },
+          status: { $ref: '#/definitions/Status' },
+        },
+        type: 'object',
+      };
+
+      const result = sanitizeGeminiSchema(schema);
+
+      expect(result).toEqual({
+        definitions: {
+          Priority: { type: 'number' },
+          Status: { enum: ['active', 'inactive'], type: 'string' },
+        },
+        properties: {
+          priority: { $ref: '#/definitions/Priority' },
+          status: { $ref: '#/definitions/Status' },
+        },
+        type: 'object',
+      });
+    });
+
+    // LOBE-8661: recurse into $defs
+    it('should sanitize schemas under $defs', () => {
+      const schema = {
+        $defs: {
+          Shape: { enum: ['circle', 'square'], required: ['radius'], type: 'string' },
+        },
+        properties: {
+          shape: { $ref: '#/$defs/Shape' },
+        },
+        type: 'object',
+      };
+
+      const result = sanitizeGeminiSchema(schema);
+
+      expect(result).toEqual({
+        $defs: {
+          Shape: { enum: ['circle', 'square'], type: 'string' },
+        },
+        properties: {
+          shape: { $ref: '#/$defs/Shape' },
+        },
+        type: 'object',
+      });
+    });
   });
 
   describe('createGoogleGenerateObject', () => {
@@ -1244,6 +1374,43 @@ describe('Google generateObject', () => {
             type: 'object',
           },
           role: { type: 'string' },
+        },
+        type: 'object',
+      });
+
+      warnSpy.mockRestore();
+    });
+
+    // LOBE-8661: buildGoogleTool should preserve nullable string enum
+    it('should preserve enum on nullable STRING type in tool parameters', () => {
+      const tool: any = {
+        function: {
+          description: 'A tool with nullable enum',
+          name: 'nullableTool',
+          parameters: {
+            properties: {
+              status: {
+                enum: ['active', 'inactive', null],
+                type: ['string', 'null'],
+              },
+            },
+            type: 'object',
+          },
+        },
+        type: 'function',
+      };
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const result = buildGoogleTool(tool);
+
+      // nullable types and null enum values should be passed through as-is
+      expect(result.parametersJsonSchema).toEqual({
+        properties: {
+          status: {
+            enum: ['active', 'inactive', null],
+            type: ['string', 'null'],
+          },
         },
         type: 'object',
       });

@@ -59,11 +59,21 @@ const convertType = (type: string): SchemaType => {
  * Convert OpenAI JSON schema to Google Gemini schema format
  */
 export const convertOpenAISchemaToGoogleSchema = (openAISchema: GenerateObjectSchema): any => {
-  const convertSchema = (schema: any): any => {
+  // Check whether a schema type is (or includes) STRING / OBJECT.
+// Handles both `type: 'string'` and nullable `type: ['string', 'null']`.
+const isStringType = (t: unknown): boolean =>
+  typeof t === 'string' ? t === 'string' : Array.isArray(t) && t.includes('string');
+const isObjectType = (t: unknown): boolean =>
+  typeof t === 'string' ? t === 'object' : Array.isArray(t) && t.includes('object');
+
+const convertSchema = (schema: any): any => {
     if (!schema) return schema;
 
+    // convertType handles single string types; for array types (nullable)
+    // default to STRING which is safe for Gemini Schema proto.
+    const typeArg: string = Array.isArray(schema.type) ? 'string' : schema.type;
     const converted: any = {
-      type: convertType(schema.type),
+      type: convertType(typeArg),
     };
 
     if (schema.description) {
@@ -73,7 +83,7 @@ export const convertOpenAISchemaToGoogleSchema = (openAISchema: GenerateObjectSc
     // Only include enum if type is STRING and enum is non-empty.
     // Gemini proto: enum is only allowed for STRING type.
     // @see https://linear.app/lobehub/issue/LOBE-8661
-    if (schema.enum && schema.enum.length > 0 && schema.type === 'string') {
+    if (schema.enum && schema.enum.length > 0 && isStringType(schema.type)) {
       converted.enum = schema.enum;
     }
 
@@ -91,7 +101,7 @@ export const convertOpenAISchemaToGoogleSchema = (openAISchema: GenerateObjectSc
     // Only include required if type is OBJECT and required is non-empty.
     // Gemini proto: required is only allowed for OBJECT type.
     // @see https://linear.app/lobehub/issue/LOBE-8661
-    if (schema.required && schema.required.length > 0 && schema.type === 'object') {
+    if (schema.required && schema.required.length > 0 && isObjectType(schema.type)) {
       converted.required = schema.required;
     }
 

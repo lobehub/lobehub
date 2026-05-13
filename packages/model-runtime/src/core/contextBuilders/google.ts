@@ -299,10 +299,17 @@ export const sanitizeGeminiSchema = (schema: any): any => {
 
   const sanitized = { ...schema };
 
+  // Determine if the schema type is (or includes) STRING / OBJECT.
+  // Handles both `type: 'string'` and nullable `type: ['string', 'null']`.
+  const isStringType = (t: unknown): boolean =>
+    typeof t === 'string' ? t === 'string' : Array.isArray(t) && t.includes('string');
+  const isObjectType = (t: unknown): boolean =>
+    typeof t === 'string' ? t === 'object' : Array.isArray(t) && t.includes('object');
+
   // Strip enum from non-STRING types and empty enums
   // Gemini proto: "enum: only allowed for STRING type"
   if (sanitized.enum !== undefined) {
-    if (sanitized.type !== 'string' || !Array.isArray(sanitized.enum) || sanitized.enum.length === 0) {
+    if (!isStringType(sanitized.type) || !Array.isArray(sanitized.enum) || sanitized.enum.length === 0) {
       console.warn(
         '[google] sanitizeGeminiSchema stripped enum — not allowed for non-STRING type or empty',
         { type: sanitized.type, enumLength: sanitized.enum?.length },
@@ -314,7 +321,7 @@ export const sanitizeGeminiSchema = (schema: any): any => {
   // Strip required from non-OBJECT types and empty required arrays
   // Gemini proto: "required: only allowed for OBJECT type"
   if (sanitized.required !== undefined) {
-    if (sanitized.type !== 'object' || !Array.isArray(sanitized.required) || sanitized.required.length === 0) {
+    if (!isObjectType(sanitized.type) || !Array.isArray(sanitized.required) || sanitized.required.length === 0) {
       console.warn(
         '[google] sanitizeGeminiSchema stripped required — not allowed for non-OBJECT type or empty',
         { type: sanitized.type, requiredLength: sanitized.required?.length },
@@ -339,6 +346,17 @@ export const sanitizeGeminiSchema = (schema: any): any => {
   for (const key of ['anyOf', 'oneOf', 'allOf']) {
     if (Array.isArray(sanitized[key])) {
       sanitized[key] = sanitized[key].map(sanitizeGeminiSchema);
+    }
+  }
+
+  // Recursively sanitize definitions/$defs — when a tool schema stores
+  // non-compliant constraints inside a referenced sub-schema the walker
+  // must reach into the definitions map as well.
+  for (const key of ['definitions', '$defs']) {
+    if (sanitized[key] && typeof sanitized[key] === 'object') {
+      for (const defKey of Object.keys(sanitized[key])) {
+        sanitized[key][defKey] = sanitizeGeminiSchema(sanitized[key][defKey]);
+      }
     }
   }
 
