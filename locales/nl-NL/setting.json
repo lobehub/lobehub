@@ -913,8 +913,6 @@
   "tools.builtins.lobe-agent-documents.title": "Documenten",
   "tools.builtins.lobe-agent-management.description": "Maak, beheer en orkestreer AI‑agents",
   "tools.builtins.lobe-agent-management.title": "Agentbeheer",
-  "tools.builtins.lobe-agent-marketplace.description": "Toon gebruikers een samengestelde Agent Marketplace-kaart en registreer welke sjablonen ze kiezen.",
-  "tools.builtins.lobe-agent-marketplace.title": "Agent Marketplace",
   "tools.builtins.lobe-artifacts.description": "Genereer en bekijk interactieve UI-componenten, datavisualisaties, grafieken, SVG-afbeeldingen en webapplicaties in realtime. Creëer rijke visuele content waarmee gebruikers direct kunnen interageren.",
   "tools.builtins.lobe-artifacts.readme": "Genereer en bekijk interactieve UI-componenten, datavisualisaties, grafieken, SVG-afbeeldingen en webapplicaties in realtime. Creëer rijke visuele content waarmee gebruikers direct kunnen interageren.",
   "tools.builtins.lobe-artifacts.title": "Artefacten",

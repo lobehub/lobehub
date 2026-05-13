@@ -35,7 +35,6 @@
   "messenger.linkModal.notConfigured": "هذا الاتصال غير متاح حاليًا. يرجى المحاولة مرة أخرى لاحقًا.",
   "messenger.linkModal.openCta": "افتح في {{platform}}",
   "messenger.linkModal.scanHint": "أو امسح باستخدام هاتفك لفتح {{platform}}.",
-  "messenger.linkModal.title": "ربط المراسلة",
   "messenger.list.discord.description": "تحدث مع وكلاء LobeHub الخاصين بك من أي خادم Discord عبر الرسائل الخاصة مع بوت LobeHub.",
   "messenger.list.slack.description": "تحدث مع وكلاء LobeHub الخاصين بك من أي مساحة عمل Slack عبر الرسائل الخاصة أو @LobeHub.",
   "messenger.list.telegram.description": "تحدث مع وكلاء LobeHub الخاصين بك في Telegram واختر من يجيب من أي مكان.",

@@ -35,7 +35,6 @@
   "messenger.linkModal.notConfigured": "To połączenie jest obecnie niedostępne. Spróbuj ponownie później.",
   "messenger.linkModal.openCta": "Otwórz w {{platform}}",
   "messenger.linkModal.scanHint": "Lub zeskanuj telefonem, aby otworzyć {{platform}}.",
-  "messenger.linkModal.title": "Połącz komunikator",
   "messenger.list.discord.description": "Rozmawiaj ze swoimi agentami LobeHub na dowolnym serwerze Discord za pomocą DM z botem LobeHub.",
   "messenger.list.slack.description": "Rozmawiaj ze swoimi agentami LobeHub w dowolnej przestrzeni roboczej Slack za pomocą DM lub @LobeHub.",
   "messenger.list.telegram.description": "Rozmawiaj ze swoimi agentami LobeHub w Telegramie i wybierz, który z nich odpowiada z dowolnego miejsca.",

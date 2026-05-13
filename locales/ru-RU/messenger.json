@@ -35,7 +35,6 @@
   "messenger.linkModal.notConfigured": "Это подключение сейчас недоступно. Пожалуйста, попробуйте позже.",
   "messenger.linkModal.openCta": "Открыть в {{platform}}",
   "messenger.linkModal.scanHint": "Или отсканируйте с помощью телефона, чтобы открыть {{platform}}.",
-  "messenger.linkModal.title": "Подключить мессенджер",
   "messenger.list.discord.description": "Общайтесь с агентами LobeHub из любого сервера Discord через личные сообщения с ботом LobeHub.",
   "messenger.list.slack.description": "Общайтесь с агентами LobeHub из любого рабочего пространства Slack через личные сообщения или @LobeHub.",
   "messenger.list.telegram.description": "Общайтесь с агентами LobeHub в Telegram и выбирайте, кто будет отвечать, из любого места.",

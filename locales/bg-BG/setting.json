@@ -913,8 +913,6 @@
   "tools.builtins.lobe-agent-documents.title": "Документи",
   "tools.builtins.lobe-agent-management.description": "Създаване, управление и оркестриране на AI агенти",
   "tools.builtins.lobe-agent-management.title": "Управление на агенти",
-  "tools.builtins.lobe-agent-marketplace.description": "Показване на потребителите на подбрана карта на Пазара на агенти и записване на избраните от тях шаблони.",
-  "tools.builtins.lobe-agent-marketplace.title": "Пазар на агенти",
   "tools.builtins.lobe-artifacts.description": "Генерирайте и визуализирайте интерактивни UI компоненти, визуализации на данни, диаграми, SVG графики и уеб приложения в реално време. Създавайте богато визуално съдържание, с което потребителите могат директно да взаимодействат.",
   "tools.builtins.lobe-artifacts.readme": "Генерирайте и визуализирайте интерактивни UI компоненти, визуализации на данни, диаграми, SVG графики и уеб приложения в реално време. Създавайте богато визуално съдържание, с което потребителите могат директно да взаимодействат.",
   "tools.builtins.lobe-artifacts.title": "Артефакти",

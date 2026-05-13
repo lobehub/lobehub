@@ -913,8 +913,6 @@
   "tools.builtins.lobe-agent-documents.title": "Documents",
   "tools.builtins.lobe-agent-management.description": "Create, manage, and orchestrate AI agents",
   "tools.builtins.lobe-agent-management.title": "Agent Management",
-  "tools.builtins.lobe-agent-marketplace.description": "Show users a curated Agent Marketplace card and record which templates they pick.",
-  "tools.builtins.lobe-agent-marketplace.title": "Agent Marketplace",
   "tools.builtins.lobe-artifacts.description": "Generate and preview interactive UI components and visualizations",
   "tools.builtins.lobe-artifacts.readme": "Generate and live-preview interactive UI components, data visualizations, charts, SVG graphics, and web applications. Create rich visual content that users can interact with directly.",
   "tools.builtins.lobe-artifacts.title": "Artifacts",

@@ -913,8 +913,6 @@
   "tools.builtins.lobe-agent-documents.title": "Documentos",
   "tools.builtins.lobe-agent-management.description": "Crie, gerencie e orquestre agentes de IA",
   "tools.builtins.lobe-agent-management.title": "Gerenciamento de Agentes",
-  "tools.builtins.lobe-agent-marketplace.description": "Mostre aos usuários um cartão do Mercado de Agentes selecionado e registre quais modelos eles escolhem.",
-  "tools.builtins.lobe-agent-marketplace.title": "Mercado de Agentes",
   "tools.builtins.lobe-artifacts.description": "Gere e visualize em tempo real componentes de interface interativos, visualizações de dados, gráficos, imagens SVG e aplicações web. Crie conteúdos visuais ricos com os quais os usuários possam interagir diretamente.",
   "tools.builtins.lobe-artifacts.readme": "Gere e visualize em tempo real componentes de interface interativos, visualizações de dados, gráficos, gráficos SVG e aplicações web. Crie conteúdos visuais ricos com os quais os usuários possam interagir diretamente.",
   "tools.builtins.lobe-artifacts.title": "Artefatos",

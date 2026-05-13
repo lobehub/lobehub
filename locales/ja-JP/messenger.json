@@ -35,7 +35,6 @@
   "messenger.linkModal.notConfigured": "この接続は現在利用できません。後でもう一度お試しください。",
   "messenger.linkModal.openCta": "{{platform}} で開く",
   "messenger.linkModal.scanHint": "または、携帯電話でスキャンして {{platform}} を開きます。",
-  "messenger.linkModal.title": "メッセンジャーを接続",
   "messenger.list.discord.description": "任意の Discord サーバーから DM を使用して LobeHub エージェントとチャットできます。",
   "messenger.list.slack.description": "任意の Slack ワークスペースから DM または @LobeHub を使用して LobeHub エージェントとチャットできます。",
   "messenger.list.telegram.description": "Telegram で LobeHub エージェントとチャットし、どこからでも応答するエージェントを選択できます。",

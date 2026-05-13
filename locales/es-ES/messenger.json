@@ -35,7 +35,6 @@
   "messenger.linkModal.notConfigured": "Esta conexión no está disponible en este momento. Por favor, inténtalo de nuevo más tarde.",
   "messenger.linkModal.openCta": "Abrir en {{platform}}",
   "messenger.linkModal.scanHint": "O escanea con tu teléfono para abrir {{platform}}.",
-  "messenger.linkModal.title": "Conectar Messenger",
   "messenger.list.discord.description": "Chatea con tus agentes de LobeHub desde cualquier servidor de Discord mediante mensajes directos con el bot de LobeHub.",
   "messenger.list.slack.description": "Chatea con tus agentes de LobeHub desde cualquier espacio de trabajo de Slack mediante mensajes directos o @LobeHub.",
   "messenger.list.telegram.description": "Chatea con tus agentes de LobeHub en Telegram y elige quién responde desde cualquier lugar.",

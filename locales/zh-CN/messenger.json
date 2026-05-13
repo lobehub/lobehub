@@ -35,7 +35,6 @@
   "messenger.linkModal.notConfigured": "此连接暂不可用，请稍后再试。",
   "messenger.linkModal.openCta": "在 {{platform}} 中打开",
   "messenger.linkModal.scanHint": "或用手机扫码打开 {{platform}}。",
-  "messenger.linkModal.title": "连接 Messenger",
   "messenger.list.discord.description": "在任意 Discord 服务器中通过私信 LobeHub 机器人与你的 Agent 对话。",
   "messenger.list.slack.description": "在任意 Slack 工作区中通过私信或 @LobeHub 与你的 Agent 对话。",
   "messenger.list.telegram.description": "在 Telegram 中与你的 LobeHub Agent 对话，随时切换接收消息的 Agent。",

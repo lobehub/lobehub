@@ -35,7 +35,6 @@
   "messenger.linkModal.notConfigured": "Kết nối này hiện không khả dụng. Vui lòng thử lại sau.",
   "messenger.linkModal.openCta": "Mở trong {{platform}}",
   "messenger.linkModal.scanHint": "Hoặc quét bằng điện thoại của bạn để mở {{platform}}.",
-  "messenger.linkModal.title": "Kết nối Messenger",
   "messenger.list.discord.description": "Trò chuyện với các đại lý LobeHub của bạn từ bất kỳ máy chủ Discord nào qua DM với bot LobeHub.",
   "messenger.list.slack.description": "Trò chuyện với các đại lý LobeHub của bạn từ bất kỳ không gian làm việc Slack nào qua DM hoặc @LobeHub.",
   "messenger.list.telegram.description": "Trò chuyện với các đại lý LobeHub của bạn trong Telegram và chọn ai sẽ trả lời từ bất kỳ đâu.",

@@ -35,7 +35,6 @@
   "messenger.linkModal.notConfigured": "این اتصال در حال حاضر در دسترس نیست. لطفاً بعداً دوباره امتحان کنید.",
   "messenger.linkModal.openCta": "باز کردن در {{platform}}",
   "messenger.linkModal.scanHint": "یا با تلفن خود اسکن کنید تا {{platform}} باز شود.",
-  "messenger.linkModal.title": "اتصال پیام‌رسان",
   "messenger.list.discord.description": "با نمایندگان LobeHub خود از هر سرور Discord از طریق پیام مستقیم با ربات LobeHub گفتگو کنید.",
   "messenger.list.slack.description": "با نمایندگان LobeHub خود از هر فضای کاری Slack از طریق پیام مستقیم یا @LobeHub گفتگو کنید.",
   "messenger.list.telegram.description": "در Telegram با نمایندگان LobeHub خود گفتگو کنید و انتخاب کنید کدام یک پاسخ دهد.",

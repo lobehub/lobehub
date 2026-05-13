@@ -913,8 +913,6 @@
   "tools.builtins.lobe-agent-documents.title": "المستندات",
   "tools.builtins.lobe-agent-management.description": "إنشاء الوكلاء وإدارتهم وتنظيم عملهم",
   "tools.builtins.lobe-agent-management.title": "إدارة الوكلاء",
-  "tools.builtins.lobe-agent-marketplace.description": "عرض بطاقة سوق الوكلاء المختارة للمستخدمين وتسجيل القوالب التي يختارونها.",
-  "tools.builtins.lobe-agent-marketplace.title": "سوق الوكلاء",
   "tools.builtins.lobe-artifacts.description": "إنشاء ومعاينة مكونات واجهة المستخدم التفاعلية، وتصوير البيانات، والمخططات، والرسومات بصيغة SVG، وتطبيقات الويب بشكل مباشر. أنشئ محتوى بصريًا غنيًا يمكن للمستخدمين التفاعل معه مباشرة.",
   "tools.builtins.lobe-artifacts.readme": "أنشئ معاينات حية وتفاعلية لمكونات واجهة المستخدم، وتصوير البيانات، والمخططات، والرسومات بصيغة SVG، وتطبيقات الويب. أنشئ محتوى بصريًا غنيًا يمكن للمستخدمين التفاعل معه مباشرة.",
   "tools.builtins.lobe-artifacts.title": "القطع الفنية",
