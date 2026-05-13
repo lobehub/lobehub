@@ -18,6 +18,11 @@ dotenvExpand.expand(dotenv.config()); // Load .env
 dotenvExpand.expand(dotenv.config({ override: true, path: `.env.${env}` })); // Load .env.[env] and override
 dotenvExpand.expand(dotenv.config({ override: true, path: `.env.${env}.local` })); // Load .env.[env].local and override
 
+if (process.env.SKIP_DB_MIGRATE === '1') {
+  console.log('🟢 SKIP_DB_MIGRATE=1, migration skipped');
+  process.exit(0);
+}
+
 const migrationsFolder = join(__dirname, '../../packages/database/migrations');
 
 const runMigrations = async () => {
