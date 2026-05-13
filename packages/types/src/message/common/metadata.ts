@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { RequestTrigger } from '../../agentRuntime';
+import { RequestTrigger } from '../../agentRuntime';
 import type { PageSelection } from './pageSelection';
 import { PageSelectionSchema } from './pageSelection';
 
@@ -175,6 +175,7 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   scope: z.string().optional(),
   subAgentId: z.string().optional(),
   toolExecutionTimeMs: z.number().optional(),
+  trigger: z.nativeEnum(RequestTrigger).optional(),
   usage: ModelUsageSchema.optional(),
 });
 
