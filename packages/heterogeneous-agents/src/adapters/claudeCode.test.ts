@@ -1210,6 +1210,24 @@ describe('ClaudeCodeAdapter', () => {
       expect(textChunks).toHaveLength(0);
     });
 
+    it('emits only the missing text suffix when the final assistant block is longer than streamed deltas', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(messageStart('msg_1'));
+      adapter.adapt(delta('text_delta', 'text', '修'));
+
+      const events = adapter.adapt({
+        message: { id: 'msg_1', content: [{ text: '修复完成', type: 'text' }] },
+        type: 'assistant',
+      });
+
+      const textChunks = events.filter(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'text',
+      );
+      expect(textChunks).toHaveLength(1);
+      expect(textChunks[0].data.content).toBe('复完成');
+    });
+
     it('suppresses handleAssistant thinking emission when thinking_delta already streamed', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt(init);

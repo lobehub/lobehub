@@ -288,10 +288,10 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
    * authoritative usage on `message_delta`.
    */
   private currentStreamEventModel: string | undefined;
-  /** message.ids whose text has already been streamed as deltas — skip the full-block emission */
-  private messagesWithStreamedText = new Set<string>();
-  /** message.ids whose thinking has already been streamed as deltas — skip the full-block emission */
-  private messagesWithStreamedThinking = new Set<string>();
+  /** Cumulative text streamed via partial-message deltas, keyed by message.id. */
+  private streamedTextByMessageId = new Map<string, string>();
+  /** Cumulative thinking streamed via partial-message deltas, keyed by message.id. */
+  private streamedThinkingByMessageId = new Map<string, string>();
   /**
    * Cumulative tool_use blocks per message.id. CC streams each tool_use in
    * its OWN assistant event, and the handler's in-memory assistant.tools
@@ -457,18 +457,25 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       }
     }
 
-    // Skip full-block emission when deltas have already been streamed for
-    // this message.id (partial-messages mode). Otherwise the UI would see
-    // the text/thinking twice — once as deltas, once as a giant trailing chunk.
-    const textAlreadyStreamed = !!messageId && this.messagesWithStreamedText.has(messageId);
-    const thinkingAlreadyStreamed = !!messageId && this.messagesWithStreamedThinking.has(messageId);
-    if (textParts.length > 0 && !textAlreadyStreamed) {
-      events.push(this.makeChunkEvent({ chunkType: 'text', content: textParts.join('') }));
+    // Under `--include-partial-messages`, CC may emit deltas first and then a
+    // final full assistant block for the SAME message.id. If the full block is
+    // longer than the streamed deltas, emit only the missing suffix so the
+    // persisted content does not lose the tail of the message.
+    const textCompletion = this.getTrailingCompletion(
+      messageId,
+      textParts.join(''),
+      this.streamedTextByMessageId,
+    );
+    const thinkingCompletion = this.getTrailingCompletion(
+      messageId,
+      reasoningParts.join(''),
+      this.streamedThinkingByMessageId,
+    );
+    if (textCompletion) {
+      events.push(this.makeChunkEvent({ chunkType: 'text', content: textCompletion }));
     }
-    if (reasoningParts.length > 0 && !thinkingAlreadyStreamed) {
-      events.push(
-        this.makeChunkEvent({ chunkType: 'reasoning', reasoning: reasoningParts.join('') }),
-      );
+    if (thinkingCompletion) {
+      events.push(this.makeChunkEvent({ chunkType: 'reasoning', reasoning: thinkingCompletion }));
     }
     events.push(...this.emitToolChunk(newToolCalls, messageId));
 
@@ -809,11 +816,21 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
         if (!delta) return [];
         const msgId = this.currentStreamEventMessageId;
         if (delta.type === 'text_delta' && delta.text) {
-          if (msgId) this.messagesWithStreamedText.add(msgId);
+          if (msgId) {
+            this.streamedTextByMessageId.set(
+              msgId,
+              `${this.streamedTextByMessageId.get(msgId) ?? ''}${delta.text}`,
+            );
+          }
           return [this.makeChunkEvent({ chunkType: 'text', content: delta.text })];
         }
         if (delta.type === 'thinking_delta' && delta.thinking) {
-          if (msgId) this.messagesWithStreamedThinking.add(msgId);
+          if (msgId) {
+            this.streamedThinkingByMessageId.set(
+              msgId,
+              `${this.streamedThinkingByMessageId.get(msgId) ?? ''}${delta.thinking}`,
+            );
+          }
           return [this.makeChunkEvent({ chunkType: 'reasoning', reasoning: delta.thinking })];
         }
         return [];
@@ -879,6 +896,24 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       this.makeEvent('stream_end', {}),
       this.makeEvent('stream_start', { model, newStep: true, provider: 'claude-code' }),
     ];
+  }
+
+  private getTrailingCompletion(
+    messageId: string | undefined,
+    fullContent: string,
+    streamedByMessageId: Map<string, string>,
+  ): string | undefined {
+    if (!fullContent) return;
+    if (!messageId) return fullContent;
+
+    const streamed = streamedByMessageId.get(messageId);
+    if (!streamed) return fullContent;
+    if (fullContent === streamed) return;
+
+    if (fullContent.startsWith(streamed)) {
+      const suffix = fullContent.slice(streamed.length);
+      return suffix || undefined;
+    }
   }
 
   // ─── Event factories ───
