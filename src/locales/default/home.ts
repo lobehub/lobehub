@@ -9,6 +9,7 @@ export default {
   'brief.action.confirm': 'Confirm',
   'brief.action.confirmDone': 'Confirm complete',
   'brief.action.feedback': 'Feedback',
+  'brief.action.ignore': 'Ignore',
   'brief.action.retry': 'Retry',
   'brief.collapse': 'Show less',
   'brief.commentPlaceholder': 'Share your feedback...',
