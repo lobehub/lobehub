@@ -13,6 +13,7 @@
  * that producers have no business pulling in).
  */
 export { AgentStreamPipeline, type AgentStreamPipelineOptions } from './agentStreamPipeline';
+export { type CliSpawnPlan, resolveCliSpawnPlan, spawnCli } from './cliSpawn';
 export { CodexFileChangeTracker } from './codexFileChangeTracker';
 export {
   type AgentContentBlock,

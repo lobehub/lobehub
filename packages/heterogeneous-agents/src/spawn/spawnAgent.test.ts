@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events';
+import type * as os from 'node:os';
 import { PassThrough } from 'node:stream';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -15,6 +16,11 @@ vi.mock('node:child_process', async (importOriginal) => {
       return nextFakeProc;
     },
   };
+});
+
+vi.mock('node:os', async () => {
+  const actual = await vi.importActual<typeof os>('node:os');
+  return { ...actual, platform: vi.fn(() => 'linux') };
 });
 
 const createFakeProc = ({
@@ -242,7 +248,9 @@ describe('spawnAgent', () => {
     const imageIdx = args.indexOf('--image');
     expect(imageIdx).toBeGreaterThan(-1);
     const materializedPath = args[imageIdx + 1]!;
-    expect(materializedPath.startsWith(cacheDir)).toBe(true);
+    const normalizedCacheDir = cacheDir.replaceAll('\\', '/');
+    const normalizedMaterializedPath = materializedPath.replaceAll('\\', '/');
+    expect(normalizedMaterializedPath.startsWith(normalizedCacheDir)).toBe(true);
     expect(materializedPath.endsWith('.png')).toBe(true);
     // Codex receives the prompt text on stdin.
     const stdinPayload = (nextFakeProc as any).stdin.write.mock.calls[0][0] as string;

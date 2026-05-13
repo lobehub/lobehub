@@ -1,9 +1,9 @@
 import type { ChildProcess } from 'node:child_process';
-import { spawn } from 'node:child_process';
 
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 
 import { AgentStreamPipeline } from './agentStreamPipeline';
+import { spawnCli } from './cliSpawn';
 import type { AgentPromptInput, BuildAgentInputOptions } from './input';
 import { buildAgentInput } from './input';
 
@@ -230,7 +230,7 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
   });
   const cwd = options.cwd || process.cwd();
 
-  const proc = spawn(command, args, {
+  const proc = await spawnCli(command, args, {
     cwd,
     detached: process.platform !== 'win32',
     env: { ...process.env, ...options.env },

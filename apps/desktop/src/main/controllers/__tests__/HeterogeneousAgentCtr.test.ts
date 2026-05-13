@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { access, mkdtemp, readdir, readFile, rm, unlink, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import * as os from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
 
@@ -8,6 +8,11 @@ import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ip
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import HeterogeneousAgentCtr from '../HeterogeneousAgentCtr';
+
+vi.mock('node:os', async () => {
+  const actual = await vi.importActual<typeof os>('node:os');
+  return { ...actual, platform: vi.fn(() => 'linux') };
+});
 
 const FAKE_DESKTOP_PATH = '/Users/fake/Desktop';
 
@@ -111,7 +116,7 @@ describe('HeterogeneousAgentCtr', () => {
   let appStoragePath: string;
 
   beforeEach(async () => {
-    appStoragePath = await mkdtemp(path.join(tmpdir(), 'lobehub-hetero-'));
+    appStoragePath = await mkdtemp(path.join(os.tmpdir(), 'lobehub-hetero-'));
   });
 
   afterEach(async () => {
@@ -817,7 +822,7 @@ describe('HeterogeneousAgentCtr', () => {
      * it like a real pending intervention and tries to unlink it.
      */
     const seedPendingIntervention = async (ctr: HeterogeneousAgentCtr, opId: string) => {
-      const tmpConfigPath = path.join(tmpdir(), `lobe-cc-mcp-test-${opId}.json`);
+      const tmpConfigPath = path.join(os.tmpdir(), `lobe-cc-mcp-test-${opId}.json`);
       await writeFile(tmpConfigPath, '{"mcpServers":{}}');
       const slot = {
         bridge: {} as any,
