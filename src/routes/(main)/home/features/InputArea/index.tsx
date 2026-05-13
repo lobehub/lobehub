@@ -15,13 +15,14 @@ import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfi
 
 import BotIntegrationBanner, { BOT_INTEGRATION_BANNER_ID } from './BotIntegrationBanner';
 import { stripMarkdownLinks } from './hintFormat';
+import MessengerBanner, { MESSENGER_BANNER_ID } from './MessengerBanner';
 import SkillInstallBanner, { SKILL_INSTALL_BANNER_ID } from './SkillInstallBanner';
 import StarterList from './StarterList';
 import { useSend } from './useSend';
 
 const leftActions: ActionKeys[] = ['model', 'search', 'fileUpload', 'tools'];
 
-type BannerKind = 'skill' | 'botIntegration';
+type BannerKind = 'skill' | 'botIntegration' | 'messenger';
 
 const InputArea = () => {
   const { loading, send, agentId } = useSend();
@@ -34,6 +35,9 @@ const InputArea = () => {
   );
   const isBotIntegrationBannerDismissed = useGlobalStore(
     systemStatusSelectors.isBannerDismissed(BOT_INTEGRATION_BANNER_ID),
+  );
+  const isMessengerBannerDismissed = useGlobalStore(
+    systemStatusSelectors.isBannerDismissed(MESSENGER_BANNER_ID),
   );
   const chatInputRef = useRef<HTMLDivElement>(null);
 
@@ -54,6 +58,7 @@ const InputArea = () => {
       candidates.push('skill');
     }
     if (!isBotIntegrationBannerDismissed) candidates.push('botIntegration');
+    if (!isMessengerBannerDismissed) candidates.push('messenger');
     if (candidates.length === 0) return;
 
     hasPickedRef.current = true;
@@ -63,13 +68,15 @@ const InputArea = () => {
     isBotIntegrationBannerDismissed,
     isKlavisEnabled,
     isLobehubSkillEnabled,
+    isMessengerBannerDismissed,
     isSkillBannerDismissed,
     serverConfigInit,
   ]);
 
   const isActiveBannerDismissed =
     (activeBanner === 'skill' && isSkillBannerDismissed) ||
-    (activeBanner === 'botIntegration' && isBotIntegrationBannerDismissed);
+    (activeBanner === 'botIntegration' && isBotIntegrationBannerDismissed) ||
+    (activeBanner === 'messenger' && isMessengerBannerDismissed);
   const visibleBanner = isActiveBannerDismissed ? null : activeBanner;
 
   // Get agent's model info for vision support check. Falls back to an empty
@@ -110,6 +117,7 @@ const InputArea = () => {
       >
         {visibleBanner === 'skill' && <SkillInstallBanner />}
         {visibleBanner === 'botIntegration' && <BotIntegrationBanner />}
+        {visibleBanner === 'messenger' && <MessengerBanner />}
         <DragUploadZone
           style={{ position: 'relative', zIndex: 1 }}
           onUploadFiles={handleUploadFiles}

@@ -2,33 +2,24 @@
 
 import { ActionIcon, Flexbox, Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { RadioTowerIcon, X } from 'lucide-react';
+import { MessageCircleIcon, X } from 'lucide-react';
 import type { FC } from 'react';
 import React, { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import { getPlatformIcon } from '@/routes/(main)/agent/channel/const';
-import { useAgentStore } from '@/store/agent';
-import { builtinAgentSelectors } from '@/store/agent/selectors/builtinAgentSelectors';
 import { useGlobalStore } from '@/store/global';
 
 // Bump this id when the banner content changes so dismissing the old
 // variant does not hide the new one.
-export const BOT_INTEGRATION_BANNER_ID = 'bot-integration-v2';
+export const MESSENGER_BANNER_ID = 'messenger-v1';
 
 const ICON_SIZE = 16;
 const AVATAR_SIZE = 24;
 
-const BANNER_PLATFORM_NAMES = [
-  'Discord',
-  'Slack',
-  'Telegram',
-  'Line',
-  'Lark',
-  'WeChat',
-  'QQ',
-] as const;
+// Platforms supported by the Messenger feature (see src/features/Messenger/constants.tsx).
+const BANNER_PLATFORM_NAMES = ['Discord', 'Slack', 'Telegram'] as const;
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   avatar: css`
@@ -80,11 +71,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const BotIntegrationBanner = memo(() => {
+const MessengerBanner = memo(() => {
   const { t } = useTranslation('common');
   const navigate = useNavigate();
 
-  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
   const platformIcons = useMemo(() => {
@@ -103,18 +93,17 @@ const BotIntegrationBanner = memo(() => {
     return icons;
   }, []);
 
-  const handleNavigateToChannels = useCallback(() => {
-    if (!inboxAgentId) return;
-    navigate(`/agent/${inboxAgentId}/channel`);
-  }, [inboxAgentId, navigate]);
+  const handleNavigateToMessenger = useCallback(() => {
+    navigate('/settings/messenger');
+  }, [navigate]);
 
   const handleDismiss = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
       const current = useGlobalStore.getState().status.dismissedBannerIds || [];
-      if (current.includes(BOT_INTEGRATION_BANNER_ID)) return;
+      if (current.includes(MESSENGER_BANNER_ID)) return;
       updateSystemStatus({
-        dismissedBannerIds: [...current, BOT_INTEGRATION_BANNER_ID],
+        dismissedBannerIds: [...current, MESSENGER_BANNER_ID],
       });
     },
     [updateSystemStatus],
@@ -123,12 +112,12 @@ const BotIntegrationBanner = memo(() => {
   return (
     <div
       className={styles.banner}
-      data-testid="bot-integration-banner"
-      onClick={handleNavigateToChannels}
+      data-testid="messenger-banner"
+      onClick={handleNavigateToMessenger}
     >
       <Flexbox horizontal align="center" gap={8}>
-        <Icon className={styles.icon} icon={RadioTowerIcon} size={18} />
-        <span className={styles.text}>{t('botIntegrationBanner.title')}</span>
+        <Icon className={styles.icon} icon={MessageCircleIcon} size={18} />
+        <span className={styles.text}>{t('messengerBanner.title')}</span>
       </Flexbox>
       <Flexbox horizontal align="center" gap={8}>
         {platformIcons.length > 0 && (
@@ -147,7 +136,7 @@ const BotIntegrationBanner = memo(() => {
         <ActionIcon
           icon={X}
           size="small"
-          title={t('botIntegrationBanner.dismiss')}
+          title={t('messengerBanner.dismiss')}
           onClick={handleDismiss}
         />
       </Flexbox>
@@ -155,6 +144,6 @@ const BotIntegrationBanner = memo(() => {
   );
 });
 
-BotIntegrationBanner.displayName = 'BotIntegrationBanner';
+MessengerBanner.displayName = 'MessengerBanner';
 
-export default BotIntegrationBanner;
+export default MessengerBanner;

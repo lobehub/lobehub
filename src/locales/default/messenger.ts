@@ -28,7 +28,6 @@ export default {
     "This connection isn't available right now. Please try again later.",
   'messenger.linkModal.openCta': 'Open in {{platform}}',
   'messenger.linkModal.scanHint': 'Or scan with your phone to open {{platform}}.',
-  'messenger.linkModal.title': 'Connect Messenger',
   'messenger.noPlatformsConfigured': 'No platforms are available yet. Check back soon.',
   'messenger.slack.connectModal.continueButton': 'Continue in Slack',
   'messenger.slack.connectModal.description':
