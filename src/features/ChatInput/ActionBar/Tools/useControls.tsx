@@ -4,11 +4,15 @@ import {
   RECOMMENDED_SKILLS,
   RecommendedSkillType,
 } from '@lobechat/const';
-import { type ItemType } from '@lobehub/ui';
-import { Avatar, Icon } from '@lobehub/ui';
+import type { ItemType } from '@lobehub/ui';
+import { Avatar, Icon, SearchBar, stopPropagation } from '@lobehub/ui';
 import { McpIcon, SkillsIcon } from '@lobehub/ui/icons';
+import { Switch } from 'antd';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { useMemo } from 'react';
+import { Check, ChevronDown, ChevronRight, MoreHorizontal, Pin, Zap } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useCheckPluginsIsInstalled } from '@/hooks/useCheckPluginsIsInstalled';
@@ -24,8 +28,11 @@ import {
   lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
+import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
+import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 
 import { useAgentId } from '../../hooks/useAgentId';
+import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
 import KlavisServerItem from './KlavisServerItem';
 import KlavisSkillIcon from './KlavisSkillIcon';
 import LobehubSkillIcon from './LobehubSkillIcon';
@@ -35,16 +42,234 @@ import MarketSkillIcon from './MarketSkillIcon';
 import ToolItem from './ToolItem';
 import ToolItemDetailPopover from './ToolItemDetailPopover';
 
-const SKILL_ICON_SIZE = 20;
+const SKILL_ICON_SIZE = 18;
+
+type SkillPolicyMode = 'auto' | 'pinned';
+
+type SkillMenuItem = NonNullable<ItemType> & {
+  popoverContent?: ReactNode;
+  searchText?: string;
+};
+
+const styles = createStaticStyles(({ css }) => ({
+  activationGroupHeader: css`
+    cursor: pointer;
+
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+
+    width: 100%;
+    min-width: 0;
+  `,
+  activationGroupChevron: css`
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  activationGroupMeta: css`
+    overflow: hidden;
+    flex: none;
+
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1;
+    color: ${cssVar.colorTextTertiary};
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+  activationGroupTitle: css`
+    display: flex;
+    gap: 7px;
+    align-items: center;
+
+    min-width: 0;
+    min-height: 18px;
+  `,
+  activationGroupTitleBlock: css`
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    min-width: 0;
+  `,
+  activationGroupTitleText: css`
+    overflow: hidden;
+
+    min-width: 0;
+
+    font-weight: 500;
+    color: ${cssVar.colorText};
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+  count: css`
+    flex: none;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  switchWrap: css`
+    transform-origin: left center;
+    transform: scale(0.88);
+    display: inline-flex;
+    flex: none;
+  `,
+  iconAuto: css`
+    color: ${cssVar.colorWarning};
+  `,
+  iconPinned: css`
+    color: ${cssVar.colorInfo};
+  `,
+  policyButton: css`
+    cursor: pointer;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+
+    color: ${cssVar.colorTextTertiary};
+
+    background: transparent;
+
+    transition:
+      color 0.2s,
+      background 0.2s;
+
+    &:hover {
+      color: ${cssVar.colorTextSecondary};
+      background: ${cssVar.colorFillTertiary};
+    }
+  `,
+  policyCheck: css`
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+
+    width: 16px;
+    height: 16px;
+
+    color: ${cssVar.colorInfo};
+  `,
+  policyItem: css`
+    cursor: pointer;
+
+    display: flex;
+    gap: 10px;
+    align-items: center;
+
+    width: 100%;
+    min-height: 36px;
+    padding-block: 8px;
+    padding-inline: 10px;
+    border: 0;
+    border-radius: 6px;
+
+    font-size: 14px;
+    line-height: 20px;
+    color: ${cssVar.colorText};
+
+    background: transparent;
+
+    transition: background 150ms ${cssVar.motionEaseOut};
+
+    &:hover {
+      background: ${cssVar.colorFillTertiary};
+    }
+  `,
+  policyItemIcon: css`
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+
+    width: 16px;
+    height: 16px;
+  `,
+  policyPanel: css`
+    min-width: 132px;
+    padding: 4px;
+    border-radius: ${cssVar.borderRadius};
+
+    background: ${cssVar.colorBgElevated};
+    box-shadow:
+      0 0 15px 0 #00000008,
+      0 2px 30px 0 #00000014;
+  `,
+  policyText: css`
+    flex: 1;
+    text-align: start;
+  `,
+  search: css`
+    padding-block: 4px 8px;
+    padding-inline: 0;
+  `,
+  searchBox: css`
+    display: flex;
+    align-items: center;
+
+    height: 36px;
+    padding-inline: 10px;
+    border-radius: 10px;
+
+    background: ${cssVar.colorFillQuaternary};
+  `,
+  toolLabel: css`
+    overflow: hidden;
+    flex: 1;
+
+    min-width: 0;
+
+    line-height: 1.4;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+  toolRow: css`
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    justify-content: space-between;
+
+    width: 100%;
+    min-width: 0;
+  `,
+  statsFooter: css`
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    width: 100%;
+  `,
+  statsItem: css`
+    display: inline-flex;
+    gap: 5px;
+    align-items: center;
+
+    font-size: 12px;
+    line-height: 18px;
+    color: ${cssVar.colorTextTertiary};
+  `,
+}));
 
 export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) => void }) => {
   const { t } = useTranslation('setting');
   const agentId = useAgentId();
+  const { updateAgentChatConfig } = useUpdateAgentConfig();
+  const [pinnedOpen, setPinnedOpen] = useState(true);
+  const [autoOpen, setAutoOpen] = useState(true);
+  const [policyOpenId, setPolicyOpenId] = useState<string | null>(null);
+  const [searchKeyword, setSearchKeyword] = useState('');
   const list = useToolStore(pluginSelectors.installedPluginMetaList, isEqual);
   const [checked, togglePlugin] = useAgentStore((s) => [
     agentByIdSelectors.getAgentPluginsById(agentId)(s),
     s.togglePlugin,
   ]);
+  const checkedSet = useMemo(() => new Set(checked), [checked]);
   // In manual skill-activate mode, surface hidden builtin tools (web-browsing,
   // cloud-sandbox, knowledge-base, etc.) so users can explicitly enable/disable them.
   // In auto mode the activator handles those tools transparently, so they remain hidden.
@@ -53,6 +278,7 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
   const isManualSkillMode = useAgentStore(
     (s) => chatConfigByIdSelectors.getSkillActivateModeById(agentId)(s) === 'manual',
   );
+  const isAutoSkillMode = !isManualSkillMode;
   const builtinList = useToolStore(
     isManualSkillMode
       ? builtinToolSelectors.metaListIncludingHidden
@@ -60,6 +286,103 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
     isEqual,
   );
   const plugins = useAgentStore((s) => agentByIdSelectors.getAgentPluginsById(agentId)(s));
+
+  const updateSkillPolicy = useCallback(
+    async (id: string, mode: SkillPolicyMode) => {
+      const shouldPin = mode === 'pinned';
+      if (checkedSet.has(id) === shouldPin) return;
+
+      setUpdating(true);
+      await togglePlugin(id, shouldPin);
+      setUpdating(false);
+    },
+    [checkedSet, setUpdating, togglePlugin],
+  );
+
+  const renderPolicyMenu = useCallback(
+    (id: string) => {
+      const mode: SkillPolicyMode = checkedSet.has(id) ? 'pinned' : 'auto';
+      const renderCheck = (value: SkillPolicyMode) =>
+        mode === value ? <Icon icon={Check} size={14} /> : null;
+
+      return (
+        <DropdownMenu
+          placement="rightTop"
+          popupProps={{ style: { minWidth: 132 } }}
+          trigger="click"
+          items={[
+            {
+              extra: renderCheck('pinned'),
+              icon: <Icon className={cx(styles.iconPinned)} icon={Pin} size={15} />,
+              key: 'pinned',
+              label: t('tools.activation.pinned'),
+              onClick: async (info) => {
+                info.domEvent.stopPropagation();
+                await updateSkillPolicy(id, 'pinned');
+              },
+            },
+            {
+              extra: renderCheck('auto'),
+              icon: <Icon className={cx(styles.iconAuto)} icon={Zap} size={15} />,
+              key: 'auto',
+              label: t('tools.activation.auto'),
+              onClick: async (info) => {
+                info.domEvent.stopPropagation();
+                await updateSkillPolicy(id, 'auto');
+              },
+            },
+          ]}
+        >
+          <button
+            aria-label={t('tools.skillActivateMode.title')}
+            className={cx(styles.policyButton)}
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+            }}
+          >
+            <Icon icon={MoreHorizontal} size={15} />
+          </button>
+        </DropdownMenu>
+      );
+    },
+    [checkedSet, t, updateSkillPolicy],
+  );
+
+  const renderToolLabel = useCallback(
+    (label: ReactNode, action: ReactNode) => (
+      <span className={cx(styles.toolRow)}>
+        <span className={cx(styles.toolLabel)}>{label}</span>
+        {action}
+      </span>
+    ),
+    [],
+  );
+
+  const createManagedSkillItem = useCallback(
+    ({
+      icon,
+      id,
+      popoverContent,
+      searchText,
+      title,
+    }: {
+      icon: ReactNode;
+      id: string;
+      popoverContent?: ReactNode;
+      searchText?: string;
+      title: ReactNode;
+    }): SkillMenuItem =>
+      ({
+        closeOnClick: false,
+        icon,
+        key: id,
+        label: renderToolLabel(title, renderPolicyMenu(id)),
+        popoverContent,
+        searchText: searchText || String(title || id),
+      }) as SkillMenuItem,
+    [renderPolicyMenu, renderToolLabel],
+  );
 
   // Klavis-related state
   const allKlavisServers = useToolStore(klavisStoreSelectors.getServers, isEqual);
@@ -98,9 +421,12 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
   useFetchLobehubSkillConnections(isLobehubSkillEnabled);
 
   // Get connected server by identifier
-  const getServerByName = (identifier: string) => {
-    return allKlavisServers.find((server) => server.identifier === identifier);
-  };
+  const getServerByName = useCallback(
+    (identifier: string) => {
+      return allKlavisServers.find((server) => server.identifier === identifier);
+    },
+    [allKlavisServers],
+  );
 
   // Get all Klavis server type identifier sets (used for filtering builtinList)
   // Using KLAVIS_SERVER_TYPES instead of connected servers here, because we want to filter out all possible Klavis types
@@ -163,19 +489,12 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
         ? KLAVIS_SERVER_TYPES.filter(
             (type) =>
               installedKlavisIds.has(type.identifier) || recommendedKlavisIds.has(type.identifier),
-          ).map((type) => ({
-            icon: <KlavisSkillIcon icon={type.icon} label={type.label} size={SKILL_ICON_SIZE} />,
-            key: type.identifier,
-            label: (
-              <KlavisServerItem
-                agentId={agentId}
-                identifier={type.identifier}
-                label={type.label}
-                server={getServerByName(type.identifier)}
-                serverName={type.serverName}
-              />
-            ),
-            popoverContent: (
+          ).map((type) => {
+            const server = getServerByName(type.identifier);
+            const icon = (
+              <KlavisSkillIcon icon={type.icon} label={type.label} size={SKILL_ICON_SIZE} />
+            );
+            const popoverContent = (
               <ToolItemDetailPopover
                 icon={<KlavisSkillIcon icon={type.icon} label={type.label} size={36} />}
                 identifier={type.identifier}
@@ -185,10 +504,44 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
                   defaultValue: type.description,
                 })}
               />
-            ),
-          }))
+            );
+
+            if (server?.status === KlavisServerStatus.CONNECTED) {
+              return createManagedSkillItem({
+                icon,
+                id: server.identifier,
+                popoverContent,
+                searchText: `${type.label} ${server.identifier}`,
+                title: type.label,
+              });
+            }
+
+            return {
+              icon,
+              key: type.identifier,
+              label: (
+                <KlavisServerItem
+                  agentId={agentId}
+                  identifier={type.identifier}
+                  label={type.label}
+                  server={server}
+                  serverName={type.serverName}
+                />
+              ),
+              popoverContent,
+              searchText: type.label,
+            };
+          })
         : [],
-    [isKlavisEnabledInEnv, allKlavisServers, installedKlavisIds, recommendedKlavisIds, agentId, t],
+    [
+      isKlavisEnabledInEnv,
+      installedKlavisIds,
+      recommendedKlavisIds,
+      agentId,
+      t,
+      createManagedSkillItem,
+      getServerByName,
+    ],
   );
 
   // LobeHub Skill Provider list items - only show installed or recommended
@@ -198,23 +551,16 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
         ? LOBEHUB_SKILL_PROVIDERS.filter(
             (provider) =>
               installedLobehubIds.has(provider.id) || recommendedLobehubIds.has(provider.id),
-          ).map((provider) => ({
-            icon: (
+          ).map((provider) => {
+            const server = allLobehubSkillServers.find((s) => s.identifier === provider.id);
+            const icon = (
               <LobehubSkillIcon
                 icon={provider.icon}
                 label={provider.label}
                 size={SKILL_ICON_SIZE}
               />
-            ),
-            key: provider.id, // Use provider.id as key, consistent with pluginId
-            label: (
-              <LobehubSkillServerItem
-                agentId={agentId}
-                label={provider.label}
-                provider={provider.id}
-              />
-            ),
-            popoverContent: (
+            );
+            const popoverContent = (
               <ToolItemDetailPopover
                 icon={<LobehubSkillIcon icon={provider.icon} label={provider.label} size={36} />}
                 identifier={provider.id}
@@ -224,8 +570,32 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
                   defaultValue: provider.description,
                 })}
               />
-            ),
-          }))
+            );
+
+            if (server?.status === LobehubSkillStatus.CONNECTED || server?.isConnected) {
+              return createManagedSkillItem({
+                icon,
+                id: server.identifier,
+                popoverContent,
+                searchText: `${provider.label} ${server.identifier}`,
+                title: provider.label,
+              });
+            }
+
+            return {
+              icon,
+              key: provider.id, // Use provider.id as key, consistent with pluginId
+              label: (
+                <LobehubSkillServerItem
+                  agentId={agentId}
+                  label={provider.label}
+                  provider={provider.id}
+                />
+              ),
+              popoverContent,
+              searchText: provider.label,
+            };
+          })
         : [],
     [
       isLobehubSkillEnabled,
@@ -234,38 +604,30 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
       recommendedLobehubIds,
       agentId,
       t,
+      createManagedSkillItem,
     ],
   );
 
   // Builtin tool list items (excluding Klavis and LobeHub Skill)
   const builtinItems = useMemo(
     () =>
-      filteredBuiltinList.map((item) => ({
-        icon: (
+      filteredBuiltinList.map((item) => {
+        const title = t(`tools.builtins.${item.identifier}.title` as any, {
+          defaultValue: item.meta?.title || item.identifier,
+        });
+        const icon = (
           <Avatar
             avatar={item.meta.avatar}
             shape={'square'}
             size={SKILL_ICON_SIZE}
             style={{ flex: 'none' }}
           />
-        ),
-        key: item.identifier,
-        label: (
-          <ToolItem
-            checked={checked.includes(item.identifier)}
-            id={item.identifier}
-            label={item.meta?.title}
-            onUpdate={async () => {
-              setUpdating(true);
-              await togglePlugin(item.identifier);
-              setUpdating(false);
-            }}
-          />
-        ),
-        popoverContent: (
+        );
+        const popoverContent = (
           <ToolItemDetailPopover
             identifier={item.identifier}
             sourceLabel={t('skillStore.tabs.lobehub')}
+            title={title}
             description={t(`tools.builtins.${item.identifier}.description` as any, {
               defaultValue: item.meta?.description || '',
             })}
@@ -277,41 +639,37 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
                 style={{ flex: 'none', marginInlineEnd: 0 }}
               />
             }
-            title={t(`tools.builtins.${item.identifier}.title` as any, {
-              defaultValue: item.meta?.title || item.identifier,
-            })}
           />
-        ),
-      })),
-    [filteredBuiltinList, checked, togglePlugin, setUpdating, t],
+        );
+
+        return createManagedSkillItem({
+          icon,
+          id: item.identifier,
+          popoverContent,
+          searchText: `${title} ${item.identifier}`,
+          title,
+        });
+      }),
+    [filteredBuiltinList, t, createManagedSkillItem],
   );
 
   // Builtin Agent Skills list items (grouped under LobeHub)
   const builtinAgentSkillItems = useMemo(
     () =>
-      installedBuiltinSkills.map((skill) => ({
-        icon: skill.avatar ? (
+      installedBuiltinSkills.map((skill) => {
+        const title = t(`tools.builtins.${skill.identifier}.title` as any, {
+          defaultValue: skill.name,
+        });
+        const icon = skill.avatar ? (
           <Avatar avatar={skill.avatar} shape={'square'} size={SKILL_ICON_SIZE} />
         ) : (
           <Icon icon={SkillsIcon} size={SKILL_ICON_SIZE} />
-        ),
-        key: skill.identifier,
-        label: (
-          <ToolItem
-            checked={checked.includes(skill.identifier)}
-            id={skill.identifier}
-            label={skill.name}
-            onUpdate={async () => {
-              setUpdating(true);
-              await togglePlugin(skill.identifier);
-              setUpdating(false);
-            }}
-          />
-        ),
-        popoverContent: (
+        );
+        const popoverContent = (
           <ToolItemDetailPopover
             identifier={skill.identifier}
             sourceLabel={t('skillStore.tabs.lobehub')}
+            title={title}
             description={t(`tools.builtins.${skill.identifier}.description` as any, {
               defaultValue: skill.description,
             })}
@@ -327,66 +685,53 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
                 <Icon icon={SkillsIcon} size={36} />
               )
             }
-            title={t(`tools.builtins.${skill.identifier}.title` as any, {
-              defaultValue: skill.name,
-            })}
           />
-        ),
-      })),
-    [installedBuiltinSkills, checked, togglePlugin, setUpdating, t],
+        );
+
+        return createManagedSkillItem({
+          icon,
+          id: skill.identifier,
+          popoverContent,
+          searchText: `${title} ${skill.identifier}`,
+          title,
+        });
+      }),
+    [installedBuiltinSkills, t, createManagedSkillItem],
   );
 
   // Market Agent Skills list items (grouped under Community)
   const marketAgentSkillItems = useMemo(
     () =>
-      marketAgentSkills.map((skill) => ({
-        icon: (
+      marketAgentSkills.map((skill) => {
+        const icon = (
           <MarketSkillIcon identifier={skill.identifier} name={skill.name} size={SKILL_ICON_SIZE} />
-        ),
-        key: skill.identifier,
-        label: (
-          <ToolItem
-            checked={checked.includes(skill.identifier)}
-            id={skill.identifier}
-            label={skill.name}
-            onUpdate={async () => {
-              setUpdating(true);
-              await togglePlugin(skill.identifier);
-              setUpdating(false);
-            }}
-          />
-        ),
-        popoverContent: (
+        );
+        const popoverContent = (
           <MarketAgentSkillPopoverContent
             description={skill.description}
             identifier={skill.identifier}
             name={skill.name}
             sourceLabel={t('skillStore.tabs.community')}
           />
-        ),
-      })),
-    [marketAgentSkills, checked, togglePlugin, setUpdating, t],
+        );
+
+        return createManagedSkillItem({
+          icon,
+          id: skill.identifier,
+          popoverContent,
+          searchText: `${skill.name} ${skill.identifier}`,
+          title: skill.name,
+        });
+      }),
+    [marketAgentSkills, t, createManagedSkillItem],
   );
 
   // User Agent Skills list items (grouped under Custom)
   const userAgentSkillItems = useMemo(
     () =>
-      userAgentSkills.map((skill) => ({
-        icon: <Icon icon={SkillsIcon} size={SKILL_ICON_SIZE} />,
-        key: skill.identifier,
-        label: (
-          <ToolItem
-            checked={checked.includes(skill.identifier)}
-            id={skill.identifier}
-            label={skill.name}
-            onUpdate={async () => {
-              setUpdating(true);
-              await togglePlugin(skill.identifier);
-              setUpdating(false);
-            }}
-          />
-        ),
-        popoverContent: (
+      userAgentSkills.map((skill) => {
+        const icon = <Icon icon={SkillsIcon} size={SKILL_ICON_SIZE} />;
+        const popoverContent = (
           <ToolItemDetailPopover
             description={skill.description}
             icon={<Icon icon={SkillsIcon} size={36} />}
@@ -394,9 +739,17 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
             sourceLabel={t('skillStore.tabs.custom')}
             title={skill.name}
           />
-        ),
-      })),
-    [userAgentSkills, checked, togglePlugin, setUpdating, t],
+        );
+
+        return createManagedSkillItem({
+          icon,
+          id: skill.identifier,
+          popoverContent,
+          searchText: `${skill.name} ${skill.identifier}`,
+          title: skill.name,
+        });
+      }),
+    [userAgentSkills, t, createManagedSkillItem],
   );
 
   // Skills list items (including LobeHub Skill and Klavis)
@@ -442,46 +795,39 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
   const mapPluginToItem = (item: (typeof list)[0]) => {
     const isMcp = item?.avatar === 'MCP_AVATAR' || !item?.avatar;
     const isCustom = item.type === 'customPlugin';
-    return {
-      icon: isMcp ? (
-        <Icon icon={McpIcon} size={SKILL_ICON_SIZE} />
-      ) : (
-        <Avatar avatar={item.avatar} shape={'square'} size={SKILL_ICON_SIZE} />
-      ),
-      key: item.identifier,
-      label: (
-        <ToolItem
-          checked={checked.includes(item.identifier)}
-          id={item.identifier}
-          label={item.title}
-          onUpdate={async () => {
-            setUpdating(true);
-            await togglePlugin(item.identifier);
-            setUpdating(false);
-          }}
-        />
-      ),
-      popoverContent: (
-        <ToolItemDetailPopover
-          description={item.description}
-          identifier={item.identifier}
-          sourceLabel={isCustom ? t('skillStore.tabs.custom') : t('skillStore.tabs.community')}
-          title={item.title}
-          icon={
-            isMcp ? (
-              <Icon icon={McpIcon} size={36} />
-            ) : (
-              <Avatar
-                avatar={item.avatar}
-                shape={'square'}
-                size={36}
-                style={{ flex: 'none', marginInlineEnd: 0 }}
-              />
-            )
-          }
-        />
-      ),
-    };
+    const icon = isMcp ? (
+      <Icon icon={McpIcon} size={SKILL_ICON_SIZE} />
+    ) : (
+      <Avatar avatar={item.avatar} shape={'square'} size={SKILL_ICON_SIZE} />
+    );
+    const popoverContent = (
+      <ToolItemDetailPopover
+        description={item.description}
+        identifier={item.identifier}
+        sourceLabel={isCustom ? t('skillStore.tabs.custom') : t('skillStore.tabs.community')}
+        title={item.title}
+        icon={
+          isMcp ? (
+            <Icon icon={McpIcon} size={36} />
+          ) : (
+            <Avatar
+              avatar={item.avatar}
+              shape={'square'}
+              size={36}
+              style={{ flex: 'none', marginInlineEnd: 0 }}
+            />
+          )
+        }
+      />
+    );
+
+    return createManagedSkillItem({
+      icon,
+      id: item.identifier,
+      popoverContent,
+      searchText: `${item.title} ${item.identifier}`,
+      title: item.title,
+    });
   };
 
   // Build LobeHub group children (including Builtin Agent Skills, builtin tools, and LobeHub Skill/Klavis)
@@ -506,37 +852,141 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
     ...customPlugins.map(mapPluginToItem),
   ];
 
-  // Items for the market tab
+  const normalizedSearchKeyword = searchKeyword.trim().toLowerCase();
+  const allSkillItems = [
+    ...lobehubGroupChildren,
+    ...communityGroupChildren,
+    ...customGroupChildren,
+  ].filter(
+    (item): item is SkillMenuItem =>
+      Boolean(item) && (item as { type?: string }).type !== 'divider',
+  );
+  const filterBySearch = (items: SkillMenuItem[]) => {
+    if (!normalizedSearchKeyword) return items;
+
+    return items.filter((item) =>
+      String(item.searchText || item.key || '')
+        .toLowerCase()
+        .includes(normalizedSearchKeyword),
+    );
+  };
+  const pinnedItems = filterBySearch(
+    allSkillItems.filter((item) => checkedSet.has(String(item.key))),
+  );
+  const autoItems = filterBySearch(
+    allSkillItems.filter((item) => !checkedSet.has(String(item.key))),
+  );
+
+  const renderActivationGroupLabel = ({
+    autoSwitch,
+    count,
+    icon,
+    open,
+    title,
+    onToggle,
+  }: {
+    autoSwitch?: boolean;
+    count: number;
+    icon: ReactNode;
+    open: boolean;
+    title: string;
+    onToggle: () => void;
+  }) => (
+    <div
+      className={cx(styles.activationGroupHeader)}
+      role="button"
+      tabIndex={0}
+      onClick={(event) => {
+        event.stopPropagation();
+        onToggle();
+      }}
+    >
+      <div className={cx(styles.activationGroupTitleBlock)}>
+        <div className={cx(styles.activationGroupChevron)}>
+          <Icon icon={open ? ChevronDown : ChevronRight} size={13} />
+        </div>
+        {icon}
+        <div className={cx(styles.activationGroupTitle)}>
+          <span className={cx(styles.activationGroupTitleText)}>{title}</span>
+          {autoSwitch && (
+            <span
+              className={cx(styles.switchWrap)}
+              onClick={(event) => {
+                event.stopPropagation();
+              }}
+            >
+              <Switch
+                checked={isAutoSkillMode}
+                size="small"
+                onClick={(_, event) => event.stopPropagation()}
+                onChange={async (checked, event) => {
+                  event?.stopPropagation?.();
+                  setUpdating(true);
+                  await updateAgentChatConfig({
+                    skillActivateMode: checked ? 'auto' : 'manual',
+                  });
+                  setUpdating(false);
+                }}
+              />
+            </span>
+          )}
+        </div>
+      </div>
+      <span className={cx(styles.activationGroupMeta)}>({count})</span>
+    </div>
+  );
+
   const marketItems: ItemType[] = [
-    // LobeHub group
-    ...(lobehubGroupChildren.length > 0
+    {
+      children: [],
+      key: 'skill-search',
+      label: (
+        <div className={cx(styles.search)} onClick={stopPropagation} onKeyDown={stopPropagation}>
+          <div className={cx(styles.searchBox)}>
+            <SearchBar
+              allowClear
+              placeholder={t('tools.search')}
+              size="small"
+              style={{ flex: 1 }}
+              value={searchKeyword}
+              variant="borderless"
+              onChange={(event) => setSearchKeyword(event.target.value)}
+              onKeyDown={stopPropagation}
+            />
+          </div>
+        </div>
+      ),
+      type: 'group' as const,
+    },
+    ...(pinnedItems.length > 0
       ? [
           {
-            children: lobehubGroupChildren,
-            key: 'lobehub',
-            label: t('skillStore.tabs.lobehub'),
+            children: pinnedOpen ? pinnedItems : [],
+            key: 'pinned',
+            label: renderActivationGroupLabel({
+              count: pinnedItems.length,
+              icon: <Icon icon={Pin} size={14} />,
+              open: pinnedOpen,
+              title: t('tools.activation.pinned'),
+              onToggle: () => setPinnedOpen((open) => !open),
+            }),
             type: 'group' as const,
           },
         ]
       : []),
-    // Community group
-    ...(communityGroupChildren.length > 0
+    ...(autoItems.length > 0
       ? [
           {
-            children: communityGroupChildren,
-            key: 'community',
-            label: t('skillStore.tabs.community'),
-            type: 'group' as const,
-          },
-        ]
-      : []),
-    // Custom group (only shown when there are custom plugins)
-    ...(customGroupChildren.length > 0
-      ? [
-          {
-            children: customGroupChildren,
-            key: 'custom',
-            label: t('skillStore.tabs.custom'),
+            children: autoOpen ? autoItems : [],
+            key: 'auto',
+            label: renderActivationGroupLabel({
+              autoSwitch: true,
+              count: autoItems.length,
+              icon: <Icon icon={Zap} size={14} />,
+              open: autoOpen,
+              title: t('tools.activation.auto'),
+              onToggle: () => setAutoOpen((open) => !open),
+            }),
             type: 'group' as const,
           },
         ]

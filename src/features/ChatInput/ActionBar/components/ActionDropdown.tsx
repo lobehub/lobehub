@@ -15,7 +15,7 @@ import {
   DropdownMenuTrigger,
   renderDropdownMenuItems,
 } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { createGlobalStyle, createStaticStyles, cssVar, cx } from 'antd-style';
 import { type CSSProperties, type ReactNode } from 'react';
 import {
   isValidElement,
@@ -41,6 +41,32 @@ const styles = createStaticStyles(({ css }) => ({
     outline: none;
   `,
 }));
+
+const SubmenuScrollStyle = createGlobalStyle`
+  [data-submenu] > [role='menu'] {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    max-height: min(50vh, 640px);
+  }
+
+  [data-submenu] > [role='menu'] [role='menuitem']:has([data-fixed-menu-footer]) {
+    position: sticky;
+    z-index: 2;
+    inset-block-end: 0;
+
+    overflow: visible;
+
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+
+    background: ${cssVar.colorBgElevated};
+    box-shadow: 0 -12px 16px 4px ${cssVar.colorBgElevated};
+  }
+
+  [data-submenu] > [role='menu'] [role='menuitem']:has([data-fixed-menu-footer]):hover,
+  [data-submenu] > [role='menu'] [role='menuitem']:has([data-fixed-menu-footer])[data-highlighted] {
+    background: ${cssVar.colorFillTertiary};
+  }
+`;
 
 export type ActionDropdownMenuItem = MenuItemType;
 
@@ -188,7 +214,7 @@ const ActionDropdown = memo<ActionDropdownProps>(
       menuItemsRef.current = nextItems;
 
       return nextItems;
-    }, [decorateMenuItems, isOpen, menu.items, prefetch]);
+    }, [decorateMenuItems, isOpen, menu, prefetch]);
 
     const menuContent = useMemo(() => {
       if (!popupRender) return renderedItems;
@@ -263,30 +289,33 @@ const ActionDropdown = memo<ActionDropdownProps>(
     }, [portalContainer]);
 
     return (
-      <DropdownMenuRoot
-        {...rest}
-        defaultOpen={defaultOpen}
-        open={open}
-        onOpenChange={handleOpenChange}
-        onOpenChangeComplete={handleOpenChangeComplete}
-      >
-        <DropdownMenuTrigger className={styles.trigger} {...resolvedTriggerProps}>
-          {children}
-        </DropdownMenuTrigger>
-        <DropdownMenuPortal container={resolvedPortalContainer} {...restPortalProps}>
-          <DropdownMenuPositioner
-            {...positionerProps}
-            hoverTrigger={Boolean(resolvedTriggerProps?.openOnHover)}
-            placement={isMobile ? 'top' : placement}
-          >
-            <DropdownMenuPopup {...resolvedPopupProps}>
-              <Suspense fallback={<DebugNode trace="ActionDropdown > popup" />}>
-                {menuContent}
-              </Suspense>
-            </DropdownMenuPopup>
-          </DropdownMenuPositioner>
-        </DropdownMenuPortal>
-      </DropdownMenuRoot>
+      <>
+        <SubmenuScrollStyle />
+        <DropdownMenuRoot
+          {...rest}
+          defaultOpen={defaultOpen}
+          open={open}
+          onOpenChange={handleOpenChange}
+          onOpenChangeComplete={handleOpenChangeComplete}
+        >
+          <DropdownMenuTrigger className={styles.trigger} {...resolvedTriggerProps}>
+            {children}
+          </DropdownMenuTrigger>
+          <DropdownMenuPortal container={resolvedPortalContainer} {...restPortalProps}>
+            <DropdownMenuPositioner
+              {...positionerProps}
+              hoverTrigger={Boolean(resolvedTriggerProps?.openOnHover)}
+              placement={isMobile ? 'top' : placement}
+            >
+              <DropdownMenuPopup {...resolvedPopupProps}>
+                <Suspense fallback={<DebugNode trace="ActionDropdown > popup" />}>
+                  {menuContent}
+                </Suspense>
+              </DropdownMenuPopup>
+            </DropdownMenuPositioner>
+          </DropdownMenuPortal>
+        </DropdownMenuRoot>
+      </>
     );
   },
 );

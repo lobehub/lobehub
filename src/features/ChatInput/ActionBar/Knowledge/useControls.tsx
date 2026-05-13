@@ -43,65 +43,75 @@ export const useControls = ({
     files.filter((item) => item.enabled).length +
     knowledgeBases.filter((item) => item.enabled).length;
 
-  const relatedItems = [
-    // first the files
-    ...files.map((item) => ({
-      icon: <FileIcon fileName={item.name} fileType={item.type} size={20} />,
-      key: item.id,
-      label: (
-        <CheckboxItem
-          checked={item.enabled}
-          id={item.id}
-          label={item.name}
-          labelMaxWidth={labelMaxWidth}
-          onUpdate={async (id, enabled) => {
-            setUpdating(true);
-            await toggleFile(id, enabled);
-            setUpdating(false);
-          }}
-        />
-      ),
-    })),
+  const libraryItems = knowledgeBases.map((item) => ({
+    icon: <RepoIcon />,
+    key: item.id,
+    label: (
+      <CheckboxItem
+        checked={item.enabled}
+        id={item.id}
+        label={item.name}
+        labelMaxWidth={labelMaxWidth}
+        onUpdate={async (id, enabled) => {
+          setUpdating(true);
+          await toggleKnowledgeBase(id, enabled);
+          setUpdating(false);
+        }}
+      />
+    ),
+  }));
 
-    // then the knowledge bases
-    ...knowledgeBases.map((item) => ({
-      icon: <RepoIcon />,
-      key: item.id,
-      label: (
-        <CheckboxItem
-          checked={item.enabled}
-          id={item.id}
-          label={item.name}
-          labelMaxWidth={labelMaxWidth}
-          onUpdate={async (id, enabled) => {
-            setUpdating(true);
-            await toggleKnowledgeBase(id, enabled);
-            setUpdating(false);
-          }}
-        />
-      ),
-    })),
-  ];
+  const fileItems = files.map((item) => ({
+    icon: <FileIcon fileName={item.name} fileType={item.type} size={20} />,
+    key: item.id,
+    label: (
+      <CheckboxItem
+        checked={item.enabled}
+        id={item.id}
+        label={item.name}
+        labelMaxWidth={labelMaxWidth}
+        onUpdate={async (id, enabled) => {
+          setUpdating(true);
+          await toggleFile(id, enabled);
+          setUpdating(false);
+        }}
+      />
+    ),
+  }));
 
-  const items: ItemType[] = [
-    ...(relatedItems.length > 0
+  const relatedGroups: ItemType[] = [
+    ...(libraryItems.length > 0
       ? [
           {
-            children: relatedItems,
-            key: 'relativeFilesOrLibraries',
-            label: t('knowledgeBase.relativeFilesOrLibraries'),
+            children: libraryItems,
+            key: 'relativeLibraries',
+            label: t('knowledgeBase.libraries'),
             type: 'group' as const,
-          },
-          {
-            type: 'divider' as const,
           },
         ]
       : []),
+    ...(libraryItems.length > 0 && fileItems.length > 0 ? [{ type: 'divider' as const }] : []),
+    ...(fileItems.length > 0
+      ? [
+          {
+            children: fileItems,
+            key: 'relativeFiles',
+            label: t('knowledgeBase.files'),
+            type: 'group' as const,
+          },
+        ]
+      : []),
+  ];
+
+  const items: ItemType[] = [
+    ...relatedGroups,
+    ...(relatedGroups.length > 0 ? [{ type: 'divider' as const }] : []),
     {
+      closeOnClick: true,
       extra: <Icon icon={ArrowRight} />,
       icon: LibraryBig,
       key: 'knowledge-base-store',
-      label: t('knowledgeBase.viewMore'),
+      label: <span data-fixed-menu-footer>{t('knowledgeBase.viewMore')}</span>,
       onClick: () => {
         openAttachKnowledgeModal();
       },

@@ -1,12 +1,12 @@
 'use client';
 
 import { validateVideoFileSize } from '@lobechat/utils/client';
-import { Icon, type IconProps } from '@lobehub/ui';
-import { BrainOffIcon, GlobeOffIcon } from '@lobehub/ui/icons';
+import type { IconProps } from '@lobehub/ui';
+import { Icon, Popover } from '@lobehub/ui';
+import { BrainOffIcon, GlobeOffIcon, SkillsIcon } from '@lobehub/ui/icons';
 import { Upload } from 'antd';
 import { css, cssVar, cx } from 'antd-style';
 import {
-  Blocks,
   Brain,
   CheckIcon,
   CloudCog,
@@ -15,8 +15,10 @@ import {
   LibraryBig,
   PlusIcon,
   SearchCheck,
+  Store,
   TypeIcon,
 } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { memo, Suspense, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -42,6 +44,7 @@ import Action from '../components/Action';
 import { type ActionDropdownMenuItems } from '../components/ActionDropdown';
 import { useControls as useKnowledgeControls } from '../Knowledge/useControls';
 import { useMemoryEnabled } from '../Memory/useMemoryEnabled';
+import { useControls as useToolsControls } from '../Tools/useControls';
 
 const hotArea = css`
   &::before {
@@ -120,6 +123,48 @@ const countChip = css`
 const activeIcon = (icon: IconProps['icon'], active?: boolean): IconProps['icon'] =>
   active ? <Icon color={cssVar.colorInfo} icon={icon} size={16} /> : icon;
 
+type DropdownItemWithPopover = NonNullable<ActionDropdownMenuItems>[number] & {
+  label?: ReactNode;
+  popoverContent?: unknown;
+};
+
+const wrapPopoverLabel = (label: ReactNode, popoverContent?: unknown) => {
+  if (!popoverContent) return label;
+
+  return (
+    <Popover
+      arrow={false}
+      content={popoverContent as ReactNode}
+      mouseEnterDelay={0.25}
+      placement={'rightTop'}
+      positionerProps={{ sideOffset: 10 }}
+      styles={{ content: { padding: 0 } }}
+    >
+      {label}
+    </Popover>
+  );
+};
+
+const stripPopoverContent = (items?: ActionDropdownMenuItems): ActionDropdownMenuItems =>
+  items?.map((item) => {
+    if (!item) return item;
+    if ('type' in item && item.type === 'divider') return item;
+
+    const nextItem = { ...(item as DropdownItemWithPopover) };
+    const popoverContent = nextItem.popoverContent;
+    delete nextItem.popoverContent;
+
+    if ('children' in nextItem && nextItem.children) {
+      return { ...nextItem, children: stripPopoverContent(nextItem.children) };
+    }
+
+    if ('label' in nextItem) {
+      nextItem.label = wrapPopoverLabel(nextItem.label, popoverContent);
+    }
+
+    return nextItem;
+  }) ?? [];
+
 const PlusAction = memo(() => {
   const { t } = useTranslation('chat');
   const { t: tEditor } = useTranslation('editor');
@@ -135,6 +180,12 @@ const PlusAction = memo(() => {
   const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
   const provider = useAgentStore((s) => agentByIdSelectors.getAgentModelProviderById(agentId)(s));
   const isAgentModeEnabled = useAgentStore(agentSelectors.isAgentModeEnabled);
+  const enabledSkillCount = useAgentStore(
+    (s) => agentByIdSelectors.getAgentPluginsById(agentId)(s).length,
+  );
+  const skillActivateMode = useAgentStore((s) =>
+    chatConfigByIdSelectors.getSkillActivateModeById(agentId)(s),
+  );
   const [searchMode, useModelBuiltinSearch] = useAgentStore((s) => [
     chatConfigByIdSelectors.getSearchModeById(agentId)(s),
     chatConfigByIdSelectors.getUseModelBuiltinSearchById(agentId)(s),
@@ -148,6 +199,7 @@ const PlusAction = memo(() => {
     openAttachKnowledgeModal,
     setUpdating,
   });
+  const { marketItems: skillItems } = useToolsControls({ setUpdating });
 
   const isModelBuiltinSearchInternal = useAiInfraStore(
     aiModelSelectors.isModelBuiltinSearchInternal(model, provider),
@@ -208,15 +260,17 @@ const PlusAction = memo(() => {
       </div>
     );
 
-    const renderLibraryLabel = () =>
-      knowledgeEnabledCount > 0 ? (
+    const renderLabelWithCount = (label: string, count: number, prefix?: string) =>
+      count > 0 || prefix ? (
         <span className={cx(labelWithChip)}>
-          <span>{t('knowledgeBase.title')}</span>
-          <span className={cx(countChip)}>{knowledgeEnabledCount}</span>
+          <span>{label}</span>
+          <span className={cx(countChip)}>{prefix ? `${prefix} | ${count}` : count}</span>
         </span>
       ) : (
-        t('knowledgeBase.title')
+        label
       );
+
+    const skillMenuItems = stripPopoverContent(skillItems as ActionDropdownMenuItems);
 
     const uploadItems: ActionDropdownMenuItems = [
       {
@@ -253,9 +307,23 @@ const PlusAction = memo(() => {
         ? [
             { type: 'divider' },
             {
-              icon: Blocks,
+              children: skillMenuItems,
+              icon: activeIcon(SkillsIcon, enabledSkillCount > 0),
               key: 'tools',
-              label: tSetting('tools.title'),
+              label: renderLabelWithCount(
+                tSetting('tools.title'),
+                enabledSkillCount,
+                tSetting(
+                  skillActivateMode === 'auto'
+                    ? 'tools.skillActivateMode.auto.title'
+                    : 'tools.skillActivateMode.manual.title',
+                ),
+              ),
+            },
+            {
+              icon: Store,
+              key: 'add-skills',
+              label: t('plus.addSkills'),
               onClick: handleOpenTools,
             },
           ]
@@ -345,7 +413,7 @@ const PlusAction = memo(() => {
             children: knowledgeItems,
             icon: activeIcon(LibraryBig, knowledgeEnabledCount > 0),
             key: 'knowledge-base',
-            label: renderLibraryLabel(),
+            label: renderLabelWithCount(t('knowledgeBase.title'), knowledgeEnabledCount),
           } as ActionDropdownMenuItems[number],
         ]
       : [];
@@ -357,6 +425,7 @@ const PlusAction = memo(() => {
     canUploadVideo,
     enableFC,
     enableKnowledgeBase,
+    enabledSkillCount,
     handleOpenTools,
     handleSelectSearch,
     handleToggleMemory,
@@ -366,10 +435,12 @@ const PlusAction = memo(() => {
     setShowTypoBar,
     showProviderSearch,
     showTypoBar,
+    skillActivateMode,
     knowledgeItems,
     t,
     tEditor,
     tSetting,
+    skillItems,
     upload,
   ]);
 
