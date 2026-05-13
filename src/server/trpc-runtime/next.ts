@@ -1,3 +1,5 @@
+import { fetchHonoRuntime } from '@/server/hono-runtime/client';
+
 import type { TRPCRouteId } from './runtime';
 import { selectTRPCRuntime, withTRPCRuntimeHeaders } from './runtime';
 
@@ -8,9 +10,7 @@ export const createNextTRPCRouteHandler =
   async (request) => {
     const selection = selectTRPCRuntime(request, route);
     const response =
-      selection.runtime === 'hono'
-        ? await (await import('@/server/trpc-hono')).default.fetch(request)
-        : await nextHandler(request);
+      selection.runtime === 'hono' ? await fetchHonoRuntime(request) : await nextHandler(request);
 
     return withTRPCRuntimeHeaders(response, selection);
   };

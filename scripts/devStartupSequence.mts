@@ -1,17 +1,21 @@
-import { type ChildProcess, spawn } from 'node:child_process';
+import type { ChildProcess } from 'node:child_process';
+import { spawn } from 'node:child_process';
+import net from 'node:net';
+
 import dotenv from 'dotenv';
 import dotenvExpand from 'dotenv-expand';
-import net from 'node:net';
+
+import type { DevTopology } from './devTopology';
+import devTopology from './devTopology';
+
+const { applyDefaultDevTopologyEnv, resolveDevAPIPort, resolveDevHonoPort } = devTopology;
 
 const env = process.env.NODE_ENV || 'development';
 
-const shellEnv = Object.entries(process.env).reduce<Record<string, string>>(
-  (acc, [key, value]) => {
-    if (typeof value === 'string') acc[key] = value;
-    return acc;
-  },
-  {},
-);
+const shellEnv = Object.entries(process.env).reduce<Record<string, string>>((acc, [key, value]) => {
+  if (typeof value === 'string') acc[key] = value;
+  return acc;
+}, {});
 const dotenvEnv: Record<string, string> = {};
 const dotenvResult = dotenv.config({
   override: true,
@@ -28,29 +32,36 @@ if (dotenvResult.parsed) {
   Object.assign(process.env, expanded.parsed, shellEnv);
 }
 
-const NEXT_HOST = 'localhost';
+const API_HOST = 'localhost';
 
 /**
- * Resolve the Next.js dev port.
+ * Resolve the local API dev port.
  * Priority: -p CLI flag > PORT env var > 3010.
  */
-const resolveNextPort = (): number => {
+const resolveCLIAPIPort = (): number | undefined => {
   const pIndex = process.argv.indexOf('-p');
   if (pIndex !== -1 && process.argv[pIndex + 1]) {
     return Number(process.argv[pIndex + 1]);
   }
-  if (process.env.PORT) return Number(process.env.PORT);
-  return 3010;
 };
 
-const NEXT_PORT = resolveNextPort();
-const NEXT_ROOT_URL = `http://${NEXT_HOST}:${NEXT_PORT}/`;
-const NEXT_READY_TIMEOUT_MS = 180_000;
-const NEXT_READY_RETRY_MS = 400;
+const cliAPIPort = resolveCLIAPIPort();
+if (cliAPIPort) process.env.PORT = String(cliAPIPort);
+
+const devTopologyConfig = applyDefaultDevTopologyEnv(process.env);
+process.title = `lobe-dev-${devTopologyConfig.topology}`;
+
+const API_PORT = resolveDevAPIPort(process.env);
+const API_ROOT_URL = `http://${API_HOST}:${API_PORT}/`;
+const HONO_PORT = resolveDevHonoPort(process.env);
+const HONO_ROOT_URL = `http://${API_HOST}:${HONO_PORT}/`;
+const API_READY_TIMEOUT_MS = 180_000;
+const API_READY_RETRY_MS = 400;
 
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
-let nextProcess: ChildProcess | undefined;
+let apiProcess: ChildProcess | undefined;
+let honoProcess: ChildProcess | undefined;
 let viteProcess: ChildProcess | undefined;
 let shuttingDown = false;
 
@@ -77,37 +88,43 @@ const isPortOpen = (host: string, port: number) =>
     socket.setTimeout(1_000, () => onDone(false));
   });
 
-const waitForNextReady = async () => {
+const waitForAPIRuntimeReady = async () => {
   const startedAt = Date.now();
 
-  while (Date.now() - startedAt < NEXT_READY_TIMEOUT_MS) {
-    if (await isPortOpen(NEXT_HOST, NEXT_PORT)) return;
-    await wait(NEXT_READY_RETRY_MS);
+  while (Date.now() - startedAt < API_READY_TIMEOUT_MS) {
+    if (await isPortOpen(API_HOST, API_PORT)) return;
+    await wait(API_READY_RETRY_MS);
   }
 
   throw new Error(
-    `Next server was not ready within ${NEXT_READY_TIMEOUT_MS / 1000}s on ${NEXT_HOST}:${NEXT_PORT}`,
+    `API runtime was not ready within ${API_READY_TIMEOUT_MS / 1000}s on ${API_HOST}:${API_PORT}`,
   );
 };
 
 const prewarmNextRootCompile = async () => {
   const startedAt = Date.now();
-  const response = await fetch(NEXT_ROOT_URL, { signal: AbortSignal.timeout(120_000) });
+  const response = await fetch(API_ROOT_URL, { signal: AbortSignal.timeout(120_000) });
   const elapsed = ((Date.now() - startedAt) / 1000).toFixed(2);
-  console.log(`✅ Next prewarm request finished (${response.status}) in ${elapsed}s ${NEXT_ROOT_URL}`);
+  console.log(
+    `✅ Next prewarm request finished (${response.status}) in ${elapsed}s ${API_ROOT_URL}`,
+  );
 };
 
-const runNextBackgroundTasks = () => {
+const runAPIRuntimeBackgroundTasks = (topology: DevTopology) => {
   setTimeout(() => {
-    console.log(`🔁 Next server URL: ${NEXT_ROOT_URL}`);
+    console.log(`🔁 API runtime (${topology}) URL: ${API_ROOT_URL}`);
+    if (devTopologyConfig.honoRuntime === 'standalone') {
+      console.log(`🔁 Hono runtime URL: ${HONO_ROOT_URL}`);
+    }
+    console.log(`🔁 Browser APP_URL: ${process.env.APP_URL}`);
   }, 2_000);
 
   void (async () => {
     try {
-      await waitForNextReady();
-      await prewarmNextRootCompile();
+      await waitForAPIRuntimeReady();
+      if (topology !== 'vite') await prewarmNextRootCompile();
     } catch (error) {
-      console.warn('⚠️ Next prewarm skipped:', error);
+      console.warn('⚠️ API runtime readiness check skipped:', error);
     }
   })();
 };
@@ -122,12 +139,13 @@ const shutdownAll = (signal: NodeJS.Signals) => {
   shuttingDown = true;
 
   terminateChild(viteProcess);
-  terminateChild(nextProcess);
+  terminateChild(apiProcess);
+  terminateChild(honoProcess);
 
   process.exitCode = signal === 'SIGINT' ? 130 : 143;
 };
 
-const watchChildExit = (child: ChildProcess, name: 'next' | 'vite') => {
+const watchChildExit = (child: ChildProcess, name: string) => {
   child.once('exit', (code, signal) => {
     if (!shuttingDown) {
       console.error(
@@ -138,23 +156,57 @@ const watchChildExit = (child: ChildProcess, name: 'next' | 'vite') => {
   });
 };
 
-const main = async () => {
-  process.once('SIGINT', () => shutdownAll('SIGINT'));
-  process.once('SIGTERM', () => shutdownAll('SIGTERM'));
+const startAPIRuntime = () => {
+  if (devTopologyConfig.apiRuntime === 'none') return;
 
-  nextProcess = spawn('npx', ['next', 'dev', '-p', String(NEXT_PORT)], {
+  const bundlerArgs = devTopologyConfig.nextBundler === 'webpack' ? ['--webpack'] : [];
+
+  return spawn('npx', ['next', 'dev', ...bundlerArgs, '-p', String(API_PORT)], {
     env: process.env,
     stdio: 'inherit',
     shell: process.platform === 'win32',
   });
-  watchChildExit(nextProcess, 'next');
+};
+
+const startHonoRuntime = () => {
+  if (devTopologyConfig.honoRuntime !== 'standalone') return;
+
+  return spawn(
+    'npx',
+    ['vite-node', '--config', 'scripts/viteNodeServer.config.ts', 'src/server/hono/standalone.ts'],
+    {
+      env: {
+        ...process.env,
+        HONO_PORT: String(HONO_PORT),
+        PORT: String(HONO_PORT),
+      },
+      stdio: 'inherit',
+      shell: process.platform === 'win32',
+    },
+  );
+};
+
+const main = async () => {
+  process.once('SIGINT', () => shutdownAll('SIGINT'));
+  process.once('SIGTERM', () => shutdownAll('SIGTERM'));
+
+  console.log(`🔧 Dev topology: ${devTopologyConfig.topology}`);
+  console.log(`🔧 API target: ${devTopologyConfig.apiTarget}`);
+  if (devTopologyConfig.honoTarget) console.log(`🔧 Hono target: ${devTopologyConfig.honoTarget}`);
+
+  honoProcess = startHonoRuntime();
+  if (honoProcess) watchChildExit(honoProcess, 'hono');
+
+  apiProcess = startAPIRuntime();
+  if (apiProcess) watchChildExit(apiProcess, devTopologyConfig.apiRuntime);
 
   viteProcess = runNpmScript('dev:spa');
   watchChildExit(viteProcess, 'vite');
-  runNextBackgroundTasks();
+  if (apiProcess) runAPIRuntimeBackgroundTasks(devTopologyConfig.topology);
 
   await Promise.race([
-    new Promise((resolve) => nextProcess?.once('exit', resolve)),
+    new Promise((resolve) => honoProcess?.once('exit', resolve)),
+    new Promise((resolve) => apiProcess?.once('exit', resolve)),
     new Promise((resolve) => viteProcess?.once('exit', resolve)),
   ]);
 };

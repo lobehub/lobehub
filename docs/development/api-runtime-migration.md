@@ -22,6 +22,49 @@ flowchart LR
 | Hono route        | `app.get` / `app.post`                                | Direct Hono mounting for migrated handlers.                              |
 | Root Hono runtime | Lazy path dispatch                                    | Import only the domain app required by the matched path.                 |
 
+## Local Development Topologies
+
+Local development uses an explicit strategy selected by `LOBE_DEV_TOPOLOGY`.
+The strategy resolver lives in `scripts/devTopology.ts` and is consumed by both
+`vite.config.ts` and `scripts/devStartupSequence.mts`.
+
+| Topology | Script             | Runtime processes  | Next bundler | Browser origin          | API target              | API execution path                                          |
+| -------- | ------------------ | ------------------ | ------------ | ----------------------- | ----------------------- | ----------------------------------------------------------- |
+| `next`   | `bun run dev`      | Next + Vite        | Turbopack    | `http://localhost:3010` | `http://localhost:3010` | Next route handlers                                         |
+| `hono`   | `bun run dev:hono` | Next + Hono + Vite | webpack      | `http://localhost:3010` | `http://localhost:3010` | Next shell forwards API prefixes to `http://localhost:3011` |
+| `vite`   | `bun run dev:vite` | Vite only          | N/A          | `http://localhost:9876` | Explicit target only    | No local API by default                                     |
+
+`APP_URL` is the public browser origin and is controlled by the selected local
+topology. In `next` and `hono` topologies the browser enters through the local
+Next.js shell, while Vite only serves development assets and HMR. Override
+`APP_URL` with `LOBE_DEV_APP_URL` when a local run needs a custom origin.
+`INTERNAL_APP_URL` is the server-to-server callback origin and defaults to the
+local API target for `next` and `hono`; override it with
+`LOBE_DEV_INTERNAL_APP_URL`. Vite proxies `/api`, `/oidc`, `/trpc`, `/webapi`,
+`/market`, and `/f` when the selected topology has a local API runtime, or when
+`LOBE_DEV_API_TARGET` is explicitly set in `vite` mode.
+
+The `hono` topology still starts Next.js so SSR login and auth pages remain
+available locally. Next is reduced to a lightweight shell: local rewrites send
+API prefixes into the internal `/hono-runtime/*` binding route, which reconstructs the
+original request URL and forwards it to the standalone Hono dev runtime through
+`LOBE_DEV_HONO_TARGET`. This keeps the root Hono source graph out of the Next.js
+dev compiler. The local `hono` topology uses webpack for the Next shell to avoid
+Turbopack's webpack-loader worker pool; this is a development-only choice and
+does not change the production build path. Because webpack does not consume
+`turbopack.rules`, the local webpack shell defines its own `.md` raw-loader rule.
+The standalone Hono dev runtime is executed with `vite-node` and the dedicated
+`scripts/viteNodeServer.config.ts` config so server-side `.md` imports from
+packages such as `@lobechat/agent-templates` and `@lobechat/builtin-skills`
+resolve to strings without loading the frontend Vite config. Production Hono
+rollout should import the separately compiled Hono dist entry through
+`LOBE_HONO_DIST_ENTRY`, whose default fallback is `hono/dist/index.js`.
+Login and auth-sensitive routes such as `/api/auth/*` and `/oidc/*` remain on
+the native Next.js route path in this local topology. The topology strategy also
+sets the route-scoped auth and OIDC runtime environment variables to `next`, so
+a broad local `LOBE_API_RUNTIME=hono` setting cannot redirect login callbacks
+away from Next.js.
+
 ## Runtime Switches
 
 | Domain      | Header override       | Global env          | Percent env              | Default |
@@ -84,6 +127,7 @@ Route-scoped env variables override global env variables. Migrated general API r
 
 | Route pattern                                                          | Domain                         | Status             | Reason / next action                                                                                                                                                                                                                                                     |
 | ---------------------------------------------------------------------- | ------------------------------ | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/hono-runtime/[...path]`                                              | Next Hono binding              | Hono-native        | Internal Next.js shell binding. In local `hono` topology it forwards to `LOBE_DEV_HONO_TARGET`; in production Hono rollout it calls the fetch-compatible Hono dist app loaded from `LOBE_HONO_DIST_ENTRY`.                                                               |
 | `/trpc/async/[trpc]`                                                   | tRPC async router              | Migrated           | Shared handler under `src/server/trpc-runtime/async.ts`; Next defaults to `next`; Hono mounted under `src/server/trpc-hono`.                                                                                                                                             |
 | `/trpc/lambda/[trpc]`                                                  | tRPC lambda router             | Migrated           | Shared handler under `src/server/trpc-runtime/lambda.ts`; gray-release parity covered by runtime tests.                                                                                                                                                                  |
 | `/trpc/mobile/[trpc]`                                                  | tRPC mobile router             | Migrated           | Shared handler under `src/server/trpc-runtime/mobile.ts`; Hono path uses the same context factory.                                                                                                                                                                       |

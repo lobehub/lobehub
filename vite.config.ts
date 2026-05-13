@@ -16,6 +16,7 @@ import {
   sharedRendererPlugins,
 } from './plugins/vite/sharedRendererConfig';
 import { vercelSkewProtection } from './plugins/vite/vercelSkewProtection';
+import { applyDefaultDevTopologyEnv } from './scripts/devTopology';
 
 const isMobile = process.env.MOBILE === 'true';
 const mode = process.env.NODE_ENV === 'production' ? 'production' : 'development';
@@ -25,6 +26,12 @@ Object.assign(process.env, loadEnv(mode, process.cwd(), ''));
 const isDev = process.env.NODE_ENV !== 'production';
 const platform = isMobile ? 'mobile' : 'web';
 const enableViteDevTools = process.env.LOBE_VITE_DEVTOOLS === 'true';
+const devTopologyConfig = isDev ? applyDefaultDevTopologyEnv(process.env) : undefined;
+const shouldPrintDebugProxy = process.env.LOBE_DEV_DEBUG_PROXY === '1';
+
+if (devTopologyConfig) {
+  process.title = `lobe-vite-${devTopologyConfig.topology}`;
+}
 
 const resolveCommandExecutable = (cmd: string) => {
   const pathValue = process.env.PATH;
@@ -122,132 +129,142 @@ export default defineConfig({
   optimizeDeps: sharedOptimizeDeps,
   plugins: [
     vercelSkewProtection(),
-    viteEnvRestartKeys(['APP_URL']),
-    enableViteDevTools && DevTools({
-      build: {
-        withApp: true,
-      },
-    }),
+    viteEnvRestartKeys([
+      'APP_URL',
+      'LOBE_DEV_API_TARGET',
+      'LOBE_DEV_APP_URL',
+      'LOBE_DEV_INTERNAL_APP_URL',
+      'LOBE_DEV_TOPOLOGY',
+      'PORT',
+      'VITE_PORT',
+    ]),
+    enableViteDevTools &&
+      DevTools({
+        build: {
+          withApp: true,
+        },
+      }),
     ...sharedRendererPlugins({ platform }),
 
-    isDev && {
-      name: 'lobe-dev-proxy-print',
-      configureServer(server: ViteDevServer) {
-        const ONLINE_HOST = 'https://app.lobehub.com';
-        const c = {
-          green: (s: string) => `\x1B[32m${s}\x1B[0m`,
-          bold: (s: string) => `\x1B[1m${s}\x1B[0m`,
-          cyan: (s: string) => `\x1B[36m${s}\x1B[0m`,
-        };
-        const { info } = server.config.logger;
-        const isBundledDev = (server.config.experimental as any)?.bundledDev;
-
-        const getProxyUrl = () => {
-          const urls = server.resolvedUrls;
-          if (!urls?.local?.[0]) return;
-          const localHost = urls.local[0].replace(/\/$/, '');
-          return `${ONLINE_HOST}/_dangerous_local_dev_proxy?debug-host=${encodeURIComponent(localHost)}`;
-        };
-        const printProxyUrl = () => {
-          const proxyUrl = getProxyUrl();
-          if (!proxyUrl) return;
-          const colorUrl = (url: string) =>
-            c.cyan(url.replace(/:(\d+)\//, (_, port) => `:${c.bold(port)}/`));
-          info(`  ${c.green('➜')}  ${c.bold('Debug Proxy')}: ${colorUrl(proxyUrl)}`);
-        };
-        const openProxyUrl = async () => {
-          const proxyUrl = getProxyUrl();
-          if (!proxyUrl) return;
-
-          const opened = await openExternalBrowser(proxyUrl, server.config.logger);
-
-          if (!opened) {
-            server.config.logger.warn(`Failed to open Debug Proxy automatically: ${proxyUrl}`);
-          }
-        };
-
-        if (isBundledDev) {
-          // Disable Vite's built-in browser opening. We always open the debug
-          // proxy URL after the first bundled compile finishes instead.
-          server.openBrowser = () => {};
-
-          const spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-          let spinnerIdx = 0;
-          let spinnerTimer: NodeJS.Timeout | null = null;
-          const formatElapsed = (ms: number) =>
-            ms < 1000 ? `${Math.max(0, Math.round(ms))}ms` : `${(ms / 1000).toFixed(1)}s`;
-
-          const startSpinner = (msg: string, since: number) => {
-            spinnerIdx = 0;
-            spinnerTimer = setInterval(() => {
-              const elapsed = formatElapsed(Date.now() - since);
-              process.stdout.write(`\r${c.cyan(spinnerFrames[spinnerIdx])} ${msg} (${elapsed})`);
-              spinnerIdx = (spinnerIdx + 1) % spinnerFrames.length;
-            }, 80);
+    isDev &&
+      shouldPrintDebugProxy && {
+        name: 'lobe-dev-proxy-print',
+        configureServer(server: ViteDevServer) {
+          const ONLINE_HOST = 'https://app.lobehub.com';
+          const c = {
+            green: (s: string) => `\x1B[32m${s}\x1B[0m`,
+            bold: (s: string) => `\x1B[1m${s}\x1B[0m`,
+            cyan: (s: string) => `\x1B[36m${s}\x1B[0m`,
           };
-          const stopSpinner = (clearLine = true) => {
-            if (spinnerTimer) {
-              clearInterval(spinnerTimer);
-              spinnerTimer = null;
+          const { info } = server.config.logger;
+          const isBundledDev = (server.config.experimental as any)?.bundledDev;
+
+          const getProxyUrl = () => {
+            const urls = server.resolvedUrls;
+            if (!urls?.local?.[0]) return;
+            const localHost = urls.local[0].replace(/\/$/, '');
+            return `${ONLINE_HOST}/_dangerous_local_dev_proxy?debug-host=${encodeURIComponent(localHost)}`;
+          };
+          const printProxyUrl = () => {
+            const proxyUrl = getProxyUrl();
+            if (!proxyUrl) return;
+            const colorUrl = (url: string) =>
+              c.cyan(url.replace(/:(\d+)\//, (_, port) => `:${c.bold(port)}/`));
+            info(`  ${c.green('➜')}  ${c.bold('Debug Proxy')}: ${colorUrl(proxyUrl)}`);
+          };
+          const openProxyUrl = async () => {
+            const proxyUrl = getProxyUrl();
+            if (!proxyUrl) return;
+
+            const opened = await openExternalBrowser(proxyUrl, server.config.logger);
+
+            if (!opened) {
+              server.config.logger.warn(`Failed to open Debug Proxy automatically: ${proxyUrl}`);
             }
-            if (clearLine) process.stdout.write('\r\x1B[K');
           };
 
-          server.httpServer?.once('listening', () => {
-            void (async () => {
-              const rootUrl =
-                server.resolvedUrls?.local?.[0] ||
-                `http://localhost:${String(server.config.server.port || 9876)}/`;
-              const startedAt = Date.now();
-              const timeout = 180_000;
-              const interval = 400;
-              let ready = false;
+          if (isBundledDev) {
+            // Disable Vite's built-in browser opening. We always open the debug
+            // proxy URL after the first bundled compile finishes instead.
+            server.openBrowser = () => {};
 
-              startSpinner('Vite: compile and bundle...', startedAt);
+            const spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+            let spinnerIdx = 0;
+            let spinnerTimer: NodeJS.Timeout | null = null;
+            const formatElapsed = (ms: number) =>
+              ms < 1000 ? `${Math.max(0, Math.round(ms))}ms` : `${(ms / 1000).toFixed(1)}s`;
 
-              try {
-                while (Date.now() - startedAt < timeout) {
-                  try {
-                    const res = await fetch(rootUrl, { signal: AbortSignal.timeout(5_000) });
-                    const text = await res.text();
-                    if (text.includes('Bundling in progress')) {
+            const startSpinner = (msg: string, since: number) => {
+              spinnerIdx = 0;
+              spinnerTimer = setInterval(() => {
+                const elapsed = formatElapsed(Date.now() - since);
+                process.stdout.write(`\r${c.cyan(spinnerFrames[spinnerIdx])} ${msg} (${elapsed})`);
+                spinnerIdx = (spinnerIdx + 1) % spinnerFrames.length;
+              }, 80);
+            };
+            const stopSpinner = (clearLine = true) => {
+              if (spinnerTimer) {
+                clearInterval(spinnerTimer);
+                spinnerTimer = null;
+              }
+              if (clearLine) process.stdout.write('\r\x1B[K');
+            };
+
+            server.httpServer?.once('listening', () => {
+              void (async () => {
+                const rootUrl =
+                  server.resolvedUrls?.local?.[0] ||
+                  `http://localhost:${String(server.config.server.port || 9876)}/`;
+                const startedAt = Date.now();
+                const timeout = 180_000;
+                const interval = 400;
+                let ready = false;
+
+                startSpinner('Vite: compile and bundle...', startedAt);
+
+                try {
+                  while (Date.now() - startedAt < timeout) {
+                    try {
+                      const res = await fetch(rootUrl, { signal: AbortSignal.timeout(5_000) });
+                      const text = await res.text();
+                      if (text.includes('Bundling in progress')) {
+                        await new Promise((r) => setTimeout(r, interval));
+                        continue;
+                      }
+                      ready = true;
+                      stopSpinner();
+                      info(
+                        `  ${c.green('✅')}  Vite: compile and bundle finished (${res.status}) ${rootUrl}`,
+                      );
+                      void openProxyUrl();
+                      break;
+                    } catch {
                       await new Promise((r) => setTimeout(r, interval));
-                      continue;
                     }
-                    ready = true;
-                    stopSpinner();
-                    info(
-                      `  ${c.green('✅')}  Vite: compile and bundle finished (${res.status}) ${rootUrl}`,
-                    );
-                    void openProxyUrl();
-                    break;
-                  } catch {
-                    await new Promise((r) => setTimeout(r, interval));
                   }
+                } catch (e) {
+                  stopSpinner();
+                  console.warn('⚠️ Vite: could not wait for compile and bundle:', e);
                 }
-              } catch (e) {
-                stopSpinner();
-                console.warn('⚠️ Vite: could not wait for compile and bundle:', e);
-              }
 
-              if (!ready && spinnerTimer) {
-                stopSpinner();
-                console.warn(`⚠️ Vite: compile and bundle timed out after ${timeout / 1000}s`);
-              }
+                if (!ready && spinnerTimer) {
+                  stopSpinner();
+                  console.warn(`⚠️ Vite: compile and bundle timed out after ${timeout / 1000}s`);
+                }
 
+                printProxyUrl();
+              })();
+            });
+          }
+
+          return () => {
+            server.printUrls = () => {
+              if (isBundledDev) return;
               printProxyUrl();
-            })();
-          });
-        }
-
-        return () => {
-          server.printUrls = () => {
-            if (isBundledDev) return;
-            printProxyUrl();
+            };
           };
-        };
+        },
       },
-    },
 
     VitePWA({
       injectRegister: null,
@@ -295,12 +312,8 @@ export default defineConfig({
     cors: true,
     host: true,
     port: 9876,
-    proxy: {
-      '/api': `http://localhost:${process.env.PORT || 3010}`,
-      '/oidc': `http://localhost:${process.env.PORT || 3010}`,
-      '/trpc': `http://localhost:${process.env.PORT || 3010}`,
-      '/webapi': `http://localhost:${process.env.PORT || 3010}`,
-    },
+    proxy: devTopologyConfig?.apiProxy,
+    strictPort: true,
     warmup: {
       clientFiles: [
         // src/ business code
