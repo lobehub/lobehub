@@ -2,6 +2,8 @@ import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import {
   KLAVIS_SERVER_TYPES,
   LOBEHUB_SKILL_PROVIDERS,
+  REQUEST_AGENT_ID_HEADER,
+  REQUEST_TOPIC_ID_HEADER,
   REQUEST_TRIGGER_HEADER,
 } from '@lobechat/const';
 import { type OfficialToolItem } from '@lobechat/context-engine';
@@ -452,9 +454,9 @@ class ChatService {
       headers: {
         'Content-Type': 'application/json',
         ...traceHeader,
-        ...(agentId && { 'x-agent-id': agentId }),
+        ...(agentId && { [REQUEST_AGENT_ID_HEADER]: agentId }),
         ...(requestTrigger && { [REQUEST_TRIGGER_HEADER]: requestTrigger }),
-        ...(topicId && { 'x-topic-id': topicId }),
+        ...(topicId && { [REQUEST_TOPIC_ID_HEADER]: topicId }),
       },
       provider,
     });
