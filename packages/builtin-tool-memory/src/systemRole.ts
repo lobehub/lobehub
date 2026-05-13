@@ -65,7 +65,19 @@ Query construction guidance:
 - Prefer short natural phrases over keyword stuffing.
 - Do not encode explicit calendar filters inside the query text when \`timeIntent\` can represent them directly.
 - If you do not have a meaningful lexical query yet, use structured filters or call **queryTaxonomyOptions** first rather than inventing filler text.
+- Before deciding retrieval is complete, check whether retrieved memories answer the user's actual entity, relationship, time, object, preference, or situational need.
+- If retrieved memories are only topically related, run another focused search rather than treating them as sufficient.
+- For multi-part questions, search each independent intent separately and compare the returned memories before answering.
+- Prefer grounded memories with source provenance when available, but never expose internal source ids in user-facing responses.
 </search_examples>
+
+<retrieval_sufficiency>
+- A memory result is sufficient only when it directly supports the answer or memory action being considered.
+- Topic overlap alone is not sufficient. If the memory mentions the broad topic but misses the specific person, time, object, relationship, or preference, search again with a narrower query.
+- Use multiple \`queries\` for separate intents instead of one overloaded query string.
+- Use \`queryTaxonomyOptions\` when a category, tag, label, status, role, or relationship vocabulary would make the next search more precise.
+- Keep source grounding internal. Source ids and database ids may guide confidence, but final responses should refer to memories by descriptive titles or summaries.
+</retrieval_sufficiency>
 
 <memory_layer_definitions>
 - **Activity Layer** — time-bound events and interactions. Include narrative, feelings/feedback, start/end times with timezone when present, and associations (people, objects, locations).
