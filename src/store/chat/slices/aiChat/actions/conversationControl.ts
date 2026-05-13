@@ -97,12 +97,24 @@ export class ConversationControlActionImpl {
    * Preserve the request trigger so downstream chat requests keep the same
    * headers after a human-intervention pause.
    */
-  #getRequestMetadataFromMessages = (
+  #getRequestMetadataFromMessageChain = (
     messages: UIChatMessage[],
+    anchorMessageId: string,
   ): Pick<MessageMetadata, 'trigger'> | undefined => {
-    for (let index = messages.length - 1; index >= 0; index -= 1) {
-      const trigger = messages[index]?.metadata?.trigger;
+    const messagesById = new Map(messages.map((message) => [message.id, message]));
+    const visitedIds = new Set<string>();
+    let currentMessageId: string | undefined = anchorMessageId;
+
+    while (currentMessageId && !visitedIds.has(currentMessageId)) {
+      visitedIds.add(currentMessageId);
+
+      const message = messagesById.get(currentMessageId);
+      if (!message) return;
+
+      const trigger = message.metadata?.trigger;
       if (trigger) return { trigger };
+
+      currentMessageId = message.parentId;
     }
   };
 
@@ -283,7 +295,10 @@ export class ConversationControlActionImpl {
     // 3. Get current messages for state construction using context
     const chatKey = messageMapKey({ agentId, topicId, threadId, scope });
     const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
-    const requestMetadata = this.#getRequestMetadataFromMessages(currentMessages);
+    const requestMetadata = this.#getRequestMetadataFromMessageChain(
+      currentMessages,
+      toolMessageId,
+    );
 
     // 4. Create agent state and context with user intervention config
     const { state, context: initialContext } = this.#get().internal_createAgentState({
@@ -399,7 +414,10 @@ export class ConversationControlActionImpl {
     // tool result, not a fake user turn.
     if (!shouldCreateUserMessage) {
       const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
-      const requestMetadata = this.#getRequestMetadataFromMessages(currentMessages);
+      const requestMetadata = this.#getRequestMetadataFromMessageChain(
+        currentMessages,
+        toolMessageId,
+      );
 
       const { state, context: initialContext } = this.#get().internal_createAgentState({
         messages: currentMessages,
@@ -472,7 +490,10 @@ export class ConversationControlActionImpl {
 
     // 3. Resume agent from user message (not tool re-execution)
     const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
-    const requestMetadata = this.#getRequestMetadataFromMessages(currentMessages);
+    const requestMetadata = this.#getRequestMetadataFromMessageChain(
+      currentMessages,
+      toolMessageId,
+    );
 
     const { state, context: initialContext } = this.#get().internal_createAgentState({
       messages: currentMessages,
@@ -577,7 +598,10 @@ export class ConversationControlActionImpl {
     // 3. Resume agent from user message
     const chatKey = messageMapKey({ agentId, topicId, threadId, scope });
     const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
-    const requestMetadata = this.#getRequestMetadataFromMessages(currentMessages);
+    const requestMetadata = this.#getRequestMetadataFromMessageChain(
+      currentMessages,
+      toolMessageId,
+    );
 
     const { state, context: initialContext } = this.#get().internal_createAgentState({
       messages: currentMessages,
@@ -1041,7 +1065,7 @@ export class ConversationControlActionImpl {
     // Get current messages for state construction using context
     const chatKey = messageMapKey({ agentId, topicId, threadId, scope });
     const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
-    const requestMetadata = this.#getRequestMetadataFromMessages(currentMessages);
+    const requestMetadata = this.#getRequestMetadataFromMessageChain(currentMessages, messageId);
 
     // Create agent state and context to continue from rejected tool message
     const { state, context: initialContext } = this.#get().internal_createAgentState({
