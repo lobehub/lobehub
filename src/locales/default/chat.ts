@@ -32,6 +32,7 @@ export default {
   'agentProfile.knowledgeBases_other': '{{count}} knowledge bases',
   'agentProfile.skills_one': '{{count}} skill',
   'agentProfile.skills_other': '{{count}} skills',
+  'agentSignal.receipts.agentSignalLabel': 'Agent Signal',
   'agentSignal.receipts.memory.detail': 'Saved this for future replies',
   'agentSignal.receipts.memory.title': 'Memory saved',
   'agentSignal.receipts.recentActivity': 'Recent activity',
