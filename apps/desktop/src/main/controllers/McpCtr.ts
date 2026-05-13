@@ -1,4 +1,4 @@
-import { exec } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -12,7 +12,17 @@ import { MCPClient, MCPConnectionError } from '../libs/mcp/client';
 import type { MCPClientParams, ToolCallContent, ToolCallResult } from '../libs/mcp/types';
 import { ControllerModule, IpcMethod } from './index';
 
-const execPromise = promisify(exec);
+const execFilePromise = promisify(execFile);
+
+// Allow only safe identifiers for executable / package / dependency names
+// (alphanumerics, underscore, hyphen, dot, plus, @, /). Disallow shell metacharacters.
+const SAFE_NAME_RE = /^[\w.@+/-]+$/;
+const isSafeName = (value: unknown): value is string =>
+  typeof value === 'string' && value.length > 0 && value.length <= 214 && SAFE_NAME_RE.test(value);
+// Extra strictness for interpreter binaries: must be a bare executable name or a path
+// without spaces/metacharacters. We still pass it as argv[0] (no shell).
+const isSafeExecutable = (value: unknown): value is string =>
+  typeof value === 'string' && value.length > 0 && value.length <= 256 && /^[\w.@+/\\:-]+$/.test(value);
 const logger = createLogger('controllers:McpCtr');
 
 /**
@@ -396,10 +406,24 @@ export default class McpCtr extends ControllerModule {
   }
 
   private async checkSystemDependency(dependency: any) {
-    const checkCommand = dependency.checkCommand || `${dependency.name} --version`;
+    const name = dependency?.name;
+    // Only run dependency probes when the name is a strict, safe identifier.
+    // We intentionally ignore any caller-supplied `checkCommand` to avoid
+    // executing arbitrary shell strings that originate from MCP marketplace
+    // metadata or other untrusted sources (CWE-78).
+    if (!isSafeName(name)) {
+      return {
+        error: 'Invalid dependency name',
+        installInstructions: this.getInstallInstructions(dependency?.installInstructions),
+        installed: false,
+        meetRequirement: false,
+        name: typeof name === 'string' ? name : undefined,
+        requiredVersion: dependency?.requiredVersion,
+      };
+    }
 
     try {
-      const { stdout, stderr } = await execPromise(checkCommand);
+      const { stdout, stderr } = await execFilePromise(name, ['--version'], { shell: false });
 
       if (stderr && !stdout) {
         return {
@@ -479,10 +503,17 @@ export default class McpCtr extends ControllerModule {
     if (installationMethod === 'npm') {
       const packageName = details?.packageName;
       if (!packageName) return { installed: false };
+      // Reject any package name containing shell metacharacters (CWE-78).
+      // npm package names allow: lowercase letters, digits, '-', '_', '.', and '/' or '@' for scoped pkgs.
+      if (!isSafeName(packageName)) return { installed: false };
 
       // Only check global npm list - do NOT use npx as it may download packages
       try {
-        const { stdout } = await execPromise(`npm list -g ${packageName} --depth=0`);
+        const { stdout } = await execFilePromise(
+          'npm',
+          ['list', '-g', packageName, '--depth=0'],
+          { shell: false },
+        );
         if (!stdout.includes('(empty)') && stdout.includes(packageName)) {
           return { installed: true };
         }
@@ -498,22 +529,43 @@ export default class McpCtr extends ControllerModule {
     if (installationMethod === 'python') {
       const packageName = details?.packageName;
       if (!packageName) return { installed: false };
+      if (!isSafeName(packageName)) return { installed: false };
 
       const pythonCommand = details?.pythonCommand || 'python';
+      // Reject pythonCommand values that contain shell metacharacters; we always
+      // invoke it via execFile with an explicit argv (no shell) (CWE-78).
+      if (!isSafeExecutable(pythonCommand)) return { installed: false };
 
+      // Run `pip list` without a shell pipeline and filter the output in-process.
       try {
-        const command = `${pythonCommand} -m pip list | grep -i "${packageName}"`;
-        const { stdout } = await execPromise(command);
-        if (stdout.trim() && stdout.toLowerCase().includes(String(packageName).toLowerCase())) {
+        const { stdout } = await execFilePromise(
+          pythonCommand,
+          ['-m', 'pip', 'list'],
+          { shell: false },
+        );
+        const needle = String(packageName).toLowerCase();
+        if (
+          stdout
+            .split(/\r?\n/)
+            .some((line) => line.toLowerCase().includes(needle))
+        ) {
           return { installed: true };
         }
       } catch {
         // ignore
       }
 
+      // Importability fallback. The module name is derived from packageName,
+      // which we already validated above; convert '-' to '_' per Python conventions.
+      const moduleName = String(packageName).replaceAll('-', '_');
+      // Defense in depth: ensure the derived module name is a valid Python identifier path.
+      if (!/^[A-Za-z_][\w.]*$/.test(moduleName)) return { installed: false };
       try {
-        const importCommand = `${pythonCommand} -c "import ${String(packageName).replace('-', '_')}; print('Package installed')"`;
-        const { stdout } = await execPromise(importCommand);
+        const { stdout } = await execFilePromise(
+          pythonCommand,
+          ['-c', `import ${moduleName}; print('Package installed')`],
+          { shell: false },
+        );
         if (stdout.includes('Package installed')) return { installed: true };
       } catch {
         // ignore
