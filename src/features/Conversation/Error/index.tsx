@@ -1,3 +1,4 @@
+import type { HeterogeneousAgentSessionError } from '@lobechat/electron-client-ipc';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import { type ILobeAgentRuntimeErrorType } from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
@@ -71,6 +72,26 @@ const OllamaSetupGuide = dynamic(() => import('./OllamaSetupGuide'), {
   loading,
   ssr: false,
 });
+
+const HETEROGENEOUS_AGENT_STATUS_GUIDE_ERROR_CODES = new Set<string>([
+  HeterogeneousAgentSessionErrorCode.AuthRequired,
+  HeterogeneousAgentSessionErrorCode.CliNotFound,
+  HeterogeneousAgentSessionErrorCode.RateLimit,
+]);
+
+const isHeterogeneousAgentStatusGuideError = (
+  value: unknown,
+): value is HeterogeneousAgentSessionError => {
+  if (!value || typeof value !== 'object') return false;
+
+  const { agentType, code } = value as Partial<HeterogeneousAgentSessionError>;
+
+  return (
+    (agentType === 'claude-code' || agentType === 'codex') &&
+    typeof code === 'string' &&
+    HETEROGENEOUS_AGENT_STATUS_GUIDE_ERROR_CODES.has(code)
+  );
+};
 
 // Config for the errorMessage display
 const getErrorAlertConfig = (
@@ -157,24 +178,15 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(({ error: alertError, data }) =>
   const navigate = useNavigate();
   const businessChatErrorMessageExtra = useRenderBusinessChatErrorMessageExtra(error, data.id);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
-  const sessionErrorCode = error?.body?.code;
-  const sessionAgentType = error?.body?.agentType;
   const sessionErrorBody = error?.body;
   const rawErrorMessage = getRawErrorMessage(error) || alertError?.message;
 
   if (enableBusinessFeatures && businessChatErrorMessageExtra) return businessChatErrorMessageExtra;
 
-  if (
-    (error?.type === AgentRuntimeErrorType.AgentRuntimeError || !error?.type) &&
-    !!sessionErrorBody &&
-    (sessionErrorCode === HeterogeneousAgentSessionErrorCode.AuthRequired ||
-      sessionErrorCode === HeterogeneousAgentSessionErrorCode.CliNotFound ||
-      sessionErrorCode === HeterogeneousAgentSessionErrorCode.RateLimit) &&
-    (sessionAgentType === 'claude-code' || sessionAgentType === 'codex')
-  ) {
+  if (isHeterogeneousAgentStatusGuideError(sessionErrorBody)) {
     return (
       <HeterogeneousAgentStatusGuide
-        agentType={sessionAgentType}
+        agentType={sessionErrorBody.agentType}
         error={sessionErrorBody}
         onOpenSystemTools={() => navigate('/settings/system-tools')}
       />
