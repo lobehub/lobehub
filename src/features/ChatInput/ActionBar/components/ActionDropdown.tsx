@@ -127,6 +127,13 @@ const ActionDropdown = memo<ActionDropdownProps>(
 
     const handleOpenChange = useCallback(
       (nextOpen: boolean, details: Parameters<NonNullable<typeof onOpenChange>>[1]) => {
+        if (
+          !nextOpen &&
+          (details as { reason?: string })?.reason === 'sibling-open'
+        ) {
+          (details as { cancel?: () => void })?.cancel?.();
+          return;
+        }
         onOpenChange?.(nextOpen, details);
         if (open === undefined) setUncontrolledOpen(nextOpen);
       },
@@ -175,6 +182,7 @@ const ActionDropdown = memo<ActionDropdownProps>(
             return {
               ...item,
               children: decorateMenuItems(item.children),
+              type: 'submenu',
             };
           }
           const itemOnClick = 'onClick' in item ? item.onClick : undefined;
@@ -216,8 +224,10 @@ const ActionDropdown = memo<ActionDropdownProps>(
       return nextItems;
     }, [decorateMenuItems, isOpen, menu, prefetch]);
 
+    console.log('ActionDropdown render', { isOpen, renderedItems });
     const menuContent = useMemo(() => {
       if (!popupRender) return renderedItems;
+
       return popupRender(renderedItems ?? null);
     }, [popupRender, renderedItems]);
 
