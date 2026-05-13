@@ -1,5 +1,6 @@
 import type {
   AgentInterventionRequestData,
+  AgentInterventionResponseData,
   AgentStreamEvent,
 } from '@lobechat/agent-gateway-client';
 import { isDesktop } from '@lobechat/const';
@@ -1355,6 +1356,40 @@ export const executeHeterogeneousAgent = async (
             );
           } catch (err) {
             console.error('[HeterogeneousAgent] persist intervention pending failed:', err);
+          }
+        });
+        return;
+      }
+
+      // ─── agent_intervention_response: bridge-side terminal state ───
+      // Mirrors the bridge's terminal state onto the UI. Only acts on the
+      // cases the user did NOT drive — `user_cancelled` and successful
+      // submits are already optimistic-updated by `submitHeteroIntervention`
+      // and arrive here as a wire echo. Timeout / session_ended are the
+      // ones that would otherwise strand the form on `status: 'pending'`
+      // until the owning operation gets garbage-collected (at which point
+      // a Submit click would throw `Operation not found`).
+      if (event.type === 'agent_intervention_response') {
+        const data = event.data as AgentInterventionResponseData;
+        const { cancelled, cancelReason, toolCallId } = data;
+        if (!cancelled) return;
+        if (cancelReason === 'user_cancelled') return;
+        persistQueue = persistQueue.then(async () => {
+          const toolMsgId = toolMsgIdByCallId.get(toolCallId);
+          if (!toolMsgId) return;
+          try {
+            await get().optimisticUpdateMessagePlugin(
+              toolMsgId,
+              {
+                intervention: {
+                  rejectedReason: cancelReason ?? 'session_ended',
+                  status: 'rejected',
+                },
+              },
+              { operationId },
+            );
+          } catch (err) {
+            console.error('[HeterogeneousAgent] persist intervention rejection failed:', err);
           }
         });
         return;

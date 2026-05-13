@@ -43,7 +43,10 @@ import {
 } from '@/database/models/userMemory';
 import { userSettings } from '@/database/schemas';
 import { getServerDefaultFilesConfig } from '@/server/globalConfig';
-import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import {
+  initModelRuntimeFromDB,
+  initModelRuntimeWithUserPayload,
+} from '@/server/modules/ModelRuntime';
 import {
   emitToolOutcomeSafely,
   resolveToolOutcomeScope,
@@ -51,6 +54,7 @@ import {
 import { redisPolicyStateStore } from '@/server/services/agentSignal/store/adapters/redis/policyStateStore';
 import { normalizeSearchMemoryParams } from '@/server/services/memory/userMemory/searchParams';
 
+import type { ToolExecutionMemoryEmbeddingRuntime } from '../types';
 import type { ServerRuntimeRegistration } from './types';
 
 type MemoryEffort = 'high' | 'low' | 'medium';
@@ -123,6 +127,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
   private toolCallId?: string;
   private topicId?: string;
   private memoryEffort: MemoryEffort;
+  private memoryEmbeddingRuntime?: ToolExecutionMemoryEmbeddingRuntime;
   private userId: string;
 
   constructor(options: {
@@ -130,6 +135,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
     emitOutcome?: typeof emitToolOutcomeSafely;
     messageId?: string;
     memoryEffort: MemoryEffort;
+    memoryEmbeddingRuntime?: ToolExecutionMemoryEmbeddingRuntime;
     memoryModel: UserMemoryModel;
     operationId?: string;
     serverDB: LobeChatDatabase;
@@ -148,6 +154,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
     this.toolCallId = options.toolCallId;
     this.topicId = options.topicId;
     this.memoryEffort = options.memoryEffort;
+    this.memoryEmbeddingRuntime = options.memoryEmbeddingRuntime;
     this.userId = options.userId;
   }
 
@@ -192,10 +199,16 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
 
   searchMemory = async (params: SearchMemoryParams): Promise<SearchMemoryResult> => {
     const normalizedParams = normalizeSearchMemoryParams(params);
-    const { provider, model: embeddingModel } =
+    const defaultEmbeddingConfig =
       getServerDefaultFilesConfig().embeddingModel || DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM;
-
-    const modelRuntime = await initModelRuntimeFromDB(this.serverDB, this.userId, provider);
+    const embeddingModel = this.memoryEmbeddingRuntime?.model ?? defaultEmbeddingConfig.model;
+    const modelRuntime = this.memoryEmbeddingRuntime
+      ? initModelRuntimeWithUserPayload(
+          this.memoryEmbeddingRuntime.provider,
+          this.memoryEmbeddingRuntime.payload,
+          { userId: this.userId },
+        )
+      : await initModelRuntimeFromDB(this.serverDB, this.userId, defaultEmbeddingConfig.provider);
     const normalizedQueries = [
       ...new Set((normalizedParams.queries ?? []).map((query) => query.trim()).filter(Boolean)),
     ];
@@ -847,6 +860,7 @@ export const memoryRuntime: ServerRuntimeRegistration = {
       emitOutcome: emitToolOutcomeSafely,
       messageId: context.messageId,
       memoryEffort,
+      memoryEmbeddingRuntime: context.memoryEmbeddingRuntime,
       memoryModel,
       operationId: context.operationId,
       serverDB: context.serverDB,

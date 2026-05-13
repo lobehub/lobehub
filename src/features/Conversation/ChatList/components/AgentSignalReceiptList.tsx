@@ -1,8 +1,9 @@
 'use client';
 
+import { Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import type { LucideIcon } from 'lucide-react';
-import { Brain, ClipboardCheck, FileText } from 'lucide-react';
+import { Brain, ClipboardCheck, FileText, RadioTower } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -14,7 +15,25 @@ import type { AgentSignalReceiptView } from '../hooks/useAgentSignalReceipts';
 
 const PAGE_ROUTE_PATTERN = /^\/agent\/([^/]+)\/([^/]+)\/page(?:\/[^/?#]+)?/;
 
-const styles = createStaticStyles(({ css }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  agentSignalDescription: css`
+    display: inline-flex;
+    gap: 4px;
+    align-items: center;
+    max-width: 100%;
+  `,
+  agentSignalMarker: css`
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    color: ${cssVar.colorPrimary};
+  `,
+  descriptionText: css`
+    overflow: hidden;
+    min-width: 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
   list: css`
     display: flex;
     flex-direction: column;
@@ -50,6 +69,19 @@ const AgentSignalReceiptItem = memo<AgentSignalReceiptItemProps>(({ receipt }) =
   const description = receipt.target ? fallbackTitle : detail;
   const summary = receipt.target?.summary ?? detail;
   const tooltip = `${fallbackTitle}: ${summary}`;
+  const agentSignalLabel = t('agentSignal.receipts.agentSignalLabel', 'Agent Signal');
+  const descriptionRender = (
+    <span className={styles.agentSignalDescription}>
+      <span
+        aria-label={agentSignalLabel}
+        className={styles.agentSignalMarker}
+        title={agentSignalLabel}
+      >
+        <Icon icon={RadioTower} size={12} />
+      </span>
+      <span className={styles.descriptionText}>{description}</span>
+    </span>
+  );
   const target = receipt.target;
   const documentId = target?.type === 'skill' ? (target.documentId ?? target.id) : undefined;
   const canOpen = target?.type === 'memory' || Boolean(documentId);
@@ -75,7 +107,7 @@ const AgentSignalReceiptItem = memo<AgentSignalReceiptItemProps>(({ receipt }) =
 
   return (
     <PortalResourceCard
-      description={description}
+      description={descriptionRender}
       icon={ReceiptIcon}
       openLabel={canOpen ? t('common:cmdk.toOpen', 'Open') : undefined}
       title={title}

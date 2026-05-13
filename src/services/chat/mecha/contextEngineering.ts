@@ -9,7 +9,7 @@ import {
   type KlavisServiceSummary,
 } from '@lobechat/builtin-tool-creds';
 import { GroupAgentBuilderIdentifier } from '@lobechat/builtin-tool-group-agent-builder';
-import { GTDIdentifier } from '@lobechat/builtin-tool-gtd';
+import { LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { WebOnboardingIdentifier } from '@lobechat/builtin-tool-web-onboarding';
 import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
@@ -20,10 +20,10 @@ import type {
   AgentManagementContext,
   GroupAgentBuilderContext,
   GroupOfficialToolItem,
-  GTDConfig,
   LobeToolManifest,
   MemoryContext,
   OnboardingContext,
+  PlanTodoConfig,
   ToolDiscoveryConfig,
   UserMemoryData,
 } from '@lobechat/context-engine';
@@ -98,7 +98,7 @@ interface ContextEngineeringContext {
   stepContext?: RuntimeStepContext;
   systemRole?: string;
   tools?: string[];
-  /** Topic ID for GTD context injection */
+  /** Topic ID for plan/todo context injection */
   topicId?: string;
 }
 
@@ -317,12 +317,12 @@ export const contextEngineering = async ({
     userMemoryData = combineUserMemoryData(topicMemories, persona);
   }
 
-  // Resolve GTD context: plan and todos
-  // GTD tool must be enabled and topicId must be provided
-  const isGTDEnabled = tools?.includes(GTDIdentifier) ?? false;
-  let gtdConfig: GTDConfig | undefined;
+  // Resolve plan + todos context (now part of the lobe-agent tool).
+  // Lobe-agent must be enabled and topicId must be provided.
+  const isPlanTodoEnabled = tools?.includes(LobeAgentIdentifier) ?? false;
+  let planTodoConfig: PlanTodoConfig | undefined;
 
-  if (isGTDEnabled && topicId) {
+  if (isPlanTodoEnabled && topicId) {
     try {
       // Fetch plan document for the current topic
       const planResult = await notebookService.listDocuments({
@@ -347,17 +347,17 @@ export const contextEngineering = async ({
         // Get todos from plan's metadata
         const todos = planDoc.metadata?.todos;
 
-        gtdConfig = {
+        planTodoConfig = {
           enabled: true,
           plan,
           todos,
         };
 
-        log('GTD context resolved: plan=%s, todos=%o', plan.goal, todos?.items?.length ?? 0);
+        log('Plan/Todo context resolved: plan=%s, todos=%o', plan.goal, todos?.items?.length ?? 0);
       }
     } catch (error) {
-      // Silently fail - GTD context is optional
-      log('Failed to resolve GTD context:', error);
+      // Silently fail - plan/todo context is optional
+      log('Failed to resolve plan/todo context:', error);
     }
   }
 
@@ -742,7 +742,7 @@ export const contextEngineering = async ({
     ...(isGroupAgentBuilderEnabled && { groupAgentBuilderContext }),
     ...(agentManagementContext && { agentManagementContext }),
     ...(agentGroup && { agentGroup }),
-    ...(gtdConfig && { gtd: gtdConfig }),
+    ...(planTodoConfig && { planTodo: planTodoConfig }),
     ...(topicReferences && topicReferences.length > 0 && { topicReferences }),
     ...(onboardingContext && { onboardingContext }),
   });

@@ -273,9 +273,9 @@ const AgentOnboardingPage = memo(() => {
           </Drawer>
         )}
       </Flexbox>
-      <ModeSwitch
-        actions={
-          isDev ? (
+      {isDev && (
+        <ModeSwitch
+          actions={
             <>
               <AgentOnboardingDebugExportButton
                 agentId={onboardingAgentId}
@@ -294,9 +294,9 @@ const AgentOnboardingPage = memo(() => {
                 {t('agent.modeSwitch.reset')}
               </Button>
             </>
-          ) : undefined
-        }
-      />
+          }
+        />
+      )}
     </OnboardingContainer>
   );
 });

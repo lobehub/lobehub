@@ -8,7 +8,6 @@ import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { CredsManifest } from '@lobechat/builtin-tool-creds';
 import { GroupAgentBuilderManifest } from '@lobechat/builtin-tool-group-agent-builder';
 import { GroupManagementManifest } from '@lobechat/builtin-tool-group-management';
-import { GTDManifest } from '@lobechat/builtin-tool-gtd';
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
@@ -43,7 +42,6 @@ export const defaultToolIds = [
   CloudSandboxManifest.identifier,
   TopicReferenceManifest.identifier,
   AgentDocumentsManifest.identifier,
-  GTDManifest.identifier,
   TaskManifest.identifier,
   LobeAgentManifest.identifier,
 ];
@@ -200,11 +198,6 @@ export const builtinTools: LobeBuiltinTool[] = [
     hidden: true,
     identifier: AgentManagementManifest.identifier,
     manifest: AgentManagementManifest,
-    type: 'builtin',
-  },
-  {
-    identifier: GTDManifest.identifier,
-    manifest: GTDManifest,
     type: 'builtin',
   },
   {

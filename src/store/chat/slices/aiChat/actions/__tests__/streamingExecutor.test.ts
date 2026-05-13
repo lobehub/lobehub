@@ -2281,26 +2281,26 @@ describe('StreamingExecutor actions', () => {
     });
   });
 
-  describe('isSubTask filtering', () => {
-    it('should filter out lobe-gtd tools when isSubTask is true', async () => {
+  describe('isSubAgent filtering', () => {
+    it('should filter out lobe-agent tool when isSubAgent is true', async () => {
       const { result } = renderHook(() => useChatStore());
       const messages = [createMockMessage({ role: 'user' })];
 
-      // Mock resolveAgentConfig to return plugins including lobe-gtd
+      // Mock resolveAgentConfig to return plugins including lobe-agent
       const resolveAgentConfigSpy = vi
         .spyOn(agentConfigResolver, 'resolveAgentConfig')
         .mockReturnValue({
           agentConfig: createMockAgentConfig(),
           chatConfig: createMockChatConfig(),
           isBuiltinAgent: false,
-          plugins: ['lobe-gtd', 'lobe-local-system', 'other-plugin'],
+          plugins: ['lobe-agent', 'lobe-local-system', 'other-plugin'],
         });
 
       // Create operation
       let operationId: string;
       act(() => {
         const res = result.current.startOperation({
-          type: 'execClientTask',
+          type: 'execClientSubAgent',
           context: {
             agentId: TEST_IDS.SESSION_ID,
             topicId: TEST_IDS.TOPIC_ID,
@@ -2309,13 +2309,13 @@ describe('StreamingExecutor actions', () => {
         operationId = res.operationId;
       });
 
-      // Call internal_createAgentState with isSubTask: true
+      // Call internal_createAgentState with isSubAgent: true
       act(() => {
         result.current.internal_createAgentState({
           messages,
           parentMessageId: TEST_IDS.USER_MESSAGE_ID,
           operationId,
-          isSubTask: true,
+          isSubAgent: true,
         });
       });
 
@@ -2325,21 +2325,21 @@ describe('StreamingExecutor actions', () => {
       resolveAgentConfigSpy.mockRestore();
     });
 
-    it('should NOT filter out lobe-gtd tools when isSubTask is false or undefined', async () => {
+    it('should NOT filter out lobe-agent tool when isSubAgent is false or undefined', async () => {
       const { result } = renderHook(() => useChatStore());
       const messages = [createMockMessage({ role: 'user' })];
 
-      // Mock resolveAgentConfig to return plugins including lobe-gtd
+      // Mock resolveAgentConfig to return plugins including lobe-agent
       const resolveAgentConfigSpy = vi
         .spyOn(agentConfigResolver, 'resolveAgentConfig')
         .mockReturnValue({
           agentConfig: createMockAgentConfig(),
           chatConfig: createMockChatConfig(),
           isBuiltinAgent: false,
-          plugins: ['lobe-gtd', 'lobe-local-system', 'other-plugin'],
+          plugins: ['lobe-agent', 'lobe-local-system', 'other-plugin'],
         });
 
-      // Create operation without isSubTask (normal conversation)
+      // Create operation without isSubAgent (normal conversation)
       let operationId: string;
       act(() => {
         const res = result.current.startOperation({
@@ -2352,7 +2352,7 @@ describe('StreamingExecutor actions', () => {
         operationId = res.operationId;
       });
 
-      // Call internal_createAgentState without isSubTask
+      // Call internal_createAgentState without isSubAgent
       act(() => {
         result.current.internal_createAgentState({
           messages,

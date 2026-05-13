@@ -170,12 +170,14 @@ const TaskSubtasks = memo(() => {
       event.preventDefault();
       showContextMenu(
         buildItems({
+          assigneeAgentId: subtask.assignee?.id,
           identifier: subtask.identifier,
           priority: subtask.priority,
           status: subtask.status,
         }),
       );
       installKeyboardHandlers({
+        assigneeAgentId: subtask.assignee?.id,
         identifier: subtask.identifier,
         priority: subtask.priority,
         status: subtask.status,

@@ -1,5 +1,5 @@
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
-import { Flexbox, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -78,15 +78,18 @@ const ContentLoading = memo<ContentLoadingProps>(({ id }) => {
     );
   }
 
+  if (operationLabel) {
+    return (
+      <Flexbox horizontal align={'center'} gap={4}>
+        <span className={shinyTextStyles.shinyText}>{operationLabel}...</span>
+        {showElapsedTime && <span>({elapsedSeconds}s)</span>}
+      </Flexbox>
+    );
+  }
+
   return (
     <Flexbox horizontal align={'center'}>
       <BubblesLoading />
-      {operationLabel && (
-        <Text type={'secondary'}>
-          {operationLabel}...
-          {showElapsedTime && ` (${elapsedSeconds}s)`}
-        </Text>
-      )}
     </Flexbox>
   );
 });

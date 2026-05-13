@@ -67,6 +67,12 @@ interface MessengerCommandContext {
    *  public channel this is the slash-invocation channel; for text it's the
    *  DM thread. */
   chatId: string;
+  /** Discord slash command interaction handle. Present only when dispatched
+   *  by `handleSlashCommand` on Discord — handlers that emit interactive UI
+   *  (e.g. `/agents` picker) must complete the deferred interaction via the
+   *  follow-up webhook, otherwise Discord shows "Thinking..." indefinitely
+   *  and eventually flips to "The application did not respond". */
+  interaction?: { applicationId: string; token: string };
   /** True when the command was invoked from a 1:1 DM. Commands that surface
    *  user-private UI (e.g. `/agents` picker) widen private replies into
    *  ephemerals when this is false so the channel doesn't see them. */
@@ -96,6 +102,29 @@ const HELP_TEXT = [
   '• /new — start a new conversation',
   '• /stop — stop the current execution',
 ].join('\n');
+
+/**
+ * Pull the Discord interaction id + token off a chat-sdk slash event so
+ * handlers can complete the deferred interaction via the follow-up webhook.
+ *
+ * chat-adapter-discord exposes the raw Discord interaction object on
+ * `event.raw` (see `chat` SlashCommandEvent: "Platform-specific raw payload"),
+ * which carries `application_id` and `token`. Returns undefined for other
+ * platforms or when the shape doesn't match (defensive — the patch only
+ * fires for Discord today).
+ */
+const extractDiscordInteractionContext = (
+  platform: MessengerPlatform,
+  event: SlashCommandEvent,
+): { applicationId: string; token: string } | undefined => {
+  if (platform !== 'discord') return undefined;
+  const raw = event.raw as { application_id?: unknown; token?: unknown } | null | undefined;
+  if (!raw || typeof raw !== 'object') return undefined;
+  if (typeof raw.application_id !== 'string' || typeof raw.token !== 'string') {
+    return undefined;
+  }
+  return { applicationId: raw.application_id, token: raw.token };
+};
 
 /** Parse a leading `/cmd` (with optional args) out of a message. Returns null
  *  when the message isn't a command. Strips a trailing `@BotName` so commands
@@ -728,6 +757,15 @@ export class MessengerRouter {
     const isDmChannel =
       event.channel.isDM === true || (creds.platform === 'slack' && chatId.startsWith('D'));
 
+    // Discord slash commands arrive as deferred interactions (the
+    // `patchDiscordForwardedInteractions` patch ack's them with type 5
+    // before dispatch). The interaction token in `event.raw` is the only
+    // way handlers can complete that deferred state via the webhook
+    // follow-up endpoint — without it, Discord keeps spinning "Thinking..."
+    // and eventually flips to "did not respond". Other platforms have no
+    // analogous concept, so the field stays undefined.
+    const interaction = extractDiscordInteractionContext(creds.platform, event);
+
     try {
       await command.handler({
         args,
@@ -735,6 +773,7 @@ export class MessengerRouter {
         authorUserName: event.user.userName,
         binder,
         chatId,
+        interaction,
         // `isDM` lets handlers like `/agents` keep the picker public in
         // DMs (so it stays in history) and widen to an ephemeral when
         // the slash was typed from a public channel.
@@ -806,6 +845,10 @@ export class MessengerRouter {
         // channel would broadcast everyone's `LobeAI / Claude Code / …`
         // grid). DMs stay non-ephemeral so the picker persists in history.
         ephemeralTo: ctx.isDM ? undefined : ctx.authorUserId,
+        // Discord-only: forward the slash interaction so the binder can
+        // complete the deferred reply via the follow-up webhook. Without
+        // this, Discord keeps "Thinking..." until it times out.
+        interaction: ctx.interaction,
         text: 'Tap an agent to make it the active one:',
       });
       return;

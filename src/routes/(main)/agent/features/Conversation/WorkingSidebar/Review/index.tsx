@@ -1,7 +1,14 @@
 'use client';
 
-import { ActionIcon, Center, Collapse, Empty, Flexbox } from '@lobehub/ui';
-import { Dropdown, type MenuProps } from 'antd';
+import {
+  ActionIcon,
+  Center,
+  Collapse,
+  type DropdownItem,
+  DropdownMenu,
+  Empty,
+  Flexbox,
+} from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import {
   ArrowLeftIcon,
@@ -307,7 +314,7 @@ const Review = memo<ReviewProps>(({ workingDirectory }) => {
     { additions: 0, deletions: 0 },
   );
 
-  const moreMenuItems: MenuProps['items'] = [
+  const moreMenuItems: DropdownItem[] = [
     {
       icon: <RefreshCwIcon size={14} />,
       key: 'refresh',
@@ -342,7 +349,7 @@ const Review = memo<ReviewProps>(({ workingDirectory }) => {
     },
   ];
 
-  const modeMenuItems: MenuProps['items'] = [
+  const modeMenuItems: DropdownItem[] = [
     {
       key: 'unstaged',
       label: t('workingPanel.review.mode.unstaged'),
@@ -358,7 +365,7 @@ const Review = memo<ReviewProps>(({ workingDirectory }) => {
   // Branches are only loaded after the user opens the picker (see
   // `basePickerOpen`). While loading, render a single disabled placeholder
   // so the menu doesn't pop empty + jump to its final size.
-  const baseRefMenuItems: MenuProps['items'] = remoteBranches
+  const baseRefMenuItems: DropdownItem[] = remoteBranches
     ? [
         ...remoteBranches.map((branch) => ({
           key: branch.name,
@@ -405,27 +412,19 @@ const Review = memo<ReviewProps>(({ workingDirectory }) => {
           gap={8}
           style={{ flex: '1 1 auto', minWidth: 0, overflow: 'hidden' }}
         >
-          <Dropdown
-            menu={{ items: modeMenuItems, selectedKeys: [mode] }}
-            placement={'bottomLeft'}
-            trigger={['click']}
-          >
+          <DropdownMenu items={modeMenuItems} placement={'bottomLeft'}>
             <span className={styles.scopeChip} role={'button'} tabIndex={0}>
               {mode === 'branch'
                 ? t('workingPanel.review.mode.branch')
                 : t('workingPanel.review.mode.unstaged')}
               <ChevronDownIcon className={styles.caret} size={12} />
             </span>
-          </Dropdown>
+          </DropdownMenu>
           {mode === 'branch' && (baseRef || headRef) && (
             <span className={styles.compareChip}>
-              <Dropdown
+              <DropdownMenu
+                items={baseRefMenuItems}
                 placement={'bottomLeft'}
-                trigger={['click']}
-                menu={{
-                  items: baseRefMenuItems,
-                  selectedKeys: baseRef ? [baseRef] : [],
-                }}
                 onOpenChange={setBasePickerOpen}
               >
                 <span className={styles.basePicker} role={'button'} tabIndex={0}>
@@ -434,7 +433,7 @@ const Review = memo<ReviewProps>(({ workingDirectory }) => {
                   </span>
                   <ChevronDownIcon className={styles.caret} size={12} />
                 </span>
-              </Dropdown>
+              </DropdownMenu>
               {headRef && (
                 <>
                   <ArrowLeftIcon className={styles.arrow} size={12} />
@@ -467,14 +466,14 @@ const Review = memo<ReviewProps>(({ workingDirectory }) => {
               onClick={handleToggleAll}
             />
           )}
-          <Dropdown menu={{ items: moreMenuItems }} placement={'bottomRight'} trigger={['click']}>
+          <DropdownMenu items={moreMenuItems} placement={'bottomRight'}>
             <ActionIcon
               icon={MoreHorizontalIcon}
               loading={isValidating}
               size={'small'}
               title={t('workingPanel.review.more')}
             />
-          </Dropdown>
+          </DropdownMenu>
         </Flexbox>
       </div>
       {isEmpty ? (

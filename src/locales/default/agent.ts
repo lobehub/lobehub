@@ -28,6 +28,10 @@ export default {
   'channel.discord.description':
     'Connect this assistant to Discord server for channel chat and direct messages.',
   'channel.documentation': 'Documentation',
+  'channel.messengerPromo.action': 'Try Messenger',
+  'channel.messengerPromo.desc': 'No bot setup. Chat with LobeHub on Slack, Discord, Telegram.',
+  'channel.messengerPromo.dismiss': 'Dismiss',
+  'channel.messengerPromo.title': 'Skip the setup',
   'channel.exportConfig': 'Export Configuration',
   'channel.importConfig': 'Import Configuration',
   'channel.importSuccess': 'Configuration imported successfully',

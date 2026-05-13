@@ -17,6 +17,7 @@ const Spark: ModelProviderCard = {
       text: 'smooth',
     },
     sdkType: 'openai',
+    showDeployName: true,
     showModelFetcher: false,
   },
   url: 'https://www.xfyun.cn',

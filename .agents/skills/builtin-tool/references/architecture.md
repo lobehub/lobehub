@@ -213,7 +213,7 @@ The runtime hands every executor method an optional `BuiltinToolContext` as the 
 | `operationId`                 | Operation lineage (use for cancellation, tracing)              |
 | `scope`                       | `'task' \| 'agent' \| …` — toggles default behaviors           |
 | `signal: AbortSignal`         | Honor for long-running ops                                     |
-| `stepContext`                 | Cross-message runtime state (GTD todos, etc.)                  |
+| `stepContext`                 | Cross-message runtime state (lobe-agent todos, etc.)           |
 | `registerAfterCompletion(cb)` | Defer side-effects past message-update race                    |
 | `groupOrchestration`          | Group orchestration callbacks                                  |
 

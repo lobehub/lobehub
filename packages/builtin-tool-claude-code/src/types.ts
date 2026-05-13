@@ -46,7 +46,7 @@ export enum ClaudeCodeApiName {
 
 /**
  * Status of a single todo item in a `TodoWrite` tool_use.
- * Matches Claude Code's native schema — do not reuse GTD's `TodoStatus`,
+ * Matches Claude Code's native schema — do not reuse lobe-agent's `TodoStatus`,
  * which has a different vocabulary (`todo` / `processing`).
  */
 export type ClaudeCodeTodoStatus = 'pending' | 'in_progress' | 'completed';

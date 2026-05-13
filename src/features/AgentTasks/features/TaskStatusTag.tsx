@@ -1,6 +1,5 @@
 import type { TaskStatus } from '@lobechat/types';
-import { Icon, Tooltip } from '@lobehub/ui';
-import { Dropdown, type MenuProps } from 'antd';
+import { type DropdownItem, DropdownMenu, Icon, type MenuInfo, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -150,7 +149,7 @@ const TaskStatusTag = memo<TaskStatusTagProps>(
       return () => document.removeEventListener('keydown', onKeyDown, true);
     }, [open]);
 
-    const menuItems = useMemo<MenuProps['items']>(
+    const menuItems = useMemo<DropdownItem[]>(
       () =>
         USER_SELECTABLE_STATUSES.map((key, index) => {
           const statusMeta = STATUS_META[key];
@@ -160,7 +159,7 @@ const TaskStatusTag = memo<TaskStatusTagProps>(
             icon: <Icon color={statusMeta.color} icon={statusMeta.icon} size={16} />,
             key,
             label: t(`taskDetail.${statusMeta.labelKey}`, { defaultValue: statusMeta.label }),
-            onClick: ({ domEvent }) => {
+            onClick: ({ domEvent }: MenuInfo) => {
               domEvent.stopPropagation();
               void handleStatusChange(key);
             },
@@ -184,17 +183,9 @@ const TaskStatusTag = memo<TaskStatusTagProps>(
     if (disableDropdown) return <>{triggerNode}</>;
 
     return (
-      <Dropdown
-        open={open}
-        trigger={['click']}
-        menu={{
-          items: menuItems,
-          selectedKeys: [displayStatus],
-        }}
-        onOpenChange={setOpen}
-      >
+      <DropdownMenu items={menuItems} open={open} onOpenChange={setOpen}>
         {triggerNode}
-      </Dropdown>
+      </DropdownMenu>
     );
   },
 );

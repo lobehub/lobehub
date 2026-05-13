@@ -3,7 +3,7 @@ import { Clock3Icon, PanelRightCloseIcon, PlusIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
+import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { conversationSelectors, useConversationStore } from '@/features/Conversation';
 import NavHeader from '@/features/NavHeader';
 import TopicItem from '@/features/PageEditor/Copilot/TopicSelector/TopicItem';
@@ -53,7 +53,7 @@ const Toolbar = memo(() => {
         <>
           <ActionIcon
             icon={PlusIcon}
-            size={DESKTOP_HEADER_ICON_SIZE}
+            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
             title={t('actions.addNewTopic')}
             onClick={handleCreate}
           />
@@ -101,12 +101,12 @@ const Toolbar = memo(() => {
               disabled={isLoadingTopics}
               icon={Clock3Icon}
               loading={isLoadingTopics}
-              size={DESKTOP_HEADER_ICON_SIZE}
+              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
             />
           </Popover>
           <ActionIcon
             icon={PanelRightCloseIcon}
-            size={DESKTOP_HEADER_ICON_SIZE}
+            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
             onClick={() => toggleTaskAgentPanel()}
           />
         </>

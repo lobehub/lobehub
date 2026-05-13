@@ -54,10 +54,6 @@ export const UserLabSchema = z.object({
    * enable markdown rendering in chat input editor
    */
   enableInputMarkdown: z.boolean().optional(),
-  /**
-   * enable the shared Messenger bot integration (Telegram, Slack)
-   */
-  enableMessenger: z.boolean().optional(),
 });
 
 export type UserLab = z.infer<typeof UserLabSchema>;

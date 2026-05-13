@@ -37,11 +37,12 @@ import type {
   MessagePluginItem,
   UserInterventionConfig,
 } from '@lobechat/types';
-import { ThreadStatus, ThreadType } from '@lobechat/types';
+import { RequestTrigger, ThreadStatus, ThreadType } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import debug from 'debug';
 
 import { AgentModel } from '@/database/models/agent';
+import { AgentOperationModel } from '@/database/models/agentOperation';
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import { AiModelModel } from '@/database/models/aiModel';
 import { FileModel } from '@/database/models/file';
@@ -322,6 +323,7 @@ export class AiAgentService {
       queueRetries,
       queueRetryDelay,
       parentMessageId,
+      parentOperationId,
       resume,
       resumeApproval,
     } = params;
@@ -1919,6 +1921,7 @@ export class AiAgentService {
         modelRuntimeConfig: { model, provider },
         hooks,
         operationId,
+        parentOperationId,
         signal,
         queueRetries,
         queueRetryDelay,
@@ -2063,6 +2066,7 @@ export class AiAgentService {
       appContext: { groupId, topicId },
       autoStart: true,
       prompt: message,
+      trigger: RequestTrigger.Chat,
     });
 
     log(
@@ -2146,6 +2150,21 @@ export class AiAgentService {
     // 3. Create hooks for updating Thread metadata and task message
     const threadHooks = this.createThreadHooks(thread.id, startedAt, parentMessageId);
 
+    // Inherit parent op's trigger so sub-agent rows stay attributable to the
+    // original entry point (chat / bot / cli / eval / …). Lookup is best-effort
+    // — a missing parent row falls back to undefined and the column stays null.
+    let inheritedTrigger: string | undefined;
+    if (parentOperationId) {
+      try {
+        const parentOp = await new AgentOperationModel(this.db, this.userId).findById(
+          parentOperationId,
+        );
+        inheritedTrigger = parentOp?.trigger ?? undefined;
+      } catch (error) {
+        log('execSubAgentTask: failed to read parent operation trigger: %O', error);
+      }
+    }
+
     // 4. Delegate to execAgent with threadId in appContext and hooks
     // The instruction will be created as user message in the Thread
     // Use headless mode to skip human approval in async task execution
@@ -2154,7 +2173,9 @@ export class AiAgentService {
       appContext: { groupId, threadId: thread.id, topicId },
       autoStart: true,
       hooks: threadHooks,
+      parentOperationId,
       prompt: instruction,
+      trigger: inheritedTrigger,
       userInterventionConfig: { approvalMode: 'headless' },
     });
 

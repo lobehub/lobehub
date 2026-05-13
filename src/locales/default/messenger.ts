@@ -28,7 +28,6 @@ export default {
     "This connection isn't available right now. Please try again later.",
   'messenger.linkModal.openCta': 'Open in {{platform}}',
   'messenger.linkModal.scanHint': 'Or scan with your phone to open {{platform}}.',
-  'messenger.linkModal.title': 'Connect Messenger',
   'messenger.noPlatformsConfigured': 'No platforms are available yet. Check back soon.',
   'messenger.slack.connectModal.continueButton': 'Continue in Slack',
   'messenger.slack.connectModal.description':
@@ -127,10 +126,6 @@ export default {
   'verify.error.title': 'Unable to confirm link',
   'verify.error.unlinkBeforeRelink':
     'This LobeHub account is already linked to another account on this platform. Disconnect it in Settings → Messenger before linking a new one.',
-  'verify.labRequired.description':
-    'Messenger is currently a Labs feature. Enable it in Settings → Advanced → Labs and reload this page.',
-  'verify.labRequired.openSettings': 'Open Labs settings',
-  'verify.labRequired.title': 'Enable Messenger to continue',
   'verify.signInCta': 'Sign in to continue',
   'verify.signInRequired': 'Please sign in to LobeHub to confirm the link.',
   'verify.success.description':

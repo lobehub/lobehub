@@ -1,12 +1,28 @@
 import type { TaskStatus } from '@lobechat/types';
-import { closeContextMenu, copyToClipboard, type GenericItemType, Icon } from '@lobehub/ui';
+import {
+  closeContextMenu,
+  type ContextMenuItem,
+  copyToClipboard,
+  type GenericItemType,
+  Icon,
+  type MenuInfo,
+} from '@lobehub/ui';
 import { App } from 'antd';
 import { cssVar } from 'antd-style';
-import { BarChart3Icon, CircleDashedIcon, CopyIcon, LinkIcon, Trash2Icon } from 'lucide-react';
+import {
+  BarChart3Icon,
+  CircleDashedIcon,
+  CopyIcon,
+  LinkIcon,
+  PlayIcon,
+  Trash2Icon,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAppOrigin } from '@/hooks/useAppOrigin';
+import { useAgentStore } from '@/store/agent';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useTaskStore } from '@/store/task';
 
 import { renderMenuExtra } from './menuExtra';
@@ -14,21 +30,25 @@ import { PRIORITY_META } from './TaskPriorityTag';
 import { STATUS_META, USER_SELECTABLE_STATUSES } from './TaskStatusTag';
 
 const PRIORITY_LEVELS = [0, 1, 2, 3, 4];
-const SUBMENU_MARKER = 'data-task-submenu';
+
+type ActiveSubmenu = 'status' | 'priority' | null;
 
 interface TaskItemContextMenu {
-  items: GenericItemType[];
+  items: ContextMenuItem[];
   onContextMenu: () => void;
 }
 
 export interface TaskContextMenuTarget {
+  assigneeAgentId?: string | null;
   identifier: string;
   priority?: number | null;
   status: string;
 }
 
+const RUN_NOW_STATUSES = new Set<TaskStatus>(['backlog', 'completed']);
+
 export interface TaskContextMenuActions {
-  buildItems: (task: TaskContextMenuTarget) => GenericItemType[];
+  buildItems: (task: TaskContextMenuTarget) => ContextMenuItem[];
   installKeyboardHandlers: (task: TaskContextMenuTarget) => void;
 }
 
@@ -41,8 +61,11 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
   const updateTask = useTaskStore((s) => s.updateTask);
   const refreshTaskList = useTaskStore((s) => s.refreshTaskList);
   const deleteTask = useTaskStore((s) => s.deleteTask);
+  const runTask = useTaskStore((s) => s.runTask);
+  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
 
   const cleanupRef = useRef<(() => void) | null>(null);
+  const activeSubmenuRef = useRef<ActiveSubmenu>(null);
 
   useEffect(() => () => cleanupRef.current?.(), []);
 
@@ -61,7 +84,7 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
       });
     };
 
-    const buildItems = (task: TaskContextMenuTarget): GenericItemType[] => {
+    const buildItems = (task: TaskContextMenuTarget): ContextMenuItem[] => {
       const currentStatus = task.status as TaskStatus;
       const currentPriority = task.priority ?? 0;
 
@@ -73,12 +96,12 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
           icon: <Icon color={meta.color} icon={meta.icon} />,
           key: `status-${status}`,
           label: t(`taskDetail.status.${status}`, { defaultValue: meta.label }),
-          onClick: ({ domEvent }) => {
+          onClick: ({ domEvent }: MenuInfo) => {
             domEvent.stopPropagation();
             if (status === currentStatus) return;
             void updateTaskStatus(task.identifier, status);
           },
-        } as GenericItemType;
+        } as ContextMenuItem;
       });
 
       const priorityChildren = PRIORITY_LEVELS.map((level, index) => {
@@ -93,36 +116,60 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
           ),
           key: `priority-${level}`,
           label: t(`taskDetail.${meta.labelKey}` as never, { defaultValue: meta.label }),
-          onClick: async ({ domEvent }) => {
+          onClick: async ({ domEvent }: MenuInfo) => {
             domEvent.stopPropagation();
             if (level === currentPriority) return;
             await updateTask(task.identifier, { priority: level });
             await refreshTaskList();
           },
-        } as GenericItemType;
+        } as ContextMenuItem;
       });
 
       const taskUrl = `${appOrigin}/task/${task.identifier}`;
+      const canRunNow = RUN_NOW_STATUSES.has(currentStatus);
 
       return [
+        ...(canRunNow
+          ? ([
+              {
+                icon: <Icon icon={PlayIcon} />,
+                key: 'runNow',
+                label: t('taskList.contextMenu.runNow'),
+                onClick: async ({ domEvent }: MenuInfo) => {
+                  domEvent.stopPropagation();
+                  if (!task.assigneeAgentId && inboxAgentId) {
+                    await updateTask(task.identifier, { assigneeAgentId: inboxAgentId });
+                  }
+                  await runTask(task.identifier);
+                },
+              },
+              { type: 'divider' },
+            ] satisfies GenericItemType[])
+          : []),
         {
           children: statusChildren,
-          icon: <Icon {...{ [SUBMENU_MARKER]: 'status' }} icon={CircleDashedIcon} />,
+          icon: <Icon icon={CircleDashedIcon} />,
           key: 'status',
           label: t('taskList.contextMenu.status'),
+          onTitleMouseEnter: () => {
+            activeSubmenuRef.current = 'status';
+          },
         },
         {
           children: priorityChildren,
-          icon: <Icon {...{ [SUBMENU_MARKER]: 'priority' }} icon={BarChart3Icon} />,
+          icon: <Icon icon={BarChart3Icon} />,
           key: 'priority',
           label: t('taskList.contextMenu.priority'),
+          onTitleMouseEnter: () => {
+            activeSubmenuRef.current = 'priority';
+          },
         },
         { type: 'divider' },
         {
           icon: <Icon icon={CopyIcon} />,
           key: 'copyId',
           label: t('taskList.contextMenu.copyId'),
-          onClick: async ({ domEvent }) => {
+          onClick: async ({ domEvent }: MenuInfo) => {
             domEvent.stopPropagation();
             await copyToClipboard(task.identifier);
             message.success(t('taskList.contextMenu.copyIdSuccess'));
@@ -132,7 +179,7 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
           icon: <Icon icon={LinkIcon} />,
           key: 'copyLink',
           label: t('taskList.contextMenu.copyLink'),
-          onClick: async ({ domEvent }) => {
+          onClick: async ({ domEvent }: MenuInfo) => {
             domEvent.stopPropagation();
             await copyToClipboard(taskUrl);
             message.success(t('taskList.contextMenu.copyLinkSuccess'));
@@ -144,7 +191,7 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
           icon: <Icon icon={Trash2Icon} />,
           key: 'delete',
           label: t('delete', { ns: 'common' }),
-          onClick: ({ domEvent }) => {
+          onClick: ({ domEvent }: MenuInfo) => {
             domEvent.stopPropagation();
             triggerDelete(task.identifier);
           },
@@ -154,6 +201,7 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
 
     const installKeyboardHandlers = (task: TaskContextMenuTarget) => {
       cleanupRef.current?.();
+      activeSubmenuRef.current = null;
 
       const currentStatus = task.status as TaskStatus;
       const currentPriority = task.priority ?? 0;
@@ -163,6 +211,7 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
         window.removeEventListener('pointerdown', pointerHandler, true);
         window.removeEventListener('contextmenu', contextHandler, true);
         cleanupRef.current = null;
+        activeSubmenuRef.current = null;
       };
 
       const keyHandler = (event: KeyboardEvent) => {
@@ -175,14 +224,7 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
         if (Number.isNaN(num)) return;
         const idx = num - 1;
 
-        // Route 1–N to whichever submenu is currently open. The base-ui
-        // SubmenuTrigger sets `data-popup-open` on the trigger button while its
-        // submenu is open, and we tag each submenu's icon with `data-task-submenu`
-        // so we can identify which one was opened.
-        const openMarker = document.querySelector<HTMLElement>(
-          `[data-popup-open] [${SUBMENU_MARKER}]`,
-        );
-        const openSubmenu = openMarker?.getAttribute(SUBMENU_MARKER);
+        const openSubmenu = activeSubmenuRef.current;
         if (!openSubmenu) return;
 
         if (openSubmenu === 'priority') {
@@ -230,14 +272,25 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
     };
 
     return { buildItems, installKeyboardHandlers };
-  }, [modal, message, t, appOrigin, updateTaskStatus, updateTask, refreshTaskList, deleteTask]);
+  }, [
+    modal,
+    message,
+    t,
+    appOrigin,
+    updateTaskStatus,
+    updateTask,
+    refreshTaskList,
+    deleteTask,
+    runTask,
+    inboxAgentId,
+  ]);
 };
 
 export const useTaskItemContextMenu = (task: TaskContextMenuTarget): TaskItemContextMenu => {
   const { buildItems, installKeyboardHandlers } = useTaskContextMenuActions();
   const items = useMemo(
     () => buildItems(task),
-    [buildItems, task.identifier, task.status, task.priority],
+    [buildItems, task.identifier, task.status, task.priority, task.assigneeAgentId],
   );
   const onContextMenu = useCallback(
     () => installKeyboardHandlers(task),

@@ -32,7 +32,9 @@ export default {
   'batchDelete': 'Batch Delete',
   'blog': 'Product Blog',
   'botIntegrationBanner.dismiss': 'Dismiss',
-  'botIntegrationBanner.title': 'Talk to Lobe AI on your favorite messaging apps',
+  'botIntegrationBanner.title': 'Create your own Bot Channel',
+  'messengerBanner.dismiss': 'Dismiss',
+  'messengerBanner.title': 'Talk to Lobe AI on your favorite messaging apps',
   'branching': 'Create Subtopic',
   'branchingDisable':
     'The "Sub-topic" feature is unavailable in the current mode. To use this feature, please switch to Postgres/Pglite DB mode or use LobeHub Cloud.',

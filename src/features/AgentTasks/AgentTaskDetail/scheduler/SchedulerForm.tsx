@@ -1,18 +1,9 @@
-import {
-  Accordion,
-  AccordionItem,
-  Checkbox,
-  Flexbox,
-  Icon,
-  InputNumber,
-  SearchBar,
-  Select,
-  Text,
-} from '@lobehub/ui';
+import { Accordion, AccordionItem, Checkbox, Flexbox, Icon, InputNumber, Text } from '@lobehub/ui';
+import { Select } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs, { type Dayjs } from 'dayjs';
 import { Globe, Hash, SlidersHorizontal } from 'lucide-react';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -21,6 +12,7 @@ import {
   SCHEDULE_TYPE_OPTIONS,
   type ScheduleType,
   TIMEZONE_OPTIONS,
+  type TimezoneOption,
   WEEKDAYS,
 } from './CronConfig';
 
@@ -28,14 +20,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   fieldLabel: css`
     font-size: 12px;
     color: ${cssVar.colorTextSecondary};
-  `,
-  timezoneEmpty: css`
-    padding-block: 12px;
-    padding-inline: 12px;
-
-    font-size: 13px;
-    color: ${cssVar.colorTextDescription};
-    text-align: center;
   `,
   timezoneOffset: css`
     flex-shrink: 0;
@@ -50,11 +34,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     justify-content: space-between;
 
     min-width: 0;
-  `,
-  timezoneSearch: css`
-    padding-block: 8px 4px;
-    padding-inline: 8px;
-    border-block-end: 1px solid ${cssVar.colorSplit};
   `,
   weekdayButton: css`
     cursor: pointer;
@@ -104,12 +83,6 @@ const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
   return { label, value: hour * 60 + minute };
 });
 
-// The parent Popover (Base UI) treats any click outside its popup root as an
-// outside-click and dismisses. antd Select's dropdown defaults to a body-level
-// portal, which trips that detection — anchor it inside the Popover's DOM so
-// option clicks stay "inside".
-const getPopupContainer = (triggerNode: HTMLElement) => triggerNode.parentElement ?? document.body;
-
 export interface SchedulerFormChange {
   maxExecutions: number | null;
   pattern: string;
@@ -150,18 +123,6 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
   const [continuous, setContinuous] = useState<boolean>(
     maxExecutions === null || maxExecutions === undefined,
   );
-  const [tzSearch, setTzSearch] = useState('');
-
-  const filteredTimezoneOptions = useMemo(() => {
-    const q = tzSearch.trim().toLowerCase();
-    if (!q) return TIMEZONE_OPTIONS;
-    return TIMEZONE_OPTIONS.filter(
-      (opt) =>
-        opt.label.toLowerCase().includes(q) ||
-        opt.value.toLowerCase().includes(q) ||
-        opt.offset.toLowerCase().includes(q),
-    );
-  }, [tzSearch]);
 
   const emit = useCallback(
     (
@@ -276,7 +237,6 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
         <Flexbox flex={1} gap={6}>
           <Text className={styles.fieldLabel}>{t('taskSchedule.frequency')}</Text>
           <Select
-            getPopupContainer={getPopupContainer}
             value={scheduleType}
             variant="filled"
             options={SCHEDULE_TYPE_OPTIONS.map((opt) => ({
@@ -290,7 +250,6 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
           <Flexbox flex={1} gap={6}>
             <Text className={styles.fieldLabel}>{t('taskSchedule.time')}</Text>
             <Select
-              getPopupContainer={getPopupContainer}
               options={TIME_OPTIONS}
               value={triggerTime.hour() * 60 + triggerTime.minute()}
               variant="filled"
@@ -312,7 +271,6 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
               />
               <Text type="secondary">{t('taskSchedule.hours')}</Text>
               <Select
-                getPopupContainer={getPopupContainer}
                 style={{ width: 80 }}
                 value={triggerTime.minute()}
                 variant="filled"
@@ -370,48 +328,23 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
                 <Text className={styles.fieldLabel}>{t('taskSchedule.timezone')}</Text>
               </Flexbox>
               <Select
-                getPopupContainer={getPopupContainer}
-                options={filteredTimezoneOptions}
+                showSearch
+                options={TIMEZONE_OPTIONS}
                 popupMatchSelectWidth={false}
                 value={tz}
                 variant="filled"
-                dropdownRender={(originNode) => (
-                  <Flexbox>
-                    <div className={styles.timezoneSearch}>
-                      <SearchBar
-                        allowClear
-                        autoFocus
-                        placeholder={t('taskSchedule.timezoneSearchPlaceholder')}
-                        size="small"
-                        value={tzSearch}
-                        variant="filled"
-                        onChange={(e) => setTzSearch(e.target.value)}
-                        // Keep arrow keys / typing local to the search input;
-                        // antd Select otherwise tries to consume them for option nav.
-                        onKeyDown={(e) => e.stopPropagation()}
-                      />
+                optionRender={(option) => {
+                  const data = option as TimezoneOption;
+                  return (
+                    <div className={styles.timezoneOption}>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {data.label}
+                      </span>
+                      <span className={styles.timezoneOffset}>{data.offset}</span>
                     </div>
-                    {filteredTimezoneOptions.length === 0 ? (
-                      <div className={styles.timezoneEmpty}>
-                        {t('taskSchedule.timezoneSearchEmpty')}
-                      </div>
-                    ) : (
-                      originNode
-                    )}
-                  </Flexbox>
-                )}
-                optionRender={({ data }) => (
-                  <div className={styles.timezoneOption}>
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {data.label}
-                    </span>
-                    <span className={styles.timezoneOffset}>{data.offset}</span>
-                  </div>
-                )}
-                onChange={handleTimezoneChange}
-                onDropdownVisibleChange={(open) => {
-                  if (!open) setTzSearch('');
+                  );
                 }}
+                onChange={handleTimezoneChange}
               />
             </Flexbox>
 

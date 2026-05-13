@@ -701,7 +701,7 @@ export const createGroupOrchestrationExecutors = (
 
         // 4. Create a child operation for task execution (now with threadId)
         const { operationId: taskOperationId } = get().startOperation({
-          type: 'execClientTask',
+          type: 'execClientSubAgent',
           context: subContext,
           parentOperationId: orchestrationOperationId,
           metadata: {
@@ -743,7 +743,7 @@ export const createGroupOrchestrationExecutors = (
           parentMessageType: 'user',
           operationId: taskOperationId,
           parentOperationId: orchestrationOperationId,
-          isSubTask: true, // Disable lobe-gtd tools to prevent nested sub-tasks
+          isSubAgent: true, // Disable lobe-agent tool to prevent nested sub-agents
         });
 
         log(`[${sessionLogId}] Client-side AgentRuntime execution completed`);

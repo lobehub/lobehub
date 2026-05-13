@@ -35,7 +35,6 @@
   "messenger.linkModal.notConfigured": "Bu bağlantı şu anda kullanılamıyor. Lütfen daha sonra tekrar deneyin.",
   "messenger.linkModal.openCta": "{{platform}}'da aç",
   "messenger.linkModal.scanHint": "Veya {{platform}}'u açmak için telefonunuzla tarayın.",
-  "messenger.linkModal.title": "Mesajlaşma Platformunu Bağla",
   "messenger.list.discord.description": "LobeHub temsilcilerinizle herhangi bir Discord sunucusundan DM aracılığıyla LobeHub botu ile sohbet edin.",
   "messenger.list.slack.description": "LobeHub temsilcilerinizle herhangi bir Slack çalışma alanından DM veya @LobeHub aracılığıyla sohbet edin.",
   "messenger.list.telegram.description": "Telegram'da LobeHub temsilcilerinizle sohbet edin ve her yerden yanıt verecek olanı seçin.",

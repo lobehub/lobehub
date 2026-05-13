@@ -9,7 +9,5 @@
   "features.groupChat.title": "群聊（多代理）",
   "features.inputMarkdown.desc": "在输入区域实时渲染 Markdown（粗体、代码块、表格等）",
   "features.inputMarkdown.title": "输入框 Markdown 渲染",
-  "features.messenger.desc": "通过共享的 LobeHub 机器人，从 Telegram（以及其他消息应用）与您的代理进行对话。在设置中添加一个消息应用选项卡，用于绑定您的账户并选择接收消息的代理。",
-  "features.messenger.title": "消息应用",
   "title": "实验室"
 }

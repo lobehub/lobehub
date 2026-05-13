@@ -2,11 +2,11 @@ import {
   type AgentInstruction,
   type AgentInstructionCallLlm,
   type AgentInstructionCallTool,
-  type AgentInstructionExecTask,
-  type AgentInstructionExecTasks,
-  type ExecTaskItem,
+  type AgentInstructionExecSubAgent,
+  type AgentInstructionExecSubAgents,
   type GeneralAgentCallingToolInstructionPayload,
   type GeneralAgentCallLLMInstructionPayload,
+  type SubAgentTask,
 } from '@lobechat/agent-runtime';
 import { type ChatToolPayload } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
@@ -129,13 +129,13 @@ export const createFinishInstruction = (
 };
 
 /**
- * Create a mock exec_task instruction (single task)
+ * Create a mock exec_sub_agent instruction (single sub-agent)
  */
-export const createExecTaskInstruction = (
-  task?: Partial<ExecTaskItem>,
+export const createExecSubAgentInstruction = (
+  task?: Partial<SubAgentTask>,
   parentMessageId?: string,
-): AgentInstructionExecTask => {
-  const defaultTask: ExecTaskItem = {
+): AgentInstructionExecSubAgent => {
+  const defaultTask: SubAgentTask = {
     description: 'Test task',
     instruction: 'Execute test task',
     ...task,
@@ -146,18 +146,18 @@ export const createExecTaskInstruction = (
       parentMessageId: parentMessageId || `msg_${nanoid()}`,
       task: defaultTask,
     },
-    type: 'exec_task',
+    type: 'exec_sub_agent',
   };
 };
 
 /**
- * Create a mock exec_tasks instruction (multiple tasks)
+ * Create a mock exec_sub_agents instruction (multiple sub-agents)
  */
-export const createExecTasksInstruction = (
-  tasks: ExecTaskItem[] = [],
+export const createExecSubAgentsInstruction = (
+  tasks: SubAgentTask[] = [],
   parentMessageId?: string,
-): AgentInstructionExecTasks => {
-  const defaultTasks: ExecTaskItem[] = tasks.length
+): AgentInstructionExecSubAgents => {
+  const defaultTasks: SubAgentTask[] = tasks.length
     ? tasks
     : [
         {
@@ -171,6 +171,6 @@ export const createExecTasksInstruction = (
       parentMessageId: parentMessageId || `msg_${nanoid()}`,
       tasks: defaultTasks,
     },
-    type: 'exec_tasks',
+    type: 'exec_sub_agents',
   };
 };

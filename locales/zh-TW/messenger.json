@@ -35,7 +35,6 @@
   "messenger.linkModal.notConfigured": "此連接目前無法使用。請稍後再試。",
   "messenger.linkModal.openCta": "在 {{platform}} 中打開",
   "messenger.linkModal.scanHint": "或使用您的手機掃描以打開 {{platform}}。",
-  "messenger.linkModal.title": "連接 Messenger",
   "messenger.list.discord.description": "從任何 Discord 伺服器通過私訊與您的 LobeHub 代理聊天。",
   "messenger.list.slack.description": "從任何 Slack 工作區通過私訊或 @LobeHub 與您的 LobeHub 代理聊天。",
   "messenger.list.telegram.description": "在 Telegram 中與您的 LobeHub 代理聊天，並選擇從任何地方回應的代理。",

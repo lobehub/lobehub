@@ -9,13 +9,13 @@ import claudeCode from './claude-code';
 import codex from './codex';
 import github from './github';
 import lobeActivator from './lobe-activator';
+import lobeAgent from './lobe-agent';
 import lobeAgentBuilder from './lobe-agent-builder';
 import lobeAgentDocuments from './lobe-agent-documents';
 import lobeAgentManagement from './lobe-agent-management';
 import lobeCloudSandbox from './lobe-cloud-sandbox';
 import lobeGroupAgentBuilder from './lobe-group-agent-builder';
 import lobeGroupManagement from './lobe-group-management';
-import lobeGtd from './lobe-gtd';
 import lobeKnowledgeBase from './lobe-knowledge-base';
 import lobeLocalSystem from './lobe-local-system';
 import lobeNotebook from './lobe-notebook';
@@ -67,13 +67,13 @@ const toolsetModules: ToolsetFixtureModule[] = [
   codex,
   github,
   lobeActivator,
+  lobeAgent,
   lobeAgentBuilder,
   lobeAgentDocuments,
   lobeAgentManagement,
   lobeCloudSandbox,
   lobeGroupAgentBuilder,
   lobeGroupManagement,
-  lobeGtd,
   lobeKnowledgeBase,
   lobeLocalSystem,
   lobeNotebook,
