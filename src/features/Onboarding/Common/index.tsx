@@ -63,6 +63,7 @@ const CommonOnboardingPage = memo(() => {
   }, [isUserStateInit]);
 
   useEffect(() => {
+    if (__TEST__) return;
     void import('@/routes/onboarding/agent');
     void import('@/routes/onboarding/classic');
   }, []);
