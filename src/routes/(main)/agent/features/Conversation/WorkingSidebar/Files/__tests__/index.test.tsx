@@ -26,6 +26,7 @@ const gitFilesMock = vi.hoisted(() => ({
     modified: ['src/foo/bar.ts'],
   },
 }));
+const openLocalFileMock = vi.hoisted(() => vi.fn());
 
 // ─── mocks ────────────────────────────────────────────────────────────────────
 
@@ -93,7 +94,7 @@ vi.mock('../useProjectFiles', () => ({
 
 vi.mock('@/store/chat', () => ({
   useChatStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ openLocalFile: vi.fn() }),
+    selector({ openLocalFile: openLocalFileMock }),
 }));
 
 const messageSpy = vi.hoisted(() => ({ warning: vi.fn() }));
@@ -143,6 +144,7 @@ beforeEach(() => {
   handleSpies.select.mockClear();
   handleSpies.setExpanded.mockClear();
   messageSpy.warning.mockClear();
+  openLocalFileMock.mockClear();
   useGlobalStore.setState({
     ...initialState,
     status: { ...initialState.status, workingSidebarRevealRequest: undefined },
@@ -188,6 +190,29 @@ describe('Files — reveal request integration', () => {
       'copy-absolute-path',
       'copy-relative-path',
     ]);
+  });
+
+  it('opens file previews with the indexed project root as the approved workspace root', () => {
+    render(<Files workingDirectory="/repo/packages/app" />);
+
+    const nodes = explorerTreeProps.current?.nodes as {
+      data: { path: string };
+      id: string;
+      isFolder: boolean;
+    }[];
+    const rootFileNode = nodes.find((node) => node.id === 'root.ts');
+    const getContextMenuItems = explorerTreeProps.current?.getContextMenuItems as (
+      node: unknown,
+    ) => Array<{ key: string; onClick?: () => void }>;
+
+    getContextMenuItems(rootFileNode)
+      .find((item) => item.key === 'open')
+      ?.onClick?.();
+
+    expect(openLocalFileMock).toHaveBeenCalledWith({
+      filePath: '/repo/root.ts',
+      workingDirectory: '/repo',
+    });
   });
 
   it('(a) reveals existing path: calls setExpanded with ancestors, then select and focus', async () => {

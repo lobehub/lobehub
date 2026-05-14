@@ -26,6 +26,20 @@ vi.mock('@/services/agentRuntime', () => ({
   },
 }));
 
+vi.mock('@/utils/localStorage', () => {
+  class AsyncLocalStorage<State> {
+    async getFromLocalStorage(): Promise<State> {
+      return {} as State;
+    }
+
+    async saveToLocalStorage(): Promise<void> {
+      return undefined;
+    }
+  }
+
+  return { AsyncLocalStorage };
+});
+
 beforeEach(() => {
   resetTestEnvironment();
 });
@@ -617,8 +631,19 @@ describe('ConversationControl actions', () => {
         const topicId = 'server-topic';
         const chatKey = messageMapKey({ agentId, topicId });
 
+        const onboardingUserMessage = createMockMessage({
+          id: 'onboarding-user-msg',
+          metadata: { trigger: RequestTrigger.Onboarding },
+          role: 'user',
+        });
+        const onboardingAssistantMessage = createMockMessage({
+          id: 'onboarding-assistant-msg',
+          parentId: onboardingUserMessage.id,
+          role: 'assistant',
+        });
         const toolMessage = createMockMessage({
           id: 'tool-msg-1',
+          parentId: onboardingAssistantMessage.id,
           plugin: {
             apiName: 'search',
             arguments: '{"q":"test"}',
@@ -635,8 +660,12 @@ describe('ConversationControl actions', () => {
           useChatStore.setState({
             activeAgentId: agentId,
             activeTopicId: topicId,
-            dbMessagesMap: { [chatKey]: [toolMessage] },
-            messagesMap: { [chatKey]: [toolMessage] },
+            dbMessagesMap: {
+              [chatKey]: [onboardingUserMessage, onboardingAssistantMessage, toolMessage],
+            },
+            messagesMap: {
+              [chatKey]: [onboardingUserMessage, onboardingAssistantMessage, toolMessage],
+            },
           });
 
           // Presence of an `execServerAgentRuntime` op (any status) is one
@@ -670,6 +699,7 @@ describe('ConversationControl actions', () => {
               parentMessageId: 'tool-msg-1',
               toolCallId: 'call_xyz',
             },
+            metadata: { trigger: RequestTrigger.Onboarding },
           }),
         );
         expect(executeClientAgentSpy).not.toHaveBeenCalled();
@@ -1166,6 +1196,7 @@ describe('ConversationControl actions', () => {
         expect.objectContaining({
           content: 'Writing documents, Professional',
           groupId: 'group-1',
+          metadata: { trigger: RequestTrigger.Onboarding },
           role: 'user',
         }),
         expect.objectContaining({ operationId: expect.any(String) }),
@@ -1468,6 +1499,7 @@ describe('ConversationControl actions', () => {
         expect.objectContaining({
           content: `I'll skip this. ${reason}`,
           groupId: 'group-1',
+          metadata: { trigger: RequestTrigger.Onboarding },
           role: 'user',
         }),
         expect.objectContaining({ operationId: expect.any(String) }),
@@ -1486,6 +1518,114 @@ describe('ConversationControl actions', () => {
       expect(executeClientAgentSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           initialContext,
+          metadata: { trigger: RequestTrigger.Onboarding },
+          parentMessageId: userMessageId,
+          parentMessageType: 'user',
+        }),
+      );
+    });
+
+    it('should preserve request trigger from raw messages when display messages are incomplete', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      const agentId = 'global-agent';
+      const topicId = 'global-topic';
+      const chatKey = messageMapKey({ agentId, topicId });
+
+      const onboardingUserMessage = createMockMessage({
+        id: 'onboarding-user-msg',
+        metadata: { trigger: RequestTrigger.Onboarding },
+        role: 'user',
+      });
+      const onboardingAssistantMessage = createMockMessage({
+        id: 'onboarding-assistant-msg',
+        parentId: onboardingUserMessage.id,
+        role: 'assistant',
+      });
+      const toolMessage = createMockMessage({
+        groupId: 'group-1',
+        id: 'tool-msg-1',
+        parentId: onboardingAssistantMessage.id,
+        plugin: {
+          apiName: 'showAgentMarketplace',
+          arguments: '{}',
+          identifier: 'lobe-web-onboarding',
+          type: 'default',
+        },
+        role: 'tool',
+      });
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          activeTopicId: topicId,
+          activeThreadId: undefined,
+          dbMessagesMap: {
+            [chatKey]: [onboardingUserMessage, onboardingAssistantMessage, toolMessage],
+          },
+          messagesMap: {
+            [chatKey]: [toolMessage],
+          },
+        });
+      });
+
+      vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
+      vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
+
+      const userMessageId = 'skipped-user-msg';
+      const optimisticCreateMessageSpy = vi
+        .spyOn(result.current, 'optimisticCreateMessage')
+        .mockImplementation(async (message) => {
+          const userMessage = createMockMessage({
+            content: message.content,
+            groupId: message.groupId,
+            id: userMessageId,
+            metadata: message.metadata,
+            role: 'user',
+            topicId,
+          });
+
+          useChatStore.setState({
+            dbMessagesMap: {
+              [chatKey]: [
+                onboardingUserMessage,
+                onboardingAssistantMessage,
+                toolMessage,
+                userMessage,
+              ],
+            },
+            messagesMap: {
+              [chatKey]: [toolMessage, userMessage],
+            },
+          });
+
+          return {
+            id: userMessageId,
+            messages: [onboardingUserMessage, onboardingAssistantMessage, toolMessage, userMessage],
+          };
+        });
+
+      vi.spyOn(result.current, 'internal_createAgentState').mockReturnValue({
+        agentConfig: createMockResolvedAgentConfig(),
+        context: { phase: 'init' } as any,
+        state: {} as any,
+      });
+      const executeClientAgentSpy = vi
+        .spyOn(result.current, 'executeClientAgent')
+        .mockResolvedValue(undefined);
+
+      await act(async () => {
+        await result.current.skipToolInteraction('tool-msg-1');
+      });
+
+      expect(optimisticCreateMessageSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: { trigger: RequestTrigger.Onboarding },
+        }),
+        expect.objectContaining({ operationId: expect.any(String) }),
+      );
+      expect(executeClientAgentSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
           metadata: { trigger: RequestTrigger.Onboarding },
           parentMessageId: userMessageId,
           parentMessageType: 'user',

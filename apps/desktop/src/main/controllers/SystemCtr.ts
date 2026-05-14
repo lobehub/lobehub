@@ -186,6 +186,19 @@ export default class SystemController extends ControllerModule {
     const folderPath = result.filePaths[0];
     const repoType = await detectRepoType(folderPath);
 
+    try {
+      const approvedRoot = await this.app.localFileProtocolManager.approveWorkspaceRoot(folderPath);
+
+      if (approvedRoot) {
+        const storedRoots = this.app.storeManager.get('localFileWorkspaceRoots', []);
+        if (!storedRoots.includes(approvedRoot)) {
+          this.app.storeManager.set('localFileWorkspaceRoots', [approvedRoot, ...storedRoots]);
+        }
+      }
+    } catch (error) {
+      logger.error(`Failed to approve local file workspace root ${folderPath}:`, error);
+    }
+
     return { path: folderPath, repoType };
   }
 

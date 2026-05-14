@@ -1,4 +1,9 @@
-import type { ChatTopicMetadata, DBMessageItem, TopicRankItem } from '@lobechat/types';
+import type {
+  ChatTopicMetadata,
+  ChatTopicStatus,
+  DBMessageItem,
+  TopicRankItem,
+} from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
 import { and, count, desc, eq, gt, gte, inArray, isNull, lte, ne, not, or, sql } from 'drizzle-orm';
 
@@ -106,7 +111,7 @@ export class TopicModel {
       excludeStatuses && excludeStatuses.length > 0
         ? or(
             isNull(topics.status),
-            not(inArray(topics.status, excludeStatuses as ('active' | 'completed' | 'archived')[])),
+            not(inArray(topics.status, excludeStatuses as ChatTopicStatus[])),
           )
         : undefined;
 

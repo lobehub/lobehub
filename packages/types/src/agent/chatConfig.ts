@@ -43,6 +43,12 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
    * Whether to enable adaptive thinking (Claude Opus 4.6)
    */
   enableAdaptiveThinking?: boolean;
+  /**
+   * Whether the agent runs in agent mode (full tool access) vs chat mode
+   * (only runtime-managed tools like KB / memory / web-browsing).
+   * Treat undefined as `true` — agent mode is the default.
+   */
+  enableAgentMode?: boolean;
   enableAutoCreateTopic?: boolean;
   /**
    * Whether to auto-scroll during AI streaming output
@@ -200,6 +206,7 @@ export const AgentChatConfigSchema = z
     disableContextCaching: z.boolean().optional(),
     effort: z.enum(['low', 'medium', 'high', 'max']).optional(),
     enableAdaptiveThinking: z.boolean().optional(),
+    enableAgentMode: z.boolean().optional(),
     enableAutoCreateTopic: z.boolean().optional(),
     enableAutoScrollOnStreaming: z.boolean().optional(),
     enableCompressHistory: z.boolean().optional(),

@@ -10,7 +10,7 @@ import RateLimitState from './states/RateLimitState';
 import type { HeterogeneousAgentStatusGuideProps } from './types';
 
 const HeterogeneousAgentStatusGuide = memo<HeterogeneousAgentStatusGuideProps>(
-  ({ agentType = 'codex', error, onOpenSystemTools, variant = 'inline' }) => {
+  ({ agentType = 'codex', error, onOpenSystemTools, onRetry, variant = 'inline' }) => {
     const config = resolveHeterogeneousAgentGuideConfig({
       agentType,
       errorAgentType: error?.agentType,
@@ -19,6 +19,7 @@ const HeterogeneousAgentStatusGuide = memo<HeterogeneousAgentStatusGuideProps>(
       config,
       error,
       onOpenSystemTools,
+      onRetry,
       variant,
     };
 

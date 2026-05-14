@@ -23,7 +23,7 @@ const createRuntimeState = (models: EnabledAiModel[], keyVaults: Record<string, 
 
 const createExecutor = (privateOverrides?: Partial<MemoryExtractionPrivateConfig>) => {
   const basePrivateConfig: MemoryExtractionPrivateConfig = {
-    agentBenchmarkLoCoMo: { model: 'gate-2', provider: 'provider-b' },
+    agentBenchmarkLoCoMo: { model: 'benchmark-1', provider: 'provider-b' },
     agentGateKeeper: { model: 'gate-2', provider: 'provider-b' },
     agentLayerExtractor: {
       contextLimit: 2048,

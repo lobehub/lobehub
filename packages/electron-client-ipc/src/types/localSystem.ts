@@ -111,6 +111,17 @@ export interface AuditSafePathsResult {
   allSafe: boolean;
 }
 
+export interface LocalFilePreviewUrlParams {
+  path: string;
+  workingDirectory: string;
+}
+
+export interface LocalFilePreviewUrlResult {
+  error?: string;
+  success: boolean;
+  url?: string;
+}
+
 export interface LocalReadFileResult {
   /**
    * Character count of the content within the specified `loc` range.

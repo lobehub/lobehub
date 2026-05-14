@@ -1,4 +1,5 @@
 import type { TaskTemplate, TaskTemplateSkillSource } from '@lobechat/const';
+import { TASK_TEMPLATE_RECOMMEND_COUNT } from '@lobechat/const';
 import { createNanoId } from '@lobechat/utils';
 import { useSessionStorageState } from 'ahooks';
 import { App } from 'antd';
@@ -20,7 +21,7 @@ const nextRefreshSeed = createNanoId(8);
 
 export type DailyBriefRecommendationsUIState =
   | { mode: 'hidden' }
-  | { mode: 'skeleton' }
+  | { mode: 'skeleton'; skeletonCount: number }
   | {
       mode: 'cards';
       onCreated: (templateId: string) => void;
@@ -37,6 +38,7 @@ export function useDailyBriefRecommendationsUI(
   options: UseDailyBriefRecommendationsUIOptions = {},
 ): DailyBriefRecommendationsUIState {
   const { count } = options;
+  const recommendationCount = count ?? TASK_TEMPLATE_RECOMMEND_COUNT;
   const { t } = useTranslation('taskTemplate');
   const { message } = App.useApp();
   const isLogin = useUserStore(authSelectors.isLogin);
@@ -53,10 +55,12 @@ export function useDailyBriefRecommendationsUI(
   });
 
   const { data, isLoading, mutate } = useSWR(
-    swrEnabled ? ['taskTemplate.listDailyRecommend', swrKey, refreshSeed, count] : null,
+    swrEnabled
+      ? ['taskTemplate.listDailyRecommend', swrKey, refreshSeed, recommendationCount]
+      : null,
     async () =>
       taskTemplateService.listDailyRecommend(interestKeys ?? [], {
-        count,
+        count: recommendationCount,
         refreshSeed: refreshSeed || undefined,
       }),
     { revalidateOnFocus: false, revalidateOnReconnect: false },
@@ -115,7 +119,7 @@ export function useDailyBriefRecommendationsUI(
   useFetchLobehubSkillConnections(requiredSources.has('lobehub'));
 
   if (!swrEnabled) return { mode: 'hidden' };
-  if (!isInit || isLoading) return { mode: 'skeleton' };
+  if (!isInit || isLoading) return { mode: 'skeleton', skeletonCount: recommendationCount };
   if (templates.length === 0) return { mode: 'hidden' };
 
   return {

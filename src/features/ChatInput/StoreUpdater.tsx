@@ -17,6 +17,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
   ({
     agentId,
     chatInputEditorRef,
+    contextWindowMessages,
     disableMention,
     disableSlash,
     mobile,
@@ -36,6 +37,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     const editor = useChatInputEditor();
 
     useStoreUpdater('agentId', agentId);
+    useStoreUpdater('contextWindowMessages', contextWindowMessages);
     useStoreUpdater('mobile', mobile!);
     useStoreUpdater('mentionItems', mentionItems);
     useStoreUpdater('leftActions', leftActions!);

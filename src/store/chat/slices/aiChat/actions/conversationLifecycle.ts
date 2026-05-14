@@ -656,6 +656,7 @@ export class ConversationLifecycleActionImpl {
           context: operationContext,
           fileIds: fileIdList,
           message,
+          metadata: requestMetadata,
           parentOperationId: operationId,
         });
 

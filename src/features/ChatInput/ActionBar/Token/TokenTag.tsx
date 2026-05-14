@@ -21,21 +21,22 @@ import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
+import { useChatInputStore } from '../../store';
 import ActionPopover from '../components/ActionPopover';
 import TokenProgress from './TokenProgress';
 
 const toolNameResolver = new ToolNameResolver();
 
-interface TokenTagProps {
-  total: string;
-}
-const Token = memo<TokenTagProps>(({ total: messageString }) => {
+const Token = memo(() => {
   const { t } = useTranslation(['chat', 'components']);
 
-  const [input, historySummary] = useChatStore((s) => [
-    s.inputMessage,
-    topicSelectors.currentActiveTopicSummary(s)?.content || '',
+  const [input, contextWindowMessages] = useChatInputStore((s) => [
+    s.markdownContent,
+    s.contextWindowMessages,
   ]);
+  const historySummary = useChatStore(
+    (s) => topicSelectors.currentActiveTopicSummary(s)?.content || '',
+  );
 
   const agentId = useAgentId();
   const [systemRole, model, provider] = useAgentStore((s) => {
@@ -89,8 +90,10 @@ const Token = memo<TokenTagProps>(({ total: messageString }) => {
   // Chat usage token
   const inputTokenCount = useTokenCount(input);
 
-  // Use messageString directly (from displayMessageSelectors.mainAIChatsMessageString)
-  // which correctly handles group chats via currentDisplayChatKey (includes groupId)
+  const messageString =
+    contextWindowMessages
+      ?.map((message) => (typeof message.content === 'string' ? message.content : ''))
+      .join('') || '';
   const chatsToken = useTokenCount(messageString) + inputTokenCount;
 
   // SystemRole token
@@ -188,6 +191,10 @@ const Token = memo<TokenTagProps>(({ total: messageString }) => {
         maxValue={maxTokens}
         mode={'used'}
         value={totalToken}
+        size={{
+          blockSize: 32,
+          size: 18,
+        }}
         text={{
           overload: t('tokenTag.overload'),
           remained: t('tokenTag.remained'),
