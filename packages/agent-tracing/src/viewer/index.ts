@@ -382,7 +382,7 @@ export function renderMessageDetail(
   source: 'input' | 'output' = 'output',
   allSteps?: StepSnapshot[],
 ): string {
-  const ceEvent = step.events?.find((e) => e.type === 'context_engine_result') as any;
+  const ceEvent = resolveCeEvent(step, allSteps) as any;
   let messages: any[] | undefined;
   let label: string;
 
@@ -434,8 +434,8 @@ export function renderMessageDetail(
   return lines.join('\n');
 }
 
-export function renderSystemRole(step: StepSnapshot): string {
-  const ceEvent = step.events?.find((e) => e.type === 'context_engine_result') as any;
+export function renderSystemRole(step: StepSnapshot, allSteps?: StepSnapshot[]): string {
+  const ceEvent = resolveCeEvent(step, allSteps) as any;
 
   // Try input.systemRole first (user-configured agent prompt)
   const inputSystemRole = ceEvent?.input?.systemRole;
@@ -466,8 +466,8 @@ export function renderSystemRole(step: StepSnapshot): string {
   return lines.join('\n');
 }
 
-export function renderEnvContext(step: StepSnapshot): string {
-  const ceEvent = step.events?.find((e) => e.type === 'context_engine_result') as any;
+export function renderEnvContext(step: StepSnapshot, allSteps?: StepSnapshot[]): string {
+  const ceEvent = resolveCeEvent(step, allSteps) as any;
   const outputMsgs: any[] | undefined = ceEvent?.output;
 
   if (!outputMsgs || outputMsgs.length === 0) {
@@ -492,9 +492,9 @@ export function renderEnvContext(step: StepSnapshot): string {
   return lines.join('\n');
 }
 
-export function renderPayloadTools(step: StepSnapshot): string {
+export function renderPayloadTools(step: StepSnapshot, allSteps?: StepSnapshot[]): string {
   const lines: string[] = [];
-  const ceEvent = step.events?.find((e) => e.type === 'context_engine_result') as any;
+  const ceEvent = resolveCeEvent(step, allSteps) as any;
 
   // Section 1: Plugin manifests from context engine input
   const toolsConfig = ceEvent?.input?.toolsConfig;
@@ -548,8 +548,8 @@ export function renderPayloadTools(step: StepSnapshot): string {
   return lines.join('\n');
 }
 
-export function renderPayload(step: StepSnapshot): string {
-  const ceEvent = step.events?.find((e) => e.type === 'context_engine_result') as any;
+export function renderPayload(step: StepSnapshot, allSteps?: StepSnapshot[]): string {
+  const ceEvent = resolveCeEvent(step, allSteps) as any;
   if (!ceEvent?.input) {
     return red('No context engine data found in this step.');
   }
@@ -683,8 +683,8 @@ export function renderPayload(step: StepSnapshot): string {
   return lines.join('\n');
 }
 
-export function renderMemory(step: StepSnapshot): string {
-  const ceEvent = step.events?.find((e) => e.type === 'context_engine_result') as any;
+export function renderMemory(step: StepSnapshot, allSteps?: StepSnapshot[]): string {
+  const ceEvent = resolveCeEvent(step, allSteps) as any;
   const userMemory = ceEvent?.input?.userMemory;
 
   if (!userMemory) {
@@ -894,7 +894,7 @@ export function renderStepDetail(
 
   if (options?.messages) {
     // Show context engine input/output from events if available
-    const ceEvent = step.events?.find((e) => e.type === 'context_engine_result') as any;
+    const ceEvent = resolveCeEvent(step, options?.allSteps) as any;
 
     if (ceEvent) {
       // Context engine input messages (DB messages passed to engine)
