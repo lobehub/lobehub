@@ -1,5 +1,5 @@
 import type { TaskTemplate, TaskTemplateSkillSource } from '@lobechat/const';
-import { resolveTaskTemplateRecommendCount } from '@lobechat/const';
+import { TASK_TEMPLATE_RECOMMEND_COUNT } from '@lobechat/const';
 import { createNanoId } from '@lobechat/utils';
 import { useSessionStorageState } from 'ahooks';
 import { App } from 'antd';
@@ -38,7 +38,7 @@ export function useDailyBriefRecommendationsUI(
   options: UseDailyBriefRecommendationsUIOptions = {},
 ): DailyBriefRecommendationsUIState {
   const { count } = options;
-  const recommendationCount = resolveTaskTemplateRecommendCount(count);
+  const recommendationCount = count ?? TASK_TEMPLATE_RECOMMEND_COUNT;
   const { t } = useTranslation('taskTemplate');
   const { message } = App.useApp();
   const isLogin = useUserStore(authSelectors.isLogin);

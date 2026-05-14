@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 
 import { INTEREST_AREA_KEYS } from './interests';
 import {
-  resolveTaskTemplateRecommendCount,
   TASK_TEMPLATE_FALLBACK_CATEGORIES,
   TASK_TEMPLATE_RECOMMEND_COUNT,
   TASK_TEMPLATE_RECOMMEND_COUNT_MAX,
@@ -81,12 +80,8 @@ describe('taskTemplates', () => {
     }
   });
 
-  it('resolves the recommendation count from shared defaults and bounds', () => {
-    expect(resolveTaskTemplateRecommendCount()).toBe(TASK_TEMPLATE_RECOMMEND_COUNT);
-    expect(resolveTaskTemplateRecommendCount(4)).toBe(4);
-    expect(resolveTaskTemplateRecommendCount(0)).toBe(1);
-    expect(resolveTaskTemplateRecommendCount(TASK_TEMPLATE_RECOMMEND_COUNT_MAX + 1)).toBe(
-      TASK_TEMPLATE_RECOMMEND_COUNT_MAX,
-    );
+  it('keeps the recommendation default within the allowed maximum', () => {
+    expect(TASK_TEMPLATE_RECOMMEND_COUNT).toBeGreaterThan(0);
+    expect(TASK_TEMPLATE_RECOMMEND_COUNT).toBeLessThanOrEqual(TASK_TEMPLATE_RECOMMEND_COUNT_MAX);
   });
 });

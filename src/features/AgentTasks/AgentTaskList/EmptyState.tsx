@@ -14,6 +14,7 @@ import WideScreenContainer from '@/features/WideScreenContainer';
 import CreateTaskInlineEntry from './CreateTaskInlineEntry';
 
 const HERO_MAX_WIDTH = 720;
+const EMPTY_STATE_RECOMMEND_COUNT = 10;
 
 const styles = createStaticStyles(({ css }) => ({
   grid: css`
@@ -30,7 +31,7 @@ const styles = createStaticStyles(({ css }) => ({
 const EmptyState = memo(() => {
   const { t } = useTranslation('chat');
   const { t: tTaskTemplate } = useTranslation('taskTemplate');
-  const templatesState = useDailyBriefRecommendationsUI({ count: 10 });
+  const templatesState = useDailyBriefRecommendationsUI({ count: EMPTY_STATE_RECOMMEND_COUNT });
 
   return (
     <WideScreenContainer
