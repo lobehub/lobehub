@@ -57,25 +57,17 @@ const TaskTriggerTag = memo<TaskTriggerTagProps>(
     }, [automationMode, heartbeatInterval, schedulePattern, scheduleTimezone, t, i18n.language]);
 
     if (mode === 'inline') {
+      // Keep the inline row to a single line regardless of mode so toggling
+      // schedule ↔ heartbeat from the popover above doesn't reflow the rows
+      // below. The timezone (if any) is still surfaced — just via the hover
+      // tooltip — so we don't lose information.
       return (
         <Tooltip title={data?.tooltip}>
-          <Flexbox horizontal align="flex-start" gap={10}>
-            <Icon
-              color={cssVar.colorTextDescription}
-              icon={ClockIcon}
-              size={16}
-              style={{ marginTop: 2 }}
-            />
-            <Flexbox gap={2}>
-              <Text type={data ? undefined : 'secondary'} weight={data ? 500 : undefined}>
-                {data?.primary ?? t('taskSchedule.tag.add')}
-              </Text>
-              {data?.secondary && (
-                <Text style={{ color: cssVar.colorTextDescription, fontSize: 11 }}>
-                  {data.secondary}
-                </Text>
-              )}
-            </Flexbox>
+          <Flexbox horizontal align="center" gap={10}>
+            <Icon color={cssVar.colorTextDescription} icon={ClockIcon} size={16} />
+            <Text type={data ? undefined : 'secondary'} weight={data ? 500 : undefined}>
+              {data?.primary ?? t('taskSchedule.tag.add')}
+            </Text>
           </Flexbox>
         </Tooltip>
       );
