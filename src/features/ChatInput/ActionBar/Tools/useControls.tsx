@@ -5,17 +5,30 @@ import {
   RecommendedSkillType,
 } from '@lobechat/const';
 import type { ItemType } from '@lobehub/ui';
-import { Avatar, Icon, Popover, SearchBar, stopPropagation } from '@lobehub/ui';
+import { Avatar, Icon, Popover, SearchBar, stopPropagation, Tag } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { McpIcon, SkillsIcon } from '@lobehub/ui/icons';
 import { Switch } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { Check, ChevronDown, ChevronRight, MoreHorizontal, Pin, Trash2, Zap } from 'lucide-react';
+import {
+  Check,
+  ChevronDown,
+  ChevronRight,
+  MoreHorizontal,
+  Package,
+  Pin,
+  Settings,
+  Trash2,
+  Wrench,
+  Zap,
+} from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
+import DevModal from '@/features/PluginDevModal';
 import { useCheckPluginsIsInstalled } from '@/hooks/useCheckPluginsIsInstalled';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { useAgentStore } from '@/store/agent';
@@ -53,6 +66,10 @@ interface SkillDeleteConfig {
   onDelete: () => Promise<void> | void;
 }
 
+interface SkillConfigureConfig {
+  onConfigure: () => void;
+}
+
 type SkillMenuItem = NonNullable<ItemType> & {
   popoverContent?: ReactNode;
   searchText?: string;
@@ -69,11 +86,17 @@ const styles = createStaticStyles(({ css }) => ({
 
     width: 100%;
     min-width: 0;
+    padding-block: 4px;
   `,
   activationGroupChevron: css`
     display: flex;
+    flex: none;
     align-items: center;
     justify-content: center;
+
+    width: 24px;
+    height: 24px;
+
     color: ${cssVar.colorTextTertiary};
   `,
   activationGroupTitle: css`
@@ -95,6 +118,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     min-width: 0;
 
+    font-size: 14px;
     font-weight: 500;
     color: ${cssVar.colorText};
     text-overflow: ellipsis;
@@ -104,14 +128,16 @@ const styles = createStaticStyles(({ css }) => ({
     flex: none;
     color: ${cssVar.colorTextTertiary};
   `,
+  activationGroupActions: css`
+    display: flex;
+    flex: none;
+    gap: 8px;
+    align-items: center;
+  `,
   switchWrap: css`
-    transform-origin: right center;
-    transform: scale(0.88);
-
     display: inline-flex;
     flex: none;
-
-    margin-inline-end: -2px;
+    align-items: center;
   `,
   iconAuto: css`
     color: ${cssVar.colorInfo};
@@ -303,6 +329,34 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
     width: 100%;
   `,
+  statsSettingsButton: css`
+    cursor: pointer;
+
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+
+    width: 24px;
+    height: 24px;
+    margin-inline-start: auto;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+
+    color: ${cssVar.colorTextTertiary};
+
+    background: transparent;
+
+    transition:
+      color 0.2s,
+      background 0.2s;
+
+    &:hover {
+      color: ${cssVar.colorTextSecondary};
+      background: ${cssVar.colorFillTertiary};
+    }
+  `,
   statsItem: css`
     display: inline-flex;
     gap: 5px;
@@ -317,6 +371,7 @@ const styles = createStaticStyles(({ css }) => ({
 export const useControls = () => {
   const { t } = useTranslation('setting');
   const agentId = useAgentId();
+  const navigate = useNavigate();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
   const [pinnedOpen, setPinnedOpen] = useState(true);
   const [autoOpen, setAutoOpen] = useState(true);
@@ -324,11 +379,26 @@ export const useControls = () => {
   const [searchKeyword, setSearchKeyword] = useState('');
   const [autoModeLoading, setAutoModeLoading] = useState(false);
   const list = useToolStore(pluginSelectors.installedPluginMetaList, isEqual);
-  const [uninstallPlugin, removeKlavisServer, deleteAgentSkill] = useToolStore((s) => [
+  const [
+    uninstallPlugin,
+    removeKlavisServer,
+    deleteAgentSkill,
+    installCustomPlugin,
+    updateNewCustomPlugin,
+    uninstallBuiltinTool,
+  ] = useToolStore((s) => [
     s.uninstallCustomPlugin,
     s.removeKlavisServer,
     s.deleteAgentSkill,
+    s.installCustomPlugin,
+    s.updateNewCustomPlugin,
+    s.uninstallBuiltinTool,
   ]);
+  const [editingPluginId, setEditingPluginId] = useState<string | null>(null);
+  const editingCustomPlugin = useToolStore(
+    pluginSelectors.getCustomPluginById(editingPluginId ?? ''),
+    isEqual,
+  );
   const [checked, togglePlugin] = useAgentStore((s) => [
     agentByIdSelectors.getAgentPluginsById(agentId)(s),
     s.togglePlugin,
@@ -369,7 +439,7 @@ export const useControls = () => {
   }, []);
 
   const renderPolicyMenu = useCallback(
-    (id: string, deleteConfig?: SkillDeleteConfig) => {
+    (id: string, deleteConfig?: SkillDeleteConfig, configureConfig?: SkillConfigureConfig) => {
       const mode: SkillPolicyMode = checkedSet.has(id) ? 'pinned' : 'auto';
       const renderCheck = (value: SkillPolicyMode) =>
         mode === value ? (
@@ -418,35 +488,49 @@ export const useControls = () => {
               size={15}
             />,
           )}
+          {(configureConfig || deleteConfig) && <div className={cx(styles.deleteDivider)} />}
+          {configureConfig && (
+            <button
+              className={cx(styles.policyItem)}
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                setPolicyOpenId(null);
+                configureConfig.onConfigure();
+              }}
+            >
+              <span className={cx(styles.policyItemIcon)}>
+                <Icon icon={Wrench} size={15} />
+              </span>
+              <span className={cx(styles.policyText)}>{t('tools.builtins.configure')}</span>
+            </button>
+          )}
           {deleteConfig && (
-            <>
-              <div className={cx(styles.deleteDivider)} />
-              <button
-                className={cx(styles.deleteButton)}
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setPolicyOpenId(null);
-                  confirmModal({
-                    content: t('tools.builtins.uninstallConfirm.desc', {
-                      name: deleteConfig.displayName,
-                    }),
-                    onOk: async () => {
-                      await deleteConfig.onDelete();
-                    },
-                    title: t('tools.builtins.uninstallConfirm.title', {
-                      name: deleteConfig.displayName,
-                    }),
-                    type: 'warning',
-                  });
-                }}
-              >
-                <span className={cx(styles.policyItemIcon)}>
-                  <Icon className={cx(styles.deleteIcon)} icon={Trash2} size={15} />
-                </span>
-                <span className={cx(styles.policyText)}>{t('tools.builtins.uninstall')}</span>
-              </button>
-            </>
+            <button
+              className={cx(styles.deleteButton)}
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                setPolicyOpenId(null);
+                confirmModal({
+                  content: t('tools.builtins.uninstallConfirm.desc', {
+                    name: deleteConfig.displayName,
+                  }),
+                  onOk: async () => {
+                    await deleteConfig.onDelete();
+                  },
+                  title: t('tools.builtins.uninstallConfirm.title', {
+                    name: deleteConfig.displayName,
+                  }),
+                  type: 'warning',
+                });
+              }}
+            >
+              <span className={cx(styles.policyItemIcon)}>
+                <Icon className={cx(styles.deleteIcon)} icon={Trash2} size={15} />
+              </span>
+              <span className={cx(styles.policyText)}>{t('tools.builtins.uninstall')}</span>
+            </button>
           )}
         </div>
       );
@@ -498,7 +582,14 @@ export const useControls = () => {
   );
 
   const renderToolLabel = useCallback(
-    (id: string, label: ReactNode, action: ReactNode, badge?: ReactNode, icon?: ReactNode) => (
+    (
+      id: string,
+      label: ReactNode,
+      action: ReactNode,
+      badge?: ReactNode,
+      icon?: ReactNode,
+      extraTag?: ReactNode,
+    ) => (
       <span
         className={cx(styles.toolRow)}
         onContextMenu={(event) => {
@@ -511,6 +602,7 @@ export const useControls = () => {
           {icon}
           <span className={cx(styles.toolLabelText)}>{label}</span>
           {badge && <span className={cx(styles.typeTag)}>{badge}</span>}
+          {extraTag}
         </span>
         {action}
       </span>
@@ -521,7 +613,9 @@ export const useControls = () => {
   const createManagedSkillItem = useCallback(
     ({
       badge,
+      configureConfig,
       deleteConfig,
+      extraTag,
       icon,
       id,
       popoverContent,
@@ -529,7 +623,9 @@ export const useControls = () => {
       title,
     }: {
       badge?: ReactNode;
+      configureConfig?: SkillConfigureConfig;
       deleteConfig?: SkillDeleteConfig;
+      extraTag?: ReactNode;
       icon: ReactNode;
       id: string;
       popoverContent?: ReactNode;
@@ -539,7 +635,14 @@ export const useControls = () => {
       ({
         closeOnClick: false,
         key: id,
-        label: renderToolLabel(id, title, renderPolicyMenu(id, deleteConfig), badge, icon),
+        label: renderToolLabel(
+          id,
+          title,
+          renderPolicyMenu(id, deleteConfig, configureConfig),
+          badge,
+          icon,
+          extraTag,
+        ),
         popoverContent,
         searchText: searchText || String(title || id),
       }) as SkillMenuItem,
@@ -813,6 +916,11 @@ export const useControls = () => {
         );
 
         return createManagedSkillItem({
+          badge: <Icon icon={Wrench} size={12} />,
+          deleteConfig: {
+            displayName: title,
+            onDelete: () => uninstallBuiltinTool(item.identifier),
+          },
           icon,
           id: item.identifier,
           popoverContent,
@@ -820,7 +928,7 @@ export const useControls = () => {
           title,
         });
       }),
-    [filteredBuiltinList, t, createManagedSkillItem],
+    [filteredBuiltinList, t, createManagedSkillItem, uninstallBuiltinTool],
   );
 
   // Builtin Agent Skills list items (grouped under LobeHub)
@@ -974,12 +1082,13 @@ export const useControls = () => {
 
   // Function to map plugins to list items
   const mapPluginToItem = (item: (typeof list)[0]) => {
-    const isMcp = item?.avatar === 'MCP_AVATAR' || !item?.avatar;
+    const isMcp = item?.runtimeType === 'mcp';
+    const hasRealAvatar = !!item?.avatar && item.avatar !== 'MCP_AVATAR';
     const isCustom = item.type === 'customPlugin';
-    const icon = isMcp ? (
-      <Icon icon={McpIcon} size={SKILL_ICON_SIZE} />
-    ) : (
+    const icon = hasRealAvatar ? (
       <Avatar avatar={item.avatar} shape={'square'} size={SKILL_ICON_SIZE} />
+    ) : (
+      <Icon icon={McpIcon} size={SKILL_ICON_SIZE} />
     );
     const popoverContent = (
       <ToolItemDetailPopover
@@ -988,15 +1097,15 @@ export const useControls = () => {
         sourceLabel={isCustom ? t('skillStore.tabs.custom') : t('skillStore.tabs.community')}
         title={item.title}
         icon={
-          isMcp ? (
-            <Icon icon={McpIcon} size={36} />
-          ) : (
+          hasRealAvatar ? (
             <Avatar
               avatar={item.avatar}
               shape={'square'}
               size={36}
               style={{ flex: 'none', marginInlineEnd: 0 }}
             />
+          ) : (
+            <Icon icon={McpIcon} size={36} />
           )
         }
       />
@@ -1004,10 +1113,18 @@ export const useControls = () => {
 
     return createManagedSkillItem({
       badge: isMcp ? <Icon icon={McpIcon} size={12} /> : undefined,
+      configureConfig: isCustom
+        ? { onConfigure: () => setEditingPluginId(item.identifier) }
+        : undefined,
       deleteConfig: {
         displayName: item.title,
         onDelete: () => uninstallPlugin(item.identifier),
       },
+      extraTag: isCustom ? (
+        <Tag color={'warning'} icon={<Icon icon={Package} />} size={'small'}>
+          {t('store.customPlugin', { ns: 'plugin' })}
+        </Tag>
+      ) : undefined,
       icon,
       id: item.identifier,
       popoverContent,
@@ -1084,40 +1201,40 @@ export const useControls = () => {
       }}
     >
       <div className={cx(styles.activationGroupTitleBlock)}>
+        {icon}
+        <span className={cx(styles.activationGroupTitleText)}>{title}</span>
+      </div>
+      <div className={cx(styles.activationGroupActions)}>
+        {autoSwitch && (
+          <span
+            className={cx(styles.switchWrap)}
+            onClick={(event) => {
+              event.stopPropagation();
+            }}
+          >
+            <Switch
+              checked={isAutoSkillMode}
+              loading={autoModeLoading}
+              size="small"
+              onClick={(_, event) => event.stopPropagation()}
+              onChange={async (checked, event) => {
+                event?.stopPropagation?.();
+                setAutoModeLoading(true);
+                try {
+                  await updateAgentChatConfig({
+                    skillActivateMode: checked ? 'auto' : 'manual',
+                  });
+                } finally {
+                  setAutoModeLoading(false);
+                }
+              }}
+            />
+          </span>
+        )}
         <div className={cx(styles.activationGroupChevron)}>
           <Icon icon={open ? ChevronDown : ChevronRight} size={13} />
         </div>
-        {icon}
-        <div className={cx(styles.activationGroupTitle)}>
-          <span className={cx(styles.activationGroupTitleText)}>{title}</span>
-        </div>
       </div>
-      {autoSwitch && (
-        <span
-          className={cx(styles.switchWrap)}
-          onClick={(event) => {
-            event.stopPropagation();
-          }}
-        >
-          <Switch
-            checked={isAutoSkillMode}
-            loading={autoModeLoading}
-            size="small"
-            onClick={(_, event) => event.stopPropagation()}
-            onChange={async (checked, event) => {
-              event?.stopPropagation?.();
-              setAutoModeLoading(true);
-              try {
-                await updateAgentChatConfig({
-                  skillActivateMode: checked ? 'auto' : 'manual',
-                });
-              } finally {
-                setAutoModeLoading(false);
-              }
-            }}
-          />
-        </span>
-      )}
     </div>
   );
 
@@ -1204,6 +1321,17 @@ export const useControls = () => {
                     <Icon icon={Zap} size={12} />
                     {allAutoItems.length}
                   </span>
+                  <button
+                    aria-label={t('tools.plugins.management')}
+                    className={cx(styles.statsSettingsButton)}
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      navigate('/settings/skill');
+                    }}
+                  >
+                    <Icon icon={Settings} size={14} />
+                  </button>
                 </div>
               </span>
             ),
@@ -1348,12 +1476,12 @@ export const useControls = () => {
     const enabledCommunityPlugins = communityPlugins
       .filter((item) => checked.includes(item.identifier))
       .map((item) => {
-        const isMcp = item?.avatar === 'MCP_AVATAR' || !item?.avatar;
+        const hasRealAvatar = !!item?.avatar && item.avatar !== 'MCP_AVATAR';
         return {
-          icon: isMcp ? (
-            <Icon icon={McpIcon} size={SKILL_ICON_SIZE} />
-          ) : (
+          icon: hasRealAvatar ? (
             <Avatar avatar={item.avatar} shape={'square'} size={SKILL_ICON_SIZE} />
+          ) : (
+            <Icon icon={McpIcon} size={SKILL_ICON_SIZE} />
           ),
           key: item.identifier,
           label: (
@@ -1373,15 +1501,15 @@ export const useControls = () => {
               sourceLabel={t('skillStore.tabs.community')}
               title={item.title}
               icon={
-                isMcp ? (
-                  <Icon icon={McpIcon} size={36} />
-                ) : (
+                hasRealAvatar ? (
                   <Avatar
                     avatar={item.avatar}
                     shape={'square'}
                     size={36}
                     style={{ flex: 'none', marginInlineEnd: 0 }}
                   />
+                ) : (
+                  <Icon icon={McpIcon} size={36} />
                 )
               }
             />
@@ -1393,12 +1521,12 @@ export const useControls = () => {
     const enabledCustomPlugins = customPlugins
       .filter((item) => checked.includes(item.identifier))
       .map((item) => {
-        const isMcp = item?.avatar === 'MCP_AVATAR' || !item?.avatar;
+        const hasRealAvatar = !!item?.avatar && item.avatar !== 'MCP_AVATAR';
         return {
-          icon: isMcp ? (
-            <Icon icon={McpIcon} size={SKILL_ICON_SIZE} />
-          ) : (
+          icon: hasRealAvatar ? (
             <Avatar avatar={item.avatar} shape={'square'} size={SKILL_ICON_SIZE} />
+          ) : (
+            <Icon icon={McpIcon} size={SKILL_ICON_SIZE} />
           ),
           key: item.identifier,
           label: (
@@ -1418,15 +1546,15 @@ export const useControls = () => {
               sourceLabel={t('skillStore.tabs.custom')}
               title={item.title}
               icon={
-                isMcp ? (
-                  <Icon icon={McpIcon} size={36} />
-                ) : (
+                hasRealAvatar ? (
                   <Avatar
                     avatar={item.avatar}
                     shape={'square'}
                     size={36}
                     style={{ flex: 'none', marginInlineEnd: 0 }}
                   />
+                ) : (
+                  <Icon icon={McpIcon} size={36} />
                 )
               }
             />
@@ -1526,8 +1654,29 @@ export const useControls = () => {
     t,
   ]);
 
+  const editPluginDrawer = (
+    <DevModal
+      mode={'edit'}
+      open={!!editingPluginId}
+      value={editingCustomPlugin}
+      onValueChange={updateNewCustomPlugin}
+      onDelete={() => {
+        if (editingPluginId) uninstallPlugin(editingPluginId);
+        setEditingPluginId(null);
+      }}
+      onOpenChange={(open) => {
+        if (!open) setEditingPluginId(null);
+      }}
+      onSave={async (devPlugin) => {
+        await installCustomPlugin(devPlugin);
+        setEditingPluginId(null);
+      }}
+    />
+  );
+
   return {
     autoCount: allAutoItems.length,
+    editPluginDrawer,
     installedPluginItems,
     marketItems,
     pinnedCount: allPinnedItems.length,

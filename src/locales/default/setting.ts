@@ -1156,6 +1156,7 @@ When I am ___, I need ___
   'tools.builtins.task.description':
     'Task management and execution — create, track, review, and complete tasks via CLI.',
   'tools.builtins.task.title': 'Task',
+  'tools.builtins.configure': 'Configure',
   'tools.builtins.notInstalled': 'Not Installed',
   'tools.builtins.uninstall': 'Uninstall',
   'tools.builtins.uninstallConfirm.desc':

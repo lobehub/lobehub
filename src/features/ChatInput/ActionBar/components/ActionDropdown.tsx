@@ -62,11 +62,34 @@ const SubmenuScrollStyle = createGlobalStyle`
        popup. Disable both for submenus where animation is already 0ms. */
     transform: none !important;
 
-    overflow-y: auto;
+    overflow: hidden auto;
     overscroll-behavior: contain;
 
+    width: 360px;
     max-height: min(50vh, 640px);
     padding-block-end: 4px;
+  }
+
+  /* base-ui menu-item internal containers are flex by default but don't set
+     min-width:0, which blocks descendant text-overflow:ellipsis from working.
+     Force min-width:0 down the chain so long titles can truncate. */
+  [data-submenu] > [role='menu'] [role='menuitem'] > *,
+  [data-submenu] > [role='menu'] [role='menuitem'] > * > * {
+    min-width: 0;
+  }
+
+  /* Align base-ui separator color with the stats-footer's border-block-start
+     (colorBorderSecondary) so all dividers in the menu look consistent. */
+  [data-submenu] > [role='menu'] [role='separator'] {
+    background: ${cssVar.colorBorderSecondary};
+  }
+
+  /* base-ui group label is rendered inside a [role='presentation'] with its
+     own default vertical padding, which stacks with our activationGroupHeader
+     padding and inflates the gap above/below group headers. Reset only the
+     vertical padding; keep horizontal padding so headers align with items. */
+  [data-submenu] > [role='menu'] [role='group'] > [role='presentation'] {
+    padding-block: 0;
   }
 
   [data-submenu] > [role='menu']:has([role='menuitem']:has([data-fixed-menu-footer])) {
@@ -86,7 +109,6 @@ const SubmenuScrollStyle = createGlobalStyle`
     border-radius: 0;
 
     background: ${cssVar.colorBgElevated};
-    box-shadow: 0 -12px 16px 4px ${cssVar.colorBgElevated};
   }
 
   [data-submenu] > [role='menu'] [role='menuitem']:has([data-fixed-menu-footer]) > * {
@@ -106,7 +128,7 @@ const SubmenuScrollStyle = createGlobalStyle`
   }
 
   [data-submenu] > [role='menu'] [role='group']:has([data-skill-menu-search]) > *:has([data-skill-menu-search]) {
-    padding-block: 6px 8px !important;
+    padding-block: 6px 4px !important;
     padding-inline: 8px !important;
   }
 

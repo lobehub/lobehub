@@ -14,7 +14,7 @@ import { useControls } from './useControls';
 
 const Tools = memo(() => {
   const { t } = useTranslation('setting');
-  const { marketItems } = useControls();
+  const { marketItems, editPluginDrawer } = useControls();
 
   const agentId = useAgentId();
   const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
@@ -46,6 +46,7 @@ const Tools = memo(() => {
           },
         }}
       />
+      {editPluginDrawer}
     </Suspense>
   );
 });

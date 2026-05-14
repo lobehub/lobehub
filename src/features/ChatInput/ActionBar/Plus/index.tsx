@@ -273,6 +273,7 @@ const PlusAction = memo(() => {
   });
   const {
     autoCount: skillAutoCount,
+    editPluginDrawer: skillEditPluginDrawer,
     marketItems: skillItems,
     pinnedCount: skillPinnedCount,
   } = useToolsControls();
@@ -551,19 +552,22 @@ const PlusAction = memo(() => {
   ]);
 
   return (
-    <Action
-      icon={PlusIcon}
-      open={dropdownOpen}
-      size={{ blockSize: 32, borderRadius: 16, size: 18 }}
-      title={t('plus.tooltip')}
-      tooltipProps={{ placement: 'top' }}
-      dropdown={{
-        menu: { items },
-        minWidth: 220,
-        placement: 'topLeft',
-      }}
-      onOpenChange={setDropdownOpen}
-    />
+    <>
+      <Action
+        icon={PlusIcon}
+        open={dropdownOpen}
+        size={{ blockSize: 32, borderRadius: 16, size: 18 }}
+        title={t('plus.tooltip')}
+        tooltipProps={{ placement: 'top' }}
+        dropdown={{
+          menu: { items },
+          minWidth: 220,
+          placement: 'topLeft',
+        }}
+        onOpenChange={setDropdownOpen}
+      />
+      {skillEditPluginDrawer}
+    </>
   );
 });
 
