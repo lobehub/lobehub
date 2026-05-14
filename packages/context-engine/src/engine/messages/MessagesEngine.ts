@@ -174,7 +174,6 @@ export class MessagesEngine {
     } = this.params;
 
     const isAgentBuilderEnabled = !!agentBuilderContext;
-    const isAgentManagementEnabled = !!agentManagementContext;
 
     const isGroupAgentBuilderEnabled = !!groupAgentBuilderContext;
     const isAgentGroupEnabled = agentGroup?.agentMap && Object.keys(agentGroup.agentMap).length > 0;
@@ -185,10 +184,12 @@ export class MessagesEngine {
     const hasSelectedTools = (selectedTools?.length ?? 0) > 0;
 
     // Chat mode (`enableAgentMode === false`) suppresses agentic-only injectors:
-    // skill discovery (<available_skills>) and agent documents. Anything else
-    // — system role, knowledge bases, memory, web-browsing tool prompts —
-    // remains untouched.
+    // skill discovery (<available_skills>), agent documents, and the
+    // agent-management context (<current_agent> + <available_agents>).
+    // Anything else — system role, knowledge bases, memory, web-browsing tool
+    // prompts — remains untouched.
     const isAgentMode = enableAgentMode !== false;
+    const isAgentManagementEnabled = !!agentManagementContext && isAgentMode;
     const hasAgentDocuments = !!agentDocuments && agentDocuments.length > 0 && isAgentMode;
     // Page editor is enabled if either direct pageContentContext or initialContext.pageEditor is provided
     const isPageEditorEnabled = !!pageContentContext || !!initialContext?.pageEditor;
