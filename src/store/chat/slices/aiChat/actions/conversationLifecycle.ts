@@ -657,6 +657,7 @@ export class ConversationLifecycleActionImpl {
           fileIds: fileIdList,
           message,
           parentOperationId: operationId,
+          trigger: requestMetadata?.trigger,
         });
 
         return {

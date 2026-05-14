@@ -275,6 +275,7 @@ export class GatewayActionImpl {
      * a fresh user prompt.
      */
     resumeApproval?: ResumeApprovalParam;
+    trigger?: string;
   }): Promise<ExecAgentResult> => {
     const {
       context,
@@ -284,6 +285,7 @@ export class GatewayActionImpl {
       parentMessageId,
       parentOperationId,
       resumeApproval,
+      trigger,
     } = params;
 
     const agentGatewayUrl =
@@ -335,6 +337,7 @@ export class GatewayActionImpl {
         parentMessageId,
         prompt: message,
         resumeApproval,
+        trigger,
       },
       { signal: abortSignal },
     );

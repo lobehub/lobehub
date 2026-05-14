@@ -488,6 +488,39 @@ describe('GatewayActionImpl', () => {
       );
     });
 
+    it('should forward trigger to execAgentTask', async () => {
+      const { action } = createExecuteTestAction();
+
+      vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+        agentId: 'agent-1',
+        assistantMessageId: 'ast-1',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        message: 'ok',
+        operationId: 'server-op-1',
+        status: 'created',
+        success: true,
+        timestamp: new Date().toISOString(),
+        token: 'test-token',
+        topicId: 'topic-1',
+        userMessageId: 'usr-1',
+      });
+
+      await action.executeGatewayAgent({
+        context: { agentId: 'agent-1', topicId: 'topic-1', threadId: null, scope: 'main' },
+        message: 'Hello',
+        trigger: 'onboarding',
+      });
+
+      expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          prompt: 'Hello',
+          trigger: 'onboarding',
+        }),
+        expect.anything(),
+      );
+    });
+
     it('should forward task manager default assignee and current task context', async () => {
       const { action } = createExecuteTestAction();
 
