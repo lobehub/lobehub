@@ -158,6 +158,7 @@
   },
   "overrides": {
     "@types/react": "19.2.13",
+    "antd": "6.3.5",
     "better-auth": "1.4.6",
     "better-call": "1.1.8",
     "drizzle-orm": "^0.45.1",
