@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { RequestTrigger } from '../../agentRuntime';
 import type { PageSelection } from './pageSelection';
 import { PageSelectionSchema } from './pageSelection';
 
@@ -174,6 +175,7 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   scope: z.string().optional(),
   subAgentId: z.string().optional(),
   toolExecutionTimeMs: z.number().optional(),
+  trigger: z.nativeEnum(RequestTrigger).optional(),
   usage: ModelUsageSchema.optional(),
 });
 
@@ -330,6 +332,10 @@ export interface MessageMetadata {
   totalTokens?: number;
   /** @deprecated use `metadata.performance` instead */
   tps?: number;
+  /**
+   * Request source used by runtime routing, billing, and logs.
+   */
+  trigger?: RequestTrigger;
   /** @deprecated use `metadata.performance` instead */
   ttft?: number;
   usage?: ModelUsage;

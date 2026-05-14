@@ -123,9 +123,17 @@ export class GlobalWorkspacePaneActionImpl {
     this.#get().updateSystemStatus({ showSystemRole }, n('toggleMobileTopic', newValue));
   };
 
-  setWorkingSidebarTab = (tab: 'resources' | 'review'): void => {
+  setWorkingSidebarTab = (tab: 'resources' | 'review' | 'files'): void => {
     if (this.#get().status.workingSidebarTab === tab) return;
     this.#get().updateSystemStatus({ workingSidebarTab: tab }, n('setWorkingSidebarTab', tab));
+  };
+
+  revealInFilesTab = (relativePath: string): void => {
+    this.#get().setWorkingSidebarTab('files');
+    this.#get().updateSystemStatus(
+      { workingSidebarRevealRequest: { nonce: Date.now(), path: relativePath } },
+      n('revealInFilesTab'),
+    );
   };
 
   toggleWideScreen = (newValue?: boolean): void => {

@@ -139,7 +139,7 @@ describe('emitClientAgentSignalSourceEvent', () => {
     expect(agentSignalService.emitClientGatewaySourceEvent).not.toHaveBeenCalled();
   });
 
-  it('skips emitting when user preference is initialized but the lab toggle is disabled', async () => {
+  it('emits when the feature flag is enabled even if the lab toggle is disabled', async () => {
     const { agentSignalService } = await import('@/services/agentSignal');
     const { getUserStoreState } = await import('@/store/user/store');
     const { emitClientAgentSignalSourceEvent } = await import('./agentSignalBridge');
@@ -161,7 +161,7 @@ describe('emitClientAgentSignalSourceEvent', () => {
       timestamp: 1,
     });
 
-    expect(agentSignalService.emitClientGatewaySourceEvent).not.toHaveBeenCalled();
+    expect(agentSignalService.emitClientGatewaySourceEvent).toHaveBeenCalledOnce();
   });
 
   it('keeps emitting before local stores finish initialization so the server can decide', async () => {

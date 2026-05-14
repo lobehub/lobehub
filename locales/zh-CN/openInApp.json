@@ -1,0 +1,8 @@
+{
+  "dropdownLabel": "用以下应用打开当前目录",
+  "errors.appNotInstalled": "未检测到 {{appName}}",
+  "errors.launchFailed": "{{appName}} 打开失败：{{error}}",
+  "errors.pathNotFound": "路径不存在：{{path}}",
+  "errors.unknown": "未知错误",
+  "tooltip": "用 {{appName}} 打开"
+}

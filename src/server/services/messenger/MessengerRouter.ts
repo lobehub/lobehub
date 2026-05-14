@@ -352,7 +352,11 @@ export class MessengerRouter {
     const platform = creds.platform;
     const tenantId = creds.tenantId;
 
-    const handle = async (thread: any, message: Message): Promise<void> => {
+    const handle = async (
+      thread: any,
+      message: Message,
+      bridgeMethod: 'handleMention' | 'handleSubscribedMessage',
+    ): Promise<void> => {
       if (message.author.isBot === true) return;
 
       const senderId = message.author.userId;
@@ -456,7 +460,15 @@ export class MessengerRouter {
           return;
         }
 
-        await this.dispatchToAgent(thread, message, client, link, link.activeAgentId, platform);
+        await this.dispatchToAgent(
+          thread,
+          message,
+          client,
+          link,
+          link.activeAgentId,
+          platform,
+          bridgeMethod,
+        );
       } catch (error) {
         log('handle: handler error: %O', error);
         try {
@@ -467,30 +479,25 @@ export class MessengerRouter {
       }
     };
 
-    // Chat SDK routes 1:1 conversations to `onDirectMessage`. Follow-up messages
-    // in a subscribed thread go to `onSubscribedMessage`. We subscribe the
-    // DM thread on first contact so future DM messages (which arrive as
-    // "subscribed" rather than "direct") still route through `handle`.
-    // Channel `@mention`s land in `onNewMention` below — we deliberately do
-    // NOT subscribe channel threads (subscribing would route every reply
-    // from any user in that thread through `handle`, including chatter
-    // between humans that wasn't directed at the bot).
-    bot.onDirectMessage(async (thread, message, _channel, _context?: MessageContext) => {
-      log('onDirectMessage: install=%s, msgId=%s', creds.installationKey, (message as any).id);
-      try {
-        await thread.subscribe();
-      } catch {
-        /* idempotent — first contact creates the subscription, later calls no-op */
-      }
-      await handle(thread, message);
-    });
-
-    // Subscribed-thread follow-ups. DMs are 1:1, so every follow-up is for
-    // the bot. Channel threads (if anything ever subscribes one — we don't
-    // today, but adapters can) are different: only respond when the user
-    // explicitly @-mentions us, otherwise we'd hijack human chatter in the
-    // thread. `message.isMention` is the chat-sdk flag set by
-    // chat-adapter-slack on `app_mention` events.
+    // We intentionally do NOT register `onDirectMessage`. Chat SDK
+    // short-circuits the DM dispatch when that handler is registered
+    // (`chat` core: `dispatchToHandlers` fires DM handlers and returns
+    // before the `isSubscribed` check), which kills the subscription-based
+    // routing that lets follow-up messages reuse the cached topicId.
+    //
+    // Without an `onDirectMessage` handler, chat-sdk forces `isMention =
+    // true` for DMs and falls through to the standard subscription dispatch
+    // (mirrors `BotMessageRouter`, which doesn't register `onDirectMessage`
+    // either):
+    //   - First DM → not subscribed yet → `onNewMention` →
+    //     `handleMention` opens a topic and subscribes the thread.
+    //   - Follow-up DM → subscribed → `onSubscribedMessage` →
+    //     `handleSubscribedMessage` reads the cached topicId and continues.
+    //
+    // For channel threads we don't worry about subscribing hijacking
+    // chatter — `onSubscribedMessage` already gates on `thread.isDM ||
+    // message.isMention === true` (same pattern as `BotMessageRouter`), so
+    // unrelated replies from other users are filtered out before dispatch.
     bot.onSubscribedMessage(async (thread, message, _context?: MessageContext) => {
       log('onSubscribedMessage: install=%s, msgId=%s', creds.installationKey, (message as any).id);
       const isAddressedToBot = thread.isDM || message.isMention === true;
@@ -501,20 +508,21 @@ export class MessengerRouter {
         );
         return;
       }
-      await handle(thread, message);
+      // Follow-up on a subscribed thread (DM after the first touch, or a
+      // subscribed channel thread). `handleSubscribedMessage` reads the
+      // cached topicId from chat-sdk thread state and continues that topic;
+      // it falls back to `handleMention` internally if no topicId is cached.
+      await handle(thread, message, 'handleSubscribedMessage');
     });
 
-    // First-touch `@mention` in a non-DM thread (Slack channel today). For an
-    // unlinked sender we surface an ephemeral link prompt visible only to
-    // the mentioner; for a linked sender we dispatch through the same
-    // `handle` path as DMs so the active agent answers in-thread.
-    //
-    // We deliberately skip `thread.subscribe()` — chat-adapter-slack would
-    // then route every reply (including chatter between other users in the
-    // same thread) to `onSubscribedMessage`, which is noisy. Future
-    // `@mention`s in the same Slack thread continue to fire `onNewMention`
-    // with the same `thread.id`, so the conversation's `topicId` (cached
-    // per-thread by AgentBridgeService) is preserved across re-mentions.
+    // First-touch entry point for any non-subscribed conversation:
+    //   - DMs (chat-sdk forces `isMention = true` for them — see the
+    //     comment above).
+    //   - Channel `@mention`s where the parent thread isn't subscribed yet.
+    // `handleMention` opens a fresh topic, writes the topicId into chat-sdk
+    // thread state, and (for subscribable platforms / threads — see
+    // `client.shouldSubscribe`) subscribes the thread so subsequent
+    // messages route through `onSubscribedMessage` and continue the topic.
     bot.onNewMention(async (thread, message, _context?: MessageContext) => {
       log(
         'onNewMention: install=%s, msgId=%s, threadId=%s',
@@ -522,7 +530,7 @@ export class MessengerRouter {
         (message as any).id,
         thread.id,
       );
-      await handle(thread, message);
+      await handle(thread, message, 'handleMention');
     });
 
     // Native slash commands — wired only for platforms that opt in by
@@ -572,6 +580,19 @@ export class MessengerRouter {
       {
         description: 'Bind your account to LobeHub',
         handler: async (ctx) => {
+          // Already-linked short-circuit: re-running `/start` while bound
+          // would issue a fresh verify-im token and, on completion,
+          // overwrite the user's `messenger_account_links` row via
+          // `confirmLink` → `upsertForPlatform`. That desyncs the cached
+          // chat-sdk thread state (topicId / agent runtime) from the new
+          // active agent and the conversation hangs at "typing…" with no
+          // reply. Treat `/start` as the unbound-only onboarding command.
+          if (ctx.link) {
+            await ctx.reply(
+              'Your account is already linked to LobeHub. Send /agents to switch the active agent, or /new to start a fresh conversation.',
+            );
+            return;
+          }
           // The verify-im URL is one-shot and account-binding — never post
           // it to a public channel. Anything outside a 1:1 DM (slash from a
           // public channel, or `@LobeHub /start` typed inside a channel
@@ -982,6 +1003,7 @@ export class MessengerRouter {
     link: MessengerAccountLinkItem,
     agentId: string,
     platform: MessengerPlatform,
+    bridgeMethod: 'handleMention' | 'handleSubscribedMessage',
   ): Promise<void> {
     log(
       'dispatchToAgent: platform=%s, tenant=%s, sender=%s, agent=%s, user=%s',
@@ -1000,7 +1022,18 @@ export class MessengerRouter {
     // `isOwner` is true iff the inbound message's `author.userId` matches
     // the linked `platformUserId`. `buildBotContext` enforces the
     // fail-closed default (never trust when either side is missing).
-    await bridge.handleMention(thread, message, {
+    //
+    // `bridgeMethod` is chosen by the caller per entry point, mirroring
+    // BotMessageRouter:
+    // - `handleMention`           — first-touch DMs and channel @mentions;
+    //                               opens a fresh topic and writes its id
+    //                               to chat-sdk thread state.
+    // - `handleSubscribedMessage` — DM follow-ups (after `thread.subscribe()`
+    //                               in `onDirectMessage`); reads the cached
+    //                               topicId and continues in the same topic.
+    //                               Falls back to `handleMention` internally
+    //                               if no topicId is cached (defensive).
+    const bridgeOpts = {
       agentId,
       botContext: {
         ...buildBotContext({
@@ -1024,7 +1057,9 @@ export class MessengerRouter {
           : `${platform}:singleton`,
       },
       client,
-    });
+    };
+
+    await bridge[bridgeMethod](thread, message, bridgeOpts);
   }
 }
 

@@ -10,6 +10,7 @@ export enum RequestTrigger {
   Image = 'image',
   Memory = 'memory',
   Notify = 'notify',
+  Onboarding = 'onboarding',
   Openapi = 'openapi',
   SemanticSearch = 'semantic_search',
   Topic = 'topic',

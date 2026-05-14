@@ -273,6 +273,7 @@ export class GlobalGeneralActionImpl {
             ...status,
             showCommandMenu: false,
             showHotkeyHelper: false,
+            workingSidebarRevealRequest: undefined,
           };
 
           this.#get().updateSystemStatus(statusWithResetTransientStates, 'initSystemStatus');
