@@ -529,13 +529,17 @@ const KEYWORD_WORD_CHAR = /\w/;
 
 const keywordOccursIn = (loweredText: string, keyword: string): boolean => {
   if (!keyword) return false;
-  const idx = loweredText.indexOf(keyword);
-  if (idx === -1) return false;
-  const before = idx === 0 ? '' : loweredText[idx - 1];
-  const after = idx + keyword.length >= loweredText.length ? '' : loweredText[idx + keyword.length];
-  const leftBoundary = !before || !KEYWORD_WORD_CHAR.test(before);
-  const rightBoundary = !after || !KEYWORD_WORD_CHAR.test(after);
-  return leftBoundary && rightBoundary;
+  let idx = loweredText.indexOf(keyword);
+  while (idx !== -1) {
+    const before = idx === 0 ? '' : loweredText[idx - 1];
+    const after =
+      idx + keyword.length >= loweredText.length ? '' : loweredText[idx + keyword.length];
+    const leftBoundary = !before || !KEYWORD_WORD_CHAR.test(before);
+    const rightBoundary = !after || !KEYWORD_WORD_CHAR.test(after);
+    if (leftBoundary && rightBoundary) return true;
+    idx = loweredText.indexOf(keyword, idx + 1);
+  }
+  return false;
 };
 
 const findFirstMatchingKeyword = (

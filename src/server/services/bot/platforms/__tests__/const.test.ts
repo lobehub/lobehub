@@ -734,6 +734,13 @@ describe('messageMatchesWatchKeyword', () => {
     expect(messageMatchesWatchKeyword('the bug landed', ['bug'])).toBe(true);
   });
 
+  it('keeps scanning past non-boundary occurrences to find a later whole-word match', () => {
+    expect(messageMatchesWatchKeyword('debug logs show a real bug', ['bug'])).toBe(true);
+    expect(messageMatchesWatchKeyword('bugfix landed but the bug is back', ['bug'])).toBe(true);
+    // Still false when every occurrence is embedded.
+    expect(messageMatchesWatchKeyword('debug then bugfix', ['bug'])).toBe(false);
+  });
+
   it('still matches when keyword is flanked by punctuation', () => {
     expect(messageMatchesWatchKeyword('(bug)', ['bug'])).toBe(true);
     expect(messageMatchesWatchKeyword('bug, anyone?', ['bug'])).toBe(true);
