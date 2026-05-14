@@ -19,7 +19,7 @@ import {
   renderSnapshot,
   renderStepDetail,
   renderSystemRole,
-  resolveCeEvent,
+  resolveCeSnapshot,
 } from '../viewer';
 
 async function fetchSnapshotFromUrl(url: string): Promise<ExecutionSnapshot> {
@@ -46,7 +46,7 @@ function findStep(snapshot: ExecutionSnapshot, stepIndex: number): StepSnapshot 
 }
 
 function getSystemRole(step: StepSnapshot, allSteps?: StepSnapshot[]): string | undefined {
-  const ceEvent = resolveCeEvent(step, allSteps) as any;
+  const ceEvent = resolveCeSnapshot(step, allSteps) as any;
   const inputRole = ceEvent?.input?.systemRole;
   if (inputRole) return inputRole;
   const outputMsgs = ceEvent?.output as any[] | undefined;
@@ -58,7 +58,7 @@ function getSystemRole(step: StepSnapshot, allSteps?: StepSnapshot[]): string | 
 }
 
 function getEnvContent(step: StepSnapshot, allSteps?: StepSnapshot[]): string | undefined {
-  const ceEvent = resolveCeEvent(step, allSteps) as any;
+  const ceEvent = resolveCeSnapshot(step, allSteps) as any;
   const outputMsgs = ceEvent?.output as any[] | undefined;
   const envMsg = outputMsgs?.find((m: any) => m.role === 'user');
   if (!envMsg) return undefined;
@@ -219,7 +219,7 @@ export function registerInspectCommand(program: Command) {
             if (opts.systemRole) {
               console.log(JSON.stringify(getSystemRole(step, snapshot.steps) ?? null, null, 2));
             } else {
-              const ceEvent = resolveCeEvent(step, snapshot.steps) as any;
+              const ceEvent = resolveCeSnapshot(step, snapshot.steps) as any;
               const envMsg = (ceEvent?.output as any[])?.find((m: any) => m.role === 'user');
               console.log(JSON.stringify(envMsg ?? null, null, 2));
             }
@@ -237,7 +237,7 @@ export function registerInspectCommand(program: Command) {
         if (opts.payloadTools && effectiveStepIndex !== undefined) {
           const step = findStep(snapshot, effectiveStepIndex);
           if (opts.json) {
-            const ceEvent = resolveCeEvent(step, snapshot.steps) as any;
+            const ceEvent = resolveCeSnapshot(step, snapshot.steps) as any;
             const toolsConfig = ceEvent?.input?.toolsConfig;
             const payloadTools = (step.context?.payload as any)?.tools;
             console.log(JSON.stringify({ payloadTools, toolsConfig }, null, 2));
@@ -251,7 +251,7 @@ export function registerInspectCommand(program: Command) {
         if (opts.payload && effectiveStepIndex !== undefined) {
           const step = findStep(snapshot, effectiveStepIndex);
           if (opts.json) {
-            const ceEvent = resolveCeEvent(step, snapshot.steps) as any;
+            const ceEvent = resolveCeSnapshot(step, snapshot.steps) as any;
             console.log(JSON.stringify(ceEvent?.input ?? null, null, 2));
           } else {
             console.log(renderPayload(step, snapshot.steps));
@@ -263,7 +263,7 @@ export function registerInspectCommand(program: Command) {
         if (opts.memory && effectiveStepIndex !== undefined) {
           const step = findStep(snapshot, effectiveStepIndex);
           if (opts.json) {
-            const ceEvent = resolveCeEvent(step, snapshot.steps) as any;
+            const ceEvent = resolveCeSnapshot(step, snapshot.steps) as any;
             console.log(JSON.stringify(ceEvent?.input?.userMemory ?? null, null, 2));
           } else {
             console.log(renderMemory(step, snapshot.steps));

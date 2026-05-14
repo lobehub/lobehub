@@ -6,14 +6,40 @@ import { reconstructMessages } from '../utils/reconstruct';
 export { analyzeAgentSignal, renderAgentSignal } from './agentSignal';
 
 /**
- * Resolve the context_engine_result event for a step, reconstructing missing
- * `input`/`output` fields by walking back through previous steps (delta format).
- * Returns undefined if no CE event exists on this step.
+ * Resolve the Context Engine snapshot for a step, reconstructing missing `input`/`output`
+ * fields by walking back through previous steps (delta format).
+ * Returns undefined if CE did not run for this step.
+ *
+ * Supports both the new `contextEngine` field format and the legacy `context_engine_result`
+ * event format for backward compatibility with older snapshots.
  */
-export function resolveCeEvent(
+export function resolveCeSnapshot(
   step: StepSnapshot,
   allSteps?: StepSnapshot[],
 ): Record<string, unknown> | undefined {
+  // New format: contextEngine typed field
+  if (step.contextEngine !== undefined) {
+    let resolvedInput = step.contextEngine.input;
+    let resolvedOutput = step.contextEngine.output;
+
+    if (allSteps && (resolvedInput === undefined || resolvedOutput === undefined)) {
+      for (let i = step.stepIndex - 1; i >= 0; i--) {
+        const prevStep = allSteps.find((s) => s.stepIndex === i);
+        if (!prevStep?.contextEngine) continue;
+        if (resolvedInput === undefined && prevStep.contextEngine.input !== undefined) {
+          resolvedInput = prevStep.contextEngine.input;
+        }
+        if (resolvedOutput === undefined && prevStep.contextEngine.output !== undefined) {
+          resolvedOutput = prevStep.contextEngine.output;
+        }
+        if (resolvedInput !== undefined && resolvedOutput !== undefined) break;
+      }
+    }
+
+    return { input: resolvedInput, output: resolvedOutput };
+  }
+
+  // Legacy format: context_engine_result stored in events array
   const localCe = step.events?.find((e) => e.type === 'context_engine_result') as any;
   if (!localCe) return undefined;
   if (!allSteps || (localCe.input !== undefined && localCe.output !== undefined)) return localCe;
@@ -33,6 +59,9 @@ export function resolveCeEvent(
 
   return { ...localCe, input: resolvedInput, output: resolvedOutput };
 }
+
+/** @deprecated Use resolveCeSnapshot instead. */
+export const resolveCeEvent = resolveCeSnapshot;
 
 /**
  * Resolve messages for a step, supporting both legacy (full) and incremental (delta) formats.
@@ -382,7 +411,7 @@ export function renderMessageDetail(
   source: 'input' | 'output' = 'output',
   allSteps?: StepSnapshot[],
 ): string {
-  const ceEvent = resolveCeEvent(step, allSteps) as any;
+  const ceEvent = resolveCeSnapshot(step, allSteps) as any;
   let messages: any[] | undefined;
   let label: string;
 
@@ -435,7 +464,7 @@ export function renderMessageDetail(
 }
 
 export function renderSystemRole(step: StepSnapshot, allSteps?: StepSnapshot[]): string {
-  const ceEvent = resolveCeEvent(step, allSteps) as any;
+  const ceEvent = resolveCeSnapshot(step, allSteps) as any;
 
   // Try input.systemRole first (user-configured agent prompt)
   const inputSystemRole = ceEvent?.input?.systemRole;
@@ -467,7 +496,7 @@ export function renderSystemRole(step: StepSnapshot, allSteps?: StepSnapshot[]):
 }
 
 export function renderEnvContext(step: StepSnapshot, allSteps?: StepSnapshot[]): string {
-  const ceEvent = resolveCeEvent(step, allSteps) as any;
+  const ceEvent = resolveCeSnapshot(step, allSteps) as any;
   const outputMsgs: any[] | undefined = ceEvent?.output;
 
   if (!outputMsgs || outputMsgs.length === 0) {
@@ -494,7 +523,7 @@ export function renderEnvContext(step: StepSnapshot, allSteps?: StepSnapshot[]):
 
 export function renderPayloadTools(step: StepSnapshot, allSteps?: StepSnapshot[]): string {
   const lines: string[] = [];
-  const ceEvent = resolveCeEvent(step, allSteps) as any;
+  const ceEvent = resolveCeSnapshot(step, allSteps) as any;
 
   // Section 1: Plugin manifests from context engine input
   const toolsConfig = ceEvent?.input?.toolsConfig;
@@ -549,7 +578,7 @@ export function renderPayloadTools(step: StepSnapshot, allSteps?: StepSnapshot[]
 }
 
 export function renderPayload(step: StepSnapshot, allSteps?: StepSnapshot[]): string {
-  const ceEvent = resolveCeEvent(step, allSteps) as any;
+  const ceEvent = resolveCeSnapshot(step, allSteps) as any;
   if (!ceEvent?.input) {
     return red('No context engine data found in this step.');
   }
@@ -684,7 +713,7 @@ export function renderPayload(step: StepSnapshot, allSteps?: StepSnapshot[]): st
 }
 
 export function renderMemory(step: StepSnapshot, allSteps?: StepSnapshot[]): string {
-  const ceEvent = resolveCeEvent(step, allSteps) as any;
+  const ceEvent = resolveCeSnapshot(step, allSteps) as any;
   const userMemory = ceEvent?.input?.userMemory;
 
   if (!userMemory) {
@@ -894,7 +923,7 @@ export function renderStepDetail(
 
   if (options?.messages) {
     // Show context engine input/output from events if available
-    const ceEvent = resolveCeEvent(step, options?.allSteps) as any;
+    const ceEvent = resolveCeSnapshot(step, options?.allSteps) as any;
 
     if (ceEvent) {
       // Context engine input messages (DB messages passed to engine)

@@ -349,7 +349,7 @@ describe('OperationTraceRecorder', () => {
     });
   });
 
-  describe('deduplicateCeEvent (via appendStep)', () => {
+  describe('contextEngine dedup (via appendStep)', () => {
     let store: ReturnType<typeof buildStore>;
     let recorder: OperationTraceRecorder;
 
@@ -383,32 +383,44 @@ describe('OperationTraceRecorder', () => {
       });
     };
 
-    const getSavedCeEvent = (newStepIndex: number) => {
+    const getSavedStep = (newStepIndex: number) => {
       const saved = store.savePartial.mock.calls[0][1];
-      const step = saved.steps.find((s: any) => s.stepIndex === newStepIndex);
-      return step.events.find((e: any) => e.type === 'context_engine_result');
+      return saved.steps.find((s: any) => s.stepIndex === newStepIndex);
     };
+
+    it('extracts CE event into contextEngine, not in events', async () => {
+      await appendStepWithCe(buildCeEvent(), []);
+
+      const step = getSavedStep(0);
+      // CE data lives in contextEngine, not events
+      expect(step.contextEngine).toBeDefined();
+      expect(step.events.some((e: any) => e.type === 'context_engine_result')).toBe(false);
+    });
 
     it('keeps both input and output on the first step (no previous CE to compare against)', async () => {
       await appendStepWithCe(buildCeEvent(), []);
 
-      const ce = getSavedCeEvent(0);
-      expect(ce.input).toEqual({ messages: ['hello'] });
-      expect(ce.output).toEqual({ tokens: 42 });
+      const step = getSavedStep(0);
+      expect(step.contextEngine.input).toEqual({ messages: ['hello'] });
+      expect(step.contextEngine.output).toEqual({ tokens: 42 });
     });
 
     it('strips both input and output when both are identical to the previous step', async () => {
-      const prevStep = { events: [buildCeEvent()], stepIndex: 0, stepType: 'call_llm' };
+      const prevStep = {
+        contextEngine: { input: { messages: ['hello'] }, output: { tokens: 42 } },
+        stepIndex: 0,
+        stepType: 'call_llm',
+      };
       await appendStepWithCe(buildCeEvent(), [prevStep]);
 
-      const ce = getSavedCeEvent(1);
-      expect(ce.input).toBeUndefined();
-      expect(ce.output).toBeUndefined();
+      const step = getSavedStep(1);
+      expect(step.contextEngine.input).toBeUndefined();
+      expect(step.contextEngine.output).toBeUndefined();
     });
 
     it('strips only input when input matches previous but output differs', async () => {
       const prevStep = {
-        events: [buildCeEvent({ input: { messages: ['hello'] }, output: { tokens: 42 } })],
+        contextEngine: { input: { messages: ['hello'] }, output: { tokens: 42 } },
         stepIndex: 0,
         stepType: 'call_llm',
       };
@@ -417,14 +429,14 @@ describe('OperationTraceRecorder', () => {
         [prevStep],
       );
 
-      const ce = getSavedCeEvent(1);
-      expect(ce.input).toBeUndefined();
-      expect(ce.output).toEqual({ tokens: 99 });
+      const step = getSavedStep(1);
+      expect(step.contextEngine.input).toBeUndefined();
+      expect(step.contextEngine.output).toEqual({ tokens: 99 });
     });
 
     it('strips only output when output matches previous but input differs', async () => {
       const prevStep = {
-        events: [buildCeEvent({ input: { messages: ['hello'] }, output: { tokens: 42 } })],
+        contextEngine: { input: { messages: ['hello'] }, output: { tokens: 42 } },
         stepIndex: 0,
         stepType: 'call_llm',
       };
@@ -433,14 +445,14 @@ describe('OperationTraceRecorder', () => {
         [prevStep],
       );
 
-      const ce = getSavedCeEvent(1);
-      expect(ce.input).toEqual({ messages: ['world'] });
-      expect(ce.output).toBeUndefined();
+      const step = getSavedStep(1);
+      expect(step.contextEngine.input).toEqual({ messages: ['world'] });
+      expect(step.contextEngine.output).toBeUndefined();
     });
 
     it('keeps both when both input and output differ from previous', async () => {
       const prevStep = {
-        events: [buildCeEvent({ input: { messages: ['old'] }, output: { tokens: 10 } })],
+        contextEngine: { input: { messages: ['old'] }, output: { tokens: 10 } },
         stepIndex: 0,
         stepType: 'call_llm',
       };
@@ -449,22 +461,26 @@ describe('OperationTraceRecorder', () => {
         [prevStep],
       );
 
-      const ce = getSavedCeEvent(1);
-      expect(ce.input).toEqual({ messages: ['new'] });
-      expect(ce.output).toEqual({ tokens: 20 });
+      const step = getSavedStep(1);
+      expect(step.contextEngine.input).toEqual({ messages: ['new'] });
+      expect(step.contextEngine.output).toEqual({ tokens: 20 });
     });
 
-    it('walks back past intermediate steps without CE events to find last stored values', async () => {
+    it('walks back past intermediate steps without CE to find last stored values', async () => {
       const prevSteps = [
-        { events: [buildCeEvent()], stepIndex: 0, stepType: 'call_llm' },
-        // step 1 has no CE event — dedup must skip it and walk back to step 0
-        { events: [{ type: 'tool_result', id: 'tc-1' }], stepIndex: 1, stepType: 'call_tool' },
+        {
+          contextEngine: { input: { messages: ['hello'] }, output: { tokens: 42 } },
+          stepIndex: 0,
+          stepType: 'call_llm',
+        },
+        // step 1 has no contextEngine — dedup must skip it and walk back to step 0
+        { stepIndex: 1, stepType: 'call_tool' },
       ];
       await appendStepWithCe(buildCeEvent(), prevSteps);
 
-      const ce = getSavedCeEvent(2);
-      expect(ce.input).toBeUndefined();
-      expect(ce.output).toBeUndefined();
+      const step = getSavedStep(2);
+      expect(step.contextEngine.input).toBeUndefined();
+      expect(step.contextEngine.output).toBeUndefined();
     });
 
     it('resolves input and output independently from different previous steps', async () => {
@@ -472,29 +488,25 @@ describe('OperationTraceRecorder', () => {
       // step 1 stored only output (input was stripped vs step 0)
       // New step 2 has the same input as step 0 and same output as step 1 → both deduped
       const prevSteps = [
-        {
-          events: [{ input: { messages: ['hello'] }, type: 'context_engine_result' }],
-          stepIndex: 0,
-          stepType: 'call_llm',
-        },
-        {
-          events: [{ output: { tokens: 42 }, type: 'context_engine_result' }],
-          stepIndex: 1,
-          stepType: 'call_llm',
-        },
+        { contextEngine: { input: { messages: ['hello'] } }, stepIndex: 0, stepType: 'call_llm' },
+        { contextEngine: { output: { tokens: 42 } }, stepIndex: 1, stepType: 'call_llm' },
       ];
       await appendStepWithCe(
         buildCeEvent({ input: { messages: ['hello'] }, output: { tokens: 42 } }),
         prevSteps,
       );
 
-      const ce = getSavedCeEvent(2);
-      expect(ce.input).toBeUndefined();
-      expect(ce.output).toBeUndefined();
+      const step = getSavedStep(2);
+      expect(step.contextEngine.input).toBeUndefined();
+      expect(step.contextEngine.output).toBeUndefined();
     });
 
-    it('is a no-op when the step has no context_engine_result event', async () => {
-      const prevStep = { events: [buildCeEvent()], stepIndex: 0, stepType: 'call_llm' };
+    it('sets contextEngine to undefined when the step has no context_engine_result event', async () => {
+      const prevStep = {
+        contextEngine: { input: { messages: ['hello'] }, output: { tokens: 42 } },
+        stepIndex: 0,
+        stepType: 'call_llm',
+      };
       store.loadPartial.mockResolvedValue({ startedAt: 1, steps: [prevStep] });
 
       await recorder.appendStep('op-ce', {
@@ -514,6 +526,7 @@ describe('OperationTraceRecorder', () => {
 
       const saved = store.savePartial.mock.calls[0][1];
       const newStep = saved.steps.find((s: any) => s.stepIndex === 1);
+      expect(newStep.contextEngine).toBeUndefined();
       expect(newStep.events.some((e: any) => e.type === 'context_engine_result')).toBe(false);
       expect(newStep.events.some((e: any) => e.type === 'tool_result')).toBe(true);
     });

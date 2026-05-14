@@ -75,7 +75,7 @@ export class OperationTraceRecorder {
 
       if (!partial.steps) partial.steps = [];
       const newStep = this.buildStepSnapshot(params);
-      this.deduplicateCeEvent(newStep, partial.steps);
+      this.deduplicateCeSnapshot(newStep, partial.steps);
       partial.steps.push(newStep);
 
       await this.store.savePartial(operationId, partial);
@@ -172,41 +172,37 @@ export class OperationTraceRecorder {
   }
 
   /**
-   * Strip `context_engine_result` input/output fields that are identical to the
-   * most-recently stored values in previous steps. The viewer reconstructs the
-   * full event by walking back through the step list (same pattern as
-   * messagesBaseline + messagesDelta).
+   * Strip `contextEngine` input/output fields that are identical to the most-recently
+   * stored values in previous steps. The viewer reconstructs the full snapshot by
+   * walking back through the step list (same pattern as messagesBaseline + messagesDelta).
    */
-  private deduplicateCeEvent(step: StepSnapshot, prevSteps: StepSnapshot[]): void {
-    const ceEvent = (step.events as any[] | undefined)?.find(
-      (e: any) => e.type === 'context_engine_result',
-    );
-    if (!ceEvent) return;
+  private deduplicateCeSnapshot(step: StepSnapshot, prevSteps: StepSnapshot[]): void {
+    if (!step.contextEngine) return;
 
-    // Walk backwards to find the last stored input and output.
     let lastInputJson: string | undefined;
     let lastOutputJson: string | undefined;
 
     for (let i = prevSteps.length - 1; i >= 0; i--) {
-      const prevCe = (prevSteps[i].events as any[] | undefined)?.find(
-        (e: any) => e.type === 'context_engine_result',
-      );
-      if (!prevCe) continue;
-      if (lastInputJson === undefined && prevCe.input !== undefined) {
-        lastInputJson = JSON.stringify(prevCe.input);
+      const prev = prevSteps[i];
+      if (!prev.contextEngine) continue;
+      if (lastInputJson === undefined && prev.contextEngine.input !== undefined) {
+        lastInputJson = JSON.stringify(prev.contextEngine.input);
       }
-      if (lastOutputJson === undefined && prevCe.output !== undefined) {
-        lastOutputJson = JSON.stringify(prevCe.output);
+      if (lastOutputJson === undefined && prev.contextEngine.output !== undefined) {
+        lastOutputJson = JSON.stringify(prev.contextEngine.output);
       }
       if (lastInputJson !== undefined && lastOutputJson !== undefined) break;
     }
 
-    if (lastInputJson !== undefined && JSON.stringify(ceEvent.input) === lastInputJson) {
-      delete ceEvent.input;
-    }
-    if (lastOutputJson !== undefined && JSON.stringify(ceEvent.output) === lastOutputJson) {
-      delete ceEvent.output;
-    }
+    const storeInput =
+      lastInputJson === undefined || JSON.stringify(step.contextEngine.input) !== lastInputJson;
+    const storeOutput =
+      lastOutputJson === undefined || JSON.stringify(step.contextEngine.output) !== lastOutputJson;
+
+    step.contextEngine = {
+      ...(storeInput ? { input: step.contextEngine.input } : {}),
+      ...(storeOutput ? { output: step.contextEngine.output } : {}),
+    };
   }
 
   private initPartialHeader(partial: any, agentState: any): void {
@@ -241,11 +237,21 @@ export class OperationTraceRecorder {
     const isBaseline = stepIndex === 0 || isCompression;
     const messagesDelta = afterMessages.slice(prevMessages.length);
 
+    // Extract context_engine_result into contextEngine (dedicated typed field).
+    // CE data is structural state, not a streaming event — it lives separately
+    // from events and uses the same delta pattern as messagesBaseline/messagesDelta.
+    const rawEvents = (stepResult.events as any[]) ?? [];
+    const ceEvent = rawEvents.find((e: any) => e.type === 'context_engine_result') as any;
+    const contextEngine: StepSnapshot['contextEngine'] = ceEvent
+      ? { input: ceEvent.input, output: ceEvent.output }
+      : undefined;
+
     // Strip heavy/redundant data from events before persisting to snapshot.
+    // context_engine_result is excluded — stored in contextEngine instead.
     const snapshotEvents = [
       ...beforeStepSignalEvents,
-      ...((stepResult.events as any[])
-        ?.filter((e) => e.type !== 'llm_stream')
+      ...rawEvents
+        .filter((e) => e.type !== 'llm_stream' && e.type !== 'context_engine_result')
         .map((e) => {
           if (e.type === 'done' && e.finalState) {
             // Remove reconstructible fields from finalState:
@@ -264,7 +270,7 @@ export class OperationTraceRecorder {
             return { ...e, finalState: restState };
           }
           return e;
-        }) ?? []),
+        }),
       ...afterStepSignalEvents,
     ];
 
@@ -289,6 +295,7 @@ export class OperationTraceRecorder {
 
     return {
       activatedStepToolsDelta,
+      contextEngine,
       completedAt: Date.now(),
       content: presentation.content,
       context: {
