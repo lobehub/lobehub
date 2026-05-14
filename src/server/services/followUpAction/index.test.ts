@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { DEFAULT_SYSTEM_AGENT_CONFIG } from '@lobechat/const';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as ModelRuntimeModule from '@/server/modules/ModelRuntime';
@@ -33,6 +34,8 @@ describe('FollowUpActionService.extract', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    delete process.env.FOLLOW_UP_ACTION_MODEL;
+    delete process.env.FOLLOW_UP_ACTION_PROVIDER;
   });
 
   it('returns empty (with empty messageId) when no eligible assistant message found', async () => {
@@ -61,6 +64,83 @@ describe('FollowUpActionService.extract', () => {
     expect(result.messageId).toBe(FOUND_MSG);
     expect(result.chips).toHaveLength(3);
     expect(result.chips[0].label).toBe('Lumi');
+  });
+
+  it('uses the caller-provided scene model config for extraction', async () => {
+    queryFindFirstSpy.mockResolvedValue({
+      id: FOUND_MSG,
+      content: 'What would you like to call me?',
+    });
+    runtimeMock.generateObject.mockResolvedValue({ chips: [] });
+
+    await svc.extract({
+      topicId: TEST_TOPIC,
+      modelConfig: {
+        model: 'custom-scene-model',
+        provider: 'custom-provider',
+      },
+    });
+
+    expect(ModelRuntimeModule.initModelRuntimeFromDB).toHaveBeenCalledWith(
+      dbMock,
+      TEST_USER,
+      'custom-provider',
+    );
+    expect(runtimeMock.generateObject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: 'custom-scene-model',
+      }),
+    );
+  });
+
+  it('lets the caller-provided scene model config take priority over env overrides', async () => {
+    process.env.FOLLOW_UP_ACTION_MODEL = 'env-model';
+    process.env.FOLLOW_UP_ACTION_PROVIDER = 'env-provider';
+    queryFindFirstSpy.mockResolvedValue({
+      id: FOUND_MSG,
+      content: 'What would you like to call me?',
+    });
+    runtimeMock.generateObject.mockResolvedValue({ chips: [] });
+
+    await svc.extract({
+      topicId: TEST_TOPIC,
+      modelConfig: {
+        model: 'scene-model',
+        provider: 'scene-provider',
+      },
+    });
+
+    expect(ModelRuntimeModule.initModelRuntimeFromDB).toHaveBeenCalledWith(
+      dbMock,
+      TEST_USER,
+      'scene-provider',
+    );
+    expect(runtimeMock.generateObject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: 'scene-model',
+      }),
+    );
+  });
+
+  it('falls back to the generic topic system agent when no scene model config is provided', async () => {
+    queryFindFirstSpy.mockResolvedValue({
+      id: FOUND_MSG,
+      content: 'What would you like to call me?',
+    });
+    runtimeMock.generateObject.mockResolvedValue({ chips: [] });
+
+    await svc.extract({ topicId: TEST_TOPIC });
+
+    expect(ModelRuntimeModule.initModelRuntimeFromDB).toHaveBeenCalledWith(
+      dbMock,
+      TEST_USER,
+      DEFAULT_SYSTEM_AGENT_CONFIG.topic.provider,
+    );
+    expect(runtimeMock.generateObject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: DEFAULT_SYSTEM_AGENT_CONFIG.topic.model,
+      }),
+    );
   });
 
   it('truncates more than 4 chips', async () => {

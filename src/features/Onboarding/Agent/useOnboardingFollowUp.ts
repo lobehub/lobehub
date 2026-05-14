@@ -1,3 +1,4 @@
+import type { FollowUpModelConfig } from '@lobechat/types';
 import { useCallback } from 'react';
 
 import { useFollowUpActionStore } from '@/store/followUpAction';
@@ -6,6 +7,7 @@ import type { OnboardingPhase } from '@/types/user';
 interface UseOnboardingFollowUpParams {
   enabled: boolean;
   isGreeting: boolean;
+  modelConfig?: FollowUpModelConfig;
 }
 
 interface OnboardingFollowUpHandlers {
@@ -16,6 +18,7 @@ interface OnboardingFollowUpHandlers {
 export const useOnboardingFollowUp = ({
   enabled,
   isGreeting,
+  modelConfig,
 }: UseOnboardingFollowUpParams): OnboardingFollowUpHandlers => {
   const triggerExtract = useCallback(
     async (topicId: string, phase: OnboardingPhase | undefined) => {
@@ -24,9 +27,15 @@ export const useOnboardingFollowUp = ({
       if (phase === 'summary') return;
       if (isGreeting) return;
 
-      await useFollowUpActionStore.getState().fetchFor(topicId, { kind: 'onboarding', phase });
+      const hint = { kind: 'onboarding', phase } as const;
+      if (modelConfig) {
+        await useFollowUpActionStore.getState().fetchFor(topicId, hint, modelConfig);
+        return;
+      }
+
+      await useFollowUpActionStore.getState().fetchFor(topicId, hint);
     },
-    [enabled, isGreeting],
+    [enabled, isGreeting, modelConfig],
   );
 
   const onBeforeSendMessage = useCallback(async () => {

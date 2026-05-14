@@ -63,6 +63,27 @@ describe('useOnboardingFollowUp', () => {
     });
   });
 
+  it('triggerExtract passes the scene model config when provided', async () => {
+    const modelConfig = {
+      model: 'scene-model',
+      provider: 'scene-provider',
+    };
+    const { result } = renderHook(() =>
+      useOnboardingFollowUp({ enabled: true, isGreeting: false, modelConfig }),
+    );
+
+    await result.current.triggerExtract('topic-1', 'discovery');
+
+    expect(fetchFor).toHaveBeenCalledWith(
+      'topic-1',
+      {
+        kind: 'onboarding',
+        phase: 'discovery',
+      },
+      modelConfig,
+    );
+  });
+
   it('onBeforeSendMessage clears when enabled', async () => {
     const { result } = renderHook(() =>
       useOnboardingFollowUp({ enabled: true, isGreeting: false }),

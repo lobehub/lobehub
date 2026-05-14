@@ -1,4 +1,4 @@
-import type { FollowUpChip, FollowUpHint } from '@lobechat/types';
+import type { FollowUpChip, FollowUpHint, FollowUpModelConfig } from '@lobechat/types';
 
 import { followUpActionService } from '@/services/followUpAction';
 import { type StoreSetter } from '@/store/types';
@@ -27,7 +27,11 @@ export class FollowUpActionImpl {
     this.#get = get;
   }
 
-  fetchFor = async (topicId: string, hint?: FollowUpHint): Promise<void> => {
+  fetchFor = async (
+    topicId: string,
+    hint?: FollowUpHint,
+    modelConfig?: FollowUpModelConfig,
+  ): Promise<void> => {
     const cur = this.#get();
     // Dedupe: skip if already loading/ready for the same topic
     if (cur.pendingTopicId === topicId && cur.status !== 'idle') return;
@@ -50,7 +54,10 @@ export class FollowUpActionImpl {
       'fetchFor:start',
     );
 
-    const result = await followUpActionService.extract({ hint, topicId }, controller.signal);
+    const result = await followUpActionService.extract(
+      { hint, modelConfig, topicId },
+      controller.signal,
+    );
     clearTimeout(timeoutId);
 
     // Discard stale results: if the active controller in state is no longer

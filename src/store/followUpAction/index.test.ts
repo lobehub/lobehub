@@ -34,6 +34,30 @@ describe('useFollowUpActionStore', () => {
     expect(useFollowUpActionStore.getState().topicId).toBe(TOPIC);
   });
 
+  it('fetchFor forwards modelConfig to the service', async () => {
+    const spy = vi.spyOn(followUpActionService, 'extract').mockResolvedValue({
+      messageId: MSG,
+      chips: [{ label: 'a', message: 'a' }],
+    });
+    const modelConfig = {
+      model: 'scene-model',
+      provider: 'scene-provider',
+    };
+
+    await useFollowUpActionStore
+      .getState()
+      .fetchFor(TOPIC, { kind: 'onboarding', phase: 'discovery' }, modelConfig);
+
+    expect(spy).toHaveBeenCalledWith(
+      {
+        hint: { kind: 'onboarding', phase: 'discovery' },
+        modelConfig,
+        topicId: TOPIC,
+      },
+      expect.any(AbortSignal),
+    );
+  });
+
   it('fetchFor returns idle when service returns null', async () => {
     vi.spyOn(followUpActionService, 'extract').mockResolvedValue(null);
     await useFollowUpActionStore.getState().fetchFor(TOPIC);
