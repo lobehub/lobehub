@@ -11,6 +11,11 @@ const TIMEOUT_MS = 20_000;
 
 type Setter = StoreSetter<FollowUpActionStore>;
 
+interface FetchForParams {
+  hint?: FollowUpHint;
+  modelConfig: FollowUpModelConfig;
+}
+
 export const createFollowUpActionSlice = (
   set: Setter,
   get: () => FollowUpActionStore,
@@ -27,11 +32,7 @@ export class FollowUpActionImpl {
     this.#get = get;
   }
 
-  fetchFor = async (
-    topicId: string,
-    hint?: FollowUpHint,
-    modelConfig?: FollowUpModelConfig,
-  ): Promise<void> => {
+  fetchFor = async (topicId: string, params: FetchForParams): Promise<void> => {
     const cur = this.#get();
     // Dedupe: skip if already loading/ready for the same topic
     if (cur.pendingTopicId === topicId && cur.status !== 'idle') return;
@@ -54,10 +55,7 @@ export class FollowUpActionImpl {
       'fetchFor:start',
     );
 
-    const result = await followUpActionService.extract(
-      { hint, modelConfig, topicId },
-      controller.signal,
-    );
+    const result = await followUpActionService.extract({ ...params, topicId }, controller.signal);
     clearTimeout(timeoutId);
 
     // Discard stale results: if the active controller in state is no longer

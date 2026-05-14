@@ -7,7 +7,7 @@ import type { OnboardingPhase } from '@/types/user';
 interface UseOnboardingFollowUpParams {
   enabled: boolean;
   isGreeting: boolean;
-  modelConfig?: FollowUpModelConfig;
+  modelConfig: FollowUpModelConfig;
 }
 
 interface OnboardingFollowUpHandlers {
@@ -27,13 +27,10 @@ export const useOnboardingFollowUp = ({
       if (phase === 'summary') return;
       if (isGreeting) return;
 
-      const hint = { kind: 'onboarding', phase } as const;
-      if (modelConfig) {
-        await useFollowUpActionStore.getState().fetchFor(topicId, hint, modelConfig);
-        return;
-      }
-
-      await useFollowUpActionStore.getState().fetchFor(topicId, hint);
+      await useFollowUpActionStore.getState().fetchFor(topicId, {
+        hint: { kind: 'onboarding', phase },
+        modelConfig,
+      });
     },
     [enabled, isGreeting, modelConfig],
   );

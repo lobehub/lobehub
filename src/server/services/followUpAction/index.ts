@@ -1,10 +1,4 @@
-import { DEFAULT_SYSTEM_AGENT_CONFIG } from '@lobechat/const';
-import type {
-  FollowUpChip,
-  FollowUpExtractInput,
-  FollowUpExtractResult,
-  FollowUpModelConfig,
-} from '@lobechat/types';
+import type { FollowUpChip, FollowUpExtractInput, FollowUpExtractResult } from '@lobechat/types';
 import debug from 'debug';
 
 import type { LobeChatDatabase } from '@/database/type';
@@ -52,7 +46,7 @@ export class FollowUpActionService {
     if (!text) return EMPTY_RESULT(row.id);
 
     const { system, user } = buildSuggestionPrompt({ assistantText: text, hint });
-    const { model, provider } = this.getModelConfig(modelConfig);
+    const { model, provider } = modelConfig;
 
     let raw: unknown;
     try {
@@ -87,21 +81,5 @@ export class FollowUpActionService {
       .slice(0, 4);
 
     return { chips, messageId: row.id };
-  }
-
-  private getModelConfig(modelConfig?: FollowUpModelConfig): FollowUpModelConfig {
-    if (modelConfig) return modelConfig;
-
-    const overrideModel = process.env.FOLLOW_UP_ACTION_MODEL;
-    const overrideProvider = process.env.FOLLOW_UP_ACTION_PROVIDER;
-    if (overrideModel && overrideProvider) {
-      return { model: overrideModel, provider: overrideProvider };
-    }
-
-    const fallback = DEFAULT_SYSTEM_AGENT_CONFIG.topic;
-    return {
-      model: overrideModel ?? fallback.model,
-      provider: overrideProvider ?? fallback.provider,
-    };
   }
 }

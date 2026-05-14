@@ -7,6 +7,8 @@ import { useFollowUpActionStore } from './store';
 const TOPIC = 'topic-1';
 const NEW_TOPIC = 'topic-2';
 const MSG = 'msg-real';
+const MODEL_CONFIG = { model: 'scene-model', provider: 'scene-provider' };
+const FETCH_PARAMS = { modelConfig: MODEL_CONFIG };
 
 describe('useFollowUpActionStore', () => {
   beforeEach(() => {
@@ -24,7 +26,7 @@ describe('useFollowUpActionStore', () => {
       chips: [{ label: 'a', message: 'a' }],
     });
 
-    const promise = useFollowUpActionStore.getState().fetchFor(TOPIC);
+    const promise = useFollowUpActionStore.getState().fetchFor(TOPIC, FETCH_PARAMS);
     expect(useFollowUpActionStore.getState().status).toBe('loading');
     await promise;
     expect(spy).toHaveBeenCalledOnce();
@@ -39,19 +41,15 @@ describe('useFollowUpActionStore', () => {
       messageId: MSG,
       chips: [{ label: 'a', message: 'a' }],
     });
-    const modelConfig = {
-      model: 'scene-model',
-      provider: 'scene-provider',
-    };
-
-    await useFollowUpActionStore
-      .getState()
-      .fetchFor(TOPIC, { kind: 'onboarding', phase: 'discovery' }, modelConfig);
+    await useFollowUpActionStore.getState().fetchFor(TOPIC, {
+      hint: { kind: 'onboarding', phase: 'discovery' },
+      modelConfig: MODEL_CONFIG,
+    });
 
     expect(spy).toHaveBeenCalledWith(
       {
         hint: { kind: 'onboarding', phase: 'discovery' },
-        modelConfig,
+        modelConfig: MODEL_CONFIG,
         topicId: TOPIC,
       },
       expect.any(AbortSignal),
@@ -60,7 +58,7 @@ describe('useFollowUpActionStore', () => {
 
   it('fetchFor returns idle when service returns null', async () => {
     vi.spyOn(followUpActionService, 'extract').mockResolvedValue(null);
-    await useFollowUpActionStore.getState().fetchFor(TOPIC);
+    await useFollowUpActionStore.getState().fetchFor(TOPIC, FETCH_PARAMS);
     expect(useFollowUpActionStore.getState().status).toBe('idle');
     expect(useFollowUpActionStore.getState().chips).toHaveLength(0);
     expect(useFollowUpActionStore.getState().messageId).toBeUndefined();
@@ -68,7 +66,7 @@ describe('useFollowUpActionStore', () => {
 
   it('fetchFor returns idle when service returns empty messageId', async () => {
     vi.spyOn(followUpActionService, 'extract').mockResolvedValue({ chips: [], messageId: '' });
-    await useFollowUpActionStore.getState().fetchFor(TOPIC);
+    await useFollowUpActionStore.getState().fetchFor(TOPIC, FETCH_PARAMS);
     expect(useFollowUpActionStore.getState().status).toBe('idle');
     expect(useFollowUpActionStore.getState().messageId).toBeUndefined();
   });
@@ -77,8 +75,8 @@ describe('useFollowUpActionStore', () => {
     const spy = vi
       .spyOn(followUpActionService, 'extract')
       .mockImplementation(() => new Promise(() => {}));
-    const p1 = useFollowUpActionStore.getState().fetchFor(TOPIC);
-    const p2 = useFollowUpActionStore.getState().fetchFor(TOPIC);
+    const p1 = useFollowUpActionStore.getState().fetchFor(TOPIC, FETCH_PARAMS);
+    const p2 = useFollowUpActionStore.getState().fetchFor(TOPIC, FETCH_PARAMS);
     void p1;
     void p2;
     expect(spy).toHaveBeenCalledTimes(1);
@@ -90,17 +88,17 @@ describe('useFollowUpActionStore', () => {
       if (!firstSignal) firstSignal = signal;
       return new Promise(() => {});
     });
-    const p1 = useFollowUpActionStore.getState().fetchFor(TOPIC);
+    const p1 = useFollowUpActionStore.getState().fetchFor(TOPIC, FETCH_PARAMS);
     void p1;
     await Promise.resolve();
     await Promise.resolve();
-    void useFollowUpActionStore.getState().fetchFor(NEW_TOPIC);
+    void useFollowUpActionStore.getState().fetchFor(NEW_TOPIC, FETCH_PARAMS);
     expect(firstSignal?.aborted).toBe(true);
   });
 
   it('clear() aborts and resets state', async () => {
     vi.spyOn(followUpActionService, 'extract').mockImplementation(() => new Promise(() => {}));
-    const p = useFollowUpActionStore.getState().fetchFor(TOPIC);
+    const p = useFollowUpActionStore.getState().fetchFor(TOPIC, FETCH_PARAMS);
     void p;
     useFollowUpActionStore.getState().clear();
     expect(useFollowUpActionStore.getState().status).toBe('idle');
@@ -114,7 +112,7 @@ describe('useFollowUpActionStore', () => {
       signal = s;
       return new Promise(() => {});
     });
-    const p = useFollowUpActionStore.getState().fetchFor(TOPIC);
+    const p = useFollowUpActionStore.getState().fetchFor(TOPIC, FETCH_PARAMS);
     void p;
     await Promise.resolve();
     vi.advanceTimersByTime(20_000);
@@ -148,7 +146,7 @@ describe('useFollowUpActionStore', () => {
       });
 
     // First fetchFor is in flight (does not yet resolve).
-    const p1 = useFollowUpActionStore.getState().fetchFor(TOPIC);
+    const p1 = useFollowUpActionStore.getState().fetchFor(TOPIC, FETCH_PARAMS);
     void p1;
     await Promise.resolve();
 
@@ -157,7 +155,7 @@ describe('useFollowUpActionStore', () => {
     expect(useFollowUpActionStore.getState().status).toBe('idle');
 
     // Next turn starts another fetchFor for the SAME topic.
-    const p2 = useFollowUpActionStore.getState().fetchFor(TOPIC);
+    const p2 = useFollowUpActionStore.getState().fetchFor(TOPIC, FETCH_PARAMS);
 
     // The first call now resolves with a stale result. It must be discarded
     // because its controller is no longer the active one — even though the
@@ -180,7 +178,7 @@ describe('useFollowUpActionStore', () => {
       signal = s;
       return new Promise(() => {});
     });
-    const p = useFollowUpActionStore.getState().fetchFor(TOPIC);
+    const p = useFollowUpActionStore.getState().fetchFor(TOPIC, FETCH_PARAMS);
     void p;
     await Promise.resolve();
     useFollowUpActionStore.getState().reset();
