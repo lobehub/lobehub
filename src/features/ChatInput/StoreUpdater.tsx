@@ -30,6 +30,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     allowExpand,
     slashPlacement,
     getMessages,
+    voiceConversationRuntime,
   }) => {
     const storeApi = useStoreApi();
     const useStoreUpdater = createStoreUpdater(storeApi);
@@ -45,6 +46,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     useStoreUpdater('disableSlash', disableSlash);
     useStoreUpdater('slashPlacement', slashPlacement);
     useStoreUpdater('getMessages', getMessages);
+    useStoreUpdater('voiceConversationRuntime', voiceConversationRuntime);
 
     useStoreUpdater('sendButtonProps', sendButtonProps);
     useStoreUpdater('onSend', onSend);

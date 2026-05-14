@@ -87,7 +87,7 @@ describe('useAgentMeta', () => {
     expect(result.current.description).toBe('Inbox description');
   });
 
-  it('should fallback to Lobe AI title for builtin agent without custom title', () => {
+  it('should fallback to Chinna title for builtin agent without custom title', () => {
     const mockInboxAgentId = 'inbox-agent-id';
     const mockMeta = {
       avatar: '/icons/icon-lobe.png',
@@ -113,7 +113,7 @@ describe('useAgentMeta', () => {
     const { result } = renderHook(() => useAgentMeta());
 
     expect(result.current.avatar).toBe('/icons/icon-lobe.png');
-    expect(result.current.title).toBe('Lobe AI');
+    expect(result.current.title).toBe('Chinna AI');
   });
 
   it('should preserve custom title for page agent (builtin)', () => {

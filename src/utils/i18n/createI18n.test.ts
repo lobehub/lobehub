@@ -15,34 +15,34 @@ describe('createI18nNext', () => {
   it('initializes synchronously with bundled fallback resources and reloads the actual language in background', async () => {
     const { createI18nNext } = await import('@/locales/create');
 
-    const i18n = createI18nNext('zh-CN');
+    const i18n = createI18nNext('te-IN');
     const reloadSpy = vi.spyOn(i18n.instance, 'reloadResources');
     const initPromise = i18n.init({ initAsync: false });
 
     expect(i18n.instance.isInitialized).toBe(true);
-    expect(i18n.instance.getResource('zh-CN', 'common', 'copy')).toBeDefined();
+    expect(i18n.instance.getResource('te-IN', 'common', 'copy')).toBeDefined();
 
     await initPromise;
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(i18n.instance.hasResourceBundle('zh-CN', 'common')).toBe(true);
-    expect(i18n.instance.hasResourceBundle('zh-CN', 'chat')).toBe(true);
-    expect(i18n.instance.hasResourceBundle('zh-CN', 'error')).toBe(true);
-    expect(i18n.instance.hasResourceBundle('zh-CN', 'home')).toBe(true);
+    expect(i18n.instance.hasResourceBundle('te-IN', 'common')).toBe(true);
+    expect(i18n.instance.hasResourceBundle('te-IN', 'chat')).toBe(true);
+    expect(i18n.instance.hasResourceBundle('te-IN', 'error')).toBe(true);
+    expect(i18n.instance.hasResourceBundle('te-IN', 'home')).toBe(true);
 
-    expect(reloadSpy).toHaveBeenCalledWith(['zh-CN'], ['chat', 'common', 'error', 'home']);
+    expect(reloadSpy).toHaveBeenCalledWith(['te-IN'], ['chat', 'common', 'error', 'home']);
     expect(loadI18nNamespaceModule).toHaveBeenCalledWith(
-      expect.objectContaining({ lng: 'zh-CN', ns: 'common' }),
+      expect.objectContaining({ lng: 'te-IN', ns: 'common' }),
     );
     expect(loadI18nNamespaceModule).toHaveBeenCalledWith(
-      expect.objectContaining({ lng: 'zh-CN', ns: 'chat' }),
+      expect.objectContaining({ lng: 'te-IN', ns: 'chat' }),
     );
     expect(loadI18nNamespaceModule).toHaveBeenCalledWith(
-      expect.objectContaining({ lng: 'zh-CN', ns: 'error' }),
+      expect.objectContaining({ lng: 'te-IN', ns: 'error' }),
     );
     expect(loadI18nNamespaceModule).toHaveBeenCalledWith(
-      expect.objectContaining({ lng: 'zh-CN', ns: 'home' }),
+      expect.objectContaining({ lng: 'te-IN', ns: 'home' }),
     );
   });
 });

@@ -1,13 +1,13 @@
 {
   "compilerOptions": {
-    "module": "CommonJS",
+    "module": "ESNext",
     "target": "ESNext",
     "lib": ["dom", "dom.iterable", "esnext"],
     "sourceMap": true,
     "skipDefaultLibCheck": true,
     "jsx": "react-jsx",
     "allowSyntheticDefaultImports": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "forceConsistentCasingInFileNames": true,
     "noImplicitReturns": true,
     "noUnusedLocals": true,

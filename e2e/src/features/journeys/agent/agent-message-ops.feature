@@ -4,7 +4,7 @@ Feature: Agent 消息操作用户体验链路
 
   Background:
     Given 用户已登录系统
-    And 用户进入 Lobe AI 对话页面
+    And 用户进入 Chinna 对话页面
     And 用户已发送消息 "hello"
 
   @AGENT-MSG-001 @P1

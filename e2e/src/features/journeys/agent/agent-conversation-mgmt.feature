@@ -4,7 +4,7 @@ Feature: Agent 对话管理用户体验链路
 
   Background:
     Given 用户已登录系统
-    And 用户进入 Lobe AI 对话页面
+    And 用户进入 Chinna 对话页面
 
   @AGENT-CONV-001 @P0
   Scenario: 创建新对话

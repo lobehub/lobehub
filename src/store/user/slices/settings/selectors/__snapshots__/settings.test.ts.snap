@@ -97,6 +97,16 @@ exports[`settingsSelectors > currentTTS > should merge DEFAULT_TTS_CONFIG and s.
   },
   "sttAutoStop": false,
   "sttServer": "openai",
+  "voiceCall": {
+    "autoSpeak": true,
+    "enabled": true,
+    "mode": "hybrid",
+    "openAIRealtimeModel": "gpt-realtime",
+    "provider": "auto",
+  },
+  "voiceInput": {
+    "enabled": true,
+  },
 }
 `;
 

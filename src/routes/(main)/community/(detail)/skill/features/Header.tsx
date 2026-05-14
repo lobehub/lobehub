@@ -1,7 +1,6 @@
 'use client';
 
-import { Github } from '@lobehub/icons';
-import { ActionIcon, Avatar, Button, Flexbox, Icon, stopPropagation, Text } from '@lobehub/ui';
+import { Avatar, Button, Flexbox, Icon, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   DotIcon,
@@ -60,7 +59,6 @@ const formatCompactNumber = (num?: number): string => {
 const Header = memo<{ mobile?: boolean }>(({ mobile }) => {
   const {
     name,
-    author,
     version,
     identifier,
     updatedAt,
@@ -68,8 +66,6 @@ const Header = memo<{ mobile?: boolean }>(({ mobile }) => {
     ratingAverage,
     category,
     installCount,
-    github,
-    homepage,
     resources,
     comments,
     license,
@@ -142,18 +138,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile }) => {
               </Text>
               {!mobile && scores}
             </Flexbox>
-            <Flexbox horizontal align={'center'} gap={6}>
-              {homepage && (
-                <a
-                  href={homepage}
-                  rel="noopener noreferrer"
-                  target={'_blank'}
-                  onClick={stopPropagation}
-                >
-                  <ActionIcon fill={cssVar.colorTextDescription} icon={Github} />
-                </a>
-              )}
-            </Flexbox>
+            <Flexbox horizontal align={'center'} gap={6} />
           </Flexbox>
           <Flexbox horizontal align={'center'} gap={4}>
             {Boolean(ratingAverage) ? (
@@ -163,14 +148,6 @@ const Header = memo<{ mobile?: boolean }>(({ mobile }) => {
               </Flexbox>
             ) : (
               <div className={styles.version}>{version}</div>
-            )}
-            <Icon icon={DotIcon} />
-            {author?.url ? (
-              <a href={author.url} rel="noopener noreferrer" target={'_blank'}>
-                {author.name}
-              </a>
-            ) : (
-              <span>{author?.name}</span>
             )}
             <Icon icon={DotIcon} />
             <PublishedTime
@@ -203,12 +180,6 @@ const Header = memo<{ mobile?: boolean }>(({ mobile }) => {
             <Flexbox horizontal align={'center'} gap={6}>
               <Icon icon={DownloadIcon} size={14} />
               {formatCompactNumber(installCount)}
-            </Flexbox>
-          )}
-          {Boolean(github?.stars) && (
-            <Flexbox horizontal align={'center'} gap={6}>
-              <Icon icon={StarIcon} size={14} />
-              {formatCompactNumber(github?.stars)}
             </Flexbox>
           )}
           {Boolean(comments?.totalCount) && (

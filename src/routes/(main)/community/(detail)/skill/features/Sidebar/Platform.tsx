@@ -1,6 +1,6 @@
 'use client';
 
-import { DEFAULT_INBOX_AVATAR, SESSION_CHAT_URL } from '@lobechat/const';
+import { SESSION_CHAT_URL } from '@lobechat/const';
 import { Claude, Cline, Cursor, OpenAI } from '@lobehub/icons';
 import {
   Avatar,
@@ -193,9 +193,9 @@ const Platform = memo<PlatformProps>(
 
     const command = genInstallCommand(identifier, active);
 
-    const agentPrompt = `Curl https://lobehub.com/skills/${identifier}/skill.md, then follow the instructions to set up LobeHub Skills Marketplace and install the skill. Once installed, read the SKILL.md file in the installed directory and follow its instructions to complete the task.`;
+    const agentPrompt = `Curl https://chinnahub.com/skills/${identifier}/skill.md, then follow the instructions to set up ChinnaHub Skills Marketplace and install the skill. Once installed, read the SKILL.md file in the installed directory and follow its instructions to complete the task.`;
 
-    const handleUseOnLobeAI = useCallback(() => {
+    const handleUseOnChinnaHub = useCallback(() => {
       if (!inboxAgentId) return;
 
       // Send message to LobeAI
@@ -254,10 +254,10 @@ const Platform = memo<PlatformProps>(
             <Flexbox padding={8}>
               <Button
                 block
-                icon={<Avatar avatar={DEFAULT_INBOX_AVATAR} size={18} />}
+                icon={<Avatar avatar={'/icons/icon-bot-192.png'} size={18} />}
                 size={'large'}
                 type={'primary'}
-                onClick={handleUseOnLobeAI}
+                onClick={handleUseOnChinnaHub}
               >
                 {t('skills.details.sidebar.agent.useOnLobeAI')}
               </Button>

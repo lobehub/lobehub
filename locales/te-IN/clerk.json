@@ -1,0 +1,769 @@
+{
+  "backButton": "వెనుకకు",
+  "badge__default": "డిఫాల్ట్",
+  "badge__otherImpersonatorDevice": "ఇతర వేషధారణ పరికరం",
+  "badge__primary": "ప్రాథమిక",
+  "badge__requiresAction": "చర్య అవసరం",
+  "badge__thisDevice": "ఈ పరికరం",
+  "badge__unverified": "ధృవీకరించబడలేదు",
+  "badge__userDevice": "వినియోగదారు పరికరం",
+  "badge__you": "మీరు",
+  "createOrganization": {
+    "formButtonSubmit": "సంస్థను సృష్టించండి",
+    "invitePage": {
+      "formButtonReset": "దాటవేయి"
+    },
+    "title": "సంస్థను సృష్టించండి"
+  },
+  "dates": {
+    "lastDay": "నిన్న {{ date | timeString('en-US') }} వద్ద",
+    "next6Days": "{{ date | weekday('en-US','long') }} వద్ద {{ date | timeString('en-US') }}",
+    "nextDay": "రేపు {{ date | timeString('en-US') }} వద్ద",
+    "numeric": "__ముసుగు_0__",
+    "previous6Days": "చివరి {{ date | weekday('en-US','long') }} వద్ద {{ date | timeString('en-US') }}",
+    "sameDay": "ఈరోజు {{ date | timeString('en-US') }} వద్ద"
+  },
+  "dividerText": "లేదా",
+  "footerActionLink__useAnotherMethod": "మరొక పద్ధతిని ఉపయోగించండి",
+  "footerPageLink__help": "సహాయం",
+  "footerPageLink__privacy": "గోప్యత",
+  "footerPageLink__terms": "నిబంధనలు",
+  "formButtonPrimary": "కొనసాగించు",
+  "formButtonPrimary__verify": "ధృవీకరించండి",
+  "formFieldAction__forgotPassword": "పాస్‌వర్డ్ మర్చిపోయారా?",
+  "formFieldError__matchingPasswords": "పాస్‌వర్డ్‌లు సరిపోతాయి.",
+  "formFieldError__notMatchingPasswords": "పాస్‌వర్డ్‌లు సరిపోలడం లేదు.",
+  "formFieldError__verificationLinkExpired": "ధృవీకరణ లింక్ గడువు ముగిసింది. దయచేసి కొత్త లింక్‌ను అభ్యర్థించండి.",
+  "formFieldHintText__optional": "ఐచ్ఛికం",
+  "formFieldHintText__slug": "స్లగ్ అనేది మానవులు చదవగలిగే ID, అది తప్పనిసరిగా ప్రత్యేకంగా ఉండాలి. ఇది తరచుగా URLsలో ఉపయోగించబడుతుంది.",
+  "formFieldInputPlaceholder__backupCode": "",
+  "formFieldInputPlaceholder__confirmDeletionUserAccount": "ఖాతాను తొలగించండి",
+  "formFieldInputPlaceholder__emailAddress": "",
+  "formFieldInputPlaceholder__emailAddress_username": "",
+  "formFieldInputPlaceholder__emailAddresses": "example@email.com, example2@email.com",
+  "formFieldInputPlaceholder__firstName": "",
+  "formFieldInputPlaceholder__lastName": "",
+  "formFieldInputPlaceholder__organizationDomain": "",
+  "formFieldInputPlaceholder__organizationDomainEmailAddress": "",
+  "formFieldInputPlaceholder__organizationName": "",
+  "formFieldInputPlaceholder__organizationSlug": "my-org",
+  "formFieldInputPlaceholder__password": "",
+  "formFieldInputPlaceholder__phoneNumber": "",
+  "formFieldInputPlaceholder__username": "",
+  "formFieldLabel__automaticInvitations": "ఈ డొమైన్ కోసం ఆటోమేటిక్ ఆహ్వానాలను ప్రారంభించండి",
+  "formFieldLabel__backupCode": "బ్యాకప్ కోడ్",
+  "formFieldLabel__confirmDeletion": "నిర్ధారణ",
+  "formFieldLabel__confirmPassword": "పాస్వర్డ్ను నిర్ధారించండి",
+  "formFieldLabel__currentPassword": "ప్రస్తుత పాస్వర్డ్",
+  "formFieldLabel__emailAddress": "Email చిరునామా",
+  "formFieldLabel__emailAddress_username": "Email చిరునామా లేదా వినియోగదారు పేరు",
+  "formFieldLabel__emailAddresses": "Email చిరునామాలు",
+  "formFieldLabel__firstName": "మొదటి పేరు",
+  "formFieldLabel__lastName": "ఇంటిపేరు",
+  "formFieldLabel__newPassword": "కొత్త పాస్‌వర్డ్",
+  "formFieldLabel__organizationDomain": "డొమైన్",
+  "formFieldLabel__organizationDomainDeletePending": "పెండింగ్‌లో ఉన్న ఆహ్వానాలు మరియు సూచనలను తొలగించండి",
+  "formFieldLabel__organizationDomainEmailAddress": "ధృవీకరణ ఇమెయిల్ చిరునామా",
+  "formFieldLabel__organizationDomainEmailAddressDescription": "కోడ్‌ను స్వీకరించడానికి మరియు ఈ డొమైన్‌ను ధృవీకరించడానికి ఈ డొమైన్ కింద ఇమెయిల్ చిరునామాను నమోదు చేయండి.",
+  "formFieldLabel__organizationName": "పేరు",
+  "formFieldLabel__organizationSlug": "స్లగ్",
+  "formFieldLabel__passkeyName": "పాస్‌కీ పేరు",
+  "formFieldLabel__password": "పాస్వర్డ్",
+  "formFieldLabel__phoneNumber": "ఫోన్ నంబర్",
+  "formFieldLabel__role": "పాత్ర",
+  "formFieldLabel__signOutOfOtherSessions": "అన్ని ఇతర పరికరాల నుండి సైన్ అవుట్ చేయండి",
+  "formFieldLabel__username": "Username",
+  "impersonationFab": {
+    "action__signOut": "సైన్ అవుట్ చేయండి",
+    "title": "{{identifier}}గా సైన్ ఇన్ చేసారు"
+  },
+  "locale": "en-US",
+  "maintenanceMode": "మేము ప్రస్తుతం నిర్వహణలో ఉన్నాము, కానీ చింతించకండి, దీనికి కొన్ని నిమిషాల కంటే ఎక్కువ సమయం పట్టదు.",
+  "membershipRole__admin": "అడ్మిన్",
+  "membershipRole__basicMember": "సభ్యుడు",
+  "membershipRole__guestMember": "అతిథి",
+  "organizationList": {
+    "action__createOrganization": "సంస్థను సృష్టించండి",
+    "action__invitationAccept": "చేరండి",
+    "action__suggestionsAccept": "చేరాలని అభ్యర్థన",
+    "createOrganization": "సంస్థను సృష్టించండి",
+    "invitationAcceptedLabel": "చేరారు",
+    "subtitle": "{{applicationName}}కి కొనసాగడానికి",
+    "suggestionsAcceptedLabel": "ఆమోదం పెండింగ్‌లో ఉంది",
+    "title": "ఖాతాను ఎంచుకోండి",
+    "titleWithoutPersonal": "ఒక సంస్థను ఎంచుకోండి"
+  },
+  "organizationProfile": {
+    "badge__automaticInvitation": "స్వయంచాలక ఆహ్వానాలు",
+    "badge__automaticSuggestion": "స్వయంచాలక సూచనలు",
+    "badge__manualInvitation": "ఆటోమేటిక్ నమోదు లేదు",
+    "badge__unverified": "ధృవీకరించబడలేదు",
+    "createDomainPage": {
+      "subtitle": "ధృవీకరించడానికి డొమైన్‌ను జోడించండి. ఈ డొమైన్‌లో ఇమెయిల్ చిరునామాలను కలిగి ఉన్న వినియోగదారులు స్వయంచాలకంగా సంస్థలో చేరవచ్చు లేదా చేరమని అభ్యర్థించవచ్చు.",
+      "title": "డొమైన్ జోడించండి"
+    },
+    "invitePage": {
+      "detailsTitle__inviteFailed": "ఆహ్వానాలు పంపడం సాధ్యం కాలేదు. కింది ఇమెయిల్ చిరునామాల కోసం ఇప్పటికే ఆహ్వానాలు పెండింగ్‌లో ఉన్నాయి: {{email_addresses}}.",
+      "formButtonPrimary__continue": "ఆహ్వానాలు పంపండి",
+      "selectDropdown__role": "పాత్రను ఎంచుకోండి",
+      "subtitle": "ఖాళీలు లేదా కామాలతో వేరు చేయబడిన ఒకటి లేదా అంతకంటే ఎక్కువ ఇమెయిల్ చిరునామాలను నమోదు చేయండి లేదా అతికించండి.",
+      "successMessage": "ఆహ్వానాలు విజయవంతంగా పంపబడ్డాయి",
+      "title": "కొత్త సభ్యులను ఆహ్వానించండి"
+    },
+    "membersPage": {
+      "action__invite": "ఆహ్వానించండి",
+      "activeMembersTab": {
+        "menuAction__remove": "సభ్యుడిని తీసివేయండి",
+        "tableHeader__actions": "",
+        "tableHeader__joined": "చేరారు",
+        "tableHeader__role": "పాత్ర",
+        "tableHeader__user": "వినియోగదారు"
+      },
+      "detailsTitle__emptyRow": "ప్రదర్శించడానికి సభ్యులు లేరు",
+      "invitationsTab": {
+        "autoInvitations": {
+          "headerSubtitle": "మీ సంస్థతో ఇమెయిల్ డొమైన్‌ను కనెక్ట్ చేయడం ద్వారా వినియోగదారులను ఆహ్వానించండి. సరిపోలే ఇమెయిల్ డొమైన్‌తో సైన్ అప్ చేసే ఎవరైనా ఎప్పుడైనా సంస్థలో చేరగలరు.",
+          "headerTitle": "స్వయంచాలక ఆహ్వానాలు",
+          "primaryButton": "ధృవీకరించబడిన డొమైన్‌లను నిర్వహించండి"
+        },
+        "table__emptyRow": "ప్రదర్శించడానికి ఆహ్వానాలు లేవు"
+      },
+      "invitedMembersTab": {
+        "menuAction__revoke": "ఆహ్వానాన్ని ఉపసంహరించుకోండి",
+        "tableHeader__invited": "ఆహ్వానించారు"
+      },
+      "requestsTab": {
+        "autoSuggestions": {
+          "headerSubtitle": "సరిపోలే ఇమెయిల్ డొమైన్‌తో సైన్ అప్ చేసే వినియోగదారులు, మీ సంస్థలో చేరమని అభ్యర్థించడానికి సూచనను చూడగలరు.",
+          "headerTitle": "స్వయంచాలక సూచనలు",
+          "primaryButton": "ధృవీకరించబడిన డొమైన్‌లను నిర్వహించండి"
+        },
+        "menuAction__approve": "ఆమోదించండి",
+        "menuAction__reject": "తిరస్కరించు",
+        "tableHeader__requested": "యాక్సెస్‌ని అభ్యర్థించారు",
+        "table__emptyRow": "ప్రదర్శించడానికి అభ్యర్థనలు లేవు"
+      },
+      "start": {
+        "headerTitle__invitations": "ఆహ్వానాలు",
+        "headerTitle__members": "సభ్యులు",
+        "headerTitle__requests": "అభ్యర్థనలు"
+      }
+    },
+    "navbar": {
+      "description": "మీ సంస్థను నిర్వహించండి.",
+      "general": "జనరల్",
+      "members": "సభ్యులు",
+      "title": "సంస్థ"
+    },
+    "profilePage": {
+      "dangerSection": {
+        "deleteOrganization": {
+          "actionDescription": "కొనసాగించడానికి క్రింద \"{{organizationName}}\" టైప్ చేయండి.",
+          "messageLine1": "మీరు ఖచ్చితంగా ఈ సంస్థను తొలగించాలనుకుంటున్నారా?",
+          "messageLine2": "ఈ చర్య శాశ్వతమైనది మరియు తిరిగి పొందలేనిది.",
+          "successMessage": "మీరు సంస్థను తొలగించారు.",
+          "title": "సంస్థను తొలగించండి"
+        },
+        "leaveOrganization": {
+          "actionDescription": "కొనసాగించడానికి క్రింద \"{{organizationName}}\" టైప్ చేయండి.",
+          "messageLine1": "మీరు ఖచ్చితంగా ఈ సంస్థ నుండి నిష్క్రమించాలనుకుంటున్నారా? మీరు ఈ సంస్థ మరియు దాని అప్లికేషన్‌లకు యాక్సెస్ కోల్పోతారు.",
+          "messageLine2": "ఈ చర్య శాశ్వతమైనది మరియు తిరిగి పొందలేనిది.",
+          "successMessage": "మీరు సంస్థ నుండి నిష్క్రమించారు.",
+          "title": "సంస్థను వదిలివేయండి"
+        },
+        "title": "ప్రమాదం"
+      },
+      "domainSection": {
+        "menuAction__manage": "నిర్వహించండి",
+        "menuAction__remove": "తొలగించు",
+        "menuAction__verify": "ధృవీకరించండి",
+        "primaryButton": "డొమైన్ జోడించండి",
+        "subtitle": "సంస్థలో ఆటోమేటిక్‌గా చేరడానికి వినియోగదారులను అనుమతించండి లేదా ధృవీకరించబడిన ఇమెయిల్ డొమైన్ ఆధారంగా చేరమని అభ్యర్థించండి.",
+        "title": "ధృవీకరించబడిన డొమైన్‌లు"
+      },
+      "successMessage": "సంస్థ నవీకరించబడింది.",
+      "title": "ప్రొఫైల్‌ను నవీకరించండి"
+    },
+    "removeDomainPage": {
+      "messageLine1": "ఇమెయిల్ డొమైన్ {{domain}} తీసివేయబడుతుంది.",
+      "messageLine2": "దీని తర్వాత వినియోగదారులు స్వయంచాలకంగా సంస్థలో చేరలేరు.",
+      "successMessage": "{{domain}} తీసివేయబడింది.",
+      "title": "డొమైన్‌ను తీసివేయండి"
+    },
+    "start": {
+      "headerTitle__general": "జనరల్",
+      "headerTitle__members": "సభ్యులు",
+      "profileSection": {
+        "primaryButton": "ప్రొఫైల్‌ను నవీకరించండి",
+        "title": "సంస్థ ప్రొఫైల్",
+        "uploadAction__title": "లోగో"
+      }
+    },
+    "verifiedDomainPage": {
+      "dangerTab": {
+        "calloutInfoLabel": "ఈ డొమైన్‌ను తీసివేయడం ఆహ్వానించబడిన వినియోగదారులపై ప్రభావం చూపుతుంది.",
+        "removeDomainActionLabel__remove": "డొమైన్‌ను తీసివేయండి",
+        "removeDomainSubtitle": "మీ ధృవీకరించబడిన డొమైన్‌ల నుండి ఈ డొమైన్‌ను తీసివేయండి",
+        "removeDomainTitle": "డొమైన్‌ను తీసివేయండి"
+      },
+      "enrollmentTab": {
+        "automaticInvitationOption__description": "వినియోగదారులు సైన్-అప్ చేసినప్పుడు సంస్థలో చేరడానికి స్వయంచాలకంగా ఆహ్వానించబడతారు మరియు ఎప్పుడైనా చేరవచ్చు.",
+        "automaticInvitationOption__label": "స్వయంచాలక ఆహ్వానాలు",
+        "automaticSuggestionOption__description": "వినియోగదారులు చేరడానికి అభ్యర్థించడానికి సూచనను అందుకుంటారు, కానీ వారు సంస్థలో చేరడానికి ముందు తప్పనిసరిగా నిర్వాహకునిచే ఆమోదించబడాలి.",
+        "automaticSuggestionOption__label": "స్వయంచాలక సూచనలు",
+        "calloutInfoLabel": "ఎన్‌రోల్‌మెంట్ మోడ్‌ను మార్చడం వల్ల కొత్త వినియోగదారులపై మాత్రమే ప్రభావం చూపుతుంది.",
+        "calloutInvitationCountLabel": "వినియోగదారులకు పంపిన పెండింగ్ ఆహ్వానాలు: {{count}}",
+        "calloutSuggestionCountLabel": "పెండింగ్‌లో ఉన్న సూచనలు వినియోగదారులకు పంపబడ్డాయి: {{count}}",
+        "manualInvitationOption__description": "వినియోగదారులను సంస్థకు మాన్యువల్‌గా మాత్రమే ఆహ్వానించగలరు.",
+        "manualInvitationOption__label": "ఆటోమేటిక్ నమోదు లేదు",
+        "subtitle": "ఈ డొమైన్ నుండి వినియోగదారులు సంస్థలో ఎలా చేరవచ్చో ఎంచుకోండి."
+      },
+      "start": {
+        "headerTitle__danger": "ప్రమాదం",
+        "headerTitle__enrollment": "నమోదు ఎంపికలు"
+      },
+      "subtitle": "డొమైన్ {{domain}} ఇప్పుడు ధృవీకరించబడింది. నమోదు మోడ్‌ని ఎంచుకోవడం ద్వారా కొనసాగించండి.",
+      "title": "{{domain}}ని నవీకరించండి"
+    },
+    "verifyDomainPage": {
+      "formSubtitle": "మీ ఇమెయిల్ చిరునామాకు పంపిన ధృవీకరణ కోడ్‌ను నమోదు చేయండి",
+      "formTitle": "ధృవీకరణ కోడ్",
+      "resendButton": "కోడ్ అందలేదా? మళ్లీ పంపండి",
+      "subtitle": "డొమైన్ {{domainName}} ఇమెయిల్ ద్వారా ధృవీకరించబడాలి.",
+      "subtitleVerificationCodeScreen": "ధృవీకరణ కోడ్ {{emailAddress}}కి పంపబడింది. కొనసాగించడానికి కోడ్‌ని నమోదు చేయండి.",
+      "title": "డొమైన్‌ని ధృవీకరించండి"
+    }
+  },
+  "organizationSwitcher": {
+    "action__createOrganization": "సంస్థను సృష్టించండి",
+    "action__invitationAccept": "చేరండి",
+    "action__manageOrganization": "నిర్వహించండి",
+    "action__suggestionsAccept": "చేరాలని అభ్యర్థన",
+    "notSelected": "ఏ సంస్థను ఎంచుకోలేదు",
+    "personalWorkspace": "వ్యక్తిగత ఖాతా",
+    "suggestionsAcceptedLabel": "ఆమోదం పెండింగ్‌లో ఉంది"
+  },
+  "paginationButton__next": "తదుపరి",
+  "paginationButton__previous": "మునుపటి",
+  "paginationRowText__displaying": "ప్రదర్శిస్తోంది",
+  "paginationRowText__of": "యొక్క",
+  "signIn": {
+    "accountSwitcher": {
+      "action__addAccount": "ఖాతాను జోడించండి",
+      "action__signOutAll": "అన్ని ఖాతాల నుండి సైన్ అవుట్ చేయండి",
+      "subtitle": "మీరు కొనసాగించాలనుకుంటున్న ఖాతాను ఎంచుకోండి.",
+      "title": "ఖాతాను ఎంచుకోండి"
+    },
+    "alternativeMethods": {
+      "actionLink": "సహాయం పొందండి",
+      "actionText": "వీటిలో ఏదీ లేదా?",
+      "blockButton__backupCode": "బ్యాకప్ కోడ్‌ని ఉపయోగించండి",
+      "blockButton__emailCode": "Email కోడ్‌కి {{identifier}}",
+      "blockButton__emailLink": "Email లింక్ {{identifier}}",
+      "blockButton__passkey": "మీ పాస్‌కీతో సైన్ ఇన్ చేయండి",
+      "blockButton__password": "మీ పాస్‌వర్డ్‌తో సైన్ ఇన్ చేయండి",
+      "blockButton__phoneCode": "SMS కోడ్‌ని {{identifier}}కి పంపండి",
+      "blockButton__totp": "మీ ప్రామాణీకరణ యాప్‌ని ఉపయోగించండి",
+      "getHelp": {
+        "blockButton__emailSupport": "Email మద్దతు",
+        "content": "మీరు మీ ఖాతాకు సైన్ ఇన్ చేయడంలో ఇబ్బందిని ఎదుర్కొంటుంటే, మాకు ఇమెయిల్ చేయండి మరియు వీలైనంత త్వరగా యాక్సెస్‌ని పునరుద్ధరించడానికి మేము మీతో కలిసి పని చేస్తాము.",
+        "title": "సహాయం పొందండి"
+      },
+      "subtitle": "సమస్యలను ఎదుర్కొంటున్నారా? మీరు సైన్ ఇన్ చేయడానికి ఈ పద్ధతుల్లో దేనినైనా ఉపయోగించవచ్చు.",
+      "title": "మరొక పద్ధతిని ఉపయోగించండి"
+    },
+    "backupCodeMfa": {
+      "subtitle": "రెండు-దశల ప్రమాణీకరణను సెటప్ చేసినప్పుడు మీ బ్యాకప్ కోడ్ మీకు లభించింది.",
+      "title": "బ్యాకప్ కోడ్‌ను నమోదు చేయండి"
+    },
+    "emailCode": {
+      "formTitle": "ధృవీకరణ కోడ్",
+      "resendButton": "కోడ్ అందలేదా? మళ్లీ పంపండి",
+      "subtitle": "{{applicationName}}కి కొనసాగడానికి",
+      "title": "మీ ఇమెయిల్‌ను తనిఖీ చేయండి"
+    },
+    "emailLink": {
+      "expired": {
+        "subtitle": "కొనసాగించడానికి అసలు ట్యాబ్‌కు తిరిగి వెళ్లండి.",
+        "title": "ఈ ధృవీకరణ లింక్ గడువు ముగిసింది"
+      },
+      "failed": {
+        "subtitle": "కొనసాగించడానికి అసలు ట్యాబ్‌కు తిరిగి వెళ్లండి.",
+        "title": "ఈ ధృవీకరణ లింక్ చెల్లదు"
+      },
+      "formSubtitle": "మీ ఇమెయిల్‌కి పంపిన ధృవీకరణ లింక్‌ని ఉపయోగించండి",
+      "formTitle": "ధృవీకరణ లింక్",
+      "loading": {
+        "subtitle": "మీరు త్వరలో దారి మళ్లించబడతారు",
+        "title": "సైన్ ఇన్ చేస్తోంది..."
+      },
+      "resendButton": "లింక్ అందలేదా? మళ్లీ పంపండి",
+      "subtitle": "{{applicationName}}కి కొనసాగడానికి",
+      "title": "మీ ఇమెయిల్‌ను తనిఖీ చేయండి",
+      "unusedTab": {
+        "title": "మీరు ఈ ట్యాబ్‌ను మూసివేయవచ్చు"
+      },
+      "verified": {
+        "subtitle": "మీరు త్వరలో దారి మళ్లించబడతారు",
+        "title": "విజయవంతంగా సైన్ ఇన్ చేయబడింది"
+      },
+      "verifiedSwitchTab": {
+        "subtitle": "కొనసాగించడానికి అసలు ట్యాబ్‌కు తిరిగి వెళ్లండి",
+        "subtitleNewTab": "కొనసాగించడానికి కొత్తగా తెరిచిన ట్యాబ్‌కి తిరిగి వెళ్లండి",
+        "titleNewTab": "ఇతర ట్యాబ్‌లో సైన్ ఇన్ చేసారు"
+      }
+    },
+    "forgotPassword": {
+      "formTitle": "పాస్‌వర్డ్ కోడ్‌ని రీసెట్ చేయండి",
+      "resendButton": "కోడ్ అందలేదా? మళ్లీ పంపండి",
+      "subtitle": "మీ పాస్‌వర్డ్‌ని రీసెట్ చేయడానికి",
+      "subtitle_email": "ముందుగా, మీ ఇమెయిల్ చిరునామాకు పంపిన కోడ్‌ను నమోదు చేయండి",
+      "subtitle_phone": "ముందుగా, మీ ఫోన్‌కి పంపిన కోడ్‌ను నమోదు చేయండి",
+      "title": "పాస్వర్డ్ను రీసెట్ చేయండి"
+    },
+    "forgotPasswordAlternativeMethods": {
+      "blockButton__resetPassword": "మీ పాస్‌వర్డ్‌ని రీసెట్ చేయండి",
+      "label__alternativeMethods": "లేదా, మరొక పద్ధతితో సైన్ ఇన్ చేయండి",
+      "title": "పాస్‌వర్డ్ మర్చిపోయారా?"
+    },
+    "noAvailableMethods": {
+      "message": "సైన్ ఇన్‌తో కొనసాగడం సాధ్యం కాదు. ప్రామాణీకరణ అంశం అందుబాటులో లేదు.",
+      "subtitle": "ఒక లోపం సంభవించింది",
+      "title": "సైన్ ఇన్ చేయలేరు"
+    },
+    "passkey": {
+      "subtitle": "మీ పాస్‌కీని ఉపయోగించడం ద్వారా ఇది మీరేనని నిర్ధారిస్తుంది. మీ పరికరం మీ వేలిముద్ర, ముఖం లేదా స్క్రీన్ లాక్ కోసం అడగవచ్చు.",
+      "title": "మీ పాస్‌కీని ఉపయోగించండి"
+    },
+    "password": {
+      "actionLink": "మరొక పద్ధతిని ఉపయోగించండి",
+      "subtitle": "మీ ఖాతాతో అనుబంధించబడిన పాస్‌వర్డ్‌ను నమోదు చేయండి",
+      "title": "మీ పాస్‌వర్డ్‌ను నమోదు చేయండి"
+    },
+    "passwordPwned": {
+      "title": "పాస్‌వర్డ్ రాజీ పడింది"
+    },
+    "phoneCode": {
+      "formTitle": "ధృవీకరణ కోడ్",
+      "resendButton": "కోడ్ అందలేదా? మళ్లీ పంపండి",
+      "subtitle": "{{applicationName}}కి కొనసాగడానికి",
+      "title": "మీ ఫోన్‌ని తనిఖీ చేయండి"
+    },
+    "phoneCodeMfa": {
+      "formTitle": "ధృవీకరణ కోడ్",
+      "resendButton": "కోడ్ అందలేదా? మళ్లీ పంపండి",
+      "subtitle": "కొనసాగించడానికి, దయచేసి మీ ఫోన్‌కి పంపిన ధృవీకరణ కోడ్‌ను నమోదు చేయండి",
+      "title": "మీ ఫోన్‌ని తనిఖీ చేయండి"
+    },
+    "resetPassword": {
+      "formButtonPrimary": "పాస్‌వర్డ్‌ని రీసెట్ చేయండి",
+      "requiredMessage": "భద్రతా కారణాల దృష్ట్యా, మీ పాస్‌వర్డ్‌ని రీసెట్ చేయడం అవసరం.",
+      "successMessage": "మీ పాస్‌వర్డ్ విజయవంతంగా మార్చబడింది. మిమ్మల్ని సైన్ ఇన్ చేస్తున్నాము, దయచేసి ఒక్క క్షణం వేచి ఉండండి.",
+      "title": "కొత్త పాస్‌వర్డ్‌ని సెట్ చేయండి"
+    },
+    "resetPasswordMfa": {
+      "detailsLabel": "మీ పాస్‌వర్డ్‌ని రీసెట్ చేయడానికి ముందు మేము మీ గుర్తింపును ధృవీకరించాలి."
+    },
+    "start": {
+      "actionLink": "సైన్ అప్ చేయండి",
+      "actionLink__use_email": "ఇమెయిల్ ఉపయోగించండి",
+      "actionLink__use_email_username": "ఇమెయిల్ లేదా వినియోగదారు పేరు ఉపయోగించండి",
+      "actionLink__use_passkey": "బదులుగా పాస్‌కీని ఉపయోగించండి",
+      "actionLink__use_phone": "ఫోన్ ఉపయోగించండి",
+      "actionLink__use_username": "వినియోగదారు పేరును ఉపయోగించండి",
+      "actionText": "ఖాతా లేదా?",
+      "subtitle": "తిరిగి స్వాగతం! దయచేసి కొనసాగడానికి సైన్ ఇన్ చేయండి",
+      "title": "{{applicationName}}కి సైన్ ఇన్ చేయండి"
+    },
+    "totpMfa": {
+      "formTitle": "ధృవీకరణ కోడ్",
+      "subtitle": "కొనసాగించడానికి, దయచేసి మీ ప్రామాణీకరణదారు యాప్ ద్వారా రూపొందించబడిన ధృవీకరణ కోడ్‌ను నమోదు చేయండి",
+      "title": "రెండు-దశల ధృవీకరణ"
+    }
+  },
+  "signInEnterPasswordTitle": "మీ పాస్‌వర్డ్‌ను నమోదు చేయండి",
+  "signUp": {
+    "continue": {
+      "actionLink": "సైన్ ఇన్ చేయండి",
+      "actionText": "ఇప్పటికే ఖాతా ఉందా?",
+      "subtitle": "కొనసాగించడానికి దయచేసి మిగిలిన వివరాలను పూరించండి.",
+      "title": "తప్పిపోయిన ఫీల్డ్‌లను పూరించండి"
+    },
+    "emailCode": {
+      "formSubtitle": "మీ ఇమెయిల్ చిరునామాకు పంపిన ధృవీకరణ కోడ్‌ను నమోదు చేయండి",
+      "formTitle": "ధృవీకరణ కోడ్",
+      "resendButton": "కోడ్ అందలేదా? మళ్లీ పంపండి",
+      "subtitle": "మీ ఇమెయిల్‌కి పంపిన ధృవీకరణ కోడ్‌ను నమోదు చేయండి",
+      "title": "మీ ఇమెయిల్‌ని ధృవీకరించండి"
+    },
+    "emailLink": {
+      "formSubtitle": "మీ ఇమెయిల్ చిరునామాకు పంపిన ధృవీకరణ లింక్‌ని ఉపయోగించండి",
+      "formTitle": "ధృవీకరణ లింక్",
+      "loading": {
+        "title": "సైన్ అప్ చేస్తోంది..."
+      },
+      "resendButton": "లింక్ అందలేదా? మళ్లీ పంపండి",
+      "subtitle": "{{applicationName}}కి కొనసాగడానికి",
+      "title": "మీ ఇమెయిల్‌ని ధృవీకరించండి",
+      "verified": {
+        "title": "విజయవంతంగా సైన్ అప్ చేయబడింది"
+      },
+      "verifiedSwitchTab": {
+        "subtitle": "కొనసాగించడానికి కొత్తగా తెరిచిన ట్యాబ్‌కి తిరిగి వెళ్లండి",
+        "subtitleNewTab": "కొనసాగించడానికి మునుపటి ట్యాబ్‌కు తిరిగి వెళ్లండి",
+        "title": "ఇమెయిల్ విజయవంతంగా ధృవీకరించబడింది"
+      }
+    },
+    "phoneCode": {
+      "formSubtitle": "మీ ఫోన్ నంబర్‌కు పంపిన ధృవీకరణ కోడ్‌ను నమోదు చేయండి",
+      "formTitle": "ధృవీకరణ కోడ్",
+      "resendButton": "కోడ్ అందలేదా? మళ్లీ పంపండి",
+      "subtitle": "మీ ఫోన్‌కి పంపిన ధృవీకరణ కోడ్‌ను నమోదు చేయండి",
+      "title": "మీ ఫోన్‌ని ధృవీకరించండి"
+    },
+    "start": {
+      "actionLink": "సైన్ ఇన్ చేయండి",
+      "actionText": "ఇప్పటికే ఖాతా ఉందా?",
+      "subtitle": "స్వాగతం! ప్రారంభించడానికి దయచేసి వివరాలను పూరించండి.",
+      "title": "మీ ఖాతాను సృష్టించండి"
+    }
+  },
+  "socialButtonsBlockButton": "{{provider|titleize}}తో కొనసాగించండి",
+  "unstable__errors": {
+    "captcha_invalid": "విఫలమైన భద్రతా ధృవీకరణల కారణంగా సైన్ అప్ చేయడం విఫలమైంది. దయచేసి మళ్లీ ప్రయత్నించడానికి పేజీని రిఫ్రెష్ చేయండి లేదా మరింత సహాయం కోసం మద్దతును సంప్రదించండి.",
+    "captcha_unavailable": "విఫలమైన బోట్ ధ్రువీకరణ కారణంగా సైన్ అప్ చేయడం విఫలమైంది. దయచేసి మళ్లీ ప్రయత్నించడానికి పేజీని రిఫ్రెష్ చేయండి లేదా మరింత సహాయం కోసం మద్దతును సంప్రదించండి.",
+    "form_code_incorrect": "",
+    "form_identifier_exists": "",
+    "form_identifier_exists__email_address": "ఈ ఇమెయిల్ చిరునామా తీసుకోబడింది. దయచేసి మరొకటి ప్రయత్నించండి.",
+    "form_identifier_exists__phone_number": "ఈ ఫోన్ నంబర్ తీసుకోబడింది. దయచేసి మరొకటి ప్రయత్నించండి.",
+    "form_identifier_exists__username": "ఈ వినియోగదారు పేరు తీసుకోబడింది. దయచేసి మరొకటి ప్రయత్నించండి.",
+    "form_identifier_not_found": "",
+    "form_param_format_invalid": "",
+    "form_param_format_invalid__email_address": "Email చిరునామా తప్పనిసరిగా చెల్లుబాటు అయ్యే ఇమెయిల్ చిరునామా అయి ఉండాలి.",
+    "form_param_format_invalid__phone_number": "ఫోన్ నంబర్ తప్పనిసరిగా చెల్లుబాటు అయ్యే అంతర్జాతీయ ఆకృతిలో ఉండాలి",
+    "form_param_max_length_exceeded__first_name": "మొదటి పేరు 256 అక్షరాలకు మించకూడదు.",
+    "form_param_max_length_exceeded__last_name": "చివరి పేరు 256 అక్షరాలను మించకూడదు.",
+    "form_param_max_length_exceeded__name": "పేరు 256 అక్షరాలకు మించకూడదు.",
+    "form_param_nil": "",
+    "form_password_incorrect": "",
+    "form_password_length_too_short": "",
+    "form_password_not_strong_enough": "మీ పాస్‌వర్డ్ తగినంత బలంగా లేదు.",
+    "form_password_pwned": "ఈ పాస్‌వర్డ్ ఉల్లంఘనలో భాగంగా కనుగొనబడింది మరియు ఉపయోగించబడదు, దయచేసి బదులుగా మరొక పాస్‌వర్డ్‌ని ప్రయత్నించండి.",
+    "form_password_pwned__sign_in": "ఈ పాస్‌వర్డ్ ఉల్లంఘనలో భాగంగా కనుగొనబడింది మరియు ఉపయోగించబడదు, దయచేసి మీ పాస్‌వర్డ్‌ని రీసెట్ చేయండి.",
+    "form_password_size_in_bytes_exceeded": "మీ పాస్‌వర్డ్ అనుమతించబడిన గరిష్ట బైట్‌ల సంఖ్యను మించిపోయింది, దయచేసి దాన్ని తగ్గించండి లేదా కొన్ని ప్రత్యేక అక్షరాలను తీసివేయండి.",
+    "form_password_validation_failed": "పాస్‌వర్డ్ తప్పు",
+    "form_username_invalid_character": "",
+    "form_username_invalid_length": "",
+    "identification_deletion_failed": "మీరు మీ చివరి గుర్తింపును తొలగించలేరు.",
+    "not_allowed_access": "",
+    "passkey_already_exists": "ఈ పరికరంతో పాస్‌కీ ఇప్పటికే నమోదు చేయబడింది.",
+    "passkey_not_supported": "ఈ పరికరంలో Passkeysకి మద్దతు లేదు.",
+    "passkey_pa_not_supported": "నమోదుకు ప్లాట్‌ఫారమ్ ప్రమాణీకరణ అవసరం కానీ పరికరం దానికి మద్దతు ఇవ్వదు.",
+    "passkey_registration_cancelled": "Passkey రిజిస్ట్రేషన్ రద్దు చేయబడింది లేదా సమయం ముగిసింది.",
+    "passkey_retrieval_cancelled": "Passkey ధృవీకరణ రద్దు చేయబడింది లేదా సమయం ముగిసింది.",
+    "passwordComplexity": {
+      "maximumLength": "{{length}} అక్షరాలు కంటే తక్కువ",
+      "minimumLength": "{{length}} లేదా అంతకంటే ఎక్కువ అక్షరాలు",
+      "requireLowercase": "ఒక చిన్న అక్షరం",
+      "requireNumbers": "ఒక సంఖ్య",
+      "requireSpecialCharacter": "ఒక ప్రత్యేక పాత్ర",
+      "requireUppercase": "ఒక పెద్ద అక్షరం",
+      "sentencePrefix": "మీ పాస్‌వర్డ్ తప్పనిసరిగా కలిగి ఉండాలి"
+    },
+    "phone_number_exists": "ఈ ఫోన్ నంబర్ తీసుకోబడింది. దయచేసి మరొకటి ప్రయత్నించండి.",
+    "zxcvbn": {
+      "couldBeStronger": "మీ పాస్‌వర్డ్ పని చేస్తుంది, కానీ మరింత బలంగా ఉండవచ్చు. మరిన్ని అక్షరాలను జోడించడానికి ప్రయత్నించండి.",
+      "goodPassword": "మీ పాస్‌వర్డ్ అవసరమైన అన్ని అవసరాలను తీరుస్తుంది.",
+      "notEnough": "మీ పాస్‌వర్డ్ తగినంత బలంగా లేదు.",
+      "suggestions": {
+        "allUppercase": "కొన్ని అక్షరాలను క్యాపిటలైజ్ చేయండి, కానీ అన్ని అక్షరాలను కాదు.",
+        "anotherWord": "తక్కువ సాధారణమైన మరిన్ని పదాలను జోడించండి.",
+        "associatedYears": "మీతో అనుబంధించబడిన సంవత్సరాలను నివారించండి.",
+        "capitalization": "మొదటి అక్షరం కంటే ఎక్కువ క్యాపిటలైజ్ చేయండి.",
+        "dates": "మీతో అనుబంధించబడిన తేదీలు మరియు సంవత్సరాలను నివారించండి.",
+        "l33t": "'a' కోసం '@' వంటి ఊహాజనిత అక్షరాల ప్రత్యామ్నాయాలను నివారించండి.",
+        "longerKeyboardPattern": "పొడవైన కీబోర్డ్ నమూనాలను ఉపయోగించండి మరియు టైపింగ్ దిశను అనేకసార్లు మార్చండి.",
+        "noNeed": "మీరు చిహ్నాలు, సంఖ్యలు లేదా పెద్ద అక్షరాలను ఉపయోగించకుండా బలమైన పాస్‌వర్డ్‌లను సృష్టించవచ్చు.",
+        "pwned": "మీరు ఈ పాస్‌వర్డ్‌ను ఎక్కడైనా ఉపయోగిస్తే, మీరు దాన్ని మార్చాలి.",
+        "recentYears": "ఇటీవలి సంవత్సరాలను నివారించండి.",
+        "repeated": "పదే పదే పదాలు మరియు అక్షరాలు మానుకోండి.",
+        "reverseWords": "సాధారణ పదాల రివర్స్ స్పెల్లింగ్‌లను నివారించండి.",
+        "sequences": "సాధారణ పాత్ర సన్నివేశాలను నివారించండి.",
+        "useWords": "బహుళ పదాలను ఉపయోగించండి, కానీ సాధారణ పదబంధాలను నివారించండి."
+      },
+      "warnings": {
+        "common": "ఇది సాధారణంగా ఉపయోగించే పాస్‌వర్డ్.",
+        "commonNames": "సాధారణ పేర్లు మరియు ఇంటిపేర్లు ఊహించడం సులభం.",
+        "dates": "తేదీలు ఊహించడం సులభం.",
+        "extendedRepeat": "\"abcabcabc\" వంటి పదేపదే అక్షర నమూనాలు ఊహించడం సులభం.",
+        "keyPattern": "చిన్న కీబోర్డ్ నమూనాలు ఊహించడం సులభం.",
+        "namesByThemselves": "ఒకే పేర్లు లేదా ఇంటిపేర్లు ఊహించడం సులభం.",
+        "pwned": "ఇంటర్నెట్‌లో డేటా ఉల్లంఘన కారణంగా మీ పాస్‌వర్డ్ బహిర్గతమైంది.",
+        "recentYears": "ఇటీవలి సంవత్సరాలు ఊహించడం సులభం.",
+        "sequences": "\"abc\" వంటి సాధారణ పాత్ర సన్నివేశాలు ఊహించడం సులభం.",
+        "similarToCommon": "ఇది సాధారణంగా ఉపయోగించే పాస్‌వర్డ్‌ను పోలి ఉంటుంది.",
+        "simpleRepeat": "\"aaa\" వంటి పదే పదే అక్షరాలు ఊహించడం సులభం.",
+        "straightRow": "మీ కీబోర్డ్‌లోని కీల వరుసలను సులభంగా ఊహించవచ్చు.",
+        "topHundred": "ఇది తరచుగా ఉపయోగించే పాస్‌వర్డ్.",
+        "topTen": "ఇది ఎక్కువగా ఉపయోగించే పాస్‌వర్డ్.",
+        "userInputs": "వ్యక్తిగత లేదా పేజీ సంబంధిత డేటా ఏదీ ఉండకూడదు.",
+        "wordByItself": "ఒకే పదాలు ఊహించడం సులభం."
+      }
+    }
+  },
+  "userButton": {
+    "action__addAccount": "ఖాతాను జోడించండి",
+    "action__manageAccount": "ఖాతాను నిర్వహించండి",
+    "action__signOut": "సైన్ అవుట్ చేయండి",
+    "action__signOutAll": "అన్ని ఖాతాల నుండి సైన్ అవుట్ చేయండి"
+  },
+  "userProfile": {
+    "backupCodePage": {
+      "actionLabel__copied": "కాపీ చేయబడింది!",
+      "actionLabel__copy": "అన్నింటినీ కాపీ చేయండి",
+      "actionLabel__download": ".txtని డౌన్‌లోడ్ చేయండి",
+      "actionLabel__print": "ముద్రించు",
+      "infoText1": "ఈ ఖాతా కోసం బ్యాకప్ కోడ్‌లు ప్రారంభించబడతాయి.",
+      "infoText2": "బ్యాకప్ కోడ్‌లను రహస్యంగా ఉంచండి మరియు వాటిని సురక్షితంగా నిల్వ చేయండి. బ్యాకప్ కోడ్‌లు రాజీ పడ్డాయని మీరు అనుమానించినట్లయితే మీరు వాటిని రీజెనరేట్ చేయవచ్చు.",
+      "subtitle__codelist": "వాటిని భద్రంగా భద్రపరచండి మరియు వాటిని రహస్యంగా ఉంచండి.",
+      "successMessage": "బ్యాకప్ కోడ్‌లు ఇప్పుడు ప్రారంభించబడ్డాయి. మీరు మీ ప్రామాణీకరణ పరికరానికి ప్రాప్యతను కోల్పోతే, మీ ఖాతాకు సైన్ ఇన్ చేయడానికి మీరు వీటిలో ఒకదాన్ని ఉపయోగించవచ్చు. ప్రతి కోడ్‌ని ఒకసారి మాత్రమే ఉపయోగించగలరు.",
+      "successSubtitle": "మీరు మీ ప్రామాణీకరణ పరికరానికి ప్రాప్యతను కోల్పోతే, మీ ఖాతాకు సైన్ ఇన్ చేయడానికి మీరు వీటిలో ఒకదాన్ని ఉపయోగించవచ్చు.",
+      "title": "బ్యాకప్ కోడ్ ధృవీకరణను జోడించండి",
+      "title__codelist": "బ్యాకప్ కోడ్‌లు"
+    },
+    "connectedAccountPage": {
+      "formHint": "మీ ఖాతాను కనెక్ట్ చేయడానికి ప్రొవైడర్‌ను ఎంచుకోండి.",
+      "formHint__noAccounts": "బాహ్య ఖాతా ప్రదాతలు అందుబాటులో లేరు.",
+      "removeResource": {
+        "messageLine1": "ఈ ఖాతా నుండి {{identifier}} తీసివేయబడుతుంది.",
+        "messageLine2": "మీరు ఇకపై ఈ కనెక్ట్ చేయబడిన ఖాతాను ఉపయోగించలేరు మరియు ఏవైనా ఆధారపడిన ఫీచర్లు ఇకపై పని చేయవు.",
+        "successMessage": "మీ ఖాతా నుండి {{connectedAccount}} తీసివేయబడింది.",
+        "title": "కనెక్ట్ చేయబడిన ఖాతాను తీసివేయండి"
+      },
+      "socialButtonsBlockButton": "__ముసుగు_0__",
+      "successMessage": "ప్రొవైడర్ మీ ఖాతాకు జోడించబడ్డారు",
+      "title": "కనెక్ట్ చేయబడిన ఖాతాను జోడించండి"
+    },
+    "deletePage": {
+      "actionDescription": "కొనసాగించడానికి దిగువన \"ఖాతాను తొలగించు\" అని టైప్ చేయండి.",
+      "confirm": "ఖాతాను తొలగించండి",
+      "messageLine1": "మీరు ఖచ్చితంగా మీ ఖాతాను తొలగించాలనుకుంటున్నారా?",
+      "messageLine2": "ఈ చర్య శాశ్వతమైనది మరియు తిరిగి పొందలేనిది.",
+      "title": "ఖాతాను తొలగించండి"
+    },
+    "emailAddressPage": {
+      "emailCode": {
+        "formHint": "ధృవీకరణ కోడ్‌తో కూడిన ఇమెయిల్ ఈ ఇమెయిల్ చిరునామాకు పంపబడుతుంది.",
+        "formSubtitle": "{{identifier}}కి పంపిన ధృవీకరణ కోడ్‌ను నమోదు చేయండి",
+        "formTitle": "ధృవీకరణ కోడ్",
+        "resendButton": "కోడ్ అందలేదా? మళ్లీ పంపండి",
+        "successMessage": "ఇమెయిల్ {{identifier}} మీ ఖాతాకు జోడించబడింది."
+      },
+      "emailLink": {
+        "formHint": "ధృవీకరణ లింక్‌ను కలిగి ఉన్న ఇమెయిల్ ఈ ఇమెయిల్ చిరునామాకు పంపబడుతుంది.",
+        "formSubtitle": "{{identifier}}కి పంపిన ఇమెయిల్‌లోని ధృవీకరణ లింక్‌పై క్లిక్ చేయండి",
+        "formTitle": "ధృవీకరణ లింక్",
+        "resendButton": "లింక్ అందలేదా? మళ్లీ పంపండి",
+        "successMessage": "ఇమెయిల్ {{identifier}} మీ ఖాతాకు జోడించబడింది."
+      },
+      "removeResource": {
+        "messageLine1": "ఈ ఖాతా నుండి {{identifier}} తీసివేయబడుతుంది.",
+        "messageLine2": "మీరు ఇకపై ఈ ఇమెయిల్ చిరునామాను ఉపయోగించి సైన్ ఇన్ చేయలేరు.",
+        "successMessage": "మీ ఖాతా నుండి {{emailAddress}} తీసివేయబడింది.",
+        "title": "ఇమెయిల్ చిరునామాను తీసివేయండి"
+      },
+      "title": "ఇమెయిల్ చిరునామాను జోడించండి",
+      "verifyTitle": "ఇమెయిల్ చిరునామాను ధృవీకరించండి"
+    },
+    "formButtonPrimary__add": "జోడించు",
+    "formButtonPrimary__continue": "కొనసాగించు",
+    "formButtonPrimary__finish": "ముగించు",
+    "formButtonPrimary__remove": "తొలగించు",
+    "formButtonPrimary__save": "సేవ్ చేయండి",
+    "formButtonReset": "రద్దు చేయి",
+    "mfaPage": {
+      "formHint": "జోడించడానికి ఒక పద్ధతిని ఎంచుకోండి.",
+      "title": "రెండు-దశల ధృవీకరణను జోడించండి"
+    },
+    "mfaPhoneCodePage": {
+      "backButton": "ఇప్పటికే ఉన్న నంబర్‌ని ఉపయోగించండి",
+      "primaryButton__addPhoneNumber": "ఫోన్ నంబర్‌ని జోడించండి",
+      "removeResource": {
+        "messageLine1": "సైన్ ఇన్ చేస్తున్నప్పుడు {{identifier}} ఇకపై ధృవీకరణ కోడ్‌లను స్వీకరించదు.",
+        "messageLine2": "మీ ఖాతా అంత సురక్షితం కాకపోవచ్చు. మీరు ఖచ్చితంగా కొనసాగించాలనుకుంటున్నారా?",
+        "successMessage": "{{mfaPhoneCode}} కోసం SMS కోడ్ రెండు-దశల ధృవీకరణ తీసివేయబడింది",
+        "title": "రెండు-దశల ధృవీకరణను తీసివేయండి"
+      },
+      "subtitle__availablePhoneNumbers": "SMS కోడ్ రెండు-దశల ధృవీకరణ కోసం నమోదు చేసుకోవడానికి ఇప్పటికే ఉన్న ఫోన్ నంబర్‌ను ఎంచుకోండి లేదా కొత్తదాన్ని జోడించండి.",
+      "subtitle__unavailablePhoneNumbers": "SMS కోడ్ రెండు-దశల ధృవీకరణ కోసం నమోదు చేసుకోవడానికి అందుబాటులో ఉన్న ఫోన్ నంబర్‌లు ఏవీ లేవు, దయచేసి కొత్తదాన్ని జోడించండి.",
+      "successMessage1": "సైన్ ఇన్ చేస్తున్నప్పుడు, మీరు అదనపు దశగా ఈ ఫోన్ నంబర్‌కి పంపిన ధృవీకరణ కోడ్‌ని నమోదు చేయాలి.",
+      "successMessage2": "ఈ బ్యాకప్ కోడ్‌లను సేవ్ చేయండి మరియు వాటిని ఎక్కడైనా సురక్షితంగా నిల్వ చేయండి. మీరు మీ ప్రామాణీకరణ పరికరానికి ప్రాప్యతను కోల్పోతే, మీరు సైన్ ఇన్ చేయడానికి బ్యాకప్ కోడ్‌లను ఉపయోగించవచ్చు.",
+      "successTitle": "SMS కోడ్ ధృవీకరణ ప్రారంభించబడింది",
+      "title": "SMS కోడ్ ధృవీకరణను జోడించండి"
+    },
+    "mfaTOTPPage": {
+      "authenticatorApp": {
+        "buttonAbleToScan__nonPrimary": "బదులుగా QR కోడ్‌ని స్కాన్ చేయండి",
+        "buttonUnableToScan__nonPrimary": "QR కోడ్‌ని స్కాన్ చేయలేరా?",
+        "infoText__ableToScan": "మీ Authenticator యాప్‌లో కొత్త సైన్-ఇన్ పద్ధతిని సెటప్ చేయండి మరియు మీ ఖాతాకు లింక్ చేయడానికి క్రింది QR కోడ్‌ని స్కాన్ చేయండి.",
+        "infoText__unableToScan": "మీ ప్రామాణీకరణదారులో కొత్త సైన్-ఇన్ పద్ధతిని సెటప్ చేయండి మరియు దిగువ అందించిన కీని నమోదు చేయండి.",
+        "inputLabel__unableToScan1": "సమయ-ఆధారిత లేదా వన్-టైమ్ పాస్‌వర్డ్‌లు ప్రారంభించబడిందని నిర్ధారించుకోండి, ఆపై మీ ఖాతాను లింక్ చేయడం పూర్తి చేయండి.",
+        "inputLabel__unableToScan2": "ప్రత్యామ్నాయంగా, మీ ప్రామాణీకరణదారు TOTP URIsకి మద్దతిస్తే, మీరు పూర్తి URIని కూడా కాపీ చేయవచ్చు."
+      },
+      "removeResource": {
+        "messageLine1": "సైన్ ఇన్ చేస్తున్నప్పుడు ఈ ప్రామాణీకరణదారు నుండి ధృవీకరణ కోడ్‌లు ఇకపై అవసరం లేదు.",
+        "messageLine2": "మీ ఖాతా అంత సురక్షితం కాకపోవచ్చు. మీరు ఖచ్చితంగా కొనసాగించాలనుకుంటున్నారా?",
+        "successMessage": "ప్రామాణీకరణ అప్లికేషన్ ద్వారా రెండు-దశల ధృవీకరణ తీసివేయబడింది.",
+        "title": "రెండు-దశల ధృవీకరణను తీసివేయండి"
+      },
+      "successMessage": "రెండు-దశల ధృవీకరణ ఇప్పుడు ప్రారంభించబడింది. సైన్ ఇన్ చేస్తున్నప్పుడు, మీరు అదనపు దశగా ఈ ప్రామాణీకరణదారు నుండి ధృవీకరణ కోడ్‌ను నమోదు చేయాలి.",
+      "title": "ప్రామాణీకరణ అప్లికేషన్‌ను జోడించండి",
+      "verifySubtitle": "మీ ప్రామాణీకరణదారు రూపొందించిన ధృవీకరణ కోడ్‌ను నమోదు చేయండి",
+      "verifyTitle": "ధృవీకరణ కోడ్"
+    },
+    "mobileButton__menu": "మెనూ",
+    "navbar": {
+      "account": "ప్రొఫైల్",
+      "description": "మీ ఖాతా సమాచారాన్ని నిర్వహించండి.",
+      "security": "భద్రత",
+      "title": "ఖాతా"
+    },
+    "passkeyScreen": {
+      "removeResource": {
+        "messageLine1": "ఈ ఖాతా నుండి {{name}} తీసివేయబడుతుంది.",
+        "title": "పాస్‌కీని తీసివేయండి"
+      },
+      "subtitle__rename": "మీరు సులభంగా కనుగొనడానికి పాస్‌కీ పేరును మార్చవచ్చు.",
+      "title__rename": "Passkey పేరు మార్చండి"
+    },
+    "passwordPage": {
+      "checkboxInfoText__signOutOfOtherSessions": "మీ పాత పాస్‌వర్డ్‌ని ఉపయోగించిన అన్ని ఇతర పరికరాల నుండి సైన్ అవుట్ చేయాలని సిఫార్సు చేయబడింది.",
+      "readonly": "మీరు ఎంటర్‌ప్రైజ్ కనెక్షన్ ద్వారా మాత్రమే సైన్ ఇన్ చేయగలరు కాబట్టి మీ పాస్‌వర్డ్ ప్రస్తుతం సవరించబడదు.",
+      "successMessage__set": "మీ పాస్‌వర్డ్ సెట్ చేయబడింది.",
+      "successMessage__signOutOfOtherSessions": "అన్ని ఇతర పరికరాలు సైన్ అవుట్ చేయబడ్డాయి.",
+      "successMessage__update": "మీ పాస్‌వర్డ్ నవీకరించబడింది.",
+      "title__set": "పాస్వర్డ్ను సెట్ చేయండి",
+      "title__update": "పాస్వర్డ్ను నవీకరించండి"
+    },
+    "phoneNumberPage": {
+      "infoText": "ధృవీకరణ కోడ్‌తో కూడిన వచన సందేశం ఈ ఫోన్ నంబర్‌కు పంపబడుతుంది. సందేశం మరియు డేటా ధరలు వర్తించవచ్చు.",
+      "removeResource": {
+        "messageLine1": "ఈ ఖాతా నుండి {{identifier}} తీసివేయబడుతుంది.",
+        "messageLine2": "మీరు ఇకపై ఈ ఫోన్ నంబర్‌ని ఉపయోగించి సైన్ ఇన్ చేయలేరు.",
+        "successMessage": "మీ ఖాతా నుండి {{phoneNumber}} తీసివేయబడింది.",
+        "title": "ఫోన్ నంబర్‌ని తీసివేయండి"
+      },
+      "successMessage": "{{identifier}} మీ ఖాతాకు జోడించబడింది.",
+      "title": "ఫోన్ నంబర్‌ని జోడించండి",
+      "verifySubtitle": "{{identifier}}కి పంపిన ధృవీకరణ కోడ్‌ను నమోదు చేయండి",
+      "verifyTitle": "ఫోన్ నంబర్‌ని ధృవీకరించండి"
+    },
+    "profilePage": {
+      "fileDropAreaHint": "సిఫార్సు చేయబడిన పరిమాణం 1:1, గరిష్టంగా 10MB.",
+      "imageFormDestructiveActionSubtitle": "తొలగించు",
+      "imageFormSubtitle": "అప్‌లోడ్ చేయండి",
+      "imageFormTitle": "ప్రొఫైల్ చిత్రం",
+      "readonly": "మీ ప్రొఫైల్ సమాచారం ఎంటర్‌ప్రైజ్ కనెక్షన్ ద్వారా అందించబడింది మరియు సవరించడం సాధ్యం కాదు.",
+      "successMessage": "మీ ప్రొఫైల్ నవీకరించబడింది.",
+      "title": "ప్రొఫైల్‌ను నవీకరించండి"
+    },
+    "start": {
+      "activeDevicesSection": {
+        "destructiveAction": "పరికరం నుండి సైన్ అవుట్ చేయండి",
+        "title": "క్రియాశీల పరికరాలు"
+      },
+      "connectedAccountsSection": {
+        "actionLabel__connectionFailed": "మళ్లీ ప్రయత్నించండి",
+        "actionLabel__reauthorize": "ఇప్పుడు అధికారం ఇవ్వండి",
+        "destructiveActionTitle": "తొలగించు",
+        "primaryButton": "ఖాతాను కనెక్ట్ చేయండి",
+        "subtitle__reauthorize": "అవసరమైన స్కోప్‌లు నవీకరించబడ్డాయి మరియు మీరు పరిమిత కార్యాచరణను అనుభవిస్తూ ఉండవచ్చు. ఏవైనా సమస్యలను నివారించడానికి దయచేసి ఈ అనువర్తనాన్ని మళ్లీ ప్రామాణీకరించండి",
+        "title": "కనెక్ట్ చేయబడిన ఖాతాలు"
+      },
+      "dangerSection": {
+        "deleteAccountButton": "ఖాతాను తొలగించండి",
+        "title": "ఖాతాను తొలగించండి"
+      },
+      "emailAddressesSection": {
+        "destructiveAction": "ఇమెయిల్‌ని తీసివేయండి",
+        "detailsAction__nonPrimary": "ప్రాథమికంగా సెట్ చేయండి",
+        "detailsAction__primary": "పూర్తి ధృవీకరణ",
+        "detailsAction__unverified": "ధృవీకరించండి",
+        "primaryButton": "ఇమెయిల్ చిరునామాను జోడించండి",
+        "title": "Email చిరునామాలు"
+      },
+      "enterpriseAccountsSection": {
+        "title": "ఎంటర్ప్రైజ్ ఖాతాలు"
+      },
+      "headerTitle__account": "ప్రొఫైల్ వివరాలు",
+      "headerTitle__security": "భద్రత",
+      "mfaSection": {
+        "backupCodes": {
+          "actionLabel__regenerate": "పునరుత్పత్తి చేయండి",
+          "headerTitle": "బ్యాకప్ కోడ్‌లు",
+          "subtitle__regenerate": "సురక్షిత బ్యాకప్ కోడ్‌ల యొక్క తాజా సెట్‌ను పొందండి. మునుపటి బ్యాకప్ కోడ్‌లు తొలగించబడతాయి మరియు ఉపయోగించబడవు.",
+          "title__regenerate": "బ్యాకప్ కోడ్‌లను పునరుద్ధరించండి"
+        },
+        "phoneCode": {
+          "actionLabel__setDefault": "డిఫాల్ట్‌గా సెట్ చేయండి",
+          "destructiveActionLabel": "తొలగించు"
+        },
+        "primaryButton": "రెండు-దశల ధృవీకరణను జోడించండి",
+        "title": "రెండు-దశల ధృవీకరణ",
+        "totp": {
+          "destructiveActionTitle": "తొలగించు",
+          "headerTitle": "ప్రామాణీకరణ అప్లికేషన్"
+        }
+      },
+      "passkeysSection": {
+        "menuAction__destructive": "తొలగించు",
+        "menuAction__rename": "పేరు మార్చండి",
+        "title": "Passkeys"
+      },
+      "passwordSection": {
+        "primaryButton__setPassword": "పాస్వర్డ్ను సెట్ చేయండి",
+        "primaryButton__updatePassword": "పాస్వర్డ్ను నవీకరించండి",
+        "title": "పాస్వర్డ్"
+      },
+      "phoneNumbersSection": {
+        "destructiveAction": "ఫోన్ నంబర్‌ని తీసివేయండి",
+        "detailsAction__nonPrimary": "ప్రాథమికంగా సెట్ చేయండి",
+        "detailsAction__primary": "పూర్తి ధృవీకరణ",
+        "detailsAction__unverified": "ఫోన్ నంబర్‌ని ధృవీకరించండి",
+        "primaryButton": "ఫోన్ నంబర్‌ని జోడించండి",
+        "title": "ఫోన్ నంబర్లు"
+      },
+      "profileSection": {
+        "primaryButton": "ప్రొఫైల్‌ను నవీకరించండి",
+        "title": "ప్రొఫైల్"
+      },
+      "usernameSection": {
+        "primaryButton__setUsername": "వినియోగదారు పేరును సెట్ చేయండి",
+        "primaryButton__updateUsername": "వినియోగదారు పేరును నవీకరించండి",
+        "title": "Username"
+      },
+      "web3WalletsSection": {
+        "destructiveAction": "వాలెట్ తొలగించండి",
+        "primaryButton": "Web3 వాలెట్లు",
+        "title": "Web3 వాలెట్లు"
+      }
+    },
+    "usernamePage": {
+      "successMessage": "మీ వినియోగదారు పేరు నవీకరించబడింది.",
+      "title__set": "వినియోగదారు పేరును సెట్ చేయండి",
+      "title__update": "వినియోగదారు పేరును నవీకరించండి"
+    },
+    "web3WalletPage": {
+      "removeResource": {
+        "messageLine1": "ఈ ఖాతా నుండి {{identifier}} తీసివేయబడుతుంది.",
+        "messageLine2": "మీరు ఇకపై ఈ web3 వాలెట్‌ని ఉపయోగించి సైన్ ఇన్ చేయలేరు.",
+        "successMessage": "మీ ఖాతా నుండి {{web3Wallet}} తీసివేయబడింది.",
+        "title": "web3 వాలెట్‌ని తీసివేయండి"
+      },
+      "subtitle__availableWallets": "మీ ఖాతాకు కనెక్ట్ చేయడానికి web3 వాలెట్‌ని ఎంచుకోండి.",
+      "subtitle__unavailableWallets": "అందుబాటులో వెబ్3 వాలెట్‌లు ఏవీ లేవు.",
+      "successMessage": "వాలెట్ మీ ఖాతాకు జోడించబడింది.",
+      "title": "web3 వాలెట్‌ని జోడించండి"
+    }
+  }
+}

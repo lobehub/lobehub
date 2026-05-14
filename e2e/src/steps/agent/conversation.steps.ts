@@ -97,7 +97,7 @@ Given('用户已登录系统', async function (this: CustomWorld) {
   expect(cookies.length).toBeGreaterThan(0);
 });
 
-Given('用户进入 Lobe AI 对话页面', { timeout: 30_000 }, async function (this: CustomWorld) {
+Given('用户进入 Chinna 对话页面', { timeout: 30_000 }, async function (this: CustomWorld) {
   console.log('   📍 Step: 设置 LLM mock...');
   // Setup LLM mock before navigation
   llmMockManager.setResponse('hello', presetResponses.greeting);
@@ -108,12 +108,12 @@ Given('用户进入 Lobe AI 对话页面', { timeout: 30_000 }, async function (
   await this.page.goto('/');
   await this.page.waitForLoadState('networkidle', { timeout: WAIT_TIMEOUT });
 
-  console.log('   📍 Step: 查找 Lobe AI...');
-  // Find and click on "Lobe AI" agent in the sidebar/home
-  const lobeAIAgent = this.page.locator('text=Lobe AI').first();
+  console.log('   📍 Step: 查找 Chinna...');
+  // Find and click on "Chinna" agent in the sidebar/home
+  const lobeAIAgent = this.page.locator('text=Chinna').first();
   await expect(lobeAIAgent).toBeVisible({ timeout: WAIT_TIMEOUT });
 
-  console.log('   📍 Step: 点击 Lobe AI...');
+  console.log('   📍 Step: 点击 Chinna...');
   await lobeAIAgent.click();
 
   console.log('   📍 Step: 等待聊天界面加载...');
@@ -132,7 +132,7 @@ Given('用户进入 Lobe AI 对话页面', { timeout: 30_000 }, async function (
   // Wait for any animations to complete
   await this.page.waitForTimeout(300);
 
-  console.log('   ✅ 已进入 Lobe AI 对话页面');
+  console.log('   ✅ 已进入 Chinna 对话页面');
 });
 
 // ============================================
@@ -160,7 +160,7 @@ Given('用户已发送消息 {string}', async function (this: CustomWorld, messa
   await this.page.waitForTimeout(1000);
 
   // Wait for the assistant response to appear
-  // Assistant messages are left-aligned .message-wrapper elements that contain "Lobe AI" title
+  // Assistant messages are left-aligned .message-wrapper elements that contain "Chinna" title
   console.log('   📍 Step: 等待助手回复...');
 
   // Wait for any new message wrapper to appear (there should be at least 2 - user + assistant)
@@ -174,7 +174,7 @@ Given('用户已发送消息 {string}', async function (this: CustomWorld, messa
 
   // Verify the assistant message contains expected content
   const assistantMessage = this.page.locator('.message-wrapper').filter({
-    has: this.page.locator('text=Lobe AI'),
+    has: this.page.locator('text=Chinna'),
   });
   await expect(assistantMessage).toBeVisible({ timeout: 5000 });
 
@@ -220,7 +220,7 @@ Then('用户应该收到助手的回复', async function (this: CustomWorld) {
 
 Then('回复内容应该可见', async function (this: CustomWorld) {
   const assistantMessage = this.page.locator('.message-wrapper').filter({
-    has: this.page.locator('.message-header', { hasText: /Lobe AI|AI/ }),
+    has: this.page.locator('.message-header', { hasText: /Chinna|AI/ }),
   });
   await expect(assistantMessage.last()).toBeVisible({ timeout: 15_000 });
 
@@ -235,7 +235,7 @@ Then('回复内容应该可见', async function (this: CustomWorld) {
             .innerText()
             .catch(() => '')) || '';
         finalText = rawText
-          .replaceAll(/Lobe AI/gi, '')
+          .replaceAll(/Chinna/gi, '')
           .replaceAll(/[·•]/g, '')
           .trim();
         return finalText.length;

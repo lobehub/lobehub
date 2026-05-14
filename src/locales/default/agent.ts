@@ -29,7 +29,7 @@ export default {
     'Connect this assistant to Discord server for channel chat and direct messages.',
   'channel.documentation': 'Documentation',
   'channel.messengerPromo.action': 'Try Messenger',
-  'channel.messengerPromo.desc': 'No bot setup. Chat with LobeHub on Slack, Discord, Telegram.',
+  'channel.messengerPromo.desc': 'No bot setup. Chat with ChinnaHub on Slack, Discord, Telegram.',
   'channel.messengerPromo.dismiss': 'Dismiss',
   'channel.messengerPromo.title': 'Skip the setup',
   'channel.exportConfig': 'Export Configuration',
@@ -46,6 +46,7 @@ export default {
   'channel.connectStarting': 'Bot is starting. Please wait a moment.',
   'channel.connectSuccess': 'Bot connected successfully',
   'channel.connecting': 'Connecting...',
+  'channel.eventSubscriptionUrl': 'Event Subscription URL',
   'channel.endpointUrl': 'Webhook URL',
   'channel.endpointUrlHint':
     'Please copy this URL and paste it into the <bold>{{fieldName}}</bold> field in the {{name}} Developer Portal.',
@@ -124,6 +125,27 @@ export default {
   'channel.secretTokenHint': 'Optional. Used to verify webhook requests from Telegram.',
   'channel.secretTokenPlaceholder': 'Optional secret for webhook verification',
   'channel.telegram.description': 'Connect this assistant to Telegram for private and group chats.',
+  'channel.whatsapp.accessToken': 'Permanent Access Token',
+  'channel.whatsapp.accessTokenHint':
+    'Access token with WhatsApp Business messaging permissions. It will be encrypted and stored securely.',
+  'channel.whatsapp.appSecret': 'App Secret',
+  'channel.whatsapp.appSecretHint':
+    'Meta app secret. Required to verify X-Hub-Signature-256 on every inbound webhook.',
+  'channel.whatsapp.callbackUrl': 'Callback URL',
+  'channel.whatsapp.description':
+    'Connect this assistant to WhatsApp Business Cloud API for customer conversations.',
+  'channel.whatsapp.graphApiVersion': 'Graph API Version',
+  'channel.whatsapp.graphApiVersionHint':
+    'Meta Graph API version for Cloud API calls. Keep the default unless you need to pin a different supported version.',
+  'channel.whatsapp.phoneNumberId': 'Phone Number ID',
+  'channel.whatsapp.phoneNumberIdHint':
+    'WhatsApp Business Phone Number ID from Meta WhatsApp Manager or API Setup. Used in the webhook URL and Graph API message calls.',
+  'channel.whatsapp.phoneNumberIdPlaceholder': 'e.g. 123456789012345',
+  'channel.whatsapp.verifyToken': 'Webhook Verify Token',
+  'channel.whatsapp.verifyTokenHint':
+    'Create a strong token and enter the same value in Meta webhook verification.',
+  'channel.whatsapp.webhookManualSetup':
+    'In Meta App Dashboard -> WhatsApp -> Configuration/Webhooks, paste this URL as the Callback URL, use the same Verify Token saved above, and subscribe to messages.',
   'channel.testConnection': 'Test Connection',
   'channel.testFailed': 'Connection test failed',
   'channel.testSuccess': 'Connection test passed',
@@ -225,6 +247,8 @@ export default {
   'channel.userIdHint.slack': 'Open your Slack profile → ⋮ More → Copy member ID (starts with U).',
   'channel.userIdHint.telegram':
     'Send any message to @userinfobot in Telegram — it replies with your numeric User ID.',
+  'channel.userIdHint.whatsapp':
+    "Your WhatsApp wa_id / phone number in international format. It appears as 'from' on inbound webhooks.",
   'channel.refreshStatus': 'Refresh status',
   'channel.runtimeDisconnected': 'Bot disconnected',
   'channel.statusConnected': 'Connected',

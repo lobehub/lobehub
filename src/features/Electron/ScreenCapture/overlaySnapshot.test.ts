@@ -16,7 +16,7 @@ describe('overlaySnapshot', () => {
         avatar: DEFAULT_INBOX_AVATAR,
         backgroundColor: undefined,
         id: 'inbox-agent',
-        title: 'Lobe AI',
+        title: 'Chinna AI',
       },
       {
         avatar: 'A',
@@ -31,7 +31,7 @@ describe('overlaySnapshot', () => {
     const agentOptions = resolveOverlayAgentOptions({
       agents: [{ avatar: 'A', id: 'agent-1', title: 'Agent 1' }],
       inboxAgentId: 'inbox-agent',
-      inboxMeta: { avatar: '🤖', title: 'Lobe AI' },
+      inboxMeta: { avatar: '🤖', title: 'Chinna AI' },
     });
 
     const defaultAgentId = resolveOverlayDefaultAgentId({

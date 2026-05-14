@@ -15,13 +15,12 @@ export const locales = [
   'pt-BR',
   'ru-RU',
   'tr-TR',
-  'zh-CN',
-  'zh-TW',
   'vi-VN',
   'fa-IR',
   'it-IT',
   'pl-PL',
   'nl-NL',
+  'te-IN',
 ] as const;
 
 export type Locales = (typeof locales)[number];

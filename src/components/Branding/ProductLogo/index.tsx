@@ -1,22 +1,41 @@
-'use client';
-
-import { type LobeHubProps } from '@lobehub/ui/brand';
-import { LobeHub } from '@lobehub/ui/brand';
+import type { CSSProperties, HTMLAttributes, ReactNode } from 'react';
 import { memo } from 'react';
 
-import { isCustomBranding } from '@/const/version';
+import { BRANDING_NAME } from '@/const/branding';
 
-import CustomLogo from './Custom';
-
-interface ProductLogoProps extends LobeHubProps {
-  height?: number;
-  width?: number;
+export interface ProductLogoProps extends HTMLAttributes<HTMLSpanElement> {
+  extra?: ReactNode;
+  mobile?: boolean;
+  size?: number | string;
+  style?: CSSProperties;
+  type?: string;
 }
 
-export const ProductLogo = memo<ProductLogoProps>((props) => {
-  if (isCustomBranding) {
-    return <CustomLogo {...props} />;
-  }
+export const ProductLogo = memo<ProductLogoProps>(({ extra, size = 32, type, style, ...rest }) => {
+  const fontSize = typeof size === 'number' ? Math.max(16, Math.round(size * 0.58)) : size;
 
-  return <LobeHub {...props} />;
+  return (
+    <span
+      aria-label={BRANDING_NAME}
+      style={{
+        alignItems: 'center',
+        display: 'inline-flex',
+        fontSize,
+        fontWeight: 800,
+        gap: 6,
+        letterSpacing: '-0.04em',
+        lineHeight: 1,
+        whiteSpace: 'nowrap',
+        ...style,
+      }}
+      {...rest}
+    >
+      {BRANDING_NAME}
+      {extra}
+    </span>
+  );
 });
+
+ProductLogo.displayName = 'ProductLogo';
+
+export default ProductLogo;

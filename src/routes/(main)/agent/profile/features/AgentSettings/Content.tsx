@@ -89,7 +89,7 @@ const Content = memo(() => {
     [t, isInbox, enableAgentSelfIteration],
   );
 
-  const displayTitle = isInbox ? 'Lobe AI' : meta.title || t('defaultSession', { ns: 'common' });
+  const displayTitle = isInbox ? 'Chinna AI' : meta.title || t('defaultSession', { ns: 'common' });
 
   return (
     <Flexbox

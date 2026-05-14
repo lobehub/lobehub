@@ -1,0 +1,648 @@
+{
+  "assistants": {
+    "addAgent": "Add Assistant",
+    "addAgentAndConverse": "Add Assistant and Converse",
+    "addAgentSuccess": "Added Successfully",
+    "conversation": {
+      "l1": "Hello, I am **{{name}}**, you can ask me any questions, and I will do my best to answer you ~",
+      "l2": "Here are my capabilities: ",
+      "l3": "Let's start the conversation!"
+    },
+    "description": "Assistant Introduction",
+    "detail": "Details",
+    "details": {
+      "capabilities": {
+        "knowledge": {
+          "desc": "The assistant is equipped with the following knowledge bases to help you answer more questions.",
+          "title": "Knowledge Base"
+        },
+        "plugin": {
+          "desc": "The assistant is equipped with the following plugins to help you complete more tasks.",
+          "title": "Built-in Plugins"
+        },
+        "title": "Assistant Capabilities"
+      },
+      "overview": {
+        "example": "Assistant Demo",
+        "title": "Overview"
+      },
+      "related": {
+        "listTitle": "Related Assistants",
+        "more": "View More",
+        "title": "Related Recommendations"
+      },
+      "sidebar": {
+        "toc": "Table of Contents"
+      },
+      "summary": {
+        "title": "What can you do with this assistant?"
+      },
+      "systemRole": {
+        "openingMessage": "Opening Message",
+        "openingQuestions": "Opening Questions",
+        "title": "Assistant Settings"
+      }
+    },
+    "list": "Assistant List",
+    "more": "More",
+    "plugins": "Integrated Plugins",
+    "recentSubmits": "Recent Updates",
+    "sorts": {
+      "createdAt": "Recently Published",
+      "identifier": "Assistant ID",
+      "knowledgeCount": "Number of Knowledge Bases",
+      "pluginCount": "Number of Plugins",
+      "title": "Assistant Name",
+      "tokenUsage": "Token Usage"
+    },
+    "suggestions": "Related Recommendations",
+    "systemRole": "Assistant Settings",
+    "tokenUsage": "Assistant Prompt Token Usage",
+    "try": "Try It Out",
+    "withKnowledge": "This assistant includes knowledge bases",
+    "withPlugin": "This assistant includes plugins"
+  },
+  "back": "Back to Discovery",
+  "category": {
+    "assistant": {
+      "academic": "Academic",
+      "all": "All",
+      "career": "Career",
+      "copywriting": "Copywriting",
+      "design": "Design",
+      "education": "Education",
+      "emotions": "Emotions",
+      "entertainment": "Entertainment",
+      "games": "Games",
+      "general": "General",
+      "life": "Life",
+      "marketing": "Marketing",
+      "office": "Office",
+      "programming": "Programming",
+      "translation": "Translation"
+    },
+    "plugin": {
+      "all": "All",
+      "gaming-entertainment": "Gaming & Entertainment",
+      "life-style": "Lifestyle",
+      "lifestyle": "Lifestyle",
+      "media-generate": "Media Generation",
+      "science-education": "Science & Education",
+      "social": "Social Media",
+      "stocks-finance": "Stocks & Finance",
+      "tools": "Utility Tools",
+      "web-search": "Web Search"
+    }
+  },
+  "cleanFilter": "Clear Filter",
+  "create": "Create",
+  "createGuide": {
+    "func1": {
+      "desc1": "Access the settings page for the assistant you want to submit through the settings in the upper right corner of the conversation window;",
+      "desc2": "Click the 'Submit to Assistant Marketplace' button in the upper right corner.",
+      "tag": "Method One",
+      "title": "Submit via LobeChat"
+    },
+    "func2": {
+      "button": "Go to GitHub Assistant Repository",
+      "desc": "If you want to add the assistant to the index, create an entry using agent-template.json or agent-template-full.json in the plugins directory, write a brief description, tag appropriately, and then create a pull request.",
+      "tag": "Method Two",
+      "title": "Submit via GitHub"
+    }
+  },
+  "dislike": "Dislike",
+  "filter": "Filter",
+  "filterBy": {
+    "authorRange": {
+      "everyone": "All Authors",
+      "followed": "Followed Authors",
+      "title": "Author Range"
+    },
+    "contentLength": "Minimum Context Length",
+    "maxToken": {
+      "title": "Set Maximum Length (Token)",
+      "unlimited": "Unlimited"
+    },
+    "other": {
+      "functionCall": "Supports Function Calls",
+      "title": "Other",
+      "vision": "Supports Visual Recognition",
+      "withKnowledge": "Includes Knowledge Base",
+      "withTool": "Includes Plugins"
+    },
+    "pricing": "Model Pricing",
+    "timePeriod": {
+      "all": "All Time",
+      "day": "Last 24 Hours",
+      "month": "Last 30 Days",
+      "title": "Time Range",
+      "week": "Last 7 Days",
+      "year": "Last Year"
+    }
+  },
+  "home": {
+    "featuredAssistants": "Featured Assistants",
+    "featuredModels": "Featured Models",
+    "featuredProviders": "Featured Model Providers",
+    "featuredTools": "Featured Plugins",
+    "more": "Discover More"
+  },
+  "isClaimed": "Claimed",
+  "isFeatured": "Featured",
+  "isOfficial": "Officially Verified",
+  "like": "Like",
+  "mcp": {
+    "categories": {
+      "all": {
+        "description": "All MCP Servers",
+        "name": "All"
+      },
+      "business": {
+        "description": "Business and Enterprise Services",
+        "name": "Business Services"
+      },
+      "developer": {
+        "description": "Developer-related Tools and Services",
+        "name": "Developer Tools"
+      },
+      "gaming-entertainment": {
+        "description": "Games, Entertainment, and Leisure Activities",
+        "name": "Gaming & Entertainment"
+      },
+      "health-wellness": {
+        "description": "Health, Fitness, and Wellness",
+        "name": "Health & Wellness"
+      },
+      "lifestyle": {
+        "description": "Personal Lifestyle, Habits, and Daily Activities",
+        "name": "Lifestyle"
+      },
+      "media-generate": {
+        "description": "Media Generation, Editing, and Processing",
+        "name": "Media Generation"
+      },
+      "news": {
+        "description": "News Aggregation, Reporting, and Information Services",
+        "name": "News & Information"
+      },
+      "productivity": {
+        "description": "Task Management, Notes, and Productivity Tools",
+        "name": "Productivity Tools"
+      },
+      "science-education": {
+        "description": "Scientific Research, Learning, and Educational Tools",
+        "name": "Science & Education"
+      },
+      "social": {
+        "description": "Social Networks and Communication",
+        "name": "Social Media"
+      },
+      "stocks-finance": {
+        "description": "Financial Markets, Trading, and Investment",
+        "name": "Stocks & Finance"
+      },
+      "tools": {
+        "description": "General-purpose Practical Tools and Services",
+        "name": "Utility Tools"
+      },
+      "travel-transport": {
+        "description": "Travel Planning and Transportation",
+        "name": "Travel & Transport"
+      },
+      "weather": {
+        "description": "Weather Forecasting and Meteorological Services",
+        "name": "Weather"
+      },
+      "web-search": {
+        "description": "Web Search and Information Retrieval",
+        "name": "Information Retrieval"
+      }
+    },
+    "details": {
+      "connectionType": {
+        "hybrid": {
+          "desc": "This service can run locally or in the cloud depending on configuration or usage scenario, offering dual operation capability.",
+          "title": "Hybrid Service"
+        },
+        "local": {
+          "desc": "This server can only run on the client’s local device, requiring installation and relying on local resources.",
+          "title": "Local Service"
+        },
+        "remote": {
+          "desc": "This server is hosted remotely because it mainly depends on remote services and does not rely on the local environment.",
+          "title": "Cloud Service"
+        }
+      },
+      "deployment": {
+        "args": "Arguments",
+        "checkCommand": "Check Command",
+        "command": "Command",
+        "commandLine": "System Dependencies",
+        "connection": "Connection Method",
+        "connectionType": "Connection Type",
+        "description": "Plugin Installation and Deployment Method",
+        "descriptionPlaceholder": "Optional Description",
+        "empty": "No Deployment Options Available",
+        "env": "Environment Variables",
+        "guide": "Installation Guide",
+        "installation": "Install via {{method}}",
+        "installationMethod": "Installation Method",
+        "other": "Other Settings",
+        "packageName": "Package Name",
+        "platform": {
+          "steps": {
+            "claude": "- Open the **Claude Desktop** app\n- Go to **Settings**, then select **Developer**\n- Click **Edit Configuration**\n- Open the **claude_desktop_config.json** file\n- Copy and paste the server configuration into the existing file, then save",
+            "cline": "- Open VS Code with the Cline extension installed\n- Click the Cline icon in the sidebar\n- Select **MCP Servers** from the dropdown menu\n- In the **Remote Servers** tab, enter the server name and your MCP server URL\n- Click **Add Server** to connect",
+            "cursor": "- Navigate to **Settings**, then select Cursor settings\n- Choose **MCP** on the left\n- Click **Add New Global MCP Server** at the top right\n- Copy and paste the server configuration into the existing file, then save",
+            "lobeChat": "- Open the **LobeChat Desktop** app\n- Go to **Settings** - **Default Assistant**\n- Then select **Plugin Settings** - **Custom Plugins**\n- Click **Quick Import JSON Configuration**\n- Copy and paste the server configuration into the text box, then install",
+            "openai": "- Open your **OpenAI app** or development environment\n- Configure MCP tools in the **Responses API**\n- Add MCP blocks to the **tools** array in API requests\n- Set **server_url** to your MCP server endpoint\n- Include required authentication headers (API key, token, etc.)\n- Use the `allowed_tools` parameter to restrict exposed tools\n- Set `require_approval` to control tool execution approval",
+            "vscode": "- Open VS Code\n- Open the command palette (`Ctrl+Shift+P` / `Cmd+Shift+P`)\n- Type **MCP: Add Server** and select it\n- Choose to add to workspace or user settings\n- Copy and paste the server configuration"
+          },
+          "title": "Install on {{platform}}"
+        },
+        "recommended": "Recommended",
+        "systemDependencies": "System Dependencies",
+        "table": {
+          "description": "Description",
+          "name": "Name",
+          "required": "Required",
+          "type": "Type"
+        },
+        "title": "Installation Method"
+      },
+      "githubBadge": {
+        "desc": "LobeHub regularly scans code repositories and documentation to:\n\n- Confirm MCP server operational status.\n- Extract server features such as tools, resources, prompts, and required parameters.\n- Our badge helps users quickly assess MCP server security, feature set, and installation instructions.\n\nPlease copy the following code into your `README.md` file:"
+      },
+      "nav": {
+        "needHelp": "Need Help?",
+        "reportIssue": "Report Issue",
+        "viewSourceCode": "View Source Code"
+      },
+      "overview": {
+        "title": "Overview"
+      },
+      "related": {
+        "listTitle": "Related MCP Servers",
+        "more": "View More",
+        "title": "Related Recommendations"
+      },
+      "schema": {
+        "mode": {
+          "docs": "Documentation"
+        },
+        "prompts": {
+          "arguments": "Parameter Configuration",
+          "desc": "Interactive templates triggered by user selection",
+          "empty": "No Prompts Available",
+          "instructions": "Instruction Description",
+          "table": {
+            "description": "Description",
+            "name": "Name",
+            "required": "Required"
+          },
+          "title": "Prompt List"
+        },
+        "resources": {
+          "desc": "Context data attached and managed by the client",
+          "empty": "No Resources Available",
+          "table": {
+            "description": "Description",
+            "mineType": "MIME Type",
+            "name": "Name",
+            "uri": "URI"
+          },
+          "title": "Resource List"
+        },
+        "title": "Plugin Features",
+        "tools": {
+          "desc": "Functional interfaces exposed to large language models (LLM) to perform operations",
+          "empty": "No Tools Available",
+          "inputSchema": "Input Description",
+          "instructions": "Instruction Description",
+          "table": {
+            "description": "Description",
+            "name": "Name",
+            "required": "Required",
+            "type": "Type"
+          },
+          "title": "Tool List"
+        }
+      },
+      "score": {
+        "claimed": {
+          "desc": "This MCP Server has been claimed by the owner, ensuring its ownership and management.",
+          "title": "Claimed by Owner"
+        },
+        "deployMoreThanManual": {
+          "desc": "This MCP Server offers installation methods friendlier than Manual, allowing users to deploy and use it easily.",
+          "title": "Offers Friendly Installation Methods"
+        },
+        "deployment": {
+          "desc": "This MCP Server provides at least one installation method, allowing users to deploy and use it.",
+          "descWithCount": "This MCP Server provides {{number}} installation methods, allowing users to deploy and use it.",
+          "title": "Provides At Least One Installation Method"
+        },
+        "license": {
+          "desc": "This repository contains a LICENSE file.",
+          "descWithlicense": "This repository is licensed under {{license}}.",
+          "title": "Has LICENSE"
+        },
+        "listTitle": "Score Details",
+        "notClaimed": {
+          "desc": "If you are the owner of this MCP Server, you can claim it by the following methods.",
+          "title": "Not Claimed by Owner"
+        },
+        "prompts": {
+          "desc": "This MCP Server provides prompts, allowing users to interact with the service.",
+          "descWithCount": "This MCP Server provides {{number}} prompts, allowing users to interact with the service.",
+          "title": "Includes Prompts"
+        },
+        "readme": {
+          "desc": "This repository contains a README.md file.",
+          "title": "Has README"
+        },
+        "resources": {
+          "desc": "This MCP Server provides resources, allowing users to attach and manage context data.",
+          "descWithCount": "This MCP Server provides {{number}} resources, allowing users to attach and manage context data.",
+          "title": "Includes Resources"
+        },
+        "title": "Score",
+        "tools": {
+          "desc": "The service must provide at least one tool, allowing users to perform specific operations.",
+          "descWithCount": "This MCP Server provides {{number}} tool features, allowing users to perform specific operations.",
+          "title": "Includes At Least One Tool"
+        },
+        "validated": {
+          "desc": "This MCP Server has passed installation validation, ensuring its quality and reliability.",
+          "title": "Validated"
+        }
+      },
+      "scoreLevel": {
+        "a": {
+          "desc": "This MCP Server has been rigorously validated, providing comprehensive features and a high-quality user experience.",
+          "fullTitle": "Excellent Plugin",
+          "title": "Premium"
+        },
+        "b": {
+          "desc": "This MCP Server offers good features and user experience but may need improvements in some areas.",
+          "fullTitle": "Good Functionality",
+          "title": "Good"
+        },
+        "f": {
+          "desc": "This MCP Server is incomplete or of low quality; users are advised to use it cautiously.",
+          "fullTitle": "Poor Quality",
+          "title": "Poor"
+        }
+      },
+      "settings": {
+        "capabilities": {
+          "prompts": "Prompts",
+          "resources": "Resources",
+          "title": "Plugin Capabilities",
+          "tools": "Tools"
+        },
+        "configuration": {
+          "title": "Plugin Configuration"
+        },
+        "connection": {
+          "args": "Startup Arguments",
+          "command": "Startup Command",
+          "title": "Connection Information",
+          "type": "Connection Type",
+          "url": "Service URL"
+        },
+        "saveSettings": "Save Settings",
+        "title": "Plugin Settings"
+      },
+      "sidebar": {
+        "install": "Install MCP Server",
+        "meta": {
+          "homepage": "Official Homepage",
+          "installCount": "Install Count",
+          "language": "Source Language",
+          "license": "License",
+          "published": "Published Date",
+          "repo": "Source Repository",
+          "stars": "Stars",
+          "title": "Details",
+          "updated": "Last Updated"
+        },
+        "moreServerConfig": "View Details",
+        "recommendServers": "Related MCP",
+        "serverConfig": "Installation Configuration",
+        "toc": "Table of Contents"
+      },
+      "summary": {
+        "title": "What can you do with this MCP Server?"
+      },
+      "totalScore": {
+        "description": "Total score calculated based on various indicators",
+        "legend": {
+          "aGrade": "Grade A ({{minPercent}}-100%)",
+          "bGrade": "Grade B ({{minPercent}}-{{maxPercent}}%)",
+          "fGrade": "Grade F (0-{{maxPercent}}%)"
+        },
+        "pointsFormat": "{{score}}/{{total}} points",
+        "popover": {
+          "completedOptional": "✅ Completed Optional Items ({{count}})",
+          "completedRequired": "✅ Completed Required Items ({{count}})",
+          "incompleteOptional": "⏸️ Incomplete Optional Items ({{count}})",
+          "incompleteRequired": "❌ Incomplete Required Items ({{count}})",
+          "title": "Score Details"
+        },
+        "ratingFormat": "Rating: {{level}}",
+        "scoreInfo": {
+          "items": "Items",
+          "points": "Points",
+          "requiredItems": "Required Items"
+        },
+        "title": "Total Score"
+      },
+      "versions": {
+        "table": {
+          "isLatest": "Latest Version",
+          "isValidated": "Validated",
+          "publishAt": "Published Date",
+          "version": "Version"
+        },
+        "title": "Version History"
+      }
+    },
+    "hero": {
+      "desc": "An open-source, deployable MCP Servers platform that helps AI systems easily access key resources such as file systems, databases, APIs, and more, comprehensively expanding your AI capabilities.",
+      "subTitle": "Open Source & Ready to Use",
+      "title": "Open Source MCP Marketplace for AI"
+    },
+    "sorts": {
+      "createdAt": "Recently Added",
+      "installCount": "Install Count",
+      "isFeatured": "Featured Plugins",
+      "isValidated": "Validated Plugins",
+      "promptsCount": "Number of Prompts",
+      "ratingCount": "Number of Ratings",
+      "resourcesCount": "Number of Resources",
+      "toolsCount": "Number of Tools",
+      "updatedAt": "Recently Updated"
+    },
+    "title": "MCP Marketplace",
+    "unvalidated": {
+      "desc": "This MCP Server has not been validated yet",
+      "title": "Unvalidated"
+    },
+    "validated": {
+      "desc": "This MCP Server has been validated to ensure its quality and reliability.",
+      "descWithDate": "This MCP Server was validated on {{date}} to ensure its quality and reliability.",
+      "title": "Validated"
+    }
+  },
+  "models": {
+    "abilities": "Model Capabilities",
+    "chat": "Start Conversation",
+    "contentLength": "Maximum Context Length",
+    "details": {
+      "overview": {
+        "title": "Overview"
+      },
+      "related": {
+        "listTitle": "Related Models",
+        "more": "View More",
+        "title": "Related Recommendations"
+      }
+    },
+    "free": "Free",
+    "guide": "Configuration Guide",
+    "list": "Model List",
+    "more": "More",
+    "parameterList": {
+      "defaultValue": "Default Value",
+      "docs": "View Documentation",
+      "frequency_penalty": {
+        "desc": "This setting adjusts the frequency at which the model reuses specific vocabulary that has already appeared in the input. Higher values reduce the likelihood of such repetition, while negative values have the opposite effect. Vocabulary penalties do not increase with frequency of occurrence. Negative values encourage vocabulary reuse.",
+        "title": "Frequency Penalty"
+      },
+      "max_tokens": {
+        "desc": "This setting defines the maximum length that the model can generate in a single response. Setting a higher value allows the model to produce longer replies, while a lower value restricts the length of the response, making it more concise. Adjusting this value appropriately based on different application scenarios can help achieve the desired response length and level of detail.",
+        "title": "Single Response Limit"
+      },
+      "presence_penalty": {
+        "desc": "This setting aims to control the reuse of vocabulary based on its frequency in the input. It attempts to use less of those words that appear more frequently in the input, with usage frequency proportional to occurrence frequency. Vocabulary penalties increase with frequency of occurrence. Negative values encourage vocabulary reuse.",
+        "title": "Topic Freshness"
+      },
+      "range": "Range",
+      "reasoning_effort": {
+        "desc": "This setting controls the intensity of reasoning the model applies before generating a response. Low intensity prioritizes response speed and saves tokens, while high intensity provides more comprehensive reasoning but consumes more tokens and slows down response time. The default value is medium, balancing reasoning accuracy with response speed.",
+        "title": "Reasoning Intensity"
+      },
+      "temperature": {
+        "desc": "This setting affects the diversity of the model's responses. Lower values lead to more predictable and typical responses, while higher values encourage more diverse and less common responses. When set to 0, the model always gives the same response to a given input.",
+        "title": "Randomness"
+      },
+      "title": "Model Parameters",
+      "top_p": {
+        "desc": "This setting limits the model's selection to a certain proportion of the most likely vocabulary: only selecting those top words whose cumulative probability reaches P. Lower values make the model's responses more predictable, while the default setting allows the model to choose from the entire range of vocabulary.",
+        "title": "Nucleus Sampling"
+      },
+      "type": "Type"
+    },
+    "providerInfo": {
+      "apiTooltip": "LobeChat supports using a custom API key for this provider.",
+      "input": "Input Price",
+      "inputTooltip": "Cost per million tokens",
+      "latency": "Latency",
+      "latencyTooltip": "Average response time for the provider to send the first token",
+      "maxOutput": "Maximum Output Length",
+      "maxOutputTooltip": "Maximum number of tokens this endpoint can generate",
+      "officialTooltip": "LobeHub Official Service",
+      "output": "Output Price",
+      "outputTooltip": "Cost per million tokens",
+      "streamCancellationTooltip": "This provider supports stream cancellation.",
+      "throughput": "Throughput",
+      "throughputTooltip": "Average number of tokens transmitted per second for stream requests"
+    },
+    "sorts": {
+      "contextWindowTokens": "Context Length",
+      "identifier": "Model ID",
+      "inputPrice": "Input Price",
+      "outputPrice": "Output Price",
+      "providerCount": "Number of Providers",
+      "releasedAt": "Recently Released"
+    },
+    "suggestions": "Related Models",
+    "supportedProviders": "Providers Supporting This Model"
+  },
+  "plugins": {
+    "community": "Community Plugins",
+    "details": {
+      "settings": {
+        "title": "Plugin Settings"
+      },
+      "summary": {
+        "title": "What can you do with this plugin?"
+      },
+      "tools": {
+        "title": "Plugin Tools"
+      }
+    },
+    "install": "Install Plugin",
+    "installed": "Installed",
+    "list": "Plugin List",
+    "meta": {
+      "description": "Description",
+      "parameter": "Parameter",
+      "title": "Tool Parameters",
+      "type": "Type"
+    },
+    "more": "More",
+    "official": "Official Plugins",
+    "recentSubmits": "Recently Updated",
+    "sorts": {
+      "createdAt": "Recently Published",
+      "identifier": "Plugin ID",
+      "title": "Plugin Name"
+    },
+    "suggestions": "Related Recommendations"
+  },
+  "providers": {
+    "config": "Configure Provider",
+    "details": {
+      "guide": {
+        "title": "Integration Guide"
+      },
+      "overview": {
+        "title": "Overview"
+      },
+      "related": {
+        "listTitle": "Related Providers",
+        "more": "View More",
+        "title": "Related Recommendations"
+      }
+    },
+    "list": "Model Provider List",
+    "modelCount": "{{count}} models",
+    "modelName": "Model Name",
+    "modelSite": "Model Documentation",
+    "more": "More",
+    "officialSite": "Official Website",
+    "showAllModels": "Show All Models",
+    "sorts": {
+      "default": "Default Sorting",
+      "identifier": "Provider ID",
+      "modelCount": "Number of Models"
+    },
+    "suggestions": "Related Providers",
+    "supportedModels": "Supported Models"
+  },
+  "publishedTime": "Published on",
+  "search": {
+    "placeholder": "Search by name, description, or keywords...",
+    "result": "{{count}} results about <highlight>{{keyword}}</highlight>",
+    "searching": "Searching..."
+  },
+  "tab": {
+    "assistant": "Assistant",
+    "home": "Home",
+    "model": "Model",
+    "plugin": "Plugin",
+    "provider": "Model Provider"
+  }
+}

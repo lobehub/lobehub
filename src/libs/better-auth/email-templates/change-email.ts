@@ -55,7 +55,7 @@ export const getChangeEmailVerificationTemplate = (params: {
         ${userName ? `<p style="margin: 0 0 16px 0;">Hi <strong>${userName}</strong>,</p>` : ''}
 
         <p style="margin: 0 0 24px 0;">
-          We received a request to change your LobeHub account email to this address. Please confirm by clicking the button below.
+          We received a request to change your Project-M account email to this address. Please confirm by clicking the button below.
         </p>
 
         <!-- Button -->
@@ -95,14 +95,14 @@ export const getChangeEmailVerificationTemplate = (params: {
     <!-- Footer -->
     <div style="text-align: center; margin-top: 32px;">
       <p style="color: #a1a1aa; font-size: 13px; margin: 0;">
-        © 2026 LobeHub. All rights reserved.
+        © 2026 Project-M. All rights reserved.
       </p>
     </div>
   </div>
 </body>
 </html>
     `,
-    subject: 'Confirm Your New Email - LobeHub',
-    text: `You requested to change your LobeHub account email. Please confirm by clicking this link: ${url}\n\nThis link will expire in ${expirationText}.\n\nIf you didn't request this change, you can safely ignore this email.`,
+    subject: 'Confirm Your New Email - Project-M',
+    text: `You requested to change your Project-M account email. Please confirm by clicking this link: ${url}\n\nThis link will expire in ${expirationText}.\n\nIf you didn't request this change, you can safely ignore this email.`,
   };
 };

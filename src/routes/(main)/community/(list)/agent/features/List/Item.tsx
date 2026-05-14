@@ -181,15 +181,7 @@ const AssistantItem = memo<DiscoverAssistantItem>(
                   </Text>
                 </Link>
               </Flexbox>
-              {author && (
-                <div
-                  className={userName ? styles.author : undefined}
-                  style={userName ? undefined : { color: 'inherit' }}
-                  onClick={userName ? handleAuthorClick : undefined}
-                >
-                  {author}
-                </div>
-              )}
+              {/* Author hidden from UI */}
             </Flexbox>
           </Flexbox>
         </Flexbox>

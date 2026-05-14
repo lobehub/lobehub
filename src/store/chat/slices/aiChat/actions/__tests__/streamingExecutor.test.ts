@@ -1208,7 +1208,7 @@ describe('StreamingExecutor actions', () => {
       );
     });
 
-    it('should not enable visual understanding when the active LobeHub model supports visual media natively', () => {
+    it('should not enable visual understanding when the active ChinnaHub model supports visual media natively', () => {
       act(() => {
         useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
       });

@@ -85,6 +85,10 @@ const Footer = memo<FooterProps>(
     const origin = useAppOrigin();
     const platformId = platformDef.id;
     const applicationId = AntdForm.useWatch('applicationId', form);
+    const webhookFieldName =
+      platformId === 'whatsapp'
+        ? t('channel.whatsapp.callbackUrl')
+        : t('channel.eventSubscriptionUrl');
 
     const settingsConnectionMode = AntdForm.useWatch(['settings', 'connectionMode'], form);
 
@@ -236,11 +240,15 @@ const Footer = memo<FooterProps>(
           />
         )}
 
+        {hasConfig && showWebhookUrl && platformId === 'whatsapp' && (
+          <Alert showIcon message={t('channel.whatsapp.webhookManualSetup')} type="info" />
+        )}
+
         {hasConfig && showWebhookUrl && (
           <Flexbox gap={8}>
             <Flexbox horizontal align="center" gap={8}>
               <span style={{ fontWeight: 600 }}>{t('channel.endpointUrl')}</span>
-              <Tag>{'Event Subscription URL'}</Tag>
+              <Tag>{webhookFieldName}</Tag>
             </Flexbox>
             <Flexbox horizontal gap={8}>
               <div className={styles.webhookBox}>{webhookUrl}</div>
@@ -261,7 +269,7 @@ const Footer = memo<FooterProps>(
                   components={{ bold: <strong /> }}
                   i18nKey="channel.endpointUrlHint"
                   ns="agent"
-                  values={{ fieldName: 'Event Subscription URL', name: platformDef.name }}
+                  values={{ fieldName: webhookFieldName, name: platformDef.name }}
                 />
               }
             />

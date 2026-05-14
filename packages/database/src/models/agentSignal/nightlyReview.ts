@@ -165,7 +165,7 @@ export class AgentSignalNightlyReviewModel {
    * Expects:
    * - `windowStart` and `windowEnd` are UTC instants for the user's local review date
    * - Message `agentId` wins when present; topic `agentId` covers legacy messages
-   * - Virtual agents are excluded except the product-owned Lobe AI inbox agent
+   * - Virtual agents are excluded except the product-owned Chinna inbox agent
    *
    * Returns:
    * - Agent targets with message/topic/failure counts

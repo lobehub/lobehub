@@ -65,7 +65,7 @@ const AgentList = memo<AgentListProps>(({ activeAgentId, onSelect }) => {
           DEFAULT_INBOX_AVATAR,
         backgroundColor: inboxMeta?.backgroundColor || undefined,
         id: inboxAgentId,
-        title: inboxMeta?.title || 'Lobe AI',
+        title: inboxMeta?.title || 'Chinna AI',
       });
       seen.add(inboxAgentId);
     }

@@ -9,8 +9,6 @@ module.exports = defineConfig({
   outputLocales: [
     'ar',
     'bg-BG',
-    'zh-CN',
-    'zh-TW',
     'ru-RU',
     'ja-JP',
     'ko-KR',
@@ -24,6 +22,7 @@ module.exports = defineConfig({
     'pl-PL',
     'vi-VN',
     'fa-IR',
+    'te-IN',
   ],
   temperature: 0,
   saveImmediately: true,

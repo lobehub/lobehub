@@ -70,7 +70,7 @@ describe('buildTaskListPrompt', () => {
     expect(result).not.toContain('ago');
   });
 
-  it('includes default Lobe AI assignee hint when provided', () => {
+  it('includes default Chinna assignee hint when provided', () => {
     const result = buildTaskListPrompt(
       {
         defaultAssigneeAgentId: 'agt_inbox',
@@ -81,7 +81,7 @@ describe('buildTaskListPrompt', () => {
     );
 
     expect(result).toContain('<task_manager_defaults>');
-    expect(result).toContain('Default Lobe AI agent id: agt_inbox');
+    expect(result).toContain('Default Chinna agent id: agt_inbox');
     expect(result).toContain('Do not use it as a listTasks filter');
   });
 });

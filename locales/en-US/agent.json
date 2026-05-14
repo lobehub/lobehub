@@ -116,7 +116,7 @@
   "channel.line.fetchBotInfoSuccess": "Destination User ID fetched",
   "channel.line.webhookManualSetup": "LINE does not allow programmatic webhook registration. Copy this URL into the LINE Developers Console (Messaging API → Webhook URL), click \"Verify\", and enable \"Use webhook\".",
   "channel.messengerPromo.action": "Try Messenger",
-  "channel.messengerPromo.desc": "No bot setup. Chat with LobeHub on Slack, Discord, Telegram.",
+  "channel.messengerPromo.desc": "No bot setup. Chat with ChinnaHub on Slack, Discord, Telegram.",
   "channel.messengerPromo.dismiss": "Dismiss",
   "channel.messengerPromo.title": "Skip the setup",
   "channel.openPlatform": "Open Platform",

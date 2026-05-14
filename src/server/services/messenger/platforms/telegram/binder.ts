@@ -128,13 +128,13 @@ export class MessengerTelegramBinder implements MessengerPlatformBinder {
 
     if (isLocalhostUrl(verifyUrl)) {
       log('handleUnlinkedMessage: APP_URL is localhost, falling back to plain text link');
-      const text = `Welcome to LobeHub! 🤖\n\nTo continue, link your Telegram account to LobeHub. The link expires in 30 minutes:\n\n${verifyUrl}\n\nAfter linking, send /agents anytime to list your agents and tap one to switch the active agent.`;
+      const text = `Welcome to ChinnaHub! 🤖\n\nTo continue, link your Telegram account to LobeHub. The link expires in 30 minutes:\n\n${verifyUrl}\n\nAfter linking, send /agents anytime to list your agents and tap one to switch the active agent.`;
       await api.sendMessage(ctx.chatId, text);
       return;
     }
 
     const text =
-      'Welcome to LobeHub! 🤖\n\nTo continue, link your Telegram account to LobeHub.\n\nTap the button below — the link expires in 30 minutes.\n\nAfter linking, send /agents anytime to list your agents and tap one to switch the active agent.';
+      'Welcome to ChinnaHub! 🤖\n\nTo continue, link your Telegram account to LobeHub.\n\nTap the button below — the link expires in 30 minutes.\n\nAfter linking, send /agents anytime to list your agents and tap one to switch the active agent.';
 
     await api.sendMessageWithUrlButton(ctx.chatId, text, {
       text: '🔗 Link Account',

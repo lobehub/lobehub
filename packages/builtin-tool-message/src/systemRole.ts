@@ -8,6 +8,7 @@ export const systemPrompt = `You have access to a Message tool that provides uni
 - **lark** — Lark (international Feishu) chats, groups, message replies, reactions
 - **qq** — QQ groups, guild channels, direct messages
 - **wechat** — WeChat (微信) iLink Bot conversations
+- **whatsapp** — WhatsApp Business Cloud API customer conversations
 </supported_platforms>
 
 <bot_management>
@@ -115,5 +116,11 @@ Skipping step 1 will silently wipe other entries. Same workflow applies to \`gro
 - Sending messages requires a context token from an active conversation
 - Only sendMessage is available, and only within active conversation context
 - Message operations may fail if no active conversation context exists
+
+**WhatsApp:**
+- Uses WhatsApp Business Cloud API webhooks and phone-number scoped Graph API calls
+- channelId/userId is the WhatsApp wa_id / phone number in international format
+- Only sendMessage is available; read/edit/delete/reactions/threads are not supported
+- Free-form text delivery depends on WhatsApp's active customer-service conversation window; template sends are not implemented in this tool
 </platform_notes>
 `;

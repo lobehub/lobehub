@@ -10,7 +10,7 @@
   "activity.notes": "备注",
   "analysis.action.button": "请求记忆分析",
   "analysis.modal.cancel": "取消",
-  "analysis.modal.helper": "默认情况下，Lobe AI 将分析所有未处理的对话。您也可以选择一个日期范围进行分析（可选）。",
+  "analysis.modal.helper": "默认情况下，Chinna 将分析所有未处理的对话。您也可以选择一个日期范围进行分析（可选）。",
   "analysis.modal.rangePlaceholder": "未选择日期范围；将分析所有对话。",
   "analysis.modal.rangeSelected": "正在分析 {{start}} 至 {{end}} 的对话",
   "analysis.modal.submit": "请求记忆分析",

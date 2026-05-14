@@ -52,7 +52,7 @@ const OnboardingContainer: FC<PropsWithChildren> = ({ children }) => {
           </Flexbox>
           <Center padding={24}>
             <Text align={'center'} type={'secondary'}>
-              © 2026 LobeHub. All rights reserved.
+              © 2026 Project-M. All rights reserved.
             </Text>
           </Center>
         </Flexbox>

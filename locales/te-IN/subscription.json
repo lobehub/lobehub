@@ -1,0 +1,24 @@
+{
+  "plans": {
+    "plan": {
+      "enterprise": {
+        "title": "సంస్థ"
+      },
+      "free": {
+        "title": "ఉచిత"
+      },
+      "hobby": {
+        "title": "అభిరుచి"
+      },
+      "premium": {
+        "title": "ప్రీమియం"
+      },
+      "starter": {
+        "title": "స్టార్టర్"
+      },
+      "ultimate": {
+        "title": "అల్టిమేట్"
+      }
+    }
+  }
+}

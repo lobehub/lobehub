@@ -3,15 +3,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { getUILocaleAndResources } from './getUILocaleAndResources';
 
 describe('getUILocaleAndResources', () => {
-  it('should return zh-CN locale and zhCn resources for zh-CN', async () => {
-    const result = await getUILocaleAndResources('zh-CN');
-    expect(result.locale).toBe('zh-CN');
-    expect(result.resources).toBeDefined();
-  });
-
-  it('should return zh-CN locale and zhCn resources for zh-TW', async () => {
-    const result = await getUILocaleAndResources('zh-TW');
-    expect(result.locale).toBe('zh-CN');
+  it('should return te-IN locale and resources for te-IN', async () => {
+    const result = await getUILocaleAndResources('te-IN');
+    expect(result.locale).toBe('te-IN');
     expect(result.resources).toBeDefined();
   });
 

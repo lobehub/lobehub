@@ -6,7 +6,7 @@ export default {
   'action.connect.short': 'Connect',
   'action.connecting': 'Waiting for authorization…',
   'action.create.error': 'Failed to create task. Please try again.',
-  'action.create.success': 'Scheduled task added. Find it in Lobe AI.',
+  'action.create.success': 'Scheduled task added. Find it in Chinna.',
   'action.createButton': 'Add task',
   'action.creating': 'Creating...',
   'action.dismiss.error': 'Failed to dismiss. Please try again.',

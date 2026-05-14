@@ -1,0 +1,470 @@
+{
+  "confirm": "Confirm",
+  "debug": {
+    "arguments": "Call Arguments",
+    "function_call": "Function Call",
+    "off": "Turn Off Debug",
+    "on": "View Plugin Call Info",
+    "payload": "Plugin Payload",
+    "pluginState": "Plugin State",
+    "response": "Response",
+    "title": "Plugin Details",
+    "tool_call": "Tool Call Request"
+  },
+  "detailModal": {
+    "customPlugin": {
+      "description": "Please go to the edit page to view details",
+      "editBtn": "Edit Now",
+      "title": "This is a Custom Plugin"
+    },
+    "emptyState": {
+      "description": "Please install this plugin first to view its capabilities and configuration options",
+      "title": "View Plugin Details After Installation"
+    },
+    "info": {
+      "description": "API Description",
+      "name": "API Name"
+    },
+    "tabs": {
+      "info": "Plugin Capabilities",
+      "manifest": "Installation File",
+      "settings": "Settings"
+    },
+    "title": "Plugin Details"
+  },
+  "dev": {
+    "confirmDeleteDevPlugin": "This local plugin will be deleted and cannot be recovered. Do you want to delete this plugin?",
+    "customParams": {
+      "useProxy": {
+        "label": "Install via Proxy (If you encounter cross-origin access errors, try enabling this option and reinstalling)"
+      }
+    },
+    "deleteSuccess": "Plugin deleted successfully",
+    "manifest": {
+      "identifier": {
+        "desc": "Unique identifier of the plugin",
+        "label": "Identifier"
+      },
+      "mode": {
+        "mcp": "MCP Plugin",
+        "mcpExp": "Experimental",
+        "url": "Online Link"
+      },
+      "name": {
+        "desc": "Plugin title",
+        "label": "Title",
+        "placeholder": "Search Engine"
+      }
+    },
+    "mcp": {
+      "advanced": {
+        "title": "Advanced Settings"
+      },
+      "args": {
+        "desc": "List of parameters passed to the execution command, usually the MCP server name or startup script path",
+        "label": "Command Arguments",
+        "placeholder": "e.g., mcp-hello-world",
+        "required": "Please enter startup parameters"
+      },
+      "auth": {
+        "bear": "API Key",
+        "desc": "Select the authentication method for the MCP server",
+        "label": "Authentication Type",
+        "none": "No Authentication Required",
+        "placeholder": "Please select authentication type",
+        "token": {
+          "desc": "Enter your API Key or Bearer Token",
+          "label": "API Key",
+          "placeholder": "sk-xxxxx",
+          "required": "Please enter authentication token"
+        }
+      },
+      "avatar": {
+        "label": "Plugin Icon"
+      },
+      "command": {
+        "desc": "Executable file or script used to start the MCP STDIO Server",
+        "label": "Command",
+        "placeholder": "e.g., npx / uv / docker etc.",
+        "required": "Please enter startup command"
+      },
+      "desc": {
+        "desc": "Add a description for the plugin",
+        "label": "Plugin Description",
+        "placeholder": "Supplement usage instructions and scenarios for this plugin"
+      },
+      "endpoint": {
+        "desc": "Enter the address of your MCP Streamable HTTP Server",
+        "label": "MCP Endpoint URL"
+      },
+      "env": {
+        "add": "Add a Row",
+        "desc": "Enter environment variables required by your MCP Server",
+        "duplicateKeyError": "Field keys must be unique",
+        "formValidationFailed": "Form validation failed, please check parameter format",
+        "keyRequired": "Field key cannot be empty",
+        "label": "MCP Server Environment Variables",
+        "stringifyError": "Unable to serialize parameters, please check parameter format"
+      },
+      "headers": {
+        "add": "Add a Row",
+        "desc": "Enter request headers",
+        "label": "HTTP Headers"
+      },
+      "identifier": {
+        "desc": "Specify a name for your MCP plugin, must use English characters",
+        "invalid": "Identifier can only contain letters, numbers, hyphens, and underscores",
+        "label": "MCP Plugin Name",
+        "placeholder": "e.g., my-mcp-plugin",
+        "required": "Please enter MCP service identifier"
+      },
+      "previewManifest": "Preview Plugin Manifest",
+      "quickImport": "Quick Import JSON Configuration",
+      "quickImportError": {
+        "empty": "Input content cannot be empty",
+        "invalidJson": "Invalid JSON format",
+        "invalidStructure": "Invalid JSON structure"
+      },
+      "stdioNotSupported": "Current environment does not support stdio type MCP plugins",
+      "testConnection": "Test Connection",
+      "testConnectionTip": "MCP plugin can only be used normally after successful connection test",
+      "type": {
+        "desc": "Select MCP plugin communication method, web version only supports Streamable HTTP",
+        "httpFeature1": "Compatible with web and desktop versions",
+        "httpFeature2": "Connect to remote MCP server without extra installation or configuration",
+        "httpShortDesc": "Streamable HTTP based communication protocol",
+        "label": "MCP Plugin Type",
+        "stdioFeature1": "Lower communication latency, suitable for local execution",
+        "stdioFeature2": "Requires local installation and running of MCP server",
+        "stdioNotAvailable": "STDIO mode is only available in desktop version",
+        "stdioShortDesc": "Communication protocol based on standard input/output",
+        "title": "MCP Plugin Type"
+      },
+      "url": {
+        "desc": "Enter your MCP Server Streamable HTTP address, SSE mode not supported",
+        "invalid": "Please enter a valid URL",
+        "label": "Streamable HTTP Endpoint URL",
+        "required": "Please enter MCP service URL"
+      }
+    },
+    "meta": {
+      "author": {
+        "desc": "Author of the plugin",
+        "label": "Author"
+      },
+      "avatar": {
+        "desc": "Plugin icon, can use Emoji or URL",
+        "label": "Icon"
+      },
+      "description": {
+        "desc": "Plugin description",
+        "label": "Description",
+        "placeholder": "Search search engines for information"
+      },
+      "formFieldRequired": "This field is required",
+      "homepage": {
+        "desc": "Plugin homepage",
+        "label": "Homepage"
+      },
+      "identifier": {
+        "desc": "Unique identifier of the plugin, automatically recognized from manifest",
+        "errorDuplicate": "Identifier duplicates an existing plugin, please modify the identifier",
+        "label": "Identifier",
+        "pattenErrorMessage": "Only English letters, numbers, - and _ are allowed"
+      },
+      "lobe": "{{appName}} Plugin",
+      "manifest": {
+        "desc": "{{appName}} will install the plugin via this link",
+        "label": "Plugin Manifest URL",
+        "preview": "Preview Manifest",
+        "refresh": "Refresh"
+      },
+      "openai": "OpenAI Plugin",
+      "title": {
+        "desc": "Plugin title",
+        "label": "Title",
+        "placeholder": "Search Engine"
+      }
+    },
+    "metaConfig": "Plugin Meta Information Configuration",
+    "modalDesc": "After adding a custom plugin, it can be used for plugin development verification or directly in conversations. For plugin development, please refer to the <1>Development Documentation↗</>.",
+    "openai": {
+      "importUrl": "Import from URL",
+      "schema": "Schema"
+    },
+    "preview": {
+      "api": {
+        "noParams": "This tool has no parameters",
+        "noResults": "No APIs matching the search criteria found",
+        "params": "Parameters:",
+        "searchPlaceholder": "Search tools..."
+      },
+      "card": "Preview Plugin Display",
+      "desc": "Preview Plugin Description",
+      "empty": {
+        "desc": "After configuration, you can preview the supported tool capabilities here",
+        "title": "Start Preview After Configuring Plugin"
+      },
+      "title": "Plugin Name Preview"
+    },
+    "save": "Install Plugin",
+    "saveSuccess": "Plugin settings saved successfully",
+    "tabs": {
+      "manifest": "Feature Manifest",
+      "meta": "Plugin Meta Information"
+    },
+    "title": {
+      "create": "Add Custom Plugin",
+      "edit": "Edit Custom Plugin"
+    },
+    "type": {
+      "lobe": "{{appName}} Plugin",
+      "openai": "OpenAI Plugin"
+    },
+    "update": "Update",
+    "updateSuccess": "Plugin settings updated successfully"
+  },
+  "error": {
+    "fetchError": "Failed to request the manifest link, please ensure the link is valid and allows cross-origin access",
+    "installError": "Plugin {{name}} installation failed",
+    "manifestInvalid": "Manifest does not comply with specifications, validation result: \n\n {{error}}",
+    "noManifest": "Manifest file does not exist",
+    "openAPIInvalid": "OpenAPI parsing failed, error: \n\n {{error}}",
+    "reinstallError": "Plugin {{name}} refresh failed",
+    "testConnectionFailed": "Failed to get Manifest: {{error}}",
+    "urlError": "The link did not return JSON content, please ensure it is a valid link"
+  },
+  "inspector": {
+    "args": "View Argument List",
+    "pluginRender": "View Plugin Interface"
+  },
+  "list": {
+    "item": {
+      "deprecated.title": "Deleted",
+      "local.config": "Configuration",
+      "local.title": "Custom"
+    }
+  },
+  "loading": {
+    "content": "Calling plugin...",
+    "plugin": "Plugin running..."
+  },
+  "localSystem": {
+    "apiName": {
+      "listLocalFiles": "View File List",
+      "moveLocalFiles": "Move Files",
+      "readLocalFile": "Read File Content",
+      "renameLocalFile": "Rename",
+      "searchLocalFiles": "Search Files",
+      "writeLocalFile": "Write File"
+    },
+    "title": "Local Files"
+  },
+  "mcpInstall": {
+    "CHECKING_INSTALLATION": "Checking installation environment...",
+    "COMPLETED": "Installation completed",
+    "CONFIGURATION_REQUIRED": "Please complete the relevant configuration before continuing installation",
+    "ERROR": "Installation error",
+    "FETCHING_MANIFEST": "Fetching plugin manifest...",
+    "GETTING_SERVER_MANIFEST": "Initializing MCP server...",
+    "INSTALLING_PLUGIN": "Installing plugin...",
+    "configurationDescription": "This MCP plugin requires configuration parameters to function properly, please fill in the necessary information",
+    "configurationRequired": "Configure Plugin Parameters",
+    "continueInstall": "Continue Installation",
+    "dependenciesDescription": "This plugin requires the following system dependencies to work properly. Please install the missing dependencies as instructed, then click recheck to continue installation.",
+    "dependenciesRequired": "Please install the plugin's system dependencies",
+    "dependencyStatus": {
+      "installed": "Installed",
+      "notInstalled": "Not Installed",
+      "requiredVersion": "Required Version: {{version}}"
+    },
+    "errorDetails": {
+      "args": "Arguments",
+      "command": "Command",
+      "connectionParams": "Connection Parameters",
+      "env": "Environment Variables",
+      "errorOutput": "Error Log",
+      "exitCode": "Exit Code",
+      "hideDetails": "Hide Details",
+      "originalError": "Original Error",
+      "showDetails": "Show Details"
+    },
+    "errorTypes": {
+      "AUTHORIZATION_ERROR": "Authorization Error",
+      "CONNECTION_FAILED": "Connection Failed",
+      "INITIALIZATION_TIMEOUT": "Initialization Timeout",
+      "PROCESS_SPAWN_ERROR": "Process Spawn Failed",
+      "UNKNOWN_ERROR": "Unknown Error",
+      "VALIDATION_ERROR": "Parameter Validation Failed"
+    },
+    "installError": "MCP plugin installation failed, reason: {{detail}}",
+    "installMethods": {
+      "manual": "Manual Installation:",
+      "recommended": "Recommended Installation Method:"
+    },
+    "recheckDependencies": "Recheck",
+    "skipDependencies": "Skip Check"
+  },
+  "pluginList": "Plugin List",
+  "protocolInstall": {
+    "actions": {
+      "install": "Install",
+      "installAnyway": "Install Anyway",
+      "installed": "Installed"
+    },
+    "config": {
+      "args": "Arguments",
+      "command": "Command",
+      "env": "Environment Variables",
+      "headers": "Request Headers",
+      "title": "Configuration Information",
+      "type": {
+        "http": "Type: HTTP",
+        "label": "Type",
+        "stdio": "Type: Stdio"
+      },
+      "url": "Service Address"
+    },
+    "custom": {
+      "badge": "Custom Plugin",
+      "security": {
+        "description": "This plugin is not officially verified, installation may pose security risks! Please ensure you trust the plugin source.",
+        "title": "⚠️ Security Risk Warning"
+      },
+      "title": "Install Custom Plugin"
+    },
+    "marketplace": {
+      "title": "Install Third-Party Plugin",
+      "trustedBy": "Provided by {{name}}",
+      "unverified": {
+        "title": "Unverified Third-Party Plugin",
+        "warning": "This plugin comes from an unverified third-party marketplace. Please confirm you trust the source before installation."
+      },
+      "verified": "Verified"
+    },
+    "messages": {
+      "connectionTestFailed": "Connection test failed",
+      "installError": "Plugin installation failed, please try again",
+      "installSuccess": "Plugin {{name}} installed successfully!",
+      "manifestError": "Failed to get plugin details, please check network connection and try again",
+      "manifestNotFound": "Failed to retrieve plugin manifest"
+    },
+    "meta": {
+      "author": "Author",
+      "homepage": "Homepage",
+      "identifier": "Identifier",
+      "source": "Source",
+      "version": "Version"
+    },
+    "official": {
+      "badge": "Project-M Official Plugin",
+      "description": "This plugin is developed and maintained by Project-M official team, has undergone strict security review, safe to use.",
+      "loadingMessage": "Fetching plugin details...",
+      "loadingTitle": "Loading",
+      "title": "Install Official Plugin"
+    },
+    "title": "Install MCP Plugin",
+    "warning": "⚠️ Please confirm you trust the source of this plugin. Malicious plugins may harm your system security."
+  },
+  "search": {
+    "apiName": {
+      "crawlMultiPages": "Read Multiple Pages Content",
+      "crawlSinglePage": "Read Page Content",
+      "search": "Search Pages"
+    },
+    "config": {
+      "addKey": "Add Key",
+      "close": "Delete",
+      "confirm": "Configuration Completed and Retry"
+    },
+    "crawPages": {
+      "crawling": "Link Recognition in Progress",
+      "detail": {
+        "preview": "Preview",
+        "raw": "Raw Text",
+        "tooLong": "Text content is too long, only the first {{characters}} characters are kept in the conversation context, the rest are excluded"
+      },
+      "meta": {
+        "crawler": "Crawling Mode",
+        "words": "Character Count"
+      }
+    },
+    "searchxng": {
+      "baseURL": "Please enter",
+      "description": "Enter the URL of SearchXNG to start online search",
+      "keyPlaceholder": "Please enter key",
+      "title": "Configure SearchXNG Search Engine",
+      "unconfiguredDesc": "Please contact administrator to complete SearchXNG search engine configuration to start online search",
+      "unconfiguredTitle": "SearchXNG Search Engine Not Configured"
+    },
+    "title": "Online Search"
+  },
+  "setting": "Plugin Settings",
+  "settings": {
+    "capabilities": {
+      "prompts": "Prompts",
+      "resources": "Resources",
+      "title": "Plugin Capabilities",
+      "tools": "Tools"
+    },
+    "configuration": {
+      "title": "Plugin Configuration"
+    },
+    "connection": {
+      "args": "Startup Arguments",
+      "command": "Startup Command",
+      "title": "Connection Information",
+      "type": "Connection Type",
+      "url": "Service Address"
+    },
+    "edit": "Edit",
+    "envConfigDescription": "These configurations will be passed as environment variables to the MCP server process at startup",
+    "httpTypeNotice": "HTTP type MCP plugins currently have no environment variables to configure",
+    "indexUrl": {
+      "title": "Marketplace Index",
+      "tooltip": "Online editing is not supported yet, please set via environment variables during deployment"
+    },
+    "messages": {
+      "connectionUpdateFailed": "Failed to update connection information",
+      "connectionUpdateSuccess": "Connection information updated successfully",
+      "envUpdateFailed": "Failed to save environment variables",
+      "envUpdateSuccess": "Environment variables saved successfully"
+    },
+    "modalDesc": "After configuring the plugin marketplace address, you can use a custom plugin marketplace",
+    "rules": {
+      "argsRequired": "Please enter startup arguments",
+      "commandRequired": "Please enter startup command",
+      "urlRequired": "Please enter service address"
+    },
+    "saveSettings": "Save Settings",
+    "title": "Configure Plugin Marketplace"
+  },
+  "showInPortal": "Please view details in the workspace",
+  "store": {
+    "actions": {
+      "cancel": "Cancel Installation",
+      "confirmUninstall": "This plugin will be uninstalled and its configuration cleared. Please confirm your action.",
+      "detail": "Details",
+      "install": "Install",
+      "manifest": "Edit Installation File",
+      "settings": "Settings",
+      "uninstall": "Uninstall"
+    },
+    "communityPlugin": "Third-Party Community",
+    "customPlugin": "Custom",
+    "empty": "No installed plugins",
+    "emptySelectHint": "Select a plugin to preview detailed information",
+    "installAllPlugins": "Install All",
+    "networkError": "Failed to fetch plugin store, please check network connection and try again",
+    "placeholder": "Search plugin name, description or keywords...",
+    "releasedAt": "Released on {{createdAt}}",
+    "tabs": {
+      "installed": "Installed",
+      "mcp": "MCP Plugins",
+      "old": "Project-M Plugins"
+    },
+    "title": "Plugin Store"
+  },
+  "unknownError": "Unknown Error",
+  "unknownPlugin": "Unknown Plugin"
+}

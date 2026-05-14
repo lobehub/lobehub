@@ -64,7 +64,7 @@ export default {
   'agent.welcome.sentence.2': 'What kind of partner do you want me to be?',
   'agent.welcome.sentence.3': 'First, give me a name :)',
   'agent.welcome.footer':
-    'Configure your Lobe AI Agent. It learns from every interaction, and the longer it runs, the better it gets to know you.',
+    'Configure your Chinna Agent. It learns from every interaction, and the longer it runs, the better it gets to know you.',
   'agent.greeting.prompt': 'Give me a name, a vibe, and an emoji',
   'agent.greeting.nameLabel': 'Name',
   'agent.greeting.namePlaceholder': 'e.g. Lumi, Atlas, Neko...',
@@ -152,7 +152,7 @@ export default {
   'telemetry.terms': 'Terms of Service',
   'telemetry.title': "Hey there, I'm {{name}}",
   'telemetry.title2': 'Nice to meet you~',
-  'telemetry.title3': "Loooobe! Let's get started!",
+  'telemetry.title3': "Hey Buddy! Let's get started!",
   'title': 'Welcome to {{appName}}',
   'username.desc': 'Tell us what we should call you',
   'username.hint': 'You can change this anytime in settings',

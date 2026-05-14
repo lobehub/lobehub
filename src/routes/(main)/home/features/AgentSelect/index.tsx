@@ -58,7 +58,7 @@ const AgentSelect = memo(() => {
 
   const displayMeta = isInboxDisplay ? inboxMeta : (sidebarItem ?? agentMapMeta);
 
-  const fallbackTitle = isInboxDisplay ? 'Lobe AI' : t('defaultSession', { ns: 'common' });
+  const fallbackTitle = isInboxDisplay ? 'Chinna AI' : t('defaultSession', { ns: 'common' });
   const displayTitle = displayMeta?.title || fallbackTitle;
   const displayAvatar =
     (typeof displayMeta?.avatar === 'string' ? displayMeta.avatar : undefined) ||

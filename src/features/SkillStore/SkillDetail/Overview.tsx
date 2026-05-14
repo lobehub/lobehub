@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Icon, Text, Typography } from '@lobehub/ui';
-import { ExternalLink } from 'lucide-react';
+import { Flexbox, Text, Typography } from '@lobehub/ui';
+// import { ExternalLink } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -27,14 +27,14 @@ const Overview = memo(() => {
       <Flexbox gap={8}>
         <Flexbox horizontal align="center" gap={4}>
           <span className={styles.sectionTitle}>{t('skillDetail.developedBy')}</span>
-          <span
+          {/* <span
             className={styles.authorLink}
             style={{ cursor: authorUrl ? 'pointer' : 'default' }}
             onClick={handleAuthorClick}
           >
             {author}
             {authorUrl && <Icon icon={ExternalLink} size={12} />}
-          </span>
+          </span> */}
         </Flexbox>
         <Text className={styles.trustWarning} type="secondary">
           {t('skillDetail.trustWarning')}
@@ -47,14 +47,14 @@ const Overview = memo(() => {
         <Flexbox horizontal gap={16}>
           <div className={styles.detailItem}>
             <span className={styles.detailLabel}>{t('skillDetail.author')}</span>
-            <span
+            {/* <span
               className={styles.authorLink}
               style={{ cursor: authorUrl ? 'pointer' : 'default' }}
               onClick={handleAuthorClick}
             >
               {author}
               {authorUrl && <Icon icon={ExternalLink} size={12} />}
-            </span>
+            </span> */}
           </div>
         </Flexbox>
       </Flexbox>

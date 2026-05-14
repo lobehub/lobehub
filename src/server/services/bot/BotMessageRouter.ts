@@ -148,7 +148,7 @@ interface BotCommand {
  * and triggers message processing via AgentBridgeService.
  *
  * All platforms require appId in the webhook URL:
- *   POST /api/agent/webhooks/[platform]/[appId]
+ *   GET/POST /api/agent/webhooks/[platform]/[appId]
  *
  * Bots are loaded on-demand: only the bot targeted by the incoming webhook
  * is created, not all bots across all platforms.

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 const { defineConfig } = require('@lobehub/i18n-cli');
 
 module.exports = defineConfig({
@@ -7,8 +8,6 @@ module.exports = defineConfig({
   outputLocales: [
     'ar',
     'bg-BG',
-    'zh-TW',
-    'zh-CN',
     'ru-RU',
     'ja-JP',
     'ko-KR',
@@ -22,6 +21,7 @@ module.exports = defineConfig({
     'pl-PL',
     'vi-VN',
     'fa-IR',
+    'te-IN',
   ],
   saveImmediately: true,
   temperature: 0,

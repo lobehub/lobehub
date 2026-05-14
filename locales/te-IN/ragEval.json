@@ -1,0 +1,91 @@
+{
+  "addDataset": {
+    "confirm": "Create",
+    "description": {
+      "placeholder": "Dataset description (optional)"
+    },
+    "name": {
+      "placeholder": "Dataset name",
+      "required": "Please enter the dataset name"
+    },
+    "title": "Add Dataset"
+  },
+  "dataset": {
+    "addNewButton": "Create Dataset",
+    "emptyGuide": "There are currently no datasets. Please create a dataset.",
+    "list": {
+      "table": {
+        "actions": {
+          "importData": "Import Data"
+        },
+        "columns": {
+          "actions": "Actions",
+          "ideal": {
+            "title": "Expected Answer"
+          },
+          "question": {
+            "title": "Question"
+          },
+          "referenceFiles": {
+            "title": "Reference Files"
+          }
+        },
+        "notSelected": "Please select a dataset on the left",
+        "title": "Dataset Details"
+      },
+      "title": "Dataset"
+    }
+  },
+  "evaluation": {
+    "addEvaluation": {
+      "confirm": "Create",
+      "datasetId": {
+        "placeholder": "Please select your evaluation dataset",
+        "required": "Please select an evaluation dataset"
+      },
+      "description": {
+        "placeholder": "Evaluation task description (optional)"
+      },
+      "name": {
+        "placeholder": "Evaluation task name",
+        "required": "Please enter the evaluation task name"
+      },
+      "title": "Add Evaluation Task"
+    },
+    "addNewButton": "Create Evaluation",
+    "emptyGuide": "There are currently no evaluation tasks. Start creating an evaluation.",
+    "table": {
+      "columns": {
+        "actions": {
+          "checkStatus": "Check Status",
+          "confirmDelete": "Are you sure you want to delete this evaluation?",
+          "confirmRun": "Are you sure you want to start running? The evaluation task will be executed asynchronously in the background, and closing the page will not affect the execution of the asynchronous task.",
+          "downloadRecords": "Download Evaluation",
+          "retry": "Retry",
+          "run": "Run",
+          "title": "Actions"
+        },
+        "datasetId": {
+          "title": "Dataset"
+        },
+        "name": {
+          "title": "Evaluation Task Name"
+        },
+        "records": {
+          "title": "Number of Evaluation Records"
+        },
+        "referenceFiles": {
+          "title": "Reference Files"
+        },
+        "status": {
+          "error": "Execution Error",
+          "pending": "Pending",
+          "processing": "In Progress",
+          "success": "Execution Successful",
+          "title": "Status"
+        }
+      },
+      "title": "Evaluation Task List"
+    }
+  }
+}

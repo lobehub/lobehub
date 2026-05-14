@@ -27,7 +27,6 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import useSWR from 'swr';
-import urlJoin from 'url-join';
 
 import PublishedTime from '@/components/PublishedTime';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
@@ -171,13 +170,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
             </Tooltip>
           </Flexbox>
           <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
-            {author && userName ? (
-              <Link style={{ color: 'inherit' }} to={urlJoin('/community/user', userName)}>
-                {author}
-              </Link>
-            ) : (
-              author
-            )}
+            {/* Author hidden from UI */}
             <Icon icon={DotIcon} />
             <PublishedTime className={styles.time} date={createdAt as string} />
             <AgentForkTag />

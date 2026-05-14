@@ -76,6 +76,14 @@ vi.mock('@/server/services/bot/platforms/telegram/api', () => ({
   })),
 }));
 
+const mockWhatsAppSendText = vi.fn();
+vi.mock('@/server/services/bot/platforms/whatsapp/api', () => ({
+  DEFAULT_WHATSAPP_GRAPH_API_VERSION: 'v25.0',
+  WhatsAppApi: vi.fn().mockImplementation(() => ({
+    sendText: mockWhatsAppSendText,
+  })),
+}));
+
 const mockSlackPostMessage = vi.fn();
 vi.mock('@/server/services/bot/platforms/slack/api', () => ({
   SLACK_API_BASE: 'https://slack.com/api',
@@ -258,6 +266,28 @@ describe('messageRuntime', () => {
 
       expect(result.success).toBe(false);
       expect(result.content).toContain('not supported on Telegram');
+    });
+  });
+
+  describe('WhatsApp adapter', () => {
+    it('should send a message via WhatsApp', async () => {
+      mockProviderFor('whatsapp', { accessToken: 'wa-token' });
+      mockWhatsAppSendText.mockResolvedValue({ id: 'wamid.out' });
+
+      const runtime = await messageRuntime.factory(validContext);
+      const result = await runtime.sendMessage({
+        channelId: '15551234567',
+        content: 'Hello WhatsApp!',
+        platform: 'whatsapp',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.state).toMatchObject({
+        channelId: '15551234567',
+        messageId: 'wamid.out',
+        platform: 'whatsapp',
+      });
+      expect(mockWhatsAppSendText).toHaveBeenCalledWith('15551234567', 'Hello WhatsApp!');
     });
   });
 

@@ -69,6 +69,7 @@ describe('getBotReplyLocale', () => {
     expect(getBotReplyLocale('slack')).toBe('en-US');
     expect(getBotReplyLocale('telegram')).toBe('en-US');
     expect(getBotReplyLocale('lark')).toBe('en-US');
+    expect(getBotReplyLocale('whatsapp')).toBe('en-US');
   });
 
   it('falls back to en-US for unknown or missing platforms', () => {

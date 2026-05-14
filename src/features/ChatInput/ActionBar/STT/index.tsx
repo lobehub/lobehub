@@ -13,11 +13,11 @@ import BrowserSTT from './browser';
 import OpenaiSTT from './openai';
 
 const STT = memo<{ mobile?: boolean }>(({ mobile }) => {
-  const { sttServer } = useUserStore(settingsSelectors.currentTTS, isEqual);
+  const { sttServer, voiceInput } = useUserStore(settingsSelectors.currentTTS, isEqual);
   const { enableSTT } = useServerConfigStore(featureFlagsSelectors);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
 
-  if (!enableSTT) return;
+  if (!enableSTT || voiceInput.enabled === false) return;
 
   if (enableBusinessFeatures) {
     return <BrowserSTT mobile={mobile} />;

@@ -14,13 +14,12 @@ export const locales = [
   'pt-BR',
   'ru-RU',
   'tr-TR',
-  'zh-CN',
-  'zh-TW',
   'vi-VN',
   'fa-IR',
   'it-IT',
   'pl-PL',
   'nl-NL',
+  'te-IN',
 ] as const;
 
 export type DefaultResources = typeof resources;
@@ -32,8 +31,7 @@ export const normalizeLocale = (locale?: string): Locales => {
 
   if (locale.startsWith('ar')) return 'ar';
   if (locale.startsWith('fa')) return 'fa-IR';
-
-  if (locale.startsWith('cn')) return 'zh-CN';
+  if (locale.startsWith('te')) return 'te-IN';
 
   for (const l of locales) {
     if (l.startsWith(locale)) {
@@ -53,14 +51,6 @@ export const localeOptions: LocaleOptions = [
   {
     label: 'English',
     value: 'en-US',
-  },
-  {
-    label: '简体中文',
-    value: 'zh-CN',
-  },
-  {
-    label: '繁體中文',
-    value: 'zh-TW',
   },
   {
     label: '日本語',
@@ -122,6 +112,10 @@ export const localeOptions: LocaleOptions = [
     label: 'فارسی',
     value: 'fa-IR',
   },
+  {
+    label: 'తెలుగు',
+    value: 'te-IN',
+  },
 ] as LocaleOptions;
 
-export const supportLocales: string[] = [...locales, 'en', 'zh'];
+export const supportLocales: string[] = [...locales, 'en'];

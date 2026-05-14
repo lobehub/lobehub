@@ -46,7 +46,7 @@ export default {
   'errors.stateMissing': 'Authorization state not found. Please try again.',
   'messages.authorizationFailed':
     'Authorization ran into an issue. Retry, or check if you finished signing in in your browser.',
-  'messages.authorized': 'LobeHub service authorized successfully',
+  'messages.authorized': 'Project-M service authorized successfully',
   'messages.handoffTimeout': 'Authorization timed out. Finish it in your browser, then retry.',
   'messages.loading': 'Starting authorization process...',
   'messages.success.cloudMcpInstall':

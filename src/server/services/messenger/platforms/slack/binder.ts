@@ -175,8 +175,8 @@ export class MessengerSlackBinder implements MessengerPlatformBinder {
     if (ctx.channelMentionThreadId) {
       const [, channelId, threadTs] = ctx.channelMentionThreadId.split(':');
       const text =
-        "Hi, I'm LobeHub — your AI agent in Slack.\n" +
-        `Link your LobeHub account to start chatting: <${verifyUrl}|click here>`;
+        "Hi, I'm Chinna — your AI agent in Slack.\n" +
+        `Link your Project-M account to start chatting: <${verifyUrl}|click here>`;
       await this.replyEphemeral({
         channelId,
         text,
@@ -187,7 +187,7 @@ export class MessengerSlackBinder implements MessengerPlatformBinder {
     }
 
     const intro =
-      "Hi, I'm LobeHub — your AI agent in Slack.\n" + 'To start, link your LobeHub account.';
+      "Hi, I'm Chinna — your AI agent in Slack.\n" + 'To start, link your Project-M account.';
     const linkLabel = `Or copy this link: <${verifyUrl}|${verifyUrl}>`;
 
     const api = new SlackApi(this.creds.botToken);

@@ -56,11 +56,11 @@ const InboxItem = memo<InboxItemProps>(({ className, style }) => {
     inboxAgentId ? operationSelectors.isAgentRunning(inboxAgentId) : () => false,
   );
   const prefetchAgent = usePrefetchAgent();
-  const inboxAgentTitle = inboxMeta.title || 'Lobe AI';
+  const inboxAgentTitle = inboxMeta.title || 'Chinna AI';
   const inboxAgentAvatar = inboxMeta.avatar || DEFAULT_INBOX_AVATAR;
   const inboxUrl = SESSION_CHAT_URL(inboxAgentId, false);
 
-  // Prefetch agent layout chunk and data eagerly since Lobe AI is almost always clicked
+  // Prefetch agent layout chunk and data eagerly since Chinna is almost always clicked
   prefetchRoute(inboxUrl);
   prefetchAgent(inboxAgentId!);
 

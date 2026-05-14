@@ -11,14 +11,14 @@ Feature: 发送消息与流式输出期间的视口滚动行为
   @AGENT-SCROLL-001 @P0 @journey
   Scenario: 开启流式自动滚动后，视口在流式输出结束时贴近底部
     Given 用户在设置中开启 "AI 回复时自动滚动"
-    And 用户进入 Lobe AI 对话页面
+    And 用户进入 Chinna 对话页面
     When 用户发送长文消息并等待回复完成
     Then 视口应贴近聊天列表底部
 
   @AGENT-SCROLL-002 @P0 @journey
   Scenario: 关闭流式自动滚动后，用户消息固定在顶部且视口不跟随
     Given 用户在设置中关闭 "AI 回复时自动滚动"
-    And 用户进入 Lobe AI 对话页面
+    And 用户进入 Chinna 对话页面
     When 用户发送长文消息并等待回复完成
     Then 用户消息应固定在聊天列表顶部
     And 视口不应贴近聊天列表底部
@@ -32,7 +32,7 @@ Feature: 发送消息与流式输出期间的视口滚动行为
   Scenario: 流式输出过程中手动向上滚动后，消息 pin 被取消
     Given 用户在设置中开启 "AI 回复时自动滚动"
     And 流式响应被放慢以模拟长文输出
-    And 用户进入 Lobe AI 对话页面
+    And 用户进入 Chinna 对话页面
     When 用户发送一条触发长文输出的消息
     And 用户在流式响应进行中向上滚动 200 像素
     Then 用户消息不应固定在聊天列表顶部
@@ -40,7 +40,7 @@ Feature: 发送消息与流式输出期间的视口滚动行为
   @AGENT-SCROLL-004 @P0 @journey
   Scenario: 发送消息后，滚动条自动把用户发送的消息顶到列表顶部
     Given 流式响应被放慢以模拟长文输出
-    And 用户进入 Lobe AI 对话页面
+    And 用户进入 Chinna 对话页面
     When 用户发送一条触发长文输出的消息
     Then 用户消息应固定在聊天列表顶部
 
@@ -50,7 +50,7 @@ Feature: 发送消息与流式输出期间的视口滚动行为
   @AGENT-SCROLL-005 @P0 @journey
   Scenario: 连续发送两轮消息后，第二轮用户消息仍固定在顶部
     Given 流式响应被放慢以模拟长文输出
-    And 用户进入 Lobe AI 对话页面
+    And 用户进入 Chinna 对话页面
     When 用户发送一条触发长文输出的消息
     And 等待流式响应结束
     And 用户发送一条触发长文输出的消息
@@ -62,7 +62,7 @@ Feature: 发送消息与流式输出期间的视口滚动行为
   # offsets must not be treated as user scroll-up intent.
   @AGENT-SCROLL-006 @P0 @journey
   Scenario: 非用户触发的上移不应收缩底部补偿区域
-    Given 用户进入 Lobe AI 对话页面
+    Given 用户进入 Chinna 对话页面
     When 用户完成一轮用于垫高列表的长回复对话
     And 用户发送一条触发短回复的消息并等待回复完成
     And 记录聊天列表底部补偿区域高度

@@ -1,0 +1,32 @@
+{
+  "addAgent": "Add Assistant",
+  "addAgentAndConverse": "Add Assistant and Converse",
+  "addAgentSuccess": "Successfully Added",
+  "guide": {
+    "func1": {
+      "desc1": "Enter the settings page you want to submit to the assistant by clicking on the settings icon in the upper right corner of the chat window.",
+      "desc2": "Click on the 'Submit to Assistant Market' button in the upper right corner.",
+      "tag": "Method 1",
+      "title": "Submit via LobeChat"
+    },
+    "func2": {
+      "button": "Go to Github Assistant Repository",
+      "desc": "If you want to add the assistant to the index, create an entry in the plugins directory using agent-template.json or agent-template-full.json, write a brief description and appropriate tags, and then create a pull request.",
+      "tag": "Method 2",
+      "title": "Submit via Github"
+    }
+  },
+  "search": {
+    "placeholder": "Search assistant name, description or keywords..."
+  },
+  "sidebar": {
+    "comment": "Comments",
+    "prompt": "Prompts",
+    "title": "Assistant Details"
+  },
+  "submitAgent": "Submit Assistant",
+  "title": {
+    "allAgents": "All Assistants",
+    "recentSubmits": "Recent Submits"
+  }
+}

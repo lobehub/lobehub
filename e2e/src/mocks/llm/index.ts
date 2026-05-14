@@ -246,7 +246,7 @@ export const llmMockManager = new LLMMockManager();
 export const presetResponses = {
   codeHelp: 'I can help you with coding! Please share the code you would like me to review.',
   error: 'I apologize, but I encountered an error processing your request.',
-  greeting: 'Hello! I am Lobe AI, your AI assistant. How can I help you today?',
+  greeting: 'Hello! I am Chinna, your AI assistant. How can I help you today?',
 
   // Much longer response so the chat surely exceeds the viewport and scroll
   // behavior is observable (used by @AGENT-SCROLL-* scenarios).
@@ -269,5 +269,5 @@ export const presetResponses = {
 
   nameRecall: '你刚才说你的名字是小明。',
   // Regenerate response
-  regenerated: '这是重新生成的回复内容。我是 Lobe AI，很高兴为你服务！',
+  regenerated: '这是重新生成的回复内容。我是 Chinna，很高兴为你服务！',
 };

@@ -7,4 +7,14 @@ export const DEFAULT_TTS_CONFIG: UserTTSConfig = {
   },
   sttAutoStop: true,
   sttServer: 'openai',
+  voiceCall: {
+    autoSpeak: true,
+    enabled: true,
+    mode: 'hybrid',
+    openAIRealtimeModel: 'gpt-realtime',
+    provider: 'auto',
+  },
+  voiceInput: {
+    enabled: true,
+  },
 };

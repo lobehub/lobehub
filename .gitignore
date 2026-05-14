@@ -37,12 +37,22 @@ tmp/
 *.log
 *.cache
 .cache/
+.backup-*/
 
 # Environment files
 .env
 .env.local
 .env*.local
+.env.local.backup*
 .env.development
+.chinnahub-env-audit.txt
+
+# Local ChinnaHub recovery/deploy helpers may contain machine-local secrets
+AUDIT_CHINNAHUB_ENV_REQUIREMENTS.sh
+DEPLOY_LOCAL_CHINNAHUB_TO_SERVER.sh
+FIX_CHINNAHUB_*.sh
+FIX_LOCAL_CHINNAHUB_RUN.sh
+RUN_CHINNAHUB_LOCAL_SAFE.sh
 venv/
 .venv/
 

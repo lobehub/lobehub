@@ -17,6 +17,12 @@ export const API_ENDPOINTS = {
   // STT
   stt: withElectronProtocolIfElectron('/webapi/stt/openai'),
 
+  // Voice
+  openAIRealtimeCall: (model: string) =>
+    withElectronProtocolIfElectron(
+      `/webapi/voice/realtime/openai?model=${encodeURIComponent(model)}`,
+    ),
+
   // TTS
   tts: (provider: string) => withElectronProtocolIfElectron(`/webapi/tts/${provider}`),
   edge: withElectronProtocolIfElectron('/webapi/tts/edge'),

@@ -22,6 +22,8 @@ import { SlackMessageService } from '@/server/services/bot/platforms/slack/servi
 import { TelegramApi } from '@/server/services/bot/platforms/telegram/api';
 import { TelegramMessageService } from '@/server/services/bot/platforms/telegram/service';
 import { WechatMessageService } from '@/server/services/bot/platforms/wechat/service';
+import { WhatsAppApi } from '@/server/services/bot/platforms/whatsapp/api';
+import { WhatsAppMessageService } from '@/server/services/bot/platforms/whatsapp/service';
 import { GatewayService } from '@/server/services/gateway';
 import { getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
 
@@ -34,7 +36,11 @@ import { MessageDispatcherService } from './MessageDispatcherService';
 const resolveCredentials = async (
   providerModel: AgentBotProviderModel,
   platform: string,
-): Promise<{ applicationId: string; credentials: Record<string, string> }> => {
+): Promise<{
+  applicationId: string;
+  credentials: Record<string, string>;
+  settings?: Record<string, unknown> | null;
+}> => {
   const providers = await providerModel.query({ platform });
   const enabled = providers.find((p) => p.enabled);
   if (!enabled?.credentials) {
@@ -43,7 +49,11 @@ const resolveCredentials = async (
         `Please configure a ${platform} integration in your bot settings.`,
     );
   }
-  return { applicationId: enabled.applicationId, credentials: enabled.credentials };
+  return {
+    applicationId: enabled.applicationId,
+    credentials: enabled.credentials,
+    settings: enabled.settings as Record<string, unknown> | null | undefined,
+  };
 };
 
 export const messageRuntime: ServerRuntimeRegistration = {
@@ -94,6 +104,20 @@ export const messageRuntime: ServerRuntimeRegistration = {
         return new WechatMessageService(
           new WechatApiClient(credentials.botToken, credentials.botId),
           applicationId,
+        );
+      },
+      whatsapp: async () => {
+        const { applicationId, credentials, settings } = await resolveCredentials(
+          providerModel,
+          'whatsapp',
+        );
+        return new WhatsAppMessageService(
+          new WhatsAppApi({
+            accessToken: credentials.accessToken,
+            graphApiVersion:
+              typeof settings?.graphApiVersion === 'string' ? settings.graphApiVersion : undefined,
+            phoneNumberId: applicationId,
+          }),
         );
       },
     });

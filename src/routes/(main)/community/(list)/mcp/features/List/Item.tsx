@@ -159,7 +159,7 @@ const McpItem = memo<DiscoverMcpItem>(
                   </Tooltip>
                 )}
               </Flexbox>
-              {author && <div className={styles.author}>{author}</div>}
+              {/* Author hidden from UI */}
             </Flexbox>
           </Flexbox>
           <Flexbox horizontal align={'center'} gap={4}>

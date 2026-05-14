@@ -1,99 +1,42 @@
-import { getMessageError } from '@lobechat/fetch-sse';
 import { type ChatMessageError } from '@lobechat/types';
-import { getRecordMineType } from '@lobehub/tts';
-import { type OpenAISTTOptions } from '@lobehub/tts/react';
-import { useOpenAISTT } from '@lobehub/tts/react';
-import isEqual from 'fast-deep-equal';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { type SWRConfiguration } from 'swr';
 
-import { createHeaderWithOpenAI } from '@/services/_header';
-import { API_ENDPOINTS } from '@/services/_url';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { useApplyTranscriptToEditor } from '@/features/ChatInput/Voice/useApplyTranscriptToEditor';
+import {
+  useOpenaiSTT,
+  useSTTErrorHandler,
+} from '@/features/ChatInput/Voice/useChatInputSpeechRecognition';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
-import { useGlobalStore } from '@/store/global';
-import { globalGeneralSelectors } from '@/store/global/selectors';
-import { useUserStore } from '@/store/user';
-import { settingsSelectors } from '@/store/user/selectors';
 
-import { useAgentId } from '../../hooks/useAgentId';
 import CommonSTT from './common';
-
-interface STTConfig extends SWRConfiguration {
-  onTextChange: (value: string) => void;
-}
-
-const useOpenaiSTT = (config: STTConfig) => {
-  const ttsSettings = useUserStore(settingsSelectors.currentTTS, isEqual);
-  const agentId = useAgentId();
-  const ttsAgentSettings = useAgentStore(
-    (s) => agentByIdSelectors.getAgentTTSById(agentId)(s),
-    isEqual,
-  );
-  const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
-
-  const autoStop = ttsSettings.sttAutoStop;
-  const sttLocale =
-    ttsAgentSettings?.sttLocale && ttsAgentSettings.sttLocale !== 'auto'
-      ? ttsAgentSettings.sttLocale
-      : locale;
-
-  return useOpenAISTT(sttLocale, {
-    ...config,
-    api: {
-      headers: createHeaderWithOpenAI(),
-      serviceUrl: API_ENDPOINTS.stt,
-    },
-    autoStop,
-    options: {
-      mineType: getRecordMineType(),
-      model: ttsSettings.openAI.sttModel,
-    },
-  } as OpenAISTTOptions);
-};
 
 const OpenaiSTT = memo<{ mobile?: boolean }>(({ mobile }) => {
   const [error, setError] = useState<ChatMessageError>();
   const { t } = useTranslation('chat');
+  const transcript = useApplyTranscriptToEditor();
+  const { handleSuccess, setDefaultError } = useSTTErrorHandler(setError);
 
-  const [loading, updateMessageInput] = useChatStore((s) => [
-    operationSelectors.isAgentRuntimeRunning(s),
-    s.updateMessageInput,
-  ]);
-
-  const setDefaultError = useCallback(
-    (err?: any) => {
-      setError({ body: err, message: t('stt.responseError', { ns: 'error' }), type: 500 });
-    },
-    [t],
-  );
+  const loading = useChatStore(operationSelectors.isAgentRuntimeRunning);
 
   const { start, isLoading, stop, formattedTime, time, response, isRecording } = useOpenaiSTT({
     onError: (err) => {
       stop();
+      transcript.end();
       setDefaultError(err);
     },
     onErrorRetry: (err) => {
       stop();
+      transcript.end();
       setDefaultError(err);
     },
     onSuccess: async () => {
-      if (!response) return;
-      if (response.status === 200) return;
-      const message = await getMessageError(response);
-      if (message) {
-        setError(message);
-      } else {
-        setDefaultError();
-      }
-      stop();
+      await handleSuccess(response, stop);
     },
     onTextChange: (text) => {
       if (loading) stop();
-      if (text) updateMessageInput(text);
+      if (text) transcript.apply(text);
     },
   });
 
@@ -102,21 +45,25 @@ const OpenaiSTT = memo<{ mobile?: boolean }>(({ mobile }) => {
   const handleTriggerStartStop = useCallback(() => {
     if (loading) return;
     if (!isLoading) {
+      transcript.begin();
       start();
     } else {
       stop();
+      transcript.end();
     }
-  }, [loading, isLoading, start, stop]);
+  }, [loading, isLoading, start, stop, transcript]);
 
   const handleCloseError = useCallback(() => {
     setError(undefined);
     stop();
-  }, [stop]);
+    transcript.end();
+  }, [stop, transcript]);
 
   const handleRetry = useCallback(() => {
     setError(undefined);
+    transcript.begin();
     start();
-  }, [start]);
+  }, [start, transcript]);
 
   return (
     <CommonSTT

@@ -1,0 +1,178 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+<!-- REDESIGNED: Cute 3D chibi bot icon -->
+  <defs>
+    <!-- Background gradient -->
+    <radialGradient id="bgGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#1a1a2e"/>
+      <stop offset="100%" stop-color="#0d0d1a"/>
+    </radialGradient>
+
+    <!-- Head gradient -->
+    <linearGradient id="headGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4f46e5"/>
+      <stop offset="40%" stop-color="#6d28d9"/>
+      <stop offset="100%" stop-color="#1e1b4b"/>
+    </linearGradient>
+
+    <!-- Head shine -->
+    <linearGradient id="headShine" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.18"/>
+      <stop offset="60%" stop-color="#ffffff" stop-opacity="0.03"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- Ear gradient -->
+    <linearGradient id="earGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#5b21b6"/>
+      <stop offset="100%" stop-color="#2e1065"/>
+    </linearGradient>
+
+    <!-- Eye glow -->
+    <radialGradient id="eyeGlowL" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#7dd3fc"/>
+      <stop offset="45%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#0ea5e9" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="eyeGlowR" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#7dd3fc"/>
+      <stop offset="45%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#0ea5e9" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Antenna glow -->
+    <radialGradient id="antGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#f0abfc"/>
+      <stop offset="50%" stop-color="#c026d3"/>
+      <stop offset="100%" stop-color="#86198f" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Mouth display gradient -->
+    <linearGradient id="mouthGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+
+    <!-- LED green -->
+    <radialGradient id="ledGreen" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#86efac"/>
+      <stop offset="100%" stop-color="#16a34a"/>
+    </radialGradient>
+
+    <!-- Filters -->
+    <filter id="eyeBloom" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="antBloom" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="softShadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="#4f46e5" flood-opacity="0.5"/>
+    </filter>
+    <filter id="innerGlow" x="-5%" y="-5%" width="110%" height="110%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Dark circular background -->
+  <circle cx="256" cy="256" r="248" fill="url(#bgGrad)"/>
+  <!-- Subtle ring -->
+  <circle cx="256" cy="256" r="244" fill="none" stroke="#4f46e5" stroke-width="1.5" stroke-opacity="0.3"/>
+
+  <!-- ─── ANTENNA ─── -->
+  <!-- Stem -->
+  <rect x="248" y="96" width="16" height="52" rx="8" fill="#4f46e5"/>
+  <!-- Outer glow halo -->
+  <circle cx="256" cy="90" r="26" fill="#c026d3" fill-opacity="0.18" filter="url(#antBloom)"/>
+  <!-- Antenna orb -->
+  <circle cx="256" cy="88" r="18" fill="#1e0a2e"/>
+  <circle cx="256" cy="88" r="14" fill="url(#antGlow)" filter="url(#antBloom)"/>
+  <circle cx="256" cy="88" r="7" fill="#f0abfc"/>
+  <!-- Orb specular -->
+  <circle cx="251" cy="83" r="3" fill="white" fill-opacity="0.6"/>
+
+  <!-- ─── ROBOT HEAD ─── -->
+  <rect x="100" y="148" width="312" height="268" rx="56" fill="url(#headGrad)" filter="url(#softShadow)"/>
+  <!-- Shine overlay -->
+  <rect x="100" y="148" width="312" height="268" rx="56" fill="url(#headShine)"/>
+  <!-- Edge highlight (top) -->
+  <rect x="102" y="149" width="308" height="4" rx="4" fill="white" fill-opacity="0.12"/>
+
+  <!-- ─── SIDE EARS / SENSORS ─── -->
+  <!-- Left ear -->
+  <rect x="68" y="216" width="40" height="80" rx="14" fill="url(#earGrad)"/>
+  <rect x="75" y="228" width="26" height="12" rx="5" fill="#38bdf8" fill-opacity="0.25"/>
+  <rect x="75" y="248" width="26" height="12" rx="5" fill="#38bdf8" fill-opacity="0.45"/>
+  <rect x="75" y="268" width="26" height="12" rx="5" fill="#38bdf8" fill-opacity="0.25"/>
+  <!-- Right ear -->
+  <rect x="404" y="216" width="40" height="80" rx="14" fill="url(#earGrad)"/>
+  <rect x="411" y="228" width="26" height="12" rx="5" fill="#38bdf8" fill-opacity="0.25"/>
+  <rect x="411" y="248" width="26" height="12" rx="5" fill="#38bdf8" fill-opacity="0.45"/>
+  <rect x="411" y="268" width="26" height="12" rx="5" fill="#38bdf8" fill-opacity="0.25"/>
+
+  <!-- ─── EYES ─── -->
+  <!-- Left eye socket -->
+  <rect x="130" y="192" width="96" height="84" rx="28" fill="#0f0a1e"/>
+  <!-- Left eye glow background -->
+  <rect x="134" y="196" width="88" height="76" rx="24" fill="#0c1a33"/>
+  <!-- Left eye iris glow -->
+  <circle cx="178" cy="234" r="32" fill="url(#eyeGlowL)" filter="url(#eyeBloom)"/>
+  <!-- Left eye pupil -->
+  <circle cx="178" cy="234" r="16" fill="#082344"/>
+  <!-- Left eye specular -->
+  <circle cx="170" cy="224" r="5" fill="white" fill-opacity="0.8"/>
+  <circle cx="183" cy="241" r="2.5" fill="white" fill-opacity="0.4"/>
+
+  <!-- Right eye socket -->
+  <rect x="286" y="192" width="96" height="84" rx="28" fill="#0f0a1e"/>
+  <!-- Right eye glow background -->
+  <rect x="290" y="196" width="88" height="76" rx="24" fill="#0c1a33"/>
+  <!-- Right eye iris glow -->
+  <circle cx="334" cy="234" r="32" fill="url(#eyeGlowR)" filter="url(#eyeBloom)"/>
+  <!-- Right eye pupil -->
+  <circle cx="334" cy="234" r="16" fill="#082344"/>
+  <!-- Right eye specular -->
+  <circle cx="326" cy="224" r="5" fill="white" fill-opacity="0.8"/>
+  <circle cx="339" cy="241" r="2.5" fill="white" fill-opacity="0.4"/>
+
+  <!-- ─── MOUTH DISPLAY PANEL ─── -->
+  <rect x="148" y="310" width="216" height="72" rx="18" fill="#0f172a"/>
+  <rect x="152" y="314" width="208" height="64" rx="14" fill="url(#mouthGrad)"/>
+  <!-- LED smile grid: 7 segments -->
+  <!-- Bottom row (smile base) -->
+  <rect x="166" y="360" width="22" height="10" rx="4" fill="#34d399" fill-opacity="0.9"/>
+  <rect x="197" y="356" width="22" height="10" rx="4" fill="#34d399" fill-opacity="0.9"/>
+  <rect x="228" y="352" width="22" height="10" rx="4" fill="#34d399" fill-opacity="0.9"/>
+  <rect x="259" y="352" width="22" height="10" rx="4" fill="#34d399" fill-opacity="0.9"/>
+  <rect x="290" y="356" width="22" height="10" rx="4" fill="#34d399" fill-opacity="0.9"/>
+  <rect x="321" y="360" width="22" height="10" rx="4" fill="#34d399" fill-opacity="0.9"/>
+  <!-- Middle accent dots -->
+  <rect x="197" y="336" width="22" height="10" rx="4" fill="#34d399" fill-opacity="0.35"/>
+  <rect x="290" y="336" width="22" height="10" rx="4" fill="#34d399" fill-opacity="0.35"/>
+  <!-- LED status row (top of mouth) -->
+  <rect x="228" y="322" width="8" height="8" rx="3" fill="#34d399" fill-opacity="0.5"/>
+  <rect x="244" y="322" width="8" height="8" rx="3" fill="#34d399" fill-opacity="0.5"/>
+  <rect x="260" y="322" width="8" height="8" rx="3" fill="#f59e0b" fill-opacity="0.6"/>
+  <rect x="276" y="322" width="8" height="8" rx="3" fill="#34d399" fill-opacity="0.5"/>
+  <!-- Mouth panel glow -->
+  <rect x="152" y="314" width="208" height="64" rx="14" fill="#34d399" fill-opacity="0.04"/>
+
+  <!-- ─── TOP STATUS INDICATOR DOTS ─── -->
+  <!-- Three small LED indicators on forehead -->
+  <circle cx="220" cy="172" r="7" fill="url(#ledGreen)" filter="url(#innerGlow)"/>
+  <circle cx="256" cy="172" r="7" fill="#fbbf24" filter="url(#innerGlow)"/>
+  <circle cx="292" cy="172" r="7" fill="#f87171" fill-opacity="0.7" filter="url(#innerGlow)"/>
+
+  <!-- ─── CIRCUIT LINES (decorative) ─── -->
+  <g stroke="#4f46e5" stroke-width="1.5" stroke-opacity="0.4" fill="none">
+    <line x1="140" y1="390" x2="140" y2="406"/>
+    <line x1="130" y1="406" x2="155" y2="406"/>
+    <circle cx="126" cy="406" r="4" fill="#4f46e5" fill-opacity="0.4" stroke="none"/>
+
+    <line x1="372" y1="390" x2="372" y2="406"/>
+    <line x1="357" y1="406" x2="382" y2="406"/>
+    <circle cx="386" cy="406" r="4" fill="#4f46e5" fill-opacity="0.4" stroke="none"/>
+  </g>
+</svg>

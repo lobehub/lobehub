@@ -15,7 +15,7 @@ const SkillSourceTag = memo<SkillSourceTagProps>(({ source }) => {
     case 'builtin': {
       return (
         <Tag color={'success'} icon={<Icon icon={BadgeCheck} />} size={'small'}>
-          LobeHub
+          Chinnaub
         </Tag>
       );
     }

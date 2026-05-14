@@ -195,8 +195,8 @@ builtin_demo() {
   echo "[demo] Step 1: Navigate to first available agent"
   local snapshot agent_ref
   snapshot=$(agent-browser --cdp "$port" snapshot -i 2>&1)
-  # Try Lobe AI first, then fall back to any agent link in the sidebar
-  agent_ref=$(echo "$snapshot" | grep -oE 'link "Lobe AI" \[ref=e[0-9]+\]' | grep -oE 'e[0-9]+' || true)
+  # Try Chinna first, then fall back to any agent link in the sidebar
+  agent_ref=$(echo "$snapshot" | grep -oE 'link "Chinna" \[ref=e[0-9]+\]' | grep -oE 'e[0-9]+' || true)
   if [ -z "$agent_ref" ]; then
     # Pick the first agent-like link (skip nav links)
     agent_ref=$(echo "$snapshot" | grep 'link "' | grep -vE '"Home"|"Pages"|"Settings"|"Search"|"Resources"|"Marketplace"' | head -1 | grep -oE 'ref=e[0-9]+' | sed 's/ref=//' || true)

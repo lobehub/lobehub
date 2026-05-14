@@ -6,19 +6,11 @@ import { createStaticStyles } from 'antd-style';
 import { BookOpenIcon, DownloadIcon, FileTextIcon, HistoryIcon, ListIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import urlJoin from 'url-join';
 
 import { useDetailContext } from '../DetailProvider';
 import { SkillNavKey } from '../types';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
-  link: css`
-    color: ${cssVar.colorTextDescription};
-
-    &:hover {
-      color: ${cssVar.colorInfo};
-    }
-  `,
   nav: css`
     border-block-end: 1px solid ${cssVar.colorBorder};
   `,
@@ -30,12 +22,10 @@ const Nav = memo<{
   setActiveTab?: (_tab: SkillNavKey) => void;
 }>(({ mobile, setActiveTab, activeTab = SkillNavKey.Overview }) => {
   const { t } = useTranslation('discover');
-  const { versions, repository, homepage, github, resources } = useDetailContext();
+  const { versions, resources } = useDetailContext();
 
   const versionCount = versions?.length || 0;
   const resourcesCount = Object.keys(resources || {}).length;
-  const source = homepage || repository;
-  const issueTarget = github?.url || repository;
 
   const nav = (
     <Tabs
@@ -110,33 +100,8 @@ const Nav = memo<{
   return mobile ? (
     nav
   ) : (
-    <Flexbox horizontal align={'center'} className={styles.nav} justify={'space-between'}>
+    <Flexbox horizontal align={'center'} className={styles.nav}>
       {nav}
-      <Flexbox horizontal gap={12}>
-        <a
-          className={styles.link}
-          href="https://discord.gg/AYFPHvv2jT"
-          rel="noopener noreferrer"
-          target={'_blank'}
-        >
-          {t('skills.details.nav.needHelp')}
-        </a>
-        {source && (
-          <a className={styles.link} href={source} rel="noopener noreferrer" target={'_blank'}>
-            {t('skills.details.nav.viewSourceCode')}
-          </a>
-        )}
-        {issueTarget && (
-          <a
-            className={styles.link}
-            href={urlJoin(issueTarget, 'issues')}
-            rel="noopener noreferrer"
-            target={'_blank'}
-          >
-            {t('skills.details.nav.reportIssue')}
-          </a>
-        )}
-      </Flexbox>
     </Flexbox>
   );
 });

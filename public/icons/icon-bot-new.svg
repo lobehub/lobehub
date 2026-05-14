@@ -1,0 +1,196 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="bgG" cx="42%" cy="38%" r="72%">
+      <stop offset="0%"   stop-color="#1a0a0a"/>
+      <stop offset="55%"  stop-color="#0d0505"/>
+      <stop offset="100%" stop-color="#050202"/>
+    </radialGradient>
+    <radialGradient id="headBase" cx="30%" cy="22%" r="80%">
+      <stop offset="0%"   stop-color="#ffffff"/>
+      <stop offset="18%"  stop-color="#f1f5f9"/>
+      <stop offset="42%"  stop-color="#e2e8f0"/>
+      <stop offset="70%"  stop-color="#b8c4d4"/>
+      <stop offset="100%" stop-color="#7c8ea3"/>
+    </radialGradient>
+    <radialGradient id="headSpec" cx="26%" cy="18%" r="46%">
+      <stop offset="0%"   stop-color="#ffffff" stop-opacity="0.72"/>
+      <stop offset="35%"  stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.00"/>
+    </radialGradient>
+    <radialGradient id="faceLight" cx="50%" cy="54%" r="52%">
+      <stop offset="0%"   stop-color="#ffe4e4" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#ffffff"  stop-opacity="0.00"/>
+    </radialGradient>
+    <radialGradient id="earG" cx="28%" cy="22%" r="80%">
+      <stop offset="0%"   stop-color="#fca5a5"/>
+      <stop offset="45%"  stop-color="#ef4444"/>
+      <stop offset="100%" stop-color="#7f1d1d"/>
+    </radialGradient>
+    <radialGradient id="irisL" cx="36%" cy="30%" r="68%">
+      <stop offset="0%"   stop-color="#e0fffe"/>
+      <stop offset="25%"  stop-color="#67e8f9"/>
+      <stop offset="58%"  stop-color="#06b6d4"/>
+      <stop offset="100%" stop-color="#0e7490"/>
+    </radialGradient>
+    <radialGradient id="irisR" cx="36%" cy="30%" r="68%">
+      <stop offset="0%"   stop-color="#e0fffe"/>
+      <stop offset="25%"  stop-color="#67e8f9"/>
+      <stop offset="58%"  stop-color="#06b6d4"/>
+      <stop offset="100%" stop-color="#0e7490"/>
+    </radialGradient>
+    <radialGradient id="socketG" cx="50%" cy="50%" r="50%">
+      <stop offset="0%"   stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0a0f1a"/>
+    </radialGradient>
+    <radialGradient id="starG" cx="33%" cy="27%" r="72%">
+      <stop offset="0%"   stop-color="#fef08a"/>
+      <stop offset="30%"  stop-color="#fbbf24"/>
+      <stop offset="65%"  stop-color="#ef4444"/>
+      <stop offset="100%" stop-color="#7f1d1d"/>
+    </radialGradient>
+    <radialGradient id="blushG" cx="50%" cy="50%" r="50%">
+      <stop offset="0%"   stop-color="#fca5a5" stop-opacity="0.78"/>
+      <stop offset="100%" stop-color="#ef4444"  stop-opacity="0.00"/>
+    </radialGradient>
+    <linearGradient id="mouthBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%"   stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0a0f1a"/>
+    </linearGradient>
+    <filter id="fHeadShadow" x="-14%" y="-8%" width="128%" height="132%">
+      <feDropShadow dx="0" dy="16" stdDeviation="24" flood-color="#ef4444" flood-opacity="0.35"/>
+    </filter>
+    <filter id="fEyeGlow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="6" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="fAntGlow" x="-120%" y="-120%" width="340%" height="340%">
+      <feGaussianBlur stdDeviation="11" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="fLED" x="-70%" y="-70%" width="240%" height="240%">
+      <feGaussianBlur stdDeviation="3.5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="fBlush"><feGaussianBlur stdDeviation="10"/></filter>
+    <filter id="fNose" x="-120%" y="-120%" width="340%" height="340%">
+      <feGaussianBlur stdDeviation="4" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="fRimShadow">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <!-- BACKGROUND -->
+  <circle cx="256" cy="256" r="250" fill="url(#bgG)"/>
+  <circle cx="256" cy="256" r="246" fill="none" stroke="#ef4444" stroke-width="1.2" stroke-opacity="0.22"/>
+  <ellipse cx="256" cy="310" rx="180" ry="145" fill="#ef4444" fill-opacity="0.07"/>
+
+  <!-- ANTENNA -->
+  <path d="M256,152 C265,143 265,131 256,125 C247,119 247,107 256,101 C265,95 265,83 256,77"
+        stroke="#ef4444" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <circle cx="256" cy="72" r="30" fill="#fbbf24" fill-opacity="0.16" filter="url(#fAntGlow)"/>
+  <polygon points="256,52 261,65 275,66 265,75 268,88 256,81 244,88 247,75 237,66 251,65"
+           fill="url(#starG)" filter="url(#fAntGlow)"/>
+  <circle cx="256" cy="70" r="7"   fill="#fef9c3"/>
+  <circle cx="252" cy="66" r="3"   fill="white" fill-opacity="0.80"/>
+
+  <!-- HEAD -->
+  <rect x="112" y="168" width="288" height="275" rx="82" fill="#b91c1c" filter="url(#fHeadShadow)"/>
+  <rect x="112" y="152" width="288" height="275" rx="82" fill="url(#headBase)"/>
+  <rect x="112" y="152" width="288" height="275" rx="82" fill="url(#headSpec)"/>
+  <rect x="112" y="152" width="288" height="275" rx="82" fill="url(#faceLight)"/>
+  <rect x="112" y="152" width="288" height="275" rx="82"
+        fill="none" stroke="#ffffff" stroke-width="2.5" stroke-opacity="0.55" filter="url(#fRimShadow)"/>
+  <path d="M158,420 Q256,436 354,420" stroke="#fca5a5" stroke-width="2.5" stroke-opacity="0.35"
+        fill="none" stroke-linecap="round"/>
+
+  <!-- LEFT EAR -->
+  <rect x="74" y="218" width="46" height="96" rx="20" fill="url(#earG)"/>
+  <ellipse cx="87" cy="240" rx="11" ry="17" fill="white" fill-opacity="0.14"/>
+  <rect x="83" y="229" width="27" height="5" rx="2.5" fill="white" fill-opacity="0.22"/>
+  <rect x="83" y="240" width="27" height="5" rx="2.5" fill="white" fill-opacity="0.42"/>
+  <rect x="83" y="251" width="27" height="5" rx="2.5" fill="white" fill-opacity="0.22"/>
+  <rect x="83" y="262" width="27" height="5" rx="2.5" fill="#fbbf24" fill-opacity="0.55"/>
+  <rect x="83" y="273" width="27" height="5" rx="2.5" fill="white" fill-opacity="0.16"/>
+  <rect x="74" y="218" width="46" height="96" rx="20"
+        fill="none" stroke="#fca5a5" stroke-width="1.5" stroke-opacity="0.50"/>
+
+  <!-- RIGHT EAR -->
+  <rect x="392" y="218" width="46" height="96" rx="20" fill="url(#earG)"/>
+  <ellipse cx="405" cy="240" rx="11" ry="17" fill="white" fill-opacity="0.14"/>
+  <rect x="402" y="229" width="27" height="5" rx="2.5" fill="white" fill-opacity="0.22"/>
+  <rect x="402" y="240" width="27" height="5" rx="2.5" fill="white" fill-opacity="0.42"/>
+  <rect x="402" y="251" width="27" height="5" rx="2.5" fill="white" fill-opacity="0.22"/>
+  <rect x="402" y="262" width="27" height="5" rx="2.5" fill="#fbbf24" fill-opacity="0.55"/>
+  <rect x="402" y="273" width="27" height="5" rx="2.5" fill="white" fill-opacity="0.16"/>
+  <rect x="392" y="218" width="46" height="96" rx="20"
+        fill="none" stroke="#fca5a5" stroke-width="1.5" stroke-opacity="0.50"/>
+
+  <!-- FOREHEAD STATUS PANEL -->
+  <rect x="210" y="168" width="92" height="24" rx="9"  fill="#1e293b"/>
+  <rect x="214" y="172" width="84" height="15" rx="5"  fill="#0f172a"/>
+  <circle cx="232" cy="179" r="4.5" fill="#4ade80" filter="url(#fLED)"/>
+  <circle cx="256" cy="179" r="4.5" fill="#fbbf24" filter="url(#fLED)"/>
+  <circle cx="280" cy="179" r="4.5" fill="#f87171" filter="url(#fLED)"/>
+
+  <!-- LEFT EYE -->
+  <rect x="128" y="202" width="108" height="92" rx="32" fill="url(#socketG)"/>
+  <rect x="132" y="206" width="100" height="84" rx="28" fill="#080f1e"/>
+  <circle cx="182" cy="248" r="38" fill="url(#irisL)" filter="url(#fEyeGlow)"/>
+  <circle cx="182" cy="248" r="18" fill="#050d1a"/>
+  <circle cx="170" cy="235" r="8.5" fill="white" fill-opacity="0.94"/>
+  <circle cx="191" cy="257" r="4"   fill="white" fill-opacity="0.55"/>
+  <circle cx="195" cy="239" r="2"   fill="white" fill-opacity="0.38"/>
+  <rect x="128" y="202" width="108" height="92" rx="32"
+        fill="none" stroke="#ef4444" stroke-width="2" stroke-opacity="0.45"/>
+  <circle cx="147" cy="205" r="3"   fill="#fca5a5" fill-opacity="0.70"/>
+  <circle cx="163" cy="200" r="3"   fill="#fca5a5" fill-opacity="0.60"/>
+  <circle cx="180" cy="198" r="3"   fill="#fca5a5" fill-opacity="0.50"/>
+  <circle cx="197" cy="201" r="2.5" fill="#fca5a5" fill-opacity="0.38"/>
+  <circle cx="212" cy="207" r="2.5" fill="#fca5a5" fill-opacity="0.25"/>
+
+  <!-- RIGHT EYE -->
+  <rect x="276" y="202" width="108" height="92" rx="32" fill="url(#socketG)"/>
+  <rect x="280" y="206" width="100" height="84" rx="28" fill="#080f1e"/>
+  <circle cx="330" cy="248" r="38" fill="url(#irisR)" filter="url(#fEyeGlow)"/>
+  <circle cx="330" cy="248" r="18" fill="#050d1a"/>
+  <circle cx="318" cy="235" r="8.5" fill="white" fill-opacity="0.94"/>
+  <circle cx="339" cy="257" r="4"   fill="white" fill-opacity="0.55"/>
+  <circle cx="343" cy="239" r="2"   fill="white" fill-opacity="0.38"/>
+  <rect x="276" y="202" width="108" height="92" rx="32"
+        fill="none" stroke="#ef4444" stroke-width="2" stroke-opacity="0.45"/>
+  <circle cx="295" cy="205" r="3"   fill="#fca5a5" fill-opacity="0.70"/>
+  <circle cx="311" cy="200" r="3"   fill="#fca5a5" fill-opacity="0.60"/>
+  <circle cx="328" cy="198" r="3"   fill="#fca5a5" fill-opacity="0.50"/>
+  <circle cx="345" cy="201" r="2.5" fill="#fca5a5" fill-opacity="0.38"/>
+  <circle cx="360" cy="207" r="2.5" fill="#fca5a5" fill-opacity="0.25"/>
+
+  <!-- NOSE -->
+  <circle cx="256" cy="315" r="5"   fill="#ef4444" filter="url(#fNose)"/>
+  <circle cx="256" cy="315" r="3.5" fill="#fca5a5"/>
+
+  <!-- BLUSH -->
+  <ellipse cx="150" cy="308" rx="40" ry="25" fill="url(#blushG)" filter="url(#fBlush)"/>
+  <ellipse cx="362" cy="308" rx="40" ry="25" fill="url(#blushG)" filter="url(#fBlush)"/>
+
+  <!-- MOUTH LED PANEL -->
+  <rect x="154" y="330" width="204" height="72" rx="22" fill="#0a0f1a"/>
+  <rect x="158" y="334" width="196" height="64" rx="18" fill="url(#mouthBg)"/>
+  <rect x="158" y="334" width="196" height="64" rx="18"
+        fill="none" stroke="#ef4444" stroke-width="1.5" stroke-opacity="0.45"/>
+  <line x1="160" y1="350" x2="352" y2="350" stroke="#4ade80" stroke-width="0.5" stroke-opacity="0.08"/>
+  <line x1="160" y1="362" x2="352" y2="362" stroke="#4ade80" stroke-width="0.5" stroke-opacity="0.08"/>
+  <line x1="160" y1="374" x2="352" y2="374" stroke="#4ade80" stroke-width="0.5" stroke-opacity="0.08"/>
+  <line x1="160" y1="386" x2="352" y2="386" stroke="#4ade80" stroke-width="0.5" stroke-opacity="0.08"/>
+  <rect x="168" y="375" width="26" height="12" rx="5" fill="#4ade80" filter="url(#fLED)"/>
+  <rect x="201" y="367" width="26" height="12" rx="5" fill="#4ade80" filter="url(#fLED)"/>
+  <rect x="234" y="362" width="26" height="12" rx="5" fill="#4ade80" filter="url(#fLED)"/>
+  <rect x="267" y="362" width="26" height="12" rx="5" fill="#4ade80" filter="url(#fLED)"/>
+  <rect x="300" y="367" width="26" height="12" rx="5" fill="#4ade80" filter="url(#fLED)"/>
+  <rect x="333" y="375" width="26" height="12" rx="5" fill="#4ade80" filter="url(#fLED)"/>
+  <rect x="201" y="346" width="26" height="9" rx="4" fill="#166534" fill-opacity="0.40"/>
+  <rect x="234" y="342" width="26" height="9" rx="4" fill="#166534" fill-opacity="0.32"/>
+  <rect x="267" y="342" width="26" height="9" rx="4" fill="#fbbf24" fill-opacity="0.28"/>
+  <rect x="300" y="346" width="26" height="9" rx="4" fill="#166534" fill-opacity="0.40"/>
+</svg>

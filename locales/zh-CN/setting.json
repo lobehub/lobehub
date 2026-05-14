@@ -683,7 +683,7 @@
   "settingOpening.title": "开场设置",
   "settingPlugin.title": "技能列表",
   "settingSelfIteration.enabled.desc": "允许该助手在自迭代工作流运行时回顾近期信号并改进自己的技能。",
-  "settingSelfIteration.enabled.managedDesc": "Self-Iteration 可用时，Lobe AI 会始终启用此能力。",
+  "settingSelfIteration.enabled.managedDesc": "Self-Iteration 可用时，Chinna 会始终启用此能力。",
   "settingSelfIteration.enabled.title": "启用自迭代",
   "settingSelfIteration.title": "自迭代",
   "settingSystem.oauth.info.desc": "已登录",

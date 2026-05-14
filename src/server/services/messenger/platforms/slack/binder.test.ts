@@ -98,7 +98,7 @@ describe('MessengerSlackBinder.handleUnlinkedMessage', () => {
     expect(postMessageWithButtonAndLink).toHaveBeenCalledTimes(1);
     const [channel, intro, button, linkLabel] = postMessageWithButtonAndLink.mock.calls[0];
     expect(channel).toBe('D_DM');
-    expect(intro).toContain("I'm LobeHub");
+    expect(intro).toContain("I'm Chinna — your AI agent in Slack.");
     expect(button.text).toContain('Link Account');
     // Button URL and inline link URL must match exactly so the user can pick
     // either path. Both carry the full Slack context as URL params.
@@ -141,7 +141,7 @@ describe('MessengerSlackBinder.handleUnlinkedMessage', () => {
     const [channel, user, text, options] = postEphemeral.mock.calls[0];
     expect(channel).toBe('C_GENERAL');
     expect(user).toBe('U_ALICE');
-    expect(text).toContain("I'm LobeHub");
+    expect(text).toContain("I'm Chinna — your AI agent in Slack.");
     // The verify-im URL is rendered as a Slack mrkdwn `<url|label>` link.
     expect(text).toMatch(/<https?:\/\/[^|]+\|[^>]+>/);
     expect(text).toContain('random_id=rand-token-1');

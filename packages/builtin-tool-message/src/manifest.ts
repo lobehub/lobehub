@@ -3,7 +3,7 @@ import type { BuiltinToolManifest } from '@lobechat/types';
 import { systemPrompt } from './systemRole';
 import { MessageApiName, MessageToolIdentifier } from './types';
 
-const platformEnum = ['discord', 'telegram', 'slack', 'feishu', 'lark', 'qq', 'wechat'];
+const platformEnum = ['discord', 'telegram', 'slack', 'feishu', 'lark', 'qq', 'wechat', 'whatsapp'];
 
 /**
  * Schema for the bot's `settings` JSON column. Both `createBot` and
@@ -746,7 +746,7 @@ export const MessageManifest: BuiltinToolManifest = {
     description:
       'Send, read, edit, and manage messages across multiple messaging platforms with a unified interface',
     readme:
-      'Cross-platform messaging tool supporting Discord, Telegram, Slack, Google Chat, and IRC. Provides unified APIs for message operations, reactions, pins, threads, channel management, and platform-specific features like polls.',
+      'Cross-platform messaging tool supporting Discord, Telegram, Slack, Feishu, Lark, QQ, WeChat, and WhatsApp. Provides unified APIs for message operations, reactions, pins, threads, channel management, and platform-specific features like polls.',
     title: 'Message',
   },
   systemRole: systemPrompt,

@@ -1,22 +1,22 @@
 ---
-title: Configuring Keycloak Authentication Service in LobeHub
+title: Configuring Keycloak Authentication Service in ChinnaHub
 description: >-
-  Learn how to configure the Keycloak authentication service in LobeHub,
+  Learn how to configure the Keycloak authentication service in ChinnaHub,
   including deployment, creation, permission settings, and environment
   variables.
 tags:
   - Keycloak Authentication
   - Environment Variable Configuration
   - Single Sign-On
-  - LobeHub
+  - ChinnaHub
 ---
 
-# Configuring Keycloak Authentication Service in LobeHub
+# Configuring Keycloak Authentication Service in ChinnaHub
 
 [Keycloak](https://www.keycloak.org/) is an open-source identity and access management solution that provides single sign-on, identity brokering, and social login features, suitable for modern applications and services.
 
 <Callout type={'tip'}>
-  If you want to privately deploy Keycloak, we recommend using it together with LobeHub via Docker
+  If you want to privately deploy Keycloak, we recommend using it together with ChinnaHub via Docker
   Compose deployment for easier service management.
 </Callout>
 
@@ -24,7 +24,7 @@ tags:
 
 If you deploy using a local network IP, this guide assumes:
 
-- Your LobeHub database version IP/port is `http://LobeHub_IP:3210`.
+- Your ChinnaHub database version IP/port is `http://ChinnaHub_IP:3210`.
 - Your privately deployed Keycloak domain is `http://KEYCLOAK_IP:8080`.
 
 If you deploy using a public network, this guide assumes:

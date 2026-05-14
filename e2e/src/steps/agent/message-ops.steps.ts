@@ -22,7 +22,7 @@ async function findAssistantMessage(page: CustomWorld['page']) {
   const wrapperCount = await messageWrappers.count();
   console.log(`   📍 Found ${wrapperCount} message wrappers`);
 
-  // Find the assistant message by looking for the one with "Lobe AI" or "AI" in title
+  // Find the assistant message by looking for the one with "Chinna" or "AI" in title
   for (let i = wrapperCount - 1; i >= 0; i--) {
     const wrapper = messageWrappers.nth(i);
     const titleText = await wrapper
@@ -30,7 +30,7 @@ async function findAssistantMessage(page: CustomWorld['page']) {
       .textContent()
       .catch(() => '');
 
-    if (titleText?.includes('Lobe AI') || titleText?.includes('AI')) {
+    if (titleText?.includes('Chinna AI') || titleText?.includes('AI')) {
       console.log(`   📍 Found assistant message at index ${i}`);
       return wrapper;
     }

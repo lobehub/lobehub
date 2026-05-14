@@ -14,7 +14,7 @@ export default {
     'Render Markdown in the input area in real time (bold text, code blocks, tables, etc.).',
   'features.inputMarkdown.title': 'Input Markdown Rendering',
   'features.messenger.desc':
-    'Enable messaging app integrations for chatting with Lobe AI outside the web app.',
+    'Enable messaging app integrations for chatting with Chinna outside the web app.',
   'features.messenger.title': 'Messenger',
   'title': 'Labs',
 };

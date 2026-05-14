@@ -38,7 +38,7 @@ const AgentListContent = memo<AgentListContentProps>(({ onMoreClick }) => {
   if (!isInit) return <SkeletonList rows={6} />;
 
   // Always render the default SessionList so the "+ Create Agent" entry is visible
-  // even when the user has only the built-in Lobe AI inbox.
+  // even when the user has only the built-in Chinna inbox.
   return (
     <>
       <InboxItem style={{ minHeight: 36 }} />

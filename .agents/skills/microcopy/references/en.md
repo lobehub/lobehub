@@ -159,7 +159,7 @@ It is a fundamentally new, agent-first experience.You can pop up your agents or 
 
 ### Create
 
-It is a unified workspace where you can find, build, or team up with agent co-workers.Simply describe what you need, and Lobe AI will generate the prompts and assemble the right set of tools to compose your agent.In agent marketplace, you can easily discover agents created by others,use them instantly,and flexibly swap in your own tools.
+It is a unified workspace where you can find, build, or team up with agent co-workers.Simply describe what you need, and Chinna will generate the prompts and assemble the right set of tools to compose your agent.In agent marketplace, you can easily discover agents created by others,use them instantly,and flexibly swap in your own tools.
 
 ### Collaboration
 

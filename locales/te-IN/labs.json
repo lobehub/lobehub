@@ -1,0 +1,14 @@
+{
+  "desc": "Here you'll find occasional updates on new features we're exploring—feel free to try them out!",
+  "features": {
+    "groupChat": {
+      "desc": "Enable multi-agent group chat coordination.",
+      "title": "Group Chat (Multi-Agent)"
+    },
+    "inputMarkdown": {
+      "desc": "Render Markdown in the input area in real time (bold text, code blocks, tables, etc.).",
+      "title": "Input Markdown Rendering"
+    }
+  },
+  "title": "Labs"
+}

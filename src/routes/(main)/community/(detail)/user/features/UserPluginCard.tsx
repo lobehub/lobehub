@@ -105,7 +105,7 @@ const UserPluginCard = memo<UserPluginCardProps>(
                 </Link>
               </Flexbox>
               <Flexbox horizontal align={'center'} className={styles.author} gap={8}>
-                {author && <div>{author}</div>}
+                {/* Author hidden from UI */}
               </Flexbox>
             </Flexbox>
           </Flexbox>

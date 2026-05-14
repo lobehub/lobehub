@@ -5,6 +5,7 @@ import { memo, useMemo } from 'react';
 import { type ActionKey } from '../ActionBar/config';
 import { actionMap } from '../ActionBar/config';
 import { useChatInputStore } from '../store';
+import { VoiceCallButton, VoiceInputButton } from '../Voice';
 import ExpandButton from './ExpandButton';
 import SendButton from './SendButton';
 
@@ -27,6 +28,8 @@ const SendArea = memo(() => {
     <Flexbox horizontal align={'center'} flex={'none'} gap={6}>
       {allowExpand && <ExpandButton />}
       {items}
+      <VoiceInputButton />
+      <VoiceCallButton />
       <SendButton />
     </Flexbox>
   );

@@ -7,12 +7,12 @@ const log = debug('lobe-server:bot:webhook-route');
 
 /**
  * Unified webhook endpoint for Chat SDK bot platforms. Handles both:
- *   - POST /api/agent/webhooks/:platform
- *   - POST /api/agent/webhooks/:platform/:appId
+ *   - GET/POST /api/agent/webhooks/:platform
+ *   - GET/POST /api/agent/webhooks/:platform/:appId
  *
  * Hono receives the raw `Request` via `c.req.raw` and forwards it to the
  * platform-specific handler returned by the bot message router (the platform
- * is responsible for verifying its own signature).
+ * is responsible for verification challenges and signature checks).
  */
 export async function platformWebhook(c: Context): Promise<Response> {
   const platform = c.req.param('platform');

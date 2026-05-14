@@ -127,7 +127,7 @@ export class AgentModel {
     return rows.map(({ slug, ...row }) => ({
       ...row,
       avatar: row.avatar || (slug === INBOX_SESSION_ID ? DEFAULT_INBOX_AVATAR : null),
-      title: row.title || (slug === INBOX_SESSION_ID ? 'Lobe AI' : null),
+      title: row.title || (slug === INBOX_SESSION_ID ? 'Chinna AI' : null),
     }));
   };
 

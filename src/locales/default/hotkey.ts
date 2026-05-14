@@ -20,7 +20,7 @@ export default {
   'desktop.showApp.title': 'Show/Hide Main Window',
   'editMessage.desc': 'Enter edit mode by holding Alt and double-clicking the message',
   'editMessage.title': 'Edit Message',
-  'navigateToChat.desc': 'Switch to the Chat tab and enter Lobe AI',
+  'navigateToChat.desc': 'Switch to the Chat tab and enter Chinna',
   'navigateToChat.title': 'Switch to Default Chat',
   'openChatSettings.desc': 'View and modify the settings for the current conversation',
   'openChatSettings.title': 'Open Chat Settings',

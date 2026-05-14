@@ -15,10 +15,16 @@ vi.mock('@/server/services/bot', () => ({
   getBotMessageRouter: mockGetBotMessageRouter,
 }));
 
-function buildContext(opts: { params: Record<string, string | undefined>; url?: string }) {
+function buildContext(opts: {
+  body?: BodyInit;
+  method?: string;
+  params: Record<string, string | undefined>;
+  url?: string;
+}) {
+  const method = opts.method ?? 'POST';
   const rawRequest = new Request(opts.url ?? 'http://x/api/agent/webhooks/telegram/app-1', {
-    method: 'POST',
-    body: '{}',
+    body: method === 'GET' ? undefined : (opts.body ?? '{}'),
+    method,
   });
   const captures: Array<{ body: any; status: number }> = [];
   const ctx = {
@@ -84,5 +90,23 @@ describe('platformWebhook handler', () => {
     await platformWebhook(ctx);
 
     expect(mockGetWebhookHandler).toHaveBeenCalledWith('discord', undefined);
+  });
+
+  it('forwards GET verification requests unchanged', async () => {
+    const platformResponse = new Response('challenge', { status: 200 });
+    const innerHandler = vi.fn().mockResolvedValue(platformResponse);
+    mockGetWebhookHandler.mockReturnValue(innerHandler);
+
+    const { ctx, rawRequest } = buildContext({
+      method: 'GET',
+      params: { appId: 'phone-number-id', platform: 'whatsapp' },
+      url: 'http://x/api/agent/webhooks/whatsapp/phone-number-id?hub.challenge=challenge',
+    });
+
+    const res = await platformWebhook(ctx);
+
+    expect(res).toBe(platformResponse);
+    expect(mockGetWebhookHandler).toHaveBeenCalledWith('whatsapp', 'phone-number-id');
+    expect(innerHandler).toHaveBeenCalledWith(rawRequest);
   });
 });

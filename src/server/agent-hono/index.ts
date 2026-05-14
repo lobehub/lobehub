@@ -68,7 +68,8 @@ app.post('/gateway/callback', gatewayCallback);
 // POST /api/agent/webhooks/bot-callback — agent step/completion webhooks (QStash)
 app.post('/webhooks/bot-callback', qstashAuth(), botCallback);
 
-// POST /api/agent/webhooks/:platform[/:appId] — Chat SDK bot platform webhooks
+// GET/POST /api/agent/webhooks/:platform[/:appId] — Chat SDK bot platform webhooks
+app.get('/webhooks/:platform/:appId?', platformWebhook);
 app.post('/webhooks/:platform/:appId?', platformWebhook);
 
 // GET /api/agent/messenger/:platform/install — start per-tenant OAuth install

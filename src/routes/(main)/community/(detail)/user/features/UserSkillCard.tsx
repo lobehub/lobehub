@@ -136,7 +136,7 @@ const UserSkillCard = memo<UserSkillCardProps>(
                     {ratingAvg?.toFixed(1)}
                   </Flexbox>
                 )}
-                {author && <div>{author}</div>}
+                {/* Author hidden from UI */}
               </Flexbox>
             </Flexbox>
           </Flexbox>

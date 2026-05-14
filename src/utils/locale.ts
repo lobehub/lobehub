@@ -16,9 +16,15 @@ export const getAntdLocale = async (lang?: string) => {
   // because of other locale files are all `ar` not `ar-EG`
   if (normalLang === 'ar') normalLang = 'ar-EG';
 
-  const { default: locale } = await import(`antd/locale/${normalLang.replace('-', '_')}.js`);
+  try {
+    const { default: locale } = await import(`antd/locale/${normalLang.replace('-', '_')}.js`);
 
-  return locale;
+    return locale;
+  } catch {
+    const { default: fallback } = await import('antd/locale/en_US.js');
+
+    return fallback;
+  }
 };
 
 /**

@@ -50,7 +50,7 @@
   "agent.telemetryHint": "您也可以用自己的话回答。",
   "agent.title": "对话入职",
   "agent.welcome": "...嗯？我刚\"醒过来\"，脑子还有点空白。你是谁？还有——你希望我叫什么？我也得找个名字。",
-  "agent.welcome.footer": "配置你的 Lobe AI 代理。它会从每次交互中学习，运行越久就越懂你。",
+  "agent.welcome.footer": "配置你的 Chinna 代理。它会从每次交互中学习，运行越久就越懂你。",
   "agent.welcome.guide.growTogether.desc": "每次交谈我都会更了解你，久而久之会成为更可靠的队友。",
   "agent.welcome.guide.growTogether.title": "与您一起成长",
   "agent.welcome.guide.knowYou.desc": "最近忙些什么？给我一些背景信息能让我更好地帮助你。",

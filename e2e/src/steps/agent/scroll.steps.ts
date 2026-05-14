@@ -81,7 +81,7 @@ async function waitForAssistantMessageToSettle(
 ): Promise<void> {
   const assistantMessage = world.page
     .locator('.message-wrapper')
-    .filter({ has: world.page.locator('text=Lobe AI') })
+    .filter({ has: world.page.locator('text=Chinna') })
     .last();
 
   await expect(assistantMessage).toBeVisible({ timeout: 15_000 });
@@ -203,7 +203,7 @@ When('用户发送长文消息并等待回复完成', { timeout: 45_000 }, async
 
   const assistantMessage = this.page
     .locator('.message-wrapper')
-    .filter({ has: this.page.locator('text=Lobe AI') })
+    .filter({ has: this.page.locator('text=Chinna') })
     .last();
   await expect(assistantMessage).toBeVisible({ timeout: 15_000 });
 
@@ -272,7 +272,7 @@ When('用户在流式响应进行中向上滚动 {int} 像素', async function (
 When('等待流式响应结束', { timeout: 30_000 }, async function (this: CustomWorld) {
   const assistantMessage = this.page
     .locator('.message-wrapper')
-    .filter({ has: this.page.locator('text=Lobe AI') })
+    .filter({ has: this.page.locator('text=Chinna') })
     .last();
 
   let prevLen = 0;

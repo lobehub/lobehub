@@ -225,7 +225,7 @@ await llmMockManager.setup(this.page);
 
 ```typescript
 // 为特定用户消息设置响应
-llmMockManager.setResponse('你好', '你好！我是 Lobe AI，有什么可以帮助你的？');
+llmMockManager.setResponse('你好', '你好！我是 Chinna，有什么可以帮助你的？');
 
 // 清除所有自定义响应
 llmMockManager.clearResponses();

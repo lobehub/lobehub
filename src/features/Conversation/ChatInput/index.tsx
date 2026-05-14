@@ -1,11 +1,12 @@
 'use client';
 
+import { type AssistantContentBlock, type UIChatMessage } from '@lobechat/types';
 import { type SlashOptions } from '@lobehub/editor';
 import { type ChatInputActionsProps } from '@lobehub/editor/react';
 import { type MenuProps } from '@lobehub/ui';
 import { Alert, Flexbox } from '@lobehub/ui';
 import { type ReactNode } from 'react';
-import { memo, useCallback, useEffect, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type ActionKeys } from '@/features/ChatInput';
@@ -14,6 +15,7 @@ import {
   type SendButtonHandler,
   type SendButtonProps,
 } from '@/features/ChatInput/store/initialState';
+import { type VoiceConversationRuntime } from '@/features/ChatInput/Voice';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { fileChatSelectors, useFileStore } from '@/store/file';
@@ -32,6 +34,28 @@ import { getConversationChatInputUiState } from './utils';
 
 /** Max recent messages to feed into auto-complete context (≈10 conversation turns) */
 const MAX_CONTEXT_MESSAGES = 25;
+
+const getLatestAssistantBlockContent = (blocks?: AssistantContentBlock[]) => {
+  if (!blocks?.length) return;
+
+  for (const block of [...blocks].reverse()) {
+    if (block.content?.trim()) return block.content;
+  }
+};
+
+const getLatestAssistantContent = (messages: UIChatMessage[]) => {
+  for (const message of [...messages].reverse()) {
+    if (message.role === 'assistant' && message.content?.trim()) return message.content;
+    if (message.role === 'assistantGroup') {
+      const content = getLatestAssistantBlockContent(message.children);
+      if (content) return content;
+    }
+    if (message.role === 'agentCouncil' && message.members?.length) {
+      const content = getLatestAssistantContent(message.members);
+      if (content) return content;
+    }
+  }
+};
 
 const useGetMessages = () => {
   const storeApi = useConversationStoreApi();
@@ -170,6 +194,7 @@ const ChatInput = memo<ChatInputProps>(
     const { t } = useTranslation('chat');
 
     const getMessages = useGetMessages();
+    const conversationStoreApi = useConversationStoreApi();
 
     // ConversationStore state
     const context = useConversationStore((s) => s.context);
@@ -179,9 +204,17 @@ const ChatInput = memo<ChatInputProps>(
       s.sendMessage,
       s.stopGenerating,
     ]);
+    const latestAssistantContent = useConversationStore((s) =>
+      getLatestAssistantContent(s.displayMessages),
+    );
+    const latestAssistantContentRef = useRef<string>();
     const updateInputMessage = useConversationStore((s) => s.updateInputMessage);
     const setEditor = useConversationStore((s) => s.setEditor);
     const setChatInputOverlayHeight = useConversationStore((s) => s.setChatInputOverlayHeight);
+
+    useEffect(() => {
+      latestAssistantContentRef.current = latestAssistantContent;
+    }, [latestAssistantContent]);
 
     // Observe the floating overlay's height (TodoProgress + QueueTray) and
     // publish it so the ChatList container can reserve matching bottom
@@ -295,6 +328,18 @@ const ChatInput = memo<ChatInputProps>(
         : undefined),
     };
 
+    const voiceConversationRuntime = useMemo<VoiceConversationRuntime>(
+      () => ({
+        getLatestAssistantText: () => latestAssistantContentRef.current,
+        isBusy: () => messageStateSelectors.isInputLoading(conversationStoreApi.getState()),
+        sendTurn: async (message) => {
+          await sendMessage({ message });
+        },
+        stop: stopGenerating,
+      }),
+      [conversationStoreApi, sendMessage, stopGenerating],
+    );
+
     const defaultContent = (
       <WideScreenContainer
         style={{ position: 'relative', ...(skipScrollMarginWithList ? { marginTop: -12 } : null) }}
@@ -356,6 +401,7 @@ const ChatInput = memo<ChatInputProps>(
         sendButtonProps={sendButtonProps}
         sendMenu={showSendMenu ? sendMenu : undefined}
         slashPlacement="top"
+        voiceConversationRuntime={voiceConversationRuntime}
         chatInputEditorRef={(instance) => {
           if (instance) {
             setEditor(instance);
