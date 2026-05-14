@@ -179,9 +179,22 @@ const ActionDropdown = memo<ActionDropdownProps>(
           }
 
           if ('children' in item && item.children) {
+            const originalOnOpenChange = (item as { onOpenChange?: unknown }).onOpenChange as
+              | ((open: boolean, details: unknown) => void)
+              | undefined;
             return {
               ...item,
               children: decorateMenuItems(item.children),
+              onOpenChange: (subOpen: boolean, details: unknown) => {
+                if (!subOpen) {
+                  const reason = (details as { reason?: string })?.reason;
+                  if (reason === 'sibling-open' || reason === 'focus-out') {
+                    (details as { cancel?: () => void })?.cancel?.();
+                    return;
+                  }
+                }
+                originalOnOpenChange?.(subOpen, details);
+              },
               type: 'submenu',
             };
           }
