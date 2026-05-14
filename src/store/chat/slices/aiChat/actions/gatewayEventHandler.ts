@@ -261,6 +261,10 @@ export const createGatewayEventHandler = (
 
         if (data?.phase === 'human_approval' && data.requiresApproval && data.pendingToolsCalling) {
           void notifyDesktopHumanApprovalRequired(get, context);
+          // Persist a paused marker so the sidebar reflects "waiting on user" across reload.
+          // Resume back to 'running' is free: approve / reject both spawn a new op via the
+          // executor entries, which already write 'running'.
+          if (context.topicId) void get().updateTopicStatus?.(context.topicId, 'paused');
         }
 
         break;
