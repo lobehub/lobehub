@@ -1704,9 +1704,25 @@ export const executeHeterogeneousAgent = async (
       }
 
       // Forward to the unified Gateway handler.
-      // If a step transition is pending, defer through persistQueue so the
-      // handler receives stream_start (with new assistant ID) FIRST.
-      if (pendingStepTransition) {
+      //
+      // Events that drive `fetchAndReplaceMessages` on the handler side
+      // (`tool_end`, `step_complete:execution_complete`, `stream_chunk` with a
+      // server-attached `toolMessageIds`) must wait for `persistQueue` to drain
+      // — otherwise the handler reads `assistant.tools[]` while a parallel
+      // `persistToolBatch` is still mid-flight and `replaceMessages` clobbers
+      // the in-memory cumulative tools[] with a shorter snapshot. That's the
+      // "7 → 6 次技能调用" rollback users see on parallel CC tool batches.
+      //
+      // Other forwards (text / reasoning / tools_calling dispatches) stay
+      // synchronous so live streaming UX isn't gated on DB round-trips.
+      const triggersFetchAndReplace =
+        event.type === 'tool_end' ||
+        (event.type === 'step_complete' &&
+          (event.data as { phase?: string } | undefined)?.phase === 'execution_complete') ||
+        (event.type === 'stream_chunk' &&
+          (event.data as { toolMessageIds?: unknown } | undefined)?.toolMessageIds !== undefined);
+
+      if (pendingStepTransition || triggersFetchAndReplace) {
         persistQueue = persistQueue.then(() => {
           eventHandler(event);
         });

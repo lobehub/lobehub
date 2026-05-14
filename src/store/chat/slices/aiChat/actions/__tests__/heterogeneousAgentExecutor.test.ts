@@ -2944,4 +2944,129 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(assistantCreates[0][0].parentId).toBe('tool-1');
     });
   });
+
+  // ────────────────────────────────────────────────────
+  // Parallel main tool batch: tool_end must not race ahead of persistQueue
+  // ────────────────────────────────────────────────────
+
+  describe('parallel-tools rollback regression', () => {
+    /**
+     * User-reported bug: when CC fires a large parallel tool batch (e.g. 7
+     * Bash commands at once), the AssistantGroup tool count occasionally
+     * "rolls back" — e.g. UI shows "7 次技能调用" then drops to 6.
+     *
+     * Root cause: the executor's `persistQueue` (DB writes) and the gateway
+     * handler's `processingChain` (in-memory dispatch + fetchAndReplaceMessages
+     * on tool_end) are two independent serial queues with no happens-before
+     * between them. `tool_end` events are forwarded to the handler
+     * SYNCHRONOUSLY at the bottom of `handleStreamEvent` (the
+     * `pendingStepTransition` gate only fires on stream_start(newStep), not
+     * inside a single message.id with parallel tool_use). So when a fast
+     * tool_result lands before persistQueue has flushed the LAST
+     * persistToolBatch's Phase 1/3 write, the handler runs
+     * fetchAndReplaceMessages → reads `assistant.tools` with a partial array
+     * → replaceMessages clobbers in-memory state from N → N-k.
+     *
+     * Observable invariant: by the time the handler is invoked with the FIRST
+     * `tool_end` event (which is what triggers fetchAndReplaceMessages), the
+     * most recent `mockUpdateMessage` call that wrote a `tools` array must
+     * already carry the full cumulative tool list. Otherwise, in real life,
+     * the DB read at that moment would return a shorter array and the UI
+     * would visibly drop tools.
+     *
+     * The test slows down `mockUpdateMessage` whenever `val.tools` is present,
+     * simulating the lag between Phase 1/3 writes and the rest of the stream.
+     * `vi.fn().mock.invocationCallOrder` gives a total ordering across all
+     * mocks so we can compare "when was the Nth tools-write CALLED" against
+     * "when was the first tool_end forwarded to the handler".
+     */
+    it('handler must not receive tool_end before persistQueue flushes full tools[]', async () => {
+      // Slow tools-bearing updateMessage writes — mirrors a real PG/lambda
+      // round trip taking long enough that a fast Bash tool_result can land
+      // before all 7 persistToolBatch operations finish their Phase 1/3.
+      const TOOLS_WRITE_DELAY_MS = 12;
+      mockUpdateMessage.mockImplementation(async (_id: string, val: any) => {
+        if (val?.tools) {
+          await new Promise((r) => setTimeout(r, TOOLS_WRITE_DELAY_MS));
+        }
+      });
+
+      // Give each tool message a deterministic id so we can spot-check.
+      let toolIdx = 0;
+      mockCreateMessage.mockImplementation(async (params: any) => {
+        if (params.role === 'tool') return { id: `tool-msg-${++toolIdx}` };
+        return { id: `ast-${params.role}-${Date.now()}` };
+      });
+
+      const PARALLEL = 7;
+      const toolIds = Array.from({ length: PARALLEL }, (_, i) => `toolu_par_${i + 1}`);
+
+      // 7 parallel tool_use blocks in the SAME message.id (CC partial-messages
+      // mode emits each tool_use in its own assistant event with the shared
+      // msg id; adapter accumulates via toolCallsByMessageId), followed by
+      // 7 tool_results arriving back-to-back.
+      const events: any[] = [ccInit()];
+      for (const id of toolIds) {
+        events.push(ccToolUse('msg_par', id, 'Bash', { command: `echo ${id}` }));
+      }
+      for (const id of toolIds) {
+        events.push(ccToolResult(id, `result of ${id}`));
+      }
+      events.push(ccResult());
+
+      await runWithEvents(events);
+
+      const handlerSpy = vi.mocked(createGatewayEventHandler).mock.results[0]?.value as ReturnType<
+        typeof vi.fn
+      >;
+      expect(handlerSpy).toBeDefined();
+
+      // Find the FIRST tool_end forwarded to the handler — this is the call
+      // that would trigger `fetchAndReplaceMessages` in real life and read
+      // assistant.tools[] from DB.
+      const handlerCalls = handlerSpy.mock.calls.map((args, i) => ({
+        event: args[0] as any,
+        order: handlerSpy.mock.invocationCallOrder[i],
+      }));
+      const firstToolEnd = handlerCalls.find(({ event }) => event?.type === 'tool_end');
+      expect(firstToolEnd).toBeDefined();
+
+      // All `mockUpdateMessage(_, { tools })` calls — these are persistToolBatch
+      // Phase 1 (pre-register) and Phase 3 (backfill) writes. Their invocation
+      // order is the moment Phase 1/3 ENTERED `await messageService.updateMessage`.
+      // Because persistToolBatch awaits each phase before moving on, the order
+      // here is a faithful proxy for the DB-write timeline.
+      const toolsWrites = mockUpdateMessage.mock.calls
+        .map((args, i) => ({
+          tools: (args[1] as any)?.tools,
+          order: mockUpdateMessage.mock.invocationCallOrder[i],
+        }))
+        .filter(({ tools }) => Array.isArray(tools));
+
+      // The latest tools[] write that started BEFORE the handler's first tool_end.
+      // If the executor properly defers tool_end through persistQueue, this
+      // should be the FINAL Phase 3 write carrying all 7 tools.
+      const latestBeforeToolEnd = toolsWrites.findLast(({ order }) => order < firstToolEnd!.order);
+
+      // The bug: without the deferral fix, persistQueue is still mid-flight
+      // (or hasn't started) when tool_end is forwarded, so the latest tools[]
+      // write seen at that point has fewer than PARALLEL entries — exactly
+      // the "7 → 6" rollback the user sees in the UI.
+      const writtenCount = latestBeforeToolEnd?.tools?.length ?? 0;
+      const writtenIds = (latestBeforeToolEnd?.tools ?? []).map((t: any) => t.id);
+      const handlerEventTrail = handlerCalls.map(({ event }) => event?.type).join(',');
+      expect(
+        writtenCount,
+        `tool_end forwarded to handler at order ${firstToolEnd!.order} ` +
+          `but the latest persistToolBatch tools[] write at that point had ` +
+          `${writtenCount}/${PARALLEL} tools — fetchAndReplaceMessages would ` +
+          `read partial assistant.tools[] and roll back the UI. ` +
+          `Handler event trail: [${handlerEventTrail}]`,
+      ).toBe(PARALLEL);
+      // All 7 tool ids must be present in that write — guards against any
+      // weird ordering where the last write happens to have 7 entries but
+      // the wrong ones (e.g. dedupe bug repopulating from a stale set).
+      for (const id of toolIds) expect(writtenIds).toContain(id);
+    });
+  });
 });
