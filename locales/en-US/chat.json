@@ -347,7 +347,7 @@
   "plus.search.off": "Off",
   "plus.search.offDesc": "Do not add web results to this chat.",
   "plus.title": "Add",
-  "plus.tooltip": "Add files, skills, and more",
+  "plus.tooltip": "Add files, skills, and more context...",
   "rag.referenceChunks": "Reference Source",
   "rag.userQuery.actions.delete": "Delete Query Rewrite",
   "rag.userQuery.actions.regenerate": "Regenerate Query",

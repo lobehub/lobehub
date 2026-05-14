@@ -347,7 +347,7 @@
   "plus.search.off": "关闭",
   "plus.search.offDesc": "本次对话不加入联网搜索结果。",
   "plus.title": "添加",
-  "plus.tooltip": "添加文件、技能等",
+  "plus.tooltip": "添加文件、技能和更多上下文...",
   "rag.referenceChunks": "引用源",
   "rag.userQuery.actions.delete": "删除 Query 重写",
   "rag.userQuery.actions.regenerate": "重新生成 Query",

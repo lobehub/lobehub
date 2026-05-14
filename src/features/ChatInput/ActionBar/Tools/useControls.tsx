@@ -43,6 +43,7 @@ import ToolItem from './ToolItem';
 import ToolItemDetailPopover from './ToolItemDetailPopover';
 
 const SKILL_ICON_SIZE = 18;
+const CLOSE_TOOL_DETAIL_POPOVER_EVENT = 'lobe-chat-tool-detail-popover-close';
 
 type SkillPolicyMode = 'auto' | 'pinned';
 
@@ -207,8 +208,7 @@ const styles = createStaticStyles(({ css }) => ({
     text-align: start;
   `,
   search: css`
-    padding-block: 4px 8px;
-    padding-inline: 0;
+    width: 100%;
   `,
   searchBox: css`
     display: flex;
@@ -299,6 +299,13 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
     [checkedSet, setUpdating, togglePlugin],
   );
 
+  const openSkillPolicyMenu = useCallback((id: string) => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event(CLOSE_TOOL_DETAIL_POPOVER_EVENT));
+    }
+    setPolicyOpenId(id);
+  }, []);
+
   const renderPolicyMenu = useCallback(
     (id: string) => {
       const mode: SkillPolicyMode = checkedSet.has(id) ? 'pinned' : 'auto';
@@ -350,7 +357,7 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
           positionerProps={{ sideOffset: 8 }}
           styles={{ content: { padding: 0 } }}
           trigger="click"
-          onOpenChange={(open) => setPolicyOpenId(open ? id : null)}
+          onOpenChange={(open) => (open ? openSkillPolicyMenu(id) : setPolicyOpenId(null))}
         >
           <button
             aria-label={t('tools.skillActivateMode.title')}
@@ -358,11 +365,25 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
             type="button"
             onClick={(event) => {
               event.stopPropagation();
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new Event(CLOSE_TOOL_DETAIL_POPOVER_EVENT));
+              }
             }}
             onContextMenu={(event) => {
               event.preventDefault();
               event.stopPropagation();
-              setPolicyOpenId(id);
+              openSkillPolicyMenu(id);
+            }}
+            onPointerDown={(event) => {
+              event.stopPropagation();
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new Event(CLOSE_TOOL_DETAIL_POPOVER_EVENT));
+              }
+            }}
+            onPointerEnter={() => {
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new Event(CLOSE_TOOL_DETAIL_POPOVER_EVENT));
+              }
             }}
           >
             <Icon icon={MoreHorizontal} size={15} />
@@ -370,7 +391,7 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
         </Popover>
       );
     },
-    [checkedSet, policyOpenId, t, updateSkillPolicy],
+    [checkedSet, openSkillPolicyMenu, policyOpenId, t, updateSkillPolicy],
   );
 
   const renderToolLabel = useCallback(
@@ -380,14 +401,14 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
         onContextMenu={(event) => {
           event.preventDefault();
           event.stopPropagation();
-          setPolicyOpenId(id);
+          openSkillPolicyMenu(id);
         }}
       >
         <span className={cx(styles.toolLabel)}>{label}</span>
         {action}
       </span>
     ),
-    [],
+    [openSkillPolicyMenu],
   );
 
   const createManagedSkillItem = useCallback(
@@ -963,16 +984,22 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
           )}
         </div>
       </div>
-      <span className={cx(styles.activationGroupMeta)}>({count})</span>
+      <span className={cx(styles.activationGroupMeta)}>{count}</span>
     </div>
   );
 
   const marketItems: ItemType[] = [
     {
       children: [],
+      closeOnClick: false,
       key: 'skill-search',
       label: (
-        <div className={cx(styles.search)} onClick={stopPropagation} onKeyDown={stopPropagation}>
+        <div
+          data-skill-menu-search
+          className={cx(styles.search)}
+          onClick={stopPropagation}
+          onKeyDown={stopPropagation}
+        >
           <div className={cx(styles.searchBox)}>
             <SearchBar
               allowClear
@@ -1002,6 +1029,14 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
               onToggle: () => setPinnedOpen((open) => !open),
             }),
             type: 'group' as const,
+          },
+        ]
+      : []),
+    ...(pinnedItems.length > 0 && autoItems.length > 0
+      ? [
+          {
+            key: 'skill-activation-divider',
+            type: 'divider' as const,
           },
         ]
       : []),

@@ -19,7 +19,7 @@ import {
   TypeIcon,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { memo, Suspense, useCallback, useMemo, useState } from 'react';
+import { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { message } from '@/components/AntdStaticMethods';
@@ -128,21 +128,61 @@ type DropdownItemWithPopover = NonNullable<ActionDropdownMenuItems>[number] & {
   popoverContent?: unknown;
 };
 
-const wrapPopoverLabel = (label: ReactNode, popoverContent?: unknown) => {
-  if (!popoverContent) return label;
+const CLOSE_TOOL_DETAIL_POPOVER_EVENT = 'lobe-chat-tool-detail-popover-close';
+
+interface PopoverLabelProps {
+  label: ReactNode;
+  popoverContent: ReactNode;
+}
+
+const PopoverLabel = memo<PopoverLabelProps>(({ label, popoverContent }) => {
+  const [open, setOpen] = useState(false);
+  const suppressUntilRef = useRef(0);
+
+  useEffect(() => {
+    const close = () => {
+      suppressUntilRef.current = Date.now() + 600;
+      setOpen(false);
+    };
+    window.addEventListener(CLOSE_TOOL_DETAIL_POPOVER_EVENT, close);
+
+    return () => window.removeEventListener(CLOSE_TOOL_DETAIL_POPOVER_EVENT, close);
+  }, []);
+
+  const handleOpenChange = useCallback((nextOpen: boolean) => {
+    if (nextOpen && Date.now() < suppressUntilRef.current) return;
+
+    setOpen(nextOpen);
+  }, []);
 
   return (
     <Popover
       arrow={false}
-      content={popoverContent as ReactNode}
+      content={popoverContent}
       mouseEnterDelay={0.25}
+      open={open}
       placement={'rightTop'}
       positionerProps={{ sideOffset: 10 }}
       styles={{ content: { padding: 0 } }}
+      onOpenChange={handleOpenChange}
     >
-      {label}
+      <span
+        style={{ display: 'block', width: '100%' }}
+        onClickCapture={() => setOpen(false)}
+        onContextMenuCapture={() => setOpen(false)}
+      >
+        {label}
+      </span>
     </Popover>
   );
+});
+
+PopoverLabel.displayName = 'PopoverLabel';
+
+const wrapPopoverLabel = (label: ReactNode, popoverContent?: unknown) => {
+  if (!popoverContent) return label;
+
+  return <PopoverLabel label={label} popoverContent={popoverContent as ReactNode} />;
 };
 
 const stripPopoverContent = (items?: ActionDropdownMenuItems): ActionDropdownMenuItems =>

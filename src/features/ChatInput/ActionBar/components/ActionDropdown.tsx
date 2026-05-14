@@ -52,18 +52,54 @@ const SubmenuScrollStyle = createGlobalStyle`
   [data-submenu] > [role='menu'] [role='menuitem']:has([data-fixed-menu-footer]) {
     position: sticky;
     z-index: 2;
-    inset-block-end: 0;
+    inset-block-end: -4px;
 
     overflow: visible;
 
+    min-height: 0;
+    margin-block: 0 -4px;
+    margin-inline: -4px;
+    padding-block: 8px 12px !important;
+    padding-inline: 8px !important;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: 0;
 
     background: ${cssVar.colorBgElevated};
     box-shadow: 0 -12px 16px 4px ${cssVar.colorBgElevated};
   }
 
+  [data-submenu] > [role='menu'] [role='menuitem']:has([data-fixed-menu-footer])::after {
+    pointer-events: none;
+    content: '';
+
+    position: absolute;
+    inset-block-end: -12px;
+    inset-inline: 0;
+
+    height: 12px;
+
+    background: ${cssVar.colorBgElevated};
+  }
+
+  [data-submenu] > [role='menu'] [role='menuitem']:has([data-fixed-menu-footer]) > * {
+    width: 100%;
+    min-height: 36px;
+    padding-inline: 8px;
+    border-radius: ${cssVar.borderRadiusSM};
+  }
+
+  [data-submenu] > [role='menu'] [role='group']:has([data-skill-menu-search]) > *:has([data-skill-menu-search]) {
+    padding-block: 12px 8px !important;
+    padding-inline: 8px !important;
+  }
+
   [data-submenu] > [role='menu'] [role='menuitem']:has([data-fixed-menu-footer]):hover,
   [data-submenu] > [role='menu'] [role='menuitem']:has([data-fixed-menu-footer])[data-highlighted] {
+    background: ${cssVar.colorBgElevated};
+  }
+
+  [data-submenu] > [role='menu'] [role='menuitem']:has([data-fixed-menu-footer]):hover > *,
+  [data-submenu] > [role='menu'] [role='menuitem']:has([data-fixed-menu-footer])[data-highlighted] > * {
     background: ${cssVar.colorFillTertiary};
   }
 `;
@@ -127,10 +163,7 @@ const ActionDropdown = memo<ActionDropdownProps>(
 
     const handleOpenChange = useCallback(
       (nextOpen: boolean, details: Parameters<NonNullable<typeof onOpenChange>>[1]) => {
-        if (
-          !nextOpen &&
-          (details as { reason?: string })?.reason === 'sibling-open'
-        ) {
+        if (!nextOpen && (details as { reason?: string })?.reason === 'sibling-open') {
           (details as { cancel?: () => void })?.cancel?.();
           return;
         }
@@ -237,7 +270,6 @@ const ActionDropdown = memo<ActionDropdownProps>(
       return nextItems;
     }, [decorateMenuItems, isOpen, menu, prefetch]);
 
-    console.log('ActionDropdown render', { isOpen, renderedItems });
     const menuContent = useMemo(() => {
       if (!popupRender) return renderedItems;
 

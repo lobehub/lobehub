@@ -379,7 +379,7 @@ export default {
   'plus.search.offDesc': 'Do not add web results to this chat.',
   'plus.addSkills': 'Add Skills',
   'plus.title': 'Add',
-  'plus.tooltip': 'Add files, skills, and more',
+  'plus.tooltip': 'Add files, skills, and more context...',
   'chatMode.agentCap.env': 'Runtime env',
   'chatMode.agentCap.files': 'File access',
   'chatMode.agentCap.memory': 'Memory',
