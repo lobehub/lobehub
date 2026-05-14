@@ -523,13 +523,13 @@ export const useControls = () => {
                   content: t('tools.builtins.uninstallConfirm.desc', {
                     name: deleteConfig.displayName,
                   }),
+                  okButtonProps: { danger: true },
                   onOk: async () => {
                     await deleteConfig.onDelete();
                   },
                   title: t('tools.builtins.uninstallConfirm.title', {
                     name: deleteConfig.displayName,
                   }),
-                  type: 'warning',
                 });
               }}
             >
@@ -1128,7 +1128,7 @@ export const useControls = () => {
         ? { onConfigure: () => setEditingPluginId(item.identifier) }
         : undefined,
       deleteConfig: {
-        displayName: item.title,
+        displayName: item.title ?? item.identifier,
         onDelete: () => uninstallPlugin(item.identifier),
       },
       extraTag: isCustom ? (
@@ -1255,7 +1255,6 @@ export const useControls = () => {
   const marketItems: ItemType[] = [
     {
       children: [],
-      closeOnClick: false,
       key: 'skill-search',
       label: (
         <div
@@ -1292,7 +1291,7 @@ export const useControls = () => {
               onToggle: () => setPinnedOpen((open) => !open),
             }),
             type: 'group' as const,
-          },
+          } as ItemType,
         ]
       : []),
     ...(pinnedItems.length > 0 && autoItems.length > 0
@@ -1300,7 +1299,7 @@ export const useControls = () => {
           {
             key: 'skill-activation-divider',
             type: 'divider' as const,
-          },
+          } as ItemType,
         ]
       : []),
     ...(autoItems.length > 0
@@ -1316,7 +1315,7 @@ export const useControls = () => {
               onToggle: () => setAutoOpen((open) => !open),
             }),
             type: 'group' as const,
-          },
+          } as ItemType,
         ]
       : []),
     ...(allSkillItems.length > 0
@@ -1351,7 +1350,7 @@ export const useControls = () => {
                 </div>
               </span>
             ),
-          },
+          } as ItemType,
         ]
       : []),
   ];

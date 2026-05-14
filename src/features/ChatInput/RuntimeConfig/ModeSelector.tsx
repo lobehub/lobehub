@@ -195,10 +195,11 @@ const ModeSelector = memo(() => {
     <Popover
       content={popoverContent}
       open={open}
-      overlayInnerStyle={{ border: `1px solid ${cssVar.colorBorderSecondary}` }}
       placement="topLeft"
-      styles={{ content: { padding: 4 } }}
       trigger="click"
+      styles={{
+        content: { border: `1px solid ${cssVar.colorBorderSecondary}`, padding: 4 },
+      }}
       onOpenChange={setOpen}
     >
       <div>

@@ -130,7 +130,7 @@ const getMinimumWidth = (levelCount: number, customMinWidth: CSSProperties['minW
 const resolveMark = (
   mark: NonNullable<SliderSingleProps['marks']>[number] | undefined,
   fallback: string,
-) => {
+): { label: ReactNode; style?: CSSProperties } => {
   if (!mark) return { label: fallback };
 
   if (typeof mark === 'object' && 'label' in mark) {
@@ -140,7 +140,7 @@ const resolveMark = (
     };
   }
 
-  return { label: mark };
+  return { label: mark as ReactNode };
 };
 
 function LevelSlider<T extends string = string>({
