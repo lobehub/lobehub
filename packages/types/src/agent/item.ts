@@ -24,7 +24,6 @@ export interface LobeAgentConfig {
    * Used to save the complete state of the rich text editor, including special nodes like mention
    */
   editorData?: any;
-  enableAgentMode?: boolean;
   fewShots?: FewShots;
   files?: FileItem[];
   id?: string;

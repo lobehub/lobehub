@@ -13,7 +13,7 @@ import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
-import { useUpdateAgentConfig } from '@/features/ChatInput/hooks/useUpdateAgentConfig';
+import { useToggleAgentMode } from '@/features/ChatInput/hooks/useToggleAgentMode';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
@@ -105,7 +105,7 @@ const AGENT_CAPS = [
 const ModeSelector = memo(() => {
   const { t } = useTranslation('chat');
   const agentId = useAgentId();
-  const { updateAgentConfig } = useUpdateAgentConfig();
+  const toggleAgentMode = useToggleAgentMode();
   const [open, setOpen] = useState(false);
 
   const enableAgentMode = useAgentStore(agentByIdSelectors.getAgentEnableModeById(agentId));
@@ -114,11 +114,11 @@ const ModeSelector = memo(() => {
   const CurrentIcon = enableAgentMode ? InfinityIcon : MessageCircleIcon;
 
   const handleSelect = useCallback(
-    (mode: 'chat' | 'agent') => {
-      updateAgentConfig({ enableAgentMode: mode === 'agent' });
+    async (mode: 'chat' | 'agent') => {
       setOpen(false);
+      await toggleAgentMode(mode === 'agent');
     },
-    [updateAgentConfig],
+    [toggleAgentMode],
   );
 
   const agentTooltip = (
@@ -140,28 +140,6 @@ const ModeSelector = memo(() => {
       <Flexbox
         horizontal
         align="center"
-        className={cx(styles.option, currentMode === 'chat' && styles.activeOption)}
-        gap={12}
-        onClick={() => handleSelect('chat')}
-      >
-        <Flexbox
-          align="center"
-          className={styles.optionIcon}
-          height={32}
-          justify="center"
-          width={32}
-        >
-          <Icon icon={MessageCircleIcon} size={16} />
-        </Flexbox>
-        <Flexbox flex={1}>
-          <div className={styles.optionTitle}>{t('chatMode.chat')}</div>
-          <div className={styles.optionDesc}>{t('chatMode.chatDesc')}</div>
-        </Flexbox>
-      </Flexbox>
-
-      <Flexbox
-        horizontal
-        align="center"
         className={cx(styles.option, currentMode === 'agent' && styles.activeOption)}
         gap={12}
         onClick={() => handleSelect('agent')}
@@ -178,6 +156,28 @@ const ModeSelector = memo(() => {
         <Flexbox flex={1}>
           <div className={styles.optionTitle}>{t('chatMode.agent')}</div>
           <div className={styles.optionDesc}>{t('chatMode.agentDesc')}</div>
+        </Flexbox>
+      </Flexbox>
+
+      <Flexbox
+        horizontal
+        align="center"
+        className={cx(styles.option, currentMode === 'chat' && styles.activeOption)}
+        gap={12}
+        onClick={() => handleSelect('chat')}
+      >
+        <Flexbox
+          align="center"
+          className={styles.optionIcon}
+          height={32}
+          justify="center"
+          width={32}
+        >
+          <Icon icon={MessageCircleIcon} size={16} />
+        </Flexbox>
+        <Flexbox flex={1}>
+          <div className={styles.optionTitle}>{t('chatMode.chat')}</div>
+          <div className={styles.optionDesc}>{t('chatMode.chatDesc')}</div>
         </Flexbox>
       </Flexbox>
     </Flexbox>
