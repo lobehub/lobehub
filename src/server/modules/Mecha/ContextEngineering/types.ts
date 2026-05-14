@@ -95,6 +95,13 @@ export interface ServerMessagesEngineParams {
   onboardingContext?: OnboardingContext;
 
   // ========== Agent configuration ==========
+  /**
+   * Whether the agent runs in agent mode. When explicitly `false` (chat mode)
+   * the engine force-disables skills and agent-document injectors. Undefined /
+   * true → agent mode.
+   */
+  enableAgentMode?: boolean;
+
   /** Whether to enable history message count limit */
   enableHistoryCount?: boolean;
 
