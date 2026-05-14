@@ -197,7 +197,7 @@ export default {
   'channel.allowListRemove': 'Remove',
   'channel.watchKeywords': 'Watch Keywords',
   'channel.watchKeywordsHint':
-    'When a subscribed channel message matches a keyword, the bot wakes without an @mention and the instruction is prepended to the user message before it is sent to the AI. Case-insensitive, whole-word match.',
+    'A keyword match wakes the bot without an @mention; its instruction is prepended to the user message. Whole-word, case-insensitive.',
   'channel.watchKeywordLabel': 'Keyword',
   'channel.watchKeywordPlaceholder': 'e.g. bug',
   'channel.watchKeywordInstructionLabel': 'Instruction',

@@ -193,7 +193,7 @@
   "channel.watchKeywords": "监听关键词",
   "channel.watchKeywordsAdd": "添加关键词",
   "channel.watchKeywordsEmpty": "暂未配置关键词——已订阅频道里仅响应 @ 或私信。",
-  "channel.watchKeywordsHint": "已订阅频道中匹配到关键词时，无需 @ 也会唤醒机器人，并把对应指令拼接到用户消息之前再发送给 AI。大小写不敏感，按整词匹配。",
+  "channel.watchKeywordsHint": "命中关键词即唤醒机器人，无需 @；指令会拼到用户消息前再发给 AI。整词匹配，不区分大小写。",
   "channel.wechat.description": "通过 iLink Bot 将助手连接到微信，支持私聊和群聊。",
   "channel.wechatBotId": "机器人 ID",
   "channel.wechatBotIdHint": "通过二维码授权后分配的机器人标识符。",
