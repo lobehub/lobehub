@@ -33,6 +33,7 @@ const showArtifactUI = (s: ChatStoreState) => currentViewType(s) === PortalViewT
 const showDocument = (s: ChatStoreState) => currentViewType(s) === PortalViewType.Document;
 const showNotebook = (s: ChatStoreState) => currentViewType(s) === PortalViewType.Notebook;
 const showFilePreview = (s: ChatStoreState) => currentViewType(s) === PortalViewType.FilePreview;
+const showLocalFile = (s: ChatStoreState) => currentViewType(s) === PortalViewType.LocalFile;
 const showMessageDetail = (s: ChatStoreState) =>
   currentViewType(s) === PortalViewType.MessageDetail;
 const showPluginUI = (s: ChatStoreState) => currentViewType(s) === PortalViewType.ToolUI;
@@ -118,6 +119,23 @@ const currentFile = (s: ChatStoreState): PortalFile | undefined => {
 const previewFileId = (s: ChatStoreState) => currentFile(s)?.fileId;
 const chunkText = (s: ChatStoreState) => currentFile(s)?.chunkText;
 
+// Local File selectors
+const activeLocalFilePath = (s: ChatStoreState): string | undefined => s.activeLocalFilePath;
+
+const openLocalFiles = (s: ChatStoreState): Array<{ filePath: string; workingDirectory: string }> =>
+  s.openLocalFiles;
+
+const currentLocalFile = (
+  s: ChatStoreState,
+): { filePath: string; workingDirectory: string } | undefined => {
+  const active = s.activeLocalFilePath;
+  if (!active) return undefined;
+  return s.openLocalFiles.find((f) => f.filePath === active);
+};
+
+const localFilePath = (s: ChatStoreState) => currentLocalFile(s)?.filePath;
+const localFileWorkingDirectory = (s: ChatStoreState) => currentLocalFile(s)?.workingDirectory;
+
 // Message Detail selectors
 const messageDetailId = (s: ChatStoreState): string | undefined => {
   const view = getViewData(s, PortalViewType.MessageDetail);
@@ -153,6 +171,7 @@ export const chatPortalSelectors = {
   showDocument,
   showNotebook,
   showFilePreview,
+  showLocalFile,
   showMessageDetail,
   showPluginUI,
 
@@ -174,6 +193,13 @@ export const chatPortalSelectors = {
   currentFile,
   previewFileId,
   chunkText,
+
+  // Local file data
+  activeLocalFilePath,
+  currentLocalFile,
+  localFilePath,
+  localFileWorkingDirectory,
+  openLocalFiles,
 
   // Message detail data
   messageDetailId,

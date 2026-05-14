@@ -322,7 +322,7 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
       onMessageHandle: (chunk) => {
         if (chunk.type === 'text') content += chunk.text || '';
       },
-      requestTrigger: RequestTrigger.VisualAnalysis,
+      metadata: { trigger: RequestTrigger.VisualAnalysis },
       signal: abortController.signal,
     });
 

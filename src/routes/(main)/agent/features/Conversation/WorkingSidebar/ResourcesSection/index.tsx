@@ -11,7 +11,7 @@ const ResourcesSection = memo(() => {
       data-testid="workspace-resources"
       flex={1}
       paddingBlock={8}
-      paddingInline={16}
+      paddingInline={'8px 12px'}
       style={{ minHeight: 0 }}
     >
       <AgentDocumentsGroup style={{ flex: 1, minHeight: 0 }} viewMode={'list'} />

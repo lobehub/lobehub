@@ -44,6 +44,7 @@
   "dependencies": {
     "@lobehub/fluent-emoji": "^4.1.0",
     "@napi-rs/canvas": "^0.1.70",
+    "electron-log": "^5.4.3",
     "get-windows": "^9.3.0",
     "node-screenshots": "^0.2.8"
   },
@@ -79,7 +80,6 @@
     "electron-builder": "^26.8.1",
     "electron-devtools-installer": "4.0.0",
     "electron-is": "^3.0.0",
-    "electron-log": "^5.4.3",
     "electron-store": "^8.2.0",
     "electron-updater": "^6.6.2",
     "electron-vite": "6.0.0-beta.1",

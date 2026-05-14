@@ -2,7 +2,14 @@
   "name": "@lobechat/builtin-agents",
   "version": "1.0.0",
   "private": true,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
   "main": "./src/index.ts",
+  "types": "./src/index.ts",
   "dependencies": {
     "@lobechat/builtin-tool-agent-builder": "workspace:*",
     "@lobechat/builtin-tool-agent-documents": "workspace:*",

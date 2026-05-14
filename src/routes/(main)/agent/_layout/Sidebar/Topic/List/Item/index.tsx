@@ -259,6 +259,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
               return <ProviderIcon color={cssVar.colorTextDescription} size={16} />;
             }
           }
+          if (isHeterogeneousAgent) return null;
           return (
             <Icon
               icon={HashIcon}

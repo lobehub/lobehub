@@ -27,6 +27,7 @@ import {
   type ChatToolPayload,
   type ConversationContext,
   type CreateMessageParams,
+  type MessageMetadata,
   type MessageToolCall,
   type ModelUsage,
   TraceNameMap,
@@ -147,6 +148,7 @@ export const createAgentExecutors = (context: {
   /** Pre-resolved agent config with isSubAgent filtering applied */
   agentConfig: ResolvedAgentConfig;
   get: () => ChatStore;
+  metadata?: Pick<MessageMetadata, 'trigger'>;
   messageKey: string;
   operationId: string;
   parentId: string;
@@ -477,6 +479,7 @@ export const createAgentExecutors = (context: {
           ...agentConfigData.params,
         },
         initialContext: runtimeContext?.initialContext,
+        metadata: context.metadata,
         stepContext: runtimeContext?.stepContext,
         trace: {
           traceId,

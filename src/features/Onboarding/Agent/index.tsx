@@ -3,6 +3,8 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { setAgentTemplatesFetcher } from '@lobechat/builtin-tool-web-onboarding/agentMarketplace';
 import { SESSION_CHAT_TOPIC_URL } from '@lobechat/const';
+import type { SendMessageParams } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 import { Button, ErrorBoundary, Flexbox } from '@lobehub/ui';
 import { Drawer } from 'antd';
 import { History } from 'lucide-react';
@@ -129,7 +131,9 @@ const AgentOnboardingPage = memo(() => {
   const { onBeforeSendMessage, triggerExtract } = onboardingFollowUp;
 
   const composedOnBeforeSendMessage = useCallback(
-    async (params: { messages?: any }) => {
+    async (params: SendMessageParams) => {
+      params.metadata = { ...params.metadata, trigger: RequestTrigger.Onboarding };
+
       const welcomeContent = t('agent.welcome');
       await onBeforeSendMessage();
 

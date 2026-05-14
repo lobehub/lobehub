@@ -30,6 +30,12 @@ vi.mock('./Review', () => ({
   ),
 }));
 
+vi.mock('./Files', () => ({
+  default: ({ workingDirectory }: { workingDirectory: string }) => (
+    <div data-testid="files-panel">{workingDirectory}</div>
+  ),
+}));
+
 vi.mock('@/features/ChatInput/RuntimeConfig/useRepoType', () => ({
   useRepoType: (path?: string) => (path ? mocks.repoType : undefined),
 }));
@@ -154,6 +160,12 @@ vi.mock('@/store/agent/selectors', () => ({
       (agentId: string) =>
       (state: { agentWorkingDirectoryById?: Record<string, string | undefined> }) =>
         state.agentWorkingDirectoryById?.[agentId],
+  },
+  chatConfigByIdSelectors: {
+    isLocalSystemEnabledById:
+      (_agentId: string) =>
+      (_state: Record<string, unknown>) =>
+        true,
   },
 }));
 
