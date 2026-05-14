@@ -71,8 +71,11 @@ const EmptyState = memo(() => {
           </Flexbox>
           <div className={styles.grid}>
             {templatesState.mode === 'skeleton'
-              ? Array.from({ length: 6 }).map((_, i) => (
-                  <TaskTemplateCardSkeleton descriptionRows={2} key={i} />
+              ? Array.from({ length: templatesState.skeletonCount }).map((_, i) => (
+                  <TaskTemplateCardSkeleton
+                    descriptionRows={2}
+                    key={`task-template-skeleton-${i}`}
+                  />
                 ))
               : templatesState.templates.map((tmpl) => (
                   <TaskTemplateCard

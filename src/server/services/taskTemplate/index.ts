@@ -1,15 +1,16 @@
+import type { TaskTemplate, TaskTemplateSkillSource } from '@lobechat/const';
 import {
   TASK_TEMPLATE_FALLBACK_CATEGORIES,
-  type TaskTemplate,
+  TASK_TEMPLATE_RECOMMEND_COUNT,
+  TASK_TEMPLATE_RECOMMEND_COUNT_MAX,
   taskTemplates,
-  type TaskTemplateSkillSource,
 } from '@lobechat/const';
 
 import { klavisEnv } from '@/config/klavis';
 import { appEnv } from '@/envs/app';
 
-export const RECOMMEND_COUNT = 3;
-export const RECOMMEND_COUNT_MAX = 20;
+export const RECOMMEND_COUNT = TASK_TEMPLATE_RECOMMEND_COUNT;
+export const RECOMMEND_COUNT_MAX = TASK_TEMPLATE_RECOMMEND_COUNT_MAX;
 
 export const ENABLED_SKILL_SOURCES: ReadonlySet<TaskTemplateSkillSource> = (() => {
   const sources = new Set<TaskTemplateSkillSource>();

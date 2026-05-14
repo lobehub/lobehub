@@ -5,8 +5,6 @@ import { TaskTemplateCard } from './TaskTemplateCard';
 import { TaskTemplateCardSkeleton } from './TaskTemplateCardSkeleton';
 import type { DailyBriefRecommendationsUIState } from './useDailyBriefRecommendationsUI';
 
-const DEFAULT_RECOMMENDATION_SKELETON_KEYS = ['first', 'second', 'third'];
-
 interface DailyBriefRecommendationsViewProps {
   state: DailyBriefRecommendationsUIState;
 }
@@ -17,8 +15,8 @@ export const DailyBriefRecommendationsView = memo<DailyBriefRecommendationsViewP
     if (state.mode === 'skeleton') {
       return (
         <Flexbox gap={8}>
-          {DEFAULT_RECOMMENDATION_SKELETON_KEYS.map((key) => (
-            <TaskTemplateCardSkeleton key={key} />
+          {Array.from({ length: state.skeletonCount }, (_, index) => (
+            <TaskTemplateCardSkeleton key={`task-template-skeleton-${index}`} />
           ))}
         </Flexbox>
       );

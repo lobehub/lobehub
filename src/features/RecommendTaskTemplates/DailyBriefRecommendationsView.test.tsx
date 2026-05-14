@@ -17,9 +17,9 @@ vi.mock('./TaskTemplateCardSkeleton', () => ({
 }));
 
 describe('DailyBriefRecommendationsView', () => {
-  it('uses task-template card skeletons while loading recommendations', () => {
-    render(<DailyBriefRecommendationsView state={{ mode: 'skeleton' }} />);
+  it('renders the requested number of task-template card skeletons while loading recommendations', () => {
+    render(<DailyBriefRecommendationsView state={{ mode: 'skeleton', skeletonCount: 4 }} />);
 
-    expect(screen.getAllByTestId('task-template-card-skeleton')).toHaveLength(3);
+    expect(screen.getAllByTestId('task-template-card-skeleton')).toHaveLength(4);
   });
 });

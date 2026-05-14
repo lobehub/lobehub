@@ -1,4 +1,5 @@
 import type { TaskTemplate, TaskTemplateSkillSource } from '@lobechat/const';
+import { TASK_TEMPLATE_RECOMMEND_COUNT, TASK_TEMPLATE_RECOMMEND_COUNT_MAX } from '@lobechat/const';
 import { createNanoId } from '@lobechat/utils';
 import { useSessionStorageState } from 'ahooks';
 import { App } from 'antd';
@@ -18,9 +19,12 @@ import { useResolvedInterestKeys } from './useResolvedInterestKeys';
 const REFRESH_SEED_STORAGE_KEY = 'lobehub:taskTemplate:refreshSeed';
 const nextRefreshSeed = createNanoId(8);
 
+const resolveRecommendationCount = (count?: number) =>
+  Math.max(1, Math.min(count ?? TASK_TEMPLATE_RECOMMEND_COUNT, TASK_TEMPLATE_RECOMMEND_COUNT_MAX));
+
 export type DailyBriefRecommendationsUIState =
   | { mode: 'hidden' }
-  | { mode: 'skeleton' }
+  | { mode: 'skeleton'; skeletonCount: number }
   | {
       mode: 'cards';
       onCreated: (templateId: string) => void;
@@ -37,6 +41,7 @@ export function useDailyBriefRecommendationsUI(
   options: UseDailyBriefRecommendationsUIOptions = {},
 ): DailyBriefRecommendationsUIState {
   const { count } = options;
+  const recommendationCount = resolveRecommendationCount(count);
   const { t } = useTranslation('taskTemplate');
   const { message } = App.useApp();
   const isLogin = useUserStore(authSelectors.isLogin);
@@ -53,10 +58,12 @@ export function useDailyBriefRecommendationsUI(
   });
 
   const { data, isLoading, mutate } = useSWR(
-    swrEnabled ? ['taskTemplate.listDailyRecommend', swrKey, refreshSeed, count] : null,
+    swrEnabled
+      ? ['taskTemplate.listDailyRecommend', swrKey, refreshSeed, recommendationCount]
+      : null,
     async () =>
       taskTemplateService.listDailyRecommend(interestKeys ?? [], {
-        count,
+        count: recommendationCount,
         refreshSeed: refreshSeed || undefined,
       }),
     { revalidateOnFocus: false, revalidateOnReconnect: false },
@@ -115,7 +122,7 @@ export function useDailyBriefRecommendationsUI(
   useFetchLobehubSkillConnections(requiredSources.has('lobehub'));
 
   if (!swrEnabled) return { mode: 'hidden' };
-  if (!isInit || isLoading) return { mode: 'skeleton' };
+  if (!isInit || isLoading) return { mode: 'skeleton', skeletonCount: recommendationCount };
   if (templates.length === 0) return { mode: 'hidden' };
 
   return {
