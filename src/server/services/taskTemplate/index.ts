@@ -2,7 +2,6 @@ import type { TaskTemplate, TaskTemplateSkillSource } from '@lobechat/const';
 import {
   TASK_TEMPLATE_FALLBACK_CATEGORIES,
   TASK_TEMPLATE_RECOMMEND_COUNT,
-  TASK_TEMPLATE_RECOMMEND_COUNT_MAX,
   taskTemplates,
 } from '@lobechat/const';
 
@@ -92,7 +91,7 @@ export class TaskTemplateService {
       now = new Date(),
       refreshSeed,
     } = options;
-    const limit = Math.max(1, Math.min(count, TASK_TEMPLATE_RECOMMEND_COUNT_MAX));
+    const limit = Math.max(1, count);
     const excluded = new Set(excludeIds ?? []);
     const seedBase = `${this.userId}:${getUtcDateStr(now)}`;
     const seed = hashString(refreshSeed ? `${seedBase}:${refreshSeed}` : seedBase);

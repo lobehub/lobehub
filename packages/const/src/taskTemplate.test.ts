@@ -5,7 +5,6 @@ import { INTEREST_AREA_KEYS } from './interests';
 import {
   TASK_TEMPLATE_FALLBACK_CATEGORIES,
   TASK_TEMPLATE_RECOMMEND_COUNT,
-  TASK_TEMPLATE_RECOMMEND_COUNT_MAX,
   taskTemplates,
 } from './taskTemplate';
 
@@ -80,8 +79,7 @@ describe('taskTemplates', () => {
     }
   });
 
-  it('keeps the recommendation default within the allowed maximum', () => {
+  it('keeps the recommendation default positive', () => {
     expect(TASK_TEMPLATE_RECOMMEND_COUNT).toBeGreaterThan(0);
-    expect(TASK_TEMPLATE_RECOMMEND_COUNT).toBeLessThanOrEqual(TASK_TEMPLATE_RECOMMEND_COUNT_MAX);
   });
 });

@@ -65,8 +65,6 @@ export const TASK_TEMPLATE_FALLBACK_CATEGORIES: TaskTemplateCategory[] = [
 
 export const TASK_TEMPLATE_RECOMMEND_COUNT = 3;
 
-export const TASK_TEMPLATE_RECOMMEND_COUNT_MAX = 20;
-
 export const taskTemplates: TaskTemplate[] = [
   // content-creation
   {
