@@ -123,14 +123,14 @@ export class LocalFileProtocolManager {
             return new Response('Forbidden', { status: 403 });
           }
 
-          const fileStat = await stat(resolvedPath);
+          const fileStat = await stat(realResolvedPath);
           if (!fileStat.isFile()) {
             return new Response('Not a file', { status: 404 });
           }
 
-          const buffer = await readFile(resolvedPath);
+          const buffer = await readFile(realResolvedPath);
           const headers = new Headers();
-          headers.set('Content-Type', getMimeType(resolvedPath));
+          headers.set('Content-Type', getMimeType(realResolvedPath));
           headers.set('Content-Length', String(buffer.byteLength));
           // Local files are immutable from the renderer's perspective for a
           // single preview session; allow short-lived caching to avoid
