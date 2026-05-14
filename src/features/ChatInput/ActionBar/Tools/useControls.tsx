@@ -5,13 +5,14 @@ import {
   RecommendedSkillType,
 } from '@lobechat/const';
 import type { ItemType } from '@lobehub/ui';
-import { Avatar, Icon, Popover, SearchBar, stopPropagation, Tag } from '@lobehub/ui';
+import { Avatar, Icon, Popover, SearchBar, stopPropagation, Tag, Tooltip } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { McpIcon, SkillsIcon } from '@lobehub/ui/icons';
 import { Switch } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import {
+  BadgeCheck,
   Check,
   ChevronDown,
   ChevronRight,
@@ -58,6 +59,12 @@ import ToolItemDetailPopover from './ToolItemDetailPopover';
 
 const SKILL_ICON_SIZE = 18;
 const CLOSE_TOOL_DETAIL_POPOVER_EVENT = 'lobe-chat-tool-detail-popover-close';
+
+const officialTag = (
+  <Tooltip placement={'top'} title={'LobeHub'}>
+    <Tag color={'success'} icon={<Icon icon={BadgeCheck} />} size={'small'} />
+  </Tooltip>
+);
 
 type SkillPolicyMode = 'auto' | 'pinned';
 
@@ -601,8 +608,8 @@ export const useControls = () => {
         <span className={cx(styles.toolLabel)}>
           {icon}
           <span className={cx(styles.toolLabelText)}>{label}</span>
-          {badge && <span className={cx(styles.typeTag)}>{badge}</span>}
           {extraTag}
+          {badge && <span className={cx(styles.typeTag)}>{badge}</span>}
         </span>
         {action}
       </span>
@@ -778,6 +785,7 @@ export const useControls = () => {
                   displayName: type.label,
                   onDelete: () => removeKlavisServer(server.identifier),
                 },
+                extraTag: type.author === 'LobeHub' ? officialTag : undefined,
                 icon,
                 id: server.identifier,
                 popoverContent,
@@ -846,6 +854,7 @@ export const useControls = () => {
             if (server?.status === LobehubSkillStatus.CONNECTED || server?.isConnected) {
               return createManagedSkillItem({
                 badge: <Icon icon={McpIcon} size={12} />,
+                extraTag: provider.author === 'LobeHub' ? officialTag : undefined,
                 icon,
                 id: server.identifier,
                 popoverContent,
@@ -921,6 +930,7 @@ export const useControls = () => {
             displayName: title,
             onDelete: () => uninstallBuiltinTool(item.identifier),
           },
+          extraTag: officialTag,
           icon,
           id: item.identifier,
           popoverContent,
@@ -968,6 +978,7 @@ export const useControls = () => {
 
         return createManagedSkillItem({
           badge: <Icon icon={SkillsIcon} size={12} />,
+          extraTag: officialTag,
           icon,
           id: skill.identifier,
           popoverContent,
@@ -1124,6 +1135,8 @@ export const useControls = () => {
         <Tag color={'warning'} icon={<Icon icon={Package} />} size={'small'}>
           {t('store.customPlugin', { ns: 'plugin' })}
         </Tag>
+      ) : item.author === 'LobeHub' ? (
+        officialTag
       ) : undefined,
       icon,
       id: item.identifier,
@@ -1192,6 +1205,7 @@ export const useControls = () => {
     onToggle: () => void;
   }) => (
     <div
+      data-skill-activation-group
       className={cx(styles.activationGroupHeader)}
       role="button"
       tabIndex={0}
@@ -1321,17 +1335,19 @@ export const useControls = () => {
                     <Icon icon={Zap} size={12} />
                     {allAutoItems.length}
                   </span>
-                  <button
-                    aria-label={t('tools.plugins.management')}
-                    className={cx(styles.statsSettingsButton)}
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      navigate('/settings/skill');
-                    }}
-                  >
-                    <Icon icon={Settings} size={14} />
-                  </button>
+                  <Tooltip placement="top" title={t('tools.plugins.management')}>
+                    <button
+                      aria-label={t('tools.plugins.management')}
+                      className={cx(styles.statsSettingsButton)}
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        navigate('/settings/skill');
+                      }}
+                    >
+                      <Icon icon={Settings} size={14} />
+                    </button>
+                  </Tooltip>
                 </div>
               </span>
             ),

@@ -87,8 +87,9 @@ const SubmenuScrollStyle = createGlobalStyle`
   /* base-ui group label is rendered inside a [role='presentation'] with its
      own default vertical padding, which stacks with our activationGroupHeader
      padding and inflates the gap above/below group headers. Reset only the
-     vertical padding; keep horizontal padding so headers align with items. */
-  [data-submenu] > [role='menu'] [role='group'] > [role='presentation'] {
+     vertical padding for skill activation groups; other groups (e.g. the
+     Knowledge submenu's Libraries/Files headers) keep their default padding. */
+  [data-submenu] > [role='menu'] [role='group']:has([data-skill-activation-group]) > [role='presentation'] {
     padding-block: 0;
   }
 
@@ -102,9 +103,7 @@ const SubmenuScrollStyle = createGlobalStyle`
     inset-block-end: 0;
 
     min-height: 0;
-    margin-inline: -4px;
     padding-block: 8px 12px !important;
-    padding-inline: 8px !important;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 0;
 
@@ -118,7 +117,6 @@ const SubmenuScrollStyle = createGlobalStyle`
     width: 100%;
     min-height: 36px;
     padding-block: 4px;
-    padding-inline: 8px;
     border-radius: ${cssVar.borderRadiusSM};
   }
 
