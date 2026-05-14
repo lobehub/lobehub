@@ -346,7 +346,7 @@ describe('MessengerRouter.getWebhookHandler', () => {
 //
 // The webhook tests above only verify routing into chat-sdk; the channel
 // mention contract lives inside the closures the router registers on
-// `bot.onNewMention` / `onSubscribedMessage` / `onDirectMessage`. We trigger
+// `bot.onNewMention` / `onSubscribedMessage`. We trigger
 // bot loading via a no-op webhook and then drive the captured handlers
 // directly with synthetic threads + messages so we can assert the unlinked
 // (ephemeral) and linked (agent dispatch) branches without standing up the
@@ -471,7 +471,17 @@ describe('MessengerRouter channel @mention', () => {
 });
 
 describe('MessengerRouter DM dispatch (regression)', () => {
-  it('dispatches a linked DM message to the active agent and subscribes the thread', async () => {
+  it('does not register an onDirectMessage handler', async () => {
+    // The router intentionally skips `onDirectMessage` so chat-sdk's DM
+    // dispatch falls through to the standard mention/subscription routing
+    // (mirrors BotMessageRouter). Registering it would short-circuit
+    // `isSubscribed` and prevent DM follow-ups from continuing the cached
+    // topic via `handleSubscribedMessage`.
+    await loadSlackBot();
+    expect(mockChatBot.onDirectMessage).not.toHaveBeenCalled();
+  });
+
+  it('routes a linked first-touch DM (forced @mention by chat-sdk) via handleMention', async () => {
     await loadSlackBot();
     mockFindLink.mockResolvedValue({
       activeAgentId: 'agt_main',
@@ -481,31 +491,54 @@ describe('MessengerRouter DM dispatch (regression)', () => {
       userId: 'user_alice',
     });
 
-    const handler = mockChatBot.onDirectMessage.mock.calls[0][0] as (
+    // chat-sdk forces `isMention = true` for DMs when no DM handler is
+    // registered, so the first DM lands in `onNewMention`. `handleMention`
+    // opens a fresh topic and subscribes the thread; later DMs flow
+    // through `onSubscribedMessage` and continue that topic.
+    const handler = mockChatBot.onNewMention.mock.calls[0][0] as (
       thread: any,
       msg: any,
     ) => Promise<void>;
-    const thread = fakeDmThread();
-    await handler(thread, fakeMessage({ text: 'hi' }));
+    await handler(fakeDmThread(), fakeMessage({ isMention: true, text: 'hi' }));
 
-    expect(thread.subscribe).toHaveBeenCalledTimes(1);
-    // First-touch DM → handleMention. Subsequent messages will hit
-    // onSubscribedMessage and continue in the cached topic via
-    // handleSubscribedMessage.
     expect(mockHandleMention).toHaveBeenCalledTimes(1);
     expect(mockHandleSubscribed).not.toHaveBeenCalled();
     expect(mockSlackBinder.handleUnlinkedMessage).not.toHaveBeenCalled();
   });
 
-  it('routes an unlinked DM through handleUnlinkedMessage WITHOUT channelMentionThreadId', async () => {
+  it('continues an existing topic when a subscribed DM follow-up arrives', async () => {
+    // After the first DM, chat-sdk's state adapter marks the thread as
+    // subscribed; subsequent DMs route to `onSubscribedMessage`, which
+    // dispatches through `handleSubscribedMessage` to reuse the cached
+    // topicId in chat-sdk thread state.
     await loadSlackBot();
-    mockFindLink.mockResolvedValue(null);
+    mockFindLink.mockResolvedValue({
+      activeAgentId: 'agt_main',
+      id: 'link_1',
+      platformUserId: 'U_ALICE',
+      tenantId: 'T_ACME',
+      userId: 'user_alice',
+    });
 
-    const handler = mockChatBot.onDirectMessage.mock.calls[0][0] as (
+    const handler = mockChatBot.onSubscribedMessage.mock.calls[0][0] as (
       thread: any,
       msg: any,
     ) => Promise<void>;
-    await handler(fakeDmThread(), fakeMessage());
+    await handler(fakeDmThread(), fakeMessage({ isMention: false, text: 'follow up' }));
+
+    expect(mockHandleSubscribed).toHaveBeenCalledTimes(1);
+    expect(mockHandleMention).not.toHaveBeenCalled();
+  });
+
+  it('routes an unlinked first-touch DM through handleUnlinkedMessage WITHOUT channelMentionThreadId', async () => {
+    await loadSlackBot();
+    mockFindLink.mockResolvedValue(null);
+
+    const handler = mockChatBot.onNewMention.mock.calls[0][0] as (
+      thread: any,
+      msg: any,
+    ) => Promise<void>;
+    await handler(fakeDmThread(), fakeMessage({ isMention: true }));
 
     expect(mockSlackBinder.handleUnlinkedMessage).toHaveBeenCalledTimes(1);
     const ctx = mockSlackBinder.handleUnlinkedMessage.mock.calls[0][0];
