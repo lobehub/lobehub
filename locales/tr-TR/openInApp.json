@@ -1,0 +1,8 @@
+{
+  "dropdownLabel": "Çalışma dizinini aç",
+  "errors.appNotInstalled": "{{appName}} yüklü değil",
+  "errors.launchFailed": "{{appName}} içinde açma başarısız oldu: {{error}}",
+  "errors.pathNotFound": "Yol bulunamadı: {{path}}",
+  "errors.unknown": "bilinmeyen hata",
+  "tooltip": "{{appName}} içinde aç"
+}
