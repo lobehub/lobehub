@@ -386,6 +386,7 @@ export class GatewayActionImpl {
 
     if (result.topicId) {
       this.#get().internal_updateTopicLoading(result.topicId, true);
+      void this.#get().updateTopicStatus?.(result.topicId, 'running');
     }
 
     // Create a dedicated operation for gateway execution with correct context.
@@ -433,6 +434,7 @@ export class GatewayActionImpl {
         this.#get().completeOperation(gatewayOpId);
         if (result.topicId) {
           this.#get().internal_updateTopicLoading(result.topicId, false);
+          void this.#get().updateTopicStatus?.(result.topicId, 'active');
           // Clear running operation from topic metadata (best-effort from frontend;
           // if browser was closed, reconnect logic will handle stale entries)
           topicService
@@ -522,6 +524,7 @@ export class GatewayActionImpl {
       onSessionComplete: () => {
         this.#get().completeOperation(gatewayOpId);
         this.#get().internal_updateTopicLoading(topicId, false);
+        void this.#get().updateTopicStatus?.(topicId, 'active');
         topicService.updateTopicMetadata(topicId, { runningOperation: null }).catch(() => {});
       },
       operationId,
