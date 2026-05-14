@@ -171,17 +171,16 @@ export const useErrorContent = (error: any) => {
 interface ErrorExtraProps {
   data: ErrorMessageData;
   error?: AlertProps;
+  onRegenerate?: () => void;
 }
 
-const ErrorMessageExtra = memo<ErrorExtraProps>(({ error: alertError, data }) => {
+const ErrorMessageExtra = memo<ErrorExtraProps>(({ error: alertError, data, onRegenerate }) => {
   const error = data.error;
   const navigate = useNavigate();
   const businessChatErrorMessageExtra = useRenderBusinessChatErrorMessageExtra(error, data.id);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const sessionErrorBody = error?.body;
   const rawErrorMessage = getRawErrorMessage(error) || alertError?.message;
-
-  if (enableBusinessFeatures && businessChatErrorMessageExtra) return businessChatErrorMessageExtra;
 
   if (isHeterogeneousAgentStatusGuideError(sessionErrorBody)) {
     return (
@@ -192,6 +191,8 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(({ error: alertError, data }) =>
       />
     );
   }
+
+  if (enableBusinessFeatures && businessChatErrorMessageExtra) return businessChatErrorMessageExtra;
 
   switch (error?.type) {
     case AgentRuntimeErrorType.OllamaServiceUnavailable: {
@@ -234,6 +235,7 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(({ error: alertError, data }) =>
           </Highlighter>
         ) : undefined,
       }}
+      onRegenerate={onRegenerate}
     />
   );
 });
