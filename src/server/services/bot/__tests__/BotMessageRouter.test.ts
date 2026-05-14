@@ -91,6 +91,10 @@ vi.mock('@/server/services/aiAgent', () => ({
 
 const mockHandleMention = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const mockHandleSubscribedMessage = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+// Default to "platform does not opt into thread isolation" so existing tests
+// keep their pre-LOBE-8891 behaviour. Individual tests can replace this via
+// `.mockResolvedValueOnce(...)` to simulate Discord's auto-thread upgrade.
+const mockOpenThreadForChannelWake = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 
 vi.mock('../AgentBridgeService', () => ({
   AgentBridgeService: vi.fn().mockImplementation(() => ({
@@ -160,6 +164,7 @@ const mockGetPlatform = vi.hoisted(() =>
             triggerTyping: vi.fn(),
           }),
           id: platform,
+          openThreadForChannelWake: mockOpenThreadForChannelWake,
           parseMessageId: (id: string) => id,
           start: vi.fn(),
           stop: vi.fn(),
@@ -276,6 +281,74 @@ vi.mock('../platforms', () => ({
     if (!operatorId || explicit.includes(operatorId)) return { ids: explicit };
     return { ids: [...explicit, operatorId] };
   },
+  // LOBE-8891: mirror the production helpers just well enough that
+  // BotMessageRouter.registerHandlers can read a clean list of entries.
+  // Tests can populate `settings.watchKeywords` with the canonical
+  // `[{ keyword, instruction? }]` shape to exercise both the keyword-match
+  // gate and the instruction-injection branch.
+  extractWatchKeywordEntries: (
+    settings: Record<string, unknown> | null | undefined,
+  ): Array<{ instruction?: string; keyword: string }> => {
+    const raw = settings?.watchKeywords;
+    const byKeyword = new Map<string, { instruction?: string; keyword: string }>();
+    if (Array.isArray(raw)) {
+      for (const entry of raw) {
+        if (typeof entry === 'string') {
+          const k = entry.trim().toLowerCase();
+          if (k && !byKeyword.has(k)) byKeyword.set(k, { keyword: k });
+        } else if (entry && typeof entry === 'object' && 'keyword' in entry) {
+          const obj = entry as { instruction?: unknown; keyword?: unknown };
+          if (typeof obj.keyword !== 'string') continue;
+          const k = obj.keyword.trim().toLowerCase();
+          if (!k) continue;
+          const instruction =
+            typeof obj.instruction === 'string' && obj.instruction.trim()
+              ? obj.instruction.trim()
+              : undefined;
+          const existing = byKeyword.get(k);
+          if (!existing) byKeyword.set(k, { instruction, keyword: k });
+          else if (!existing.instruction && instruction) existing.instruction = instruction;
+        }
+      }
+    }
+    return Array.from(byKeyword.values());
+  },
+  findMatchingWatchKeywordEntries: (
+    text: string | undefined | null,
+    entries: ReadonlyArray<{ instruction?: string; keyword: string }>,
+  ) => {
+    if (!text || entries.length === 0) return [];
+    const lowered = text.toLowerCase();
+    const wordChar = /\w/;
+    return entries.filter((entry) => {
+      const idx = lowered.indexOf(entry.keyword);
+      if (idx === -1) return false;
+      const before = idx === 0 ? '' : lowered[idx - 1];
+      const after =
+        idx + entry.keyword.length >= lowered.length ? '' : lowered[idx + entry.keyword.length];
+      const leftBoundary = !before || !wordChar.test(before);
+      const rightBoundary = !after || !wordChar.test(after);
+      return leftBoundary && rightBoundary;
+    });
+  },
+  messageMatchesWatchKeyword: (
+    text: string | undefined | null,
+    keywords: ReadonlyArray<string>,
+  ): boolean => {
+    if (!text || keywords.length === 0) return false;
+    const lowered = text.toLowerCase();
+    const wordChar = /\w/;
+    for (const keyword of keywords) {
+      const idx = lowered.indexOf(keyword);
+      if (idx === -1) continue;
+      const before = idx === 0 ? '' : lowered[idx - 1];
+      const after = idx + keyword.length >= lowered.length ? '' : lowered[idx + keyword.length];
+      const leftBoundary = !before || !wordChar.test(before);
+      const rightBoundary = !after || !wordChar.test(after);
+      if (leftBoundary && rightBoundary) return true;
+    }
+    return false;
+  },
   mergeWithDefaults: mockMergeWithDefaults,
   platformRegistry: {
     getPlatform: mockGetPlatform,
@@ -351,6 +424,7 @@ describe('BotMessageRouter', () => {
     mockFindEnabledByPlatform.mockResolvedValue([]);
     mockHandleMention.mockResolvedValue(undefined);
     mockHandleSubscribedMessage.mockResolvedValue(undefined);
+    mockOpenThreadForChannelWake.mockResolvedValue(undefined);
     // Reset pairing-store + provider-model mocks to safe defaults so a
     // previous test's stub doesn't leak into the next one.
     mockPeekPairingRequest.mockResolvedValue(null);
@@ -592,6 +666,140 @@ describe('BotMessageRouter', () => {
       await handler(thread, message, { skipped, totalSinceLastHandler: 3 });
 
       expect(mockHandleSubscribedMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it('should wake on a watch-keyword match in a subscribed group thread (LOBE-8891)', async () => {
+      const handler = await loadSubscribedHandler({
+        dmPolicy: 'open',
+        watchKeywords: [{ keyword: 'bug' }, { keyword: 'outage' }],
+      });
+      const thread = makeThread({ isDM: false });
+      const message = makeMessage({
+        isMention: false,
+        text: 'hey team, I think we have a bug in checkout',
+      });
+
+      await handler(thread, message);
+
+      expect(mockHandleSubscribedMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it('should still skip when text contains a keyword as substring only (word boundary)', async () => {
+      const handler = await loadSubscribedHandler({
+        dmPolicy: 'open',
+        watchKeywords: [{ keyword: 'bug' }],
+      });
+      const thread = makeThread({ isDM: false });
+      // `debug` must NOT trigger `bug` — that would flood the bot in
+      // engineering channels where "debug" is everyday vocabulary.
+      const message = makeMessage({ isMention: false, text: 'enabling debug logs on prod' });
+
+      await handler(thread, message);
+
+      expect(mockHandleSubscribedMessage).not.toHaveBeenCalled();
+    });
+
+    it('should wake when a debounced/skipped earlier message contained a watch keyword', async () => {
+      const handler = await loadSubscribedHandler({
+        dmPolicy: 'open',
+        watchKeywords: [{ keyword: 'bug' }],
+      });
+      const thread = makeThread({ isDM: false });
+      const skipped = [makeMessage({ isMention: false, text: 'found a bug earlier' })];
+      const message = makeMessage({ isMention: false, text: 'still investigating' });
+
+      await handler(thread, message, { skipped, totalSinceLastHandler: 2 });
+
+      expect(mockHandleSubscribedMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not change behaviour when watchKeywords is empty/missing', async () => {
+      // Sanity: existing call sites must keep their pre-LOBE-8891 semantics.
+      const handler = await loadSubscribedHandler({ dmPolicy: 'open' });
+      const thread = makeThread({ isDM: false });
+      const message = makeMessage({ isMention: false, text: 'there is a bug somewhere' });
+
+      await handler(thread, message);
+
+      expect(mockHandleSubscribedMessage).not.toHaveBeenCalled();
+    });
+
+    it('should prepend the matched entry instruction to the user message before dispatch', async () => {
+      // Operator-authored prompt: when the keyword (and not a mention) is
+      // what wakes the bot, the agent should see `instruction\n\nuser text`.
+      const handler = await loadSubscribedHandler({
+        dmPolicy: 'open',
+        watchKeywords: [
+          { instruction: 'Scan the thread and reply if it is a real bug.', keyword: 'bug' },
+        ],
+      });
+      const thread = makeThread({ isDM: false });
+      const message = makeMessage({
+        isMention: false,
+        text: 'hey team, I think we have a bug in checkout',
+      });
+
+      await handler(thread, message);
+
+      expect(mockHandleSubscribedMessage).toHaveBeenCalledTimes(1);
+      const [, merged] = mockHandleSubscribedMessage.mock.calls[0];
+      expect(merged.text).toBe(
+        'Scan the thread and reply if it is a real bug.\n\nhey team, I think we have a bug in checkout',
+      );
+    });
+
+    it('should merge instructions for every matched entry (dedup, authoring order)', async () => {
+      const handler = await loadSubscribedHandler({
+        dmPolicy: 'open',
+        watchKeywords: [
+          { instruction: 'Scan the thread for a bug report.', keyword: 'bug' },
+          { instruction: 'Page oncall if downtime is confirmed.', keyword: 'outage' },
+          { keyword: 'noise' }, // no instruction → contributes nothing
+        ],
+      });
+      const thread = makeThread({ isDM: false });
+      const message = makeMessage({
+        isMention: false,
+        text: 'we have a bug AND a major outage right now',
+      });
+
+      await handler(thread, message);
+
+      const [, merged] = mockHandleSubscribedMessage.mock.calls[0];
+      expect(merged.text).toBe(
+        'Scan the thread for a bug report.\n\nPage oncall if downtime is confirmed.\n\nwe have a bug AND a major outage right now',
+      );
+    });
+
+    it('should NOT inject the instruction when the bot is @-mentioned (user-initiated wins)', async () => {
+      // Mentions/DMs/commands are explicit user intent — silently stacking an
+      // operator prompt on top would surprise the user, so the instruction
+      // injection is scoped to the keyword-only wake path.
+      const handler = await loadSubscribedHandler({
+        dmPolicy: 'open',
+        watchKeywords: [{ instruction: 'should not appear', keyword: 'bug' }],
+      });
+      const thread = makeThread({ isDM: false });
+      const message = makeMessage({ isMention: true, text: '@bot we have a bug here' });
+
+      await handler(thread, message);
+
+      const [, merged] = mockHandleSubscribedMessage.mock.calls[0];
+      expect(merged.text).toBe('@bot we have a bug here');
+    });
+
+    it('should leave the message untouched when matched entries have no instruction', async () => {
+      const handler = await loadSubscribedHandler({
+        dmPolicy: 'open',
+        watchKeywords: [{ keyword: 'bug' }],
+      });
+      const thread = makeThread({ isDM: false });
+      const message = makeMessage({ isMention: false, text: 'tracking down a bug' });
+
+      await handler(thread, message);
+
+      const [, merged] = mockHandleSubscribedMessage.mock.calls[0];
+      expect(merged.text).toBe('tracking down a bug');
     });
 
     it('should ignore messages from other bots', async () => {
@@ -1016,6 +1224,243 @@ describe('BotMessageRouter', () => {
       expect(mockHandleMention).toHaveBeenCalledTimes(1);
       // No pairing notice was posted — Lin is already approved.
       expect(thread.post).not.toHaveBeenCalled();
+    });
+
+    // ---- LOBE-8891: channel-side keyword wake via catch-all ----
+    //
+    // Discord (and any platform that opts out of subscribing top-level
+    // channels via `shouldSubscribe`) never fires `onSubscribedMessage` for
+    // a parent channel — so the only way to wake the bot on a keyword in
+    // #general is to route the keyword path through the same `/./`
+    // catch-all the DM flow uses. These tests cover that secondary path.
+
+    it('registers the catch-all when DM is disabled but watch keywords are configured', async () => {
+      const handler = await loadDmCatchAllHandler({
+        dmPolicy: 'disabled',
+        watchKeywords: [{ keyword: 'bug' }],
+      });
+      expect(handler).not.toBeNull();
+    });
+
+    it('wakes the bot in a non-DM channel when a watch keyword matches', async () => {
+      const handler = await loadDmCatchAllHandler({
+        dmPolicy: 'open',
+        watchKeywords: [
+          { instruction: 'Scan the recent thread for a bug report.', keyword: 'bug' },
+        ],
+      });
+      if (!handler) throw new Error('expected catch-all to be registered');
+      const thread = {
+        id: 'discord:guild-1:channel-1',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'alice-id', userName: 'alice' },
+        text: 'looks like a bug in checkout',
+      };
+
+      await handler(thread, message);
+
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+      const [, merged] = mockHandleMention.mock.calls[0];
+      expect(merged.text).toBe(
+        'Scan the recent thread for a bug report.\n\nlooks like a bug in checkout',
+      );
+    });
+
+    it('still ignores non-DM channel traffic that does NOT match any watch keyword', async () => {
+      // Regression: the relaxed early-return must not turn `/./` into a
+      // channel-wide hijack — non-mention chatter without a keyword still
+      // belongs to `onSubscribedMessage` (subscribed threads) or nowhere.
+      const handler = await loadDmCatchAllHandler({
+        dmPolicy: 'open',
+        watchKeywords: [{ keyword: 'bug' }],
+      });
+      if (!handler) throw new Error('expected catch-all to be registered');
+      const thread = {
+        id: 'discord:guild-1:channel-1',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'alice-id', userName: 'alice' },
+        text: 'just chatting about the weather',
+      };
+
+      await handler(thread, message);
+
+      expect(mockHandleMention).not.toHaveBeenCalled();
+    });
+
+    it('wakes in channel when only a debounced/skipped sibling carried the keyword', async () => {
+      const handler = await loadDmCatchAllHandler({
+        dmPolicy: 'open',
+        watchKeywords: [{ instruction: 'Scan for bug.', keyword: 'bug' }],
+      });
+      if (!handler) throw new Error('expected catch-all to be registered');
+      const thread = {
+        id: 'discord:guild-1:channel-1',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const skipped = [
+        {
+          author: { isBot: false, userId: 'alice-id', userName: 'alice' },
+          text: 'found a bug earlier',
+        },
+      ];
+      const message = {
+        author: { isBot: false, userId: 'alice-id', userName: 'alice' },
+        text: 'still investigating',
+      };
+
+      await handler(thread, message, { skipped, totalSinceLastHandler: 2 });
+
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+      // The matched keyword sits in `skipped` text; after merging, both
+      // skipped + current text are joined and the instruction is prepended.
+      const [, merged] = mockHandleMention.mock.calls[0];
+      expect(merged.text).toBe('Scan for bug.\n\nfound a bug earlier\nstill investigating');
+    });
+
+    it('opens a sub-thread for the reply when the platform implements openThreadForChannelWake', async () => {
+      // Discord (and any platform with thread isolation) upgrades the
+      // composite threadId so the chat-sdk routes reactions / typing /
+      // post to a fresh sub-thread instead of the parent channel.
+      mockOpenThreadForChannelWake.mockResolvedValueOnce('discord:guild-1:channel-1:new-thread-1');
+      const handler = await loadDmCatchAllHandler({
+        dmPolicy: 'open',
+        watchKeywords: [{ instruction: 'Scan.', keyword: 'bug' }],
+      });
+      if (!handler) throw new Error('expected catch-all to be registered');
+      const thread = {
+        id: 'discord:guild-1:channel-1',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'alice-id', userName: 'alice' },
+        raw: { id: 'msg-99' },
+        text: 'there is a bug',
+      };
+
+      await handler(thread, message);
+
+      expect(mockOpenThreadForChannelWake).toHaveBeenCalledTimes(1);
+      expect(mockOpenThreadForChannelWake.mock.calls[0][0]).toBe('discord:guild-1:channel-1');
+      expect(mockOpenThreadForChannelWake.mock.calls[0][1]).toEqual({ id: 'msg-99' });
+      // The mutation is observable to handleMention through the thread
+      // object — chat-sdk's `thread.post` / subscribe / reaction calls
+      // all read `thread.id` lazily, so swapping it propagates.
+      expect(thread.id).toBe('discord:guild-1:channel-1:new-thread-1');
+      const [dispatchedThread] = mockHandleMention.mock.calls[0];
+      expect(dispatchedThread.id).toBe('discord:guild-1:channel-1:new-thread-1');
+    });
+
+    it('falls back to the original threadId when openThreadForChannelWake returns undefined', async () => {
+      // Threadless platforms (Telegram / WeChat / QQ) return undefined
+      // from the hook; the bot replies inline in the channel/chat.
+      const handler = await loadDmCatchAllHandler({
+        dmPolicy: 'open',
+        watchKeywords: [{ instruction: 'Scan.', keyword: 'bug' }],
+      });
+      if (!handler) throw new Error('expected catch-all to be registered');
+      const thread = {
+        id: 'telegram:chat-1',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'alice-id', userName: 'alice' },
+        raw: { id: 'msg-99' },
+        text: 'reporting a bug',
+      };
+
+      await handler(thread, message);
+
+      expect(mockOpenThreadForChannelWake).toHaveBeenCalledTimes(1);
+      expect(thread.id).toBe('telegram:chat-1');
+      const [dispatchedThread] = mockHandleMention.mock.calls[0];
+      expect(dispatchedThread.id).toBe('telegram:chat-1');
+    });
+
+    it('still dispatches when openThreadForChannelWake throws (best-effort contract)', async () => {
+      // A platform API failure must not drop the user's message. The
+      // router logs the error and posts in the original channel instead.
+      mockOpenThreadForChannelWake.mockRejectedValueOnce(new Error('discord 500'));
+      const handler = await loadDmCatchAllHandler({
+        dmPolicy: 'open',
+        watchKeywords: [{ keyword: 'bug' }],
+      });
+      if (!handler) throw new Error('expected catch-all to be registered');
+      const thread = {
+        id: 'discord:guild-1:channel-1',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'alice-id', userName: 'alice' },
+        raw: { id: 'msg-99' },
+        text: 'reporting a bug',
+      };
+
+      await handler(thread, message);
+
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+      const [dispatchedThread] = mockHandleMention.mock.calls[0];
+      expect(dispatchedThread.id).toBe('discord:guild-1:channel-1');
+    });
+
+    it('does NOT call openThreadForChannelWake on the DM path', async () => {
+      // DMs already deliver replies in the right context; spawning a
+      // thread there would either fail (no thread concept in DMs) or
+      // create noise. Scoped to the channel-keyword path only.
+      const handler = await loadDmCatchAllHandler({
+        dmPolicy: 'open',
+        watchKeywords: [{ keyword: 'bug' }],
+      });
+      if (!handler) throw new Error('expected catch-all to be registered');
+      const thread = {
+        id: 'telegram:chat-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'alice-id', userName: 'alice' },
+        raw: { id: 'msg-99' },
+        text: 'bug here',
+      };
+
+      await handler(thread, message);
+
+      expect(mockOpenThreadForChannelWake).not.toHaveBeenCalled();
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT inject an instruction when the DM path triggers the catch-all', async () => {
+      // DMs are explicit user intent — even if a DM message happens to
+      // contain a configured keyword, we should not silently prepend an
+      // operator prompt on top of what the user actually wrote.
+      const handler = await loadDmCatchAllHandler({
+        dmPolicy: 'open',
+        watchKeywords: [{ instruction: 'should not appear', keyword: 'bug' }],
+      });
+      if (!handler) throw new Error('expected catch-all to be registered');
+      const thread = {
+        id: 'telegram:chat-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'alice-id', userName: 'alice' },
+        text: 'I think there is a bug in the app',
+      };
+
+      await handler(thread, message);
+
+      const [, merged] = mockHandleMention.mock.calls[0];
+      expect(merged.text).toBe('I think there is a bug in the app');
     });
   });
 

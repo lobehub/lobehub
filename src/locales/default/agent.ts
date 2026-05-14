@@ -195,6 +195,17 @@ export default {
   'channel.groupAllowFromAdd': 'Add channel',
   'channel.groupAllowFromEmpty': 'No channels added yet — the bot will not respond anywhere.',
   'channel.allowListRemove': 'Remove',
+  'channel.watchKeywords': 'Watch Keywords',
+  'channel.watchKeywordsHint':
+    'When a subscribed channel message matches a keyword, the bot wakes without an @mention and the instruction is prepended to the user message before it is sent to the AI. Case-insensitive, whole-word match.',
+  'channel.watchKeywordLabel': 'Keyword',
+  'channel.watchKeywordPlaceholder': 'e.g. bug',
+  'channel.watchKeywordInstructionLabel': 'Instruction',
+  'channel.watchKeywordInstructionPlaceholder':
+    'e.g. Scan the recent thread and reply if there is an actionable bug report',
+  'channel.watchKeywordsAdd': 'Add keyword',
+  'channel.watchKeywordsEmpty':
+    'No keywords added yet — bot only wakes on @mention or DM in subscribed channels.',
   'channel.settings': 'Advanced Settings',
   'channel.settingsResetConfirm': 'Are you sure you want to reset advanced settings to default?',
   'channel.settingsResetDefault': 'Reset to Default',

@@ -30,8 +30,11 @@ import {
   extractDmSettings,
   extractGroupSettings,
   extractUserAllowlist,
+  extractWatchKeywordEntries,
+  findMatchingWatchKeywordEntries,
   getBotReplyLocale,
   type GroupSettings,
+  messageMatchesWatchKeyword,
   normalizeAllowFromEntries,
   normalizeBotReplyLocale,
   type PlatformClient,
@@ -42,6 +45,7 @@ import {
   shouldHandleDm,
   shouldHandleGroup,
   type UserAllowlist,
+  type WatchKeywordEntry,
 } from './platforms';
 import {
   renderApproveSuccess,
@@ -465,6 +469,42 @@ export class BotMessageRouter {
     });
   }
 
+  /**
+   * Prepend the operator-authored `instruction` of every matched watch
+   * keyword to the merged user message. Used on the keyword-wake paths
+   * (subscribed-thread `onSubscribedMessage` and the channel catch-all)
+   * so a bare trigger like "bug" can carry a directive into the agent
+   * call without an explicit mention.
+   *
+   * Duplicated instructions are de-duplicated (operators routinely paste
+   * the same directive under several keywords like "bug" / "outage").
+   * If no matched entry has an instruction, the original `merged` is
+   * returned unchanged so the caller doesn't need to branch.
+   */
+  private static applyWatchKeywordInstructions(
+    merged: Message,
+    entries: ReadonlyArray<WatchKeywordEntry>,
+  ): { instructionCount: number; merged: Message; prefixLength: number } {
+    const matched = findMatchingWatchKeywordEntries(merged.text, entries);
+    const instructions = Array.from(
+      new Set(
+        matched
+          .map((entry) => entry.instruction?.trim())
+          .filter((value): value is string => !!value),
+      ),
+    );
+    if (instructions.length === 0) {
+      return { instructionCount: 0, merged, prefixLength: 0 };
+    }
+    const prefix = instructions.join('\n\n');
+    const originalText = merged.text ?? '';
+    const augmentedText = originalText ? `${prefix}\n\n${originalText}` : prefix;
+    const next = Object.assign(Object.create(Object.getPrototypeOf(merged)), merged, {
+      text: augmentedText,
+    }) as Message;
+    return { instructionCount: instructions.length, merged: next, prefixLength: prefix.length };
+  }
+
   private registerHandlers(
     bot: Chat<any>,
     serverDB: LobeChatDatabase,
@@ -483,6 +523,23 @@ export class BotMessageRouter {
     const dmSettings: DmSettings = extractDmSettings(info.settings);
     const groupSettings: GroupSettings = extractGroupSettings(info.settings);
     const userAllowlist: UserAllowlist = extractUserAllowlist(info.settings);
+    /**
+     * Operator-configured keywords (LOBE-8891). When non-empty, a non-@mention
+     * non-command message in a subscribed group thread still wakes the bot if
+     * its text contains any keyword — case-insensitive, word-boundary aware
+     * (see `messageMatchesWatchKeyword`). Empty list keeps the legacy
+     * mention-only behaviour exactly. DMs and explicit mentions are unaffected;
+     * keyword matching only relaxes the gate in subscribed group threads.
+     *
+     * `watchKeywordEntries` carries the operator-authored `instruction` for
+     * each keyword. When a keyword (and not a mention) is what wakes the
+     * bot, the matched entries' instructions are prepended to the user
+     * message as a prompt prefix before dispatch — so a bare trigger word
+     * can drive a specific directive ("scan the recent thread for a bug
+     * report", "summarise the last 20 messages", …).
+     */
+    const watchKeywordEntries = extractWatchKeywordEntries(info.settings);
+    const watchKeywords: ReadonlyArray<string> = watchKeywordEntries.map((e) => e.keyword);
     /**
      * The provider's owner platform user ID. Only consulted under the
      * `pairing` policy, where the gate gives the owner a free pass so they
@@ -922,8 +979,17 @@ export class BotMessageRouter {
         message.isMention === true ||
         context?.skipped?.some((m) => m.isMention === true) === true;
       const isCommand = looksLikeCommand(message.text);
+      // LOBE-8891: operator-configured keyword match also wakes the bot in a
+      // subscribed group thread. Skipped (debounced) siblings are inspected
+      // too so a keyword queued behind a non-trigger still fires — same
+      // pattern as the mention check above.
+      const matchesWatchKeyword =
+        watchKeywords.length > 0 &&
+        (messageMatchesWatchKeyword(message.text, watchKeywords) ||
+          context?.skipped?.some((m) => messageMatchesWatchKeyword(m.text, watchKeywords)) ===
+            true);
 
-      if (!isAddressedToBot && !isCommand) {
+      if (!isAddressedToBot && !isCommand && !matchesWatchKeyword) {
         log(
           'onSubscribedMessage: skip non-mention in group thread, agent=%s, platform=%s, author=%s, thread=%s',
           agentId,
@@ -932,6 +998,17 @@ export class BotMessageRouter {
           thread.id,
         );
         return;
+      }
+
+      if (matchesWatchKeyword && !isAddressedToBot && !isCommand) {
+        log(
+          'onSubscribedMessage: keyword match wakes bot, agent=%s, platform=%s, author=%s, thread=%s, keywords=%o',
+          agentId,
+          platform,
+          message.author.userName,
+          thread.id,
+          watchKeywords,
+        );
       }
 
       // Gate before tryDispatch so a /command from a non-allowlisted sender
@@ -962,7 +1039,27 @@ export class BotMessageRouter {
         );
       }
 
-      const merged = BotMessageRouter.mergeSkippedMessages(message, context);
+      let merged = BotMessageRouter.mergeSkippedMessages(message, context);
+      // LOBE-8891: when a keyword (and not a mention / DM / command) is what
+      // wakes the bot, prepend the matched entries' operator-authored
+      // instructions to the user message so the agent gets a directive
+      // rather than only the raw chatter. Mentions, DMs, and commands are
+      // skipped on purpose — those flows are user-initiated and should not
+      // have an operator prompt silently injected on top.
+      if (matchesWatchKeyword && !isAddressedToBot && !isCommand) {
+        const applied = BotMessageRouter.applyWatchKeywordInstructions(merged, watchKeywordEntries);
+        merged = applied.merged;
+        if (applied.instructionCount > 0) {
+          log(
+            'onSubscribedMessage: injecting %d watch-keyword instruction(s), agent=%s, platform=%s, thread=%s, prefixLen=%d',
+            applied.instructionCount,
+            agentId,
+            platform,
+            thread.id,
+            applied.prefixLength,
+          );
+        }
+      }
       void emitAgentSignalSourceEvent(
         {
           payload: {
@@ -1038,12 +1135,26 @@ export class BotMessageRouter {
       passGatesOrNotify,
     );
 
-    // DM catch-all: only registered when DM handling is enabled. For mixed
-    // platforms (e.g. Slack/Discord with both DMs and group channels), the
-    // handler itself restricts routing to DM threads that satisfy the policy —
-    // otherwise the `/./` regex would match every group message and hijack
-    // non-mention traffic. Group @-mentions keep going through `onNewMention`.
-    if (dmSettings.policy !== 'disabled') {
+    // DM / keyword-wake catch-all: registered when either DM is enabled OR at
+    // least one watch keyword is configured. The handler routes two distinct
+    // paths through the same `onNewMessage(/./)` subscription so a single
+    // regex listener can serve both:
+    //
+    //   • DM path: every message in a DM thread (when DM policy allows it).
+    //   • Channel keyword path (LOBE-8891): non-DM messages whose text — or
+    //     a debounced sibling's text — contains a configured watch keyword.
+    //     This is the only way to wake the bot in a parent channel on
+    //     platforms like Discord, where `shouldSubscribe` returns false for
+    //     top-level guild channels and `onSubscribedMessage` therefore never
+    //     fires for the channel itself (only its sub-threads).
+    //
+    // Non-DM messages that DON'T match a keyword are silently dropped so the
+    // regex doesn't hijack every group message in shared channels. Group
+    // @-mentions keep going through `onNewMention` (unsubscribed) and
+    // `onSubscribedMessage` (subscribed sub-threads).
+    const dmCatchAllEnabled = dmSettings.policy !== 'disabled';
+    const keywordCatchAllEnabled = watchKeywordEntries.length > 0;
+    if (dmCatchAllEnabled || keywordCatchAllEnabled) {
       bot.onNewMessage(/./, async (thread, message, context?: MessageContext) => {
         if (message.author.isBot === true) return;
 
@@ -1051,12 +1162,34 @@ export class BotMessageRouter {
         // (which applies the same gates).
         if (BotMessageRouter.dispatchTextCommand(message.text, commands)) return;
 
-        // The catch-all exists solely to handle DMs on mention-less platforms
-        // (Telegram, WeChat, …) and on mixed platforms where the DM flow should
-        // not require an @-mention. Group / channel traffic is already handled
-        // by onNewMention + onSubscribedMessage; if we let it through here we
-        // would hijack every non-mention message in shared threads.
-        if (thread.isDM !== true) return;
+        const isDM = thread.isDM === true;
+
+        // Channel-side keyword wake: only relevant for non-DM threads, since
+        // DMs already pass the gate below via `isDM`. Inspect the current
+        // message AND any debounced siblings, mirroring `onSubscribedMessage`
+        // so a keyword queued behind a non-trigger message still fires.
+        const matchesWatchKeyword =
+          !isDM &&
+          keywordCatchAllEnabled &&
+          (messageMatchesWatchKeyword(message.text, watchKeywords) ||
+            context?.skipped?.some((m) => messageMatchesWatchKeyword(m.text, watchKeywords)) ===
+              true);
+
+        // If neither path applies, return so the regex doesn't act as a
+        // channel-wide hijack. DMs still need the dmCatchAllEnabled gate
+        // because a DM message can arrive while DM policy is disabled.
+        if (!(isDM && dmCatchAllEnabled) && !matchesWatchKeyword) return;
+
+        if (matchesWatchKeyword) {
+          log(
+            'onNewMessage (%s catch-all): keyword match wakes bot in channel, agent=%s, author=%s, thread=%s, keywords=%o',
+            platform,
+            agentId,
+            message.author.userName,
+            thread.id,
+            watchKeywords,
+          );
+        }
 
         const replyLocale = detectReplyLocale(message);
 
@@ -1091,7 +1224,59 @@ export class BotMessageRouter {
           );
         }
 
-        const merged = BotMessageRouter.mergeSkippedMessages(message, context);
+        let merged = BotMessageRouter.mergeSkippedMessages(message, context);
+        // LOBE-8891: same instruction-injection rule as `onSubscribedMessage`
+        // — prepend the matched entries' operator-authored instructions when
+        // the keyword (not a mention / DM / command) is what wakes the bot.
+        // DMs are explicit user intent and never get the prefix.
+        if (matchesWatchKeyword) {
+          const applied = BotMessageRouter.applyWatchKeywordInstructions(
+            merged,
+            watchKeywordEntries,
+          );
+          merged = applied.merged;
+          if (applied.instructionCount > 0) {
+            log(
+              'onNewMessage (%s catch-all): injecting %d watch-keyword instruction(s), agent=%s, thread=%s, prefixLen=%d',
+              platform,
+              applied.instructionCount,
+              agentId,
+              thread.id,
+              applied.prefixLength,
+            );
+          }
+
+          // Discord (and any platform that prefers thread isolation) opts
+          // into spawning a sub-thread for the reply via this hook. The
+          // chat-sdk Discord adapter only auto-creates a thread on
+          // @-mention, so without this the keyword wake would clutter the
+          // parent channel with the bot's output. Best-effort: on hook
+          // failure we keep the original thread.id and reply in the
+          // channel rather than dropping the message.
+          if (typeof client.openThreadForChannelWake === 'function') {
+            try {
+              const upgraded = await client.openThreadForChannelWake(
+                thread.id,
+                (message as { raw?: unknown }).raw,
+              );
+              if (upgraded && upgraded !== thread.id) {
+                log(
+                  'onNewMessage (%s catch-all): opened reply thread for keyword wake, %s -> %s',
+                  platform,
+                  thread.id,
+                  upgraded,
+                );
+                (thread as { id: string }).id = upgraded;
+              }
+            } catch (error) {
+              log(
+                'onNewMessage (%s catch-all): openThreadForChannelWake threw, posting in channel: %O',
+                platform,
+                error,
+              );
+            }
+          }
+        }
         void emitAgentSignalSourceEvent(
           {
             payload: {

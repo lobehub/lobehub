@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { DiscordClientFactory } from './client';
 
@@ -201,6 +201,94 @@ describe('DiscordGatewayClient', () => {
           raw: { referenced_message: { attachments: [] } },
         }),
       );
+      expect(result).toBeUndefined();
+    });
+  });
+
+  describe('openThreadForChannelWake (LOBE-8891)', () => {
+    // The chat-sdk Discord adapter only auto-spawns a reply thread on
+    // @-mention. For the watch-keyword wake path the bot would otherwise
+    // reply directly in the parent channel; this hook opens a thread off
+    // the triggering message so the conversation stays isolated.
+
+    const installFakeApi = (client: any, impl: () => any) => {
+      // The client is constructed in the factory and holds its own
+      // DiscordApi via a private field. Reach in and replace the one
+      // method we care about for these tests.
+      client.discord = {
+        ...client.discord,
+        startThreadFromMessage: vi.fn(impl),
+      };
+      return client.discord.startThreadFromMessage as ReturnType<typeof vi.fn>;
+    };
+
+    it('spawns a thread off the triggering message for a top-level guild channel', async () => {
+      const client = createClient() as any;
+      const spy = installFakeApi(client, async () => ({ id: 'new-thread-1' }));
+
+      const result = await client.openThreadForChannelWake('discord:guild-1:channel-1', {
+        id: 'msg-99',
+      });
+
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy.mock.calls[0][0]).toBe('channel-1');
+      expect(spy.mock.calls[0][1]).toBe('msg-99');
+      expect(result).toBe('discord:guild-1:channel-1:new-thread-1');
+    });
+
+    it('returns undefined for DMs (guildId === @me)', async () => {
+      const client = createClient() as any;
+      const spy = installFakeApi(client, async () => ({ id: 'never-called' }));
+
+      const result = await client.openThreadForChannelWake('discord:@me:dm-1', { id: 'msg-1' });
+
+      expect(spy).not.toHaveBeenCalled();
+      expect(result).toBeUndefined();
+    });
+
+    it('returns undefined when the threadId already has a thread segment', async () => {
+      // 4-segment IDs already deliver replies inside a sub-thread; no
+      // need to spawn another.
+      const client = createClient() as any;
+      const spy = installFakeApi(client, async () => ({ id: 'never-called' }));
+
+      const result = await client.openThreadForChannelWake(
+        'discord:guild-1:channel-1:existing-thread',
+        { id: 'msg-1' },
+      );
+
+      expect(spy).not.toHaveBeenCalled();
+      expect(result).toBeUndefined();
+    });
+
+    it('returns undefined when the message has no usable id', async () => {
+      const client = createClient() as any;
+      const spy = installFakeApi(client, async () => ({ id: 'never-called' }));
+
+      expect(
+        await client.openThreadForChannelWake('discord:guild-1:channel-1', undefined),
+      ).toBeUndefined();
+      expect(
+        await client.openThreadForChannelWake('discord:guild-1:channel-1', {}),
+      ).toBeUndefined();
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('returns undefined and swallows the error when the Discord API rejects', async () => {
+      // Best-effort contract: a thread-creation failure must NOT bubble
+      // up to the router, since the router would then drop the user's
+      // message. Falling back to a channel-level reply is the safer
+      // failure mode.
+      const client = createClient() as any;
+      const spy = installFakeApi(client, async () => {
+        throw new Error('boom');
+      });
+
+      const result = await client.openThreadForChannelWake('discord:guild-1:channel-1', {
+        id: 'msg-99',
+      });
+
+      expect(spy).toHaveBeenCalledTimes(1);
       expect(result).toBeUndefined();
     });
   });
