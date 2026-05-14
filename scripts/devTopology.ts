@@ -1,9 +1,10 @@
-export type DevTopology = 'hono' | 'next' | 'vite';
+export type DevTopology = 'hono' | 'hono-lite' | 'next' | 'vite';
 
 type Env = Record<string, string | undefined>;
 
 interface DevTopologyStrategy {
   apiRuntime: 'next' | 'none';
+  defaultAPITarget: (env: Env) => string;
   defaultAppUrl: (env: Env) => string;
   defaultHonoTarget?: (env: Env) => string;
   defaultInternalAppUrl?: (env: Env) => string;
@@ -35,7 +36,7 @@ const DEFAULT_HONO_PORT = 3011;
 const DEFAULT_VITE_HOST = 'localhost';
 const DEFAULT_VITE_PORT = 9876;
 
-export const API_PROXY_PREFIXES = ['/api', '/oidc', '/trpc', '/webapi', '/market', '/f'] as const;
+export const API_PROXY_PATTERN = '^/(?:api|oidc|trpc|webapi|market|f)(?:/|$)';
 
 const AUTH_NATIVE_NEXT_RUNTIME_ENV = [
   'LOBE_API_AUTH_RUNTIME',
@@ -78,8 +79,9 @@ const resolveDefaultHonoTarget = (env: Env) =>
   createLocalUrl(DEFAULT_HONO_HOST, resolveDevHonoPort(env));
 
 const devTopologyStrategies: Record<DevTopology, DevTopologyStrategy> = {
-  hono: {
+  'hono': {
     apiRuntime: 'next',
+    defaultAPITarget: resolveDefaultAPITarget,
     defaultAppUrl: resolveDefaultAPITarget,
     defaultHonoTarget: resolveDefaultHonoTarget,
     defaultInternalAppUrl: resolveDefaultAPITarget,
@@ -90,8 +92,21 @@ const devTopologyStrategies: Record<DevTopology, DevTopologyStrategy> = {
     shouldProxyAPI: () => true,
     topology: 'hono',
   },
-  next: {
+  'hono-lite': {
+    apiRuntime: 'none',
+    defaultAPITarget: resolveDefaultHonoTarget,
+    defaultAppUrl: resolveDefaultViteOrigin,
+    defaultHonoTarget: resolveDefaultHonoTarget,
+    defaultInternalAppUrl: resolveDefaultHonoTarget,
+    honoRuntime: 'standalone',
+    nextBundler: 'none',
+    nextRouteRuntime: 'none',
+    shouldProxyAPI: () => true,
+    topology: 'hono-lite',
+  },
+  'next': {
     apiRuntime: 'next',
+    defaultAPITarget: resolveDefaultAPITarget,
     defaultAppUrl: resolveDefaultAPITarget,
     defaultInternalAppUrl: resolveDefaultAPITarget,
     honoRuntime: 'none',
@@ -100,8 +115,9 @@ const devTopologyStrategies: Record<DevTopology, DevTopologyStrategy> = {
     shouldProxyAPI: () => true,
     topology: 'next',
   },
-  vite: {
+  'vite': {
     apiRuntime: 'none',
+    defaultAPITarget: resolveDefaultAPITarget,
     defaultAppUrl: resolveDefaultViteOrigin,
     honoRuntime: 'none',
     nextBundler: 'none',
@@ -113,7 +129,13 @@ const devTopologyStrategies: Record<DevTopology, DevTopologyStrategy> = {
 
 export const normalizeDevTopology = (value: string | undefined): DevTopology => {
   const normalized = value?.trim().toLowerCase();
-  if (normalized === 'hono' || normalized === 'next' || normalized === 'vite') return normalized;
+  if (
+    normalized === 'hono' ||
+    normalized === 'hono-lite' ||
+    normalized === 'next' ||
+    normalized === 'vite'
+  )
+    return normalized;
 
   return 'next';
 };
@@ -121,7 +143,7 @@ export const normalizeDevTopology = (value: string | undefined): DevTopology => 
 export const resolveDevTopologyConfig = (env: Env = process.env): DevTopologyConfig => {
   const topology = normalizeDevTopology(env.LOBE_DEV_TOPOLOGY);
   const strategy = devTopologyStrategies[topology];
-  const apiTarget = env.LOBE_DEV_API_TARGET || resolveDefaultAPITarget(env);
+  const apiTarget = env.LOBE_DEV_API_TARGET || strategy.defaultAPITarget(env);
   const appUrl = env.LOBE_DEV_APP_URL || strategy.defaultAppUrl(env);
   const honoTarget = env.LOBE_DEV_HONO_TARGET || strategy.defaultHonoTarget?.(env);
   const internalAppUrl =
@@ -130,16 +152,13 @@ export const resolveDevTopologyConfig = (env: Env = process.env): DevTopologyCon
 
   return {
     apiProxy: shouldProxyAPI
-      ? Object.fromEntries(
-          API_PROXY_PREFIXES.map((prefix) => [
-            prefix,
-            {
-              changeOrigin: true,
-              target: apiTarget,
-              ws: true,
-            },
-          ]),
-        )
+      ? {
+          [API_PROXY_PATTERN]: {
+            changeOrigin: true,
+            target: apiTarget,
+            ws: true,
+          },
+        }
       : undefined,
     apiRuntime: strategy.apiRuntime,
     apiTarget,
@@ -159,10 +178,11 @@ export const applyDefaultDevTopologyEnv = (env: Env = process.env) => {
   env.LOBE_DEV_TOPOLOGY = config.topology;
   env.APP_URL = config.appUrl;
   if (config.internalAppUrl) env.INTERNAL_APP_URL = config.internalAppUrl;
-  if (config.apiRuntime !== 'none' || env.LOBE_DEV_API_TARGET) {
+  if (config.apiRuntime !== 'none' || config.apiProxy || env.LOBE_DEV_API_TARGET) {
     env.LOBE_DEV_API_TARGET ||= config.apiTarget;
   }
   if (config.honoTarget) env.LOBE_DEV_HONO_TARGET ||= config.honoTarget;
+  if (config.topology === 'hono-lite') env.LOBE_DEV_AUTH_BOOTSTRAP ||= '1';
 
   const strategy = devTopologyStrategies[config.topology];
   for (const envName of strategy.nativeNextRuntimeEnv ?? []) {

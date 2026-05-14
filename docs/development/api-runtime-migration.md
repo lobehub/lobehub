@@ -28,20 +28,22 @@ Local development uses an explicit strategy selected by `LOBE_DEV_TOPOLOGY`.
 The strategy resolver lives in `scripts/devTopology.ts` and is consumed by both
 `vite.config.ts` and `scripts/devStartupSequence.mts`.
 
-| Topology | Script             | Runtime processes  | Next bundler | Browser origin          | API target              | API execution path                                          |
-| -------- | ------------------ | ------------------ | ------------ | ----------------------- | ----------------------- | ----------------------------------------------------------- |
-| `next`   | `bun run dev`      | Next + Vite        | Turbopack    | `http://localhost:3010` | `http://localhost:3010` | Next route handlers                                         |
-| `hono`   | `bun run dev:hono` | Next + Hono + Vite | webpack      | `http://localhost:3010` | `http://localhost:3010` | Next shell forwards API prefixes to `http://localhost:3011` |
-| `vite`   | `bun run dev:vite` | Vite only          | N/A          | `http://localhost:9876` | Explicit target only    | No local API by default                                     |
+| Topology    | Script                  | Runtime processes  | Next bundler | Browser origin          | API target              | API execution path                                          |
+| ----------- | ----------------------- | ------------------ | ------------ | ----------------------- | ----------------------- | ----------------------------------------------------------- |
+| `next`      | `bun run dev`           | Next + Vite        | Turbopack    | `http://localhost:3010` | `http://localhost:3010` | Next route handlers                                         |
+| `hono`      | `bun run dev:hono`      | Next + Hono + Vite | webpack      | `http://localhost:3010` | `http://localhost:3010` | Next shell forwards API prefixes to `http://localhost:3011` |
+| `hono-lite` | `bun run dev:hono-lite` | Hono + Vite        | N/A          | `http://localhost:9876` | `http://localhost:3011` | Vite proxies API prefixes directly to standalone Hono       |
+| `vite`      | `bun run dev:vite`      | Vite only          | N/A          | `http://localhost:9876` | Explicit target only    | No local API by default                                     |
 
 `APP_URL` is the public browser origin and is controlled by the selected local
 topology. In `next` and `hono` topologies the browser enters through the local
 Next.js shell, while Vite only serves development assets and HMR. Override
 `APP_URL` with `LOBE_DEV_APP_URL` when a local run needs a custom origin.
 `INTERNAL_APP_URL` is the server-to-server callback origin and defaults to the
-local API target for `next` and `hono`; override it with
-`LOBE_DEV_INTERNAL_APP_URL`. Vite proxies `/api`, `/oidc`, `/trpc`, `/webapi`,
-`/market`, and `/f` when the selected topology has a local API runtime, or when
+local API target for `next`, `hono`, and `hono-lite`; override it with
+`LOBE_DEV_INTERNAL_APP_URL`. Vite uses a single regex proxy rule,
+`^/(?:api|oidc|trpc|webapi|market|f)(?:/|$)`, when the selected topology has a
+local API runtime, when `hono-lite` runs the standalone Hono runtime, or when
 `LOBE_DEV_API_TARGET` is explicitly set in `vite` mode.
 
 The `hono` topology still starts Next.js so SSR login and auth pages remain
@@ -53,10 +55,13 @@ dev compiler. The local `hono` topology uses webpack for the Next shell to avoid
 Turbopack's webpack-loader worker pool; this is a development-only choice and
 does not change the production build path. Because webpack does not consume
 `turbopack.rules`, the local webpack shell defines its own `.md` raw-loader rule.
-The standalone Hono dev runtime is executed with `vite-node` and the dedicated
-`scripts/viteNodeServer.config.ts` config so server-side `.md` imports from
-packages such as `@lobechat/agent-templates` and `@lobechat/builtin-skills`
-resolve to strings without loading the frontend Vite config. Production Hono
+The standalone Hono dev runtime is executed with `vite-node --watch` and the
+dedicated `scripts/viteNodeServer.config.ts` config so server-side `.md` imports
+from packages such as `@lobechat/agent-templates` and `@lobechat/builtin-skills`
+resolve to strings without loading the frontend Vite config. Watch mode is
+required because the Hono app lazy-loads route domains after startup; plain
+`vite-node` can close its transform server before those request-time imports.
+Production Hono
 rollout should import the separately compiled Hono dist entry through
 `LOBE_HONO_DIST_ENTRY`, whose default fallback is `hono/dist/index.js`.
 Login and auth-sensitive routes such as `/api/auth/*` and `/oidc/*` remain on
@@ -64,6 +69,132 @@ the native Next.js route path in this local topology. The topology strategy also
 sets the route-scoped auth and OIDC runtime environment variables to `next`, so
 a broad local `LOBE_API_RUNTIME=hono` setting cannot redirect login callbacks
 away from Next.js.
+
+The `hono-lite` topology intentionally does not start Next.js. It is suitable
+for SPA and API work after a local browser session exists. For this mode,
+`bun run dev:login -- --email dev@local.test` opens the local Vite origin at
+`/api/auth/dev/local-login`; Vite proxies that request to Hono, and the
+development-only Better Auth plugin signs a local database session cookie. The
+endpoint is available only when `NODE_ENV=development` and
+`LOBE_DEV_AUTH_BOOTSTRAP=1`; the topology sets this flag by default, while
+production builds and normal runtime routes remain unchanged.
+
+## Developer Usage Guide
+
+### Choose a topology
+
+| Development goal                                | Command                 | Use this when                                                                  | Avoid this when                                                                    |
+| ----------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| Validate production-like Next.js behavior       | `bun run dev`           | Debugging SSR, auth pages, middleware, or any route that must stay on Next.js. | Measuring the standalone Hono API graph or reducing local Next.js memory pressure. |
+| Develop the API on Hono with a local Next shell | `bun run dev:hono`      | You still need local SSR login pages, but API traffic should execute on Hono.  | You need to compare native Next route execution without Hono forwarding.           |
+| Develop SPA and API without Next.js             | `bun run dev:hono-lite` | You already have or can bootstrap a local session and are not editing SSR UI.  | You need `/signin`, OIDC consent, or other Next-rendered pages.                    |
+| Run Vite only                                   | `bun run dev:vite`      | You want a frontend-only Vite server with an explicit external API target.     | You expect local API routes to be available automatically.                         |
+
+### Production-like local API verification
+
+Use `dev:hono` when the browser must enter through Next.js but API execution
+should be delegated to Hono:
+
+```bash
+bun run dev:hono
+```
+
+This starts:
+
+| Process title     | Default port | Responsibility                                       |
+| ----------------- | ------------ | ---------------------------------------------------- |
+| `lobe-dev-hono`   | N/A          | Startup supervisor for local topology orchestration. |
+| `lobe-hono-3011`  | `3011`       | Standalone Hono runtime.                             |
+| Next.js dev shell | `3010`       | SSR pages and the `/hono-runtime/*` binding route.   |
+| Vite dev server   | `9876`       | SPA assets and HMR.                                  |
+
+The browser origin remains `http://localhost:3010`. API prefixes are forwarded
+through the local Next shell into Hono, while auth and OIDC routes remain on the
+native Next path so SSR login continues to work.
+
+### Hono-lite local login
+
+`dev:hono-lite` does not start Next.js. Since `/signin` is rendered by Next.js,
+use the development login helper to create a local Better Auth session directly
+against the local Hono-backed instance:
+
+```bash
+bun run dev:hono-lite
+bun run dev:login -- --email dev@local.test --name "Local Dev" --callback /
+```
+
+The login helper opens:
+
+```text
+http://localhost:9876/api/auth/dev/local-login?email=dev%40local.test&name=Local%20Dev&callbackURL=/
+```
+
+Vite proxies this request to Hono. The Better Auth development plugin then:
+
+1. Requires `NODE_ENV=development`.
+2. Requires `LOBE_DEV_AUTH_BOOTSTRAP=1`.
+3. Finds or creates the requested local user.
+4. Creates a Better Auth session.
+5. Writes the normal signed `better-auth.session_token` cookie.
+6. Redirects to the callback path.
+
+The callback must be a same-origin path. Absolute URLs and protocol-relative
+URLs are rejected and normalized to `/`.
+
+### Vite-only external API mode
+
+`dev:vite` starts only the SPA dev server. It does not proxy API traffic unless
+`LOBE_DEV_API_TARGET` is explicitly set:
+
+```bash
+LOBE_DEV_API_TARGET=https://app.example.com bun run dev:vite
+```
+
+This mode is appropriate for frontend-only work against a known remote or local
+API endpoint. It is not a replacement for local auth or server-side debugging.
+
+### Environment overrides
+
+| Variable                    | Default by topology                          | Purpose                                                        |
+| --------------------------- | -------------------------------------------- | -------------------------------------------------------------- |
+| `LOBE_DEV_TOPOLOGY`         | Set by the selected script.                  | Selects `next`, `hono`, `hono-lite`, or `vite`.                |
+| `PORT`                      | `3010`                                       | Local Next.js shell port.                                      |
+| `HONO_PORT`                 | `3011`                                       | Local standalone Hono runtime port.                            |
+| `VITE_PORT`                 | `9876`                                       | Vite SPA dev server port.                                      |
+| `LOBE_DEV_APP_URL`          | Topology-specific browser origin.            | Overrides `APP_URL`.                                           |
+| `LOBE_DEV_INTERNAL_APP_URL` | Topology-specific server-to-server origin.   | Overrides `INTERNAL_APP_URL`.                                  |
+| `LOBE_DEV_API_TARGET`       | Topology-specific API target.                | Overrides Vite API proxy target.                               |
+| `LOBE_DEV_HONO_TARGET`      | `http://localhost:${HONO_PORT}` when needed. | Overrides the Next shell's Hono forwarding target.             |
+| `LOBE_DEV_AUTH_BOOTSTRAP`   | `1` only in `hono-lite`.                     | Enables the development-only Better Auth local login endpoint. |
+
+### Database prerequisites
+
+The Hono runtime uses the same database schema as the Next.js runtime. If
+`SKIP_DB_MIGRATE=1` is set, the selected database must already contain all
+columns required by the current checkout.
+
+For example, `brief.listUnresolved` reads `briefs.trigger` and
+`briefs.metadata`. A local Neon database that has not applied
+`packages/database/migrations/0100_add_metadata_and_trigger_to_briefs.sql` will
+fail with:
+
+```text
+column briefs.trigger does not exist
+```
+
+This is a schema drift failure, not a Hono runtime failure. Apply the migration
+to the local development database or switch to a database that has already been
+migrated.
+
+### Troubleshooting
+
+| Symptom                                                              | Likely cause                                                    | Action                                                                                   |
+| -------------------------------------------------------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `` `after` was called outside a request scope `` in Hono             | Business code imported `next/server.after` directly.            | Use `scheduleAfterResponse` so Next uses `after()` and Hono uses the fallback scheduler. |
+| `ERR_CLOSED_SERVER` from `vite-node`                                 | Request-time lazy imports outlived a plain `vite-node` server.  | Use `dev:hono:server` or topology scripts; they run `vite-node --watch`.                 |
+| `EADDRINUSE` after editing Hono server files                         | Watch mode re-executed the entry while the old server listened. | The standalone entry closes the previous server before listening again.                  |
+| `/signin` does not render in `hono-lite`                             | `hono-lite` does not start Next.js.                             | Use `dev:hono` for SSR login, or use `dev:login` to bootstrap a local session.           |
+| API calls work in `dev:hono` but fail in `dev:hono-lite` after login | Missing local DB/env dependency rather than SSR dependency.     | Check server logs, database migrations, and provider credentials for that procedure.     |
 
 ## Runtime Switches
 

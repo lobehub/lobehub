@@ -67,7 +67,9 @@
     "dev:docker:down": "docker compose -f docker-compose/dev/docker-compose.yml down",
     "dev:docker:reset": "docker compose -f docker-compose/dev/docker-compose.yml down -v && rm -rf docker-compose/dev/data && npm run dev:docker && pnpm db:migrate",
     "dev:hono": "cross-env LOBE_DEV_TOPOLOGY=hono tsx scripts/devStartupSequence.mts",
-    "dev:hono:server": "vite-node --config scripts/viteNodeServer.config.ts src/server/hono/standalone.ts",
+    "dev:hono:server": "vite-node --watch --config scripts/viteNodeServer.config.ts src/server/hono/standalone.ts",
+    "dev:hono-lite": "cross-env LOBE_DEV_TOPOLOGY=hono-lite tsx scripts/devStartupSequence.mts",
+    "dev:login": "cross-env LOBE_DEV_TOPOLOGY=hono-lite tsx scripts/devLocalLogin.mts",
     "dev:next": "next dev -p 3010",
     "dev:spa": "vite --port 9876",
     "dev:spa:mobile": "cross-env MOBILE=true vite --port 3012",
@@ -160,6 +162,7 @@
     ]
   },
   "overrides": {
+    "@rolldown/pluginutils": "1.0.1",
     "@types/react": "19.2.13",
     "antd": "6.3.5",
     "baseline-browser-mapping": "2.10.31",
@@ -169,6 +172,7 @@
     "fast-xml-parser": "5.4.2",
     "lexical": "0.42.0",
     "pdfjs-dist": "5.4.530",
+    "rolldown": "1.0.1",
     "stylelint-config-clean-order": "7.0.0"
   },
   "dependencies": {
@@ -561,6 +565,7 @@
     ],
     "overrides": {
       "@react-pdf/image": "3.0.4",
+      "@rolldown/pluginutils": "1.0.1",
       "@types/react": "19.2.13",
       "antd": "6.3.5",
       "baseline-browser-mapping": "2.10.31",
@@ -572,6 +577,7 @@
       "pdfjs-dist": "5.4.530",
       "react": "19.2.5",
       "react-dom": "19.2.5",
+      "rolldown": "1.0.1",
       "stylelint-config-clean-order": "7.0.0",
       "typescript": "6.0.3"
     },

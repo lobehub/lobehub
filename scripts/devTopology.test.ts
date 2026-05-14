@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  API_PROXY_PREFIXES,
+  API_PROXY_PATTERN,
   applyDefaultDevTopologyEnv,
   resolveDevTopologyConfig,
 } from './devTopology';
@@ -22,9 +22,11 @@ describe('dev topology strategy', () => {
     expect(config.honoTarget).toBeUndefined();
     expect(config.internalAppUrl).toBe('http://localhost:3010');
 
-    for (const prefix of API_PROXY_PREFIXES) {
-      expect(config.apiProxy?.[prefix]?.target).toBe('http://localhost:3010');
-    }
+    expect(config.apiProxy?.[API_PROXY_PATTERN]?.target).toBe('http://localhost:3010');
+    expect(new RegExp(API_PROXY_PATTERN).test('/api/version')).toBe(true);
+    expect(new RegExp(API_PROXY_PATTERN).test('/trpc/lambda/user.getUserState')).toBe(true);
+    expect(new RegExp(API_PROXY_PATTERN).test('/f/file-id')).toBe(true);
+    expect(new RegExp(API_PROXY_PATTERN).test('/signin')).toBe(false);
   });
 
   it('uses the Hono topology as a Next shell with Hono-backed API routes', () => {
@@ -40,9 +42,29 @@ describe('dev topology strategy', () => {
     expect(config.appUrl).toBe('http://localhost:3211');
     expect(config.honoTarget).toBe('http://localhost:3212');
     expect(config.internalAppUrl).toBe('http://localhost:3211');
-    expect(config.apiProxy?.['/trpc']?.target).toBe('http://localhost:3211');
-    expect(config.apiProxy?.['/market']?.target).toBe('http://localhost:3211');
-    expect(config.apiProxy?.['/f']?.target).toBe('http://localhost:3211');
+    expect(config.apiProxy?.[API_PROXY_PATTERN]?.target).toBe('http://localhost:3211');
+  });
+
+  it('uses the Hono-lite topology as a Vite shell with direct Hono API proxying', () => {
+    const config = resolveDevTopologyConfig(
+      createEnv({
+        HONO_PORT: '3212',
+        LOBE_DEV_TOPOLOGY: 'hono-lite',
+        PORT: '3211',
+        VITE_PORT: '9888',
+      }),
+    );
+
+    expect(config.topology).toBe('hono-lite');
+    expect(config.apiRuntime).toBe('none');
+    expect(config.honoRuntime).toBe('standalone');
+    expect(config.nextBundler).toBe('none');
+    expect(config.nextRouteRuntime).toBe('none');
+    expect(config.appUrl).toBe('http://localhost:9888');
+    expect(config.apiTarget).toBe('http://localhost:3212');
+    expect(config.honoTarget).toBe('http://localhost:3212');
+    expect(config.internalAppUrl).toBe('http://localhost:3212');
+    expect(config.apiProxy?.[API_PROXY_PATTERN]?.target).toBe('http://localhost:3212');
   });
 
   it('keeps Vite-only mode API-free unless an explicit target is configured', () => {
@@ -61,7 +83,7 @@ describe('dev topology strategy', () => {
       }),
     );
 
-    expect(withTarget.apiProxy?.['/api']?.target).toBe('http://localhost:4321');
+    expect(withTarget.apiProxy?.[API_PROXY_PATTERN]?.target).toBe('http://localhost:4321');
   });
 
   it('applies Vite-only public URL defaults without enabling proxy implicitly', () => {
@@ -89,6 +111,15 @@ describe('dev topology strategy', () => {
     expect(honoEnv.LOBE_API_VERSION_RUNTIME).toBeUndefined();
     expect(honoEnv.LOBE_TRPC_RUNTIME).toBeUndefined();
     expect(honoEnv.LOBE_DEV_HONO_TARGET).toBe('http://localhost:3011');
+    expect(honoEnv.LOBE_DEV_AUTH_BOOTSTRAP).toBeUndefined();
+
+    const honoLiteEnv = createEnv({ LOBE_DEV_TOPOLOGY: 'hono-lite' });
+    applyDefaultDevTopologyEnv(honoLiteEnv);
+
+    expect(honoLiteEnv.APP_URL).toBe('http://localhost:9876');
+    expect(honoLiteEnv.INTERNAL_APP_URL).toBe('http://localhost:3011');
+    expect(honoLiteEnv.LOBE_DEV_API_TARGET).toBe('http://localhost:3011');
+    expect(honoLiteEnv.LOBE_DEV_AUTH_BOOTSTRAP).toBe('1');
 
     const nextEnv = createEnv({ LOBE_DEV_TOPOLOGY: 'next' });
     applyDefaultDevTopologyEnv(nextEnv);

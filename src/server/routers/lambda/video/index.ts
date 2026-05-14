@@ -11,7 +11,6 @@ import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
 import { isProviderModelAvailable } from 'model-bank';
-import { after } from 'next/server';
 import { z } from 'zod';
 
 import { getProviderContentPolicyErrorMessage } from '@/business/server/getProviderContentPolicyErrorMessage';
@@ -33,6 +32,7 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { FileService } from '@/server/services/file';
 import { processBackgroundVideoPolling } from '@/server/services/generation/videoBackgroundPolling';
+import { scheduleAfterResponse } from '@/server/utils/scheduleAfterResponse';
 import { AsyncTaskStatus, AsyncTaskType } from '@/types/asyncTask';
 
 import { createVideoTaskSubmitError } from './error';
@@ -270,7 +270,7 @@ export const videoRouter = router({
           status: AsyncTaskStatus.Processing,
         });
 
-        after(async () => {
+        scheduleAfterResponse(async () => {
           log('After() hook executing background video polling for task: %s', asyncTaskId);
 
           try {
@@ -293,7 +293,7 @@ export const videoRouter = router({
           } catch (error) {
             console.error('[video] Background polling failed:', error);
           }
-        });
+        }, 'video:background-polling');
 
         log('After() hook registered for background video polling: %s', asyncTaskId);
       }

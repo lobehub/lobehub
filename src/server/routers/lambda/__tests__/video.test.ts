@@ -89,6 +89,8 @@ const txResult = {
   generation: { id: 'gen-1' },
 };
 
+const flushAfterResponseTasks = () => new Promise((resolve) => setTimeout(resolve, 0));
+
 // Minimal drizzle-like chain mocks
 function createInsertChain() {
   return vi.fn().mockReturnValue({
@@ -209,8 +211,7 @@ describe('videoRouter', () => {
         inferenceId: 'inf-2',
         status: AsyncTaskStatus.Processing,
       });
-      // Polling: should trigger background polling via after()
-      expect(mockAfter).toHaveBeenCalled();
+      await flushAfterResponseTasks();
       expect(mockProcessBackgroundVideoPolling).toHaveBeenCalled();
     });
 
@@ -229,8 +230,7 @@ describe('videoRouter', () => {
         inferenceId: 'inf-3',
         status: AsyncTaskStatus.Processing,
       });
-      // No special videoUrl branch — falls through to polling
-      expect(mockAfter).toHaveBeenCalled();
+      await flushAfterResponseTasks();
       expect(mockProcessBackgroundVideoPolling).toHaveBeenCalled();
     });
 
@@ -241,8 +241,7 @@ describe('videoRouter', () => {
       const caller = videoRouter.createCaller(mockCtx);
       await caller.createVideo(defaultInput);
 
-      // useWebhook=false means not webhook, should fall to polling
-      expect(mockAfter).toHaveBeenCalled();
+      await flushAfterResponseTasks();
       expect(mockProcessBackgroundVideoPolling).toHaveBeenCalled();
     });
   });

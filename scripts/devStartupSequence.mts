@@ -101,6 +101,19 @@ const waitForAPIRuntimeReady = async () => {
   );
 };
 
+const waitForHonoRuntimeReady = async () => {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < API_READY_TIMEOUT_MS) {
+    if (await isPortOpen(API_HOST, HONO_PORT)) return;
+    await wait(API_READY_RETRY_MS);
+  }
+
+  throw new Error(
+    `Hono runtime was not ready within ${API_READY_TIMEOUT_MS / 1000}s on ${API_HOST}:${HONO_PORT}`,
+  );
+};
+
 const prewarmNextRootCompile = async () => {
   const startedAt = Date.now();
   const response = await fetch(API_ROOT_URL, { signal: AbortSignal.timeout(120_000) });
@@ -110,9 +123,11 @@ const prewarmNextRootCompile = async () => {
   );
 };
 
-const runAPIRuntimeBackgroundTasks = (topology: DevTopology) => {
+const runRuntimeBackgroundTasks = (topology: DevTopology) => {
   setTimeout(() => {
-    console.log(`🔁 API runtime (${topology}) URL: ${API_ROOT_URL}`);
+    if (devTopologyConfig.apiRuntime !== 'none') {
+      console.log(`🔁 API runtime (${topology}) URL: ${API_ROOT_URL}`);
+    }
     if (devTopologyConfig.honoRuntime === 'standalone') {
       console.log(`🔁 Hono runtime URL: ${HONO_ROOT_URL}`);
     }
@@ -121,10 +136,15 @@ const runAPIRuntimeBackgroundTasks = (topology: DevTopology) => {
 
   void (async () => {
     try {
-      await waitForAPIRuntimeReady();
-      if (topology !== 'vite') await prewarmNextRootCompile();
+      if (devTopologyConfig.apiRuntime !== 'none') {
+        await waitForAPIRuntimeReady();
+        await prewarmNextRootCompile();
+        return;
+      }
+
+      if (devTopologyConfig.honoRuntime === 'standalone') await waitForHonoRuntimeReady();
     } catch (error) {
-      console.warn('⚠️ API runtime readiness check skipped:', error);
+      console.warn('⚠️ Runtime readiness check skipped:', error);
     }
   })();
 };
@@ -173,7 +193,13 @@ const startHonoRuntime = () => {
 
   return spawn(
     'npx',
-    ['vite-node', '--config', 'scripts/viteNodeServer.config.ts', 'src/server/hono/standalone.ts'],
+    [
+      'vite-node',
+      '--watch',
+      '--config',
+      'scripts/viteNodeServer.config.ts',
+      'src/server/hono/standalone.ts',
+    ],
     {
       env: {
         ...process.env,
@@ -202,7 +228,7 @@ const main = async () => {
 
   viteProcess = runNpmScript('dev:spa');
   watchChildExit(viteProcess, 'vite');
-  if (apiProcess) runAPIRuntimeBackgroundTasks(devTopologyConfig.topology);
+  if (apiProcess || honoProcess) runRuntimeBackgroundTasks(devTopologyConfig.topology);
 
   await Promise.race([
     new Promise((resolve) => honoProcess?.once('exit', resolve)),

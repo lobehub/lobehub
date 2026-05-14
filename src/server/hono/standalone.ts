@@ -1,4 +1,4 @@
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { createServer } from 'node:http';
 import { Readable } from 'node:stream';
 
@@ -11,6 +11,10 @@ interface HonoFetchApp {
 interface HonoModule {
   default?: unknown;
 }
+
+type HonoStandaloneGlobal = typeof globalThis & {
+  __lobeHonoStandaloneServer?: Server;
+};
 
 const DEFAULT_HOST = 'localhost';
 const DEFAULT_PORT = 3011;
@@ -106,6 +110,28 @@ const server = createServer((request, response) => {
   })();
 });
 
-server.listen(port, host, () => {
-  console.info(`Hono runtime ready at http://${host}:${port}`);
+const closePreviousServer = (previousServer: Server | undefined) =>
+  new Promise<void>((resolve) => {
+    if (!previousServer?.listening) {
+      resolve();
+      return;
+    }
+
+    previousServer.close(() => resolve());
+  });
+
+const startServer = async () => {
+  const standaloneGlobal = globalThis as HonoStandaloneGlobal;
+
+  await closePreviousServer(standaloneGlobal.__lobeHonoStandaloneServer);
+  standaloneGlobal.__lobeHonoStandaloneServer = server;
+
+  server.listen(port, host, () => {
+    console.info(`Hono runtime ready at http://${host}:${port}`);
+  });
+};
+
+void startServer().catch((error) => {
+  console.error('Failed to start Hono runtime:', error);
+  process.exitCode = 1;
 });

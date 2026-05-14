@@ -1,4 +1,3 @@
-import { after } from 'next/server';
 import { z } from 'zod';
 
 import { AgentModel } from '@/database/models/agent';
@@ -7,6 +6,7 @@ import { HomeRepository } from '@/database/repositories/home';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { type HomeBriefData, HomeService } from '@/server/services/home';
+import { scheduleAfterResponse } from '@/server/utils/scheduleAfterResponse';
 
 const homeProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -38,8 +38,7 @@ export const homeRouter = router({
       }
     };
 
-    // Use Next.js after() for non-blocking execution
-    after(runMigration);
+    scheduleAfterResponse(runMigration, 'AgentMigration');
 
     return result;
   }),

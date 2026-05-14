@@ -131,6 +131,8 @@ export default defineConfig({
     vercelSkewProtection(),
     viteEnvRestartKeys([
       'APP_URL',
+      'HONO_PORT',
+      'LOBE_DEV_AUTH_BOOTSTRAP',
       'LOBE_DEV_API_TARGET',
       'LOBE_DEV_APP_URL',
       'LOBE_DEV_INTERNAL_APP_URL',
