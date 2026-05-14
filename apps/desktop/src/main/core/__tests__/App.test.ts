@@ -115,9 +115,9 @@ vi.mock('../infrastructure/I18nManager', () => ({
 
 vi.mock('../infrastructure/StoreManager', () => ({
   StoreManager: vi.fn().mockImplementation(() => ({
-    get: vi.fn((key) => {
-      if (key === 'storagePath') return '/mock/storage/path';
-      return undefined;
+    get: vi.fn((_key, defaultValue) => {
+      if (_key === 'storagePath') return '/mock/storage/path';
+      return defaultValue;
     }),
     set: vi.fn(),
   })),

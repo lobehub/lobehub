@@ -173,7 +173,7 @@ export class LocalFileProtocolManager {
     return realRoot;
   }
 
-  async approveWorkspaceRoots(rootPaths: string[]): Promise<string[]> {
+  async approveWorkspaceRoots(rootPaths: string[] = []): Promise<string[]> {
     const approvedRoots = await Promise.allSettled(
       rootPaths.map((rootPath) => this.approveWorkspaceRoot(rootPath)),
     );
