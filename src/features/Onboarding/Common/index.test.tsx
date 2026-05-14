@@ -10,7 +10,6 @@ interface RenderOptions {
   finishedAt?: string;
   isUserStateInit?: boolean;
   persistedStep?: number;
-  refreshedEnableAgentOnboarding?: boolean;
   serverConfigInit?: boolean;
   setOnboardingStep?: ReturnType<typeof vi.fn>;
 }
@@ -23,7 +22,6 @@ const renderCommon = async ({
   finishedAt,
   isUserStateInit = true,
   persistedStep,
-  refreshedEnableAgentOnboarding,
   serverConfigInit = true,
   setOnboardingStep = vi.fn(),
 }: RenderOptions) => {
@@ -50,19 +48,12 @@ const renderCommon = async ({
     default: () => <div>ResponseLanguageStep</div>,
   }));
 
-  const serverConfigState = {
-    featureFlags: { enableAgentOnboarding },
-    refreshServerConfig: vi.fn(async () => {
-      if (refreshedEnableAgentOnboarding === undefined) return;
-      serverConfigState.featureFlags.enableAgentOnboarding = refreshedEnableAgentOnboarding;
-    }),
-    serverConfigInit,
-  };
-
   function selectFromServerConfigStore(selector: (state: Record<string, unknown>) => unknown) {
-    return selector(serverConfigState);
+    return selector({
+      featureFlags: { enableAgentOnboarding },
+      serverConfigInit,
+    });
   }
-  selectFromServerConfigStore.getState = () => serverConfigState;
 
   vi.doMock('@/store/serverConfig', () => ({
     useServerConfigStore: selectFromServerConfigStore,
@@ -97,8 +88,6 @@ const renderCommon = async ({
       </Routes>
     </MemoryRouter>,
   );
-
-  return { refreshServerConfig: serverConfigState.refreshServerConfig };
 };
 
 afterEach(() => {
@@ -123,23 +112,12 @@ describe('CommonOnboardingPage', () => {
 
   it('redirects to /onboarding/agent when shared prefix is complete and agent flag is on', async () => {
     await renderCommon({ commonStepsCompleted: true, enableAgentOnboarding: true });
-    await waitFor(() => expect(screen.getByText('Agent onboarding')).toBeInTheDocument());
-  });
-
-  it('refreshes server config before branch selection so user-scoped agent flag wins', async () => {
-    const { refreshServerConfig } = await renderCommon({
-      commonStepsCompleted: true,
-      enableAgentOnboarding: false,
-      refreshedEnableAgentOnboarding: true,
-    });
-
-    await waitFor(() => expect(refreshServerConfig).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(screen.getByText('Agent onboarding')).toBeInTheDocument());
+    expect(screen.getByText('Agent onboarding')).toBeInTheDocument();
   });
 
   it('redirects to /onboarding/classic when shared prefix is complete and agent flag is off', async () => {
     await renderCommon({ commonStepsCompleted: true, enableAgentOnboarding: false });
-    await waitFor(() => expect(screen.getByText('Classic onboarding')).toBeInTheDocument());
+    expect(screen.getByText('Classic onboarding')).toBeInTheDocument();
   });
 
   it('redirects to /onboarding/classic on desktop even when agent flag is on', async () => {
@@ -148,7 +126,7 @@ describe('CommonOnboardingPage', () => {
       desktop: true,
       enableAgentOnboarding: true,
     });
-    await waitFor(() => expect(screen.getByText('Classic onboarding')).toBeInTheDocument());
+    expect(screen.getByText('Classic onboarding')).toBeInTheDocument();
   });
 
   it('redirects to /onboarding/classic when AGENT_ONBOARDING_ENABLED master switch is off', async () => {
@@ -157,7 +135,7 @@ describe('CommonOnboardingPage', () => {
       commonStepsCompleted: true,
       enableAgentOnboarding: true,
     });
-    await waitFor(() => expect(screen.getByText('Classic onboarding')).toBeInTheDocument());
+    expect(screen.getByText('Classic onboarding')).toBeInTheDocument();
   });
 
   it('shows loading until user state initializes', async () => {

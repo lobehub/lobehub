@@ -1,4 +1,4 @@
-import type { SWRResponse } from 'swr';
+import { type SWRResponse } from 'swr';
 
 import { useOnlyFetchOnceSWR } from '@/libs/swr';
 import { globalService } from '@/services/global';
@@ -25,24 +25,6 @@ export class ServerConfigActionImpl {
     void get;
   }
 
-  #applyRuntimeConfig = (data: GlobalRuntimeConfig, action: string) => {
-    this.#set(
-      {
-        billboard: data.billboard ?? null,
-        featureFlags: data.serverFeatureFlags,
-        serverConfig: data.serverConfig,
-        serverConfigInit: true,
-      },
-      false,
-      action,
-    );
-  };
-
-  refreshServerConfig = async (): Promise<void> => {
-    const data = await globalService.getGlobalConfig();
-    this.#applyRuntimeConfig(data, 'refreshServerConfig');
-  };
-
   useInitServerConfig = (): SWRResponse<GlobalRuntimeConfig> => {
     return useOnlyFetchOnceSWR<GlobalRuntimeConfig>(
       FETCH_SERVER_CONFIG_KEY,
@@ -52,7 +34,16 @@ export class ServerConfigActionImpl {
           this.#set({ serverConfigInit: true }, false, 'initServerConfigFallback');
         },
         onSuccess: (data) => {
-          this.#applyRuntimeConfig(data, 'initServerConfig');
+          this.#set(
+            {
+              billboard: data.billboard ?? null,
+              featureFlags: data.serverFeatureFlags,
+              serverConfig: data.serverConfig,
+              serverConfigInit: true,
+            },
+            false,
+            'initServerConfig',
+          );
         },
       },
     );

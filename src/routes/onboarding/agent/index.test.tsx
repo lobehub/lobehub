@@ -8,7 +8,6 @@ interface RenderAgentRouteOptions {
   desktop?: boolean;
   enabled: boolean;
   isUserStateInit?: boolean;
-  refreshedEnabled?: boolean;
   serverConfigInit?: boolean;
 }
 
@@ -18,7 +17,6 @@ const renderAgentRoute = async ({
   desktop = false,
   enabled,
   isUserStateInit = true,
-  refreshedEnabled,
   serverConfigInit = true,
 }: RenderAgentRouteOptions) => {
   vi.resetModules();
@@ -36,10 +34,6 @@ const renderAgentRoute = async ({
   }));
   const serverConfigState = {
     featureFlags: { enableAgentOnboarding: enabled },
-    refreshServerConfig: vi.fn(async () => {
-      if (refreshedEnabled === undefined) return;
-      serverConfigState.featureFlags.enableAgentOnboarding = refreshedEnabled;
-    }),
     serverConfigInit,
   };
   function selectFromServerConfigStore(selector: (state: Record<string, unknown>) => unknown) {
@@ -75,8 +69,6 @@ const renderAgentRoute = async ({
       </Routes>
     </MemoryRouter>,
   );
-
-  return { refreshServerConfig: serverConfigState.refreshServerConfig };
 };
 
 afterEach(() => {
@@ -130,17 +122,6 @@ describe('AgentOnboardingRoute', () => {
     await renderAgentRoute({ commonStepsCompleted: false, enabled: false });
 
     await waitFor(() => expect(screen.getByText('Common onboarding')).toBeInTheDocument());
-    expect(screen.queryByText('Classic onboarding')).not.toBeInTheDocument();
-  });
-
-  it('refreshes server config before redirecting to classic so user-scoped agent flag can recover', async () => {
-    const { refreshServerConfig } = await renderAgentRoute({
-      enabled: false,
-      refreshedEnabled: true,
-    });
-
-    await waitFor(() => expect(refreshServerConfig).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(screen.getByText('Agent onboarding')).toBeInTheDocument());
     expect(screen.queryByText('Classic onboarding')).not.toBeInTheDocument();
   });
 
