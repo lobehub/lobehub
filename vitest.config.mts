@@ -130,6 +130,9 @@ export default defineConfig({
           'emoji-mart',
           '@lobehub/ui',
           '@lobehub/fluent-emoji',
+          // antd 6.4+ pulls ESM @rc-component packages with extensionless subpath imports.
+          // Inline them so Vite resolves those imports instead of Node's strict ESM loader.
+          /@rc-component\//,
           '@pierre/diffs',
           '@pierre/diffs/react',
           'lru_map',
