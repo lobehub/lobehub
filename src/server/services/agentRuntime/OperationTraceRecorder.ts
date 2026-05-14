@@ -75,7 +75,6 @@ export class OperationTraceRecorder {
 
       if (!partial.steps) partial.steps = [];
       const newStep = this.buildStepSnapshot(params);
-<<<<<<< HEAD
       this.deduplicateCeSnapshot(newStep, partial.steps);
       partial.steps.push(newStep);
 
