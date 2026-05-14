@@ -1,18 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { type GlobalRuntimeConfig } from '@/types/serverConfig';
+import { globalService } from '@/services/global';
+import type { GlobalRuntimeConfig } from '@/types/serverConfig';
 
 import { createServerConfigStore } from './store';
 
 // Mock SWR
 let mockSWRData: GlobalRuntimeConfig | undefined;
 let mockSWRError: Error | undefined;
-let mockOnSuccessCallback: ((data: GlobalRuntimeConfig) => void) | undefined;
 
 vi.mock('@/libs/swr', () => ({
   useOnlyFetchOnceSWR: vi.fn((key, fetcher, options) => {
     const { onError, onSuccess } = options || {};
-    mockOnSuccessCallback = onSuccess;
 
     // Simulate SWR behavior
     if (mockSWRData && onSuccess) {
@@ -57,7 +56,6 @@ afterEach(() => {
   vi.restoreAllMocks();
   mockSWRData = undefined;
   mockSWRError = undefined;
-  mockOnSuccessCallback = undefined;
 });
 
 describe('ServerConfigAction', () => {
@@ -145,6 +143,30 @@ describe('ServerConfigAction', () => {
       const updatedState = store.getState();
       expect(updatedState.serverConfig).toEqual(mockGlobalConfig.serverConfig);
       expect(updatedState.featureFlags).toEqual(mockGlobalConfig.serverFeatureFlags);
+    });
+  });
+
+  describe('refreshServerConfig', () => {
+    it('fetches and applies the latest runtime config', async () => {
+      const refreshedConfig: GlobalRuntimeConfig = {
+        billboard: { id: 1, items: [], slug: 'agent-onboarding', startAt: '', title: '' },
+        serverConfig: {
+          aiProvider: {},
+          telemetry: {},
+        },
+        serverFeatureFlags: {
+          enableAgentOnboarding: true,
+        },
+      } as any;
+      vi.spyOn(globalService, 'getGlobalConfig').mockResolvedValueOnce(refreshedConfig);
+
+      const store = createServerConfigStore();
+      await store.getState().refreshServerConfig();
+
+      expect(store.getState().featureFlags).toEqual(refreshedConfig.serverFeatureFlags);
+      expect(store.getState().serverConfig).toEqual(refreshedConfig.serverConfig);
+      expect(store.getState().serverConfigInit).toBe(true);
+      expect(store.getState().billboard).toEqual(refreshedConfig.billboard);
     });
   });
 

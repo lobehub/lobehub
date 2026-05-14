@@ -3,7 +3,7 @@
 import { isDesktop } from '@lobechat/const';
 import { MAX_ONBOARDING_STEPS } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import { memo, useCallback, useEffect, useRef } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate, useSearchParams } from 'react-router-dom';
 
 import Loading from '@/components/Loading/BrandTextLoading';
@@ -36,7 +36,10 @@ const CommonOnboardingPage = memo(() => {
   const isUserStateInit = useUserStore((s) => s.isUserStateInit);
   const commonStepsCompleted = useUserStore(onboardingSelectors.commonStepsCompleted);
   const enableAgentOnboarding = useServerConfigStore((s) => s.featureFlags.enableAgentOnboarding);
+  const refreshServerConfig = useServerConfigStore((s) => s.refreshServerConfig);
   const serverConfigInit = useServerConfigStore((s) => s.serverConfigInit);
+  const [branchConfigReady, setBranchConfigReady] = useState(false);
+  const branchConfigRefreshRef = useRef<Promise<void> | undefined>(undefined);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const step: 1 | 2 = searchParams.get('step') === '2' ? 2 : 1;
@@ -76,12 +79,40 @@ const CommonOnboardingPage = memo(() => {
     // the redirect on the next render.
   }, []);
 
+  useEffect(() => {
+    if (!commonStepsCompleted) {
+      setBranchConfigReady(false);
+      return;
+    }
+
+    if (!serverConfigInit || branchConfigReady) return;
+
+    let cancelled = false;
+    const refreshPromise =
+      branchConfigRefreshRef.current ??
+      refreshServerConfig().catch((error) => {
+        console.error('[Onboarding] Failed to refresh server config before branch redirect', error);
+      });
+
+    branchConfigRefreshRef.current = refreshPromise;
+    void refreshPromise.finally(() => {
+      if (branchConfigRefreshRef.current === refreshPromise) {
+        branchConfigRefreshRef.current = undefined;
+      }
+      if (!cancelled) setBranchConfigReady(true);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [branchConfigReady, commonStepsCompleted, refreshServerConfig, serverConfigInit]);
+
   if (!isUserStateInit) {
     return <Loading debugId="CommonOnboarding/userState" />;
   }
 
   if (commonStepsCompleted) {
-    if (!serverConfigInit) {
+    if (!serverConfigInit || !branchConfigReady) {
       return <Loading debugId="CommonOnboarding/serverConfig" />;
     }
     const branchPath = deriveOnboardingBranchPath({
