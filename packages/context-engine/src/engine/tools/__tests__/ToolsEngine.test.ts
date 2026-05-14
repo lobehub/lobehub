@@ -217,6 +217,44 @@ describe('ToolsEngine', () => {
       ]);
     });
 
+    it('should deduplicate repeated function names inside one MCP manifest', () => {
+      const duplicateMcpManifest: LobeToolManifest = {
+        api: [
+          {
+            description: 'First copy',
+            name: 'getPolyMarketEvents',
+            parameters: { properties: {}, type: 'object' },
+          },
+          {
+            description: 'Duplicate copy',
+            name: 'getPolyMarketEvents',
+            parameters: { properties: {}, type: 'object' },
+          },
+        ],
+        identifier: 'emblemcompany-agent-skills',
+        meta: { description: '', title: 'Agent Skills' },
+        type: 'mcp',
+      };
+
+      const engine = new ToolsEngine({
+        enableChecker: () => true,
+        functionCallChecker: () => true,
+        manifestSchemas: [duplicateMcpManifest],
+      });
+
+      const result = engine.generateTools({
+        model: 'kimi-k2.6',
+        provider: 'newapi',
+        toolIds: ['emblemcompany-agent-skills'],
+      });
+
+      expect(result).toHaveLength(1);
+      expect(result?.[0].function.name).toBe(
+        'emblemcompany-agent-skills____getPolyMarketEvents____mcp',
+      );
+      expect(result?.[0].function.description).toBe('First copy');
+    });
+
     it('should handle non-existent plugins gracefully', () => {
       const engine = new ToolsEngine({
         manifestSchemas: [mockWebBrowsingManifest],

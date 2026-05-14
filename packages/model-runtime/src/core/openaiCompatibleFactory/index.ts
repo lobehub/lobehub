@@ -8,6 +8,7 @@ import type { ClientOptions } from 'openai';
 import OpenAI from 'openai';
 import type { Stream } from 'openai/streaming';
 
+import { applyKimiCompat } from '../../../../business/heyang/src/kimi-compat';
 import { responsesAPIModels } from '../../const/models';
 import type {
   ChatCompletionErrorPayload,
@@ -420,13 +421,16 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
         // Sanitize temperature/top_p conflict for Claude 4+ models routed via OpenAI-compatible API.
         // normalizeTemperature is false here because OpenAI-compatible providers use the raw range.
-        const postPayload = {
-          ...handledPayload,
-          ...resolveModelSamplingParameters(handledPayload.model, handledPayload, {
-            normalizeTemperature: false,
-            preferTemperature: true,
-          }),
-        };
+        const postPayload = applyKimiCompat(
+          {
+            ...handledPayload,
+            ...resolveModelSamplingParameters(handledPayload.model, handledPayload, {
+              normalizeTemperature: false,
+              preferTemperature: true,
+            }),
+          },
+          this.id,
+        );
 
         const computedBaseURL =
           typeof this._options.baseURL === 'string' && this._options.baseURL

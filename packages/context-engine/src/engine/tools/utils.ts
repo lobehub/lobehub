@@ -1,3 +1,4 @@
+import { heyangDiagnostics } from '../../../../business/heyang/src/diagnostics';
 import { ToolNameResolver } from './ToolNameResolver';
 import type { LobeToolManifest, UniformTool } from './types';
 
@@ -32,18 +33,49 @@ export const normalizeToolParameters = (
   return { ...parameters, required: [] };
 };
 
+export const dedupeUniformToolsByName = (
+  tools: UniformTool[],
+  source: Record<string, unknown>,
+): UniformTool[] => {
+  const seen = new Set<string>();
+  const deduped: UniformTool[] = [];
+
+  for (const tool of tools) {
+    const name = tool.function.name;
+
+    if (seen.has(name)) {
+      heyangDiagnostics.warn('duplicate-tool-function-name-dropped', {
+        ...source,
+        functionName: name,
+      });
+      continue;
+    }
+
+    seen.add(name);
+    deduped.push(tool);
+  }
+
+  return deduped;
+};
+
 /**
  * Convert a tool manifest into LLM-compatible UniformTool definitions
  */
 export function generateToolsFromManifest(manifest: LobeToolManifest): UniformTool[] {
-  return manifest.api.map((api) => ({
-    function: {
-      description: api.description,
-      name: new ToolNameResolver().generate(manifest.identifier, api.name, manifest.type),
-      parameters: normalizeToolParameters(api.parameters),
+  return dedupeUniformToolsByName(
+    manifest.api.map((api) => ({
+      function: {
+        description: api.description,
+        name: new ToolNameResolver().generate(manifest.identifier, api.name, manifest.type),
+        parameters: normalizeToolParameters(api.parameters),
+      },
+      type: 'function' as const,
+    })),
+    {
+      manifestIdentifier: manifest.identifier,
+      source: 'generateToolsFromManifest',
     },
-    type: 'function' as const,
-  }));
+  );
 }
 
 /**

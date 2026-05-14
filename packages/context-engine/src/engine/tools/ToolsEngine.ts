@@ -10,7 +10,7 @@ import type {
   ToolsGenerationResult,
   UniformTool,
 } from './types';
-import { generateToolName, normalizeToolParameters } from './utils';
+import { dedupeUniformToolsByName, generateToolName, normalizeToolParameters } from './utils';
 
 const log = debug('context-engine:tools-engine');
 
@@ -273,8 +273,13 @@ export class ToolsEngine {
       })),
     );
 
-    log('Converted to %d tools', tools.length);
-    return tools;
+    const dedupedTools = dedupeUniformToolsByName(tools, {
+      manifestCount: manifests.length,
+      source: 'ToolsEngine.convertManifestsToTools',
+    });
+
+    log('Converted to %d tools', dedupedTools.length);
+    return dedupedTools;
   }
 
   /**
