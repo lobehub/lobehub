@@ -1,7 +1,11 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { promisify } from 'node:util';
+import { zstdDecompress } from 'node:zlib';
 
 import type { ExecutionSnapshot } from '../types';
+
+const decompressZstd = promisify(zstdDecompress);
 
 const REMOTE_DIR = '_remote';
 const ENV_FILE = '.env';
@@ -32,7 +36,7 @@ export function buildRemoteUrl(baseUrl: string, opId: string): string | null {
   const parsed = parseOperationId(opId);
   if (!parsed) return null;
   const base = baseUrl.replace(/\/$/, '');
-  return `${base}/${parsed.agentId}/${parsed.topicId}/${parsed.operationId}.json`;
+  return `${base}/${parsed.agentId}/${parsed.topicId}/${parsed.operationId}.json.zst`;
 }
 
 /**
@@ -90,15 +94,17 @@ export class RemoteSnapshotStore {
       return cached;
     }
 
-    // Download
+    // Download — remote object is zstd-compressed JSON (`.json.zst`).
     console.error(`↓ Downloading: ${url}`);
     const res = await fetch(url);
     if (!res.ok) {
       throw new Error(`Failed to fetch snapshot: ${res.status} ${res.statusText}\n  URL: ${url}`);
     }
-    const snapshot = (await res.json()) as ExecutionSnapshot;
+    const compressed = Buffer.from(await res.arrayBuffer());
+    const decompressed = await decompressZstd(compressed);
+    const snapshot = JSON.parse(decompressed.toString('utf8')) as ExecutionSnapshot;
 
-    // Cache locally
+    // Cache locally as plain JSON for easy inspection.
     await fs.mkdir(this.cacheDir, { recursive: true });
     const filePath = path.join(this.cacheDir, `${operationId}.json`);
     await fs.writeFile(filePath, JSON.stringify(snapshot, null, 2), 'utf8');
