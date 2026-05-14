@@ -1,8 +1,9 @@
 // @vitest-environment node
-import { type TaskTemplate, taskTemplates } from '@lobechat/const';
+import type { TaskTemplate } from '@lobechat/const';
+import { TASK_TEMPLATE_RECOMMEND_COUNT, taskTemplates } from '@lobechat/const';
 import { describe, expect, it } from 'vitest';
 
-import { isTemplateSkillSourceEligible, RECOMMEND_COUNT, TaskTemplateService } from './index';
+import { isTemplateSkillSourceEligible, TaskTemplateService } from './index';
 
 const makeTemplate = (overrides: Partial<TaskTemplate>): TaskTemplate => ({
   category: 'engineering',
@@ -16,11 +17,11 @@ const UTC_DAY_1 = new Date('2026-04-24T10:00:00Z');
 const UTC_DAY_2 = new Date('2026-04-25T10:00:00Z');
 
 describe('TaskTemplateService.listDailyRecommend', () => {
-  it('returns RECOMMEND_COUNT items when user has matching interests', async () => {
+  it('returns the default recommendation count when user has matching interests', async () => {
     const service = new TaskTemplateService('user-1');
     const picked = await service.listDailyRecommend(['coding'], { now: UTC_DAY_1 });
 
-    expect(picked).toHaveLength(RECOMMEND_COUNT);
+    expect(picked).toHaveLength(TASK_TEMPLATE_RECOMMEND_COUNT);
     const codingMatches = taskTemplates.filter((t) => t.interests.includes('coding'));
     expect(picked.some((p) => codingMatches.some((m) => m.id === p.id))).toBe(true);
   });
@@ -62,7 +63,7 @@ describe('TaskTemplateService.listDailyRecommend', () => {
     const service = new TaskTemplateService('user-1');
     const picked = await service.listDailyRecommend([], { now: UTC_DAY_1 });
 
-    expect(picked).toHaveLength(RECOMMEND_COUNT);
+    expect(picked).toHaveLength(TASK_TEMPLATE_RECOMMEND_COUNT);
     for (const p of picked) {
       expect(taskTemplates.some((t) => t.id === p.id)).toBe(true);
     }
@@ -78,10 +79,10 @@ describe('TaskTemplateService.listDailyRecommend', () => {
 
   it('unrecognized interest strings fall back to non-matched pool', async () => {
     const service = new TaskTemplateService('user-1');
-    // Freeform custom input won't match any template's interests — should still return 3 picks
+    // Freeform custom input won't match any template's interests and should still return defaults.
     const picked = await service.listDailyRecommend(['my special hobby'], { now: UTC_DAY_1 });
 
-    expect(picked).toHaveLength(RECOMMEND_COUNT);
+    expect(picked).toHaveLength(TASK_TEMPLATE_RECOMMEND_COUNT);
   });
 
   it('excludes templates listed in excludeIds', async () => {
@@ -96,7 +97,7 @@ describe('TaskTemplateService.listDailyRecommend', () => {
     });
 
     expect(picked.some((t) => t.id === excludedId)).toBe(false);
-    expect(picked).toHaveLength(RECOMMEND_COUNT);
+    expect(picked).toHaveLength(TASK_TEMPLATE_RECOMMEND_COUNT);
   });
 
   it('drops templates whose required skill sources are not all enabled', async () => {
@@ -104,7 +105,7 @@ describe('TaskTemplateService.listDailyRecommend', () => {
     // Without `enabledSkillSources`, any template with `requiresSkills` is filtered out.
     // Since current catalog has none, this should match the baseline (no-op).
     const baseline = await service.listDailyRecommend(['coding'], { now: UTC_DAY_1 });
-    expect(baseline).toHaveLength(RECOMMEND_COUNT);
+    expect(baseline).toHaveLength(TASK_TEMPLATE_RECOMMEND_COUNT);
   });
 
   it('returns only non-excluded templates when most are excluded', async () => {
@@ -178,7 +179,7 @@ describe('TaskTemplateService.listDailyRecommend', () => {
     }
   });
 
-  it('changes the first item across refreshSeeds when matched candidates are fewer than RECOMMEND_COUNT', async () => {
+  it('changes the first item across refreshSeeds when matched candidates are fewer than the default recommendation count', async () => {
     // Repro for: `health` interest matches only one template (`diet-log-companion`),
     // so the legacy "matched-first" logic locked it to position 0 regardless of seed.
     const service = new TaskTemplateService('user-1');

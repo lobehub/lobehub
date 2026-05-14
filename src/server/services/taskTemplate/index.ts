@@ -9,9 +9,6 @@ import {
 import { klavisEnv } from '@/config/klavis';
 import { appEnv } from '@/envs/app';
 
-export const RECOMMEND_COUNT = TASK_TEMPLATE_RECOMMEND_COUNT;
-export const RECOMMEND_COUNT_MAX = TASK_TEMPLATE_RECOMMEND_COUNT_MAX;
-
 export const ENABLED_SKILL_SOURCES: ReadonlySet<TaskTemplateSkillSource> = (() => {
   const sources = new Set<TaskTemplateSkillSource>();
   if (klavisEnv.KLAVIS_API_KEY) sources.add('klavis');
@@ -89,13 +86,13 @@ export class TaskTemplateService {
     } = {},
   ): Promise<TaskTemplate[]> {
     const {
-      count = RECOMMEND_COUNT,
+      count = TASK_TEMPLATE_RECOMMEND_COUNT,
       enabledSkillSources,
       excludeIds,
       now = new Date(),
       refreshSeed,
     } = options;
-    const limit = Math.max(1, Math.min(count, RECOMMEND_COUNT_MAX));
+    const limit = Math.max(1, Math.min(count, TASK_TEMPLATE_RECOMMEND_COUNT_MAX));
     const excluded = new Set(excludeIds ?? []);
     const seedBase = `${this.userId}:${getUtcDateStr(now)}`;
     const seed = hashString(refreshSeed ? `${seedBase}:${refreshSeed}` : seedBase);
