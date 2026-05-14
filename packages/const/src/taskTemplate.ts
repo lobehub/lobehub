@@ -67,6 +67,9 @@ export const TASK_TEMPLATE_RECOMMEND_COUNT = 3;
 
 export const TASK_TEMPLATE_RECOMMEND_COUNT_MAX = 20;
 
+export const resolveTaskTemplateRecommendCount = (count?: number) =>
+  Math.max(1, Math.min(count ?? TASK_TEMPLATE_RECOMMEND_COUNT, TASK_TEMPLATE_RECOMMEND_COUNT_MAX));
+
 export const taskTemplates: TaskTemplate[] = [
   // content-creation
   {

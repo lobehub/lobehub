@@ -1,4 +1,5 @@
 import type { TaskTemplate, TaskTemplateSkillSource } from '@lobechat/const';
+import { resolveTaskTemplateRecommendCount } from '@lobechat/const';
 import { createNanoId } from '@lobechat/utils';
 import { useSessionStorageState } from 'ahooks';
 import { App } from 'antd';
@@ -13,7 +14,6 @@ import { useToolStore } from '@/store/tool';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
-import { resolveRecommendationCount } from './resolveRecommendationCount';
 import { useResolvedInterestKeys } from './useResolvedInterestKeys';
 
 const REFRESH_SEED_STORAGE_KEY = 'lobehub:taskTemplate:refreshSeed';
@@ -38,7 +38,7 @@ export function useDailyBriefRecommendationsUI(
   options: UseDailyBriefRecommendationsUIOptions = {},
 ): DailyBriefRecommendationsUIState {
   const { count } = options;
-  const recommendationCount = resolveRecommendationCount(count);
+  const recommendationCount = resolveTaskTemplateRecommendCount(count);
   const { t } = useTranslation('taskTemplate');
   const { message } = App.useApp();
   const isLogin = useUserStore(authSelectors.isLogin);

@@ -2,7 +2,13 @@ import { parseCronPattern } from '@lobechat/utils/cron';
 import { describe, expect, it } from 'vitest';
 
 import { INTEREST_AREA_KEYS } from './interests';
-import { TASK_TEMPLATE_FALLBACK_CATEGORIES, taskTemplates } from './taskTemplate';
+import {
+  resolveTaskTemplateRecommendCount,
+  TASK_TEMPLATE_FALLBACK_CATEGORIES,
+  TASK_TEMPLATE_RECOMMEND_COUNT,
+  TASK_TEMPLATE_RECOMMEND_COUNT_MAX,
+  taskTemplates,
+} from './taskTemplate';
 
 const CRON_FIELDS = 5;
 const VALID_INTEREST_KEYS = new Set(INTEREST_AREA_KEYS);
@@ -73,5 +79,14 @@ describe('taskTemplates', () => {
         ).toBe(false);
       }
     }
+  });
+
+  it('resolves the recommendation count from shared defaults and bounds', () => {
+    expect(resolveTaskTemplateRecommendCount()).toBe(TASK_TEMPLATE_RECOMMEND_COUNT);
+    expect(resolveTaskTemplateRecommendCount(4)).toBe(4);
+    expect(resolveTaskTemplateRecommendCount(0)).toBe(1);
+    expect(resolveTaskTemplateRecommendCount(TASK_TEMPLATE_RECOMMEND_COUNT_MAX + 1)).toBe(
+      TASK_TEMPLATE_RECOMMEND_COUNT_MAX,
+    );
   });
 });
