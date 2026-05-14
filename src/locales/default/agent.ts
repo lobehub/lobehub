@@ -11,6 +11,10 @@ export default {
   'channel.botTokenPlaceholderNew': 'Paste your bot token here',
   'channel.connectionConfig': 'Connection Configuration',
   'channel.copied': 'Copied to clipboard',
+  'channel.comingSoon': 'Coming Soon',
+  'channel.comingSoonDesc':
+    'We are working on bringing this integration to LobeHub. Stay tuned for updates.',
+  'channel.comingSoonTitle': '{{name}} integration is coming soon',
   'channel.copy': 'Copy',
   'channel.deleteAllChannels': 'Remove All Channels',
   'channel.deleteAllConfirm': 'Are you sure you want to remove all channels?',
