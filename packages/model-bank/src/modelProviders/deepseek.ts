@@ -5,6 +5,7 @@ const DeepSeek: ModelProviderCard = {
   checkModel: 'deepseek-v4-flash',
   description:
     'DeepSeek focuses on AI research and applications. Its latest DeepSeek V4 family ships in Flash and Pro variants with a 1M context window and hybrid thinking — competitive with leading closed frontier models on reasoning and agent benchmarks.',
+  enabled: true,
   id: 'deepseek',
   modelList: { showModelFetcher: true },
   modelsUrl: 'https://platform.deepseek.com/api-docs/zh-cn/quick_start/pricing',

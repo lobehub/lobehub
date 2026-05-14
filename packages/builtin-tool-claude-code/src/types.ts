@@ -23,6 +23,13 @@ export enum ClaudeCodeApiName {
    * different concept.
    */
   Agent = 'Agent',
+  /**
+   * Synthetic apiName the adapter rewrites the local
+   * `mcp__lobe_cc__ask_user_question` MCP tool to. Routes the dedicated
+   * intervention UI for CC's clarifying-question flow (LOBE-8725); not
+   * something CC's CLI emits directly.
+   */
+  AskUserQuestion = 'askUserQuestion',
   Bash = 'Bash',
   Edit = 'Edit',
   Glob = 'Glob',
@@ -39,7 +46,7 @@ export enum ClaudeCodeApiName {
 
 /**
  * Status of a single todo item in a `TodoWrite` tool_use.
- * Matches Claude Code's native schema — do not reuse GTD's `TodoStatus`,
+ * Matches Claude Code's native schema — do not reuse lobe-agent's `TodoStatus`,
  * which has a different vocabulary (`todo` / `processing`).
  */
 export type ClaudeCodeTodoStatus = 'pending' | 'in_progress' | 'completed';
@@ -116,4 +123,32 @@ export interface TaskOutputArgs {
 export interface TaskStopArgs {
   shell_id?: string;
   task_id?: string;
+}
+
+/**
+ * One option on an AskUserQuestion question — `label` is what the user picks,
+ * `description` is the supporting text shown alongside.
+ */
+export interface AskUserQuestionOption {
+  description: string;
+  label: string;
+}
+
+/**
+ * One question in an `AskUserQuestion` invocation — header is short (≤12
+ * chars per CC's contract), `options` is 2-4 entries, `multiSelect` is opt-in.
+ */
+export interface AskUserQuestionItem {
+  header: string;
+  multiSelect?: boolean;
+  options: AskUserQuestionOption[];
+  question: string;
+}
+
+/**
+ * `AskUserQuestion` tool arguments — mirrors CC's own schema verbatim so the
+ * model's existing prompts work unchanged. 1-4 questions per call.
+ */
+export interface AskUserQuestionArgs {
+  questions: AskUserQuestionItem[];
 }

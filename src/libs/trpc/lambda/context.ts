@@ -9,6 +9,7 @@ import { getServerDB } from '@/database/core/db-adaptor';
 import { ApiKeyModel } from '@/database/models/apiKey';
 import { authEnv, LOBE_CHAT_OIDC_AUTH_HEADER } from '@/envs/auth';
 import { extractTraceContext } from '@/libs/observability/traceparent';
+import { assertOIDCUserActive, isOIDCUserInactiveError } from '@/libs/oidc-provider/access-control';
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
 import { isApiKeyExpired, validateApiKeyFormat } from '@/utils/apiKey';
 
@@ -175,7 +176,8 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
 
     try {
       if (oidcAuthToken) {
-        // Use direct JWT validation instead of database lookup
+        // Validate the stateless JWT first, then check the current user state
+        // so banned/deleted accounts cannot keep using an already-issued token.
         const tokenInfo = await validateOIDCJWT(oidcAuthToken);
 
         oidcAuth = {
@@ -184,6 +186,8 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
           sub: tokenInfo.userId, // Use tokenData as payload
         };
         userId = tokenInfo.userId;
+        const db = await getServerDB();
+        await assertOIDCUserActive(db, userId);
         log('OIDC authentication successful, userId: %s', userId);
 
         // If OIDC authentication is successful, return context immediately
@@ -196,6 +200,16 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
         });
       }
     } catch (error) {
+      if (isOIDCUserInactiveError(error)) {
+        log('OIDC user is inactive, rejecting request without fallback auth');
+        console.error('OIDC authentication failed for inactive user:', error);
+        return createContextInner({
+          ...commonContext,
+          traceContext,
+          userId: null,
+        });
+      }
+
       // If OIDC authentication fails, log error and continue with other authentication methods
       if (oidcAuthToken) {
         log('OIDC authentication failed, error: %O', error);

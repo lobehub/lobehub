@@ -17,6 +17,8 @@ import {
 import { difference } from '@/utils/difference';
 import { merge } from '@/utils/merge';
 
+import { settingsSelectors } from './selectors/settings';
+
 type Setter = StoreSetter<UserStore>;
 export const createSettingsSlice = (set: Setter, get: () => UserStore, _api?: unknown) =>
   new UserSettingsActionImpl(set, get, _api);
@@ -89,7 +91,10 @@ export class UserSettingsActionImpl {
 
     const diffs = difference(nextSettings, defaultSettings);
     const isEmptyObjectDiff = (value: unknown): boolean =>
-      !!value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value as object).length === 0;
+      !!value &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      Object.keys(value as object).length === 0;
 
     // When user resets a field to default value, we need to explicitly include it in diffs
     // to override the previously saved non-default value in the backend
@@ -102,6 +107,34 @@ export class UserSettingsActionImpl {
       }
     }
 
+    const nextDefaultAgentConfig = nextSettings.defaultAgent?.config;
+    const changedDefaultAgentConfig = changedFields.defaultAgent?.config;
+    const hasDefaultAgentModelProviderChange =
+      !!changedDefaultAgentConfig &&
+      ('model' in changedDefaultAgentConfig || 'provider' in changedDefaultAgentConfig);
+    const defaultAgentModelProviderDiffersFromDefault =
+      nextDefaultAgentConfig?.model !== defaultSettings.defaultAgent?.config?.model ||
+      nextDefaultAgentConfig?.provider !== defaultSettings.defaultAgent?.config?.provider;
+
+    if (
+      hasDefaultAgentModelProviderChange &&
+      (defaultAgentModelProviderDiffersFromDefault || 'defaultAgent' in prevSetting) &&
+      nextDefaultAgentConfig?.model &&
+      nextDefaultAgentConfig.provider
+    ) {
+      const defaultAgentDiff = diffs.defaultAgent || {};
+      const configDiff = defaultAgentDiff.config || {};
+
+      diffs.defaultAgent = {
+        ...defaultAgentDiff,
+        config: {
+          ...configDiff,
+          model: nextDefaultAgentConfig.model,
+          provider: nextDefaultAgentConfig.provider,
+        },
+      };
+    }
+
     this.#set({ settings: diffs }, false, 'optimistic_updateSettings');
 
     const abortController = this.#get().internal_createSignal();
@@ -110,7 +143,27 @@ export class UserSettingsActionImpl {
   };
 
   updateDefaultAgent = async (defaultAgent: PartialDeep<LobeAgentSettings>): Promise<void> => {
-    await this.#get().setSettings({ defaultAgent });
+    const config = defaultAgent.config;
+    const shouldNormalizeModelProvider =
+      config && (config.model !== undefined || config.provider !== undefined);
+
+    if (!shouldNormalizeModelProvider) {
+      await this.#get().setSettings({ defaultAgent });
+      return;
+    }
+
+    const currentConfig = settingsSelectors.defaultAgentConfig(this.#get());
+
+    await this.#get().setSettings({
+      defaultAgent: {
+        ...defaultAgent,
+        config: {
+          ...config,
+          model: config.model ?? currentConfig.model,
+          provider: config.provider ?? currentConfig.provider,
+        },
+      },
+    });
   };
 
   updateGeneralConfig = async (general: Partial<UserGeneralConfig>): Promise<void> => {

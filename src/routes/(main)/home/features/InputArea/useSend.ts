@@ -2,6 +2,7 @@ import { SESSION_CHAT_TOPIC_URL, SESSION_CHAT_URL } from '@lobechat/const';
 import { useCallback } from 'react';
 
 import type { SendButtonHandler } from '@/features/ChatInput/store/initialState';
+import { useHomeDailyBrief } from '@/hooks/useHomeDailyBrief';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { agentService } from '@/services/agent';
 import { useAgentStore } from '@/store/agent';
@@ -10,6 +11,12 @@ import { fileChatSelectors, useFileStore } from '@/store/file';
 import { useHomeStore } from '@/store/home';
 
 import { useResolvedHomeAgentId } from '../AgentSelect/useResolvedHomeAgentId';
+
+/**
+ * Trim trailing ellipsis the LLM uses on hint placeholders so the sent
+ * message doesn't carry the cosmetic suffix.
+ */
+const stripHintEllipsis = (hint: string): string => hint.replace(/\s*(?:\.{3,}|…)\s*$/, '').trim();
 
 /**
  * Make sure the agent's config is hydrated into `agentMap` before we call
@@ -41,37 +48,66 @@ export const useSend = () => {
   // on the same browser) back to inbox so we don't try to send to a missing id.
   const { agentId: activeAgentId } = useResolvedHomeAgentId();
 
+  // Daily-brief hint paired with the home WelcomeText. Pressing Enter on an
+  // empty input "accepts" the hint as the message — like a smart-compose
+  // suggestion — and rotates to the next pair.
+  const { currentPair, advance } = useHomeDailyBrief();
+
   const send = useCallback<SendButtonHandler>(
-    async ({ getEditorData }) => {
+    async ({ getEditorData, getMarkdownContent }) => {
       const { inputMessage, mainInputEditor } = useChatStore.getState();
-      const editorData = getEditorData?.() ?? mainInputEditor?.getJSONState();
+      // Prefer the live editor content over the cached `inputMessage`.
+      // `onMarkdownContentChange` is wired through the editor's async
+      // `onChange`, so a fast type-then-Enter sequence can fire before the
+      // cache catches up and the empty-message guard would bail incorrectly.
+      const typed = (getMarkdownContent?.() ?? inputMessage ?? '').trim();
       const fileList = fileChatSelectors.chatUploadFileList(useFileStore.getState());
       const contextList = fileChatSelectors.chatContextSelections(useFileStore.getState());
       const { sendAsAgent, sendAsGroup, sendAsWrite, sendAsResearch, inputActiveMode } =
         useHomeStore.getState();
 
+      // If the user pressed Enter on an empty input, fall back to the
+      // currently displayed daily-brief hint (with cosmetic ellipsis stripped)
+      // and rotate the carousel so the next press shows / sends a different
+      // pair.
+      const hint = currentPair?.hint ? stripHintEllipsis(currentPair.hint) : '';
+      const usedHint = !typed && !!hint;
+      const message = typed || hint;
+      if (usedHint) advance();
+
+      // When falling back to the hint, the editor is empty — but its JSON
+      // state still contains root nodes (e.g. `{ type: 'doc' }`), which is
+      // truthy under `Object.keys(editorData).length > 0`. That makes the
+      // user-message renderer take the RichTextMessage branch and draw
+      // nothing, so the chat shows a blank user bubble while the agent
+      // happily processes the hint text. Skip editorData in that case so
+      // the renderer falls back to the markdown `content`.
+      const editorData = usedHint
+        ? undefined
+        : (getEditorData?.() ?? mainInputEditor?.getJSONState());
+
       // Require input content (except for default inbox which can have files/context)
-      if (!inputMessage && fileList.length === 0 && contextList.length === 0) return;
+      if (!message && fileList.length === 0 && contextList.length === 0) return;
 
       try {
         switch (inputActiveMode) {
           case 'agent': {
-            await sendAsAgent({ editorData, message: inputMessage });
+            await sendAsAgent({ editorData, message });
             break;
           }
 
           case 'group': {
-            await sendAsGroup({ editorData, message: inputMessage });
+            await sendAsGroup({ editorData, message });
             break;
           }
 
           case 'write': {
-            await sendAsWrite({ editorData, message: inputMessage });
+            await sendAsWrite({ editorData, message });
             break;
           }
 
           case 'research': {
-            await sendAsResearch(inputMessage);
+            await sendAsResearch(message);
             break;
           }
 
@@ -89,7 +125,7 @@ export const useSend = () => {
               contexts: contextList,
               editorData,
               files: fileList,
-              message: inputMessage,
+              message,
               onTopicCreated: (topicId) => {
                 router.replace(SESSION_CHAT_TOPIC_URL(activeAgentId, topicId, false));
               },
@@ -105,7 +141,15 @@ export const useSend = () => {
         mainInputEditor?.clearContent();
       }
     },
-    [activeAgentId, sendMessage, clearChatContextSelections, clearChatUploadFileList, router],
+    [
+      activeAgentId,
+      sendMessage,
+      clearChatContextSelections,
+      clearChatUploadFileList,
+      router,
+      currentPair,
+      advance,
+    ],
   );
 
   return {

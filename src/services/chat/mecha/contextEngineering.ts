@@ -8,13 +8,8 @@ import {
   generateKlavisServicesList,
   type KlavisServiceSummary,
 } from '@lobechat/builtin-tool-creds';
-import {
-  CronIdentifier,
-  type CronJobSummaryForContext,
-  generateCronJobsList,
-} from '@lobechat/builtin-tool-cron';
 import { GroupAgentBuilderIdentifier } from '@lobechat/builtin-tool-group-agent-builder';
-import { GTDIdentifier } from '@lobechat/builtin-tool-gtd';
+import { LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { WebOnboardingIdentifier } from '@lobechat/builtin-tool-web-onboarding';
 import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
@@ -25,10 +20,10 @@ import type {
   AgentManagementContext,
   GroupAgentBuilderContext,
   GroupOfficialToolItem,
-  GTDConfig,
   LobeToolManifest,
   MemoryContext,
   OnboardingContext,
+  PlanTodoConfig,
   ToolDiscoveryConfig,
   UserMemoryData,
 } from '@lobechat/context-engine';
@@ -103,7 +98,7 @@ interface ContextEngineeringContext {
   stepContext?: RuntimeStepContext;
   systemRole?: string;
   tools?: string[];
-  /** Topic ID for GTD context injection */
+  /** Topic ID for plan/todo context injection */
   topicId?: string;
 }
 
@@ -322,12 +317,12 @@ export const contextEngineering = async ({
     userMemoryData = combineUserMemoryData(topicMemories, persona);
   }
 
-  // Resolve GTD context: plan and todos
-  // GTD tool must be enabled and topicId must be provided
-  const isGTDEnabled = tools?.includes(GTDIdentifier) ?? false;
-  let gtdConfig: GTDConfig | undefined;
+  // Resolve plan + todos context (now part of the lobe-agent tool).
+  // Lobe-agent must be enabled and topicId must be provided.
+  const isPlanTodoEnabled = tools?.includes(LobeAgentIdentifier) ?? false;
+  let planTodoConfig: PlanTodoConfig | undefined;
 
-  if (isGTDEnabled && topicId) {
+  if (isPlanTodoEnabled && topicId) {
     try {
       // Fetch plan document for the current topic
       const planResult = await notebookService.listDocuments({
@@ -352,17 +347,17 @@ export const contextEngineering = async ({
         // Get todos from plan's metadata
         const todos = planDoc.metadata?.todos;
 
-        gtdConfig = {
+        planTodoConfig = {
           enabled: true,
           plan,
           todos,
         };
 
-        log('GTD context resolved: plan=%s, todos=%o', plan.goal, todos?.items?.length ?? 0);
+        log('Plan/Todo context resolved: plan=%s, todos=%o', plan.goal, todos?.items?.length ?? 0);
       }
     } catch (error) {
-      // Silently fail - GTD context is optional
-      log('Failed to resolve GTD context:', error);
+      // Silently fail - plan/todo context is optional
+      log('Failed to resolve plan/todo context:', error);
     }
   }
 
@@ -420,42 +415,6 @@ export const contextEngineering = async ({
       );
     } catch (error) {
       log('Failed to resolve Klavis services context:', error);
-    }
-  }
-
-  // Resolve cron jobs context for cron tool
-  // Only inject a small preview (up to 4) to save context window;
-  // the model can call listCronJobs API for the full list.
-  const isCronEnabled = tools?.includes(CronIdentifier) ?? false;
-  let cronJobsList: CronJobSummaryForContext[] | undefined;
-  let cronJobsTotal = 0;
-
-  if (isCronEnabled && agentId) {
-    try {
-      const cronResult = await lambdaClient.agentCronJob.list.query({ agentId, limit: 4 });
-      const jobs = (cronResult as any)?.data ?? [];
-      cronJobsTotal = (cronResult as any)?.pagination?.total ?? jobs.length;
-      cronJobsList = jobs.map(
-        (job: any): CronJobSummaryForContext => ({
-          cronPattern: job.cronPattern,
-          description: job.description,
-          enabled: job.enabled,
-          id: job.id,
-          lastExecutedAt: job.lastExecutedAt,
-          name: job.name,
-          remainingExecutions: job.remainingExecutions,
-          timezone: job.timezone ?? 'UTC',
-          totalExecutions: job.totalExecutions ?? 0,
-        }),
-      );
-      log(
-        'Cron jobs context resolved: count=%d, total=%d',
-        cronJobsList?.length ?? 0,
-        cronJobsTotal,
-      );
-    } catch (error) {
-      // Silently fail - cron context is optional
-      log('Failed to resolve cron jobs context:', error);
     }
   }
 
@@ -756,8 +715,6 @@ export const contextEngineering = async ({
       CREDS_LIST: () => (credsList ? generateCredsList(credsList) : ''),
       // NOTICE: required by builtin-tool-creds/src/systemRole.ts (Klavis integrations)
       KLAVIS_SERVICES_LIST: () => klavisServicesList,
-      // NOTICE: required by builtin-tool-cron/src/systemRole.ts
-      CRON_JOBS_LIST: () => (cronJobsList ? generateCronJobsList(cronJobsList, cronJobsTotal) : ''),
       // NOTICE(@nekomeowww): required by builtin-tool-memory/src/systemRole.ts
       memory_effort: () => (userMemoryConfig ? (memoryContext?.effort ?? '') : ''),
       // Current agent + topic identity — referenced by the LobeHub builtin
@@ -785,7 +742,7 @@ export const contextEngineering = async ({
     ...(isGroupAgentBuilderEnabled && { groupAgentBuilderContext }),
     ...(agentManagementContext && { agentManagementContext }),
     ...(agentGroup && { agentGroup }),
-    ...(gtdConfig && { gtd: gtdConfig }),
+    ...(planTodoConfig && { planTodo: planTodoConfig }),
     ...(topicReferences && topicReferences.length > 0 && { topicReferences }),
     ...(onboardingContext && { onboardingContext }),
   });

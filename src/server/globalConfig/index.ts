@@ -43,13 +43,22 @@ export const getServerGlobalConfig = async () => {
         enabledKey: 'ENABLED_AZURE_OPENAI',
         withDeploymentName: true,
       },
+      azureai: {
+        withDeploymentName: true,
+      },
       bedrock: {
         enabledKey: 'ENABLED_AWS_BEDROCK',
         modelListKey: 'AWS_BEDROCK_MODEL_LIST',
       },
+      deepseek: {
+        enabled: true,
+      },
       giteeai: {
         enabledKey: 'ENABLED_GITEE_AI',
         modelListKey: 'GITEE_AI_MODEL_LIST',
+      },
+      kimicodingplan: {
+        withDeploymentName: true,
       },
       lmstudio: {
         fetchOnClient: isDesktop ? false : undefined,
@@ -64,11 +73,17 @@ export const getServerGlobalConfig = async () => {
       qwen: {
         withDeploymentName: true,
       },
+      spark: {
+        withDeploymentName: true,
+      },
       tencentcloud: {
         enabledKey: 'ENABLED_TENCENT_CLOUD',
         modelListKey: 'TENCENT_CLOUD_MODEL_LIST',
       },
       volcengine: {
+        withDeploymentName: true,
+      },
+      volcenginecodingplan: {
         withDeploymentName: true,
       },
     }),
@@ -97,10 +112,8 @@ export const getServerGlobalConfig = async () => {
         }
       : undefined),
 
-    // Expose Agent Gateway URL to client when queue-based agent runtime is enabled
-    ...(appEnv.enableQueueAgentRuntime && appEnv.AGENT_GATEWAY_URL
-      ? { agentGatewayUrl: appEnv.AGENT_GATEWAY_URL }
-      : undefined),
+    // Expose Agent Gateway URL to client (used by hetero agents; also required for queue mode)
+    ...(appEnv.AGENT_GATEWAY_URL ? { agentGatewayUrl: appEnv.AGENT_GATEWAY_URL } : undefined),
 
     image: cleanObject({
       defaultImageNum: imageEnv.AI_IMAGE_DEFAULT_IMAGE_NUM,

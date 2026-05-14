@@ -176,6 +176,41 @@ describe('GeneralChatAgent', () => {
       });
     });
 
+    // Regression for LOBE-8696: when the LLM emits tool_calls whose names
+    // can't be resolved (e.g. `activateTools` instead of
+    // `lobe-activator____activateTools`), the agent used to silently finish
+    // with "completed without tool calls". Surface the unresolved names so
+    // dashboards can spot the regression.
+    it('should report unresolvable tool_calls in reasonDetail', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const state = createMockState();
+      const context = createMockContext('llm_result', {
+        hasToolsCalling: true,
+        toolsCalling: [],
+        parentMessageId: 'msg-1',
+        result: {
+          content: '',
+          tool_calls: [
+            { id: 't1', type: 'function', function: { name: 'activateTools', arguments: '{}' } },
+            { id: 't2', type: 'function', function: { name: 'activateSkill', arguments: '{}' } },
+          ],
+        },
+      });
+
+      const result = await agent.runner(context, state);
+
+      expect(result).toEqual({
+        type: 'finish',
+        reason: 'completed',
+        reasonDetail: 'LLM returned 2 unresolvable tool_calls: activateTools, activateSkill',
+      });
+    });
+
     it('should return call_tool for single tool that does not need intervention', async () => {
       const agent = new GeneralChatAgent({
         agentConfig: { maxSteps: 100 },
@@ -416,8 +451,8 @@ describe('GeneralChatAgent', () => {
   });
 
   describe('tool_result phase', () => {
-    describe('GTD async tasks', () => {
-      it('should return exec_task for single async task (execTask)', async () => {
+    describe('Lobe Agent sub-agents (execSubAgent state)', () => {
+      it('should return exec_sub_agent for single sub-agent (execSubAgent)', async () => {
         const agent = new GeneralChatAgent({
           agentConfig: { maxSteps: 100 },
           operationId: 'test-session',
@@ -430,7 +465,7 @@ describe('GeneralChatAgent', () => {
           stop: true,
           data: {
             state: {
-              type: 'execTask',
+              type: 'execSubAgent',
               parentMessageId: 'exec-parent-msg',
               task: { instruction: 'Do something async', timeout: 30000 },
             },
@@ -440,7 +475,7 @@ describe('GeneralChatAgent', () => {
         const result = await agent.runner(context, state);
 
         expect(result).toEqual({
-          type: 'exec_task',
+          type: 'exec_sub_agent',
           payload: {
             parentMessageId: 'exec-parent-msg',
             task: { instruction: 'Do something async', timeout: 30000 },
@@ -448,7 +483,7 @@ describe('GeneralChatAgent', () => {
         });
       });
 
-      it('should return exec_tasks for multiple async tasks (execTasks)', async () => {
+      it('should return exec_sub_agents for multiple sub-agents (execSubAgents)', async () => {
         const agent = new GeneralChatAgent({
           agentConfig: { maxSteps: 100 },
           operationId: 'test-session',
@@ -465,7 +500,7 @@ describe('GeneralChatAgent', () => {
           stop: true,
           data: {
             state: {
-              type: 'execTasks',
+              type: 'execSubAgents',
               parentMessageId: 'exec-parent-msg',
               tasks,
             },
@@ -475,7 +510,7 @@ describe('GeneralChatAgent', () => {
         const result = await agent.runner(context, state);
 
         expect(result).toEqual({
-          type: 'exec_tasks',
+          type: 'exec_sub_agents',
           payload: {
             parentMessageId: 'exec-parent-msg',
             tasks,
@@ -483,7 +518,7 @@ describe('GeneralChatAgent', () => {
         });
       });
 
-      it('should return exec_client_task for single client-side async task (execClientTask)', async () => {
+      it('should return exec_client_sub_agent for single client-side sub-agent (execClientSubAgent)', async () => {
         const agent = new GeneralChatAgent({
           agentConfig: { maxSteps: 100 },
           operationId: 'test-session',
@@ -496,7 +531,7 @@ describe('GeneralChatAgent', () => {
           stop: true,
           data: {
             state: {
-              type: 'execClientTask',
+              type: 'execClientSubAgent',
               parentMessageId: 'exec-parent-msg',
               task: { type: 'localFile', path: '/path/to/file' },
             },
@@ -506,7 +541,7 @@ describe('GeneralChatAgent', () => {
         const result = await agent.runner(context, state);
 
         expect(result).toEqual({
-          type: 'exec_client_task',
+          type: 'exec_client_sub_agent',
           payload: {
             parentMessageId: 'exec-parent-msg',
             task: { type: 'localFile', path: '/path/to/file' },
@@ -514,7 +549,7 @@ describe('GeneralChatAgent', () => {
         });
       });
 
-      it('should return exec_client_tasks for multiple client-side async tasks (execClientTasks)', async () => {
+      it('should return exec_client_sub_agents for multiple client-side sub-agents (execClientSubAgents)', async () => {
         const agent = new GeneralChatAgent({
           agentConfig: { maxSteps: 100 },
           operationId: 'test-session',
@@ -531,7 +566,7 @@ describe('GeneralChatAgent', () => {
           stop: true,
           data: {
             state: {
-              type: 'execClientTasks',
+              type: 'execClientSubAgents',
               parentMessageId: 'exec-parent-msg',
               tasks,
             },
@@ -541,7 +576,7 @@ describe('GeneralChatAgent', () => {
         const result = await agent.runner(context, state);
 
         expect(result).toEqual({
-          type: 'exec_client_tasks',
+          type: 'exec_client_sub_agents',
           payload: {
             parentMessageId: 'exec-parent-msg',
             tasks,
@@ -549,7 +584,7 @@ describe('GeneralChatAgent', () => {
         });
       });
 
-      it('should not trigger exec_task when stop is false', async () => {
+      it('should not trigger exec_sub_agent when stop is false', async () => {
         const agent = new GeneralChatAgent({
           agentConfig: { maxSteps: 100 },
           operationId: 'test-session',
@@ -565,10 +600,10 @@ describe('GeneralChatAgent', () => {
         });
         const context = createMockContext('tool_result', {
           parentMessageId: 'tool-msg-1',
-          stop: false, // stop is false, should not trigger exec_task
+          stop: false, // stop is false, should not trigger exec_sub_agent
           data: {
             state: {
-              type: 'execTask',
+              type: 'execSubAgent',
               parentMessageId: 'exec-parent-msg',
               task: { instruction: 'Do something async' },
             },
@@ -577,7 +612,7 @@ describe('GeneralChatAgent', () => {
 
         const result = await agent.runner(context, state);
 
-        // Should return call_llm instead of exec_task
+        // Should return call_llm instead of exec_sub_agent
         expect(result).toEqual({
           type: 'call_llm',
           payload: {
@@ -590,7 +625,7 @@ describe('GeneralChatAgent', () => {
         });
       });
 
-      it('should not trigger exec_task when data.state is undefined', async () => {
+      it('should not trigger exec_sub_agent when data.state is undefined', async () => {
         const agent = new GeneralChatAgent({
           agentConfig: { maxSteps: 100 },
           operationId: 'test-session',
@@ -612,7 +647,7 @@ describe('GeneralChatAgent', () => {
 
         const result = await agent.runner(context, state);
 
-        // Should return call_llm instead of exec_task
+        // Should return call_llm instead of exec_sub_agent
         expect(result).toEqual({
           type: 'call_llm',
           payload: {
@@ -1467,7 +1502,7 @@ describe('GeneralChatAgent', () => {
     });
   });
 
-  describe('task_result phase (single task)', () => {
+  describe('sub_agent_result phase (single sub-agent)', () => {
     it('should return call_llm when task completed', async () => {
       const agent = new GeneralChatAgent({
         agentConfig: { maxSteps: 100 },
@@ -1483,7 +1518,7 @@ describe('GeneralChatAgent', () => {
         ] as any,
       });
 
-      const context = createMockContext('task_result', {
+      const context = createMockContext('sub_agent_result', {
         parentMessageId: 'task-parent-msg',
         result: {
           success: true,
@@ -1522,7 +1557,7 @@ describe('GeneralChatAgent', () => {
         ] as any,
       });
 
-      const context = createMockContext('task_result', {
+      const context = createMockContext('sub_agent_result', {
         parentMessageId: 'task-parent-msg',
         result: {
           success: false,
@@ -1557,7 +1592,7 @@ describe('GeneralChatAgent', () => {
         ] as any,
       });
 
-      const context = createMockContext('task_result', {
+      const context = createMockContext('sub_agent_result', {
         parentMessageId: 'task-parent-msg',
       });
 
@@ -1567,7 +1602,7 @@ describe('GeneralChatAgent', () => {
     });
   });
 
-  describe('tasks_batch_result phase (multiple tasks)', () => {
+  describe('sub_agents_batch_result phase (multiple sub-agents)', () => {
     it('should return call_llm when tasks completed', async () => {
       const agent = new GeneralChatAgent({
         agentConfig: { maxSteps: 100 },
@@ -1584,7 +1619,7 @@ describe('GeneralChatAgent', () => {
         ] as any,
       });
 
-      const context = createMockContext('tasks_batch_result', {
+      const context = createMockContext('sub_agents_batch_result', {
         parentMessageId: 'task-parent-msg',
         results: [
           { success: true, taskMessageId: 'task-1', threadId: 'thread-1', result: 'Task 1 result' },
@@ -1629,7 +1664,7 @@ describe('GeneralChatAgent', () => {
         ] as any,
       });
 
-      const context = createMockContext('tasks_batch_result', {
+      const context = createMockContext('sub_agents_batch_result', {
         parentMessageId: 'task-parent-msg',
         results: [
           { success: true, taskMessageId: 'task-1', threadId: 'thread-1', result: 'Task 1 result' },
@@ -1675,7 +1710,7 @@ describe('GeneralChatAgent', () => {
         ] as any,
       });
 
-      const context = createMockContext('tasks_batch_result', {
+      const context = createMockContext('sub_agents_batch_result', {
         parentMessageId: 'task-parent-msg',
       });
 

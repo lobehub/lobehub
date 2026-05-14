@@ -13,7 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
 import { autoUpdateService } from '@/services/electron/autoUpdate';
-import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
+import { useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors, preferenceSelectors, settingsSelectors } from '@/store/user/selectors';
 
@@ -35,22 +35,15 @@ const Page = memo(() => {
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
   const [loading, setLoading] = useState(false);
 
-  const [
-    isPreferenceInit,
-    enableAgentSelfIteration,
-    enableInputMarkdown,
-    enableGatewayMode,
-    updateLab,
-  ] = useUserStore((s) => [
-    preferenceSelectors.isPreferenceInit(s),
-    labPreferSelectors.enableAgentSelfIteration(s),
-    labPreferSelectors.enableInputMarkdown(s),
-    labPreferSelectors.enableGatewayMode(s),
-    s.updateLab,
-  ]);
+  const [isPreferenceInit, enableInputMarkdown, enableGatewayMode, updateLab] = useUserStore(
+    (s) => [
+      preferenceSelectors.isPreferenceInit(s),
+      labPreferSelectors.enableInputMarkdown(s),
+      labPreferSelectors.enableGatewayMode(s),
+      s.updateLab,
+    ],
+  );
 
-  const { enableAgentSelfIteration: canShowAgentSelfIterationLab } =
-    useServerConfigStore(featureFlagsSelectors);
   const hasGatewayUrl = useServerConfigStore((s) => !!s.serverConfig.agentGatewayUrl);
 
   const [channel, setChannel] = useState<UpdateChannelValue>('stable');
@@ -104,31 +97,7 @@ const Page = memo(() => {
   };
 
   const labItems: FormItemProps[] = [
-    ...(canShowAgentSelfIterationLab
-      ? [
-          {
-            children: (
-              <Switch
-                checked={enableAgentSelfIteration}
-                loading={!isPreferenceInit}
-                onChange={(checked: boolean) => updateLab({ enableAgentSelfIteration: checked })}
-              />
-            ),
-            className: styles.labItem,
-            desc: tLabs('features.agentSelfIteration.desc'),
-            label: tLabs('features.agentSelfIteration.title'),
-            minWidth: undefined,
-          } satisfies FormItemProps,
-        ]
-      : []),
     {
-      avatar: (
-        <img
-          alt={tLabs('features.inputMarkdown.title')}
-          src="https://github.com/user-attachments/assets/0527a966-3d95-46b4-b880-c0f3fca18f02"
-          style={{ borderRadius: 8, height: 72, marginRight: 12, objectFit: 'cover', width: 120 }}
-        />
-      ),
       children: (
         <Switch
           checked={enableInputMarkdown}

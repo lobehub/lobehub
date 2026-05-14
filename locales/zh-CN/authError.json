@@ -27,6 +27,7 @@
   "codes.RATE_LIMIT_EXCEEDED": "请求过于频繁，请稍后再试",
   "codes.SESSION_EXPIRED": "会话已过期，请重新登录",
   "codes.SOCIAL_ACCOUNT_ALREADY_LINKED": "这个社交账号已被其他用户绑定，请使用其他账号",
+  "codes.TEMPORARY_EMAIL_NOT_ALLOWED": "不支持临时邮箱地址。请使用常规邮箱地址。多次尝试可能会导致此网络被封锁。",
   "codes.UNEXPECTED_ERROR": "遇到一点意外情况。你可以重试，或稍后再试",
   "codes.UNKNOWN": "遇到未识别的问题。你可以重试，或复制错误信息联系支持",
   "codes.USER_ALREADY_EXISTS": "该用户已存在，请直接登录",

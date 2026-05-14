@@ -1,7 +1,4 @@
-import {
-  DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
-  DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM,
-} from '@lobechat/const';
+import { DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM } from '@lobechat/const';
 import { ModelRuntime } from '@lobechat/model-runtime';
 import { and, eq, inArray } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
@@ -12,6 +9,7 @@ import { userMemories } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
 import { selectNonVectorColumns } from '@/database/utils/columns';
 import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
+import { embedUserMemoryTexts } from '@/server/services/memory/userMemory/embedding';
 import { LayersEnum } from '@/types/userMemory';
 
 const bodySchema = z.object({
@@ -65,12 +63,13 @@ export const POST = async (req: Request) => {
       },
     );
 
-    const [embedding] =
-      (await runtime.embeddings({
-        dimensions: DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
-        input: parsed.query,
-        model: config.embedding.model,
-      })) || [];
+    const [embedding] = await embedUserMemoryTexts({
+      input: [parsed.query],
+      model: config.embedding.model,
+      runtime,
+      source: 'dev:locomo.search',
+      userId,
+    });
 
     if (!embedding) {
       return NextResponse.json(

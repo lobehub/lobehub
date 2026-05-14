@@ -11,6 +11,36 @@ import type { LobeChatDatabase } from '../type';
  */
 const GLOBAL_TENANT_ID = '';
 
+/**
+ * Thrown by `upsertForPlatform` when the IM identity is already bound to a
+ * different LobeHub user. Callers (e.g. the messenger router) should surface
+ * a friendly 409 — never let the underlying DB unique-index error escape.
+ */
+export class MessengerAccountLinkConflictError extends Error {
+  readonly code = 'MESSENGER_ACCOUNT_LINK_CONFLICT' as const;
+  readonly existingUserId: string;
+
+  constructor(existingUserId: string, message?: string) {
+    super(message ?? 'IM identity is already linked to another LobeHub user');
+    this.name = 'MessengerAccountLinkConflictError';
+    this.existingUserId = existingUserId;
+  }
+}
+
+/**
+ * Thrown when the same LobeHub user already has a different IM identity bound
+ * for the requested `(platform, tenant)` scope and must explicitly unlink
+ * before switching accounts.
+ */
+export class MessengerAccountLinkRelinkRequiredError extends Error {
+  readonly code = 'MESSENGER_ACCOUNT_LINK_RELINK_REQUIRED' as const;
+
+  constructor(message?: string) {
+    super(message ?? 'Existing messenger link must be unlinked before re-linking');
+    this.name = 'MessengerAccountLinkRelinkRequiredError';
+  }
+}
+
 export class MessengerAccountLinkModel {
   private userId: string;
   private db: LobeChatDatabase;
@@ -24,14 +54,19 @@ export class MessengerAccountLinkModel {
 
   /**
    * Insert or update the user's link for `(platform, tenantId)`. Used by the
-   * verify-im confirm flow — if the user re-links the same Telegram account
-   * they keep the same row; if they link a different IM account in the same
-   * `(platform, tenant)` the existing row is overwritten (one IM account per
-   * `(user, platform, tenant)`).
+   * verify-im confirm flow — if the user re-asserts the same IM identity they
+   * keep the same row, but switching to a different IM identity in the same
+   * `(platform, tenant)` requires an explicit unlink first.
    *
    * For Telegram (and any global-bot platform), `tenantId` is omitted /
    * defaults to the empty string, which collapses the new 3-column index
    * back to the original `(user, platform)` semantic.
+   *
+   * Resolution order is `(platform, tenant, platformUserId)` first, then
+   * `(user, platform, tenant)` — so we never let the
+   * `messenger_account_links_platform_tenant_user_unique` constraint surface
+   * as an opaque DB error when the IM identity is already owned by another
+   * LobeHub user; we throw `MessengerAccountLinkConflictError` instead.
    *
    * Returns the resulting link row.
    */
@@ -39,27 +74,88 @@ export class MessengerAccountLinkModel {
     params: Omit<NewMessengerAccountLink, 'userId' | 'id'>,
   ): Promise<MessengerAccountLinkItem> => {
     const tenantId = params.tenantId ?? GLOBAL_TENANT_ID;
-    const existing = await this.findByPlatform(params.platform, tenantId);
+    const now = new Date();
 
-    if (existing) {
+    // Try to claim the `(user, platform, tenant)` scope first. This prevents
+    // concurrent verify-im confirmations from both observing "no row" and
+    // then silently overwriting one another in a later update path.
+    try {
+      const [created] = await this.db
+        .insert(messengerAccountLinks)
+        .values({
+          ...params,
+          tenantId,
+          updatedAt: now,
+          userId: this.userId,
+        })
+        .onConflictDoNothing({
+          target: [
+            messengerAccountLinks.userId,
+            messengerAccountLinks.platform,
+            messengerAccountLinks.tenantId,
+          ],
+        })
+        .returning();
+
+      if (created) return created;
+    } catch (error) {
+      const pgError = error as { cause?: { code?: string; constraint?: string }; code?: string };
+      const code = pgError.cause?.code ?? pgError.code;
+      const constraint = pgError.cause?.constraint;
+
+      if (
+        code !== '23505' &&
+        constraint !== 'messenger_account_links_platform_tenant_user_unique'
+      ) {
+        throw error;
+      }
+    }
+
+    // Resolve by IM identity after the insert attempt. This catches both the
+    // steady-state refresh path and races where another request/user inserted
+    // before us.
+    const byIdentity = await MessengerAccountLinkModel.findByPlatformUser(
+      this.db,
+      params.platform,
+      params.platformUserId,
+      tenantId,
+    );
+
+    if (byIdentity) {
+      if (byIdentity.userId !== this.userId) {
+        throw new MessengerAccountLinkConflictError(byIdentity.userId);
+      }
       const [updated] = await this.db
         .update(messengerAccountLinks)
         .set({
-          activeAgentId: params.activeAgentId ?? existing.activeAgentId,
-          platformUserId: params.platformUserId,
+          activeAgentId: params.activeAgentId ?? byIdentity.activeAgentId,
           platformUsername: params.platformUsername ?? null,
-          updatedAt: new Date(),
+          updatedAt: now,
         })
-        .where(eq(messengerAccountLinks.id, existing.id))
+        .where(eq(messengerAccountLinks.id, byIdentity.id))
         .returning();
       return updated;
     }
 
-    const [created] = await this.db
-      .insert(messengerAccountLinks)
-      .values({ ...params, tenantId, userId: this.userId })
-      .returning();
-    return created;
+    const existingForUser = await this.findByPlatform(params.platform, tenantId);
+    if (existingForUser) {
+      if (existingForUser.platformUserId !== params.platformUserId) {
+        throw new MessengerAccountLinkRelinkRequiredError();
+      }
+
+      const [updated] = await this.db
+        .update(messengerAccountLinks)
+        .set({
+          activeAgentId: params.activeAgentId ?? existingForUser.activeAgentId,
+          platformUsername: params.platformUsername ?? null,
+          updatedAt: now,
+        })
+        .where(eq(messengerAccountLinks.id, existingForUser.id))
+        .returning();
+      return updated;
+    }
+
+    throw new Error('MessengerAccountLink upsert could not resolve the final row state');
   };
 
   delete = async (id: string) => {

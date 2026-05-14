@@ -15,6 +15,7 @@ import { type ToolsEngine } from '@lobechat/context-engine';
 import { buildTaskDetailPrompt, buildTaskListPrompt } from '@lobechat/prompts';
 import {
   type ConversationContext,
+  type MessageMetadata,
   type RuntimeInitialContext,
   type UIChatMessage,
 } from '@lobechat/types';
@@ -33,6 +34,7 @@ import { aiModelSelectors } from '@/store/aiInfra/selectors';
 import { getAiInfraStoreState } from '@/store/aiInfra/store';
 import { createAgentExecutors } from '@/store/chat/agents/createAgentExecutors';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/aiChat/actions/agentSignalBridge';
+import { type OperationStatus } from '@/store/chat/slices/operation/types';
 import { type ChatStore, useChatStore } from '@/store/chat/store';
 import {
   notifyDesktopHumanApprovalRequired,
@@ -86,6 +88,59 @@ const getVisualMediaAvailability = (messages: UIChatMessage[]) => ({
 });
 
 /**
+ * Normalizes AgentRuntime terminal status into client runtime completion status.
+ *
+ * Before:
+ * - "done"
+ * - "waiting_for_human"
+ *
+ * After:
+ * - "completed"
+ * - "cancelled"
+ */
+const normalizeClientRuntimeCompleteStatus = (
+  runtimeStatus: AgentState['status'],
+  operationStatus?: OperationStatus,
+): 'cancelled' | 'completed' | 'failed' | undefined => {
+  if (operationStatus === 'cancelled') return 'cancelled';
+  if (operationStatus === 'failed') return 'failed';
+  if (runtimeStatus === 'waiting_for_human') return 'cancelled';
+  if (operationStatus === 'completed') return 'completed';
+  if (runtimeStatus === 'done') return 'completed';
+  if (runtimeStatus === 'error' || runtimeStatus === 'interrupted') return 'failed';
+  return undefined;
+};
+
+const findCompletionAssistantMessageId = (
+  messages: UIChatMessage[],
+  parentMessageId: string,
+  parentMessageType: 'user' | 'assistant' | 'tool',
+) => {
+  const messagesById = new Map(messages.map((message) => [message.id, message]));
+  const parentMessage = messagesById.get(parentMessageId);
+  const isDescendantOfParent = (message: UIChatMessage) => {
+    let currentParentId = message.parentId;
+    const visited = new Set<string>();
+
+    while (currentParentId && !visited.has(currentParentId)) {
+      if (currentParentId === parentMessageId) return true;
+      visited.add(currentParentId);
+      currentParentId = messagesById.get(currentParentId)?.parentId;
+    }
+
+    return false;
+  };
+
+  return (
+    messages.findLast((message) => message.role === 'assistant' && isDescendantOfParent(message))
+      ?.id ??
+    (parentMessageType === 'assistant' && parentMessage?.role === 'assistant'
+      ? parentMessage.id
+      : undefined)
+  );
+};
+
+/**
  * Core streaming execution actions for AI chat
  */
 
@@ -115,7 +170,7 @@ export class StreamingExecutorActionImpl {
     initialContext,
     operationId,
     subAgentId: paramSubAgentId,
-    isSubTask,
+    isSubAgent,
   }: {
     messages: UIChatMessage[];
     parentMessageId: string;
@@ -132,7 +187,7 @@ export class StreamingExecutorActionImpl {
      * - scope: 'sub_agent': Used for agent config but doesn't change message ownership
      */
     subAgentId?: string;
-    isSubTask?: boolean;
+    isSubAgent?: boolean;
   }): {
     state: AgentState;
     context: AgentRuntimeContext;
@@ -157,13 +212,13 @@ export class StreamingExecutorActionImpl {
 
     // Resolve agent config with builtin agent runtime config merged
     // This ensures runtime plugins (e.g., 'lobe-agent-builder' for Agent Builder) are included
-    // - isSubTask: filters out lobe-gtd tools to prevent nested sub-task creation
+    // - isSubAgent: filters out lobe-agent tool to prevent nested sub-agent creation
     // - disableTools: clears all plugins for broadcast scenarios
     const agentConfig = resolveAgentConfig({
       agentId: effectiveAgentId || '',
       disableTools, // Clear plugins for broadcast scenarios
       groupId, // Pass groupId for supervisor detection
-      isSubTask, // Filter out lobe-gtd in sub-task context
+      isSubAgent, // Filter out lobe-agent in sub-agent context
       scope, // Pass scope from operation context
     });
 
@@ -204,9 +259,9 @@ export class StreamingExecutorActionImpl {
         : effectivePluginIds;
 
     log(
-      '[internal_createAgentState] resolved plugins=%o, isSubTask=%s, disableTools=%s, hasTopicReference=%s',
+      '[internal_createAgentState] resolved plugins=%o, isSubAgent=%s, disableTools=%s, hasTopicReference=%s',
       effectivePluginIds,
-      isSubTask,
+      isSubAgent,
       disableTools,
       hasTopicReference,
     );
@@ -419,13 +474,14 @@ export class StreamingExecutorActionImpl {
     initialContext?: AgentRuntimeContext;
     initialState?: AgentState;
     inPortalThread?: boolean;
+    metadata?: Pick<MessageMetadata, 'trigger'>;
     messages: UIChatMessage[];
     operationId?: string;
     parentMessageId: string;
     parentMessageType: 'user' | 'assistant' | 'tool';
     parentOperationId?: string;
     skipCreateFirstMessage?: boolean;
-    isSubTask?: boolean;
+    isSubAgent?: boolean;
   }): Promise<{ cost?: Cost; usage?: Usage } | void> => {
     const {
       disableTools,
@@ -433,7 +489,7 @@ export class StreamingExecutorActionImpl {
       parentMessageId,
       parentMessageType,
       context,
-      isSubTask,
+      isSubAgent,
     } = params;
 
     // Extract values from context
@@ -500,7 +556,7 @@ export class StreamingExecutorActionImpl {
     // ===========================================
     // Step 1: Create Agent State (resolves config once)
     // ===========================================
-    // agentConfig contains isSubTask filtering and is passed to callLLM executor
+    // agentConfig already has isSubAgent filtering applied and is passed to callLLM executor
     const {
       state: initialAgentState,
       context: initialAgentContext,
@@ -517,7 +573,7 @@ export class StreamingExecutorActionImpl {
       initialContext: params.initialContext,
       operationId,
       subAgentId, // Pass subAgentId for agent config retrieval (behavior depends on scope)
-      isSubTask, // Pass isSubTask to filter out lobe-gtd tools in sub-task context
+      isSubAgent, // Pass isSubAgent to filter out lobe-agent tool in sub-agent context
     });
 
     // Use model/provider from resolved agentConfig
@@ -556,6 +612,7 @@ export class StreamingExecutorActionImpl {
       executors: createAgentExecutors({
         agentConfig, // Pass pre-resolved config to callLLM executor
         get: this.#get,
+        metadata: params.metadata,
         messageKey,
         operationId,
         parentId: params.parentMessageId,
@@ -580,6 +637,31 @@ export class StreamingExecutorActionImpl {
 
     // Compute contextKey for message queue (per-context, not per-operation)
     const contextKey = messageKey;
+
+    const emitRuntimeCompleteSource = () => {
+      const finalMessages = this.#get().messagesMap[messageKey] || [];
+      const assistantMessageId =
+        findCompletionAssistantMessageId(finalMessages, parentMessageId, parentMessageType) ??
+        findCompletionAssistantMessageId(
+          this.#get().dbMessagesMap[messageKey] || [],
+          parentMessageId,
+          parentMessageType,
+        );
+      const operationStatus = this.#get().operations[operationId]?.status;
+
+      void emitClientAgentSignalSourceEvent({
+        payload: {
+          agentId,
+          assistantMessageId,
+          operationId,
+          status: normalizeClientRuntimeCompleteStatus(state.status, operationStatus),
+          threadId: threadId ?? undefined,
+          topicId: topicId ?? undefined,
+        },
+        sourceId: `${operationId}:client:complete`,
+        sourceType: 'client.runtime.complete',
+      });
+    };
 
     // Execute the agent runtime loop
     let stepCount = 0;
@@ -663,7 +745,7 @@ export class StreamingExecutorActionImpl {
       // REMEMBER: There is no test for it (too hard to add), if you want to change it , ask @arvinxx first
       if (
         result.nextContext?.phase &&
-        ['tasks_batch_result', 'tools_batch_result'].includes(result.nextContext?.phase)
+        ['sub_agents_batch_result', 'tools_batch_result'].includes(result.nextContext?.phase)
       ) {
         log(
           `[executeClientAgent] ${result.nextContext?.phase} completed, refreshing messages to sync state`,
@@ -788,6 +870,8 @@ export class StreamingExecutorActionImpl {
           this.#get().markUnreadCompleted(completedOp.context.agentId, completedOp.context.topicId);
         }
 
+        emitRuntimeCompleteSource();
+
         const execContext = { ...context };
         const mergedContent = merged.content;
         // Rebuild UploadFileItem-shaped objects from the queued file previews so
@@ -851,17 +935,7 @@ export class StreamingExecutorActionImpl {
     }
 
     log('[executeClientAgent] completed');
-    void emitClientAgentSignalSourceEvent({
-      payload: {
-        agentId,
-        operationId,
-        status: state.status,
-        threadId: threadId ?? undefined,
-        topicId: topicId ?? undefined,
-      },
-      sourceId: `${operationId}:client:complete`,
-      sourceType: 'client.runtime.complete',
-    });
+    emitRuntimeCompleteSource();
 
     // Desktop notification (if not in tools calling mode)
     if (isDesktop) {

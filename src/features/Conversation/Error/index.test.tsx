@@ -153,6 +153,38 @@ describe('ErrorMessageExtra', () => {
     expect(screen.getByText('guide:claude-code:rate_limit')).toBeInTheDocument();
   });
 
+  it('renders the heterogeneous guide from the session body without relying on the top-level error type', () => {
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'response.ServerAgentRuntimeError' }}
+        data={{
+          error: {
+            body: {
+              agentType: 'claude-code',
+              clearEchoedContent: true,
+              code: HeterogeneousAgentSessionErrorCode.RateLimit,
+              message: "You've hit your limit · resets May 17 at 2am (Asia/Shanghai)",
+              rateLimitInfo: {
+                isUsingOverage: false,
+                overageDisabledReason: 'org_level_disabled',
+                overageStatus: 'rejected',
+                rateLimitType: 'seven_day',
+                resetsAt: 1778954400,
+                status: 'rejected',
+              },
+              stderr: "You've hit your limit · resets May 17 at 2am (Asia/Shanghai)",
+            },
+            message: "You've hit your limit · resets May 17 at 2am (Asia/Shanghai)",
+            type: 'ServerAgentRuntimeError',
+          } as any,
+          id: 'msg-rate-limit-wrapped',
+        }}
+      />,
+    );
+
+    expect(screen.getByText('guide:claude-code:rate_limit')).toBeInTheDocument();
+  });
+
   it('falls back to the raw error message instead of rendering a blank block', () => {
     render(
       <ErrorMessageExtra

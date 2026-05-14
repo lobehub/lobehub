@@ -11,6 +11,11 @@ import { setNamespace } from '@/utils/storeDebug';
 const n = setNamespace('recent');
 
 const FETCH_RECENTS_KEY = 'fetchRecents';
+// Mirror the home Daily Brief / task detail polling cadence so users see new
+// items, status transitions (incl. backlog/paused → running which the per-item
+// task.detail poll never caught) without manual refresh. SWR pauses when the
+// tab is backgrounded.
+const RECENTS_REFRESH_INTERVAL = 10_000;
 /** SWR key prefix for `AllRecentsDrawer` (`['allRecents', open]`) */
 export const ALL_RECENTS_DRAWER_SWR_PREFIX = 'allRecents';
 
@@ -61,6 +66,7 @@ export class RecentActionImpl {
 
           this.#set({ isRecentsInit: true, recents: data }, false, n('useFetchRecents/onData'));
         },
+        refreshInterval: RECENTS_REFRESH_INTERVAL,
       },
     );
   };

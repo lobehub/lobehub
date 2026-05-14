@@ -45,6 +45,14 @@ export interface AgentHookEvent {
 
   errorMessage?: string;
 
+  /**
+   * Stable error code (e.g. `NoAvailableProvider`, `InvalidProviderAPIKey`).
+   * Populated when the underlying error carries an `errorType` from
+   * `AgentRuntimeError.chat`. Hooks should switch on this code rather than
+   * pattern-matching `errorMessage`, which is free-form text.
+   */
+  errorType?: string;
+
   /** Step execution time in ms (afterStep only) */
   executionTimeMs?: number;
   /**

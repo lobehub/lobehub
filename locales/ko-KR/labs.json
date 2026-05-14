@@ -9,5 +9,7 @@
   "features.groupChat.title": "그룹 채팅 (다중 도우미)",
   "features.inputMarkdown.desc": "입력 영역에서 실시간으로 Markdown을 렌더링합니다 (굵은 글씨, 코드 블록, 표 등).",
   "features.inputMarkdown.title": "입력창 Markdown 렌더링",
+  "features.messenger.desc": "Telegram(및 기타 메신저)을 통해 공유된 LobeHub 봇으로 에이전트와 대화하세요. 계정을 연결하고 메시지를 받을 에이전트를 선택할 수 있는 설정의 메신저 탭이 추가됩니다.",
+  "features.messenger.title": "메신저",
   "title": "실험실"
 }

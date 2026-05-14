@@ -9,6 +9,7 @@ import RingLoadingIcon from '@/components/RingLoading';
 import { electronGitService } from '@/services/electron/git';
 import { electronSystemService } from '@/services/electron/system';
 import { useGlobalStore } from '@/store/global';
+import { systemStatusSelectors } from '@/store/global/selectors';
 
 import BranchSwitcher from './BranchSwitcher';
 import { useGitAheadBehind } from './useGitAheadBehind';
@@ -149,6 +150,8 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub }) => {
   const [pushing, setPushing] = useState(false);
   const toggleRightPanel = useGlobalStore((s) => s.toggleRightPanel);
   const setWorkingSidebarTab = useGlobalStore((s) => s.setWorkingSidebarTab);
+  const showRightPanel = useGlobalStore(systemStatusSelectors.showRightPanel);
+  const workingSidebarTab = useGlobalStore((s) => s.status.workingSidebarTab);
 
   const handleOpenPr = useCallback(() => {
     if (data?.pullRequest?.url) {
@@ -156,10 +159,14 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub }) => {
     }
   }, [data?.pullRequest?.url]);
 
-  const handleOpenReview = useCallback(() => {
+  const handleToggleReview = useCallback(() => {
+    if (showRightPanel && workingSidebarTab === 'review') {
+      toggleRightPanel(false);
+      return;
+    }
     setWorkingSidebarTab('review');
     toggleRightPanel(true);
-  }, [setWorkingSidebarTab, toggleRightPanel]);
+  }, [showRightPanel, workingSidebarTab, setWorkingSidebarTab, toggleRightPanel]);
 
   const refreshAfterSync = useCallback(async () => {
     await Promise.all([mutate(), mutateWorkingStatus(), mutateAheadBehind()]);
@@ -322,7 +329,7 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub }) => {
   const diffNode = (() => {
     if (!hasChanges || !workingStatus) return null;
     const diffButton = (
-      <div className={styles.trigger} role="button" onClick={handleOpenReview}>
+      <div className={styles.trigger} role="button" onClick={handleToggleReview}>
         <span className={styles.diffStat}>
           {workingStatus.added > 0 && (
             <span className={styles.diffStatAdded}>+{workingStatus.added}</span>

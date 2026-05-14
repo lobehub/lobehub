@@ -28,8 +28,8 @@ const FollowUpChips = memo<FollowUpChipsProps>(({ messageId, topicId }) => {
     [childIdsKey, messageId, topicId],
   );
   const chips = useFollowUpActionStore(selector);
-  const consume = useFollowUpActionStore((s) => s.consume);
-  const sendMessage = useConversationStore((s) => s.sendMessage);
+  const updateInputMessage = useConversationStore((s) => s.updateInputMessage);
+  const editor = useConversationStore((s) => s.editor);
   // Hide chips while the bound group/message is still being generated — chips
   // are only valid for a fully settled assistant turn.
   const isGenerating = useConversationStore(
@@ -38,10 +38,13 @@ const FollowUpChips = memo<FollowUpChipsProps>(({ messageId, topicId }) => {
 
   const handleClick = useCallback(
     (chip: FollowUpChip) => {
-      consume(chip);
-      void sendMessage({ message: chip.message });
+      updateInputMessage('');
+      editor?.setDocument('text', '');
+      updateInputMessage(chip.message);
+      editor?.setDocument('text', chip.message);
+      editor?.focus();
     },
-    [consume, sendMessage],
+    [updateInputMessage, editor],
   );
 
   if (chips.length === 0 || isGenerating) return null;

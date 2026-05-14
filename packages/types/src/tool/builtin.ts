@@ -469,7 +469,7 @@ export interface BuiltinToolContext {
 
   /**
    * Step context computed at the beginning of each step
-   * Contains dynamic state like GTD todos that changes between steps
+   * Contains dynamic state like lobe-agent todos that changes between steps
    * Computed by AgentRuntime and passed to Tool Executors
    */
   stepContext?: RuntimeStepContext;
@@ -478,6 +478,11 @@ export interface BuiltinToolContext {
    * Current task identifier or database id when the conversation is scoped to a task detail page.
    */
   taskId?: string | null;
+
+  /**
+   * The tool call ID from the assistant message.
+   */
+  toolCallId?: string;
 
   /**
    * The current topic ID (only available when operating within a topic)

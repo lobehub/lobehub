@@ -65,7 +65,8 @@ export default {
   'betterAuth.captcha.continue': 'Continue',
   'betterAuth.captcha.description':
     'Complete the security verification below. We will continue your sign up or sign in automatically.',
-  'betterAuth.captcha.pendingDescription': 'Please complete the verification first, then continue.',
+  'betterAuth.captcha.pendingDescription':
+    'Verification did not complete. Please try the challenge again.',
   'betterAuth.captcha.title': 'Security verification required',
   'betterAuth.signin.backToEmail': 'Back to change email',
   'betterAuth.signin.continueWithApple': 'Continue with Apple',

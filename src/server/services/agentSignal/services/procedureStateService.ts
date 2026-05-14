@@ -1,4 +1,8 @@
 import {
+  readRecordedSkillIntent,
+  recordSkillIntent,
+} from '../policies/analyzeIntent/skillIntentRecord';
+import {
   appendAndScoreProcedureAccumulatorRecord,
   appendProcedureAccumulatorRecord,
 } from '../procedure/accumulators/procedure';
@@ -13,6 +17,10 @@ import { appendProcedureReceipt } from '../procedure/receipt';
 import { writeProcedureRecordField } from '../procedure/record';
 import type { AgentSignalPolicyStateStore } from '../store/types';
 import type { ProcedureStateService } from './types';
+
+type ProcedureStateServiceWithSkillIntentRecords = ProcedureStateService & {
+  skillIntentRecords: NonNullable<ProcedureStateService['skillIntentRecords']>;
+};
 
 /**
  * Input for creating the procedure state facade.
@@ -41,7 +49,7 @@ export interface CreateProcedureStateServiceInput {
  */
 export const createProcedureStateService = (
   input: CreateProcedureStateServiceInput,
-): ProcedureStateService => {
+): ProcedureStateServiceWithSkillIntentRecords => {
   const now = input.now ?? (() => Date.now());
   const inspector = new AgentSignalProcedureInspector(input.policyStateStore);
 
@@ -56,6 +64,15 @@ export const createProcedureStateService = (
     },
     inspect: {
       scope: (scopeKey) => inspector.inspectScope(scopeKey),
+    },
+    skillIntentRecords: {
+      read: (recordInput) => readRecordedSkillIntent(input.policyStateStore, recordInput),
+      write: (record) =>
+        recordSkillIntent(input.policyStateStore, {
+          record,
+          scopeKey: record.scopeKey,
+          ttlSeconds: input.ttlSeconds,
+        }),
     },
     markers: {
       shouldSuppress: async (markerInput) => {

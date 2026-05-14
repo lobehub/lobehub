@@ -17,13 +17,34 @@ const anthropicBaseURL = 'https://api.deepseek.com/anthropic';
 vi.spyOn(console, 'error').mockImplementation(() => {});
 
 describe('LobeDeepSeekAI', () => {
-  const resolveRouter = async (baseURL?: string) => {
-    const runtime = new LobeDeepSeekAI({
+  const createRuntime = ({
+    baseURL,
+    sdkType,
+  }: {
+    baseURL?: string;
+    sdkType?: string;
+  } = {}) =>
+    new LobeDeepSeekAI({
       apiKey: 'test',
       ...(baseURL ? { baseURL } : {}),
+      ...(sdkType ? { sdkType } : {}),
     });
 
+  const resolveRouter = async (baseURL?: string, sdkType?: string) => {
+    const runtime = createRuntime({ baseURL, sdkType });
+
     return (runtime as any).resolveMatchedRouter('deepseek-v4-pro');
+  };
+
+  const resolveFirstRouterOption = async (baseURL: string, sdkType: string) => {
+    const runtime = createRuntime({ baseURL, sdkType });
+    const router = await (runtime as any).resolveMatchedRouter('deepseek-v4-pro');
+    const routerOptions = (runtime as any).normalizeRouterOptions(router);
+
+    return {
+      option: routerOptions[0],
+      router,
+    };
   };
 
   describe('RouterRuntime baseURL routing', () => {
@@ -60,6 +81,50 @@ describe('LobeDeepSeekAI', () => {
 
       expect(router.apiType).toBe('deepseek');
       expect(router.id).toBe('openai-compatible');
+    });
+
+    it('should route to Anthropic format when sdkType is anthropic', async () => {
+      const router = await resolveRouter('https://aihubmix.com/v1/messages', 'anthropic');
+
+      expect(router.apiType).toBe('deepseek');
+      expect(router.id).toBe('anthropic-compatible');
+    });
+
+    it('should normalize /v1/messages before creating an Anthropic SDK runtime', async () => {
+      const { option } = await resolveFirstRouterOption(
+        'https://aihubmix.com/v1/messages',
+        'anthropic',
+      );
+      const runtime = new LobeDeepSeekAnthropicAI({ apiKey: 'test', baseURL: option.baseURL });
+
+      expect(option.baseURL).toBe('https://aihubmix.com');
+      expect(runtime).toBeInstanceOf(LobeDeepSeekAnthropicAI);
+      expect((runtime as any).baseURL).toBe('https://aihubmix.com');
+    });
+
+    it('should normalize /anthropic/v1/messages before creating an Anthropic SDK runtime', async () => {
+      const { option } = await resolveFirstRouterOption(
+        'https://api.deepseek.com/anthropic/v1/messages',
+        'anthropic',
+      );
+      const runtime = new LobeDeepSeekAnthropicAI({ apiKey: 'test', baseURL: option.baseURL });
+
+      expect(option.baseURL).toBe(anthropicBaseURL);
+      expect(runtime).toBeInstanceOf(LobeDeepSeekAnthropicAI);
+      expect((runtime as any).baseURL).toBe(anthropicBaseURL);
+    });
+
+    it('should let sdkType override legacy baseURL suffix routing', async () => {
+      const router = await resolveRouter(anthropicBaseURL, 'openai');
+
+      expect(router.apiType).toBe('deepseek');
+      expect(router.id).toBe('openai-compatible');
+    });
+
+    it('should reject unsupported sdkType values', async () => {
+      await expect(resolveRouter(defaultOpenAIBaseURL, 'invalid')).rejects.toThrow(
+        'Unsupported DeepSeek sdkType: invalid',
+      );
     });
   });
 });
@@ -114,7 +179,7 @@ describe('LobeDeepSeekAnthropicAI', () => {
 
       const payload = getLastRequestPayload();
 
-      expect(payload.max_tokens).toBe(384_000);
+      expect(payload.max_tokens).toBe(393_216);
       expect(payload.thinking).toEqual({
         budget_tokens: 1024,
         type: 'enabled',
@@ -545,6 +610,82 @@ describe('LobeDeepSeekAI - custom features', () => {
           content: 'hi',
         });
       });
+    });
+
+    it('should add empty reasoning_content for assistant messages in deepseek-v4-pro thinking mode', () => {
+      const payload = {
+        messages: [
+          { role: 'user', content: 'Call a tool' },
+          {
+            role: 'assistant',
+            content: '',
+            tool_calls: [
+              {
+                id: 'call_1',
+                type: 'function',
+                function: {
+                  name: 'lookup',
+                  arguments: '{"q":"docs"}',
+                },
+              },
+            ],
+          },
+        ],
+        model: 'deepseek-v4-pro',
+      };
+
+      const result = openAIParams.chatCompletion!.handlePayload!(payload as any);
+
+      expect(result.messages).toEqual([
+        { role: 'user', content: 'Call a tool' },
+        {
+          role: 'assistant',
+          content: '',
+          reasoning_content: '',
+          tool_calls: [
+            {
+              id: 'call_1',
+              type: 'function',
+              function: {
+                name: 'lookup',
+                arguments: '{"q":"docs"}',
+              },
+            },
+          ],
+        },
+      ]);
+    });
+
+    it('should preserve only supported DeepSeek thinking config fields', () => {
+      const payload = {
+        messages: [{ role: 'user', content: 'Hello' }],
+        model: 'deepseek-v4-flash',
+        reasoning_effort: 'high' as const,
+        thinking: {
+          budget_tokens: 4096,
+          type: 'enabled' as const,
+        },
+      };
+
+      const result = openAIParams.chatCompletion!.handlePayload!(payload as any);
+
+      expect(result.reasoning_effort).toBe('high');
+      expect(result).toEqual(expect.objectContaining({ thinking: { type: 'enabled' } }));
+      expect(result).not.toEqual(
+        expect.objectContaining({ thinking: expect.objectContaining({ budget_tokens: 4096 }) }),
+      );
+    });
+
+    it('should forward disabled thinking mode for deepseek-v4-pro', () => {
+      const payload = {
+        messages: [{ role: 'user', content: 'Hello' }],
+        model: 'deepseek-v4-pro',
+        thinking: { type: 'disabled' as const },
+      };
+
+      const result = openAIParams.chatCompletion!.handlePayload!(payload as any);
+
+      expect(result).toEqual(expect.objectContaining({ thinking: { type: 'disabled' } }));
     });
   });
 

@@ -299,6 +299,7 @@ export const videoRouter = router({
       const providerContentPolicyMessage = await getProviderContentPolicyErrorMessage({
         error: e,
         provider,
+        trigger: RequestTrigger.Video,
         userId,
       });
       await asyncTaskModel.update(asyncTaskId, {

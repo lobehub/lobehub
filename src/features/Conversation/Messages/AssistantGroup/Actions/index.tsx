@@ -15,6 +15,7 @@ const DEFAULT_BAR: MessageActionSlot[] = ['edit', 'copy'];
 const DEFAULT_MENU: MessageActionSlot[] = [
   'edit',
   'copy',
+  'branching',
   'collapse',
   'divider',
   'share',

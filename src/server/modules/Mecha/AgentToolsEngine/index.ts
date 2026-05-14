@@ -24,6 +24,11 @@ import { type RuntimeEnvMode, type RuntimePlatform } from '@lobechat/types';
 import debug from 'debug';
 
 import {
+  buildAllowedBuiltinTools,
+  DEVICE_TOOL_IDENTIFIERS,
+} from '@/server/services/aiAgent/deviceToolRegistry';
+
+import {
   type ServerAgentToolsContext,
   type ServerAgentToolsEngineConfig,
   type ServerCreateAgentToolsEngineParams,
@@ -51,24 +56,44 @@ export const createServerToolsEngine = (
   context: ServerAgentToolsContext,
   config: ServerAgentToolsEngineConfig = {},
 ): ToolsEngine => {
-  const { enableChecker, additionalManifests = [], defaultToolIds } = config;
+  const {
+    enableChecker,
+    additionalManifests = [],
+    builtinTools: builtinToolsOverride = builtinTools,
+    defaultToolIds,
+    excludeIdentifiers,
+  } = config;
 
   // Get plugin manifests from installed plugins (from database)
   const pluginManifests = context.installedPlugins
     .map((plugin) => plugin.manifest as LobeToolManifest)
     .filter(Boolean);
 
-  // Get all builtin tool manifests
-  const builtinManifests = builtinTools.map((tool) => tool.manifest as LobeToolManifest);
+  // Get builtin tool manifests from the (possibly pre-filtered) list. The
+  // filter is one half of the hard wall keeping device tools out of an
+  // external bot sender's manifestSchemas — see `buildAllowedBuiltinTools`
+  // and LOBE-8768. The enableChecker rules below are defense-in-depth
+  // because `allowExplicitActivation` lets activator-driven activation
+  // bypass them.
+  const builtinManifests = builtinToolsOverride.map((tool) => tool.manifest as LobeToolManifest);
 
-  // Combine all manifests
-  const allManifests = [...pluginManifests, ...builtinManifests, ...additionalManifests];
+  // Combine all manifests, then drop anything whose identifier the caller
+  // has explicitly forbidden for this turn. The post-merge filter closes
+  // the second half of the LOBE-8768 wall: an installed plugin or a
+  // Skill/Klavis manifest claiming `lobe-remote-device` would otherwise
+  // slip through `buildAllowedBuiltinTools` (which only touches the
+  // builtin source).
+  const combinedManifests = [...pluginManifests, ...builtinManifests, ...additionalManifests];
+  const allManifests = excludeIdentifiers
+    ? combinedManifests.filter((m) => !excludeIdentifiers.has(m.identifier))
+    : combinedManifests;
 
   log(
-    'Creating ToolsEngine with %d plugin manifests, %d builtin manifests, %d additional manifests',
+    'Creating ToolsEngine with %d plugin manifests, %d builtin manifests, %d additional manifests, %d excluded',
     pluginManifests.length,
     builtinManifests.length,
     additionalManifests.length,
+    combinedManifests.length - allManifests.length,
   );
 
   return new ToolsEngine({
@@ -95,6 +120,7 @@ export const createServerAgentToolsEngine = (
   const {
     additionalManifests,
     agentConfig,
+    canUseDevice = false,
     clientRuntime,
     deviceContext,
     disableLocalSystem = false,
@@ -139,7 +165,7 @@ export const createServerAgentToolsEngine = (
   const isSearchEnabled = searchMode !== 'off';
 
   log(
-    'Creating agent tools engine model=%s provider=%s searchMode=%s platform=%s runtimeMode=%s additionalManifests=%d hasClientExecutor=%s hasDeviceProxy=%s',
+    'Creating agent tools engine model=%s provider=%s searchMode=%s platform=%s runtimeMode=%s additionalManifests=%d hasClientExecutor=%s hasDeviceProxy=%s canUseDevice=%s',
     model,
     provider,
     searchMode,
@@ -148,13 +174,25 @@ export const createServerAgentToolsEngine = (
     additionalManifests?.length ?? 0,
     hasClientExecutor,
     hasDeviceProxy,
+    canUseDevice,
   );
 
   return createServerToolsEngine(context, {
     // Pass additional manifests (e.g., LobeHub Skills)
     additionalManifests,
+    // Physically drop device-tool manifests for turns whose access policy
+    // denies them. Without this filter, `lobe-activator`'s explicit
+    // activation could resolve the manifest and bypass the rule-layer
+    // gates below (LOBE-8768).
+    builtinTools: buildAllowedBuiltinTools({ canUseDevice, disableLocalSystem }),
     // Add default tools based on configuration
     defaultToolIds,
+    // Post-merge wall: a plugin or Skill/Klavis manifest claiming a
+    // device identifier survives `buildAllowedBuiltinTools` (which only
+    // filters the builtin source). Excluding the identifiers here drops
+    // them from the combined `manifestSchemas` so the activator cannot
+    // resolve them regardless of which manifest source declared them.
+    excludeIdentifiers: canUseDevice ? undefined : DEVICE_TOOL_IDENTIFIERS,
     enableChecker: createEnableChecker({
       // Allow lobe-activator to dynamically enable tools at runtime (e.g., lobe-creds, lobe-cron)
       allowExplicitActivation: true,
@@ -166,14 +204,16 @@ export const createServerAgentToolsEngine = (
         // System-level rules (may override user selection for specific tools)
         [CloudSandboxManifest.identifier]: runtimeMode === 'cloud',
         [KnowledgeBaseManifest.identifier]: hasEnabledKnowledgeBases,
-        // Local-system: user must have opted into local runtime on this
-        // platform (`runtimeMode === 'local'`), AND one execution channel
-        // must exist:
+        // Local-system: gated by `canUseDevice` (resolveDeviceAccessPolicy)
+        // first — keeps external bot senders out before runtime checks even
+        // run. Then user must have opted into local runtime on this platform
+        // (`runtimeMode === 'local'`), AND one execution channel must exist:
         //  - `hasClientExecutor` — Phase 6.4 dispatch over the Agent Gateway
         //    WS that this request is already riding on; no extra server-side
         //    prerequisite needed;
         //  - legacy device-proxy with an online & auto-activated device.
         [LocalSystemManifest.identifier]:
+          canUseDevice &&
           !disableLocalSystem &&
           runtimeMode === 'local' &&
           (hasClientExecutor ||
@@ -186,19 +226,13 @@ export const createServerAgentToolsEngine = (
         // the caller itself can execute `executor: 'client'` tools, the
         // proxy is redundant — local-system goes directly to the caller.
         //
-        // Bot conversations (Telegram/Discord/Slack/…) never have a
-        // client-executor by definition, which would otherwise make
-        // RemoteDevice permanently auto-enabled there. Its systemRole
-        // tells the model to "inform the user to open their desktop
-        // application" when no device is online, overriding the
-        // Activator's own guidance and blocking discovery of cloud tools
-        // (e.g. Klavis Gmail). Keep RemoteDevice discoverable via the
-        // Activator in bot flows, but don't inject it by default.
+        // `canUseDevice` is the first short-circuit: external bot senders
+        // (and unconfigured bot owners) never reach the proxy, both because
+        // it would let them poke at the owner's machine AND because its
+        // systemRole would otherwise leak the device list into the LLM
+        // context — see the gated injection in `aiAgent.execAgent`.
         [RemoteDeviceManifest.identifier]:
-          hasDeviceProxy &&
-          !deviceContext?.autoActivated &&
-          !hasClientExecutor &&
-          !isBotConversation,
+          canUseDevice && hasDeviceProxy && !deviceContext?.autoActivated && !hasClientExecutor,
         [AgentDocumentsManifest.identifier]: hasAgentDocuments,
         [WebBrowsingManifest.identifier]: isSearchEnabled,
       },

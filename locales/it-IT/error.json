@@ -114,6 +114,7 @@
   "response.ProviderBizError": "Errore nella richiesta al servizio {{provider}}. Risolvi il problema o riprova utilizzando le informazioni seguenti.",
   "response.ProviderContentModeration": "Controllo delle politiche sui contenuti non riuscito. Modifica il tuo prompt e riprova.",
   "response.ProviderContentModerationWarning": "Violazioni ripetute delle politiche rilevate. Ulteriori abusi potrebbero limitare il tuo account.",
+  "response.ProviderImageContentModerationWarning": "Rilevati ripetuti rifiuti di sicurezza delle immagini. Promemoria simili potrebbero temporaneamente sospendere la generazione di immagini.",
   "response.QuotaLimitReached": "Spiacenti, l'utilizzo dei token o il numero di richieste ha raggiunto il limite per questa chiave. Aumenta la quota o riprova più tardi.",
   "response.QuotaLimitReachedCloud": "Il servizio del modello è attualmente sotto carico elevato. Per favore, riprova più tardi.",
   "response.ServerAgentRuntimeError": "Spiacenti, il servizio Agent non è disponibile. Riprova più tardi o contattaci via email.",

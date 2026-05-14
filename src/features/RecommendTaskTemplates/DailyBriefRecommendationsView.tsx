@@ -25,7 +25,12 @@ export const DailyBriefRecommendationsView = memo<DailyBriefRecommendationsViewP
     return (
       <Flexbox gap={8}>
         {state.templates.map((tmpl) => (
-          <TaskTemplateCard key={tmpl.id} template={tmpl} onDismiss={state.onDismiss} />
+          <TaskTemplateCard
+            key={tmpl.id}
+            template={tmpl}
+            onCreated={state.onCreated}
+            onDismiss={state.onDismiss}
+          />
         ))}
       </Flexbox>
     );

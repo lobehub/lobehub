@@ -150,9 +150,64 @@ export const TaskManifest: BuiltinToolManifest = {
         type: 'object',
       },
     },
+    // ==================== Task Comments ====================
     {
       description:
-        "Edit a task's fields (name, description, instruction, priority) or dependencies (batched). Status changes go through updateTaskStatus.",
+        'Add a comment to a task. If identifier is omitted, this only works when there is a current task context. Use comments to record decisions, progress, or feedback that should appear in task activities.',
+      name: TaskApiName.addTaskComment,
+      parameters: {
+        properties: {
+          content: {
+            description: 'Comment content to add to the task.',
+            type: 'string',
+          },
+          identifier: {
+            description:
+              'The task identifier to comment on (e.g. "TASK-1"). If omitted, the current task is used only when a current task context exists.',
+            type: 'string',
+          },
+        },
+        required: ['content'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Update an existing task comment by commentId. Use viewTask to inspect task activities and find comment ids.',
+      name: TaskApiName.updateTaskComment,
+      parameters: {
+        properties: {
+          commentId: {
+            description: 'The task comment id to update.',
+            type: 'string',
+          },
+          content: {
+            description: 'Updated comment content.',
+            type: 'string',
+          },
+        },
+        required: ['commentId', 'content'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Delete an existing task comment by commentId. Use viewTask to inspect task activities and find comment ids.',
+      name: TaskApiName.deleteTaskComment,
+      parameters: {
+        properties: {
+          commentId: {
+            description: 'The task comment id to delete.',
+            type: 'string',
+          },
+        },
+        required: ['commentId'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        "Edit a task's fields (name, description, instruction, priority), parent, or dependencies (batched). Status changes go through updateTaskStatus; schedule configuration goes through setTaskSchedule.",
       name: TaskApiName.editTask,
       parameters: {
         properties: {
@@ -182,6 +237,11 @@ export const TaskManifest: BuiltinToolManifest = {
           name: {
             description: 'Updated name for the task.',
             type: 'string',
+          },
+          parentIdentifier: {
+            description:
+              'Set the parent task by identifier (e.g. "TASK-1"). Pass null to move this task to top level. Omit to keep the current parent.',
+            type: ['string', 'null'],
           },
           priority: {
             description: 'Updated priority level: 0=none, 1=urgent, 2=high, 3=normal, 4=low.',
@@ -241,6 +301,47 @@ export const TaskManifest: BuiltinToolManifest = {
     },
     {
       description:
+        'Configure (or clear) the recurring schedule of a task. Use this to turn a task into a periodically running one, switch between cron (`schedule`) and fixed-interval (`heartbeat`) automation, or disable automation entirely. Pass automationMode=null to stop the task from auto-running. For schedule mode, supply schedulePattern (cron) and scheduleTimezone (IANA). For heartbeat mode, supply heartbeatInterval (seconds). maxExecutions caps how many scheduled runs may fire (null = unlimited). Status changes still go through updateTaskStatus; this tool only touches schedule configuration.',
+      name: TaskApiName.setTaskSchedule,
+      parameters: {
+        properties: {
+          automationMode: {
+            description:
+              'Enables periodic execution. "schedule" fires on the cron `schedulePattern`; "heartbeat" ticks every `heartbeatInterval` seconds. Pass null to disable automation entirely.',
+            enum: ['heartbeat', 'schedule', null],
+            type: ['string', 'null'],
+          },
+          heartbeatInterval: {
+            description:
+              'Periodic execution interval in seconds (heartbeat mode). Pass 0 to clear the interval. Recommend ≥600s.',
+            type: 'number',
+          },
+          identifier: {
+            description: 'The identifier of the task to configure (e.g. "TASK-1").',
+            type: 'string',
+          },
+          maxExecutions: {
+            description:
+              'Cap on the number of scheduled executions for this task. Pass null to remove the cap (run indefinitely).',
+            type: ['number', 'null'],
+          },
+          schedulePattern: {
+            description:
+              'Cron expression for scheduled mode, e.g. "0 9 * * *" (every day at 09:00). Pass null to clear the pattern.',
+            type: ['string', 'null'],
+          },
+          scheduleTimezone: {
+            description:
+              'IANA timezone for the cron expression, e.g. "Asia/Shanghai" or "America/New_York". Pass null to clear; defaults to UTC when unset.',
+            type: ['string', 'null'],
+          },
+        },
+        required: ['identifier'],
+        type: 'object',
+      },
+    },
+    {
+      description:
         "Update a task's status. Use to mark tasks as completed, canceled, paused, resumed, or failed. To START a task (transition into running), use runTask — it actually launches the agent. updateTaskStatus only flips the status flag without execution. If identifier is omitted, this only works when there is a current task context.",
       name: TaskApiName.updateTaskStatus,
       parameters: {
@@ -284,7 +385,7 @@ export const TaskManifest: BuiltinToolManifest = {
   identifier: TaskIdentifier,
   meta: {
     avatar: '\uD83D\uDCCB',
-    description: 'Create, list, edit, delete tasks with dependencies',
+    description: 'Create, list, edit, comment on, and delete tasks with dependencies',
     title: 'Task Tools',
   },
   systemRole: systemPrompt,

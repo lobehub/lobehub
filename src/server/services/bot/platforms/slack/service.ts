@@ -147,7 +147,7 @@ export class SlackMessageService implements MessageRuntimeService {
       id: channel.id,
       memberCount: channel.num_members ?? undefined,
       name: channel.name ?? undefined,
-      type: channel.is_private ? 'private' : 'public',
+      type: channel.is_mpim ? 'mpim' : channel.is_private ? 'private' : 'public',
     };
   };
 
@@ -161,7 +161,7 @@ export class SlackMessageService implements MessageRuntimeService {
       channels: channels.map((c: any) => ({
         id: c.id,
         name: c.name ?? '',
-        type: c.is_private ? 'private' : 'public',
+        type: c.is_mpim ? 'mpim' : c.is_private ? 'private' : 'public',
       })),
     };
   };

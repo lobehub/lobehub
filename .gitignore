@@ -148,3 +148,6 @@ apps/desktop/resources/cli-package.json
 .superpowers/
 docs/superpowers/
 .heerogeneous-tracing
+
+# Kagura agent runtime
+.kagura/

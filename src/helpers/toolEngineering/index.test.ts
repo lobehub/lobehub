@@ -67,7 +67,6 @@ vi.mock('@/store/tool', () => ({
               description: 'Analyze visual media',
               name: 'analyzeVisualMedia',
               parameters: {
-                anyOf: [{ required: ['refs'] }, { required: ['urls'] }],
                 properties: {
                   question: { type: 'string' },
                   refs: {

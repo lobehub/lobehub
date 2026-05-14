@@ -163,14 +163,16 @@ export const TOOL_API_DISPLAY_NAMES: Record<string, string> = {
   // Cloud sandbox
   executeCode: 'workflow.toolDisplayName.executeCode',
 
-  // GTD
+  // Lobe Agent — Plan & Todos
   createPlan: 'workflow.toolDisplayName.createPlan',
   createTodos: 'workflow.toolDisplayName.createTodos',
   updatePlan: 'workflow.toolDisplayName.updatePlan',
   updateTodos: 'workflow.toolDisplayName.updateTodos',
   clearTodos: 'workflow.toolDisplayName.clearTodos',
-  execTask: 'workflow.toolDisplayName.execTask',
-  execTasks: 'workflow.toolDisplayName.execTasks',
+
+  // Lobe Agent — Sub-Agents
+  callSubAgent: 'workflow.toolDisplayName.callSubAgent',
+  callSubAgents: 'workflow.toolDisplayName.callSubAgents',
 
   // Memory
   addActivityMemory: 'workflow.toolDisplayName.addActivityMemory',
@@ -215,4 +217,8 @@ export const TOOL_API_DISPLAY_NAMES: Record<string, string> = {
   // Web onboarding
   saveUserQuestion: 'workflow.toolDisplayName.saveUserQuestion',
   writeDocument: 'workflow.toolDisplayName.writeDocument',
+
+  // Agent marketplace
+  showAgentMarketplace: 'workflow.toolDisplayName.showAgentMarketplace',
+  submitAgentPick: 'workflow.toolDisplayName.submitAgentPick',
 };

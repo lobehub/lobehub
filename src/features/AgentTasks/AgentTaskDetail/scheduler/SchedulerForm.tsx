@@ -1,17 +1,9 @@
-import {
-  Accordion,
-  AccordionItem,
-  Checkbox,
-  Flexbox,
-  Icon,
-  InputNumber,
-  Select,
-  Text,
-} from '@lobehub/ui';
+import { Accordion, AccordionItem, Checkbox, Flexbox, Icon, InputNumber, Text } from '@lobehub/ui';
+import { Select } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs, { type Dayjs } from 'dayjs';
 import { Globe, Hash, SlidersHorizontal } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -20,6 +12,7 @@ import {
   SCHEDULE_TYPE_OPTIONS,
   type ScheduleType,
   TIMEZONE_OPTIONS,
+  type TimezoneOption,
   WEEKDAYS,
 } from './CronConfig';
 
@@ -27,6 +20,20 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   fieldLabel: css`
     font-size: 12px;
     color: ${cssVar.colorTextSecondary};
+  `,
+  timezoneOffset: css`
+    flex-shrink: 0;
+    margin-inline-start: 12px;
+    font-size: 12px;
+    color: ${cssVar.colorTextDescription};
+  `,
+  timezoneOption: css`
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+
+    min-width: 0;
   `,
   weekdayButton: css`
     cursor: pointer;
@@ -43,13 +50,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-weight: 500;
     color: ${cssVar.colorTextSecondary};
 
-    background: ${cssVar.colorFillTertiary};
+    background: transparent;
 
     transition: all 0.15s ease;
 
     &:hover {
       color: ${cssVar.colorText};
-      background: ${cssVar.colorFillSecondary};
+      background: ${cssVar.colorFillTertiary};
     }
   `,
   weekdayButtonActive: css`
@@ -76,12 +83,6 @@ const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
   return { label, value: hour * 60 + minute };
 });
 
-// The parent Popover (Base UI) treats any click outside its popup root as an
-// outside-click and dismisses. antd Select's dropdown defaults to a body-level
-// portal, which trips that detection — anchor it inside the Popover's DOM so
-// option clicks stay "inside".
-const getPopupContainer = (triggerNode: HTMLElement) => triggerNode.parentElement ?? document.body;
-
 export interface SchedulerFormChange {
   maxExecutions: number | null;
   pattern: string;
@@ -98,13 +99,18 @@ interface SchedulerFormProps {
 const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, pattern, timezone }) => {
   const { t } = useTranslation('chat');
 
-  const initial = useMemo(() => {
+  // Optimistic local state: seed once from props at mount, then own the values
+  // locally. Don't re-sync from props on every change — otherwise the async
+  // server roundtrip (updateSchedule → refreshTaskDetail) bounces stale prop
+  // values back into the form during rapid edits and clobbers the user input.
+  // Parent should `key={taskId}` this component to remount cleanly across tasks.
+  const [initial] = useState(() => {
     const parsed = parseCronPattern(pattern || DEFAULT_PATTERN);
     return {
       ...parsed,
       triggerTime: dayjs().hour(parsed.triggerHour).minute(parsed.triggerMinute),
     };
-  }, [pattern]);
+  });
 
   const [scheduleType, setScheduleType] = useState<ScheduleType>(initial.scheduleType);
   const [triggerTime, setTriggerTime] = useState<Dayjs>(initial.triggerTime);
@@ -114,21 +120,9 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
   );
   const [tz, setTz] = useState<string>(timezone || DEFAULT_TIMEZONE);
   const [maxExec, setMaxExec] = useState<number | null>(maxExecutions ?? null);
-
-  useEffect(() => {
-    setScheduleType(initial.scheduleType);
-    setTriggerTime(initial.triggerTime);
-    setHourlyInterval(initial.hourlyInterval ?? 1);
-    setWeekdays(initial.weekdays ?? (initial.scheduleType === 'weekly' ? [1, 2, 3, 4, 5] : []));
-  }, [initial]);
-
-  useEffect(() => {
-    setTz(timezone || DEFAULT_TIMEZONE);
-  }, [timezone]);
-
-  useEffect(() => {
-    setMaxExec(maxExecutions ?? null);
-  }, [maxExecutions]);
+  const [continuous, setContinuous] = useState<boolean>(
+    maxExecutions === null || maxExecutions === undefined,
+  );
 
   const emit = useCallback(
     (
@@ -141,9 +135,14 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
         weekdays: number[];
       }>,
     ) => {
+      // When the user is mid-editing maxExec (cleared the input but hasn't
+      // typed yet), local maxExec is null but `continuous` is still false.
+      // Falling back to the persisted prop here avoids emitting null for an
+      // unrelated field change — which would otherwise flip Continuous on.
+      const fallbackMaxExec = continuous ? null : (maxExec ?? maxExecutions ?? null);
       const next = {
         hourlyInterval: overrides.hourlyInterval ?? hourlyInterval,
-        maxExec: overrides.maxExec === undefined ? maxExec : overrides.maxExec,
+        maxExec: overrides.maxExec === undefined ? fallbackMaxExec : overrides.maxExec,
         scheduleType: overrides.scheduleType ?? scheduleType,
         triggerTime: overrides.triggerTime ?? triggerTime,
         tz: overrides.tz ?? tz,
@@ -157,7 +156,17 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
       );
       onChange({ maxExecutions: next.maxExec, pattern: nextPattern, timezone: next.tz });
     },
-    [hourlyInterval, maxExec, onChange, scheduleType, triggerTime, tz, weekdays],
+    [
+      continuous,
+      hourlyInterval,
+      maxExec,
+      maxExecutions,
+      onChange,
+      scheduleType,
+      triggerTime,
+      tz,
+      weekdays,
+    ],
   );
 
   const handleScheduleTypeChange = (value: ScheduleType) => {
@@ -199,18 +208,26 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
   };
 
   const handleMaxExecChange = (value: number | string | null) => {
-    const next = typeof value === 'number' && value > 0 ? value : null;
-    setMaxExec(next);
-    emit({ maxExec: next });
+    if (typeof value === 'number' && value > 0) {
+      setMaxExec(value);
+      emit({ maxExec: value });
+      return;
+    }
+    // Mid-edit clear (e.g. user is replacing 100 with 5): keep the field
+    // empty locally but don't toggle Continuous or emit a null upstream.
+    setMaxExec(null);
   };
 
   const handleContinuousChange = (checked: boolean) => {
-    const next = checked ? null : 100;
-    setMaxExec(next);
-    emit({ maxExec: next });
+    setContinuous(checked);
+    if (checked) {
+      emit({ maxExec: null });
+    } else {
+      const next = maxExec ?? 100;
+      setMaxExec(next);
+      emit({ maxExec: next });
+    }
   };
-
-  const isUnlimited = maxExec === null || maxExec === undefined;
 
   const showTimeRow = scheduleType !== 'hourly';
 
@@ -220,7 +237,6 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
         <Flexbox flex={1} gap={6}>
           <Text className={styles.fieldLabel}>{t('taskSchedule.frequency')}</Text>
           <Select
-            getPopupContainer={getPopupContainer}
             value={scheduleType}
             variant="filled"
             options={SCHEDULE_TYPE_OPTIONS.map((opt) => ({
@@ -234,7 +250,6 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
           <Flexbox flex={1} gap={6}>
             <Text className={styles.fieldLabel}>{t('taskSchedule.time')}</Text>
             <Select
-              getPopupContainer={getPopupContainer}
               options={TIME_OPTIONS}
               value={triggerTime.hour() * 60 + triggerTime.minute()}
               variant="filled"
@@ -256,7 +271,6 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
               />
               <Text type="secondary">{t('taskSchedule.hours')}</Text>
               <Select
-                getPopupContainer={getPopupContainer}
                 style={{ width: 80 }}
                 value={triggerTime.minute()}
                 variant="filled"
@@ -293,7 +307,7 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
         </Flexbox>
       )}
 
-      <Accordion gap={0}>
+      <Accordion defaultExpandedKeys={[]} gap={0}>
         <AccordionItem
           itemKey="advanced"
           paddingBlock={6}
@@ -315,11 +329,21 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
               </Flexbox>
               <Select
                 showSearch
-                getPopupContainer={getPopupContainer}
                 options={TIMEZONE_OPTIONS}
                 popupMatchSelectWidth={false}
                 value={tz}
                 variant="filled"
+                optionRender={(option) => {
+                  const data = option as TimezoneOption;
+                  return (
+                    <div className={styles.timezoneOption}>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {data.label}
+                      </span>
+                      <span className={styles.timezoneOffset}>{data.offset}</span>
+                    </div>
+                  );
+                }}
                 onChange={handleTimezoneChange}
               />
             </Flexbox>
@@ -331,7 +355,7 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
               </Flexbox>
               <Flexbox horizontal align="center" gap={12}>
                 <InputNumber
-                  disabled={isUnlimited}
+                  disabled={continuous}
                   min={1}
                   placeholder={t('taskSchedule.maxExecutionsPlaceholder')}
                   style={{ flex: 1 }}
@@ -339,7 +363,7 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
                   variant="filled"
                   onChange={handleMaxExecChange}
                 />
-                <Checkbox checked={isUnlimited} onChange={handleContinuousChange}>
+                <Checkbox checked={continuous} onChange={handleContinuousChange}>
                   {t('taskSchedule.continuous')}
                 </Checkbox>
               </Flexbox>

@@ -1,6 +1,7 @@
 ---
 name: hotkey
-description: Guide for adding keyboard shortcuts. Use when implementing new hotkeys, registering shortcuts, or working with keyboard interactions. Triggers on hotkey implementation or keyboard shortcut tasks.
+description: "Adding or editing keyboard shortcuts in LobeHub. Use when registering a new hotkey, changing a key combo, scoping a shortcut to chat vs global, or wiring a hotkey hook + tooltip. Covers the 5-step flow: add to `HotkeyEnum` in `src/types/hotkey.ts`, register in `HOTKEYS_REGISTRATION` (`src/const/hotkeys.ts`) with `combineKeys([Key.Mod, …])`, add i18n in `src/locales/default/hotkey.ts`, expose via `useHotkeyById` in `src/hooks/useHotkeys/`, and render `<Tooltip hotkey={…}>`. Triggers on `HotkeyEnum`, `HOTKEYS_REGISTRATION`, `useHotkeyById`, `combineKeys`, `Key.Mod`/`Key.Shift`, 'add a hotkey', 'add a shortcut', '加快捷键', '快捷键', 'Cmd+K', 'keyboard shortcut', 'hotkey scope', 'hotkey conflict'."
+user-invocable: false
 ---
 
 # Adding Keyboard Shortcuts Guide

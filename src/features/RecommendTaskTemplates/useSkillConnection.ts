@@ -45,18 +45,15 @@ export interface UseSkillConnectionResult {
   nextUnconnected: SkillProviderMeta | undefined;
 }
 
-export const useSkillConnection = (
-  specs: TaskTemplateSkillRequirement[] | undefined,
-): UseSkillConnectionResult => {
-  const getLobehubAuth = useToolStore((s) => s.getLobehubSkillAuthorizeUrl);
-  const checkLobehubStatus = useToolStore((s) => s.checkLobehubSkillStatus);
-  const createKlavisServer = useToolStore((s) => s.createKlavisServer);
-  const refreshKlavisServerTools = useToolStore((s) => s.refreshKlavisServerTools);
-
+/**
+ * Shared predicate for both `useSkillConnection` and ad-hoc filtering
+ * (e.g. hiding already-connected providers from the inline auth list).
+ */
+export const useIsSkillConnected = () => {
   const lobehubServers = useToolStore(lobehubSkillStoreSelectors.getServers);
   const klavisServers = useToolStore(klavisStoreSelectors.getServers);
 
-  const isConnectedFor = useCallback(
+  return useCallback(
     (spec: TaskTemplateSkillRequirement): boolean => {
       if (spec.source === 'lobehub') {
         return lobehubServers.some(
@@ -69,6 +66,17 @@ export const useSkillConnection = (
     },
     [lobehubServers, klavisServers],
   );
+};
+
+export const useSkillConnection = (
+  specs: TaskTemplateSkillRequirement[] | undefined,
+): UseSkillConnectionResult => {
+  const getLobehubAuth = useToolStore((s) => s.getLobehubSkillAuthorizeUrl);
+  const checkLobehubStatus = useToolStore((s) => s.checkLobehubSkillStatus);
+  const createKlavisServer = useToolStore((s) => s.createKlavisServer);
+  const refreshKlavisServerTools = useToolStore((s) => s.refreshKlavisServerTools);
+
+  const isConnectedFor = useIsSkillConnected();
 
   const nextUnconnected = useMemo(
     () => findNextUnconnectedSpec(specs, isConnectedFor),

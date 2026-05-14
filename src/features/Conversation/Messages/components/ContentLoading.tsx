@@ -1,5 +1,5 @@
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
-import { Flexbox, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -8,7 +8,7 @@ import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { type OperationType } from '@/store/chat/slices/operation/types';
-import { shinyTextStyles } from '@/styles/loading';
+import { elapsedTimeStyles, shinyTextStyles } from '@/styles/loading';
 
 const ELAPSED_TIME_THRESHOLD = 2100; // Show elapsed time after 2 seconds
 
@@ -78,15 +78,20 @@ const ContentLoading = memo<ContentLoadingProps>(({ id }) => {
     );
   }
 
+  if (operationLabel) {
+    return (
+      <Flexbox horizontal align={'center'} gap={4}>
+        <span className={shinyTextStyles.shinyText}>{operationLabel}...</span>
+        {showElapsedTime && (
+          <span className={elapsedTimeStyles.elapsedTime}>({elapsedSeconds}s)</span>
+        )}
+      </Flexbox>
+    );
+  }
+
   return (
     <Flexbox horizontal align={'center'}>
       <BubblesLoading />
-      {operationLabel && (
-        <Text type={'secondary'}>
-          {operationLabel}...
-          {showElapsedTime && ` (${elapsedSeconds}s)`}
-        </Text>
-      )}
     </Flexbox>
   );
 });

@@ -73,11 +73,4 @@ describe('getNodeDraftState', () => {
   it('returns undefined for summary node', () => {
     expect(getNodeDraftState('summary', {})).toBeUndefined();
   });
-
-  it('handles responseLanguage as scalar', () => {
-    expect(getNodeDraftState('responseLanguage', { responseLanguage: 'zh-CN' })?.status).toBe(
-      'complete',
-    );
-    expect(getNodeDraftState('responseLanguage', {})?.status).toBe('empty');
-  });
 });

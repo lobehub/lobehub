@@ -21,15 +21,15 @@ const run = async () => {
   ensureLocalesDirs();
 
   // Diff analysis
-  split('差异分析');
+  split('Diff Analysis');
   genDiff();
 
   // Generate default locale files
-  split('生成默认语言文件');
+  split('Generate Default Locale Files');
   genDefaultLocale();
 
   // Generate i18n files
-  split('生成国际化文件');
+  split('Generate i18n Files');
 };
 
 run();

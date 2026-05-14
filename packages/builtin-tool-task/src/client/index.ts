@@ -1,13 +1,16 @@
 // Inspector components (customized tool call headers)
 export {
+  AddTaskCommentInspector,
   CreateTaskInspector,
   CreateTasksInspector,
+  DeleteTaskCommentInspector,
   DeleteTaskInspector,
   EditTaskInspector,
   ListTasksInspector,
   RunTaskInspector,
   RunTasksInspector,
   TaskInspectors,
+  UpdateTaskCommentInspector,
   UpdateTaskStatusInspector,
   ViewTaskInspector,
 } from './Inspector';

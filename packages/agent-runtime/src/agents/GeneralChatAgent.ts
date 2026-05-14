@@ -21,8 +21,8 @@ import {
   type GeneralAgentCompressionResultPayload,
   type GeneralAgentConfig,
   type HumanAbortPayload,
-  type TaskResultPayload,
-  type TasksBatchResultPayload,
+  type SubAgentResultPayload,
+  type SubAgentsBatchResultPayload,
 } from '../types';
 import { shouldCompress } from '../utils/tokenCounter';
 
@@ -469,7 +469,7 @@ export class GeneralChatAgent implements Agent {
 
       case 'llm_result': {
         // LLM response received, check if it contains tool calls
-        const { hasToolsCalling, toolsCalling, parentMessageId } =
+        const { hasToolsCalling, toolsCalling, parentMessageId, result } =
           context.payload as GeneralAgentCallLLMResultPayload;
 
         if (hasToolsCalling && toolsCalling && toolsCalling.length > 0) {
@@ -516,12 +516,26 @@ export class GeneralChatAgent implements Agent {
           return instructions;
         }
 
+        // Silent-drop diagnostic: LLM emitted raw tool_calls but every one
+        // failed to resolve to a known tool (e.g. malformed names without the
+        // `____` separator). Surface this in reasonDetail so dashboards can
+        // distinguish it from a genuine no-tool completion. See LOBE-8696.
+        const rawToolCallCount = result?.tool_calls?.length ?? 0;
+        const hasUnresolvedToolCalls = rawToolCallCount > 0;
+
         // No tool calls, conversation is complete
         return {
           reason: state.forceFinish ? 'max_steps_completed' : 'completed',
-          reasonDetail: state.forceFinish
-            ? 'Force finish: LLM produced final text response after max steps'
-            : 'LLM response completed without tool calls',
+          reasonDetail: hasUnresolvedToolCalls
+            ? `LLM returned ${rawToolCallCount} unresolvable tool_calls: ${(
+                result?.tool_calls ?? []
+              )
+                .map((tc) => tc.function?.name)
+                .filter(Boolean)
+                .join(', ')}`
+            : state.forceFinish
+              ? 'Force finish: LLM produced final text response after max steps'
+              : 'LLM response completed without tool calls',
           type: 'finish',
         };
       }
@@ -530,55 +544,57 @@ export class GeneralChatAgent implements Agent {
         const { data, parentMessageId, stop } =
           context.payload as GeneralAgentCallToolResultPayload;
 
-        // Check if this is a GTD async task request (only execTask/execTasks are passed here with stop=true)
+        // Check if this is a sub-agent dispatch request (lobe-agent.callSubAgent /
+        // callSubAgents and similarly-shaped tools emit state.type=execSubAgent*
+        // with stop=true so the runtime forks a sub-agent here).
         if (stop && data?.state) {
           const stateType = data.state.type;
 
-          // GTD async task (single)
-          if (stateType === 'execTask') {
+          // Server-side sub-agent (single)
+          if (stateType === 'execSubAgent') {
             const { parentMessageId: execParentId, task } = data.state as {
               parentMessageId: string;
               task: any;
             };
             return {
               payload: { parentMessageId: execParentId, task },
-              type: 'exec_task',
+              type: 'exec_sub_agent',
             };
           }
 
-          // GTD async tasks (multiple)
-          if (stateType === 'execTasks') {
+          // Server-side sub-agents (multiple)
+          if (stateType === 'execSubAgents') {
             const { parentMessageId: execParentId, tasks } = data.state as {
               parentMessageId: string;
               tasks: any[];
             };
             return {
               payload: { parentMessageId: execParentId, tasks },
-              type: 'exec_tasks',
+              type: 'exec_sub_agents',
             };
           }
 
-          // GTD client-side async task (single, desktop only)
-          if (stateType === 'execClientTask') {
+          // Client-side sub-agent (single, desktop only)
+          if (stateType === 'execClientSubAgent') {
             const { parentMessageId: execParentId, task } = data.state as {
               parentMessageId: string;
               task: any;
             };
             return {
               payload: { parentMessageId: execParentId, task },
-              type: 'exec_client_task',
+              type: 'exec_client_sub_agent',
             };
           }
 
-          // GTD client-side async tasks (multiple, desktop only)
-          if (stateType === 'execClientTasks') {
+          // Client-side sub-agents (multiple, desktop only)
+          if (stateType === 'execClientSubAgents') {
             const { parentMessageId: execParentId, tasks } = data.state as {
               parentMessageId: string;
               tasks: any[];
             };
             return {
               payload: { parentMessageId: execParentId, tasks },
-              type: 'exec_client_tasks',
+              type: 'exec_client_sub_agents',
             };
           }
         }
@@ -648,9 +664,9 @@ export class GeneralChatAgent implements Agent {
         } as GeneralAgentCallLLMInstructionPayload);
       }
 
-      case 'task_result': {
-        // Single async task completed, continue to call LLM with result
-        const { parentMessageId } = context.payload as TaskResultPayload;
+      case 'sub_agent_result': {
+        // Single sub-agent completed, continue to call LLM with result
+        const { parentMessageId } = context.payload as SubAgentResultPayload;
 
         // Continue to call LLM with updated messages (task message is already in state)
         return this.toLLMCall({
@@ -662,9 +678,9 @@ export class GeneralChatAgent implements Agent {
         } as GeneralAgentCallLLMInstructionPayload);
       }
 
-      case 'tasks_batch_result': {
-        // Async tasks batch completed, continue to call LLM with results
-        const { parentMessageId } = context.payload as TasksBatchResultPayload;
+      case 'sub_agents_batch_result': {
+        // Sub-agents batch completed, continue to call LLM with results
+        const { parentMessageId } = context.payload as SubAgentsBatchResultPayload;
 
         if (context.stepContext?.hasQueuedMessages) {
           return { reason: 'queued_message_interrupt', type: 'finish' };

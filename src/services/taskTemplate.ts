@@ -5,8 +5,15 @@ class TaskTemplateService {
     return lambdaClient.taskTemplate.dismiss.mutate({ templateId });
   };
 
-  listDailyRecommend = async (interestKeys: string[]) => {
-    return lambdaClient.taskTemplate.listDailyRecommend.query({ interestKeys });
+  listDailyRecommend = async (
+    interestKeys: string[],
+    options: { count?: number; refreshSeed?: string } = {},
+  ) => {
+    return lambdaClient.taskTemplate.listDailyRecommend.query({
+      count: options.count,
+      interestKeys,
+      refreshSeed: options.refreshSeed,
+    });
   };
 
   recordCreated = async (templateId: string) => {

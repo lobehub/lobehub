@@ -3,7 +3,7 @@ import { Plus } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
+import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import NavHeader from '@/features/NavHeader';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 import WideScreenContainer from '@/features/WideScreenContainer';
@@ -16,6 +16,7 @@ import { taskListSelectors } from '@/store/task/selectors';
 import { createTaskModal } from '../CreateTaskModal';
 import Breadcrumb from '../shared/Breadcrumb';
 import CreateTaskInlineEntry from './CreateTaskInlineEntry';
+import EmptyState from './EmptyState';
 import KanbanBoard from './KanbanBoard';
 import type { TaskListViewOptions } from './listViewOptions';
 import { normalizeTaskListViewOptions } from './listViewOptions';
@@ -29,6 +30,7 @@ const AgentTasksPage = memo(() => {
   const viewMode = useTaskStore(taskListSelectors.viewMode);
   const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
   useFetchTaskList({ allAgents: true });
+  const isEmptyHero = useTaskStore(taskListSelectors.isListEmpty);
   const rawViewOptions = useGlobalStore(systemStatusSelectors.taskListViewOptions);
   const viewOptions = useMemo(() => normalizeTaskListViewOptions(rawViewOptions), [rawViewOptions]);
   const inlineCollapsed = useGlobalStore(systemStatusSelectors.taskCreateInlineCollapsed);
@@ -66,7 +68,11 @@ const AgentTasksPage = memo(() => {
         right={
           <Flexbox horizontal align={'center'} gap={4}>
             {(inlineCollapsed || viewMode === 'kanban') && (
-              <ActionIcon icon={Plus} size={DESKTOP_HEADER_ICON_SIZE} onClick={handleCreateTask} />
+              <ActionIcon
+                icon={Plus}
+                size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+                onClick={handleCreateTask}
+              />
             )}
             <TasksGroupConfig options={viewOptions} setOptions={setViewOptions} />
             {showTaskAgentPanelToggle && (
@@ -85,7 +91,9 @@ const AgentTasksPage = memo(() => {
           },
         }}
       />
-      {viewMode === 'kanban' ? (
+      {isEmptyHero ? (
+        <EmptyState />
+      ) : viewMode === 'kanban' ? (
         <Flexbox flex={1} style={{ overflowX: 'auto', overflowY: 'hidden' }}>
           <KanbanBoard />
         </Flexbox>

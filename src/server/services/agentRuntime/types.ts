@@ -1,13 +1,15 @@
 import { type AgentRuntimeContext, type AgentState } from '@lobechat/agent-runtime';
 import type {
+  BotPlatformContext,
   LobeToolManifest,
   OperationSkillSet,
   ToolExecutor,
   ToolSource,
 } from '@lobechat/context-engine';
-import { type UserInterventionConfig } from '@lobechat/types';
+import type { ChatTopicBotContext, UserInterventionConfig } from '@lobechat/types';
 
 import { type ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
+import type { DeviceAccessReason } from '@/server/services/aiAgent/deviceAccessPolicy';
 
 import { type AgentHook } from './hooks/types';
 
@@ -161,8 +163,21 @@ export interface OperationCreationParams {
     trigger?: string;
   };
   autoStart?: boolean;
+  /**
+   * Sender/owner identity for bot-originated runs. Forwarded into
+   * `state.metadata.botContext` so device-tool dispatch can audit who
+   * triggered the call. `undefined` for first-party (web/desktop) callers.
+   */
+  botContext?: ChatTopicBotContext;
   /** Bot platform context for injecting platform capabilities (e.g. markdown support) */
-  botPlatformContext?: any;
+  botPlatformContext?: BotPlatformContext;
+  /**
+   * Device-access policy decision computed once per turn by
+   * `resolveDeviceAccessPolicy`. Forwarded into `state.metadata.deviceAccessPolicy`
+   * so the dispatch site can include `reason` in the audit entry without
+   * re-deriving it.
+   */
+  deviceAccessPolicy?: { canUseDevice: boolean; reason: DeviceAccessReason };
   /** Device system info for placeholder variable replacement in Local System systemRole */
   deviceSystemInfo?: Record<string, string>;
   /** Discord context for injecting channel/guild info into agent system message */
@@ -182,6 +197,13 @@ export interface OperationCreationParams {
   operationId: string;
   /** Operation-level skill set for SkillResolver */
   operationSkillSet?: OperationSkillSet;
+  /**
+   * Operation ID of the parent run when this operation is a sub-agent
+   * invocation (e.g. spawned via `execSubAgentTask`). Persisted to
+   * `agent_operations.parent_operation_id` so analytics can join the
+   * sub-tree back to its root.
+   */
+  parentOperationId?: string;
   queueRetries?: number;
   queueRetryDelay?: string;
   /** Abort startup before the first step is scheduled */

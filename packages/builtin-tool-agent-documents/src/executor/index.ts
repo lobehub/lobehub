@@ -45,7 +45,11 @@ export class AgentDocumentsExecutor extends BaseExecutor<typeof AgentDocumentsAp
     return this.runtime.createDocument(params, {
       agentId: ctx.agentId,
       currentDocumentId: ctx.documentId,
+      messageId: ctx.sourceMessageId,
+      operationId: ctx.operationId,
       scope: ctx.scope,
+      taskId: ctx.taskId,
+      toolCallId: ctx.toolCallId,
       topicId: ctx.topicId,
     });
   };

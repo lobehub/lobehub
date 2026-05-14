@@ -4,21 +4,28 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
+    "./agentMarketplace": "./src/agentMarketplace/index.ts",
+    "./agentMarketplace/client": "./src/agentMarketplace/client/index.ts",
     "./client": "./src/client/index.ts",
     "./executionRuntime": "./src/ExecutionRuntime/index.ts",
     "./utils": "./src/ExecutionRuntime/utils.ts"
   },
   "main": "./src/index.ts",
   "dependencies": {
+    "@lobechat/const": "workspace:*",
     "@lobechat/markdown-patch": "workspace:*",
-    "@lobechat/prompts": "workspace:*"
+    "@lobechat/prompts": "workspace:*",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"
   },
   "peerDependencies": {
     "@lobehub/ui": "^5",
+    "antd": "^6",
+    "antd-style": "*",
     "react": "*",
-    "react-i18next": "*"
+    "react-i18next": "*",
+    "swr": "^2"
   }
 }

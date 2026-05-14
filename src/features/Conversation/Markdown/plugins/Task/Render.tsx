@@ -1,24 +1,11 @@
-import type { TaskStatus } from '@lobechat/types';
 import { Flexbox, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { ClipboardList } from 'lucide-react';
 import { memo, useMemo } from 'react';
-
-import TaskStatusIcon from '@/features/AgentTasks/features/TaskStatusIcon';
 
 import { type MarkdownElementProps } from '../type';
 import { useTaskCardScope } from './context';
 import { type ParsedTaskContent, parseTaskContent } from './parseTaskContent';
-
-const KNOWN_STATUSES: TaskStatus[] = [
-  'backlog',
-  'canceled',
-  'completed',
-  'failed',
-  'paused',
-  'running',
-  'scheduled',
-];
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   divider: css`
@@ -112,9 +99,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const isKnownStatus = (status?: string): status is TaskStatus =>
-  !!status && (KNOWN_STATUSES as string[]).includes(status);
-
 const FieldRow = memo<{ label: string; value?: string }>(({ label, value }) => {
   if (!value) return null;
   return (
@@ -165,33 +149,10 @@ const Render = memo<TaskRenderProps>(({ children }) => {
         <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
           <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
             {parsed.identifier && <span className={styles.identifier}>{parsed.identifier}</span>}
-            <Text ellipsis weight={500}>
+            <Text ellipsis style={{ flex: 1, minWidth: 0 }} weight={500}>
               {titleText}
             </Text>
           </Flexbox>
-          {(parsed.status || parsed.priority) && (
-            <Flexbox horizontal align={'center'} gap={8}>
-              {parsed.status && (
-                <Flexbox horizontal align={'center'} gap={4}>
-                  {isKnownStatus(parsed.status) ? (
-                    <TaskStatusIcon size={14} status={parsed.status} />
-                  ) : (
-                    <span style={{ color: cssVar.colorTextTertiary, fontSize: 12 }}>
-                      {parsed.statusIcon}
-                    </span>
-                  )}
-                  <Text fontSize={12} type={'secondary'}>
-                    {parsed.status}
-                  </Text>
-                </Flexbox>
-              )}
-              {parsed.priority && (
-                <Text fontSize={12} type={'secondary'}>
-                  · Priority: {parsed.priority}
-                </Text>
-              )}
-            </Flexbox>
-          )}
         </Flexbox>
       </Flexbox>
 
@@ -207,17 +168,9 @@ const Render = memo<TaskRenderProps>(({ children }) => {
         </>
       )}
 
-      {(parsed.description ||
-        parsed.agent ||
-        parsed.parent ||
-        parsed.topics ||
-        parsed.dependencies ||
-        parsed.review) && (
+      {(parsed.description || parsed.dependencies || parsed.review) && (
         <Flexbox gap={4}>
           <FieldRow label="Description" value={parsed.description} />
-          <FieldRow label="Agent" value={parsed.agent} />
-          <FieldRow label="Parent" value={parsed.parent} />
-          <FieldRow label="Topics" value={parsed.topics} />
           <FieldRow label="Dependencies" value={parsed.dependencies} />
           <FieldRow label="Review" value={parsed.review} />
         </Flexbox>

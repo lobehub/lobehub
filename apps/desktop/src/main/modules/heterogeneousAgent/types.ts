@@ -20,6 +20,12 @@ export interface HeterogeneousAgentBuildPlanParams {
   args: string[];
   helpers: HeterogeneousAgentBuildPlanHelpers;
   imageList: HeterogeneousAgentImageAttachment[];
+  /**
+   * Optional path to an MCP config JSON written by the controller (e.g. for
+   * the local `lobe_cc` AskUserQuestion server). Drivers that recognize the
+   * field append `--mcp-config <path>`; others ignore it.
+   */
+  mcpConfigPath?: string;
   prompt: string;
   resumeSessionId?: string;
 }

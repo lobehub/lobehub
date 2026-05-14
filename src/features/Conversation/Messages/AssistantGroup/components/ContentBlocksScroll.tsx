@@ -1,15 +1,20 @@
 'use client';
 
 import type { UIChatMessage } from '@lobechat/types';
-import { Flexbox, ScrollShadow } from '@lobehub/ui';
+import { Flexbox, ScrollArea } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { memo, type RefObject, useMemo } from 'react';
+import type { RefObject } from 'react';
+import { memo, useMemo } from 'react';
 
 import { resolveAssistantGroupFromMessages } from '../utils/resolveAssistantGroupFromMessages';
 import ContentBlock from './ContentBlock';
 import type { RenderableAssistantContentBlock } from './types';
 
 const styles = createStaticStyles(({ css }) => ({
+  scrollRoot: css`
+    border-radius: 0;
+    background: transparent;
+  `,
   scrollTask: css`
     max-height: min(50vh, 300px);
   `,
@@ -82,18 +87,28 @@ const ContentBlocksScroll = memo<ContentBlocksScrollProps>((props) => {
   }
 
   const scrollClass = variant === 'task' ? styles.scrollTask : styles.scrollWorkflow;
-  const shadowSize = variant === 'task' ? 8 : 12;
 
   return (
-    <ScrollShadow
-      className={scrollClass}
-      offset={12}
-      ref={scrollRef as RefObject<HTMLDivElement>}
-      size={shadowSize}
-      onScroll={onScroll}
+    <ScrollArea
+      scrollFade
+      className={styles.scrollRoot}
+      contentProps={{
+        style: {
+          color: 'inherit',
+          display: 'block',
+          fontSize: 'inherit',
+          gap: 0,
+          lineHeight: 'inherit',
+        },
+      }}
+      viewportProps={{
+        className: scrollClass,
+        ref: scrollRef as RefObject<HTMLDivElement>,
+        onScroll,
+      }}
     >
       {body}
-    </ScrollShadow>
+    </ScrollArea>
   );
 });
 

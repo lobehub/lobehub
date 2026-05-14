@@ -158,6 +158,53 @@ describe('ClaudeCodeAdapter', () => {
       const toolStart = events.find((e) => e.type === 'tool_start');
       expect(toolStart).toBeDefined();
     });
+
+    it('rewrites mcp__lobe_cc__ask_user_question to apiName=askUserQuestion', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      const askInput = {
+        questions: [
+          {
+            header: 'Color',
+            options: [
+              { description: 'Red', label: 'Red' },
+              { description: 'Blue', label: 'Blue' },
+            ],
+            question: 'Pick a color?',
+          },
+        ],
+      };
+
+      const events = adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [
+            {
+              id: 'tu_aq_1',
+              input: askInput,
+              name: 'mcp__lobe_cc__ask_user_question',
+              type: 'tool_use',
+            },
+          ],
+        },
+        type: 'assistant',
+      });
+
+      const chunk = events.find(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
+      );
+      expect(chunk!.data.toolsCalling).toEqual([
+        {
+          // Wire-prefixed name is rewritten to the stable domain key.
+          apiName: 'askUserQuestion',
+          arguments: JSON.stringify(askInput),
+          id: 'tu_aq_1',
+          identifier: 'claude-code',
+          type: 'default',
+        },
+      ]);
+    });
   });
 
   describe('tool_result in user events', () => {
@@ -1163,6 +1210,25 @@ describe('ClaudeCodeAdapter', () => {
       expect(textChunks).toHaveLength(0);
     });
 
+    it('emits only the missing text suffix when the final assistant block is longer than streamed deltas', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(messageStart('msg_1'));
+      adapter.adapt(delta('text_delta', 'text', '修'));
+
+      const events = adapter.adapt({
+        message: { id: 'msg_1', content: [{ text: '修复完成', type: 'text' }] },
+        type: 'assistant',
+      });
+
+      const textChunks = events.filter(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'text',
+      );
+      expect(textChunks).toHaveLength(1);
+      expect(textChunks[0].data.content).toBe('复完成');
+      expect((adapter as any).streamedTextByMessageId.has('msg_1')).toBe(false);
+    });
+
     it('suppresses handleAssistant thinking emission when thinking_delta already streamed', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt(init);
@@ -1178,6 +1244,32 @@ describe('ClaudeCodeAdapter', () => {
         (e) => e.type === 'stream_chunk' && e.data.chunkType === 'reasoning',
       );
       expect(reasoningChunks).toHaveLength(0);
+    });
+
+    it('keeps the other modality dedupe state when assistant blocks reconcile separately', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(messageStart('msg_1'));
+      adapter.adapt(delta('text_delta', 'text', 'hello'));
+      adapter.adapt(delta('thinking_delta', 'thinking', 'pondering'));
+
+      const textEvents = adapter.adapt({
+        message: { id: 'msg_1', content: [{ text: 'hello', type: 'text' }] },
+        type: 'assistant',
+      });
+      const thinkingEvents = adapter.adapt({
+        message: { id: 'msg_1', content: [{ thinking: 'pondering', type: 'thinking' }] },
+        type: 'assistant',
+      });
+
+      expect(
+        textEvents.filter((e) => e.type === 'stream_chunk' && e.data.chunkType === 'text'),
+      ).toHaveLength(0);
+      expect(
+        thinkingEvents.filter((e) => e.type === 'stream_chunk' && e.data.chunkType === 'reasoning'),
+      ).toHaveLength(0);
+      expect((adapter as any).streamedTextByMessageId.has('msg_1')).toBe(false);
+      expect((adapter as any).streamedThinkingByMessageId.has('msg_1')).toBe(false);
     });
 
     it('still emits tool_use from assistant event even when text was streamed via deltas', () => {

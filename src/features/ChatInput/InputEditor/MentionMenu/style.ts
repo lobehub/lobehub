@@ -136,5 +136,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   scrollArea: css`
     overflow-y: auto;
     flex: 1;
+    margin: -4px;
+    padding: 4px;
   `,
 }));

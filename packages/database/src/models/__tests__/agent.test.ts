@@ -186,6 +186,51 @@ describe('AgentModel', () => {
     });
   });
 
+  describe('getAgentModelConfig', () => {
+    it('returns model + provider when both are configured', async () => {
+      const agentId = 'snap-agent-1';
+      await serverDB
+        .insert(agents)
+        .values({ id: agentId, model: 'claude-sonnet-4-6', provider: 'anthropic', userId });
+
+      const result = await agentModel.getAgentModelConfig(agentId);
+
+      expect(result).toEqual({ model: 'claude-sonnet-4-6', provider: 'anthropic' });
+    });
+
+    it('resolves by slug when id does not match', async () => {
+      const agentId = 'snap-agent-by-slug';
+      const slug = 'snap-slug';
+      await serverDB
+        .insert(agents)
+        .values({ id: agentId, model: 'gpt-4o', provider: 'openai', slug, userId });
+
+      const result = await agentModel.getAgentModelConfig(slug);
+
+      expect(result).toEqual({ model: 'gpt-4o', provider: 'openai' });
+    });
+
+    it('returns null when model or provider is missing', async () => {
+      const agentId = 'snap-agent-incomplete';
+      await serverDB.insert(agents).values({ id: agentId, model: 'gpt-4o', userId });
+
+      const result = await agentModel.getAgentModelConfig(agentId);
+
+      expect(result).toBeNull();
+    });
+
+    it('does not leak across users', async () => {
+      const agentId = 'snap-agent-other-user';
+      await serverDB
+        .insert(agents)
+        .values({ id: agentId, model: 'gpt-4o', provider: 'openai', userId: userId2 });
+
+      const result = await agentModel.getAgentModelConfig(agentId);
+
+      expect(result).toBeNull();
+    });
+  });
+
   describe('getAgentConfig', () => {
     it('should find agent by ID', async () => {
       const agentId = 'test-agent-by-id';

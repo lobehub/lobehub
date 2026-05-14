@@ -9,5 +9,7 @@
   "features.groupChat.title": "群組聊天（多智能體）",
   "features.inputMarkdown.desc": "在輸入區即時渲染 Markdown（粗體、程式碼區塊、表格等）。",
   "features.inputMarkdown.title": "輸入框 Markdown 渲染",
+  "features.messenger.desc": "透過共享的 LobeHub 機器人，從 Telegram（以及其他即時通訊工具）與您的代理進行對話。在設定中新增「Messenger」標籤，用於綁定您的帳戶並選擇接收訊息的代理。",
+  "features.messenger.title": "即時通訊",
   "title": "實驗室"
 }

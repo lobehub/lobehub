@@ -7,7 +7,62 @@ vi.mock('@/server/routers/lambda/task', () => ({
   taskRouter: { createCaller: () => ({}) },
 }));
 
+// TaskService's transitive deps (taskReview → ModelRuntime) call getLLMConfig
+// at module load, which fails in unit-test env. The runtime is passed a
+// taskService instance per test, so a stubbed class is all we need here.
+vi.mock('@/server/services/task', () => ({
+  TaskService: vi.fn(),
+}));
+
 describe('createTaskRuntime', () => {
+  describe('task comments', () => {
+    it('adds a comment to the current task with agent attribution', async () => {
+      const taskCaller = {
+        addComment: vi.fn().mockResolvedValue({ data: { id: 'comment-1' } }),
+      };
+      const runtime = createTaskRuntime({
+        agentModel: { existsById: vi.fn() } as any,
+        agentId: 'agt-manager',
+        taskCaller: taskCaller as any,
+        taskId: 'T-1',
+        taskModel: {} as any,
+        taskService: {} as any,
+      });
+
+      const result = await runtime.addTaskComment({ content: 'Keep the original parent.' });
+
+      expect(result.success).toBe(true);
+      expect(taskCaller.addComment).toHaveBeenCalledWith({
+        authorAgentId: 'agt-manager',
+        content: 'Keep the original parent.',
+        id: 'T-1',
+      });
+      expect(result.content).toBe('Comment added to task T-1.');
+    });
+
+    it('updates and deletes comments by commentId', async () => {
+      const taskCaller = {
+        deleteComment: vi.fn().mockResolvedValue({ success: true }),
+        updateComment: vi.fn().mockResolvedValue({ success: true }),
+      };
+      const runtime = createTaskRuntime({
+        agentModel: { existsById: vi.fn() } as any,
+        taskCaller: taskCaller as any,
+        taskModel: {} as any,
+        taskService: {} as any,
+      });
+
+      await runtime.updateTaskComment({ commentId: 'comment-1', content: 'Updated' });
+      await runtime.deleteTaskComment({ commentId: 'comment-1' });
+
+      expect(taskCaller.updateComment).toHaveBeenCalledWith({
+        commentId: 'comment-1',
+        content: 'Updated',
+      });
+      expect(taskCaller.deleteComment).toHaveBeenCalledWith({ commentId: 'comment-1' });
+    });
+  });
+
   describe('normalizeListTasksParams', () => {
     it('defaults to top-level unfinished tasks for the current agent', () => {
       const result = normalizeListTasksParams({}, { currentAgentId: 'agt-1' });
@@ -75,10 +130,11 @@ describe('createTaskRuntime', () => {
         existsById: vi.fn().mockResolvedValue(true),
       };
       const taskModel = {
-        create: vi.fn().mockResolvedValue(fakeTask),
         resolve: vi.fn(),
       };
-      const taskService = {} as any;
+      const taskService = {
+        createTask: vi.fn().mockResolvedValue(fakeTask),
+      };
       const taskCaller = {} as any;
       return { agentModel, taskCaller, taskModel, taskService };
     };
@@ -91,7 +147,7 @@ describe('createTaskRuntime', () => {
         agentId: 'agt-xyz',
         taskCaller: deps.taskCaller,
         taskModel: deps.taskModel as any,
-        taskService: deps.taskService,
+        taskService: deps.taskService as any,
       });
 
       const result = await runtime.createTask({
@@ -100,7 +156,7 @@ describe('createTaskRuntime', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(deps.taskModel.create).toHaveBeenCalledWith(
+      expect(deps.taskService.createTask).toHaveBeenCalledWith(
         expect.objectContaining({
           assigneeAgentId: 'agt-xyz',
           createdByAgentId: 'agt-xyz',
@@ -115,7 +171,7 @@ describe('createTaskRuntime', () => {
         agentModel: deps.agentModel as any,
         taskCaller: deps.taskCaller,
         taskModel: deps.taskModel as any,
-        taskService: deps.taskService,
+        taskService: deps.taskService as any,
       });
 
       await runtime.createTask({
@@ -123,7 +179,7 @@ describe('createTaskRuntime', () => {
         name: 'Test',
       });
 
-      expect(deps.taskModel.create).toHaveBeenCalledWith(
+      expect(deps.taskService.createTask).toHaveBeenCalledWith(
         expect.objectContaining({
           assigneeAgentId: undefined,
           createdByAgentId: undefined,
@@ -140,7 +196,7 @@ describe('createTaskRuntime', () => {
         scope: 'task',
         taskCaller: deps.taskCaller,
         taskModel: deps.taskModel as any,
-        taskService: deps.taskService,
+        taskService: deps.taskService as any,
       });
 
       await runtime.createTask({
@@ -148,7 +204,7 @@ describe('createTaskRuntime', () => {
         name: 'Test',
       });
 
-      expect(deps.taskModel.create).toHaveBeenCalledWith(
+      expect(deps.taskService.createTask).toHaveBeenCalledWith(
         expect.objectContaining({
           assigneeAgentId: undefined,
           createdByAgentId: 'agt-xyz',
@@ -165,7 +221,7 @@ describe('createTaskRuntime', () => {
         scope: 'task',
         taskCaller: deps.taskCaller,
         taskModel: deps.taskModel as any,
-        taskService: deps.taskService,
+        taskService: deps.taskService as any,
       });
 
       await runtime.createTask({
@@ -174,7 +230,7 @@ describe('createTaskRuntime', () => {
         name: 'Test',
       });
 
-      expect(deps.taskModel.create).toHaveBeenCalledWith(
+      expect(deps.taskService.createTask).toHaveBeenCalledWith(
         expect.objectContaining({
           assigneeAgentId: 'agt-worker',
           createdByAgentId: 'agt-manager',
@@ -193,7 +249,7 @@ describe('createTaskRuntime', () => {
         scope: 'task',
         taskCaller: deps.taskCaller,
         taskModel: deps.taskModel as any,
-        taskService: deps.taskService,
+        taskService: deps.taskService as any,
       });
 
       const result = await runtime.createTask({
@@ -204,7 +260,7 @@ describe('createTaskRuntime', () => {
 
       expect(result.success).toBe(false);
       expect(result.content).toBe('Assignee agent not found: agt-other-user');
-      expect(deps.taskModel.create).not.toHaveBeenCalled();
+      expect(deps.taskService.createTask).not.toHaveBeenCalled();
     });
 
     it('resolves and uses parentTaskId when parentIdentifier is provided', async () => {
@@ -216,7 +272,7 @@ describe('createTaskRuntime', () => {
         agentId: 'agt-xyz',
         taskCaller: deps.taskCaller,
         taskModel: deps.taskModel as any,
-        taskService: deps.taskService,
+        taskService: deps.taskService as any,
       });
 
       await runtime.createTask({
@@ -225,7 +281,7 @@ describe('createTaskRuntime', () => {
         parentIdentifier: 'T-99',
       });
 
-      expect(deps.taskModel.create).toHaveBeenCalledWith(
+      expect(deps.taskService.createTask).toHaveBeenCalledWith(
         expect.objectContaining({
           createdByAgentId: 'agt-xyz',
           parentTaskId: 'parent-id',
@@ -242,7 +298,7 @@ describe('createTaskRuntime', () => {
         agentId: 'agt-xyz',
         taskCaller: deps.taskCaller,
         taskModel: deps.taskModel as any,
-        taskService: deps.taskService,
+        taskService: deps.taskService as any,
       });
 
       const result = await runtime.createTask({
@@ -252,7 +308,7 @@ describe('createTaskRuntime', () => {
       });
 
       expect(result.success).toBe(false);
-      expect(deps.taskModel.create).not.toHaveBeenCalled();
+      expect(deps.taskService.createTask).not.toHaveBeenCalled();
     });
   });
 
@@ -266,7 +322,7 @@ describe('createTaskRuntime', () => {
         update: vi.fn().mockResolvedValue({}),
       };
       const taskService = {} as any;
-      const taskCaller = {} as any;
+      const taskCaller = { update: vi.fn().mockResolvedValue({}) } as any;
       return { agentModel, taskCaller, taskModel, taskService };
     };
 
@@ -279,7 +335,7 @@ describe('createTaskRuntime', () => {
         agentId: 'agt-manager',
         taskCaller: deps.taskCaller,
         taskModel: deps.taskModel as any,
-        taskService: deps.taskService,
+        taskService: deps.taskService as any,
       });
 
       const result = await runtime.editTask({
@@ -290,6 +346,7 @@ describe('createTaskRuntime', () => {
       expect(result.success).toBe(false);
       expect(result.content).toBe('Assignee agent not found: agt-other-user');
       expect(deps.taskModel.update).not.toHaveBeenCalled();
+      expect(deps.taskCaller.update).not.toHaveBeenCalled();
     });
 
     it('allows clearing assigneeAgentId without ownership lookup', async () => {
@@ -300,7 +357,7 @@ describe('createTaskRuntime', () => {
         agentId: 'agt-manager',
         taskCaller: deps.taskCaller,
         taskModel: deps.taskModel as any,
-        taskService: deps.taskService,
+        taskService: deps.taskService as any,
       });
 
       const result = await runtime.editTask({
@@ -310,7 +367,55 @@ describe('createTaskRuntime', () => {
 
       expect(result.success).toBe(true);
       expect(deps.agentModel.existsById).not.toHaveBeenCalled();
-      expect(deps.taskModel.update).toHaveBeenCalledWith('task-1', { assigneeAgentId: null });
+      expect(deps.taskCaller.update).toHaveBeenCalledWith({
+        assigneeAgentId: null,
+        id: 'task-1',
+      });
+      expect(deps.taskModel.update).not.toHaveBeenCalled();
+    });
+
+    it('delegates parentIdentifier to router update for resolution and safety validation', async () => {
+      const deps = makeDeps();
+
+      const runtime = createTaskRuntime({
+        agentModel: deps.agentModel as any,
+        agentId: 'agt-manager',
+        taskCaller: deps.taskCaller,
+        taskModel: deps.taskModel as any,
+        taskService: deps.taskService as any,
+      });
+
+      const result = await runtime.editTask({
+        identifier: 'T-1',
+        parentIdentifier: 'T-43',
+      });
+
+      expect(result.success).toBe(true);
+      expect(deps.taskCaller.update).toHaveBeenCalledWith({ id: 'task-1', parentTaskId: 'T-43' });
+      expect(deps.taskModel.update).not.toHaveBeenCalled();
+      expect(result.content).toContain('parent → T-43');
+    });
+
+    it('passes null parentIdentifier through to move a task to the top level', async () => {
+      const deps = makeDeps();
+
+      const runtime = createTaskRuntime({
+        agentModel: deps.agentModel as any,
+        agentId: 'agt-manager',
+        taskCaller: deps.taskCaller,
+        taskModel: deps.taskModel as any,
+        taskService: deps.taskService as any,
+      });
+
+      const result = await runtime.editTask({
+        identifier: 'T-1',
+        parentIdentifier: null,
+      });
+
+      expect(result.success).toBe(true);
+      expect(deps.taskCaller.update).toHaveBeenCalledWith({ id: 'task-1', parentTaskId: null });
+      expect(deps.taskModel.update).not.toHaveBeenCalled();
+      expect(result.content).toContain('parent cleared');
     });
   });
 
@@ -341,20 +446,22 @@ describe('createTaskRuntime', () => {
     const makeDeps = () => {
       const agentModel = { existsById: vi.fn().mockResolvedValue(true) };
       const taskModel = {
-        create: vi.fn().mockImplementation(async ({ name }) => ({
+        resolve: vi.fn(),
+      };
+      const taskService = {
+        createTask: vi.fn().mockImplementation(async ({ name }) => ({
           id: `db-${name}`,
           identifier: `T-${name}`,
           name,
           priority: 0,
           status: 'backlog',
         })),
-        resolve: vi.fn(),
       };
       return {
         agentModel,
         taskCaller: {} as any,
         taskModel,
-        taskService: {} as any,
+        taskService,
       };
     };
 
@@ -365,7 +472,7 @@ describe('createTaskRuntime', () => {
         agentId: 'agt-x',
         taskCaller: deps.taskCaller,
         taskModel: deps.taskModel as any,
-        taskService: deps.taskService,
+        taskService: deps.taskService as any,
       });
 
       const result = await runtime.createTasks({
@@ -376,7 +483,7 @@ describe('createTaskRuntime', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(deps.taskModel.create).toHaveBeenCalledTimes(2);
+      expect(deps.taskService.createTask).toHaveBeenCalledTimes(2);
       expect(result.content).toContain('Created 2 tasks');
       expect(result.content).toContain('T-A');
       expect(result.content).toContain('T-B');
@@ -385,7 +492,7 @@ describe('createTaskRuntime', () => {
     it('continues past per-item failures and reports them in the summary', async () => {
       const deps = makeDeps();
       // make the second create throw
-      deps.taskModel.create
+      deps.taskService.createTask
         .mockResolvedValueOnce({
           id: 'db-A',
           identifier: 'T-A',
@@ -400,7 +507,7 @@ describe('createTaskRuntime', () => {
         agentId: 'agt-x',
         taskCaller: deps.taskCaller,
         taskModel: deps.taskModel as any,
-        taskService: deps.taskService,
+        taskService: deps.taskService as any,
       });
 
       const result = await runtime.createTasks({
@@ -421,13 +528,13 @@ describe('createTaskRuntime', () => {
         agentModel: deps.agentModel as any,
         taskCaller: deps.taskCaller,
         taskModel: deps.taskModel as any,
-        taskService: deps.taskService,
+        taskService: deps.taskService as any,
       });
 
       const result = await runtime.createTasks({ tasks: [] });
 
       expect(result.success).toBe(false);
-      expect(deps.taskModel.create).not.toHaveBeenCalled();
+      expect(deps.taskService.createTask).not.toHaveBeenCalled();
     });
   });
 

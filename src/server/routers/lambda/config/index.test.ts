@@ -146,6 +146,21 @@ describe('configRouter', () => {
           process.env.OPENROUTER_MODEL_LIST = '';
         });
       });
+
+      it('should enable the default DeepSeek provider without a server API key', async () => {
+        const originalApiKey = process.env.DEEPSEEK_API_KEY;
+        delete process.env.DEEPSEEK_API_KEY;
+
+        const response = await router.getGlobalConfig();
+
+        expect(response.serverConfig.aiProvider?.deepseek?.enabled).toBe(true);
+
+        if (originalApiKey === undefined) {
+          delete process.env.DEEPSEEK_API_KEY;
+        } else {
+          process.env.DEEPSEEK_API_KEY = originalApiKey;
+        }
+      });
     });
   });
 

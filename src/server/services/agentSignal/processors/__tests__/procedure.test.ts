@@ -312,7 +312,7 @@ describe('procedure processors', () => {
       cheapScoreDelta: 0.6,
       createdAt: 1000,
       domainKey: 'skill',
-      id: 'procedure-record:sig_skill:skill-candidate',
+      id: 'procedure-record:sig_skill:skill-observation-record',
       intentClass: 'implicit_positive',
       refs: {
         signalIds: ['sig_skill'],
@@ -326,7 +326,7 @@ describe('procedure processors', () => {
     expect(write).toHaveBeenCalledWith(expectedRecord);
     expect(appendAndScore).toHaveBeenCalledWith(expectedRecord);
     expect(result).toEqual({
-      reason: 'accumulated skill candidate',
+      reason: 'recorded skill observation',
       type: 'continue',
       value: { record: expectedRecord, scored: undefined },
     });

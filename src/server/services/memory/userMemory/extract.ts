@@ -276,9 +276,33 @@ const extractCredentialsFromVault = (vault?: Record<string, unknown>) => {
   return { apiKey, baseURL };
 };
 
-const serializeError = (error: unknown): MemoryExtractionTraceError => {
+const getStringErrorProperty = (error: unknown, key: string) => {
+  if (!error || typeof error !== 'object') return undefined;
+
+  const value = (error as Record<string, unknown>)[key];
+
+  return typeof value === 'string' ? value : undefined;
+};
+
+const getErrorCause = (error: unknown) => {
+  if (!error || typeof error !== 'object') return undefined;
+
+  return (error as { cause?: unknown }).cause;
+};
+
+const serializeError = (
+  error: unknown,
+): AsyncTaskStructuredErrorItem & MemoryExtractionTraceError => {
   if (error instanceof Error) {
-    return { message: error.message, name: error.name, stack: error.stack };
+    const cause = getErrorCause(error);
+
+    return {
+      cause: cause ? serializeError(cause) : undefined,
+      code: getStringErrorProperty(error, 'code'),
+      message: error.message,
+      name: error.name,
+      stack: error.stack,
+    };
   }
 
   try {
@@ -324,7 +348,20 @@ const summarizeUnknown = (value: unknown, limit = 500) => {
   }
 };
 
-const makeTaskErrorItem = (
+/**
+ * Serializes a memory extraction error for async task persistence.
+ *
+ * Use when:
+ * - Recording extraction, persistence, or retrieval failures on async tasks
+ * - Preserving wrapped database/runtime error causes for production debugging
+ *
+ * Expects:
+ * - Error inputs may be plain values, `Error` instances, or errors with nested `cause`
+ *
+ * Returns:
+ * - A JSON-safe task error item with stage/source context and nested cause details
+ */
+export const makeTaskErrorItem = (
   stage: MemoryExtractionErrorStage,
   error: unknown,
   options: {
@@ -340,7 +377,10 @@ const makeTaskErrorItem = (
   return {
     layer: options.layer,
     memoryIndex: options.memoryIndex,
+    cause: serialized.cause,
+    code: serialized.code,
     message: serialized.message,
+    name: serialized.name,
     preview: options.preview ? summarizeUnknown(options.preview) : undefined,
     sourceId: options.sourceId,
     sourceType: options.sourceType,

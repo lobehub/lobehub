@@ -7,6 +7,7 @@ export const MENTION_TAG = 'mention';
 export const THINKING_TAG = 'think';
 export const LOCAL_FILE_TAG = 'localFile';
 export const TASK_TAG = 'task';
+export const USER_FEEDBACK_TAG = 'user_feedback';
 // https://regex101.com/r/TwzTkf/2
 export const ARTIFACT_TAG_REGEX = /<lobeArtifact\b[^>]*>(?<content>[\S\s]*?)(?:<\/lobeArtifact>|$)/;
 

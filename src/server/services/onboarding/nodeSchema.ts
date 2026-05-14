@@ -166,12 +166,6 @@ export const getNodeDraftState = (
 ): NodeDraftState | undefined => {
   if (!node || node === 'summary') return undefined;
 
-  if (node === 'responseLanguage') {
-    return draft.responseLanguage
-      ? { status: 'complete' }
-      : { missingFields: ['responseLanguage'], status: 'empty' };
-  }
-
   const currentDraft = draft[node];
 
   if (!currentDraft || Object.keys(currentDraft).length === 0) {

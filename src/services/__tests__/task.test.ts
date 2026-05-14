@@ -17,6 +17,7 @@ vi.mock('@/libs/trpc/client', () => ({
       clearAll: { mutate: vi.fn() },
       create: { mutate: vi.fn() },
       delete: { mutate: vi.fn() },
+      deleteComment: { mutate: vi.fn() },
       deleteTopic: { mutate: vi.fn() },
       detail: { query: vi.fn() },
       find: { query: vi.fn() },
@@ -38,6 +39,7 @@ vi.mock('@/libs/trpc/client', () => ({
       runReview: { mutate: vi.fn() },
       unpinDocument: { mutate: vi.fn() },
       update: { mutate: vi.fn() },
+      updateComment: { mutate: vi.fn() },
       updateCheckpoint: { mutate: vi.fn() },
       updateConfig: { mutate: vi.fn() },
       updateReview: { mutate: vi.fn() },
@@ -118,11 +120,30 @@ describe('TaskService', () => {
     });
 
     it('addComment should pass all params', async () => {
-      await taskService.addComment('T-1', 'Great work', { topicId: 'tpc_1' });
+      await taskService.addComment('T-1', 'Great work', {
+        authorAgentId: 'agt_1',
+        topicId: 'tpc_1',
+      });
       expect(lambdaClient.task.addComment.mutate).toHaveBeenCalledWith({
+        authorAgentId: 'agt_1',
         content: 'Great work',
         id: 'T-1',
         topicId: 'tpc_1',
+      });
+    });
+
+    it('updateComment should pass commentId and content', async () => {
+      await taskService.updateComment('comment_1', 'Updated');
+      expect(lambdaClient.task.updateComment.mutate).toHaveBeenCalledWith({
+        commentId: 'comment_1',
+        content: 'Updated',
+      });
+    });
+
+    it('deleteComment should pass commentId', async () => {
+      await taskService.deleteComment('comment_1');
+      expect(lambdaClient.task.deleteComment.mutate).toHaveBeenCalledWith({
+        commentId: 'comment_1',
       });
     });
 

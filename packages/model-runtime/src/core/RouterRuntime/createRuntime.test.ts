@@ -10,7 +10,7 @@ describe('createRouterRuntime', () => {
   });
 
   describe('initialization', () => {
-    it('should throw error when routers array is empty', async () => {
+    it('should throw NoAvailableProvider error when routers array is empty', async () => {
       const Runtime = createRouterRuntime({
         id: 'test-runtime',
         routers: [],
@@ -20,7 +20,11 @@ describe('createRouterRuntime', () => {
       // 现在错误在使用时才抛出，因为是延迟创建
       await expect(
         runtime.chat({ model: 'test-model', messages: [], temperature: 0.7 }),
-      ).rejects.toThrow('empty providers');
+      ).rejects.toMatchObject({
+        error: { message: 'empty providers' },
+        errorType: AgentRuntimeErrorType.NoAvailableProvider,
+        provider: 'test-runtime',
+      });
     });
 
     it('should create UniformRuntime class with valid routers', () => {
@@ -369,7 +373,7 @@ describe('createRouterRuntime', () => {
       );
     });
 
-    it('should throw error when dynamic routers function returns empty array', async () => {
+    it('should throw NoAvailableProvider error when dynamic routers function returns empty array', async () => {
       const emptyRoutersFunction = () => [];
 
       const Runtime = createRouterRuntime({
@@ -381,7 +385,11 @@ describe('createRouterRuntime', () => {
       // 现在错误在使用时才抛出，因为是延迟创建
       await expect(
         runtime.chat({ model: 'test-model', messages: [], temperature: 0.7 }),
-      ).rejects.toThrow('empty providers');
+      ).rejects.toMatchObject({
+        error: { message: 'empty providers' },
+        errorType: AgentRuntimeErrorType.NoAvailableProvider,
+        provider: 'test-runtime',
+      });
     });
 
     it('should support async function-based routers configuration', async () => {

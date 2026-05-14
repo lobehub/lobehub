@@ -1,4 +1,5 @@
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
+import { SELF_FEEDBACK_INTENT_IDENTIFIER } from '@lobechat/builtin-tool-self-iteration';
 import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -9,6 +10,7 @@ import { AiAgentService } from '../index';
 const {
   mockCreateOperation,
   mockGetAgentConfig,
+  mockIsAgentSignalEnabledForUser,
   mockMessageCreate,
   mockMessageQuery,
   mockResolveTask,
@@ -16,6 +18,7 @@ const {
 } = vi.hoisted(() => ({
   mockCreateOperation: vi.fn(),
   mockGetAgentConfig: vi.fn(),
+  mockIsAgentSignalEnabledForUser: vi.fn(),
   mockMessageCreate: vi.fn(),
   mockMessageQuery: vi.fn(),
   mockResolveTask: vi.fn(),
@@ -54,6 +57,26 @@ vi.mock('@/server/services/agent', () => ({
   AgentService: vi.fn().mockImplementation(() => ({
     getAgentConfig: mockGetAgentConfig,
   })),
+}));
+
+vi.mock('@/server/services/agentSignal/featureGate', () => ({
+  isAgentSignalEnabledForUser: mockIsAgentSignalEnabledForUser,
+  isLobeAiAgentSlug: (slug?: string | null) => slug === 'inbox',
+  resolveAgentSelfIterationCapability: ({
+    agentSelfIterationEnabled,
+    isAgentSelfIterationFeatureEnabled,
+    isLobeAiAgent,
+  }: {
+    agentSelfIterationEnabled?: boolean;
+    isAgentSelfIterationFeatureEnabled: boolean;
+    isLobeAiAgent: boolean;
+  }) =>
+    isAgentSelfIterationFeatureEnabled &&
+    (isLobeAiAgent || agentSelfIterationEnabled === true),
+}));
+
+vi.mock('@/server/services/agentSignal', () => ({
+  enqueueAgentSignalSourceEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@/database/models/plugin', () => ({
@@ -109,7 +132,7 @@ vi.mock('@/server/services/file', () => ({
 
 vi.mock('@/server/modules/Mecha', () => ({
   createServerAgentToolsEngine: vi.fn().mockReturnValue({
-    generateToolsDetailed: vi.fn().mockReturnValue({ enabledToolIds: [], tools: [] }),
+    generateToolsDetailed: vi.fn().mockImplementation(() => ({ enabledToolIds: [], tools: [] })),
     getEnabledPluginManifests: vi.fn().mockReturnValue(new Map()),
   }),
   serverMessagesEngine: vi.fn().mockResolvedValue([{ content: 'test', role: 'user' }]),
@@ -155,6 +178,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     vi.clearAllMocks();
     mockMessageCreate.mockResolvedValue({ id: 'msg-1' });
     mockMessageQuery.mockResolvedValue([]);
+    mockIsAgentSignalEnabledForUser.mockResolvedValue(true);
     mockResolveTask.mockResolvedValue(null);
     mockToolsEnv.VISUAL_UNDERSTANDING_MODEL = 'vision-model';
     mockToolsEnv.VISUAL_UNDERSTANDING_PROVIDER = 'test-provider';
@@ -250,6 +274,72 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
 
     const callArgs = mockCreateOperation.mock.calls[0][0];
     expect(callArgs.agentConfig.systemRole).toBe('');
+  });
+
+  it('should inject self-feedback intent tool for Lobe AI when user gate is enabled', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      chatConfig: {},
+      id: 'agent-inbox',
+      model: 'gpt-4',
+      plugins: [],
+      provider: 'openai',
+      slug: 'inbox',
+      systemRole: '',
+    });
+
+    await service.execAgent({
+      agentId: 'agent-inbox',
+      prompt: 'Hello',
+    });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.toolSet.enabledToolIds).toContain(SELF_FEEDBACK_INTENT_IDENTIFIER);
+    expect(callArgs.toolSet.manifestMap[SELF_FEEDBACK_INTENT_IDENTIFIER]).toBeDefined();
+    expect(callArgs.toolSet.sourceMap[SELF_FEEDBACK_INTENT_IDENTIFIER]).toBe('builtin');
+  });
+
+  it('should not inject self-feedback intent tool for custom agents without agent self-iteration', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      chatConfig: {},
+      id: 'agent-custom',
+      model: 'gpt-4',
+      plugins: [],
+      provider: 'openai',
+      slug: 'custom-agent',
+      systemRole: '',
+    });
+
+    await service.execAgent({
+      agentId: 'agent-custom',
+      prompt: 'Hello',
+    });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.toolSet.enabledToolIds).not.toContain(SELF_FEEDBACK_INTENT_IDENTIFIER);
+    expect(callArgs.toolSet.manifestMap[SELF_FEEDBACK_INTENT_IDENTIFIER]).toBeUndefined();
+    expect(callArgs.toolSet.sourceMap[SELF_FEEDBACK_INTENT_IDENTIFIER]).toBeUndefined();
+  });
+
+  it('should inject self-feedback intent tool for custom agents with agent self-iteration', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      chatConfig: { selfIteration: { enabled: true } },
+      id: 'agent-custom',
+      model: 'gpt-4',
+      plugins: [],
+      provider: 'openai',
+      slug: 'custom-agent',
+      systemRole: '',
+    });
+
+    await service.execAgent({
+      agentId: 'agent-custom',
+      prompt: 'Hello',
+    });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.toolSet.enabledToolIds).toContain(SELF_FEEDBACK_INTENT_IDENTIFIER);
+    expect(callArgs.toolSet.manifestMap[SELF_FEEDBACK_INTENT_IDENTIFIER]).toBeDefined();
+    expect(callArgs.toolSet.sourceMap[SELF_FEEDBACK_INTENT_IDENTIFIER]).toBe('builtin');
   });
 
   it('should inject page-agent runtime for regular agents in page scope', async () => {

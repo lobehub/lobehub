@@ -61,6 +61,22 @@ import type {
  */
 const CC_TODO_WRITE_TOOL_NAME = 'TodoWrite';
 
+/**
+ * Tool name CC sees for the LobeHub-hosted MCP `ask_user_question` server.
+ * Source of truth lives in `../askUser/constants.ts`; replicated here as a
+ * literal so the adapter compiles in browser bundles without dragging in
+ * any of the askUser package's runtime (node:http, MCP SDK, etc.) by
+ * accident. Keep in sync.
+ */
+const ASK_USER_MCP_TOOL_NAME = 'mcp__lobe_cc__ask_user_question';
+
+/**
+ * apiName the adapter rewrites the MCP tool to so the renderer routes on
+ * a stable key, not the wire-prefixed MCP name. Source of truth same as
+ * above.
+ */
+const ASK_USER_API_NAME = 'askUserQuestion';
+
 /** Status of a single todo item in CC's `TodoWrite` tool_use. */
 type ClaudeCodeTodoStatus = 'pending' | 'in_progress' | 'completed';
 
@@ -272,10 +288,10 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
    * authoritative usage on `message_delta`.
    */
   private currentStreamEventModel: string | undefined;
-  /** message.ids whose text has already been streamed as deltas — skip the full-block emission */
-  private messagesWithStreamedText = new Set<string>();
-  /** message.ids whose thinking has already been streamed as deltas — skip the full-block emission */
-  private messagesWithStreamedThinking = new Set<string>();
+  /** Cumulative text streamed via partial-message deltas, keyed by message.id. */
+  private streamedTextByMessageId = new Map<string, string>();
+  /** Cumulative thinking streamed via partial-message deltas, keyed by message.id. */
+  private streamedThinkingByMessageId = new Map<string, string>();
   /**
    * Cumulative tool_use blocks per message.id. CC streams each tool_use in
    * its OWN assistant event, and the handler's in-memory assistant.tools
@@ -414,8 +430,13 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
           break;
         }
         case 'tool_use': {
+          // Rewrite our local MCP `ask_user_question` tool to a stable
+          // apiName so the renderer routes on `askUserQuestion` (clean,
+          // domain-named) instead of the wire-prefixed MCP form. Identifier
+          // stays `claude-code` because this remains a CC-side tool.
+          const apiName = block.name === ASK_USER_MCP_TOOL_NAME ? ASK_USER_API_NAME : block.name;
           newToolCalls.push({
-            apiName: block.name,
+            apiName,
             arguments: JSON.stringify(block.input || {}),
             id: block.id,
             identifier: 'claude-code',
@@ -436,18 +457,31 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       }
     }
 
-    // Skip full-block emission when deltas have already been streamed for
-    // this message.id (partial-messages mode). Otherwise the UI would see
-    // the text/thinking twice — once as deltas, once as a giant trailing chunk.
-    const textAlreadyStreamed = !!messageId && this.messagesWithStreamedText.has(messageId);
-    const thinkingAlreadyStreamed = !!messageId && this.messagesWithStreamedThinking.has(messageId);
-    if (textParts.length > 0 && !textAlreadyStreamed) {
-      events.push(this.makeChunkEvent({ chunkType: 'text', content: textParts.join('') }));
+    // Under `--include-partial-messages`, CC may emit deltas first and then a
+    // final full assistant block for the SAME message.id. If the full block is
+    // longer than the streamed deltas, emit only the missing suffix so the
+    // persisted content does not lose the tail of the message.
+    const textCompletion = this.getTrailingCompletion(
+      messageId,
+      textParts.join(''),
+      this.streamedTextByMessageId,
+    );
+    const thinkingCompletion = this.getTrailingCompletion(
+      messageId,
+      reasoningParts.join(''),
+      this.streamedThinkingByMessageId,
+    );
+    if (textCompletion) {
+      events.push(this.makeChunkEvent({ chunkType: 'text', content: textCompletion }));
     }
-    if (reasoningParts.length > 0 && !thinkingAlreadyStreamed) {
-      events.push(
-        this.makeChunkEvent({ chunkType: 'reasoning', reasoning: reasoningParts.join('') }),
-      );
+    if (thinkingCompletion) {
+      events.push(this.makeChunkEvent({ chunkType: 'reasoning', reasoning: thinkingCompletion }));
+    }
+    if (messageId) {
+      this.clearStreamedBuffers(messageId, {
+        thinking: reasoningParts.length > 0,
+        text: textParts.length > 0,
+      });
     }
     events.push(...this.emitToolChunk(newToolCalls, messageId));
 
@@ -507,8 +541,13 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
           break;
         }
         case 'tool_use': {
+          // Rewrite our local MCP `ask_user_question` tool to a stable
+          // apiName so the renderer routes on `askUserQuestion` (clean,
+          // domain-named) instead of the wire-prefixed MCP form. Identifier
+          // stays `claude-code` because this remains a CC-side tool.
+          const apiName = block.name === ASK_USER_MCP_TOOL_NAME ? ASK_USER_API_NAME : block.name;
           newToolCalls.push({
-            apiName: block.name,
+            apiName,
             arguments: JSON.stringify(block.input || {}),
             id: block.id,
             identifier: 'claude-code',
@@ -753,6 +792,8 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       : this.makeEvent('agent_runtime_end', {});
 
     this.pendingRateLimitInfo = undefined;
+    this.streamedTextByMessageId.clear();
+    this.streamedThinkingByMessageId.clear();
 
     return [...events, this.makeEvent('stream_end', {}), finalEvent];
   }
@@ -783,11 +824,21 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
         if (!delta) return [];
         const msgId = this.currentStreamEventMessageId;
         if (delta.type === 'text_delta' && delta.text) {
-          if (msgId) this.messagesWithStreamedText.add(msgId);
+          if (msgId) {
+            this.streamedTextByMessageId.set(
+              msgId,
+              `${this.streamedTextByMessageId.get(msgId) ?? ''}${delta.text}`,
+            );
+          }
           return [this.makeChunkEvent({ chunkType: 'text', content: delta.text })];
         }
         if (delta.type === 'thinking_delta' && delta.thinking) {
-          if (msgId) this.messagesWithStreamedThinking.add(msgId);
+          if (msgId) {
+            this.streamedThinkingByMessageId.set(
+              msgId,
+              `${this.streamedThinkingByMessageId.get(msgId) ?? ''}${delta.thinking}`,
+            );
+          }
           return [this.makeChunkEvent({ chunkType: 'reasoning', reasoning: delta.thinking })];
         }
         return [];
@@ -853,6 +904,32 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       this.makeEvent('stream_end', {}),
       this.makeEvent('stream_start', { model, newStep: true, provider: 'claude-code' }),
     ];
+  }
+
+  private getTrailingCompletion(
+    messageId: string | undefined,
+    fullContent: string,
+    streamedByMessageId: Map<string, string>,
+  ): string | undefined {
+    if (!fullContent) return;
+    if (!messageId) return fullContent;
+
+    const streamed = streamedByMessageId.get(messageId);
+    if (!streamed) return fullContent;
+    if (fullContent === streamed) return;
+
+    if (fullContent.startsWith(streamed)) {
+      const suffix = fullContent.slice(streamed.length);
+      return suffix || undefined;
+    }
+  }
+
+  private clearStreamedBuffers(
+    messageId: string,
+    modes: { text?: boolean; thinking?: boolean },
+  ): void {
+    if (modes.text) this.streamedTextByMessageId.delete(messageId);
+    if (modes.thinking) this.streamedThinkingByMessageId.delete(messageId);
   }
 
   // ─── Event factories ───

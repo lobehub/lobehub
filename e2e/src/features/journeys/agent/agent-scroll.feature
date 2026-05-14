@@ -55,3 +55,16 @@ Feature: 发送消息与流式输出期间的视口滚动行为
     And 等待流式响应结束
     And 用户发送一条触发长文输出的消息
     Then 用户消息应固定在聊天列表顶部
+
+  # Regression guard for the spacer-shrink issue: after streaming has ended,
+  # layout/virtual-list offset corrections can emit scroll events without any
+  # wheel, touch, keyboard, or pointer scroll input. Those synthetic negative
+  # offsets must not be treated as user scroll-up intent.
+  @AGENT-SCROLL-006 @P0 @journey
+  Scenario: 非用户触发的上移不应收缩底部补偿区域
+    Given 用户进入 Lobe AI 对话页面
+    When 用户完成一轮用于垫高列表的长回复对话
+    And 用户发送一条触发短回复的消息并等待回复完成
+    And 记录聊天列表底部补偿区域高度
+    And 模拟非用户触发的聊天列表上移 120 像素
+    Then 聊天列表底部补偿区域高度不应收缩

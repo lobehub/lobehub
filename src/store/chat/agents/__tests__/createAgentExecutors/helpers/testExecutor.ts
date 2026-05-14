@@ -1,5 +1,5 @@
 import type { AgentInstruction, AgentState } from '@lobechat/agent-runtime';
-import type { MessageMapScope } from '@lobechat/types';
+import type { MessageMapScope, MessageMetadata } from '@lobechat/types';
 
 import { DEFAULT_AGENT_CHAT_CONFIG, DEFAULT_AGENT_CONFIG } from '@/const/settings';
 import { type ResolvedAgentConfig } from '@/services/chat/mecha';
@@ -35,6 +35,7 @@ export const executeWithMockContext = async ({
   state,
   mockStore,
   context,
+  metadata,
   skipCreateFirstMessage = false,
 }: {
   context: {
@@ -48,6 +49,7 @@ export const executeWithMockContext = async ({
     topicId?: string | null;
   };
   executor: AgentInstruction['type'];
+  metadata?: Pick<MessageMetadata, 'trigger'>;
   instruction: AgentInstruction;
   mockStore: ChatStore;
   skipCreateFirstMessage?: boolean;
@@ -77,6 +79,7 @@ export const executeWithMockContext = async ({
   const executors = createAgentExecutors({
     agentConfig: createMockResolvedAgentConfig(),
     get: () => mockStore,
+    metadata,
     messageKey: context.messageKey,
     operationId: context.operationId,
     parentId: context.parentId,

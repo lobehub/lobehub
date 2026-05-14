@@ -2,7 +2,7 @@
 
 import type { AssistantContentBlock, EmojiReaction } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
-import type { MouseEventHandler } from 'react';
+import type { MouseEventHandler, ReactNode } from 'react';
 import { memo, Suspense, useCallback, useMemo } from 'react';
 
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
@@ -42,13 +42,14 @@ const actionBarHolder = (
 interface GroupMessageProps {
   defaultWorkflowExpandLevel?: WorkflowExpandLevelDefault;
   disableEditing?: boolean;
+  footerRender?: ReactNode;
   id: string;
   index: number;
   isLatestItem?: boolean;
 }
 
 const GroupMessage = memo<GroupMessageProps>(
-  ({ defaultWorkflowExpandLevel, id, index, disableEditing }) => {
+  ({ defaultWorkflowExpandLevel, id, index, disableEditing, footerRender }) => {
     // Get message and actionsConfig from ConversationStore
     const item = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual)!;
 
@@ -141,6 +142,7 @@ const GroupMessage = memo<GroupMessageProps>(
       <ChatItem
         showTitle
         avatar={avatar}
+        id={id}
         placement={'left'}
         time={createdAt}
         actions={
@@ -177,6 +179,7 @@ const GroupMessage = memo<GroupMessageProps>(
           </div>
         )}
         {interrupted && <InterruptedHint />}
+        {footerRender}
         {isDevMode && model && (
           <Usage model={model} performance={performance} provider={provider!} usage={usage} />
         )}

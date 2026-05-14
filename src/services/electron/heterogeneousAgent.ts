@@ -39,6 +39,21 @@ class HeterogeneousAgentService {
   async getSessionInfo(sessionId: string) {
     return this.ipc.heterogeneousAgent.getSessionInfo({ sessionId });
   }
+
+  /**
+   * Submit the user's answer (or cancellation) for a pending CC
+   * AskUserQuestion intervention. The main process routes it to the
+   * matching MCP bridge so the blocked tool handler can return to CC.
+   */
+  async submitIntervention(params: {
+    cancelReason?: 'timeout' | 'user_cancelled';
+    cancelled?: boolean;
+    operationId: string;
+    result?: unknown;
+    toolCallId: string;
+  }) {
+    return this.ipc.heterogeneousAgent.submitIntervention(params);
+  }
 }
 
 export const heterogeneousAgentService = new HeterogeneousAgentService();

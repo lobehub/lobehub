@@ -440,7 +440,7 @@ describe('messageMapKey', () => {
     });
 
     it('Scenario: Agent has independent message stream in group (group_agent scope)', () => {
-      // When an agent needs its own message stream (future execTask scenario)
+      // When an agent needs its own message stream (future sub-agent scenario)
       const result = messageMapKey({
         agentId: 'agt_supervisor',
         groupId: 'grp_group001',

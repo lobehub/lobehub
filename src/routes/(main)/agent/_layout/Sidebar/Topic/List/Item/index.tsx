@@ -13,6 +13,7 @@ import { pluginRegistry } from '@/features/Electron/titlebar/RecentlyViewed/plug
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { getPlatformIcon } from '@/routes/(main)/agent/channel/const';
 import { useAgentStore } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { useElectronStore } from '@/store/electron';
@@ -97,6 +98,9 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
   const { t } = useTranslation('topic');
   const { isDarkMode } = useTheme();
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
+  // Heterogeneous agents (Claude Code, Codex, …) don't have the chat-style
+  // topic semantics, so skip the default `#` placeholder icon for their rows.
+  const isHeterogeneousAgent = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
   const addTab = useElectronStore((s) => s.addTab);
 
   const loadingRingColor = isDarkMode
@@ -256,7 +260,17 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
             }
           }
           return (
-            <Icon icon={HashIcon} size={'small'} style={{ color: cssVar.colorTextDescription }} />
+            <Icon
+              icon={HashIcon}
+              size={'small'}
+              style={{
+                color: cssVar.colorTextDescription,
+                // Heterogeneous agents (Claude Code, Codex, …) have no chat-style
+                // topic semantics, so suppress the `#` glyph while keeping its
+                // box so the title stays aligned with sibling rows.
+                visibility: isHeterogeneousAgent ? 'hidden' : undefined,
+              }}
+            />
           );
         })()}
         onClick={handleClick}

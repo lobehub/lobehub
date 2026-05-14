@@ -9,5 +9,7 @@
   "features.groupChat.title": "Groepschat (Meerdere Agenten)",
   "features.inputMarkdown.desc": "Toon Markdown in het invoerveld in realtime (vette tekst, codeblokken, tabellen, enz.).",
   "features.inputMarkdown.title": "Markdown-weergave bij Invoer",
+  "features.messenger.desc": "Praat met je agents via Telegram (en andere messengers) via de gedeelde LobeHub-bot. Voegt een Messenger-tabblad toe in Instellingen om je account te koppelen en te kiezen welke agent berichten ontvangt.",
+  "features.messenger.title": "Messenger",
   "title": "Labs"
 }

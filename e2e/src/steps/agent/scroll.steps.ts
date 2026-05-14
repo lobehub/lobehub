@@ -22,6 +22,7 @@ const AT_BOTTOM_EPSILON = 320;
 const MANUAL_SCROLL_UP_DELTA = 200;
 
 interface ScrollSnapshot {
+  bottomCompensationHeight: number;
   clientHeight: number;
   distanceToBottom: number;
   scrollHeight: number;
@@ -42,7 +43,18 @@ async function getScrollSnapshot(world: CustomWorld): Promise<ScrollSnapshot | n
     while (el) {
       const style = window.getComputedStyle(el);
       if (style.overflowY === 'auto' || style.overflowY === 'scroll') {
+        const bottomCompensationHeight = Math.max(
+          0,
+          ...Array.from(el.querySelectorAll<HTMLElement>('div[aria-hidden="true"]'))
+            .filter((node) => {
+              const nodeStyle = window.getComputedStyle(node);
+              return nodeStyle.pointerEvents === 'none' && node.offsetWidth > 0;
+            })
+            .map((node) => node.getBoundingClientRect().height),
+        );
+
         return {
+          bottomCompensationHeight,
           clientHeight: el.clientHeight,
           distanceToBottom: el.scrollHeight - el.scrollTop - el.clientHeight,
           scrollHeight: el.scrollHeight,
@@ -53,6 +65,41 @@ async function getScrollSnapshot(world: CustomWorld): Promise<ScrollSnapshot | n
     }
     return null;
   });
+}
+
+async function sendPrompt(world: CustomWorld, prompt: string, response: string): Promise<void> {
+  llmMockManager.setResponse(prompt, response);
+
+  await world.page.keyboard.type(prompt, { delay: 20 });
+  await world.page.waitForTimeout(200);
+  await world.page.keyboard.press('Enter');
+}
+
+async function waitForAssistantMessageToSettle(
+  world: CustomWorld,
+  minLength: number,
+): Promise<void> {
+  const assistantMessage = world.page
+    .locator('.message-wrapper')
+    .filter({ has: world.page.locator('text=Lobe AI') })
+    .last();
+
+  await expect(assistantMessage).toBeVisible({ timeout: 15_000 });
+
+  let prevLen = 0;
+  let stableTicks = 0;
+  for (let i = 0; i < 60; i++) {
+    const len =
+      (await assistantMessage
+        .innerText()
+        .then((t) => t.length)
+        .catch(() => 0)) || 0;
+    if (len > minLength && len === prevLen) stableTicks += 1;
+    else stableTicks = 0;
+    prevLen = len;
+    if (stableTicks >= 3) break;
+    await world.page.waitForTimeout(250);
+  }
 }
 
 async function scrollBy(world: CustomWorld, deltaY: number): Promise<void> {
@@ -146,11 +193,7 @@ Given('流式响应被放慢以模拟长文输出', async function (this: Custom
 
 When('用户发送长文消息并等待回复完成', { timeout: 45_000 }, async function (this: CustomWorld) {
   const prompt = '请输出一篇很长的文章';
-  llmMockManager.setResponse(prompt, presetResponses.longScrollArticle);
-
-  await this.page.keyboard.type(prompt, { delay: 20 });
-  await this.page.waitForTimeout(200);
-  await this.page.keyboard.press('Enter');
+  await sendPrompt(this, prompt, presetResponses.longScrollArticle);
 
   // Wait for assistant message to appear and its content to stabilize.
   const messageWrappers = this.page.locator('.message-wrapper');
@@ -165,34 +208,53 @@ When('用户发送长文消息并等待回复完成', { timeout: 45_000 }, async
   await expect(assistantMessage).toBeVisible({ timeout: 15_000 });
 
   // Poll until text has grown past an obvious threshold, then plateaus.
-  let prevLen = 0;
-  let stableTicks = 0;
-  for (let i = 0; i < 40; i++) {
-    const len =
-      (await assistantMessage
-        .innerText()
-        .then((t) => t.length)
-        .catch(() => 0)) || 0;
-    if (len > 200 && len === prevLen) stableTicks += 1;
-    else stableTicks = 0;
-    prevLen = len;
-    if (stableTicks >= 3) break;
-    await this.page.waitForTimeout(250);
-  }
+  await waitForAssistantMessageToSettle(this, 200);
 });
 
 When('用户发送一条触发长文输出的消息', async function (this: CustomWorld) {
   const prompt = '请输出一篇很长的文章';
-  llmMockManager.setResponse(prompt, presetResponses.longScrollArticle);
-
-  await this.page.keyboard.type(prompt, { delay: 20 });
-  await this.page.waitForTimeout(200);
-  await this.page.keyboard.press('Enter');
+  await sendPrompt(this, prompt, presetResponses.longScrollArticle);
 
   // Wait long enough for pin's smooth scrollToIndex to finish. Virtua drives
   // the smooth animation via rAF and would otherwise overwrite a manual
   // scroll while the animation is still in flight.
   await this.page.waitForTimeout(1200);
+});
+
+When(
+  '用户完成一轮用于垫高列表的长回复对话',
+  { timeout: 45_000 },
+  async function (this: CustomWorld) {
+    const prompt = '请先输出一篇很长的文章用于垫高列表';
+    await sendPrompt(this, prompt, presetResponses.longScrollArticle);
+    await waitForAssistantMessageToSettle(this, 200);
+  },
+);
+
+When(
+  '用户发送一条触发短回复的消息并等待回复完成',
+  { timeout: 30_000 },
+  async function (this: CustomWorld) {
+    const prompt = '请输出一段短回复用于测试底部补偿区域';
+    await sendPrompt(this, prompt, '这是一个短回复，用于让底部补偿区域保持可见。');
+    await waitForAssistantMessageToSettle(this, 10);
+    await this.page.waitForTimeout(400);
+  },
+);
+
+When('记录聊天列表底部补偿区域高度', async function (this: CustomWorld) {
+  const snap = await getScrollSnapshot(this);
+  expect(snap, 'failed to locate scroll container').not.toBeNull();
+  expect(snap!.bottomCompensationHeight).toBeGreaterThan(0);
+  expect(snap!.scrollTop).toBeGreaterThan(120);
+
+  this.testContext.scrollCompensationHeight = snap!.bottomCompensationHeight;
+  this.testContext.scrollHeightBeforeSyntheticOffset = snap!.scrollHeight;
+});
+
+When('模拟非用户触发的聊天列表上移 {int} 像素', async function (this: CustomWorld, px: number) {
+  await scrollBy(this, -Math.abs(px));
+  await this.page.waitForTimeout(400);
 });
 
 When('用户在流式响应进行中向上滚动 {int} 像素', async function (this: CustomWorld, px: number) {
@@ -305,4 +367,14 @@ Then('用户消息应固定在聊天列表顶部', async function (this: CustomW
   expect(rect, 'failed to resolve user message + scroll parent').not.toBeNull();
   // Pin anchors with `align: 'start'` — tolerate ~150 px of slack for headers.
   expect(Math.abs(rect!.delta)).toBeLessThanOrEqual(150);
+});
+
+Then('聊天列表底部补偿区域高度不应收缩', async function (this: CustomWorld) {
+  const before = this.testContext.scrollCompensationHeight as number | undefined;
+  expect(before, 'missing recorded bottom compensation height').toBeDefined();
+
+  const snap = await getScrollSnapshot(this);
+  expect(snap, 'failed to locate scroll container').not.toBeNull();
+
+  expect(snap!.bottomCompensationHeight).toBeGreaterThanOrEqual(before! - 2);
 });

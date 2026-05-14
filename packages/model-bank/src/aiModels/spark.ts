@@ -7,12 +7,37 @@ const sparkChatModels: AIChatModelCard[] = [
       reasoning: true,
       search: true,
     },
+    config: {
+      deploymentName: 'spark-x',
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'Spark X2-Flash adopts an MoE (Mixture of Experts) architecture with 30 billion total parameters and supports up to a 256K context window. It claims significant improvements in agentic and coding capabilities, and was trained on a cluster of Ascend 910B AI processors.',
+    displayName: 'Spark X2 Flash',
+    enabled: true,
+    id: 'spark-x2-flash',
+    maxOutput: 262_144,
+    settings: {
+      extendParams: ['thinking'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+    },
+    config: {
+      deploymentName: 'spark-x',
+    },
     contextWindowTokens: 131_072,
     description:
       'X2 Capabilities Overview: 1. Introduces dynamic adjustment of reasoning mode, controlled via the `thinking` field. 2. Expanded context length: 64K input tokens and 128K output tokens. 3. Supports Function Call functionality.',
     displayName: 'Spark X2',
     enabled: true,
-    id: 'spark-x',
+    id: 'spark-x2',
     maxOutput: 131_072,
     settings: {
       extendParams: ['thinking'],
@@ -26,11 +51,14 @@ const sparkChatModels: AIChatModelCard[] = [
       reasoning: true,
       search: true,
     },
+    config: {
+      deploymentName: 'spark-x',
+    },
     contextWindowTokens: 65_535,
     description:
       'X1.5 updates: (1) adds dynamic thinking mode controlled by the `thinking` field; (2) larger context length with 64K input and 64K output; (3) supports FunctionCall.',
     displayName: 'Spark X1.5',
-    id: 'x1',
+    id: 'spark-x1.5',
     maxOutput: 65_535,
     settings: {
       extendParams: ['thinking'],

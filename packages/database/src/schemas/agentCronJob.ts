@@ -1,4 +1,3 @@
-import type { ExecutionConditions } from '@lobechat/types';
 import { boolean, index, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 
 import { idGenerator } from '../utils/idGenerator';
@@ -6,6 +5,12 @@ import { timestamps } from './_helpers';
 import { agents } from './agent';
 import { chatGroups } from './chatGroup';
 import { users } from './user';
+
+interface ExecutionConditions {
+  activeDays?: number[];
+  activeHours?: { end: number; start: number };
+  maxExecutionsPerDay?: number;
+}
 
 // Agent cron jobs table - supports multiple cron jobs per agent
 export const agentCronJobs = pgTable(
@@ -65,8 +70,8 @@ export const agentCronJobs = pgTable(
 // Type exports
 export type NewAgentCronJob = typeof agentCronJobs.$inferInsert;
 export type AgentCronJob = typeof agentCronJobs.$inferSelect;
+export type CreateAgentCronJobData = Partial<NewAgentCronJob> &
+  Pick<NewAgentCronJob, 'agentId' | 'cronPattern' | 'content'>;
+export type UpdateAgentCronJobData = Partial<AgentCronJob>;
 
-// Re-export types from types package for consumers
-export type { ExecutionConditions } from '@lobechat/types';
-export type { InsertAgentCronJob as CreateAgentCronJobData } from '@lobechat/types';
-export type { UpdateAgentCronJob as UpdateAgentCronJobData } from '@lobechat/types';
+export type { ExecutionConditions };

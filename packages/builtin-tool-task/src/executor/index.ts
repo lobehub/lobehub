@@ -8,7 +8,12 @@ import {
   formatTaskList,
   priorityLabel,
 } from '@lobechat/prompts';
-import type { BuiltinToolContext, BuiltinToolResult, TaskStatus } from '@lobechat/types';
+import type {
+  BuiltinToolContext,
+  BuiltinToolResult,
+  TaskAutomationMode,
+  TaskStatus,
+} from '@lobechat/types';
 import { BaseExecutor } from '@lobechat/types';
 import debug from 'debug';
 
@@ -17,7 +22,14 @@ import { getTaskStoreState } from '@/store/task';
 
 import { normalizeListTasksParams } from '../listTasks';
 import { TaskIdentifier } from '../manifest';
-import type { CreateTaskParams, CreateTasksItemResult, RunTasksItemResult } from '../types';
+import type {
+  AddTaskCommentParams,
+  CreateTaskParams,
+  CreateTasksItemResult,
+  DeleteTaskCommentParams,
+  RunTasksItemResult,
+  UpdateTaskCommentParams,
+} from '../types';
 import { TaskApiName } from '../types';
 
 const log = debug('lobe-task:executor');
@@ -25,6 +37,42 @@ const log = debug('lobe-task:executor');
 class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
   readonly identifier = TaskIdentifier;
   protected readonly apiEnum = TaskApiName;
+
+  addTaskComment = async (
+    params: AddTaskCommentParams,
+    ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    const identifier = params.identifier?.trim() || ctx?.taskId || undefined;
+    if (!identifier) {
+      return {
+        content: 'No task identifier provided.',
+        error: { message: 'identifier is required', type: 'MissingIdentifier' },
+        success: false,
+      };
+    }
+
+    try {
+      log('[TaskExecutor] addTaskComment - identifier:', identifier);
+      const result = await getTaskStoreState().addComment(identifier, params.content, {
+        authorAgentId: ctx?.agentId,
+      });
+      const commentId = (result as { data?: { id?: string } } | undefined)?.data?.id;
+
+      return {
+        content: `Comment added to task ${identifier}.`,
+        state: { commentId, identifier, success: true },
+        success: true,
+      };
+    } catch (error) {
+      log('[TaskExecutor] addTaskComment - error:', error);
+      const message = error instanceof Error ? error.message : 'Failed to add task comment';
+      return {
+        content: `Failed to add task comment: ${message}`,
+        error: { message, type: 'AddTaskCommentFailed' },
+        success: false,
+      };
+    }
+  };
 
   createTask = async (
     params: {
@@ -164,6 +212,30 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
     }
   };
 
+  deleteTaskComment = async (
+    params: DeleteTaskCommentParams,
+    ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    try {
+      log('[TaskExecutor] deleteTaskComment - commentId:', params.commentId);
+      await getTaskStoreState().deleteComment(params.commentId, ctx?.taskId ?? undefined);
+
+      return {
+        content: `Comment ${params.commentId} deleted.`,
+        state: { commentId: params.commentId, success: true },
+        success: true,
+      };
+    } catch (error) {
+      log('[TaskExecutor] deleteTaskComment - error:', error);
+      const message = error instanceof Error ? error.message : 'Failed to delete task comment';
+      return {
+        content: `Failed to delete task comment: ${message}`,
+        error: { message, type: 'DeleteTaskCommentFailed' },
+        success: false,
+      };
+    }
+  };
+
   editTask = async (
     params: {
       addDependencies?: string[];
@@ -172,6 +244,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       identifier: string;
       instruction?: string;
       name?: string;
+      parentIdentifier?: string | null;
       priority?: number;
       removeDependencies?: string[];
     },
@@ -190,6 +263,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
         assigneeAgentId?: string | null;
         instruction?: string;
         name?: string;
+        parentTaskId?: string | null;
         priority?: number;
       } = {};
       if (params.name !== undefined) {
@@ -211,6 +285,11 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       if (params.description !== undefined) {
         updateData.description = params.description;
         changes.push('description updated');
+      }
+      if (params.parentIdentifier !== undefined) {
+        const parentIdentifier = params.parentIdentifier?.trim() || null;
+        updateData.parentTaskId = parentIdentifier;
+        changes.push(parentIdentifier ? `parent → ${parentIdentifier}` : 'parent cleared');
       }
       if (params.priority !== undefined) {
         updateData.priority = params.priority;
@@ -247,6 +326,113 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       return {
         content: `Failed to edit task: ${message}`,
         error: { message, type: 'EditTaskFailed' },
+        success: false,
+      };
+    }
+  };
+
+  setTaskSchedule = async (
+    params: {
+      automationMode?: TaskAutomationMode | null;
+      heartbeatInterval?: number;
+      identifier: string;
+      maxExecutions?: number | null;
+      schedulePattern?: string | null;
+      scheduleTimezone?: string | null;
+    },
+    _ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    try {
+      log('[TaskExecutor] setTaskSchedule - params:', params);
+
+      const { identifier } = params;
+      const store = getTaskStoreState();
+      const changes: string[] = [];
+      const ops: Promise<unknown>[] = [];
+
+      // Top-level schedule columns — direct service.update bypasses the
+      // store.updateTask optimistic path, which would otherwise need to map
+      // flat columns onto the detail's nested `schedule.*` shape.
+      const scheduleUpdate: {
+        automationMode?: TaskAutomationMode | null;
+        heartbeatInterval?: number;
+        schedulePattern?: string | null;
+        scheduleTimezone?: string | null;
+      } = {};
+      if (params.automationMode !== undefined) {
+        scheduleUpdate.automationMode = params.automationMode;
+        changes.push(
+          params.automationMode
+            ? `automation mode → ${params.automationMode}`
+            : 'automation disabled',
+        );
+      }
+      if (params.heartbeatInterval !== undefined) {
+        scheduleUpdate.heartbeatInterval = params.heartbeatInterval;
+        changes.push(
+          params.heartbeatInterval > 0
+            ? `heartbeat interval → ${params.heartbeatInterval}s`
+            : 'heartbeat interval cleared',
+        );
+      }
+      if (params.schedulePattern !== undefined) {
+        scheduleUpdate.schedulePattern = params.schedulePattern;
+        changes.push(
+          params.schedulePattern
+            ? `schedule pattern → "${params.schedulePattern}"`
+            : 'schedule pattern cleared',
+        );
+      }
+      if (params.scheduleTimezone !== undefined) {
+        scheduleUpdate.scheduleTimezone = params.scheduleTimezone;
+        changes.push(
+          params.scheduleTimezone
+            ? `schedule timezone → ${params.scheduleTimezone}`
+            : 'schedule timezone cleared',
+        );
+      }
+      if (Object.keys(scheduleUpdate).length > 0) {
+        ops.push(taskService.update(identifier, scheduleUpdate));
+      }
+
+      // maxExecutions lives in `tasks.config.schedule.maxExecutions` (JSONB);
+      // route through updateConfig so the server-side merge preserves siblings
+      // (checkpoint, review, model snapshot, etc).
+      if (params.maxExecutions !== undefined) {
+        ops.push(
+          taskService.updateConfig(identifier, {
+            schedule: { maxExecutions: params.maxExecutions },
+          }),
+        );
+        changes.push(
+          params.maxExecutions === null
+            ? 'max executions cleared (unlimited)'
+            : `max executions → ${params.maxExecutions}`,
+        );
+      }
+
+      if (ops.length === 0) {
+        return {
+          content: 'No schedule fields provided; nothing to update.',
+          error: { message: 'No schedule fields provided.', type: 'NoFields' },
+          success: false,
+        };
+      }
+
+      await Promise.all(ops);
+      await store.internal_refreshTaskDetail(identifier);
+
+      return {
+        content: formatTaskEdited(identifier, changes),
+        state: { automationMode: params.automationMode, identifier, success: true },
+        success: true,
+      };
+    } catch (error) {
+      log('[TaskExecutor] setTaskSchedule - error:', error);
+      const message = error instanceof Error ? error.message : 'Failed to set task schedule';
+      return {
+        content: `Failed to set task schedule: ${message}`,
+        error: { message, type: 'SetTaskScheduleFailed' },
         success: false,
       };
     }
@@ -390,6 +576,34 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       state: { failed, results, succeeded },
       success: failed === 0,
     };
+  };
+
+  updateTaskComment = async (
+    params: UpdateTaskCommentParams,
+    ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    try {
+      log('[TaskExecutor] updateTaskComment - commentId:', params.commentId);
+      await getTaskStoreState().updateComment(
+        params.commentId,
+        params.content,
+        ctx?.taskId ?? undefined,
+      );
+
+      return {
+        content: `Comment ${params.commentId} updated.`,
+        state: { commentId: params.commentId, success: true },
+        success: true,
+      };
+    } catch (error) {
+      log('[TaskExecutor] updateTaskComment - error:', error);
+      const message = error instanceof Error ? error.message : 'Failed to update task comment';
+      return {
+        content: `Failed to update task comment: ${message}`,
+        error: { message, type: 'UpdateTaskCommentFailed' },
+        success: false,
+      };
+    }
   };
 
   updateTaskStatus = async (

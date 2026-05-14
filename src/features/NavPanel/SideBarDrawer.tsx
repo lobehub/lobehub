@@ -7,7 +7,7 @@ import { XIcon } from 'lucide-react';
 import type { ReactNode, Ref } from 'react';
 import { cloneElement, isValidElement, memo, Suspense, useCallback, useState } from 'react';
 
-import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
+import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 
 import { NAV_PANEL_RIGHT_DRAWER_ID } from './';
 import SkeletonList from './components/SkeletonList';
@@ -116,7 +116,12 @@ const SideBarDrawer = memo<SideBarDrawerProps>(
                 right={
                   <>
                     {action}
-                    <ActionIcon icon={XIcon} size={DESKTOP_HEADER_ICON_SIZE} onClick={onClose} />
+                    <ActionIcon
+                      icon={XIcon}
+                      size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+                      style={{ marginInlineEnd: -2 }}
+                      onClick={onClose}
+                    />
                   </>
                 }
               />

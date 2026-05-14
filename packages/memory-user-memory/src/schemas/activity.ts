@@ -40,6 +40,7 @@ export const ActivityMemoryItemSchema = z.object({
   details: z.string(),
   memoryCategory: z.string(),
   memoryType: MemoryTypeSchema,
+  sourceIds: z.array(z.string()).optional().nullable(),
   summary: z.string(),
   tags: z.array(z.string()),
   title: z.string(),
@@ -77,6 +78,7 @@ export const ActivityMemorySchema: GenerateObjectSchema = {
                 'Talked through renewal scope, confirmed timeline flexibility, and captured follow-ups.',
               memoryCategory: 'work',
               memoryType: 'activity',
+              sourceIds: ['message-3'],
               summary: 'Client Q2 renewal meeting with Alice (ACME)',
               tags: ['meeting', 'client', 'renewal'],
               title: 'ACME Q2 renewal meeting',
@@ -141,6 +143,12 @@ export const ActivityMemorySchema: GenerateObjectSchema = {
             summary: {
               description: 'Concise overview of this activity.',
               type: 'string',
+            },
+            sourceIds: {
+              description:
+                'Stable source message ids that support this activity. Use [] when unavailable.',
+              items: { type: 'string' },
+              type: ['array', 'null'],
             },
             tags: {
               description: 'Model-generated tags summarizing key facets of the activity.',
@@ -322,6 +330,7 @@ export const ActivityMemorySchema: GenerateObjectSchema = {
             'details',
             'memoryType',
             'memoryCategory',
+            'sourceIds',
             'tags',
             'withActivity',
           ],

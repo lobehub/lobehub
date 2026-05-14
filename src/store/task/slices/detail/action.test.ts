@@ -181,6 +181,35 @@ describe('TaskDetailSliceAction', () => {
       expect(message.error).not.toHaveBeenCalled();
     });
 
+    it('should refresh list and affected details when reparenting', async () => {
+      const { mutate } = await import('@/libs/swr');
+      useTaskStore.setState({
+        activeTaskId: 'T-sub',
+        taskDetailMap: {
+          'T-parent': {
+            identifier: 'T-parent',
+            instruction: 'Parent',
+            status: 'backlog',
+            subtasks: [{ assignee: null, identifier: 'T-sub', name: 'Sub', status: 'backlog' }],
+          },
+          'T-sub': { identifier: 'T-sub', instruction: 'Sub', status: 'backlog' },
+        },
+      });
+
+      const refreshTaskList = vi.fn().mockResolvedValue(undefined);
+      useTaskStore.setState({ refreshTaskList } as any);
+      vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
+
+      await useTaskStore.getState().updateTask('T-sub', { parentTaskId: 'T-new-parent' });
+
+      expect(taskService.update).toHaveBeenCalledWith('T-sub', { parentTaskId: 'T-new-parent' });
+      expect(useTaskStore.getState().taskDetailMap['T-sub']).not.toHaveProperty('parentTaskId');
+      expect(refreshTaskList).toHaveBeenCalled();
+      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-sub']);
+      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-parent']);
+      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-new-parent']);
+    });
+
     it('should refresh the parent that was patched even if activeTaskId changes mid-flight', async () => {
       const { mutate } = await import('@/libs/swr');
       useTaskStore.setState({

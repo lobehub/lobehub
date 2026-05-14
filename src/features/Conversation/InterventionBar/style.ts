@@ -2,9 +2,10 @@ import { createStaticStyles } from 'antd-style';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   actions: css`
-    padding-block: 8px;
-    padding-inline: 16px;
+    padding-block: 8px 10px;
+    padding-inline: 10px;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+    background: color-mix(in srgb, ${cssVar.colorBgElevated} 92%, ${cssVar.colorFillSecondary});
 
     &:empty {
       display: none;
@@ -17,20 +18,23 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     overflow-y: auto;
     flex: 1;
     min-height: 0;
-    padding-block: 8px 12px;
+    padding-block: 6px 8px;
   `,
   tab: css`
     cursor: pointer;
 
-    padding-block: 6px;
-    padding-inline: 14px;
+    padding-block: 5px;
+    padding-inline: 10px;
     border-block-end: 2px solid transparent;
 
     font-size: 12px;
     color: ${cssVar.colorTextSecondary};
     white-space: nowrap;
 
-    transition: all 0.2s;
+    transition:
+      border-color 0.2s,
+      color 0.2s,
+      background 0.2s;
 
     &:hover {
       color: ${cssVar.colorText};
@@ -49,8 +53,8 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   tabCounter: css`
     margin-inline-start: auto;
-    padding-block: 6px;
-    padding-inline: 14px;
+    padding-block: 5px;
+    padding-inline: 10px;
 
     font-size: 11px;
     color: ${cssVar.colorTextTertiary};

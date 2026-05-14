@@ -30,6 +30,12 @@ const alias = {
 };
 
 export default defineConfig({
+  define: {
+    '__CI__': process.env.CI === 'true' ? 'true' : 'false',
+    '__DEV__': process.env.NODE_ENV !== 'production' ? 'true' : 'false',
+    '__ELECTRON__': 'false',
+    '__MOBILE__': 'false',
+  },
   optimizeDeps: {
     exclude: ['crypto', 'util', 'tty'],
     include: ['@lobehub/tts'],

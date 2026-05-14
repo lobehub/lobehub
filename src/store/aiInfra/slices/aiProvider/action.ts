@@ -4,15 +4,16 @@ import {
   resolveVideoSinglePrice,
 } from '@lobechat/model-runtime';
 import { uniqBy } from 'es-toolkit/compat';
-import {
-  type AIImageModelCard,
-  type AIVideoModelCard,
-  type EnabledAiModel,
-  type LobeDefaultAiModelListItem,
-  type ModelAbilities,
-  type ModelParamsSchema,
-  type Pricing,
+import type {
+  AIImageModelCard,
+  AIVideoModelCard,
+  EnabledAiModel,
+  LobeDefaultAiModelListItem,
+  ModelAbilities,
+  ModelParamsSchema,
+  Pricing,
 } from 'model-bank';
+import { isAiModelVisible } from 'model-bank';
 import { type SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
@@ -59,7 +60,7 @@ const createProviderModelCollector = (
 ) => {
   return async (enabledAiModels: EnabledAiModel[], providerId: string) => {
     const filteredModels = enabledAiModels.filter(
-      (model) => model.providerId === providerId && model.type === type,
+      (model) => model.providerId === providerId && model.type === type && isAiModelVisible(model),
     );
 
     if (!filteredModels.length) return [];

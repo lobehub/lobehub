@@ -209,6 +209,31 @@ const appendWorkflowRangeBlock = (
   block: AssistantContentBlock,
   allowLeadingSentencePromotion = false,
 ) => {
+  if (block.error) {
+    if (hasTools(block)) {
+      appendWorkflowBlock(
+        segments,
+        createWorkflowRenderBlock(block, {
+          content: '',
+          error: undefined,
+          imageList: undefined,
+          reasoning: undefined,
+        }),
+      );
+      appendAnswerBlock(
+        segments,
+        createAnswerRenderBlock(block, {
+          reasoning: undefined,
+          tools: undefined,
+        }),
+      );
+      return;
+    }
+
+    appendAnswerBlock(segments, block);
+    return;
+  }
+
   if (!shouldPromoteMixedBlockContent(block)) {
     const leadingSentenceSplit =
       allowLeadingSentencePromotion && segments.length === 0 && hasTools(block)
