@@ -27,7 +27,7 @@ const SendArea = memo(() => {
   );
 
   return (
-    <Flexbox horizontal align={'center'} flex={'none'} gap={6}>
+    <Flexbox horizontal align={'center'} flex={'none'} gap={12}>
       {allowExpand && <ExpandButton />}
       {items}
       <SendButton />

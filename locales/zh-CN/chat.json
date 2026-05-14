@@ -49,7 +49,7 @@
   "chatMode.agentCap.tools": "工具调用",
   "chatMode.agentCap.web": "联网搜索",
   "chatMode.agentDesc": "智能体可以使用工具和运行环境自动完成任务",
-  "chatMode.chat": "纯对话",
+  "chatMode.chat": "对话",
   "chatMode.chatDesc": "不启用运行环境和自主执行，更省 Token",
   "chatMode.select": "切换模式",
   "claudeCodeInstallGuide.actions.openDocs": "打开安装指南",

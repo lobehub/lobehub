@@ -80,6 +80,7 @@ const ActionToolbar = memo<ActionToolbarProps>(
           defaultGroupCollapse={true}
           groupCollapse={!expandInputActionbar}
           items={items}
+          paddingLeft={6}
           onGroupCollapseChange={(v) => {
             toggleExpandInputActionbar(!v);
           }}
