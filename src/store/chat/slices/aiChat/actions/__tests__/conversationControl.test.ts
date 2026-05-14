@@ -699,7 +699,7 @@ describe('ConversationControl actions', () => {
               parentMessageId: 'tool-msg-1',
               toolCallId: 'call_xyz',
             },
-            trigger: RequestTrigger.Onboarding,
+            metadata: { trigger: RequestTrigger.Onboarding },
           }),
         );
         expect(executeClientAgentSpy).not.toHaveBeenCalled();

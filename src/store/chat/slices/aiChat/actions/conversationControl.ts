@@ -284,13 +284,13 @@ export class ConversationControlActionImpl {
         await this.#get().executeGatewayAgent({
           context: effectiveContext,
           message: '',
+          metadata: requestMetadata,
           parentMessageId: toolMessageId,
           resumeApproval: {
             decision: 'approved',
             parentMessageId: toolMessageId,
             toolCallId,
           },
-          trigger: requestMetadata?.trigger,
         });
         this.#completeOpsById(pausedOpIds);
         completeOperation(operationId);
@@ -952,6 +952,7 @@ export class ConversationControlActionImpl {
         await this.#get().executeGatewayAgent({
           context: effectiveContext,
           message: '',
+          metadata: requestMetadata,
           parentMessageId: messageId,
           resumeApproval: {
             decision: 'rejected_continue',
@@ -959,7 +960,6 @@ export class ConversationControlActionImpl {
             rejectionReason: reason,
             toolCallId,
           },
-          trigger: requestMetadata?.trigger,
         });
         this.#completeOpsById(pausedOpIds);
       } catch (error) {
@@ -1037,6 +1037,7 @@ export class ConversationControlActionImpl {
         await this.#get().executeGatewayAgent({
           context: effectiveContext,
           message: '',
+          metadata: requestMetadata,
           parentMessageId: messageId,
           resumeApproval: {
             decision: 'rejected_continue',
@@ -1044,7 +1045,6 @@ export class ConversationControlActionImpl {
             rejectionReason: reason,
             toolCallId,
           },
-          trigger: requestMetadata?.trigger,
         });
         this.#completeOpsById(pausedOpIds);
         completeOperation(operationId);

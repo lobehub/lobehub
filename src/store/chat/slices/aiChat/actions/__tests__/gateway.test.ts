@@ -1,4 +1,5 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
+import { RequestTrigger } from '@lobechat/types';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { aiAgentService } from '@/services/aiAgent';
@@ -488,7 +489,7 @@ describe('GatewayActionImpl', () => {
       );
     });
 
-    it('should forward trigger to execAgentTask', async () => {
+    it('should forward metadata trigger to execAgentTask', async () => {
       const { action } = createExecuteTestAction();
 
       vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
@@ -509,7 +510,7 @@ describe('GatewayActionImpl', () => {
       await action.executeGatewayAgent({
         context: { agentId: 'agent-1', topicId: 'topic-1', threadId: null, scope: 'main' },
         message: 'Hello',
-        trigger: 'onboarding',
+        metadata: { trigger: RequestTrigger.Onboarding },
       });
 
       expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(

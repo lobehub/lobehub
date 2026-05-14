@@ -4,7 +4,7 @@ import {
   type AgentStreamEvent,
   type ConnectionStatus,
 } from '@lobechat/agent-gateway-client';
-import type { ConversationContext, ExecAgentResult } from '@lobechat/types';
+import type { ConversationContext, ExecAgentResult, MessageMetadata } from '@lobechat/types';
 
 import { isDesktop } from '@/const/version';
 import { aiAgentService, type ResumeApprovalParam } from '@/services/aiAgent';
@@ -255,6 +255,8 @@ export class GatewayActionImpl {
     /** File IDs of already-uploaded attachments to attach to the new user message */
     fileIds?: string[];
     message: string;
+    /** Request metadata carried from the originating user message. */
+    metadata?: Pick<MessageMetadata, 'trigger'>;
     /** Called when the gateway session completes (agent finished running) */
     onComplete?: () => void;
     /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
@@ -275,17 +277,16 @@ export class GatewayActionImpl {
      * a fresh user prompt.
      */
     resumeApproval?: ResumeApprovalParam;
-    trigger?: string;
   }): Promise<ExecAgentResult> => {
     const {
       context,
       fileIds,
       message,
+      metadata,
       onComplete,
       parentMessageId,
       parentOperationId,
       resumeApproval,
-      trigger,
     } = params;
 
     const agentGatewayUrl =
@@ -337,7 +338,7 @@ export class GatewayActionImpl {
         parentMessageId,
         prompt: message,
         resumeApproval,
-        trigger,
+        trigger: metadata?.trigger,
       },
       { signal: abortSignal },
     );
