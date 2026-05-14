@@ -1,5 +1,4 @@
 import type { TaskTemplate, TaskTemplateSkillSource } from '@lobechat/const';
-import { TASK_TEMPLATE_RECOMMEND_COUNT, TASK_TEMPLATE_RECOMMEND_COUNT_MAX } from '@lobechat/const';
 import { createNanoId } from '@lobechat/utils';
 import { useSessionStorageState } from 'ahooks';
 import { App } from 'antd';
@@ -14,13 +13,11 @@ import { useToolStore } from '@/store/tool';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
+import { resolveRecommendationCount } from './resolveRecommendationCount';
 import { useResolvedInterestKeys } from './useResolvedInterestKeys';
 
 const REFRESH_SEED_STORAGE_KEY = 'lobehub:taskTemplate:refreshSeed';
 const nextRefreshSeed = createNanoId(8);
-
-const resolveRecommendationCount = (count?: number) =>
-  Math.max(1, Math.min(count ?? TASK_TEMPLATE_RECOMMEND_COUNT, TASK_TEMPLATE_RECOMMEND_COUNT_MAX));
 
 export type DailyBriefRecommendationsUIState =
   | { mode: 'hidden' }
