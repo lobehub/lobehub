@@ -14,6 +14,8 @@ import {
   type ListLocalFileParams,
   type ListLocalFilesResult,
   type LocalFileItem,
+  type LocalFilePreviewUrlParams,
+  type LocalFilePreviewUrlResult,
   type LocalMoveFilesResultItem,
   type LocalReadFileParams,
   type LocalReadFileResult,
@@ -82,6 +84,12 @@ class LocalFileService {
 
   async auditSafePaths(params: AuditSafePathsParams): Promise<AuditSafePathsResult> {
     return ensureElectronIpc().localSystem.auditSafePaths(params);
+  }
+
+  async getLocalFilePreviewUrl(
+    params: LocalFilePreviewUrlParams,
+  ): Promise<LocalFilePreviewUrlResult> {
+    return ensureElectronIpc().localSystem.getLocalFilePreviewUrl(params);
   }
 
   async prepareSkillDirectory(

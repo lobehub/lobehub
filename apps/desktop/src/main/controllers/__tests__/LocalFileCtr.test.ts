@@ -84,6 +84,12 @@ const mockContentSearchService = {
   checkToolAvailable: vi.fn(),
 };
 
+const mockLocalFileProtocolManager = {
+  approveIndexedProjectRoot: vi.fn(),
+  approveProjectRootFromScope: vi.fn(),
+  createPreviewUrl: vi.fn(),
+};
+
 // Mock makeSureDirExist
 vi.mock('@/utils/file-system', () => ({
   makeSureDirExist: vi.fn(),
@@ -98,6 +104,7 @@ const mockApp = {
     }
     return mockSearchService;
   }),
+  localFileProtocolManager: mockLocalFileProtocolManager,
   toolDetectorManager: {
     getBestTool: vi.fn(() => null), // No external tools available, use Node.js fallback
   },
@@ -179,6 +186,42 @@ describe('LocalFileCtr', () => {
   // readFile / readFiles e2e tests live in LocalFileCtr.readFile.test.ts so
   // they exercise real fs + file-loaders without fighting the heavy mocks
   // this suite needs for execa-driven tools, electron, and the like.
+
+  describe('getLocalFilePreviewUrl', () => {
+    it('should return a main-issued preview URL for an approved workspace file', async () => {
+      mockLocalFileProtocolManager.createPreviewUrl.mockResolvedValue(
+        'localfile://file/workspace/app.ts?token=abc',
+      );
+
+      const result = await localFileCtr.getLocalFilePreviewUrl({
+        path: '/workspace/app.ts',
+        workingDirectory: '/workspace',
+      });
+
+      expect(mockLocalFileProtocolManager.createPreviewUrl).toHaveBeenCalledWith({
+        filePath: '/workspace/app.ts',
+        workspaceRoot: '/workspace',
+      });
+      expect(result).toEqual({
+        success: true,
+        url: 'localfile://file/workspace/app.ts?token=abc',
+      });
+    });
+
+    it('should reject preview URL creation outside an approved workspace', async () => {
+      mockLocalFileProtocolManager.createPreviewUrl.mockResolvedValue(null);
+
+      const result = await localFileCtr.getLocalFilePreviewUrl({
+        path: '/Users/alice/.ssh/id_rsa',
+        workingDirectory: '/workspace',
+      });
+
+      expect(result).toEqual({
+        error: 'File is outside the approved workspace',
+        success: false,
+      });
+    });
+  });
 
   describe('handleWriteFile', () => {
     it('should write file successfully', async () => {

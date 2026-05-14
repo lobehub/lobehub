@@ -1,10 +1,11 @@
-import { buildLocalFileUrl, isDesktop } from '@lobechat/const';
+import { isDesktop } from '@lobechat/const';
 import { Center, Empty, Flexbox, Highlighter } from '@lobehub/ui';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import Loading from '@/components/Loading/CircleLoading';
 import { useClientDataSWR } from '@/libs/swr';
+import { localFileService } from '@/services/electron/localFileService';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
@@ -104,28 +105,34 @@ interface ActiveFileViewProps {
   workingDirectory: string;
 }
 
-const ActiveFileView = memo<ActiveFileViewProps>(({ filePath }) => {
+const ActiveFileView = memo<ActiveFileViewProps>(({ filePath, workingDirectory }) => {
   const { t } = useTranslation('chat');
 
   const filename = filePath.split('/').at(-1) ?? '';
-  const localFileUrl = isDesktop ? buildLocalFileUrl(filePath) : null;
   const {
     data: preview,
     error,
     isLoading,
   } = useClientDataSWR(
-    localFileUrl ? ['local-file-preview', localFileUrl] : null,
+    isDesktop && workingDirectory ? ['local-file-preview', filePath, workingDirectory] : null,
     async () => {
-      if (!localFileUrl) throw new Error('Missing local file URL');
-      return fetchLocalFilePreview(localFileUrl);
+      const result = await localFileService.getLocalFilePreviewUrl({
+        path: filePath,
+        workingDirectory,
+      });
+
+      if (!result.success || !result.url) {
+        throw new Error(result.error || 'Missing local file preview URL');
+      }
+
+      return fetchLocalFilePreview(result.url);
     },
     { revalidateOnFocus: false },
   );
 
   // Chromium blocks `file://` from a non-file origin. The desktop main process
-  // exposes local disk files through `localfile://`; the renderer fetches that
-  // URL for every file type and keeps rendering inside our own components.
-  if (!localFileUrl) {
+  // mints short-lived `localfile://` preview URLs for approved workspace files.
+  if (!isDesktop) {
     return (
       <Center height={'100%'} width={'100%'}>
         <Empty description={t('workingPanel.localFile.binary')} />

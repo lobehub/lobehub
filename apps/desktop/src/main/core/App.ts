@@ -105,6 +105,9 @@ export class App {
 
     this.rendererUrlManager = new RendererUrlManager();
     this.localFileProtocolManager = new LocalFileProtocolManager();
+    void this.localFileProtocolManager.approveWorkspaceRoots(
+      this.storeManager.get('localFileWorkspaceRoots', []),
+    );
     protocol.registerSchemesAsPrivileged([
       {
         privileges: {
