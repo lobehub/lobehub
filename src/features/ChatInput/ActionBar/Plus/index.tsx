@@ -96,6 +96,43 @@ const optionLabel = css`
   }
 `;
 
+const searchOptionRow = css`
+  display: flex;
+  gap: 10px;
+  align-items: center;
+
+  width: 100%;
+  min-width: 220px;
+  max-width: 320px;
+
+  .title {
+    line-height: 1.25;
+  }
+
+  .desc {
+    margin-block-start: 3px;
+
+    font-size: 12px;
+    line-height: 1.35;
+    color: ${cssVar.colorTextDescription};
+    white-space: normal;
+  }
+`;
+
+const searchIconBox = css`
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+
+  width: 36px;
+  height: 36px;
+  border: 1px solid ${cssVar.colorBorderSecondary};
+  border-radius: 8px;
+
+  background: ${cssVar.colorBgContainer};
+`;
+
 const labelWithChip = css`
   display: inline-flex;
   gap: 8px;
@@ -212,7 +249,6 @@ const PlusAction = memo(() => {
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [updating, setUpdating] = useState(false);
 
   const upload = useFileStore((s) => s.uploadChatFiles);
   const { enableKnowledgeBase } = useServerConfigStore(featureFlagsSelectors);
@@ -220,9 +256,6 @@ const PlusAction = memo(() => {
   const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
   const provider = useAgentStore((s) => agentByIdSelectors.getAgentModelProviderById(agentId)(s));
   const isAgentModeEnabled = useAgentStore(agentSelectors.isAgentModeEnabled);
-  const enabledSkillCount = useAgentStore(
-    (s) => agentByIdSelectors.getAgentPluginsById(agentId)(s).length,
-  );
   const skillActivateMode = useAgentStore((s) =>
     chatConfigByIdSelectors.getSkillActivateModeById(agentId)(s),
   );
@@ -237,9 +270,12 @@ const PlusAction = memo(() => {
   const enableFC = useModelSupportToolUse(model, provider);
   const { enabledCount: knowledgeEnabledCount, items: knowledgeItems } = useKnowledgeControls({
     openAttachKnowledgeModal,
-    setUpdating,
   });
-  const { marketItems: skillItems } = useToolsControls({ setUpdating });
+  const {
+    autoCount: skillAutoCount,
+    marketItems: skillItems,
+    pinnedCount: skillPinnedCount,
+  } = useToolsControls();
 
   const isModelBuiltinSearchInternal = useAiInfraStore(
     aiModelSelectors.isModelBuiltinSearchInternal(model, provider),
@@ -294,7 +330,23 @@ const PlusAction = memo(() => {
       <div className={cx(optionLabel)}>
         <div>
           <div className="title">{title}</div>
-          <div className="desc">{description}</div>
+          {description && <div className="desc">{description}</div>}
+        </div>
+        {active && <Icon icon={CheckIcon} size={14} />}
+      </div>
+    );
+
+    const renderSearchOption = (
+      icon: ReactNode,
+      title: string,
+      description: string,
+      active: boolean,
+    ) => (
+      <div className={cx(searchOptionRow)}>
+        <div className={cx(searchIconBox)}>{icon}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="title">{title}</div>
+          {description && <div className="desc">{description}</div>}
         </div>
         {active && <Icon icon={CheckIcon} size={14} />}
       </div>
@@ -342,17 +394,22 @@ const PlusAction = memo(() => {
       },
     ];
 
+    // In auto mode every installed skill is callable, so show pinned + auto.
+    // In manual mode only the pinned ones are active, so show pinned only.
+    const activeSkillCount =
+      skillActivateMode === 'auto' ? skillPinnedCount + skillAutoCount : skillPinnedCount;
+
     const toolsItems: ActionDropdownMenuItems =
       isAgentModeEnabled && enableFC
         ? [
             { type: 'divider' },
             {
               children: skillMenuItems,
-              icon: activeIcon(SkillsIcon, enabledSkillCount > 0),
+              icon: activeIcon(SkillsIcon, activeSkillCount > 0),
               key: 'tools',
               label: renderLabelWithCount(
                 tSetting('tools.title'),
-                enabledSkillCount,
+                activeSkillCount,
                 tSetting(
                   skillActivateMode === 'auto'
                     ? 'tools.skillActivateMode.auto.title'
@@ -395,9 +452,9 @@ const PlusAction = memo(() => {
             {
               children: [
                 {
-                  icon: GlobeOffIcon,
                   key: 'search-off',
-                  label: renderOption(
+                  label: renderSearchOption(
+                    <Icon icon={GlobeOffIcon} size={18} />,
                     t('plus.search.off'),
                     t('plus.search.offDesc'),
                     activeSearchOption === 'off',
@@ -405,9 +462,13 @@ const PlusAction = memo(() => {
                   onClick: () => handleSelectSearch('off'),
                 },
                 {
-                  icon: activeIcon(SearchCheck, activeSearchOption === 'app'),
                   key: 'search-app',
-                  label: renderOption(
+                  label: renderSearchOption(
+                    <Icon
+                      color={activeSearchOption === 'app' ? cssVar.colorInfo : undefined}
+                      icon={SearchCheck}
+                      size={18}
+                    />,
                     t('plus.search.appSearch'),
                     t('plus.search.appSearchDesc'),
                     activeSearchOption === 'app',
@@ -415,9 +476,13 @@ const PlusAction = memo(() => {
                   onClick: () => handleSelectSearch('app'),
                 },
                 {
-                  icon: activeIcon(CloudCog, activeSearchOption === 'provider'),
                   key: 'search-provider',
-                  label: renderOption(
+                  label: renderSearchOption(
+                    <Icon
+                      color={activeSearchOption === 'provider' ? cssVar.colorInfo : undefined}
+                      icon={CloudCog}
+                      size={18}
+                    />,
                     t('plus.search.modelSearch'),
                     t('plus.search.modelSearchDesc'),
                     activeSearchOption === 'provider',
@@ -465,7 +530,6 @@ const PlusAction = memo(() => {
     canUploadVideo,
     enableFC,
     enableKnowledgeBase,
-    enabledSkillCount,
     handleOpenTools,
     handleSelectSearch,
     handleToggleMemory,
@@ -476,6 +540,8 @@ const PlusAction = memo(() => {
     showProviderSearch,
     showTypoBar,
     skillActivateMode,
+    skillAutoCount,
+    skillPinnedCount,
     knowledgeItems,
     t,
     tEditor,
@@ -487,7 +553,6 @@ const PlusAction = memo(() => {
   return (
     <Action
       icon={PlusIcon}
-      loading={updating}
       open={dropdownOpen}
       size={{ blockSize: 32, borderRadius: 16, size: 18 }}
       title={t('plus.tooltip')}

@@ -300,6 +300,7 @@ export default {
   'cliAuthGuide.runCommand': 'Run this in Terminal',
   'cliAuthGuide.title': 'Sign in to {{name}}',
   'cliRateLimitGuide.actions.openSystemTools': 'Open System Tools',
+  'cliRateLimitGuide.actions.retry': 'Retry',
   'cliRateLimitGuide.afterReset':
     'Wait until the reset time, then retry your message. If you are using API authorization, you can also check your provider quota and billing status.',
   'cliRateLimitGuide.desc':
@@ -372,12 +373,13 @@ export default {
   'search.grounding.imageTitle': 'Found {{count}} images',
   'chatMode.agent': 'Agent',
   'plus.search.appSearch': 'Smart Search',
-  'plus.search.appSearchDesc': 'Use LobeHub retrieval tools for web results.',
+  'plus.search.appSearchDesc':
+    'LobeHub optimized search service, delivering best retrieval results.',
   'plus.search.modelSearch': 'Provider Search',
-  'plus.search.modelSearchDesc': "Use the provider's built-in search service.",
+  'plus.search.modelSearchDesc': 'May cause unexpected behavior when enabled, not recommended.',
   'plus.search.off': 'Off',
-  'plus.search.offDesc': 'Do not add web results to this chat.',
-  'plus.addSkills': 'Add Skills',
+  'plus.search.offDesc': '',
+  'plus.addSkills': 'Add Skills...',
   'plus.title': 'Add',
   'plus.tooltip': 'Add files, skills, and more context...',
   'chatMode.agentCap.env': 'Runtime env',
@@ -413,9 +415,12 @@ export default {
   'searchAgentPlaceholder': 'Search agents...',
   'searchAgents': 'Search agents...',
   'selectedAgents': 'Selected agents',
-  'followUpPlaceholder': 'Follow up. @ to assign tasks to other agents.',
+  'followUpPlaceholder': 'Follow up.',
   'followUpPlaceholderHeterogeneous': 'Follow up.',
   'sendPlaceholder': 'Ask, create, or start a task, <hotkey><hotkey/>',
+  'sendPlaceholderChat': 'Ask, search, or brainstorm, <hotkey><hotkey/>',
+  'sendPlaceholderChatWithAgentAssignment':
+    'Ask, search, or brainstorm. @ to bring in other agents.',
   'sendPlaceholderHeterogeneous': 'Describe a task or ask a question to {{name}}',
   'sendPlaceholderWithAgentAssignment':
     'Ask, create, or start a task. @ to assign tasks to other agents.',

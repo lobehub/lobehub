@@ -43,21 +43,42 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const SubmenuScrollStyle = createGlobalStyle`
+  /* base-ui DropdownMenu.Item reserves an indicator slot (empty aria-hidden
+     span) for checkbox/radio variants. Our menu items don't use it, so the
+     empty slot only contributes left whitespace. Collapse it across both
+     the top-level menu and any nested submenu popups. */
+  [role='menu'] [role='menuitem'] > * > span[aria-hidden='true']:empty,
+  [role='menu'] [role='menuitem'] > span[aria-hidden='true']:empty {
+    display: none;
+  }
+
   [data-submenu] > [role='menu'] {
+    will-change: auto;
+
+    /* Submenus have 0ms animation, so disabling compositing is safe.
+       Both will-change:transform AND the inherited transform: scaleY(1) from
+       Menu.Positioner ('& > *' rule) create a new containing block, which
+       breaks position:sticky for descendants and lets items leak below the
+       popup. Disable both for submenus where animation is already 0ms. */
+    transform: none !important;
+
     overflow-y: auto;
     overscroll-behavior: contain;
+
     max-height: min(50vh, 640px);
+    padding-block-end: 4px;
+  }
+
+  [data-submenu] > [role='menu']:has([role='menuitem']:has([data-fixed-menu-footer])) {
+    padding-block-end: 0 !important;
   }
 
   [data-submenu] > [role='menu'] [role='menuitem']:has([data-fixed-menu-footer]) {
     position: sticky;
     z-index: 2;
-    inset-block-end: -4px;
-
-    overflow: visible;
+    inset-block-end: 0;
 
     min-height: 0;
-    margin-block: 0 -4px;
     margin-inline: -4px;
     padding-block: 8px 12px !important;
     padding-inline: 8px !important;
@@ -68,28 +89,24 @@ const SubmenuScrollStyle = createGlobalStyle`
     box-shadow: 0 -12px 16px 4px ${cssVar.colorBgElevated};
   }
 
-  [data-submenu] > [role='menu'] [role='menuitem']:has([data-fixed-menu-footer])::after {
-    pointer-events: none;
-    content: '';
-
-    position: absolute;
-    inset-block-end: -12px;
-    inset-inline: 0;
-
-    height: 12px;
-
-    background: ${cssVar.colorBgElevated};
-  }
-
   [data-submenu] > [role='menu'] [role='menuitem']:has([data-fixed-menu-footer]) > * {
+    display: flex;
+    align-items: center;
+
     width: 100%;
     min-height: 36px;
+    padding-block: 4px;
     padding-inline: 8px;
     border-radius: ${cssVar.borderRadiusSM};
   }
 
+  [data-submenu] > [role='menu'] [role='menuitem']:has([data-skill-stats]) {
+    cursor: default;
+    padding-block: 0 !important;
+  }
+
   [data-submenu] > [role='menu'] [role='group']:has([data-skill-menu-search]) > *:has([data-skill-menu-search]) {
-    padding-block: 12px 8px !important;
+    padding-block: 6px 8px !important;
     padding-inline: 8px !important;
   }
 
@@ -101,6 +118,11 @@ const SubmenuScrollStyle = createGlobalStyle`
   [data-submenu] > [role='menu'] [role='menuitem']:has([data-fixed-menu-footer]):hover > *,
   [data-submenu] > [role='menu'] [role='menuitem']:has([data-fixed-menu-footer])[data-highlighted] > * {
     background: ${cssVar.colorFillTertiary};
+  }
+
+  [data-submenu] > [role='menu'] [role='menuitem']:has([data-skill-stats]):hover > *,
+  [data-submenu] > [role='menu'] [role='menuitem']:has([data-skill-stats])[data-highlighted] > * {
+    background: transparent;
   }
 `;
 

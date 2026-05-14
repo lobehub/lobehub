@@ -21,10 +21,8 @@ export interface KnowledgeControls {
 
 export const useControls = ({
   openAttachKnowledgeModal,
-  setUpdating,
 }: {
   openAttachKnowledgeModal: () => void;
-  setUpdating: (updating: boolean) => void;
 }) => {
   const { t } = useTranslation('chat');
   const agentId = useAgentId();
@@ -53,9 +51,7 @@ export const useControls = ({
         label={item.name}
         labelMaxWidth={labelMaxWidth}
         onUpdate={async (id, enabled) => {
-          setUpdating(true);
           await toggleKnowledgeBase(id, enabled);
-          setUpdating(false);
         }}
       />
     ),
@@ -71,9 +67,7 @@ export const useControls = ({
         label={item.name}
         labelMaxWidth={labelMaxWidth}
         onUpdate={async (id, enabled) => {
-          setUpdating(true);
           await toggleFile(id, enabled);
-          setUpdating(false);
         }}
       />
     ),

@@ -110,6 +110,14 @@ vi.mock('@/store/serverConfig', () => ({
   useServerConfigStore: (selector: (s: unknown) => unknown) => selector({}),
 }));
 
+vi.mock('@/features/Conversation/store', () => ({
+  useConversationStore: (selector: (state: unknown) => unknown) =>
+    selector({
+      deleteMessage: vi.fn(),
+      regenerateAssistantMessage: vi.fn(),
+    }),
+}));
+
 describe('ErrorMessageExtra', () => {
   it('renders the auth guide when the refreshed error is missing type but still carries session code', () => {
     render(

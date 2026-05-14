@@ -6,11 +6,12 @@ import {
 } from '@lobechat/const';
 import type { ItemType } from '@lobehub/ui';
 import { Avatar, Icon, Popover, SearchBar, stopPropagation } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { McpIcon, SkillsIcon } from '@lobehub/ui/icons';
 import { Switch } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { Check, ChevronDown, ChevronRight, MoreHorizontal, Pin, Zap } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, MoreHorizontal, Pin, Trash2, Zap } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -47,6 +48,11 @@ const CLOSE_TOOL_DETAIL_POPOVER_EVENT = 'lobe-chat-tool-detail-popover-close';
 
 type SkillPolicyMode = 'auto' | 'pinned';
 
+interface SkillDeleteConfig {
+  displayName: string;
+  onDelete: () => Promise<void> | void;
+}
+
 type SkillMenuItem = NonNullable<ItemType> & {
   popoverContent?: ReactNode;
   searchText?: string;
@@ -69,17 +75,6 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
     justify-content: center;
     color: ${cssVar.colorTextTertiary};
-  `,
-  activationGroupMeta: css`
-    overflow: hidden;
-    flex: none;
-
-    font-size: 12px;
-    font-weight: 400;
-    line-height: 1;
-    color: ${cssVar.colorTextTertiary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
   `,
   activationGroupTitle: css`
     display: flex;
@@ -110,13 +105,19 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextTertiary};
   `,
   switchWrap: css`
-    transform-origin: left center;
+    transform-origin: right center;
     transform: scale(0.88);
+
     display: inline-flex;
     flex: none;
+
+    margin-inline-end: -2px;
   `,
   iconAuto: css`
-    color: ${cssVar.colorWarning};
+    color: ${cssVar.colorInfo};
+  `,
+  iconDefault: css`
+    color: ${cssVar.colorTextTertiary};
   `,
   iconPinned: css`
     color: ${cssVar.colorInfo};
@@ -146,6 +147,41 @@ const styles = createStaticStyles(({ css }) => ({
       color: ${cssVar.colorTextSecondary};
       background: ${cssVar.colorFillTertiary};
     }
+  `,
+  deleteButton: css`
+    cursor: pointer;
+
+    display: flex;
+    gap: 10px;
+    align-items: center;
+
+    width: 100%;
+    min-height: 36px;
+    padding-block: 8px;
+    padding-inline: 10px;
+    border: 0;
+    border-radius: 6px;
+
+    font-size: 14px;
+    line-height: 20px;
+    color: ${cssVar.colorError};
+
+    background: transparent;
+
+    transition: background 150ms ${cssVar.motionEaseOut};
+
+    &:hover {
+      background: ${cssVar.colorErrorBg};
+    }
+  `,
+  deleteDivider: css`
+    height: 1px;
+    margin-block: 2px;
+    margin-inline: 4px;
+    background: ${cssVar.colorBorderSecondary};
+  `,
+  deleteIcon: css`
+    color: ${cssVar.colorError};
   `,
   policyCheck: css`
     display: flex;
@@ -221,8 +257,16 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorFillQuaternary};
   `,
   toolLabel: css`
-    overflow: hidden;
+    display: flex;
     flex: 1;
+    gap: 6px;
+    align-items: center;
+
+    min-width: 0;
+  `,
+  toolLabelText: css`
+    overflow: hidden;
+    flex: 0 1 auto;
 
     min-width: 0;
 
@@ -238,6 +282,20 @@ const styles = createStaticStyles(({ css }) => ({
 
     width: 100%;
     min-width: 0;
+  `,
+  typeTag: css`
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+
+    padding-block: 1px;
+    padding-inline: 4px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: 4px;
+
+    color: ${cssVar.colorTextTertiary};
+
+    background: ${cssVar.colorFillQuaternary};
   `,
   statsFooter: css`
     display: flex;
@@ -256,7 +314,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) => void }) => {
+export const useControls = () => {
   const { t } = useTranslation('setting');
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
@@ -264,7 +322,13 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
   const [autoOpen, setAutoOpen] = useState(true);
   const [policyOpenId, setPolicyOpenId] = useState<string | null>(null);
   const [searchKeyword, setSearchKeyword] = useState('');
+  const [autoModeLoading, setAutoModeLoading] = useState(false);
   const list = useToolStore(pluginSelectors.installedPluginMetaList, isEqual);
+  const [uninstallPlugin, removeKlavisServer, deleteAgentSkill] = useToolStore((s) => [
+    s.uninstallCustomPlugin,
+    s.removeKlavisServer,
+    s.deleteAgentSkill,
+  ]);
   const [checked, togglePlugin] = useAgentStore((s) => [
     agentByIdSelectors.getAgentPluginsById(agentId)(s),
     s.togglePlugin,
@@ -292,11 +356,9 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
       const shouldPin = mode === 'pinned';
       if (checkedSet.has(id) === shouldPin) return;
 
-      setUpdating(true);
       await togglePlugin(id, shouldPin);
-      setUpdating(false);
     },
-    [checkedSet, setUpdating, togglePlugin],
+    [checkedSet, togglePlugin],
   );
 
   const openSkillPolicyMenu = useCallback((id: string) => {
@@ -307,7 +369,7 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
   }, []);
 
   const renderPolicyMenu = useCallback(
-    (id: string) => {
+    (id: string, deleteConfig?: SkillDeleteConfig) => {
       const mode: SkillPolicyMode = checkedSet.has(id) ? 'pinned' : 'auto';
       const renderCheck = (value: SkillPolicyMode) =>
         mode === value ? (
@@ -342,9 +404,50 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
         >
           {renderPolicyItem(
             'pinned',
-            <Icon className={cx(styles.iconPinned)} icon={Pin} size={15} />,
+            <Icon
+              className={cx(mode === 'pinned' ? styles.iconPinned : styles.iconDefault)}
+              icon={Pin}
+              size={15}
+            />,
           )}
-          {renderPolicyItem('auto', <Icon className={cx(styles.iconAuto)} icon={Zap} size={15} />)}
+          {renderPolicyItem(
+            'auto',
+            <Icon
+              className={cx(mode === 'auto' ? styles.iconAuto : styles.iconDefault)}
+              icon={Zap}
+              size={15}
+            />,
+          )}
+          {deleteConfig && (
+            <>
+              <div className={cx(styles.deleteDivider)} />
+              <button
+                className={cx(styles.deleteButton)}
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setPolicyOpenId(null);
+                  confirmModal({
+                    content: t('tools.builtins.uninstallConfirm.desc', {
+                      name: deleteConfig.displayName,
+                    }),
+                    onOk: async () => {
+                      await deleteConfig.onDelete();
+                    },
+                    title: t('tools.builtins.uninstallConfirm.title', {
+                      name: deleteConfig.displayName,
+                    }),
+                    type: 'warning',
+                  });
+                }}
+              >
+                <span className={cx(styles.policyItemIcon)}>
+                  <Icon className={cx(styles.deleteIcon)} icon={Trash2} size={15} />
+                </span>
+                <span className={cx(styles.policyText)}>{t('tools.builtins.uninstall')}</span>
+              </button>
+            </>
+          )}
         </div>
       );
 
@@ -395,7 +498,7 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
   );
 
   const renderToolLabel = useCallback(
-    (id: string, label: ReactNode, action: ReactNode) => (
+    (id: string, label: ReactNode, action: ReactNode, badge?: ReactNode, icon?: ReactNode) => (
       <span
         className={cx(styles.toolRow)}
         onContextMenu={(event) => {
@@ -404,7 +507,11 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
           openSkillPolicyMenu(id);
         }}
       >
-        <span className={cx(styles.toolLabel)}>{label}</span>
+        <span className={cx(styles.toolLabel)}>
+          {icon}
+          <span className={cx(styles.toolLabelText)}>{label}</span>
+          {badge && <span className={cx(styles.typeTag)}>{badge}</span>}
+        </span>
         {action}
       </span>
     ),
@@ -413,12 +520,16 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
 
   const createManagedSkillItem = useCallback(
     ({
+      badge,
+      deleteConfig,
       icon,
       id,
       popoverContent,
       searchText,
       title,
     }: {
+      badge?: ReactNode;
+      deleteConfig?: SkillDeleteConfig;
       icon: ReactNode;
       id: string;
       popoverContent?: ReactNode;
@@ -427,9 +538,8 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
     }): SkillMenuItem =>
       ({
         closeOnClick: false,
-        icon,
         key: id,
-        label: renderToolLabel(id, title, renderPolicyMenu(id)),
+        label: renderToolLabel(id, title, renderPolicyMenu(id, deleteConfig), badge, icon),
         popoverContent,
         searchText: searchText || String(title || id),
       }) as SkillMenuItem,
@@ -560,6 +670,11 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
 
             if (server?.status === KlavisServerStatus.CONNECTED) {
               return createManagedSkillItem({
+                badge: <Icon icon={McpIcon} size={12} />,
+                deleteConfig: {
+                  displayName: type.label,
+                  onDelete: () => removeKlavisServer(server.identifier),
+                },
                 icon,
                 id: server.identifier,
                 popoverContent,
@@ -593,6 +708,7 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
       t,
       createManagedSkillItem,
       getServerByName,
+      removeKlavisServer,
     ],
   );
 
@@ -626,6 +742,7 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
 
             if (server?.status === LobehubSkillStatus.CONNECTED || server?.isConnected) {
               return createManagedSkillItem({
+                badge: <Icon icon={McpIcon} size={12} />,
                 icon,
                 id: server.identifier,
                 popoverContent,
@@ -667,13 +784,10 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
         const title = t(`tools.builtins.${item.identifier}.title` as any, {
           defaultValue: item.meta?.title || item.identifier,
         });
-        const icon = (
-          <Avatar
-            avatar={item.meta.avatar}
-            shape={'square'}
-            size={SKILL_ICON_SIZE}
-            style={{ flex: 'none' }}
-          />
+        const icon = item.meta?.avatar ? (
+          <Avatar avatar={item.meta.avatar} shape={'square'} size={SKILL_ICON_SIZE} />
+        ) : (
+          <Icon icon={SkillsIcon} size={SKILL_ICON_SIZE} />
         );
         const popoverContent = (
           <ToolItemDetailPopover
@@ -684,12 +798,16 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
               defaultValue: item.meta?.description || '',
             })}
             icon={
-              <Avatar
-                avatar={item.meta.avatar}
-                shape={'square'}
-                size={36}
-                style={{ flex: 'none', marginInlineEnd: 0 }}
-              />
+              item.meta?.avatar ? (
+                <Avatar
+                  avatar={item.meta.avatar}
+                  shape={'square'}
+                  size={36}
+                  style={{ flex: 'none', marginInlineEnd: 0 }}
+                />
+              ) : (
+                <Icon icon={SkillsIcon} size={36} />
+              )
             }
           />
         );
@@ -741,6 +859,7 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
         );
 
         return createManagedSkillItem({
+          badge: <Icon icon={SkillsIcon} size={12} />,
           icon,
           id: skill.identifier,
           popoverContent,
@@ -768,6 +887,11 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
         );
 
         return createManagedSkillItem({
+          badge: <Icon icon={SkillsIcon} size={12} />,
+          deleteConfig: {
+            displayName: skill.name,
+            onDelete: () => deleteAgentSkill(skill.id),
+          },
           icon,
           id: skill.identifier,
           popoverContent,
@@ -775,7 +899,7 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
           title: skill.name,
         });
       }),
-    [marketAgentSkills, t, createManagedSkillItem],
+    [marketAgentSkills, t, createManagedSkillItem, deleteAgentSkill],
   );
 
   // User Agent Skills list items (grouped under Custom)
@@ -794,6 +918,11 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
         );
 
         return createManagedSkillItem({
+          badge: <Icon icon={SkillsIcon} size={12} />,
+          deleteConfig: {
+            displayName: skill.name,
+            onDelete: () => deleteAgentSkill(skill.id),
+          },
           icon,
           id: skill.identifier,
           popoverContent,
@@ -801,7 +930,7 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
           title: skill.name,
         });
       }),
-    [userAgentSkills, t, createManagedSkillItem],
+    [userAgentSkills, t, createManagedSkillItem, deleteAgentSkill],
   );
 
   // Skills list items (including LobeHub Skill and Klavis)
@@ -874,6 +1003,11 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
     );
 
     return createManagedSkillItem({
+      badge: isMcp ? <Icon icon={McpIcon} size={12} /> : undefined,
+      deleteConfig: {
+        displayName: item.title,
+        onDelete: () => uninstallPlugin(item.identifier),
+      },
       icon,
       id: item.identifier,
       popoverContent,
@@ -922,23 +1056,19 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
         .includes(normalizedSearchKeyword),
     );
   };
-  const pinnedItems = filterBySearch(
-    allSkillItems.filter((item) => checkedSet.has(String(item.key))),
-  );
-  const autoItems = filterBySearch(
-    allSkillItems.filter((item) => !checkedSet.has(String(item.key))),
-  );
+  const allPinnedItems = allSkillItems.filter((item) => checkedSet.has(String(item.key)));
+  const allAutoItems = allSkillItems.filter((item) => !checkedSet.has(String(item.key)));
+  const pinnedItems = filterBySearch(allPinnedItems);
+  const autoItems = filterBySearch(allAutoItems);
 
   const renderActivationGroupLabel = ({
     autoSwitch,
-    count,
     icon,
     open,
     title,
     onToggle,
   }: {
     autoSwitch?: boolean;
-    count: number;
     icon: ReactNode;
     open: boolean;
     title: string;
@@ -960,31 +1090,34 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
         {icon}
         <div className={cx(styles.activationGroupTitle)}>
           <span className={cx(styles.activationGroupTitleText)}>{title}</span>
-          {autoSwitch && (
-            <span
-              className={cx(styles.switchWrap)}
-              onClick={(event) => {
-                event.stopPropagation();
-              }}
-            >
-              <Switch
-                checked={isAutoSkillMode}
-                size="small"
-                onClick={(_, event) => event.stopPropagation()}
-                onChange={async (checked, event) => {
-                  event?.stopPropagation?.();
-                  setUpdating(true);
-                  await updateAgentChatConfig({
-                    skillActivateMode: checked ? 'auto' : 'manual',
-                  });
-                  setUpdating(false);
-                }}
-              />
-            </span>
-          )}
         </div>
       </div>
-      <span className={cx(styles.activationGroupMeta)}>{count}</span>
+      {autoSwitch && (
+        <span
+          className={cx(styles.switchWrap)}
+          onClick={(event) => {
+            event.stopPropagation();
+          }}
+        >
+          <Switch
+            checked={isAutoSkillMode}
+            loading={autoModeLoading}
+            size="small"
+            onClick={(_, event) => event.stopPropagation()}
+            onChange={async (checked, event) => {
+              event?.stopPropagation?.();
+              setAutoModeLoading(true);
+              try {
+                await updateAgentChatConfig({
+                  skillActivateMode: checked ? 'auto' : 'manual',
+                });
+              } finally {
+                setAutoModeLoading(false);
+              }
+            }}
+          />
+        </span>
+      )}
     </div>
   );
 
@@ -1022,7 +1155,6 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
             children: pinnedOpen ? pinnedItems : [],
             key: 'pinned',
             label: renderActivationGroupLabel({
-              count: pinnedItems.length,
               icon: <Icon icon={Pin} size={14} />,
               open: pinnedOpen,
               title: t('tools.activation.pinned'),
@@ -1047,13 +1179,34 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
             key: 'auto',
             label: renderActivationGroupLabel({
               autoSwitch: true,
-              count: autoItems.length,
               icon: <Icon icon={Zap} size={14} />,
               open: autoOpen,
               title: t('tools.activation.auto'),
               onToggle: () => setAutoOpen((open) => !open),
             }),
             type: 'group' as const,
+          },
+        ]
+      : []),
+    ...(allSkillItems.length > 0
+      ? [
+          {
+            closeOnClick: false,
+            key: 'skill-stats-footer',
+            label: (
+              <span data-fixed-menu-footer data-skill-stats>
+                <div className={cx(styles.statsFooter)}>
+                  <span className={cx(styles.statsItem)}>
+                    <Icon icon={Pin} size={12} />
+                    {allPinnedItems.length}
+                  </span>
+                  <span className={cx(styles.statsItem)}>
+                    <Icon icon={Zap} size={12} />
+                    {allAutoItems.length}
+                  </span>
+                </div>
+              </span>
+            ),
           },
         ]
       : []),
@@ -1067,13 +1220,10 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
     const enabledBuiltinItems = filteredBuiltinList
       .filter((item) => checked.includes(item.identifier))
       .map((item) => ({
-        icon: (
-          <Avatar
-            avatar={item.meta.avatar}
-            shape={'square'}
-            size={SKILL_ICON_SIZE}
-            style={{ flex: 'none' }}
-          />
+        icon: item.meta?.avatar ? (
+          <Avatar avatar={item.meta.avatar} shape={'square'} size={SKILL_ICON_SIZE} />
+        ) : (
+          <Icon icon={SkillsIcon} size={SKILL_ICON_SIZE} />
         ),
         key: item.identifier,
         label: (
@@ -1082,9 +1232,7 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
             id={item.identifier}
             label={item.meta?.title}
             onUpdate={async () => {
-              setUpdating(true);
               await togglePlugin(item.identifier);
-              setUpdating(false);
             }}
           />
         ),
@@ -1096,12 +1244,16 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
               defaultValue: item.meta?.description || '',
             })}
             icon={
-              <Avatar
-                avatar={item.meta.avatar}
-                shape={'square'}
-                size={36}
-                style={{ flex: 'none', marginInlineEnd: 0 }}
-              />
+              item.meta?.avatar ? (
+                <Avatar
+                  avatar={item.meta.avatar}
+                  shape={'square'}
+                  size={36}
+                  style={{ flex: 'none', marginInlineEnd: 0 }}
+                />
+              ) : (
+                <Icon icon={SkillsIcon} size={36} />
+              )
             }
             title={t(`tools.builtins.${item.identifier}.title` as any, {
               defaultValue: item.meta?.title || item.identifier,
@@ -1139,9 +1291,7 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
             id={skill.identifier}
             label={skill.name}
             onUpdate={async () => {
-              setUpdating(true);
               await togglePlugin(skill.identifier);
-              setUpdating(false);
             }}
           />
         ),
@@ -1212,9 +1362,7 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
               id={item.identifier}
               label={item.title}
               onUpdate={async () => {
-                setUpdating(true);
                 await togglePlugin(item.identifier);
-                setUpdating(false);
               }}
             />
           ),
@@ -1259,9 +1407,7 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
               id={item.identifier}
               label={item.title}
               onUpdate={async () => {
-                setUpdating(true);
                 await togglePlugin(item.identifier);
-                setUpdating(false);
               }}
             />
           ),
@@ -1302,9 +1448,7 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
             id={skill.identifier}
             label={skill.name}
             onUpdate={async () => {
-              setUpdating(true);
               await togglePlugin(skill.identifier);
-              setUpdating(false);
             }}
           />
         ),
@@ -1341,9 +1485,7 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
             id={skill.identifier}
             label={skill.name}
             onUpdate={async () => {
-              setUpdating(true);
               await togglePlugin(skill.identifier);
-              setUpdating(false);
             }}
           />
         ),
@@ -1381,9 +1523,13 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
     lobehubSkillItems,
     checked,
     togglePlugin,
-    setUpdating,
     t,
   ]);
 
-  return { installedPluginItems, marketItems };
+  return {
+    autoCount: allAutoItems.length,
+    installedPluginItems,
+    marketItems,
+    pinnedCount: allPinnedItems.length,
+  };
 };
