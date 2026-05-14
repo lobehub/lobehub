@@ -3,7 +3,7 @@ import { Divider } from 'antd';
 import { cssVar } from 'antd-style';
 import { memo } from 'react';
 
-/** Loading placeholder for {@link BriefCard} and task-template recommend cards (shared layout). */
+/** Loading placeholder for {@link BriefCard}. */
 const BriefCardSkeleton = memo(() => {
   return (
     <Block

@@ -6,8 +6,8 @@ import { RefreshCw } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { BriefCardSkeleton } from '@/features/DailyBrief/BriefCardSkeleton';
 import { TaskTemplateCard } from '@/features/RecommendTaskTemplates/TaskTemplateCard';
+import { TaskTemplateCardSkeleton } from '@/features/RecommendTaskTemplates/TaskTemplateCardSkeleton';
 import { useDailyBriefRecommendationsUI } from '@/features/RecommendTaskTemplates/useDailyBriefRecommendationsUI';
 import WideScreenContainer from '@/features/WideScreenContainer';
 
@@ -71,7 +71,9 @@ const EmptyState = memo(() => {
           </Flexbox>
           <div className={styles.grid}>
             {templatesState.mode === 'skeleton'
-              ? Array.from({ length: 6 }).map((_, i) => <BriefCardSkeleton key={i} />)
+              ? Array.from({ length: 6 }).map((_, i) => (
+                  <TaskTemplateCardSkeleton descriptionRows={2} key={i} />
+                ))
               : templatesState.templates.map((tmpl) => (
                   <TaskTemplateCard
                     key={tmpl.id}
