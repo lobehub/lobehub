@@ -7,15 +7,15 @@ import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router-dom';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
+import { useAgentStore } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { useUserStore } from '@/store/user';
-import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 const ParamsPanelToggle = memo(() => {
   const { t } = useTranslation('setting');
   const { pathname } = useLocation();
-  const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
+  const isHetero = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
   const [showRightPanel, workingSidebarTab, setWorkingSidebarTab, toggleRightPanel] =
     useGlobalStore((s) => [
       systemStatusSelectors.showRightPanel(s),
@@ -36,7 +36,7 @@ const ParamsPanelToggle = memo(() => {
     toggleRightPanel(true);
   }, [active, setWorkingSidebarTab, toggleRightPanel]);
 
-  if (!isDevMode || pathname.startsWith('/popup')) return null;
+  if (isHetero || pathname.startsWith('/popup')) return null;
 
   return (
     <ActionIcon

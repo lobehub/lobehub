@@ -8,7 +8,11 @@ import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { useRepoType } from '@/features/ChatInput/RuntimeConfig/useRepoType';
 import RightPanel from '@/features/RightPanel';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
+import {
+  agentByIdSelectors,
+  agentSelectors,
+  chatConfigByIdSelectors,
+} from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
@@ -84,13 +88,15 @@ const AgentWorkingSidebar = memo(() => {
   const isLocalSystemEnabled = useAgentStore((s) =>
     activeAgentId ? chatConfigByIdSelectors.isLocalSystemEnabledById(activeAgentId)(s) : false,
   );
+  const isHetero = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
   const workingDirectory = topicWorkingDirectory || agentWorkingDirectory;
   const repoType = useRepoType(workingDirectory);
 
   const filesAvailable = isLocalSystemEnabled && !!workingDirectory;
   const reviewAvailable = isLocalSystemEnabled && !!workingDirectory && !!repoType;
+  const paramsAvailable = !isHetero;
   const resolveActiveTab = (): Tab => {
-    if (storedTab === 'params') return 'params';
+    if (storedTab === 'params' && paramsAvailable) return 'params';
     if (storedTab === 'review' && reviewAvailable) return 'review';
     if (storedTab === 'files' && filesAvailable) return 'files';
     if (storedTab === 'resources') return 'resources';
@@ -111,50 +117,33 @@ const AgentWorkingSidebar = memo(() => {
           justify={'space-between'}
           paddingInline={4}
         >
-          {reviewAvailable || filesAvailable ? (
-            <div className={styles.tabs}>
+          <div className={styles.tabs}>
+            <button
+              className={`${styles.tab} ${activeTab === 'resources' ? styles.tabActive : ''}`}
+              type="button"
+              onClick={() => setWorkingSidebarTab('resources')}
+            >
+              {t('workingPanel.space')}
+            </button>
+            {reviewAvailable && (
               <button
-                className={`${styles.tab} ${activeTab === 'resources' ? styles.tabActive : ''}`}
+                className={`${styles.tab} ${activeTab === 'review' ? styles.tabActive : ''}`}
                 type="button"
-                onClick={() => setWorkingSidebarTab('resources')}
+                onClick={() => setWorkingSidebarTab('review')}
               >
-                {t('workingPanel.space')}
+                {t('workingPanel.review.title')}
               </button>
-              {reviewAvailable && (
-                <button
-                  className={`${styles.tab} ${activeTab === 'review' ? styles.tabActive : ''}`}
-                  type="button"
-                  onClick={() => setWorkingSidebarTab('review')}
-                >
-                  {t('workingPanel.review.title')}
-                </button>
-              )}
-              {filesAvailable && (
-                <button
-                  className={`${styles.tab} ${activeTab === 'files' ? styles.tabActive : ''}`}
-                  type="button"
-                  onClick={() => setWorkingSidebarTab('files')}
-                >
-                  {t('workingPanel.files.title')}
-                </button>
-              )}
+            )}
+            {filesAvailable && (
               <button
-                className={`${styles.tab} ${activeTab === 'params' ? styles.tabActive : ''}`}
+                className={`${styles.tab} ${activeTab === 'files' ? styles.tabActive : ''}`}
                 type="button"
-                onClick={() => setWorkingSidebarTab('params')}
+                onClick={() => setWorkingSidebarTab('files')}
               >
-                {t('settingModel.params.panel.tab', { ns: 'setting' })}
+                {t('workingPanel.files.title')}
               </button>
-            </div>
-          ) : (
-            <div className={styles.tabs}>
-              <button
-                className={`${styles.tab} ${activeTab === 'resources' ? styles.tabActive : ''}`}
-                type="button"
-                onClick={() => setWorkingSidebarTab('resources')}
-              >
-                {t('workingPanel.space')}
-              </button>
+            )}
+            {paramsAvailable && (
               <button
                 className={`${styles.tab} ${activeTab === 'params' ? styles.tabActive : ''}`}
                 type="button"
@@ -162,8 +151,8 @@ const AgentWorkingSidebar = memo(() => {
               >
                 {t('settingModel.params.panel.tab', { ns: 'setting' })}
               </button>
-            </div>
-          )}
+            )}
+          </div>
           <ActionIcon
             icon={PanelRightCloseIcon}
             size={DESKTOP_HEADER_ICON_SMALL_SIZE}
@@ -171,7 +160,7 @@ const AgentWorkingSidebar = memo(() => {
           />
         </Flexbox>
         <Flexbox className={styles.body} width={'100%'}>
-          {activeTab === 'params' && (
+          {paramsAvailable && activeTab === 'params' && (
             <Flexbox className={styles.pane}>
               <ParamsSection />
             </Flexbox>
