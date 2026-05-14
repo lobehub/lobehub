@@ -1,5 +1,4 @@
-import type { ChildProcess, SpawnOptions } from 'node:child_process';
-import { execFile, spawn } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { access, readFile } from 'node:fs/promises';
 import { platform } from 'node:os';
 import path from 'node:path';
@@ -233,13 +232,4 @@ export const resolveCliSpawnPlan = async (
   if (!target) return { args, command };
 
   return { args: [...(target.argsPrefix ?? []), ...args], command: target.command };
-};
-
-export const spawnCli = async (
-  command: string,
-  args: string[],
-  options: SpawnOptions,
-): Promise<ChildProcess> => {
-  const plan = await resolveCliSpawnPlan(command, args);
-  return spawn(plan.command, plan.args, options);
 };

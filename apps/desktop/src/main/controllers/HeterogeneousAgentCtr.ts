@@ -24,7 +24,7 @@ import {
   buildAgentInput,
   materializeImageToPath,
   normalizeImage,
-  spawnCli,
+  resolveCliSpawnPlan,
 } from '@lobechat/heterogeneous-agents/spawn';
 import { app as electronApp, BrowserWindow } from 'electron';
 
@@ -872,8 +872,14 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     }
     const useStdin = spawnPlan.stdinPayload !== undefined;
     const cliArgs = spawnPlan.args;
+    const resolvedCliSpawnPlan = await resolveCliSpawnPlan(session.command, cliArgs);
 
-    logger.info('Spawning agent:', session.command, cliArgs.join(' '), `(cwd: ${cwd})`);
+    logger.info(
+      'Spawning agent:',
+      resolvedCliSpawnPlan.command,
+      resolvedCliSpawnPlan.args.join(' '),
+      `(cwd: ${cwd})`,
+    );
 
     // `detached: true` on Unix puts the child in a new process group so we
     // can SIGINT/SIGKILL the whole tree (claude + any tool subprocesses)
@@ -892,21 +898,9 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       stdio: [useStdin ? 'pipe' : 'ignore', 'pipe', 'pipe'] as ['pipe' | 'ignore', 'pipe', 'pipe'],
     };
 
-    let proc: ChildProcess;
-    try {
-      proc = await spawnCli(session.command, cliArgs, spawnOptions);
-    } catch (err) {
-      if (intervention) {
-        await intervention.cleanup().catch((cleanupErr) => {
-          logger.warn('AskUserQuestion cleanup error during spawn failure:', cleanupErr);
-        });
-      }
-      throw err;
-    }
-
     return new Promise<void>((resolve, reject) => {
+      const proc = spawn(resolvedCliSpawnPlan.command, resolvedCliSpawnPlan.args, spawnOptions);
       this.handleSpawnedAgentProcess({
-        cliArgs,
         intervention,
         params,
         proc,
@@ -921,7 +915,6 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   }
 
   private handleSpawnedAgentProcess({
-    cliArgs,
     intervention,
     params,
     proc,
@@ -932,7 +925,6 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     traceSession,
     useStdin,
   }: {
-    cliArgs: string[];
     intervention?: Awaited<ReturnType<HeterogeneousAgentCtr['setupInterventionForOp']>>;
     params: SendPromptParams;
     proc: ChildProcess;
@@ -943,6 +935,21 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     traceSession: CliTraceSession | undefined;
     useStdin: boolean;
   }) {
+    proc.on('error', (err) => {
+      logger.error('Agent process error:', err);
+      void this.writeCliTraceJson(traceSession, 'process-error.json', {
+        message: err.message,
+        name: err.name,
+      });
+      void this.flushCliTrace(traceSession);
+      const sessionError = this.getSessionErrorPayload(err, session);
+      this.broadcast('heteroAgentSessionError', {
+        error: sessionError,
+        sessionId: session.sessionId,
+      });
+      reject(new Error(typeof sessionError === 'string' ? sessionError : sessionError.message));
+    });
+
     // In stdin mode, write the prepared payload and close stdin.
     if (useStdin && spawnPlan.stdinPayload !== undefined && proc.stdin) {
       void this.writeCliTraceFile(traceSession, 'stdin.txt', spawnPlan.stdinPayload);
@@ -1004,21 +1011,6 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     stderr.on('data', (chunk: Buffer) => {
       void this.appendCliTraceFile(traceSession, 'stderr.log', chunk);
       stderrChunks.push(chunk.toString('utf8'));
-    });
-
-    proc.on('error', (err) => {
-      logger.error('Agent process error:', err);
-      void this.writeCliTraceJson(traceSession, 'process-error.json', {
-        message: err.message,
-        name: err.name,
-      });
-      void this.flushCliTrace(traceSession);
-      const sessionError = this.getSessionErrorPayload(err, session);
-      this.broadcast('heteroAgentSessionError', {
-        error: sessionError,
-        sessionId: session.sessionId,
-      });
-      reject(new Error(typeof sessionError === 'string' ? sessionError : sessionError.message));
     });
 
     proc.on('exit', (code, signal) => {

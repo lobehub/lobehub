@@ -1,5 +1,4 @@
 import * as childProcess from 'node:child_process';
-import { EventEmitter } from 'node:events';
 import * as fsPromises from 'node:fs/promises';
 import * as os from 'node:os';
 
@@ -24,13 +23,11 @@ vi.mock('node:child_process', async () => {
   return {
     ...actual,
     execFile: vi.fn(),
-    spawn: vi.fn(() => new EventEmitter()),
   };
 });
 
 const platformMock = vi.mocked(os.platform);
 const execFileMock = vi.mocked(childProcess.execFile);
-const spawnMock = vi.mocked(childProcess.spawn);
 const accessMock = vi.mocked(fsPromises.access);
 const readFileMock = vi.mocked(fsPromises.readFile);
 
@@ -56,7 +53,6 @@ describe('cliSpawn', () => {
   beforeEach(() => {
     platformMock.mockReturnValue('linux');
     execFileMock.mockReset();
-    spawnMock.mockClear();
     accessMock.mockReset();
     readFileMock.mockReset();
   });
@@ -229,34 +225,5 @@ describe('cliSpawn', () => {
       args: ['--version'],
       command: shimPath,
     });
-  });
-
-  it('spawns the resolved executable command', async () => {
-    platformMock.mockReturnValue('win32');
-    callExecFile('C:\\Tools\\claude.exe\r\n');
-    const options = { cwd: 'C:\\repo', stdio: ['pipe', 'pipe', 'pipe'] } as any;
-
-    const { spawnCli } = await import('./cliSpawn');
-    await spawnCli('claude', ['-p'], options);
-
-    expect(spawnMock).toHaveBeenCalledWith('C:\\Tools\\claude.exe', ['-p'], options);
-  });
-
-  it('spawns a JS-backed shim with the script path prepended to args', async () => {
-    platformMock.mockReturnValue('win32');
-    const shimPath = 'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\gemini.cmd';
-    const nodePath = 'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\node.exe';
-    const scriptPath =
-      'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\node_modules\\@google\\gemini-cli\\dist\\index.js';
-    existingPaths(shimPath, nodePath, scriptPath);
-    readFileMock.mockResolvedValue(
-      '"%dp0%\\node.exe" "%dp0%\\node_modules\\@google\\gemini-cli\\dist\\index.js" %*\r\n',
-    );
-    const options = { cwd: 'C:\\repo', stdio: ['pipe', 'pipe', 'pipe'] } as any;
-
-    const { spawnCli } = await import('./cliSpawn');
-    await spawnCli(shimPath, ['--version'], options);
-
-    expect(spawnMock).toHaveBeenCalledWith(nodePath, [scriptPath, '--version'], options);
   });
 });

@@ -1,9 +1,10 @@
 import type { ChildProcess } from 'node:child_process';
+import { spawn } from 'node:child_process';
 
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 
 import { AgentStreamPipeline } from './agentStreamPipeline';
-import { spawnCli } from './cliSpawn';
+import { resolveCliSpawnPlan } from './cliSpawn';
 import type { AgentPromptInput, BuildAgentInputOptions } from './input';
 import { buildAgentInput } from './input';
 
@@ -230,12 +231,20 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
   });
   const cwd = options.cwd || process.cwd();
 
-  const proc = await spawnCli(command, args, {
+  const cliSpawnPlan = await resolveCliSpawnPlan(command, args);
+  const proc = spawn(cliSpawnPlan.command, cliSpawnPlan.args, {
     cwd,
     detached: process.platform !== 'win32',
     env: { ...process.env, ...options.env },
     stdio: ['pipe', 'pipe', 'pipe'],
   });
+
+  const exit = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
+    (resolve, reject) => {
+      proc.on('exit', (code, signal) => resolve({ code, signal }));
+      proc.on('error', (err) => reject(err));
+    },
+  );
 
   if (proc.stdin) {
     proc.stdin.write(inputPlan.stdin, () => {
@@ -337,13 +346,6 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
       };
     },
   };
-
-  const exit = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
-    (resolve, reject) => {
-      proc.on('exit', (code, signal) => resolve({ code, signal }));
-      proc.on('error', (err) => reject(err));
-    },
-  );
 
   return {
     events,

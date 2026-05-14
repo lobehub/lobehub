@@ -1,5 +1,6 @@
+import * as childProcess from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import type * as os from 'node:os';
+import * as os from 'node:os';
 import { PassThrough } from 'node:stream';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -7,14 +8,28 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const spawnCalls: Array<{ args: string[]; command: string; options: any }> = [];
 let nextFakeProc: any = null;
 
-vi.mock('node:child_process', async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>;
+const platformMock = vi.mocked(os.platform);
+const execFileMock = vi.mocked(childProcess.execFile);
+
+const callExecFile = (stdout: string) => {
+  execFileMock.mockImplementationOnce(((...args: unknown[]) => {
+    const callback = [...args].reverse().find((arg) => typeof arg === 'function') as
+      | ((error: Error | null, stdout: string) => void)
+      | undefined;
+    callback?.(null, stdout);
+    return {} as childProcess.ChildProcess;
+  }) as typeof childProcess.execFile);
+};
+
+vi.mock('node:child_process', async () => {
+  const actual = await vi.importActual<typeof childProcess>('node:child_process');
   return {
     ...actual,
-    spawn: (command: string, args: string[], options: any) => {
+    execFile: vi.fn(),
+    spawn: vi.fn((command: string, args: string[], options: any) => {
       spawnCalls.push({ args, command, options });
       return nextFakeProc;
-    },
+    }),
   };
 });
 
@@ -84,6 +99,8 @@ describe('spawnAgent', () => {
   beforeEach(() => {
     spawnCalls.length = 0;
     nextFakeProc = null;
+    platformMock.mockReturnValue('linux');
+    execFileMock.mockReset();
   });
 
   afterEach(() => {
@@ -173,6 +190,19 @@ describe('spawnAgent', () => {
     expect(args).toContain('--json');
     expect(args).toContain('--skip-git-repo-check');
     expect(args).toContain('--full-auto');
+  });
+
+  it('spawns the Windows executable resolved by the shared CLI spawn plan', async () => {
+    platformMock.mockReturnValue('win32');
+    callExecFile('C:\\Tools\\codex.exe\r\n');
+    nextFakeProc = createFakeProc().proc;
+
+    const { spawnAgent } = await import('./spawnAgent');
+    await spawnAgent({ agentType: 'codex', operationId: 'op-1', prompt: 'hello' });
+
+    const { args, command } = spawnCalls[0];
+    expect(command).toBe('C:\\Tools\\codex.exe');
+    expect(args[0]).toBe('exec');
   });
 
   it('uses codex `exec resume` form with thread id + `-` stdin marker on resume', async () => {
