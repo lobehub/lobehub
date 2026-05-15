@@ -34,7 +34,9 @@ export const AuthThemeProvider = memo<PropsWithChildren>(({ children }) => {
     setThemeState(nextTheme);
     try {
       localStorage.setItem(STORAGE_KEY, nextTheme);
-    } catch {}
+    } catch (error) {
+      console.error('[AuthThemeProvider] Failed to persist theme', error);
+    }
   }, []);
 
   useEffect(() => {
@@ -45,7 +47,9 @@ export const AuthThemeProvider = memo<PropsWithChildren>(({ children }) => {
       if (localTheme && isAuthTheme(localTheme)) {
         storedTheme = localTheme;
       }
-    } catch {}
+    } catch (error) {
+      console.error('[AuthThemeProvider] Failed to read stored theme', error);
+    }
 
     setThemeState(storedTheme);
   }, []);
