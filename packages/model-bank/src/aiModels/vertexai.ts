@@ -97,7 +97,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
           name: 'textInput_cacheRead',
           strategy: 'tiered',
           tiers: [
-            { rate: 0.2, upTo: 200_000 },
+            { rate: 0.2, upTo: 0.2 },
             { rate: 0.4, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -106,7 +106,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
           name: 'textInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 2, upTo: 200_000 },
+            { rate: 2, upTo: 0.2 },
             { rate: 4, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -115,7 +115,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
           name: 'imageInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 2, upTo: 200_000 },
+            { rate: 2, upTo: 0.2 },
             { rate: 4, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -124,7 +124,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
           name: 'videoInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 2, upTo: 200_000 },
+            { rate: 2, upTo: 0.2 },
             { rate: 4, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -133,7 +133,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
           name: 'audioInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 2, upTo: 200_000 },
+            { rate: 2, upTo: 0.2 },
             { rate: 4, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -142,7 +142,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
           name: 'textOutput',
           strategy: 'tiered',
           tiers: [
-            { rate: 12, upTo: 200_000 },
+            { rate: 12, upTo: 0.2 },
             { rate: 18, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -252,7 +252,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
           name: 'textInput_cacheRead',
           strategy: 'tiered',
           tiers: [
-            { rate: 0.2, upTo: 200_000 },
+            { rate: 0.2, upTo: 0.2 },
             { rate: 0.4, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -261,7 +261,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
           name: 'textInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 2, upTo: 200_000 },
+            { rate: 2, upTo: 0.2 },
             { rate: 4, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -270,7 +270,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
           name: 'textOutput',
           strategy: 'tiered',
           tiers: [
-            { rate: 12, upTo: 200_000 },
+            { rate: 12, upTo: 0.2 },
             { rate: 18, upTo: 'infinity' },
           ],
           unit: 'millionTokens',

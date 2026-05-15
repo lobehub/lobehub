@@ -32,7 +32,7 @@ const googleChatModels: AIChatModelCard[] = [
           name: 'textInput_cacheRead',
           strategy: 'tiered',
           tiers: [
-            { rate: 0.31, upTo: 200_000 },
+            { rate: 0.31, upTo: 0.2 },
             { rate: 0.625, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -41,7 +41,7 @@ const googleChatModels: AIChatModelCard[] = [
           name: 'textInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 1.25, upTo: 200_000 },
+            { rate: 1.25, upTo: 0.2 },
             { rate: 2.5, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -50,7 +50,7 @@ const googleChatModels: AIChatModelCard[] = [
           name: 'textOutput',
           strategy: 'tiered',
           tiers: [
-            { rate: 10, upTo: 200_000 },
+            { rate: 10, upTo: 0.2 },
             { rate: 15, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -211,7 +211,7 @@ const googleChatModels: AIChatModelCard[] = [
           name: 'textInput_cacheRead',
           strategy: 'tiered',
           tiers: [
-            { rate: 0.2, upTo: 200_000 },
+            { rate: 0.2, upTo: 0.2 },
             { rate: 0.4, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -220,7 +220,7 @@ const googleChatModels: AIChatModelCard[] = [
           name: 'textInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 2, upTo: 200_000 },
+            { rate: 2, upTo: 0.2 },
             { rate: 4, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -229,7 +229,7 @@ const googleChatModels: AIChatModelCard[] = [
           name: 'imageInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 2, upTo: 200_000 },
+            { rate: 2, upTo: 0.2 },
             { rate: 4, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -238,7 +238,7 @@ const googleChatModels: AIChatModelCard[] = [
           name: 'videoInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 2, upTo: 200_000 },
+            { rate: 2, upTo: 0.2 },
             { rate: 4, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -247,7 +247,7 @@ const googleChatModels: AIChatModelCard[] = [
           name: 'audioInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 2, upTo: 200_000 },
+            { rate: 2, upTo: 0.2 },
             { rate: 4, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -256,7 +256,7 @@ const googleChatModels: AIChatModelCard[] = [
           name: 'textOutput',
           strategy: 'tiered',
           tiers: [
-            { rate: 12, upTo: 200_000 },
+            { rate: 12, upTo: 0.2 },
             { rate: 18, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -484,7 +484,7 @@ const googleChatModels: AIChatModelCard[] = [
           name: 'textInput_cacheRead',
           strategy: 'tiered',
           tiers: [
-            { rate: 0.31, upTo: 200_000 },
+            { rate: 0.31, upTo: 0.2 },
             { rate: 0.625, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -493,7 +493,7 @@ const googleChatModels: AIChatModelCard[] = [
           name: 'textInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 1.25, upTo: 200_000 },
+            { rate: 1.25, upTo: 0.2 },
             { rate: 2.5, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -502,7 +502,7 @@ const googleChatModels: AIChatModelCard[] = [
           name: 'imageInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 1.25, upTo: 200_000 },
+            { rate: 1.25, upTo: 0.2 },
             { rate: 2.5, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -511,7 +511,7 @@ const googleChatModels: AIChatModelCard[] = [
           name: 'videoInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 1.25, upTo: 200_000 },
+            { rate: 1.25, upTo: 0.2 },
             { rate: 2.5, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -520,7 +520,7 @@ const googleChatModels: AIChatModelCard[] = [
           name: 'audioInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 1.25, upTo: 200_000 },
+            { rate: 1.25, upTo: 0.2 },
             { rate: 2.5, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -529,7 +529,7 @@ const googleChatModels: AIChatModelCard[] = [
           name: 'textOutput',
           strategy: 'tiered',
           tiers: [
-            { rate: 10, upTo: 200_000 },
+            { rate: 10, upTo: 0.2 },
             { rate: 15, upTo: 'infinity' },
           ],
           unit: 'millionTokens',

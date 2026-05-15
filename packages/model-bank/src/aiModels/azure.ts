@@ -25,7 +25,7 @@ const azureChatModels: AIChatModelCard[] = [
           name: 'textInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 2.5, upTo: 272_000 },
+            { rate: 2.5, upTo: 0.272 },
             { rate: 5, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -34,7 +34,7 @@ const azureChatModels: AIChatModelCard[] = [
           name: 'textInput_cacheRead',
           strategy: 'tiered',
           tiers: [
-            { rate: 0.25, upTo: 272_000 },
+            { rate: 0.25, upTo: 0.272 },
             { rate: 0.5, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -43,7 +43,7 @@ const azureChatModels: AIChatModelCard[] = [
           name: 'textOutput',
           strategy: 'tiered',
           tiers: [
-            { rate: 15, upTo: 272_000 },
+            { rate: 15, upTo: 0.272 },
             { rate: 22.5, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -79,7 +79,7 @@ const azureChatModels: AIChatModelCard[] = [
           name: 'textInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 30, upTo: 272_000 },
+            { rate: 30, upTo: 0.272 },
             { rate: 60, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -88,7 +88,7 @@ const azureChatModels: AIChatModelCard[] = [
           name: 'textOutput',
           strategy: 'tiered',
           tiers: [
-            { rate: 180, upTo: 272_000 },
+            { rate: 180, upTo: 0.272 },
             { rate: 270, upTo: 'infinity' },
           ],
           unit: 'millionTokens',

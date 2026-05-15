@@ -890,73 +890,6 @@ const aihubmixChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
-      search: true,
-      vision: true,
-    },
-    contextWindowTokens: 2_000_000,
-    description:
-      'We’re excited to release Grok 4 Fast, our latest progress in cost-effective reasoning models.',
-    displayName: 'Grok 4 Fast (Non-Reasoning)',
-    id: 'grok-4-fast-non-reasoning',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-09-09',
-    settings: {
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      search: true,
-      vision: true,
-    },
-    contextWindowTokens: 2_000_000,
-    description:
-      'We’re excited to release Grok 4 Fast, our latest progress in cost-effective reasoning models.',
-    displayName: 'Grok 4 Fast',
-    id: 'grok-4-fast-reasoning',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-09-09',
-    settings: {
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      vision: true,
-    },
-    contextWindowTokens: 256_000,
-    description:
-      'Latest Grok flagship with unmatched performance in language, math, and reasoning — a true all-rounder. Currently points to grok-4-0709; due to limited resources it is temporarily 10% higher than official pricing and is expected to return to official price later.',
-    displayName: 'Grok 4 0709',
-    id: 'grok-4',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 3.3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 16.5, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-07-09',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
     },
     contextWindowTokens: 131_072,
     description:
@@ -1525,7 +1458,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
           name: 'textInput_cacheRead',
           strategy: 'tiered',
           tiers: [
-            { rate: 0.2, upTo: 200_000 },
+            { rate: 0.2, upTo: 0.2 },
             { rate: 0.4, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -1534,7 +1467,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
           name: 'textInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 2, upTo: 200_000 },
+            { rate: 2, upTo: 0.2 },
             { rate: 4, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -1543,7 +1476,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
           name: 'textOutput',
           strategy: 'tiered',
           tiers: [
-            { rate: 12, upTo: 200_000 },
+            { rate: 12, upTo: 0.2 },
             { rate: 18, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -1614,7 +1547,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
           name: 'textInput_cacheRead',
           strategy: 'tiered',
           tiers: [
-            { rate: 0.2, upTo: 200_000 },
+            { rate: 0.2, upTo: 0.2 },
             { rate: 0.4, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -1623,7 +1556,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
           name: 'textInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 2, upTo: 200_000 },
+            { rate: 2, upTo: 0.2 },
             { rate: 4, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -1632,7 +1565,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
           name: 'textOutput',
           strategy: 'tiered',
           tiers: [
-            { rate: 12, upTo: 200_000 },
+            { rate: 12, upTo: 0.2 },
             { rate: 18, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
