@@ -11,16 +11,6 @@ const REMOTE_DIR = '_remote';
 const ENV_FILE = '.env';
 const DEFAULT_DIR = '.agent-tracing';
 
-// zstd frame magic: 0x28 0xb5 0x2f 0xfd. Used to auto-detect the body format
-// regardless of which environment uploaded it (prod writes `.json.zst`, local
-// dev writes plain `.json`).
-const isZstdFrame = (bytes: Uint8Array): boolean =>
-  bytes.length >= 4 &&
-  bytes[0] === 0x28 &&
-  bytes[1] === 0xb5 &&
-  bytes[2] === 0x2f &&
-  bytes[3] === 0xfd;
-
 /**
  * Parse an operation ID to extract agentId and topicId for URL construction.
  *
@@ -104,27 +94,15 @@ export class RemoteSnapshotStore {
       return cached;
     }
 
-    // Download. Prod uploads `.json.zst`, local dev uploads plain `.json`. Try
-    // the zstd suffix first (dominant case); on 404 fall back to the plain
-    // sibling so dev-uploaded snapshots remain inspectable from another machine.
+    // Download — remote object is zstd-compressed JSON (`.json.zst`).
     console.error(`↓ Downloading: ${url}`);
-    let res = await fetch(url);
-    if (res.status === 404 && url.endsWith('.json.zst')) {
-      const plainUrl = url.slice(0, -'.zst'.length);
-      console.error(`↓ Falling back to plain JSON: ${plainUrl}`);
-      res = await fetch(plainUrl);
-    }
+    const res = await fetch(url);
     if (!res.ok) {
       throw new Error(`Failed to fetch snapshot: ${res.status} ${res.statusText}\n  URL: ${url}`);
     }
-
-    // Body format is determined by sniffing magic bytes, not by URL suffix —
-    // covers any combination of upload/download environment.
-    const bytes = new Uint8Array(await res.arrayBuffer());
-    const json = isZstdFrame(bytes)
-      ? (await decompressZstd(Buffer.from(bytes))).toString('utf8')
-      : Buffer.from(bytes).toString('utf8');
-    const snapshot = JSON.parse(json) as ExecutionSnapshot;
+    const compressed = Buffer.from(await res.arrayBuffer());
+    const decompressed = await decompressZstd(compressed);
+    const snapshot = JSON.parse(decompressed.toString('utf8')) as ExecutionSnapshot;
 
     // Cache locally as plain JSON for easy inspection.
     await fs.mkdir(this.cacheDir, { recursive: true });
