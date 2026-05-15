@@ -84,6 +84,17 @@ export interface MessengerPlatformBinder {
   ) => InboundCallbackAction | null;
 
   /**
+   * Slack-only: peek for an `app_home_opened` event with `tab: "messages"`.
+   * Slack's marketplace listing requires apps with the Messages tab enabled
+   * to send a welcome message on first open. chat-sdk's slack adapter only
+   * forwards Home-tab opens, so messages-tab opens have to be caught at the
+   * webhook level. Returns the user + IM channel to greet, or null when the
+   * inbound isn't the messages-tab opener. The router clones the request
+   * before calling so the body stays readable.
+   */
+  extractAppHomeOpened?: (req: Request) => Promise<{ channelId: string; userId: string } | null>;
+
+  /**
    * Try to extract a tap-action from a raw webhook request. Returns null when
    * the update is a regular message (in which case the caller hands it off to
    * chat-sdk). Platforms without tap callbacks return null unconditionally.

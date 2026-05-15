@@ -233,6 +233,23 @@ export class MessengerRouter {
         return new Response(`Messenger ${platform} bot unavailable`, { status: 503 });
       }
 
+      // ----- App Home `Messages` tab opener (Slack marketplace welcome) ---
+      // Slack requires a welcome message the first time a user opens the
+      // Messages tab. chat-sdk's slack adapter drops these events, so peek
+      // the raw body here and dispatch via the binder. Dedupe is handled
+      // inside `handleAppHomeOpened` so a per-user welcome fires once.
+      if (bot.binder.extractAppHomeOpened) {
+        try {
+          const opener = await bot.binder.extractAppHomeOpened(reconstructRequest(req, rawBody));
+          if (opener) {
+            await this.handleAppHomeOpened(bot, creds, opener);
+            return new Response('OK', { status: 200 });
+          }
+        } catch (error) {
+          log('extractAppHomeOpened failed for %s: %O', platform, error);
+        }
+      }
+
       // ----- Tap-action callbacks (binder peeks raw body) -----------------
       if (bot.binder.extractCallbackAction) {
         try {
@@ -894,6 +911,66 @@ export class MessengerRouter {
       isActive: agent.id === activeAgentId,
       title: agent.title,
     }));
+  }
+
+  /**
+   * Slack-only welcome on first Messages-tab open. Slack's marketplace
+   * listing rule: apps that enable the Messages tab MUST send a welcome
+   * the first time any user opens it. The `setIfNotExists` gate makes
+   * sure follow-up opens (the same user clicking the tab again, multiple
+   * webhook deliveries from Slack's retry policy) stay silent.
+   *
+   * chat-sdk state is already per-install (Redis keyPrefix in
+   * `createChatBot`), so the gate key is implicitly workspace-scoped.
+   * Unlinked users get the same Link Account CTA they'd see on a first
+   * DM; linked users get a short ready-to-chat note with the active
+   * agent name.
+   */
+  private async handleAppHomeOpened(
+    bot: RegisteredMessengerBot,
+    creds: InstallationCredentials,
+    event: { channelId: string; userId: string },
+  ): Promise<void> {
+    const stateAdapter = bot.chatBot.getState();
+    const gateKey = `app_home_welcomed:${event.userId}`;
+    try {
+      const fresh = await stateAdapter.setIfNotExists(gateKey, '1');
+      if (!fresh) return;
+    } catch (error) {
+      log('handleAppHomeOpened: dedupe gate failed: %O', error);
+      return;
+    }
+
+    try {
+      const serverDB = await getServerDB();
+      const link = await MessengerAccountLinkModel.findByPlatformUser(
+        serverDB,
+        creds.platform,
+        event.userId,
+        creds.tenantId,
+      );
+
+      if (!link) {
+        await bot.binder.handleUnlinkedMessage({
+          authorUserId: event.userId,
+          chatId: event.channelId,
+        });
+        return;
+      }
+
+      let activeAgentName: string | undefined;
+      if (link.activeAgentId) {
+        const userAgents = await this.fetchUserAgents(serverDB, link.userId);
+        activeAgentName = userAgents.find((a) => a.id === link.activeAgentId)?.title;
+      }
+
+      const text = activeAgentName
+        ? `Welcome to LobeHub! Your active agent is *${activeAgentName}*. Send a message to chat, or use \`/agents\` to switch.`
+        : 'Welcome to LobeHub! Send `/agents` to pick an active agent and start chatting.';
+      await bot.binder.sendDmText(event.channelId, text);
+    } catch (error) {
+      log('handleAppHomeOpened: dispatch failed: %O', error);
+    }
   }
 
   /**
