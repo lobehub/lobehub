@@ -224,7 +224,44 @@ describe('assertContextWithinWindow', () => {
       expect(payload.model).toBe('tight-model');
       expect(payload.ctx).toBe(2000);
       expect(payload.shortBy).toBe(payload.promptTokens - payload.ctx);
+      expect(payload.shortBy).toBeGreaterThan(0); // strict overflow path: shortBy must be positive
       expect(payload.suggestions).toEqual(['fork_topic', 'switch_to_larger_ctx_model']);
+      // Pre-flight-only path doesn't enforce completion headroom, so the
+      // payload omits the minOutputTokens field.
+      expect((payload as any).minOutputTokens).toBeUndefined();
     }
+  });
+
+  it('does NOT reject a near-limit prompt that still fits within the window', () => {
+    // Regression test for LOBE-8974 PR review feedback: the helper was
+    // previously deducting a 1024 buffer + 1024 minOutputTokens and would
+    // throw for a 198.5k-token prompt against a 200k-token window even
+    // though the upstream would accept it. With the corrected threshold,
+    // this must pass through.
+    // ~4 chars per token, so 'a'.repeat(794_000) estimates to ~198.5k.
+    const nearLimitContent = 'a'.repeat(794_000);
+
+    expect(() =>
+      assertContextWithinWindow(
+        { messages: [{ content: nearLimitContent, role: 'user' }], model: 'big-model' } as any,
+        [baseModel({ contextWindowTokens: 200_000, id: 'big-model' })],
+      ),
+    ).not.toThrow();
+  });
+
+  it('honors safetyMarginTokens for stricter callers', () => {
+    // With no margin, a ~5k-token prompt against a 6k-token window fits.
+    const baseArgs = {
+      messages: [{ content: 'a'.repeat(20_000), role: 'user' }],
+      model: 'snug-model',
+    } as any;
+    const models = [baseModel({ contextWindowTokens: 6000, id: 'snug-model' })];
+
+    expect(() => assertContextWithinWindow(baseArgs, models)).not.toThrow();
+
+    // With a generous margin, the same prompt is treated as overflow.
+    expect(() => assertContextWithinWindow(baseArgs, models, { safetyMarginTokens: 3000 })).toThrow(
+      ContextExceededPreFlightError,
+    );
   });
 });

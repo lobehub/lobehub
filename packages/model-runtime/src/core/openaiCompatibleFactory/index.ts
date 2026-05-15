@@ -46,8 +46,8 @@ import { isQuotaLimitError } from '../../utils/isQuotaLimitError';
 import { postProcessModelList } from '../../utils/postProcessModelList';
 import {
   assertContextWithinWindow,
+  type AssertContextWithinWindowOptions,
   ContextExceededPreFlightError,
-  type ResolveSafeMaxTokensOptions,
 } from '../../utils/resolveSafeMaxTokens';
 import { StreamingResponse } from '../../utils/response';
 import type { LobeRuntimeAI } from '../BaseAI';
@@ -111,18 +111,18 @@ export interface OpenAICompatibleFactoryOptions<T extends Record<string, any> = 
     /**
      * When set, the factory runs a pre-flight token estimate against the
      * provided model list before dispatching to upstream. If the estimated
-     * prompt tokens already exceed the model's context window (or leave
-     * less than `minOutputTokens` headroom), the request is aborted with
-     * a structured `ExceededContextWindow` error — see LOBE-8974.
+     * prompt tokens strictly exceed the model's context window, the
+     * request is aborted with a structured `ExceededContextWindow` error
+     * — see LOBE-8974.
      *
      * This is for providers like NVIDIA / DeepSeek where the harness does
      * not cap `max_tokens` itself but we still want to fail fast on doomed
      * requests instead of round-tripping to the upstream just to get a
-     * 400 back. Providers that already manage `max_tokens` themselves
-     * (e.g. MiniMax via `resolveSafeMaxTokens`) get the same fail-fast
-     * behaviour for free because they throw the same error class.
+     * 400 back. Providers that manage `max_tokens` themselves (e.g.
+     * MiniMax via `resolveSafeMaxTokens`) still benefit because the
+     * factory's centralised error handler converts the same error class.
      */
-    contextPreFlight?: ResolveSafeMaxTokensOptions & {
+    contextPreFlight?: AssertContextWithinWindowOptions & {
       models: AiFullModelCard[];
     };
     excludeUsage?: boolean;

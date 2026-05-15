@@ -43,21 +43,29 @@ export class ContextExceededPreFlightError extends Error {
   readonly promptTokens: number;
   readonly ctx: number;
   readonly shortBy: number;
-  readonly minOutputTokens: number;
+  /**
+   * Only populated by `resolveSafeMaxTokens` (max_tokens-capping path). The
+   * pre-flight-only `assertContextWithinWindow` leaves it undefined since
+   * it does not require headroom for completion to consider the prompt
+   * valid.
+   */
+  readonly minOutputTokens?: number;
   readonly suggestions: readonly PreFlightSuggestion[];
 
   constructor(params: {
     ctx: number;
-    minOutputTokens: number;
+    minOutputTokens?: number;
     model: string;
     promptTokens: number;
     suggestions?: readonly PreFlightSuggestion[];
   }) {
     const { model, ctx, promptTokens, minOutputTokens, suggestions } = params;
     const shortBy = promptTokens - ctx;
-    super(
-      `Prompt tokens (${promptTokens}) leave less than ${minOutputTokens} tokens for completion within the model context window (${ctx}) for model "${model}". Reduce input or attached tools, or pick a model with a larger context window.`,
-    );
+    const message =
+      minOutputTokens !== undefined
+        ? `Prompt tokens (${promptTokens}) leave less than ${minOutputTokens} tokens for completion within the model context window (${ctx}) for model "${model}". Reduce input or attached tools, or pick a model with a larger context window.`
+        : `Prompt tokens (${promptTokens}) exceed the model context window (${ctx}) for model "${model}". Reduce input or attached tools, or pick a model with a larger context window.`;
+    super(message);
     this.name = 'ContextExceededPreFlightError';
     this.model = model;
     this.promptTokens = promptTokens;
@@ -71,12 +79,12 @@ export class ContextExceededPreFlightError extends Error {
   toPayload() {
     return {
       ctx: this.ctx,
-      minOutputTokens: this.minOutputTokens,
       model: this.model,
       promptTokens: this.promptTokens,
       shortBy: this.shortBy,
       suggestions: [...this.suggestions],
       type: this.type,
+      ...(this.minOutputTokens !== undefined ? { minOutputTokens: this.minOutputTokens } : {}),
     };
   }
 }
@@ -132,19 +140,33 @@ export const resolveSafeMaxTokens = (
   return maxOutput !== undefined ? Math.min(maxOutput, remaining) : remaining;
 };
 
+export interface AssertContextWithinWindowOptions {
+  /**
+   * Number of tokens to subtract from the model context window before
+   * comparing against the estimated prompt size. Use a small positive
+   * value to be conservative against estimator drift / per-message
+   * protocol overhead that `tokenx` doesn't model. Default `0` — only
+   * reject when the estimated prompt strictly exceeds the model window.
+   */
+  safetyMarginTokens?: number;
+}
+
 /**
  * Pre-flight check for providers where the harness does not need to cap
  * `max_tokens` itself (the upstream picks its own default), but we still
  * want to bail fast when the prompt alone already overflows the model's
  * context window.
  *
- * Behaviour mirrors `resolveSafeMaxTokens` but doesn't mutate the payload
- * or compute a capped `max_tokens` value — it only throws.
+ * Unlike `resolveSafeMaxTokens` this does NOT require headroom for
+ * completion — the upstream will pick its own `max_tokens` default once
+ * the request is dispatched. Rejecting near-limit-but-fitting prompts
+ * (e.g. 198.5k tokens against a 200k window) would block valid requests
+ * that the upstream would happily serve. See LOBE-8974 review feedback.
  */
 export const assertContextWithinWindow = (
   payload: Pick<ChatStreamPayload, 'messages' | 'model' | 'tools'>,
   models: AiFullModelCard[],
-  options: ResolveSafeMaxTokensOptions = {},
+  options: AssertContextWithinWindowOptions = {},
 ): void => {
   const model = models.find((m) => m.id === payload.model);
   if (!model) return;
@@ -152,18 +174,14 @@ export const assertContextWithinWindow = (
   const contextWindow = model.contextWindowTokens;
   if (!contextWindow) return;
 
-  const bufferTokens = options.bufferTokens ?? DEFAULT_MAX_TOKENS_BUFFER;
-  const minOutputTokens = options.minOutputTokens ?? DEFAULT_MIN_OUTPUT_TOKENS;
-
+  const safetyMarginTokens = options.safetyMarginTokens ?? 0;
   const estimatedInputTokens = estimatePayloadInputTokens(payload);
-  const remaining = contextWindow - estimatedInputTokens - bufferTokens;
 
-  if (remaining < minOutputTokens) {
-    throw new ContextExceededPreFlightError({
-      ctx: contextWindow,
-      minOutputTokens,
-      model: payload.model,
-      promptTokens: estimatedInputTokens,
-    });
-  }
+  if (estimatedInputTokens <= contextWindow - safetyMarginTokens) return;
+
+  throw new ContextExceededPreFlightError({
+    ctx: contextWindow,
+    model: payload.model,
+    promptTokens: estimatedInputTokens,
+  });
 };

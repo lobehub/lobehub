@@ -794,6 +794,36 @@ describe('LobeOpenAICompatibleFactory', () => {
 
         expect(mockCreateMethod).toHaveBeenCalledTimes(1);
       });
+
+      it('passes through a near-limit prompt that still fits the window', async () => {
+        // Regression: prior implementation deducted a 1024 buffer + 1024
+        // minOutputTokens before deciding, which rejected a ~198.5k-token
+        // prompt against a 200k-token window. The corrected threshold
+        // only fires on real overflow.
+        const LobePreFlightProvider = createOpenAICompatibleRuntime({
+          baseURL: defaultBaseURL,
+          chatCompletion: {
+            contextPreFlight: { models: [roomyModel] },
+          },
+          provider: 'preflight-test',
+        });
+
+        const instance = new LobePreFlightProvider({ apiKey: 'test' });
+        const mockCreateMethod = vi
+          .spyOn(instance['client'].chat.completions, 'create')
+          .mockResolvedValue(new ReadableStream() as any);
+
+        // ~4 chars/token, so this estimates around 198.5k tokens.
+        const nearLimitContent = 'a'.repeat(794_000);
+
+        await instance.chat({
+          messages: [{ content: nearLimitContent, role: 'user' }],
+          model: 'roomy-model',
+          temperature: 0,
+        });
+
+        expect(mockCreateMethod).toHaveBeenCalledTimes(1);
+      });
     });
 
     describe('cancel request', () => {
