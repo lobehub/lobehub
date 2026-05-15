@@ -58,8 +58,12 @@ export const params = {
 
       // MiniMax API enforces `input_tokens + max_tokens <= context_window`,
       // so we must derive max_tokens dynamically from the actual input size
-      // when the caller did not specify one.
-      const safeMaxTokens = resolveSafeMaxTokens(payload, minimaxChatModels);
+      // when the caller did not specify one. Estimate against the sanitized
+      // messages (with stripped reasoning) — that's what we actually send.
+      const safeMaxTokens = resolveSafeMaxTokens(
+        { ...payload, messages: processedMessages },
+        minimaxChatModels,
+      );
 
       // Resolve parameters with constraints
       const resolvedParams = resolveParameters(

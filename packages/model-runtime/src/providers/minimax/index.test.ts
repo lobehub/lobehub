@@ -88,6 +88,29 @@ describe('LobeMinimaxAI - handlePayload', () => {
     ).toThrow(MaxTokensExceededError);
   });
 
+  it('estimates tokens against the sanitized messages, not the raw payload', () => {
+    // Signed reasoning is stripped before sending, so a long signed
+    // reasoning trace must NOT count toward the input estimate.
+    // M2-her has contextWindow=65_536; ~60k tokens of signed reasoning
+    // would otherwise exceed the window and throw.
+    const longSignedReasoning = 'r'.repeat(400_000);
+
+    expect(() =>
+      handlePayload({
+        messages: [
+          {
+            content: 'short reply',
+            reasoning: { content: longSignedReasoning, signature: 'sig-1' },
+            role: 'assistant',
+          },
+          { content: 'next', role: 'user' },
+        ],
+        model: 'M2-her',
+        temperature: 1,
+      } as any),
+    ).not.toThrow();
+  });
+
   it('preserves existing message and parameter handling', () => {
     const result = handlePayload({
       messages: [
