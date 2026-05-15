@@ -1,0 +1,48 @@
+{
+  "api": [
+    {
+      "name": "getPolyMarketEvents",
+      "description": "Search public market events for a topic.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          }
+        },
+        "required": ["query"]
+      }
+    },
+    {
+      "name": "getPolyMarketEvents",
+      "description": "Duplicated API name that should be dropped by ToolsEngine.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          }
+        },
+        "required": ["query"]
+      }
+    },
+    {
+      "name": "summarizeMarketEvent",
+      "description": "Summarize a market event payload.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string"
+          }
+        },
+        "required": ["event"]
+      }
+    }
+  ],
+  "identifier": "emblemcompany-agent-skills",
+  "meta": {
+    "title": "Duplicate MCP Fixture"
+  },
+  "type": "mcp"
+}

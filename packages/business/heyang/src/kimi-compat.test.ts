@@ -22,6 +22,34 @@ describe('kimi-compat', () => {
     expect(payload).not.toHaveProperty('thinking');
   });
 
+  it('should keep the caller configured temperature while removing thinking', () => {
+    const payload = applyKimiCompat(
+      {
+        messages: [{ content: 'hello', role: 'user' }],
+        model: 'kimi-k2.6',
+        temperature: 1,
+        thinking: { budget_tokens: 1024, type: 'enabled' },
+      },
+      'newapi',
+    );
+
+    expect(payload.temperature).toBe(1);
+    expect(payload).not.toHaveProperty('thinking');
+  });
+
+  it('should not mutate the original payload object', () => {
+    const payload = {
+      messages: [{ content: 'hello', role: 'user' }],
+      model: 'kimi-k2.6',
+      thinking: { budget_tokens: 1024, type: 'enabled' },
+    };
+
+    const normalized = applyKimiCompat(payload, 'newapi');
+
+    expect(normalized).not.toBe(payload);
+    expect(payload).toHaveProperty('thinking');
+  });
+
   it('should preserve complete reasoning content on assistant tool-call history', () => {
     const payload = applyKimiCompat(
       {
@@ -75,6 +103,31 @@ describe('kimi-compat', () => {
     );
 
     expect(payload.messages?.[0]).not.toHaveProperty('reasoning_content');
+  });
+
+  it('should preserve existing non-empty reasoning_content on assistant tool-call history', () => {
+    const payload = applyKimiCompat(
+      {
+        messages: [
+          {
+            content: '',
+            reasoning_content: 'I need a tool.',
+            role: 'assistant',
+            tool_calls: [
+              {
+                function: { arguments: '{}', name: 'search' },
+                id: 'call_1',
+                type: 'function',
+              },
+            ],
+          },
+        ],
+        model: 'kimi-k2.6',
+      },
+      'newapi',
+    );
+
+    expect(payload.messages?.[0]).toHaveProperty('reasoning_content', 'I need a tool.');
   });
 
   it('should leave non-Kimi payloads untouched', () => {

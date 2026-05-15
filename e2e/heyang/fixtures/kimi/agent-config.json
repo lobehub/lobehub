@@ -1,0 +1,6 @@
+{
+  "model": "kimi-k2.6",
+  "provider": "newapi",
+  "systemRole": "You are a concise enterprise compatibility test agent. Follow tool-choice instructions exactly.",
+  "temperature": 0.6
+}

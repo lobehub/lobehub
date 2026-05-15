@@ -1,0 +1,35 @@
+{
+  "api": [
+    {
+      "name": "getPolyMarketEvents",
+      "description": "Search public market events for a topic.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          }
+        },
+        "required": ["query"]
+      }
+    },
+    {
+      "name": "summarizeMarketEvent",
+      "description": "Summarize a market event payload.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string"
+          }
+        },
+        "required": ["event"]
+      }
+    }
+  ],
+  "identifier": "emblemcompany-agent-skills",
+  "meta": {
+    "title": "Normal MCP Fixture"
+  },
+  "type": "mcp"
+}
