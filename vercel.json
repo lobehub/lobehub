@@ -1,5 +1,5 @@
 {
-  "buildCommand": "pnpm run build:vercel",
+  "buildCommand": "pnpm -w run build:vercel",
   "headers": [
     {
       "source": "/_spa/(.*)",
