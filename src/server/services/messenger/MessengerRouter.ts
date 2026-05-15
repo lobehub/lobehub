@@ -623,21 +623,35 @@ export class MessengerRouter {
             );
             return;
           }
-          // The verify-im URL is one-shot and account-binding — never post
-          // it to a public channel. Anything outside a 1:1 DM (slash from a
-          // public channel, or `@LobeHub /start` typed inside a channel
-          // thread) routes the link button into the invoker's DM instead.
-          // Slack accepts a user id as the `chatId` and auto-opens the IM
-          // (requires `im:write`); Discord's binder treats the user id the
-          // same way; Telegram uses the user's chat id directly.
-          const linkChatId = ctx.isDM ? ctx.chatId : ctx.authorUserId;
+          // The verify-im URL is one-shot and account-binding; it must reach
+          // the invoker privately. Two equally-private surfaces depending on
+          // the platform:
+          //   • Slack — `chat.postEphemeral` in the channel is invoker-only
+          //     and keeps the link flow inline (no DM context switch).
+          //   • Discord — no text-channel ephemeral primitive for non-
+          //     interaction messages, so we still open a DM. Telegram has no
+          //     channel slash surface today, falls through to DM as well.
+          // Detection key: presence of `binder.replyEphemeral`, which is what
+          // the @mention path also uses to decide ephemeral-vs-DM.
+          const canEphemeralInChannel = !ctx.isDM && !!ctx.binder.replyEphemeral;
+          const linkChatId = ctx.isDM || canEphemeralInChannel ? ctx.chatId : ctx.authorUserId;
+          // `slack:<channel>:` (empty threadTs) — slash commands fire outside
+          // any thread, so the ephemeral floats inline at the channel root,
+          // which is what we want.
+          const channelMentionThreadId = canEphemeralInChannel
+            ? `${ctx.platform}:${ctx.chatId}:`
+            : undefined;
           await ctx.binder.handleUnlinkedMessage({
             authorUserId: ctx.authorUserId,
             authorUserName: ctx.authorUserName,
+            channelMentionThreadId,
             chatId: linkChatId,
             message: ctx.message,
           });
-          if (!ctx.isDM) {
+          // Only nudge the user toward DM when the link actually went there.
+          // For the Slack ephemeral path the prompt is already inline, a
+          // second "check your DM" would be misleading.
+          if (!ctx.isDM && !canEphemeralInChannel) {
             await ctx.reply('Check your DM with LobeHub for the link button.');
           }
         },

@@ -740,6 +740,48 @@ describe('MessengerRouter slash command dispatch', () => {
       text: expect.stringContaining('Tap an agent'),
     });
   });
+
+  it('routes /start in a Slack channel through the ephemeral inline link path', async () => {
+    // Slack supports `chat.postEphemeral`, so the verify-im link should stay
+    // in the channel (invoker-only) instead of bouncing the user out to DM.
+    await loadSlackBot();
+    mockFindLink.mockResolvedValue(null);
+
+    const handler = mockChatBot.onSlashCommand.mock.calls[0][1] as (event: any) => Promise<void>;
+    await handler(fakeSlashEvent({ command: '/start' }));
+
+    expect(mockSlackBinder.handleUnlinkedMessage).toHaveBeenCalledTimes(1);
+    const ctx = mockSlackBinder.handleUnlinkedMessage.mock.calls[0][0];
+    expect(ctx).toMatchObject({
+      authorUserId: 'U_ALICE',
+      chatId: 'C_GENERAL',
+      channelMentionThreadId: 'slack:C_GENERAL:',
+    });
+    // No "check your DM" nudge — the link is already inline in the channel.
+    expect(mockSlackBinder.replyPrivately).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.stringContaining('Check your DM'),
+    );
+  });
+
+  it('routes /start in a Slack DM through the regular DM link path', async () => {
+    await loadSlackBot();
+    mockFindLink.mockResolvedValue(null);
+
+    const handler = mockChatBot.onSlashCommand.mock.calls[0][1] as (event: any) => Promise<void>;
+    await handler(
+      fakeSlashEvent({ channel: { id: 'slack:D_DM', isDM: false }, command: '/start' }),
+    );
+
+    expect(mockSlackBinder.handleUnlinkedMessage).toHaveBeenCalledTimes(1);
+    const ctx = mockSlackBinder.handleUnlinkedMessage.mock.calls[0][0];
+    expect(ctx).toMatchObject({
+      authorUserId: 'U_ALICE',
+      chatId: 'D_DM',
+      channelMentionThreadId: undefined,
+    });
+  });
 });
 
 describe('MessengerRouter onSubscribedMessage gating', () => {
