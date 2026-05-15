@@ -4,6 +4,7 @@ import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallow } from 'zustand/shallow';
 
+import { useEnterToSend } from '@/hooks/useEnterToSend';
 import { useUserAvatar } from '@/hooks/useUserAvatar';
 import { useTaskStore } from '@/store/task';
 
@@ -28,6 +29,7 @@ const FeedbackInput = memo<FeedbackInputProps>(({ taskId, topicId }) => {
   );
   const [submitting, setSubmitting] = useState(false);
   const [hasContent, setHasContent] = useState(false);
+  const shouldSendOnEnter = useEnterToSend();
 
   const handleSubmit = useCallback(async () => {
     const trimmed = String(editor?.getDocument?.('markdown') ?? '').trim();
@@ -64,7 +66,7 @@ const FeedbackInput = memo<FeedbackInputProps>(({ taskId, topicId }) => {
           type={'text'}
           variant={'chat'}
           onPressEnter={({ event }) => {
-            if (event.metaKey || event.ctrlKey) {
+            if (shouldSendOnEnter(event)) {
               handleSubmit();
               return true;
             }
