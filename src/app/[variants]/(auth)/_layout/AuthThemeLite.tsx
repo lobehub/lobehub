@@ -10,15 +10,16 @@ import { type PropsWithChildren } from 'react';
 import { memo } from 'react';
 
 import AntdStaticMethods from '@/components/AntdStaticMethods';
-import { useIsDark } from '@/hooks/useIsDark';
 import Image from '@/libs/next/Image';
+
+import { useIsDarkInAuth } from './AuthThemeProvider';
 
 interface AuthThemeLiteProps extends PropsWithChildren {
   globalCDN?: boolean;
 }
 
 const AuthThemeLite = memo<AuthThemeLiteProps>(({ children, globalCDN }) => {
-  const isDark = useIsDark();
+  const isDark = useIsDarkInAuth();
   const currentAppearance = isDark ? 'dark' : 'light';
 
   return (

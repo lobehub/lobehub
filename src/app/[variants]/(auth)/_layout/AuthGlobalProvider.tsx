@@ -3,7 +3,6 @@ import { type ReactNode } from 'react';
 import { appEnv } from '@/envs/app';
 import AnalyticsRSCProvider from '@/layout/AnalyticsRSCProvider';
 import AuthProvider from '@/layout/AuthProvider';
-import NextThemeProvider from '@/layout/GlobalProvider/NextThemeProvider';
 import StyleRegistry from '@/layout/GlobalProvider/StyleRegistry';
 import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFlags';
 import { getServerAuthConfig } from '@/server/globalConfig/getServerAuthConfig';
@@ -12,6 +11,7 @@ import { RouteVariants } from '@/utils/server/routeVariants';
 import AuthLocale from './AuthLocale';
 import { AuthServerConfigProvider } from './AuthServerConfigProvider';
 import AuthThemeLite from './AuthThemeLite';
+import { AuthThemeProvider } from './AuthThemeProvider';
 
 interface AuthGlobalProviderProps {
   children: ReactNode;
@@ -26,7 +26,7 @@ const AuthGlobalProvider = async ({ children, variants }: AuthGlobalProviderProp
   return (
     <StyleRegistry>
       <AuthLocale defaultLang={locale}>
-        <NextThemeProvider>
+        <AuthThemeProvider>
           <AuthThemeLite globalCDN={appEnv.CDN_USE_GLOBAL}>
             <AuthServerConfigProvider
               featureFlags={featureFlags}
@@ -39,7 +39,7 @@ const AuthGlobalProvider = async ({ children, variants }: AuthGlobalProviderProp
               </AnalyticsRSCProvider>
             </AuthServerConfigProvider>
           </AuthThemeLite>
-        </NextThemeProvider>
+        </AuthThemeProvider>
       </AuthLocale>
     </StyleRegistry>
   );

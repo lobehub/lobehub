@@ -2,8 +2,9 @@
 
 import { ActionIcon, DropdownMenu, type DropdownMenuProps, Icon } from '@lobehub/ui';
 import { Monitor, Moon, Sun } from 'lucide-react';
-import { useTheme as useNextThemesTheme } from 'next-themes';
 import { memo, useMemo } from 'react';
+
+import { useAuthTheme } from './AuthThemeProvider';
 
 const themeIcons = {
   dark: Moon,
@@ -12,7 +13,7 @@ const themeIcons = {
 } as const;
 
 const AuthThemeButton = memo<{ size?: number }>((props) => {
-  const { setTheme, theme } = useNextThemesTheme();
+  const { setTheme, theme } = useAuthTheme();
 
   const items = useMemo<DropdownMenuProps['items']>(
     () => [
