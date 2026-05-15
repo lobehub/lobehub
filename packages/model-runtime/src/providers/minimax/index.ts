@@ -2,14 +2,30 @@ import { minimax as minimaxChatModels, ModelProvider } from 'model-bank';
 
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import { resolveParameters } from '../../core/parameterResolver';
-import { getModelMaxOutputs } from '../../utils/getModelMaxOutputs';
+import { AgentRuntimeErrorType } from '../../types/error';
+import { MaxTokensExceededError, resolveSafeMaxTokens } from '../../utils/resolveSafeMaxTokens';
 import { createMiniMaxImage } from './createImage';
 import { createMiniMaxVideo } from './createVideo';
 
-export const LobeMinimaxAI = createOpenAICompatibleRuntime({
+export const params = {
   baseURL: 'https://api.minimaxi.com/v1',
   chatCompletion: {
-    handlePayload: (payload) => {
+    handleError: (error: any) => {
+      if (error instanceof MaxTokensExceededError) {
+        return {
+          error: {
+            contextWindowTokens: error.contextWindowTokens,
+            estimatedInputTokens: error.estimatedInputTokens,
+            message: error.message,
+            modelId: error.modelId,
+          },
+          errorType: AgentRuntimeErrorType.ExceededContextWindow,
+          message: error.message,
+        };
+      }
+      return undefined;
+    },
+    handlePayload: (payload: any) => {
       const { enabledSearch, max_tokens, messages, temperature, top_p, ...params } = payload;
 
       // Interleaved thinking
@@ -40,13 +56,15 @@ export const LobeMinimaxAI = createOpenAICompatibleRuntime({
         return message;
       });
 
+      // MiniMax API enforces `input_tokens + max_tokens <= context_window`,
+      // so we must derive max_tokens dynamically from the actual input size
+      // when the caller did not specify one.
+      const safeMaxTokens = resolveSafeMaxTokens(payload, minimaxChatModels);
+
       // Resolve parameters with constraints
       const resolvedParams = resolveParameters(
         {
-          max_tokens:
-            max_tokens !== undefined
-              ? max_tokens
-              : getModelMaxOutputs(payload.model, minimaxChatModels),
+          max_tokens: safeMaxTokens,
           temperature,
           top_p,
         },
@@ -74,15 +92,17 @@ export const LobeMinimaxAI = createOpenAICompatibleRuntime({
   },
   createImage: createMiniMaxImage,
   createVideo: createMiniMaxVideo,
-  handlePollVideoStatus: async (inferenceId, options) => {
+  debug: {
+    chatCompletion: () => process.env.DEBUG_MINIMAX_CHAT_COMPLETION === '1',
+  },
+  handlePollVideoStatus: async (inferenceId: string, options: any) => {
     const { pollMiniMaxVideoStatus } = await import('./createVideo');
     return pollMiniMaxVideoStatus(inferenceId, {
       apiKey: options.apiKey,
       baseURL: options.baseURL || '',
     });
   },
-  debug: {
-    chatCompletion: () => process.env.DEBUG_MINIMAX_CHAT_COMPLETION === '1',
-  },
   provider: ModelProvider.Minimax,
-});
+};
+
+export const LobeMinimaxAI = createOpenAICompatibleRuntime(params);
