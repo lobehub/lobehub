@@ -485,7 +485,7 @@ export default {
   'memory.effort.medium': 'Medium — Balanced behavior',
   'memory.effort.title': 'Aggressiveness',
   'memory.enabled.desc':
-    'Allow LobeHub to extract preferences and info from conversations and use them later. You can view, edit, or clear memory anytime.',
+    'Allow ChinnaHub to extract preferences and info from conversations and use them later. You can view, edit, or clear memory anytime.',
   'memory.enabled.title': 'Enable Memory',
   'memory.title': 'Memory Settings',
   'message.success': 'Update successful',
@@ -858,26 +858,6 @@ export default {
   'settingTTS.ttsService.desc':
     'If using OpenAI text-to-speech service, make sure the OpenAI model service is enabled',
   'settingTTS.ttsService.title': 'Text-to-Speech Service',
-  'settingTTS.voiceCall.autoSpeak.desc':
-    'Speak assistant replies with the browser voice during browser and hybrid voice calls',
-  'settingTTS.voiceCall.autoSpeak.title': 'Auto speak replies',
-  'settingTTS.voiceCall.enabled.desc':
-    'Show the circular waveform button for live voice conversations in supported chat inputs',
-  'settingTTS.voiceCall.enabled.title': 'Enable live voice calls',
-  'settingTTS.voiceCall.mode.desc':
-    'Browser uses free Web Speech APIs, provider native uses realtime audio APIs, and hybrid falls back automatically',
-  'settingTTS.voiceCall.mode.title': 'Voice call mode',
-  'settingTTS.voiceCall.openAIRealtimeModel.desc':
-    'Realtime model used when OpenAI native voice is selected or auto-detected',
-  'settingTTS.voiceCall.openAIRealtimeModel.title': 'OpenAI realtime model',
-  'settingTTS.voiceCall.provider.desc':
-    'Auto follows the active assistant provider when realtime voice support is available',
-  'settingTTS.voiceCall.provider.title': 'Native voice provider',
-  'settingTTS.voiceCall.title': 'Live Voice Conversation',
-  'settingTTS.voiceInput.enabled.desc':
-    'Show the circular mic button next to send and transcribe speech into the current input',
-  'settingTTS.voiceInput.enabled.title': 'Enable input mic button',
-  'settingTTS.voiceInput.title': 'Voice Input Controls',
   'settingTTS.voice.desc':
     'Select a voice for the current agent, different TTS services support different voices',
   'settingTTS.voice.preview': 'Voice Preview',
@@ -1118,7 +1098,7 @@ When I am ___, I need ___
   'tools.builtins.lobe-message.description':
     'Send, read, edit, and manage messages across multiple messaging platforms with a unified interface',
   'tools.builtins.lobe-message.readme':
-    'Cross-platform messaging tool supporting Discord, Telegram, Slack, Feishu, Lark, QQ, WeChat, and WhatsApp. Provides unified APIs for message operations, reactions, pins, threads, channel management, and platform-specific features like polls.',
+    'Cross-platform messaging tool supporting Discord, Telegram, Slack, Google Chat, and IRC. Provides unified APIs for message operations, reactions, pins, threads, channel management, and platform-specific features like polls.',
   'tools.builtins.lobe-message.title': 'Message',
   'tools.builtins.lobe-page-agent.description':
     'Create, read, update, and delete nodes in XML-structured documents',
