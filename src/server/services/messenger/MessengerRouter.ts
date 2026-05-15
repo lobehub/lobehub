@@ -576,6 +576,19 @@ export class MessengerRouter {
         }
       });
     }
+
+    // Channel-join welcome (Slack `member_joined_channel`). Counterpart to the
+    // App Home `Messages`-tab welcome in `handleAppHomeOpened` — the marketplace
+    // listing reviewers also test the `/invite @LobeHub` entry point, so the
+    // bot must speak up the first time it lands in a channel. Other events
+    // (regular members joining) are filtered out by the `botUserId` check.
+    bot.onMemberJoinedChannel(async (event) => {
+      const botUserId = (event.adapter as any)?.botUserId as string | undefined;
+      if (!botUserId || event.userId !== botUserId) return;
+      const channelId = client.extractChatId(event.channelId);
+      if (!channelId) return;
+      await this.handleChannelJoin(bot, binder, channelId);
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -970,6 +983,48 @@ export class MessengerRouter {
       await bot.binder.sendDmText(event.channelId, text);
     } catch (error) {
       log('handleAppHomeOpened: dispatch failed: %O', error);
+    }
+  }
+
+  /**
+   * Slack `member_joined_channel` welcome. Fires the first time the bot
+   * itself joins a channel (via `/invite @LobeHub` or being added through the
+   * channel settings). Slack retries `member_joined_channel` aggressively on
+   * 5xx, and re-adding-then-removing-then-re-adding a bot would fire it again,
+   * so `setIfNotExists` keys on the channel id to keep the greeting one-shot.
+   *
+   * The message lives in the channel (not as an ephemeral) because every
+   * member should see what the bot is and how to start. Account linking is
+   * intentionally pushed to a DM in the copy — verify-im URLs are personal
+   * and must never be broadcast to the channel.
+   */
+  private async handleChannelJoin(
+    chatBot: Chat<any>,
+    binder: MessengerPlatformBinder,
+    channelId: string,
+  ): Promise<void> {
+    const stateAdapter = chatBot.getState();
+    const gateKey = `channel_welcomed:${channelId}`;
+    try {
+      const fresh = await stateAdapter.setIfNotExists(gateKey, '1');
+      if (!fresh) return;
+    } catch (error) {
+      log('handleChannelJoin: dedupe gate failed: %O', error);
+      return;
+    }
+
+    const text = [
+      ":wave: Hi, I'm *LobeHub* — your AI agent in Slack.",
+      '',
+      '• Mention me with `@LobeHub <your question>` to chat in this channel.',
+      '• First time? Send me a *direct message* to link your LobeHub account.',
+      '• Use `/agents` in DM to switch the active agent.',
+    ].join('\n');
+
+    try {
+      await binder.sendDmText(channelId, text);
+    } catch (error) {
+      log('handleChannelJoin: send failed: %O', error);
     }
   }
 

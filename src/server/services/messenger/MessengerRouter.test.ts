@@ -49,10 +49,15 @@ const mockWebhookHandler = vi.fn(async () => new Response('chat-sdk OK', { statu
 // out should pre-populate this with a fake thread so `/new` / `/stop`
 // take the DM path instead of falling back to the "open your DM" branch.
 const mockOpenDM = vi.fn();
+const mockSetIfNotExists = vi.fn();
 const mockChatBot = {
+  getState: vi.fn(() => ({
+    setIfNotExists: (...args: any[]) => mockSetIfNotExists(...args),
+  })),
   initialize: vi.fn().mockResolvedValue(undefined),
   onAction: vi.fn(),
   onDirectMessage: vi.fn(),
+  onMemberJoinedChannel: vi.fn(),
   onNewMention: vi.fn(),
   onSlashCommand: vi.fn(),
   onSubscribedMessage: vi.fn(),
@@ -178,6 +183,8 @@ beforeEach(() => {
   mockHandleMention.mockReset();
   mockHandleSubscribed.mockReset();
   mockOpenDM.mockReset();
+  mockSetIfNotExists.mockReset();
+  mockSetIfNotExists.mockResolvedValue(true);
   mockSlackBinder.handleUnlinkedMessage.mockReset();
   mockSlackBinder.replyEphemeral.mockReset();
   mockSlackBinder.replyPrivately.mockReset();
@@ -466,6 +473,75 @@ describe('MessengerRouter channel @mention', () => {
       userId: 'U_ALICE',
     });
     // Public DM-style nudge is suppressed in channels.
+    expect(mockSlackBinder.sendDmText).not.toHaveBeenCalled();
+  });
+});
+
+describe('MessengerRouter member_joined_channel welcome', () => {
+  it('posts a welcome message when the bot itself joins a channel', async () => {
+    await loadSlackBot();
+
+    const handler = mockChatBot.onMemberJoinedChannel.mock.calls[0][0] as (
+      event: any,
+    ) => Promise<void>;
+    await handler({
+      adapter: { botUserId: 'U_BOT' },
+      channelId: 'slack:C_GENERAL:',
+      inviterId: 'U_ALICE',
+      userId: 'U_BOT',
+    });
+
+    expect(mockSetIfNotExists).toHaveBeenCalledWith('channel_welcomed:C_GENERAL', '1');
+    expect(mockSlackBinder.sendDmText).toHaveBeenCalledTimes(1);
+    expect(mockSlackBinder.sendDmText.mock.calls[0][0]).toBe('C_GENERAL');
+    expect(mockSlackBinder.sendDmText.mock.calls[0][1]).toMatch(/LobeHub/);
+  });
+
+  it('does nothing when a regular user (not the bot) joins the channel', async () => {
+    await loadSlackBot();
+
+    const handler = mockChatBot.onMemberJoinedChannel.mock.calls[0][0] as (
+      event: any,
+    ) => Promise<void>;
+    await handler({
+      adapter: { botUserId: 'U_BOT' },
+      channelId: 'slack:C_GENERAL:',
+      userId: 'U_ALICE',
+    });
+
+    expect(mockSetIfNotExists).not.toHaveBeenCalled();
+    expect(mockSlackBinder.sendDmText).not.toHaveBeenCalled();
+  });
+
+  it('skips the welcome on a duplicate member_joined_channel delivery', async () => {
+    await loadSlackBot();
+    mockSetIfNotExists.mockResolvedValueOnce(false);
+
+    const handler = mockChatBot.onMemberJoinedChannel.mock.calls[0][0] as (
+      event: any,
+    ) => Promise<void>;
+    await handler({
+      adapter: { botUserId: 'U_BOT' },
+      channelId: 'slack:C_GENERAL:',
+      userId: 'U_BOT',
+    });
+
+    expect(mockSlackBinder.sendDmText).not.toHaveBeenCalled();
+  });
+
+  it('drops the event when the adapter has no resolved bot user id yet', async () => {
+    await loadSlackBot();
+
+    const handler = mockChatBot.onMemberJoinedChannel.mock.calls[0][0] as (
+      event: any,
+    ) => Promise<void>;
+    await handler({
+      adapter: { botUserId: undefined },
+      channelId: 'slack:C_GENERAL:',
+      userId: 'U_BOT',
+    });
+
+    expect(mockSetIfNotExists).not.toHaveBeenCalled();
     expect(mockSlackBinder.sendDmText).not.toHaveBeenCalled();
   });
 });
