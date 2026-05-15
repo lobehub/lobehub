@@ -131,5 +131,37 @@ describe('tokenCounter', () => {
       expect(result.needsCompression).toBe(false);
       expect(result.currentTokenCount).toBe(0);
     });
+
+    // LOBE-8973 Bug B: tool definitions also occupy the input window, so a
+    // message payload that fits when tools are absent can overflow once tool
+    // definitions are accounted for. Without this, compression only fires on
+    // message size and leaves the tool budget to silently push the request
+    // past the model's context window (openrouter "ExceededContextWindow").
+    it('should count tool definition tokens against the budget', () => {
+      const messages = [
+        mkMsg({
+          role: 'assistant',
+          metadata: { usage: { totalOutputTokens: 50_000 } as any } as any,
+        }),
+      ];
+      const options = { driftMultiplier: 1, maxWindowToken: 100_000, thresholdRatio: 0.6 };
+
+      const withoutTools = shouldCompress(messages, options);
+      expect(withoutTools.needsCompression).toBe(false);
+
+      // A chunky tool manifest (~20K tokens of JSON) should push us over.
+      const bigTool = {
+        function: {
+          description: 'x'.repeat(80_000),
+          name: 'big_tool',
+          parameters: { properties: {}, type: 'object' },
+        },
+        type: 'function',
+      };
+      const withTools = shouldCompress(messages, { ...options, tools: [bigTool] });
+
+      expect(withTools.needsCompression).toBe(true);
+      expect(withTools.currentTokenCount).toBeGreaterThan(withoutTools.currentTokenCount);
+    });
   });
 });

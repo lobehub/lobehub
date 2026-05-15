@@ -368,6 +368,7 @@ export class GeneralChatAgent implements Agent {
     const compressionOptions = {
       maxWindowToken: this.config.compressionConfig?.maxWindowToken,
       thresholdRatio: this.config.compressionConfig?.thresholdRatio,
+      tools: payload.tools,
     };
 
     if (compressionEnabled) {
@@ -438,6 +439,7 @@ export class GeneralChatAgent implements Agent {
         const compressionOptions = {
           maxWindowToken: this.config.compressionConfig?.maxWindowToken,
           thresholdRatio: this.config.compressionConfig?.thresholdRatio,
+          tools: state.tools,
         };
 
         if (compressionEnabled) {

@@ -150,6 +150,57 @@ describe('GeneralChatAgent', () => {
 
       expect(result).toEqual(expectCompressionInstruction(state.messages));
     });
+
+    // LOBE-8973 Bug B: state.tools must feed into the compression budget,
+    // otherwise large tool manifests (16-22K tokens observed on openrouter)
+    // slip past the threshold and overflow the model context window.
+    it('should fold state.tools into the compression budget on init', async () => {
+      const compressionConfig = {
+        enabled: true,
+        maxWindowToken: 200_000,
+        thresholdRatio: 0.5,
+      };
+      const messages = [
+        {
+          content: '',
+          metadata: { usage: { totalOutputTokens: 50_000 } },
+          role: 'assistant',
+        },
+      ] as any;
+      const context = createMockContext('init', { model: 'gpt-4o-mini', provider: 'openai' });
+
+      // Without tools: raw=50K, adjusted=62.5K vs 100K threshold → no compression.
+      const agentNoTools = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        compressionConfig,
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+      const noToolsResult = await agentNoTools.runner(context, createMockState({ messages }));
+      expect((noToolsResult as any).type).toBe('call_llm');
+
+      // With a chunky tool manifest (~66K tokens) total raw input is ~116K,
+      // drift-adjusted ~145K, which crosses the 100K threshold.
+      const bigTool = {
+        function: {
+          description: 'x'.repeat(400_000),
+          name: 'big_tool',
+          parameters: { properties: {}, type: 'object' },
+        },
+        type: 'function',
+      };
+      const agentWithTools = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        compressionConfig,
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+      const withToolsResult = await agentWithTools.runner(
+        context,
+        createMockState({ messages, tools: [bigTool] as any }),
+      );
+      expect((withToolsResult as any).type).toBe('compress_context');
+    });
   });
 
   describe('llm_result phase', () => {
