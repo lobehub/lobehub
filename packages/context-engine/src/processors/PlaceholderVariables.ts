@@ -243,10 +243,7 @@ export const parsePlaceholderVariablesMessages = (
  *
  * Used for diagnostic reporting — not for replacement logic.
  */
-const extractUnresolvedPlaceholderNames = (
-  message: any,
-  generatorKeys: string[],
-): string[] => {
+const extractUnresolvedPlaceholderNames = (message: any, generatorKeys: string[]): string[] => {
   const generatorSet = new Set(generatorKeys);
   const texts: string[] = [];
 
@@ -305,9 +302,7 @@ export class PlaceholderVariablesProcessor extends BaseProcessor {
     }
 
     const generatorKeys = Object.keys(generators);
-    log(
-      `Starting placeholder variables processing with ${generatorKeys.length} generators`,
-    );
+    log(`Starting placeholder variables processing with ${generatorKeys.length} generators`);
     log('Generator keys: %o', generatorKeys);
 
     // Collect per-message failures so the caller can see which message(s) failed
@@ -339,12 +334,10 @@ export class PlaceholderVariablesProcessor extends BaseProcessor {
       );
 
       try {
-        const { processed, unresolvedPlaceholders } = this.processMessagePlaceholdersWithDiagnostics(
-          message,
-          depth,
-        );
+        const { processed, unresolvedPlaceholders } =
+          this.processMessagePlaceholdersWithDiagnostics(message, depth);
 
-        if (processed !== message) {
+        if (JSON.stringify(processed) !== JSON.stringify(message)) {
           clonedContext.messages[i] = processed;
           processedCount++;
           log(`Processed placeholders in message ${message.id}, role: ${message.role}`);
@@ -366,10 +359,7 @@ export class PlaceholderVariablesProcessor extends BaseProcessor {
         const errorMessage = error instanceof Error ? error.message : String(error);
 
         // Extract unresolved placeholder names from the message content for diagnostics
-        const unresolvedPlaceholders = extractUnresolvedPlaceholderNames(
-          message,
-          generatorKeys,
-        );
+        const unresolvedPlaceholders = extractUnresolvedPlaceholderNames(message, generatorKeys);
 
         failures.push({
           contentPreview,
@@ -427,9 +417,7 @@ export class PlaceholderVariablesProcessor extends BaseProcessor {
     // Helper to collect unresolved placeholder names from a text
     const collectUnresolvedFromText = (text: string): string[] => {
       const tokens = extractPlaceholderTokens(text);
-      return tokens
-        .filter((t) => !generatorSet.has(t.key))
-        .map((t) => t.key);
+      return tokens.filter((t) => !generatorSet.has(t.key)).map((t) => t.key);
     };
 
     if (typeof content === 'string') {
