@@ -749,7 +749,6 @@ export default {
   'thread.closeSubagentThread': 'Collapse SubAgent conversation',
   'thread.divider': 'Subtopic',
   'thread.openSubagentThread': 'View full SubAgent conversation',
-  'thread.subagentBadge': 'SubAgent',
   'thread.subagentReadOnlyHint':
     'SubAgent conversations are read-only — execution is driven by the parent agent.',
   'thread.threadMessageCount': '{{messageCount}} messages',
