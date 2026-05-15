@@ -57,7 +57,11 @@ export const formatWebOnboardingStateMessage = (state: OnboardingStateContext) =
     'Questioning rule: prefer the `lobe-user-interaction____askUserQuestion` tool call for structured collection or explicit UI input. For natural exploratory questions, plain text is allowed.',
   ];
 
-  if (state.remainingDiscoveryExchanges !== undefined && state.remainingDiscoveryExchanges > 0) {
+  if (
+    state.phase === 'discovery' &&
+    state.remainingDiscoveryExchanges !== undefined &&
+    state.remainingDiscoveryExchanges > 0
+  ) {
     const currentDiscoveryExchanges = state.discoveryUserMessageCount ?? 0;
     const recommendedTarget = currentDiscoveryExchanges + state.remainingDiscoveryExchanges;
 
@@ -68,6 +72,7 @@ export const formatWebOnboardingStateMessage = (state: OnboardingStateContext) =
       `Recommended: ${state.remainingDiscoveryExchanges} more user exchange(s) before moving to summary. Do not rush — keep exploring different aspects of the user's work and life.`,
     );
   } else if (
+    state.phase === 'discovery' &&
     state.discoveryUserMessageCount !== undefined &&
     state.remainingDiscoveryExchanges === 0
   ) {

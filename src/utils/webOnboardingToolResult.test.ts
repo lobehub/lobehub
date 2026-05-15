@@ -53,7 +53,24 @@ describe('web onboarding tool result helpers', () => {
     expect(message).toContain('Phase: Discovery');
   });
 
-  it('formats target-reached discovery progress when remaining discovery exchanges is 0', () => {
+  it('formats target-reached discovery progress only during discovery phase', () => {
+    const message = formatWebOnboardingStateMessage({
+      discoveryUserMessageCount: 4,
+      finished: false,
+      missingStructuredFields: [],
+      phase: 'discovery',
+      remainingDiscoveryExchanges: 0,
+      topicId: 'topic-1',
+      version: 1,
+    });
+
+    expect(message).not.toContain('more user exchange(s) before moving to summary');
+    expect(message).toContain(
+      'Discovery progress: recommended target reached after 4 user exchange(s).',
+    );
+  });
+
+  it('does not include discovery progress during summary phase', () => {
     const message = formatWebOnboardingStateMessage({
       discoveryUserMessageCount: 4,
       finished: false,
@@ -64,9 +81,7 @@ describe('web onboarding tool result helpers', () => {
       version: 1,
     });
 
-    expect(message).not.toContain('more user exchange(s) before moving to summary');
-    expect(message).toContain(
-      'Discovery progress: recommended target reached after 4 user exchange(s).',
-    );
+    expect(message).toContain('Phase: Summary');
+    expect(message).not.toContain('Discovery progress:');
   });
 });
