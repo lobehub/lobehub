@@ -50,8 +50,12 @@ const mockWebhookHandler = vi.fn(async () => new Response('chat-sdk OK', { statu
 // take the DM path instead of falling back to the "open your DM" branch.
 const mockOpenDM = vi.fn();
 const mockSetIfNotExists = vi.fn();
+const mockGetList = vi.fn();
+const mockAppendToList = vi.fn();
 const mockChatBot = {
   getState: vi.fn(() => ({
+    appendToList: (...args: any[]) => mockAppendToList(...args),
+    getList: (...args: any[]) => mockGetList(...args),
     setIfNotExists: (...args: any[]) => mockSetIfNotExists(...args),
   })),
   initialize: vi.fn().mockResolvedValue(undefined),
@@ -185,6 +189,10 @@ beforeEach(() => {
   mockOpenDM.mockReset();
   mockSetIfNotExists.mockReset();
   mockSetIfNotExists.mockResolvedValue(true);
+  mockGetList.mockReset();
+  mockGetList.mockResolvedValue([]);
+  mockAppendToList.mockReset();
+  mockAppendToList.mockResolvedValue(undefined);
   mockSlackBinder.handleUnlinkedMessage.mockReset();
   mockSlackBinder.replyEphemeral.mockReset();
   mockSlackBinder.replyPrivately.mockReset();
@@ -808,9 +816,12 @@ describe('MessengerRouter onSubscribedMessage gating', () => {
     expect(mockHandleMention).not.toHaveBeenCalled();
   });
 
-  it('drops a non-mention follow-up in a subscribed channel thread', async () => {
+  it('responds to a non-mention follow-up while the channel thread is still single-human (LOBE-8981)', async () => {
+    // The original @mentioner already counts as participant #1 (tracked
+    // in `onNewMention`); when their next post arrives in
+    // `onSubscribedMessage` the thread is still 1-human, so the bot should
+    // reply without requiring a re-mention.
     await loadSlackBot();
-    // findLink should never be reached because the gate fires first.
     mockFindLink.mockResolvedValue({
       activeAgentId: 'agt_main',
       id: 'link_1',
@@ -818,16 +829,81 @@ describe('MessengerRouter onSubscribedMessage gating', () => {
       tenantId: 'T_ACME',
       userId: 'user_alice',
     });
+    mockGetList.mockResolvedValue(['U_ALICE']); // alice already tracked
 
     const handler = mockChatBot.onSubscribedMessage.mock.calls[0][0] as (
       thread: any,
       msg: any,
     ) => Promise<void>;
-    await handler(fakeChannelThread(), fakeMessage({ isMention: false, text: 'random chatter' }));
+    await handler(fakeChannelThread(), fakeMessage({ isMention: false, text: 'follow up' }));
 
+    expect(mockHandleSubscribed).toHaveBeenCalledTimes(1);
     expect(mockHandleMention).not.toHaveBeenCalled();
+    expect(mockSetIfNotExists).not.toHaveBeenCalledWith(
+      expect.stringContaining('mention-required-announced'),
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it('announces mention-only mode and drops the message when a second human joins (LOBE-8981)', async () => {
+    // Alice already in the participants list; Bob's first non-mention post
+    // pushes count to 2 → bot must announce + skip dispatch.
+    await loadSlackBot();
+    mockGetList.mockResolvedValue(['U_ALICE']);
+    const thread = fakeChannelThread();
+
+    const handler = mockChatBot.onSubscribedMessage.mock.calls[0][0] as (
+      thread: any,
+      msg: any,
+    ) => Promise<void>;
+    await handler(
+      thread,
+      fakeMessage({
+        author: { isBot: false, userId: 'U_BOB', userName: 'bob' },
+        isMention: false,
+        text: 'taking over',
+      }),
+    );
+
     expect(mockHandleSubscribed).not.toHaveBeenCalled();
-    expect(mockFindLink).not.toHaveBeenCalled();
+    expect(mockHandleMention).not.toHaveBeenCalled();
+    expect(mockAppendToList).toHaveBeenCalledWith(
+      'messenger:thread-humans:slack:C_GENERAL:1715000000.000100',
+      'U_BOB',
+      expect.objectContaining({ maxLength: 50 }),
+    );
+    expect(mockSetIfNotExists).toHaveBeenCalledWith(
+      'messenger:thread-mention-required-announced:slack:C_GENERAL:1715000000.000100',
+      '1',
+      expect.any(Number),
+    );
+    expect(thread.post).toHaveBeenCalledWith(expect.stringContaining('@mention me'));
+  });
+
+  it('only announces mention-only mode once per channel thread (LOBE-8981)', async () => {
+    // Second non-mention in a multi-human thread → `setIfNotExists` returns
+    // false, the announcement is suppressed.
+    await loadSlackBot();
+    mockGetList.mockResolvedValue(['U_ALICE', 'U_BOB']);
+    mockSetIfNotExists.mockResolvedValueOnce(false);
+    const thread = fakeChannelThread();
+
+    const handler = mockChatBot.onSubscribedMessage.mock.calls[0][0] as (
+      thread: any,
+      msg: any,
+    ) => Promise<void>;
+    await handler(
+      thread,
+      fakeMessage({
+        author: { isBot: false, userId: 'U_BOB', userName: 'bob' },
+        isMention: false,
+        text: 'another non-mention',
+      }),
+    );
+
+    expect(mockHandleSubscribed).not.toHaveBeenCalled();
+    expect(thread.post).not.toHaveBeenCalled();
   });
 
   it('responds to a re-mention in a subscribed channel thread', async () => {
@@ -853,5 +929,34 @@ describe('MessengerRouter onSubscribedMessage gating', () => {
     // cached topic.
     expect(mockHandleSubscribed).toHaveBeenCalledTimes(1);
     expect(mockHandleMention).not.toHaveBeenCalled();
+  });
+
+  it('responds to a @mention even after multi-human switch (LOBE-8981)', async () => {
+    // After the mode switch, a fresh @mention still gets a reply — the
+    // gate keys off `isMention || count <= 1`.
+    await loadSlackBot();
+    mockFindLink.mockResolvedValue({
+      activeAgentId: 'agt_main',
+      id: 'link_1',
+      platformUserId: 'U_ALICE',
+      tenantId: 'T_ACME',
+      userId: 'user_alice',
+    });
+    mockGetList.mockResolvedValue(['U_ALICE', 'U_BOB']);
+
+    const handler = mockChatBot.onSubscribedMessage.mock.calls[0][0] as (
+      thread: any,
+      msg: any,
+    ) => Promise<void>;
+    await handler(
+      fakeChannelThread(),
+      fakeMessage({
+        author: { isBot: false, userId: 'U_ALICE', userName: 'alice' },
+        isMention: true,
+        text: '<@U_BOT> please respond',
+      }),
+    );
+
+    expect(mockHandleSubscribed).toHaveBeenCalledTimes(1);
   });
 });

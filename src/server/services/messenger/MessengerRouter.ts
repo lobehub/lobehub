@@ -511,20 +511,94 @@ export class MessengerRouter {
     //   - Follow-up DM → subscribed → `onSubscribedMessage` →
     //     `handleSubscribedMessage` reads the cached topicId and continues.
     //
-    // For channel threads we don't worry about subscribing hijacking
-    // chatter — `onSubscribedMessage` already gates on `thread.isDM ||
-    // message.isMention === true` (same pattern as `BotMessageRouter`), so
-    // unrelated replies from other users are filtered out before dispatch.
+    // Track distinct humans who have spoken in a channel thread. A
+    // single-user thread is effectively a private 1:1 with the bot (just
+    // hosted in a channel), so we relax the @mention requirement and let
+    // every follow-up reach the agent. Once a second human joins we revert
+    // to mention-only mode and announce the switch once so newcomers
+    // understand why follow-ups are suddenly silent.
+    //
+    // Tracking lives in chat-sdk state so the count survives webhook
+    // boundaries (each Slack event delivery is a fresh request). DMs and
+    // bot authors are excluded — DMs are already 1:1 and bots can't drive
+    // a conversation.
+    const PARTICIPANTS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+    const participantsKey = (threadId: string): string => `messenger:thread-humans:${threadId}`;
+    const mentionRequiredAnnouncedKey = (threadId: string): string =>
+      `messenger:thread-mention-required-announced:${threadId}`;
+
+    const trackThreadParticipant = async (
+      thread: any,
+      message: Message,
+    ): Promise<{ count: number; isNewParticipant: boolean }> => {
+      if (thread.isDM) return { count: 0, isNewParticipant: false };
+      const senderId = message.author?.userId;
+      const isHuman =
+        !!senderId &&
+        message.author?.isBot !== true &&
+        (message.author as { isMe?: boolean })?.isMe !== true;
+      if (!isHuman) return { count: 0, isNewParticipant: false };
+
+      const stateAdapter = bot.getState();
+      const key = participantsKey(thread.id);
+      let participants: string[] = [];
+      try {
+        participants = (await stateAdapter.getList<string>(key)) ?? [];
+      } catch (error) {
+        log('trackThreadParticipant: getList failed: %O', error);
+      }
+      if (participants.includes(senderId)) {
+        return { count: participants.length, isNewParticipant: false };
+      }
+      try {
+        await stateAdapter.appendToList(key, senderId, {
+          maxLength: 50,
+          ttlMs: PARTICIPANTS_TTL_MS,
+        });
+      } catch (error) {
+        log('trackThreadParticipant: appendToList failed: %O', error);
+      }
+      return { count: participants.length + 1, isNewParticipant: true };
+    };
+
     bot.onSubscribedMessage(async (thread, message, _context?: MessageContext) => {
       log('onSubscribedMessage: install=%s, msgId=%s', creds.installationKey, (message as any).id);
-      const isAddressedToBot = thread.isDM || message.isMention === true;
-      if (!isAddressedToBot) {
-        log(
-          'onSubscribedMessage: skip non-mention in subscribed channel thread, install=%s',
-          creds.installationKey,
-        );
+
+      // DM short-circuit — always 1:1 with the bot, no participant gating.
+      if (thread.isDM) {
+        await handle(thread, message, 'handleSubscribedMessage');
         return;
       }
+
+      const isMention = message.isMention === true;
+      const { count } = await trackThreadParticipant(thread, message);
+
+      // Single-human thread → respond without `@`. Multi-human thread →
+      // only @mention triggers a reply, so the bot doesn't insert itself
+      // into human-to-human chatter happening inside a thread it once
+      // opened. `count === 0` covers tracking failures or bot authors —
+      // fall through to `handle()` and let its existing `isBot` filter
+      // drop bot messages.
+      const shouldHandle = isMention || count <= 1;
+      if (!shouldHandle) {
+        // First skip in this thread → tell the room why the bot just went
+        // quiet so participants know to @mention if they need it. Dedupe
+        // by thread id so we never spam more than once.
+        try {
+          const fresh = await bot
+            .getState()
+            .setIfNotExists(mentionRequiredAnnouncedKey(thread.id), '1', PARTICIPANTS_TTL_MS);
+          if (fresh) {
+            await thread.post(
+              "Multiple people are talking in this thread now. From here on I'll only respond when you @mention me.",
+            );
+          }
+        } catch (error) {
+          log('onSubscribedMessage: mention-mode announcement failed: %O', error);
+        }
+        return;
+      }
+
       // Follow-up on a subscribed thread (DM after the first touch, or a
       // subscribed channel thread). `handleSubscribedMessage` reads the
       // cached topicId from chat-sdk thread state and continues that topic;
@@ -547,6 +621,11 @@ export class MessengerRouter {
         (message as any).id,
         thread.id,
       );
+      // Record the original @mentioner so the participant count starts at 1
+      // (not 0) when their first follow-up lands in `onSubscribedMessage`.
+      // Without this the follow-up looks like a "new participant" instead
+      // of the same person continuing.
+      await trackThreadParticipant(thread, message);
       await handle(thread, message, 'handleMention');
     });
 
