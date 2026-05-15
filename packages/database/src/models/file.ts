@@ -176,8 +176,9 @@ export class FileModel {
     return this.db.delete(globalFiles).where(eq(globalFiles.hashId, hashId));
   };
 
-  countUsage = async () => {
-    const result = await this.db
+  countUsage = async (trx?: Transaction) => {
+    const db = trx ?? this.db;
+    const result = await db
       .select({
         totalSize: sum(files.size),
       })
