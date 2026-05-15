@@ -69,10 +69,21 @@ const mockOnNewMention = vi.hoisted(() => vi.fn());
 const mockOnSubscribedMessage = vi.hoisted(() => vi.fn());
 const mockOnNewMessage = vi.hoisted(() => vi.fn());
 const mockOnSlashCommand = vi.hoisted(() => vi.fn());
+// Default state mocks for the LOBE-8981 participant tracking. Tests that
+// care about the multi-human transition reassign `mockGetList` to seed the
+// pre-existing participant list.
+const mockGetList = vi.hoisted(() => vi.fn().mockResolvedValue([]));
+const mockAppendToList = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const mockStateSetIfNotExists = vi.hoisted(() => vi.fn().mockResolvedValue(true));
 
 vi.mock('chat', () => ({
   BaseFormatConverter: class {},
   Chat: vi.fn().mockImplementation(() => ({
+    getState: vi.fn(() => ({
+      appendToList: mockAppendToList,
+      getList: mockGetList,
+      setIfNotExists: mockStateSetIfNotExists,
+    })),
     initialize: mockInitialize,
     onNewMention: mockOnNewMention,
     onNewMessage: mockOnNewMessage,
@@ -425,6 +436,12 @@ describe('BotMessageRouter', () => {
     mockHandleMention.mockResolvedValue(undefined);
     mockHandleSubscribedMessage.mockResolvedValue(undefined);
     mockOpenThreadForChannelWake.mockResolvedValue(undefined);
+    // LOBE-8981 participant tracking — restore defaults wiped by
+    // clearAllMocks. Empty list = fresh single-human thread; individual
+    // describes / tests override as needed.
+    mockGetList.mockResolvedValue([]);
+    mockAppendToList.mockResolvedValue(undefined);
+    mockStateSetIfNotExists.mockResolvedValue(true);
     // Reset pairing-store + provider-model mocks to safe defaults so a
     // previous test's stub doesn't leak into the next one.
     mockPeekPairingRequest.mockResolvedValue(null);
@@ -580,6 +597,16 @@ describe('BotMessageRouter', () => {
   });
 
   describe('onSubscribedMessage policy', () => {
+    // LOBE-8981 introduced single-human thread relaxation: a non-mention
+    // post in a thread with ≤1 known humans now reaches the agent. Most of
+    // the existing policy tests are about the multi-human gate (keyword
+    // wake, command pass-through, allowlist rejection), so seed two
+    // participants by default to keep their semantics. Single-human tests
+    // override this explicitly.
+    beforeEach(() => {
+      mockGetList.mockResolvedValue(['alice-id', 'bob-id']);
+    });
+
     /**
      * Boot the router so its handler registration runs, then return the
      * `onSubscribedMessage` handler that was registered with the Chat SDK
@@ -624,14 +651,58 @@ describe('BotMessageRouter', () => {
       };
     }
 
-    it('should skip non-mention messages in group threads', async () => {
+    it('should skip non-mention messages in a multi-human group thread', async () => {
+      // LOBE-8981: post-fix the gate keys off thread.isDM || mention ||
+      // singleHumanThread. Default beforeEach seeds two known participants,
+      // a third sender keeps the thread in multi-human territory.
       const handler = await loadSubscribedHandler();
       const thread = makeThread({ isDM: false });
-      const message = makeMessage({ isMention: false, text: 'just chatting with bob' });
+      const message = makeMessage({
+        isMention: false,
+        text: 'just chatting with bob',
+        userId: 'carol-id',
+      });
 
       await handler(thread, message);
 
       expect(mockHandleSubscribedMessage).not.toHaveBeenCalled();
+    });
+
+    it('should respond to non-mention messages while the channel thread is still single-human (LOBE-8981)', async () => {
+      // Override the default multi-human seed: no prior participants →
+      // tracker records alice as participant #1 → gate lets her through
+      // without an explicit @mention.
+      mockGetList.mockResolvedValue([]);
+      const handler = await loadSubscribedHandler();
+      const thread = makeThread({ isDM: false });
+      const message = makeMessage({ isMention: false, text: 'follow up' });
+
+      await handler(thread, message);
+
+      expect(mockHandleSubscribedMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it('should announce mention-only mode once when a second human joins (LOBE-8981)', async () => {
+      // Alice is already tracked; bob's first non-mention post is the
+      // multi-human transition.
+      mockGetList.mockResolvedValue(['alice-id']);
+      const handler = await loadSubscribedHandler();
+      const thread = makeThread({ isDM: false });
+      const message = makeMessage({
+        isMention: false,
+        text: 'hello',
+        userId: 'bob-id',
+      });
+
+      await handler(thread, message);
+
+      expect(mockHandleSubscribedMessage).not.toHaveBeenCalled();
+      expect(mockStateSetIfNotExists).toHaveBeenCalledWith(
+        'messenger:thread-mention-required-announced:telegram:chat-1',
+        '1',
+        expect.any(Number),
+      );
+      expect(thread.post).toHaveBeenCalledWith(expect.stringContaining('@mention me'));
     });
 
     it('should respond to @-mentions in group threads', async () => {
