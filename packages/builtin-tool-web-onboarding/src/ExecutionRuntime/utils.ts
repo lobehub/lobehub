@@ -58,8 +58,21 @@ export const formatWebOnboardingStateMessage = (state: OnboardingStateContext) =
   ];
 
   if (state.remainingDiscoveryExchanges !== undefined && state.remainingDiscoveryExchanges > 0) {
+    const currentDiscoveryExchanges = state.discoveryUserMessageCount ?? 0;
+    const recommendedTarget = currentDiscoveryExchanges + state.remainingDiscoveryExchanges;
+
+    parts.push(
+      `Discovery progress: ${currentDiscoveryExchanges}/${recommendedTarget} user exchange(s) observed since Discovery began.`,
+    );
     parts.push(
       `Recommended: ${state.remainingDiscoveryExchanges} more user exchange(s) before moving to summary. Do not rush — keep exploring different aspects of the user's work and life.`,
+    );
+  } else if (
+    state.discoveryUserMessageCount !== undefined &&
+    state.remainingDiscoveryExchanges === 0
+  ) {
+    parts.push(
+      `Discovery progress: recommended target reached after ${state.discoveryUserMessageCount} user exchange(s). Move to summary once interests/customInterests and the persona are persisted.`,
     );
   }
 

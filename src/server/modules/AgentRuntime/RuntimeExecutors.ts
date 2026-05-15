@@ -484,8 +484,10 @@ export const createRuntimeExecutors = (
             ]);
 
             onboardingContext = {
+              discoveryUserMessageCount: onboardingState.discoveryUserMessageCount,
               personaContent: persona?.persona ?? null,
               phaseGuidance: formatWebOnboardingStateMessage(onboardingState),
+              remainingDiscoveryExchanges: onboardingState.remainingDiscoveryExchanges,
               soulContent: soulDoc?.content ?? null,
               userInfo,
             };

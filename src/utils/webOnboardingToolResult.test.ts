@@ -48,11 +48,12 @@ describe('web onboarding tool result helpers', () => {
       version: 1,
     });
 
+    expect(message).toContain('Discovery progress: 1/4 user exchange(s) observed');
     expect(message).toContain('Recommended: 3 more user exchange(s) before moving to summary.');
     expect(message).toContain('Phase: Discovery');
   });
 
-  it('omits pacing hint when remaining discovery exchanges is 0', () => {
+  it('formats target-reached discovery progress when remaining discovery exchanges is 0', () => {
     const message = formatWebOnboardingStateMessage({
       discoveryUserMessageCount: 4,
       finished: false,
@@ -64,5 +65,8 @@ describe('web onboarding tool result helpers', () => {
     });
 
     expect(message).not.toContain('more user exchange(s) before moving to summary');
+    expect(message).toContain(
+      'Discovery progress: recommended target reached after 4 user exchange(s).',
+    );
   });
 });
