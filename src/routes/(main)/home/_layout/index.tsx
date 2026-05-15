@@ -3,7 +3,6 @@ import { useTheme } from 'antd-style';
 import { Activity, type FC, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 
-import { useInitAgentConfig } from '@/hooks/useInitAgentConfig';
 import { useIsDark } from '@/hooks/useIsDark';
 
 import HomeAgentIdSync from './HomeAgentIdSync';
@@ -16,8 +15,6 @@ interface LayoutProps {
 }
 
 const Layout: FC<LayoutProps> = ({ children }) => {
-  useInitAgentConfig();
-
   const isDarkMode = useIsDark();
   const theme = useTheme(); // Keep for colorBgContainerSecondary (not in cssVar)
   const { pathname } = useLocation();
