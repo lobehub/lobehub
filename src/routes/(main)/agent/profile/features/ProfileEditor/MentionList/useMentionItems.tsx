@@ -112,7 +112,7 @@ const resolveApiDescription = (
 };
 
 const useMentionOptions = () => {
-  const installedTools = useToolStore(toolSelectors.metaList, isEqual);
+  const installedTools = useToolStore(toolSelectors.metaListIncludingHidden, isEqual);
   const toggleAgentPlugin = useAgentStore((s) => s.toggleAgentPlugin);
 
   const baseItems = useMemo<MentionListOption[]>(() => {
