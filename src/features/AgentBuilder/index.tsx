@@ -34,8 +34,8 @@ const AgentBuilder = memo(() => {
       }}
     >
       {agentId && agentBuilderId ? (
-        <AgentBuilderProvider agentId={agentBuilderId}>
-          <AgentBuilderConversation agentId={agentBuilderId} />
+        <AgentBuilderProvider agentId={agentId}>
+          <AgentBuilderConversation agentId={agentId} />
         </AgentBuilderProvider>
       ) : (
         <Loading debugId="AgentBuilder > Init" />
