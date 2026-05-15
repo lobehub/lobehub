@@ -41,14 +41,14 @@ const CommentInput = memo<{ taskId: string }>(({ taskId }) => {
           placeholder={t('taskDetail.commentPlaceholder')}
           type={'text'}
           variant={'chat'}
+          onChange={(ed) => {
+            setHasContent(!ed?.isEmpty);
+          }}
           onPressEnter={({ event }) => {
             if (event.metaKey || event.ctrlKey) {
               handleSubmit();
               return true;
             }
-          }}
-          onTextChange={(ed) => {
-            setHasContent(!!String(ed?.getDocument?.('markdown') ?? '').trim());
           }}
         />
       </div>
