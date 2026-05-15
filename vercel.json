@@ -1,10 +1,6 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "pnpm -w run build:vercel",
-  "environmentVariables": {
-    "NODE_OPTIONS": "--max-old-space-size=4096",
-    "NEXT_TELEMETRY_DISABLED": "1",
-    "CI": "true"
-  },
   "headers": [
     {
       "source": "/_spa/(.*)",
