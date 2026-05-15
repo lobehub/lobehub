@@ -14,8 +14,8 @@ import { formatNumber, formatShortenNumber } from '@/utils/format';
 
 import AnimatedNumber from './AnimatedNumber';
 import ModelCard from './ModelCard';
-import { type TokenProgressItem } from './TokenProgress';
-import TokenProgress from './TokenProgress';
+import type { TokenProgressItem } from './TokenProgress';
+import TokenProgress, { formatToken } from './TokenProgress';
 import { getDetailsToken } from './tokens';
 
 interface TokenDetailProps {
@@ -127,7 +127,8 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
       ? detailTokens.totalTokens.credit
       : detailTokens.totalTokens!.token;
 
-  const detailTotal = formatNumber(totalCount);
+  const valueFormatter = isShowCredit ? formatNumber : formatToken;
+  const detailTotal = valueFormatter(totalCount);
 
   const averagePricing = formatNumber(
     detailTokens.totalTokens!.credit / detailTokens.totalTokens!.token,
@@ -159,7 +160,7 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
                     {t('messages.tokenDetails.inputTitle')}
                   </div>
                 </Flexbox>
-                <TokenProgress showIcon data={inputDetails} />
+                <TokenProgress showIcon data={inputDetails} formatter={valueFormatter} />
               </Flexbox>
             )}
             {outputDetails.length > 1 && (
@@ -175,11 +176,11 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
                     {t('messages.tokenDetails.outputTitle')}
                   </div>
                 </Flexbox>
-                <TokenProgress showIcon data={outputDetails} />
+                <TokenProgress showIcon data={outputDetails} formatter={valueFormatter} />
               </Flexbox>
             )}
             <Flexbox>
-              <TokenProgress showIcon data={totalDetail} />
+              <TokenProgress showIcon data={totalDetail} formatter={valueFormatter} />
               <Divider style={{ marginBlock: 8 }} />
               <Flexbox horizontal align={'center'} gap={4} justify={'space-between'}>
                 <div style={{ color: cssVar.colorTextSecondary }}>

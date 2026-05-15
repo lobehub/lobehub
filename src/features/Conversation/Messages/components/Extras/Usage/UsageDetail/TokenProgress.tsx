@@ -12,12 +12,17 @@ export interface TokenProgressItem {
 
 interface TokenProgressProps {
   data: TokenProgressItem[];
+  formatter?: (value: number) => string;
   showIcon?: boolean;
 }
 
-const format = (number: number) => numeral(number).format('0,0');
+export const formatToken = (number: number) => {
+  if (number >= 1_000_000) return numeral(number / 1_000_000).format('0.[0]') + 'M';
+  if (number >= 1_000) return numeral(number / 1_000).format('0.[0]') + 'K';
+  return numeral(number).format('0,0');
+};
 
-const TokenProgress = memo<TokenProgressProps>(({ data, showIcon }) => {
+const TokenProgress = memo<TokenProgressProps>(({ data, formatter = formatToken, showIcon }) => {
   const total = data.reduce((acc, item) => acc + item.value, 0);
 
   return (
@@ -58,7 +63,7 @@ const TokenProgress = memo<TokenProgressProps>(({ data, showIcon }) => {
               )}
               <div style={{ color: cssVar.colorTextSecondary }}>{item.title}</div>
             </Flexbox>
-            <div style={{ fontWeight: 500 }}>{format(item.value)}</div>
+            <div style={{ fontWeight: 500 }}>{formatter(item.value)}</div>
           </Flexbox>
         ))}
       </Flexbox>
