@@ -24,22 +24,16 @@ const metaList = (s: ToolStoreState): LobeToolMeta[] => {
 };
 
 /**
- * Same as metaList but includes hidden builtin tools (e.g. web-browsing, memory,
- * knowledge-base, cloud-sandbox). Used in the agent profile @-mention editor so
- * authors can reference any installed tool in the system prompt, not just the
- * ones visible in the chat-input toolbar.
- *
- * Pure infrastructure tools (discoverable: false) and runtime-managed tools are
- * still excluded — they are never meaningfully user-configurable.
+ * All installed discoverable tools across every source (builtins, plugins, skills).
+ * Excludes only tools with `discoverable: false` (pure infrastructure / internal).
+ * Includes hidden and runtime-managed builtins (web-browsing, memory, cloud-sandbox, etc.)
+ * that `metaList` hides from the chat toolbar.
  */
-const metaListIncludingHidden = (s: ToolStoreState): LobeToolMeta[] => {
+const discoverableMetaList = (s: ToolStoreState): LobeToolMeta[] => {
   const pluginList = pluginSelectors.installedPluginMetaList(s) as LobeToolMeta[];
   const lobehubSkillList = lobehubSkillStoreSelectors.metaList(s) as LobeToolMeta[];
 
-  return builtinToolSelectors
-    .metaListIncludingHidden(s)
-    .concat(pluginList)
-    .concat(lobehubSkillList);
+  return builtinToolSelectors.discoverableMetaList(s).concat(pluginList).concat(lobehubSkillList);
 };
 
 const getMetaById =
@@ -191,11 +185,11 @@ const availableToolsForDiscovery = (s: ToolStoreState): AvailableToolForDiscover
 
 export const toolSelectors = {
   availableToolsForDiscovery,
+  discoverableMetaList,
   getManifestById,
   getManifestLoadingStatus,
   getMetaById,
   getRenderDisplayControl,
   isToolHasUI,
   metaList,
-  metaListIncludingHidden,
 };
