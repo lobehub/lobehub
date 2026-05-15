@@ -99,10 +99,8 @@ interface SchedulerFormProps {
 const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, pattern, timezone }) => {
   const { t } = useTranslation('chat');
 
-  // Optimistic local state: seed once from props at mount, then own the values
-  // locally. Don't re-sync from props on every change — otherwise the async
-  // server roundtrip (updateSchedule → refreshTaskDetail) bounces stale prop
-  // values back into the form during rapid edits and clobbers the user input.
+  // Local state seeded once from props at mount; never re-synced. Keeps the
+  // form in user control even if an unrelated detail refresh runs concurrently.
   // Parent should `key={taskId}` this component to remount cleanly across tasks.
   const [initial] = useState(() => {
     const parsed = parseCronPattern(pattern || DEFAULT_PATTERN);

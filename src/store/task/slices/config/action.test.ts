@@ -307,6 +307,127 @@ describe('TaskConfigSliceAction', () => {
     });
   });
 
+  describe('updateSchedule', () => {
+    it('mirrors pattern, timezone, and maxExecutions into the local detail and PUTs the flat shape', async () => {
+      const { mutate } = await import('@/libs/swr');
+      vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
+
+      await useTaskStore.getState().updateSchedule('T-1', {
+        maxExecutions: 5,
+        pattern: '0 9 * * 1-5',
+        timezone: 'Asia/Shanghai',
+      });
+
+      const detail = useTaskStore.getState().taskDetailMap['T-1'];
+      expect(detail.schedule).toEqual({
+        maxExecutions: 5,
+        pattern: '0 9 * * 1-5',
+        timezone: 'Asia/Shanghai',
+      });
+      expect((detail.config as any).schedule.maxExecutions).toBe(5);
+      expect(taskService.update).toHaveBeenCalledWith('T-1', {
+        config: { schedule: { maxExecutions: 5 } },
+        schedulePattern: '0 9 * * 1-5',
+        scheduleTimezone: 'Asia/Shanghai',
+      });
+      // No SWR refresh — optimistic patch is the source of truth.
+      const refreshCalls = vi
+        .mocked(mutate)
+        .mock.calls.filter((c) => Array.isArray(c[0]) && c[0][0] === 'fetchTaskDetail');
+      expect(refreshCalls).toHaveLength(0);
+    });
+
+    it('serializes rapid weekday-toggle edits and keeps the user’s final input', async () => {
+      const flush = () => new Promise((r) => setTimeout(r, 0));
+
+      const settlers: Array<() => void> = [];
+      vi.mocked(taskService.update).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            settlers.push(() => resolve({ success: true } as any));
+          }),
+      );
+
+      const store = useTaskStore.getState();
+      const args = (pattern: string) => ({ maxExecutions: null, pattern, timezone: 'UTC' });
+      const p1 = store.updateSchedule('T-1', args('0 9 * * 1'));
+      const p2 = store.updateSchedule('T-1', args('0 9 * * 1,2'));
+      const p3 = store.updateSchedule('T-1', args('0 9 * * 1,2,3'));
+
+      // Store reflects the most recent click immediately.
+      expect(useTaskStore.getState().taskDetailMap['T-1'].schedule?.pattern).toBe('0 9 * * 1,2,3');
+
+      await flush();
+      expect(taskService.update).toHaveBeenCalledTimes(1);
+      settlers[0]();
+      await flush();
+      expect(taskService.update).toHaveBeenCalledTimes(2);
+      settlers[1]();
+      await flush();
+      expect(taskService.update).toHaveBeenCalledTimes(3);
+      settlers[2]();
+      await Promise.all([p1, p2, p3]);
+
+      const patterns = vi.mocked(taskService.update).mock.calls.map((c) => c[1].schedulePattern);
+      expect(patterns).toEqual(['0 9 * * 1', '0 9 * * 1,2', '0 9 * * 1,2,3']);
+      expect(useTaskStore.getState().taskDetailMap['T-1'].schedule?.pattern).toBe('0 9 * * 1,2,3');
+    });
+
+    it('shares the engine path with setAutomationMode, so a mode toggle and a schedule edit serialize', async () => {
+      const flush = () => new Promise((r) => setTimeout(r, 0));
+
+      const settlers: Array<() => void> = [];
+      vi.mocked(taskService.update).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            settlers.push(() => resolve({ success: true } as any));
+          }),
+      );
+
+      const store = useTaskStore.getState();
+      const pA = store.setAutomationMode('T-1', 'schedule');
+      const pB = store.updateSchedule('T-1', {
+        maxExecutions: null,
+        pattern: '0 10 * * *',
+        timezone: 'UTC',
+      });
+
+      // First PUT runs; the second is queued on the conflicting path.
+      await flush();
+      expect(taskService.update).toHaveBeenCalledTimes(1);
+
+      settlers[0]();
+      await flush();
+      expect(taskService.update).toHaveBeenCalledTimes(2);
+
+      settlers[1]();
+      await Promise.all([pA, pB]);
+    });
+
+    it('rolls back the schedule patch when the PUT fails', async () => {
+      useTaskStore.setState({
+        taskDetailMap: {
+          'T-1': {
+            ...useTaskStore.getState().taskDetailMap['T-1'],
+            schedule: { pattern: '0 9 * * *', timezone: 'UTC' },
+          },
+        },
+      });
+
+      vi.mocked(taskService.update).mockRejectedValue(new Error('boom'));
+
+      await useTaskStore.getState().updateSchedule('T-1', {
+        maxExecutions: 10,
+        pattern: '0 11 * * 1',
+        timezone: 'Asia/Shanghai',
+      });
+
+      const detail = useTaskStore.getState().taskDetailMap['T-1'];
+      expect(detail.schedule?.pattern).toBe('0 9 * * *');
+      expect(detail.schedule?.timezone).toBe('UTC');
+    });
+  });
+
   describe('resolveBrief', () => {
     it('should call service and refresh active detail', async () => {
       const { mutate } = await import('@/libs/swr');

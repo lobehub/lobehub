@@ -35,14 +35,10 @@ export const createTaskConfigSlice = (set: Setter, get: () => TaskStore, _api?: 
 export class TaskConfigSliceActionImpl {
   readonly #get: () => TaskStore;
   readonly #set: Setter;
-  // Counts in-flight writes per task so we can coalesce the post-write
-  // `internal_refreshTaskDetail` into a single fetch after the last response.
-  // Without this, rapid edits trigger overlapping refreshes that surface stale
-  // intermediate server state to readers like TaskTriggerTag / summary text.
-  readonly #pendingWrites = new Map<string, number>();
-  // Lazily-initialized engine that owns serialization + rollback for
-  // setAutomationMode. Scoped to `taskDetailMap` so per-task path conflicts
-  // queue rapid toggles for the same task while different tasks stay parallel.
+  // Lazily-initialized engine shared by every action that mutates a task's
+  // `taskDetailMap` entry (setAutomationMode, updateSchedule). Per-task path
+  // conflicts serialize rapid edits for the same task while different tasks
+  // stay parallel.
   #automationEngine?: OptimisticEngine<AutomationModeOptimisticState>;
 
   constructor(set: Setter, get: () => TaskStore, _api?: unknown) {
@@ -66,24 +62,6 @@ export class TaskConfigSliceActionImpl {
     );
     return this.#automationEngine;
   };
-
-  // Run a write; refresh task detail only after the LAST concurrent write for
-  // this task settles. Optimistic dispatches by the caller should already have
-  // updated the store before invoking this, so the UI stays steady.
-  async #withCoalescedRefresh(id: string, write: () => Promise<void>): Promise<void> {
-    this.#pendingWrites.set(id, (this.#pendingWrites.get(id) ?? 0) + 1);
-    try {
-      await write();
-    } finally {
-      const remaining = (this.#pendingWrites.get(id) ?? 1) - 1;
-      if (remaining <= 0) {
-        this.#pendingWrites.delete(id);
-        await this.#get().internal_refreshTaskDetail(id);
-      } else {
-        this.#pendingWrites.set(id, remaining);
-      }
-    }
-  }
 
   markBriefRead = async (briefId: string): Promise<void> => {
     await taskService.markBriefRead(briefId);
@@ -260,35 +238,43 @@ export class TaskConfigSliceActionImpl {
       schedule: { ...existingScheduleConfig, maxExecutions: schedule.maxExecutions },
     };
 
-    // Optimistic dispatch so TaskTriggerTag / summary text reflect the change
-    // immediately, without waiting for the server roundtrip. `taskService.update`
-    // wants the flat DB shape (`schedulePattern` / `scheduleTimezone` columns +
-    // `config.schedule.maxExecutions` JSONB), but the store reads from the
-    // normalized nested `schedule` object — populate both for the in-memory copy.
-    this.#get().internal_dispatchTaskDetail({
-      id,
-      type: 'updateTaskDetail',
-      value: {
+    // Share the engine + path (taskDetailMap.<id>) with setAutomationMode, so
+    // rapid SchedulerForm edits (weekday toggles, frequency switches, time
+    // picks) serialize against each other AND against mode toggles. No PUT
+    // reordering on the wire; no stale post-write refresh that could land
+    // after the user's next click.
+    //
+    // The optimistic patch mirrors every field this call sends to the server
+    // (`config` JSONB shape + flat `schedule.{pattern,timezone}` for the
+    // normalized store copy), so we don't need a follow-up refresh — that
+    // refresh used to be the race source: an async SWR write that could
+    // arrive after the user's next click and overwrite their input.
+    const engine = this.#getAutomationEngine();
+    const tx = engine.createTransaction(`updateSchedule(${id})`);
+    tx.set((draft) => {
+      const target = draft.taskDetailMap[id];
+      if (!target) return;
+      target.config = nextConfig;
+      target.schedule = {
+        maxExecutions: schedule.maxExecutions,
+        pattern: schedule.pattern,
+        timezone: schedule.timezone,
+      };
+    });
+    tx.mutation = async () => {
+      await taskService.update(id, {
         config: nextConfig,
-        schedule: {
-          maxExecutions: schedule.maxExecutions,
-          pattern: schedule.pattern,
-          timezone: schedule.timezone,
-        },
-      },
-    });
+        schedulePattern: schedule.pattern,
+        scheduleTimezone: schedule.timezone,
+      });
+    };
 
-    await this.#withCoalescedRefresh(id, async () => {
-      try {
-        await taskService.update(id, {
-          config: nextConfig,
-          schedulePattern: schedule.pattern,
-          scheduleTimezone: schedule.timezone,
-        });
-      } catch (error) {
-        console.error('[TaskStore] Failed to update schedule:', error);
-      }
-    });
+    try {
+      await tx.commit();
+    } catch (error) {
+      // engine already rolled the optimistic patches back; just log.
+      console.error('[TaskStore] Failed to update schedule:', error);
+    }
   };
 }
 
