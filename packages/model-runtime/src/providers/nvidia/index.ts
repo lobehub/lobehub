@@ -1,4 +1,4 @@
-import { ModelProvider } from 'model-bank';
+import { ModelProvider, nvidia as nvidiaChatModels } from 'model-bank';
 
 import { type OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
@@ -19,6 +19,12 @@ export interface NvidiaModelCard {
 export const params = {
   baseURL: 'https://integrate.api.nvidia.com/v1',
   chatCompletion: {
+    // NVIDIA NIM rejects requests where prompt tokens already meet or
+    // exceed the model context window (returns 400 "requested 0 output
+    // tokens and your prompt contains at least N+1 input tokens"). Fail
+    // fast so the UI can surface a fork / switch-model affordance instead
+    // of a raw provider error. See LOBE-8974.
+    contextPreFlight: { models: nvidiaChatModels },
     handlePayload: (payload) => {
       const { model, thinking, messages, ...rest } = payload;
 

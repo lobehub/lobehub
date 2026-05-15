@@ -2,29 +2,13 @@ import { minimax as minimaxChatModels, ModelProvider } from 'model-bank';
 
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import { resolveParameters } from '../../core/parameterResolver';
-import { AgentRuntimeErrorType } from '../../types/error';
-import { MaxTokensExceededError, resolveSafeMaxTokens } from '../../utils/resolveSafeMaxTokens';
+import { resolveSafeMaxTokens } from '../../utils/resolveSafeMaxTokens';
 import { createMiniMaxImage } from './createImage';
 import { createMiniMaxVideo } from './createVideo';
 
 export const params = {
   baseURL: 'https://api.minimaxi.com/v1',
   chatCompletion: {
-    handleError: (error: any) => {
-      if (error instanceof MaxTokensExceededError) {
-        return {
-          error: {
-            contextWindowTokens: error.contextWindowTokens,
-            estimatedInputTokens: error.estimatedInputTokens,
-            message: error.message,
-            modelId: error.modelId,
-          },
-          errorType: AgentRuntimeErrorType.ExceededContextWindow,
-          message: error.message,
-        };
-      }
-      return undefined;
-    },
     handlePayload: (payload: any) => {
       const { enabledSearch, max_tokens, messages, temperature, top_p, ...params } = payload;
 

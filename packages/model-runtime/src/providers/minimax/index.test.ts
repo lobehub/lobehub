@@ -3,8 +3,7 @@ import { ModelProvider } from 'model-bank';
 import { describe, expect, it } from 'vitest';
 
 import { testProvider } from '../../providerTestUtils';
-import { AgentRuntimeErrorType } from '../../types/error';
-import { MaxTokensExceededError } from '../../utils/resolveSafeMaxTokens';
+import { ContextExceededPreFlightError } from '../../utils/resolveSafeMaxTokens';
 import { LobeMinimaxAI, params } from './index';
 
 const provider = ModelProvider.Minimax;
@@ -22,7 +21,6 @@ testProvider({
 });
 
 const handlePayload = params.chatCompletion.handlePayload;
-const handleError = params.chatCompletion.handleError;
 
 describe('LobeMinimaxAI - handlePayload', () => {
   it('respects an explicitly provided max_tokens', () => {
@@ -73,7 +71,7 @@ describe('LobeMinimaxAI - handlePayload', () => {
     expect(result.max_tokens).toBeGreaterThanOrEqual(1024);
   });
 
-  it('throws MaxTokensExceededError when no headroom remains', () => {
+  it('throws ContextExceededPreFlightError when no headroom remains', () => {
     // M2-her: contextWindow=65_536. With ~67k tokens of input there is no
     // room left for the minimum 1024 output tokens, so we should bail out
     // before the request reaches the upstream API.
@@ -85,7 +83,7 @@ describe('LobeMinimaxAI - handlePayload', () => {
         model: 'M2-her',
         temperature: 1,
       } as any),
-    ).toThrow(MaxTokensExceededError);
+    ).toThrow(ContextExceededPreFlightError);
   });
 
   it('estimates tokens against the sanitized messages, not the raw payload', () => {
@@ -140,29 +138,5 @@ describe('LobeMinimaxAI - handlePayload', () => {
     expect(result.temperature).toBeUndefined();
     // Reasoning split is always enabled.
     expect(result.reasoning_split).toBe(true);
-  });
-});
-
-describe('LobeMinimaxAI - handleError', () => {
-  it('converts MaxTokensExceededError into ExceededContextWindow', () => {
-    const error = new MaxTokensExceededError({
-      contextWindowTokens: 204_800,
-      estimatedInputTokens: 200_000,
-      minOutputTokens: 1024,
-      modelId: 'MiniMax-M2.7',
-    });
-
-    const result = handleError!(error);
-
-    expect(result).toBeDefined();
-    expect(result!.errorType).toBe(AgentRuntimeErrorType.ExceededContextWindow);
-    expect(result!.message).toContain('context window');
-    expect((result!.error as any).estimatedInputTokens).toBe(200_000);
-    expect((result!.error as any).modelId).toBe('MiniMax-M2.7');
-  });
-
-  it('passes through unrelated errors', () => {
-    const result = handleError!(new Error('boom'));
-    expect(result).toBeUndefined();
   });
 });

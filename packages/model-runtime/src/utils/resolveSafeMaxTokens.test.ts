@@ -3,9 +3,12 @@ import { type AiFullModelCard } from 'model-bank';
 import { describe, expect, it } from 'vitest';
 
 import {
+  assertContextWithinWindow,
+  CONTEXT_EXCEEDED_PRE_FLIGHT_TYPE,
+  ContextExceededPreFlightError,
   DEFAULT_MAX_TOKENS_BUFFER,
   DEFAULT_MIN_OUTPUT_TOKENS,
-  MaxTokensExceededError,
+  DEFAULT_PRE_FLIGHT_SUGGESTIONS,
   resolveSafeMaxTokens,
 } from './resolveSafeMaxTokens';
 
@@ -66,8 +69,6 @@ describe('resolveSafeMaxTokens', () => {
   });
 
   it('caps max_tokens to remaining window when input is large', () => {
-    // Build a payload large enough that contextWindow - input - buffer < maxOutput
-    // contextWindow=10_000, maxOutput=8000, big input → must be capped below 8000.
     const longContent = 'a'.repeat(20_000); // ~5000+ estimated tokens
     const result = resolveSafeMaxTokens(
       {
@@ -82,8 +83,7 @@ describe('resolveSafeMaxTokens', () => {
     expect(result!).toBeGreaterThanOrEqual(DEFAULT_MIN_OUTPUT_TOKENS);
   });
 
-  it('throws MaxTokensExceededError when remaining window < minOutputTokens', () => {
-    // contextWindow=2000, big input → no room left
+  it('throws ContextExceededPreFlightError when remaining window < minOutputTokens', () => {
     const longContent = 'a'.repeat(20_000);
     expect(() =>
       resolveSafeMaxTokens(
@@ -93,10 +93,10 @@ describe('resolveSafeMaxTokens', () => {
         } as any,
         [baseModel({ contextWindowTokens: 2000, maxOutput: 8000 })],
       ),
-    ).toThrow(MaxTokensExceededError);
+    ).toThrow(ContextExceededPreFlightError);
   });
 
-  it('attaches diagnostic data to MaxTokensExceededError', () => {
+  it('attaches structured diagnostic data to ContextExceededPreFlightError', () => {
     const longContent = 'a'.repeat(20_000);
     try {
       resolveSafeMaxTokens(
@@ -108,17 +108,19 @@ describe('resolveSafeMaxTokens', () => {
       );
       throw new Error('should have thrown');
     } catch (error) {
-      expect(error).toBeInstanceOf(MaxTokensExceededError);
-      const err = error as MaxTokensExceededError;
-      expect(err.modelId).toBe('tight-model');
-      expect(err.contextWindowTokens).toBe(2000);
-      expect(err.estimatedInputTokens).toBeGreaterThan(0);
+      expect(error).toBeInstanceOf(ContextExceededPreFlightError);
+      const err = error as ContextExceededPreFlightError;
+      expect(err.type).toBe(CONTEXT_EXCEEDED_PRE_FLIGHT_TYPE);
+      expect(err.model).toBe('tight-model');
+      expect(err.ctx).toBe(2000);
+      expect(err.promptTokens).toBeGreaterThan(0);
+      expect(err.shortBy).toBe(err.promptTokens - err.ctx);
       expect(err.minOutputTokens).toBe(DEFAULT_MIN_OUTPUT_TOKENS);
+      expect(err.suggestions).toEqual(DEFAULT_PRE_FLIGHT_SUGGESTIONS);
     }
   });
 
   it('factors tools into the input estimate', () => {
-    // Same messages, but adding many tool definitions should reduce remaining headroom.
     const baseArgs = {
       messages: [{ content: 'hi', role: 'user' }],
       model: 'test-model',
@@ -163,5 +165,66 @@ describe('resolveSafeMaxTokens', () => {
     );
 
     expect(largerBuffer).toBe(defaultBuffer! - 1000);
+  });
+});
+
+describe('assertContextWithinWindow', () => {
+  it('is a no-op when input fits comfortably', () => {
+    expect(() =>
+      assertContextWithinWindow(
+        { messages: [{ content: 'hi', role: 'user' }], model: 'test-model' } as any,
+        [baseModel({ contextWindowTokens: 200_000 })],
+      ),
+    ).not.toThrow();
+  });
+
+  it('is a no-op when the model is unknown (we cannot decide)', () => {
+    expect(() =>
+      assertContextWithinWindow(
+        { messages: [{ content: 'hi', role: 'user' }], model: 'unknown' } as any,
+        [baseModel()],
+      ),
+    ).not.toThrow();
+  });
+
+  it('is a no-op when the model has no contextWindowTokens', () => {
+    expect(() =>
+      assertContextWithinWindow(
+        {
+          messages: [{ content: 'a'.repeat(1_000_000), role: 'user' }],
+          model: 'test-model',
+        } as any,
+        [baseModel({ contextWindowTokens: undefined as any })],
+      ),
+    ).not.toThrow();
+  });
+
+  it('throws ContextExceededPreFlightError when prompt overflows the window', () => {
+    const longContent = 'a'.repeat(20_000);
+    expect(() =>
+      assertContextWithinWindow(
+        { messages: [{ content: longContent, role: 'user' }], model: 'tight-model' } as any,
+        [baseModel({ contextWindowTokens: 2000, id: 'tight-model' })],
+      ),
+    ).toThrow(ContextExceededPreFlightError);
+  });
+
+  it('attaches LOBE-8974 structured payload via toPayload()', () => {
+    const longContent = 'a'.repeat(20_000);
+    try {
+      assertContextWithinWindow(
+        { messages: [{ content: longContent, role: 'user' }], model: 'tight-model' } as any,
+        [baseModel({ contextWindowTokens: 2000, id: 'tight-model' })],
+      );
+      throw new Error('should have thrown');
+    } catch (error) {
+      const err = error as ContextExceededPreFlightError;
+      const payload = err.toPayload();
+      expect(payload.type).toBe('context_exceeded_pre_flight');
+      expect(payload.model).toBe('tight-model');
+      expect(payload.ctx).toBe(2000);
+      expect(payload.shortBy).toBe(payload.promptTokens - payload.ctx);
+      expect(payload.suggestions).toEqual(['fork_topic', 'switch_to_larger_ctx_model']);
+    }
   });
 });
