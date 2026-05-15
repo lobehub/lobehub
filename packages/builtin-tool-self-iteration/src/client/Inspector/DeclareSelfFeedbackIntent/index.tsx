@@ -14,6 +14,30 @@ import type {
   DeclareSelfFeedbackIntentState,
 } from '../../../types';
 
+const getIntentLabelKey = (data?: Partial<DeclareSelfFeedbackIntentParams>) => {
+  if (data?.kind === 'memory' && data.action === 'write') {
+    return 'builtins.lobe-self-feedback-intent.inspector.memory.write';
+  }
+
+  if (data?.kind === 'skill' && data.action === 'create') {
+    return 'builtins.lobe-self-feedback-intent.inspector.skill.create';
+  }
+
+  if (data?.kind === 'skill' && data.action === 'refine') {
+    return 'builtins.lobe-self-feedback-intent.inspector.skill.refine';
+  }
+
+  if (data?.kind === 'skill' && data.action === 'consolidate') {
+    return 'builtins.lobe-self-feedback-intent.inspector.skill.consolidate';
+  }
+
+  if (data?.kind === 'gap' && data.action === 'proposal') {
+    return 'builtins.lobe-self-feedback-intent.inspector.gap.proposal';
+  }
+
+  return 'builtins.lobe-self-feedback-intent.apiName.declareSelfFeedbackIntent';
+};
+
 const styles = createStaticStyles(({ css, cssVar }) => ({
   iconAccepted: css`
     flex-shrink: 0;
@@ -30,8 +54,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   summary: css`
     overflow: hidden;
+
     min-width: 0;
     max-width: 320px;
+
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
@@ -44,8 +70,8 @@ export const DeclareSelfFeedbackIntentInspector = memo<
 
   const data = args ?? partialArgs;
   const summary = data?.summary;
-  const hasContext = Boolean(summary);
-  const title = t('builtins.lobe-self-feedback-intent.apiName.declareSelfFeedbackIntent');
+  const hasContext = Boolean(summary || data?.kind || data?.action);
+  const title = t(getIntentLabelKey(data));
 
   if (isArgumentsStreaming && !hasContext) {
     return (

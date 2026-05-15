@@ -1,8 +1,4 @@
 import { AGENT_SIGNAL_SOURCE_TYPES } from '@lobechat/agent-signal/source';
-import {
-  SELF_FEEDBACK_INTENT_ACTIONS,
-  SELF_FEEDBACK_INTENT_KINDS,
-} from '@lobechat/builtin-tool-self-iteration';
 import type {
   DeclareSelfFeedbackIntentInput,
   DeclareSelfFeedbackIntentPayload,
@@ -10,6 +6,10 @@ import type {
   SelfFeedbackIntentAction,
   SelfFeedbackIntentKind,
   SelfFeedbackIntentStrength,
+} from '@lobechat/builtin-tool-self-iteration';
+import {
+  SELF_FEEDBACK_INTENT_ACTIONS,
+  SELF_FEEDBACK_INTENT_KINDS,
 } from '@lobechat/builtin-tool-self-iteration';
 
 import type { AgentSignalSourceEventInput } from '@/server/services/agentSignal/emitter';
