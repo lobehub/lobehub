@@ -134,6 +134,17 @@ export const ExtendedHumanInterventionConfigSchema = z.union([
 ]);
 
 export interface LobeChatPluginApi {
+  /**
+   * Default execution timeout in milliseconds for this API.
+   *
+   * Used as the fallback when the LLM does not supply `arguments.timeout`.
+   * Falls back to the global default (120_000 ms) if not set.
+   *
+   * The resolved value (clamped to `[1_000, 800_000]` server-side) drives
+   * both `dispatchClientTool` BLPOP deadline and the renderer's race
+   * deadline, keeping server and client aligned on a single budget.
+   */
+  defaultTimeoutMs?: number;
   description: string;
   /**
    * Human intervention configuration
@@ -166,6 +177,7 @@ export interface LobeChatPluginApi {
 }
 
 export const LobeChatPluginApiSchema = z.object({
+  defaultTimeoutMs: z.number().int().positive().optional(),
   description: z.string(),
   humanIntervention: ExtendedHumanInterventionConfigSchema.optional(),
   name: z.string(),

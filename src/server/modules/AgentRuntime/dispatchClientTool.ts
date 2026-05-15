@@ -4,31 +4,28 @@ import debug from 'debug';
 import type { ToolExecutionResultResponse } from '@/server/services/toolExecution/types';
 
 import { getAgentRuntimeRedisClient } from './redis';
+import { GLOBAL_DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS, MIN_TIMEOUT_MS } from './resolveToolTimeout';
 import type { ToolResultPayload } from './ToolResultWaiter';
 import { ToolResultWaiter } from './ToolResultWaiter';
 import type { IStreamEventManager } from './types';
 
 const log = debug('lobe-server:agent-runtime:dispatch-client-tool');
 
-/**
- * Default per-tool execution budget when the payload doesn't carry one.
- */
-const DEFAULT_EXECUTION_TIMEOUT_MS = 60_000;
-
-/**
- * Hard cap tied to a single Vercel serverless function window. Phase 6.3c
- * relaxes this by persisting pending-tool state and resuming on a fresh
- * invocation.
- */
-const MAX_EXECUTION_TIMEOUT_MS = 270_000;
-
 interface DispatchContext {
   operationId: string;
   streamManager: IStreamEventManager;
+  /**
+   * Per-call execution budget in milliseconds, normally produced by
+   * `resolveToolTimeoutMs`. When omitted, falls back to the global default
+   * (`GLOBAL_DEFAULT_TIMEOUT_MS`). Always clamped to
+   * `[MIN_TIMEOUT_MS, MAX_TIMEOUT_MS]` regardless of source — the client is
+   * a suggester, this dispatcher is the arbiter.
+   */
+  timeoutMs?: number;
 }
 
 const clampTimeout = (value: number): number =>
-  Math.min(Math.max(value, 1_000), MAX_EXECUTION_TIMEOUT_MS);
+  Math.min(Math.max(Math.trunc(value), MIN_TIMEOUT_MS), MAX_TIMEOUT_MS);
 
 const buildTimeoutResult = (executionTime: number): ToolExecutionResultResponse => ({
   content: '',
@@ -88,7 +85,7 @@ export async function dispatchClientTool(
   const blockingClient = redis.duplicate();
   const waiter = new ToolResultWaiter(blockingClient, redis);
 
-  const timeoutMs = clampTimeout(DEFAULT_EXECUTION_TIMEOUT_MS);
+  const timeoutMs = clampTimeout(ctx.timeoutMs ?? GLOBAL_DEFAULT_TIMEOUT_MS);
 
   try {
     log(

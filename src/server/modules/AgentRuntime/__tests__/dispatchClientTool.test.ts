@@ -181,4 +181,60 @@ describe('dispatchClientTool', () => {
     expect(result.error?.message).toBe('gateway down');
     expect(mockDisconnect).toHaveBeenCalled();
   });
+
+  it('forwards the caller-provided timeoutMs to both sendToolExecute and waitForResult', async () => {
+    const sendToolExecute = vi.fn().mockResolvedValue(undefined);
+    const streamManager = makeStreamManager(sendToolExecute);
+
+    mockBlpop.mockResolvedValue([
+      'tool_result:call-1',
+      JSON.stringify({ content: 'ok', success: true, toolCallId: 'call-1' }),
+    ]);
+
+    await dispatchClientTool(makePayload(), {
+      operationId: 'op-1',
+      streamManager,
+      timeoutMs: 240_000,
+    });
+
+    expect(sendToolExecute.mock.calls[0][1]).toMatchObject({ executionTimeoutMs: 240_000 });
+    // BLPOP signature: (key1, ..., timeoutSeconds). 240_000ms → 240s.
+    const blpopArgs = mockBlpop.mock.calls[0];
+    expect(blpopArgs.at(-1)).toBe(240);
+  });
+
+  it('clamps caller-supplied timeoutMs above the MAX_TIMEOUT_MS ceiling', async () => {
+    const sendToolExecute = vi.fn().mockResolvedValue(undefined);
+    const streamManager = makeStreamManager(sendToolExecute);
+
+    mockBlpop.mockResolvedValue([
+      'tool_result:call-1',
+      JSON.stringify({ content: 'ok', success: true, toolCallId: 'call-1' }),
+    ]);
+
+    await dispatchClientTool(makePayload(), {
+      operationId: 'op-1',
+      streamManager,
+      timeoutMs: 10_000_000,
+    });
+
+    expect(sendToolExecute.mock.calls[0][1]).toMatchObject({ executionTimeoutMs: 800_000 });
+  });
+
+  it('falls back to the 120s global default when ctx.timeoutMs is omitted', async () => {
+    const sendToolExecute = vi.fn().mockResolvedValue(undefined);
+    const streamManager = makeStreamManager(sendToolExecute);
+
+    mockBlpop.mockResolvedValue([
+      'tool_result:call-1',
+      JSON.stringify({ content: 'ok', success: true, toolCallId: 'call-1' }),
+    ]);
+
+    await dispatchClientTool(makePayload(), {
+      operationId: 'op-1',
+      streamManager,
+    });
+
+    expect(sendToolExecute.mock.calls[0][1]).toMatchObject({ executionTimeoutMs: 120_000 });
+  });
 });

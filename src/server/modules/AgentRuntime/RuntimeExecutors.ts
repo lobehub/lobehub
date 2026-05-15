@@ -65,6 +65,7 @@ import {
   isPersistFatal,
   markPersistFatal,
 } from './messagePersistErrors';
+import { resolveToolTimeoutMs } from './resolveToolTimeout';
 import { type IStreamEventManager } from './types';
 
 const log = debug('lobe-server:agent-runtime:streaming-executors');
@@ -1633,9 +1634,15 @@ export const createRuntimeExecutors = (
         };
       } else if (canDispatchToClient) {
         log(`[${operationLogId}] Dispatching tool ${toolName} to client via Agent Gateway`);
+        const timeoutMs = resolveToolTimeoutMs({
+          apiName: chatToolPayload.apiName,
+          args: parsedArgs,
+          manifest: effectiveManifestMap[chatToolPayload.identifier],
+        });
         const dispatchResult = await dispatchClientTool(chatToolPayload, {
           operationId,
           streamManager,
+          timeoutMs,
         });
         execution = { attempts: 1, result: dispatchResult };
       } else {
@@ -2088,9 +2095,15 @@ export const createRuntimeExecutors = (
             };
           } else if (canDispatchToClient) {
             log(`[${operationLogId}] Dispatching tool ${toolName} to client via Agent Gateway`);
+            const timeoutMs = resolveToolTimeoutMs({
+              apiName: chatToolPayload.apiName,
+              args: batchParsedArgs,
+              manifest: batchManifestMap[chatToolPayload.identifier],
+            });
             const dispatchResult = await dispatchClientTool(chatToolPayload, {
               operationId,
               streamManager,
+              timeoutMs,
             });
             execution = { attempts: 1, result: dispatchResult };
           } else {
