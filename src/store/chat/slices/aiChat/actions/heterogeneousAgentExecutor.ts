@@ -1143,6 +1143,23 @@ export const executeHeterogeneousAgent = async (
   /** Adapter/CLI provider (e.g. `claude-code`) — carried on every turn_metadata. */
   let lastProvider: string | undefined;
   /**
+   * Most recent tool `result_msg_id` seen across step boundaries — survives the
+   * `toolState.payloads` reset that happens on every new step.
+   *
+   * Required for the **toolless middle step** case (LOBE-8993): when a step
+   * produces only text (e.g. Monitor stdout drives Claude to reply "等一下…"
+   * without invoking a tool), `toolState.payloads` is empty at the next step
+   * boundary. Without this tracker, `stepParentId` would fall back to
+   * `currentAssistantMessageId` (= the toolless assistant), forming an
+   * `assistant → assistant` link. `MessageCollector.collectAssistantChain`
+   * only walks the `assistant → tool → assistant` zigzag, so the UI splits
+   * into one bubble per Monitor stdout line.
+   *
+   * Scope: executor lifetime (one user run). A new user message spawns a
+   * new executor, so this resets implicitly at run boundaries.
+   */
+  let lastToolMsgIdEver: string | undefined;
+  /**
    * Deferred terminal event (agent_runtime_end or error). We don't forward
    * these to the gateway handler immediately because handler triggers
    * fetchAndReplaceMessages which would clobber our in-flight content
@@ -1563,7 +1580,11 @@ export const executeHeterogeneousAgent = async (
           const lastToolMsgId = [...toolState.payloads]
             .reverse()
             .find((p) => !!p.result_msg_id)?.result_msg_id;
-          const stepParentId = lastToolMsgId || currentAssistantMessageId;
+          if (lastToolMsgId) lastToolMsgIdEver = lastToolMsgId;
+          // Prefer this step's last tool, then the most recent tool ever seen
+          // in the run (rescues toolless middle steps — see LOBE-8993), then
+          // the previous assistant as a last resort.
+          const stepParentId = lastToolMsgId ?? lastToolMsgIdEver ?? currentAssistantMessageId;
 
           const newMsg = await messageService.createMessage({
             agentId: context.agentId,

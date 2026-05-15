@@ -2959,12 +2959,11 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
     });
 
     /**
-     * Hypothesis 2 from the issue: a toolless step in the middle.
-     * If Monitor's stdout triggers CC to respond with only text (no tool_use),
-     * the next step must still chain through. This test documents current
-     * behavior: toolless step breaks tool → next-tool chain.
+     * LOBE-8993 regression: a toolless step in the middle must NOT break the
+     * zigzag chain. The next step should chain back to the most recent tool
+     * result ever produced in the run, not to the toolless assistant.
      */
-    it('toolless middle step: chain visibly breaks at text-only step', async () => {
+    it('toolless middle step: next step chains back to last real tool', async () => {
       const idCounter = { tool: 0, assistant: 0 };
       mockCreateMessage.mockImplementation(async (params: any) => {
         if (params.role === 'tool') {
@@ -2993,15 +2992,61 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       );
       expect(assistantCreates.length).toBe(2);
 
-      // Step 1 parent = Monitor tool from step 0 → this IS correct (tool-1)
+      // Step 1 parent = Monitor tool from step 0 (tool-1)
       expect(assistantCreates[0][0].parentId).toBe('tool-1');
 
-      // Step 2 parent: step 1 had NO tools, so toolState.payloads is empty.
-      // Code falls back to currentAssistantMessageId (= step 1 assistant).
-      // BUG: this breaks the assistantGroup chain because collectAssistantChain
-      // only walks tool → assistant, never assistant → assistant.
-      expect(assistantCreates[1][0].parentId).toBe('ast-new-1');
-      // ^ If this assertion passes, the chain IS broken.
+      // Step 2 parent: step 1 was toolless, but the chain must skip back to
+      // step 0's Monitor (tool-1) so MessageCollector's assistant → tool →
+      // assistant walk keeps every assistant in the same group.
+      expect(assistantCreates[1][0].parentId).toBe('tool-1');
+    });
+
+    /**
+     * LOBE-8993 follow-up: N consecutive toolless steps (Monitor pushing
+     * stdout line by line, each line triggering a new LLM call that only
+     * answers with text). All toolless assistants must chain back to the
+     * same originating tool result; otherwise the UI splits one bubble per
+     * Monitor line.
+     */
+    it('consecutive toolless steps: all parents resolve to the originating tool', async () => {
+      const idCounter = { tool: 0, assistant: 0 };
+      mockCreateMessage.mockImplementation(async (params: any) => {
+        if (params.role === 'tool') {
+          idCounter.tool++;
+          return { id: `tool-${idCounter.tool}` };
+        }
+        idCounter.assistant++;
+        return { id: `ast-new-${idCounter.assistant}` };
+      });
+
+      await runWithEvents([
+        ccInit(),
+        // Step 0: Monitor kicks off the long-running task
+        ccToolUse('msg_01', 'toolu_mon_0', 'Monitor', { shell: 'tail -f log' }),
+        ccToolResult('toolu_mon_0', 'Monitor started'),
+        // Step 1, 2, 3: each Monitor stdout line drives a toolless reply
+        ccText('msg_02', '等 list 完。'),
+        ccText('msg_03', '84842 列完，开干。'),
+        ccText('msg_04', '100/84842 全 skip…'),
+        // Step 4: CC finally reacts with a Bash tool
+        ccToolUse('msg_05', 'toolu_bash_1', 'Bash', { command: 'echo ack' }),
+        ccToolResult('toolu_bash_1', 'ack'),
+        ccResult(),
+      ]);
+
+      const assistantCreates = mockCreateMessage.mock.calls.filter(
+        ([p]: any) => p.role === 'assistant',
+      );
+      // 4 new assistants (steps 1–4); step 0 reuses ast-initial
+      expect(assistantCreates.length).toBe(4);
+
+      // All toolless steps chain back to the Monitor tool from step 0
+      expect(assistantCreates[0][0].parentId).toBe('tool-1');
+      expect(assistantCreates[1][0].parentId).toBe('tool-1');
+      expect(assistantCreates[2][0].parentId).toBe('tool-1');
+      // Step 4 also chains to tool-1 — its own step had no tools yet at
+      // step_start, the Bash tool only persists after stream_start fires.
+      expect(assistantCreates[3][0].parentId).toBe('tool-1');
     });
 
     /**
