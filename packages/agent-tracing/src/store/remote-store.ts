@@ -10,6 +10,16 @@ const decompressZstd = promisify(zstdDecompress);
 const REMOTE_DIR = '_remote';
 const ENV_FILE = '.env';
 const DEFAULT_DIR = '.agent-tracing';
+const ZSTD_SUFFIX = '.json.zst';
+const LEGACY_SUFFIX = '.json';
+
+// Zstd frame magic number — first 4 bytes of any zstd-compressed stream.
+// https://datatracker.ietf.org/doc/html/rfc8478#section-3.1.1
+function isZstdFrame(buf: Buffer): boolean {
+  return (
+    buf.length >= 4 && buf[0] === 0x28 && buf[1] === 0xb5 && buf[2] === 0x2f && buf[3] === 0xfd
+  );
+}
 
 /**
  * Parse an operation ID to extract agentId and topicId for URL construction.
@@ -36,7 +46,7 @@ export function buildRemoteUrl(baseUrl: string, opId: string): string | null {
   const parsed = parseOperationId(opId);
   if (!parsed) return null;
   const base = baseUrl.replace(/\/$/, '');
-  return `${base}/${parsed.agentId}/${parsed.topicId}/${parsed.operationId}.json.zst`;
+  return `${base}/${parsed.agentId}/${parsed.topicId}/${parsed.operationId}${ZSTD_SUFFIX}`;
 }
 
 /**
@@ -94,15 +104,25 @@ export class RemoteSnapshotStore {
       return cached;
     }
 
-    // Download — remote object is zstd-compressed JSON (`.json.zst`).
+    // Download. New uploads are zstd-compressed (`.json.zst`) but objects from
+    // before the rollout remain at the legacy `.json` key, so try the primary
+    // URL first and fall back to the legacy sibling on any non-OK response.
     console.error(`↓ Downloading: ${url}`);
-    const res = await fetch(url);
+    let res = await fetch(url);
+    if (!res.ok && url.endsWith(ZSTD_SUFFIX)) {
+      const legacyUrl = url.slice(0, -ZSTD_SUFFIX.length) + LEGACY_SUFFIX;
+      console.error(`↻ Trying legacy key: ${legacyUrl}`);
+      const legacyRes = await fetch(legacyUrl);
+      if (legacyRes.ok) res = legacyRes;
+    }
     if (!res.ok) {
       throw new Error(`Failed to fetch snapshot: ${res.status} ${res.statusText}\n  URL: ${url}`);
     }
-    const compressed = Buffer.from(await res.arrayBuffer());
-    const decompressed = await decompressZstd(compressed);
-    const snapshot = JSON.parse(decompressed.toString('utf8')) as ExecutionSnapshot;
+    // Sniff the zstd frame magic so the body is decoded by content, not URL
+    // suffix — keeps legacy `.json` snapshots working alongside compressed ones.
+    const body = Buffer.from(await res.arrayBuffer());
+    const decoded = isZstdFrame(body) ? await decompressZstd(body) : body;
+    const snapshot = JSON.parse(decoded.toString('utf8')) as ExecutionSnapshot;
 
     // Cache locally as plain JSON for easy inspection.
     await fs.mkdir(this.cacheDir, { recursive: true });
