@@ -265,6 +265,25 @@ const ccSubagentSpawnResult = (spawnToolUseId: string, finalText: string) => ({
   type: 'user',
 });
 
+/**
+ * Subagent INNER tool_result: a user event tagged with `parent_tool_use_id`,
+ * which the adapter routes through its subagent path so the emitted
+ * `tool_result` + `tool_end` events both carry the `subagent` peer field.
+ */
+const ccSubagentToolResult = (
+  toolUseId: string,
+  parentToolUseId: string,
+  content: string,
+  isError = false,
+) => ({
+  message: {
+    content: [{ content, is_error: isError, tool_use_id: toolUseId, type: 'tool_result' }],
+    role: 'user',
+  },
+  parent_tool_use_id: parentToolUseId,
+  type: 'user',
+});
+
 const ccText = (msgId: string, text: string) => ccAssistant(msgId, [{ text, type: 'text' }]);
 
 const ccThinking = (msgId: string, thinking: string) =>
@@ -2793,6 +2812,91 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(seenToolIds).toContain('toolu_task');
       expect(seenToolIds).toContain('toolu_read');
       expect(seenToolIds).not.toContain('toolu_grep');
+    });
+
+    /**
+     * Regression for LOBE-8991: the subagent forwarding guard initially only
+     * filtered `stream_chunk` events. `tool_start` / `tool_end` for subagent
+     * inner tools still reached the main gateway handler, where:
+     *   - `tool_start` would fire `dispatchOnBeforeCall` against the MAIN
+     *     context for what is actually a subagent inner tool.
+     *   - `tool_end`  would call `fetchAndReplaceMessages(main)` once per
+     *     subagent inner tool result — wasted work AND a state-drift window
+     *     that surfaced as the "orphan tool call" banner on the spawn's
+     *     Task/Agent bubble in the main topic.
+     *
+     * The guard now covers ALL subagent-tagged events. Main-agent tool
+     * lifecycle events (no `subagent` peer) must still reach the handler
+     * so the main bubble's animation / onAfterCall hooks fire.
+     */
+    it('does NOT forward subagent-tagged tool_start / tool_end events to the gateway handler', async () => {
+      await runWithEvents([
+        ccInit(),
+        // Main emits Task + a parallel Read in the same message.id.
+        ccToolUse('msg_main', 'toolu_task', 'Task', {
+          description: 'inspect',
+          prompt: 'go',
+          subagent_type: 'Explore',
+        }),
+        ccToolUse('msg_main', 'toolu_read', 'Read', { file_path: '/a.ts' }),
+        // Subagent inner tool — adapter emits tool_start(subagent) here.
+        ccSubagentToolUse('msg_sub_1', 'toolu_task', 'toolu_grep', 'Grep', {
+          pattern: 'foo',
+        }),
+        // Subagent inner tool_result with parent_tool_use_id — adapter emits
+        // tool_result(subagent) + tool_end(subagent) here. Without the
+        // broadened guard, tool_end(subagent) would reach the main handler.
+        ccSubagentToolResult('toolu_grep', 'toolu_task', 'grep output'),
+        ccSubagentText('msg_sub_2', 'toolu_task', 'subagent summary'),
+        // Main's own parallel tool result — emits tool_end (no subagent flag),
+        // MUST reach the handler so dispatchOnAfterCall fires on main bucket.
+        ccToolResult('toolu_read', 'read content'),
+        // Spawn result closes the subagent run.
+        ccSubagentSpawnResult('toolu_task', 'task done'),
+        ccResult(),
+      ]);
+
+      const handlerSpy = vi.mocked(createGatewayEventHandler).mock.results[0]?.value as ReturnType<
+        typeof vi.fn
+      >;
+      expect(handlerSpy).toBeDefined();
+
+      const forwardedEvents = handlerSpy.mock.calls.map((call) => call[0]);
+
+      // No forwarded event of ANY type may carry the subagent peer field —
+      // they're all handled inline (tool_result) or routed through the
+      // per-spawn thread-scoped dispatcher (stream_chunk, tool_start,
+      // tool_end). The main gateway handler is main-agent-only.
+      const leakedSubagentEvents = forwardedEvents.filter(
+        (e: any) => e?.data?.subagent !== undefined,
+      );
+      expect(leakedSubagentEvents).toHaveLength(0);
+
+      // Sanity: main-agent tool lifecycle for `toolu_read` still reaches the
+      // handler — this is the path that drives the main bubble's tool card
+      // animation + invalidates renderer caches via dispatchOnAfterCall.
+      const mainToolStarts = forwardedEvents.filter(
+        (e: any) => e?.type === 'tool_start' && e.data?.toolCalling?.id === 'toolu_read',
+      );
+      expect(mainToolStarts.length).toBeGreaterThan(0);
+
+      const mainToolEnds = forwardedEvents.filter(
+        (e: any) => e?.type === 'tool_end' && e.data?.toolCallId === 'toolu_read',
+      );
+      expect(mainToolEnds.length).toBeGreaterThan(0);
+
+      // The subagent's inner Grep tool_start / tool_end specifically must
+      // not appear in the forwarded set — guards against a future regression
+      // that narrows the filter back to stream_chunk only.
+      const grepToolStarts = forwardedEvents.filter(
+        (e: any) => e?.type === 'tool_start' && e.data?.toolCalling?.id === 'toolu_grep',
+      );
+      expect(grepToolStarts).toHaveLength(0);
+
+      const grepToolEnds = forwardedEvents.filter(
+        (e: any) => e?.type === 'tool_end' && e.data?.toolCallId === 'toolu_grep',
+      );
+      expect(grepToolEnds).toHaveLength(0);
     });
   });
 

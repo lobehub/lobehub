@@ -1688,18 +1688,28 @@ export const executeHeterogeneousAgent = async (
         }
       }
 
-      // Subagent-tagged stream_chunks are persisted above via
-      // persistSubagent*Chunk into the in-thread assistant. The gateway
-      // handler is main-agent-only: forwarding would dispatch
-      // `updateMessage { tools }` onto `currentAssistantMessageId` (main),
-      // overwriting main.tools[] with subagent tools — main's own
-      // tool_use messages then lose their tools[] pairing and render
-      // as orphans until the next fetchAndReplaceMessages. Text /
-      // reasoning chunks similarly bleed subagent content into the
-      // main bubble. DB state is already correct (the subagent persist
-      // path writes to the thread scope), so dropping the forward
-      // keeps in-memory state aligned with DB.
-      if (event.type === 'stream_chunk' && (event.data as any)?.subagent) {
+      // ALL subagent-tagged events are handled inline (tool_result, line
+      // 1407) or routed through the per-spawn thread-scoped dispatcher
+      // (stream_chunk via persistSubagent*Chunk). They must NOT reach the
+      // main gateway handler, which is main-agent-only:
+      //   - `stream_chunk { tools_calling }` → handler dispatches
+      //     `updateMessage { tools }` onto `currentAssistantMessageId`
+      //     (main), overwriting main.tools[] with subagent tools. Main's
+      //     own tool_use messages then lose their tools[] pairing and
+      //     render as orphans until the next fetchAndReplaceMessages.
+      //   - `stream_chunk { text | reasoning }` → bleeds subagent content
+      //     into the main bubble.
+      //   - `tool_start` → fires `dispatchOnBeforeCall` against the MAIN
+      //     context for what is actually a subagent inner tool, leaking
+      //     renderer-side onBeforeCall hooks into the wrong scope.
+      //   - `tool_end`  → triggers `fetchAndReplaceMessages(main)` on
+      //     every subagent inner tool result. Wasted work, AND it widens
+      //     the in-memory ↔ DB drift window that surfaces as orphan
+      //     warnings even after the DB has settled (LOBE-8991).
+      // DB state is already correct (the subagent persist path writes to
+      // the thread scope), so dropping the forward keeps in-memory state
+      // aligned with DB.
+      if ((event.data as any)?.subagent) {
         return;
       }
 
