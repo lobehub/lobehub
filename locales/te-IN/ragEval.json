@@ -1,91 +1,43 @@
 {
-  "addDataset": {
-    "confirm": "Create",
-    "description": {
-      "placeholder": "Dataset description (optional)"
-    },
-    "name": {
-      "placeholder": "Dataset name",
-      "required": "Please enter the dataset name"
-    },
-    "title": "Add Dataset"
-  },
-  "dataset": {
-    "addNewButton": "Create Dataset",
-    "emptyGuide": "There are currently no datasets. Please create a dataset.",
-    "list": {
-      "table": {
-        "actions": {
-          "importData": "Import Data"
-        },
-        "columns": {
-          "actions": "Actions",
-          "ideal": {
-            "title": "Expected Answer"
-          },
-          "question": {
-            "title": "Question"
-          },
-          "referenceFiles": {
-            "title": "Reference Files"
-          }
-        },
-        "notSelected": "Please select a dataset on the left",
-        "title": "Dataset Details"
-      },
-      "title": "Dataset"
-    }
-  },
-  "evaluation": {
-    "addEvaluation": {
-      "confirm": "Create",
-      "datasetId": {
-        "placeholder": "Please select your evaluation dataset",
-        "required": "Please select an evaluation dataset"
-      },
-      "description": {
-        "placeholder": "Evaluation task description (optional)"
-      },
-      "name": {
-        "placeholder": "Evaluation task name",
-        "required": "Please enter the evaluation task name"
-      },
-      "title": "Add Evaluation Task"
-    },
-    "addNewButton": "Create Evaluation",
-    "emptyGuide": "There are currently no evaluation tasks. Start creating an evaluation.",
-    "table": {
-      "columns": {
-        "actions": {
-          "checkStatus": "Check Status",
-          "confirmDelete": "Are you sure you want to delete this evaluation?",
-          "confirmRun": "Are you sure you want to start running? The evaluation task will be executed asynchronously in the background, and closing the page will not affect the execution of the asynchronous task.",
-          "downloadRecords": "Download Evaluation",
-          "retry": "Retry",
-          "run": "Run",
-          "title": "Actions"
-        },
-        "datasetId": {
-          "title": "Dataset"
-        },
-        "name": {
-          "title": "Evaluation Task Name"
-        },
-        "records": {
-          "title": "Number of Evaluation Records"
-        },
-        "referenceFiles": {
-          "title": "Reference Files"
-        },
-        "status": {
-          "error": "Execution Error",
-          "pending": "Pending",
-          "processing": "In Progress",
-          "success": "Execution Successful",
-          "title": "Status"
-        }
-      },
-      "title": "Evaluation Task List"
-    }
-  }
+  "addDataset.confirm": "సృష్టించు",
+  "addDataset.description.placeholder": "డేటాసెట్ వివరణ (ఐచ్చికం)",
+  "addDataset.name.placeholder": "డేటాసెట్ పేరు",
+  "addDataset.name.required": "దయచేసి డేటాసెట్ పేరును నమోదు చేయండి",
+  "addDataset.title": "డేటాసెట్ జోడించు",
+  "dataset.addNewButton": "డేటాసెట్ సృష్టించు",
+  "dataset.emptyGuide": "ప్రస్తుతం డేటాసెట్లు లేవు. దయచేసి ఒక డేటాసెట్ సృష్టించండి.",
+  "dataset.list.table.actions.importData": "డేటాను దిగుమతి చేయండి",
+  "dataset.list.table.columns.actions": "చర్యలు",
+  "dataset.list.table.columns.ideal.title": "అంచనా సమాధానం",
+  "dataset.list.table.columns.question.title": "ప్రశ్న",
+  "dataset.list.table.columns.referenceFiles.title": "సూచన ఫైళ్లు",
+  "dataset.list.table.notSelected": "దయచేసి ఎడమవైపు ఒక డేటాసెట్‌ను ఎంచుకోండి",
+  "dataset.list.table.title": "డేటాసెట్ వివరాలు",
+  "dataset.list.title": "డేటాసెట్",
+  "evaluation.addEvaluation.confirm": "సృష్టించు",
+  "evaluation.addEvaluation.datasetId.placeholder": "దయచేసి మీ మూల్యాంకన డేటాసెట్‌ను ఎంచుకోండి",
+  "evaluation.addEvaluation.datasetId.required": "దయచేసి ఒక మూల్యాంకన డేటాసెట్‌ను ఎంచుకోండి",
+  "evaluation.addEvaluation.description.placeholder": "మూల్యాంకన పనుల వివరణ (ఐచ్చికం)",
+  "evaluation.addEvaluation.name.placeholder": "మూల్యాంకన పనుల పేరు",
+  "evaluation.addEvaluation.name.required": "దయచేసి మూల్యాంకన పనుల పేరును నమోదు చేయండి",
+  "evaluation.addEvaluation.title": "మూల్యాంకన పనులను జోడించు",
+  "evaluation.addNewButton": "మూల్యాంకనాన్ని సృష్టించు",
+  "evaluation.emptyGuide": "ప్రస్తుతం ఎటువంటి మూల్యాంకన పనులు లేవు. ఒక మూల్యాంకనాన్ని సృష్టించడం ప్రారంభించండి.",
+  "evaluation.table.columns.actions.checkStatus": "స్థితిని తనిఖీ చేయండి",
+  "evaluation.table.columns.actions.confirmDelete": "ఈ మూల్యాంకనాన్ని తొలగించాలనుకుంటున్నారా?",
+  "evaluation.table.columns.actions.confirmRun": "మీరు నడపడం ప్రారంభించాలనుకుంటున్నారా? మూల్యాంకన పని నేపథ్యంలో అసింక్రోనస్‌గా అమలు చేయబడుతుంది, మరియు పేజీని మూసివేయడం అసింక్రోనస్ పనుల అమలును ప్రభావితం చేయదు.",
+  "evaluation.table.columns.actions.downloadRecords": "మూల్యాంకనాన్ని డౌన్‌లోడ్ చేయండి",
+  "evaluation.table.columns.actions.retry": "మళ్ళీ ప్రయత్నించండి",
+  "evaluation.table.columns.actions.run": "నడపండి",
+  "evaluation.table.columns.actions.title": "చర్యలు",
+  "evaluation.table.columns.datasetId.title": "డేటాసెట్",
+  "evaluation.table.columns.name.title": "మూల్యాంకన పనుల పేరు",
+  "evaluation.table.columns.records.title": "మూల్యాంకన రికార్డుల సంఖ్య",
+  "evaluation.table.columns.referenceFiles.title": "సూచన ఫైళ్లు",
+  "evaluation.table.columns.status.error": "అమలు లోపం",
+  "evaluation.table.columns.status.pending": "పెండింగ్",
+  "evaluation.table.columns.status.processing": "ప్రక్రియలో ఉంది",
+  "evaluation.table.columns.status.success": "అమలు విజయవంతం",
+  "evaluation.table.columns.status.title": "స్థితి",
+  "evaluation.table.title": "మూల్యాంకన పనుల జాబితా"
 }

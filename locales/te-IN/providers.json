@@ -1,200 +1,82 @@
 {
-  "ai21": {
-    "description": "AI21 Labs builds foundational models and AI systems for enterprises, accelerating the application of generative AI in production."
-  },
-  "ai302": {
-    "description": "302.AI is an on-demand AI application platform offering the most comprehensive AI APIs and online AI applications available on the market."
-  },
-  "ai360": {
-    "description": "360 AI is an AI model and service platform launched by 360 Company, offering various advanced natural language processing models, including 360GPT2 Pro, 360GPT Pro, 360GPT Turbo, and 360GPT Turbo Responsibility 8K. These models combine large-scale parameters and multimodal capabilities, widely applied in text generation, semantic understanding, dialogue systems, and code generation. With flexible pricing strategies, 360 AI meets diverse user needs, supports developer integration, and promotes the innovation and development of intelligent applications."
-  },
-  "aihubmix": {
-    "description": "AiHubMix provides access to various AI models through a unified API interface."
-  },
-  "akashchat": {
-    "description": "Akash is a permissionless cloud resource marketplace with competitive pricing compared to traditional cloud providers."
-  },
-  "anthropic": {
-    "description": "Anthropic is a company focused on AI research and development, offering a range of advanced language models such as Claude 3.5 Sonnet, Claude 3 Sonnet, Claude 3 Opus, and Claude 3 Haiku. These models achieve an ideal balance between intelligence, speed, and cost, suitable for various applications from enterprise workloads to rapid-response scenarios. Claude 3.5 Sonnet, as their latest model, has excelled in multiple evaluations while maintaining a high cost-performance ratio."
-  },
-  "azure": {
-    "description": "Azure offers a variety of advanced AI models, including GPT-3.5 and the latest GPT-4 series, supporting various data types and complex tasks, dedicated to secure, reliable, and sustainable AI solutions."
-  },
-  "azureai": {
-    "description": "Azure offers a variety of advanced AI models, including GPT-3.5 and the latest GPT-4 series, supporting multiple data types and complex tasks, dedicated to secure, reliable, and sustainable AI solutions."
-  },
-  "baichuan": {
-    "description": "Baichuan Intelligence is a company focused on the research and development of large AI models, with its models excelling in domestic knowledge encyclopedias, long text processing, and generative creation tasks in Chinese, surpassing mainstream foreign models. Baichuan Intelligence also possesses industry-leading multimodal capabilities, performing excellently in multiple authoritative evaluations. Its models include Baichuan 4, Baichuan 3 Turbo, and Baichuan 3 Turbo 128k, each optimized for different application scenarios, providing cost-effective solutions."
-  },
-  "bedrock": {
-    "description": "Bedrock is a service provided by Amazon AWS, focusing on delivering advanced AI language and visual models for enterprises. Its model family includes Anthropic's Claude series, Meta's Llama 3.1 series, and more, offering a range of options from lightweight to high-performance, supporting tasks such as text generation, conversation, and image processing for businesses of varying scales and needs."
-  },
-  "bfl": {
-    "description": "A leading, cutting-edge AI research lab building the visual infrastructure of tomorrow."
-  },
-  "cerebras": {
-    "description": "Cerebras is an AI inference platform built on its dedicated CS-3 system, designed to deliver the world's fastest, real-time, high-throughput LLM services. It is specifically engineered to eliminate latency and accelerate complex AI workflows such as real-time code generation and agent-based tasks."
-  },
-  "cloudflare": {
-    "description": "Run serverless GPU-powered machine learning models on Cloudflare's global network."
-  },
-  "cohere": {
-    "description": "Cohere brings you cutting-edge multilingual models, advanced retrieval capabilities, and an AI workspace tailored for modern enterprises—all integrated into a secure platform."
-  },
-  "cometapi": {
-    "description": "CometAPI is a service platform offering a variety of cutting-edge large model interfaces, supporting OpenAI, Anthropic, Google, and more. It caters to diverse development and application needs, allowing users to flexibly choose the optimal model and pricing according to their requirements, enhancing the AI experience."
-  },
-  "comfyui": {
-    "description": "A powerful open-source workflow engine for generating images, videos, and audio. Supports advanced models such as SD, FLUX, Qwen, Hunyuan, and WAN, offering node-based workflow editing and private deployment capabilities."
-  },
-  "deepseek": {
-    "description": "DeepSeek is a company focused on AI technology research and application, with its latest model DeepSeek-V2.5 integrating general dialogue and code processing capabilities, achieving significant improvements in human preference alignment, writing tasks, and instruction following."
-  },
-  "fal": {
-    "description": "Generative Media Platform for Developers"
-  },
-  "fireworksai": {
-    "description": "Fireworks AI is a leading provider of advanced language model services, focusing on functional calling and multimodal processing. Its latest model, Firefunction V2, is based on Llama-3, optimized for function calling, conversation, and instruction following. The visual language model FireLLaVA-13B supports mixed input of images and text. Other notable models include the Llama series and Mixtral series, providing efficient multilingual instruction following and generation support."
-  },
-  "giteeai": {
-    "description": "Gitee AI's Serverless API provides AI developers with an out of the box large model inference API service."
-  },
-  "github": {
-    "description": "With GitHub Models, developers can become AI engineers and leverage the industry's leading AI models."
-  },
-  "google": {
-    "description": "Google's Gemini series represents its most advanced, versatile AI models, developed by Google DeepMind, designed for multimodal capabilities, supporting seamless understanding and processing of text, code, images, audio, and video. Suitable for various environments from data centers to mobile devices, it significantly enhances the efficiency and applicability of AI models."
-  },
-  "groq": {
-    "description": "Groq's LPU inference engine has excelled in the latest independent large language model (LLM) benchmarks, redefining the standards for AI solutions with its remarkable speed and efficiency. Groq represents instant inference speed, demonstrating strong performance in cloud-based deployments."
-  },
-  "higress": {
-    "description": "Higress is a cloud-native API gateway that was developed internally at Alibaba to address the issues of Tengine reload affecting long-lived connections and the insufficient load balancing capabilities for gRPC/Dubbo."
-  },
-  "huggingface": {
-    "description": "The HuggingFace Inference API provides a fast and free way for you to explore thousands of models for various tasks. Whether you are prototyping for a new application or experimenting with the capabilities of machine learning, this API gives you instant access to high-performance models across multiple domains."
-  },
-  "hunyuan": {
-    "description": "A large language model developed by Tencent, equipped with powerful Chinese creative capabilities, logical reasoning abilities in complex contexts, and reliable task execution skills."
-  },
-  "infiniai": {
-    "description": "Provides high-performance, easy-to-use, and secure large model services for application developers, covering the entire process from large model development to service deployment."
-  },
-  "internlm": {
-    "description": "An open-source organization dedicated to the research and development of large model toolchains. It provides an efficient and user-friendly open-source platform for all AI developers, making cutting-edge large models and algorithm technologies easily accessible."
-  },
-  "jina": {
-    "description": "Founded in 2020, Jina AI is a leading search AI company. Our search base platform includes vector models, rerankers, and small language models to help businesses build reliable and high-quality generative AI and multimodal search applications."
-  },
-  "lmstudio": {
-    "description": "LM Studio is a desktop application for developing and experimenting with LLMs on your computer."
-  },
-  "minimax": {
-    "description": "MiniMax is a general artificial intelligence technology company established in 2021, dedicated to co-creating intelligence with users. MiniMax has independently developed general large models of different modalities, including trillion-parameter MoE text models, voice models, and image models, and has launched applications such as Conch AI."
-  },
-  "mistral": {
-    "description": "Mistral provides advanced general, specialized, and research models widely used in complex reasoning, multilingual tasks, and code generation. Through functional calling interfaces, users can integrate custom functionalities for specific applications."
-  },
-  "modelscope": {
-    "description": "ModelScope is a model-as-a-service platform launched by Alibaba Cloud, offering a wide range of AI models and inference services."
-  },
-  "moonshot": {
-    "description": "Moonshot is an open-source platform launched by Beijing Dark Side Technology Co., Ltd., providing various natural language processing models with a wide range of applications, including but not limited to content creation, academic research, intelligent recommendations, and medical diagnosis, supporting long text processing and complex generation tasks."
-  },
-  "nebius": {
-    "description": "Nebius provides high-performance infrastructure for global AI innovators by building large-scale GPU clusters and vertically integrated cloud platforms."
-  },
-  "newapi": {
-    "description": "Open-source unified forwarding platform aggregating multiple AI services"
-  },
-  "novita": {
-    "description": "Novita AI is a platform providing a variety of large language models and AI image generation API services, flexible, reliable, and cost-effective. It supports the latest open-source models like Llama3 and Mistral, offering a comprehensive, user-friendly, and auto-scaling API solution for generative AI application development, suitable for the rapid growth of AI startups."
-  },
-  "nvidia": {
-    "description": "NVIDIA NIM™ provides containers for self-hosted GPU-accelerated inference microservices, supporting the deployment of pre-trained and custom AI models in the cloud, data centers, RTX™ AI personal computers, and workstations."
-  },
-  "ollama": {
-    "description": "Ollama provides models that cover a wide range of fields, including code generation, mathematical operations, multilingual processing, and conversational interaction, catering to diverse enterprise-level and localized deployment needs."
-  },
-  "ollamacloud": {
-    "description": "Ollama Cloud offers officially hosted inference services, providing out-of-the-box access to the Ollama model library and supporting OpenAI-compatible interfaces."
-  },
-  "openai": {
-    "description": "OpenAI is a global leader in artificial intelligence research, with models like the GPT series pushing the frontiers of natural language processing. OpenAI is committed to transforming multiple industries through innovative and efficient AI solutions. Their products demonstrate significant performance and cost-effectiveness, widely used in research, business, and innovative applications."
-  },
-  "openrouter": {
-    "description": "OpenRouter is a service platform providing access to various cutting-edge large model interfaces, supporting OpenAI, Anthropic, LLaMA, and more, suitable for diverse development and application needs. Users can flexibly choose the optimal model and pricing based on their requirements, enhancing the AI experience."
-  },
-  "perplexity": {
-    "description": "Perplexity is a leading provider of conversational generation models, offering various advanced Llama 3.1 models that support both online and offline applications, particularly suited for complex natural language processing tasks."
-  },
-  "ppio": {
-    "description": "PPIO supports stable and cost-efficient open-source LLM APIs, such as DeepSeek, Llama, Qwen etc."
-  },
-  "qiniu": {
-    "description": "Qiniu, as a long-established cloud service provider, delivers cost-effective and reliable AI inference services for both real-time and batch processing, with a simple and user-friendly experience."
-  },
-  "qwen": {
-    "description": "Tongyi Qianwen is a large-scale language model independently developed by Alibaba Cloud, featuring strong natural language understanding and generation capabilities. It can answer various questions, create written content, express opinions, and write code, playing a role in multiple fields."
-  },
-  "sambanova": {
-    "description": "SambaNova Cloud allows developers to easily utilize the best open-source models and enjoy the fastest inference speeds."
-  },
-  "search1api": {
-    "description": "Search1API provides access to the DeepSeek series of models that can connect to the internet as needed, including standard and fast versions, supporting a variety of model sizes."
-  },
-  "sensenova": {
-    "description": "SenseNova, backed by SenseTime's robust infrastructure, offers efficient and user-friendly full-stack large model services."
-  },
-  "siliconcloud": {
-    "description": "SiliconFlow is dedicated to accelerating AGI for the benefit of humanity, enhancing large-scale AI efficiency through an easy-to-use and cost-effective GenAI stack."
-  },
-  "spark": {
-    "description": "iFlytek's Spark model provides powerful AI capabilities across multiple domains and languages, utilizing advanced natural language processing technology to build innovative applications suitable for smart hardware, smart healthcare, smart finance, and other vertical scenarios."
-  },
-  "stepfun": {
-    "description": "StepFun's large model possesses industry-leading multimodal and complex reasoning capabilities, supporting ultra-long text understanding and powerful autonomous scheduling search engine functions."
-  },
-  "taichu": {
-    "description": "The Institute of Automation, Chinese Academy of Sciences, and Wuhan Artificial Intelligence Research Institute have launched a new generation of multimodal large models, supporting comprehensive question-answering tasks such as multi-turn Q&A, text creation, image generation, 3D understanding, and signal analysis, with stronger cognitive, understanding, and creative abilities, providing a new interactive experience."
-  },
-  "tencentcloud": {
-    "description": "The Knowledge Engine Atomic Power, based on the Knowledge Engine, provides a comprehensive knowledge Q&A capability for enterprises and developers. It offers the ability to flexibly assemble and develop model applications. You can create your own model services using various atomic capabilities, integrating services such as document parsing, splitting, embedding, and multi-turn rewriting to customize AI solutions tailored to your business."
-  },
-  "togetherai": {
-    "description": "Together AI is dedicated to achieving leading performance through innovative AI models, offering extensive customization capabilities, including rapid scaling support and intuitive deployment processes to meet various enterprise needs."
-  },
-  "upstage": {
-    "description": "Upstage focuses on developing AI models for various business needs, including Solar LLM and document AI, aiming to achieve artificial general intelligence (AGI) for work. It allows for the creation of simple conversational agents through Chat API and supports functional calling, translation, embedding, and domain-specific applications."
-  },
-  "v0": {
-    "description": "v0 is a pair programming assistant that generates code and user interfaces (UI) for your projects based on your natural language descriptions."
-  },
-  "vercelaigateway": {
-    "description": "Vercel AI Gateway provides a unified API to access over 100 models, allowing you to use models from multiple providers such as OpenAI, Anthropic, and Google through a single endpoint. It supports budget settings, usage monitoring, request load balancing, and failover."
-  },
-  "vertexai": {
-    "description": "Google's Gemini series is its most advanced and versatile AI model, developed by Google DeepMind. It is designed for multimodal use, supporting seamless understanding and processing of text, code, images, audio, and video. Suitable for a variety of environments, from data centers to mobile devices, it significantly enhances the efficiency and applicability of AI models."
-  },
-  "vllm": {
-    "description": "vLLM is a fast and easy-to-use library for LLM inference and serving."
-  },
-  "volcengine": {
-    "description": "A development platform for large model services launched by ByteDance, offering feature-rich, secure, and competitively priced model invocation services. It also provides end-to-end functionalities such as model data, fine-tuning, inference, and evaluation, ensuring comprehensive support for the development and implementation of your AI applications."
-  },
-  "wenxin": {
-    "description": "An enterprise-level one-stop platform for large model and AI-native application development and services, providing the most comprehensive and user-friendly toolchain for the entire process of generative artificial intelligence model development and application development."
-  },
-  "xai": {
-    "description": "xAI is a company dedicated to building artificial intelligence to accelerate human scientific discovery. Our mission is to advance our collective understanding of the universe."
-  },
-  "xinference": {
-    "description": "Xorbits Inference (Xinference) is an open-source platform designed to simplify the deployment and integration of diverse AI models. With Xinference, you can leverage any open-source LLM, embedding model, or multimodal model to perform inference in cloud or on-premises environments, enabling the creation of powerful AI applications."
-  },
-  "zeroone": {
-    "description": "01.AI focuses on AI 2.0 era technologies, vigorously promoting the innovation and application of 'human + artificial intelligence', using powerful models and advanced AI technologies to enhance human productivity and achieve technological empowerment."
-  },
-  "zhipu": {
-    "description": "Zhipu AI offers an open platform for multimodal and language models, supporting a wide range of AI application scenarios, including text processing, image understanding, and programming assistance."
-  }
+  "ai21.description": "AI21 లాబ్స్ సంస్థలు కోసం ఫౌండేషన్ మోడల్స్ మరియు AI సిస్టమ్స్‌ను నిర్మిస్తుంది, ఉత్పత్తిలో జనరేటివ్ AI ని వేగవంతం చేస్తుంది.",
+  "ai302.description": "302.AI అనేది పేమెంట్-ఆన్-ది-గో AI ప్లాట్‌ఫారమ్, AI APIలు మరియు ఆన్‌లైన్ AI యాప్‌ల విస్తృత క్యాటలాగ్‌ను అందిస్తుంది.",
+  "ai360.description": "360 AI అనేది 360 నుండి మోడల్ మరియు సర్వీస్ ప్లాట్‌ఫారమ్, 360GPT2 ప్రో, 360GPT ప్రో మరియు 360GPT టర్బో వంటి NLP మోడళ్లను అందిస్తుంది. ఈ మోడళ్లు పెద్ద పరిమాణం గల పారామీటర్లు మరియు మల్టీమోడల్ సామర్థ్యాలను కలిగి ఉంటాయి, వచన ఉత్పత్తి, సేమాంటిక్ అర్థం, చాట్ మరియు కోడ్ కోసం, వివిధ అవసరాలకు అనువైన ధరలతో.",
+  "aihubmix.description": "AiHubMix ఒక ఏకీకృత API ద్వారా అనేక AI మోడళ్లకు ప్రాప్యతను అందిస్తుంది.",
+  "akashchat.description": "అకాశ్ అనేది అనుమతిలేని క్లౌడ్ వనరుల మార్కెట్‌ప్లేస్, సంప్రదాయ క్లౌడ్ ప్రొవైడర్లతో పోలిస్తే పోటీ ధరలను అందిస్తుంది.",
+  "anthropic.description": "Anthropic క్లాడ్ 3.5 సోనెట్, క్లాడ్ 3 సోనెట్, క్లాడ్ 3 ఓపస్ మరియు క్లాడ్ 3 హైకూ వంటి అధునాతన భాషా మోడళ్లను నిర్మిస్తుంది, ఇంటెలిజెన్స్, వేగం మరియు ఖర్చును సమతుల్యం చేస్తూ, ఎంటర్‌ప్రైజ్ నుండి వేగవంతమైన ప్రతిస్పందన వినియోగ కేసుల వరకు వర్క్‌లోడ్‌ల కోసం.",
+  "azure.description": "అజ్యూర్ GPT-3.5 మరియు GPT-4 సిరీస్‌లను కలిగి ఉన్న అధునాతన AI మోడళ్లను అందిస్తుంది, వివిధ డేటా రకాల మరియు సంక్లిష్ట పనుల కోసం, సురక్షితమైన, నమ్మదగిన మరియు స్థిరమైన AI పై దృష్టి సారిస్తుంది.",
+  "azureai.description": "అజ్యూర్ GPT-3.5 మరియు GPT-4 సిరీస్‌లను కలిగి ఉన్న అధునాతన AI మోడళ్లను అందిస్తుంది, వివిధ డేటా రకాల మరియు సంక్లిష్ట పనుల కోసం, సురక్షితమైన, నమ్మదగిన మరియు స్థిరమైన AI పై దృష్టి సారిస్తుంది.",
+  "baichuan.description": "బైచువాన్ AI చైనీస్ జ్ఞానం, దీర్ఘ-సందర్భ ప్రాసెసింగ్ మరియు సృజనాత్మక ఉత్పత్తిపై బలమైన పనితీరుతో ఫౌండేషన్ మోడళ్లపై దృష్టి సారిస్తుంది. దాని మోడళ్లు (బైచువాన్ 4, బైచువాన్ 3 టర్బో, బైచువాన్ 3 టర్బో 128k) వివిధ సందర్భాలకు అనుకూలంగా ఉంటాయి మరియు బలమైన విలువను అందిస్తాయి.",
+  "bailiancodingplan.description": "అలియున్ బైలియన్ కోడింగ్ ప్లాన్ అనేది ప్రత్యేకమైన AI కోడింగ్ సేవ, Qwen, GLM, Kimi మరియు MiniMax నుండి కోడింగ్-ఆప్టిమైజ్డ్ మోడళ్లకు ప్రత్యేక ఎండ్‌పాయింట్ ద్వారా ప్రాప్యతను అందిస్తుంది.",
+  "bedrock.description": "అమెజాన్ బెడ్‌రాక్ Anthropic Claude మరియు మెటా లామా 3.1 వంటి అధునాతన భాష మరియు విజన్ మోడళ్లను అందిస్తుంది, వచనం, చాట్ మరియు ఇమేజ్ పనుల కోసం తేలికపాటి నుండి అధిక పనితీరు ఎంపికల వరకు విస్తరిస్తుంది.",
+  "bfl.description": "రేపటి విజువల్ ఇన్‌ఫ్రాస్ట్రక్చర్‌ను నిర్మించే ప్రముఖ ఫ్రంట్‌యర్ AI రీసెర్చ్ ల్యాబ్.",
+  "cerebras.description": "సెరెబ్రాస్ అనేది దాని CS-3 సిస్టమ్‌పై నిర్మించబడిన ఇన్‌ఫరెన్స్ ప్లాట్‌ఫారమ్, కోడ్ ఉత్పత్తి మరియు ఏజెంట్ పనుల వంటి రియల్-టైమ్ వర్క్‌లోడ్‌ల కోసం అల్ట్రా-లో లేటెన్సీ మరియు అధిక-థ్రూపుట్ LLM సేవపై దృష్టి సారిస్తుంది.",
+  "cloudflare.description": "క్లోడ్‌ఫ్లేర్ యొక్క గ్లోబల్ నెట్‌వర్క్‌లో GPU-పవర్డ్ ML మోడళ్లను సర్వర్‌లెస్‌గా నడపండి.",
+  "cohere.description": "కోహేర్ ఆధునిక మల్టీలింగ్వల్ మోడళ్లను, అధునాతన రిట్రీవల్ మరియు AI వర్క్‌స్పేస్‌లను ఆధునిక సంస్థలకు అందిస్తుంది—అన్నీ ఒకే సురక్షితమైన ప్లాట్‌ఫారమ్‌లో.",
+  "cometapi.description": "CometAPI OpenAI, Anthropic, Google మరియు మరిన్నింటి నుండి ఫ్రంట్‌యర్ మోడళ్లకు ప్రాప్యతను అందిస్తుంది, వినియోగదారులు వివిధ వినియోగ కేసుల కోసం ఉత్తమ మోడల్ మరియు ధరను ఎంచుకునేలా చేస్తుంది.",
+  "comfyui.description": "చిత్రం, వీడియో మరియు ఆడియో ఉత్పత్తి కోసం శక్తివంతమైన ఓపెన్-సోర్స్ వర్క్‌ఫ్లో ఇంజిన్, SD, FLUX, Qwen, Hunyuan మరియు WAN వంటి మోడళ్లను మద్దతు ఇస్తుంది, నోడ్-ఆధారిత ఎడిటింగ్ మరియు ప్రైవేట్ డిప్లాయ్‌మెంట్‌తో.",
+  "deepseek.description": "డీప్‌సీక్ AI పరిశోధన మరియు అనువర్తనాలపై దృష్టి సారిస్తుంది. దాని తాజా డీప్‌సీక్ V4 కుటుంబం ఫ్లాష్ మరియు ప్రో వేరియంట్లలో 1M కాంటెక్స్ట్ విండో మరియు హైబ్రిడ్ థింకింగ్‌తో వస్తుంది — లీడింగ్ క్లోజ్డ్ ఫ్రంట్‌యర్ మోడళ్లతో పోటీగా ఉండే తర్కం మరియు ఏజెంట్ బెంచ్‌మార్క్‌లపై.",
+  "fal.description": "డెవలపర్‌ల కోసం నిర్మించిన జనరేటివ్ మీడియా ప్లాట్‌ఫారమ్.",
+  "fireworksai.description": "ఫైర్‌వర్క్స్ AI ఫంక్షన్ కాలింగ్ మరియు మల్టీమోడల్ ప్రాసెసింగ్‌తో అధునాతన భాషా మోడల్ సేవలను అందిస్తుంది. ఫైర్‌ఫంక్షన్ V2 (లామా-3 ఆధారంగా) ఫంక్షన్ కాల్స్, చాట్ మరియు ఇన్‌స్ట్రక్షన్ ఫాలోయింగ్ కోసం ఆప్టిమైజ్ చేయబడింది, ఫైర్‌ఎల్‌ఎల్‌ఎవిఎ-13బి మిక్స్‌డ్ ఇమేజ్-టెక్స్ట్ ఇన్‌పుట్‌లను మద్దతు ఇస్తుంది. ఇతర ప్రముఖ మోడళ్లలో లామా మరియు మిక్స్ట్రల్ కుటుంబాలు ఉన్నాయి.",
+  "giteeai.description": "Gitee AI సర్వర్‌లెస్ APIలు డెవలపర్‌ల కోసం ప్లగ్-అండ్-ప్లే LLM ఇన్‌ఫరెన్స్ సేవలను అందిస్తాయి.",
+  "github.description": "గిట్‌హబ్ మోడళ్లతో, డెవలపర్‌లు పరిశ్రమ-నేతృత్వంలోని మోడళ్లను ఉపయోగించి AI ఇంజనీర్లుగా నిర్మించవచ్చు.",
+  "githubcopilot.description": "మీ గిట్‌హబ్ కోపైలట్ సబ్‌స్క్రిప్షన్ ద్వారా క్లాడ్, GPT మరియు జెమిని మోడళ్లను యాక్సెస్ చేయండి.",
+  "glmcodingplan.description": "GLM కోడింగ్ ప్లాన్ Zhipu AI మోడళ్లకు ప్రాప్యతను అందిస్తుంది, ఇందులో GLM-5 మరియు GLM-4.7 కోడింగ్ పనుల కోసం స్థిర-ఫీజు సబ్‌స్క్రిప్షన్ ద్వారా ఉన్నాయి.",
+  "google.description": "గూగుల్ యొక్క జెమిని కుటుంబం అనేది దాని అత్యంత అధునాతన సాధారణ-ఉద్దేశ్య AI, గూగుల్ డీప్‌మైండ్ ద్వారా వచనం, కోడ్, చిత్రాలు, ఆడియో మరియు వీడియో అంతటా మల్టీమోడల్ వినియోగం కోసం నిర్మించబడింది. ఇది డేటా సెంటర్‌ల నుండి మొబైల్ పరికరాల వరకు స్కేల్ అవుతుంది, బలమైన సామర్థ్యం మరియు చేరుకోగలిగే సామర్థ్యాన్ని కలిగి ఉంటుంది.",
+  "groq.description": "గ్రోక్ యొక్క LPU ఇన్‌ఫరెన్స్ ఇంజిన్ అసాధారణ వేగం మరియు సామర్థ్యంతో అద్భుతమైన బెంచ్‌మార్క్ పనితీరును అందిస్తుంది, తక్కువ లేటెన్సీ, క్లౌడ్-ఆధారిత LLM ఇన్‌ఫరెన్స్ కోసం ఉన్నత ప్రమాణాన్ని సెట్ చేస్తుంది.",
+  "higress.description": "హిగ్రెస్ అనేది అలీబాబా లోపల సృష్టించబడిన క్లౌడ్-నేటివ్ API గేట్‌వే, దీర్ఘకాలిక కనెక్షన్‌లపై టెంజిన్ రీలోడ్ ప్రభావాన్ని మరియు gRPC/Dubbo లోడ్ బ్యాలెన్సింగ్‌లో గ్యాప్‌లను పరిష్కరించడానికి.",
+  "huggingface.description": "హగింగ్ ఫేస్ ఇన్‌ఫరెన్స్ API అనేక పనుల కోసం వేలాది మోడళ్లను అన్వేషించడానికి వేగవంతమైన మార్గాన్ని అందిస్తుంది, ప్రోటోటైపింగ్ మరియు ML ప్రయోగాల కోసం హై-పర్ఫార్మెన్స్ మోడళ్లకు తక్షణ ప్రాప్యతను ఇస్తుంది.",
+  "hunyuan.description": "టెన్సెంట్ అభివృద్ధి చేసిన LLM, బలమైన చైనీస్ రచన, సంక్లిష్ట సందర్భాలలో ఘనమైన తర్కం మరియు నమ్మదగిన పనుల అమలు.",
+  "infiniai.description": "యాప్ డెవలపర్‌లకు మోడల్ అభివృద్ధి నుండి ఉత్పత్తి డిప్లాయ్‌మెంట్ వరకు పూర్తి వర్క్‌ఫ్లో అంతటా అధిక-పనితీరు, ఉపయోగించడానికి సులభమైన, సురక్షితమైన LLM సేవలను అందిస్తుంది.",
+  "internlm.description": "పెద్ద మోడల్ పరిశోధన మరియు టూలింగ్‌పై దృష్టి సారించిన ఓపెన్-సోర్స్ సంస్థ, ఆధునిక మోడళ్లను మరియు అల్గోరిథమ్‌లను అందుబాటులోకి తీసుకురావడానికి సమర్థవంతమైన, ఉపయోగించడానికి సులభమైన ప్లాట్‌ఫారమ్‌ను అందిస్తుంది.",
+  "jina.description": "2020లో స్థాపించబడిన జినా AI అనేది ప్రముఖ శోధన AI కంపెనీ. దాని శోధన స్టాక్‌లో వెక్టర్ మోడళ్లు, రీరాంకర్లు మరియు చిన్న భాషా మోడళ్లు ఉన్నాయి, ఇవి నమ్మదగిన, అధిక-నాణ్యత గల జనరేటివ్ మరియు మల్టీమోడల్ శోధన యాప్‌లను నిర్మించడానికి ఉపయోగిస్తారు.",
+  "kimicodingplan.description": "మూన్‌షాట్ AI నుండి కిమి కోడ్, కోడింగ్ పనుల కోసం K2.5 సహా కిమి మోడళ్లకు ప్రాప్యతను అందిస్తుంది.",
+  "lmstudio.description": "LM స్టూడియో అనేది మీ కంప్యూటర్‌పై LLMలతో అభివృద్ధి చేయడానికి మరియు ప్రయోగాలు చేయడానికి డెస్క్‌టాప్ యాప్.",
+  "longcat.description": "లాంగ్‌క్యాట్ అనేది మెయిటువాన్ స్వతంత్రంగా అభివృద్ధి చేసిన జనరేటివ్ AI పెద్ద మోడళ్ల సిరీస్. ఇది అంతర్గత సంస్థల ఉత్పాదకతను పెంచడానికి మరియు సమర్థవంతమైన కంప్యూటేషనల్ ఆర్కిటెక్చర్ మరియు బలమైన మల్టీమోడల్ సామర్థ్యాల ద్వారా వినూత్న అనువర్తనాలను ప్రారంభించడానికి రూపొందించబడింది.",
+  "minimax.description": "2021లో స్థాపించబడిన మినిమాక్స్, మల్టీమోడల్ ఫౌండేషన్ మోడళ్లతో సాధారణ-ఉద్దేశ్య AIని నిర్మిస్తుంది, ఇందులో ట్రిలియన్-పారామీటర్ MoE వచన మోడళ్లు, స్పీచ్ మోడళ్లు మరియు విజన్ మోడళ్లు ఉన్నాయి, అలాగే హైలువో AI వంటి యాప్‌లు ఉన్నాయి.",
+  "minimaxcodingplan.description": "మినిమాక్స్ టోకెన్ ప్లాన్, స్థిర-ఫీజు సబ్‌స్క్రిప్షన్ ద్వారా M2.7 సహా మినిమాక్స్ మోడళ్లకు ప్రాప్యతను అందిస్తుంది.",
+  "mistral.description": "మిస్ట్రల్ సంక్లిష్టమైన తర్కం, బహుభాషా పనులు మరియు కోడ్ ఉత్పత్తి కోసం అధునాతన సాధారణ, ప్రత్యేక మరియు పరిశోధన మోడళ్లను అందిస్తుంది, కస్టమ్ ఇంటిగ్రేషన్‌ల కోసం ఫంక్షన్-కాల్‌తో.",
+  "modelscope.description": "మోడల్‌స్కోప్ అనేది అలీబాబా క్లౌడ్ యొక్క మోడల్-ఎ-సర్వీస్ ప్లాట్‌ఫారమ్, AI మోడళ్ల మరియు ఇన్‌ఫరెన్స్ సేవల విస్తృత శ్రేణిని అందిస్తుంది.",
+  "moonshot.description": "మూన్‌షాట్, మూన్‌షాట్ AI (బీజింగ్ మూన్‌షాట్ టెక్నాలజీ) నుండి, కంటెంట్ క్రియేషన్, పరిశోధన, సిఫార్సులు మరియు వైద్య విశ్లేషణ వంటి వినియోగ కేసుల కోసం అనేక NLP మోడళ్లను అందిస్తుంది, దీర్ఘ-సందర్భం మరియు సంక్లిష్ట ఉత్పత్తి మద్దతుతో.",
+  "nebius.description": "నెబియస్ పెద్ద-పరిమాణ GPU క్లస్టర్‌ల ద్వారా గ్లోబల్ AI ఇన్నోవేటర్‌లకు అధిక-పనితీరు గల మౌలిక సదుపాయాలను మరియు నిలువు సమగ్ర క్లౌడ్ ప్లాట్‌ఫారమ్‌ను అందిస్తుంది.",
+  "newapi.description": "అనేక AI సేవల కోసం ఓపెన్-సోర్స్ సమీకరణ మరియు రూటింగ్ ప్లాట్‌ఫారమ్.",
+  "novita.description": "నోవిటా AI LLMలు మరియు ఇమేజ్ ఉత్పత్తి కోసం అనువైన, నమ్మదగిన, ఖర్చు-సమర్థమైన APIలను అందిస్తుంది. ఇది లామా 3 మరియు మిస్ట్రల్ వంటి మోడళ్లను మద్దతు ఇస్తుంది మరియు జనరేటివ్ AI స్టార్టప్‌ల కోసం స్కేలబుల్, డెవలపర్-ఫ్రెండ్లీ APIలను అందిస్తుంది.",
+  "nvidia.description": "NVIDIA NIM స్వీయ-హోస్టెడ్, GPU-త్వరిత ఇన్‌ఫరెన్స్ మైక్రోసర్వీస్‌ల కోసం కంటైనర్‌లను క్లౌడ్, డేటా సెంటర్‌లు, RTX AI PCs మరియు వర్క్‌స్టేషన్‌లలో ప్రీ-ట్రెయిన్ చేయబడిన మరియు కస్టమ్ మోడళ్ల కోసం అందిస్తుంది.",
+  "ollama.description": "ఒల్లామా కోడ్ ఉత్పత్తి, గణితం, బహుభాషా ప్రాసెసింగ్ మరియు చాట్ అంతటా మోడళ్లను అందిస్తుంది, ఎంటర్‌ప్రైజ్ మరియు స్థానిక డిప్లాయ్‌మెంట్‌లను మద్దతు ఇస్తుంది.",
+  "ollamacloud.description": "ఒల్లామా క్లౌడ్ Ollama మోడల్ లైబ్రరీ మరియు OpenAI-కంపాటిబుల్ APIలకు అవుట్-ఆఫ్-ది-బాక్స్ యాక్సెస్‌తో నిర్వహిత ఇన్‌ఫరెన్స్‌ను అందిస్తుంది.",
+  "openai.description": "OpenAI అనేది ప్రముఖ AI పరిశోధనా ల్యాబ్, దాని GPT మోడళ్లు సహజ భాషా ప్రాసెసింగ్‌ను అభివృద్ధి చేశాయి, పరిశోధన, వ్యాపారం మరియు ఆవిష్కరణ అంతటా అధిక పనితీరు మరియు బలమైన విలువను అందిస్తాయి.",
+  "opencodecodingplan.description": "ఓపెన్‌కోడ్ గో అనేది $10/నెల సబ్‌స్క్రిప్షన్, GLM, కిమి, మిమో, Qwen, మినిమాక్స్ వంటి కరాతమైన ఓపెన్ కోడింగ్ మోడళ్లకు నమ్మదగిన ప్రాప్యతను అందిస్తుంది.",
+  "opencodezen.description": "ఓపెన్‌కోడ్ జెన్ ఒకే API కీ ద్వారా OpenAI, Anthropic, Moonshot, MiniMax, Zhipu, Qwen మరియు మరిన్నింటి నుండి కరాతమైన మోడళ్లకు ప్రాప్యతను అందిస్తుంది.",
+  "openrouter.description": "ఓపెన్‌రౌటర్ OpenAI, Anthropic, LLaMA మరియు మరిన్నింటి నుండి అనేక ఫ్రంట్‌యర్ మోడళ్లకు ప్రాప్యతను అందిస్తుంది, వినియోగదారులు తమ వినియోగ కేసుకు ఉత్తమ మోడల్ మరియు ధరను ఎంచుకునేలా చేస్తుంది.",
+  "perplexity.description": "పెర్ప్లెక్సిటీ ఆన్‌లైన్ మరియు ఆఫ్‌లైన్ వినియోగం మరియు సంక్లిష్ట NLP వర్క్‌లోడ్‌ల కోసం లామా 3.1 వేరియంట్లను కలిగి ఉన్న అధునాతన చాట్ మోడళ్లను అందిస్తుంది.",
+  "ppio.description": "PPIO డీప్‌సీక్, లామా, Qwen మరియు ఇతర ప్రముఖ మోడళ్లను కలిగి ఉన్న నమ్మదగిన, ఖర్చు-సమర్థమైన ఓపెన్-మోడల్ APIలను అందిస్తుంది.",
+  "qiniu.description": "Qiniu ఉపయోగించడానికి సులభమైన నమ్మదగిన, ఖర్చు-సమర్థమైన రియల్-టైమ్ మరియు బ్యాచ్ AI ఇన్‌ఫరెన్స్ సేవలను అందిస్తుంది.",
+  "qwen.description": "Qwen అనేది అలీబాబా క్లౌడ్ యొక్క పెద్ద-పరిమాణ భాషా మోడల్, బలమైన అర్థం మరియు ఉత్పత్తిని కలిగి ఉంది, అనేక డొమైన్‌లలో Q&A, రచన, అభిప్రాయ వ్యక్తీకరణ మరియు కోడ్‌ను కవర్ చేస్తుంది.",
+  "replicate.description": "రిప్లికేట్ FLUX మరియు స్టేబుల్ డిఫ్యూషన్ వంటి ఓపెన్-సోర్స్ ఇమేజ్ మోడళ్లను సింపుల్ క్లౌడ్ API ద్వారా నడుపుతుంది.",
+  "sambanova.description": "సాంబానోవా క్లౌడ్ డెవలపర్‌లకు అత్యంత వేగవంతమైన ఇన్‌ఫరెన్స్‌తో టాప్ ఓపెన్-సోర్స్ మోడళ్లను ఉపయోగించడానికి అనుమతిస్తుంది.",
+  "search1api.description": "Search1API డీప్‌సీక్ మోడళ్లకు ప్రాప్యతను అందిస్తుంది, ఐచ్ఛిక వెబ్ కనెక్టివిటీతో, అనేక పారామీటర్ పరిమాణాల అంతటా ప్రామాణిక మరియు వేగవంతమైన వేరియంట్లను కలిగి ఉంది.",
+  "sensenova.description": "సెన్స్‌నోవా సెన్స్‌టైమ్ మౌలిక సదుపాయాల మద్దతుతో సమర్థవంతమైన, ఉపయోగించడానికి సులభమైన పూర్తి-స్టాక్ LLM సేవలను అందిస్తుంది.",
+  "siliconcloud.description": "సిలికాన్‌క్లౌడ్ బలమైన ఓపెన్-సోర్స్ బేస్ మోడళ్లపై నిర్మించబడిన ఖర్చు-సమర్థమైన GenAI క్లౌడ్ సేవ.",
+  "spark.description": "iFLYTEK స్పార్క్ అనేక డొమైన్‌లలో శక్తివంతమైన బహుభాషా AIని అందిస్తుంది, స్మార్ట్ హార్డ్‌వేర్, ఆరోగ్యం, ఆర్థిక మరియు ఇతర వర్టికల్‌లలో ఆవిష్కరణలను ప్రారంభిస్తుంది.",
+  "stepfun.description": "స్టెప్‌ఫన్ మోడళ్లు దీర్ఘ-సందర్భం అర్థం మరియు శక్తివంతమైన స్వయంచాలక శోధన ఆర్కెస్ట్రేషన్‌తో, ప్రముఖ మల్టీమోడల్ మరియు సంక్లిష్ట తర్క సామర్థ్యాలను అందిస్తాయి.",
+  "straico.description": "స్ట్రైకో AI ఇంటిగ్రేషన్‌ను సరళీకృతం చేస్తుంది, టాప్ టెక్స్ట్, ఇమేజ్ మరియు ఆడియో జనరేటివ్ AI మోడళ్లను ఏకీకృత వర్క్‌స్పేస్‌లో కలిపి, మార్కెటర్‌లు, వ్యాపారులు మరియు ఉత్సాహవంతులందరికీ విభిన్న AI టూల్‌లకు సులభమైన ప్రాప్యతను అందిస్తుంది.",
+  "streamlake.description": "స్ట్రీమ్‌లేక్ అనేది ఎంటర్‌ప్రైజ్-స్థాయి మోడల్ సేవ మరియు AI కంప్యూటింగ్ క్లౌడ్ ప్లాట్‌ఫారమ్, అధిక-పనితీరు గల మోడల్ ఇన్‌ఫరెన్స్, తక్కువ-ఖర్చు మోడల్ అనుకూలీకరణ మరియు పూర్తిగా నిర్వహించబడిన సేవలను సమగ్రపరచడం, సంస్థలు AI అనువర్తన ఆవిష్కరణపై దృష్టి సారించడానికి సహాయపడుతుంది, అంతర్గత కంప్యూటింగ్ వనరుల సంక్లిష్టత మరియు ఖర్చు గురించి చింతించకుండా.",
+  "taichu.description": "CASIA మరియు వుహాన్ ఇన్స్టిట్యూట్ ఆఫ్ AI నుండి తదుపరి తరం మల్టీమోడల్ మోడల్, బలమైన జ్ఞానం మరియు సృజనాత్మకతతో బహుళ-మలుపు QA, రచన, ఇమేజ్ ఉత్పత్తి, 3D అర్థం మరియు సిగ్నల్ విశ్లేషణను మద్దతు ఇస్తుంది.",
+  "tencentcloud.description": "LLM నాలెడ్జ్ ఇంజిన్ అటామిక్ పవర్ సంస్థలు మరియు డెవలపర్‌ల కోసం ఎండ్-టు-ఎండ్ నాలెడ్జ్ QAని అందిస్తుంది, డాక్యుమెంట్ పార్సింగ్, చంకింగ్, ఎంబెడింగ్‌లు మరియు మల్టీ-టర్న్ రీరైటింగ్ వంటి మాడ్యులర్ సేవలతో కస్టమ్ AI పరిష్కారాలను అసెంబుల్ చేయడానికి.",
+  "togetherai.description": "టుగెదర్ AI వినూత్న మోడళ్లతో ప్రముఖ పనితీరును అందిస్తుంది, విస్తృత అనుకూలీకరణ, వేగవంతమైన స్కేలింగ్ మరియు ఎంటర్‌ప్రైజ్ అవసరాల కోసం సరళమైన డిప్లాయ్‌మెంట్.",
+  "upstage.description": "అప్‌స్టేజ్ వ్యాపార అవసరాల కోసం AI మోడళ్లను నిర్మిస్తుంది, సోలార్ LLM మరియు డాక్యుమెంట్ AIతో సహా, ఫంక్షన్ కాలింగ్, అనువాదం, ఎంబెడింగ్‌లు మరియు డొమైన్-స్పెసిఫిక్ వినియోగ కేసులను మద్దతు ఇస్తుంది.",
+  "v0.description": "v0 అనేది జత-ప్రోగ్రామింగ్ అసిస్టెంట్, ఇది మీ ప్రాజెక్ట్ కోసం సహజ-భాషా ఆలోచనలను కోడ్ మరియు UIగా మార్చుతుంది.",
+  "vercelaigateway.description": "వెర్సెల్ AI గేట్‌వే OpenAI, Anthropic, Google మరియు మరిన్నింటి అంతటా 100+ మోడళ్ల కోసం ఏకీకృత APIని అందిస్తుంది, బడ్జెటింగ్, వినియోగ మానిటరింగ్, లోడ్ బ్యాలెన్సింగ్ మరియు ఫెయిలోవర్‌తో.",
+  "vertexai.description": "గూగుల్ యొక్క జెమిని కుటుంబం అనేది దాని అత్యంత అధునాతన సాధారణ-ఉద్దేశ్య AI, గూగుల్ డీప్‌మైండ్ ద్వారా వచనం, కోడ్, చిత్రాలు, ఆడియో మరియు వీడియో అంతటా మల్టీమోడల్ వినియోగం కోసం నిర్మించబడింది. ఇది డేటా సెంటర్‌ల నుండి మొబైల్ పరికరాల వరకు స్కేల్ అవుతుంది, సామర్థ్యాన్ని మెరుగుపరుస్తుంది మరియు డిప్లాయ్‌మెంట్ సౌలభ్యాన్ని అందిస్తుంది.",
+  "vllm.description": "vLLM అనేది LLM ఇన్‌ఫరెన్స్ మరియు సర్వింగ్ కోసం వేగవంతమైన, ఉపయోగించడానికి సులభమైన లైబ్రరీ.",
+  "volcengine.description": "బైట్‌డాన్స్ యొక్క మోడల్ సర్వీస్ ప్లాట్‌ఫారమ్ సురక్షితమైన, ఫీచర్-రిచ్, ఖర్చు-సమర్థమైన మోడల్ ప్రాప్యతను మరియు డేటా, ఫైన్-ట్యూనింగ్, ఇన్‌ఫరెన్స్ మరియు మూల్యాంకనం కోసం ఎండ్-టు-ఎండ్ టూలింగ్‌ను అందిస్తుంది.",
+  "volcenginecodingplan.description": "బైట్‌డాన్స్ నుండి వోల్క్‌ఇంజిన్ కోడింగ్ ప్లాన్, డౌబావో-సీడ్-కోడ్, GLM-4.7, డీప్‌సీక్-V3.2 మరియు కిమి-K2.5 సహా అనేక కోడింగ్ మోడళ్లకు స్థిర-ఫీజు సబ్‌స్క్రిప్షన్ ద్వారా ప్రాప్యతను అందిస్తుంది.",
+  "wenxin.description": "ఫౌండేషన్ మోడళ్ల మరియు AI-నేటివ్ యాప్ డెవలప్‌మెంట్ కోసం ఒక ఎంటర్‌ప్రైజ్ ఆల్-ఇన్-వన్ ప్లాట్‌ఫారమ్, జనరేటివ్ AI మోడల్ మరియు అప్లికేషన్ వర్క్‌ఫ్లోల కోసం ఎండ్-టు-ఎండ్ టూలింగ్‌ను అందిస్తుంది.",
+  "xai.description": "xAI శాస్త్రీయ ఆవిష్కరణను వేగవంతం చేయడానికి AIని నిర్మిస్తుంది, విశ్వం పట్ల మానవత్వం యొక్క అర్థాన్ని లోతుగా చేయడానికి ఒక లక్ష్యంగా.",
+  "xiaomimimo.description": "షియోమీ మిమో ఓపెన్‌AI-కంపాటిబుల్ APIతో సంభాషణ మోడల్ సేవను అందిస్తుంది. mimo-v2-flash మోడల్ లోతైన తర్కం, స్ట్రీమింగ్ అవుట్‌పుట్, ఫంక్షన్ కాలింగ్, 256K కాంటెక్స్ట్ విండో మరియు గరిష్ట అవుట్‌పుట్ 128Kని మద్దతు ఇస్తుంది.",
+  "xinference.description": "Xorbits ఇన్‌ఫరెన్స్ (Xinference) అనేది AI మోడళ్లను నడపడం మరియు సమీకరించడం సులభం చేసే ఓపెన్-సోర్స్ ప్లాట్‌ఫారమ్. ఇది శక్తివంతమైన AI యాప్‌లను నిర్మించడానికి మీరు ఓపెన్-సోర్స్ LLMలు, ఎంబెడింగ్ మోడళ్లు మరియు మల్టీమోడల్ మోడళ్లను స్థానికంగా లేదా క్లౌడ్‌లో నడిపేలా చేస్తుంది.",
+  "zenmux.description": "జెన్‌మక్స్ అనేది ఓపెన్‌AI, Anthropic, Google VertexAI మరియు మరిన్నింటిని మద్దతు ఇస్తున్న ఏకీకృత AI సమీకరణ ప్లాట్‌ఫారమ్, మోడళ్లను సులభంగా మార్చడానికి మరియు నిర్వహించడానికి అనువైన రూటింగ్‌తో.",
+  "zeroone.description": "01.AI మానవ-కేంద్రిత AI 2.0 విప్లవాన్ని నడుపుతుంది, LLMలను ఉపయోగించి ఆర్థిక మరియు సామాజిక విలువను సృష్టిస్తుంది మరియు కొత్త AI ఎకోసిస్టమ్‌లు మరియు వ్యాపార మోడళ్లను నిర్మిస్తుంది.",
+  "zhipu.description": "ZhiPu AI వచన ప్రాసెసింగ్, ఇమేజ్ అర్థం మరియు కోడింగ్ సహాయం అంతటా మల్టీమోడల్ మరియు భాషా మోడళ్ల కోసం ఓపెన్ ప్లాట్‌ఫారమ్‌ను అందిస్తుంది."
 }

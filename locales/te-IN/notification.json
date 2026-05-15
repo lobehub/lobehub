@@ -1,0 +1,18 @@
+{
+  "agent_cron_job_failed": "మీ షెడ్యూల్ చేసిన పని \"{{jobName}}\" విఫలమైంది. పూర్తి లోపాన్ని చూడటానికి పనిని తెరవండి.",
+  "agent_cron_job_failed_insufficient_budget": "మీ షెడ్యూల్ చేసిన పని \"{{jobName}}\" నడవలేదు ఎందుకంటే మీ ఖాతాలో క్రెడిట్లు లేవు. భవిష్యత్తులో నడుస్తున్న పనులను పునరుద్ధరించడానికి మీ ప్లాన్‌ను అప్‌గ్రేడ్ చేయండి లేదా టాప్ అప్ చేయండి.",
+  "agent_cron_job_failed_insufficient_budget_title": "షెడ్యూల్ చేసిన పని నిలిపివేయబడింది: క్రెడిట్లు సరిపోలడం లేదు",
+  "agent_cron_job_failed_title": "షెడ్యూల్ చేసిన పని విఫలమైంది",
+  "billboard.learnMore": "మరింత తెలుసుకోండి",
+  "billboard.menuLabel": "ప్రకటనలు",
+  "image_generation_completed": "మీ చిత్రం \"{{prompt}}\" సిద్ధంగా ఉంది.",
+  "image_generation_completed_title": "చిత్రం ఉత్పత్తి పూర్తయింది",
+  "inbox.archiveAll": "అన్నింటినీ ఆర్కైవ్ చేయండి",
+  "inbox.empty": "ఇంకా ఎటువంటి నోటిఫికేషన్లు లేవు",
+  "inbox.emptyUnread": "చదవని నోటిఫికేషన్లు లేవు",
+  "inbox.filterUnread": "చదవని వాటిని మాత్రమే చూపించు",
+  "inbox.markAllRead": "అన్నింటినీ చదివినట్లుగా గుర్తించు",
+  "inbox.title": "నోటిఫికేషన్లు",
+  "video_generation_completed": "మీ వీడియో \"{{prompt}}\" సిద్ధంగా ఉంది.",
+  "video_generation_completed_title": "వీడియో ఉత్పత్తి పూర్తయింది"
+}

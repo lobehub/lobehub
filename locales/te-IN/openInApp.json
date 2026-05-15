@@ -1,0 +1,8 @@
+{
+  "dropdownLabel": "లో పని డైరెక్టరీని తెరవండి",
+  "errors.appNotInstalled": "{{appName}} ఇన్‌స్టాల్ చేయబడలేదు",
+  "errors.launchFailed": "{{appName}} లో తెరవడం విఫలమైంది: {{error}}",
+  "errors.pathNotFound": "మార్గం కనుగొనబడలేదు: {{path}}",
+  "errors.unknown": "తెలియని లోపం",
+  "tooltip": "{{appName}} లో తెరవండి"
+}

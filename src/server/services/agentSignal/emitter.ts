@@ -74,6 +74,44 @@ export type UserMessageAgentSignalSourceInput = AgentSignalSourceEventInput<
 
 export const resolveSourceScopeKey = getSourceEventScopeKey;
 
+const collectErrorMessages = (error: unknown): string[] => {
+  const messages: string[] = [];
+  const visited = new Set<unknown>();
+  let current: unknown = error;
+
+  while (current && !visited.has(current)) {
+    visited.add(current);
+
+    if (typeof current === 'string') {
+      messages.push(current);
+      break;
+    }
+
+    if (current instanceof Error) {
+      if (current.message) messages.push(current.message);
+      current = current.cause;
+      continue;
+    }
+
+    if (typeof current === 'object') {
+      const maybeMessage = (current as { message?: unknown }).message;
+      if (typeof maybeMessage === 'string') messages.push(maybeMessage);
+      current = (current as { cause?: unknown }).cause;
+      continue;
+    }
+
+    break;
+  }
+
+  return messages;
+};
+
+const isLoopbackDestinationError = (error: unknown): boolean => {
+  const message = collectErrorMessages(error).join(' ').toLowerCase();
+
+  return message.includes('invalid destination url') && message.includes('loopback');
+};
+
 const withSelfIterationPolicy = (
   options: AgentSignalEmitOptions,
   selfIterationEnabled: boolean,
@@ -156,15 +194,41 @@ export const enqueueAgentSignalSourceEvent = async <TSourceType extends AgentSig
     userId: context.userId,
   });
 
-  const trigger = await AgentSignalWorkflow.triggerRun({
-    agentId: context.agentId,
-    sourceEvent,
-    userId: context.userId,
-  });
+  try {
+    const trigger = await AgentSignalWorkflow.triggerRun({
+      agentId: context.agentId,
+      sourceEvent,
+      userId: context.userId,
+    });
 
-  return {
-    accepted: true,
-    scopeKey: sourceEvent.scopeKey,
-    workflowRunId: trigger.workflowRunId,
-  };
+    return {
+      accepted: true,
+      scopeKey: sourceEvent.scopeKey,
+      workflowRunId: trigger.workflowRunId,
+    };
+  } catch (error) {
+    const shouldFallbackToLocalRun =
+      process.env.NODE_ENV !== 'production' || isLoopbackDestinationError(error);
+
+    if (!shouldFallbackToLocalRun) throw error;
+
+    log('Workflow enqueue failed; falling back to in-process execution error=%O', error);
+
+    const { executeAgentSignalSourceEvent } = await import('./orchestrator');
+    const result = await executeAgentSignalSourceEvent(
+      sourceEvent,
+      {
+        agentId: context.agentId,
+        db,
+        userId: context.userId,
+      },
+      { ignoreError: true },
+    );
+
+    return {
+      accepted: !!result,
+      scopeKey: sourceEvent.scopeKey,
+      workflowRunId: result ? `local:${sourceEvent.sourceId}` : '',
+    };
+  }
 };

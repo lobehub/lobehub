@@ -10,6 +10,15 @@
     "title": "Add to Knowledge Base",
     "totalFiles": "{{count}} files selected"
   },
+  "addToKnowledgeBase.addSuccess": "ఫైల్ విజయవంతంగా జోడించబడింది",
+  "addToKnowledgeBase.alreadyExists": "ఈ ఫైల్ ఇప్పటికే లైబ్రరీలో ఉంది",
+  "addToKnowledgeBase.confirm": "జోడించు",
+  "addToKnowledgeBase.error": "లైబ్రరీకి ఫైల్‌ని జోడించడంలో విఫలమైంది",
+  "addToKnowledgeBase.id.placeholder": "దయచేసి జోడించడానికి లైబ్రరీని ఎంచుకోండి",
+  "addToKnowledgeBase.id.required": "దయచేసి లైబ్రరీని ఎంచుకోండి",
+  "addToKnowledgeBase.id.title": "లక్ష్య లైబ్రరీ",
+  "addToKnowledgeBase.title": "లైబ్రరీకి జోడించండి",
+  "addToKnowledgeBase.totalFiles": "{{count}} ఫైల్‌లు ఎంచుకోబడ్డాయి",
   "createNew": {
     "confirm": "Create New",
     "description": {
@@ -22,11 +31,26 @@
     },
     "title": "Create Knowledge Base"
   },
+  "createNew.confirm": "క్రొత్తదాన్ని సృష్టించండి",
+  "createNew.description.label": "లైబ్రరీ వివరణ (ఐచ్ఛికం)",
+  "createNew.description.placeholder": "వివరణ మీ లైబ్రరీని బాగా అర్థం చేసుకోవడానికి LLMకి సహాయపడుతుంది",
+  "createNew.edit.confirm": "మార్పులను సేవ్ చేయండి",
+  "createNew.edit.title": "లైబ్రరీని సవరించండి",
+  "createNew.formTitle": "ప్రాథమిక సమాచారం",
+  "createNew.name.placeholder": "లైబ్రరీ పేరు",
+  "createNew.name.required": "దయచేసి లైబ్రరీ పేరును నమోదు చేయండి",
+  "createNew.title": "కొత్త లైబ్రరీని సృష్టించండి",
+  "moveToKnowledgeBase.error": "ఫైల్‌ని లైబ్రరీకి తరలించడంలో విఫలమైంది",
+  "moveToKnowledgeBase.success": "ఫైల్ విజయవంతంగా తరలించబడింది",
   "tab": {
     "evals": "Evaluations",
     "files": "Documents",
     "settings": "Settings",
     "testing": "Recall Testing"
   },
+  "tab.evals": "మూల్యాంకనాలు",
+  "tab.files": "ఫైల్‌లు",
+  "tab.settings": "సెట్టింగ్‌లు",
+  "tab.testing": "రీకాల్ టెస్టింగ్",
   "title": "Knowledge Base"
 }

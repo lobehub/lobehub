@@ -6,6 +6,7 @@ import type { IToolDetector, ToolStatus } from '@/core/infrastructure/ToolDetect
 import { createCommandDetector } from '@/core/infrastructure/ToolDetectorManager';
 
 const execPromise = promisify(exec);
+const DETECTION_TIMEOUT_MS = 1500;
 
 /**
  * Node.js runtime detector
@@ -35,13 +36,15 @@ export const pythonDetector: IToolDetector = {
     for (const cmd of commands) {
       try {
         const whichCmd = platform() === 'win32' ? 'where' : 'which';
-        const { stdout: pathOut } = await execPromise(`${whichCmd} ${cmd}`, { timeout: 3000 });
+        const { stdout: pathOut } = await execPromise(`${whichCmd} ${cmd}`, {
+          timeout: DETECTION_TIMEOUT_MS,
+        });
         const toolPath = pathOut.trim().split('\n')[0];
 
         // Must successfully invoke --version to confirm usable runtime (e.g. avoid
         // Windows Microsoft Store alias which is found by where but fails to run)
         const { stdout: versionOut } = await execPromise(`${cmd} --version`, {
-          timeout: 3000,
+          timeout: DETECTION_TIMEOUT_MS,
         });
         const version = versionOut.trim().split('\n')[0];
 
@@ -107,14 +110,20 @@ export const lobehubDetector: IToolDetector = {
 
     for (const cmd of commands) {
       try {
-        const { stdout: pathOut } = await execPromise(`${whichCmd} ${cmd}`, { timeout: 3000 });
+        const { stdout: pathOut } = await execPromise(`${whichCmd} ${cmd}`, {
+          timeout: DETECTION_TIMEOUT_MS,
+        });
         const toolPath = pathOut.trim().split('\n')[0];
 
         // Validate it's actually ChinnaHub CLI by checking help output
-        const { stdout: helpOut } = await execPromise(`${cmd} --help`, { timeout: 3000 });
+        const { stdout: helpOut } = await execPromise(`${cmd} --help`, {
+          timeout: DETECTION_TIMEOUT_MS,
+        });
         if (!helpOut.includes('ChinnaHub')) continue;
 
-        const { stdout: versionOut } = await execPromise(`${cmd} --version`, { timeout: 3000 });
+        const { stdout: versionOut } = await execPromise(`${cmd} --version`, {
+          timeout: DETECTION_TIMEOUT_MS,
+        });
         const version = versionOut.trim().split('\n')[0];
 
         return { available: true, path: toolPath, version };

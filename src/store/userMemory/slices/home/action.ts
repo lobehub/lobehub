@@ -30,6 +30,7 @@ export class HomeActionImpl {
       isLogin ? FETCH_PERSONA_KEY : null,
       () => userMemoryService.getPersona(),
       {
+        dedupingInterval: 60_000,
         onSuccess: (data: PersonaData | null | undefined) => {
           this.#set(
             {
@@ -40,6 +41,8 @@ export class HomeActionImpl {
             n('useFetchPersona/onSuccess'),
           );
         },
+        revalidateOnFocus: false,
+        revalidateOnReconnect: false,
       },
     );
   };
@@ -53,6 +56,7 @@ export class HomeActionImpl {
           size: 64,
         }),
       {
+        dedupingInterval: 60_000,
         onSuccess: (data: QueryIdentityRolesResult | undefined) => {
           this.#set(
             {
@@ -64,6 +68,8 @@ export class HomeActionImpl {
             n('useFetchTags/onSuccess'),
           );
         },
+        revalidateOnFocus: false,
+        revalidateOnReconnect: false,
       },
     );
   };

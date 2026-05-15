@@ -1,4 +1,10 @@
 {
+  "actionTag.category.command": "ఆదేశం",
+  "actionTag.category.skill": "నైపుణ్యం",
+  "actionTag.category.tool": "సాధనం",
+  "actionTag.tooltip.command": "పంపే ముందు క్లయింట్-సైడ్ స్లాష్ కమాండ్‌ను అమలు చేస్తుంది.",
+  "actionTag.tooltip.skill": "ఈ అభ్యర్థన కోసం పునర్వినియోగ నైపుణ్య ప్యాకేజీని లోడ్ చేస్తుంది.",
+  "actionTag.tooltip.tool": "ఈ అభ్యర్థన కోసం వినియోగదారు స్పష్టంగా ఎంచుకున్న సాధనాన్ని గుర్తు చేస్తుంది.",
   "actions": {
     "expand": {
       "off": "కుదించు",
@@ -9,24 +15,69 @@
       "on": "ఫార్మాటింగ్ టూల్ బార్ చూపించు"
     }
   },
+  "actions.expand.off": "కుదించు",
+  "actions.expand.on": "విస్తరించు",
+  "actions.typobar.off": "ఫార్మాటింగ్ టూల్‌బార్‌ను దాచండి",
+  "actions.typobar.on": "ఫార్మాటింగ్ టూల్‌బార్‌ని చూపించు",
+  "autoSave.latest": "తాజా వెర్షన్ లోడ్ చేయబడింది",
+  "autoSave.saved": "సేవ్ చేయబడింది",
+  "autoSave.saving": "స్వీయ-పొదుపు...",
   "cancel": "రద్దు చేయి",
+  "codemirror.copyFailed": "కాపీ విఫలమైంది",
+  "codemirror.copySuccess": "కోడ్ క్లిప్‌బోర్డ్‌కి కాపీ చేయబడింది",
+  "codemirror.selectLanguage": "భాషను ఎంచుకోండి",
+  "codemirror.selectTheme": "థీమ్‌ని ఎంచుకోండి",
+  "codemirror.showLineNumbers": "పంక్తి సంఖ్యలను చూపు",
+  "codemirror.tabSize": "ట్యాబ్ పరిమాణం",
+  "codemirror.theme": "థీమ్",
+  "codemirror.useTabs": "ట్యాబ్‌లను ఉపయోగించండి",
   "confirm": "నిర్ధారించండి",
   "file": {
     "error": "లోపం: {{message}}",
     "uploading": "ఫైల్‌ని అప్‌లోడ్ చేస్తోంది..."
   },
+  "file.error": "లోపం: {{message}}",
+  "file.uploading": "ఫైల్‌ని అప్‌లోడ్ చేస్తోంది...",
   "image": {
     "broken": "చిత్రం పాడైంది"
   },
+  "image.broken": "చిత్రం పాడైంది",
   "link": {
     "edit": "లింక్‌ని సవరించండి",
     "open": "లింక్ తెరవండి",
     "placeholder": "లింక్‌ని నమోదు చేయండి URL",
     "unlink": "అన్‌లింక్ చేయండి"
   },
+  "link.edit": "లింక్‌ని సవరించండి",
+  "link.editLinkTitle": "లింక్",
+  "link.editTextTitle": "శీర్షిక",
+  "link.open": "లింక్ తెరవండి",
+  "link.placeholder": "లింక్ URLని నమోదు చేయండి",
+  "link.unlink": "అన్‌లింక్ చేయండి",
+  "markdown.cancel": "రద్దు చేయి",
+  "markdown.confirm": "మార్చు",
+  "markdown.parseMessage": "మార్క్‌డౌన్ ఆకృతికి మార్చండి. ఇప్పటికే ఉన్న కంటెంట్ ఓవర్‌రైట్ చేయబడుతుంది. మీరు ఖచ్చితంగా ఉన్నారా? (5 సెకన్లలో స్వయంచాలకంగా మూసివేయబడుతుంది)",
+  "markdown.parseTitle": "మార్క్‌డౌన్‌గా ఫార్మాట్ చేయండి",
   "math": {
     "placeholder": "దయచేసి TeX సూత్రాన్ని నమోదు చేయండి"
   },
+  "math.placeholder": "దయచేసి TeX సూత్రాన్ని నమోదు చేయండి",
+  "modifier.accept": "ఉంచండి",
+  "modifier.acceptAll": "అన్నీ ఉంచండి",
+  "modifier.reject": "తిరిగి మార్చు",
+  "modifier.rejectAll": "అన్నింటినీ తిరిగి మార్చండి",
+  "skillFrontmatter.edit": "మెటాడేటాను సవరించండి",
+  "skillFrontmatter.empty": "మెటాడేటా లేదు",
+  "skillFrontmatter.invalid.descriptionInvalid": "వివరణ తప్పనిసరిగా సింగిల్-లైన్ టెక్స్ట్ అయి ఉండాలి.",
+  "skillFrontmatter.invalid.descriptionRequired": "వివరణ అవసరం.",
+  "skillFrontmatter.invalid.mapping": "మొదటి విషయం తప్పనిసరిగా YAML మ్యాపింగ్ అయి ఉండాలి.",
+  "skillFrontmatter.invalid.nameInvalid": "పేరు తప్పనిసరిగా చిన్న అక్షరాలు, సంఖ్యలు మరియు హైఫన్‌లను ఉపయోగించాలి.",
+  "skillFrontmatter.invalid.nameLocked": "పేరు తప్పనిసరిగా {{name}} ఉండాలి. బదులుగా స్కిల్ బండిల్ పేరు మార్చండి.",
+  "skillFrontmatter.invalid.nameRequired": "పేరు అవసరం.",
+  "skillFrontmatter.invalid.required": "ముందు విషయం అవసరం.",
+  "skillFrontmatter.invalid.syntax": "చెల్లని YAML సింటాక్స్.",
+  "skillFrontmatter.saveFailed": "మెటాడేటా సేవ్ చేయబడలేదు. మళ్లీ ప్రయత్నించండి లేదా సవరించడం కొనసాగించండి.",
+  "skillFrontmatter.title": "నైపుణ్యం మెటాడేటా",
   "slash": {
     "h1": "హెడ్డింగ్ 1",
     "h2": "హెడ్డింగ్ 2",
@@ -35,6 +86,17 @@
     "table": "పట్టిక",
     "tex": "TeX ఫార్ములా"
   },
+  "slash.compact": "కాంపాక్ట్ సందర్భం",
+  "slash.h1": "హెడ్డింగ్ 1",
+  "slash.h2": "హెడ్డింగ్ 2",
+  "slash.h3": "శీర్షిక 3",
+  "slash.hr": "డివైడర్",
+  "slash.newTopic": "కొత్త టాపిక్ లో పంపండి",
+  "slash.rewrite": "తిరిగి వ్రాయండి",
+  "slash.summarize": "సంగ్రహించండి",
+  "slash.table": "పట్టిక",
+  "slash.tex": "TeX ఫార్ములా",
+  "slash.translate": "అనువదించు",
   "table": {
     "delete": "పట్టికను తొలగించండి",
     "deleteColumn": "నిలువు వరుసను తొలగించండి",
@@ -44,6 +106,13 @@
     "insertRowAbove": "పైన {{count}} అడ్డు వరుస(లు) చొప్పించండి",
     "insertRowBelow": "దిగువన {{count}} అడ్డు వరుస(లు) చొప్పించండి"
   },
+  "table.delete": "పట్టికను తొలగించండి",
+  "table.deleteColumn": "నిలువు వరుసను తొలగించండి",
+  "table.deleteRow": "అడ్డు వరుసను తొలగించండి",
+  "table.insertColumnLeft": "ఎడమవైపున {{count}} నిలువు వరుస(ల)ను చొప్పించండి",
+  "table.insertColumnRight": "{{count}} నిలువు వరుస(ల)ను కుడివైపున చొప్పించండి",
+  "table.insertRowAbove": "పైన {{count}} అడ్డు వరుస(లు)ని చొప్పించండి",
+  "table.insertRowBelow": "దిగువన {{count}} అడ్డు వరుస(లు) చొప్పించండి",
   "typobar": {
     "blockquote": "బ్లాక్‌కోట్",
     "bold": "బోల్డ్",
@@ -58,5 +127,21 @@
     "taskList": "టాస్క్ జాబితా",
     "tex": "TeX ఫార్ములా",
     "underline": "అండర్లైన్"
-  }
+  },
+  "typobar.blockquote": "బ్లాక్‌కోట్",
+  "typobar.bold": "బోల్డ్",
+  "typobar.bulletList": "బుల్లెట్ జాబితా",
+  "typobar.code": "ఇన్లైన్ కోడ్",
+  "typobar.codeblock": "కోడ్ బ్లాక్",
+  "typobar.image": "చిత్రం",
+  "typobar.italic": "ఇటాలిక్",
+  "typobar.link": "లింక్",
+  "typobar.numberList": "సంఖ్యా జాబితా",
+  "typobar.redo": "పునరావృతం చేయండి",
+  "typobar.strikethrough": "స్ట్రైక్‌త్రూ",
+  "typobar.table": "పట్టిక",
+  "typobar.taskList": "టాస్క్ జాబితా",
+  "typobar.tex": "TeX ఫార్ములా",
+  "typobar.underline": "అండర్లైన్",
+  "typobar.undo": "అన్డు"
 }

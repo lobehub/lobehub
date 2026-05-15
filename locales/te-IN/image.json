@@ -52,6 +52,35 @@
       "label": "వెడల్పు"
     }
   },
+  "config.aspectRatio.label": "కారక నిష్పత్తి",
+  "config.aspectRatio.lock": "కారక నిష్పత్తిని లాక్ చేయండి",
+  "config.aspectRatio.unlock": "అన్‌లాక్ యాస్పెక్ట్ రేషియో",
+  "config.cfg.label": "మార్గదర్శక తీవ్రత",
+  "config.header.desc": "సంక్షిప్త వివరణ, తక్షణమే సృష్టించండి",
+  "config.header.title": "చిత్రం",
+  "config.height.label": "ఎత్తు",
+  "config.imageNum.label": "చిత్రాల సంఖ్య",
+  "config.imageUrl.label": "సూచన చిత్రం",
+  "config.imageUrls.label": "సూచన చిత్రాలు",
+  "config.model.label": "మోడల్",
+  "config.prompt.placeholder": "మీరు ఏమి ఉత్పత్తి చేయాలనుకుంటున్నారో వివరించండి",
+  "config.prompt.placeholderWithRef": "మీరు చిత్రాన్ని ఎలా సర్దుబాటు చేయాలనుకుంటున్నారో వివరించండి",
+  "config.promptExtend.label": "ప్రాంప్ట్ పొడిగింపు",
+  "config.quality.label": "చిత్రం నాణ్యత",
+  "config.quality.options.hd": "హై డెఫినిషన్",
+  "config.quality.options.standard": "ప్రామాణికం",
+  "config.resolution.label": "రిజల్యూషన్",
+  "config.resolution.options.1K": "1K",
+  "config.resolution.options.2K": "2K",
+  "config.resolution.options.4K": "4K",
+  "config.seed.label": "విత్తనం",
+  "config.seed.random": "యాదృచ్ఛిక విత్తనం",
+  "config.size.label": "పరిమాణం",
+  "config.steps.label": "దశలు",
+  "config.title": "ఆకృతీకరణ",
+  "config.watermark.label": "వాటర్‌మార్క్",
+  "config.webSearch.label": "వెబ్ శోధన",
+  "config.width.label": "వెడల్పు",
   "generation": {
     "actions": {
       "applySeed": "సీడ్ వర్తించు",
@@ -81,6 +110,27 @@
       "generating": "Generating..."
     }
   },
+  "generation.actions.applySeed": "సీడ్ వర్తించు",
+  "generation.actions.copyError": "దోష సందేశాన్ని కాపీ చేయండి",
+  "generation.actions.copyPrompt": "ప్రాంప్ట్‌ని కాపీ చేయండి",
+  "generation.actions.copySeed": "కాపీ సీడ్",
+  "generation.actions.delete": "తొలగించు",
+  "generation.actions.deleteBatch": "బ్యాచ్‌ని తొలగించండి",
+  "generation.actions.download": "డౌన్‌లోడ్ చేయండి",
+  "generation.actions.downloadFailed": "చిత్రాన్ని డౌన్‌లోడ్ చేయడంలో విఫలమైంది. దయచేసి మీ నెట్‌వర్క్ కనెక్షన్ లేదా S3 నిల్వ CORS కాన్ఫిగరేషన్‌ని తనిఖీ చేయండి.",
+  "generation.actions.errorCopied": "ఎర్రర్ మెసేజ్ క్లిప్‌బోర్డ్‌కి కాపీ చేయబడింది",
+  "generation.actions.errorCopyFailed": "ఎర్రర్ సందేశాన్ని కాపీ చేయడంలో విఫలమైంది",
+  "generation.actions.generate": "సృష్టించు",
+  "generation.actions.promptCopied": "ప్రాంప్ట్ క్లిప్‌బోర్డ్‌కి కాపీ చేయబడింది",
+  "generation.actions.promptCopyFailed": "ప్రాంప్ట్‌ను కాపీ చేయడంలో విఫలమైంది",
+  "generation.actions.reuseSettings": "సెట్టింగ్‌లను మళ్లీ ఉపయోగించండి",
+  "generation.actions.seedApplied": "సీడ్ కాన్ఫిగరేషన్‌కు వర్తింపజేయబడింది",
+  "generation.actions.seedApplyFailed": "విత్తనాన్ని వర్తింపజేయడంలో విఫలమైంది",
+  "generation.actions.seedCopied": "సీడ్ క్లిప్‌బోర్డ్‌కి కాపీ చేయబడింది",
+  "generation.actions.seedCopyFailed": "విత్తనాన్ని కాపీ చేయడంలో విఫలమైంది",
+  "generation.metadata.count": "{{count}} చిత్రాలు",
+  "generation.status.failed": "జనరేషన్ విఫలమైంది",
+  "generation.status.generating": "ఉత్పత్తి చేస్తోంది...",
   "notSupportGuide": {
     "desc": "ప్రస్తుత విస్తరణ ఉదాహరణ క్లయింట్-సైడ్ డేటాబేస్ మోడ్‌ని ఉపయోగిస్తుంది మరియు AI ఇమేజ్ జనరేషన్‌కు మద్దతు ఇవ్వదు. దయచేసి <1>సర్వర్ వైపు డేటాబేస్ విస్తరణ మోడ్</1>కి మారండి లేదా నేరుగా <3>LobeChat Cloud</3>ని ఉపయోగించండి.",
     "features": {
@@ -99,6 +149,14 @@
     },
     "title": "ప్రస్తుత డిప్లాయ్‌మెంట్ మోడ్ AI ఇమేజ్ జనరేషన్‌కు మద్దతు ఇవ్వదు"
   },
+  "notSupportGuide.desc": "ప్రస్తుత విస్తరణ మోడ్ AI ఇమేజ్ జనరేషన్‌కు మద్దతు ఇవ్వదు. <1>సర్వర్ డేటాబేస్ డిప్లాయ్‌మెంట్ మోడ్‌</1>కి మారండి లేదా <3>LobeHub Cloud</3>ని ఉపయోగించండి.",
+  "notSupportGuide.features.fileIntegration.desc": "ఫైల్ మేనేజ్‌మెంట్ సిస్టమ్‌తో డీప్ ఇంటిగ్రేషన్; రూపొందించబడిన చిత్రాలు ఏకీకృత నిర్వహణ మరియు సంస్థ కోసం ఫైల్ సిస్టమ్‌కు స్వయంచాలకంగా సేవ్ చేయబడతాయి.",
+  "notSupportGuide.features.fileIntegration.title": "ఫైల్ సిస్టమ్ ఇంటిగ్రేషన్",
+  "notSupportGuide.features.llmAssisted.desc": "ప్రాంప్ట్‌లను తెలివిగా ఆప్టిమైజ్ చేయడానికి మరియు విస్తరింపజేయడానికి పెద్ద భాషా నమూనా సామర్థ్యాలను మిళితం చేస్తుంది, ఇమేజ్ ఉత్పత్తి నాణ్యతను పెంచుతుంది (త్వరలో వస్తుంది).",
+  "notSupportGuide.features.llmAssisted.title": "LLM-సహాయక చిత్ర జనరేషన్",
+  "notSupportGuide.features.multiProviders.desc": "అనేక రకాల మోడల్‌లను అందిస్తూ OpenAI gpt-image-1, Google Imagen, FAL.ai మరియు మరిన్నింటితో సహా బహుళ AI ఇమేజ్ జనరేషన్ ప్రొవైడర్‌లకు మద్దతు ఇస్తుంది.",
+  "notSupportGuide.features.multiProviders.title": "బహుళ ప్రొవైడర్ మద్దతు",
+  "notSupportGuide.title": "ప్రస్తుత డిప్లాయ్‌మెంట్ మోడ్ AI ఇమేజ్ జనరేషన్‌కు మద్దతు ఇవ్వదు",
   "topic": {
     "createNew": "కొత్త అంశం",
     "deleteConfirm": "జనరేషన్ అంశాన్ని తొలగించండి",
@@ -106,5 +164,11 @@
     "empty": "తరం అంశాలు లేవు",
     "title": "పెయింటింగ్ థీమ్",
     "untitled": "డిఫాల్ట్ అంశం"
-  }
+  },
+  "topic.createNew": "కొత్త అంశాన్ని సృష్టించండి",
+  "topic.deleteConfirm": "జనరేషన్ అంశాన్ని తొలగించండి",
+  "topic.deleteConfirmDesc": "మీరు ఈ తరం అంశాన్ని తొలగించబోతున్నారు. ఈ చర్య రద్దు చేయబడదు, దయచేసి జాగ్రత్తగా కొనసాగండి.",
+  "topic.empty": "తరం అంశాలు లేవు",
+  "topic.title": "చిత్ర అంశం",
+  "topic.untitled": "డిఫాల్ట్ అంశం"
 }

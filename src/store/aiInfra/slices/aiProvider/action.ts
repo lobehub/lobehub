@@ -242,6 +242,18 @@ type AiProviderRuntimeStateWithBuiltinModels = AiProviderRuntimeState & {
   enabledVideoModelList?: EnabledProviderWithModels[];
 };
 
+const modelBankBundlePromise = Promise.all([
+  import('model-bank'),
+  import('model-bank/modelProviders'),
+]);
+
+const loadModelBankBundle = async () => {
+  const [{ LOBE_DEFAULT_MODEL_LIST: builtinAiModelList }, { DEFAULT_MODEL_PROVIDER_LIST }] =
+    await modelBankBundlePromise;
+
+  return { DEFAULT_MODEL_PROVIDER_LIST, builtinAiModelList };
+};
+
 type Setter = StoreSetter<AiInfraStore>;
 export const createAiProviderSlice = (set: Setter, get: () => AiInfraStore, _api?: unknown) =>
   new AiProviderActionImpl(set, get, _api);
@@ -477,8 +489,7 @@ export class AiProviderActionImpl {
     return useClientDataSWR<AiProviderRuntimeStateWithBuiltinModels | undefined>(
       shouldFetch ? [AiProviderSwrKey.fetchAiProviderRuntimeState, isLogin] : null,
       async ([, isLogin]) => {
-        const [{ LOBE_DEFAULT_MODEL_LIST: builtinAiModelList }, { DEFAULT_MODEL_PROVIDER_LIST }] =
-          await Promise.all([import('model-bank'), import('model-bank/modelProviders')]);
+        const { DEFAULT_MODEL_PROVIDER_LIST, builtinAiModelList } = await loadModelBankBundle();
 
         if (isLogin) {
           const data = await aiProviderService.getAiProviderRuntimeState();
@@ -548,6 +559,7 @@ export class AiProviderActionImpl {
         };
       },
       {
+        dedupingInterval: 60_000,
         onSuccess: (data) => {
           if (!data) return;
 
@@ -566,6 +578,8 @@ export class AiProviderActionImpl {
             'useFetchAiProviderRuntimeState',
           );
         },
+        revalidateOnFocus: false,
+        revalidateOnReconnect: false,
       },
     );
   };

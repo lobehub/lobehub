@@ -1,30 +1,24 @@
 {
-  "Artifacts": "కళాఖండాలు",
-  "FilePreview": {
-    "tabs": {
-      "chunk": "చంక్",
-      "file": "ఫైల్"
-    }
-  },
+  "FilePreview.tabs.chunk": "చంక్",
+  "FilePreview.tabs.file": "ఫైల్",
   "Plugins": "ప్లగిన్లు",
-  "artifacts": {
-    "display": {
-      "code": "కోడ్",
-      "preview": "ప్రివ్యూ"
-    },
-    "svg": {
-      "copyAsImage": "చిత్రంగా కాపీ చేయండి",
-      "copyFail": "కాపీ విఫలమైంది, కారణం: {{error}}",
-      "copySuccess": "చిత్రం విజయవంతంగా కాపీ చేయబడింది",
-      "download": {
-        "png": "PNGగా డౌన్‌లోడ్ చేయండి",
-        "svg": "SVG వలె డౌన్‌లోడ్ చేయండి"
-      }
-    }
-  },
+  "artifacts.display.code": "కోడ్",
+  "artifacts.display.preview": "ప్రివ్యూ",
+  "artifacts.svg.copyAsImage": "చిత్రంగా కాపీ చేయండి",
+  "artifacts.svg.copyFail": "కాపీ విఫలమైంది: {{error}}. మళ్లీ ప్రయత్నించండి.",
+  "artifacts.svg.copySuccess": "చిత్రం విజయవంతంగా కాపీ చేయబడింది",
+  "artifacts.svg.download.png": "PNG గా డౌన్‌లోడ్ చేయండి",
+  "artifacts.svg.download.svg": "SVG గా డౌన్‌లోడ్ చేయండి",
+  "document.todos.allCompleted": "అన్ని పనులు పూర్తయ్యాయి",
+  "document.todos.title": "పనులు",
   "emptyArtifactList": "ప్రస్తుత కళాఖండాల జాబితా ఖాళీగా ఉంది. దయచేసి వీక్షించే ముందు అవసరమైన విధంగా సెషన్‌లో ప్లగిన్‌లను ఉపయోగించండి.",
   "emptyKnowledgeList": "ప్రస్తుత జ్ఞాన జాబితా ఖాళీగా ఉంది. దయచేసి వీక్షించే ముందు సంభాషణ సమయంలో అవసరమైన నాలెడ్జ్ బేస్‌ని ప్రారంభించండి.",
   "files": "ఫైల్‌లు",
   "messageDetail": "సందేశం వివరాలు",
+  "notebook.confirmDelete": "ఈ పేజీని తొలగించాలా?",
+  "notebook.delete": "తొలగించు",
+  "notebook.empty": "ఇంకా పేజీలు లేవు. ఈ విషయానికి సంబంధించిన పేజీలు ఇక్కడ చూపబడతాయి.",
+  "notebook.title": "నోట్బుక్",
+  "openInPageEditor": "పేజీలో సవరించండి",
   "title": "పోర్టల్ వీక్షణ"
 }
