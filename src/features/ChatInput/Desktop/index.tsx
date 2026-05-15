@@ -160,7 +160,7 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
           slashMenuRef={slashMenuRef}
           footer={
             <ChatInputActionBar
-              style={actionBarStyle ?? { paddingRight: 8 }}
+              style={actionBarStyle ?? { paddingBlock: 8, paddingRight: 8 }}
               left={
                 loadingLeftSlot ??
                 leftContent ?? (
