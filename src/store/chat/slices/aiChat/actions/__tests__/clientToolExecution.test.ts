@@ -309,15 +309,17 @@ describe('internal_executeClientTool', () => {
       await promise;
 
       expect(abort).toHaveBeenCalledTimes(1);
+      // Error message surfaces the budget so the LLM can adjust on retry.
       expect(sendToolResult).toHaveBeenCalledWith(
         expect.objectContaining({
-          error: expect.objectContaining({ type: 'client_executor_timeout' }),
+          error: expect.objectContaining({
+            message: expect.stringContaining('2000ms'),
+            type: 'client_executor_timeout',
+          }),
           success: false,
           toolCallId: 'call_1',
         }),
       );
-      // Error message surfaces the budget so the LLM can adjust on retry
-      expect(sendToolResult.mock.calls[0][0].error.message).toContain('2000ms');
     });
 
     it('does NOT trip the timeout when executor finishes before the deadline', async () => {

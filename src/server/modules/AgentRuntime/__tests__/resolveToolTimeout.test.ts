@@ -63,8 +63,8 @@ describe('resolveToolTimeoutMs', () => {
     expect(
       resolveToolTimeoutMs({
         apiName: 'runCommand',
-        // @ts-expect-error - intentionally invalid for runtime defense
-        args: { timeout: '240' },
+        // String value at runtime — defensive, the resolver should reject and fall through.
+        args: { timeout: '240' } as unknown as Record<string, unknown>,
         manifest,
       }),
     ).toBe(45_000);
