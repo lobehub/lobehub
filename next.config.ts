@@ -26,6 +26,15 @@ const vercelConfig = {
   turbopack: {
     root: __dirname,
   },
+  webpack: (config, { dev }) => {
+    if (!dev && config.cache) {
+      config.cache = Object.freeze({
+        type: 'memory',
+      });
+    }
+
+    return config;
+  },
 };
 const nextConfig = defineConfig({
   ...(isVercel ? vercelConfig : {}),
