@@ -220,6 +220,7 @@ describe('tool outcome procedure handler', () => {
         accumulator: createSelfReflectionAccumulator(),
         getWindowStart: ({ decision }) => decision.windowStart ?? 'missing-window-start',
         service: { requestSelfReflection },
+        userId: 'user-1',
       },
       ttlSeconds: 3600,
     });
@@ -268,6 +269,61 @@ describe('tool outcome procedure handler', () => {
 
   /**
    * @example
+   * workflow-built tool outcome sources can trigger self-reflection without a hydrated source scope.
+   */
+  it('uses self-reflection wiring user id when workflow source has no scope', async () => {
+    const requestSelfReflection = vi.fn(async () => ({ enqueued: true, sourceId: 'reflect-1' }));
+    const handler = createToolOutcomeSourceHandler({
+      accumulator: { appendRecord: async () => {} },
+      markerStore: { write: async () => {} },
+      now: () => 100,
+      receiptStore: { append: async () => {} },
+      recordStore: { write: async () => {} },
+      selfReflection: {
+        accumulator: createSelfReflectionAccumulator(),
+        getWindowStart: ({ decision }) => decision.windowStart ?? 'missing-window-start',
+        service: { requestSelfReflection },
+        userId: 'user-from-workflow',
+      },
+      ttlSeconds: 3600,
+    });
+    const createFailedSource = (sourceId: string, timestamp: number) =>
+      ({
+        chain: { chainId: `chain:${sourceId}`, rootSourceId: sourceId },
+        payload: {
+          agentId: 'agent-1',
+          domainKey: 'skill:market-skill',
+          intentClass: 'tool_command',
+          operationId: 'operation-1',
+          outcome: { action: 'import', errorReason: 'network', status: 'failed' },
+          tool: { apiName: 'importFromMarket', identifier: 'lobe-skill-store' },
+          topicId: 'topic-1',
+        },
+        scopeKey: 'topic:topic-1',
+        sourceId,
+        sourceType: AGENT_SIGNAL_SOURCE_TYPES.toolOutcomeFailed,
+        timestamp,
+      }) as SourceToolOutcomeFailed;
+
+    await handler.handle(createFailedSource('source_failed_no_scope_1', 2000), {
+      now: () => 2000,
+      scopeKey: 'topic:topic-1',
+    } as never);
+    await handler.handle(createFailedSource('source_failed_no_scope_2', 3000), {
+      now: () => 3000,
+      scopeKey: 'topic:topic-1',
+    } as never);
+
+    expect(requestSelfReflection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reason: 'same_tool_failure_count',
+        userId: 'user-from-workflow',
+      }),
+    );
+  });
+
+  /**
+   * @example
    * a single completed outcome stays below self-reflection thresholds.
    */
   it('does not request self-reflection for one completed outcome below threshold', async () => {
@@ -282,6 +338,7 @@ describe('tool outcome procedure handler', () => {
         accumulator: createSelfReflectionAccumulator(),
         getWindowStart: () => '2026-05-04T00:00:00.000Z',
         service: { requestSelfReflection },
+        userId: 'user-1',
       },
       ttlSeconds: 3600,
     });
@@ -332,6 +389,7 @@ describe('tool outcome procedure handler', () => {
         accumulator: createSelfReflectionAccumulator(),
         getWindowStart: () => '2026-05-04T00:00:00.000Z',
         service: { requestSelfReflection },
+        userId: 'user-1',
       },
       ttlSeconds: 3600,
     });
@@ -396,6 +454,7 @@ describe('tool outcome procedure handler', () => {
         accumulator: createSelfReflectionAccumulator(),
         getWindowStart: () => '2026-05-04T00:00:00.000Z',
         service: { requestSelfReflection },
+        userId: 'user-1',
       },
       ttlSeconds: 3600,
     });

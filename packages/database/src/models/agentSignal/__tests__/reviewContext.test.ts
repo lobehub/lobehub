@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { INBOX_SESSION_ID } from '@lobechat/const';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
@@ -25,6 +26,83 @@ beforeEach(async () => {
 });
 
 describe('AgentSignalReviewContextModel', () => {
+  describe('canAgentRunSelfIteration', () => {
+    /**
+     * @example
+     * await expect(model.canAgentRunSelfIteration('agent-signal-review-context-inbox')).resolves.toBe(true).
+     */
+    it('allows inbox Lobe AI even when virtual and selfIteration chat config is absent', async () => {
+      await serverDB.insert(users).values({ id: userId });
+      await serverDB.insert(agents).values({
+        id: 'agent-signal-review-context-inbox',
+        slug: INBOX_SESSION_ID,
+        title: 'Lobe AI',
+        userId,
+        virtual: true,
+      });
+
+      const model = new AgentSignalReviewContextModel(serverDB, userId);
+
+      await expect(
+        model.canAgentRunSelfIteration('agent-signal-review-context-inbox'),
+      ).resolves.toBe(true);
+    });
+
+    /**
+     * @example
+     * await expect(model.canAgentRunSelfIteration('agent-signal-review-context-task')).resolves.toBe(false).
+     */
+    it('does not allow non-inbox virtual agents without selfIteration chat config', async () => {
+      await serverDB.insert(users).values({ id: userId });
+      await serverDB.insert(agents).values({
+        id: 'agent-signal-review-context-task',
+        slug: 'task-agent',
+        title: 'Task Agent',
+        userId,
+        virtual: true,
+      });
+
+      const model = new AgentSignalReviewContextModel(serverDB, userId);
+
+      await expect(
+        model.canAgentRunSelfIteration('agent-signal-review-context-task'),
+      ).resolves.toBe(false);
+    });
+
+    /**
+     * @example
+     * await expect(model.canAgentRunSelfIteration('agent-signal-review-context-enabled')).resolves.toBe(true).
+     */
+    it('keeps non-Lobe AI agents behind chatConfig.selfIteration.enabled', async () => {
+      await serverDB.insert(users).values({ id: userId });
+      await serverDB.insert(agents).values([
+        {
+          chatConfig: { autoCreateTopicThreshold: 2, selfIteration: { enabled: true } },
+          id: 'agent-signal-review-context-enabled',
+          slug: 'custom-agent',
+          title: 'Custom enabled',
+          userId,
+        },
+        {
+          chatConfig: { autoCreateTopicThreshold: 2, selfIteration: { enabled: false } },
+          id: 'agent-signal-review-context-disabled',
+          slug: 'custom-disabled',
+          title: 'Custom disabled',
+          userId,
+        },
+      ]);
+
+      const model = new AgentSignalReviewContextModel(serverDB, userId);
+
+      await expect(
+        model.canAgentRunSelfIteration('agent-signal-review-context-enabled'),
+      ).resolves.toBe(true);
+      await expect(
+        model.canAgentRunSelfIteration('agent-signal-review-context-disabled'),
+      ).resolves.toBe(false);
+    });
+  });
+
   describe('listToolActivity', () => {
     it('groups tool activity by identifier and api name with clipped samples', async () => {
       await serverDB.insert(users).values({ id: userId });

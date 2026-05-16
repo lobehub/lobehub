@@ -1,5 +1,13 @@
 [
   {
+    "children": {
+      "fixes": ["hide runtime-only model aliases."],
+      "features": ["set OSS default model to DeepSeek V4 Pro."]
+    },
+    "date": "2026-05-09",
+    "version": "2.1.57"
+  },
+  {
     "children": {},
     "date": "2026-05-01",
     "version": "2.1.56"

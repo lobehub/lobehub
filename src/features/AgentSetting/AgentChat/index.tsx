@@ -16,13 +16,6 @@ const AgentChat = memo(() => {
   const [form] = Form.useForm();
   const updateConfig = useStore((s) => s.setChatConfig);
   const config = useStore(selectors.currentChatConfig, isEqual);
-  const initialValues = {
-    ...config,
-    selfIteration: {
-      ...config.selfIteration,
-      enabled: config.selfIteration?.enabled ?? false,
-    },
-  };
 
   const chat: FormGroupItemType = {
     children: [
@@ -81,27 +74,12 @@ const AgentChat = memo(() => {
     title: t('settingChat.title'),
   };
 
-  const selfIteration: FormGroupItemType = {
-    children: [
-      {
-        children: <Switch />,
-        desc: t('settingChat.selfIteration.enabled.desc'),
-        label: t('settingChat.selfIteration.enabled.title'),
-        layout: 'horizontal',
-        minWidth: undefined,
-        name: ['selfIteration', 'enabled'],
-        valuePropName: 'checked',
-      },
-    ],
-    title: t('settingChat.selfIteration.title'),
-  };
-
   return (
     <Form
       footer={<Form.SubmitFooter />}
       form={form}
-      initialValues={initialValues}
-      items={[chat, selfIteration]}
+      initialValues={config}
+      items={[chat]}
       itemsType={'group'}
       variant={'borderless'}
       onFinish={updateConfig}

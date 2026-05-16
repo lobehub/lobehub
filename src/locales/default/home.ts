@@ -7,8 +7,9 @@ export default {
   'brief.action.acknowledge': 'Acknowledge',
   'brief.action.approve': 'Approve',
   'brief.action.confirm': 'Confirm',
-  'brief.action.confirmDone': 'Confirm',
+  'brief.action.confirmDone': 'Confirm complete',
   'brief.action.feedback': 'Feedback',
+  'brief.action.ignore': 'Ignore',
   'brief.action.retry': 'Retry',
   'brief.collapse': 'Show less',
   'brief.commentPlaceholder': 'Share your feedback...',
@@ -27,6 +28,12 @@ export default {
   'project.create': 'New project',
   'project.deleteConfirm':
     "This project will be deleted and can't be recovered. Confirm to continue.",
+  'recommendations.heteroAgent.cta': 'Add Agent',
+  'recommendations.heteroAgent.description':
+    'Detected the {{name}} CLI on this device — add {{name}} agent to chat with it from LobeHub.',
+  'recommendations.heteroAgent.tag': 'Coding Agent',
+  'recommendations.heteroAgent.title': 'Add {{name}} agent',
+  'recommendations.subtitle': 'Some recommendations for your setup',
   'starter.createAgent': 'Create Agent',
   'starter.createGroup': 'Create Group',
   'starter.deepResearch': 'Deep Research',

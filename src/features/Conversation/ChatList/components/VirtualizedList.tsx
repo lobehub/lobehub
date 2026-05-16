@@ -1,7 +1,7 @@
 'use client';
 
 import isEqual from 'fast-deep-equal';
-import type { ReactElement, ReactNode } from 'react';
+import type { KeyboardEvent, PointerEvent, ReactElement, ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { VListHandle } from 'virtua';
 import { VList } from 'virtua';
@@ -29,8 +29,13 @@ import DebugInspector, { OPEN_DEV_INSPECTOR } from './AutoScroll/DebugInspector'
 import { useAutoScrollEnabled } from './AutoScroll/useAutoScrollEnabled';
 import BackBottom from './BackBottom';
 
+const CONVERSATION_FOOTER_ID = '__conversation_footer__';
+const USER_SCROLL_INTENT_TTL_MS = 500;
+const SCROLL_KEYS = new Set(['ArrowDown', 'ArrowUp', 'End', 'Home', 'PageDown', 'PageUp', ' ']);
+
 interface VirtualizedListProps {
   dataSource: string[];
+  footerSlot?: ReactNode;
   itemContent: (index: number, data: string) => ReactNode;
 }
 
@@ -39,9 +44,10 @@ interface VirtualizedListProps {
  *
  * Based on ConversationStore data flow, no dependency on global ChatStore.
  */
-const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent }) => {
+const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, footerSlot, itemContent }) => {
   const virtuaRef = useRef<VListHandle>(null);
   const scrollEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastUserScrollIntentAtRef = useRef(0);
 
   // Per-topic scroll restoration. Provider does not remount on topic switch,
   // so we key the scroll snapshot by the message-map key derived from
@@ -81,6 +87,28 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
   const setActiveIndex = useConversationStore((s) => s.setActiveIndex);
   const activeIndex = useConversationStore(virtuaListSelectors.activeIndex);
 
+  const markUserScrollIntent = useCallback(() => {
+    lastUserScrollIntentAtRef.current = Date.now();
+  }, []);
+
+  const handlePointerMove = useCallback(
+    (event: PointerEvent<HTMLDivElement>) => {
+      if (event.buttons > 0) {
+        markUserScrollIntent();
+      }
+    },
+    [markUserScrollIntent],
+  );
+
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      if (SCROLL_KEYS.has(event.key)) {
+        markUserScrollIntent();
+      }
+    },
+    [markUserScrollIntent],
+  );
+
   // Check if at bottom based on scroll position
   const checkAtBottom = useCallback(() => {
     const ref = virtuaRef.current;
@@ -110,7 +138,9 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
     // Shrink spacer on scroll up when not streaming
     const ref = virtuaRef.current;
     if (ref) {
-      onScrollOffset(ref.scrollOffset);
+      const hasUserScrollIntent =
+        Date.now() - lastUserScrollIntentAtRef.current <= USER_SCROLL_INTENT_TTL_MS;
+      onScrollOffset(ref.scrollOffset, hasUserScrollIntent);
     }
 
     // Check if at bottom
@@ -145,6 +175,7 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
         getItemSize: (index) => ref.getItemSize(index),
         getScrollOffset: () => ref.scrollOffset,
         getScrollSize: () => ref.scrollSize,
+        getTotalCount: () => totalCountRef.current,
         getViewportSize: () => ref.viewportSize,
         scrollTo: (offset) => ref.scrollTo(offset),
         scrollToIndex: (index, options) => ref.scrollToIndex(index, options),
@@ -213,13 +244,31 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
   const overlayHeight = useConversationStore(inputSelectors.chatInputOverlayHeight);
   const paddingBottom = Math.max(24, overlayHeight + 12);
 
+  const dataWithFooter = useMemo(
+    () => (footerSlot ? [...listData, CONVERSATION_FOOTER_ID] : listData),
+    [listData, footerSlot],
+  );
+
+  // Mirror the latest data length into a ref so the scroll-methods registered
+  // once on mount can read the current total count (including spacer/footer)
+  // without re-registering on every render.
+  const totalCountRef = useRef(dataWithFooter.length);
+  totalCountRef.current = dataWithFooter.length;
+
   return (
-    <div style={{ height: '100%', position: 'relative' }}>
+    <div
+      style={{ height: '100%', position: 'relative' }}
+      onKeyDownCapture={handleKeyDown}
+      onPointerDownCapture={markUserScrollIntent}
+      onPointerMoveCapture={handlePointerMove}
+      onTouchMoveCapture={markUserScrollIntent}
+      onWheelCapture={markUserScrollIntent}
+    >
       {/* Debug Inspector - placed outside VList so it won't be recycled by the virtual list */}
       {OPEN_DEV_INSPECTOR && <DebugInspector />}
       <VList
         bufferSize={typeof window !== 'undefined' ? window.innerHeight : 0}
-        data={listData}
+        data={dataWithFooter}
         keepMounted={keepMountedIndices}
         ref={virtuaRef}
         style={{ height: '100%', overflowAnchor: 'none', paddingBottom }}
@@ -227,6 +276,13 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
         onScrollEnd={handleScrollEnd}
       >
         {(messageId, index): ReactElement => {
+          if (messageId === CONVERSATION_FOOTER_ID) {
+            return (
+              <WideScreenContainer key={messageId} style={{ position: 'relative' }}>
+                {footerSlot}
+              </WideScreenContainer>
+            );
+          }
           if (isSpacerMessage(messageId)) {
             // Only animate the collapse-to-zero (unmount). Any non-zero height
             // change (initial mount, shrink as assistant grows) is applied

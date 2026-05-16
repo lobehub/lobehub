@@ -8,7 +8,6 @@ import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { CredsManifest } from '@lobechat/builtin-tool-creds';
 import { GroupAgentBuilderManifest } from '@lobechat/builtin-tool-group-agent-builder';
 import { GroupManagementManifest } from '@lobechat/builtin-tool-group-management';
-import { GTDManifest } from '@lobechat/builtin-tool-gtd';
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
@@ -16,7 +15,7 @@ import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { MessageManifest } from '@lobechat/builtin-tool-message';
 import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
-import { selfIterationIntentManifest } from '@lobechat/builtin-tool-self-iteration';
+import { selfFeedbackIntentManifest } from '@lobechat/builtin-tool-self-iteration';
 import { SkillMaintainerManifest } from '@lobechat/builtin-tool-skill-maintainer';
 import { SkillStoreManifest } from '@lobechat/builtin-tool-skill-store';
 import { SkillsManifest } from '@lobechat/builtin-tool-skills';
@@ -25,7 +24,6 @@ import { TopicReferenceManifest } from '@lobechat/builtin-tool-topic-reference';
 import { UserInteractionManifest } from '@lobechat/builtin-tool-user-interaction';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { WebOnboardingManifest } from '@lobechat/builtin-tool-web-onboarding';
-import { AgentMarketplaceManifest } from '@lobechat/builtin-tool-web-onboarding/agentMarketplace';
 import { isDesktop, RECOMMENDED_SKILLS, RecommendedSkillType } from '@lobechat/const';
 import { type LobeBuiltinTool } from '@lobechat/types';
 
@@ -44,7 +42,6 @@ export const defaultToolIds = [
   CloudSandboxManifest.identifier,
   TopicReferenceManifest.identifier,
   AgentDocumentsManifest.identifier,
-  GTDManifest.identifier,
   TaskManifest.identifier,
   LobeAgentManifest.identifier,
 ];
@@ -67,6 +64,24 @@ export const alwaysOnToolIds = [
 export const manualModeExcludeToolIds = [
   LobeActivatorManifest.identifier,
   SkillStoreManifest.identifier,
+];
+
+/**
+ * Tool IDs allowed when the agent runs in chat mode
+ * (`chatConfig.enableAgentMode === false`). Each one still passes through
+ * its own runtime gate (e.g. knowledge base requires `hasEnabledKnowledgeBases`,
+ * memory requires the global memory setting, web-browsing requires search
+ * enabled) — this list is the strict outer whitelist.
+ *
+ * In chat mode, both the server `createServerAgentToolsEngine` and the
+ * frontend `createAgentToolsEngine` build their rules from ONLY these
+ * identifiers, drop user plugins / `alwaysOnToolIds` entirely, and disable
+ * `allowExplicitActivation` so the activator can't smuggle other tools in.
+ */
+export const chatModeAllowedToolIds = [
+  KnowledgeBaseManifest.identifier,
+  MemoryManifest.identifier,
+  WebBrowsingManifest.identifier,
 ];
 
 /**
@@ -124,8 +139,8 @@ export const builtinTools: LobeBuiltinTool[] = [
   {
     discoverable: false,
     hidden: true,
-    identifier: selfIterationIntentManifest.identifier,
-    manifest: selfIterationIntentManifest,
+    identifier: selfFeedbackIntentManifest.identifier,
+    manifest: selfFeedbackIntentManifest,
     type: 'builtin',
   },
   {
@@ -204,11 +219,6 @@ export const builtinTools: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
-    identifier: GTDManifest.identifier,
-    manifest: GTDManifest,
-    type: 'builtin',
-  },
-  {
     identifier: CalculatorManifest.identifier,
     manifest: CalculatorManifest,
     type: 'builtin',
@@ -246,15 +256,6 @@ export const builtinTools: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
-    discoverable: false,
-    hidden: true,
-    identifier: AgentMarketplaceManifest.identifier,
-    manifest: AgentMarketplaceManifest,
-    type: 'builtin',
-  },
-  {
-    discoverable: false,
-    hidden: true,
     identifier: TaskManifest.identifier,
     manifest: TaskManifest,
     type: 'builtin',

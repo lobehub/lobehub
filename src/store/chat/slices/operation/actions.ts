@@ -50,23 +50,33 @@ export class OperationActionsImpl {
     if (context?.operationId) {
       const operation = this.#get().operations[context.operationId];
       if (!operation) {
+        // The op was already cleaned up (e.g. completed CC turn whose
+        // runtime_end fired and was GC'd 30s later), but a late caller
+        // — typically a long-lived intervention surface — still carries
+        // the opId. Throwing here would tear down the optimistic write
+        // and any follow-up IPC the caller was about to perform, so we
+        // degrade to the global-state fallback and log loudly.
         log(
-          '[internal_getConversationContext] ERROR: Operation not found: %s',
+          '[internal_getConversationContext] WARNING: Operation not found, falling back to global state: %s',
           context.operationId,
         );
-        throw new Error(`Operation not found: ${context.operationId}`);
+        console.warn(
+          '[internal_getConversationContext] operation not found, using global state:',
+          context.operationId,
+        );
+      } else {
+        const { agentId, topicId, threadId, scope, isNew, groupId } = operation.context;
+        log(
+          '[internal_getConversationContext] get from operation %s: agentId=%s, topicId=%s, threadId=%s, scope=%s, groupId=%s',
+          context.operationId,
+          agentId,
+          topicId,
+          threadId,
+          scope,
+          groupId,
+        );
+        return { agentId: agentId!, topicId, threadId, scope, isNew, groupId };
       }
-      const { agentId, topicId, threadId, scope, isNew, groupId } = operation.context;
-      log(
-        '[internal_getConversationContext] get from operation %s: agentId=%s, topicId=%s, threadId=%s, scope=%s, groupId=%s',
-        context.operationId,
-        agentId,
-        topicId,
-        threadId,
-        scope,
-        groupId,
-      );
-      return { agentId: agentId!, topicId, threadId, scope, isNew, groupId };
     }
 
     // Fallback to global state
@@ -606,12 +616,15 @@ export class OperationActionsImpl {
             }
           }
 
-          // Remove from messageOperationMap
-          const messageEntry = Object.entries(state.messageOperationMap).find(
-            ([, opId]) => opId === operationId,
-          );
-          if (messageEntry) {
-            delete state.messageOperationMap[messageEntry[0]];
+          // Remove EVERY messageOperationMap entry pointing to this opId.
+          // Assistant + tool messages from the same turn often map to the
+          // same operation; the previous `find` + single-delete left
+          // dangling references behind, which `submitHeteroIntervention`
+          // later read back as a stale opId and threw on lookup.
+          for (const [messageId, opId] of Object.entries(state.messageOperationMap)) {
+            if (opId === operationId) {
+              delete state.messageOperationMap[messageId];
+            }
           }
         });
       }),

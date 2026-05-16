@@ -12,11 +12,27 @@ import WorkflowCollapse from './WorkflowCollapse';
 let mockIsGenerating = true;
 
 vi.mock('@lobehub/ui', () => ({
-  Accordion: ({ children, expandedKeys }: { children?: ReactNode; expandedKeys?: string[] }) => (
-    <div data-expanded-keys={JSON.stringify(expandedKeys ?? [])} data-testid="workflow-accordion">
-      {children}
-    </div>
-  ),
+  Accordion: ({
+    children,
+    expandedKeys,
+    onExpandedChange,
+  }: {
+    children?: ReactNode;
+    expandedKeys?: string[];
+    onExpandedChange?: (keys: string[]) => void;
+  }) => {
+    const isExpanded = (expandedKeys ?? []).includes('workflow');
+    return (
+      <div data-expanded-keys={JSON.stringify(expandedKeys ?? [])} data-testid="workflow-accordion">
+        <button
+          aria-label="toggle-accordion-header"
+          type="button"
+          onClick={() => onExpandedChange?.(isExpanded ? [] : ['workflow'])}
+        />
+        {children}
+      </div>
+    );
+  },
   AccordionItem: ({
     action,
     children,
@@ -291,6 +307,35 @@ describe('WorkflowCollapse', () => {
     expect(getExpandedKeys()).toBe('[]');
     expect(screen.queryByRole('button', { name: 'Expand fully' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Collapse' })).not.toBeInTheDocument();
+
+    act(() => {
+      screen.getByRole('button', { name: 'toggle-accordion-header' }).click();
+    });
+
+    expect(getExpandedKeys()).toBe('["workflow"]');
+    expect(screen.getByRole('button', { name: 'Expand fully' })).toBeInTheDocument();
+  });
+
+  it('manual expand jumps to full when any phase defaults to full (heterogeneous agents)', () => {
+    mockIsGenerating = false;
+    render(
+      <WorkflowCollapse
+        assistantMessageId="msg-1"
+        blocks={makeBlocks({ result: { content: 'ok' } })}
+        defaultWorkflowExpandLevel={{ streaming: 'full' }}
+      />,
+    );
+
+    // Completion default falls back to 'collapsed' since only streaming is overridden.
+    expect(getExpandedKeys()).toBe('[]');
+
+    act(() => {
+      screen.getByRole('button', { name: 'toggle-accordion-header' }).click();
+    });
+
+    expect(getExpandedKeys()).toBe('["workflow"]');
+    // The toggle next to the header would offer "collapse" because we landed at 'full' directly.
+    expect(screen.getByRole('button', { name: 'Collapse' })).toBeInTheDocument();
   });
 
   it('collapses to collapsed when accordion header is clicked from full', () => {

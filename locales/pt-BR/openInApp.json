@@ -1,0 +1,8 @@
+{
+  "dropdownLabel": "Abrir diretório de trabalho em",
+  "errors.appNotInstalled": "{{appName}} não está instalado",
+  "errors.launchFailed": "Falha ao abrir em {{appName}}: {{error}}",
+  "errors.pathNotFound": "Caminho não encontrado: {{path}}",
+  "errors.unknown": "erro desconhecido",
+  "tooltip": "Abrir em {{appName}}"
+}

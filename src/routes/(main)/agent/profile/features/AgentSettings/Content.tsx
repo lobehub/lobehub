@@ -5,6 +5,7 @@ import { type ItemType } from 'antd/es/menu/interface';
 import { useTheme } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import {
+  ActivityIcon,
   BookTextIcon,
   BrainIcon,
   MessageSquareHeartIcon,
@@ -21,6 +22,7 @@ import { AgentSettings as Settings } from '@/features/AgentSetting';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { ChatSettingsTabs } from '@/store/global/initialState';
+import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 const Content = memo(() => {
   const { t } = useTranslation('setting');
@@ -31,6 +33,7 @@ const Content = memo(() => {
   );
   const config = useAgentStore(agentSelectors.currentAgentConfig, isEqual);
   const meta = useAgentStore(agentSelectors.currentAgentMeta, isEqual);
+  const { enableAgentSelfIteration } = useServerConfigStore(featureFlagsSelectors);
   const [tab, setTab] = useState(isInbox ? ChatSettingsTabs.Modal : ChatSettingsTabs.Meta);
 
   const updateAgentConfig = async (config: any) => {
@@ -75,8 +78,15 @@ const Content = memo(() => {
           key: ChatSettingsTabs.Modal,
           label: t('agentTab.modal'),
         },
+        enableAgentSelfIteration
+          ? {
+              icon: <Icon icon={ActivityIcon} />,
+              key: ChatSettingsTabs.SelfIteration,
+              label: t('agentTab.selfIteration'),
+            }
+          : null,
       ].filter(Boolean) as ItemType[],
-    [t, isInbox],
+    [t, isInbox, enableAgentSelfIteration],
   );
 
   const displayTitle = isInbox ? 'Lobe AI' : meta.title || t('defaultSession', { ns: 'common' });

@@ -174,6 +174,12 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
     );
     const streamingInitialLevel: WorkflowExpandLevel = streamingDefault ?? 'semi';
     const completionInitialLevel: WorkflowExpandLevel = completionDefault ?? 'collapsed';
+    /** When a consumer opts any phase into `full`, treat the workflow as a
+     *  "fully expanded" experience — manual expands from collapsed go to
+     *  `full` instead of the legacy `semi` cap. Heterogeneous agents rely on
+     *  this so all 40+ tool calls stay visible after the user re-expands. */
+    const manualExpandLevel: WorkflowExpandLevel =
+      streamingDefault === 'full' || completionDefault === 'full' ? 'full' : 'semi';
 
     const [expandLevel, setExpandLevel] = useState<WorkflowExpandLevel>(() =>
       allComplete ? completionInitialLevel : streamingInitialLevel,
@@ -308,13 +314,13 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
         if (forceExpanded && !nowExpanded) return;
 
         if (nowExpanded) {
-          setExpandLevel('semi');
+          setExpandLevel(manualExpandLevel);
           userOpenedRef.current = true;
         } else {
           setExpandLevel('collapsed');
         }
       },
-      [forceExpanded],
+      [forceExpanded, manualExpandLevel],
     );
     const expandedKeys = useMemo(() => (isExpanded ? ['workflow'] : []), [isExpanded]);
     const constrained = expandLevel === 'semi';

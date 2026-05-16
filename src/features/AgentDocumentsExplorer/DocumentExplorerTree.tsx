@@ -12,7 +12,7 @@ import type {
   ExplorerTreeHandle,
   ExplorerTreeNode,
 } from '@/features/ExplorerTree';
-import { ExplorerTree } from '@/features/ExplorerTree';
+import { ExplorerTree, FOLDER_ICON_CSS } from '@/features/ExplorerTree';
 import { useChatStore } from '@/store/chat';
 
 import DocumentExplorerToolbar from './DocumentExplorerToolbar';
@@ -99,6 +99,10 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
       })),
     [documents, resolveParentRowId],
   );
+  const defaultExpandedIds = useMemo(
+    () => nodes.filter((node) => node.isFolder && node.parentId == null).map((node) => node.id),
+    [nodes],
+  );
 
   const parentMap = useMemo(() => {
     const map = new Map<string, string | null>();
@@ -111,13 +115,21 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
     [documents],
   );
 
+  const focusNewRowForRename = useCallback((pendingId: string) => {
+    // Defer past the current task so React commits the inserted row and the
+    // tree adapter rebuilds its id→path map before we trigger rename.
+    setTimeout(() => treeRef.current?.startRenaming(pendingId), 0);
+  }, []);
+
   const handleCreateFolder = useCallback(
-    (parentId: string | null) => ops.createFolder(parentId),
-    [ops],
+    (parentId: string | null) =>
+      ops.createFolder(parentId, { onPendingInserted: focusNewRowForRename }),
+    [focusNewRowForRename, ops],
   );
   const handleCreateDocument = useCallback(
-    (parentId: string | null) => ops.createDocument(parentId),
-    [ops],
+    (parentId: string | null) =>
+      ops.createDocument(parentId, { onPendingInserted: focusNewRowForRename }),
+    [focusNewRowForRename, ops],
   );
 
   const handleNodeClick = useCallback(
@@ -225,14 +237,18 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
   return (
     <div className={styles.tree} style={style}>
       <ExplorerTree<AgentDocumentItem>
+        iconsColored
         canDrag={canDrag}
         canDrop={canDrop}
         canRename={canRename}
-        density="relaxed"
+        defaultExpandedIds={defaultExpandedIds}
+        density="compact"
         getContextMenuItems={getContextMenuItems}
+        iconSet="complete"
         nodes={nodes}
         ref={treeRef}
         style={{ height: '100%' }}
+        unsafeCSS={FOLDER_ICON_CSS}
         header={
           <DocumentExplorerToolbar
             onCreateDocument={() => handleCreateDocument(null)}

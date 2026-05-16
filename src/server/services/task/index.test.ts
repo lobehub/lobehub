@@ -31,6 +31,14 @@ vi.mock('@/database/models/user', () => ({
   UserModel: { findByIds: vi.fn().mockResolvedValue([]) },
 }));
 
+// AiAgentService pulls in ~14 sub-dependencies in its constructor; mock it so
+// the running-status branch in updateStatus doesn't drag them in.
+vi.mock('@/server/services/aiAgent', () => ({
+  AiAgentService: vi.fn().mockImplementation(() => ({
+    interruptTask: vi.fn(),
+  })),
+}));
+
 describe('TaskService', () => {
   const db = {} as LobeChatDatabase;
   const userId = 'user-1';
@@ -52,10 +60,13 @@ describe('TaskService', () => {
     getTreePinnedDocuments: vi.fn(),
     resolve: vi.fn(),
     update: vi.fn(),
+    updateContext: vi.fn(),
     updateStatus: vi.fn(),
   };
 
   const mockTaskTopicModel = {
+    cancelIfRunning: vi.fn(),
+    findByTaskId: vi.fn(),
     findWithHandoff: vi.fn(),
     timeoutRunning: vi.fn(),
   };
@@ -1254,6 +1265,89 @@ describe('TaskService', () => {
       // comment with time should come first, brief without time at end
       expect(result?.activities?.[0].type).toBe('comment');
       expect(result?.activities?.[1].type).toBe('brief');
+    });
+  });
+
+  describe('updateStatus / scheduleStartedAt', () => {
+    const baseTask = (overrides: Partial<Record<string, unknown>> = {}) => ({
+      automationMode: 'schedule',
+      context: {},
+      id: 'task-1',
+      identifier: 'T-1',
+      parentTaskId: null,
+      status: 'backlog',
+      ...overrides,
+    });
+
+    it('stamps scheduleStartedAt when a user starts a schedule (backlog → scheduled)', async () => {
+      const prev = baseTask({ status: 'backlog', automationMode: 'schedule' });
+      const next = baseTask({ status: 'scheduled', automationMode: 'schedule' });
+      mockTaskModel.resolve.mockResolvedValue(prev);
+      mockTaskModel.updateStatus.mockResolvedValue(next);
+
+      const service = new TaskService(db, userId);
+      await service.updateStatus({ id: 'T-1', status: 'scheduled' as any });
+
+      expect(mockTaskModel.updateContext).toHaveBeenCalledTimes(1);
+      expect(mockTaskModel.updateContext).toHaveBeenCalledWith('task-1', {
+        scheduler: { scheduleStartedAt: expect.any(String) },
+      });
+      const stamped = (mockTaskModel.updateContext.mock.calls[0]![1] as any).scheduler
+        .scheduleStartedAt as string;
+      expect(() => new Date(stamped).toISOString()).not.toThrow();
+    });
+
+    it('does NOT stamp on the cron loop natural cycle (running → scheduled)', async () => {
+      // taskLifecycle parks finished ticks at 'scheduled' via taskModel.updateStatus,
+      // bypassing the service layer; the only way it reaches the service is when a
+      // user explicitly transitions. Either way, prev='running' must NOT reset the
+      // counter window — otherwise every successful tick would zero out the cap.
+      const prev = baseTask({ status: 'running', automationMode: 'schedule' });
+      const next = baseTask({ status: 'scheduled', automationMode: 'schedule' });
+      mockTaskModel.resolve.mockResolvedValue(prev);
+      mockTaskModel.updateStatus.mockResolvedValue(next);
+      mockTaskTopicModel.findByTaskId.mockResolvedValue([]);
+
+      const service = new TaskService(db, userId);
+      await service.updateStatus({ id: 'T-1', status: 'scheduled' as any });
+
+      expect(mockTaskModel.updateContext).not.toHaveBeenCalled();
+    });
+
+    it('does NOT stamp for heartbeat-mode tasks', async () => {
+      const prev = baseTask({ status: 'backlog', automationMode: 'heartbeat' });
+      const next = baseTask({ status: 'scheduled', automationMode: 'heartbeat' });
+      mockTaskModel.resolve.mockResolvedValue(prev);
+      mockTaskModel.updateStatus.mockResolvedValue(next);
+
+      const service = new TaskService(db, userId);
+      await service.updateStatus({ id: 'T-1', status: 'scheduled' as any });
+
+      expect(mockTaskModel.updateContext).not.toHaveBeenCalled();
+    });
+
+    it('does NOT stamp when the new status is not scheduled', async () => {
+      const prev = baseTask({ status: 'backlog' });
+      const next = baseTask({ status: 'paused' });
+      mockTaskModel.resolve.mockResolvedValue(prev);
+      mockTaskModel.updateStatus.mockResolvedValue(next);
+
+      const service = new TaskService(db, userId);
+      await service.updateStatus({ id: 'T-1', status: 'paused' as any });
+
+      expect(mockTaskModel.updateContext).not.toHaveBeenCalled();
+    });
+
+    it('stamps on user-initiated restart (paused → scheduled)', async () => {
+      const prev = baseTask({ status: 'paused', automationMode: 'schedule' });
+      const next = baseTask({ status: 'scheduled', automationMode: 'schedule' });
+      mockTaskModel.resolve.mockResolvedValue(prev);
+      mockTaskModel.updateStatus.mockResolvedValue(next);
+
+      const service = new TaskService(db, userId);
+      await service.updateStatus({ id: 'T-1', status: 'scheduled' as any });
+
+      expect(mockTaskModel.updateContext).toHaveBeenCalledTimes(1);
     });
   });
 });

@@ -232,6 +232,7 @@ type SystemStrings = {
   error: string;
   errorExceededContextWindow: string;
   errorInvalidProviderAPIKey: string;
+  errorCommandConnectionClosed: string;
   errorLocationNotSupported: string;
   errorModelNotFound: string;
   errorNoAvailableProvider: string;
@@ -280,6 +281,8 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
     error: '**Agent Execution Failed**',
     errorExceededContextWindow:
       "**Context window exceeded.**\nThe conversation is too long for this model. Send `/new` to start a fresh topic, or switch to a model with a larger context window in the agent's settings.",
+    errorCommandConnectionClosed:
+      '**Command session disconnected.**\nThe agent lost its command connection before finishing. Please retry. If this keeps happening, check the sandbox or device connection and review the server logs for the operation.',
     errorInvalidProviderAPIKey:
       "**Invalid or missing API key.**\nThe configured model provider rejected its API key. Please verify the key in the agent's provider settings (it may be expired, revoked, or mistyped) and try again.",
     errorLocationNotSupported:
@@ -329,6 +332,8 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
     error: '**Agent 执行失败**',
     errorExceededContextWindow:
       '**上下文已超出模型上限**\n当前对话长度超过了该模型的上下文窗口。可以发送 `/new` 开启新话题，或在 Agent 设置中切换到上下文更大的模型后重试。',
+    errorCommandConnectionClosed:
+      '**命令会话已断开**\nAgent 在完成前丢失了命令连接。请重试；如果该问题持续出现，请检查 sandbox 或设备连接，并结合 Operation ID 查看服务端日志。',
     errorInvalidProviderAPIKey:
       '**API Key 无效或缺失**\n所配置的模型 Provider 拒绝了 API Key，可能已过期、被吊销或填写错误。请到 Agent 的 Provider 设置中检查并更新 API Key 后重试。',
     errorLocationNotSupported:
@@ -386,6 +391,16 @@ const FRIENDLY_ERROR_BY_TYPE: Record<string, keyof SystemStrings> = {
   QuotaLimitReached: 'errorQuotaLimitReached',
 };
 
+const isCommandConnectionClosedError = (
+  errorType: string | undefined,
+  errorMessage: string | undefined,
+) => {
+  if (errorType && errorType !== '500') return false;
+  if (!errorMessage) return false;
+
+  return /command aborted due to connection close/i.test(errorMessage);
+};
+
 /**
  * Render an agent-execution failure for the user. Switches on the stable
  * `errorType` code (from `AgentRuntimeError.chat`) to surface a friendly,
@@ -396,10 +411,16 @@ const FRIENDLY_ERROR_BY_TYPE: Record<string, keyof SystemStrings> = {
  */
 export function renderAgentError(
   errorType: string | undefined,
+  errorMessage: string | undefined,
   operationId: string | undefined,
   lng?: BotReplyLocale,
 ): string {
   const strings = getSystemStrings(lng);
+
+  if (isCommandConnectionClosedError(errorType, errorMessage)) {
+    const value = strings.errorCommandConnectionClosed;
+    return operationId ? `${value}\nOperation ID: \`${operationId}\`` : value;
+  }
 
   const stringKey = errorType ? FRIENDLY_ERROR_BY_TYPE[errorType] : undefined;
   if (stringKey) {

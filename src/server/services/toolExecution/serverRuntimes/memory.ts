@@ -5,7 +5,6 @@ import {
 } from '@lobechat/builtin-tool-memory/executionRuntime';
 import { BRANDING_PROVIDER, ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import {
-  DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
   DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM,
   MEMORY_SEARCH_TOP_K_LIMITS,
 } from '@lobechat/const';
@@ -32,7 +31,7 @@ import type {
   SearchMemoryResult,
   UpdateIdentityMemoryResult,
 } from '@lobechat/types';
-import { LayersEnum, RequestTrigger } from '@lobechat/types';
+import { LayersEnum } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import type { z } from 'zod';
 
@@ -43,14 +42,20 @@ import {
 } from '@/database/models/userMemory';
 import { userSettings } from '@/database/schemas';
 import { getServerDefaultFilesConfig } from '@/server/globalConfig';
-import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import {
+  initModelRuntimeFromDB,
+  initModelRuntimeWithUserPayload,
+} from '@/server/modules/ModelRuntime';
 import {
   emitToolOutcomeSafely,
   resolveToolOutcomeScope,
 } from '@/server/services/agentSignal/procedure';
 import { redisPolicyStateStore } from '@/server/services/agentSignal/store/adapters/redis/policyStateStore';
+import type { UserMemoryEmbeddingRuntime } from '@/server/services/memory/userMemory/embedding';
+import { embedUserMemoryTexts } from '@/server/services/memory/userMemory/embedding';
 import { normalizeSearchMemoryParams } from '@/server/services/memory/userMemory/searchParams';
 
+import type { ToolExecutionMemoryEmbeddingRuntime } from '../types';
 import type { ServerRuntimeRegistration } from './types';
 
 type MemoryEffort = 'high' | 'low' | 'medium';
@@ -95,20 +100,23 @@ const getEmbeddingRuntime = async (serverDB: LobeChatDatabase, userId: string) =
   return { agentRuntime, embeddingModel };
 };
 
-const createEmbedder = (agentRuntime: any, embeddingModel: string, userId: string) => {
+const createEmbedder = (
+  agentRuntime: UserMemoryEmbeddingRuntime,
+  embeddingModel: string,
+  userId: string,
+) => {
   return async (value?: string | null): Promise<number[] | undefined> => {
     if (!value || value.trim().length === 0) return undefined;
 
-    const embeddings = await agentRuntime.embeddings(
-      {
-        dimensions: DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
-        input: value,
-        model: embeddingModel,
-      },
-      { metadata: { trigger: RequestTrigger.Memory }, user: userId },
-    );
+    const [embedding] = await embedUserMemoryTexts({
+      input: [value],
+      model: embeddingModel,
+      runtime: agentRuntime,
+      source: 'toolRuntime:userMemory.tool',
+      userId,
+    });
 
-    return embeddings?.[0];
+    return embedding;
   };
 };
 
@@ -123,6 +131,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
   private toolCallId?: string;
   private topicId?: string;
   private memoryEffort: MemoryEffort;
+  private memoryEmbeddingRuntime?: ToolExecutionMemoryEmbeddingRuntime;
   private userId: string;
 
   constructor(options: {
@@ -130,6 +139,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
     emitOutcome?: typeof emitToolOutcomeSafely;
     messageId?: string;
     memoryEffort: MemoryEffort;
+    memoryEmbeddingRuntime?: ToolExecutionMemoryEmbeddingRuntime;
     memoryModel: UserMemoryModel;
     operationId?: string;
     serverDB: LobeChatDatabase;
@@ -148,6 +158,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
     this.toolCallId = options.toolCallId;
     this.topicId = options.topicId;
     this.memoryEffort = options.memoryEffort;
+    this.memoryEmbeddingRuntime = options.memoryEmbeddingRuntime;
     this.userId = options.userId;
   }
 
@@ -192,24 +203,31 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
 
   searchMemory = async (params: SearchMemoryParams): Promise<SearchMemoryResult> => {
     const normalizedParams = normalizeSearchMemoryParams(params);
-    const { provider, model: embeddingModel } =
+    const defaultEmbeddingConfig =
       getServerDefaultFilesConfig().embeddingModel || DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM;
-
-    const modelRuntime = await initModelRuntimeFromDB(this.serverDB, this.userId, provider);
+    const embeddingModel = this.memoryEmbeddingRuntime?.model ?? defaultEmbeddingConfig.model;
+    const modelRuntime = this.memoryEmbeddingRuntime
+      ? initModelRuntimeWithUserPayload(
+          this.memoryEmbeddingRuntime.provider,
+          this.memoryEmbeddingRuntime.payload,
+          { userId: this.userId },
+        )
+      : await initModelRuntimeFromDB(this.serverDB, this.userId, defaultEmbeddingConfig.provider);
     const normalizedQueries = [
       ...new Set((normalizedParams.queries ?? []).map((query) => query.trim()).filter(Boolean)),
     ];
 
     const queryEmbeddings =
       normalizedQueries.length > 0
-        ? await modelRuntime.embeddings(
-            {
-              dimensions: DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
+        ? (
+            await embedUserMemoryTexts({
               input: normalizedQueries,
               model: embeddingModel,
-            },
-            { metadata: { trigger: RequestTrigger.Memory }, user: this.userId },
-          )
+              runtime: modelRuntime,
+              source: 'toolRuntime:userMemory.search',
+              userId: this.userId,
+            })
+          ).filter((embedding): embedding is number[] => Boolean(embedding))
         : [];
 
     const effectiveEffort = normalizeMemoryEffort(normalizedParams.effort ?? this.memoryEffort);
@@ -847,6 +865,7 @@ export const memoryRuntime: ServerRuntimeRegistration = {
       emitOutcome: emitToolOutcomeSafely,
       messageId: context.messageId,
       memoryEffort,
+      memoryEmbeddingRuntime: context.memoryEmbeddingRuntime,
       memoryModel,
       operationId: context.operationId,
       serverDB: context.serverDB,

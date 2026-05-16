@@ -17,6 +17,7 @@ const n = setNamespace('homeInput');
 
 interface SendMessageWithEditorParams {
   editorData?: Record<string, any>;
+  groupId?: string;
   message: string;
 }
 
@@ -56,7 +57,11 @@ export class HomeInputActionImpl {
     this.#set({ inputActiveMode: null }, false, n('clearInputMode'));
   };
 
-  sendAsAgent = async ({ editorData, message }: SendMessageWithEditorParams): Promise<string> => {
+  sendAsAgent = async ({
+    editorData,
+    groupId,
+    message,
+  }: SendMessageWithEditorParams): Promise<string> => {
     this.#set({ homeInputLoading: true }, false, n('sendAsAgent/start'));
 
     try {
@@ -78,6 +83,7 @@ export class HomeInputActionImpl {
           systemRole: message,
           title: message?.slice(0, 50) || 'New Agent',
         },
+        groupId,
       });
 
       // 3. Navigate to Agent profile page
@@ -117,7 +123,11 @@ export class HomeInputActionImpl {
     }
   };
 
-  sendAsGroup = async ({ editorData, message }: SendMessageWithEditorParams): Promise<string> => {
+  sendAsGroup = async ({
+    editorData,
+    groupId,
+    message,
+  }: SendMessageWithEditorParams): Promise<string> => {
     this.#set({ homeInputLoading: true }, false, n('sendAsGroup/start'));
 
     try {
@@ -136,6 +146,7 @@ export class HomeInputActionImpl {
         config: {
           systemPrompt: message,
         },
+        groupId,
         title: message?.slice(0, 50) || 'New Group',
       });
 

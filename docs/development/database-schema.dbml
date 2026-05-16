@@ -267,6 +267,62 @@ table agent_eval_test_cases {
   }
 }
 
+table agent_operations {
+  id text [pk, not null]
+  user_id text [not null]
+  agent_id text
+  topic_id text
+  thread_id text
+  task_id text
+  chat_group_id text
+  parent_operation_id text
+  status text [not null]
+  completion_reason text
+  started_at "timestamp with time zone"
+  completed_at "timestamp with time zone"
+  step_count integer
+  max_steps integer
+  force_finish boolean
+  interruption jsonb
+  error jsonb
+  total_cost "numeric(20, 6)"
+  currency text [not null, default: 'USD']
+  total_input_tokens integer
+  total_output_tokens integer
+  total_tokens integer
+  llm_calls integer
+  tool_calls integer
+  human_interventions integer
+  processing_time_ms integer
+  human_waiting_time_ms integer
+  cost jsonb
+  usage jsonb
+  cost_limit jsonb
+  model text
+  provider text
+  model_runtime_config jsonb
+  trigger text
+  app_context jsonb
+  trace_s3_key text
+  metadata jsonb [default: `{}`]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    user_id [name: 'agent_operations_user_id_idx']
+    agent_id [name: 'agent_operations_agent_id_idx']
+    topic_id [name: 'agent_operations_topic_id_idx']
+    thread_id [name: 'agent_operations_thread_id_idx']
+    task_id [name: 'agent_operations_task_id_idx']
+    chat_group_id [name: 'agent_operations_chat_group_id_idx']
+    parent_operation_id [name: 'agent_operations_parent_operation_id_idx']
+    status [name: 'agent_operations_status_idx']
+    (user_id, created_at) [name: 'agent_operations_user_id_created_at_idx']
+    metadata [name: 'agent_operations_metadata_idx']
+  }
+}
+
 table agent_skills {
   id text [pk, not null]
   name text [not null]

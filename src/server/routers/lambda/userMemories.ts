@@ -1,7 +1,6 @@
 import { BRANDING_PROVIDER, ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import {
   DEFAULT_SEARCH_USER_MEMORY_TOP_K,
-  DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
   DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM,
   MEMORY_SEARCH_TOP_K_LIMITS,
 } from '@lobechat/const';
@@ -16,12 +15,7 @@ import {
   UpdateIdentityActionSchema,
 } from '@lobechat/memory-user-memory';
 import type { QueryTaxonomyOptionsResult, SearchMemoryResult } from '@lobechat/types';
-import {
-  LayersEnum,
-  queryTaxonomyOptionsSchema,
-  RequestTrigger,
-  searchMemorySchema,
-} from '@lobechat/types';
+import { LayersEnum, queryTaxonomyOptionsSchema, searchMemorySchema } from '@lobechat/types';
 import { type SQL } from 'drizzle-orm';
 import { and, asc, eq, gte, lte } from 'drizzle-orm';
 import pMap from 'p-map';
@@ -51,6 +45,8 @@ import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getServerDefaultFilesConfig } from '@/server/globalConfig';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import type { UserMemoryEmbeddingRuntime } from '@/server/services/memory/userMemory/embedding';
+import { embedUserMemoryTexts } from '@/server/services/memory/userMemory/embedding';
 import { normalizeSearchMemoryParams } from '@/server/services/memory/userMemory/searchParams';
 
 const EMPTY_SEARCH_RESULT: SearchMemoryResult = {
@@ -133,14 +129,15 @@ const searchUserMemories = async (
 
   const queryEmbeddings =
     normalizedQueries.length > 0
-      ? await modelRuntime.embeddings(
-          {
-            dimensions: DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
+      ? (
+          await embedUserMemoryTexts({
             input: normalizedQueries,
             model: embeddingModel,
-          },
-          { metadata: { trigger: RequestTrigger.Memory }, user: ctx.userId },
-        )
+            runtime: modelRuntime,
+            source: 'lambda:userMemories.search',
+            userId: ctx.userId,
+          })
+        ).filter((embedding): embedding is number[] => Boolean(embedding))
       : [];
 
   const effectiveEffort = normalizeMemoryEffort(normalizedInput.effort ?? ctx.memoryEffort);
@@ -176,20 +173,23 @@ const getEmbeddingRuntime = async (serverDB: LobeChatDatabase, userId: string) =
   return { agentRuntime, embeddingModel };
 };
 
-const createEmbedder = (agentRuntime: any, embeddingModel: string, userId: string) => {
+const createEmbedder = (
+  agentRuntime: UserMemoryEmbeddingRuntime,
+  embeddingModel: string,
+  userId: string,
+) => {
   return async (value?: string | null): Promise<number[] | undefined> => {
     if (!value || value.trim().length === 0) return undefined;
 
-    const embeddings = await agentRuntime.embeddings(
-      {
-        dimensions: DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
-        input: value,
-        model: embeddingModel,
-      },
-      { metadata: { trigger: RequestTrigger.Memory }, user: userId },
-    );
+    const [embedding] = await embedUserMemoryTexts({
+      input: [value],
+      model: embeddingModel,
+      runtime: agentRuntime,
+      source: 'lambda:userMemories.tool',
+      userId,
+    });
 
-    return embeddings?.[0];
+    return embedding;
   };
 };
 
@@ -469,20 +469,23 @@ export const userMemoriesRouter = router({
         const embedTexts = async (texts: string[]): Promise<number[][]> => {
           if (texts.length === 0) return [];
 
-          const response = await agentRuntime.embeddings(
-            {
-              dimensions: DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
-              input: texts,
-              model: embeddingModel,
-            },
-            { metadata: { trigger: RequestTrigger.Memory }, user: ctx.userId },
-          );
+          const response = await embedUserMemoryTexts({
+            input: texts,
+            model: embeddingModel,
+            runtime: agentRuntime,
+            source: 'lambda:userMemories.reEmbed',
+            userId: ctx.userId,
+          });
 
-          if (!response || response.length !== texts.length) {
+          if (response.length !== texts.length) {
             throw new Error('Embedding response length mismatch');
           }
 
-          return response;
+          return response.map((embedding) => {
+            if (!embedding) throw new Error('Embedding response length mismatch');
+
+            return embedding;
+          });
         };
 
         const results: Partial<Record<ReEmbedTableKey, ReEmbedStats>> = {};

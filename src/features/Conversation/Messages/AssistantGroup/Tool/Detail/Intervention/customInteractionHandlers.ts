@@ -1,8 +1,10 @@
+import { ClaudeCodeIdentifier } from '@lobechat/builtin-tool-claude-code';
 import { UserInteractionIdentifier } from '@lobechat/builtin-tool-user-interaction';
 import {
-  AgentMarketplaceIdentifier,
-  buildAgentMarketplaceToolResult,
-} from '@lobechat/builtin-tool-web-onboarding/agentMarketplace';
+  WebOnboardingApiName,
+  WebOnboardingIdentifier,
+} from '@lobechat/builtin-tool-web-onboarding';
+import { buildAgentMarketplaceToolResult } from '@lobechat/builtin-tool-web-onboarding/agentMarketplace';
 import type { OnboardingAgentMarketplacePickSnapshot } from '@lobechat/types';
 
 import { topicService } from '@/services/topic';
@@ -21,6 +23,7 @@ interface CustomInteractionSubmitResult {
 }
 
 interface CustomInteractionContext {
+  apiName?: string;
   requestArgs?: Record<string, unknown>;
   topicId?: string | null;
   updateTopicMetadata?: typeof topicService.updateTopicMetadata;
@@ -30,6 +33,9 @@ type CustomInteractionSubmitHandler = (
   payload: Record<string, unknown>,
   context?: CustomInteractionContext,
 ) => Promise<CustomInteractionSubmitResult | undefined>;
+
+const isAgentMarketplaceCall = (identifier: string, apiName?: string) =>
+  identifier === WebOnboardingIdentifier && apiName === WebOnboardingApiName.showAgentMarketplace;
 
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((item) => typeof item === 'string');
@@ -113,19 +119,42 @@ const handleAgentMarketplaceSubmit: CustomInteractionSubmitHandler = async (payl
   };
 };
 
-const customInteractionSubmitHandlers = new Map<string, CustomInteractionSubmitHandler>([
-  [AgentMarketplaceIdentifier, handleAgentMarketplaceSubmit],
-]);
+const customInteractionSubmitHandlers: Array<{
+  handler: CustomInteractionSubmitHandler;
+  match: (identifier: string, apiName?: string) => boolean;
+}> = [
+  {
+    handler: handleAgentMarketplaceSubmit,
+    match: isAgentMarketplaceCall,
+  },
+];
 
-export const isCustomInteractionIdentifier = (identifier: string) =>
-  identifier === UserInteractionIdentifier || customInteractionSubmitHandlers.has(identifier);
+const findCustomInteractionSubmitHandler = (identifier: string, apiName?: string) =>
+  customInteractionSubmitHandlers.find((entry) => entry.match(identifier, apiName))?.handler;
+
+/**
+ * Identifiers whose intervention component renders inline as a form (with
+ * `onInteractionAction` callbacks) rather than the default approve / reject
+ * approval UI. Hetero CLIs (CC AskUserQuestion etc.) need this surface
+ * because the answer ships back through IPC, not through a synthetic user
+ * turn.
+ */
+const HETERO_CUSTOM_INTERACTION_IDENTIFIERS = new Set<string>([ClaudeCodeIdentifier]);
+
+export const isHeteroInteractionIdentifier = (identifier: string) =>
+  HETERO_CUSTOM_INTERACTION_IDENTIFIERS.has(identifier);
+
+export const isCustomInteractionIdentifier = (identifier: string, apiName?: string) =>
+  identifier === UserInteractionIdentifier ||
+  isHeteroInteractionIdentifier(identifier) ||
+  Boolean(findCustomInteractionSubmitHandler(identifier, apiName));
 
 export const prepareCustomInteractionSubmit = async (
   identifier: string,
   payload: Record<string, unknown>,
   context?: CustomInteractionContext,
 ): Promise<CustomInteractionSubmitResult> => {
-  const handler = customInteractionSubmitHandlers.get(identifier);
+  const handler = findCustomInteractionSubmitHandler(identifier, context?.apiName);
   const result = await handler?.(payload, context);
 
   return result ?? { payload };
@@ -138,7 +167,7 @@ export const recordCustomInteractionResolution = async (
   context?: CustomInteractionContext,
   reason?: string,
 ) => {
-  if (identifier !== AgentMarketplaceIdentifier) return;
+  if (!isAgentMarketplaceCall(identifier, context?.apiName)) return;
 
   const pickBase = resolveMarketplacePickBase(payload ?? {}, context?.requestArgs);
   if (!pickBase) return;

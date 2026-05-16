@@ -85,6 +85,7 @@ LobeHub supports two connection modes for Slack:
     event_subscriptions:
       bot_events:
         - app_mention
+        - app_home_opened
         - message.channels
         - message.groups
         - message.im
@@ -195,7 +196,7 @@ Use this method if your Slack app already has Event Subscriptions configured wit
 
   ### Configure Event Subscriptions
 
-  In the Slack API Dashboard → **Event Subscriptions**, enable events, paste the Webhook URL as the **Request URL**, and subscribe to bot events: `app_mention`, `message.channels`, `message.groups`, `message.im`, `message.mpim`, `member_joined_channel`.
+  In the Slack API Dashboard → **Event Subscriptions**, enable events, paste the Webhook URL as the **Request URL**, and subscribe to bot events: `app_mention`, `app_home_opened`, `message.channels`, `message.groups`, `message.im`, `message.mpim`, `member_joined_channel`.
 
   ![](/blog/assets8f3657f3785fc04c42b0f53c17daa72e.webp)
 

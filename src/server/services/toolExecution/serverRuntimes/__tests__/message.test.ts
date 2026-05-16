@@ -78,6 +78,7 @@ vi.mock('@/server/services/bot/platforms/telegram/api', () => ({
 
 const mockSlackPostMessage = vi.fn();
 vi.mock('@/server/services/bot/platforms/slack/api', () => ({
+  SLACK_API_BASE: 'https://slack.com/api',
   SlackApi: vi.fn().mockImplementation(() => ({
     addReaction: vi.fn(),
     deleteMessage: vi.fn(),

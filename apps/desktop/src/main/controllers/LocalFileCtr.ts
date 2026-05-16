@@ -12,6 +12,8 @@ import {
   type GrepContentParams,
   type GrepContentResult,
   type ListLocalFileParams,
+  type LocalFilePreviewUrlParams,
+  type LocalFilePreviewUrlResult,
   type LocalMoveFilesResultItem,
   type LocalReadFileParams,
   type LocalReadFileResult,
@@ -371,6 +373,28 @@ export default class LocalFileCtr extends ControllerModule {
   }
 
   @IpcMethod()
+  async getLocalFilePreviewUrl({
+    path: filePath,
+    workingDirectory,
+  }: LocalFilePreviewUrlParams): Promise<LocalFilePreviewUrlResult> {
+    try {
+      const url = await this.app.localFileProtocolManager.createPreviewUrl({
+        filePath,
+        workspaceRoot: workingDirectory,
+      });
+
+      if (!url) {
+        return { error: 'File is outside the approved workspace', success: false };
+      }
+
+      return { success: true, url };
+    } catch (error) {
+      logger.error('Failed to create local file preview URL:', error);
+      return { error: (error as Error).message, success: false };
+    }
+  }
+
+  @IpcMethod()
   async handlePrepareSkillDirectory({
     forceRefresh,
     url,
@@ -532,6 +556,7 @@ export default class LocalFileCtr extends ControllerModule {
           requestedScope,
           root,
         });
+        await this.approveProjectRootForPreview(root);
 
         return {
           entries,
@@ -560,6 +585,7 @@ export default class LocalFileCtr extends ControllerModule {
       engine: fallback.engine,
       requestedScope,
     });
+    await this.approveProjectRootForPreview(requestedScope);
 
     return {
       entries,
@@ -640,5 +666,13 @@ export default class LocalFileCtr extends ControllerModule {
   async handleEditFile(params: EditLocalFileParams): Promise<EditLocalFileResult> {
     logger.debug(`Editing file ${params.file_path}`, { replace_all: params.replace_all });
     return editLocalFile(params);
+  }
+
+  private async approveProjectRootForPreview(root: string) {
+    try {
+      await this.app.localFileProtocolManager.approveIndexedProjectRoot(root);
+    } catch (error) {
+      logger.error(`Failed to approve project preview root ${root}:`, error);
+    }
   }
 }

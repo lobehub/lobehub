@@ -75,7 +75,7 @@ export class SlackApi {
 
   /**
    * Post a message that combines a Block Kit URL button AND the same URL
-   * rendered as a plain inline link below it (邮件式 fallback). Mirrors how
+   * rendered as a plain inline link below it (email-style fallback). Mirrors how
    * email templates render "Click [Verify] / Or copy this link: …" so users
    * have a path through every Slack client (mobile, screen reader, copy-to-
    * other-device, future Block Kit regressions).
@@ -158,6 +158,77 @@ export class SlackApi {
   }
 
   /**
+   * Ephemeral variant of `postMessageWithButtonGrid` — only the targeted
+   * `user` sees the picker. Used by the messenger `/agents` flow when
+   * invoked from a public channel so we don't broadcast the user's
+   * personal agent list to the whole channel. Pair with
+   * `respondToActionUrl({ replaceOriginal: true })` in the action callback
+   * — `chat.update` cannot edit ephemerals.
+   */
+  async postEphemeralWithButtonGrid(
+    channel: string,
+    user: string,
+    text: string,
+    buttons: Array<{
+      actionId: string;
+      style?: 'primary' | 'danger';
+      text: string;
+      value?: string;
+    }>,
+    options?: { threadTs?: string },
+  ): Promise<void> {
+    log(
+      'postEphemeralWithButtonGrid: channel=%s, user=%s, buttons=%d',
+      channel,
+      user,
+      buttons.length,
+    );
+    const fallback = this.truncateText(text);
+    const payload: Record<string, unknown> = {
+      blocks: this.buildButtonGridBlocks(fallback, buttons),
+      channel,
+      text: fallback,
+      user,
+    };
+    if (options?.threadTs) payload.thread_ts = options.threadTs;
+    await this.call('chat.postEphemeral', payload);
+  }
+
+  /**
+   * Replace an ephemeral picker in place via the action callback's
+   * `response_url`. `chat.update` cannot edit ephemerals, so this is the
+   * only path. The `response_url` is valid for ~30 minutes / 5 calls per
+   * interaction.
+   */
+  async updateEphemeralButtonGrid(
+    responseUrl: string,
+    text: string,
+    buttons: Array<{
+      actionId: string;
+      style?: 'primary' | 'danger';
+      text: string;
+      value?: string;
+    }>,
+  ): Promise<void> {
+    log('updateEphemeralButtonGrid: buttons=%d', buttons.length);
+    const fallback = this.truncateText(text);
+    const response = await fetch(responseUrl, {
+      body: JSON.stringify({
+        blocks: this.buildButtonGridBlocks(fallback, buttons),
+        replace_original: true,
+        text: fallback,
+      }),
+      headers: { 'content-type': 'application/json; charset=utf-8' },
+      method: 'POST',
+    });
+    if (!response.ok) {
+      const errText = await response.text();
+      log('updateEphemeralButtonGrid: status=%d body=%s', response.status, errText);
+      throw new Error(`Slack response_url POST failed: ${response.status} ${errText}`);
+    }
+  }
+
+  /**
    * Replace an existing message's text + button grid in place. Used to
    * re-render the picker after one of its options is selected so the new
    * active marker is visible.
@@ -193,14 +264,25 @@ export class SlackApi {
    * no native button-tap toast (unlike Telegram's `answerCallbackQuery`) so
    * this is what we use to surface short feedback after an interactive
    * action — e.g. "Switched to Foo." Requires the `chat:write` scope.
+   *
+   * `threadTs` anchors the ephemeral in a Slack thread (e.g. when responding
+   * to an `@mention` so the prompt appears next to the mention, not at the
+   * bottom of the channel). Slack ignores `thread_ts` for DMs.
    */
-  async postEphemeral(channel: string, user: string, text: string): Promise<void> {
-    log('postEphemeral: channel=%s, user=%s', channel, user);
-    await this.call('chat.postEphemeral', {
+  async postEphemeral(
+    channel: string,
+    user: string,
+    text: string,
+    options?: { threadTs?: string },
+  ): Promise<void> {
+    log('postEphemeral: channel=%s, user=%s, threadTs=%s', channel, user, options?.threadTs);
+    const payload: Record<string, unknown> = {
       channel,
       text: this.truncateText(text),
       user,
-    });
+    };
+    if (options?.threadTs) payload.thread_ts = options.threadTs;
+    await this.call('chat.postEphemeral', payload);
   }
 
   async removeReaction(channel: string, timestamp: string, name: string): Promise<void> {
@@ -307,7 +389,7 @@ export class SlackApi {
     const data = await this.call('conversations.list', {
       exclude_archived: true,
       limit: 200,
-      types: 'public_channel,private_channel',
+      types: 'public_channel,private_channel,mpim',
       ...options,
     });
     return {

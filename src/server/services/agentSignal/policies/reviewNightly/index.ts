@@ -1,11 +1,11 @@
 import type { AgentSignalHandlerDefinition, AgentSignalMiddleware } from '../../runtime/middleware';
 import { defineAgentSignalHandlers } from '../../runtime/middleware';
-import type { CreateNightlyReviewSourceHandlerDependencies } from './nightlyReview';
-import { createNightlyReviewSourcePolicyHandler } from './nightlyReview';
-import type { CreateSelfIterationIntentSourceHandlerDependencies } from './selfIterationIntent';
-import { createSelfIterationIntentSourcePolicyHandler } from './selfIterationIntent';
-import type { CreateSelfReflectionSourceHandlerDependencies } from './selfReflection';
-import { createSelfReflectionSourcePolicyHandler } from './selfReflection';
+import type { CreateSelfFeedbackIntentSourceHandlerDependencies } from '../../services/selfIteration/feedback/handler';
+import { createSelfFeedbackIntentSourcePolicyHandler } from '../../services/selfIteration/feedback/handler';
+import type { CreateSelfReflectionSourceHandlerDependencies } from '../../services/selfIteration/reflection/handler';
+import { createSelfReflectionSourcePolicyHandler } from '../../services/selfIteration/reflection/handler';
+import type { CreateNightlyReviewSourceHandlerDependencies } from '../../services/selfIteration/review/handler';
+import { createNightlyReviewSourcePolicyHandler } from '../../services/selfIteration/review/handler';
 
 const createOptionalSourceHandler = <TOptions>(
   options: TOptions | undefined,
@@ -13,23 +13,23 @@ const createOptionalSourceHandler = <TOptions>(
 ) => (options ? [create(options)] : []);
 
 /**
- * Options for composing review-nightly maintenance source handlers.
+ * Options for composing review-nightly self-iteration source handlers.
  */
 export interface CreateReviewNightlyPolicyOptions {
   /** Optional nightly review source handler options. */
   nightlyReview?: CreateNightlyReviewSourceHandlerDependencies;
-  /** Optional self-iteration intent source handler options. */
-  selfIterationIntent?: CreateSelfIterationIntentSourceHandlerDependencies;
+  /** Optional self-feedback intent source handler options. */
+  selfFeedbackIntent?: CreateSelfFeedbackIntentSourceHandlerDependencies;
   /** Optional self-reflection source handler options. */
   selfReflection?: CreateSelfReflectionSourceHandlerDependencies;
 }
 
 /**
- * Creates the Agent Signal policy slice for deferred maintenance reviews.
+ * Creates the Agent Signal policy slice for deferred self-iteration reviews.
  *
  * Use when:
  * - Runtime creation wants to install nightly review source handlers
- * - Runtime creation wants self-reflection or self-iteration intent handlers in the same domain
+ * - Runtime creation wants self-reflection or self-feedback intent handlers in the same domain
  *
  * Expects:
  * - Each optional handler option bundle is complete for its corresponding source handler
@@ -45,14 +45,14 @@ export const createReviewNightlyPolicy = (
     ...createOptionalSourceHandler(options.nightlyReview, createNightlyReviewSourcePolicyHandler),
     ...createOptionalSourceHandler(options.selfReflection, createSelfReflectionSourcePolicyHandler),
     ...createOptionalSourceHandler(
-      options.selfIterationIntent,
-      createSelfIterationIntentSourcePolicyHandler,
+      options.selfFeedbackIntent,
+      createSelfFeedbackIntentSourcePolicyHandler,
     ),
   ];
 
   return handlers.length > 0 ? [defineAgentSignalHandlers(handlers)] : [];
 };
 
-export * from './nightlyReview';
-export * from './selfIterationIntent';
-export * from './selfReflection';
+export * from '../../services/selfIteration/feedback/handler';
+export * from '../../services/selfIteration/reflection/handler';
+export * from '../../services/selfIteration/review/handler';

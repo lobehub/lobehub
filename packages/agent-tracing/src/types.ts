@@ -38,6 +38,22 @@ export interface StepSnapshot {
     payload?: unknown;
     stepContext?: unknown;
   };
+  /**
+   * Context Engine result snapshot for this step. Only present on steps where the CE ran
+   * (typically `call_llm`). Uses a delta format: only `input`/`output` fields that changed
+   * from the previous step are stored — resolve the full snapshot by walking backward
+   * through steps (same pattern as `messagesBaseline`/`messagesDelta`).
+   *
+   * - `undefined`        → CE did not run for this step (e.g., `call_tool` steps)
+   * - `{}`               → CE ran but both `input` and `output` are unchanged from before
+   * - `{ input }`        → input changed; `output` unchanged
+   * - `{ output }`       → output changed; `input` unchanged
+   * - `{ input, output}` → both changed (full snapshot, typical of the first CE event)
+   */
+  contextEngine?: {
+    input?: unknown;
+    output?: unknown;
+  };
   events?: Array<{ type: string; [key: string]: unknown }>;
 
   executionTimeMs: number;

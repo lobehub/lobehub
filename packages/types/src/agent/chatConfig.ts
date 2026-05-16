@@ -43,6 +43,12 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
    * Whether to enable adaptive thinking (Claude Opus 4.6)
    */
   enableAdaptiveThinking?: boolean;
+  /**
+   * Whether the agent runs in agent mode (full tool access) vs chat mode
+   * (only runtime-managed tools like KB / memory / web-browsing).
+   * Treat undefined as `true` — agent mode is the default.
+   */
+  enableAgentMode?: boolean;
   enableAutoCreateTopic?: boolean;
   /**
    * Whether to auto-scroll during AI streaming output
@@ -80,6 +86,7 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
   gpt5_2ProReasoningEffort?: 'medium' | 'high' | 'xhigh';
   gpt5_2ReasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
   gpt5ReasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
+  grok4_3ReasoningEffort?: 'none' | 'low' | 'medium' | 'high';
   grok4_20ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
   /**
    * Number of historical messages
@@ -199,6 +206,7 @@ export const AgentChatConfigSchema = z
     disableContextCaching: z.boolean().optional(),
     effort: z.enum(['low', 'medium', 'high', 'max']).optional(),
     enableAdaptiveThinking: z.boolean().optional(),
+    enableAgentMode: z.boolean().optional(),
     enableAutoCreateTopic: z.boolean().optional(),
     enableAutoScrollOnStreaming: z.boolean().optional(),
     enableCompressHistory: z.boolean().optional(),
@@ -213,6 +221,7 @@ export const AgentChatConfigSchema = z
     gpt5_2ProReasoningEffort: z.enum(['medium', 'high', 'xhigh']).optional(),
     gpt5_2ReasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'xhigh']).optional(),
     grok4_20ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
+    grok4_3ReasoningEffort: z.enum(['none', 'low', 'medium', 'high']).optional(),
     hy3ReasoningEffort: z.enum(['no_think', 'low', 'high']).optional(),
     historyCount: z.number().optional(),
     imageAspectRatio: z.string().optional(),

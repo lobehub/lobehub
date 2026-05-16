@@ -20,9 +20,9 @@
       {
         "id": "call_exec_tasks_1",
         "type": "builtin",
-        "apiName": "execTasks",
+        "apiName": "callSubAgents",
         "arguments": "{\"tasks\": [{\"description\": \"Task 1\"}, {\"description\": \"Task 2\"}, {\"description\": \"Task 3\"}, {\"description\": \"Task 4\"}, {\"description\": \"Task 5\"}, {\"description\": \"Task 6\"}, {\"description\": \"Task 7\"}, {\"description\": \"Task 8\"}, {\"description\": \"Task 9\"}, {\"description\": \"Task 10\"}]}",
-        "identifier": "lobe-gtd"
+        "identifier": "lobe-agent"
       }
     ]
   },
@@ -35,7 +35,7 @@
     "createdAt": 1735526588116,
     "updatedAt": 1735526591337,
     "pluginState": {
-      "type": "execTasks",
+      "type": "execSubAgents",
       "tasks": [
         { "description": "Task 1" },
         { "description": "Task 2" },

@@ -1,9 +1,9 @@
-import { Flexbox, Highlighter } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { memo, useCallback } from 'react';
 
 import SafeBoundary from '@/components/ErrorBoundary';
 import { LOADING_FLAT } from '@/const/message';
-import { useErrorContent } from '@/features/Conversation/Error';
+import ErrorMessageExtra, { useErrorContent } from '@/features/Conversation/Error';
 
 import ErrorContent from '../../../ChatItem/components/ErrorContent';
 import { messageStateSelectors, useConversationStore } from '../../../store';
@@ -54,21 +54,16 @@ const ContentBlock = memo<ContentBlockProps>(
       return (
         <ErrorContent
           id={id}
+          customErrorRender={(alertError) => (
+            <ErrorMessageExtra
+              data={{ error, id }}
+              error={alertError}
+              onRegenerate={handleRegenerate}
+            />
+          )}
           error={
             errorContent && error && (content === LOADING_FLAT || !content)
-              ? {
-                  ...errorContent,
-                  extra: error?.body && (
-                    <Highlighter
-                      actionIconSize={'small'}
-                      language={'json'}
-                      padding={8}
-                      variant={'borderless'}
-                    >
-                      {JSON.stringify(error?.body, null, 2)}
-                    </Highlighter>
-                  ),
-                }
+              ? errorContent
               : undefined
           }
           onRegenerate={handleRegenerate}

@@ -8,7 +8,10 @@ import {
 
 import { ClaudeCodeApiName } from '../../types';
 import { AgentInspector } from './Agent';
+import { AskUserQuestionInspector } from './AskUserQuestion';
 import { EditInspector } from './Edit';
+import { LinearMcpInspectors } from './LinearMcp';
+import { MonitorInspector } from './Monitor';
 import { ReadInspector } from './Read';
 import { ScheduleWakeupInspector } from './ScheduleWakeup';
 import { SkillInspector } from './Skill';
@@ -16,6 +19,8 @@ import { TaskOutputInspector } from './TaskOutput';
 import { TaskStopInspector } from './TaskStop';
 import { TodoWriteInspector } from './TodoWrite';
 import { ToolSearchInspector } from './ToolSearch';
+import { WebFetchInspector } from './WebFetch';
+import { WebSearchInspector } from './WebSearch';
 import { WriteInspector } from './Write';
 
 // CC's own tool names (Bash / Edit / Glob / Grep / Read / Write) are already
@@ -28,6 +33,7 @@ import { WriteInspector } from './Write';
 // state for diff stats), so they live in their own sibling files.
 export const ClaudeCodeInspectors = {
   [ClaudeCodeApiName.Agent]: AgentInspector,
+  [ClaudeCodeApiName.AskUserQuestion]: AskUserQuestionInspector,
   [ClaudeCodeApiName.Bash]: createRunCommandInspector(ClaudeCodeApiName.Bash),
   [ClaudeCodeApiName.Edit]: EditInspector,
   [ClaudeCodeApiName.Glob]: createGlobLocalFilesInspector(ClaudeCodeApiName.Glob),
@@ -35,6 +41,10 @@ export const ClaudeCodeInspectors = {
     noResultsKey: 'No results',
     translationKey: ClaudeCodeApiName.Grep,
   }),
+  // Monitor is a long-running tracked tool — its turns drive a SignalCallbacks
+  // accordion below the AssistantGroup (LOBE-8998). The dedicated inspector
+  // uses the lucide `Monitor` (screen) icon to match the tool name.
+  [ClaudeCodeApiName.Monitor]: MonitorInspector,
   [ClaudeCodeApiName.Read]: ReadInspector,
   [ClaudeCodeApiName.ScheduleWakeup]: ScheduleWakeupInspector,
   [ClaudeCodeApiName.Skill]: SkillInspector,
@@ -42,5 +52,8 @@ export const ClaudeCodeInspectors = {
   [ClaudeCodeApiName.TaskStop]: TaskStopInspector,
   [ClaudeCodeApiName.TodoWrite]: TodoWriteInspector,
   [ClaudeCodeApiName.ToolSearch]: ToolSearchInspector,
+  [ClaudeCodeApiName.WebFetch]: WebFetchInspector,
+  [ClaudeCodeApiName.WebSearch]: WebSearchInspector,
   [ClaudeCodeApiName.Write]: WriteInspector,
+  ...LinearMcpInspectors,
 };

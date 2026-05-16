@@ -58,6 +58,7 @@ describe('IdentityExtractor', () => {
             relationship: 'self',
             role: 'developer',
             scoreConfidence: 0.8,
+            sourceIds: ['message-1'],
             sourceEvidence: null,
             type: 'personal',
           },

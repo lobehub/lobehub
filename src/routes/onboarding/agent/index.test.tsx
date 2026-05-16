@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -32,11 +32,12 @@ const renderAgentRoute = async ({
   vi.doMock('@/features/Onboarding/Agent', () => ({
     default: () => <div>Agent onboarding</div>,
   }));
+  const serverConfigState = {
+    featureFlags: { enableAgentOnboarding: enabled },
+    serverConfigInit,
+  };
   function selectFromServerConfigStore(selector: (state: Record<string, unknown>) => unknown) {
-    return selector({
-      featureFlags: { enableAgentOnboarding: enabled },
-      serverConfigInit,
-    });
+    return selector(serverConfigState);
   }
 
   vi.doMock('@/store/serverConfig', () => ({
@@ -84,7 +85,7 @@ describe('AgentOnboardingRoute', () => {
   it('renders the agent onboarding page when the feature is enabled', async () => {
     await renderAgentRoute({ enabled: true });
 
-    expect(screen.getByText('Agent onboarding')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Agent onboarding')).toBeInTheDocument());
   });
 
   it('shows a loading state before the server config is initialized', async () => {
@@ -102,7 +103,7 @@ describe('AgentOnboardingRoute', () => {
   it('redirects to classic onboarding when the feature is disabled', async () => {
     await renderAgentRoute({ enabled: false });
 
-    expect(screen.getByText('Classic onboarding')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Classic onboarding')).toBeInTheDocument());
   });
 
   it('redirects to classic onboarding on desktop builds', async () => {
@@ -114,7 +115,14 @@ describe('AgentOnboardingRoute', () => {
   it('redirects to /onboarding when the shared prefix is incomplete', async () => {
     await renderAgentRoute({ commonStepsCompleted: false, enabled: true });
 
-    expect(screen.getByText('Common onboarding')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Common onboarding')).toBeInTheDocument());
+  });
+
+  it('redirects to /onboarding instead of classic when shared prefix is incomplete even if the runtime flag is off', async () => {
+    await renderAgentRoute({ commonStepsCompleted: false, enabled: false });
+
+    await waitFor(() => expect(screen.getByText('Common onboarding')).toBeInTheDocument());
+    expect(screen.queryByText('Classic onboarding')).not.toBeInTheDocument();
   });
 
   it('redirects to classic when AGENT_ONBOARDING_ENABLED master switch is off', async () => {

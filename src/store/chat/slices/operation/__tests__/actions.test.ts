@@ -1141,12 +1141,33 @@ describe('Operation Actions', () => {
       expect(context.groupId).toBe('global-group');
     });
 
-    it('should throw error when operationId is invalid', () => {
+    it('should fall back to global state when operationId is invalid', () => {
       const { result } = renderHook(() => useChatStore());
 
-      expect(() => {
-        result.current.internal_getConversationContext({ operationId: 'invalid-op-id' });
-      }).toThrow('Operation not found');
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: 'fallback-agent',
+          activeTopicId: 'fallback-topic',
+          activeThreadId: 'fallback-thread',
+          activeGroupId: 'fallback-group',
+        });
+      });
+
+      // Long-lived intervention surfaces can outlive the operation they
+      // were started under (op GC'd 30s after runtime_end). The previous
+      // throw would tear down the whole optimistic write chain on Submit;
+      // instead, degrade gracefully to the global state so the IPC submit
+      // can still ship.
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const context = result.current.internal_getConversationContext({
+        operationId: 'invalid-op-id',
+      });
+      expect(context.agentId).toBe('fallback-agent');
+      expect(context.topicId).toBe('fallback-topic');
+      expect(context.threadId).toBe('fallback-thread');
+      expect(context.groupId).toBe('fallback-group');
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
     });
   });
 

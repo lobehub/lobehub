@@ -35,6 +35,7 @@ export const STORE_DEFAULTS: ElectronMainStore = {
   gatewayEnabled: true,
   gatewayUrl: 'https://device-gateway.lobehub.com',
   locale: 'auto',
+  localFileWorkspaceRoots: [],
   networkProxy: defaultProxySettings,
   shortcuts: DEFAULT_ELECTRON_DESKTOP_SHORTCUTS,
   storagePath: appStorageDir,

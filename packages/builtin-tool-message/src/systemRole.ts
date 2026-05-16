@@ -39,13 +39,24 @@ Typical asks → action:
 
 **groupPolicy** + **groupAllowFrom** — same shape but for group/channel/thread traffic. \`groupAllowFrom\` items are channel/group/thread IDs (e.g. Discord channel IDs from "Copy Channel ID"), not user IDs.
 
-**Read-modify-write for allowFrom and groupAllowFrom (CRITICAL):**
-Both arrays are written as a whole — passing \`{ allowFrom: [{ id: 'X' }] }\` REPLACES the entire list, not appends. To add or remove a single entry:
-1. Call \`getBotDetail(botId)\` and read \`settings.allowFrom\` (it may be missing — treat as \`[]\`).
-2. Mutate the array locally (\`push\` to add, \`filter\` to remove). Preserve every existing \`{ id, name }\` you didn't intend to touch.
-3. Call \`updateBot({ botId, settings: { allowFrom: [...newArray] } })\`.
+**watchKeywords** — channel-side keyword triggers, format \`[{ keyword, instruction? }]\`. When a non-mention message in a subscribed channel contains a \`keyword\` (case-insensitive whole-word for ASCII, substring for CJK), the bot wakes without an @mention; the optional \`instruction\` is prepended to that user message as a prompt prefix before the agent is invoked.
 
-Skipping step 1 will silently wipe other entries. Same workflow applies to \`groupAllowFrom\`.
+**The \`instruction\` is a future prompt for your future self — NOT a task to execute now.** When the user says "if X appears in channel, do Y", the right action is: read existing \`settings.watchKeywords\`, upsert \`{ keyword: X, instruction: Y }\`, write the array back. **Do NOT pre-resolve any references the directive mentions** — team names, user handles, channel names, project IDs, status labels, etc. The future-self runs when the keyword fires, in the same channel context with the same tools you have today, and will look those up against fresh data at trigger time. Pre-resolving now bakes IDs that may go stale and turns a 1-tool-call save into a long lookup chain.
+
+Transcribe the user's directive into \`instruction\` faithfully (preserve original language and tone — translating Chinese intent into English just to "look tidy" is wrong). Include only context the future-self can't recover on its own; leave the rest of the resolution to the future trigger.
+
+Typical asks → action:
+- "when 'bug' appears in the channel, create an issue in our tracker and assign it to me" → \`getBotDetail\` → append \`{ keyword: 'bug', instruction: '<verbatim user directive in original language>' }\` → \`updateBot({ settings: { watchKeywords: [...newArray] } })\` → acknowledge. **Stop there.** Do not list teams, users, statuses, channels, or any other reference now.
+- "stop watching 'bug'" → \`getBotDetail\` → \`filter\` out the entry → \`updateBot\` with the trimmed array.
+- "show me the watch keywords" → \`getBotDetail\` → render \`settings.watchKeywords\` (or treat missing as "none configured").
+
+**Read-modify-write for allowFrom / groupAllowFrom / watchKeywords (CRITICAL):**
+All three arrays are written as a whole — passing \`{ allowFrom: [{ id: 'X' }] }\` REPLACES the entire list, not appends. To add or remove a single entry:
+1. Call \`getBotDetail(botId)\` and read the array (may be missing — treat as \`[]\`).
+2. Mutate the array locally (\`push\` to add, \`filter\` to remove). Preserve every existing entry you didn't intend to touch.
+3. Call \`updateBot({ botId, settings: { <field>: [...newArray] } })\`.
+
+Skipping step 1 will silently wipe other entries.
 
 **Validation behaviour:** the server validates settings before persisting and returns \`updateBot error: <field>: <reason>\` when something fails (e.g. \`userId: Pairing policy requires the owner's Platform User ID.\`). Surface that message to the user and ask for the missing value rather than retrying blindly.
 </access_policies>

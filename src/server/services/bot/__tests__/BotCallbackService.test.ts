@@ -119,11 +119,28 @@ vi.mock('@/server/services/systemAgent', () => ({
 
 vi.mock('@/server/services/messenger/installations', () => ({
   getInstallationStore: mockMessengerGetInstallationStore,
+  messengerConnectionIdForUser: ({
+    installationKey,
+    userId,
+  }: {
+    installationKey: string;
+    userId: string;
+  }) => {
+    if (installationKey.endsWith(':singleton')) {
+      return `messenger:${installationKey.slice(0, -':singleton'.length)}:user-${userId}`;
+    }
+    return `messenger:${installationKey}:user-${userId}`;
+  },
 }));
 
 vi.mock('@/server/services/messenger/platforms', () => ({
   messengerPlatformRegistry: {
     createBinder: mockMessengerCreateBinder,
+    getPlatform: vi.fn().mockImplementation((platform: string) => ({
+      connectionMode: platform === 'discord' ? 'websocket' : 'webhook',
+      id: platform,
+      name: platform,
+    })),
   },
 }));
 

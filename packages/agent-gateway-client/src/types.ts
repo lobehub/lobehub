@@ -16,6 +16,23 @@ export type AgentStreamEventType =
    * wire union so consumers can pattern-match without casting.
    */
   | 'tool_result'
+  /**
+   * Producer needs structured input from the user mid-run (e.g. CC's
+   * AskUserQuestion delivered via a local MCP server). Distinct from
+   * `tool_execute` — that one means "client, please run this tool"; this
+   * one means "user, please answer these questions". Renderer surfaces a
+   * dedicated UI; the producer's MCP handler stays pending until the
+   * paired `agent_intervention_response` resolves it (or the deadline
+   * passes / the op is cancelled).
+   */
+  | 'agent_intervention_request'
+  /**
+   * The user's answer to a prior `agent_intervention_request`. Flows back
+   * to the producer (Electron main → MCP handler resolve, sandbox →
+   * server bus → CLI). Carries either a structured `result` or a
+   * cancellation marker.
+   */
+  | 'agent_intervention_response'
   | 'step_start'
   | 'step_complete'
   | 'error';
@@ -76,6 +93,39 @@ export interface StepCompleteData {
   phase: string;
   reason?: string;
   reasonDetail?: string;
+}
+
+/**
+ * Producer → consumer: structured-input request the user must answer
+ * directly (no tool execution involved). The producer's tool handler stays
+ * blocked until a matching `agent_intervention_response` (correlated by
+ * `toolCallId`) flows back, or the `deadline` is reached.
+ */
+export interface AgentInterventionRequestData {
+  /** Tool API name (e.g. `'askUserQuestion'`). */
+  apiName: string;
+  /** JSON-encoded payload the UI renders (e.g. `{ questions: [...] }`). */
+  arguments: string;
+  /** Unix-ms wall-clock at which the producer will give up waiting. */
+  deadline: number;
+  /** Tool plugin identifier (e.g. `'claude-code'`). */
+  identifier: string;
+  /** Correlation key. Stable for the lifetime of the intervention. */
+  toolCallId: string;
+}
+
+/**
+ * Consumer → producer: the user's answer to a prior intervention request.
+ * Either `result` (success) or `cancelled: true` (timeout / user cancel).
+ */
+export interface AgentInterventionResponseData {
+  /** Set when the user cancelled or the deadline elapsed. */
+  cancelled?: boolean;
+  /** When `cancelled`, optional reason for telemetry/logging. */
+  cancelReason?: 'timeout' | 'user_cancelled' | 'session_ended';
+  /** User-supplied answer (JSON-serializable). Absent when cancelled. */
+  result?: unknown;
+  toolCallId: string;
 }
 
 /**

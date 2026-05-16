@@ -3,12 +3,15 @@ import type { RenderDisplayControl } from '@lobechat/types';
 
 import { ClaudeCodeApiName } from '../../types';
 import Agent from './Agent';
+import AskUserQuestion from './AskUserQuestion';
 import Edit from './Edit';
 import Glob from './Glob';
 import Grep from './Grep';
 import Read from './Read';
 import Skill from './Skill';
 import TodoWrite from './TodoWrite';
+import WebFetch from './WebFetch';
+import WebSearch from './WebSearch';
 import Write from './Write';
 
 /**
@@ -19,6 +22,7 @@ import Write from './Write';
  */
 export const ClaudeCodeRenders = {
   [ClaudeCodeApiName.Agent]: Agent,
+  [ClaudeCodeApiName.AskUserQuestion]: AskUserQuestion,
   // RunCommand already renders `args.command` + combined output the way CC emits —
   // use the shared component directly instead of wrapping it in a re-export file.
   [ClaudeCodeApiName.Bash]: RunCommandRender,
@@ -28,6 +32,8 @@ export const ClaudeCodeRenders = {
   [ClaudeCodeApiName.Read]: Read,
   [ClaudeCodeApiName.Skill]: Skill,
   [ClaudeCodeApiName.TodoWrite]: TodoWrite,
+  [ClaudeCodeApiName.WebFetch]: WebFetch,
+  [ClaudeCodeApiName.WebSearch]: WebSearch,
   [ClaudeCodeApiName.Write]: Write,
 };
 
