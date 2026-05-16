@@ -15,7 +15,7 @@ interface MessageSignal {
   sequence?: number;
   sourceToolCallId: string;
   sourceToolName: string;
-  type: 'tool-stdout' | 'tool-callback';
+  type: 'tool-stdout' | 'tool-callback' | 'task-completion';
 }
 
 /**
@@ -33,6 +33,14 @@ const getMessageSignal = (msg: Message): MessageSignal | undefined => {
   if (msg.tools && msg.tools.length > 0) return undefined;
   return (msg.metadata as { signal?: MessageSignal } | undefined | null)?.signal;
 };
+
+/** `tool-stdout` / `tool-callback` — reactive callback turns rendered inside the SignalCallbacks accordion. */
+const isCallbackSignal = (sig: MessageSignal | undefined): boolean =>
+  sig?.type === 'tool-stdout' || sig?.type === 'tool-callback';
+
+/** `task-completion` — post-task summary, rendered as a plain message AFTER the SignalCallbacks block. */
+const isTaskCompletionSignal = (sig: MessageSignal | undefined): boolean =>
+  sig?.type === 'task-completion';
 
 /**
  * MessageCollector - Handles collection of related messages
@@ -171,10 +179,13 @@ export class MessageCollector {
       const children = allMessages.filter((m) => m.parentId === toolMsg.id);
       const callbacks: Message[] = [];
       for (const child of children) {
-        if (!getMessageSignal(child)) continue;
+        if (!isCallbackSignal(getMessageSignal(child))) continue;
         callbacks.push(child);
       }
       if (callbacks.length === 0) continue;
+      // (task-completion siblings are emitted separately by
+      // `collectFlatTaskCompletions` so they land in the parent
+      // AssistantGroup after the callbacks accordion.)
 
       callbacks.sort((a, b) => {
         const sa = getMessageSignal(a)?.sequence ?? Number.POSITIVE_INFINITY;
@@ -190,6 +201,29 @@ export class MessageCollector {
       });
     }
     return blocks;
+  }
+
+  /**
+   * Flat-list variant — find post-task-summary assistants (LOBE-8998),
+   * i.e. toolless assistants tagged with
+   * `metadata.signal.type === 'task-completion'`, fired by the LLM after
+   * CC delivers `task_notification` for a long-running tool.
+   *
+   * Returns them in createdAt order; the caller is responsible for
+   * marking returned messages as processed so they don't render as
+   * separate top-level groups.
+   */
+  collectFlatTaskCompletions(allToolMessages: Message[], allMessages: Message[]): Message[] {
+    const completions: Message[] = [];
+    for (const toolMsg of allToolMessages) {
+      const children = allMessages.filter((m) => m.parentId === toolMsg.id);
+      for (const child of children) {
+        if (!isTaskCompletionSignal(getMessageSignal(child))) continue;
+        completions.push(child);
+      }
+    }
+    completions.sort((a, b) => a.createdAt - b.createdAt);
+    return completions;
   }
 
   /**
@@ -286,15 +320,16 @@ export class MessageCollector {
         const childMsg = this.messageMap.get(child.id);
         if (childMsg?.role !== 'tool') continue;
 
-        // Gather signal-tagged toolless callbacks among this tool's
-        // children. `getMessageSignal` already returns undefined for
-        // tool-using assistants and non-assistants, so the filter is
-        // straightforward.
+        // Gather callback-typed signal toolless siblings among this
+        // tool's children. `getMessageSignal` already returns undefined
+        // for tool-using assistants and non-assistants; `task-completion`
+        // turns are excluded here so they render outside the accordion
+        // (see `collectTaskCompletions`).
         const callbacks: Message[] = [];
         for (const toolChild of child.children) {
           const toolChildMsg = this.messageMap.get(toolChild.id);
           if (!toolChildMsg) continue;
-          if (!getMessageSignal(toolChildMsg)) continue;
+          if (!isCallbackSignal(getMessageSignal(toolChildMsg))) continue;
           callbacks.push(toolChildMsg);
         }
 
@@ -332,6 +367,62 @@ export class MessageCollector {
 
     walk(idNode);
     return blocks;
+  }
+
+  /**
+   * Collect post-task-summary toolless siblings (LOBE-8998) — assistants
+   * tagged with `metadata.signal.type === 'task-completion'`, fired by
+   * the LLM after CC delivers `system task_notification` for a long-
+   * running tool (Monitor, etc.). Each one belongs inside the same
+   * AssistantGroup as the preceding SignalCallbacks block, rendered as
+   * a plain message AFTER the accordion.
+   *
+   * Walks the same main-chain as `collectAssistantGroupMessages` so the
+   * lookup tracks signal-tagged toolless siblings exactly where they
+   * live in the parentId tree (children of the source tool's
+   * tool_result, alongside the callbacks).
+   *
+   * Returned in creation order. Multiple completions per group are rare
+   * but supported (e.g. two long-running tools both summarized in one
+   * LLM call).
+   */
+  collectTaskCompletions(message: Message, idNode: IdNode): MessageNode[] {
+    const groupAgentId = message.agentId;
+    const nodes: MessageNode[] = [];
+    const visited = new Set<string>();
+
+    const walk = (node: IdNode): void => {
+      if (visited.has(node.id)) return;
+      visited.add(node.id);
+
+      for (const child of node.children) {
+        const childMsg = this.messageMap.get(child.id);
+        if (childMsg?.role !== 'tool') continue;
+
+        for (const toolChild of child.children) {
+          const toolChildMsg = this.messageMap.get(toolChild.id);
+          if (!toolChildMsg) continue;
+          if (toolChildMsg.agentId !== groupAgentId) continue;
+          if (!isTaskCompletionSignal(getMessageSignal(toolChildMsg))) continue;
+          nodes.push({ id: toolChildMsg.id, type: 'message' });
+        }
+
+        // Continue walking the main chain into the next non-signal
+        // follower under this tool (same skip rule as
+        // `collectAssistantGroupMessages`).
+        for (const nextChild of child.children) {
+          const nextMsg = this.messageMap.get(nextChild.id);
+          if (nextMsg?.role !== 'assistant') continue;
+          if (nextMsg.agentId !== groupAgentId) continue;
+          if (getMessageSignal(nextMsg)) continue;
+          walk(nextChild);
+          break;
+        }
+      }
+    };
+
+    walk(idNode);
+    return nodes;
   }
 
   /**

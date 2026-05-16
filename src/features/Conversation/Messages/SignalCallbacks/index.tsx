@@ -19,9 +19,6 @@ const styles = createStaticStyles(({ css }) => ({
       border-block-end: 1px solid ${cssVar.colorBorderSecondary};
     }
   `,
-  container: css`
-    margin-block-start: 8px;
-  `,
   sequence: css`
     flex: none;
 
@@ -39,7 +36,6 @@ const SignalCallbacks = memo<{ block: UISignalCallbacksBlock }>(({ block }) => {
 
   return (
     <Accordion
-      className={styles.container}
       expandedKeys={expandedKeys}
       gap={4}
       onExpandedChange={(keys) => setExpandedKeys(keys as string[])}

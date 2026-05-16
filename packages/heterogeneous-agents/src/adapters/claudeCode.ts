@@ -376,6 +376,20 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
    * on the next `tool_use` (LLM is back on the main chain).
    */
   private pendingExternalSignal: ExternalSignalContext | undefined;
+  /**
+   * Source-tool lineage of the most recently completed long-running task,
+   * waiting to be stamped on the post-task summary turn with
+   * `type: 'task-completion'`.
+   *
+   * Armed when `system task_notification` ends an active task; consumed
+   * by the NEXT `message_start` that takes the natural-turn branch
+   * (no other active task triggering a callback). Cleared on `result`
+   * so it never leaks across LLM runs.
+   *
+   * Lets the renderer keep the summary inside the same AssistantGroup as
+   * the preceding callbacks instead of letting it spawn a separate group.
+   */
+  private pendingTaskCompletion: { sourceToolCallId: string; sourceToolName: string } | undefined;
 
   adapt(raw: any): HeterogeneousAgentEvent[] {
     if (!raw || typeof raw !== 'object') return [];
@@ -432,6 +446,18 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       return [];
     }
     if (raw.subtype === 'task_notification' && raw.task_id) {
+      // Capture lineage BEFORE deleting so the next natural turn (the
+      // post-task summary, after CC re-invokes the LLM with a synthesized
+      // task-ended notification) can be tagged with `task-completion`.
+      // Last-task-wins if multiple tasks end before a summary fires — in
+      // practice CC summarizes once per LLM call.
+      const ending = this.activeTasks.get(raw.task_id);
+      if (ending) {
+        this.pendingTaskCompletion = {
+          sourceToolCallId: ending.toolUseId,
+          sourceToolName: ending.sourceToolName,
+        };
+      }
       this.activeTasks.delete(raw.task_id);
       return [];
     }
@@ -887,6 +913,10 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     this.pendingRateLimitInfo = undefined;
     this.streamedTextByMessageId.clear();
     this.streamedThinkingByMessageId.clear();
+    // Drop any unconsumed task-completion lineage so the next LLM run
+    // doesn't inherit it (e.g. a follow-up user turn would otherwise
+    // wrongly inherit the previous run's task-completion tag).
+    this.pendingTaskCompletion = undefined;
 
     return [...events, this.makeEvent('stream_end', {}), finalEvent];
   }
@@ -1013,6 +1043,17 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
         sourceToolName: task.sourceToolName,
         type: 'tool-stdout',
       };
+    } else if (this.pendingTaskCompletion) {
+      // Natural turn that follows a `task_notification` — this is the
+      // post-task summary. Tag it with the source-tool lineage so the
+      // collector keeps it inside the same AssistantGroup as the
+      // preceding callbacks (rendered after the SignalCallbacks block).
+      this.pendingExternalSignal = {
+        sourceToolCallId: this.pendingTaskCompletion.sourceToolCallId,
+        sourceToolName: this.pendingTaskCompletion.sourceToolName,
+        type: 'task-completion',
+      };
+      this.pendingTaskCompletion = undefined;
     } else {
       // Natural turn boundary — clear any stale signal so the new
       // assistant joins the main chain.

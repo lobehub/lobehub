@@ -233,12 +233,22 @@ export class FlatListBuilder {
           allMessages,
         );
 
+        // Post-task-summary turns (LOBE-8998) — toolless siblings of
+        // the callbacks under the same tool_result, tagged with
+        // `signal.type === 'task-completion'`. Belong inside the same
+        // AssistantGroup, rendered AFTER the SignalCallbacks accordion.
+        const taskCompletionMessages = this.messageCollector.collectFlatTaskCompletions(
+          allToolMessages,
+          allMessages,
+        );
+
         // Create assistantGroup virtual message
         const groupMessage = this.createAssistantGroupMessage(
           assistantChain[0],
           assistantChain,
           allToolMessages,
           signalBlocks,
+          taskCompletionMessages,
         );
         flatList.push(groupMessage);
 
@@ -247,6 +257,9 @@ export class FlatListBuilder {
         allToolMessages.forEach((m) => processedIds.add(m.id));
         for (const block of signalBlocks) {
           for (const cb of block.callbacks) processedIds.add(cb.id);
+        }
+        for (const completion of taskCompletionMessages) {
+          processedIds.add(completion.id);
         }
 
         // Continue after the assistant chain
@@ -768,6 +781,7 @@ export class FlatListBuilder {
       sourceToolMessageId: string;
       sourceToolName: string;
     }[],
+    taskCompletionMessages?: Message[],
   ): Message {
     const children: AssistantContentBlock[] = [];
 
@@ -945,6 +959,27 @@ export class FlatListBuilder {
         sourceToolMessageId: block.sourceToolMessageId,
         sourceToolName: block.sourceToolName,
       }));
+    }
+
+    // Snapshot post-task-summary turns as content blocks (LOBE-8998).
+    // They render after `<SignalCallbacks>` inside the same group, via
+    // a second `<Group>` that pulls live content from the store using
+    // the block id (no need to denormalize text here — keeps streaming
+    // updates working without an extra refresh).
+    if (taskCompletionMessages && taskCompletionMessages.length > 0) {
+      result.taskCompletions = taskCompletionMessages.map((m) => {
+        const block: AssistantContentBlock = {
+          content: m.content ?? '',
+          id: m.id,
+        };
+        if (m.error) block.error = m.error;
+        if (m.fileList && m.fileList.length > 0) block.fileList = m.fileList;
+        if (m.imageList && m.imageList.length > 0) block.imageList = m.imageList;
+        if (m.performance) block.performance = m.performance;
+        if (m.reasoning) block.reasoning = m.reasoning;
+        if (m.usage) block.usage = m.usage;
+        return block;
+      });
     }
 
     return result;

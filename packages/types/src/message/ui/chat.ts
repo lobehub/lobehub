@@ -268,6 +268,19 @@ export interface UIChatMessage {
    */
   targetId?: string | null;
   /**
+   * Post-task summary blocks (LOBE-8998). Set on virtual assistantGroup
+   * messages by FlatListBuilder when the chain contains toolless
+   * assistants tagged with `signal.type === 'task-completion'` — the
+   * final-summary turn the LLM emits after CC delivers
+   * `system task_notification` for a long-running tool (Monitor, etc.).
+   *
+   * Rendered after `<SignalCallbacks>` so the natural narrative inside
+   * the same AssistantGroup reads: initial reply → callback accordion →
+   * summary. Multiple entries are possible (rare) if several tools
+   * completed within one LLM run.
+   */
+  taskCompletions?: AssistantContentBlock[];
+  /**
    * Task execution details for role='task' messages
    * Retrieved from the associated Thread via sourceMessageId
    */

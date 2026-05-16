@@ -164,7 +164,7 @@ export const MessageSignalSchema = z.object({
   sequence: z.number().optional(),
   sourceToolCallId: z.string(),
   sourceToolName: z.string(),
-  type: z.enum(['tool-stdout', 'tool-callback']),
+  type: z.enum(['tool-stdout', 'tool-callback', 'task-completion']),
 });
 
 export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSchema).extend({
@@ -383,6 +383,14 @@ export interface MessageSignal {
   sourceToolCallId: string;
   /** Tool name for UI labelling, e.g. `Monitor`. */
   sourceToolName: string;
-  /** Discriminator for the trigger source. */
-  type: 'tool-stdout' | 'tool-callback';
+  /**
+   * Discriminator for the trigger source.
+   *
+   * - `tool-stdout`: reactive turn driven by a long-running tool's stdout push.
+   * - `tool-callback`: (future) one-shot async callback variant.
+   * - `task-completion`: post-task summary turn after the long-running tool
+   *   ended; keeps the summary inside the same AssistantGroup as the
+   *   preceding callbacks.
+   */
+  type: 'tool-stdout' | 'tool-callback' | 'task-completion';
 }

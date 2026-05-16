@@ -1902,7 +1902,7 @@ describe('ClaudeCodeAdapter', () => {
       expect(sequences).toEqual([1, 2, 3]);
     });
 
-    it('stops tagging after `task_notification` ends the task', () => {
+    it('tags the post-task summary turn with `task-completion` after `task_notification`', () => {
       const adapter = new ClaudeCodeAdapter();
       init(adapter);
 
@@ -1921,15 +1921,59 @@ describe('ClaudeCodeAdapter', () => {
       const cb1 = adapter.adapt(ccMessageStart('msg_03'));
       expect(
         cb1.find((e) => e.type === 'stream_start' && e.data?.newStep)!.data.externalSignal,
-      ).toBeDefined();
+      ).toEqual({
+        sequence: 1,
+        sourceToolCallId: 'toolu_mon',
+        sourceToolName: 'Monitor',
+        type: 'tool-stdout',
+      });
 
       // Task ends
       adapter.adapt(ccTaskNotification('task_1'));
 
-      // Next turn — no active task → no signal
+      // Next turn — task ended, but the post-task summary keeps the
+      // source-tool lineage so MessageCollector can render it inside
+      // the same AssistantGroup as the preceding callbacks.
       const after = adapter.adapt(ccMessageStart('msg_04'));
       expect(
         after.find((e) => e.type === 'stream_start' && e.data?.newStep)!.data.externalSignal,
+      ).toEqual({
+        sourceToolCallId: 'toolu_mon',
+        sourceToolName: 'Monitor',
+        type: 'task-completion',
+      });
+
+      // The completion tag is one-shot — a subsequent turn (e.g. if CC
+      // spawned another LLM call) must not inherit it.
+      const followUp = adapter.adapt(ccMessageStart('msg_05'));
+      expect(
+        followUp.find((e) => e.type === 'stream_start' && e.data?.newStep)!.data.externalSignal,
+      ).toBeUndefined();
+    });
+
+    it('clears unconsumed task-completion lineage on `result`', () => {
+      const adapter = new ClaudeCodeAdapter();
+      init(adapter);
+
+      adapter.adapt({
+        message: {
+          content: [{ id: 'toolu_mon', input: {}, name: 'Monitor', type: 'tool_use' }],
+          id: 'msg_01',
+        },
+        type: 'assistant',
+      });
+      adapter.adapt(ccTaskStarted('task_1', 'toolu_mon'));
+      adapter.adapt(ccUser('toolu_mon', 'Monitor started'));
+      adapter.adapt(ccMessageStart('msg_02'));
+      adapter.adapt(ccTaskNotification('task_1'));
+      // Run ends before the summary turn fires (unusual but possible).
+      adapter.adapt({ result: 'ok', type: 'result', usage: undefined });
+
+      // A later turn (e.g. follow-up user message) must NOT inherit
+      // the unconsumed task-completion lineage.
+      const next = adapter.adapt(ccMessageStart('msg_03'));
+      expect(
+        next.find((e) => e.type === 'stream_start' && e.data?.newStep)!.data.externalSignal,
       ).toBeUndefined();
     });
 

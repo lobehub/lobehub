@@ -3174,8 +3174,14 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         sourceToolName: 'Monitor',
         type: 'tool-stdout',
       });
-      // Step 4 post-task summary: no signal
-      expect(assistantCreates[3][0].metadata?.signal).toBeUndefined();
+      // Step 4 post-task summary: tagged with `task-completion` (LOBE-8998)
+      // so MessageCollector renders it inside the same AssistantGroup,
+      // after the SignalCallbacks accordion.
+      expect(assistantCreates[3][0].metadata?.signal).toEqual({
+        sourceToolCallId: 'toolu_mon_0',
+        sourceToolName: 'Monitor',
+        type: 'task-completion',
+      });
     });
 
     it('does NOT stamp metadata.signal on turns following a tool_result (main-chain follow-up)', async () => {

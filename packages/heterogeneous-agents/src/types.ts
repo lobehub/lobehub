@@ -84,13 +84,22 @@ export interface ExternalSignalContext {
   /** Tool name for UI labelling, e.g. `Monitor`. */
   sourceToolName: string;
   /**
-   * Discriminator for the trigger source — wire-stable. `tool-stdout`
-   * is the Monitor / long-running-tool push pattern; `tool-callback` is
-   * the (future) one-shot async callback. Webhook / scheduled /
-   * agent-signal-source variants land here as the pipeline absorbs
-   * more upstreams.
+   * Discriminator for the trigger source — wire-stable.
+   *
+   * - `tool-stdout`: Monitor / long-running-tool stdout push pattern —
+   *   each turn is a reactive reply to a stdout event.
+   * - `tool-callback`: (future) one-shot async callback variant.
+   * - `task-completion`: the post-task summary turn — fired by the LLM
+   *   after CC delivers `system task_notification` (and the implicit
+   *   "task ended" user event). Carries the same `sourceTool*` lineage
+   *   as the preceding callbacks so the renderer can keep the summary
+   *   inside the same AssistantGroup (appended after the SignalCallbacks
+   *   block), instead of letting it spawn a separate group.
+   *
+   * Future webhook / scheduled / agent-signal-source variants land
+   * here as the pipeline absorbs more upstreams.
    */
-  type: 'tool-stdout' | 'tool-callback';
+  type: 'tool-stdout' | 'tool-callback' | 'task-completion';
 }
 
 /**

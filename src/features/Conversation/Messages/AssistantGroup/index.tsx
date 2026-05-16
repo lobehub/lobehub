@@ -1,6 +1,7 @@
 'use client';
 
 import type { AssistantContentBlock, EmojiReaction, UISignalCallbacksBlock } from '@lobechat/types';
+import { Flexbox } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import type { MouseEventHandler, ReactNode } from 'react';
 import { memo, Suspense, useCallback, useMemo } from 'react';
@@ -65,6 +66,7 @@ const GroupMessage = memo<GroupMessageProps>(
       branch,
       metadata,
       signalCallbacks,
+      taskCompletions,
     } = item;
     const avatar = useAgentMeta(agentId);
 
@@ -173,20 +175,41 @@ const GroupMessage = memo<GroupMessageProps>(
         onAvatarClick={onAvatarClick}
         onMouseEnter={onMouseEnter}
       >
-        {children && children.length > 0 && (
-          <Group
-            blocks={children}
-            content={lastAssistantMsg?.content}
-            contentId={contentId}
-            defaultWorkflowExpandLevel={defaultWorkflowExpandLevel}
-            disableEditing={disableEditing}
-            id={id}
-            messageIndex={index}
-          />
-        )}
-        {(signalCallbacks as UISignalCallbacksBlock[] | undefined)?.map((block) => (
-          <SignalCallbacks block={block} key={block.sourceToolMessageId} />
-        ))}
+        {/*
+          Wrap main chain + signal callbacks + post-task summary in a tight
+          flex stack so the SignalCallbacks accordion sits visually inside
+          the same "agent reply" block. The ChatItem body gap (16px) would
+          otherwise stretch them apart and the natural narrative — initial
+          reply → callbacks → summary — reads as three disconnected
+          sections (LOBE-8998).
+        */}
+        <Flexbox gap={4}>
+          {children && children.length > 0 && (
+            <Group
+              blocks={children}
+              content={lastAssistantMsg?.content}
+              contentId={contentId}
+              defaultWorkflowExpandLevel={defaultWorkflowExpandLevel}
+              disableEditing={disableEditing}
+              id={id}
+              messageIndex={index}
+            />
+          )}
+          {(signalCallbacks as UISignalCallbacksBlock[] | undefined)?.map((block) => (
+            <SignalCallbacks block={block} key={block.sourceToolMessageId} />
+          ))}
+          {taskCompletions && taskCompletions.length > 0 && (
+            <Group
+              blocks={taskCompletions}
+              contentId={taskCompletions.at(-1)?.id}
+              defaultWorkflowExpandLevel={defaultWorkflowExpandLevel}
+              disableEditing={disableEditing}
+              id={id}
+              messageIndex={index}
+            />
+          )}
+        </Flexbox>
+
         {aggregatedFileList.length > 0 && (
           <div style={{ marginTop: 8 }}>
             <FileListViewer items={aggregatedFileList} />
