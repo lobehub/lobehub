@@ -165,19 +165,21 @@ const startGateway = async () => {
 
 // Function to create QStash schedule for dispatching workflow tasks every 10 minutes
 const createQstashSchedule = async () => {
-  const QSTASH_URL = process.env.QSTASH_URL;
-  if (!QSTASH_URL) return;
+  const QSTASH_URL = process.env.QSTASH_URL || 'https://qstash-eu-central-1.upstash.io';
 
   const QSTASH_TOKEN = process.env.QSTASH_TOKEN;
-  if (!QSTASH_TOKEN) return;
+  if (!QSTASH_TOKEN) {
+    console.warn('⚠️ QStash: QSTASH_TOKEN not set. Skipping schedule creation.');
+    return;
+  }
 
   const APP_URL = process.env.APP_URL;
-  const INTERNAL_APP_URL = process.env.INTERNAL_APP_URL;
-  if (!APP_URL && !INTERNAL_APP_URL) return;
+  if (!APP_URL) {
+    console.warn('⚠️ QStash: APP_URL not set. Skipping schedule creation.');
+    return;
+  }
 
-  const BASE_URL = INTERNAL_APP_URL || APP_URL;
-
-  const url = `${QSTASH_URL}/v2/schedules/${BASE_URL}/api/workflows/task/schedule-dispatch`;
+  const url = `${QSTASH_URL}/v2/schedules/${APP_URL}/api/workflows/task/schedule-dispatch`;
 
   try {
     const res = await fetch(url, {
@@ -187,7 +189,7 @@ const createQstashSchedule = async () => {
         'Content-Type': 'application/json',
         'Upstash-Method': 'POST',
         'Upstash-Cron': '*/10 * * * *',
-        'Upstash-Schedule-Id': 'task-schedule-dispatch',
+        'Upstash-Schedule-Id': 'lobe-task-schedule-dispatch',
       },
       body: JSON.stringify({}),
     });
