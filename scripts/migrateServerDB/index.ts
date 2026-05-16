@@ -4,6 +4,7 @@ import * as dotenv from 'dotenv';
 import dotenvExpand from 'dotenv-expand';
 import { migrate as neonMigrate } from 'drizzle-orm/neon-serverless/migrator';
 import { migrate as nodeMigrate } from 'drizzle-orm/node-postgres/migrator';
+import { Client as PgClient } from 'pg';
 
 // @ts-ignore tsgo handle esm import cjs and compatibility issues
 import { DB_FAIL_INIT_HINT, DUPLICATE_EMAIL_HINT, PGVECTOR_HINT } from './errorHint';
@@ -24,6 +25,49 @@ const migrationsFolder = join(__dirname, '../../packages/database/migrations');
 
 const isVercelBuild = process.env.VERCEL === '1' || !!process.env.VERCEL_ENV;
 const shouldMigrateOnVercelBuild = process.env.MIGRATE_ON_VERCEL_BUILD === '1';
+const shouldAutoRepairMigrationHistory = process.env.MIGRATION_AUTO_REPAIR === '1' || isVercelBuild;
+
+const isOutOfSyncMigrationHistoryError = (err: unknown): boolean => {
+  const code = (err as { code?: string; cause?: { code?: string } })?.code;
+  const causeCode = (err as { cause?: { code?: string } })?.cause?.code;
+  const query = ((err as { query?: string })?.query || '').toLowerCase();
+  const message = ((err as { message?: string })?.message || '').toLowerCase();
+
+  const missingRelation =
+    code === '42P01' ||
+    causeCode === '42P01' ||
+    query.includes('relation') ||
+    message.includes('relation');
+
+  if (!missingRelation) return false;
+
+  // Typical symptom when __drizzle_migrations points to a much later migration
+  // while foundational tables were never created in this DB.
+  return (
+    query.includes('alter table "topics"') ||
+    query.includes('insert into "verifications"') ||
+    message.includes('relation "topics" does not exist') ||
+    message.includes('relation "verifications" does not exist')
+  );
+};
+
+const resetDrizzleMigrationHistory = async (dbUrl: string) => {
+  const client = new PgClient({ connectionString: dbUrl });
+  await client.connect();
+  try {
+    await client.query('CREATE SCHEMA IF NOT EXISTS "drizzle";');
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "drizzle"."__drizzle_migrations" (
+        "id" SERIAL PRIMARY KEY,
+        "hash" text NOT NULL,
+        "created_at" bigint
+      );
+    `);
+    await client.query('TRUNCATE TABLE "drizzle"."__drizzle_migrations";');
+  } finally {
+    await client.end();
+  }
+};
 
 const runMigrations = async () => {
   const { serverDB } = await import('../../packages/database/src/server');
@@ -48,7 +92,20 @@ if (isVercelBuild && !shouldMigrateOnVercelBuild) {
     '🟢 Vercel build detected. Skip db:migrate by default. Set MIGRATE_ON_VERCEL_BUILD=1 to enable.',
   );
 } else if (connectionString) {
-  runMigrations().catch((err) => {
+  runMigrations().catch(async (err) => {
+    if (shouldAutoRepairMigrationHistory && isOutOfSyncMigrationHistoryError(err)) {
+      console.info(
+        '⚠️ Detected out-of-sync drizzle migration history. Resetting drizzle.__drizzle_migrations and retrying once...',
+      );
+      try {
+        await resetDrizzleMigrationHistory(connectionString);
+        await runMigrations();
+        return;
+      } catch (repairErr) {
+        console.error('❌ Automatic migration history repair failed:', repairErr);
+      }
+    }
+
     console.error('❌ Database migrate failed:', err);
 
     const errMsg = err.message as string;
