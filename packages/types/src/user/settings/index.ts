@@ -12,7 +12,6 @@ import type { NotificationSettings } from './notification';
 import type { UserSystemAgentConfig } from './systemAgent';
 import type { UserToolConfig } from './tool';
 import type { UserTTSConfig } from './tts';
-import type { UserUsageSettings } from './usage';
 
 export type UserDefaultAgent = LobeAgentSettings;
 
@@ -29,7 +28,6 @@ export * from './sync';
 export * from './systemAgent';
 export * from './tool';
 export * from './tts';
-export * from './usage';
 
 /**
  * User configuration settings
@@ -47,7 +45,6 @@ export interface UserSettings {
   systemAgent: UserSystemAgentConfig;
   tool: UserToolConfig;
   tts: UserTTSConfig;
-  usage: UserUsageSettings;
 }
 
 /**
@@ -68,7 +65,6 @@ export const UserSettingsSchema = z
     systemAgent: z.any().optional(),
     tool: z.any().optional(),
     tts: z.any().optional(),
-    usage: z.any().optional(),
   })
   .passthrough()
   .partial();

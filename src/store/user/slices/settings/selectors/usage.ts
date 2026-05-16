@@ -1,14 +1,12 @@
-import { DEFAULT_USAGE_SETTINGS } from '@lobechat/const';
+import { DEFAULT_COST_ESTIMATE_WARNING_THRESHOLD } from '@lobechat/const';
 
 import { type UserStore } from '../../../store';
 import { currentSettings } from './settings';
 
-const usageSettings = (s: UserStore) => currentSettings(s).usage || DEFAULT_USAGE_SETTINGS;
-
 const costEstimateWarningThreshold = (s: UserStore) =>
-  usageSettings(s).costEstimateWarningThreshold;
+  currentSettings(s).general.costEstimateWarningThreshold ??
+  DEFAULT_COST_ESTIMATE_WARNING_THRESHOLD;
 
 export const userUsageSettingsSelectors = {
   costEstimateWarningThreshold,
-  usageSettings,
 };

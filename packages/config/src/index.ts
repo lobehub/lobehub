@@ -9,7 +9,6 @@ import {
   DEFAULT_SYSTEM_AGENT_CONFIG,
   DEFAULT_TOOL_CONFIG,
   DEFAULT_TTS_CONFIG,
-  DEFAULT_USAGE_SETTINGS,
 } from '@lobechat/const';
 import type { UserSettings } from '@lobechat/types';
 
@@ -25,5 +24,4 @@ export const DEFAULT_SETTINGS: UserSettings = {
   systemAgent: DEFAULT_SYSTEM_AGENT_CONFIG,
   tool: DEFAULT_TOOL_CONFIG,
   tts: DEFAULT_TTS_CONFIG,
-  usage: DEFAULT_USAGE_SETTINGS,
 };
