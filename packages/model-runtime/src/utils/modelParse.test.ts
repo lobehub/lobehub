@@ -1,5 +1,5 @@
 import type { ChatModelCard } from '@lobechat/types';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   detectModelProvider,
@@ -10,7 +10,8 @@ import {
 } from './modelParse';
 
 // Mock the imported LOBE_DEFAULT_MODEL_LIST
-const { mockDefaultModelList } = vi.hoisted(() => ({
+const { loadModelsMock, mockDefaultModelList } = vi.hoisted(() => ({
+  loadModelsMock: vi.fn(),
   mockDefaultModelList: [
     {
       contextWindowTokens: 8192,
@@ -114,6 +115,8 @@ vi.mock('model-bank', () => ({
     options: ['chat', 'embedding', 'tts', 'stt', 'image', 'video', 'text2music', 'realtime'],
   },
   LOBE_DEFAULT_MODEL_LIST: mockDefaultModelList,
+  loadModels: vi.fn().mockResolvedValue(mockDefaultModelList),
+  ModelProvider: { LobeHub: 'lobehub' },
   // 新增 provider 专用清单，供 findKnownModelByProvider 使用
   google: [
     {
@@ -125,8 +128,12 @@ vi.mock('model-bank', () => ({
 }));
 
 describe('modelParse', () => {
+  beforeEach(() => {
+    loadModelsMock.mockResolvedValue(mockDefaultModelList);
+  });
+
   afterEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('detectModelProvider', () => {

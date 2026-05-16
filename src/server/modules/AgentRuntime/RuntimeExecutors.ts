@@ -396,7 +396,8 @@ export const createRuntimeExecutors = (
       const agentConfig = ctx.agentConfig;
       let processedMessages;
       if (agentConfig) {
-        const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
+        const { loadModels } = await import('@/business/model-bank/loadModels');
+        const builtinModels = await loadModels();
 
         // Extract <refer_topic> tags from messages and fetch summaries.
         // Skip if messages already contain injected topic_reference_context
@@ -626,15 +627,13 @@ export const createRuntimeExecutors = (
           userTimezone: ctx.userTimezone,
           capabilities: {
             isCanUseFC: (m: string, p: string) => {
-              const info = LOBE_DEFAULT_MODEL_LIST.find(
-                (item) => item.id === m && item.providerId === p,
-              );
+              const info = builtinModels.find((item) => item.id === m && item.providerId === p);
               return info?.abilities?.functionCall ?? true;
             },
             isCanUseVideo: (m: string, p: string) => {
               const info =
-                LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === m && item.providerId === p) ??
-                LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === m);
+                builtinModels.find((item) => item.id === m && item.providerId === p) ??
+                builtinModels.find((item) => item.id === m);
               return info?.abilities?.video ?? false;
             },
             isCanUseVision: (m: string, p: string) => {
@@ -643,8 +642,8 @@ export const createRuntimeExecutors = (
               // fall back to a cross-provider lookup by model id when the
               // (model, provider) pair has no direct entry.
               const info =
-                LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === m && item.providerId === p) ??
-                LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === m);
+                builtinModels.find((item) => item.id === m && item.providerId === p) ??
+                builtinModels.find((item) => item.id === m);
               return info?.abilities?.vision ?? false;
             },
           },

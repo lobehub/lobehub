@@ -1,5 +1,6 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 
+import { ModelProvider } from '../const/modelProvider';
 import { type AiFullModelCard, type LobeDefaultAiModelListItem } from '../types/aiModel';
 import { default as ai21 } from './ai21';
 import { default as ai302 } from './ai302';
@@ -83,7 +84,12 @@ import { default as zenmux } from './zenmux';
 import { default as zeroone } from './zeroone';
 import { default as zhipu } from './zhipu';
 
+type ModelProviderLoader = () => Promise<AiFullModelCard[]>;
 type ModelsMap = Record<string, AiFullModelCard[]>;
+
+export interface LoadModelsOptions {
+  providerLoaders?: Partial<Record<ModelProvider, ModelProviderLoader>>;
+}
 
 const buildDefaultModelList = (map: ModelsMap): LobeDefaultAiModelListItem[] => {
   let models: LobeDefaultAiModelListItem[] = [];
@@ -102,7 +108,7 @@ const buildDefaultModelList = (map: ModelsMap): LobeDefaultAiModelListItem[] => 
   return models;
 };
 
-export const LOBE_DEFAULT_MODEL_LIST = buildDefaultModelList({
+const staticModelMap: ModelsMap = {
   ai21,
   ai302,
   ai360,
@@ -138,7 +144,7 @@ export const LOBE_DEFAULT_MODEL_LIST = buildDefaultModelList({
   kimicodingplan,
   lmstudio,
   longcat,
-  ...(ENABLE_BUSINESS_FEATURES ? { lobehub } : {}),
+  ...(ENABLE_BUSINESS_FEATURES ? { [ModelProvider.LobeHub]: lobehub } : {}),
   minimax,
   minimaxcodingplan,
   mistral,
@@ -184,7 +190,31 @@ export const LOBE_DEFAULT_MODEL_LIST = buildDefaultModelList({
   zenmux,
   zeroone,
   zhipu,
-});
+};
+
+export const LOBE_DEFAULT_MODEL_LIST = buildDefaultModelList(staticModelMap);
+
+export const loadModels = async (
+  options?: LoadModelsOptions,
+): Promise<LobeDefaultAiModelListItem[]> => {
+  const providerLoaders = options?.providerLoaders;
+  if (!providerLoaders || Object.keys(providerLoaders).length === 0) {
+    return LOBE_DEFAULT_MODEL_LIST;
+  }
+
+  const modelMap = { ...staticModelMap };
+  const entries = await Promise.all(
+    (Object.entries(providerLoaders) as Array<[ModelProvider, ModelProviderLoader]>).map(
+      async ([provider, loader]) => [provider, await loader()] as const,
+    ),
+  );
+
+  for (const [provider, models] of entries) {
+    modelMap[provider] = models;
+  }
+
+  return buildDefaultModelList(modelMap);
+};
 
 export { default as ai21 } from './ai21';
 export { default as ai302 } from './ai302';

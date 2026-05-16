@@ -9,6 +9,23 @@ import { createRuntimeExecutors, type RuntimeExecutorContext } from '../RuntimeE
 
 const mockCreateCompressionGroup = vi.fn();
 const mockFinalizeCompression = vi.fn();
+const mockBuiltinModels = vi.hoisted(() => [
+  {
+    abilities: { functionCall: true, video: false, vision: true },
+    id: 'gpt-4',
+    providerId: 'openai',
+  },
+  {
+    abilities: { functionCall: false, video: false, vision: false },
+    id: 'no-tools-model',
+    providerId: 'test-provider',
+  },
+  {
+    abilities: { functionCall: true, video: true, vision: true },
+    id: 'gemini-3.1-flash-lite-preview',
+    providerId: 'google',
+  },
+]);
 
 // Mock dependencies
 vi.mock('@/server/modules/ModelRuntime', () => ({
@@ -30,25 +47,13 @@ vi.mock('@lobechat/model-runtime', () => ({
   consumeStreamUntilDone: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('@/business/model-bank/loadModels', () => ({
+  loadModels: vi.fn().mockResolvedValue(mockBuiltinModels),
+}));
+
 // model-bank is a TypeScript source file that cannot be dynamically imported in vitest
 vi.mock('model-bank', () => ({
-  LOBE_DEFAULT_MODEL_LIST: [
-    {
-      abilities: { functionCall: true, video: false, vision: true },
-      id: 'gpt-4',
-      providerId: 'openai',
-    },
-    {
-      abilities: { functionCall: false, video: false, vision: false },
-      id: 'no-tools-model',
-      providerId: 'test-provider',
-    },
-    {
-      abilities: { functionCall: true, video: true, vision: true },
-      id: 'gemini-3.1-flash-lite-preview',
-      providerId: 'google',
-    },
-  ],
+  LOBE_DEFAULT_MODEL_LIST: mockBuiltinModels,
 }));
 
 describe('RuntimeExecutors', () => {

@@ -151,12 +151,11 @@ const toManifestRecord = (manifestMap: Map<string, LobeToolManifest>) => {
 };
 
 const createFunctionCallSupportChecker = async () => {
-  const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
+  const { loadModels } = await import('@/business/model-bank/loadModels');
+  const builtinModels = await loadModels();
 
   return (model: string, provider: string) => {
-    const info = LOBE_DEFAULT_MODEL_LIST.find(
-      (item) => item.id === model && item.providerId === provider,
-    );
+    const info = builtinModels.find((item) => item.id === model && item.providerId === provider);
 
     return info?.abilities?.functionCall ?? true;
   };

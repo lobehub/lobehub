@@ -5,8 +5,5 @@
   "exports": {
     ".": "./src/index.ts"
   },
-  "main": "./src/index.ts",
-  "dependencies": {
-    "model-bank": "workspace:*"
-  }
+  "main": "./src/index.ts"
 }

@@ -241,6 +241,7 @@
     "@lobechat/builtin-tools": "workspace:*",
     "@lobechat/business-config": "workspace:*",
     "@lobechat/business-const": "workspace:*",
+    "@lobechat/business-model-bank": "workspace:*",
     "@lobechat/business-model-runtime": "workspace:*",
     "@lobechat/chat-adapter-feishu": "workspace:*",
     "@lobechat/chat-adapter-line": "workspace:*",

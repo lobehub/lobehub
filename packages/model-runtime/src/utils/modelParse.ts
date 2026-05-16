@@ -635,7 +635,8 @@ export const processModelList = async (
   config: ModelProcessorConfig,
   provider?: keyof typeof MODEL_LIST_CONFIGS,
 ): Promise<ChatModelCard[]> => {
-  const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
+  const { loadModels } = await import('model-bank');
+  const builtinModels = await loadModels();
 
   // If provider is provided, try to get the local configuration for that provider
   const providerLocalConfig = await getProviderLocalConfig(provider as ModelProviderKey);
@@ -651,9 +652,7 @@ export const processModelList = async (
 
       // If not found, fall back to global configuration
       if (!knownModel) {
-        knownModel = LOBE_DEFAULT_MODEL_LIST.find(
-          (m) => model.id.toLowerCase() === m.id.toLowerCase(),
-        );
+        knownModel = builtinModels.find((m) => model.id.toLowerCase() === m.id.toLowerCase());
       }
 
       const processedModel = processModelCard(model, config, knownModel);
@@ -688,7 +687,8 @@ export const processMultiProviderModelList = async (
   modelList: Array<{ id: string }>,
   providerid?: ModelProviderKey,
 ): Promise<ChatModelCard[]> => {
-  const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
+  const { loadModels } = await import('model-bank');
+  const builtinModels = await loadModels();
 
   // If providerid is provided, try to get the local configuration for that provider
   const providerLocalConfig = await getProviderLocalConfig(providerid);
@@ -703,9 +703,7 @@ export const processMultiProviderModelList = async (
 
       // If not found, fall back to global configuration
       if (!knownModel) {
-        knownModel = LOBE_DEFAULT_MODEL_LIST.find(
-          (m) => model.id.toLowerCase() === m.id.toLowerCase(),
-        );
+        knownModel = builtinModels.find((m) => model.id.toLowerCase() === m.id.toLowerCase());
       }
 
       const includeKnownExtendParams =

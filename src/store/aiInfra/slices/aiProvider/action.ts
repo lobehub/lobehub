@@ -477,8 +477,11 @@ export class AiProviderActionImpl {
     return useClientDataSWR<AiProviderRuntimeStateWithBuiltinModels | undefined>(
       shouldFetch ? [AiProviderSwrKey.fetchAiProviderRuntimeState, isLogin] : null,
       async ([, isLogin]) => {
-        const [{ LOBE_DEFAULT_MODEL_LIST: builtinAiModelList }, { DEFAULT_MODEL_PROVIDER_LIST }] =
-          await Promise.all([import('model-bank'), import('model-bank/modelProviders')]);
+        const [{ loadModels }, { DEFAULT_MODEL_PROVIDER_LIST }] = await Promise.all([
+          import('@/business/model-bank/loadModels'),
+          import('model-bank/modelProviders'),
+        ]);
+        const builtinAiModelList = await loadModels();
 
         if (isLogin) {
           const data = await aiProviderService.getAiProviderRuntimeState();

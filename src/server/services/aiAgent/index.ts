@@ -873,8 +873,9 @@ export class AiAgentService {
     let klavisManifests: LobeToolManifest[] = [];
     let agentPlugins: string[] = [...(agentConfig?.plugins ?? []), ...(additionalPluginIds || [])];
 
-    // model-bank is needed both for tool support check and model metadata
-    const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
+    // Model metadata is needed both for tool support checks and agent-management context.
+    const { loadModels } = await import('@/business/model-bank/loadModels');
+    const builtinModels = await loadModels();
     // Resolve S3 keys in imageList/videoList before visual tool activation checks and context build.
     const fileService = new FileService(this.db, this.userId);
     const postProcessUrl = (path: string | null) => fileService.getFullFileUrl(path);
@@ -919,7 +920,7 @@ export class AiAgentService {
 
       // 5b. Get model abilities from model-bank for function calling support check
       const isModelSupportToolUse = (m: string, p: string) => {
-        const info = LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === m && item.providerId === p);
+        const info = builtinModels.find((item) => item.id === m && item.providerId === p);
         return info?.abilities?.functionCall ?? true;
       };
 
@@ -978,8 +979,8 @@ export class AiAgentService {
       // Dynamically inject turn-scoped builtin tools.
       const hasTopicReference = /refer_topic/.test(prompt ?? '');
       const modelAbilities =
-        LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === model && item.providerId === provider)
-          ?.abilities ?? LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === model)?.abilities;
+        builtinModels.find((item) => item.id === model && item.providerId === provider)
+          ?.abilities ?? builtinModels.find((item) => item.id === model)?.abilities;
       const externalFileTypes = files?.map((file) => file.mimeType ?? '') ?? [];
       let attachedFileTypes: string[] = [];
       if (attachedFileIds && attachedFileIds.length > 0) {
@@ -1347,8 +1348,8 @@ export class AiAgentService {
         // Only include enabled chat models
         if (!userModel.enabled || userModel.type !== 'chat') continue;
 
-        // Get model info from LOBE_DEFAULT_MODEL_LIST for full metadata
-        const modelInfo = LOBE_DEFAULT_MODEL_LIST.find(
+        // Get model info from builtin metadata for full metadata.
+        const modelInfo = builtinModels.find(
           (m) => m.id === userModel.id && m.providerId === userModel.providerId,
         );
 
