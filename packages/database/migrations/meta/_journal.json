@@ -721,6 +721,13 @@
       "when": 1778602304603,
       "tag": "0102_add_agent_operations_table",
       "breakpoints": true
+    },
+    {
+      "idx": 103,
+      "version": "7",
+      "when": 1778910974184,
+      "tag": "0103_legacy_auth_schema_repair",
+      "breakpoints": true
     }
   ],
   "version": "6"
