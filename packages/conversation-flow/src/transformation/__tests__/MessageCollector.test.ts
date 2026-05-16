@@ -204,6 +204,103 @@ describe('MessageCollector', () => {
 
       expect(result?.id).toBe('msg-2');
     });
+
+    it('skips signal-tagged callbacks when locating the group tail', () => {
+      // LOBE-8998: when [signal callback, next tool-using assistant]
+      // both live under the same tool, the tail finder must follow the
+      // real main-chain assistant — taking children[0] blindly lands on
+      // the callback (which is a leaf) and truncates the AssistantGroup.
+      const messageMap = new Map<string, Message>([
+        [
+          'ast-0',
+          {
+            agentId: 'agent-x',
+            content: '',
+            createdAt: 0,
+            id: 'ast-0',
+            role: 'assistant',
+            updatedAt: 0,
+          },
+        ],
+        [
+          'tool-1',
+          {
+            content: '',
+            createdAt: 0,
+            id: 'tool-1',
+            parentId: 'ast-0',
+            role: 'tool',
+            tool_call_id: 'toolu_mon',
+            updatedAt: 0,
+          },
+        ],
+        [
+          'cb-1',
+          {
+            agentId: 'agent-x',
+            content: '',
+            createdAt: 0,
+            id: 'cb-1',
+            metadata: {
+              signal: {
+                sequence: 1,
+                sourceToolCallId: 'toolu_mon',
+                sourceToolName: 'Monitor',
+                type: 'tool-stdout',
+              },
+            } as any,
+            parentId: 'tool-1',
+            role: 'assistant',
+            updatedAt: 0,
+          },
+        ],
+        [
+          'ast-4',
+          {
+            agentId: 'agent-x',
+            content: '',
+            createdAt: 0,
+            id: 'ast-4',
+            parentId: 'tool-1',
+            role: 'assistant',
+            updatedAt: 0,
+          },
+        ],
+        [
+          'tool-2',
+          {
+            content: '',
+            createdAt: 0,
+            id: 'tool-2',
+            parentId: 'ast-4',
+            role: 'tool',
+            updatedAt: 0,
+          },
+        ],
+      ]);
+      const collector = new MessageCollector(messageMap, new Map());
+
+      const idNode: IdNode = {
+        children: [
+          {
+            children: [
+              { children: [], id: 'cb-1' },
+              {
+                children: [{ children: [], id: 'tool-2' }],
+                id: 'ast-4',
+              },
+            ],
+            id: 'tool-1',
+          },
+        ],
+        id: 'ast-0',
+      };
+
+      const result = collector.findLastNodeInAssistantGroup(idNode, 'agent-x');
+
+      // Tail must be tool-2 (descended through ast-4), NOT cb-1.
+      expect(result?.id).toBe('tool-2');
+    });
   });
 
   // ────────────────────────────────────────────────────

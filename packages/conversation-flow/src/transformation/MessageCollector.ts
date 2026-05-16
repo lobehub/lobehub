@@ -493,15 +493,18 @@ export class MessageCollector {
         continue;
       }
 
-      if (toolNode.children.length > 0) {
-        const nextChild = toolNode.children[0];
+      // Pick the next main-chain assistant under this tool. Mirror the
+      // skip rule used by `collectAssistantGroupMessages`: signal-tagged
+      // toolless siblings (Monitor callbacks etc., LOBE-8998) share the
+      // parent tool but live on a side-channel — if they appear before
+      // the real follower, blindly taking children[0] would end the
+      // walk on a callback node and truncate the AssistantGroup tail.
+      for (const nextChild of toolNode.children) {
         const nextMsg = this.messageMap.get(nextChild.id);
-
-        // Only continue if the next assistant has the SAME agentId
-        if (nextMsg?.role === 'assistant' && nextMsg.agentId === groupAgentId) {
-          // Continue following the assistant chain (same agent only)
-          return this.findLastNodeInAssistantGroup(nextChild, groupAgentId);
-        }
+        if (nextMsg?.role !== 'assistant') continue;
+        if (nextMsg.agentId !== groupAgentId) continue;
+        if (getMessageSignal(nextMsg)) continue;
+        return this.findLastNodeInAssistantGroup(nextChild, groupAgentId);
       }
     }
 
