@@ -186,6 +186,7 @@ export default {
   'input.addAi': 'Add an AI message',
   'input.addUser': 'Add a user message',
   'input.costEstimate.hint': 'Estimated cost: ~${{cost}}',
+  'input.costEstimate.settingsLink': 'Adjust warning threshold',
   'input.costEstimate.tooltip':
     'Estimated from the current context, enabled tools, and model pricing. Input: {{inputTokens}} tokens. Estimated output: {{outputTokens}} tokens. Actual cost may vary.',
   'input.disclaimer': 'Agents can make mistakes. Use your judgment for critical info.',
