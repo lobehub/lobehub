@@ -166,6 +166,7 @@
   "limitation.limited.title": "计算积分已用尽",
   "limitation.limited.topup": "充值积分",
   "limitation.limited.upgrade": "升级至更高套餐",
+  "limitation.limited.upgradeToPlan": "升级至 {{plan}}",
   "limitation.providers.lock.addNew": "立即订阅以创建自定义 AI 提供商",
   "limitation.providers.lock.enableProvider": "立即订阅以启用此 AI 提供商",
   "limitation.providers.lock.menuItem": "立即订阅以配置自定义 API 服务",
