@@ -14,6 +14,10 @@ import { imageGenerationConfigSelectors } from '@/store/image/slices/generationC
 import { getImageStoreState } from '@/store/image/store';
 
 const log = debug('lobe-image:lambda-client');
+const isCustomDeploymentHost =
+  typeof window !== 'undefined' && !/(?:\.|^)lobehub\.com$/.test(window.location.hostname);
+const isMarketAuthDisabled =
+  process.env.NEXT_PUBLIC_DISABLE_MARKET_AUTH === '1' || isCustomDeploymentHost;
 
 // 401 error debouncing: prevent showing multiple login notifications in short time
 let last401Time = 0;
@@ -69,6 +73,12 @@ const errorHandlingLink: TRPCLink<LambdaRouter> = () => {
             switch (status) {
               case 401: {
                 if (isMarketApi) {
+                  if (isMarketAuthDisabled) {
+                    // Deployment override: bypass all market auth side-effects.
+                    err.meta = { ...err.meta, shouldRetry: false };
+                    break;
+                  }
+
                   // Market API 401: emit event for MarketAuthProvider to handle
                   // Don't trigger LobeChat logout for market auth issues
                   const now = Date.now();

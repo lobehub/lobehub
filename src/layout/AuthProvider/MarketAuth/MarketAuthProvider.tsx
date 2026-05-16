@@ -134,6 +134,10 @@ const checkNeedsProfileSetup = async (username: string): Promise<boolean> => {
 export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderProps) => {
   const { message } = App.useApp();
   const { t } = useTranslation('marketAuth');
+  const isCustomDeploymentHost =
+    typeof window !== 'undefined' && !/(?:\.|^)lobehub\.com$/.test(window.location.hostname);
+  const isMarketAuthDisabled =
+    process.env.NEXT_PUBLIC_DISABLE_MARKET_AUTH === '1' || isCustomDeploymentHost;
 
   const [session, setSession] = useState<MarketAuthSession | null>(null);
   const [status, setStatus] = useState<'loading' | 'authenticated' | 'unauthenticated'>('loading');
@@ -233,6 +237,12 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
    * Initialize: check and restore session, fetch user info
    */
   const initializeSession = async () => {
+    if (isMarketAuthDisabled) {
+      setSession(null);
+      setStatus('unauthenticated');
+      return;
+    }
+
     setStatus('loading');
 
     // If Trusted Client authentication is enabled, fetch user info directly from backend (without token)
@@ -392,12 +402,14 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
    * Sign-in method (shows confirmation dialog first)
    */
   const signIn = useCallback(async (): Promise<number | null> => {
+    if (isMarketAuthDisabled) return null;
+
     return new Promise<number | null>((resolve, reject) => {
       setPendingSignInResolve(() => resolve);
       setPendingSignInReject(() => reject);
       setShowConfirmModal(true);
     });
-  }, []);
+  }, [isMarketAuthDisabled]);
 
   /**
    * Handle authorization confirmation
@@ -479,11 +491,16 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
   /**
    * Open profile setup modal (for manual user editing)
    */
-  const openProfileSetup = useCallback((onSuccess?: (profile: MarketUserProfile) => void) => {
-    setIsFirstTimeSetup(false);
-    setPendingProfileSuccessCallback(() => onSuccess || null);
-    setShowProfileSetupModal(true);
-  }, []);
+  const openProfileSetup = useCallback(
+    (onSuccess?: (profile: MarketUserProfile) => void) => {
+      if (isMarketAuthDisabled) return;
+
+      setIsFirstTimeSetup(false);
+      setPendingProfileSuccessCallback(() => onSuccess || null);
+      setShowProfileSetupModal(true);
+    },
+    [isMarketAuthDisabled],
+  );
 
   /**
    * Close profile setup modal
@@ -537,6 +554,8 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
    */
   const checkAndShowClaimableResources = useCallback(
     async (onClaimSuccess?: () => void): Promise<boolean> => {
+      if (isMarketAuthDisabled) return false;
+
       // Only check if user is authenticated
       if (status !== 'authenticated') {
         return false;
@@ -559,7 +578,7 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
         return false;
       }
     },
-    [status],
+    [isMarketAuthDisabled, status],
   );
 
   /**
@@ -574,6 +593,8 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
    * Returns true if refresh was successful, false otherwise
    */
   const refreshToken = useCallback(async (): Promise<boolean> => {
+    if (isMarketAuthDisabled) return false;
+
     const dbTokens = getMarketTokensFromDB();
 
     // No refresh token available
@@ -623,7 +644,7 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
       setStatus('unauthenticated');
       return false;
     }
-  }, [isDesktop]);
+  }, [isDesktop, isMarketAuthDisabled]);
 
   /**
    * Handle unauthorized (401) error from Market API
@@ -631,6 +652,8 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
    * @returns true if successfully re-authenticated, false if user cancelled or failed
    */
   const handleUnauthorized = useCallback(async (): Promise<boolean> => {
+    if (isMarketAuthDisabled) return false;
+
     console.info('[MarketAuth] Handling unauthorized error, attempting recovery...');
 
     // First try to refresh the token
@@ -653,7 +676,7 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
       console.error('[MarketAuth] Re-authentication failed:', error);
       return false;
     }
-  }, [refreshToken, signIn]);
+  }, [isMarketAuthDisabled, refreshToken, signIn]);
 
   /**
    * Restore session and fetch user info on initialization
@@ -671,6 +694,8 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
    * Refreshes the token 5 minutes before it expires to ensure continuous access
    */
   useEffect(() => {
+    if (isMarketAuthDisabled) return;
+
     // Skip if using trusted client (no token expiration)
     if (enableMarketTrustedClient) return;
 
@@ -696,13 +721,15 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
     return () => {
       clearTimeout(refreshTimer);
     };
-  }, [status, session?.expiresAt, enableMarketTrustedClient, refreshToken]);
+  }, [status, session?.expiresAt, enableMarketTrustedClient, isMarketAuthDisabled, refreshToken]);
 
   /**
    * Listen for market-unauthorized events from tRPC error handler
    * Automatically attempt to recover from 401 errors
    */
   useEffect(() => {
+    if (isMarketAuthDisabled) return;
+
     const unsubscribe = marketAuthEvents.on('market-unauthorized', async (event) => {
       console.info('[MarketAuth] Received unauthorized event for path:', event.path);
       // Desktop: do not open community auth / profile modals from background API 401s.
@@ -720,7 +747,7 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
     });
 
     return unsubscribe;
-  }, [handleUnauthorized, isDesktop, refreshToken]);
+  }, [handleUnauthorized, isDesktop, isMarketAuthDisabled, refreshToken]);
 
   const contextValue: MarketAuthContextType = {
     checkAndShowClaimableResources,
@@ -729,8 +756,9 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
     getRefreshToken,
     handleUnauthorized,
     // When Trusted Client authentication is enabled, automatically treat as authenticated (backend uses trustedClientToken)
-    isAuthenticated: enableMarketTrustedClient || status === 'authenticated',
-    isLoading: status === 'loading',
+    isAuthenticated:
+      isMarketAuthDisabled || enableMarketTrustedClient || status === 'authenticated',
+    isLoading: !isMarketAuthDisabled && status === 'loading',
     openProfileSetup,
     refreshToken,
     session,
@@ -776,28 +804,32 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
   return (
     <MarketAuthContext value={contextValue}>
       {children}
-      <MarketAuthConfirmModal
-        open={showConfirmModal}
-        onCancel={handleCancelAuth}
-        onConfirm={handleConfirmAuth}
-      />
-      <ProfileSetupModal
-        accessToken={session?.accessToken ?? null}
-        defaultDisplayName={userProfile?.displayName || ''}
-        isFirstTimeSetup={isFirstTimeSetup}
-        open={showProfileSetupModal}
-        userProfile={userProfile}
-        onClose={handleCloseProfileSetup}
-        onShowClaimResources={handleShowClaimResources}
-        onSuccess={handleProfileSuccess}
-      />
-      {claimableResources && (
-        <ClaimResourcesModal
-          open={showClaimModal}
-          resources={claimableResources}
-          onClose={handleCloseClaimModal}
-          onSuccess={handleClaimSuccess}
-        />
+      {!isMarketAuthDisabled && (
+        <>
+          <MarketAuthConfirmModal
+            open={showConfirmModal}
+            onCancel={handleCancelAuth}
+            onConfirm={handleConfirmAuth}
+          />
+          <ProfileSetupModal
+            accessToken={session?.accessToken ?? null}
+            defaultDisplayName={userProfile?.displayName || ''}
+            isFirstTimeSetup={isFirstTimeSetup}
+            open={showProfileSetupModal}
+            userProfile={userProfile}
+            onClose={handleCloseProfileSetup}
+            onShowClaimResources={handleShowClaimResources}
+            onSuccess={handleProfileSuccess}
+          />
+          {claimableResources && (
+            <ClaimResourcesModal
+              open={showClaimModal}
+              resources={claimableResources}
+              onClose={handleCloseClaimModal}
+              onSuccess={handleClaimSuccess}
+            />
+          )}
+        </>
       )}
     </MarketAuthContext>
   );

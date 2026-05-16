@@ -9,6 +9,10 @@ import { createHeaderWithAuth } from '@/services/_auth';
 // 401 error debouncing for market auth
 let lastMarket401Time = 0;
 const MIN_401_INTERVAL = 5000; // 5 seconds
+const isCustomDeploymentHost =
+  typeof window !== 'undefined' && !/(?:\.|^)lobehub\.com$/.test(window.location.hostname);
+const isMarketAuthDisabled =
+  process.env.NEXT_PUBLIC_DISABLE_MARKET_AUTH === '1' || isCustomDeploymentHost;
 
 const getAuthHeaders = async () => {
   try {
@@ -41,6 +45,11 @@ const errorHandlingLink: TRPCLink<ToolsRouter> = () => {
           // UNAUTHORIZED tRPC code maps to HTTP 401
           const is401 = status === 401 || code === 'UNAUTHORIZED';
           if (is401 && op.path.startsWith('market.')) {
+            if (isMarketAuthDisabled) {
+              observer.error(err);
+              return;
+            }
+
             const now = Date.now();
             if (now - lastMarket401Time > MIN_401_INTERVAL) {
               lastMarket401Time = now;

@@ -5,9 +5,9 @@ import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { Flexbox } from '@lobehub/ui';
 import { cx } from 'antd-style';
 import { type FC } from 'react';
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { HotkeysProvider } from 'react-hotkeys-hook';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import { isDesktop } from '@/const/version';
@@ -28,6 +28,8 @@ import CmdkLazy from '@/layout/GlobalProvider/CmdkLazy';
 import dynamic from '@/libs/next/dynamic';
 import { DndContextWrapper } from '@/routes/(main)/resource/features/DndContextWrapper';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
+import { useUserStore } from '@/store/user';
+import { onboardingSelectors } from '@/store/user/selectors';
 
 import DesktopHome from '../home';
 import DesktopHomeLayout from '../home/_layout';
@@ -39,6 +41,25 @@ import { styles } from './style';
 const FeedbackModal = lazy(() => import('@/components/FeedbackModal'));
 
 const CloudBanner = dynamic(() => import('@/features/AlertBanner/CloudBanner'));
+
+const WebOnboardingGate = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [isUserStateInit, needsOnboarding] = useUserStore((s) => [
+    s.isUserStateInit,
+    onboardingSelectors.needsOnboarding(s),
+  ]);
+
+  useEffect(() => {
+    if (isDesktop) return;
+    if (!isUserStateInit || !needsOnboarding) return;
+    if (location.pathname.startsWith('/onboarding')) return;
+
+    navigate('/onboarding', { replace: true });
+  }, [isUserStateInit, location.pathname, navigate, needsOnboarding]);
+
+  return null;
+};
 
 const Layout: FC = () => {
   const { isPWA } = usePlatform();
@@ -79,6 +100,7 @@ const Layout: FC = () => {
           <NavPanel />
           <DesktopLayoutContainer>
             <MarketAuthProvider isDesktop={isDesktop}>
+              <WebOnboardingGate />
               <DesktopHomeLayout>
                 <DesktopHome />
               </DesktopHomeLayout>
