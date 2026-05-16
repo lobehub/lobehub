@@ -5,7 +5,7 @@ const isVercel = !!process.env.VERCEL_ENV;
 const vercelConfig = {
   experimental: {
     turbopackMemoryLimit: 6144,
-    webpackBuildWorker: true,
+    webpackBuildWorker: false,
     webpackMemoryOptimizations: true,
   },
   // Vercel serverless optimization: exclude musl binaries from all routes
