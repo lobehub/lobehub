@@ -178,8 +178,6 @@ export default {
   'agentSkillModal.url.urlPlaceholder': 'https://example.com/path/to/SKILL.md',
   'agentSkillTag': 'Agent Skill',
   'agentTab.chat': 'Chat Preferences',
-  'agentTab.documents': 'Documents',
-  'agentTab.meta': 'Agent info',
   'agentTab.modal': 'Model Settings',
   'agentTab.opening': 'Opening Settings',
   'agentTab.plugin': 'Skill Settings',
