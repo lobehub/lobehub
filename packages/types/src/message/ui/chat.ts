@@ -109,6 +109,34 @@ interface UIMessageBranch {
 }
 
 /**
+ * Snapshot of a single toolless assistant callback inside a
+ * {@link UISignalCallbacksBlock}. The snapshot is denormalized at
+ * FlatListBuilder time so the renderer doesn't have to round-trip
+ * through the messages map.
+ */
+export interface UISignalCallback {
+  content: string;
+  id: string;
+  model?: string | null;
+  provider?: string | null;
+  /** Nth push from the same source (1-based, matches metadata.signal.sequence). */
+  sequence?: number;
+}
+
+/**
+ * Group of callback turns attached to one source tool, denormalized
+ * onto a virtual `assistantGroup` message by FlatListBuilder. One
+ * block per source tool — multiple callback-firing tools in the same
+ * group produce multiple blocks.
+ */
+export interface UISignalCallbacksBlock {
+  callbacks: UISignalCallback[];
+  sourceToolCallId: string;
+  sourceToolMessageId: string;
+  sourceToolName: string;
+}
+
+/**
  * Task execution details for role='task' messages
  * Retrieved from the associated Thread via sourceMessageId
  */
@@ -224,6 +252,17 @@ export interface UIChatMessage {
   role: UIMessageRoleType;
   search?: GroundingSearch | null;
   sessionId?: string;
+  /**
+   * External-signal callback blocks (LOBE-8998). Set on virtual
+   * assistantGroup messages built by FlatListBuilder when the chain
+   * contains toolless assistants triggered by repeated tool_results
+   * (Monitor stdout push pattern). Rendered as `<SignalCallbacks>`
+   * blocks inside the AssistantGroup, separate from the main chain.
+   *
+   * Each entry corresponds to one source tool; multiple source tools
+   * in the same group produce multiple entries.
+   */
+  signalCallbacks?: UISignalCallbacksBlock[];
   /**
    * target member ID for DM messages in group chat
    */

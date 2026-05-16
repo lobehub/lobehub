@@ -1,6 +1,6 @@
 'use client';
 
-import type { AssistantContentBlock, EmojiReaction } from '@lobechat/types';
+import type { AssistantContentBlock, EmojiReaction, UISignalCallbacksBlock } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import type { MouseEventHandler, ReactNode } from 'react';
 import { memo, Suspense, useCallback, useMemo } from 'react';
@@ -25,6 +25,7 @@ import {
   useSetMessageItemActionElementPortialContext,
   useSetMessageItemActionTypeContext,
 } from '../Contexts/message-action-context';
+import SignalCallbacks from '../SignalCallbacks';
 import FileListViewer from '../User/components/FileListViewer';
 import Group from './components/Group';
 import type { WorkflowExpandLevelDefault } from './components/WorkflowCollapse';
@@ -53,8 +54,18 @@ const GroupMessage = memo<GroupMessageProps>(
     // Get message and actionsConfig from ConversationStore
     const item = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual)!;
 
-    const { agentId, usage, createdAt, children, performance, model, provider, branch, metadata } =
-      item;
+    const {
+      agentId,
+      usage,
+      createdAt,
+      children,
+      performance,
+      model,
+      provider,
+      branch,
+      metadata,
+      signalCallbacks,
+    } = item;
     const avatar = useAgentMeta(agentId);
 
     // Collect fileList from all children blocks
@@ -173,6 +184,9 @@ const GroupMessage = memo<GroupMessageProps>(
             messageIndex={index}
           />
         )}
+        {(signalCallbacks as UISignalCallbacksBlock[] | undefined)?.map((block) => (
+          <SignalCallbacks block={block} key={block.sourceToolMessageId} />
+        ))}
         {aggregatedFileList.length > 0 && (
           <div style={{ marginTop: 8 }}>
             <FileListViewer items={aggregatedFileList} />

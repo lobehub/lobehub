@@ -223,17 +223,31 @@ export class FlatListBuilder {
           processedIds,
         );
 
+        // Gather external-signal callback blocks (LOBE-8998) for any
+        // tool in the chain that fired toolless reactive replies
+        // (Monitor stdout pushes, etc.). Snapshot now so the UI doesn't
+        // need to query messageMap; mark callback messages as processed
+        // so they don't render as separate top-level bubbles.
+        const signalBlocks = this.messageCollector.collectFlatSignalCallbacks(
+          allToolMessages,
+          allMessages,
+        );
+
         // Create assistantGroup virtual message
         const groupMessage = this.createAssistantGroupMessage(
           assistantChain[0],
           assistantChain,
           allToolMessages,
+          signalBlocks,
         );
         flatList.push(groupMessage);
 
         // Mark all as processed
         assistantChain.forEach((m) => processedIds.add(m.id));
         allToolMessages.forEach((m) => processedIds.add(m.id));
+        for (const block of signalBlocks) {
+          for (const cb of block.callbacks) processedIds.add(cb.id);
+        }
 
         // Continue after the assistant chain
         // Priority 1: If last assistant has non-tool children, continue from it
@@ -748,6 +762,12 @@ export class FlatListBuilder {
     firstAssistant: Message,
     assistantChain: Message[],
     allToolMessages: Message[],
+    signalCallbackBlocks?: {
+      callbacks: Message[];
+      sourceToolCallId: string;
+      sourceToolMessageId: string;
+      sourceToolName: string;
+    }[],
   ): Message {
     const children: AssistantContentBlock[] = [];
 
@@ -905,6 +925,26 @@ export class FlatListBuilder {
     // Preserve isSupervisor in metadata for supervisor messages
     if (isSupervisor) {
       result.metadata = { ...result.metadata, isSupervisor: true };
+    }
+
+    // Snapshot signal-callback blocks onto the virtual group message
+    // (LOBE-8998) so AssistantGroupMessage can render `<SignalCallbacks>`
+    // without re-querying the store. Each callback Message becomes a
+    // compact UISignalCallback with content + model/provider/sequence.
+    if (signalCallbackBlocks && signalCallbackBlocks.length > 0) {
+      result.signalCallbacks = signalCallbackBlocks.map((block) => ({
+        callbacks: block.callbacks.map((m) => ({
+          content: m.content ?? '',
+          id: m.id,
+          model: m.model ?? undefined,
+          provider: m.provider ?? undefined,
+          sequence: (m.metadata as { signal?: { sequence?: number } } | null | undefined)?.signal
+            ?.sequence,
+        })),
+        sourceToolCallId: block.sourceToolCallId,
+        sourceToolMessageId: block.sourceToolMessageId,
+        sourceToolName: block.sourceToolName,
+      }));
     }
 
     return result;
