@@ -20,6 +20,9 @@ dotenvExpand.expand(dotenv.config({ override: true, path: `.env.${env}.local` })
 
 const migrationsFolder = join(__dirname, '../../packages/database/migrations');
 
+const isVercelBuild = process.env.VERCEL === '1' || !!process.env.VERCEL_ENV;
+const shouldMigrateOnVercelBuild = process.env.MIGRATE_ON_VERCEL_BUILD === '1';
+
 const runMigrations = async () => {
   const { serverDB } = await import('../../packages/database/src/server');
 
@@ -38,7 +41,11 @@ const runMigrations = async () => {
 const connectionString = process.env.DATABASE_URL;
 
 // only migrate database if the connection string is available
-if (connectionString) {
+if (isVercelBuild && !shouldMigrateOnVercelBuild) {
+  console.log(
+    '🟢 Vercel build detected. Skip db:migrate by default. Set MIGRATE_ON_VERCEL_BUILD=1 to enable.',
+  );
+} else if (connectionString) {
   runMigrations().catch((err) => {
     console.error('❌ Database migrate failed:', err);
 
@@ -50,6 +57,13 @@ if (connectionString) {
       console.info(PGVECTOR_HINT);
     } else if (constraint === 'users_email_unique' || errMsg.includes('users_email_unique')) {
       console.info(DUPLICATE_EMAIL_HINT);
+    } else if ((err as { code?: string })?.code === '42P01') {
+      console.info(
+        'Hint: relation missing during migration (code 42P01). This usually means DB schema and migration history are out of sync.',
+      );
+      console.info(
+        'For Vercel deploys, keep MIGRATE_ON_VERCEL_BUILD unset to skip migrations at build time, then run migrations manually in a controlled step.',
+      );
     } else if (errMsg.includes(`Cannot read properties of undefined (reading 'migrate')`)) {
       console.info(DB_FAIL_INIT_HINT);
     }
