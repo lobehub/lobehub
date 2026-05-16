@@ -31,6 +31,7 @@ export type { PlaceholderValue, PlaceholderValueMap } from './processors';
 export {
   buildPlaceholderGenerators,
   formatPlaceholderValues,
+  getSlicedMessages,
   GroupMessageFlattenProcessor,
   HistoryTruncateProcessor,
   InputTemplateProcessor,

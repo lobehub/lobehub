@@ -185,6 +185,9 @@ export default {
   'inbox.title': 'Lobe AI',
   'input.addAi': 'Add an AI message',
   'input.addUser': 'Add a user message',
+  'input.costEstimate.hint': 'Estimated cost: ~${{cost}}',
+  'input.costEstimate.tooltip':
+    'Estimated from the current context, enabled tools, and model pricing. Input: {{inputTokens}} tokens. Estimated output: {{outputTokens}} tokens. Actual cost may vary.',
   'input.disclaimer': 'Agents can make mistakes. Use your judgment for critical info.',
   'input.errorMsg': 'Send failed: {{errorMsg}}. Retry, or send again later.',
   'input.more': 'More',
