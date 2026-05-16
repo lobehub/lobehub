@@ -87,7 +87,7 @@ export default {
   'response.524':
     'We apologize, the server timed out while waiting for a response, possibly due to a slow reply. Please try again later.',
   'response.AgentRuntimeError':
-    'Lobe language model runtime execution error. Please troubleshoot or retry based on the following information.',
+    'Model runtime execution error. Please troubleshoot or retry based on the following information.',
   'response.ComfyUIBizError':
     'An error occurred while requesting the ComfyUI service. Please troubleshoot using the information below or try again.',
   'response.ComfyUIEmptyResult':
@@ -164,7 +164,7 @@ export default {
     "We're sorry, your current location does not support this model service. This may be due to regional restrictions or the service not being available. Please confirm if the current location supports using this service, or try using a different location.",
   'response.ModelNotFound':
     'Sorry, the requested model could not be found. It may not exist or you may not have the necessary access permissions. Please try again after changing the API Key or adjusting your access permissions.',
-  'response.NoOpenAIAPIKey': 'OpenAI API Key is empty, please add a custom OpenAI API Key',
+  'response.NoOpenAIAPIKey': 'API Key is empty, please add a custom API Key',
   'response.OllamaBizError':
     'Error requesting Ollama service, please troubleshoot or retry based on the following information',
   'response.OllamaServiceUnavailable':
@@ -220,7 +220,7 @@ export default {
   'response.SystemTimeNotMatchError':
     'Sorry, your system time does not match the server. Please check your system time and try again.',
   'response.LobeHubModelDeprecated':
-    'The model "{{model}}" is no longer available. Please pick a current model from the model selector.',
+    'The selected model "{{model}}" is no longer available. Please pick a current model from the model selector.',
   'response.UnknownChatFetchError':
     'Sorry, an unknown request error occurred. Please check the information below or try again.',
   'stt.responseError': 'Service request failed, please check the configuration or try again',
@@ -228,7 +228,7 @@ export default {
     'The group host is unable to function. Please check your host configuration to ensure the correct model, API Key, and API endpoint are set.',
   'testConnectionFailed': 'Test connection failed: {{error}}',
   'tts.responseError': 'Service request failed, please check the configuration or try again',
-  'unlock.addProxyUrl': 'Add OpenAI proxy URL (optional)',
+  'unlock.addProxyUrl': 'Add proxy URL (optional)',
   'unlock.apiKey.description': 'Enter your {{name}} API Key to start the session',
   'unlock.apiKey.imageGenerationDescription': 'Enter your {{name}} API Key to start generating',
   'unlock.apiKey.title': 'Use custom {{name}} API Key',

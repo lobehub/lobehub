@@ -30,7 +30,7 @@ export default {
     "This project will be deleted and can't be recovered. Confirm to continue.",
   'recommendations.heteroAgent.cta': 'Add Agent',
   'recommendations.heteroAgent.description':
-    'Detected the {{name}} CLI on this device — add {{name}} agent to chat with it from LobeHub.',
+    'Detected the {{name}} CLI on this device — add {{name}} agent to chat with it from ChinnaHub.',
   'recommendations.heteroAgent.tag': 'Coding Agent',
   'recommendations.heteroAgent.title': 'Add {{name}} agent',
   'recommendations.subtitle': 'Some recommendations for your setup',
@@ -42,7 +42,7 @@ export default {
   'starter.deepseekV4ProSwitched': 'Switched to DeepSeek V4 Pro',
   'starter.developing': 'Coming soon',
   'starter.image': 'Image',
-  'starter.imageGeneration': 'GPT Image 2',
+  'starter.imageGeneration': 'Image Generation',
   'starter.newLabel': 'New',
   'starter.videoGeneration': 'Seedance 2.0',
   'starter.write': 'Write',

@@ -20,6 +20,7 @@ export const locales = [
   'pl-PL',
   'nl-NL',
   'te-IN',
+  'ti-IN',
 ] as const;
 
 export type DefaultResources = typeof resources;
@@ -32,6 +33,7 @@ export const normalizeLocale = (locale?: string): Locales => {
   if (locale.startsWith('ar')) return 'ar';
   if (locale.startsWith('fa')) return 'fa-IR';
   if (locale.startsWith('te')) return 'te-IN';
+  if (locale.startsWith('ti')) return 'ti-IN';
 
   for (const l of locales) {
     if (l.startsWith(locale)) {
@@ -115,6 +117,10 @@ export const localeOptions: LocaleOptions = [
   {
     label: 'తెలుగు',
     value: 'te-IN',
+  },
+  {
+    label: 'Tinglish (Telugu+English)',
+    value: 'ti-IN',
   },
 ] as LocaleOptions;
 

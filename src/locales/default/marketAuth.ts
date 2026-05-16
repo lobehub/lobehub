@@ -26,7 +26,7 @@ export default {
     '{{message}} The window will close automatically in {{countdown}} seconds',
   'callback.messages.successWithRedirect': 'Authorization successful! Redirecting...',
   'callback.titles.error': 'Authorization Failed',
-  'callback.titles.loading': 'LobeHub Market Authorization',
+  'callback.titles.loading': 'ChinnaHub Market Authorization',
   'callback.titles.success': 'Authorization Successful',
   'errors.authorizationFailed': 'Authorization failed, please try again.',
   'errors.browserOnly': 'The authorization process can only be initiated in a browser.',

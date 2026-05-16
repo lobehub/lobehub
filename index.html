@@ -60,6 +60,55 @@
       html[data-theme='dark'] #loading-brand {
         color: #f0f0f0;
       }
+
+      #chinnahub-loader-dots {
+        display: flex;
+        gap: 7px;
+        align-items: center;
+        margin-top: 4px;
+      }
+      #chinnahub-loader-dots span {
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #7c3aed, #06b6d4);
+        animation: ch-dot 1.5s ease-in-out infinite;
+      }
+      #chinnahub-loader-dots span:nth-child(1) { animation-delay: 0s; }
+      #chinnahub-loader-dots span:nth-child(2) { animation-delay: 0.22s; }
+      #chinnahub-loader-dots span:nth-child(3) { animation-delay: 0.44s; }
+      @keyframes ch-dot {
+        0%, 80%, 100% { opacity: 0.3; transform: scale(0.65); }
+        40%            { opacity: 1;   transform: scale(1); }
+      }
+      #chinnahub-loader-glow {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 220px;
+        height: 48px;
+        transform: translate(-50%, -70%);
+        background: linear-gradient(90deg, rgba(124,58,237,0.2), rgba(6,182,212,0.2));
+        border-radius: 50%;
+        filter: blur(28px);
+        pointer-events: none;
+        animation: ch-glow 2.8s ease-in-out infinite alternate;
+      }
+      @keyframes ch-glow {
+        0%   { opacity: 0.4; transform: translate(-50%, -70%) scaleX(0.85); }
+        100% { opacity: 0.9; transform: translate(-50%, -70%) scaleX(1.15); }
+      }
+      #loading-brand {
+        position: relative;
+        flex-direction: column;
+        gap: 18px;
+        animation: ch-fadein 0.45s cubic-bezier(0.4, 0, 0.2, 1) both;
+      }
+      @keyframes ch-fadein {
+        from { opacity: 0; transform: translateY(10px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
     </style>
     <script>
       (function () {
@@ -136,7 +185,10 @@
   <body>
     <div id="loading-screen">
       <div id="loading-brand" aria-label="Loading ChinnaHub" role="status">
+        <div id="chinnahub-loader-glow"></div>
         <div id="chinnahub-loader-text">ChinnaHub</div>
+        <div id="chinnahub-loader-dots"><span></span><span></span><span></span></div>
+      </div>
       </div>
     </div>
     <div id="root" style="height: 100%"></div>

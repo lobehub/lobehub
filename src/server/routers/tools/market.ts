@@ -540,6 +540,25 @@ export const marketRouter = router({
       };
     } catch (error) {
       log('connectListConnections error: %O', error);
+
+      const errorMessage = (error as Error)?.message || String(error);
+      const errorCode = (error as any)?.code || (error as any)?.error;
+
+      // Map Market auth failures to UNAUTHORIZED so the client can trigger re-auth
+      if (
+        errorCode === 'invalid_token' ||
+        errorCode === 'token_expired' ||
+        errorCode === 'unauthorized' ||
+        errorMessage.toLowerCase().includes('invalid_token') ||
+        errorMessage.toLowerCase().includes('token expired') ||
+        errorMessage.toLowerCase().includes('unauthorized')
+      ) {
+        throw new TRPCError({
+          code: 'UNAUTHORIZED',
+          message: 'Market access token is invalid or expired. Please sign in to Market again.',
+        });
+      }
+
       throw new TRPCError({
         code: 'INTERNAL_SERVER_ERROR',
         message: `Failed to list connections: ${(error as Error).message}`,

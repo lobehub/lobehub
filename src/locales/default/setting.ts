@@ -223,9 +223,9 @@ export default {
 
   // Heterogeneous agent — Cloud tab (web environment config)
   'heterogeneousStatus.cloud.tabLabel': 'Cloud',
-  'heterogeneousStatus.cloud.tokenLabel': 'Claude Code Token',
+  'heterogeneousStatus.cloud.tokenLabel': 'CLI Token',
   'heterogeneousStatus.cloud.tokenDesc':
-    'Your Claude Code OAuth token. Saved securely to Credentials once submitted. Run `claude setup-token` in your terminal to generate one.',
+    'Your CLI OAuth token. Saved securely to Credentials once submitted. Run the setup command in your terminal to generate one.',
   'heterogeneousStatus.cloud.tokenPlaceholder': 'Paste your OAuth token here',
   'heterogeneousStatus.cloud.tokenChange': 'Change',
   'heterogeneousStatus.cloud.tokenSave': 'Save',
@@ -378,12 +378,11 @@ export default {
   'llm.customModelCards.confirmDelete':
     'You are about to delete this custom model. Once deleted, it cannot be recovered. Please proceed with caution.',
   'llm.customModelCards.modelConfig.azureDeployName.extra':
-    'The field actually requested in Azure OpenAI',
+    'The field actually requested by the provider',
   'llm.customModelCards.modelConfig.azureDeployName.placeholder':
     'Enter the model deployment name in Azure',
   'llm.customModelCards.modelConfig.azureDeployName.title': 'Model Deployment Name',
-  'llm.customModelCards.modelConfig.displayName.placeholder':
-    'Enter the display name of the model, such as ChatGPT, GPT-4, etc.',
+  'llm.customModelCards.modelConfig.displayName.placeholder': 'Enter the display name of the model',
   'llm.customModelCards.modelConfig.displayName.title': 'Model Display Name',
   'llm.customModelCards.modelConfig.files.extra':
     'The current file upload implementation is merely a hack solution and is intended for personal experimentation only. Please wait for a complete file upload capability in future updates.',
@@ -392,8 +391,7 @@ export default {
     'This only enables Skill calling in the app. Whether the model actually supports Skill calling depends on the model itself—please test it.',
   'llm.customModelCards.modelConfig.functionCall.title': 'Supports Skill calling',
   'llm.customModelCards.modelConfig.id.extra': 'Will be displayed as the model label',
-  'llm.customModelCards.modelConfig.id.placeholder':
-    'Enter the model ID, such as gpt-4-turbo-preview or claude-2.1',
+  'llm.customModelCards.modelConfig.id.placeholder': 'Enter the model ID from your provider',
   'llm.customModelCards.modelConfig.id.title': 'Model ID',
   'llm.customModelCards.modelConfig.modalTitle': 'Custom Model Configuration',
   'llm.customModelCards.modelConfig.tokens.title': 'Maximum Token Count',
@@ -576,7 +574,7 @@ export default {
   'settingAgent.tag.title': 'Tag',
   'settingAgent.title': 'Agent info',
   'settingAppearance.appTray.desc':
-    'Show the LobeHub icon in the system tray or macOS menu bar. Disabling it also removes tray menu access.',
+    'Show the ChinnaHub icon in the system tray or macOS menu bar. Disabling it also removes tray menu access.',
   'settingAppearance.appTray.title': 'Show App Tray',
   'settingAppearance.animationMode.agile': 'Agile',
   'settingAppearance.animationMode.desc':
@@ -799,8 +797,7 @@ export default {
   'settingSystemTools.category.browserAutomation.desc':
     'Tools for headless browser automation and web interaction',
   'settingSystemTools.category.cliAgents': 'CLI Agents',
-  'settingSystemTools.category.cliAgents.desc':
-    'Agentic coding CLIs detected on your system, such as Claude Code, Codex, and Kimi',
+  'settingSystemTools.category.cliAgents.desc': 'Agentic coding CLIs detected on your system',
   'settingSystemTools.category.contentSearch': 'Content Search',
   'settingSystemTools.category.contentSearch.desc': 'Tools for searching text content within files',
   'settingSystemTools.category.fileSearch': 'File Search',
@@ -818,15 +815,16 @@ export default {
     'Agent-browser - headless browser automation CLI for AI agents',
   'settingSystemTools.tools.ag.desc': 'The Silver Searcher - fast code searching tool',
   'settingSystemTools.tools.aider.desc': 'Aider - AI pair programming in your terminal',
-  'settingSystemTools.tools.claude.desc': 'Claude Code - Anthropic official agentic coding CLI',
-  'settingSystemTools.tools.codex.desc': 'Codex - OpenAI agentic coding CLI',
+  'settingSystemTools.tools.claude.desc': 'Agentic coding CLI from a major provider',
+  'settingSystemTools.tools.codex.desc': 'Agentic coding CLI from a major provider',
   'settingSystemTools.tools.fd.desc': 'fd - fast and user-friendly alternative to find',
   'settingSystemTools.tools.find.desc': 'Unix find - standard file search command',
-  'settingSystemTools.tools.gemini.desc': 'Gemini CLI - Google agentic coding CLI',
+  'settingSystemTools.tools.gemini.desc': 'Agentic coding CLI from a major provider',
   'settingSystemTools.tools.grep.desc': 'GNU grep - standard text search tool',
   'settingSystemTools.tools.kimi.desc': 'Kimi CLI - Moonshot AI agentic coding CLI',
   'settingSystemTools.tools.mdfind.desc': 'macOS Spotlight search (fast indexed search)',
-  'settingSystemTools.tools.lobehub.desc': 'LobeHub CLI - manage and connect to LobeHub services',
+  'settingSystemTools.tools.lobehub.desc':
+    'ChinnaHub CLI - manage and connect to ChinnaHub services',
   'settingSystemTools.tools.bun.desc': 'Bun - fast JavaScript runtime and package manager',
   'settingSystemTools.tools.bunx.desc': 'bunx - Bun package runner for executing npm packages',
   'settingSystemTools.tools.node.desc': 'Node.js - JavaScript runtime for executing JS/TS',
@@ -836,9 +834,9 @@ export default {
   'settingSystemTools.tools.qwen.desc': 'Qwen Code - Alibaba Qwen agentic coding CLI',
   'settingSystemTools.tools.rg.desc': 'ripgrep - extremely fast text search tool',
   'settingSystemTools.tools.uv.desc': 'uv - extremely fast Python package manager',
-  'settingTTS.openai.sttModel': 'OpenAI Speech-to-Text Model',
-  'settingTTS.openai.title': 'OpenAI',
-  'settingTTS.openai.ttsModel': 'OpenAI Text-to-Speech Model',
+  'settingTTS.openai.sttModel': 'Speech-to-Text Model',
+  'settingTTS.openai.title': 'Speech Service',
+  'settingTTS.openai.ttsModel': 'Text-to-Speech Model',
   'settingTTS.showAllLocaleVoice.desc':
     'If closed, only voices in the current language will be displayed',
   'settingTTS.showAllLocaleVoice.title': 'Show All Locale Voices',
@@ -856,7 +854,7 @@ export default {
   'settingTTS.title': 'Speech Service',
   'settingTTS.tts': 'Text-to-Speech Settings',
   'settingTTS.ttsService.desc':
-    'If using OpenAI text-to-speech service, make sure the OpenAI model service is enabled',
+    'If using the text-to-speech service, make sure the matching model service is enabled',
   'settingTTS.ttsService.title': 'Text-to-Speech Service',
   'settingTTS.voice.desc':
     'Select a voice for the current agent, different TTS services support different voices',
@@ -1111,7 +1109,7 @@ When I am ___, I need ___
     'Manage connections to your desktop devices. List online devices, activate a device for remote operations, and check connection status.',
   'tools.builtins.lobe-remote-device.title': 'Remote Device',
   'tools.builtins.lobe-skill-store.description':
-    'Browse and install agent skills from the LobeHub marketplace. Use this when you need extended capabilities or want to install a specific skill.',
+    'Browse and install agent skills from the ChinnaHub marketplace. Use this when you need extended capabilities or want to install a specific skill.',
   'tools.builtins.lobe-skill-store.title': 'Skill Store',
   'tools.builtins.lobe-skills.description': 'Activate and use reusable skill packages',
   'tools.builtins.lobe-skills.title': 'Skills',

@@ -15,7 +15,7 @@ export default {
   'consent.redirecting': 'Authorization successful, redirecting...',
   'consent.scope.email': 'Access your email address',
   'consent.scope.offline_access': 'Allow the client to access your data',
-  'consent.scope.openid': 'Authenticate using your LobeHub account',
+  'consent.scope.openid': 'Authenticate using your ChinnaHub account',
   'consent.scope.profile': 'Access your basic profile information (name, avatar, etc.)',
   'consent.scope.sync-read': 'Read your synchronized data',
   'consent.scope.sync-write': 'Write and update your synchronized data',

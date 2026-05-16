@@ -51,7 +51,7 @@ export default {
   'generation.status.failed': 'Generation Failed',
   'generation.status.generating': 'Generating...',
   'notSupportGuide.desc':
-    'The current deployment mode does not support AI image generation. Switch to the <1>server database deployment mode</1>, or use <3>LobeHub Cloud</3>.',
+    'The current deployment mode does not support AI image generation. Switch to the <1>server database deployment mode</1>, or use <3>ChinnaHub Cloud</3>.',
   'notSupportGuide.features.fileIntegration.desc':
     'Deep integration with the file management system; generated images are automatically saved to the file system for unified management and organization.',
   'notSupportGuide.features.fileIntegration.title': 'File System Integration',
