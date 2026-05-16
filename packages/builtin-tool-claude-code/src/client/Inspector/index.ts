@@ -15,6 +15,8 @@ import { MonitorInspector } from './Monitor';
 import { ReadInspector } from './Read';
 import { ScheduleWakeupInspector } from './ScheduleWakeup';
 import { SkillInspector } from './Skill';
+import { TaskInspector } from './Task';
+import { TaskGetInspector } from './TaskGet';
 import { TaskOutputInspector } from './TaskOutput';
 import { TaskStopInspector } from './TaskStop';
 import { TodoWriteInspector } from './TodoWrite';
@@ -48,8 +50,16 @@ export const ClaudeCodeInspectors = {
   [ClaudeCodeApiName.Read]: ReadInspector,
   [ClaudeCodeApiName.ScheduleWakeup]: ScheduleWakeupInspector,
   [ClaudeCodeApiName.Skill]: SkillInspector,
+  // CC 2.1.143+ task tools — TaskCreate / TaskUpdate / TaskList share the
+  // same inspector because they're driven by the adapter-synthesized
+  // `pluginState.todos` snapshot (the per-call args are deltas, not state).
+  // TaskGet is read-only with no pluginState, so it gets its own minimal chip.
+  [ClaudeCodeApiName.TaskCreate]: TaskInspector,
+  [ClaudeCodeApiName.TaskGet]: TaskGetInspector,
+  [ClaudeCodeApiName.TaskList]: TaskInspector,
   [ClaudeCodeApiName.TaskOutput]: TaskOutputInspector,
   [ClaudeCodeApiName.TaskStop]: TaskStopInspector,
+  [ClaudeCodeApiName.TaskUpdate]: TaskInspector,
   [ClaudeCodeApiName.TodoWrite]: TodoWriteInspector,
   [ClaudeCodeApiName.ToolSearch]: ToolSearchInspector,
   [ClaudeCodeApiName.WebFetch]: WebFetchInspector,

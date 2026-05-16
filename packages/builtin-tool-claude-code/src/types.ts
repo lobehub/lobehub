@@ -46,8 +46,26 @@ export enum ClaudeCodeApiName {
   Read = 'Read',
   ScheduleWakeup = 'ScheduleWakeup',
   Skill = 'Skill',
+  /**
+   * Imperative successor to {@link TodoWrite} in CC 2.1.143+. The model creates
+   * one task per call (CC server assigns the numeric id) and mutates by id with
+   * {@link TaskUpdate}. The adapter accumulates these into a per-session map
+   * and synthesizes the shared `pluginState.todos` shape on each task-tool
+   * result so the existing TodoProgress UI keeps working without renderer
+   * changes.
+   */
+  TaskCreate = 'TaskCreate',
+  /** Inspect a single task by id. Read-only — does not mutate adapter state. */
+  TaskGet = 'TaskGet',
+  /**
+   * List all tasks. Read-only, but its plain-text output is the only
+   * reconciliation signal available when resuming a CC session whose
+   * TaskCreate / TaskUpdate calls happened before this adapter was started.
+   */
+  TaskList = 'TaskList',
   TaskOutput = 'TaskOutput',
   TaskStop = 'TaskStop',
+  TaskUpdate = 'TaskUpdate',
   TodoWrite = 'TodoWrite',
   ToolSearch = 'ToolSearch',
   WebFetch = 'WebFetch',
@@ -136,6 +154,51 @@ export interface ScheduleWakeupArgs {
   delaySeconds?: number;
   prompt?: string;
   reason?: string;
+}
+
+/**
+ * Status of a single task in CC's `TaskCreate` / `TaskUpdate` flow. `deleted`
+ * is only valid on TaskUpdate — it permanently removes the entry rather than
+ * representing a steady state.
+ */
+export type ClaudeCodeTaskStatus = 'pending' | 'in_progress' | 'completed';
+
+/**
+ * Arguments for CC's built-in `TaskCreate`. Each call creates ONE task with
+ * default status `pending`; the CC server assigns a numeric id that the
+ * adapter must parse from the tool_result line `Task #N created successfully`.
+ */
+export interface TaskCreateArgs {
+  /** Present continuous form shown while the task is in_progress. */
+  activeForm?: string;
+  description: string;
+  metadata?: Record<string, unknown>;
+  subject: string;
+}
+
+/**
+ * Arguments for CC's built-in `TaskUpdate`. All fields except `taskId` are
+ * optional — TaskUpdate is a merge. `status: 'deleted'` is the soft-delete
+ * path; downstream the adapter drops the entry from its accumulator.
+ */
+export interface TaskUpdateArgs {
+  activeForm?: string;
+  addBlockedBy?: string[];
+  addBlocks?: string[];
+  description?: string;
+  metadata?: Record<string, unknown>;
+  owner?: string;
+  status?: ClaudeCodeTaskStatus | 'deleted';
+  subject?: string;
+  taskId: string;
+}
+
+/** Arguments for CC's built-in `TaskList` — no parameters in current schema. */
+export type TaskListArgs = Record<PropertyKey, never>;
+
+/** Arguments for CC's built-in `TaskGet`. */
+export interface TaskGetArgs {
+  taskId: string;
 }
 
 /**

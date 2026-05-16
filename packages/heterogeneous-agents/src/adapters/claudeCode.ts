@@ -63,6 +63,48 @@ import type {
 const CC_TODO_WRITE_TOOL_NAME = 'TodoWrite';
 
 /**
+ * CC 2.1.143+ replaced the declarative {@link CC_TODO_WRITE_TOOL_NAME} with
+ * an imperative trio: one task per `TaskCreate` (server-assigned numeric id),
+ * field-merge mutations via `TaskUpdate`, and `TaskList` as the only
+ * full-state read. The adapter accumulates these into a per-session map and
+ * synthesizes the shared `pluginState.todos` shape on each task-tool
+ * tool_result so the existing TodoProgress UI keeps working.
+ *
+ * The old TodoWrite path stays alongside — resumed sessions started on an
+ * older CC may still emit it, and CC's recent SDK reminder text doesn't
+ * forbid the model from using TodoWrite if it really wants to.
+ */
+const CC_TASK_CREATE_TOOL_NAME = 'TaskCreate';
+const CC_TASK_UPDATE_TOOL_NAME = 'TaskUpdate';
+const CC_TASK_LIST_TOOL_NAME = 'TaskList';
+
+/**
+ * tool_result confirmation emitted by CC for a successful `TaskCreate`.
+ * Observed shape on CC 2.1.143: `Task #1 created successfully: <subject>`.
+ * The numeric id is the only place we can read the CC-assigned handle —
+ * `TaskCreate.input` itself does not echo it.
+ */
+const TASK_CREATE_RESULT_PATTERN = /^Task #(\d+) created successfully/;
+
+/**
+ * tool_result confirmation emitted by CC for a successful `TaskUpdate`.
+ * Suffix varies (`status`, blank if no field changed, etc.); we only need
+ * the id to confirm the mutation landed — the field deltas are already
+ * carried by the cached `TaskUpdate.input`.
+ */
+const TASK_UPDATE_RESULT_PATTERN = /^Updated task #\d+/;
+
+/**
+ * One line of `TaskList`'s plain-text output: `#1 [in_progress] 读 hosts`.
+ * Used as the resume reconciliation path — when this adapter joins a CC
+ * session mid-stream and missed earlier Create / Update events, parsing
+ * TaskList rebuilds id / subject / status. `activeForm` and `description`
+ * cannot be recovered (CC omits them) so resumed in_progress tasks fall
+ * back to the subject text, same as TodoWrite's content-fallback.
+ */
+const TASK_LIST_LINE_PATTERN = /^#(\d+) \[(pending|in_progress|completed)\] (.+)$/;
+
+/**
  * Tool name CC sees for the LobeHub-hosted MCP `ask_user_question` server.
  * Source of truth lives in `../askUser/constants.ts`; replicated here as a
  * literal so the adapter compiles in browser bundles without dragging in
@@ -91,6 +133,43 @@ interface ClaudeCodeTodoItem {
 
 interface TodoWriteArgs {
   todos: ClaudeCodeTodoItem[];
+}
+
+/**
+ * Shared synthesized status alphabet (`pending|in_progress|completed` →
+ * `todo|processing|completed`) used by both the TodoWrite and the Task*
+ * pluginState paths. Aliased here so the two synthesizers stay aligned.
+ */
+type SynthesizedTodoStatus = 'todo' | 'processing' | 'completed';
+
+/** Cached `TaskCreate.input`, keyed by `tool_use.id` until the matching tool_result arrives. */
+interface CachedTaskCreateInput {
+  activeForm?: string;
+  description?: string;
+  subject: string;
+}
+
+/** Cached `TaskUpdate.input`, keyed by `tool_use.id` until the matching tool_result arrives. */
+interface CachedTaskUpdateInput {
+  activeForm?: string;
+  description?: string;
+  status?: ClaudeCodeTodoStatus | 'deleted';
+  subject?: string;
+  taskId: string;
+}
+
+/**
+ * Per-session accumulator entry — the adapter's running mirror of CC's
+ * task list, keyed by the CC-assigned numeric id. Updated as Create /
+ * Update tool_results land, and (when present) reconciled against
+ * `TaskList` tool_results to recover from resume gaps.
+ */
+interface ClaudeCodeTaskEntry {
+  /** Empty until a TaskCreate or TaskUpdate populated it; TaskList output cannot recover this. */
+  activeForm?: string;
+  description?: string;
+  status: ClaudeCodeTodoStatus;
+  subject: string;
 }
 
 const CLAUDE_CODE_CLI_INSTALL_DOCS_URL = 'https://docs.anthropic.com/en/docs/claude-code/setup';
@@ -196,24 +275,55 @@ const getRateLimitTerminalError = (
  * Text field: use `activeForm` while in progress (present-continuous is what
  * the header surfaces), fall back to `content` for every other state.
  */
-const synthesizeTodoWritePluginState = (
-  args: TodoWriteArgs,
-): {
+/**
+ * Synthesized `pluginState.todos` shape consumed by `selectTodosFromMessages`.
+ *
+ * `id` is optional: legacy `TodoWrite` snapshots are positional and have no
+ * stable id, while the CC 2.1.143+ Task* tools carry the CC-server-assigned
+ * numeric id so per-call inspectors can resolve `args.taskId` → subject text
+ * without falling back to a cryptic `#N` label.
+ */
+interface SynthesizedTodoPluginState {
   todos: {
-    items: Array<{ status: 'todo' | 'processing' | 'completed'; text: string }>;
+    items: Array<{ id?: string; status: SynthesizedTodoStatus; text: string }>;
     updatedAt: string;
   };
-} => {
+}
+
+const toSynthesizedStatus = (status: ClaudeCodeTodoStatus): SynthesizedTodoStatus =>
+  status === 'in_progress' ? 'processing' : status === 'pending' ? 'todo' : 'completed';
+
+const synthesizeTodoWritePluginState = (args: TodoWriteArgs): SynthesizedTodoPluginState => {
   const items = (args.todos || []).map((todo: ClaudeCodeTodoItem) => {
-    const status =
-      todo.status === 'in_progress'
-        ? 'processing'
-        : todo.status === 'pending'
-          ? 'todo'
-          : 'completed';
     const text = todo.status === 'in_progress' ? todo.activeForm || todo.content : todo.content;
-    return { status, text } as const;
+    return { status: toSynthesizedStatus(todo.status), text } as const;
   });
+  return { todos: { items, updatedAt: new Date().toISOString() } };
+};
+
+/**
+ * Snapshot the running `claudeCodeTasks` accumulator into the shared
+ * `pluginState.todos` shape. Sorted by numeric id so the rendered order
+ * matches CC's own TaskList output (insertion order = id order in practice,
+ * but TaskUpdate can rearrange status without rearranging ids). Carries the
+ * `id` per item so the TaskUpdate inspector can resolve `args.taskId` →
+ * subject text without falling back to a `#N` label.
+ *
+ * Text resolution mirrors {@link synthesizeTodoWritePluginState}: use
+ * `activeForm` while in progress so the spinner reads "Running tests"
+ * rather than "Run tests"; fall back to `subject` whenever activeForm is
+ * missing (TaskList-reconciled entries, or a TaskCreate that omitted it).
+ */
+const synthesizeTaskPluginState = (
+  tasks: Map<string, ClaudeCodeTaskEntry>,
+): SynthesizedTodoPluginState => {
+  const items = [...tasks.entries()]
+    .sort(([a], [b]) => Number(a) - Number(b))
+    .map(([id, entry]) => {
+      const text =
+        entry.status === 'in_progress' ? entry.activeForm || entry.subject : entry.subject;
+      return { id, status: toSynthesizedStatus(entry.status), text } as const;
+    });
   return { todos: { items, updatedAt: new Date().toISOString() } };
 };
 
@@ -309,6 +419,34 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
    * bounded.
    */
   private todoWriteInputs = new Map<string, TodoWriteArgs>();
+  /**
+   * Cached `TaskCreate.input` keyed by `tool_use.id`. Drained in `handleUser`
+   * once the matching tool_result lands: at that point we parse the
+   * CC-assigned numeric id from `Task #N created successfully` and push the
+   * cached fields into {@link claudeCodeTasks}. Cleared even on error to
+   * keep long sessions bounded — failed creates never reach the accumulator.
+   */
+  private taskCreateInputs = new Map<string, CachedTaskCreateInput>();
+  /**
+   * Cached `TaskUpdate.input` keyed by `tool_use.id`. Drained on
+   * tool_result; on success the cached fields merge into the targeted entry
+   * in {@link claudeCodeTasks}. `status: 'deleted'` removes the entry.
+   */
+  private taskUpdateInputs = new Map<string, CachedTaskUpdateInput>();
+  /**
+   * Tool_use ids of `TaskList` calls awaiting their tool_result. Used to
+   * dispatch the reconciliation parser without re-checking the tool name on
+   * every user event. `TaskList.input` is empty so no payload to cache.
+   */
+  private pendingTaskListCalls = new Set<string>();
+  /**
+   * Adapter's running mirror of CC's task list, keyed by the CC-assigned
+   * numeric task id. Survives across `result` events because CC keeps the
+   * task list alive between turns within one session; cleared only when
+   * the adapter is destroyed. This is what `synthesizeTaskPluginState`
+   * snapshots on each task-tool tool_result.
+   */
+  private claudeCodeTasks = new Map<string, ClaudeCodeTaskEntry>();
   /**
    * Cached inputs for main-agent tool_uses keyed by their tool_use.id.
    * Populated for every main-agent tool_use (not just `Task`) because
@@ -552,6 +690,19 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
           if (block.name) this.mainToolNamesById.set(block.id, block.name);
           if (block.name === CC_TODO_WRITE_TOOL_NAME && block.input) {
             this.todoWriteInputs.set(block.id, block.input as TodoWriteArgs);
+          }
+          // Task* tool inputs cached for the tool_result-time reducer.
+          // Only TaskCreate / TaskUpdate carry payloads worth caching;
+          // TaskList carries no input but we still need to remember the
+          // tool_use.id so the result-side dispatcher can recognize it.
+          if (block.name === CC_TASK_CREATE_TOOL_NAME && block.input) {
+            this.taskCreateInputs.set(block.id, block.input as CachedTaskCreateInput);
+          }
+          if (block.name === CC_TASK_UPDATE_TOOL_NAME && block.input) {
+            this.taskUpdateInputs.set(block.id, block.input as CachedTaskUpdateInput);
+          }
+          if (block.name === CC_TASK_LIST_TOOL_NAME) {
+            this.pendingTaskListCalls.add(block.id);
           }
           break;
         }
@@ -832,22 +983,36 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
                 .join('\n')
             : JSON.stringify(block.content || '');
 
-      // Synthesize pluginState for tools whose input IS the target state.
-      // TodoWrite is currently the only such tool; future CC tools (Task,
-      // Skill activation, …) extend this same collection point.
+      // Synthesize pluginState for tools whose input IS (or, for Task*,
+      // imperatively mutates) the target state. Two independent paths:
       //
-      // Guard on `is_error`: a failed TodoWrite means the snapshot was never
-      // applied on CC's side, so we must not persist it here either. Since
+      //  - TodoWrite: declarative snapshot — each call carries the complete
+      //    list. The cached input is the synthesizable state.
+      //  - TaskCreate / TaskUpdate / TaskList (CC 2.1.143+): imperative;
+      //    the adapter accumulates them into `claudeCodeTasks` and snapshots
+      //    that map.
+      //
+      // Guard on `is_error` for both: a failed write was never applied on
+      // CC's side, so we must not persist a derived snapshot —
       // `selectTodosFromMessages` picks the latest `pluginState.todos` from
-      // any producer, leaking a failed write would overwrite the live todo
-      // UI with changes that never actually happened. Drain the cache either
-      // way so a retry with a fresh tool_use id doesn't inherit stale args.
+      // any producer, and leaking a failed write would overwrite the live
+      // todo UI with changes that never actually happened. Drain the input
+      // caches either way so a retry with a fresh tool_use id doesn't
+      // inherit stale args. Subagent inner tools never participate (their
+      // task state is per-subagent, not the main plan).
       const cachedTodoArgs = this.todoWriteInputs.get(toolCallId);
       if (cachedTodoArgs) this.todoWriteInputs.delete(toolCallId);
-      const pluginState =
+      const todoWritePluginState =
         cachedTodoArgs && !block.is_error
           ? synthesizeTodoWritePluginState(cachedTodoArgs)
           : undefined;
+
+      const taskPluginState =
+        subagentCtx === undefined
+          ? this.applyTaskToolResult(toolCallId, !!block.is_error, resultContent)
+          : undefined;
+
+      const pluginState = todoWritePluginState ?? taskPluginState;
 
       // Emit tool_result for executor to persist content to tool message
       events.push(
@@ -874,6 +1039,98 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     }
 
     return events;
+  }
+
+  /**
+   * Apply a Task* tool_result to the running {@link claudeCodeTasks}
+   * accumulator and return a fresh synthesized `pluginState.todos` snapshot.
+   * Returns `undefined` if the tool_result was for a non-Task tool, was an
+   * error, or carried no state change (the snapshot is identical to the
+   * pre-call one — but we still emit it so the UI re-syncs).
+   *
+   * Drain the input caches even on error to keep long sessions bounded;
+   * the accumulator itself only mutates on success so a failed TaskUpdate
+   * doesn't leak partial state into the rendered todo list.
+   */
+  private applyTaskToolResult(
+    toolCallId: string,
+    isError: boolean,
+    resultContent: string,
+  ): SynthesizedTodoPluginState | undefined {
+    const cachedCreate = this.taskCreateInputs.get(toolCallId);
+    if (cachedCreate) this.taskCreateInputs.delete(toolCallId);
+    const cachedUpdate = this.taskUpdateInputs.get(toolCallId);
+    if (cachedUpdate) this.taskUpdateInputs.delete(toolCallId);
+    const wasTaskList = this.pendingTaskListCalls.has(toolCallId);
+    if (wasTaskList) this.pendingTaskListCalls.delete(toolCallId);
+
+    if (!cachedCreate && !cachedUpdate && !wasTaskList) return undefined;
+    if (isError) return undefined;
+
+    if (cachedCreate) {
+      // CC assigns the task id server-side; parse it from the confirmation
+      // line so the accumulator keys match the ids the model will use in
+      // later TaskUpdate calls. Skip silently on a non-matching format —
+      // future CC versions might rephrase the confirmation, and leaking a
+      // garbage entry is worse than missing one row.
+      const match = TASK_CREATE_RESULT_PATTERN.exec(resultContent);
+      if (match) {
+        const taskId = match[1];
+        this.claudeCodeTasks.set(taskId, {
+          activeForm: cachedCreate.activeForm,
+          description: cachedCreate.description,
+          status: 'pending',
+          subject: cachedCreate.subject,
+        });
+      }
+    } else if (cachedUpdate) {
+      // Only apply the update if CC confirmed it. `Updated task #N` is the
+      // success line; any other shape implies a failure CC didn't surface
+      // as `is_error`, in which case we leave the accumulator alone.
+      if (!TASK_UPDATE_RESULT_PATTERN.test(resultContent)) return undefined;
+      if (cachedUpdate.status === 'deleted') {
+        this.claudeCodeTasks.delete(cachedUpdate.taskId);
+      } else {
+        const existing = this.claudeCodeTasks.get(cachedUpdate.taskId);
+        // TaskUpdate against an id we never saw a Create for can happen in
+        // resume sessions; seed a placeholder entry from whatever fields
+        // the update carried so the next TaskList reconcile fills the rest.
+        const next: ClaudeCodeTaskEntry = existing ?? {
+          status: 'pending',
+          subject: cachedUpdate.subject ?? `Task #${cachedUpdate.taskId}`,
+        };
+        // `deleted` is handled in the outer branch — TS narrows it out here.
+        if (cachedUpdate.status) next.status = cachedUpdate.status;
+        if (cachedUpdate.subject !== undefined) next.subject = cachedUpdate.subject;
+        if (cachedUpdate.description !== undefined) next.description = cachedUpdate.description;
+        if (cachedUpdate.activeForm !== undefined) next.activeForm = cachedUpdate.activeForm;
+        this.claudeCodeTasks.set(cachedUpdate.taskId, next);
+      }
+    } else if (wasTaskList) {
+      // Reconciliation: rebuild id / status / subject from each line of
+      // CC's plain-text list. activeForm / description aren't recoverable
+      // — keep whatever we already had (e.g. from a prior Create) and
+      // fall back to subject for the in-progress spinner text.
+      for (const rawLine of resultContent.split('\n')) {
+        const line = rawLine.trim();
+        if (!line) continue;
+        const m = TASK_LIST_LINE_PATTERN.exec(line);
+        if (!m) continue;
+        const [, taskId, status, subject] = m;
+        const existing = this.claudeCodeTasks.get(taskId);
+        if (existing) {
+          existing.status = status as ClaudeCodeTodoStatus;
+          existing.subject = subject;
+        } else {
+          this.claudeCodeTasks.set(taskId, {
+            status: status as ClaudeCodeTodoStatus,
+            subject,
+          });
+        }
+      }
+    }
+
+    return synthesizeTaskPluginState(this.claudeCodeTasks);
   }
 
   private handleResult(raw: any): HeterogeneousAgentEvent[] {

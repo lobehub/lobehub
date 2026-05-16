@@ -44,6 +44,18 @@ export default defineFixtures({
       name: 'Skill',
     },
     {
+      description: 'Create a new task (CC 2.1.143+ replacement for TodoWrite).',
+      name: 'TaskCreate',
+    },
+    {
+      description: 'Inspect a single task by id.',
+      name: 'TaskGet',
+    },
+    {
+      description: 'List all tasks.',
+      name: 'TaskList',
+    },
+    {
       description: 'Read output from a background task.',
       name: 'TaskOutput',
     },
@@ -52,7 +64,11 @@ export default defineFixtures({
       name: 'TaskStop',
     },
     {
-      description: 'Track todo progress.',
+      description: 'Update an existing task by id.',
+      name: 'TaskUpdate',
+    },
+    {
+      description: 'Track todo progress (pre-2.1.143 legacy).',
       name: 'TodoWrite',
     },
     {
@@ -165,6 +181,124 @@ export default defineFixtures({
       args: { task_id: 'task-build-2025-04-25' },
       content: 'Background task stopped (exit code 0).',
     }),
+    // Task tools — the renderer reads `pluginState.todos.items`, which the
+    // CC adapter synthesizes from the accumulated TaskCreate / TaskUpdate /
+    // TaskList history. Fixtures supply that snapshot directly.
+    TaskCreate: variants([
+      {
+        args: {
+          activeForm: 'Reading hosts',
+          description: 'Read /etc/hosts and capture the content.',
+          subject: 'Read hosts',
+        },
+        content: 'Task #1 created successfully: Read hosts',
+        label: 'First create',
+        pluginState: {
+          todos: {
+            items: [{ id: '1', status: 'todo', text: 'Read hosts' }],
+            updatedAt: '2026-05-16T07:23:19.639Z',
+          },
+        },
+      },
+      {
+        args: {
+          activeForm: 'Drafting summary',
+          description: 'Summarize findings.',
+          subject: 'Draft summary',
+        },
+        content: 'Task #3 created successfully: Draft summary',
+        label: 'Third create with prior progress',
+        pluginState: {
+          todos: {
+            items: [
+              { id: '1', status: 'completed', text: 'Read hosts' },
+              { id: '2', status: 'processing', text: 'Counting lines' },
+              { id: '3', status: 'todo', text: 'Draft summary' },
+            ],
+            updatedAt: '2026-05-16T07:24:00.000Z',
+          },
+        },
+      },
+    ]),
+    TaskGet: single({
+      args: { taskId: '1' },
+      content: 'Task #1: Read hosts\nStatus: in_progress\nDescription: Read /etc/hosts content',
+    }),
+    TaskList: variants([
+      {
+        args: {},
+        content:
+          '#1 [in_progress] Read hosts\n#2 [pending] Count lines\n#3 [pending] Draft summary',
+        label: 'Mixed progress',
+        pluginState: {
+          todos: {
+            items: [
+              { id: '1', status: 'processing', text: 'Read hosts' },
+              { id: '2', status: 'todo', text: 'Count lines' },
+              { id: '3', status: 'todo', text: 'Draft summary' },
+            ],
+            updatedAt: '2026-05-16T07:24:30.000Z',
+          },
+        },
+      },
+      {
+        args: {},
+        content:
+          '#1 [completed] Read hosts\n#2 [completed] Count lines\n#3 [completed] Draft summary',
+        label: 'All done',
+        pluginState: {
+          todos: {
+            items: [
+              { id: '1', status: 'completed', text: 'Read hosts' },
+              { id: '2', status: 'completed', text: 'Count lines' },
+              { id: '3', status: 'completed', text: 'Draft summary' },
+            ],
+            updatedAt: '2026-05-16T07:25:00.000Z',
+          },
+        },
+      },
+    ]),
+    TaskUpdate: variants([
+      {
+        args: { status: 'in_progress', taskId: '1' },
+        content: 'Updated task #1 status',
+        label: 'Mark in_progress',
+        pluginState: {
+          todos: {
+            items: [
+              { id: '1', status: 'processing', text: 'Read hosts' },
+              { id: '2', status: 'todo', text: 'Count lines' },
+            ],
+            updatedAt: '2026-05-16T07:23:35.000Z',
+          },
+        },
+      },
+      {
+        args: { status: 'completed', taskId: '1' },
+        content: 'Updated task #1 status',
+        label: 'Mark completed',
+        pluginState: {
+          todos: {
+            items: [
+              { id: '1', status: 'completed', text: 'Read hosts' },
+              { id: '2', status: 'processing', text: 'Counting lines' },
+            ],
+            updatedAt: '2026-05-16T07:23:50.000Z',
+          },
+        },
+      },
+      {
+        args: { status: 'deleted', taskId: '2' },
+        content: 'Deleted task #2',
+        label: 'Mark deleted',
+        pluginState: {
+          todos: {
+            items: [{ id: '1', status: 'processing', text: 'Read hosts' }],
+            updatedAt: '2026-05-16T07:24:10.000Z',
+          },
+        },
+      },
+    ]),
     TodoWrite: variants([
       {
         args: {

@@ -9,6 +9,7 @@ import Glob from './Glob';
 import Grep from './Grep';
 import Read from './Read';
 import Skill from './Skill';
+import Task from './Task';
 import TodoWrite from './TodoWrite';
 import WebFetch from './WebFetch';
 import WebSearch from './WebSearch';
@@ -31,6 +32,15 @@ export const ClaudeCodeRenders = {
   [ClaudeCodeApiName.Grep]: Grep,
   [ClaudeCodeApiName.Read]: Read,
   [ClaudeCodeApiName.Skill]: Skill,
+  // Task panel renders the adapter-synthesized `pluginState.todos` snapshot.
+  // Only TaskUpdate / TaskList show it — those events express list-level
+  // changes (status flip / full snapshot) where the cumulative panel is
+  // genuinely informative. TaskCreate is deliberately skipped: it's a
+  // single-task add and the inspector chip already says `Creating task:
+  // <subject>`, so the big "Todos N/M" panel adds noise without info.
+  // TaskGet is read-only and falls through to the default tool card.
+  [ClaudeCodeApiName.TaskList]: Task,
+  [ClaudeCodeApiName.TaskUpdate]: Task,
   [ClaudeCodeApiName.TodoWrite]: TodoWrite,
   [ClaudeCodeApiName.WebFetch]: WebFetch,
   [ClaudeCodeApiName.WebSearch]: WebSearch,
@@ -47,6 +57,8 @@ export const ClaudeCodeRenders = {
  */
 export const ClaudeCodeRenderDisplayControls: Record<string, RenderDisplayControl> = {
   [ClaudeCodeApiName.Edit]: 'expand',
+  [ClaudeCodeApiName.TaskList]: 'expand',
+  [ClaudeCodeApiName.TaskUpdate]: 'expand',
   [ClaudeCodeApiName.TodoWrite]: 'expand',
   [ClaudeCodeApiName.Write]: 'expand',
 };
