@@ -2,12 +2,12 @@
 import { Type as SchemaType } from '@google/genai';
 import { describe, expect, it, vi } from 'vitest';
 
+import { buildGoogleTool, sanitizeGeminiSchema } from '../../core/contextBuilders/google';
 import {
   convertOpenAISchemaToGoogleSchema,
   createGoogleGenerateObject,
   createGoogleGenerateObjectWithTools,
 } from './generateObject';
-import { sanitizeGeminiSchema, buildGoogleTool } from '../../core/contextBuilders/google';
 
 describe('Google generateObject', () => {
   describe('convertOpenAISchemaToGoogleSchema', () => {
@@ -268,37 +268,49 @@ describe('Google generateObject', () => {
   describe('sanitizeGeminiSchema', () => {
     it('should strip enum from non-STRING types', () => {
       const schema = {
-        priority: { enum: [1, 2, 3], type: 'integer' },
-        status: { enum: ['active'], type: 'string' },
+        properties: {
+          priority: { enum: [1, 2, 3], type: 'integer' },
+          status: { enum: ['active'], type: 'string' },
+        },
+        type: 'object',
       };
 
       const result = sanitizeGeminiSchema(schema);
 
       expect(result).toEqual({
-        priority: { type: 'integer' },
-        status: { enum: ['active'], type: 'string' },
+        properties: {
+          priority: { type: 'integer' },
+          status: { enum: ['active'], type: 'string' },
+        },
+        type: 'object',
       });
     });
 
     it('should strip required from non-OBJECT types', () => {
       const schema = {
-        name: { required: ['firstName'], type: 'string' },
-        user: {
-          properties: { name: { type: 'string' } },
-          required: ['name'],
-          type: 'object',
+        properties: {
+          name: { required: ['firstName'], type: 'string' },
+          user: {
+            properties: { name: { type: 'string' } },
+            required: ['name'],
+            type: 'object',
+          },
         },
+        type: 'object',
       };
 
       const result = sanitizeGeminiSchema(schema);
 
       expect(result).toEqual({
-        name: { type: 'string' },
-        user: {
-          properties: { name: { type: 'string' } },
-          required: ['name'],
-          type: 'object',
+        properties: {
+          name: { type: 'string' },
+          user: {
+            properties: { name: { type: 'string' } },
+            required: ['name'],
+            type: 'object',
+          },
         },
+        type: 'object',
       });
     });
 
@@ -352,13 +364,19 @@ describe('Google generateObject', () => {
 
     it('should handle empty enum arrays', () => {
       const schema = {
-        status: { enum: [], type: 'string' },
+        properties: {
+          status: { enum: [], type: 'string' },
+        },
+        type: 'object',
       };
 
       const result = sanitizeGeminiSchema(schema);
 
       expect(result).toEqual({
-        status: { type: 'string' },
+        properties: {
+          status: { type: 'string' },
+        },
+        type: 'object',
       });
     });
 
@@ -373,10 +391,7 @@ describe('Google generateObject', () => {
       const result = sanitizeGeminiSchema(schema);
 
       expect(result).toEqual({
-        anyOf: [
-          { type: 'number' },
-          { enum: ['low'], type: 'string' },
-        ],
+        anyOf: [{ type: 'number' }, { enum: ['low'], type: 'string' }],
       });
     });
 
