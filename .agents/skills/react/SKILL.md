@@ -85,12 +85,12 @@ errorElement: <ErrorBoundary />;
 
 ## Common Mistakes
 
-| Mistake                                                                                                             | Fix                                                                                                                                                          |
-| ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Using `next/link` in SPA                                                                                            | Use `react-router-dom` `Link`                                                                                                                                |
-| Using antd directly                                                                                                 | Use `@lobehub/ui/base-ui` first, then `@lobehub/ui`                                                                                                          |
-| `createStyles` for static styles                                                                                    | Use `createStaticStyles` + `cssVar`                                                                                                                          |
-| Editing only `desktopRouter.config.tsx`                                                                             | Must edit both `.tsx` and `.desktop.tsx`                                                                                                                     |
-| Using `margin` for flex spacing                                                                                     | Use `gap` prop on Flexbox                                                                                                                                    |
-| Accessing zustand store without selector                                                                            | Use selectors to access store data (see zustand skill)                                                                                                       |
-| Using `Flexbox`/`Text`/`Icon` + `onClick` for section/header actions like refresh, retry, view all, or change batch | Use `Button type={'text'} size={'small'}` for icon+text actions, e.g. `<Button icon={<RefreshCw size={12} />}>`; use `ActionIcon` only for icon-only actions |
+| Mistake                                                | Fix                                                                                    |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| Using `next/link` in SPA                               | Use `react-router-dom` `Link`                                                          |
+| Using antd directly                                    | Use `@lobehub/ui/base-ui` first, then `@lobehub/ui`                                    |
+| `createStyles` for static styles                       | Use `createStaticStyles` + `cssVar`                                                    |
+| Editing only `desktopRouter.config.tsx`                | Must edit both `.tsx` and `.desktop.tsx`                                               |
+| Using `margin` for flex spacing                        | Use `gap` prop on Flexbox                                                              |
+| Accessing zustand store without selector               | Use selectors to access store data (see zustand skill)                                 |
+| Header actions built with `Flexbox`/`Text` + `onClick` | Use `Button type={'text'} size={'small'}`; use `ActionIcon` only for icon-only actions |
