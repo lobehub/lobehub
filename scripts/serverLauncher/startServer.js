@@ -163,6 +163,45 @@ const startGateway = async () => {
   console.error('❌ Gateway: Failed to start after retries.');
 };
 
+// Function to create QStash schedule for dispatching workflow tasks every 10 minutes
+const createQstashSchedule = async () => {
+  const QSTASH_URL = process.env.QSTASH_URL;
+  if (!QSTASH_URL) return;
+
+  const QSTASH_TOKEN = process.env.QSTASH_TOKEN;
+  if (!QSTASH_TOKEN) return;
+
+  const APP_URL = process.env.APP_URL;
+  const INTERNAL_APP_URL = process.env.INTERNAL_APP_URL;
+  if (!APP_URL && !INTERNAL_APP_URL) return;
+
+  const BASE_URL = INTERNAL_APP_URL || APP_URL;
+
+  const url = `${QSTASH_URL}/v2/schedules/${BASE_URL}/api/workflows/task/schedule-dispatch`;
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${QSTASH_TOKEN}`,
+        'Content-Type': 'application/json',
+        'Upstash-Method': 'POST',
+        'Upstash-Cron': '*/10 * * * *',
+        'Upstash-Schedule-Id': 'task-schedule-dispatch',
+      },
+      body: JSON.stringify({}),
+    });
+
+    if (res.ok) {
+      console.log('✅ QStash: Schedule created successfully.');
+    } else {
+      console.error(`❌ QStash: Failed to create schedule. Status ${res.status}`);
+    }
+  } catch (err) {
+    console.error('❌ QStash: Error creating schedule:', err);
+  }
+};
+
 // Main function to run the server with optional proxy
 const runServer = async () => {
   const PROXY_URL = process.env.PROXY_URL || ''; // Default empty string to avoid undefined errors
@@ -203,6 +242,9 @@ const runServer = async () => {
 
   // Start gateway in background after server is ready
   startGateway();
+
+  // Create QStash schedule for workflow task dispatching
+  createQstashSchedule();
 
   // Run the server in either database or non-database mode
   await runServer();
