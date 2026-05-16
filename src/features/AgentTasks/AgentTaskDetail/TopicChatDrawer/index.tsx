@@ -37,11 +37,10 @@ import FeedbackInput from './FeedbackInput';
 
 interface TopicChatDrawerBodyProps {
   agentId: string;
-  taskId: string;
   topicId: string;
 }
 
-const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(({ agentId, taskId, topicId }) => {
+const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(({ agentId, topicId }) => {
   const isLogin = useUserStore(authSelectors.isLogin);
   const useHydrateAgentConfig = useAgentStore((s) => s.useHydrateAgentConfig);
 
@@ -108,7 +107,7 @@ const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(({ agentId, taskId, t
           </Flexbox>
           {canLeaveFeedback && (
             <Flexbox padding={12} style={{ flexShrink: 0 }}>
-              <FeedbackInput taskId={taskId} topicId={topicId} />
+              <FeedbackInput />
             </Flexbox>
           )}
         </Flexbox>
@@ -238,9 +237,7 @@ const TopicChatDrawer = memo(() => {
       onClose={closeTopicDrawer}
     >
       <Freeze frozen={!open}>
-        {open && activeTaskId && (
-          <TopicChatDrawerBody agentId={agentId!} taskId={activeTaskId} topicId={topicId!} />
-        )}
+        {open && activeTaskId && <TopicChatDrawerBody agentId={agentId!} topicId={topicId!} />}
       </Freeze>
     </Drawer>
   );
