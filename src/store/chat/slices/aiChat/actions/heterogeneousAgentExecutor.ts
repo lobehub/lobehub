@@ -1379,6 +1379,10 @@ export const executeHeterogeneousAgent = async (
               { intervention: { status: 'pending' } },
               { operationId },
             );
+            // Sidebar topic row swaps the running spinner for a hand icon
+            // so it's obvious from the topic list that this conversation is
+            // blocked on the user, not still streaming.
+            writeTopicStatus('waitingForHuman');
           } catch (err) {
             console.error('[HeterogeneousAgent] persist intervention pending failed:', err);
           }
@@ -1413,6 +1417,10 @@ export const executeHeterogeneousAgent = async (
               },
               { operationId },
             );
+            // Bridge resolved without the user — drop the hand state so the
+            // sidebar reflects that we're back to whatever the stream does
+            // next (`active`/`failed` lands shortly after via runtime_end).
+            writeTopicStatus('running');
           } catch (err) {
             console.error('[HeterogeneousAgent] persist intervention rejection failed:', err);
           }

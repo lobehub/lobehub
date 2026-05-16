@@ -43,7 +43,7 @@ export const topics = pgTable(
     trigger: text('trigger'), // 'cron' | 'chat' | 'api' | 'eval' - topic creation trigger source
     mode: text('mode'), // 'temp' | 'test' | 'default' - topic usage scenario
     status: text('status', {
-      enum: ['active', 'running', 'paused', 'failed', 'completed', 'archived'],
+      enum: ['active', 'running', 'paused', 'waitingForHuman', 'failed', 'completed', 'archived'],
     }),
     completedAt: timestamptz('completed_at'),
     ...timestamps,

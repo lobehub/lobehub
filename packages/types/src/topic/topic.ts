@@ -168,7 +168,14 @@ export interface ChatTopicSummary {
   provider: string;
 }
 
-export type ChatTopicStatus = 'active' | 'running' | 'paused' | 'failed' | 'completed' | 'archived';
+export type ChatTopicStatus =
+  | 'active'
+  | 'running'
+  | 'paused'
+  | 'waitingForHuman'
+  | 'failed'
+  | 'completed'
+  | 'archived';
 
 export interface ChatTopic extends Omit<BaseDataModel, 'meta'> {
   completedAt?: Date | null;

@@ -553,7 +553,15 @@ export const topicRouter = router({
             .optional(),
           sessionId: z.string().optional(),
           status: z
-            .enum(['active', 'running', 'paused', 'failed', 'completed', 'archived'])
+            .enum([
+              'active',
+              'running',
+              'paused',
+              'waitingForHuman',
+              'failed',
+              'completed',
+              'archived',
+            ])
             .nullable()
             .optional(),
           title: z.string().optional(),
