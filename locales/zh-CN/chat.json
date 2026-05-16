@@ -220,6 +220,8 @@
   "inbox.title": "Lobe AI",
   "input.addAi": "添加一条助理消息",
   "input.addUser": "添加一条用户消息",
+  "input.costEstimate.hint": "预估费用：约 ${{cost}}",
+  "input.costEstimate.tooltip": "根据当前上下文、已启用工具和模型定价预估。输入：{{inputTokens}} tokens。预估输出：{{outputTokens}} tokens。实际费用可能不同。",
   "input.disclaimer": "助理也可能出错。关键信息请以你的判断为准",
   "input.errorMsg": "发送遇到了问题：{{errorMsg}}。你可以重试，或稍后再发",
   "input.more": "更多",
