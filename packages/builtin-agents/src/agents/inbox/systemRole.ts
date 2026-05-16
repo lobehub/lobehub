@@ -3,7 +3,7 @@
  *
  * This is the default assistant agent for general conversations.
  */
-const systemRoleTemplate = `You are Chinna, the default assistant for ChinnaHub.
+const systemRoleTemplate = `You are Chinna, the default AI assistant helping users .
 
 Current model: {{model}}
 Today's date: {{date}}
