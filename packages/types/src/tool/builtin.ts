@@ -715,6 +715,52 @@ export interface IBuiltinToolExecutor {
    * @returns The execution result
    */
   invoke: (apiName: string, params: any, ctx: BuiltinToolContext) => Promise<BuiltinToolResult>;
+
+  /**
+   * Optional renderer-side hook fired AFTER a tool call completes — regardless
+   * of whether it actually executed in the client (this executor) or server-side
+   * (server runtime). Use to invalidate SWR caches, refresh stores, or trigger
+   * any other UI-side reaction to the mutation. Implementations should narrow
+   * `ctx.params` themselves based on `ctx.apiName`.
+   */
+  onAfterCall?: (ctx: ToolAfterCallContext) => void | Promise<void>;
+
+  /**
+   * Optional renderer-side hook fired BEFORE a tool call dispatches, regardless
+   * of whether the tool will execute client- or server-side. Use to optimistically
+   * update UI, set loading states, etc.
+   */
+  onBeforeCall?: (ctx: ToolBeforeCallContext) => void | Promise<void>;
+}
+
+/**
+ * Shared base for all renderer-side tool lifecycle hooks. New fields go here
+ * (or on the variants below) — keeping the call signature as a single object
+ * so additions stay non-breaking.
+ */
+export interface ToolHookContext {
+  /** API name being invoked (e.g. `'deleteTask'`). */
+  apiName: string;
+  /** Tool identifier (e.g. `'lobe-task'`). */
+  identifier: string;
+  /**
+   * Parsed tool arguments. Arrives JSON-decoded when the event comes off the
+   * agent stream; never the raw string. Hook implementations narrow per
+   * `apiName`.
+   */
+  params: unknown;
+  /**
+   * Stable id for this specific tool invocation (`ChatToolPayload.id`).
+   * Useful for correlating before/after hooks against the same call.
+   */
+  toolCallId?: string;
+}
+
+export interface ToolBeforeCallContext extends ToolHookContext {}
+
+export interface ToolAfterCallContext extends ToolHookContext {
+  /** Execution result returned by either the client executor or server runtime. */
+  result: BuiltinToolResult;
 }
 
 /**

@@ -9,7 +9,7 @@ import {
   formatTaskList,
   priorityLabel,
 } from '@lobechat/prompts';
-import type { TaskStatus } from '@lobechat/types';
+import type { TaskAutomationMode, TaskStatus } from '@lobechat/types';
 
 import { AgentModel } from '@/database/models/agent';
 import { TaskModel } from '@/database/models/task';
@@ -330,6 +330,86 @@ export const createTaskRuntime = ({
           success: false,
         };
       }
+    },
+
+    setTaskSchedule: async (args: {
+      automationMode?: TaskAutomationMode | null;
+      heartbeatInterval?: number;
+      identifier: string;
+      maxExecutions?: number | null;
+      schedulePattern?: string | null;
+      scheduleTimezone?: string | null;
+    }) => {
+      const task = await taskModel.resolve(args.identifier);
+      if (!task) return { content: `Task not found: ${args.identifier}`, success: false };
+
+      const changes: string[] = [];
+      const ops: Promise<unknown>[] = [];
+
+      // Mirrors client executor: schedule columns go through taskCaller.update;
+      // maxExecutions lives in `tasks.config.schedule.maxExecutions` (JSONB) and
+      // routes through updateConfig so server-side merge preserves siblings.
+      const scheduleUpdate: {
+        automationMode?: TaskAutomationMode | null;
+        heartbeatInterval?: number;
+        schedulePattern?: string | null;
+        scheduleTimezone?: string | null;
+      } = {};
+      if (args.automationMode !== undefined) {
+        scheduleUpdate.automationMode = args.automationMode;
+        changes.push(
+          args.automationMode ? `automation mode → ${args.automationMode}` : 'automation disabled',
+        );
+      }
+      if (args.heartbeatInterval !== undefined) {
+        scheduleUpdate.heartbeatInterval = args.heartbeatInterval;
+        changes.push(
+          args.heartbeatInterval > 0
+            ? `heartbeat interval → ${args.heartbeatInterval}s`
+            : 'heartbeat interval cleared',
+        );
+      }
+      if (args.schedulePattern !== undefined) {
+        scheduleUpdate.schedulePattern = args.schedulePattern;
+        changes.push(
+          args.schedulePattern
+            ? `schedule pattern → "${args.schedulePattern}"`
+            : 'schedule pattern cleared',
+        );
+      }
+      if (args.scheduleTimezone !== undefined) {
+        scheduleUpdate.scheduleTimezone = args.scheduleTimezone;
+        changes.push(
+          args.scheduleTimezone
+            ? `schedule timezone → ${args.scheduleTimezone}`
+            : 'schedule timezone cleared',
+        );
+      }
+      if (Object.keys(scheduleUpdate).length > 0) {
+        ops.push(taskCaller.update({ id: task.id, ...scheduleUpdate }));
+      }
+
+      if (args.maxExecutions !== undefined) {
+        ops.push(
+          taskCaller.updateConfig({
+            config: { schedule: { maxExecutions: args.maxExecutions } },
+            id: task.id,
+          }),
+        );
+        changes.push(
+          args.maxExecutions === null
+            ? 'max executions cleared (unlimited)'
+            : `max executions → ${args.maxExecutions}`,
+        );
+      }
+
+      if (ops.length === 0) {
+        return { content: 'No schedule fields provided; nothing to update.', success: false };
+      }
+
+      await Promise.all(ops);
+
+      return { content: formatTaskEdited(task.identifier, changes), success: true };
     },
 
     runTask: async (args: { continueTopicId?: string; identifier?: string; prompt?: string }) => {

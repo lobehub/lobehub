@@ -17,6 +17,7 @@ const WorkingPanelToggle = memo(() => {
     systemStatusSelectors.showRightPanel(s),
     s.toggleRightPanel,
   ]);
+  const setWorkingSidebarTab = useGlobalStore((s) => s.setWorkingSidebarTab);
 
   // The popup window has no WorkingSidebar — hide the toggle to avoid a
   // button that does nothing visible.
@@ -29,7 +30,10 @@ const WorkingPanelToggle = memo(() => {
       icon={PanelRightOpenIcon}
       size={DESKTOP_HEADER_ICON_SMALL_SIZE}
       title={t('workingPanel.title')}
-      onClick={() => toggleRightPanel(true)}
+      onClick={() => {
+        setWorkingSidebarTab('review');
+        toggleRightPanel(true);
+      }}
     />
   );
 });

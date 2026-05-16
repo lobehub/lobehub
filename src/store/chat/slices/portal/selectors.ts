@@ -66,6 +66,14 @@ const artifactCodeLanguage = (s: ChatStoreState) => currentArtifact(s)?.language
 
 // Escape special regex characters in a string
 const escapeRegExp = (str: string) => str.replaceAll(/[$()*+.?[\\\]^{|}]/g, '\\$&');
+const CODE_FENCE_START_REGEX = /^\s*```[^\n]*(?:\n|$)/;
+const CODE_FENCE_END_REGEX = /\n```\s*$/;
+
+const unwrapArtifactCodeBlock = (content: string) => {
+  if (!CODE_FENCE_START_REGEX.test(content)) return content;
+
+  return content.replace(CODE_FENCE_START_REGEX, '').replace(CODE_FENCE_END_REGEX, '');
+};
 
 const artifactMessageContent = (id: string) => (s: ChatStoreState) => {
   const message = dbMessageSelectors.getDbMessageById(id)(s);
@@ -84,8 +92,7 @@ const artifactCode = (id: string, identifier?: string) => (s: ChatStoreState) =>
   const result = messageContent.match(regex);
   let content = result?.groups?.content || '';
 
-  // Remove markdown code block if content is wrapped
-  content = content.replace(/^\s*```[^\n]*\n([\S\s]*?)\n```\s*$/, '$1');
+  content = unwrapArtifactCodeBlock(content);
 
   return content;
 };

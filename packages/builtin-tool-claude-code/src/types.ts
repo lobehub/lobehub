@@ -34,6 +34,15 @@ export enum ClaudeCodeApiName {
   Edit = 'Edit',
   Glob = 'Glob',
   Grep = 'Grep',
+  /**
+   * Long-running command monitor (CC 2.1+). Spawns `command` as a tracked
+   * background task; CC re-invokes the LLM each time the task pushes new
+   * stdout (`system task_started` registers the task, `task_notification`
+   * terminates it — see LOBE-8998 in the adapter). Rendered by a dedicated
+   * `MonitorInspector` so the chip iconography matches the SignalCallbacks
+   * accordion underneath.
+   */
+  Monitor = 'Monitor',
   Read = 'Read',
   ScheduleWakeup = 'ScheduleWakeup',
   Skill = 'Skill',
@@ -41,6 +50,8 @@ export enum ClaudeCodeApiName {
   TaskStop = 'TaskStop',
   TodoWrite = 'TodoWrite',
   ToolSearch = 'ToolSearch',
+  WebFetch = 'WebFetch',
+  WebSearch = 'WebSearch',
   Write = 'Write',
 }
 
@@ -70,6 +81,27 @@ export interface TodoWriteArgs {
  */
 export interface SkillArgs {
   skill?: string;
+}
+
+/**
+ * Arguments for CC's built-in `Monitor` tool — long-running command monitor.
+ * CC spawns `command` as a tracked background task; `system task_started`
+ * registers it and `system task_notification` ends it (see LOBE-8998 in the
+ * CC adapter). Each stdout push between those two lifecycle events fires a
+ * new LLM turn that's surfaced as a SignalCallbacks entry in the UI.
+ *
+ * - `description` — one-line summary for the inspector chip (model-written).
+ * - `command` — shell snippet to run; falls back to the chip label when
+ *   `description` is empty.
+ * - `timeout_ms` — wall-clock cap on the monitor; advisory in the UI.
+ * - `persistent` — `true` keeps the task alive across the next LLM
+ *   re-invocation; `false` (default) means single-run.
+ */
+export interface MonitorArgs {
+  command?: string;
+  description?: string;
+  persistent?: boolean;
+  timeout_ms?: number;
 }
 
 /**
@@ -151,4 +183,24 @@ export interface AskUserQuestionItem {
  */
 export interface AskUserQuestionArgs {
   questions: AskUserQuestionItem[];
+}
+
+/**
+ * Arguments for CC's built-in `WebSearch` tool. CC issues a web search via
+ * Anthropic's hosted search and returns a text block of formatted results.
+ */
+export interface WebSearchArgs {
+  allowed_domains?: string[];
+  blocked_domains?: string[];
+  query?: string;
+}
+
+/**
+ * Arguments for CC's built-in `WebFetch` tool. CC fetches a URL and asks the
+ * model to extract `prompt` from the page; the tool_result is the model's
+ * summary, not the raw HTML.
+ */
+export interface WebFetchArgs {
+  prompt?: string;
+  url?: string;
 }

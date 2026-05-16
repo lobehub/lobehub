@@ -740,6 +740,17 @@ export default {
   'settingModel.model.desc': '{{provider}} model',
   'settingModel.model.title': 'Model',
   'settingModel.params.title': 'Advanced Parameters',
+  'settingModel.params.panel.advanced': 'Advanced Settings',
+  'settingModel.params.panel.agentTitle': 'Agent Advanced Settings',
+  'settingModel.params.panel.contextCompression': 'Auto-compress Context',
+  'settingModel.params.panel.creativity': 'Creativity',
+  'settingModel.params.panel.historyLimit': 'Limit History Messages',
+  'settingModel.params.panel.openness': 'Openness',
+  'settingModel.params.panel.responseLength': 'Limit Response Length',
+  'settingModel.params.panel.tab': 'Params',
+  'settingModel.params.panel.title': 'Chat Parameter Settings',
+  'settingModel.params.panel.topicDivergence': 'Topic Divergence',
+  'settingModel.params.panel.vocabularyRichness': 'Vocabulary Richness',
   'settingModel.presencePenalty.desc':
     'The higher the value, the more inclined to use different expressions and avoid concept repetition; the lower the value, the more inclined to use repeated concepts or narratives, resulting in more consistent expression.',
   'settingModel.presencePenalty.title': 'Expression Divergence',
@@ -1145,6 +1156,7 @@ When I am ___, I need ___
   'tools.builtins.task.description':
     'Task management and execution — create, track, review, and complete tasks via CLI.',
   'tools.builtins.task.title': 'Task',
+  'tools.builtins.configure': 'Configure',
   'tools.builtins.notInstalled': 'Not Installed',
   'tools.builtins.uninstall': 'Uninstall',
   'tools.builtins.uninstallConfirm.desc':
@@ -1362,6 +1374,10 @@ When I am ___, I need ___
   'tools.plugins.noEnabled': 'No skills enabled',
   'tools.plugins.store': 'Add skill',
   'tools.search': 'Search skills...',
+  'tools.activation.auto': 'Auto',
+  'tools.activation.auto.desc': 'Smart',
+  'tools.activation.pinned': 'Pinned',
+  'tools.activation.pinned.desc': 'Always On',
   'tools.skillActivateMode.auto.desc':
     'AI can autonomously activate tools, run skills, and install new skills from the store',
   'tools.skillActivateMode.auto.title': 'Auto',

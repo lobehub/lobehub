@@ -6,6 +6,7 @@ import {
   makeDmPolicyField,
   makeGroupPolicyFields,
   makeUserIdField,
+  watchKeywordsField,
 } from '../const';
 import type { FieldSchema } from '../types';
 
@@ -84,6 +85,7 @@ export const schema: FieldSchema[] = [
       makeDmPolicyField({ policy: 'open' }),
       ...makeGroupPolicyFields({ policy: 'open' }),
       allowFromField,
+      watchKeywordsField,
     ],
     type: 'object',
   },

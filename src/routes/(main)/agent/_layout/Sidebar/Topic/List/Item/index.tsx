@@ -180,6 +180,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
   });
 
   const isCompleted = status === 'completed';
+  const isRunning = status === 'running';
 
   const hasUnread = id && isUnreadCompleted;
   const unreadIcon = (
@@ -234,7 +235,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
         href={href}
         title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
         icon={(() => {
-          if (isLoading) {
+          if (isLoading || isRunning) {
             return (
               <RingLoadingIcon
                 ringColor={loadingRingColor}
@@ -259,7 +260,6 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
               return <ProviderIcon color={cssVar.colorTextDescription} size={16} />;
             }
           }
-          if (isHeterogeneousAgent) return null;
           return (
             <Icon
               icon={HashIcon}

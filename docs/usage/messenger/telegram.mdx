@@ -1,0 +1,77 @@
+---
+title: Use LobeHub on Telegram
+description: >-
+  Link your LobeHub account to the official LobeHub bot on Telegram. Send /start
+  to the bot, pick a default agent, and chat with your AI assistants directly
+  from any Telegram conversation — no bot setup required.
+tags:
+  - Messenger
+  - Telegram
+  - LobeHub Bot
+  - Account Linking
+---
+
+# Use LobeHub on Telegram
+
+Telegram is the simplest Messenger platform: there is one global LobeHub bot, and any Telegram account can DM it. You only need to link your LobeHub account once.
+
+## Prerequisites
+
+- A LobeHub account
+- A Telegram account on any device
+
+## Step 1: Open Settings → Messenger
+
+In LobeHub, open **Settings → Messenger** and click the **Telegram** card.
+
+{/* TODO: screenshot — Settings → Messenger with Telegram card highlighted */}
+
+## Step 2: Click Connect
+
+On the Telegram detail page, click **Connect** in the top-right corner. A modal opens with two ways to reach the bot.
+
+{/* TODO: screenshot — Telegram detail page with empty Connections list and the Connect button */}
+
+## Step 3: Open the bot in Telegram
+
+Either tap **Open in Telegram** in the modal, or scan the QR code with your phone. Telegram opens the official LobeHub bot.
+
+{/* TODO: screenshot — LinkModal showing the Open in Telegram button + QR code */}
+
+## Step 4: Send `/start`
+
+Inside the bot, send the `/start` command. The bot replies with a one-time confirmation link.
+
+{/* TODO: screenshot — Telegram bot conversation showing /start sent and the bot's reply with the Link Account button */}
+
+## Step 5: Confirm the link in your browser
+
+Tap the link in the bot's reply. You'll be taken back to LobeHub. Sign in if asked, then choose a **default agent** — every message you DM the bot from now on will route to this agent.
+
+{/* TODO: screenshot — confirm-link page in LobeHub with the agent picker visible */}
+
+After confirming, the Telegram detail page shows your link as a "user" row with the active agent.
+
+{/* TODO: screenshot — Telegram detail page with one connected user row */}
+
+## Switching the Active Agent
+
+Two equivalent ways:
+
+- **In Telegram** — send `/agents` to the bot and pick a different agent.
+- **In LobeHub** — open **Settings → Messenger → Telegram** and use the agent picker on your link row.
+
+The change takes effect on the next message you send.
+
+## Disconnecting
+
+In **Settings → Messenger → Telegram**, click **Disconnect** on the link row. The bot will stop accepting your messages until you re-link by sending `/start` again.
+
+> Disconnecting from LobeHub does not remove the bot from your Telegram chat list — you can manually delete the chat in Telegram if you no longer want to see it.
+
+## Troubleshooting
+
+- **The bot does not reply to `/start`** — Check that the platform card actually exists in **Settings → Messenger**. If your deployment hasn't enabled Telegram yet, the bot won't respond.
+- **"This link is already used"** — One-time links can only be used once. Send `/start` again to get a new link.
+- **"This account is already linked"** — Your Telegram account is bound to a different LobeHub account. Sign in to that LobeHub account to manage the link, or unlink there first.
+- **"Another Telegram account is already linked"** — Your LobeHub account already has a Telegram link. Disconnect it in **Settings → Messenger → Telegram** before linking a new Telegram account.

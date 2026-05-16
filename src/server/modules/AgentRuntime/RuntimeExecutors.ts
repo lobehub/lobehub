@@ -484,8 +484,10 @@ export const createRuntimeExecutors = (
             ]);
 
             onboardingContext = {
+              discoveryUserMessageCount: onboardingState.discoveryUserMessageCount,
               personaContent: persona?.persona ?? null,
               phaseGuidance: formatWebOnboardingStateMessage(onboardingState),
+              remainingDiscoveryExchanges: onboardingState.remainingDiscoveryExchanges,
               soulContent: soulDoc?.content ?? null,
               userInfo,
             };
@@ -658,10 +660,13 @@ export const createRuntimeExecutors = (
           },
           userMemory: state.metadata?.userMemory,
 
-          // Skills configuration for <available_skills> injection
+          // Skills configuration for <available_skills> injection.
+          // In chat mode the MessagesEngine force-disables this injector via
+          // its `enableAgentMode` param — no extra gate needed here.
           ...(resolvedSkills?.enabledSkills?.length && {
             skillsConfig: { enabledSkills: resolvedSkills.enabledSkills },
           }),
+          enableAgentMode: agentConfig.chatConfig?.enableAgentMode,
 
           // Topic reference summaries
           ...(topicReferences && { topicReferences }),

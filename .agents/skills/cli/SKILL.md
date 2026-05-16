@@ -1,6 +1,6 @@
 ---
 name: cli
-description: LobeHub CLI (@lobehub/cli) development guide. Use when working on CLI commands, adding new subcommands, fixing CLI bugs, or understanding CLI architecture. Triggers on CLI development, command implementation, or `lh` command questions.
+description: LobeHub CLI (@lobehub/cli) development guide — commands, subcommands, architecture.
 disable-model-invocation: true
 ---
 

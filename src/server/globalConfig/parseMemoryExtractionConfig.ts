@@ -46,6 +46,7 @@ export type MemoryLayerExtractorConfig = MemoryLayerExtractorPublicConfig &
   };
 
 export interface MemoryExtractionPrivateConfig {
+  agentBenchmarkLoCoMo: MemoryAgentConfig;
   agentGateKeeper: MemoryAgentConfig;
   agentGateKeeperPreferredModels?: string[];
   agentGateKeeperPreferredProviders?: string[];
@@ -89,6 +90,22 @@ const parseGateKeeperAgent = (): MemoryAgentConfig => {
     apiKey,
     baseURL,
     language,
+    model,
+    provider,
+  };
+};
+
+const parseBenchmarkLoCoMoAgent = (fallback: MemoryAgentConfig): MemoryAgentConfig => {
+  const model = process.env.MEMORY_USER_MEMORY_BENCHMARK_LOCOMO_AGENT_MODEL || fallback.model;
+  const provider =
+    process.env.MEMORY_USER_MEMORY_BENCHMARK_LOCOMO_AGENT_PROVIDER ||
+    fallback.provider ||
+    DEFAULT_MINI_PROVIDER;
+
+  return {
+    apiKey: process.env.MEMORY_USER_MEMORY_BENCHMARK_LOCOMO_AGENT_API_KEY ?? fallback.apiKey,
+    baseURL: process.env.MEMORY_USER_MEMORY_BENCHMARK_LOCOMO_AGENT_BASE_URL ?? fallback.baseURL,
+    language: process.env.MEMORY_USER_MEMORY_BENCHMARK_LOCOMO_AGENT_LANGUAGE ?? fallback.language,
     model,
     provider,
   };
@@ -214,6 +231,7 @@ const parsePreferredList = (value?: string) =>
 
 export const parseMemoryExtractionConfig = (): MemoryExtractionPrivateConfig => {
   const agentGateKeeper = parseGateKeeperAgent();
+  const agentBenchmarkLoCoMo = parseBenchmarkLoCoMoAgent(agentGateKeeper);
   const agentLayerExtractor = parseLayerExtractorAgent(agentGateKeeper.model);
   const agentPersonaWriter = parsePersonaWriterAgent(agentGateKeeper.model);
   const embedding = parseEmbeddingAgent(
@@ -279,6 +297,7 @@ export const parseMemoryExtractionConfig = (): MemoryExtractionPrivateConfig => 
   );
 
   return {
+    agentBenchmarkLoCoMo,
     agentGateKeeper,
     agentGateKeeperPreferredModels,
     agentGateKeeperPreferredProviders,

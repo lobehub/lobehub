@@ -100,6 +100,7 @@ const Files = memo<FilesProps>(({ workingDirectory }) => {
   const { t } = useTranslation('chat');
   const { data, isLoading, isValidating, mutate } = useProjectFiles(workingDirectory);
   const { data: gitFiles } = useGitWorkingTreeFiles(workingDirectory, data?.source === 'git');
+  const projectRoot = data?.root ?? workingDirectory;
 
   const entries = useMemo(() => data?.entries ?? [], [data]);
   const nodes = useMemo(() => buildTreeNodes(entries), [entries]);
@@ -161,9 +162,9 @@ const Files = memo<FilesProps>(({ workingDirectory }) => {
         void localFileService.openLocalFileOrFolder(node.data.path, true);
         return;
       }
-      openLocalFile({ filePath: node.data.path, workingDirectory });
+      openLocalFile({ filePath: node.data.path, workingDirectory: projectRoot });
     },
-    [openLocalFile, workingDirectory],
+    [openLocalFile, projectRoot],
   );
 
   const handleNodeClick = useCallback(

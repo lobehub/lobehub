@@ -15,7 +15,6 @@ export const DEFAULT_PREFERENCE: UserPreference = {
   lab: {
     enableAgentSelfIteration: false,
     enableInputMarkdown: true,
-    enableMessenger: false,
   },
   topicGroupMode: 'byTime',
   topicIncludeCompleted: false,

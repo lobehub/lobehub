@@ -85,11 +85,12 @@ errorElement: <ErrorBoundary />;
 
 ## Common Mistakes
 
-| Mistake                                  | Fix                                                    |
-| ---------------------------------------- | ------------------------------------------------------ |
-| Using `next/link` in SPA                 | Use `react-router-dom` `Link`                          |
-| Using antd directly                      | Use `@lobehub/ui/base-ui` first, then `@lobehub/ui`    |
-| `createStyles` for static styles         | Use `createStaticStyles` + `cssVar`                    |
-| Editing only `desktopRouter.config.tsx`  | Must edit both `.tsx` and `.desktop.tsx`               |
-| Using `margin` for flex spacing          | Use `gap` prop on Flexbox                              |
-| Accessing zustand store without selector | Use selectors to access store data (see zustand skill) |
+| Mistake                                                           | Fix                                                               |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Using `next/link` in SPA                                          | Use `react-router-dom` `Link`                                     |
+| Using antd directly                                               | Use `@lobehub/ui/base-ui` first, then `@lobehub/ui`               |
+| `createStyles` for static styles                                  | Use `createStaticStyles` + `cssVar`                               |
+| Editing only `desktopRouter.config.tsx`                           | Must edit both `.tsx` and `.desktop.tsx`                          |
+| Using `margin` for flex spacing                                   | Use `gap` prop on Flexbox                                         |
+| Accessing zustand store without selector                          | Use selectors to access store data (see zustand skill)            |
+| Text or icon-text actions built with `Flexbox`/`Text` + `onClick` | Use `Button type={'text'} size={'small'}` with `icon` when needed |

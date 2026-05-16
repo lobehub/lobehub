@@ -42,7 +42,9 @@ export const topics = pgTable(
     metadata: jsonb('metadata').$type<ChatTopicMetadata | undefined>(),
     trigger: text('trigger'), // 'cron' | 'chat' | 'api' | 'eval' - topic creation trigger source
     mode: text('mode'), // 'temp' | 'test' | 'default' - topic usage scenario
-    status: text('status', { enum: ['active', 'completed', 'archived'] }),
+    status: text('status', {
+      enum: ['active', 'running', 'paused', 'failed', 'completed', 'archived'],
+    }),
     completedAt: timestamptz('completed_at'),
     ...timestamps,
   },

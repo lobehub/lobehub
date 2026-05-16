@@ -1,6 +1,6 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import type { ChatModelCard } from '@lobechat/types';
-import { ModelProvider } from 'model-bank';
+import { deepseek as deepseekChatModels, ModelProvider } from 'model-bank';
 import type OpenAI from 'openai';
 
 import {
@@ -251,6 +251,10 @@ export const LobeDeepSeekAnthropicAI = createAnthropicCompatibleRuntime(anthropi
 export const openAIParams = {
   baseURL: DEFAULT_DEEPSEEK_BASE_URL,
   chatCompletion: {
+    // DeepSeek upstream rejects requests where input alone exceeds the
+    // model context window with a 400 carrying `max_completion=0` in the
+    // message. Fail fast before round-tripping. See LOBE-8974.
+    contextPreFlight: { models: deepseekChatModels },
     handlePayload: buildDeepSeekOpenAIPayload,
   },
   debug: {

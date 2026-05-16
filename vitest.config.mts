@@ -35,6 +35,7 @@ export default defineConfig({
     '__DEV__': process.env.NODE_ENV !== 'production' ? 'true' : 'false',
     '__ELECTRON__': 'false',
     '__MOBILE__': 'false',
+    '__TEST__': 'true',
   },
   optimizeDeps: {
     exclude: ['crypto', 'util', 'tty'],

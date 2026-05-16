@@ -1,5 +1,6 @@
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { SELF_FEEDBACK_INTENT_IDENTIFIER } from '@lobechat/builtin-tool-self-iteration';
+import { RequestTrigger } from '@lobechat/types';
 import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -70,9 +71,7 @@ vi.mock('@/server/services/agentSignal/featureGate', () => ({
     agentSelfIterationEnabled?: boolean;
     isAgentSelfIterationFeatureEnabled: boolean;
     isLobeAiAgent: boolean;
-  }) =>
-    isAgentSelfIterationFeatureEnabled &&
-    (isLobeAiAgent || agentSelfIterationEnabled === true),
+  }) => isAgentSelfIterationFeatureEnabled && (isLobeAiAgent || agentSelfIterationEnabled === true),
 }));
 
 vi.mock('@/server/services/agentSignal', () => ({
@@ -274,6 +273,32 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
 
     const callArgs = mockCreateOperation.mock.calls[0][0];
     expect(callArgs.agentConfig.systemRole).toBe('');
+  });
+
+  it('should persist request trigger metadata on the created user message', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      chatConfig: {},
+      id: 'agent-custom',
+      model: 'gpt-4',
+      plugins: [],
+      provider: 'openai',
+      systemRole: '',
+    });
+
+    await service.execAgent({
+      agentId: 'agent-custom',
+      appContext: { topicId: 'topic-1' },
+      prompt: 'Hello',
+      trigger: RequestTrigger.Onboarding,
+    });
+
+    expect(mockMessageCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: 'Hello',
+        metadata: { trigger: RequestTrigger.Onboarding },
+        role: 'user',
+      }),
+    );
   });
 
   it('should inject self-feedback intent tool for Lobe AI when user gate is enabled', async () => {

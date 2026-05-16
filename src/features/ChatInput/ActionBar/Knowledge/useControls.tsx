@@ -12,12 +12,17 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useAgentId } from '../../hooks/useAgentId';
 import CheckboxItem from '../components/CheckboxWithLoading';
 
+const labelMaxWidth = 'min(400px, 56vw)';
+
+export interface KnowledgeControls {
+  enabledCount: number;
+  items: ItemType[];
+}
+
 export const useControls = ({
   openAttachKnowledgeModal,
-  setUpdating,
 }: {
   openAttachKnowledgeModal: () => void;
-  setUpdating: (updating: boolean) => void;
 }) => {
   const { t } = useTranslation('chat');
   const agentId = useAgentId();
@@ -32,63 +37,80 @@ export const useControls = ({
     s.toggleFile,
     s.toggleKnowledgeBase,
   ]);
+  const enabledCount =
+    files.filter((item) => item.enabled).length +
+    knowledgeBases.filter((item) => item.enabled).length;
+
+  const libraryItems = knowledgeBases.map((item) => ({
+    icon: <RepoIcon />,
+    key: item.id,
+    label: (
+      <CheckboxItem
+        checked={item.enabled}
+        id={item.id}
+        label={item.name}
+        labelMaxWidth={labelMaxWidth}
+        onUpdate={async (id, enabled) => {
+          await toggleKnowledgeBase(id, enabled);
+        }}
+      />
+    ),
+  }));
+
+  const fileItems = files.map((item) => ({
+    icon: <FileIcon fileName={item.name} fileType={item.type} size={20} />,
+    key: item.id,
+    label: (
+      <CheckboxItem
+        checked={item.enabled}
+        id={item.id}
+        label={item.name}
+        labelMaxWidth={labelMaxWidth}
+        onUpdate={async (id, enabled) => {
+          await toggleFile(id, enabled);
+        }}
+      />
+    ),
+  }));
+
+  const relatedGroups: ItemType[] = [
+    ...(libraryItems.length > 0
+      ? [
+          {
+            children: libraryItems,
+            key: 'relativeLibraries',
+            label: t('knowledgeBase.libraries'),
+            type: 'group' as const,
+          },
+        ]
+      : []),
+    ...(libraryItems.length > 0 && fileItems.length > 0 ? [{ type: 'divider' as const }] : []),
+    ...(fileItems.length > 0
+      ? [
+          {
+            children: fileItems,
+            key: 'relativeFiles',
+            label: t('knowledgeBase.files'),
+            type: 'group' as const,
+          },
+        ]
+      : []),
+  ];
 
   const items: ItemType[] = [
+    ...relatedGroups,
+    ...(relatedGroups.length > 0 ? [{ type: 'divider' as const }] : []),
     {
-      children: [
-        // first the files
-        ...files.map((item) => ({
-          icon: <FileIcon fileName={item.name} fileType={item.type} size={20} />,
-          key: item.id,
-          label: (
-            <CheckboxItem
-              checked={item.enabled}
-              id={item.id}
-              label={item.name}
-              onUpdate={async (id, enabled) => {
-                setUpdating(true);
-                await toggleFile(id, enabled);
-                setUpdating(false);
-              }}
-            />
-          ),
-        })),
-
-        // then the knowledge bases
-        ...knowledgeBases.map((item) => ({
-          icon: <RepoIcon />,
-          key: item.id,
-          label: (
-            <CheckboxItem
-              checked={item.enabled}
-              id={item.id}
-              label={item.name}
-              onUpdate={async (id, enabled) => {
-                setUpdating(true);
-                await toggleKnowledgeBase(id, enabled);
-                setUpdating(false);
-              }}
-            />
-          ),
-        })),
-      ],
-      key: 'relativeFilesOrLibraries',
-      label: t('knowledgeBase.relativeFilesOrLibraries'),
-      type: 'group',
-    },
-    {
-      type: 'divider',
-    },
-    {
+      closeOnClick: true,
       extra: <Icon icon={ArrowRight} />,
       icon: LibraryBig,
       key: 'knowledge-base-store',
-      label: t('knowledgeBase.viewMore'),
+      label: <span data-fixed-menu-footer>{t('knowledgeBase.viewMore')}</span>,
       onClick: () => {
         openAttachKnowledgeModal();
       },
     },
   ];
 
-  return items;
+  return { enabledCount, items } satisfies KnowledgeControls;
 };

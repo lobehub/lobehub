@@ -9,12 +9,10 @@ import isEqual from 'fast-deep-equal';
 import { Loader2Icon } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import useSWR from 'swr';
 
 import { FORM_STYLE } from '@/const/layoutTokens';
 import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
 import { autoUpdateService } from '@/services/electron/autoUpdate';
-import { messengerService } from '@/services/messenger';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors, preferenceSelectors, settingsSelectors } from '@/store/user/selectors';
@@ -37,22 +35,16 @@ const Page = memo(() => {
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
   const [loading, setLoading] = useState(false);
 
-  const [isPreferenceInit, enableInputMarkdown, enableGatewayMode, enableMessenger, updateLab] =
-    useUserStore((s) => [
+  const [isPreferenceInit, enableInputMarkdown, enableGatewayMode, updateLab] = useUserStore(
+    (s) => [
       preferenceSelectors.isPreferenceInit(s),
       labPreferSelectors.enableInputMarkdown(s),
       labPreferSelectors.enableGatewayMode(s),
-      labPreferSelectors.enableMessenger(s),
       s.updateLab,
-    ]);
+    ],
+  );
 
   const hasGatewayUrl = useServerConfigStore((s) => !!s.serverConfig.agentGatewayUrl);
-  // Only surface the Messenger lab when the server actually has a messenger
-  // bot configured — otherwise toggling it would do nothing useful.
-  const messengerPlatformsSWR = useSWR('messenger:availablePlatforms', () =>
-    messengerService.availablePlatforms(),
-  );
-  const hasMessengerPlatform = (messengerPlatformsSWR.data?.length ?? 0) > 0;
 
   const [channel, setChannel] = useState<UpdateChannelValue>('stable');
 
@@ -131,23 +123,6 @@ const Page = memo(() => {
             className: styles.labItem,
             desc: tLabs('features.gatewayMode.desc'),
             label: tLabs('features.gatewayMode.title'),
-            minWidth: undefined,
-          } satisfies FormItemProps,
-        ]
-      : []),
-    ...(hasMessengerPlatform
-      ? [
-          {
-            children: (
-              <Switch
-                checked={enableMessenger}
-                loading={!isPreferenceInit}
-                onChange={(checked: boolean) => updateLab({ enableMessenger: checked })}
-              />
-            ),
-            className: styles.labItem,
-            desc: tLabs('features.messenger.desc'),
-            label: tLabs('features.messenger.title'),
             minWidth: undefined,
           } satisfies FormItemProps,
         ]

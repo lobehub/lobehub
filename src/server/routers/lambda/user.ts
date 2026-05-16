@@ -272,8 +272,10 @@ export const userRouter = router({
     ]);
 
     return {
+      discoveryUserMessageCount: state.discoveryUserMessageCount,
       personaContent: persona?.persona || null,
       phaseGuidance: formatWebOnboardingStateMessage(state),
+      remainingDiscoveryExchanges: state.remainingDiscoveryExchanges,
       soulContent: soulDoc?.content || null,
       userInfo,
     };

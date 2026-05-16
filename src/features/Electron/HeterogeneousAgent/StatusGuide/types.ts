@@ -7,6 +7,7 @@ export interface HeterogeneousAgentStatusGuideProps {
   agentType?: string;
   error?: HeterogeneousAgentSessionError | null;
   onOpenSystemTools?: () => void;
+  onRetry?: () => void;
   variant?: HeterogeneousAgentStatusGuideVariant;
 }
 
@@ -27,5 +28,6 @@ export interface HeterogeneousAgentGuideStateProps {
   config: HeterogeneousAgentGuideConfig;
   error?: HeterogeneousAgentSessionError | null;
   onOpenSystemTools?: () => void;
+  onRetry?: () => void;
   variant: HeterogeneousAgentStatusGuideVariant;
 }

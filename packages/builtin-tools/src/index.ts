@@ -67,6 +67,24 @@ export const manualModeExcludeToolIds = [
 ];
 
 /**
+ * Tool IDs allowed when the agent runs in chat mode
+ * (`chatConfig.enableAgentMode === false`). Each one still passes through
+ * its own runtime gate (e.g. knowledge base requires `hasEnabledKnowledgeBases`,
+ * memory requires the global memory setting, web-browsing requires search
+ * enabled) — this list is the strict outer whitelist.
+ *
+ * In chat mode, both the server `createServerAgentToolsEngine` and the
+ * frontend `createAgentToolsEngine` build their rules from ONLY these
+ * identifiers, drop user plugins / `alwaysOnToolIds` entirely, and disable
+ * `allowExplicitActivation` so the activator can't smuggle other tools in.
+ */
+export const chatModeAllowedToolIds = [
+  KnowledgeBaseManifest.identifier,
+  MemoryManifest.identifier,
+  WebBrowsingManifest.identifier,
+];
+
+/**
  * Tool IDs whose enabled state is decided by runtime / system conditions
  * (e.g. cloud runtime, agent has documents attached, knowledge base configured,
  * desktop gateway available), NOT by the user's plugin selection.

@@ -14,6 +14,17 @@ const SLACK_INSTALL_ERROR_REASON_KEYS = {
   persist_failed: 'messenger.slack.installResult.reasons.persistFailed',
 } as const satisfies Record<string, MessengerTranslationKey>;
 
+const DISCORD_INSTALL_ERROR_REASON_KEYS = {
+  access_denied: 'messenger.discord.installResult.reasons.accessDenied',
+  exchange_failed: 'messenger.discord.installResult.reasons.exchangeFailed',
+  invalid_state: 'messenger.discord.installResult.reasons.invalidState',
+  missing_app_id: 'messenger.discord.installResult.reasons.missingAppId',
+  missing_code_or_state: 'messenger.discord.installResult.reasons.missingCodeOrState',
+  missing_tenant: 'messenger.discord.installResult.reasons.missingTenant',
+  missing_token: 'messenger.discord.installResult.reasons.missingToken',
+  persist_failed: 'messenger.discord.installResult.reasons.persistFailed',
+} as const satisfies Record<string, MessengerTranslationKey>;
+
 const getMessengerTranslationKey = (error: unknown): MessengerTranslationKey | undefined => {
   if (!error || typeof error !== 'object' || !('message' in error)) return;
 
@@ -40,6 +51,15 @@ export const getSlackInstallErrorReason = (t: MessengerT, reason?: string | null
 
   const key =
     SLACK_INSTALL_ERROR_REASON_KEYS[reason as keyof typeof SLACK_INSTALL_ERROR_REASON_KEYS];
+
+  return key ? t(key) : reason;
+};
+
+export const getDiscordInstallErrorReason = (t: MessengerT, reason?: string | null) => {
+  if (!reason) return t('messenger.discord.installResult.reasons.generic');
+
+  const key =
+    DISCORD_INSTALL_ERROR_REASON_KEYS[reason as keyof typeof DISCORD_INSTALL_ERROR_REASON_KEYS];
 
   return key ? t(key) : reason;
 };

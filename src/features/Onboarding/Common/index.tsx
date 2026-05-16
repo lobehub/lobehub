@@ -62,6 +62,12 @@ const CommonOnboardingPage = memo(() => {
     remappedRef.current = true;
   }, [isUserStateInit]);
 
+  useEffect(() => {
+    if (__TEST__) return;
+    void import('@/routes/onboarding/agent');
+    void import('@/routes/onboarding/classic');
+  }, []);
+
   const goNextFromTelemetry = useCallback(() => {
     setSearchParams({ step: '2' }, { replace: true });
   }, [setSearchParams]);

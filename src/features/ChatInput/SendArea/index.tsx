@@ -19,12 +19,15 @@ const SendArea = memo(() => {
   const rightActions = useChatInputStore((s) => s.rightActions, isEqual);
 
   const items = useMemo(
-    () => mapActionsToItems((rightActions as ActionKey[]) || []),
+    () =>
+      mapActionsToItems(
+        ((rightActions as ActionKey[]) || []).filter((actionKey) => actionKey !== 'contextWindow'),
+      ),
     [rightActions],
   );
 
   return (
-    <Flexbox horizontal align={'center'} flex={'none'} gap={6}>
+    <Flexbox horizontal align={'center'} flex={'none'} gap={12}>
       {allowExpand && <ExpandButton />}
       {items}
       <SendButton />

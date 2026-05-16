@@ -39,6 +39,8 @@ export enum GroupSettingsTabs {
   Settings = 'settings',
 }
 
+export type WorkingSidebarTab = 'files' | 'params' | 'resources' | 'review';
+
 export enum SettingsTabs {
   About = 'about',
   Advanced = 'advanced',
@@ -274,7 +276,7 @@ export interface SystemStatus {
    * Lifted to global so external triggers (e.g. the diff badge in the input bar)
    * can switch the panel to "review" when revealing the right panel.
    */
-  workingSidebarTab?: 'resources' | 'review' | 'files';
+  workingSidebarTab?: WorkingSidebarTab;
   zenMode?: boolean;
 }
 

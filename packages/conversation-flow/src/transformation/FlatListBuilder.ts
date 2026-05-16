@@ -223,17 +223,44 @@ export class FlatListBuilder {
           processedIds,
         );
 
+        // Gather external-signal callback blocks (LOBE-8998) for any
+        // tool in the chain that fired toolless reactive replies
+        // (Monitor stdout pushes, etc.). Snapshot now so the UI doesn't
+        // need to query messageMap; mark callback messages as processed
+        // so they don't render as separate top-level bubbles.
+        const signalBlocks = this.messageCollector.collectFlatSignalCallbacks(
+          allToolMessages,
+          allMessages,
+        );
+
+        // Post-task-summary turns (LOBE-8998) — toolless siblings of
+        // the callbacks under the same tool_result, tagged with
+        // `signal.type === 'task-completion'`. Belong inside the same
+        // AssistantGroup, rendered AFTER the SignalCallbacks accordion.
+        const taskCompletionMessages = this.messageCollector.collectFlatTaskCompletions(
+          allToolMessages,
+          allMessages,
+        );
+
         // Create assistantGroup virtual message
         const groupMessage = this.createAssistantGroupMessage(
           assistantChain[0],
           assistantChain,
           allToolMessages,
+          signalBlocks,
+          taskCompletionMessages,
         );
         flatList.push(groupMessage);
 
         // Mark all as processed
         assistantChain.forEach((m) => processedIds.add(m.id));
         allToolMessages.forEach((m) => processedIds.add(m.id));
+        for (const block of signalBlocks) {
+          for (const cb of block.callbacks) processedIds.add(cb.id);
+        }
+        for (const completion of taskCompletionMessages) {
+          processedIds.add(completion.id);
+        }
 
         // Continue after the assistant chain
         // Priority 1: If last assistant has non-tool children, continue from it
@@ -748,6 +775,13 @@ export class FlatListBuilder {
     firstAssistant: Message,
     assistantChain: Message[],
     allToolMessages: Message[],
+    signalCallbackBlocks?: {
+      callbacks: Message[];
+      sourceToolCallId: string;
+      sourceToolMessageId: string;
+      sourceToolName: string;
+    }[],
+    taskCompletionMessages?: Message[],
   ): Message {
     const children: AssistantContentBlock[] = [];
 
@@ -905,6 +939,47 @@ export class FlatListBuilder {
     // Preserve isSupervisor in metadata for supervisor messages
     if (isSupervisor) {
       result.metadata = { ...result.metadata, isSupervisor: true };
+    }
+
+    // Snapshot signal-callback blocks onto the virtual group message
+    // (LOBE-8998) so AssistantGroupMessage can render `<SignalCallbacks>`
+    // without re-querying the store. Each callback Message becomes a
+    // compact UISignalCallback with content + model/provider/sequence.
+    if (signalCallbackBlocks && signalCallbackBlocks.length > 0) {
+      result.signalCallbacks = signalCallbackBlocks.map((block) => ({
+        callbacks: block.callbacks.map((m) => ({
+          content: m.content ?? '',
+          id: m.id,
+          model: m.model ?? undefined,
+          provider: m.provider ?? undefined,
+          sequence: (m.metadata as { signal?: { sequence?: number } } | null | undefined)?.signal
+            ?.sequence,
+        })),
+        sourceToolCallId: block.sourceToolCallId,
+        sourceToolMessageId: block.sourceToolMessageId,
+        sourceToolName: block.sourceToolName,
+      }));
+    }
+
+    // Snapshot post-task-summary turns as content blocks (LOBE-8998).
+    // They render after `<SignalCallbacks>` inside the same group, via
+    // a second `<Group>` that pulls live content from the store using
+    // the block id (no need to denormalize text here — keeps streaming
+    // updates working without an extra refresh).
+    if (taskCompletionMessages && taskCompletionMessages.length > 0) {
+      result.taskCompletions = taskCompletionMessages.map((m) => {
+        const block: AssistantContentBlock = {
+          content: m.content ?? '',
+          id: m.id,
+        };
+        if (m.error) block.error = m.error;
+        if (m.fileList && m.fileList.length > 0) block.fileList = m.fileList;
+        if (m.imageList && m.imageList.length > 0) block.imageList = m.imageList;
+        if (m.performance) block.performance = m.performance;
+        if (m.reasoning) block.reasoning = m.reasoning;
+        if (m.usage) block.usage = m.usage;
+        return block;
+      });
     }
 
     return result;

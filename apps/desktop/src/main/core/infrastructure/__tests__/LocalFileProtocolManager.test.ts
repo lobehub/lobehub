@@ -2,24 +2,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LocalFileProtocolManager } from '../LocalFileProtocolManager';
 
-const { mockApp, mockProtocol, mockReadFile, mockStat, protocolHandlerRef } = vi.hoisted(() => {
-  const protocolHandlerRef = { current: null as any };
+const { mockApp, mockProtocol, mockReadFile, mockRealpath, mockStat, protocolHandlerRef } =
+  vi.hoisted(() => {
+    const protocolHandlerRef = { current: null as any };
 
-  return {
-    mockApp: {
-      isReady: vi.fn().mockReturnValue(true),
-      whenReady: vi.fn().mockResolvedValue(undefined),
-    },
-    mockProtocol: {
-      handle: vi.fn((_scheme: string, handler: any) => {
-        protocolHandlerRef.current = handler;
-      }),
-    },
-    mockReadFile: vi.fn(),
-    mockStat: vi.fn(),
-    protocolHandlerRef,
-  };
-});
+    return {
+      mockApp: {
+        isReady: vi.fn().mockReturnValue(true),
+        whenReady: vi.fn().mockResolvedValue(undefined),
+      },
+      mockProtocol: {
+        handle: vi.fn((_scheme: string, handler: any) => {
+          protocolHandlerRef.current = handler;
+        }),
+      },
+      mockReadFile: vi.fn(),
+      mockRealpath: vi.fn(),
+      mockStat: vi.fn(),
+      protocolHandlerRef,
+    };
+  });
 
 vi.mock('electron', () => ({
   app: mockApp,
@@ -27,6 +29,7 @@ vi.mock('electron', () => ({
 }));
 
 vi.mock('node:fs/promises', () => ({
+  realpath: mockRealpath,
   readFile: mockReadFile,
   stat: mockStat,
 }));
@@ -45,6 +48,7 @@ describe('LocalFileProtocolManager', () => {
     vi.clearAllMocks();
     protocolHandlerRef.current = null;
     mockApp.isReady.mockReturnValue(true);
+    mockRealpath.mockImplementation(async (filePath: string) => filePath);
     mockStat.mockImplementation(async () => ({ isFile: () => true, size: 1024 }));
     mockReadFile.mockImplementation(async () => Buffer.from('image-bytes'));
   });
@@ -69,6 +73,12 @@ describe('LocalFileProtocolManager', () => {
   it('serves a POSIX absolute path with the correct mime type', async () => {
     const manager = new LocalFileProtocolManager();
     manager.registerHandler();
+    await manager.approveWorkspaceRoot('/Users/alice');
+    const url = await manager.createPreviewUrl({
+      filePath: '/Users/alice/Pictures/cat.png',
+      workspaceRoot: '/Users/alice',
+    });
+    if (!url) throw new Error('Expected local file preview URL');
 
     expect(mockProtocol.handle).toHaveBeenCalledWith('localfile', expect.any(Function));
     const handler = protocolHandlerRef.current;
@@ -76,7 +86,7 @@ describe('LocalFileProtocolManager', () => {
     const response = await handler({
       headers: new Headers(),
       method: 'GET',
-      url: 'localfile://file/Users/alice/Pictures/cat.png',
+      url,
     });
 
     expect(mockStat).toHaveBeenCalledWith('/Users/alice/Pictures/cat.png');
@@ -89,12 +99,18 @@ describe('LocalFileProtocolManager', () => {
   it('serves source files as text through the localfile protocol', async () => {
     const manager = new LocalFileProtocolManager();
     manager.registerHandler();
+    await manager.approveWorkspaceRoot('/Users/alice/project');
+    const url = await manager.createPreviewUrl({
+      filePath: '/Users/alice/project/App.tsx',
+      workspaceRoot: '/Users/alice/project',
+    });
+    if (!url) throw new Error('Expected local file preview URL');
     const handler = protocolHandlerRef.current;
 
     const response = await handler({
       headers: new Headers(),
       method: 'GET',
-      url: 'localfile://file/Users/alice/project/App.tsx',
+      url,
     });
 
     expect(mockStat).toHaveBeenCalledWith('/Users/alice/project/App.tsx');
@@ -106,12 +122,18 @@ describe('LocalFileProtocolManager', () => {
   it('decodes percent-encoded characters in the path', async () => {
     const manager = new LocalFileProtocolManager();
     manager.registerHandler();
+    await manager.approveWorkspaceRoot('/Users/alice');
+    const url = await manager.createPreviewUrl({
+      filePath: '/Users/alice/My Pictures/图 #.png',
+      workspaceRoot: '/Users/alice',
+    });
+    if (!url) throw new Error('Expected local file preview URL');
     const handler = protocolHandlerRef.current;
 
     await handler({
       headers: new Headers(),
       method: 'GET',
-      url: 'localfile://file/Users/alice/My%20Pictures/%E5%9B%BE%20%23.png',
+      url,
     });
 
     expect(mockStat).toHaveBeenCalledWith('/Users/alice/My Pictures/图 #.png');
@@ -137,12 +159,18 @@ describe('LocalFileProtocolManager', () => {
 
     const manager = new LocalFileProtocolManager();
     manager.registerHandler();
+    await manager.approveWorkspaceRoot('/Users/alice');
+    const url = await manager.createPreviewUrl({
+      filePath: '/Users/alice/folder',
+      workspaceRoot: '/Users/alice',
+    });
+    if (!url) throw new Error('Expected local file preview URL');
     const handler = protocolHandlerRef.current;
 
     const response = await handler({
       headers: new Headers(),
       method: 'GET',
-      url: 'localfile://file/Users/alice/folder',
+      url,
     });
 
     expect(response.status).toBe(404);
@@ -158,15 +186,96 @@ describe('LocalFileProtocolManager', () => {
 
     const manager = new LocalFileProtocolManager();
     manager.registerHandler();
+    await manager.approveWorkspaceRoot('/');
+    const handler = protocolHandlerRef.current;
+    const url = await manager.createPreviewUrl({
+      filePath: '/nonexistent.png',
+      workspaceRoot: '/',
+    });
+    if (!url) throw new Error('Expected local file preview URL');
+
+    const response = await handler({
+      headers: new Headers(),
+      method: 'GET',
+      url,
+    });
+
+    expect(response.status).toBe(404);
+  });
+
+  it('rejects direct localfile requests without a main-issued preview token', async () => {
+    const manager = new LocalFileProtocolManager();
+    manager.registerHandler();
     const handler = protocolHandlerRef.current;
 
     const response = await handler({
       headers: new Headers(),
       method: 'GET',
-      url: 'localfile://file/nonexistent.png',
+      url: 'localfile://file/Users/alice/.ssh/id_rsa',
     });
 
-    expect(response.status).toBe(404);
+    expect(response.status).toBe(403);
+    expect(mockStat).not.toHaveBeenCalled();
+    expect(mockReadFile).not.toHaveBeenCalled();
+  });
+
+  it('rejects forged preview tokens before resolving the requested path', async () => {
+    const manager = new LocalFileProtocolManager();
+    manager.registerHandler();
+    const handler = protocolHandlerRef.current;
+
+    const response = await handler({
+      headers: new Headers(),
+      method: 'GET',
+      url: 'localfile://file/Users/alice/.ssh/id_rsa?token=forged',
+    });
+
+    expect(response.status).toBe(403);
+    expect(mockRealpath).not.toHaveBeenCalled();
+    expect(mockStat).not.toHaveBeenCalled();
+    expect(mockReadFile).not.toHaveBeenCalled();
+  });
+
+  it('does not mint preview URLs outside an approved workspace root', async () => {
+    const manager = new LocalFileProtocolManager();
+    await manager.approveWorkspaceRoot('/Users/alice/project');
+
+    const url = await manager.createPreviewUrl({
+      filePath: '/Users/alice/.ssh/id_rsa',
+      workspaceRoot: '/Users/alice/project',
+    });
+
+    expect(url).toBeNull();
+  });
+
+  it('can approve a project root derived from an already approved nested scope', async () => {
+    const manager = new LocalFileProtocolManager();
+    await manager.approveWorkspaceRoot('/Users/alice/project/packages/app');
+    await manager.approveProjectRootFromScope({
+      projectRoot: '/Users/alice/project',
+      requestedScope: '/Users/alice/project/packages/app',
+    });
+
+    const url = await manager.createPreviewUrl({
+      filePath: '/Users/alice/project/root.ts',
+      workspaceRoot: '/Users/alice/project',
+    });
+    if (!url) throw new Error('Expected local file preview URL');
+
+    expect(url).toContain('token=');
+  });
+
+  it('can mint preview URLs for roots produced by the main-process project index', async () => {
+    const manager = new LocalFileProtocolManager();
+    await manager.approveIndexedProjectRoot('/Users/alice/project');
+
+    const url = await manager.createPreviewUrl({
+      filePath: '/Users/alice/project/App.tsx',
+      workspaceRoot: '/Users/alice/project',
+    });
+    if (!url) throw new Error('Expected local file preview URL');
+
+    expect(url).toContain('token=');
   });
 
   it('defers registration until app ready when not yet ready', async () => {

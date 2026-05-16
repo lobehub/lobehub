@@ -20,6 +20,9 @@ export {
   extractDmSettings,
   extractGroupSettings,
   extractUserAllowlist,
+  extractWatchKeywordEntries,
+  extractWatchKeywords,
+  findMatchingWatchKeywordEntries,
   getBotReplyLocale,
   getStepReactionEmoji,
   type GroupPolicy,
@@ -28,6 +31,7 @@ export {
   makeGroupPolicyFields,
   makeServerIdField,
   makeUserIdField,
+  messageMatchesWatchKeyword,
   normalizeAllowFromEntries,
   normalizeBotReplyLocale,
   RECEIVED_REACTION_EMOJI,
@@ -37,6 +41,8 @@ export {
   THINKING_REACTION_EMOJI,
   type UserAllowlist,
   validateAccessSettings,
+  type WatchKeywordEntry,
+  watchKeywordsField,
   WORKING_REACTION_EMOJI,
 } from './const';
 export { PlatformRegistry } from './registry';

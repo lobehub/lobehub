@@ -1,15 +1,12 @@
+import type { TaskTemplate, TaskTemplateSkillSource } from '@lobechat/const';
 import {
   TASK_TEMPLATE_FALLBACK_CATEGORIES,
-  type TaskTemplate,
+  TASK_TEMPLATE_RECOMMEND_COUNT,
   taskTemplates,
-  type TaskTemplateSkillSource,
 } from '@lobechat/const';
 
 import { klavisEnv } from '@/config/klavis';
 import { appEnv } from '@/envs/app';
-
-export const RECOMMEND_COUNT = 3;
-export const RECOMMEND_COUNT_MAX = 20;
 
 export const ENABLED_SKILL_SOURCES: ReadonlySet<TaskTemplateSkillSource> = (() => {
   const sources = new Set<TaskTemplateSkillSource>();
@@ -88,13 +85,13 @@ export class TaskTemplateService {
     } = {},
   ): Promise<TaskTemplate[]> {
     const {
-      count = RECOMMEND_COUNT,
+      count = TASK_TEMPLATE_RECOMMEND_COUNT,
       enabledSkillSources,
       excludeIds,
       now = new Date(),
       refreshSeed,
     } = options;
-    const limit = Math.max(1, Math.min(count, RECOMMEND_COUNT_MAX));
+    const limit = Math.max(1, count);
     const excluded = new Set(excludeIds ?? []);
     const seedBase = `${this.userId}:${getUtcDateStr(now)}`;
     const seed = hashString(refreshSeed ? `${seedBase}:${refreshSeed}` : seedBase);

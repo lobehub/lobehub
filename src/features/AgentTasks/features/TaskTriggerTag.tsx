@@ -57,25 +57,22 @@ const TaskTriggerTag = memo<TaskTriggerTagProps>(
     }, [automationMode, heartbeatInterval, schedulePattern, scheduleTimezone, t, i18n.language]);
 
     if (mode === 'inline') {
+      // Single-line row regardless of mode/content length — long primaries
+      // (e.g. "Every Mon/Tue/Wed/Thu/Fri/Sat at HH:MM") used to wrap to two
+      // lines and shift the rows below. Tooltip still surfaces the full text
+      // plus timezone on hover, so no information is lost.
       return (
         <Tooltip title={data?.tooltip}>
-          <Flexbox horizontal align="flex-start" gap={10}>
-            <Icon
-              color={cssVar.colorTextDescription}
-              icon={ClockIcon}
-              size={16}
-              style={{ marginTop: 2 }}
-            />
-            <Flexbox gap={2}>
-              <Text type={data ? undefined : 'secondary'} weight={data ? 500 : undefined}>
-                {data?.primary ?? t('taskSchedule.tag.add')}
-              </Text>
-              {data?.secondary && (
-                <Text style={{ color: cssVar.colorTextDescription, fontSize: 11 }}>
-                  {data.secondary}
-                </Text>
-              )}
-            </Flexbox>
+          <Flexbox horizontal align="center" gap={10} style={{ minWidth: 0 }}>
+            <Icon color={cssVar.colorTextDescription} icon={ClockIcon} size={16} />
+            <Text
+              ellipsis
+              style={{ minWidth: 0 }}
+              type={data ? undefined : 'secondary'}
+              weight={data ? 500 : undefined}
+            >
+              {data?.primary ?? t('taskSchedule.tag.add')}
+            </Text>
           </Flexbox>
         </Tooltip>
       );
