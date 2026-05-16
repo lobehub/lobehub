@@ -6,6 +6,7 @@ import {
 } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
 import { type LobeChatDatabase } from '@/database/type';
+import { buildFinalSnapshotKey } from '@/server/modules/AgentTracing';
 import { emitAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { toAgentSignalTraceEvents } from '@/server/services/agentSignal/observability/traceEvents';
 
@@ -99,7 +100,7 @@ export class CompletionLifecycle {
     const agentId = metadata?.agentId;
     const topicId = metadata?.topicId;
     const traceS3Key =
-      agentId && topicId ? `agent-traces/${agentId}/${topicId}/${operationId}.json` : null;
+      agentId && topicId ? buildFinalSnapshotKey(agentId, topicId, operationId) : null;
 
     const processingTimeMs = state?.createdAt
       ? Date.now() - new Date(state.createdAt).getTime()

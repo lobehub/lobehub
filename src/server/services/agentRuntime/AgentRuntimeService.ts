@@ -951,8 +951,8 @@ export class AgentRuntimeService {
       // failed op is observable in the same place as a successful run.
       // Without this, propagated errors (e.g. markPersistFatal from
       // RuntimeExecutors) leave the partial as an orphan at
-      // `_partial/<op>.json` and the canonical
-      // `agent-traces/<agentId>/<topicId>/<op>.json` returns 404 — see
+      // `_partial/<op>.json.zst` and the canonical
+      // `agent-traces/<agentId>/<topicId>/<op>.json.zst` returns 404 — see
       // LOBE-8533.
       //
       // `failedStep` synthesizes a step record for the failure because the
