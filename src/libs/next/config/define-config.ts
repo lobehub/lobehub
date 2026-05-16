@@ -20,6 +20,7 @@ export function defineConfig(config: CustomNextConfig) {
 
   const isTest =
     process.env.NODE_ENV === 'test' || process.env.TEST === '1' || process.env.E2E === '1';
+  const enableCodeInspector = !isProd && !isTest;
 
   const isStandaloneMode = buildWithDocker || process.env.NEXT_BUILD_STANDALONE === '1';
 
@@ -366,12 +367,12 @@ export function defineConfig(config: CustomNextConfig) {
     transpilePackages: ['mermaid', 'better-auth-harmony'],
     turbopack: {
       rules: {
-        ...(isTest
-          ? void 0
-          : codeInspectorPlugin({
+        ...(enableCodeInspector
+          ? codeInspectorPlugin({
               bundler: 'turbopack',
               hotKeys: ['altKey', 'ctrlKey'],
-            })),
+            })
+          : void 0),
         '*.md': {
           as: '*.js',
           loaders: ['raw-loader'],

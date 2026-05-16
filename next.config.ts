@@ -5,6 +5,8 @@ const isVercel = !!process.env.VERCEL_ENV;
 const vercelConfig = {
   experimental: {
     turbopackMemoryLimit: 6144,
+    webpackBuildWorker: true,
+    webpackMemoryOptimizations: true,
   },
   // Vercel serverless optimization: exclude musl binaries from all routes
   // Vercel uses Amazon Linux (glibc), not Alpine Linux (musl)
@@ -20,6 +22,9 @@ const vercelConfig = {
       'apps/desktop/**',
       'packages/database/migrations/**',
     ],
+  },
+  turbopack: {
+    root: __dirname,
   },
 };
 const nextConfig = defineConfig({
