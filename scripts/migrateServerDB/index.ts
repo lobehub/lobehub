@@ -10,11 +10,13 @@ import { DB_FAIL_INIT_HINT, DUPLICATE_EMAIL_HINT, PGVECTOR_HINT } from './errorH
 
 // Load environment variables in priority order:
 // 1. .env (lowest priority)
-// 2. .env.[env] (medium priority, overrides .env)
-// 3. .env.[env].local (highest priority, overrides previous)
+// 2. .env.local
+// 3. .env.[env]
+// 4. .env.[env].local (highest priority, overrides previous)
 // Use dotenv-expand to support ${var} variable expansion
 const env = process.env.NODE_ENV || 'development';
 dotenvExpand.expand(dotenv.config()); // Load .env
+dotenvExpand.expand(dotenv.config({ override: true, path: `.env.local` })); // Load .env.local and override
 dotenvExpand.expand(dotenv.config({ override: true, path: `.env.${env}` })); // Load .env.[env] and override
 dotenvExpand.expand(dotenv.config({ override: true, path: `.env.${env}.local` })); // Load .env.[env].local and override
 
