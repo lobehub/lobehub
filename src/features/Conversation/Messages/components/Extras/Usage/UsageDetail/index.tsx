@@ -15,7 +15,7 @@ import { formatNumber, formatShortenNumber } from '@/utils/format';
 import AnimatedNumber from './AnimatedNumber';
 import ModelCard from './ModelCard';
 import type { TokenProgressItem } from './TokenProgress';
-import TokenProgress, { formatToken } from './TokenProgress';
+import TokenProgress, { formatUsageValue } from './TokenProgress';
 import { getDetailsToken } from './tokens';
 
 interface TokenDetailProps {
@@ -127,7 +127,7 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
       ? detailTokens.totalTokens.credit
       : detailTokens.totalTokens!.token;
 
-  const valueFormatter = isShowCredit ? formatNumber : formatToken;
+  const valueFormatter = formatUsageValue;
   const detailTotal = valueFormatter(totalCount);
 
   const averagePricing = formatNumber(
