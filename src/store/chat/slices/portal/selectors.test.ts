@@ -192,6 +192,106 @@ describe('chatDockSelectors', () => {
     });
   });
 
+  describe('showLocalFile', () => {
+    it('should return false when no LocalFile view on stack', () => {
+      expect(chatPortalSelectors.showLocalFile(createState())).toBe(false);
+      expect(
+        chatPortalSelectors.showLocalFile(
+          createState({ portalStack: [{ type: PortalViewType.Notebook }] }),
+        ),
+      ).toBe(false);
+    });
+
+    it('should return true when LocalFile view is on top of stack', () => {
+      const state = createState({
+        portalStack: [{ type: PortalViewType.LocalFile }],
+      });
+      expect(chatPortalSelectors.showLocalFile(state)).toBe(true);
+    });
+  });
+
+  describe('currentLocalFile', () => {
+    it('should return undefined when activeLocalFilePath is undefined', () => {
+      expect(chatPortalSelectors.currentLocalFile(createState())).toBeUndefined();
+    });
+
+    it('should return the active file entry from openLocalFiles', () => {
+      const state = createState({
+        activeLocalFilePath: '/path/to/file.ts',
+        openLocalFiles: [{ filePath: '/path/to/file.ts', workingDirectory: '/path/to' }],
+      } as Partial<ChatStoreState>);
+      expect(chatPortalSelectors.currentLocalFile(state)).toEqual({
+        filePath: '/path/to/file.ts',
+        workingDirectory: '/path/to',
+      });
+    });
+
+    it('should return undefined when activeLocalFilePath is not in openLocalFiles', () => {
+      const state = createState({
+        activeLocalFilePath: '/path/to/other.ts',
+        openLocalFiles: [{ filePath: '/path/to/file.ts', workingDirectory: '/path/to' }],
+      } as Partial<ChatStoreState>);
+      expect(chatPortalSelectors.currentLocalFile(state)).toBeUndefined();
+    });
+  });
+
+  describe('localFilePath', () => {
+    it('should return undefined when no active file', () => {
+      expect(chatPortalSelectors.localFilePath(createState())).toBeUndefined();
+    });
+
+    it('should return the filePath of the active tab', () => {
+      const state = createState({
+        activeLocalFilePath: '/path/to/file.ts',
+        openLocalFiles: [{ filePath: '/path/to/file.ts', workingDirectory: '/path/to' }],
+      } as Partial<ChatStoreState>);
+      expect(chatPortalSelectors.localFilePath(state)).toBe('/path/to/file.ts');
+    });
+  });
+
+  describe('localFileWorkingDirectory', () => {
+    it('should return undefined when no active file', () => {
+      expect(chatPortalSelectors.localFileWorkingDirectory(createState())).toBeUndefined();
+    });
+
+    it('should return the workingDirectory of the active tab', () => {
+      const state = createState({
+        activeLocalFilePath: '/path/to/file.ts',
+        openLocalFiles: [{ filePath: '/path/to/file.ts', workingDirectory: '/path/to' }],
+      } as Partial<ChatStoreState>);
+      expect(chatPortalSelectors.localFileWorkingDirectory(state)).toBe('/path/to');
+    });
+  });
+
+  describe('openLocalFiles', () => {
+    it('should return empty array when openLocalFiles is empty', () => {
+      const state = createState({ openLocalFiles: [] } as Partial<ChatStoreState>);
+      expect(chatPortalSelectors.openLocalFiles(state)).toEqual([]);
+    });
+
+    it('should return the openLocalFiles array', () => {
+      const files = [
+        { filePath: '/path/a.ts', workingDirectory: '/path' },
+        { filePath: '/path/b.ts', workingDirectory: '/path' },
+      ];
+      const state = createState({ openLocalFiles: files } as Partial<ChatStoreState>);
+      expect(chatPortalSelectors.openLocalFiles(state)).toEqual(files);
+    });
+  });
+
+  describe('activeLocalFilePath', () => {
+    it('should return undefined when no active file', () => {
+      expect(chatPortalSelectors.activeLocalFilePath(createState())).toBeUndefined();
+    });
+
+    it('should return the activeLocalFilePath', () => {
+      const state = createState({
+        activeLocalFilePath: '/path/a.ts',
+      } as Partial<ChatStoreState>);
+      expect(chatPortalSelectors.activeLocalFilePath(state)).toBe('/path/a.ts');
+    });
+  });
+
   describe('artifactMessageContent', () => {
     it('should return empty string when message not found', () => {
       const state = createState();

@@ -1,3 +1,4 @@
+import { INBOX_SESSION_ID } from '@lobechat/const';
 import { and, count, desc, eq, gte, isNull, lte, or, sql } from 'drizzle-orm';
 
 import {
@@ -113,8 +114,11 @@ export class AgentSignalReviewContextModel {
         and(
           eq(agents.id, agentId),
           eq(agents.userId, this.userId),
-          or(eq(agents.virtual, false), isNull(agents.virtual)),
-          sql`COALESCE((${agents.chatConfig}->'selfIteration'->>'enabled')::boolean, false) = true`,
+          or(eq(agents.virtual, false), isNull(agents.virtual), eq(agents.slug, INBOX_SESSION_ID)),
+          or(
+            eq(agents.slug, INBOX_SESSION_ID),
+            sql`COALESCE((${agents.chatConfig}->'selfIteration'->>'enabled')::boolean, false) = true`,
+          ),
         ),
       )
       .limit(1);

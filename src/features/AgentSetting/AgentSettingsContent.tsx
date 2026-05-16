@@ -4,12 +4,14 @@ import { memo } from 'react';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { ChatSettingsTabs } from '@/store/global/initialState';
+import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import AgentChat from './AgentChat';
 import AgentDocuments from './AgentDocuments';
 import AgentMeta from './AgentMeta';
 import AgentModal from './AgentModal';
 import AgentOpening from './AgentOpening';
+import AgentSelfIteration from './AgentSelfIteration';
 
 export interface AgentSettingsContentProps {
   loadingSkeleton: ReactNode;
@@ -18,6 +20,7 @@ export interface AgentSettingsContentProps {
 
 const AgentSettingsContent = memo<AgentSettingsContentProps>(({ tab, loadingSkeleton }) => {
   const loading = useAgentStore(agentSelectors.isAgentConfigLoading);
+  const { enableAgentSelfIteration } = useServerConfigStore(featureFlagsSelectors);
 
   if (loading) return loadingSkeleton;
 
@@ -28,6 +31,7 @@ const AgentSettingsContent = memo<AgentSettingsContentProps>(({ tab, loadingSkel
       {tab === ChatSettingsTabs.Opening && <AgentOpening />}
       {tab === ChatSettingsTabs.Chat && <AgentChat />}
       {tab === ChatSettingsTabs.Modal && <AgentModal />}
+      {enableAgentSelfIteration && tab === ChatSettingsTabs.SelfIteration && <AgentSelfIteration />}
     </>
   );
 });

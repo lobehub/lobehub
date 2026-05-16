@@ -68,7 +68,11 @@ import { hookDispatcher } from '@/server/services/agentRuntime/hooks';
 import type { AgentHook } from '@/server/services/agentRuntime/hooks/types';
 import type { StepLifecycleCallbacks } from '@/server/services/agentRuntime/types';
 import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
-import { isAgentSignalEnabledForUser } from '@/server/services/agentSignal/featureGate';
+import {
+  isAgentSignalEnabledForUser,
+  isLobeAiAgentSlug,
+  resolveAgentSelfIterationCapability,
+} from '@/server/services/agentSignal/featureGate';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
@@ -1174,24 +1178,33 @@ export class AiAgentService {
       );
 
       const agentSelfIterationEnabled = agentConfig.chatConfig?.selfIteration?.enabled === true;
+      const isLobeAiAgent = isLobeAiAgentSlug(agentSlug);
       const shouldCheckUserSelfIterationGate =
-        agentSelfIterationEnabled && !params.disableSelfFeedbackIntentTool;
-      if (
-        shouldCheckUserSelfIterationGate &&
-        shouldExposeSelfFeedbackIntentTool({
+        !params.disableSelfFeedbackIntentTool && (agentSelfIterationEnabled || isLobeAiAgent);
+      if (shouldCheckUserSelfIterationGate) {
+        const featureUserEnabled = await isAgentSignalEnabledForUser(this.db, this.userId);
+        const effectiveAgentSelfIterationEnabled = resolveAgentSelfIterationCapability({
           agentSelfIterationEnabled,
-          disableSelfFeedbackIntentTool: params.disableSelfFeedbackIntentTool,
-          featureUserEnabled: await isAgentSignalEnabledForUser(this.db, this.userId),
-        })
-      ) {
-        tools = tools ?? [];
-        injectSelfFeedbackIntentTool({
-          enabledToolIds: toolsResult.enabledToolIds,
-          manifestMap: toolManifestMap,
-          sourceMap: toolSourceMap,
-          tools,
+          isAgentSelfIterationFeatureEnabled: featureUserEnabled,
+          isLobeAiAgent,
         });
-        log('execAgent: injected self-feedback intent declaration tool');
+
+        if (
+          shouldExposeSelfFeedbackIntentTool({
+            agentSelfIterationEnabled: effectiveAgentSelfIterationEnabled,
+            disableSelfFeedbackIntentTool: params.disableSelfFeedbackIntentTool,
+            featureUserEnabled,
+          })
+        ) {
+          tools = tools ?? [];
+          injectSelfFeedbackIntentTool({
+            enabledToolIds: toolsResult.enabledToolIds,
+            manifestMap: toolManifestMap,
+            sourceMap: toolSourceMap,
+            tools,
+          });
+          log('execAgent: injected self-feedback intent declaration tool');
+        }
       }
     }
 
@@ -1650,7 +1663,11 @@ export class AiAgentService {
         });
     if (userMessageRecord) {
       log('execAgent: created user message %s', userMessageRecord.id);
-      await enqueueAgentSignalSourceEvent(
+      // Agent Signal is a governance side-channel for feedback and self-iteration.
+      // It must not block the primary agent execution path; local Workflow/QStash
+      // stalls would otherwise leave the conversation with only the user message
+      // persisted and no assistant placeholder or operation row.
+      void enqueueAgentSignalSourceEvent(
         {
           payload: {
             agentId: resolvedAgentId,
@@ -1667,7 +1684,9 @@ export class AiAgentService {
           agentId: resolvedAgentId,
           userId: this.userId,
         },
-      );
+      ).catch((error) => {
+        log('execAgent: failed to enqueue user message Agent Signal source event: %O', error);
+      });
     }
 
     // 14. Create assistant message placeholder in database

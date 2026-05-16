@@ -44,6 +44,7 @@ vi.mock('./WorkflowCollapse', () => ({
       contentOverride?: string;
       disableMarkdownStreaming?: boolean;
       domId?: string;
+      error?: unknown;
       hasToolsOverride?: boolean;
       tools?: unknown[];
     }>;
@@ -57,6 +58,7 @@ vi.mock('./WorkflowCollapse', () => ({
             contentOverride,
             disableMarkdownStreaming,
             domId,
+            error,
             hasToolsOverride,
             tools,
           }) => ({
@@ -64,6 +66,7 @@ vi.mock('./WorkflowCollapse', () => ({
             contentOverride,
             disableMarkdownStreaming: !!disableMarkdownStreaming,
             domId,
+            hasError: !!error,
             hasToolsOverride,
             toolCount: tools?.length ?? 0,
           }),
@@ -79,6 +82,7 @@ vi.mock('./GroupItem', () => ({
     contentOverride,
     disableMarkdownStreaming,
     domId,
+    error,
     hasToolsOverride,
     id,
     isFirstBlock,
@@ -88,6 +92,7 @@ vi.mock('./GroupItem', () => ({
     contentOverride?: string;
     disableMarkdownStreaming?: boolean;
     domId?: string;
+    error?: unknown;
     hasToolsOverride?: boolean;
     id: string;
     isFirstBlock?: boolean;
@@ -100,6 +105,7 @@ vi.mock('./GroupItem', () => ({
         contentOverride,
         disableMarkdownStreaming: !!disableMarkdownStreaming,
         domId,
+        hasError: !!error,
         hasToolsOverride,
         id,
         isFirstBlock: !!isFirstBlock,
@@ -159,6 +165,7 @@ describe('Group', () => {
         contentOverride: longContent,
         disableMarkdownStreaming: true,
         domId: 'block-1__answer',
+        hasError: false,
         hasToolsOverride: false,
         id: 'block-1',
         isFirstBlock: false,
@@ -169,6 +176,7 @@ describe('Group', () => {
         contentOverride: '',
         disableMarkdownStreaming: true,
         domId: 'block-1__workflow',
+        hasError: false,
         hasToolsOverride: true,
         id: 'block-1',
         isFirstBlock: false,
@@ -198,6 +206,7 @@ describe('Group', () => {
         content: '现在我来搜索资料。',
         disableMarkdownStreaming: true,
         domId: undefined,
+        hasError: false,
         id: 'block-1',
         isFirstBlock: false,
         toolCount: 1,
@@ -235,6 +244,7 @@ describe('Group', () => {
       contentOverride: '我先帮你查一下。',
       disableMarkdownStreaming: true,
       domId: 'block-1__answer',
+      hasError: false,
       hasToolsOverride: false,
       id: 'block-1',
       isFirstBlock: false,
@@ -246,6 +256,7 @@ describe('Group', () => {
         contentOverride: '接下来我会继续整理结果。',
         disableMarkdownStreaming: true,
         domId: 'block-1__workflow',
+        hasError: false,
         hasToolsOverride: true,
         toolCount: 1,
       },
@@ -253,9 +264,62 @@ describe('Group', () => {
         content: '',
         disableMarkdownStreaming: false,
         domId: undefined,
+        hasError: false,
         toolCount: 1,
       },
     ]);
+  });
+
+  it('keeps assistant runtime errors outside the workflow collapse', () => {
+    const { container } = render(
+      <Group
+        id="assistant-1"
+        messageIndex={0}
+        blocks={[
+          blk({
+            content: '',
+            error: {
+              body: { code: 'rate_limit' },
+              message: 'rate limit',
+              type: 'ProviderBizError',
+            } as any,
+            id: 'block-1',
+            tools: [
+              { apiName: 'bash', id: 'tool-1' } as any,
+              { apiName: 'bash', id: 'tool-2' } as any,
+            ],
+          }),
+        ]}
+      />,
+    );
+
+    const sequence = Array.from(container.querySelectorAll('[data-testid]')).map((node) =>
+      node.getAttribute('data-testid'),
+    );
+
+    expect(sequence).toEqual(['workflow-segment', 'answer-segment']);
+    expect(parseWorkflowSegment()).toEqual([
+      {
+        content: '',
+        contentOverride: '',
+        disableMarkdownStreaming: true,
+        domId: 'block-1__workflow',
+        hasError: false,
+        hasToolsOverride: true,
+        toolCount: 2,
+      },
+    ]);
+    expect(parseAnswerSegment()).toEqual({
+      content: '',
+      contentOverride: '',
+      disableMarkdownStreaming: true,
+      domId: 'block-1__answer',
+      hasError: true,
+      hasToolsOverride: false,
+      id: 'block-1',
+      isFirstBlock: false,
+      toolCount: 0,
+    });
   });
 
   it('renders a single tool call inline instead of folding it', () => {
@@ -279,6 +343,7 @@ describe('Group', () => {
         content: '',
         disableMarkdownStreaming: true,
         domId: undefined,
+        hasError: false,
         id: 'block-1',
         isFirstBlock: false,
         toolCount: 1,

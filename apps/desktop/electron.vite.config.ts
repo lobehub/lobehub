@@ -13,7 +13,8 @@ import {
   sharedRendererPlugins,
   sharedRollupOutput,
 } from '../../plugins/vite/sharedRendererConfig';
-import { getExternalDependencies } from './native-deps.config.mjs';
+import { externalRuntimeModules } from './external-runtime-deps.config.mjs';
+import { getNativeExternalDependencies } from './native-deps.config.mjs';
 
 /**
  * Force `base: '/'` in renderer config. The `electron-vite` preset
@@ -99,7 +100,11 @@ const desktopPackageJson = JSON.parse(
   readFileSync(path.resolve(__dirname, 'package.json'), 'utf8'),
 ) as { version: string };
 const electronRuntimeExternals = ['electron'];
-const mainProcessRuntimeExternals = [...electronRuntimeExternals, 'node-mac-permissions'];
+const mainProcessRuntimeExternals = [
+  ...electronRuntimeExternals,
+  ...externalRuntimeModules,
+  'node-mac-permissions',
+];
 
 console.info(`[electron-vite.config.ts] Detected UPDATE_CHANNEL: ${updateChannel}`);
 
@@ -113,7 +118,7 @@ export default defineConfig({
         // bufferutil and utf-8-validate are optional peer deps of ws that may not be installed.
         external: [
           ...mainProcessRuntimeExternals,
-          ...getExternalDependencies(),
+          ...getNativeExternalDependencies(),
           'bufferutil',
           'utf-8-validate',
         ],

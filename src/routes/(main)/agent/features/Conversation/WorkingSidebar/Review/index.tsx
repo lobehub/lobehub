@@ -1,14 +1,6 @@
 'use client';
 
-import {
-  ActionIcon,
-  Center,
-  Collapse,
-  type DropdownItem,
-  DropdownMenu,
-  Empty,
-  Flexbox,
-} from '@lobehub/ui';
+import { ActionIcon, Center, type DropdownItem, DropdownMenu, Empty, Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import {
   ArrowLeftIcon,
@@ -25,7 +17,8 @@ import {
   WholeWordIcon,
   WrapTextIcon,
 } from 'lucide-react';
-import { memo, useMemo, useState } from 'react';
+import { AnimatePresence, m } from 'motion/react';
+import { type KeyboardEvent, memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
@@ -73,30 +66,49 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 12px;
     font-variant-numeric: tabular-nums;
   `,
-  // Skip layout/paint of off-screen file panels. Each panel still mounts
-  // (so React/Shiki state is preserved across scroll), but the browser
-  // short-circuits its layout & paint until it scrolls near the viewport.
-  // Crucial for repos with many large diffs where ~38+ panels were
-  // previously locking the scroll thread on every frame.
   list: css`
-    & :where(.ant-collapse-item) {
-      content-visibility: auto;
-      contain-intrinsic-size: auto 56px;
+    border-block: 1px solid ${cssVar.colorBorderSecondary};
+  `,
+  item: css`
+    /* Skip layout/paint of off-screen rows. Preserved from the previous
+       implementation. */
+    content-visibility: auto;
+    contain-intrinsic-size: auto 32px;
+
+    & + & {
+      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+    }
+  `,
+  row: css`
+    cursor: pointer;
+    user-select: none;
+
+    display: flex;
+    gap: 6px;
+    align-items: center;
+
+    width: 100%;
+    padding-block: 5px;
+    padding-inline: 10px;
+
+    transition: background 0.12s;
+
+    &:hover {
+      background: ${cssVar.colorFillTertiary};
     }
 
-    /* antd v6 renders the label slot as .ant-collapse-title (was
-       .ant-collapse-header-text in v4/v5). When collapsible is 'header'
-       (the @lobehub/ui Collapse default), antd applies a (0,4,0) rule
-       on .ant-collapse .ant-item .ant-collapsible-header .ant-title
-       that locks flex to 0 0 auto — long paths then push stats and
-       chevron off-screen instead of triggering ellipsis on .path. Our
-       parent-className selector is only (0,3,0), so we !important to win.
-       Verified via getComputedStyle on a real row: without !important the
-       title resolves to flex: 0 0 auto; with it, flex: 1 1 0%. */
-    & .ant-collapse-collapsible-header .ant-collapse-title {
-      overflow: hidden !important;
-      flex: 1 1 0 !important;
-      min-width: 0 !important;
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimary};
+      outline-offset: -2px;
+    }
+  `,
+  chevron: css`
+    flex: none;
+    color: ${cssVar.colorTextTertiary};
+    transition: transform 0.2s;
+
+    &[data-expanded='true'] {
+      transform: rotate(90deg);
     }
   `,
   arrow: css`
@@ -268,37 +280,6 @@ const Review = memo<ReviewProps>(({ workingDirectory }) => {
       </Center>
     );
   }
-
-  const items = patches.map((entry) => {
-    const key = itemKey(entry);
-    return {
-      children: (
-        <FileItemBody
-          expanded={activeKeys.includes(key)}
-          filePath={entry.filePath}
-          isBinary={entry.isBinary}
-          patch={entry.patch}
-          textDiff={textDiff}
-          truncated={entry.truncated}
-          viewMode={viewMode}
-          wordWrap={wordWrap}
-        />
-      ),
-      key,
-      label: (
-        <FileItemHeader
-          additions={entry.additions}
-          deletions={entry.deletions}
-          filePath={entry.filePath}
-          onReverted={() => void mutate()}
-          // Revert is only meaningful for working-tree changes; in branch-diff
-          // mode there's nothing to "discard" on the file system.
-          revertContext={mode === 'unstaged' ? { workingDirectory } : undefined}
-          status={entry.status}
-        />
-      ),
-    };
-  });
 
   const allExpanded = patches.length > 0 && activeKeys.length === patches.length;
   const handleToggleAll = () => {
@@ -481,31 +462,74 @@ const Review = memo<ReviewProps>(({ workingDirectory }) => {
           <Empty description={emptyText} icon={GitCompareIcon} />
         </Center>
       ) : (
-        <Flexbox
-          className={styles.list}
-          gap={6}
-          paddingInline={8}
-          style={{ overflow: 'auto' }}
-          width={'100%'}
-        >
-          <Collapse
-            activeKey={activeKeys}
-            expandIconPlacement={'end'}
-            items={items}
-            padding={{ body: 0, header: '6px 12px' }}
-            variant={'outlined'}
-            expandIcon={({ isActive }) => (
-              <ChevronRightIcon
-                size={14}
-                style={{
-                  color: 'var(--ant-color-text-tertiary)',
-                  transform: isActive ? 'rotate(90deg)' : 'rotate(0deg)',
-                  transition: 'transform 0.2s',
-                }}
-              />
-            )}
-            onChange={(next) => setActiveKeys(Array.isArray(next) ? next : [next])}
-          />
+        <Flexbox className={styles.list} style={{ overflow: 'auto' }} width={'100%'}>
+          {patches.map((entry) => {
+            const key = itemKey(entry);
+            const expanded = activeKeys.includes(key);
+            const toggle = () =>
+              setActiveKeys((prev) =>
+                prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key],
+              );
+            const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggle();
+              }
+            };
+            return (
+              <div className={styles.item} key={key}>
+                <div
+                  data-review-row
+                  aria-expanded={expanded}
+                  className={styles.row}
+                  role={'button'}
+                  tabIndex={0}
+                  onClick={toggle}
+                  onKeyDown={onKeyDown}
+                >
+                  <ChevronRightIcon
+                    className={styles.chevron}
+                    data-expanded={expanded ? 'true' : 'false'}
+                    size={14}
+                  />
+                  <FileItemHeader
+                    additions={entry.additions}
+                    deletions={entry.deletions}
+                    filePath={entry.filePath}
+                    revertContext={mode === 'unstaged' ? { workingDirectory } : undefined}
+                    status={entry.status}
+                    onReverted={() => void mutate()}
+                  />
+                </div>
+                <AnimatePresence initial={false}>
+                  {expanded && (
+                    <m.div
+                      animate={'open'}
+                      exit={'collapsed'}
+                      initial={'collapsed'}
+                      style={{ overflow: 'hidden' }}
+                      transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+                      variants={{
+                        collapsed: { height: 0, opacity: 0 },
+                        open: { height: 'auto', opacity: 1 },
+                      }}
+                    >
+                      <FileItemBody
+                        expanded
+                        filePath={entry.filePath}
+                        isBinary={entry.isBinary}
+                        patch={entry.patch}
+                        textDiff={textDiff}
+                        truncated={entry.truncated}
+                        viewMode={viewMode}
+                        wordWrap={wordWrap}
+                      />
+                    </m.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            );
+          })}
         </Flexbox>
       )}
     </Flexbox>

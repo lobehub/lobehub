@@ -13,6 +13,7 @@ export * from './lobehubSkill';
 export * from './message';
 export * from './meta';
 export * from './plugin';
+export * from './protocol';
 export * from './recommendedSkill';
 export * from './session';
 export * from './settings';
