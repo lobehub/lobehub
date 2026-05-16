@@ -1,6 +1,6 @@
+import { formatUsageValue } from '@lobechat/utils';
 import { Flexbox } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import numeral from 'numeral';
 import { memo } from 'react';
 
 export interface TokenProgressItem {
@@ -14,12 +14,6 @@ interface TokenProgressProps {
   data: TokenProgressItem[];
   showIcon?: boolean;
 }
-
-export const formatUsageValue = (number: number) => {
-  if (number >= 1_000_000) return numeral(number / 1_000_000).format('0.[0]') + 'M';
-  if (number >= 1_000) return numeral(number / 1_000).format('0.[0]') + 'K';
-  return numeral(number).format('0,0');
-};
 
 const TokenProgress = memo<TokenProgressProps>(({ data, showIcon }) => {
   const total = data.reduce((acc, item) => acc + item.value, 0);

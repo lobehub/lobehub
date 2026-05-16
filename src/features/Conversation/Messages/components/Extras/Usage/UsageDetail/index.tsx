@@ -1,4 +1,5 @@
 import { type ModelPerformance, type ModelUsage } from '@lobechat/types';
+import { formatUsageValue } from '@lobechat/utils';
 import { Center, Flexbox, Icon, Popover } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { cssVar } from 'antd-style';
@@ -15,7 +16,7 @@ import { formatNumber, formatShortenNumber } from '@/utils/format';
 import AnimatedNumber from './AnimatedNumber';
 import ModelCard from './ModelCard';
 import type { TokenProgressItem } from './TokenProgress';
-import TokenProgress, { formatUsageValue } from './TokenProgress';
+import TokenProgress from './TokenProgress';
 import { getDetailsToken } from './tokens';
 
 interface TokenDetailProps {
