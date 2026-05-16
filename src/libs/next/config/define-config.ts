@@ -14,6 +14,7 @@ interface CustomNextConfig {
 
 export function defineConfig(config: CustomNextConfig) {
   const isProd = process.env.NODE_ENV === 'production';
+  const isVercel = !!process.env.VERCEL_ENV;
   const buildWithDocker = process.env.DOCKER === 'true';
 
   const shouldUseCSP = process.env.ENABLED_CSP === '1';
@@ -81,6 +82,15 @@ export function defineConfig(config: CustomNextConfig) {
       // refs: https://github.com/lobehub/lobe-chat/pull/7430
       serverMinification: false,
       webVitalsAttribution: ['CLS', 'LCP'],
+      // Lower parallel SSG pressure in Vercel build containers to avoid OOM kills.
+      ...(isVercel
+        ? {
+            cpus: 2,
+            staticGenerationMaxConcurrency: 4,
+            staticGenerationMinPagesPerWorker: 100,
+            staticGenerationRetryCount: 1,
+          }
+        : {}),
       ...config.experimental,
     },
     async headers() {
@@ -366,7 +376,7 @@ export function defineConfig(config: CustomNextConfig) {
     transpilePackages: ['mermaid', 'better-auth-harmony'],
     turbopack: {
       rules: {
-        ...(isTest
+        ...(isTest || isProd
           ? void 0
           : codeInspectorPlugin({
               bundler: 'turbopack',
