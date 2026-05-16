@@ -127,8 +127,7 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
       ? detailTokens.totalTokens.credit
       : detailTokens.totalTokens!.token;
 
-  const valueFormatter = formatUsageValue;
-  const detailTotal = valueFormatter(totalCount);
+  const detailTotal = formatUsageValue(totalCount);
 
   const averagePricing = formatNumber(
     detailTokens.totalTokens!.credit / detailTokens.totalTokens!.token,
@@ -160,7 +159,7 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
                     {t('messages.tokenDetails.inputTitle')}
                   </div>
                 </Flexbox>
-                <TokenProgress showIcon data={inputDetails} formatter={valueFormatter} />
+                <TokenProgress showIcon data={inputDetails} />
               </Flexbox>
             )}
             {outputDetails.length > 1 && (
@@ -176,11 +175,11 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
                     {t('messages.tokenDetails.outputTitle')}
                   </div>
                 </Flexbox>
-                <TokenProgress showIcon data={outputDetails} formatter={valueFormatter} />
+                <TokenProgress showIcon data={outputDetails} />
               </Flexbox>
             )}
             <Flexbox>
-              <TokenProgress showIcon data={totalDetail} formatter={valueFormatter} />
+              <TokenProgress showIcon data={totalDetail} />
               <Divider style={{ marginBlock: 8 }} />
               <Flexbox horizontal align={'center'} gap={4} justify={'space-between'}>
                 <div style={{ color: cssVar.colorTextSecondary }}>
