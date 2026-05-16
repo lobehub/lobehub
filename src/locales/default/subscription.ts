@@ -138,6 +138,9 @@ export default {
   'keyMissMatch.description':
     'Due to an occasional system failure, your current subscription usage is temporarily inactive. Please click the button below to restore usage and continue the conversation. If this happens repeatedly, please contact us via email (support@lobehub.com)',
   'keyMissMatch.title': 'Restore Subscription Usage Now',
+  'limitation.chat.budgetReady.action': 'Continue Chatting',
+  'limitation.chat.budgetReady.desc': 'Your available credits now cover this request.',
+  'limitation.chat.budgetReady.title': 'Credits Ready',
   'limitation.chat.success.action': 'Continue Chatting',
   'limitation.chat.success.desc':
     'Your {{plan}} subscription has been upgraded successfully. Enjoy AI chatting. Your current plan includes:',
@@ -149,10 +152,19 @@ export default {
   'limitation.expired.desc':
     'Your {{plan}} computing credits expired on {{expiredAt}}. Upgrade your plan now to get computing credits.',
   'limitation.expired.title': 'Computing Credits Expired',
+  'limitation.insufficientBudget.approximateDesc':
+    'This request may need more credits. Top up credits or upgrade your plan.',
+  'limitation.insufficientBudget.available': 'Available Credits',
   'limitation.insufficientBudget.desc':
-    'Your remaining credits are not enough for the estimated cost of this model. Please top up credits or switch to a less expensive model.',
+    'Your credits are not enough to continue. Top up credits or upgrade your plan.',
+  'limitation.insufficientBudget.estimatedDesc':
+    'This request is estimated to need more credits. Top up credits or upgrade your plan.',
+  'limitation.insufficientBudget.exactDesc':
+    'This request needs more credits. Top up credits or upgrade your plan.',
+  'limitation.insufficientBudget.required': 'Required Credits',
   'limitation.insufficientBudget.retry': 'Retry',
-  'limitation.insufficientBudget.title': 'Insufficient Credits for This Model',
+  'limitation.insufficientBudget.shortfall': 'Credit Shortfall',
+  'limitation.insufficientBudget.title': 'Insufficient Credits',
   'limitation.hobby.action': 'Configured, continue chatting',
   'limitation.hobby.configAPI': 'Configure API',
   'limitation.hobby.desc':
@@ -160,6 +172,9 @@ export default {
   'limitation.hobby.docs': 'View configuration docs',
   'limitation.hobby.tip': 'Remember to switch to a model with custom API Key',
   'limitation.hobby.title': 'Please Configure Model Service API',
+  'limitation.image.budgetReady.action': 'Continue Generating',
+  'limitation.image.budgetReady.desc': 'Your available credits now cover this generation.',
+  'limitation.image.budgetReady.title': 'Credits Ready',
   'limitation.image.success.action': 'Continue Generating',
   'limitation.image.success.desc':
     'Your {{plan}} subscription has been upgraded successfully. Enjoy AI image generation. Your current plan includes:',
@@ -168,6 +183,9 @@ export default {
   'limitation.image.topupSuccess.desc':
     'Your top-up credits are now active. Enjoy AI image generation. Your current plan includes:',
   'limitation.image.topupSuccess.title': 'Top-up Successful',
+  'limitation.video.budgetReady.action': 'Continue Generating',
+  'limitation.video.budgetReady.desc': 'Your available credits now cover this generation.',
+  'limitation.video.budgetReady.title': 'Credits Ready',
   'limitation.video.success.action': 'Continue Generating',
   'limitation.video.success.desc':
     'Your {{plan}} subscription has been upgraded successfully. Enjoy AI video generation. Your current plan includes:',
