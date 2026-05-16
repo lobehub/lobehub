@@ -84,7 +84,7 @@ export async function runScheduleTick(
     if (startedAtIso) {
       const startedAt = new Date(startedAtIso);
       const topicModel = new TaskTopicModel(db, userId);
-      const runCount = await topicModel.countByTaskSince(taskId, startedAt);
+      const runCount = await topicModel.countByTask(taskId, { since: startedAt });
       if (runCount >= maxExecutions) {
         log(
           'skip task=%s reason=max-executions-reached (%d/%d) — marking completed',
