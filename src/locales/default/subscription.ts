@@ -92,8 +92,6 @@ export default {
   'credits.costEstimateHint.saveError': 'Failed to save cost estimate alert settings',
   'credits.costEstimateHint.saveSuccess': 'Cost estimate alert settings saved',
   'credits.costEstimateHint.threshold': 'Warning Threshold',
-  'credits.costEstimateHint.thresholdDesc':
-    'The inline warning appears when the estimated cost of the next chat call reaches this amount',
   'credits.costEstimateHint.title': 'Cost Estimate Alert',
   'credits.costEstimateHint.validation.threshold': 'Threshold must be greater than or equal to 0',
   'credits.packages.expired': 'Expired',
