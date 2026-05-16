@@ -9,6 +9,9 @@ import superjson from 'superjson';
 import { withElectronProtocolIfElectron } from '@/const/protocol';
 import { isDesktop } from '@/const/version';
 import { type LambdaRouter } from '@/server/routers/lambda';
+import { createHeaderWithAuth } from '@/services/_auth';
+import { imageGenerationConfigSelectors } from '@/store/image/slices/generationConfig/selectors';
+import { getImageStoreState } from '@/store/image/store';
 
 const log = debug('lobe-image:lambda-client');
 
@@ -16,6 +19,30 @@ const log = debug('lobe-image:lambda-client');
 let last401Time = 0;
 let lastMarket401Time = 0;
 const MIN_401_INTERVAL = 5000; // 5 seconds
+
+const getAuthHeaders = async (provider?: ModelProvider) => {
+  try {
+    // Only include provider in JWT for image operations
+    // For other operations (like knowledge base embedding), let server use its own config
+    return await createHeaderWithAuth(provider ? { provider } : undefined);
+  } catch (error) {
+    // Never let auth-header resolution break page rendering.
+    console.error('[lambdaClient] failed to build auth headers:', error);
+    return {};
+  }
+};
+
+const resolveImageProvider = async (): Promise<ModelProvider | undefined> => {
+  if (location.pathname !== '/image') return;
+
+  try {
+    return imageGenerationConfigSelectors.provider(getImageStoreState()) as ModelProvider;
+  } catch (error) {
+    // Keep TRPC requests healthy even when optional provider preload fails.
+    console.error('[lambdaClient] failed to resolve image provider:', error);
+    return;
+  }
+};
 
 // handle error
 const errorHandlingLink: TRPCLink<LambdaRouter> = () => {
@@ -113,23 +140,14 @@ const linkOptions = {
     return await fetch(input, fetchOptions);
   },
   headers: async () => {
-    // dynamic import to avoid circular dependency
-    const { createHeaderWithAuth } = await import('@/services/_auth');
-
-    let provider: ModelProvider | undefined;
     // for image page, we need to get the provider from the store
     log('Getting provider from store for image page: %s', location.pathname);
-    if (location.pathname === '/image') {
-      const { getImageStoreState } = await import('@/store/image');
-      const { imageGenerationConfigSelectors } =
-        await import('@/store/image/slices/generationConfig/selectors');
-      provider = imageGenerationConfigSelectors.provider(getImageStoreState()) as ModelProvider;
+    const provider = await resolveImageProvider();
+    if (provider) {
       log('Getting provider from store for image page: %s', provider);
     }
 
-    // Only include provider in JWT for image operations
-    // For other operations (like knowledge base embedding), let server use its own config
-    const headers = await createHeaderWithAuth(provider ? { provider } : undefined);
+    const headers = await getAuthHeaders(provider);
     log('Headers: %O', headers);
     return headers;
   },

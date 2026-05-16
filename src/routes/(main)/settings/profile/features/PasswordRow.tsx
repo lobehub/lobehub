@@ -5,6 +5,7 @@ import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { notification } from '@/components/AntdStaticMethods';
+import { requestPasswordReset } from '@/libs/better-auth/auth-client';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
 
@@ -21,7 +22,6 @@ const PasswordRow = () => {
 
     try {
       setSending(true);
-      const { requestPasswordReset } = await import('@/libs/better-auth/auth-client');
       await requestPasswordReset({
         email: userProfile.email,
         redirectTo: `/reset-password?email=${encodeURIComponent(userProfile.email)}`,

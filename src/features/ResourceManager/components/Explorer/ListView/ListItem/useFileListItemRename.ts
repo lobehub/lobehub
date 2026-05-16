@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useEventCallback } from '@/hooks/useEventCallback';
+import { useFileStore } from '@/store/file';
 import { useTreeStore } from '@/store/tree';
 
 interface UseFileListItemRenameOptions {
@@ -62,7 +63,7 @@ export const useFileListItemRename = ({
     try {
       await updateResource(id, { name: renamingValue.trim() });
       // Revalidate tree for the parent folder — the explorer subscription will reconcile
-      const { queryParams } = await import('@/store/file').then((m) => m.useFileStore.getState());
+      const { queryParams } = useFileStore.getState();
       const parentId = queryParams?.parentId ?? '';
       useTreeStore.getState().revalidate(parentId);
       await refreshFileList({ revalidateResources: false });

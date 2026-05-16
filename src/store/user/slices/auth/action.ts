@@ -1,5 +1,6 @@
 import { type SSOProvider } from '@lobechat/types';
 
+import { accountInfo, listAccounts, signOut } from '@/libs/better-auth/auth-client';
 import { type StoreSetter } from '@/store/types';
 
 import { type UserStore } from '../../store';
@@ -10,7 +11,6 @@ interface AuthProvidersData {
 }
 
 const fetchAuthProvidersData = async (): Promise<AuthProvidersData> => {
-  const { accountInfo, listAccounts } = await import('@/libs/better-auth/auth-client');
   const result = await listAccounts();
   const accounts = result.data || [];
   const hasPasswordAccount = accounts.some((account) => account.providerId === 'credential');
@@ -70,7 +70,6 @@ export class UserAuthActionImpl {
       // Best-effort: don't block sign-out if the cleanup request fails
     }
 
-    const { signOut } = await import('@/libs/better-auth/auth-client');
     await signOut({
       fetchOptions: {
         onSuccess: () => {

@@ -1,5 +1,6 @@
 import { fileService } from '@/services/file';
 import { resourceService } from '@/services/resource';
+import { useFileStore } from '@/store/file';
 import type { StoreSetter } from '@/store/types';
 import { OptimisticEngine } from '@/store/utils/optimisticEngine';
 
@@ -211,7 +212,6 @@ export class TreeActionImpl {
     const item = children[fromParent]?.find((i) => i.id === itemId);
 
     if (!item) {
-      const { useFileStore } = await import('@/store/file');
       const { resourceMap } = useFileStore.getState();
 
       if (resourceMap.has(itemId)) {
@@ -236,7 +236,6 @@ export class TreeActionImpl {
     });
 
     tx.mutation = async () => {
-      const { useFileStore } = await import('@/store/file');
       const { resourceMap } = useFileStore.getState();
 
       if (resourceMap.has(itemId)) {
@@ -274,7 +273,6 @@ export class TreeActionImpl {
     });
 
     tx.mutation = async () => {
-      const { useFileStore } = await import('@/store/file');
       const { resourceMap } = useFileStore.getState();
 
       // Split items into those visible in Explorer vs not
@@ -321,7 +319,6 @@ export class TreeActionImpl {
 
     tx.mutation = async () => {
       await resourceService.updateResource(itemId, { name: newName });
-      const { useFileStore } = await import('@/store/file');
       await useFileStore.getState().refreshFileList();
     };
 
@@ -344,7 +341,6 @@ export class TreeActionImpl {
 
     tx.mutation = async () => {
       await resourceService.deleteResources(itemIds);
-      const { useFileStore } = await import('@/store/file');
       await useFileStore.getState().refreshFileList();
     };
 

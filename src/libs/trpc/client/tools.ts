@@ -4,10 +4,21 @@ import superjson from 'superjson';
 
 import { withElectronProtocolIfElectron } from '@/const/protocol';
 import { type ToolsRouter } from '@/server/routers/tools';
+import { createHeaderWithAuth } from '@/services/_auth';
 
 // 401 error debouncing for market auth
 let lastMarket401Time = 0;
 const MIN_401_INTERVAL = 5000; // 5 seconds
+
+const getAuthHeaders = async () => {
+  try {
+    return await createHeaderWithAuth();
+  } catch (error) {
+    // Never let auth-header resolution break page rendering.
+    console.error('[toolsClient] failed to build auth headers:', error);
+    return {};
+  }
+};
 
 // Error handling link for tools client
 const errorHandlingLink: TRPCLink<ToolsRouter> = () => {
@@ -55,10 +66,7 @@ export const toolsClient = createTRPCClient<ToolsRouter>({
     errorHandlingLink,
     httpBatchLink({
       headers: async () => {
-        // dynamic import to avoid circular dependency
-        const { createHeaderWithAuth } = await import('@/services/_auth');
-
-        return createHeaderWithAuth();
+        return getAuthHeaders();
       },
       maxURLLength: 2083,
       transformer: superjson,
