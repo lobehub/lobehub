@@ -69,10 +69,17 @@ export async function runScheduleTick(
     return { ran: false, reason: 'human-waiting' };
   }
 
-  // Enforce `config.schedule.maxExecutions` by counting task_topics created
-  // since `context.scheduler.scheduleStartedAt` (stamped when the user starts
-  // the schedule). At the cap, mark the task `completed` so future dispatches
-  // filter it out via `getScheduledTasks`.
+  // Defense-in-depth cap check.
+  //
+  // `TaskLifecycleService.onTopicComplete` is the primary stopper — it parks
+  // a schedule-mode task at `completed` (instead of `scheduled`) the instant
+  // it consumes its final allowed run, so the UI reflects the cap immediately
+  // even on low-frequency crons (e.g. daily, maxExecutions=1).
+  //
+  // This pre-tick recheck catches the residual edge cases the lifecycle
+  // hook can miss: a crashed tick that never reached onTopicComplete; a
+  // user editing maxExecutions downward after the cap is already exceeded;
+  // or stale `scheduled` rows from older code paths.
   const scheduleConfig =
     ((task.config as { schedule?: { maxExecutions?: number | null } } | null) ?? {}).schedule ?? {};
   const maxExecutions = scheduleConfig.maxExecutions ?? null;
