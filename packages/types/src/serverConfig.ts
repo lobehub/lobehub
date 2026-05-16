@@ -39,6 +39,16 @@ export interface VisualUnderstandingConfig {
   provider: string;
 }
 
+export interface GlobalBrandingConfig {
+  appIcon192?: string;
+  appIcon512?: string;
+  appleTouchIcon?: string;
+  assistantAvatar?: string;
+  favicon?: string;
+  logo?: string;
+  userAvatar?: string;
+}
+
 export interface ServerModelProviderConfig {
   enabled?: boolean;
   enabledModels?: string[];
@@ -59,6 +69,7 @@ export interface GlobalServerConfig {
    */
   agentGatewayUrl?: string;
   aiProvider: ServerLanguageModel;
+  branding?: GlobalBrandingConfig;
   defaultAgent?: PartialDeep<UserDefaultAgent>;
   disableEmailPassword?: boolean;
   enableBusinessFeatures?: boolean;

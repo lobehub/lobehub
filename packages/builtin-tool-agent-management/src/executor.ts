@@ -37,10 +37,18 @@ import {
   type UpdatePromptParams,
 } from './types';
 
-const runtime = new AgentManagerRuntime({
-  agentService,
-  discoverService,
-});
+let runtime: AgentManagerRuntime | undefined;
+
+const getRuntime = () => {
+  if (!runtime) {
+    runtime = new AgentManagerRuntime({
+      agentService,
+      discoverService,
+    });
+  }
+
+  return runtime;
+};
 
 class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName> {
   readonly identifier = AgentManagementIdentifier;
@@ -49,7 +57,7 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
   // ==================== Agent CRUD ====================
 
   createAgent = async (params: CreateAgentParams): Promise<BuiltinToolResult> => {
-    return runtime.createAgent(params);
+    return getRuntime().createAgent(params);
   };
 
   updateAgent = async (params: UpdateAgentParams): Promise<BuiltinToolResult> => {
@@ -71,27 +79,27 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
         /* ignore */
       }
     }
-    return runtime.updateAgentConfig(agentId, { config, meta });
+    return getRuntime().updateAgentConfig(agentId, { config, meta });
   };
 
   deleteAgent = async (params: DeleteAgentParams): Promise<BuiltinToolResult> => {
-    return runtime.deleteAgent(params.agentId);
+    return getRuntime().deleteAgent(params.agentId);
   };
 
   getAgentDetail = async (params: GetAgentDetailParams): Promise<BuiltinToolResult> => {
-    return runtime.getAgentDetail(params.agentId);
+    return getRuntime().getAgentDetail(params.agentId);
   };
 
   duplicateAgent = async (params: DuplicateAgentParams): Promise<BuiltinToolResult> => {
-    return runtime.duplicateAgent(params.agentId, params.newTitle);
+    return getRuntime().duplicateAgent(params.agentId, params.newTitle);
   };
 
   updatePrompt = async (params: UpdatePromptParams): Promise<BuiltinToolResult> => {
-    return runtime.updatePrompt(params.agentId, { prompt: params.prompt });
+    return getRuntime().updatePrompt(params.agentId, { prompt: params.prompt });
   };
 
   installPlugin = async (params: InstallPluginParams): Promise<BuiltinToolResult> => {
-    return runtime.installPlugin(params.agentId, {
+    return getRuntime().installPlugin(params.agentId, {
       identifier: params.identifier,
       source: params.source,
     });
@@ -100,7 +108,7 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
   // ==================== Search ====================
 
   searchAgent = async (params: SearchAgentParams): Promise<BuiltinToolResult> => {
-    return runtime.searchAgents(params);
+    return getRuntime().searchAgents(params);
   };
 
   // ==================== Execution ====================

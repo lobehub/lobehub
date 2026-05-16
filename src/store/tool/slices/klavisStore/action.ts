@@ -338,7 +338,13 @@ export class KlavisStoreActionImpl {
     return useSWR<KlavisServer[]>(
       enabled ? 'fetchUserKlavisServers' : null,
       async () => {
-        const klavisPlugins = await lambdaClient.klavis.getKlavisPlugins.query();
+        let klavisPlugins: Awaited<ReturnType<typeof lambdaClient.klavis.getKlavisPlugins.query>>;
+        try {
+          klavisPlugins = await lambdaClient.klavis.getKlavisPlugins.query();
+        } catch (error) {
+          console.warn('[Klavis] Skip loading Klavis servers:', error);
+          return [];
+        }
 
         if (klavisPlugins.length === 0) return [];
 

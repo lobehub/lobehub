@@ -1,20 +1,38 @@
 import { type ToolManifest } from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { PluginModel } from '@/database/models/plugin';
-import { getKlavisClient } from '@/libs/klavis';
+import { getKlavisClient, isKlavisClientAvailable } from '@/libs/klavis';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 
 /**
- * Klavis procedure with API key validation and database access
+ * Klavis procedure with database access only.
  */
-const klavisProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
-  const client = getKlavisClient();
+const klavisDBProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const pluginModel = new PluginModel(opts.ctx.serverDB, opts.ctx.userId);
 
   return opts.next({
-    ctx: { ...opts.ctx, klavisClient: client, pluginModel },
+    ctx: { ...opts.ctx, pluginModel },
+  });
+});
+
+/**
+ * Klavis procedure with API key validation and database access.
+ */
+const klavisProcedure = klavisDBProcedure.use(async (opts) => {
+  if (!isKlavisClientAvailable()) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'Klavis is not configured on server',
+    });
+  }
+
+  const client = getKlavisClient();
+
+  return opts.next({
+    ctx: { ...opts.ctx, klavisClient: client },
   });
 });
 
@@ -116,7 +134,7 @@ export const klavisRouter = router({
   /**
    * Get Klavis plugins from database
    */
-  getKlavisPlugins: klavisProcedure.query(async ({ ctx }) => {
+  getKlavisPlugins: klavisDBProcedure.query(async ({ ctx }) => {
     const allPlugins = await ctx.pluginModel.query();
     // Filter plugins that have klavis customParams
     return allPlugins.filter((plugin) => plugin.customParams?.klavis);
@@ -189,7 +207,7 @@ export const klavisRouter = router({
   /**
    * Remove Klavis plugin from database by identifier
    */
-  removeKlavisPlugin: klavisProcedure
+  removeKlavisPlugin: klavisDBProcedure
     .input(
       z.object({
         /** Identifier for storage (e.g., 'google-calendar') */
@@ -204,7 +222,7 @@ export const klavisRouter = router({
   /**
    * Update Klavis plugin with tools and auth status in database
    */
-  updateKlavisPlugin: klavisProcedure
+  updateKlavisPlugin: klavisDBProcedure
     .input(
       z.object({
         /** Identifier for storage (e.g., 'google-calendar') */

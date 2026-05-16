@@ -90,6 +90,15 @@ export const getServerGlobalConfig = async () => {
     defaultAgent: {
       config: parseAgentConfig(DEFAULT_AGENT_CONFIG),
     },
+    branding: cleanObject({
+      appleTouchIcon: appEnv.BRANDING_APPLE_TOUCH_ICON_URL,
+      appIcon192: appEnv.BRANDING_APP_ICON_192_URL,
+      appIcon512: appEnv.BRANDING_APP_ICON_512_URL,
+      assistantAvatar: appEnv.BRANDING_ASSISTANT_AVATAR_URL,
+      favicon: appEnv.BRANDING_FAVICON_URL,
+      logo: appEnv.BRANDING_LOGO_URL,
+      userAvatar: appEnv.BRANDING_USER_AVATAR_URL,
+    }),
     disableEmailPassword: authEnv.AUTH_DISABLE_EMAIL_PASSWORD,
     enableBusinessFeatures: ENABLE_BUSINESS_FEATURES,
     enableEmailVerification: authEnv.AUTH_EMAIL_VERIFICATION,

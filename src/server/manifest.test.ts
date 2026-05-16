@@ -1,14 +1,8 @@
 // @vitest-environment node
-import { BRANDING_LOGO_URL } from '@lobechat/business-const';
 import qs from 'query-string';
 import { describe, expect, it, vi } from 'vitest';
 
 import { Manifest, manifestModule } from './manifest';
-
-// Mock external dependencies
-vi.mock('@/const/branding', () => ({
-  BRANDING_LOGO_URL: 'https://example.com/logo.png',
-}));
 
 vi.mock('@/server/utils/url', () => ({
   getCanonicalUrl: vi.fn().mockReturnValue('https://example.com/manifest.webmanifest'),
@@ -78,7 +72,7 @@ describe('Manifest', () => {
         cache_busting_mode: 'query',
         immutable: 'true',
         max_age: 31536000,
-        src: qs.stringifyUrl({ query: { v: version }, url: BRANDING_LOGO_URL || url }),
+        src: qs.stringifyUrl({ query: { v: version }, url }),
       });
     });
 
@@ -147,7 +141,7 @@ describe('Manifest', () => {
         form_factor: 'narrow',
         immutable: 'true',
         max_age: 31536000,
-        sizes: '1280x676',
+        sizes: '320x569',
         src: 'https://example.com/screenshot.png?v=1',
         type: 'image/png',
       });

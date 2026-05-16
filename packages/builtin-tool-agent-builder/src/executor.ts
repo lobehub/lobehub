@@ -20,10 +20,18 @@ import type {
 } from './types';
 import { AgentBuilderApiName, AgentBuilderIdentifier } from './types';
 
-const runtime = new AgentManagerRuntime({
-  agentService,
-  discoverService,
-});
+let runtime: AgentManagerRuntime | undefined;
+
+const getRuntime = () => {
+  if (!runtime) {
+    runtime = new AgentManagerRuntime({
+      agentService,
+      discoverService,
+    });
+  }
+
+  return runtime;
+};
 
 class AgentBuilderExecutor extends BaseExecutor<typeof AgentBuilderApiName> {
   readonly identifier = AgentBuilderIdentifier;
@@ -32,11 +40,11 @@ class AgentBuilderExecutor extends BaseExecutor<typeof AgentBuilderApiName> {
   // ==================== Read Operations ====================
 
   getAvailableModels = async (params: GetAvailableModelsParams): Promise<BuiltinToolResult> => {
-    return runtime.getAvailableModels(params);
+    return getRuntime().getAvailableModels(params);
   };
 
   searchMarketTools = async (params: SearchMarketToolsParams): Promise<BuiltinToolResult> => {
-    return runtime.searchMarketTools(params);
+    return getRuntime().searchMarketTools(params);
   };
 
   // ==================== Write Operations ====================
@@ -55,7 +63,7 @@ class AgentBuilderExecutor extends BaseExecutor<typeof AgentBuilderApiName> {
       };
     }
 
-    return runtime.updateAgentConfig(agentId, params);
+    return getRuntime().updateAgentConfig(agentId, params);
   };
 
   updatePrompt = async (
@@ -72,7 +80,7 @@ class AgentBuilderExecutor extends BaseExecutor<typeof AgentBuilderApiName> {
       };
     }
 
-    return runtime.updatePrompt(agentId, {
+    return getRuntime().updatePrompt(agentId, {
       streaming: true,
       ...params,
     });
@@ -92,7 +100,7 @@ class AgentBuilderExecutor extends BaseExecutor<typeof AgentBuilderApiName> {
       };
     }
 
-    return runtime.installPlugin(agentId, params);
+    return getRuntime().installPlugin(agentId, params);
   };
 }
 

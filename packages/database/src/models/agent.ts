@@ -617,6 +617,7 @@ export class AgentModel {
     if (!persistConfig) return null;
 
     // 4. Create the builtin agent with persist config
+    // Use conflict-safe insert to handle concurrent requests during onboarding.
     const result = await this.db
       .insert(agents)
       .values({
@@ -626,8 +627,16 @@ export class AgentModel {
         userId: this.userId,
         virtual: true,
       })
+      .onConflictDoNothing({
+        target: [agents.slug, agents.userId],
+      })
       .returning();
 
-    return result[0];
+    if (result[0]) return result[0];
+
+    // Another request may have inserted it first. Read it back to keep API idempotent.
+    return this.db.query.agents.findFirst({
+      where: and(eq(agents.slug, persistConfig.slug), eq(agents.userId, this.userId)),
+    });
   };
 }

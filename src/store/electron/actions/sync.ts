@@ -9,7 +9,6 @@ import { useChatStore } from '@/store/chat';
 import { useSessionStore } from '@/store/session';
 import { type StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
-import { stores } from '@/store/utils/userDataStores';
 
 import { type ElectronStore } from '../store';
 
@@ -18,6 +17,11 @@ import { type ElectronStore } from '../store';
  */
 
 const REMOTE_SERVER_CONFIG_KEY = 'electron:getRemoteServerConfig';
+
+const resetAllUserDataStores = async () => {
+  const { stores } = await import('@/store/utils/userDataStores');
+  stores.reset();
+};
 
 type Setter = StoreSetter<ElectronStore>;
 export const remoteSyncSlice = (set: Setter, get: () => ElectronStore, _api?: unknown) =>
@@ -80,7 +84,7 @@ export class ElectronRemoteServerActionImpl {
       // Must use clearRemoteServerConfig (not only set active: false): main process
       // clears encrypted OIDC access/refresh tokens; otherwise sign-out still leaves auth state.
       await remoteServerService.clearRemoteServerConfig();
-      stores.reset();
+      await resetAllUserDataStores();
       await this.#get().refreshServerConfig();
     } catch (error) {
       console.error('Disconnect failed:', error);
@@ -97,7 +101,7 @@ export class ElectronRemoteServerActionImpl {
   };
 
   refreshUserData = async (): Promise<void> => {
-    stores.reset();
+    await resetAllUserDataStores();
 
     await useSessionStore.getState().refreshSessions();
     await useChatStore.getState().refreshMessages();

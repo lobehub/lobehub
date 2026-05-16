@@ -6,6 +6,7 @@ import {
   BusinessDesktopRoutesWithMainLayout,
   BusinessDesktopRoutesWithoutMainLayout,
 } from '@/business/client/BusinessDesktopRoutes';
+import DesktopMainLayout from '@/routes/(main)/_layout';
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
 
 const agentChatElement = dynamicElement(() => import('@/routes/(main)/agent'), 'Desktop > Chat');
@@ -627,7 +628,7 @@ export const desktopRoutes: RouteObject[] = [
         path: '*',
       },
     ],
-    element: dynamicLayout(() => import('@/routes/(main)/_layout'), 'Desktop > Main > Layout'),
+    element: <DesktopMainLayout />,
     errorElement: <ErrorBoundary />,
     path: '/',
   },

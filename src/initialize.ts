@@ -34,6 +34,9 @@ if (typeof window !== 'undefined') {
   });
 }
 
-if (__DEV__) {
-  scan({ enabled: true });
+if (__DEV__ && typeof window !== 'undefined') {
+  const isReactScanEnabled = window.localStorage.getItem('LOBE_REACT_SCAN_ENABLED') === '1';
+  if (isReactScanEnabled) {
+    scan({ enabled: true });
+  }
 }

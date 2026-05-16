@@ -1,4 +1,3 @@
-import { BRANDING_LOGO_URL } from '@lobechat/business-const';
 import qs from 'query-string';
 
 import { getCanonicalUrl } from '@/server/utils/url';
@@ -77,7 +76,7 @@ export class Manifest {
     cache_busting_mode: 'query',
     immutable: 'true',
     max_age: MAX_AGE,
-    src: qs.stringifyUrl({ query: { v: version }, url: BRANDING_LOGO_URL || url }),
+    src: qs.stringifyUrl({ query: { v: version }, url }),
   });
 
   private _getIcon = ({ url, version, sizes, purpose }: IconItem) => ({
@@ -90,7 +89,7 @@ export class Manifest {
   private _getScreenshot = ({ form_factor, url, version, sizes }: ScreenshotItem) => ({
     ...this._getImage(url, version),
     form_factor,
-    sizes: sizes || form_factor === 'wide' ? '1280x676' : '640x1138',
+    sizes: sizes || (form_factor === 'wide' ? '1280x676' : '640x1138'),
     type: 'image/png',
   });
 }

@@ -1,14 +1,23 @@
-import { BRANDING_LOGO_URL, BRANDING_NAME, ORG_NAME } from '@lobechat/business-const';
+import { BRANDING_NAME, ORG_NAME } from '@lobechat/business-const';
 import { OG_URL } from '@lobechat/const';
 
 import { DEFAULT_LANG } from '@/const/locale';
 import { OFFICIAL_URL } from '@/const/url';
-import { isCustomBranding, isCustomORG } from '@/const/version';
+import { isCustomORG } from '@/const/version';
+import { appEnv } from '@/envs/app';
 import { translation } from '@/server/translation';
 import { type DynamicLayoutProps } from '@/types/next';
 import { RouteVariants } from '@/utils/server/routeVariants';
 
-const isDev = process.env.NODE_ENV === 'development';
+const DEFAULT_APPLE_TOUCH_ICON = '/icons/icon-bot-192.png';
+const DEFAULT_FAVICON_ICON = '/icons/icon-bot-192.png';
+const DEFAULT_SHORTCUT_ICON = '/icons/icon-bot-192.png';
+
+const brandingIconSources = {
+  apple: appEnv.BRANDING_APPLE_TOUCH_ICON_URL || appEnv.BRANDING_APP_ICON_192_URL,
+  favicon: appEnv.BRANDING_FAVICON_URL || appEnv.BRANDING_APP_ICON_192_URL,
+  shortcut: appEnv.BRANDING_FAVICON_URL || appEnv.BRANDING_APP_ICON_192_URL,
+};
 
 export const generateMetadata = async (props: DynamicLayoutProps) => {
   const locale = await RouteVariants.getLocale(props);
@@ -23,13 +32,11 @@ export const generateMetadata = async (props: DynamicLayoutProps) => {
       title: BRANDING_NAME,
     },
     description: t('chat.description', { appName: BRANDING_NAME }),
-    icons: isCustomBranding
-      ? BRANDING_LOGO_URL
-      : {
-          apple: '/apple-touch-icon.png?v=1',
-          icon: isDev ? '/favicon-dev.ico' : '/favicon.ico?v=1',
-          shortcut: isDev ? '/favicon-32x32-dev.ico' : '/favicon-32x32.ico?v=1',
-        },
+    icons: {
+      apple: brandingIconSources.apple || DEFAULT_APPLE_TOUCH_ICON,
+      icon: brandingIconSources.favicon || DEFAULT_FAVICON_ICON,
+      shortcut: brandingIconSources.shortcut || DEFAULT_SHORTCUT_ICON,
+    },
     manifest: '/manifest.json',
     metadataBase: new URL(OFFICIAL_URL),
     openGraph: {

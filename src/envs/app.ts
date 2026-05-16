@@ -37,6 +37,13 @@ export const getAppConfig = () => {
   return createEnv({
     clientPrefix: 'NEXT_PUBLIC_',
     client: {
+      NEXT_PUBLIC_BRANDING_APPLE_TOUCH_ICON_URL: z.string().optional(),
+      NEXT_PUBLIC_BRANDING_APP_ICON_192_URL: z.string().optional(),
+      NEXT_PUBLIC_BRANDING_APP_ICON_512_URL: z.string().optional(),
+      NEXT_PUBLIC_BRANDING_ASSISTANT_AVATAR_URL: z.string().optional(),
+      NEXT_PUBLIC_BRANDING_FAVICON_URL: z.string().optional(),
+      NEXT_PUBLIC_BRANDING_LOGO_URL: z.string().optional(),
+      NEXT_PUBLIC_BRANDING_USER_AVATAR_URL: z.string().optional(),
       NEXT_PUBLIC_ENABLE_SENTRY: z.boolean(),
     },
     server: {
@@ -56,6 +63,13 @@ export const getAppConfig = () => {
       CDN_USE_GLOBAL: z.boolean().optional(),
       CUSTOM_FONT_FAMILY: z.string().optional(),
       CUSTOM_FONT_URL: z.string().optional(),
+      BRANDING_LOGO_URL: z.string().optional(),
+      BRANDING_FAVICON_URL: z.string().optional(),
+      BRANDING_APPLE_TOUCH_ICON_URL: z.string().optional(),
+      BRANDING_APP_ICON_192_URL: z.string().optional(),
+      BRANDING_APP_ICON_512_URL: z.string().optional(),
+      BRANDING_ASSISTANT_AVATAR_URL: z.string().optional(),
+      BRANDING_USER_AVATAR_URL: z.string().optional(),
 
       SSRF_ALLOW_PRIVATE_IP_ADDRESS: z.boolean().optional(),
       SSRF_ALLOW_IP_ADDRESS_LIST: z.string().optional(),
@@ -89,6 +103,15 @@ export const getAppConfig = () => {
     runtimeEnv: {
       // Sentry
       NEXT_PUBLIC_ENABLE_SENTRY: !!process.env.NEXT_PUBLIC_SENTRY_DSN,
+      NEXT_PUBLIC_BRANDING_APPLE_TOUCH_ICON_URL:
+        process.env.NEXT_PUBLIC_BRANDING_APPLE_TOUCH_ICON_URL,
+      NEXT_PUBLIC_BRANDING_APP_ICON_192_URL: process.env.NEXT_PUBLIC_BRANDING_APP_ICON_192_URL,
+      NEXT_PUBLIC_BRANDING_APP_ICON_512_URL: process.env.NEXT_PUBLIC_BRANDING_APP_ICON_512_URL,
+      NEXT_PUBLIC_BRANDING_ASSISTANT_AVATAR_URL:
+        process.env.NEXT_PUBLIC_BRANDING_ASSISTANT_AVATAR_URL,
+      NEXT_PUBLIC_BRANDING_FAVICON_URL: process.env.NEXT_PUBLIC_BRANDING_FAVICON_URL,
+      NEXT_PUBLIC_BRANDING_LOGO_URL: process.env.NEXT_PUBLIC_BRANDING_LOGO_URL,
+      NEXT_PUBLIC_BRANDING_USER_AVATAR_URL: process.env.NEXT_PUBLIC_BRANDING_USER_AVATAR_URL,
 
       AGENTS_INDEX_URL: !!process.env.AGENTS_INDEX_URL
         ? process.env.AGENTS_INDEX_URL
@@ -112,6 +135,21 @@ export const getAppConfig = () => {
       CUSTOM_FONT_FAMILY: process.env.CUSTOM_FONT_FAMILY,
       CUSTOM_FONT_URL: process.env.CUSTOM_FONT_URL,
       CDN_USE_GLOBAL: process.env.CDN_USE_GLOBAL === '1',
+      BRANDING_LOGO_URL: process.env.BRANDING_LOGO_URL || process.env.NEXT_PUBLIC_BRANDING_LOGO_URL,
+      BRANDING_FAVICON_URL:
+        process.env.BRANDING_FAVICON_URL || process.env.NEXT_PUBLIC_BRANDING_FAVICON_URL,
+      BRANDING_APPLE_TOUCH_ICON_URL:
+        process.env.BRANDING_APPLE_TOUCH_ICON_URL ||
+        process.env.NEXT_PUBLIC_BRANDING_APPLE_TOUCH_ICON_URL,
+      BRANDING_APP_ICON_192_URL:
+        process.env.BRANDING_APP_ICON_192_URL || process.env.NEXT_PUBLIC_BRANDING_APP_ICON_192_URL,
+      BRANDING_APP_ICON_512_URL:
+        process.env.BRANDING_APP_ICON_512_URL || process.env.NEXT_PUBLIC_BRANDING_APP_ICON_512_URL,
+      BRANDING_ASSISTANT_AVATAR_URL:
+        process.env.BRANDING_ASSISTANT_AVATAR_URL ||
+        process.env.NEXT_PUBLIC_BRANDING_ASSISTANT_AVATAR_URL,
+      BRANDING_USER_AVATAR_URL:
+        process.env.BRANDING_USER_AVATAR_URL || process.env.NEXT_PUBLIC_BRANDING_USER_AVATAR_URL,
 
       SSRF_ALLOW_PRIVATE_IP_ADDRESS: process.env.SSRF_ALLOW_PRIVATE_IP_ADDRESS === '1',
       SSRF_ALLOW_IP_ADDRESS_LIST: process.env.SSRF_ALLOW_IP_ADDRESS_LIST,

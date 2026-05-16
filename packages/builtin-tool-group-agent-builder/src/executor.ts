@@ -32,10 +32,18 @@ import type {
 } from './types';
 import { GroupAgentBuilderApiName, GroupAgentBuilderIdentifier } from './types';
 
-const agentManagerRuntime = new AgentManagerRuntime({
-  agentService,
-  discoverService,
-});
+let agentManagerRuntime: AgentManagerRuntime | undefined;
+
+const getAgentManagerRuntime = () => {
+  if (!agentManagerRuntime) {
+    agentManagerRuntime = new AgentManagerRuntime({
+      agentService,
+      discoverService,
+    });
+  }
+
+  return agentManagerRuntime;
+};
 const groupAgentBuilderRuntime = new GroupAgentBuilderExecutionRuntime();
 
 class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApiName> {
@@ -162,11 +170,11 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
   // ==================== Inherited Operations (for supervisor agent) ====================
 
   getAvailableModels = async (params: GetAvailableModelsParams): Promise<BuiltinToolResult> => {
-    return agentManagerRuntime.getAvailableModels(params);
+    return getAgentManagerRuntime().getAvailableModels(params);
   };
 
   searchMarketTools = async (params: SearchMarketToolsParams): Promise<BuiltinToolResult> => {
-    return agentManagerRuntime.searchMarketTools(params);
+    return getAgentManagerRuntime().searchMarketTools(params);
   };
 
   updateConfig = async (
@@ -186,7 +194,7 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
       };
     }
 
-    return agentManagerRuntime.updateAgentConfig(agentId, restParams);
+    return getAgentManagerRuntime().updateAgentConfig(agentId, restParams);
   };
 
   installPlugin = async (
@@ -203,7 +211,7 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
       };
     }
 
-    return agentManagerRuntime.installPlugin(agentId, params);
+    return getAgentManagerRuntime().installPlugin(agentId, params);
   };
 }
 

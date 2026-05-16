@@ -24,6 +24,9 @@ import ChatTransitionPreview from './ChatTransitionPreview';
 import HighlighterPreview from './HighlighterPreview';
 import MermaidPreview from './MermaidPreview';
 
+const toThemeDisplayLabel = (item: { displayName: string; id: string }) =>
+  item.id === 'lobe-theme' ? 'Chinna Theme' : item.displayName;
+
 const ChatAppearance = memo(() => {
   const { t } = useTranslation('setting');
   const { general } = useUserStore(settingsSelectors.currentSettings, isEqual);
@@ -160,7 +163,7 @@ const ChatAppearance = memo(() => {
             <Select
               value={general.highlighterTheme}
               options={highlighterThemes.map((item) => ({
-                label: item.displayName,
+                label: toThemeDisplayLabel(item),
                 value: item.id,
               }))}
               style={{
@@ -186,7 +189,7 @@ const ChatAppearance = memo(() => {
             <Select
               value={general.mermaidTheme}
               options={mermaidThemes.map((item) => ({
-                label: item.displayName,
+                label: toThemeDisplayLabel(item),
                 value: item.id,
               }))}
               style={{

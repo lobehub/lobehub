@@ -157,3 +157,50 @@ describe('APP_URL fallback', () => {
     });
   });
 });
+
+describe('branding urls', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    delete process.env.BRANDING_LOGO_URL;
+    delete process.env.BRANDING_FAVICON_URL;
+    delete process.env.BRANDING_APPLE_TOUCH_ICON_URL;
+    delete process.env.BRANDING_APP_ICON_192_URL;
+    delete process.env.BRANDING_APP_ICON_512_URL;
+    delete process.env.BRANDING_ASSISTANT_AVATAR_URL;
+    delete process.env.BRANDING_USER_AVATAR_URL;
+    delete process.env.NEXT_PUBLIC_BRANDING_LOGO_URL;
+    delete process.env.NEXT_PUBLIC_BRANDING_FAVICON_URL;
+    delete process.env.NEXT_PUBLIC_BRANDING_APPLE_TOUCH_ICON_URL;
+    delete process.env.NEXT_PUBLIC_BRANDING_APP_ICON_192_URL;
+    delete process.env.NEXT_PUBLIC_BRANDING_APP_ICON_512_URL;
+    delete process.env.NEXT_PUBLIC_BRANDING_ASSISTANT_AVATAR_URL;
+    delete process.env.NEXT_PUBLIC_BRANDING_USER_AVATAR_URL;
+  });
+
+  it('should prefer server branding URLs when provided', async () => {
+    process.env.BRANDING_LOGO_URL = 'https://cdn.example.com/logo.svg';
+    process.env.BRANDING_FAVICON_URL = 'https://cdn.example.com/favicon.png';
+    process.env.BRANDING_APP_ICON_192_URL = 'https://cdn.example.com/icon-192.png';
+
+    const { getAppConfig } = await import('../app');
+    const config = getAppConfig();
+
+    expect(config.BRANDING_LOGO_URL).toBe('https://cdn.example.com/logo.svg');
+    expect(config.BRANDING_FAVICON_URL).toBe('https://cdn.example.com/favicon.png');
+    expect(config.BRANDING_APP_ICON_192_URL).toBe('https://cdn.example.com/icon-192.png');
+  });
+
+  it('should fallback to NEXT_PUBLIC branding URLs when server keys are not set', async () => {
+    process.env.NEXT_PUBLIC_BRANDING_LOGO_URL = 'https://cdn.example.com/public-logo.svg';
+    process.env.NEXT_PUBLIC_BRANDING_ASSISTANT_AVATAR_URL =
+      'https://cdn.example.com/public-assistant.png';
+
+    const { getAppConfig } = await import('../app');
+    const config = getAppConfig();
+
+    expect(config.BRANDING_LOGO_URL).toBe('https://cdn.example.com/public-logo.svg');
+    expect(config.BRANDING_ASSISTANT_AVATAR_URL).toBe(
+      'https://cdn.example.com/public-assistant.png',
+    );
+  });
+});

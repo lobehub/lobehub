@@ -5,6 +5,7 @@ import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 
 import { KLAVIS_SERVER_TYPES } from '@/const/index';
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
 import { klavisStoreSelectors } from '@/store/tool/slices/klavisStore';
 
@@ -13,8 +14,9 @@ import KlavisServerItem from './components/KlavisServerItem';
 const KlavisServerList = memo(() => {
   const allKlavisServers = useToolStore(klavisStoreSelectors.getServers, isEqual);
   const useFetchUserKlavisServers = useToolStore((s) => s.useFetchUserKlavisServers);
+  const enableKlavis = useServerConfigStore(serverConfigSelectors.enableKlavis);
 
-  useFetchUserKlavisServers(true);
+  useFetchUserKlavisServers(enableKlavis);
 
   const getServerByIdentifier = (identifier: string) => {
     return allKlavisServers.find((server) => server.identifier === identifier);
