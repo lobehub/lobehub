@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import { modal, notification } from '@/components/AntdStaticMethods';
 import AuthIcons from '@/components/AuthIcons';
+import { linkSocial, oauth2, unlinkAccount } from '@/libs/better-auth/auth-client';
 import { isBuiltinProvider, normalizeProviderId } from '@/libs/better-auth/utils/client';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
@@ -60,7 +61,6 @@ export const SSOProvidersList = memo(() => {
         danger: true,
       },
       onOk: async () => {
-        const { unlinkAccount } = await import('@/libs/better-auth/auth-client');
         await unlinkAccount({ providerId: provider });
         refreshAuthProviders();
       },
@@ -72,8 +72,6 @@ export const SSOProvidersList = memo(() => {
     if (!enableAuthActions) return;
 
     const normalizedProvider = normalizeProviderId(provider);
-    const { linkSocial, oauth2 } = await import('@/libs/better-auth/auth-client');
-
     if (isBuiltinProvider(normalizedProvider)) {
       // Use better-auth native linkSocial API for built-in providers
       await linkSocial({
