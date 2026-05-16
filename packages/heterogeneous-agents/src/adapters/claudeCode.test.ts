@@ -1790,4 +1790,238 @@ describe('ClaudeCodeAdapter', () => {
       expect(end!.data.subagent).toEqual({ parentToolCallId: 'toolu_task' });
     });
   });
+
+  // ────────────────────────────────────────────────────
+  // LOBE-8998: external signal detection (Monitor stdout / tool-callback)
+  // ────────────────────────────────────────────────────
+  describe('external signal detection (LOBE-8998)', () => {
+    const init = (adapter: ClaudeCodeAdapter) => {
+      adapter.adapt({
+        model: 'claude-sonnet-4-6',
+        session_id: 'sess_1',
+        subtype: 'init',
+        type: 'system',
+      });
+    };
+
+    /**
+     * Canonical Monitor pattern: a tool emits its FIRST tool_result
+     * (normal) and then keeps pushing additional tool_results on the
+     * same tool_use.id. Each repeat lights up `externalSignal` on the
+     * next stream_start(newStep).
+     */
+    it('attaches externalSignal to stream_start after a repeat tool_result on the same tool_use.id', () => {
+      const adapter = new ClaudeCodeAdapter();
+      init(adapter);
+
+      // Step 0: Monitor tool_use
+      adapter.adapt({
+        message: {
+          content: [
+            { id: 'toolu_mon', input: { shell: 'tail -f log' }, name: 'Monitor', type: 'tool_use' },
+          ],
+          id: 'msg_01',
+        },
+        type: 'assistant',
+      });
+
+      // 1st tool_result (normal) — no signal yet
+      adapter.adapt({
+        message: {
+          content: [{ content: 'Monitor started', tool_use_id: 'toolu_mon', type: 'tool_result' }],
+        },
+        type: 'user',
+      });
+
+      // 2nd tool_result (Monitor pushing stdout) — pendingExternalSignal set
+      adapter.adapt({
+        message: {
+          content: [{ content: '84842 列完。', tool_use_id: 'toolu_mon', type: 'tool_result' }],
+        },
+        type: 'user',
+      });
+
+      // New step opens (CC emits message_start for the toolless reply)
+      const events = adapter.adapt({
+        event: { message: { id: 'msg_02', model: 'claude-sonnet-4-6' }, type: 'message_start' },
+        type: 'stream_event',
+      });
+
+      const newStart = events.find((e) => e.type === 'stream_start' && e.data?.newStep === true);
+      expect(newStart).toBeDefined();
+      expect(newStart!.data.externalSignal).toEqual({
+        sequence: 1,
+        sourceToolCallId: 'toolu_mon',
+        sourceToolName: 'Monitor',
+        type: 'tool-stdout',
+      });
+    });
+
+    it('does NOT attach externalSignal on the FIRST tool_result for a tool_use.id', () => {
+      const adapter = new ClaudeCodeAdapter();
+      init(adapter);
+
+      adapter.adapt({
+        message: {
+          content: [{ id: 'toolu_mon', input: {}, name: 'Monitor', type: 'tool_use' }],
+          id: 'msg_01',
+        },
+        type: 'assistant',
+      });
+      adapter.adapt({
+        message: {
+          content: [{ content: 'started', tool_use_id: 'toolu_mon', type: 'tool_result' }],
+        },
+        type: 'user',
+      });
+
+      const events = adapter.adapt({
+        event: { message: { id: 'msg_02', model: 'claude-sonnet-4-6' }, type: 'message_start' },
+        type: 'stream_event',
+      });
+
+      const newStart = events.find((e) => e.type === 'stream_start' && e.data?.newStep === true);
+      expect(newStart!.data.externalSignal).toBeUndefined();
+    });
+
+    it('keeps signal across consecutive toolless steps (Monitor pushes line by line)', () => {
+      const adapter = new ClaudeCodeAdapter();
+      init(adapter);
+
+      adapter.adapt({
+        message: {
+          content: [{ id: 'toolu_mon', input: {}, name: 'Monitor', type: 'tool_use' }],
+          id: 'msg_01',
+        },
+        type: 'assistant',
+      });
+      adapter.adapt({
+        message: {
+          content: [{ content: 'started', tool_use_id: 'toolu_mon', type: 'tool_result' }],
+        },
+        type: 'user',
+      });
+
+      const sequences: (number | undefined)[] = [];
+
+      // Loop: 3 stdout pushes, each driving a new toolless step
+      for (let i = 2; i <= 4; i++) {
+        adapter.adapt({
+          message: {
+            content: [{ content: `push ${i - 1}`, tool_use_id: 'toolu_mon', type: 'tool_result' }],
+          },
+          type: 'user',
+        });
+        const events = adapter.adapt({
+          event: {
+            message: { id: `msg_0${i}`, model: 'claude-sonnet-4-6' },
+            type: 'message_start',
+          },
+          type: 'stream_event',
+        });
+        const start = events.find((e) => e.type === 'stream_start' && e.data?.newStep);
+        sequences.push(start!.data.externalSignal?.sequence);
+      }
+
+      expect(sequences).toEqual([1, 2, 3]);
+    });
+
+    it('clears pendingExternalSignal when LLM emits a fresh tool_use', () => {
+      const adapter = new ClaudeCodeAdapter();
+      init(adapter);
+
+      adapter.adapt({
+        message: {
+          content: [{ id: 'toolu_mon', input: {}, name: 'Monitor', type: 'tool_use' }],
+          id: 'msg_01',
+        },
+        type: 'assistant',
+      });
+      adapter.adapt({
+        message: {
+          content: [{ content: 'r1', tool_use_id: 'toolu_mon', type: 'tool_result' }],
+        },
+        type: 'user',
+      });
+      // Repeat → signal armed
+      adapter.adapt({
+        message: {
+          content: [{ content: 'r2', tool_use_id: 'toolu_mon', type: 'tool_result' }],
+        },
+        type: 'user',
+      });
+
+      // Step 2: LLM acts with Bash — clears the pending signal
+      adapter.adapt({
+        message: {
+          content: [
+            { id: 'toolu_bash', input: { command: 'echo ok' }, name: 'Bash', type: 'tool_use' },
+          ],
+          id: 'msg_02',
+        },
+        type: 'assistant',
+      });
+
+      // Bash returns its first result — count goes 0 → 1, no signal
+      adapter.adapt({
+        message: {
+          content: [{ content: 'ok', tool_use_id: 'toolu_bash', type: 'tool_result' }],
+        },
+        type: 'user',
+      });
+
+      // Step 3 opens — should be CLEAN, no externalSignal
+      const events = adapter.adapt({
+        event: { message: { id: 'msg_03', model: 'claude-sonnet-4-6' }, type: 'message_start' },
+        type: 'stream_event',
+      });
+      const start = events.find((e) => e.type === 'stream_start' && e.data?.newStep);
+      expect(start!.data.externalSignal).toBeUndefined();
+    });
+
+    it('does NOT trigger on subagent inner tool_results (parent_tool_use_id)', () => {
+      const adapter = new ClaudeCodeAdapter();
+      init(adapter);
+
+      // Main agent fires a Task spawn
+      adapter.adapt({
+        message: {
+          content: [
+            {
+              id: 'toolu_task',
+              input: { description: 'sub' },
+              name: 'Task',
+              type: 'tool_use',
+            },
+          ],
+          id: 'msg_01',
+        },
+        type: 'assistant',
+      });
+
+      // Subagent inner tool fires twice with parent_tool_use_id set —
+      // must NOT count toward main-agent signal detection.
+      adapter.adapt({
+        message: {
+          content: [{ content: 'inner1', tool_use_id: 'toolu_inner', type: 'tool_result' }],
+        },
+        parent_tool_use_id: 'toolu_task',
+        type: 'user',
+      });
+      adapter.adapt({
+        message: {
+          content: [{ content: 'inner2', tool_use_id: 'toolu_inner', type: 'tool_result' }],
+        },
+        parent_tool_use_id: 'toolu_task',
+        type: 'user',
+      });
+
+      const events = adapter.adapt({
+        event: { message: { id: 'msg_02', model: 'claude-sonnet-4-6' }, type: 'message_start' },
+        type: 'stream_event',
+      });
+      const start = events.find((e) => e.type === 'stream_start' && e.data?.newStep);
+      expect(start!.data.externalSignal).toBeUndefined();
+    });
+  });
 });

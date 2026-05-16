@@ -231,6 +231,14 @@ export class ContextTreeBuilder {
     // Recursively collect all assistant messages in this group
     this.messageCollector.collectAssistantGroupMessages(message, idNode, children);
 
+    // Append external-signal callback blocks (LOBE-8998) at the END of
+    // children — one block per source tool that fired callbacks. They
+    // ride INSIDE the AssistantGroup but BELOW the main-chain zigzag,
+    // since the toolless reactive replies aren't part of the
+    // assistant → tool → assistant chain MessageCollector walks.
+    const signalCallbacks = this.messageCollector.collectSignalCallbacks(message, idNode);
+    children.push(...signalCallbacks);
+
     return {
       children,
       id: message.id,

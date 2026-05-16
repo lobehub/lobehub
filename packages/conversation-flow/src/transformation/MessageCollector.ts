@@ -1,4 +1,38 @@
-import type { ContextNode, IdNode, Message, MessageNode } from '../types';
+import type { ContextNode, IdNode, Message, MessageNode, SignalCallbacksNode } from '../types';
+
+/**
+ * Persisted external-signal lineage on `message.metadata.signal` —
+ * mirrors `MessageSignal` in `@lobechat/types/message/common/metadata.ts`.
+ * Locally duplicated to avoid a cross-package import for a single
+ * structural type.
+ *
+ * Phase 2 (LOBE-8999) promotes this to a dedicated `messages.signal`
+ * jsonb column. To migrate, swap the `metadata?.signal` lookup in
+ * `getMessageSignal` below for `(msg as any).signal ?? msg.metadata?.signal`
+ * — UI and node shape are unchanged.
+ */
+interface MessageSignal {
+  sequence?: number;
+  sourceToolCallId: string;
+  sourceToolName: string;
+  type: 'tool-stdout' | 'tool-callback';
+}
+
+/**
+ * Read the external-signal lineage from a message. Returns undefined
+ * when the message has tools (LLM was on the main chain, not reacting
+ * to a signal) — the writer attaches the tag at stream_start before it
+ * knows whether the step will end up using tools, so the collector
+ * must defang that mismatch here.
+ *
+ * Phase 2 compat seam (LOBE-8999): when the `messages.signal` column
+ * lands, prefer it over `metadata.signal`.
+ */
+const getMessageSignal = (msg: Message): MessageSignal | undefined => {
+  if (msg.role !== 'assistant') return undefined;
+  if (msg.tools && msg.tools.length > 0) return undefined;
+  return (msg.metadata as { signal?: MessageSignal } | undefined | null)?.signal;
+};
 
 /**
  * MessageCollector - Handles collection of related messages
@@ -76,6 +110,10 @@ export class MessageCollector {
         // Only continue if the next assistant has the SAME agentId
         // Different agentId means it's a different agent responding (e.g., via speak tool)
         const isSameAgent = nextMsg.agentId === groupAgentId;
+        // Skip signal-tagged toolless callbacks (LOBE-8998) — they're a
+        // side-channel under the same parent tool and get collected
+        // separately by `collectFlatSignalCallbacks`.
+        if (getMessageSignal(nextMsg)) continue;
 
         if (
           nextMsg.role === 'assistant' &&
@@ -100,6 +138,58 @@ export class MessageCollector {
         // If different agentId, don't add to chain - let it be processed separately
       }
     }
+  }
+
+  /**
+   * Flat-list variant of {@link collectSignalCallbacks} — finds signal
+   * callback blocks (Monitor stdout pushes, etc.) for an assistant
+   * chain that's already been collected from the flat messages array.
+   *
+   * Returns one entry per source tool that fired callbacks, in source
+   * tool encounter order. Each entry's `callbacks` are ordered by
+   * `metadata.signal.sequence`.
+   *
+   * Caller is responsible for marking returned messages as processed.
+   */
+  collectFlatSignalCallbacks(
+    allToolMessages: Message[],
+    allMessages: Message[],
+  ): {
+    callbacks: Message[];
+    sourceToolCallId: string;
+    sourceToolMessageId: string;
+    sourceToolName: string;
+  }[] {
+    const blocks: {
+      callbacks: Message[];
+      sourceToolCallId: string;
+      sourceToolMessageId: string;
+      sourceToolName: string;
+    }[] = [];
+
+    for (const toolMsg of allToolMessages) {
+      const children = allMessages.filter((m) => m.parentId === toolMsg.id);
+      const callbacks: Message[] = [];
+      for (const child of children) {
+        if (!getMessageSignal(child)) continue;
+        callbacks.push(child);
+      }
+      if (callbacks.length === 0) continue;
+
+      callbacks.sort((a, b) => {
+        const sa = getMessageSignal(a)?.sequence ?? Number.POSITIVE_INFINITY;
+        const sb = getMessageSignal(b)?.sequence ?? Number.POSITIVE_INFINITY;
+        return sa - sb;
+      });
+      const first = getMessageSignal(callbacks[0])!;
+      blocks.push({
+        callbacks,
+        sourceToolCallId: first.sourceToolCallId,
+        sourceToolMessageId: toolMsg.id,
+        sourceToolName: first.sourceToolName,
+      });
+    }
+    return blocks;
   }
 
   /**
@@ -153,19 +243,95 @@ export class MessageCollector {
         continue;
       }
 
-      // Check if tool has an assistant child
-      if (toolNode.children.length > 0) {
-        const nextChild = toolNode.children[0];
+      // Find the next main-chain assistant under this tool. Signal-tagged
+      // toolless siblings (Monitor callbacks etc., LOBE-8998) share the
+      // same parent tool but live on a side-channel — skip them here so
+      // the main chain still walks the real follower. The signal blocks
+      // are emitted separately by `collectSignalCallbacks`.
+      for (const nextChild of toolNode.children) {
         const nextMsg = this.messageMap.get(nextChild.id);
-
-        // Only continue if the next assistant has the SAME agentId
-        if (nextMsg?.role === 'assistant' && nextMsg.agentId === agentId) {
-          // Recursively collect this assistant and its descendants (same agent only)
-          this.collectAssistantGroupMessages(nextMsg, nextChild, children, agentId);
-          return; // Only follow one path
-        }
+        if (nextMsg?.role !== 'assistant') continue;
+        if (nextMsg.agentId !== agentId) continue;
+        if (getMessageSignal(nextMsg)) continue; // skip signal callbacks
+        // Recursively collect this assistant and its descendants (same agent only)
+        this.collectAssistantGroupMessages(nextMsg, nextChild, children, agentId);
+        return; // Only follow one path
       }
     }
+  }
+
+  /**
+   * Collect signal-callback blocks for an AssistantGroup — one
+   * SignalCallbacksNode per source tool that fired signals (Monitor
+   * stdout pushes triggering toolless follow-up turns, etc.).
+   *
+   * Walks the same main-chain as `collectAssistantGroupMessages` and,
+   * for each tool encountered, looks at its children for assistants
+   * carrying `metadata.signal`. Multiple source tools in the same
+   * group produce multiple blocks, in source-tool encounter order.
+   *
+   * Blocks are emitted at the END of `AssistantGroupNode.children`
+   * after the main-chain zigzag — see ContextTreeBuilder.
+   */
+  collectSignalCallbacks(message: Message, idNode: IdNode): SignalCallbacksNode[] {
+    const groupAgentId = message.agentId;
+    const blocks: SignalCallbacksNode[] = [];
+    const visited = new Set<string>();
+
+    const walk = (node: IdNode): void => {
+      if (visited.has(node.id)) return;
+      visited.add(node.id);
+
+      for (const child of node.children) {
+        const childMsg = this.messageMap.get(child.id);
+        if (childMsg?.role !== 'tool') continue;
+
+        // Gather signal-tagged toolless callbacks among this tool's
+        // children. `getMessageSignal` already returns undefined for
+        // tool-using assistants and non-assistants, so the filter is
+        // straightforward.
+        const callbacks: Message[] = [];
+        for (const toolChild of child.children) {
+          const toolChildMsg = this.messageMap.get(toolChild.id);
+          if (!toolChildMsg) continue;
+          if (!getMessageSignal(toolChildMsg)) continue;
+          callbacks.push(toolChildMsg);
+        }
+
+        if (callbacks.length > 0) {
+          // Sort by sequence; missing sequence sorts to the end.
+          callbacks.sort((a, b) => {
+            const sa = getMessageSignal(a)?.sequence ?? Number.POSITIVE_INFINITY;
+            const sb = getMessageSignal(b)?.sequence ?? Number.POSITIVE_INFINITY;
+            return sa - sb;
+          });
+          const first = getMessageSignal(callbacks[0])!;
+          blocks.push({
+            callbacks: callbacks.map((m) => ({ id: m.id, type: 'message' as const })),
+            id: `signalCallbacks-${child.id}`,
+            sourceToolCallId: first.sourceToolCallId,
+            sourceToolMessageId: child.id,
+            sourceToolName: first.sourceToolName,
+            type: 'signalCallbacks',
+          });
+        }
+
+        // Continue walking the main chain — recurse into the next
+        // main-chain follower under this tool (skipping signal
+        // callbacks, just like `collectAssistantGroupMessages` does).
+        for (const nextChild of child.children) {
+          const nextMsg = this.messageMap.get(nextChild.id);
+          if (nextMsg?.role !== 'assistant') continue;
+          if (nextMsg.agentId !== groupAgentId) continue;
+          if (getMessageSignal(nextMsg)) continue;
+          walk(nextChild);
+          break;
+        }
+      }
+    };
+
+    walk(idNode);
+    return blocks;
   }
 
   /**

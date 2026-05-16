@@ -1513,6 +1513,17 @@ export const executeHeterogeneousAgent = async (
         const prevReasoning = accumulatedReasoning;
         const prevModel = lastModel;
         const prevProvider = lastProvider;
+        // External-signal context (LOBE-8998): set when the adapter
+        // detected a repeated tool_result on the same tool_use.id
+        // (Monitor stdout push, etc.). Stamp on the new message's
+        // `metadata.signal` so MessageCollector can route toolless
+        // signal-tagged assistants into a SignalCallbacksNode.
+        //
+        // Phase 1 lives in metadata; Phase 2 (LOBE-8999) promotes to a
+        // dedicated `messages.signal` column — to migrate, change THIS
+        // assignment and the `getMessageSignal()` helper in
+        // conversation-flow, nothing else.
+        const externalSignal = event.data.externalSignal;
 
         // Reset content accumulators synchronously so new-step chunks go to fresh state
         accumulatedContent = '';
@@ -1557,6 +1568,7 @@ export const executeHeterogeneousAgent = async (
           const newMsg = await messageService.createMessage({
             agentId: context.agentId,
             content: '',
+            ...(externalSignal ? { metadata: { signal: externalSignal } } : {}),
             model: lastModel,
             parentId: stepParentId,
             provider: lastProvider,

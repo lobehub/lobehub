@@ -43,8 +43,54 @@ export interface HeterogeneousAgentEvent {
 /** Data shape for stream_start events */
 export interface StreamStartData {
   assistantMessage?: { id: string };
+  /**
+   * External-trigger context for the step opened by this stream_start.
+   * Set when the new step was opened in response to a repeated tool
+   * result on the same `tool_use.id` (Monitor stdout push pattern) or
+   * other out-of-band callback — i.e. NOT a fresh user message.
+   *
+   * Executor stamps this onto the new assistant message's
+   * `metadata.signal` so MessageCollector can collect signal-tagged
+   * toolless assistants into a SignalCallbacksNode.
+   *
+   * Phase 2 (LOBE-8999) promotes the persisted shape to a dedicated
+   * `messages.signal` column; the event peer field name stays
+   * `externalSignal` regardless.
+   */
+  externalSignal?: ExternalSignalContext;
   model?: string;
   provider?: string;
+}
+
+/**
+ * Carried as a peer field on stream events when the LLM turn was
+ * triggered by an external signal rather than a fresh user message.
+ *
+ * Canonical case: CC's Monitor tool keeps pushing additional stdout
+ * lines as `tool_result` blocks on the SAME `tool_use.id`, each push
+ * driving a new assistant turn. Future variants will cover webhook
+ * callbacks, scheduled triggers, and agent-signal sources.
+ *
+ * The adapter detects these patterns by counting tool_results per
+ * `tool_use.id`; the executor writes the context to
+ * `message.metadata.signal`; the conversation-flow collector groups
+ * signal-tagged toolless assistants into a SignalCallbacksNode.
+ */
+export interface ExternalSignalContext {
+  /** Nth push from the same source (1 = first repeat result). */
+  sequence?: number;
+  /** Source `tool_use.id` (CC) / function call id whose repeat fired this signal. */
+  sourceToolCallId: string;
+  /** Tool name for UI labelling, e.g. `Monitor`. */
+  sourceToolName: string;
+  /**
+   * Discriminator for the trigger source — wire-stable. `tool-stdout`
+   * is the Monitor / long-running-tool push pattern; `tool-callback` is
+   * the (future) one-shot async callback. Webhook / scheduled /
+   * agent-signal-source variants land here as the pipeline absorbs
+   * more upstreams.
+   */
+  type: 'tool-stdout' | 'tool-callback';
 }
 
 /**

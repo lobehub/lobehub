@@ -3050,6 +3050,120 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   });
 
   // ────────────────────────────────────────────────────
+  // LOBE-8998: external signal stamping on Monitor-driven follow-up steps
+  // ────────────────────────────────────────────────────
+
+  describe('LOBE-8998 external signal (metadata.signal)', () => {
+    it('stamps metadata.signal on the message created for a Monitor-pushed step', async () => {
+      const idCounter = { tool: 0, assistant: 0 };
+      mockCreateMessage.mockImplementation(async (params: any) => {
+        if (params.role === 'tool') {
+          idCounter.tool++;
+          return { id: `tool-${idCounter.tool}` };
+        }
+        idCounter.assistant++;
+        return { id: `ast-new-${idCounter.assistant}` };
+      });
+
+      await runWithEvents([
+        ccInit(),
+        // Step 0: Monitor tool_use + first tool_result (count = 1, no signal)
+        ccMessageStart('msg_01'),
+        ccToolUse('msg_01', 'toolu_mon_0', 'Monitor', { shell: 'tail -f log' }),
+        ccToolResult('toolu_mon_0', 'Monitor started'),
+        // Step 1: toolless reaction to the FIRST Monitor result — no signal yet
+        ccMessageStart('msg_02'),
+        ccText('msg_02', '等 list 完。'),
+        // Monitor pushes again on the SAME tool_use_id — count goes 1 → 2
+        ccToolResult('toolu_mon_0', '84842 列完，开干。'),
+        // Step 2: new step opens for the second push — this is the signal-tagged step
+        ccMessageStart('msg_03'),
+        ccText('msg_03', '100/84842 全 skip…'),
+        // Yet another push — count 2 → 3
+        ccToolResult('toolu_mon_0', '200 — 还在 skip 区'),
+        ccMessageStart('msg_04'),
+        ccText('msg_04', '300 — 写入中'),
+        ccResult(),
+      ]);
+
+      const assistantCreates = mockCreateMessage.mock.calls.filter(
+        ([p]: any) => p.role === 'assistant',
+      );
+      // Steps 1, 2, 3 are new assistant creates (step 0 reuses ast-initial)
+      expect(assistantCreates.length).toBe(3);
+
+      // Step 1 (FIRST Monitor result is not a callback) — no signal
+      expect(assistantCreates[0][0].metadata?.signal).toBeUndefined();
+
+      // Step 2 — second Monitor result fired pendingExternalSignal
+      expect(assistantCreates[1][0].metadata?.signal).toEqual({
+        sequence: 1,
+        sourceToolCallId: 'toolu_mon_0',
+        sourceToolName: 'Monitor',
+        type: 'tool-stdout',
+      });
+
+      // Step 3 — third Monitor result, sequence advances
+      expect(assistantCreates[2][0].metadata?.signal).toEqual({
+        sequence: 2,
+        sourceToolCallId: 'toolu_mon_0',
+        sourceToolName: 'Monitor',
+        type: 'tool-stdout',
+      });
+    });
+
+    it('does NOT stamp metadata.signal when the next step uses a tool (LLM back on main chain)', async () => {
+      const idCounter = { tool: 0, assistant: 0 };
+      mockCreateMessage.mockImplementation(async (params: any) => {
+        if (params.role === 'tool') {
+          idCounter.tool++;
+          return { id: `tool-${idCounter.tool}` };
+        }
+        idCounter.assistant++;
+        return { id: `ast-new-${idCounter.assistant}` };
+      });
+
+      await runWithEvents([
+        ccInit(),
+        ccMessageStart('msg_01'),
+        ccToolUse('msg_01', 'toolu_mon_0', 'Monitor', { shell: '...' }),
+        ccToolResult('toolu_mon_0', 'started'),
+        // Step 1: text response to first result
+        ccMessageStart('msg_02'),
+        ccText('msg_02', 'ok'),
+        // Monitor pushes — signal armed
+        ccToolResult('toolu_mon_0', 'push 1'),
+        // Step 2: signal-tagged step with text + a fresh Bash tool_use.
+        // metadata.signal still gets stamped at stream_start (we can't know
+        // about the upcoming tool_use yet), but adapter clears the pending
+        // signal for the step AFTER. Reader-side ignores the tag when
+        // tools.length > 0 — see MessageCollector.
+        ccMessageStart('msg_03'),
+        ccToolUse('msg_03', 'toolu_bash_0', 'Bash', { command: 'echo' }),
+        ccToolResult('toolu_bash_0', 'echo result'),
+        // Step 3: opens AFTER Bash returned — pendingExternalSignal cleared
+        // by the tool_use in step 2, so no signal here.
+        ccMessageStart('msg_04'),
+        ccText('msg_04', 'all done'),
+        ccResult(),
+      ]);
+
+      const assistantCreates = mockCreateMessage.mock.calls.filter(
+        ([p]: any) => p.role === 'assistant',
+      );
+      expect(assistantCreates.length).toBe(3);
+
+      // Step 1 — no signal
+      expect(assistantCreates[0][0].metadata?.signal).toBeUndefined();
+      // Step 2 — signal stamped (the stream_start tag fires before tool_use)
+      expect(assistantCreates[1][0].metadata?.signal?.sourceToolCallId).toBe('toolu_mon_0');
+      // Step 3 — adapter cleared the pending signal when LLM emitted Bash,
+      // so the next stream_start has NO externalSignal
+      expect(assistantCreates[2][0].metadata?.signal).toBeUndefined();
+    });
+  });
+
+  // ────────────────────────────────────────────────────
   // Parallel main tool batch: tool_end must not race ahead of persistQueue
   // ────────────────────────────────────────────────────
 

@@ -37,6 +37,7 @@
 import type {
   AgentCLIPreset,
   AgentEventAdapter,
+  ExternalSignalContext,
   HeterogeneousAgentEvent,
   HeterogeneousRateLimitInfo,
   HeterogeneousTerminalErrorData,
@@ -329,6 +330,33 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
    * recreate the Thread on every chunk.
    */
   private announcedSpawns = new Set<string>();
+  /**
+   * Tool name keyed by main-agent `tool_use.id`. Used to label the
+   * resulting {@link ExternalSignalContext} when a repeat tool_result
+   * arrives on the same id (Monitor stdout push pattern).
+   *
+   * Populated for every main-agent tool_use; subagent inner tools are
+   * excluded because their tool_results route through `subagent.parentToolCallId`,
+   * not the main-agent signal detector.
+   */
+  private mainToolNamesById = new Map<string, string>();
+  /**
+   * Count of `tool_result` blocks received per main-agent `tool_use.id`.
+   * A second result on the same id (count goes 1 → 2) is the canonical
+   * "tool keeps calling back" pattern — Monitor stdout push, file-watch
+   * notifications, etc. — and signals that the next step is reactive
+   * rather than a fresh user-initiated turn.
+   */
+  private toolResultCountById = new Map<string, number>();
+  /**
+   * {@link ExternalSignalContext} to attach to the NEXT `stream_start(newStep)`.
+   *
+   * Set on a callback tool_result (count ≥ 2). Survives across multiple
+   * toolless steps so consecutive callback pushes all chain to the same
+   * source tool. Cleared when the LLM emits a fresh `tool_use` (back on
+   * main chain) or when `result` ends the run.
+   */
+  private pendingExternalSignal: ExternalSignalContext | undefined;
 
   adapt(raw: any): HeterogeneousAgentEvent[] {
     if (!raw || typeof raw !== 'object') return [];
@@ -449,6 +477,11 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
           // used (`Task`, `Agent`, etc.). Non-spawn tools occupy a tiny
           // amount of memory and get pruned naturally when the run ends.
           if (block.input) this.mainToolInputsById.set(block.id, block.input);
+          // Cache the raw CC tool name (NOT the rewritten apiName) so a
+          // later repeat tool_result on this id can label its
+          // ExternalSignalContext with the actual tool — Monitor shows
+          // up as `Monitor`, not the apiName remap.
+          if (block.name) this.mainToolNamesById.set(block.id, block.name);
           if (block.name === CC_TODO_WRITE_TOOL_NAME && block.input) {
             this.todoWriteInputs.set(block.id, block.input as TodoWriteArgs);
           }
@@ -456,6 +489,15 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
         }
       }
     }
+
+    // Any main-agent tool_use means the LLM has acted again — the
+    // reactive "signal-driven step" phase ends. Drop any pending signal
+    // so future stream_starts go back on the main chain. The CURRENT
+    // step's stream_start may have already shipped with the signal tag
+    // (since it fires on `message_start`, before tool_use blocks
+    // arrive); MessageCollector ignores `metadata.signal` on messages
+    // with `tools.length > 0` so that mismatch is benign.
+    if (newToolCalls.length > 0) this.pendingExternalSignal = undefined;
 
     // Under `--include-partial-messages`, CC may emit deltas first and then a
     // final full assistant block for the SAME message.id. If the full block is
@@ -687,6 +729,30 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       const toolCallId: string | undefined = block.tool_use_id;
       if (!toolCallId) continue;
 
+      // ─── External-signal detection (main-agent only) ───
+      // A second (or later) tool_result on the same `tool_use.id` means
+      // the tool is pushing additional output (Monitor stdout streaming
+      // back, etc.). Stamp `pendingExternalSignal` so the next
+      // `stream_start(newStep)` tags the resulting assistant turn for
+      // SignalCallbacksNode collection downstream.
+      //
+      // Subagent inner tool_results are excluded — they have their own
+      // routing via `subagent.parentToolCallId` and never drive the
+      // main-agent signal pipeline.
+      if (!subagentCtx) {
+        const prevCount = this.toolResultCountById.get(toolCallId) ?? 0;
+        const newCount = prevCount + 1;
+        this.toolResultCountById.set(toolCallId, newCount);
+        if (newCount >= 2) {
+          this.pendingExternalSignal = {
+            sequence: newCount - 1,
+            sourceToolCallId: toolCallId,
+            sourceToolName: this.mainToolNamesById.get(toolCallId) ?? 'unknown',
+            type: 'tool-stdout',
+          };
+        }
+      }
+
       const resultContent =
         typeof block.content === 'string'
           ? block.content
@@ -900,9 +966,19 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
 
     this.currentMessageId = messageId;
     this.stepIndex++;
+    // Snapshot externalSignal — present if a recent tool_result was a
+    // repeat push (Monitor stdout). The pending value survives across
+    // multiple toolless steps; `handleAssistant` clears it the moment
+    // the LLM issues a fresh tool_use, returning to the main chain.
+    const externalSignal = this.pendingExternalSignal;
     return [
       this.makeEvent('stream_end', {}),
-      this.makeEvent('stream_start', { model, newStep: true, provider: 'claude-code' }),
+      this.makeEvent('stream_start', {
+        externalSignal,
+        model,
+        newStep: true,
+        provider: 'claude-code',
+      }),
     ];
   }
 
