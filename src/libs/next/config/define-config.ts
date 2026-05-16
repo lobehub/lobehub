@@ -2,6 +2,8 @@ import { codeInspectorPlugin } from 'code-inspector-plugin';
 import { type NextConfig } from 'next';
 import { type Header, type Redirect } from 'next/dist/lib/load-custom-routes';
 
+const OPTIONAL_SERVER_NATIVE_DEPENDENCIES = ['bufferutil', 'utf-8-validate', 'zlib-sync'] as const;
+
 interface CustomNextConfig {
   experimental?: NextConfig['experimental'];
   headers?: Header[];
@@ -355,6 +357,7 @@ export function defineConfig(config: CustomNextConfig) {
     // @napi-rs/canvas is a native module that can't be bundled by Turbopack
     // pdfjs-dist uses @napi-rs/canvas for DOMMatrix polyfill in Node.js environment
     serverExternalPackages: config.serverExternalPackages ?? [
+      '@chat-adapter/discord',
       'pdfkit',
       '@napi-rs/canvas',
       '@lobehub/editor',
@@ -366,7 +369,43 @@ export function defineConfig(config: CustomNextConfig) {
     ],
 
     transpilePackages: ['mermaid', 'better-auth-harmony'],
-    webpack: config.webpack,
+    webpack: (webpackConfig, options) => {
+      const configuredWebpack = config.webpack?.(webpackConfig, options) ?? webpackConfig;
+
+      const applyWebpackTweaks = (resolvedConfig: typeof webpackConfig) => {
+        resolvedConfig.module ??= {};
+        resolvedConfig.module.rules ??= [];
+        resolvedConfig.module.rules.push({
+          test: /\.md$/i,
+          type: 'asset/source',
+        });
+
+        if (options.isServer) {
+          const optionalNativeExternals = Object.fromEntries(
+            OPTIONAL_SERVER_NATIVE_DEPENDENCIES.map((dependency) => [
+              dependency,
+              `commonjs ${dependency}`,
+            ]),
+          );
+
+          if (Array.isArray(resolvedConfig.externals)) {
+            resolvedConfig.externals.push(optionalNativeExternals);
+          } else if (resolvedConfig.externals) {
+            resolvedConfig.externals = [resolvedConfig.externals, optionalNativeExternals];
+          } else {
+            resolvedConfig.externals = [optionalNativeExternals];
+          }
+        }
+
+        return resolvedConfig;
+      };
+
+      if (configuredWebpack instanceof Promise) {
+        return configuredWebpack.then(applyWebpackTweaks);
+      }
+
+      return applyWebpackTweaks(configuredWebpack);
+    },
     turbopack: {
       rules: {
         ...(enableCodeInspector
