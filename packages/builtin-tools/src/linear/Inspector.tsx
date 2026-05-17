@@ -6,13 +6,7 @@ import { createStaticStyles, cx } from 'antd-style';
 import { CornerLeftUp } from 'lucide-react';
 import { memo } from 'react';
 
-import {
-  capitalize,
-  LINEAR_MCP_PREFIX,
-  LINEAR_MCP_TOOL_NAMES,
-  type ParsedTool,
-  parseToolName,
-} from './linearMcpLabels';
+import { capitalize, type ParsedTool, parseToolName } from './labels';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   chip: css`
@@ -241,7 +235,7 @@ const pickChip = (parsed: ParsedTool, args: Record<string, unknown> | undefined)
   return { parentId: showParent ? parentId : undefined, primary };
 };
 
-const LinearMcpInspectorImpl = memo<BuiltinInspectorProps<Record<string, unknown>>>(
+const LinearInspectorImpl = memo<BuiltinInspectorProps<Record<string, unknown>>>(
   ({ apiName, args, partialArgs, isArgumentsStreaming, isLoading }) => {
     const effectiveArgs = args ?? partialArgs;
     const parsed = parseToolName(apiName);
@@ -283,10 +277,6 @@ const LinearMcpInspectorImpl = memo<BuiltinInspectorProps<Record<string, unknown
     );
   },
 );
-LinearMcpInspectorImpl.displayName = 'ClaudeCodeLinearMcpInspector';
+LinearInspectorImpl.displayName = 'LinearInspector';
 
-export const LinearMcpInspector = LinearMcpInspectorImpl as unknown as BuiltinInspector;
-
-export const LinearMcpInspectors: Record<string, BuiltinInspector> = Object.fromEntries(
-  LINEAR_MCP_TOOL_NAMES.map((tool) => [`${LINEAR_MCP_PREFIX}${tool}`, LinearMcpInspector]),
-);
+export const LinearInspector = LinearInspectorImpl as unknown as BuiltinInspector;

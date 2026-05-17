@@ -1,12 +1,17 @@
-// Pure label utilities for Linear MCP tool calls. Kept free of antd-style /
-// React / lucide imports so the workflow-summary path can pull
-// `formatLinearMcpShortLabel` without dragging the inspector component
-// (and its `keyframes`-using style modules) into test transitively.
+// Pure label utilities for Linear tool calls — used by both the built-in
+// Linear toolset (identifier='linear', apiName='get_issue', …) and the CC
+// adapter's MCP variant (apiName='mcp__claude_ai_Linear__get_issue', …).
+//
+// Kept free of React / antd-style imports so the workflow-summary path can
+// pull `formatLinearShortLabel` without dragging the inspector component
+// (and its style modules) into tests transitively.
 
 export const LINEAR_MCP_PREFIX = 'mcp__claude_ai_Linear__';
 
-// Mirrors the wire names CC emits for the claude.ai Linear MCP server.
-export const LINEAR_MCP_TOOL_NAMES = [
+// Mirrors the wire names the claude.ai Linear MCP server emits. The same
+// suffixes are reused by the LobeHub built-in Linear skill, so this single
+// list drives inspector registration for both code paths.
+export const LINEAR_TOOL_NAMES = [
   'create_attachment',
   'create_attachment_from_upload',
   'create_issue_label',
@@ -129,7 +134,23 @@ export const staticLabelFor = (parsed: ParsedTool): string => {
   }
 };
 
-export const formatLinearMcpShortLabel = (apiName: string): string | null => {
-  if (!apiName.startsWith(LINEAR_MCP_PREFIX)) return null;
-  return `Linear · ${staticLabelFor(parseToolName(apiName))}`;
+const isKnownLinearSuffix = (suffix: string): boolean =>
+  (LINEAR_TOOL_NAMES as readonly string[]).includes(suffix);
+
+/**
+ * Produce a "Linear · Get issue" workflow-summary label for any Linear tool
+ * call, regardless of whether it arrived via the CC adapter (mcp__-prefixed
+ * apiName) or the LobeHub built-in skill (bare apiName like `get_issue`).
+ *
+ * Returns null for non-Linear apiNames so callers can fall through to their
+ * default labeling.
+ */
+export const formatLinearShortLabel = (apiName: string): string | null => {
+  if (apiName.startsWith(LINEAR_MCP_PREFIX)) {
+    return `Linear · ${staticLabelFor(parseToolName(apiName))}`;
+  }
+  if (isKnownLinearSuffix(apiName)) {
+    return `Linear · ${staticLabelFor(parseToolName(apiName))}`;
+  }
+  return null;
 };
