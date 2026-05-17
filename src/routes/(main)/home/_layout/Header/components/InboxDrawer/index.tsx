@@ -2,12 +2,12 @@
 
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { ArchiveIcon, CheckCheckIcon, ListFilterIcon } from 'lucide-react';
-import { memo, useCallback, useState } from 'react';
+import { memo, type Ref, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
-import SideBarDrawer from '@/features/NavPanel/SideBarDrawer';
+import SideBarDrawer, { type SideBarDrawerHandle } from '@/features/NavPanel/SideBarDrawer';
 import dynamic from '@/libs/next/dynamic';
 import { mutate } from '@/libs/swr';
 import { notificationService } from '@/services/notification';
@@ -24,13 +24,13 @@ const Content = dynamic(() => import('./Content'), {
 });
 
 interface InboxDrawerProps {
-  onClose: () => void;
-  open: boolean;
+  ref?: Ref<SideBarDrawerHandle>;
 }
 
-const InboxDrawer = memo<InboxDrawerProps>(({ open, onClose }) => {
+const InboxDrawer = memo<InboxDrawerProps>(({ ref }) => {
   const { t } = useTranslation('notification');
   const [unreadOnly, setUnreadOnly] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
 
   const refreshList = useCallback(() => {
     mutate((key: unknown) => Array.isArray(key) && key[0] === FETCH_KEY);
@@ -69,7 +69,7 @@ const InboxDrawer = memo<InboxDrawerProps>(({ open, onClose }) => {
 
   return (
     <SideBarDrawer
-      open={open}
+      ref={ref}
       title={t('inbox.title')}
       action={
         <>
@@ -94,10 +94,10 @@ const InboxDrawer = memo<InboxDrawerProps>(({ open, onClose }) => {
           />
         </>
       }
-      onClose={onClose}
+      onOpenChange={setIsOpen}
     >
       <Content
-        open={open}
+        open={isOpen}
         unreadOnly={unreadOnly}
         onArchive={handleArchive}
         onMarkAsRead={handleMarkAsRead}

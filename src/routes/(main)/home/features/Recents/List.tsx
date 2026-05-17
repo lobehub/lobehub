@@ -1,11 +1,12 @@
 import { Flexbox } from '@lobehub/ui';
 import { MoreHorizontalIcon } from 'lucide-react';
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { type SideBarDrawerHandle } from '@/features/NavPanel/SideBarDrawer';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
@@ -19,11 +20,9 @@ const RecentsList = memo(() => {
   const recents = useHomeStore(homeRecentSelectors.recents);
   const isInit = useHomeStore(homeRecentSelectors.isRecentsInit);
   const recentPageSize = useGlobalStore(systemStatusSelectors.recentPageSize);
-  const [drawerOpen, openDrawer, closeDrawer] = useHomeStore((s) => [
-    s.allRecentsDrawerOpen,
-    s.openAllRecentsDrawer,
-    s.closeAllRecentsDrawer,
-  ]);
+
+  const drawerRef = useRef<SideBarDrawerHandle>(null);
+  const openDrawer = useCallback(() => drawerRef.current?.open(), []);
 
   const displayItems = useMemo(() => recents.slice(0, recentPageSize), [recents, recentPageSize]);
   const hasMore = recents.length > recentPageSize;
@@ -32,7 +31,6 @@ const RecentsList = memo(() => {
     if (item.type !== 'task') return item.routePath;
     const taskId = item.id;
     if (!taskId) return item.routePath;
-
     return `/task/${taskId}`;
   }, []);
 
@@ -54,7 +52,7 @@ const RecentsList = memo(() => {
       {hasMore && (
         <NavItem icon={MoreHorizontalIcon} title={t('input.more')} onClick={openDrawer} />
       )}
-      <AllRecentsDrawer open={drawerOpen} onClose={closeDrawer} />
+      <AllRecentsDrawer ref={drawerRef} />
     </Flexbox>
   );
 });

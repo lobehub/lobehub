@@ -1,11 +1,11 @@
 'use client';
 
 import { Flexbox, SearchBar } from '@lobehub/ui';
-import { memo, useState } from 'react';
+import { memo, type Ref, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
-import SideBarDrawer from '@/features/NavPanel/SideBarDrawer';
+import SideBarDrawer, { type SideBarDrawerHandle } from '@/features/NavPanel/SideBarDrawer';
 import dynamic from '@/libs/next/dynamic';
 
 const Content = dynamic(() => import('./Content'), {
@@ -18,17 +18,17 @@ const Content = dynamic(() => import('./Content'), {
 });
 
 interface AllTopicsDrawerProps {
-  onClose: () => void;
-  open: boolean;
+  ref?: Ref<SideBarDrawerHandle>;
 }
 
-const AllTopicsDrawer = memo<AllTopicsDrawerProps>(({ open, onClose }) => {
+const AllTopicsDrawer = memo<AllTopicsDrawerProps>(({ ref }) => {
   const { t } = useTranslation('topic');
   const [searchKeyword, setSearchKeyword] = useState('');
+  const [isOpen, setIsOpen] = useState(false);
 
   return (
     <SideBarDrawer
-      open={open}
+      ref={ref}
       title={t('title')}
       subHeader={
         <Flexbox paddingBlock={'0 8px'} paddingInline={8}>
@@ -43,9 +43,9 @@ const AllTopicsDrawer = memo<AllTopicsDrawerProps>(({ open, onClose }) => {
           />
         </Flexbox>
       }
-      onClose={onClose}
+      onOpenChange={setIsOpen}
     >
-      <Content open={open} searchKeyword={searchKeyword} />
+      <Content open={isOpen} searchKeyword={searchKeyword} />
     </SideBarDrawer>
   );
 });

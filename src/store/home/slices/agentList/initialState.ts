@@ -10,10 +10,6 @@ export interface AgentListState {
    */
   agentGroups: SidebarGroup[];
   /**
-   * Whether all agents drawer is open
-   */
-  allAgentsDrawerOpen: boolean;
-  /**
    * Whether the agent list has been initialized
    */
   isAgentListInit: boolean;
@@ -29,7 +25,6 @@ export interface AgentListState {
 
 export const initialAgentListState: AgentListState = {
   agentGroups: [],
-  allAgentsDrawerOpen: false,
   isAgentListInit: false,
   pinnedAgents: [],
   ungroupedAgents: [],

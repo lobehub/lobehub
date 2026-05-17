@@ -3,10 +3,11 @@
 import { ActionIcon } from '@lobehub/ui';
 import { Badge } from 'antd';
 import { BellIcon } from 'lucide-react';
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
+import { type SideBarDrawerHandle } from '@/features/NavPanel/SideBarDrawer';
 import { useClientDataSWR } from '@/libs/swr';
 import { notificationService } from '@/services/notification';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
@@ -16,7 +17,6 @@ import { UNREAD_COUNT_KEY } from './InboxDrawer/constants';
 
 const InboxButton = memo(() => {
   const { t } = useTranslation('notification');
-  const [open, setOpen] = useState(false);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
 
   const { data: unreadCount = 0 } = useClientDataSWR<number>(
@@ -25,13 +25,8 @@ const InboxButton = memo(() => {
     { refreshInterval: 10_000 },
   );
 
-  const handleToggle = useCallback(() => {
-    setOpen((prev) => !prev);
-  }, []);
-
-  const handleClose = useCallback(() => {
-    setOpen(false);
-  }, []);
+  const drawerRef = useRef<SideBarDrawerHandle>(null);
+  const handleOpen = useCallback(() => drawerRef.current?.open(), []);
 
   if (!enableBusinessFeatures) return null;
 
@@ -42,10 +37,10 @@ const InboxButton = memo(() => {
           icon={BellIcon}
           size={DESKTOP_HEADER_ICON_SMALL_SIZE}
           title={t('inbox.title')}
-          onClick={handleToggle}
+          onClick={handleOpen}
         />
       </Badge>
-      <InboxDrawer open={open} onClose={handleClose} />
+      <InboxDrawer ref={drawerRef} />
     </>
   );
 });

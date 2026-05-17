@@ -17,19 +17,21 @@ import { preferenceSelectors } from '@/store/user/selectors';
 
 import TopicItem from '../../List/Item';
 
-const FlatMode = memo(() => {
+interface FlatModeProps {
+  onOpenDrawer?: () => void;
+}
+
+const FlatMode = memo<FlatModeProps>(({ onOpenDrawer }) => {
   const { t } = useTranslation('topic');
   const topicPageSize = useGlobalStore(systemStatusSelectors.topicPageSize);
   const topicSortBy = useUserStore(preferenceSelectors.topicSortBy);
 
-  const [activeTopicId, activeThreadId, hasMore, isExpandingPageSize, openAllTopicsDrawer] =
-    useChatStore((s) => [
-      s.activeTopicId,
-      s.activeThreadId,
-      topicSelectors.hasMoreTopics(s),
-      topicSelectors.isExpandingPageSize(s),
-      s.openAllTopicsDrawer,
-    ]);
+  const [activeTopicId, activeThreadId, hasMore, isExpandingPageSize] = useChatStore((s) => [
+    s.activeTopicId,
+    s.activeThreadId,
+    topicSelectors.hasMoreTopics(s),
+    topicSelectors.isExpandingPageSize(s),
+  ]);
 
   const activeTopicList = useChatStore(
     topicSelectors.displayTopicsForSidebar(topicPageSize, topicSortBy),
@@ -51,8 +53,8 @@ const FlatMode = memo(() => {
         />
       ))}
       {isExpandingPageSize && <SkeletonList rows={3} />}
-      {hasMore && !isExpandingPageSize && (
-        <NavItem icon={MoreHorizontal} title={t('loadMore')} onClick={openAllTopicsDrawer} />
+      {onOpenDrawer && hasMore && !isExpandingPageSize && (
+        <NavItem icon={MoreHorizontal} title={t('loadMore')} onClick={onOpenDrawer} />
       )}
     </Flexbox>
   );

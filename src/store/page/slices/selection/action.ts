@@ -19,14 +19,6 @@ export class SelectionActionImpl {
     this.#get = get;
   }
 
-  closeAllPagesDrawer = (): void => {
-    this.#set({ allPagesDrawerOpen: false }, false, n('closeAllPagesDrawer'));
-  };
-
-  openAllPagesDrawer = (): void => {
-    this.#set({ allPagesDrawerOpen: true }, false, n('openAllPagesDrawer'));
-  };
-
   selectPage = (pageId: string): void => {
     const { selectedPageId } = this.#get();
 

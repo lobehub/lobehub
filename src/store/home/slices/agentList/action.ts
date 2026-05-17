@@ -29,14 +29,6 @@ export class AgentListActionImpl {
     this.#get = get;
   }
 
-  closeAllAgentsDrawer = (): void => {
-    this.#set({ allAgentsDrawerOpen: false }, false, n('closeAllAgentsDrawer'));
-  };
-
-  openAllAgentsDrawer = (): void => {
-    this.#set({ allAgentsDrawerOpen: true }, false, n('openAllAgentsDrawer'));
-  };
-
   refreshAgentList = async (): Promise<void> => {
     await mutate([FETCH_AGENT_LIST_KEY, true]);
   };

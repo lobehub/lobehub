@@ -5,7 +5,13 @@ import { memo } from 'react';
 import GroupedAccordion from '../GroupedAccordion';
 import GroupItem from './GroupItem';
 
-const ByTimeMode = memo(() => <GroupedAccordion GroupItem={GroupItem} />);
+interface ByTimeModeProps {
+  onOpenDrawer?: () => void;
+}
+
+const ByTimeMode = memo<ByTimeModeProps>(({ onOpenDrawer }) => (
+  <GroupedAccordion GroupItem={GroupItem} onOpenDrawer={onOpenDrawer} />
+));
 
 ByTimeMode.displayName = 'ByTimeMode';
 

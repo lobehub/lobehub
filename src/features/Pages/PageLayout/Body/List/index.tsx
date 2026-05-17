@@ -10,17 +10,20 @@ import { pageSelectors, usePageStore } from '@/store/page';
 
 import Item from './Item';
 
+interface PageListProps {
+  onOpenDrawer: () => void;
+}
+
 /**
  * Show pages filtered by library
  */
-const PageList = () => {
+const PageList = ({ onOpenDrawer }: PageListProps) => {
   const { t } = useTranslation(['file', 'common']);
 
-  const [filteredDocuments, hasMore, isLoadingMore, openAllPagesDrawer] = usePageStore((s) => [
+  const [filteredDocuments, hasMore, isLoadingMore] = usePageStore((s) => [
     pageSelectors.getFilteredDocumentsLimited(s),
     pageSelectors.hasMoreFilteredDocuments(s),
     pageSelectors.isLoadingMoreDocuments(s),
-    s.openAllPagesDrawer,
   ]);
 
   return (
@@ -30,11 +33,7 @@ const PageList = () => {
       ))}
       {isLoadingMore && <SkeletonList rows={3} />}
       {hasMore && !isLoadingMore && (
-        <NavItem
-          icon={MoreHorizontal}
-          title={t('more', { ns: 'common' })}
-          onClick={openAllPagesDrawer}
-        />
+        <NavItem icon={MoreHorizontal} title={t('more', { ns: 'common' })} onClick={onOpenDrawer} />
       )}
     </Flexbox>
   );

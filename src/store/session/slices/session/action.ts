@@ -55,10 +55,6 @@ export class SessionActionImpl {
     await this.#get().refreshSessions();
   };
 
-  closeAllAgentsDrawer = (): void => {
-    this.#set({ allAgentsDrawerOpen: false }, false, n('closeAllAgentsDrawer'));
-  };
-
   /** @deprecated Use agentStore.createAgent instead */
   createSession = async (
     agent?: PartialDeep<LobeAgentSession>,
@@ -131,10 +127,6 @@ export class SessionActionImpl {
     message.success(t('duplicateSession.success', { ns: 'chat' }));
 
     switchSession(newId);
-  };
-
-  openAllAgentsDrawer = (): void => {
-    this.#set({ allAgentsDrawerOpen: true }, false, n('openAllAgentsDrawer'));
   };
 
   pinSession = async (id: string, pinned: boolean): Promise<void> => {

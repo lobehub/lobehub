@@ -33,7 +33,6 @@ const TopicListContent = memo(() => {
 
   if (isInSearchMode) return <SearchResult />;
 
-  // Show skeleton when current session's topic data is not yet loaded
   if (isUndefinedTopics) return <SkeletonList />;
 
   return (

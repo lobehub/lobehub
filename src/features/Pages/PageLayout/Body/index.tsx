@@ -1,10 +1,11 @@
 'use client';
 
 import { Accordion, AccordionItem, ContextMenuTrigger, Flexbox, Text } from '@lobehub/ui';
-import React, { memo, Suspense } from 'react';
+import React, { memo, Suspense, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { type SideBarDrawerHandle } from '@/features/NavPanel/SideBarDrawer';
 import PageEmpty from '@/features/PageEmpty';
 import { pageSelectors, usePageStore } from '@/store/page';
 
@@ -33,10 +34,8 @@ const Body = memo(() => {
   const filteredDocuments = usePageStore(pageSelectors.getFilteredDocumentsLimited);
   const searchKeywords = usePageStore((s) => s.searchKeywords);
   const dropdownMenu = useDropdownMenu();
-  const [allPagesDrawerOpen, closeAllPagesDrawer] = usePageStore((s) => [
-    s.allPagesDrawerOpen,
-    s.closeAllPagesDrawer,
-  ]);
+  const drawerRef = useRef<SideBarDrawerHandle>(null);
+  const openDrawer = useCallback(() => drawerRef.current?.open(), []);
 
   return (
     <Flexbox gap={1} paddingInline={4}>
@@ -64,14 +63,14 @@ const Body = memo(() => {
                 {filteredDocuments.length === 0 ? (
                   <PageEmpty search={Boolean(searchKeywords.trim())} />
                 ) : (
-                  <List />
+                  <List onOpenDrawer={openDrawer} />
                 )}
               </Flexbox>
             )}
           </Suspense>
         </AccordionItem>
       </Accordion>
-      <AllPagesDrawer open={allPagesDrawerOpen} onClose={closeAllPagesDrawer} />
+      <AllPagesDrawer ref={drawerRef} />
     </Flexbox>
   );
 });

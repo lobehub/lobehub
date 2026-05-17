@@ -1,11 +1,12 @@
 'use client';
 
-import React, { memo } from 'react';
+import React, { memo, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
 import EmptyNavItem from '@/features/NavPanel/components/EmptyNavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { type SideBarDrawerHandle } from '@/features/NavPanel/SideBarDrawer';
 import { useFetchChatTopics } from '@/hooks/useFetchChatTopics';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useChatStore } from '@/store/chat';
@@ -23,17 +24,15 @@ const TopicList = memo(() => {
   const topicLength = useChatStore((s) => topicSelectors.currentTopicLength(s));
   const isUndefinedTopics = useChatStore((s) => topicSelectors.isUndefinedTopics(s));
 
-  const [agentId, allTopicsDrawerOpen, closeAllTopicsDrawer] = useChatStore((s) => [
-    s.activeAgentId,
-    s.allTopicsDrawerOpen,
-    s.closeAllTopicsDrawer,
-  ]);
+  const agentId = useChatStore((s) => s.activeAgentId);
 
   const { topicGroupMode } = useAgentTopicGroupMode();
 
+  const drawerRef = useRef<SideBarDrawerHandle>(null);
+  const openDrawer = useCallback(() => drawerRef.current?.open(), []);
+
   useFetchChatTopics();
 
-  // Show skeleton when current session's topic data is not yet loaded
   if (isUndefinedTopics) return <SkeletonList />;
 
   return (
@@ -47,13 +46,13 @@ const TopicList = memo(() => {
         />
       )}
       {topicGroupMode === 'flat' ? (
-        <FlatMode />
+        <FlatMode onOpenDrawer={openDrawer} />
       ) : topicGroupMode === 'byProject' ? (
-        <ByProjectMode />
+        <ByProjectMode onOpenDrawer={openDrawer} />
       ) : (
-        <ByTimeMode />
+        <ByTimeMode onOpenDrawer={openDrawer} />
       )}
-      <AllTopicsDrawer open={allTopicsDrawerOpen} onClose={closeAllTopicsDrawer} />
+      <AllTopicsDrawer ref={drawerRef} />
     </>
   );
 });

@@ -1,11 +1,11 @@
 'use client';
 
 import { Flexbox, SearchBar } from '@lobehub/ui';
-import { memo, useState } from 'react';
+import { memo, type Ref, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
-import SideBarDrawer from '@/features/NavPanel/SideBarDrawer';
+import SideBarDrawer, { type SideBarDrawerHandle } from '@/features/NavPanel/SideBarDrawer';
 import dynamic from '@/libs/next/dynamic';
 
 const Content = dynamic(() => import('./Content'), {
@@ -18,17 +18,16 @@ const Content = dynamic(() => import('./Content'), {
 });
 
 interface AllPagesDrawerProps {
-  onClose: () => void;
-  open: boolean;
+  ref?: Ref<SideBarDrawerHandle>;
 }
 
-const AllPagesDrawer = memo<AllPagesDrawerProps>(({ open, onClose }) => {
+const AllPagesDrawer = memo<AllPagesDrawerProps>(({ ref }) => {
   const { t } = useTranslation('file');
   const [searchKeyword, setSearchKeyword] = useState('');
 
   return (
     <SideBarDrawer
-      open={open}
+      ref={ref}
       title={t('pageList.title')}
       subHeader={
         <Flexbox paddingBlock={'0 8px'} paddingInline={8}>
@@ -43,7 +42,6 @@ const AllPagesDrawer = memo<AllPagesDrawerProps>(({ open, onClose }) => {
           />
         </Flexbox>
       }
-      onClose={onClose}
     >
       <Content searchKeyword={searchKeyword} />
     </SideBarDrawer>

@@ -82,14 +82,6 @@ export class ChatTopicActionImpl {
     this.#get = get;
   }
 
-  closeAllTopicsDrawer = (): void => {
-    this.#set({ allTopicsDrawerOpen: false }, false, n('closeAllTopicsDrawer'));
-  };
-
-  openAllTopicsDrawer = (): void => {
-    this.#set({ allTopicsDrawerOpen: true }, false, n('openAllTopicsDrawer'));
-  };
-
   openNewTopicOrSaveTopic = async (): Promise<void> => {
     const { switchTopic, saveToTopic, refreshMessages, activeTopicId } = this.#get();
     const hasTopic = !!activeTopicId;

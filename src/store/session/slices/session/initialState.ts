@@ -7,10 +7,6 @@ export interface SessionState {
    * @description The session currently being edited or viewed
    */
   activeId: string;
-  /**
-   * whether all agents drawer is open
-   */
-  allAgentsDrawerOpen: boolean;
   defaultSessions: LobeSessions;
   /**
    * @title Whether the agent panel is pinned
@@ -40,7 +36,6 @@ export interface SessionState {
 
 export const initialSessionState: SessionState = {
   activeId: 'inbox',
-  allAgentsDrawerOpen: false,
   defaultSessions: [],
   isAgentPinned: false,
   isSearching: false,

@@ -35,7 +35,6 @@ const List = memo<SessionListProps>(
     const isDefaultList = groupId === SessionDefaultGroup.Default;
     const ungroupedAgentsCount = useHomeStore(homeAgentListSelectors.ungroupedAgentsCount);
     const agentPageSize = useGlobalStore(systemStatusSelectors.agentPageSize);
-    const openAllAgentsDrawer = useHomeStore((s) => s.openAllAgentsDrawer);
 
     const hasMore = isDefaultList && ungroupedAgentsCount > agentPageSize;
 
@@ -59,12 +58,8 @@ const List = memo<SessionListProps>(
             <AgentItem className={itemClassName} item={item} key={item.id} style={itemStyle} />
           ),
         )}
-        {hasMore && (
-          <NavItem
-            icon={MoreHorizontal}
-            title={t('input.more')}
-            onClick={onMoreClick || openAllAgentsDrawer}
-          />
+        {hasMore && onMoreClick && (
+          <NavItem icon={MoreHorizontal} title={t('input.more')} onClick={onMoreClick} />
         )}
         {showCreateButton && <CreateAgentButton className={itemClassName} groupId={groupId} />}
       </Flexbox>

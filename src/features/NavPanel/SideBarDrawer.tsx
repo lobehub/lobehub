@@ -1,11 +1,20 @@
 'use client';
 
 import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import { useClickAway } from 'ahooks';
 import { Drawer } from 'antd';
 import { cssVar } from 'antd-style';
 import { XIcon } from 'lucide-react';
 import type { ReactNode, Ref } from 'react';
-import { cloneElement, isValidElement, memo, Suspense, useCallback, useState } from 'react';
+import {
+  cloneElement,
+  isValidElement,
+  memo,
+  Suspense,
+  useCallback,
+  useImperativeHandle,
+  useState,
+} from 'react';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 
@@ -14,11 +23,16 @@ import SkeletonList from './components/SkeletonList';
 import { OverlayContainerContext } from './OverlayContainer';
 import SideBarHeaderLayout from './SideBarHeaderLayout';
 
+export interface SideBarDrawerHandle {
+  close: () => void;
+  open: () => void;
+}
+
 interface SideBarDrawerProps {
   action?: ReactNode;
   children?: ReactNode;
-  onClose: () => void;
-  open: boolean;
+  onOpenChange?: (open: boolean) => void;
+  ref?: Ref<SideBarDrawerHandle>;
   subHeader?: ReactNode;
   title?: ReactNode;
 }
@@ -39,10 +53,39 @@ const setRef = <T,>(ref: Ref<T> | undefined, value: T | null) => {
 };
 
 const SideBarDrawer = memo<SideBarDrawerProps>(
-  ({ subHeader, open, onClose, children, title, action }) => {
+  ({ subHeader, onOpenChange, children, title, action, ref }) => {
     const size = 280;
 
     const [overlayContainer, setOverlayContainer] = useState<HTMLDivElement | null>(null);
+    const [internalOpen, setInternalOpen] = useState(false);
+
+    const handleOpen = useCallback(() => {
+      setInternalOpen((prev) => {
+        if (!prev) onOpenChange?.(true);
+        return true;
+      });
+    }, [onOpenChange]);
+
+    const handleClose = useCallback(() => {
+      setInternalOpen((prev) => {
+        if (prev) onOpenChange?.(false);
+        return false;
+      });
+    }, [onOpenChange]);
+
+    useImperativeHandle(
+      ref,
+      () => ({
+        close: handleClose,
+        open: handleOpen,
+      }),
+      [handleClose, handleOpen],
+    );
+
+    useClickAway(() => {
+      if (!internalOpen) return;
+      handleClose();
+    }, overlayContainer);
 
     const renderDrawerContent = useCallback((node: ReactNode) => {
       if (!isValidElement<DrawerRenderNodeProps>(node)) return node;
@@ -67,7 +110,7 @@ const SideBarDrawer = memo<SideBarDrawerProps>(
           drawerRender={renderDrawerContent}
           getContainer={() => document.querySelector(`#${NAV_PANEL_RIGHT_DRAWER_ID}`)!}
           mask={false}
-          open={open}
+          open={internalOpen}
           placement="left"
           size={size}
           rootStyle={{
@@ -120,7 +163,7 @@ const SideBarDrawer = memo<SideBarDrawerProps>(
                       icon={XIcon}
                       size={DESKTOP_HEADER_ICON_SMALL_SIZE}
                       style={{ marginInlineEnd: -2 }}
-                      onClick={onClose}
+                      onClick={handleClose}
                     />
                   </>
                 }
@@ -128,7 +171,7 @@ const SideBarDrawer = memo<SideBarDrawerProps>(
               {subHeader}
             </>
           }
-          onClose={onClose}
+          onClose={handleClose}
         >
           <Suspense
             fallback={

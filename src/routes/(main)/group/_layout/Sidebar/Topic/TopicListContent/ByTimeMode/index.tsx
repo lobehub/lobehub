@@ -17,16 +17,19 @@ import { preferenceSelectors } from '@/store/user/selectors';
 
 import GroupItem from './GroupItem';
 
-const ByTimeMode = memo(() => {
+interface ByTimeModeProps {
+  onOpenDrawer?: () => void;
+}
+
+const ByTimeMode = memo<ByTimeModeProps>(({ onOpenDrawer }) => {
   const { t } = useTranslation('topic');
   const topicPageSize = useGlobalStore(systemStatusSelectors.topicPageSize);
   const topicSortBy = useUserStore(preferenceSelectors.topicSortBy);
   const topicGroupMode = useUserStore(preferenceSelectors.topicGroupMode);
 
-  const [hasMore, isExpandingPageSize, openAllTopicsDrawer] = useChatStore((s) => [
+  const [hasMore, isExpandingPageSize] = useChatStore((s) => [
     topicSelectors.hasMoreTopics(s),
     topicSelectors.isExpandingPageSize(s),
-    s.openAllTopicsDrawer,
   ]);
   const [activeTopicId, activeThreadId] = useChatStore((s) => [s.activeTopicId, s.activeThreadId]);
 
@@ -68,8 +71,8 @@ const ByTimeMode = memo(() => {
         ))}
       </Accordion>
       {isExpandingPageSize && <SkeletonList rows={3} />}
-      {hasMore && !isExpandingPageSize && (
-        <NavItem icon={MoreHorizontal} title={t('loadMore')} onClick={openAllTopicsDrawer} />
+      {onOpenDrawer && hasMore && !isExpandingPageSize && (
+        <NavItem icon={MoreHorizontal} title={t('loadMore')} onClick={onOpenDrawer} />
       )}
     </Flexbox>
   );

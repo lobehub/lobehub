@@ -8,11 +8,6 @@ export interface PageQueryFilter {
 }
 
 export interface PageState {
-  // ===== Selection & Navigation =====
-  /**
-   * Whether all pages drawer is open
-   */
-  allPagesDrawerOpen: boolean;
   // ===== List Management =====
   /**
    * Current page number (0-based) for pagination
@@ -66,9 +61,6 @@ export interface PageState {
 }
 
 export const initialState: PageState = {
-  // Selection & Navigation
-  allPagesDrawerOpen: false,
-
   // List Management
   currentPage: 0,
 

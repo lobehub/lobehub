@@ -33,14 +33,6 @@ export class RecentActionImpl {
     this.#get = get;
   }
 
-  closeAllRecentsDrawer = (): void => {
-    this.#set({ allRecentsDrawerOpen: false }, false, n('closeAllRecentsDrawer'));
-  };
-
-  openAllRecentsDrawer = (): void => {
-    this.#set({ allRecentsDrawerOpen: true }, false, n('openAllRecentsDrawer'));
-  };
-
   updateRecentTitle = (id: string, title: string): void => {
     const recents = this.#get().recents.map((item) => (item.id === id ? { ...item, title } : item));
     this.#set({ recents }, false, n('updateRecentTitle'));
