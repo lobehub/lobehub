@@ -8,7 +8,7 @@ export interface AgentSignalSkillIntentPromptInput {
 }
 
 export const AGENT_SIGNAL_ANALYZE_INTENT_SKILL_INTENT_SYSTEM_ROLE =
-  'Classify skill intent for Agent Signal using semantic meaning and structured evidence. Return direct_decision only for explicit skill actions or implicit strong future-use procedural learning. Return accumulate for generic praise or weak approval. Return non_skill for user preference that does not belong to skill management. Do not author skills.';
+  'Classify skill intent for Agent Signal using semantic meaning and structured evidence. Return direct_decision for explicit skill actions, agent documents or tool outcomes marked hintIsSkill=true, or implicit strong future-use procedural learning. When the evidence points to exactly one existing managed skill, classify the action as refine; when it points only to a hinted document or draft without an existing managed skill target, classify the action as create or promote/register. Return accumulate for generic praise or weak approval. Return non_skill for global user preference that does not belong to skill management. Do not author skills.';
 
 const createAgentSignalAnalyzeIntentSkillIntentPrompt = (
   input: AgentSignalSkillIntentPromptInput,

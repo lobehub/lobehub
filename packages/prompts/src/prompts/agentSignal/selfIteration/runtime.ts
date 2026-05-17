@@ -31,8 +31,9 @@ const SELF_ITERATION_SYSTEM_ROLE = [
   'Inspect the bounded nightly review context and use the provided self-iteration tools to read evidence or apply safe write operations.',
   'Evidence ids and proposal keys are different namespaces: read topic/message/tool_call/agent_document evidence with getEvidenceDigest; read proposals with readSelfReviewProposal only when using proposalActivity.active[].proposalKey or keys returned from listSelfReviewProposals.',
   'Never claim that a write happened unless a write tool result confirms it.',
-  'Use writeMemory for explicit durable user preferences such as response style, summary structure, or verification-reporting preferences. Do not turn those preference memories into skills or proposals.',
-  'Use createSkillIfAbsent only when evidence describes a reusable workflow and you can provide a non-empty skill name and full bodyMarkdown.',
+  'Use writeMemory only for user-level durable preferences that should survive across agents and topics, such as tone, reporting style, or verification expectations.',
+  'Do not use writeMemory for reusable workflows, checklists, templates, skill drafts, agent capabilities, or agent/topic-scoped procedures. Route those to skill actions or recordSelfFeedbackIntent(kind="skill").',
+  'Use createSkillIfAbsent when evidence describes a reusable workflow and you can provide a non-empty skill name and full bodyMarkdown. Treat agent_document evidence with hintIsSkill=true as strong skill evidence.',
   'When review evidence supports an approval-gated change, call createSelfReviewProposal in this run; do not offer to draft it later.',
   'For createSelfReviewProposal actions, use actionType exactly create_skill, refine_skill, consolidate_skill, or record_idea. For refine_skill include target.skillDocumentId and operation { domain: "skill", operation: "refine", input: { skillDocumentId, bodyMarkdown } }. For consolidate_skill include operation { domain: "skill", operation: "consolidate", input: { canonicalSkillDocumentId, sourceSkillIds, bodyMarkdown } }. Prefer recordSelfReviewIdea instead of proposal actions when the output is only a thought or question.',
   'Stop after the useful self-iteration work is complete and summarize the confirmed outcome.',
@@ -71,7 +72,7 @@ export const createAgentSignalSelfIterationToolSystemRole = (
 ) =>
   mode === 'review'
     ? 'Use resource read tools before writes when evidence is incomplete. Use getEvidenceDigest for topic/message/tool_call/agent_document evidenceRefs. Use readSelfReviewProposal only with proposal keys from proposalActivity.active or listSelfReviewProposals, never with evidence ids. Treat write tool results as the source of truth.'
-    : 'Use resource read tools before writes when evidence is incomplete. Direct-apply only safe memory or bounded skill updates. Record approval-gated or unsupported reflection output with recordSelfFeedbackIntent, and record non-actionable thoughts with recordReflectionIdea.';
+    : 'Use resource read tools before writes when evidence is incomplete. Direct-apply only safe user-level memory or bounded skill updates. Prefer skill actions over memory when evidence includes reusable workflows, templates, checklists, or agent_document hintIsSkill=true. Record approval-gated or unsupported reflection output with recordSelfFeedbackIntent, and record non-actionable thoughts with recordReflectionIdea.';
 
 const createNightlyReviewPromptXml = (input: AgentSignalSelfIterationPromptInput) =>
   toXml(

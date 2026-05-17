@@ -67,6 +67,7 @@ Rules:
 - Use read-only tools to inspect same-turn document outcomes before guessing from document names or content shape.
 - Treat same-turn document outcomes with hintIsSkill:true as strong evidence, not automatic authorization.
 - For hinted ordinary documents, prefer create/register candidates unless exactly one existing managed skill is the target.
+- If same-turn evidence contains createDocument with hintIsSkill:true and there is no resolved managed skill target, prefer "create" over "reject" when the document content is a reusable workflow, checklist, template, or procedural writing pattern.
 - Use refine only with one resolved targetSkillRefs entry; use consolidate only with multiple resolved targetSkillRefs entries.
 - Do not force refine or consolidate without targetSkillRefs.
 - Do not infer skill intent from a filename, title, or SKILL.md-shaped content alone.
