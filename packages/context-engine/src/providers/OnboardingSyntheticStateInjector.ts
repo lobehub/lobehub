@@ -35,12 +35,12 @@ export class OnboardingSyntheticStateInjector extends BaseProcessor {
   }
 
   protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
-    if (!this.config.enabled || !this.config.onboardingContext?.phaseGuidance) {
+    const ctx = this.config.onboardingContext;
+
+    if (!this.config.enabled || ctx?.finished === true || !ctx?.phaseGuidance) {
       log('Disabled or no phaseGuidance, skipping');
       return this.markAsExecuted(context);
     }
-
-    const ctx = this.config.onboardingContext;
 
     // Build the synthetic tool result content (mimics getOnboardingState response)
     const stateResult = this.buildStateResult(

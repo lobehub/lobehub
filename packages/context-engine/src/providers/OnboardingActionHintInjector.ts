@@ -50,7 +50,13 @@ export class OnboardingActionHintInjector extends BaseVirtualLastUserContentProv
   }
 
   protected shouldSkip(_context: PipelineContext): boolean {
-    if (!this.config.enabled || !this.config.onboardingContext?.phaseGuidance) {
+    const { onboardingContext } = this.config;
+
+    if (
+      !this.config.enabled ||
+      onboardingContext?.finished === true ||
+      !onboardingContext?.phaseGuidance
+    ) {
       log('Disabled or no phaseGuidance configured, skipping');
       return true;
     }
@@ -59,7 +65,7 @@ export class OnboardingActionHintInjector extends BaseVirtualLastUserContentProv
 
   protected buildContent(context: PipelineContext): string | null {
     const ctx = this.config.onboardingContext;
-    if (!ctx) return null;
+    if (!ctx || ctx.finished === true) return null;
 
     const hints: string[] = [];
     const phase = ctx.phaseGuidance;

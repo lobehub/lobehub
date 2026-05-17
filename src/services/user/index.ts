@@ -1,4 +1,4 @@
-import type { OnboardingUserInfo } from '@lobechat/context-engine';
+import type { OnboardingContext } from '@lobechat/context-engine';
 import { type MarkdownPatchHunk } from '@lobechat/markdown-patch';
 import { type PartialDeep } from 'type-fest';
 
@@ -42,12 +42,7 @@ export class UserService {
     return lambdaClient.user.getOrCreateOnboardingState.query();
   };
 
-  getOnboardingAgentContext = async (): Promise<{
-    personaContent: string | null;
-    phaseGuidance: string;
-    soulContent: string | null;
-    userInfo?: OnboardingUserInfo;
-  }> => {
+  getOnboardingAgentContext = async (): Promise<OnboardingContext> => {
     return lambdaClient.user.getOnboardingAgentContext.query();
   };
 

@@ -15,6 +15,7 @@ describe('OnboardingContextInjector', () => {
     const provider = new OnboardingContextInjector({
       enabled: true,
       onboardingContext: {
+        finished: false,
         personaContent: '# Persona',
         phaseGuidance: '<phase>collect-profile</phase>',
         soulContent: '# SOUL',
@@ -120,5 +121,29 @@ describe('OnboardingContextInjector', () => {
 
     expect(result.messages).toHaveLength(2);
     expect(result.messages[1].content).toContain('<phase>existing</phase>');
+  });
+
+  it('should skip injection when onboarding is finished', async () => {
+    const provider = new OnboardingContextInjector({
+      enabled: true,
+      onboardingContext: {
+        finished: true,
+        personaContent: '# Persona',
+        phaseGuidance: 'Onboarding is complete.',
+        soulContent: '# SOUL',
+      },
+    });
+
+    const result = await provider.process(
+      createContext([
+        { content: 'System role', role: 'system' },
+        { content: 'Hello', role: 'user' },
+      ]),
+    );
+
+    expect(result.messages).toHaveLength(2);
+    expect(
+      result.messages.some((message) => message.content?.includes('<onboarding_context>')),
+    ).toBe(false);
   });
 });
