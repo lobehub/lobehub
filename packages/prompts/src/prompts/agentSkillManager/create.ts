@@ -14,6 +14,8 @@ export interface AgentSkillCreatePromptInput {
   evidence: Array<{ cue: string; excerpt: string }>;
   /** Original feedback or instruction that triggered skill creation. */
   feedbackMessage: string;
+  /** Language instruction block for persisted skill artifact text. */
+  languageInstruction?: string;
   /** Optional source agent document id selected by the decision worker. */
   sourceAgentDocumentId?: string;
   /** Optional source document content selected by the decision worker. */
@@ -92,5 +94,7 @@ Output ONLY the JSON object, no markdown fences or explanations.`;
  * - A compact prompt containing serialized creation context
  */
 export const createAgentSkillCreatePrompt = (input: AgentSkillCreatePromptInput) => {
-  return `Create a managed Agent Skill from this evidence.\ninput=${JSON.stringify(input)}`;
+  const languageInstruction = input.languageInstruction ? `\n\n${input.languageInstruction}` : '';
+
+  return `Create a managed Agent Skill from this evidence.${languageInstruction}\ninput=${JSON.stringify(input)}`;
 };

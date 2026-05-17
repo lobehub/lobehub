@@ -7,6 +7,10 @@ import type {
 } from '@lobechat/agent-signal';
 import { MemoryApiName, MemoryIdentifier } from '@lobechat/builtin-tool-memory';
 import type { LobeToolManifest, ToolExecutor, ToolSource } from '@lobechat/context-engine';
+import {
+  createAgentSignalMemoryWriterPrompt,
+  createAgentSignalMemoryWriterSystemRole,
+} from '@lobechat/prompts';
 import { RequestTrigger } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 
@@ -52,27 +56,6 @@ const MEMORY_WRITE_TOOL_NAMES = new Set(
   ].map((apiName) => `${MemoryIdentifier}/${apiName}`),
 );
 
-const MEMORY_WRITER_SYSTEM_ROLE = `You are the Agent Signal memory writer.
-
-You are not chatting with the user.
-Your job is to decide whether the feedback should update durable user memory.
-
-Use only the lobe-user-memory built-in tool when a durable memory write is justified.
-Choose the correct memory API based on the feedback:
-- addPreferenceMemory for stable future-facing preferences
-- addIdentityMemory / updateIdentityMemory / removeIdentityMemory for enduring identity facts or corrections
-- addContextMemory for ongoing situations, environments, or projects
-- addExperienceMemory for reusable lessons from outcomes or workflows
-- addActivityMemory for notable concrete events worth remembering
-
-Do not use memory tools for requests to create, update, refine, merge, consolidate, or store reusable skills, procedures, workflows, playbooks, checklists, agent capabilities, agent prompts, or agent documents.
-If the feedback asks for a "reusable skill", "future workflow", "PR review checklist skill", "agent capability", or similar operational artifact, skip memory and leave it to the skill/document management path.
-Apply the same boundary to Chinese feedback such as "复用 skill", "可复用流程", "review 流程", "检查清单", "下次参考这个流程", "保留这个流程", or "合并/更新清单".
-Do not summarize skill-management requests as preferences.
-
-If the feedback should not become durable memory, do not call any tools and end briefly.
-Do not invent your own JSON schema. Use the built-in tool exactly as exposed.`;
-
 export interface MemoryAgentActionResult {
   detail?: string;
   status: 'applied' | 'failed' | 'skipped';
@@ -86,6 +69,7 @@ export interface UserMemoryActionHandlerOptions {
     conflictPolicy?: AgentSignalFeedbackDomainConflictPolicy;
     evidence?: AgentSignalFeedbackEvidence[];
     feedbackHint?: 'not_satisfied' | 'satisfied';
+    memoryLanguage?: string;
     message: string;
     reason?: string;
     serializedContext?: string;
@@ -121,46 +105,6 @@ const toExecutorError = (actionId: string, error: unknown, startedAt: number): E
 
 const isUserMemoryAction = (action: BaseAction): action is ActionUserMemoryHandle => {
   return action.actionType === AGENT_SIGNAL_POLICY_ACTION_TYPES.userMemoryHandle;
-};
-
-const toMemoryWriterPrompt = (input: {
-  conflictPolicy?: AgentSignalFeedbackDomainConflictPolicy;
-  evidence?: AgentSignalFeedbackEvidence[];
-  feedbackHint?: 'not_satisfied' | 'satisfied';
-  message: string;
-  reason?: string;
-  serializedContext?: string;
-  sourceHints?: AgentSignalFeedbackSourceHints;
-}) => {
-  const feedbackHintBlock = input.feedbackHint
-    ? `Feedback satisfaction hint: ${input.feedbackHint}`
-    : undefined;
-  const domainReasonBlock = input.reason ? `Domain routing reason: ${input.reason}` : undefined;
-  const evidenceBlock =
-    input.evidence && input.evidence.length > 0
-      ? `Domain evidence:\n${JSON.stringify(input.evidence)}`
-      : undefined;
-  const sourceHintsBlock = input.sourceHints
-    ? `Source hints:\n${JSON.stringify(input.sourceHints)}`
-    : undefined;
-  const conflictPolicyBlock = input.conflictPolicy
-    ? `Conflict policy:\n${JSON.stringify(input.conflictPolicy)}`
-    : undefined;
-  const routingContextBlock = [
-    feedbackHintBlock,
-    domainReasonBlock,
-    evidenceBlock,
-    sourceHintsBlock,
-    conflictPolicyBlock,
-  ]
-    .filter(Boolean)
-    .join('\n\n');
-  const contextBlock = input.serializedContext?.trim()
-    ? `\n\nAdditional runtime context:\n${input.serializedContext}`
-    : '';
-  const hintBlock = routingContextBlock ? `\n\nRouting context:\n${routingContextBlock}` : '';
-
-  return `User feedback to analyze for durable memory:\n${input.message}${hintBlock}${contextBlock}`;
 };
 
 const createInitialContext = (operationId: string): AgentRuntimeContext => {
@@ -215,6 +159,7 @@ export const runMemoryActionAgent = async (
     conflictPolicy?: AgentSignalFeedbackDomainConflictPolicy;
     evidence?: AgentSignalFeedbackEvidence[];
     feedbackHint?: 'not_satisfied' | 'satisfied';
+    memoryLanguage?: string;
     message: string;
     reason?: string;
     serializedContext?: string;
@@ -233,6 +178,7 @@ export const runMemoryActionAgent = async (
   const agentService = options.agentService ?? new AgentService(options.db, options.userId);
   const pluginModel = options.pluginModel ?? new PluginModel(options.db, options.userId);
   const agentConfig = await agentService.getAgentConfig(input.agentId);
+  const memoryLanguage = input.memoryLanguage ?? 'English';
 
   if (!agentConfig?.model || !agentConfig?.provider) {
     return {
@@ -259,7 +205,7 @@ export const runMemoryActionAgent = async (
   const memoryRuntimeAgentConfig = {
     ...agentConfig,
     plugins: [MemoryIdentifier],
-    systemRole: MEMORY_WRITER_SYSTEM_ROLE,
+    systemRole: createAgentSignalMemoryWriterSystemRole({ memoryLanguage }),
   };
 
   const toolsEngine = createServerAgentToolsEngine(toolsContext, {
@@ -308,7 +254,12 @@ export const runMemoryActionAgent = async (
     },
     autoStart: false,
     initialContext,
-    initialMessages: [{ content: toMemoryWriterPrompt(input), role: 'user' }],
+    initialMessages: [
+      {
+        content: createAgentSignalMemoryWriterPrompt({ ...input, memoryLanguage }),
+        role: 'user',
+      },
+    ],
     modelRuntimeConfig: {
       model: agentConfig.model,
       provider: agentConfig.provider,

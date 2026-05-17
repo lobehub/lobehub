@@ -455,6 +455,7 @@ describe('defineSkillManagementActionHandler', () => {
 
     const handler = defineSkillManagementActionHandler({
       db: {} as never,
+      responseLanguage: 'zh-CN',
       selfIterationEnabled: true,
       skillCreateRunner,
       skillDecisionRunner,
@@ -495,6 +496,18 @@ describe('defineSkillManagementActionHandler', () => {
         turnContext: '{"surface":"chat"}',
       }),
     );
+    expect(skillCreateRunner).toHaveBeenCalledWith(
+      expect.objectContaining({
+        languageInstruction: expect.stringContaining('Skill artifact language rules:'),
+      }),
+    );
+    expect(skillCreateRunner).toHaveBeenCalledWith(
+      expect.objectContaining({
+        languageInstruction: expect.stringContaining(
+          'Default to zh-CN when the source evidence does not imply a better artifact language.',
+        ),
+      }),
+    );
     expect(result).toMatchObject({
       output: {
         decision: { action: 'create', confidence: 0.9, reason: 'reusable workflow feedback' },
@@ -528,6 +541,7 @@ describe('defineSkillManagementActionHandler', () => {
 
     const handler = defineSkillManagementActionHandler({
       db: {} as never,
+      responseLanguage: 'zh-CN',
       selfIterationEnabled: true,
       skillCandidateSkillsFactory: async () => [
         { id: 'review-skill-bundle-id', name: 'Review Skill', scope: 'agent' },
@@ -1132,6 +1146,7 @@ describe('defineSkillManagementActionHandler', () => {
 
     expect(skillMaintainerRunner).toHaveBeenCalledWith(
       expect.objectContaining({
+        languageInstruction: expect.stringContaining('Skill artifact language rules:'),
         targetSkills: [
           expect.objectContaining({
             content: '# review-skill-bundle-id',
