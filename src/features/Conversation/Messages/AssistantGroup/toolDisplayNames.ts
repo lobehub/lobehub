@@ -1,4 +1,4 @@
-import { formatLinearShortLabel } from '@lobechat/builtin-tools/linear/labels';
+import { formatLinearMcpShortLabel } from '@lobechat/builtin-tool-claude-code/client/labels';
 import { type ChatToolPayloadWithResult } from '@lobechat/types';
 import { t } from 'i18next';
 
@@ -103,7 +103,7 @@ const toTitleCase = (apiName: string): string => {
 };
 
 export const getToolDisplayName = (apiName: string): string => {
-  const linearLabel = formatLinearShortLabel(apiName);
+  const linearLabel = formatLinearMcpShortLabel(apiName);
   if (linearLabel) return linearLabel;
 
   const defaultValue = toTitleCase(apiName);

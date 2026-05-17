@@ -65,7 +65,7 @@ import type { BuiltinInspector } from '@lobechat/types';
 
 import { CodexInspectors } from './codex';
 import { GithubIdentifier, GithubInspectors } from './github';
-import { LinearIdentifier, LinearInspectors, LinearMcpInspectors } from './linear';
+import { LinearIdentifier, LinearInspectors } from './linear';
 
 /**
  * Builtin tools inspector registry
@@ -81,10 +81,7 @@ const BuiltinToolInspectors: Record<string, Record<string, BuiltinInspector>> = 
     string,
     BuiltinInspector
   >,
-  [ClaudeCodeIdentifier]: {
-    ...(ClaudeCodeInspectors as Record<string, BuiltinInspector>),
-    ...LinearMcpInspectors,
-  },
+  [ClaudeCodeIdentifier]: ClaudeCodeInspectors as Record<string, BuiltinInspector>,
   [CloudSandboxIdentifier]: CloudSandboxInspectors as Record<string, BuiltinInspector>,
   [GroupAgentBuilderManifest.identifier]: GroupAgentBuilderInspectors as Record<
     string,

@@ -1,14 +1,12 @@
-// Pure label utilities for the built-in Linear toolset (identifier='linear',
-// apiName='get_issue', …). Kept free of React / antd-style imports so the
-// workflow-summary path can pull `formatLinearShortLabel` without dragging
-// the inspector component (and its style modules) into tests transitively.
-//
-// The CC adapter's MCP variant (`mcp__claude_ai_Linear__*`) has its own
-// parallel labels module in `@lobechat/builtin-tool-claude-code` — we don't
-// reuse it from here to avoid a circular dep (builtin-tools already depends
-// on builtin-tool-claude-code).
+// Pure label utilities for Linear MCP tool calls. Kept free of antd-style /
+// React / lucide imports so the workflow-summary path can pull
+// `formatLinearMcpShortLabel` without dragging the inspector component
+// (and its `keyframes`-using style modules) into test transitively.
 
-export const LINEAR_TOOL_NAMES = [
+export const LINEAR_MCP_PREFIX = 'mcp__claude_ai_Linear__';
+
+// Mirrors the wire names CC emits for the claude.ai Linear MCP server.
+export const LINEAR_MCP_TOOL_NAMES = [
   'create_attachment',
   'create_attachment_from_upload',
   'create_issue_label',
@@ -77,17 +75,19 @@ export interface ParsedTool {
 }
 
 export const parseToolName = (apiName: string): ParsedTool => {
-  if (apiName === 'extract_images') return { noun: 'images', verb: 'extract' };
-  if (apiName === 'prepare_attachment_upload') {
-    return { noun: 'attachment upload', verb: 'prepare' };
-  }
-  if (apiName === 'search_documentation') return { noun: 'docs', verb: 'search' };
+  const suffix = apiName.startsWith(LINEAR_MCP_PREFIX)
+    ? apiName.slice(LINEAR_MCP_PREFIX.length)
+    : apiName;
 
-  const underscoreIdx = apiName.indexOf('_');
-  if (underscoreIdx <= 0) return { noun: apiName, verb: 'other' };
+  if (suffix === 'extract_images') return { noun: 'images', verb: 'extract' };
+  if (suffix === 'prepare_attachment_upload') return { noun: 'attachment upload', verb: 'prepare' };
+  if (suffix === 'search_documentation') return { noun: 'docs', verb: 'search' };
 
-  const head = apiName.slice(0, underscoreIdx);
-  const tail = apiName.slice(underscoreIdx + 1);
+  const underscoreIdx = suffix.indexOf('_');
+  if (underscoreIdx <= 0) return { noun: suffix, verb: 'other' };
+
+  const head = suffix.slice(0, underscoreIdx);
+  const tail = suffix.slice(underscoreIdx + 1);
   const noun = NOUN_OVERRIDES[tail] ?? tail.replaceAll('_', ' ');
 
   switch (head) {
@@ -99,7 +99,7 @@ export const parseToolName = (apiName: string): ParsedTool => {
       return { noun, verb: head };
     }
     default: {
-      return { noun: apiName.replaceAll('_', ' '), verb: 'other' };
+      return { noun: suffix.replaceAll('_', ' '), verb: 'other' };
     }
   }
 };
@@ -129,12 +129,7 @@ export const staticLabelFor = (parsed: ParsedTool): string => {
   }
 };
 
-/**
- * Produce a "Linear · Get issue" workflow-summary label for a built-in Linear
- * skill tool call. Returns null for non-Linear apiNames so callers can fall
- * through to their default labeling.
- */
-export const formatLinearShortLabel = (apiName: string): string | null => {
-  if (!(LINEAR_TOOL_NAMES as readonly string[]).includes(apiName)) return null;
+export const formatLinearMcpShortLabel = (apiName: string): string | null => {
+  if (!apiName.startsWith(LINEAR_MCP_PREFIX)) return null;
   return `Linear · ${staticLabelFor(parseToolName(apiName))}`;
 };
