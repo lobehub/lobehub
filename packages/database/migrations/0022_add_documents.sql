@@ -35,15 +35,23 @@ CREATE TABLE IF NOT EXISTS "topic_documents" (
 	CONSTRAINT "topic_documents_document_id_topic_id_pk" PRIMARY KEY("document_id","topic_id")
 );
 --> statement-breakpoint
+ALTER TABLE "document_chunks" DROP CONSTRAINT IF EXISTS "document_chunks_document_id_documents_id_fk";--> statement-breakpoint
 ALTER TABLE "document_chunks" ADD CONSTRAINT "document_chunks_document_id_documents_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."documents"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "document_chunks" DROP CONSTRAINT IF EXISTS "document_chunks_chunk_id_chunks_id_fk";--> statement-breakpoint
 ALTER TABLE "document_chunks" ADD CONSTRAINT "document_chunks_chunk_id_chunks_id_fk" FOREIGN KEY ("chunk_id") REFERENCES "public"."chunks"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "document_chunks" DROP CONSTRAINT IF EXISTS "document_chunks_user_id_users_id_fk";--> statement-breakpoint
 ALTER TABLE "document_chunks" ADD CONSTRAINT "document_chunks_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "documents" DROP CONSTRAINT IF EXISTS "documents_file_id_files_id_fk";--> statement-breakpoint
 ALTER TABLE "documents" ADD CONSTRAINT "documents_file_id_files_id_fk" FOREIGN KEY ("file_id") REFERENCES "public"."files"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "documents" DROP CONSTRAINT IF EXISTS "documents_user_id_users_id_fk";--> statement-breakpoint
 ALTER TABLE "documents" ADD CONSTRAINT "documents_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "topic_documents" DROP CONSTRAINT IF EXISTS "topic_documents_document_id_documents_id_fk";--> statement-breakpoint
 ALTER TABLE "topic_documents" ADD CONSTRAINT "topic_documents_document_id_documents_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."documents"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "topic_documents" DROP CONSTRAINT IF EXISTS "topic_documents_topic_id_topics_id_fk";--> statement-breakpoint
 ALTER TABLE "topic_documents" ADD CONSTRAINT "topic_documents_topic_id_topics_id_fk" FOREIGN KEY ("topic_id") REFERENCES "public"."topics"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "topic_documents" DROP CONSTRAINT IF EXISTS "topic_documents_user_id_users_id_fk";--> statement-breakpoint
 ALTER TABLE "topic_documents" ADD CONSTRAINT "topic_documents_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX "documents_source_idx" ON "documents" USING btree ("source");--> statement-breakpoint
-CREATE INDEX "documents_file_type_idx" ON "documents" USING btree ("file_type");--> statement-breakpoint
-CREATE INDEX "documents_file_id_idx" ON "documents" USING btree ("file_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "documents_client_id_user_id_unique" ON "documents" USING btree ("client_id","user_id");
+CREATE INDEX IF NOT EXISTS "documents_source_idx" ON "documents" USING btree ("source");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "documents_file_type_idx" ON "documents" USING btree ("file_type");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "documents_file_id_idx" ON "documents" USING btree ("file_id");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "documents_client_id_user_id_unique" ON "documents" USING btree ("client_id","user_id");

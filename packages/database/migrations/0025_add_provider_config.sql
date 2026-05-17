@@ -1,1 +1,1 @@
-ALTER TABLE "ai_providers" ADD COLUMN "config" jsonb;
+ALTER TABLE "ai_providers" ADD COLUMN IF NOT EXISTS "config" jsonb;

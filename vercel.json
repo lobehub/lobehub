@@ -1,5 +1,5 @@
 {
-  "buildCommand": "bun run build:vercel",
+  "buildCommand": "MIGRATE_ON_VERCEL_BUILD=0 bun run build:vercel",
   "headers": [
     {
       "source": "/_spa/(.*)",

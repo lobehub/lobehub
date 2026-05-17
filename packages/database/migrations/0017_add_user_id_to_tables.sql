@@ -3,7 +3,7 @@
 
 BEGIN;--> statement-breakpoint
 
-CREATE INDEX "file_hash_idx" ON "files" USING btree ("file_hash");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "file_hash_idx" ON "files" USING btree ("file_hash");--> statement-breakpoint
 
 -- Step 1: Add nullable user_id columns to all required tables
 ALTER TABLE "global_files" ADD COLUMN IF NOT EXISTS "creator" text;--> statement-breakpoint

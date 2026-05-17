@@ -1,2 +1,2 @@
-ALTER TABLE "messages" ADD COLUMN "search" jsonb;--> statement-breakpoint
-ALTER TABLE "messages" ADD COLUMN "metadata" jsonb;
+ALTER TABLE "messages" ADD COLUMN IF NOT EXISTS "search" jsonb;--> statement-breakpoint
+ALTER TABLE "messages" ADD COLUMN IF NOT EXISTS "metadata" jsonb;

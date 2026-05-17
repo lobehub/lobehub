@@ -92,20 +92,25 @@ CREATE TABLE IF NOT EXISTS "user_memories_preferences" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+ALTER TABLE "user_memories" DROP CONSTRAINT IF EXISTS "user_memories_user_id_users_id_fk";--> statement-breakpoint
 ALTER TABLE "user_memories" ADD CONSTRAINT "user_memories_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "user_memories_experiences" DROP CONSTRAINT IF EXISTS "user_memories_experiences_user_memory_id_user_memories_id_fk";--> statement-breakpoint
 ALTER TABLE "user_memories_experiences" ADD CONSTRAINT "user_memories_experiences_user_memory_id_user_memories_id_fk" FOREIGN KEY ("user_memory_id") REFERENCES "public"."user_memories"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "user_memories_identities" DROP CONSTRAINT IF EXISTS "user_memories_identities_user_memory_id_user_memories_id_fk";--> statement-breakpoint
 ALTER TABLE "user_memories_identities" ADD CONSTRAINT "user_memories_identities_user_memory_id_user_memories_id_fk" FOREIGN KEY ("user_memory_id") REFERENCES "public"."user_memories"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "user_memories_preferences" DROP CONSTRAINT IF EXISTS "user_memories_preferences_context_id_user_memories_contexts_id_fk";--> statement-breakpoint
 ALTER TABLE "user_memories_preferences" ADD CONSTRAINT "user_memories_preferences_context_id_user_memories_contexts_id_fk" FOREIGN KEY ("context_id") REFERENCES "public"."user_memories_contexts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "user_memories_preferences" DROP CONSTRAINT IF EXISTS "user_memories_preferences_user_memory_id_user_memories_id_fk";--> statement-breakpoint
 ALTER TABLE "user_memories_preferences" ADD CONSTRAINT "user_memories_preferences_user_memory_id_user_memories_id_fk" FOREIGN KEY ("user_memory_id") REFERENCES "public"."user_memories"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX "user_memories_summary_vector_1024_index" ON "user_memories" USING hnsw ("summary_vector_1024" vector_cosine_ops);--> statement-breakpoint
-CREATE INDEX "user_memories_details_vector_1024_index" ON "user_memories" USING hnsw ("details_vector_1024" vector_cosine_ops);--> statement-breakpoint
-CREATE INDEX "user_memories_contexts_title_vector_index" ON "user_memories_contexts" USING hnsw ("title_vector" vector_cosine_ops);--> statement-breakpoint
-CREATE INDEX "user_memories_contexts_description_vector_index" ON "user_memories_contexts" USING hnsw ("description_vector" vector_cosine_ops);--> statement-breakpoint
-CREATE INDEX "user_memories_contexts_type_index" ON "user_memories_contexts" USING btree ("type");--> statement-breakpoint
-CREATE INDEX "user_memories_experiences_situation_vector_index" ON "user_memories_experiences" USING hnsw ("situation_vector" vector_cosine_ops);--> statement-breakpoint
-CREATE INDEX "user_memories_experiences_action_vector_index" ON "user_memories_experiences" USING hnsw ("action_vector" vector_cosine_ops);--> statement-breakpoint
-CREATE INDEX "user_memories_experiences_key_learning_vector_index" ON "user_memories_experiences" USING hnsw ("key_learning_vector" vector_cosine_ops);--> statement-breakpoint
-CREATE INDEX "user_memories_experiences_type_index" ON "user_memories_experiences" USING btree ("type");--> statement-breakpoint
-CREATE INDEX "user_memories_identities_description_vector_index" ON "user_memories_identities" USING hnsw ("description_vector" vector_cosine_ops);--> statement-breakpoint
-CREATE INDEX "user_memories_identities_type_index" ON "user_memories_identities" USING btree ("type");--> statement-breakpoint
-CREATE INDEX "user_memories_preferences_conclusion_directives_vector_index" ON "user_memories_preferences" USING hnsw ("conclusion_directives_vector" vector_cosine_ops);
+CREATE INDEX IF NOT EXISTS "user_memories_summary_vector_1024_index" ON "user_memories" USING hnsw ("summary_vector_1024" vector_cosine_ops);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "user_memories_details_vector_1024_index" ON "user_memories" USING hnsw ("details_vector_1024" vector_cosine_ops);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "user_memories_contexts_title_vector_index" ON "user_memories_contexts" USING hnsw ("title_vector" vector_cosine_ops);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "user_memories_contexts_description_vector_index" ON "user_memories_contexts" USING hnsw ("description_vector" vector_cosine_ops);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "user_memories_contexts_type_index" ON "user_memories_contexts" USING btree ("type");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "user_memories_experiences_situation_vector_index" ON "user_memories_experiences" USING hnsw ("situation_vector" vector_cosine_ops);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "user_memories_experiences_action_vector_index" ON "user_memories_experiences" USING hnsw ("action_vector" vector_cosine_ops);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "user_memories_experiences_key_learning_vector_index" ON "user_memories_experiences" USING hnsw ("key_learning_vector" vector_cosine_ops);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "user_memories_experiences_type_index" ON "user_memories_experiences" USING btree ("type");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "user_memories_identities_description_vector_index" ON "user_memories_identities" USING hnsw ("description_vector" vector_cosine_ops);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "user_memories_identities_type_index" ON "user_memories_identities" USING btree ("type");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "user_memories_preferences_conclusion_directives_vector_index" ON "user_memories_preferences" USING hnsw ("conclusion_directives_vector" vector_cosine_ops);

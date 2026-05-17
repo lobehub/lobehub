@@ -27,10 +27,16 @@ CREATE TABLE IF NOT EXISTS "chat_groups_agents" (
 ALTER TABLE "messages" ADD COLUMN IF NOT EXISTS "group_id" text;--> statement-breakpoint
 ALTER TABLE "messages" ADD COLUMN IF NOT EXISTS "target_id" text;--> statement-breakpoint
 ALTER TABLE "topics" ADD COLUMN IF NOT EXISTS "group_id" text;--> statement-breakpoint
+ALTER TABLE "chat_groups" DROP CONSTRAINT IF EXISTS "chat_groups_user_id_users_id_fk";--> statement-breakpoint
 ALTER TABLE "chat_groups" ADD CONSTRAINT "chat_groups_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "chat_groups_agents" DROP CONSTRAINT IF EXISTS "chat_groups_agents_chat_group_id_chat_groups_id_fk";--> statement-breakpoint
 ALTER TABLE "chat_groups_agents" ADD CONSTRAINT "chat_groups_agents_chat_group_id_chat_groups_id_fk" FOREIGN KEY ("chat_group_id") REFERENCES "public"."chat_groups"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "chat_groups_agents" DROP CONSTRAINT IF EXISTS "chat_groups_agents_agent_id_agents_id_fk";--> statement-breakpoint
 ALTER TABLE "chat_groups_agents" ADD CONSTRAINT "chat_groups_agents_agent_id_agents_id_fk" FOREIGN KEY ("agent_id") REFERENCES "public"."agents"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "chat_groups_agents" DROP CONSTRAINT IF EXISTS "chat_groups_agents_user_id_users_id_fk";--> statement-breakpoint
 ALTER TABLE "chat_groups_agents" ADD CONSTRAINT "chat_groups_agents_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-CREATE UNIQUE INDEX "chat_groups_client_id_user_id_unique" ON "chat_groups" USING btree ("client_id","user_id");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "chat_groups_client_id_user_id_unique" ON "chat_groups" USING btree ("client_id","user_id");--> statement-breakpoint
+ALTER TABLE "messages" DROP CONSTRAINT IF EXISTS "messages_group_id_chat_groups_id_fk";--> statement-breakpoint
 ALTER TABLE "messages" ADD CONSTRAINT "messages_group_id_chat_groups_id_fk" FOREIGN KEY ("group_id") REFERENCES "public"."chat_groups"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "topics" DROP CONSTRAINT IF EXISTS "topics_group_id_chat_groups_id_fk";--> statement-breakpoint
 ALTER TABLE "topics" ADD CONSTRAINT "topics_group_id_chat_groups_id_fk" FOREIGN KEY ("group_id") REFERENCES "public"."chat_groups"("id") ON DELETE cascade ON UPDATE no action;

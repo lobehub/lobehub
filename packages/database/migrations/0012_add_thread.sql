@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS "threads" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-ALTER TABLE "messages" ADD COLUMN "thread_id" text;--> statement-breakpoint
+ALTER TABLE "messages" ADD COLUMN IF NOT EXISTS "thread_id" text;--> statement-breakpoint
 DO $$ BEGIN
  ALTER TABLE "threads" ADD CONSTRAINT "threads_topic_id_topics_id_fk" FOREIGN KEY ("topic_id") REFERENCES "public"."topics"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION

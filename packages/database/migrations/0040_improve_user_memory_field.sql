@@ -4,7 +4,7 @@ ALTER TABLE "user_memories_experiences" ALTER COLUMN "user_memory_id" SET DATA T
 ALTER TABLE "user_memories_identities" ALTER COLUMN "relationship" SET DATA TYPE varchar(255);--> statement-breakpoint
 ALTER TABLE "user_memories_identities" ALTER COLUMN "user_memory_id" SET DATA TYPE varchar(255);--> statement-breakpoint
 ALTER TABLE "user_memories" ADD COLUMN IF NOT EXISTS "metadata" jsonb;--> statement-breakpoint
-ALTER TABLE "user_memories" ADD COLUMN  IF NOT EXISTS"tags" text[];--> statement-breakpoint
+ALTER TABLE "user_memories" ADD COLUMN IF NOT EXISTS "tags" text[];--> statement-breakpoint
 ALTER TABLE "user_memories_contexts" ADD COLUMN IF NOT EXISTS "user_id" text;--> statement-breakpoint
 ALTER TABLE "user_memories_contexts" ADD COLUMN IF NOT EXISTS "metadata" jsonb;--> statement-breakpoint
 ALTER TABLE "user_memories_contexts" ADD COLUMN IF NOT EXISTS "tags" text[];--> statement-breakpoint
@@ -17,9 +17,13 @@ ALTER TABLE "user_memories_identities" ADD COLUMN IF NOT EXISTS "episodic_date" 
 ALTER TABLE "user_memories_preferences" ADD COLUMN IF NOT EXISTS "user_id" text;--> statement-breakpoint
 ALTER TABLE "user_memories_preferences" ADD COLUMN IF NOT EXISTS "metadata" jsonb;--> statement-breakpoint
 ALTER TABLE "user_memories_preferences" ADD COLUMN IF NOT EXISTS "tags" text[];--> statement-breakpoint
+ALTER TABLE "user_memories_contexts" DROP CONSTRAINT IF EXISTS "user_memories_contexts_user_id_users_id_fk";--> statement-breakpoint
 ALTER TABLE "user_memories_contexts" ADD CONSTRAINT "user_memories_contexts_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "user_memories_experiences" DROP CONSTRAINT IF EXISTS "user_memories_experiences_user_id_users_id_fk";--> statement-breakpoint
 ALTER TABLE "user_memories_experiences" ADD CONSTRAINT "user_memories_experiences_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "user_memories_identities" DROP CONSTRAINT IF EXISTS "user_memories_identities_user_id_users_id_fk";--> statement-breakpoint
 ALTER TABLE "user_memories_identities" ADD CONSTRAINT "user_memories_identities_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "user_memories_preferences" DROP CONSTRAINT IF EXISTS "user_memories_preferences_user_id_users_id_fk";--> statement-breakpoint
 ALTER TABLE "user_memories_preferences" ADD CONSTRAINT "user_memories_preferences_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "user_memories_contexts" DROP COLUMN IF EXISTS "labels";--> statement-breakpoint
 ALTER TABLE "user_memories_contexts" DROP COLUMN IF EXISTS "extracted_labels";--> statement-breakpoint

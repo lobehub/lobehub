@@ -1,1 +1,1 @@
-ALTER TABLE "messages" ADD COLUMN "reasoning" jsonb;
+ALTER TABLE "messages" ADD COLUMN IF NOT EXISTS "reasoning" jsonb;

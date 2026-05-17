@@ -19,4 +19,5 @@ DROP TABLE embeddings_temp;
 --> statement-breakpoint
 
 -- step 5: now it's safe to add the unique constraint
+ALTER TABLE "embeddings" DROP CONSTRAINT IF EXISTS "embeddings_chunk_id_unique";--> statement-breakpoint
 ALTER TABLE "embeddings" ADD CONSTRAINT "embeddings_chunk_id_unique" UNIQUE("chunk_id");

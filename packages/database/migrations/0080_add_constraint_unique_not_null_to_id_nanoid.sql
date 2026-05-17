@@ -16,12 +16,19 @@ ALTER TABLE "rbac_roles" ALTER COLUMN "id_nanoid" SET NOT NULL;--> statement-bre
 -- id_nanoid will cause performance issues.
 -- If anything happens wrong during the migration, please check and drop the existing constraints manually before re-applying the migration.
 
+ALTER TABLE "api_keys" DROP CONSTRAINT IF EXISTS "api_keys_id_nanoid_unique";--> statement-breakpoint
 ALTER TABLE "api_keys" ADD CONSTRAINT "api_keys_id_nanoid_unique" UNIQUE("id_nanoid");--> statement-breakpoint
 
+ALTER TABLE "rag_eval_dataset_records" DROP CONSTRAINT IF EXISTS "rag_eval_dataset_records_id_nanoid_unique";--> statement-breakpoint
 ALTER TABLE "rag_eval_dataset_records" ADD CONSTRAINT "rag_eval_dataset_records_id_nanoid_unique" UNIQUE("id_nanoid");--> statement-breakpoint
+ALTER TABLE "rag_eval_datasets" DROP CONSTRAINT IF EXISTS "rag_eval_datasets_id_nanoid_unique";--> statement-breakpoint
 ALTER TABLE "rag_eval_datasets" ADD CONSTRAINT "rag_eval_datasets_id_nanoid_unique" UNIQUE("id_nanoid");--> statement-breakpoint
+ALTER TABLE "rag_eval_evaluations" DROP CONSTRAINT IF EXISTS "rag_eval_evaluations_id_nanoid_unique";--> statement-breakpoint
 ALTER TABLE "rag_eval_evaluations" ADD CONSTRAINT "rag_eval_evaluations_id_nanoid_unique" UNIQUE("id_nanoid");--> statement-breakpoint
+ALTER TABLE "rag_eval_evaluation_records" DROP CONSTRAINT IF EXISTS "rag_eval_evaluation_records_id_nanoid_unique";--> statement-breakpoint
 ALTER TABLE "rag_eval_evaluation_records" ADD CONSTRAINT "rag_eval_evaluation_records_id_nanoid_unique" UNIQUE("id_nanoid");--> statement-breakpoint
 
+ALTER TABLE "rbac_permissions" DROP CONSTRAINT IF EXISTS "rbac_permissions_id_nanoid_unique";--> statement-breakpoint
 ALTER TABLE "rbac_permissions" ADD CONSTRAINT "rbac_permissions_id_nanoid_unique" UNIQUE("id_nanoid");--> statement-breakpoint
+ALTER TABLE "rbac_roles" DROP CONSTRAINT IF EXISTS "rbac_roles_id_nanoid_unique";--> statement-breakpoint
 ALTER TABLE "rbac_roles" ADD CONSTRAINT "rbac_roles_id_nanoid_unique" UNIQUE("id_nanoid");

@@ -121,11 +121,20 @@ CREATE TABLE IF NOT EXISTS "unstructured_chunks" (
 	"file_id" varchar
 );
 --> statement-breakpoint
-ALTER TABLE "files_to_messages" RENAME TO "messages_files";--> statement-breakpoint
-DROP TABLE "files_to_agents";--> statement-breakpoint
-ALTER TABLE "files" ADD COLUMN "file_hash" varchar(64);--> statement-breakpoint
-ALTER TABLE "files" ADD COLUMN "chunk_task_id" uuid;--> statement-breakpoint
-ALTER TABLE "files" ADD COLUMN "embedding_task_id" uuid;--> statement-breakpoint
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'files_to_messages'
+  ) THEN
+    ALTER TABLE "files_to_messages" RENAME TO "messages_files";
+  END IF;
+END $$;--> statement-breakpoint
+DROP TABLE IF EXISTS "files_to_agents";--> statement-breakpoint
+ALTER TABLE "files" ADD COLUMN IF NOT EXISTS "file_hash" varchar(64);--> statement-breakpoint
+ALTER TABLE "files" ADD COLUMN IF NOT EXISTS "chunk_task_id" uuid;--> statement-breakpoint
+ALTER TABLE "files" ADD COLUMN IF NOT EXISTS "embedding_task_id" uuid;--> statement-breakpoint
 DO $$ BEGIN
  ALTER TABLE "agents_files" ADD CONSTRAINT "agents_files_file_id_files_id_fk" FOREIGN KEY ("file_id") REFERENCES "public"."files"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION
