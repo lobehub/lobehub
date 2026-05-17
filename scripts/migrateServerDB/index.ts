@@ -82,14 +82,23 @@ const isOutOfSyncMigrationHistoryError = (err: unknown): boolean => {
   );
 };
 
-const isMissingSessionsGroupColumnError = (err: unknown): boolean => {
+const isMissingSessionsSchemaColumnError = (err: unknown): boolean => {
   const codes = getErrorCodes(err);
   const text = getErrorText(err);
 
   const missingColumn = codes.includes('42703') || text.includes('column');
   if (!missingColumn) return false;
 
+  const sessionsScope =
+    text.includes(' on "sessions"') ||
+    text.includes('alter table "sessions"') ||
+    text.includes('sessions_group_id_session_groups_id_fk') ||
+    text.includes('slug_user_id_unique');
+  if (!sessionsScope) return false;
+
   return (
+    text.includes('slug_user_id_unique') ||
+    text.includes('"slug" does not exist') ||
     text.includes('sessions_group_id_session_groups_id_fk') ||
     text.includes('column "group_id"') ||
     text.includes('"group_id" does not exist') ||
@@ -370,7 +379,7 @@ const runLegacyAuthSchemaRepair = async (dbUrl: string) => {
   }
 };
 
-const runLegacySessionGroupSchemaRepair = async (dbUrl: string) => {
+const runLegacySessionsSchemaRepair = async (dbUrl: string) => {
   const client = new PgClient({ connectionString: dbUrl });
   await client.connect();
   try {
@@ -384,7 +393,31 @@ const runLegacySessionGroupSchemaRepair = async (dbUrl: string) => {
         "updated_at" timestamp with time zone DEFAULT now() NOT NULL
       );
 
+      ALTER TABLE IF EXISTS "sessions" ADD COLUMN IF NOT EXISTS "id" text;
+      ALTER TABLE IF EXISTS "sessions" ADD COLUMN IF NOT EXISTS "slug" varchar(100);
+      ALTER TABLE IF EXISTS "sessions" ADD COLUMN IF NOT EXISTS "title" text;
+      ALTER TABLE IF EXISTS "sessions" ADD COLUMN IF NOT EXISTS "description" text;
+      ALTER TABLE IF EXISTS "sessions" ADD COLUMN IF NOT EXISTS "avatar" text;
+      ALTER TABLE IF EXISTS "sessions" ADD COLUMN IF NOT EXISTS "background_color" text;
+      ALTER TABLE IF EXISTS "sessions" ADD COLUMN IF NOT EXISTS "type" text;
+      ALTER TABLE IF EXISTS "sessions" ADD COLUMN IF NOT EXISTS "user_id" text;
       ALTER TABLE IF EXISTS "sessions" ADD COLUMN IF NOT EXISTS "group_id" text;
+      ALTER TABLE IF EXISTS "sessions" ADD COLUMN IF NOT EXISTS "pinned" boolean DEFAULT false;
+      ALTER TABLE IF EXISTS "sessions" ADD COLUMN IF NOT EXISTS "created_at" timestamp with time zone DEFAULT now() NOT NULL;
+      ALTER TABLE IF EXISTS "sessions" ADD COLUMN IF NOT EXISTS "updated_at" timestamp with time zone DEFAULT now() NOT NULL;
+
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1
+          FROM information_schema.tables
+          WHERE table_schema = 'public' AND table_name = 'sessions'
+        ) THEN
+          UPDATE "sessions" SET "pinned" = false WHERE "pinned" IS NULL;
+          UPDATE "sessions" SET "created_at" = now() WHERE "created_at" IS NULL;
+          UPDATE "sessions" SET "updated_at" = now() WHERE "updated_at" IS NULL;
+        END IF;
+      END $$;
     `);
   } finally {
     await client.end();
@@ -425,13 +458,13 @@ if (isVercelBuild && shouldSkipMigrateOnVercelBuild) {
 
     await runMigrations();
   })().catch(async (err) => {
-    if (isMissingSessionsGroupColumnError(err)) {
+    if (isMissingSessionsSchemaColumnError(err)) {
       console.info(
-        '⚠️ Detected legacy sessions schema (missing sessions.group_id). Applying compatibility repair and retrying migrations once...',
+        '⚠️ Detected legacy sessions schema mismatch (missing columns on sessions). Applying compatibility repair and retrying migrations once...',
       );
 
       try {
-        await runLegacySessionGroupSchemaRepair(connectionString);
+        await runLegacySessionsSchemaRepair(connectionString);
         await runMigrations();
         return;
       } catch (repairErr) {
