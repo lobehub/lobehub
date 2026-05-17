@@ -265,9 +265,10 @@ export interface GrepContentParams {
   'head_limit'?: number;
   'multiline'?: boolean;
   'output_mode'?: 'content' | 'files_with_matches' | 'count';
+  /** Legacy alias for `scope`. Takes precedence when set; prefer `scope` (the manifest-documented name) for new callers. */
   'path'?: string;
   'pattern': string;
-  /** Working directory scope. When `path` is not specified, used as the default search location. */
+  /** Working directory scope. Limits the search to this directory. Defaults to `process.cwd()`. */
   'scope'?: string;
   /** Preferred search tool: 'rg' | 'ag' | 'grep' */
   'tool'?: 'rg' | 'ag' | 'grep';
