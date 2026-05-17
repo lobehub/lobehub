@@ -34,17 +34,21 @@ import {
 } from './ActionTag';
 import { createMentionMenu } from './MentionMenu';
 import type { MentionMenuState } from './MentionMenu/types';
+import { mentionFilledClassName } from './mentionStyle';
 import Placeholder, { type PlaceholderVariant } from './Placeholder';
 import { CHAT_INPUT_EMBED_PLUGINS, createChatInputRichPlugins } from './plugins';
 import { INSERT_REFER_TOPIC_COMMAND } from './ReferTopic';
 import { useLocalFileMention } from './useLocalFileMention';
 import { useMentionCategories } from './useMentionCategories';
 
-const className = cx(css`
-  p {
-    margin-block-end: 0;
-  }
-`);
+const className = cx(
+  css`
+    p {
+      margin-block-end: 0;
+    }
+  `,
+  mentionFilledClassName,
+);
 
 const InputEditor = memo<{
   defaultRows?: number;
