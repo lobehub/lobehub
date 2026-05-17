@@ -28,44 +28,72 @@ const shouldSkipMigrateOnVercelBuild = process.env.MIGRATE_ON_VERCEL_BUILD === '
 const shouldAutoRepairMigrationHistory = process.env.MIGRATION_AUTO_REPAIR === '1' || isVercelBuild;
 const shouldRepairLegacyAuthOnly = process.env.MIGRATION_REPAIR_LEGACY_AUTH_ONLY === '1';
 
-const isOutOfSyncMigrationHistoryError = (err: unknown): boolean => {
-  const code = (err as { code?: string; cause?: { code?: string } })?.code;
-  const causeCode = (err as { cause?: { code?: string } })?.cause?.code;
-  const query = ((err as { query?: string })?.query || '').toLowerCase();
-  const message = ((err as { message?: string })?.message || '').toLowerCase();
+const collectErrorChain = (err: unknown) => {
+  const chain: Array<Record<string, unknown>> = [];
+  const visited = new Set<unknown>();
+  let current: unknown = err;
 
-  const missingRelation =
-    code === '42P01' ||
-    causeCode === '42P01' ||
-    query.includes('relation') ||
-    message.includes('relation');
+  while (current && typeof current === 'object' && !visited.has(current) && chain.length < 8) {
+    const node = current as Record<string, unknown>;
+    chain.push(node);
+    visited.add(current);
+    current = node.cause;
+  }
+
+  return chain;
+};
+
+const getErrorCodes = (err: unknown) =>
+  collectErrorChain(err)
+    .map((node) => node.code)
+    .filter((code): code is string => typeof code === 'string');
+
+const getErrorText = (err: unknown) =>
+  collectErrorChain(err)
+    .flatMap((node) => [
+      node.message,
+      node.where,
+      node.detail,
+      node.hint,
+      node.query,
+      node.constraint,
+      node.column,
+      node.routine,
+    ])
+    .filter((part): part is string => typeof part === 'string')
+    .join(' ')
+    .toLowerCase();
+
+const isOutOfSyncMigrationHistoryError = (err: unknown): boolean => {
+  const codes = getErrorCodes(err);
+  const text = getErrorText(err);
+
+  const missingRelation = codes.includes('42P01') || text.includes('relation');
 
   if (!missingRelation) return false;
 
   // Typical symptom when __drizzle_migrations points to a much later migration
   // while foundational tables were never created in this DB.
   return (
-    query.includes('alter table "topics"') ||
-    query.includes('insert into "verifications"') ||
-    message.includes('relation "topics" does not exist') ||
-    message.includes('relation "verifications" does not exist')
+    text.includes('alter table "topics"') ||
+    text.includes('insert into "verifications"') ||
+    text.includes('relation "topics" does not exist') ||
+    text.includes('relation "verifications" does not exist')
   );
 };
 
 const isMissingSessionsGroupColumnError = (err: unknown): boolean => {
-  const code = (err as { code?: string; cause?: { code?: string } })?.code;
-  const causeCode = (err as { cause?: { code?: string } })?.cause?.code;
-  const where = ((err as { where?: string })?.where || '').toLowerCase();
-  const message = ((err as { message?: string })?.message || '').toLowerCase();
+  const codes = getErrorCodes(err);
+  const text = getErrorText(err);
 
-  const missingColumn = code === '42703' || causeCode === '42703' || message.includes('column');
+  const missingColumn = codes.includes('42703') || text.includes('column');
   if (!missingColumn) return false;
 
   return (
-    where.includes('sessions_group_id_session_groups_id_fk') ||
-    message.includes('sessions_group_id_session_groups_id_fk') ||
-    message.includes('column "group_id"') ||
-    message.includes('"group_id" does not exist')
+    text.includes('sessions_group_id_session_groups_id_fk') ||
+    text.includes('column "group_id"') ||
+    text.includes('"group_id" does not exist') ||
+    text.includes('transformcolumnnamelist')
   );
 };
 
