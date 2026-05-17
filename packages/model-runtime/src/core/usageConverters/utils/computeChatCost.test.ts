@@ -132,6 +132,12 @@ describe('computeChatPricing', () => {
   });
 
   describe('LobeHub-hosted DeepSeek', () => {
+    interface HostedPricingCase {
+      expectedCredits: Record<string, number>;
+      expectedUnits: Pricing['units'];
+      modelId: string;
+    }
+
     const usage: ModelTokensUsage = {
       inputCacheMissTokens: 1_000_000,
       inputCachedTokens: 1_000_000,
@@ -142,7 +148,7 @@ describe('computeChatPricing', () => {
       totalTokens: 3_000_000,
     };
 
-    it.each([
+    const hostedPricingCases = [
       {
         expectedCredits: {
           textInput: 140_000,
@@ -213,7 +219,9 @@ describe('computeChatPricing', () => {
         ],
         modelId: 'deepseek-reasoner',
       },
-    ])(
+    ] satisfies HostedPricingCase[];
+
+    it.each(hostedPricingCases)(
       'applies LobeHub-hosted official pricing for $modelId',
       ({ expectedCredits, expectedUnits, modelId }) => {
         const pricing: Pricing = { units: expectedUnits };

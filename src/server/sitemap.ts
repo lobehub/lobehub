@@ -55,7 +55,14 @@ export class Sitemap {
 
   // Get total number of model pages
   async getModelPageCount(): Promise<number> {
-    const list = await this.discoverService.getModelIdentifiers();
+    let list: Awaited<ReturnType<DiscoverService['getModelIdentifiers']>>;
+    try {
+      list = await this.discoverService.getModelIdentifiers();
+    } catch {
+      // Keep sitemap generation from blocking deployment when model identifiers are unavailable.
+      return 0;
+    }
+
     return Math.ceil(list.length / ITEMS_PER_PAGE);
   }
 

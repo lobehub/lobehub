@@ -272,6 +272,15 @@ describe('Sitemap', () => {
       const pageCount = await sitemap.getModelPageCount();
       expect(pageCount).toBe(2); // 120 items / 100 per page = ceil(1.2) = 2 pages
     });
+
+    it('should skip model sitemap pagination when model identifiers are unavailable', async () => {
+      const isolatedSitemap = new Sitemap();
+      vi.spyOn(isolatedSitemap['discoverService'], 'getModelIdentifiers').mockRejectedValue(
+        new Error('model config unavailable'),
+      );
+
+      await expect(isolatedSitemap.getModelPageCount()).resolves.toBe(0);
+    });
   });
 
   describe('getRobots', () => {
