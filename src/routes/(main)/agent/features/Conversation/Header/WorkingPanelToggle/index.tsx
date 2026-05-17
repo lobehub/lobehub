@@ -18,7 +18,6 @@ const WorkingPanelToggle = memo(() => {
     s.toggleRightPanel,
     systemStatusSelectors.isStatusInit(s),
   ]);
-  const setWorkingSidebarTab = useGlobalStore((s) => s.setWorkingSidebarTab);
 
   // The popup window has no WorkingSidebar — hide the toggle to avoid a
   // button that does nothing visible.
@@ -30,15 +29,16 @@ const WorkingPanelToggle = memo(() => {
 
   if (showRightPanel) return null;
 
+  // Open the panel without touching the tab preference — the sidebar's own
+  // resolveActiveTab will pick the right default (and honor the user's last
+  // explicit click). Force-setting `review` here would overwrite a previously
+  // picked Space/Files tab every time the panel is re-opened.
   return (
     <ActionIcon
       icon={PanelRightOpenIcon}
       size={DESKTOP_HEADER_ICON_SMALL_SIZE}
       title={t('workingPanel.title')}
-      onClick={() => {
-        setWorkingSidebarTab('review');
-        toggleRightPanel(true);
-      }}
+      onClick={() => toggleRightPanel(true)}
     />
   );
 });
