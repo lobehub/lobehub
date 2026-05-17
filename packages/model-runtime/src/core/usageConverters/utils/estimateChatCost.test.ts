@@ -62,12 +62,33 @@ describe('estimateChatCost', () => {
       expect(estimate.imageTokens).toBe(1000);
       expect(estimate.textTokens).toBeGreaterThan(0);
       expect(estimate.totalTokens).toBe(estimate.textTokens + 1000);
+      expect(estimate.videoTokens).toBe(0);
+    });
+
+    it('counts video inputs in the video token bucket', () => {
+      const estimate = estimateOpenAIChatInputTokens(
+        [
+          {
+            content: [
+              { text: 'summarize this clip', type: 'text' },
+              { type: 'video_url', video_url: { url: 'https://example.com/video.mp4' } },
+            ],
+            role: 'user',
+          },
+        ],
+        { videoTokenEstimate: 1200 },
+      );
+
+      expect(estimate.imageTokens).toBe(0);
+      expect(estimate.textTokens).toBeGreaterThan(0);
+      expect(estimate.totalTokens).toBe(estimate.textTokens + 1200);
+      expect(estimate.videoTokens).toBe(1200);
     });
 
     it('handles assistant tool-call messages with null content', () => {
       const estimate = estimateOpenAIChatInputTokens([
-        // @ts-expect-error OpenAI-compatible runtime payloads can contain null content.
         {
+          // @ts-expect-error OpenAI-compatible runtime payloads can contain null content.
           content: null,
           role: 'assistant',
           tool_calls: [
@@ -83,6 +104,7 @@ describe('estimateChatCost', () => {
       expect(estimate.imageTokens).toBe(0);
       expect(estimate.textTokens).toBeGreaterThan(0);
       expect(estimate.totalTokens).toBe(estimate.textTokens);
+      expect(estimate.videoTokens).toBe(0);
     });
   });
 
@@ -142,6 +164,28 @@ describe('estimateChatCost', () => {
       expect(estimate?.estimatedCost).toBeGreaterThan(0);
       expect(estimate?.estimatedOutputTokens).toBeGreaterThan(0);
       expect(estimate?.totalInputTokens).toBeGreaterThan(0);
+    });
+
+    it('forwards video inputs to video pricing units', () => {
+      const pricing: Pricing = {
+        units: [{ name: 'videoInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' }],
+      };
+
+      const estimate = estimateChatCostFromMessages(
+        pricing,
+        [
+          {
+            content: [{ type: 'video_url', video_url: { url: 'https://example.com/video.mp4' } }],
+            role: 'user',
+          },
+        ],
+        { videoTokenEstimate: 2000 },
+      );
+
+      expect(estimate?.estimatedCost).toBe(0.006);
+      expect(estimate?.inputVideoTokens).toBe(2000);
+      expect(estimate?.totalInputTokens).toBeGreaterThan(2000);
+      expect(estimate?.breakdown.map((item) => item.unit.name)).toEqual(['videoInput']);
     });
   });
 });

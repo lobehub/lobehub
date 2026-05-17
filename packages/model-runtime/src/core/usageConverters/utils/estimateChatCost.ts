@@ -7,6 +7,7 @@ import type { ComputeChatCostOptions, PricingComputationResult } from './compute
 import { computeChatCost } from './computeChatCost';
 
 const DEFAULT_IMAGE_INPUT_TOKEN_ESTIMATE = 1000;
+const DEFAULT_VIDEO_INPUT_TOKEN_ESTIMATE = 1000;
 const OUTPUT_INPUT_RATIO = 0.5;
 const OUTPUT_TOKEN_CAP = 8192;
 
@@ -14,6 +15,7 @@ export interface ChatInputTokenEstimate {
   imageTokens: number;
   textTokens: number;
   totalTokens: number;
+  videoTokens: number;
 }
 
 export interface EstimateOpenAIChatInputTokensOptions {
@@ -26,6 +28,10 @@ export interface EstimateOpenAIChatInputTokensOptions {
    * chat request.
    */
   tools?: ChatCompletionTool[];
+  /**
+   * Conservative token estimate for each video input when exact video accounting is unavailable.
+   */
+  videoTokenEstimate?: number;
 }
 
 /**
@@ -90,8 +96,10 @@ export function estimateOpenAIChatInputTokens(
   options: EstimateOpenAIChatInputTokensOptions = {},
 ): ChatInputTokenEstimate {
   const imageTokenEstimate = options.imageTokenEstimate ?? DEFAULT_IMAGE_INPUT_TOKEN_ESTIMATE;
+  const videoTokenEstimate = options.videoTokenEstimate ?? DEFAULT_VIDEO_INPUT_TOKEN_ESTIMATE;
   let textTokens = 0;
   let imageTokens = 0;
+  let videoTokens = 0;
 
   for (const message of messages) {
     textTokens += estimateSerializableTokens(message.role);
@@ -121,6 +129,11 @@ export function estimateOpenAIChatInputTokens(
         continue;
       }
 
+      if (part.type === 'video_url') {
+        videoTokens += videoTokenEstimate;
+        continue;
+      }
+
       textTokens += estimateSerializableTokens(part);
     }
   }
@@ -130,7 +143,8 @@ export function estimateOpenAIChatInputTokens(
   return {
     imageTokens,
     textTokens,
-    totalTokens: textTokens + imageTokens,
+    totalTokens: textTokens + imageTokens + videoTokens,
+    videoTokens,
   };
 }
 
@@ -190,14 +204,19 @@ export function estimateChatCostFromMessages(
   messages: OpenAIChatMessage[],
   options: EstimateChatCostFromMessagesOptions = {},
 ): ChatCostEstimate | undefined {
-  const { tools, imageTokenEstimate, lookupParams, usdToCnyRate } = options;
-  const inputTokens = estimateOpenAIChatInputTokens(messages, { imageTokenEstimate, tools });
+  const { tools, imageTokenEstimate, lookupParams, usdToCnyRate, videoTokenEstimate } = options;
+  const inputTokens = estimateOpenAIChatInputTokens(messages, {
+    imageTokenEstimate,
+    tools,
+    videoTokenEstimate,
+  });
 
   return estimateChatCostFromTokens(
     pricing,
     {
       imageTokens: inputTokens.imageTokens,
       textTokens: inputTokens.textTokens,
+      videoTokens: inputTokens.videoTokens,
     },
     { lookupParams, usdToCnyRate },
   );
