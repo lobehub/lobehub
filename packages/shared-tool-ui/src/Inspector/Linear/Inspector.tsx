@@ -1,11 +1,11 @@
 'use client';
 
-import { inspectorTextStyles, shinyTextStyles } from '@lobechat/shared-tool-ui/styles';
 import type { BuiltinInspector, BuiltinInspectorProps } from '@lobechat/types';
 import { createStaticStyles, cx } from 'antd-style';
 import { CornerLeftUp } from 'lucide-react';
 import { memo } from 'react';
 
+import { inspectorTextStyles, shinyTextStyles } from '../../styles';
 import { capitalize, type ParsedTool, parseToolName } from './labels';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
