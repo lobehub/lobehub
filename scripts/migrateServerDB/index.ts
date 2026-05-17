@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import path from 'node:path';
 
 import * as dotenv from 'dotenv';
 import dotenvExpand from 'dotenv-expand';
@@ -21,10 +21,10 @@ dotenvExpand.expand(dotenv.config({ override: true, path: `.env.local` })); // L
 dotenvExpand.expand(dotenv.config({ override: true, path: `.env.${env}` })); // Load .env.[env] and override
 dotenvExpand.expand(dotenv.config({ override: true, path: `.env.${env}.local` })); // Load .env.[env].local and override
 
-const migrationsFolder = join(__dirname, '../../packages/database/migrations');
+const migrationsFolder = path.join(__dirname, '../../packages/database/migrations');
 
 const isVercelBuild = process.env.VERCEL === '1' || !!process.env.VERCEL_ENV;
-const shouldMigrateOnVercelBuild = process.env.MIGRATE_ON_VERCEL_BUILD === '1';
+const shouldSkipMigrateOnVercelBuild = process.env.MIGRATE_ON_VERCEL_BUILD === '0';
 const shouldAutoRepairMigrationHistory = process.env.MIGRATION_AUTO_REPAIR === '1' || isVercelBuild;
 const shouldRepairLegacyAuthOnly = process.env.MIGRATION_REPAIR_LEGACY_AUTH_ONLY === '1';
 
@@ -343,10 +343,8 @@ const runMigrations = async () => {
 const connectionString = process.env.DATABASE_URL;
 
 // only migrate database if the connection string is available
-if (isVercelBuild && !shouldMigrateOnVercelBuild) {
-  console.log(
-    '🟢 Vercel build detected. Skip db:migrate by default. Set MIGRATE_ON_VERCEL_BUILD=1 to enable.',
-  );
+if (isVercelBuild && shouldSkipMigrateOnVercelBuild) {
+  console.log('🟢 Vercel build detected. Skip db:migrate because MIGRATE_ON_VERCEL_BUILD=0.');
 } else if (connectionString) {
   (async () => {
     if (shouldRepairLegacyAuthOnly) {
@@ -389,7 +387,7 @@ if (isVercelBuild && !shouldMigrateOnVercelBuild) {
         'Hint: relation missing during migration (code 42P01). This usually means DB schema and migration history are out of sync.',
       );
       console.info(
-        'For Vercel deploys, keep MIGRATE_ON_VERCEL_BUILD unset to skip migrations at build time, then run migrations manually in a controlled step.',
+        'For Vercel deploys, migrations run by default when DATABASE_URL is set. Set MIGRATE_ON_VERCEL_BUILD=0 only if you intentionally want to skip.',
       );
     } else if (errMsg.includes(`Cannot read properties of undefined (reading 'migrate')`)) {
       console.info(DB_FAIL_INIT_HINT);

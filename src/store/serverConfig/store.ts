@@ -1,9 +1,9 @@
 import { type StoreApiWithSelector } from '@lobechat/types';
+import { createContext, createElement, type ReactNode, useContext, useRef } from 'react';
 import { type StoreApi } from 'zustand';
 import { shallow } from 'zustand/shallow';
-import { createWithEqualityFn } from 'zustand/traditional';
+import { createWithEqualityFn, useStoreWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
-import { createContext } from 'zustand-utils';
 
 import { type IFeatureFlagsState } from '@/config/featureFlags';
 import { DEFAULT_FEATURE_FLAGS, mapFeatureFlagsEnvToState } from '@/config/featureFlags';
@@ -99,5 +99,31 @@ export const createServerConfigStore = (initState?: Partial<ServerConfigStore>) 
 
 export const getServerConfigStoreState = () => store?.getState();
 
-export const { useStore: useServerConfigStore, Provider } =
-  createContext<StoreApiWithSelector<ServerConfigStore>>();
+const ServerConfigStoreContext = createContext<StoreApiWithSelector<ServerConfigStore> | undefined>(
+  undefined,
+);
+
+interface ServerConfigProviderProps {
+  children: ReactNode;
+  createStore: () => StoreApiWithSelector<ServerConfigStore>;
+}
+
+export const Provider = ({ createStore, children }: ServerConfigProviderProps) => {
+  const storeRef = useRef<StoreApiWithSelector<ServerConfigStore>>();
+
+  if (!storeRef.current) {
+    storeRef.current = createStore();
+  }
+
+  return createElement(ServerConfigStoreContext.Provider, { value: storeRef.current }, children);
+};
+
+export const useServerConfigStore = <T>(
+  selector: (state: ServerConfigStore) => T,
+  equalityFn = shallow,
+) => {
+  const contextStore = useContext(ServerConfigStoreContext);
+  const fallbackStore = createServerConfigStore();
+
+  return useStoreWithEqualityFn(contextStore ?? fallbackStore, selector, equalityFn);
+};

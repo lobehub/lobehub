@@ -18,6 +18,13 @@ const isCustomDeploymentHost =
   typeof window !== 'undefined' && !/(?:\.|^)lobehub\.com$/.test(window.location.hostname);
 const isMarketAuthDisabled =
   process.env.NEXT_PUBLIC_DISABLE_MARKET_AUTH === '1' || isCustomDeploymentHost;
+const NON_RETRYABLE_ERROR_PATTERNS = [
+  'S3 environment variables are not set completely',
+  'Klavis API key is not configured on server',
+  'Failed query:',
+  'relation "',
+  'does not exist',
+];
 
 // 401 error debouncing: prevent showing multiple login notifications in short time
 let last401Time = 0;
@@ -67,6 +74,13 @@ const errorHandlingLink: TRPCLink<LambdaRouter> = () => {
 
           // Check if this is a market API call
           const isMarketApi = op.path.startsWith('market.');
+          const isDeterministicServerError =
+            status >= 500 &&
+            NON_RETRYABLE_ERROR_PATTERNS.some((pattern) => err.message?.includes(pattern));
+
+          if (isDeterministicServerError) {
+            err.meta = { ...err.meta, shouldRetry: false };
+          }
 
           // Don't show notifications for abort errors
           if (showError && !isAbortError) {
