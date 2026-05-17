@@ -259,6 +259,7 @@ export { default as nvidia } from './nvidia';
 export { default as ollama } from './ollama';
 export { default as ollamacloud } from './ollamacloud';
 export { default as openai, openaiChatModels } from './openai';
+export { gptImage1Schema, gptImage2Schema } from './openaiImageParameters';
 export { default as opencodecodingplan } from './opencodeCodingPlan';
 export { default as opencodezen } from './opencodeZen';
 export { default as openrouter } from './openrouter';
