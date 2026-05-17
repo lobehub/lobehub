@@ -322,7 +322,14 @@ export class HeterogeneousPersistenceHandler {
     ) {
       state.toolState = {
         payloads: [...dbTools],
-        persistedIds: new Set(dbTools.map((t) => t.id)),
+        // Only treat tool ids whose `result_msg_id` is already filled in as
+        // persisted. Phase 1 of `persistToolBatch` writes `tools[]` before
+        // creating the `role:'tool'` row (Phase 2), so a refresh that lands
+        // between the two would see an unresolved id. Marking that id as
+        // persisted would cause a subsequent retry of the same tools_calling
+        // event to skip the create (Phase 2) entirely — leaving the tool
+        // permanently without a tool message / result_msg_id.
+        persistedIds: new Set(dbTools.filter((t) => !!t.result_msg_id).map((t) => t.id)),
       };
     }
     if (!state.lastModel && refreshed?.model) state.lastModel = refreshed.model;
@@ -453,7 +460,14 @@ export class HeterogeneousPersistenceHandler {
     const restoredContent = (currentMsg?.content ?? '') as string;
     const restoredReasoning = (currentMsg?.reasoning as { content?: string } | null)?.content ?? '';
     const restoredTools = (currentMsg?.tools ?? []) as ChatToolPayload[];
-    const restoredPersistedIds = new Set(restoredTools.map((t) => t.id));
+    // Phase 1 of `persistToolBatch` writes `tools[]` BEFORE the tool message
+    // row is created (Phase 2 sets `result_msg_id`). Only ids that already
+    // carry a `result_msg_id` are truly persisted — restoring an unresolved
+    // id into `persistedIds` would make a retry of the same tools_calling
+    // event skip the Phase 2 create, orphaning the tool forever.
+    const restoredPersistedIds = new Set(
+      restoredTools.filter((t) => !!t.result_msg_id).map((t) => t.id),
+    );
 
     state = {
       accumulatedContent: restoredContent,
@@ -516,7 +530,13 @@ export class HeterogeneousPersistenceHandler {
     state.accumulatedReasoning = restoredReasoning;
     state.toolState = {
       payloads: restoredTools,
-      persistedIds: new Set(restoredTools.map((tool) => tool.id)),
+      // Same `persistedIds` invariant as `loadOrCreateState`: only ids with a
+      // backfilled `result_msg_id` count as persisted. An unresolved id (Phase
+      // 1 written, Phase 2 not yet) must remain re-createable so a retry on
+      // this replica can complete the tool message.
+      persistedIds: new Set(
+        restoredTools.filter((tool) => !!tool.result_msg_id).map((tool) => tool.id),
+      ),
     };
 
     log(

@@ -630,6 +630,70 @@ describe('HeterogeneousPersistenceHandler', () => {
         provider: 'claude-code',
       });
     });
+
+    it('retry recovers an unresolved tool that another replica only Phase-1 registered (no false-positive persistedIds)', async () => {
+      // Race: another replica wrote `assistant.tools[]` (Phase 1) but its
+      // Phase 2 — creating the `role:'tool'` row + backfilling
+      // `result_msg_id` — hasn't landed yet (or threw). The BatchIngester
+      // then retries the SAME tools_calling event onto THIS replica.
+      //
+      // If `persistedIds` includes the unresolved id, `persistToolBatch`
+      // filters it out of `freshForCreate`, skips the create, and rewrites
+      // `tools[]` unchanged → the tool is orphaned (never gets a tool
+      // message, never gets `result_msg_id`). Fix: only mark ids whose
+      // `result_msg_id` is filled in as persisted.
+      const h = createHarness({
+        assistantMessageId: 'asst-init',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      // Pre-populate the initial assistant with a Phase-1-only tool entry
+      // (no `result_msg_id`), simulating the other replica's mid-flight write.
+      h.messages.set('asst-init', {
+        ...h.messages.get('asst-init')!,
+        tools: [
+          {
+            apiName: 'Bash',
+            arguments: '{"cmd":"ls"}',
+            id: 'tc-unresolved',
+            identifier: 'bash',
+            type: 'default',
+            // NOTE: no result_msg_id — Phase 2 has not run yet.
+          },
+        ],
+      });
+
+      // Retry of the same tools_calling event lands on this replica.
+      await h.handler.ingest({
+        events: [
+          buildEvent('stream_chunk', 0, {
+            chunkType: 'tools_calling',
+            toolsCalling: [
+              {
+                apiName: 'Bash',
+                arguments: '{"cmd":"ls"}',
+                id: 'tc-unresolved',
+                identifier: 'bash',
+                type: 'default',
+              },
+            ],
+          }),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      // The tool message must have been created (Phase 2 completed via retry)
+      // and assistant.tools[0].result_msg_id must point at it.
+      const toolMsgs = [...h.messages.values()].filter((m) => m.role === 'tool');
+      expect(toolMsgs).toHaveLength(1);
+      expect(toolMsgs[0].tool_call_id).toBe('tc-unresolved');
+
+      const asst = h.messages.get('asst-init')!;
+      expect(asst.tools).toHaveLength(1);
+      expect(asst.tools![0].result_msg_id).toBe(toolMsgs[0].id);
+    });
   });
 
   describe('subagent threads', () => {
