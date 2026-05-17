@@ -1,5 +1,5 @@
 import type { AiFullModelCard, AiModelType, Pricing } from 'model-bank';
-import { loadModels as loadModelBankModels } from 'model-bank';
+import { loadModels as loadModelBankModels, ModelProvider } from 'model-bank';
 
 export interface LobeHubModelConfig {
   models: AiFullModelCard[];
@@ -17,7 +17,12 @@ export const getDefaultLobeHubModelConfig = (): LobeHubModelConfig => ({
 export const loadLobeHubModelConfig = async (): Promise<LobeHubModelConfig> =>
   getDefaultLobeHubModelConfig();
 
-export const loadModels = async () => loadModelBankModels();
+export const loadModels = async () =>
+  loadModelBankModels({
+    providerLoaders: {
+      [ModelProvider.LobeHub]: loadLobeHubModels,
+    },
+  });
 
 export const loadLobeHubModels = async (): Promise<AiFullModelCard[]> =>
   (await loadLobeHubModelConfig()).models;

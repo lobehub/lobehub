@@ -1,8 +1,6 @@
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
-import {
-  isLobeHubModelAvailable,
-  resolveBusinessModelMapping,
-} from '@lobechat/business-model-runtime';
+import { isLobeHubModelAvailable } from '@lobechat/business-model-bank/model-config';
+import { resolveBusinessModelMapping } from '@lobechat/business-model-runtime';
 import { ChatErrorType } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';

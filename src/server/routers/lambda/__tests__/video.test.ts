@@ -9,6 +9,7 @@ import { AsyncTaskStatus } from '@/types/asyncTask';
 const {
   mockAfter,
   mockCreateVideo,
+  mockIsLobeHubModelAvailable,
   mockProcessBackgroundVideoPolling,
   mockResolveBusinessModelMapping,
   mockServerDB,
@@ -18,11 +19,13 @@ const {
   const mockServerDB = { transaction: mockTransaction };
   const mockCreateVideo = vi.fn();
   const mockAfter = vi.fn((cb: () => void) => cb());
+  const mockIsLobeHubModelAvailable = vi.fn();
   const mockProcessBackgroundVideoPolling = vi.fn().mockResolvedValue(undefined);
   const mockResolveBusinessModelMapping = vi.fn();
   return {
     mockAfter,
     mockCreateVideo,
+    mockIsLobeHubModelAvailable,
     mockProcessBackgroundVideoPolling,
     mockResolveBusinessModelMapping,
     mockServerDB,
@@ -54,6 +57,9 @@ vi.mock('@lobechat/business-model-runtime', async (importOriginal) => ({
   ...((await importOriginal()) as any),
   resolveBusinessModelMapping: (...args: [string, string]) =>
     mockResolveBusinessModelMapping(...args),
+}));
+vi.mock('@lobechat/business-model-bank/model-config', () => ({
+  isLobeHubModelAvailable: (...args: [string, string]) => mockIsLobeHubModelAvailable(...args),
 }));
 vi.mock('@/business/server/video-generation/getVideoFreeQuota', () => ({
   getVideoFreeQuota: vi.fn().mockResolvedValue({ remaining: 10 }),
@@ -140,6 +146,7 @@ describe('videoRouter', () => {
         resolvedModelId: model,
       }),
     );
+    mockIsLobeHubModelAvailable.mockResolvedValue(true);
   });
 
   describe('createVideo - async strategy routing', () => {

@@ -1,9 +1,9 @@
 import { randomBytes } from 'node:crypto';
 
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
+import { isLobeHubModelAvailable } from '@lobechat/business-model-bank/model-config';
 import {
   buildMappedBusinessModelFields,
-  isLobeHubModelAvailable,
   resolveBusinessModelMapping,
 } from '@lobechat/business-model-runtime';
 import { ChatErrorType, RequestTrigger } from '@lobechat/types';

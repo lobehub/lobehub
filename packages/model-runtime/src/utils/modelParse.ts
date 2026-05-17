@@ -1,6 +1,12 @@
 import type { ChatModelCard } from '@lobechat/types';
-import type { AIBaseModelCard, AiModelSettings, AiModelType, ExtendParamsType } from 'model-bank';
-import { AiModelTypeSchema } from 'model-bank';
+import type {
+  AIBaseModelCard,
+  AiFullModelCard,
+  AiModelSettings,
+  AiModelType,
+  ExtendParamsType,
+} from 'model-bank';
+import { AiModelTypeSchema, ModelProvider } from 'model-bank';
 
 import type { ModelProviderKey } from '../types';
 
@@ -194,6 +200,11 @@ export const IMAGE_MODEL_KEYWORDS = [
 export const EMBEDDING_MODEL_KEYWORDS = ['embedding', 'embed', 'bge', 'm3e'] as const;
 
 const AI_MODEL_TYPE_SET = new Set<AiModelType>(AiModelTypeSchema.options);
+const BUSINESS_MODEL_CONFIG_MODULE = '@lobechat/business-model-bank/model-config';
+
+interface BusinessModelConfigModule {
+  loadLobeHubModels: () => Promise<AiFullModelCard[]>;
+}
 
 const normalizeModelType = (value: unknown): AiModelType | undefined => {
   if (typeof value !== 'string') return undefined;
@@ -446,19 +457,29 @@ const mergeSettings = (
  * @param provider Model provider
  * @returns Local configuration of the model provider
  */
-const getProviderLocalConfig = async (provider?: ModelProviderKey): Promise<any[] | null> => {
-  let providerLocalConfig: any[] | null = null;
-  if (provider) {
-    try {
-      const modules = await import('model-bank');
+const getProviderLocalConfig = async (
+  provider?: ModelProviderKey,
+): Promise<AiFullModelCard[] | null> => {
+  if (!provider) return null;
 
-      providerLocalConfig = modules[provider];
-    } catch {
-      // If configuration file doesn't exist or import fails, keep as null
-      providerLocalConfig = null;
-    }
+  if (provider === ModelProvider.LobeHub) {
+    const { loadLobeHubModels } = (await import(
+      /* @vite-ignore */ BUSINESS_MODEL_CONFIG_MODULE
+    )) as BusinessModelConfigModule;
+    return loadLobeHubModels();
   }
-  return providerLocalConfig;
+
+  try {
+    const modules = (await import('model-bank')) as unknown as Record<
+      ModelProviderKey,
+      AiFullModelCard[] | undefined
+    >;
+
+    return modules[provider] ?? null;
+  } catch {
+    // If configuration file doesn't exist or import fails, keep as null
+    return null;
+  }
 };
 
 /**

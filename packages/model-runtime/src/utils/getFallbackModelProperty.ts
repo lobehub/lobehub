@@ -1,6 +1,10 @@
-import type { AiFullModelCard } from 'model-bank';
+import type { AiFullModelCard, LobeDefaultAiModelListItem } from 'model-bank';
 
 const BUSINESS_MODEL_CONFIG_MODULE = '@lobechat/business-model-bank/model-config';
+
+interface BusinessModelConfigModule {
+  loadModels: () => Promise<LobeDefaultAiModelListItem[]>;
+}
 
 /**
  * Get the model property value, first from the specified provider, and then from other providers as a fallback.
@@ -14,7 +18,9 @@ export const getModelPropertyWithFallback = async <T>(
   propertyName: keyof AiFullModelCard,
   providerId?: string,
 ): Promise<T> => {
-  const { loadModels } = await import(/* @vite-ignore */ BUSINESS_MODEL_CONFIG_MODULE);
+  const { loadModels } = (await import(
+    /* @vite-ignore */ BUSINESS_MODEL_CONFIG_MODULE
+  )) as BusinessModelConfigModule;
   const models = await loadModels();
 
   // Step 1: If providerId is provided, prioritize an exact match (same provider + same id)
