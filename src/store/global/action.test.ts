@@ -36,6 +36,7 @@ describe('createPreferenceSlice', () => {
       const { result } = renderHook(() => useGlobalStore());
 
       act(() => {
+        useGlobalStore.setState({ isStatusInit: true });
         useGlobalStore.getState().updateSystemStatus({ showRightPanel: false });
         result.current.toggleRightPanel();
       });

@@ -13,15 +13,20 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 const WorkingPanelToggle = memo(() => {
   const { t } = useTranslation('chat');
   const { pathname } = useLocation();
-  const [showRightPanel, toggleRightPanel] = useGlobalStore((s) => [
+  const [showRightPanel, toggleRightPanel, isStatusInit] = useGlobalStore((s) => [
     systemStatusSelectors.showRightPanel(s),
     s.toggleRightPanel,
+    systemStatusSelectors.isStatusInit(s),
   ]);
   const setWorkingSidebarTab = useGlobalStore((s) => s.setWorkingSidebarTab);
 
   // The popup window has no WorkingSidebar — hide the toggle to avoid a
   // button that does nothing visible.
   if (pathname.startsWith('/popup')) return null;
+
+  // Defer render until status hydrates — updateSystemStatus is a no-op while
+  // !isStatusInit, so clicks here would otherwise be silently dropped.
+  if (!isStatusInit) return null;
 
   if (showRightPanel) return null;
 
