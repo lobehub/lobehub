@@ -2,7 +2,7 @@ import { Icon, Tooltip } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { cx } from 'antd-style';
 import { TerminalIcon, WrenchIcon } from 'lucide-react';
-import type { ComponentType } from 'react';
+import type { FC } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -14,7 +14,7 @@ export interface ActionMentionProps {
   label: string;
 }
 
-const CATEGORY_ICON: Record<ActionTagCategory, ComponentType<any>> = {
+const CATEGORY_ICON: Record<ActionTagCategory, FC<any>> = {
   command: TerminalIcon,
   projectSkill: SkillsIcon,
   skill: SkillsIcon,
