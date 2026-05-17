@@ -294,6 +294,40 @@ export class HeterogeneousPersistenceHandler {
       state.accumulatedReasoning = dbReasoning;
     }
 
+    // Same multi-replica concern for `tools[]` and `lastModel`/`lastProvider`.
+    //
+    // Why this is necessary: `handleStepStart` computes the new assistant's
+    // parentId from `state.toolState.payloads` and copies model/provider from
+    // `state.lastModel` / `state.lastProvider`. Those are populated by
+    // `persistMainToolBatch` and `handleTurnMetadata` respectively — both
+    // run on whichever replica drains the relevant event. When the replica
+    // driving the next step boundary is NOT the one that drained the prior
+    // step's tools_calling / step_complete, the in-memory state is empty:
+    //   - parentId falls back to `state.currentAssistantMessageId`, so the
+    //     new turn chains off the previous assistant instead of the tool
+    //     message (observed in prod: 4/11 step boundaries in one topic).
+    //   - model/provider are written as null on the new assistant.
+    //
+    // Adopt the DB view as authoritative whenever it carries more resolved
+    // state than memory. `tools[]` is rewritten end-to-end on every Phase-3
+    // backfill, so it's safe to replace wholesale rather than merge by id —
+    // the same-batch transient where mem has a tool DB hasn't seen yet does
+    // not happen at refresh time (refresh runs before the event loop).
+    const dbTools = (refreshed?.tools ?? []) as ChatToolPayload[];
+    const dbResolvedToolCount = dbTools.filter((t) => !!t.result_msg_id).length;
+    const memResolvedToolCount = state.toolState.payloads.filter((t) => !!t.result_msg_id).length;
+    if (
+      dbTools.length > state.toolState.payloads.length ||
+      dbResolvedToolCount > memResolvedToolCount
+    ) {
+      state.toolState = {
+        payloads: [...dbTools],
+        persistedIds: new Set(dbTools.map((t) => t.id)),
+      };
+    }
+    if (!state.lastModel && refreshed?.model) state.lastModel = refreshed.model;
+    if (!state.lastProvider && refreshed?.provider) state.lastProvider = refreshed.provider;
+
     for (const event of params.events) {
       const key = eventKey(event);
       if (state.processedKeys.has(key)) {
@@ -541,11 +575,19 @@ export class HeterogeneousPersistenceHandler {
     const { model, provider, usage } = event.data ?? {};
     if (model) state.lastModel = model;
     if (provider) state.lastProvider = provider;
-    if (!usage) return;
 
-    await this.deps.messageModel.update(state.currentAssistantMessageId, {
-      metadata: { usage },
-    });
+    // Persist model/provider/usage to DB so a replica that didn't drain this
+    // event can still recover lastModel/lastProvider via the ingest-refresh
+    // path. Previously only `metadata.usage` was written, which left
+    // model/provider in-memory only — and the next step boundary on a
+    // different replica created assistants with model=null/provider=null.
+    const update: Record<string, any> = {};
+    if (usage) update.metadata = { usage };
+    if (model) update.model = model;
+    if (provider) update.provider = provider;
+    if (Object.keys(update).length === 0) return;
+
+    await this.deps.messageModel.update(state.currentAssistantMessageId, update);
   }
 
   /**
