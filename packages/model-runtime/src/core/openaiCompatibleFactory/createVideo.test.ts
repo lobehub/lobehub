@@ -19,6 +19,12 @@ const mockOptions: CreateVideoOptions = {
   provider: 'openai',
 };
 
+const mockVllmOptions: CreateVideoOptions = {
+  apiKey: 'test-api-key',
+  baseURL: 'http://localhost:8000/v1',
+  provider: 'vllm',
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -113,6 +119,26 @@ describe('createOpenAICompatibleVideo', () => {
 
       const body = JSON.parse((global.fetch as any).mock.calls[0][1].body);
       expect(body.input_reference).toEqual({ image_url: 'https://example.com/image.jpg' });
+    });
+
+    it('should preserve string input_reference for non-OpenAI compatible providers', async () => {
+      global.fetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: 'video-task-vllm-img' }),
+      });
+
+      const payload: CreateVideoPayload = {
+        model: 'vllm-omni',
+        params: {
+          prompt: 'Continue this scene',
+          imageUrl: 'https://example.com/image.jpg',
+        },
+      };
+
+      await createOpenAICompatibleVideo(payload, mockVllmOptions);
+
+      const body = JSON.parse((global.fetch as any).mock.calls[0][1].body);
+      expect(body.input_reference).toBe('https://example.com/image.jpg');
     });
   });
 
