@@ -52,6 +52,23 @@ const isOutOfSyncMigrationHistoryError = (err: unknown): boolean => {
   );
 };
 
+const isMissingSessionsGroupColumnError = (err: unknown): boolean => {
+  const code = (err as { code?: string; cause?: { code?: string } })?.code;
+  const causeCode = (err as { cause?: { code?: string } })?.cause?.code;
+  const where = ((err as { where?: string })?.where || '').toLowerCase();
+  const message = ((err as { message?: string })?.message || '').toLowerCase();
+
+  const missingColumn = code === '42703' || causeCode === '42703' || message.includes('column');
+  if (!missingColumn) return false;
+
+  return (
+    where.includes('sessions_group_id_session_groups_id_fk') ||
+    message.includes('sessions_group_id_session_groups_id_fk') ||
+    message.includes('column "group_id"') ||
+    message.includes('"group_id" does not exist')
+  );
+};
+
 const resetDrizzleMigrationHistory = async (dbUrl: string) => {
   const client = new PgClient({ connectionString: dbUrl });
   await client.connect();
@@ -325,6 +342,27 @@ const runLegacyAuthSchemaRepair = async (dbUrl: string) => {
   }
 };
 
+const runLegacySessionGroupSchemaRepair = async (dbUrl: string) => {
+  const client = new PgClient({ connectionString: dbUrl });
+  await client.connect();
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "session_groups" (
+        "id" text PRIMARY KEY NOT NULL,
+        "name" text NOT NULL,
+        "sort" integer,
+        "user_id" text,
+        "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+        "updated_at" timestamp with time zone DEFAULT now() NOT NULL
+      );
+
+      ALTER TABLE IF EXISTS "sessions" ADD COLUMN IF NOT EXISTS "group_id" text;
+    `);
+  } finally {
+    await client.end();
+  }
+};
+
 const runMigrations = async () => {
   const { serverDB } = await import('../../packages/database/src/server');
 
@@ -359,6 +397,20 @@ if (isVercelBuild && shouldSkipMigrateOnVercelBuild) {
 
     await runMigrations();
   })().catch(async (err) => {
+    if (isMissingSessionsGroupColumnError(err)) {
+      console.info(
+        '⚠️ Detected legacy sessions schema (missing sessions.group_id). Applying compatibility repair and retrying migrations once...',
+      );
+
+      try {
+        await runLegacySessionGroupSchemaRepair(connectionString);
+        await runMigrations();
+        return;
+      } catch (repairErr) {
+        console.error('❌ Legacy sessions compatibility repair failed:', repairErr);
+      }
+    }
+
     if (shouldAutoRepairMigrationHistory && isOutOfSyncMigrationHistoryError(err)) {
       console.info(
         '⚠️ Detected out-of-sync drizzle migration history. Resetting drizzle.__drizzle_migrations and retrying once...',
