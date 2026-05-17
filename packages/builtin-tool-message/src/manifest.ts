@@ -75,6 +75,28 @@ const botSettingsSchema = {
         "The bot owner's platform user ID. Required when dmPolicy='pairing' (used as approver identity and as an implicit member of allowFrom). Also used to push owner-only notifications.",
       type: 'string',
     },
+    watchKeywords: {
+      description:
+        'Channel-side keyword wake list. When a non-mention message in a non-DM channel contains any of these keywords (case-insensitive, whole-word), the bot wakes without an @mention. If the matched entry has an `instruction`, it is prepended to the user message as an extra prompt before being sent to the AI — so a bare trigger like "bug" can carry a directive ("Scan the recent thread and reply if there is a real bug report"). Empty/absent instructions just wake the bot with the raw user text. Same overwrite-replace semantics as allowFrom — read-modify-write via getBotDetail to add/remove entries.',
+      items: {
+        additionalProperties: false,
+        properties: {
+          instruction: {
+            description:
+              'Optional operator-authored prompt prepended to the user message when this keyword fires. Omit for "just wake the bot" behaviour.',
+            type: 'string',
+          },
+          keyword: {
+            description:
+              'Trigger word. Lowercased and whole-word matched against inbound message text (Latin scripts use ASCII word boundaries; CJK keywords match as substrings since they have no whitespace boundary).',
+            type: 'string',
+          },
+        },
+        required: ['keyword'],
+        type: 'object',
+      },
+      type: 'array',
+    },
   },
   type: 'object',
 };
@@ -683,7 +705,7 @@ export const MessageManifest: BuiltinToolManifest = {
           settings: {
             ...botSettingsSchema,
             description:
-              'Updated settings (partial update at the key level). See nested field descriptions for the allowed keys (dmPolicy, allowFrom, userId, groupPolicy, groupAllowFrom, serverId).',
+              'Updated settings (partial update at the key level). See nested field descriptions for the allowed keys (dmPolicy, allowFrom, userId, groupPolicy, groupAllowFrom, serverId, watchKeywords).',
           },
         },
         required: ['botId'],

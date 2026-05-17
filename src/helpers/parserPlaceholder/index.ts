@@ -1,6 +1,5 @@
 import { isDesktop } from '@lobechat/const';
 import { uuid } from '@lobechat/utils';
-import { template } from 'es-toolkit/compat';
 
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -195,7 +194,10 @@ export const parsePlaceholderVariables = (text: string, depth = 2): string => {
           .filter(([, value]) => value !== undefined),
       );
 
-      const replaced = template(result, { interpolate: placeholderVariablesRegex })(variables);
+      const replaced = result.replaceAll(
+        placeholderVariablesRegex,
+        (match, key) => variables[key.trim()] ?? match,
+      );
       if (replaced === result) break;
 
       result = replaced;

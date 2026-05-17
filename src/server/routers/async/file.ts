@@ -6,7 +6,6 @@ import pMap from 'p-map';
 import { z } from 'zod';
 
 import { checkEmbeddingUsage } from '@/business/server/trpc-middlewares/async';
-import { serverDBEnv } from '@/config/db';
 import { DEFAULT_FILE_EMBEDDING_MODEL_ITEM } from '@/const/settings/knowledge';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { ChunkModel } from '@/database/models/chunk';
@@ -168,16 +167,56 @@ export const fileRouter = router({
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'File not found' });
       }
 
+      // Inline documents (custom/document) keep a mirror file row whose url is the
+      // `internal://document/placeholder` marker. Their content lives on documents.content
+      // and is intentionally not chunked — searching is handled by BM25 instead.
+      if (file.url.startsWith('internal://')) {
+        await ctx.asyncTaskModel.update(input.taskId, {
+          error: new AsyncTaskError(
+            AsyncTaskErrorType.TaskTriggerError,
+            'Inline documents (custom/document) do not require chunking; content is searched via BM25.',
+          ),
+          status: AsyncTaskStatus.Error,
+        });
+        return {
+          message: `File ${file.name}(${input.taskId}) is an inline document and was skipped`,
+          success: false,
+        };
+      }
+
       let content: Uint8Array | undefined;
       try {
         content = await ctx.fileService.getFileByteArray(file.url);
       } catch (e) {
         console.error(e);
-        // if file not found, delete it from db
-        if ((e as any).Code === 'NoSuchKey') {
-          await ctx.fileModel.delete(input.fileId, serverDBEnv.REMOVE_GLOBAL_FILE);
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'File not found' });
+        const errorCode = (e as any).Code;
+        // Storage returned NoSuchKey. Do NOT delete the file row — transient S3
+        // outages, IAM misconfig, or already-orphaned DB rows must not cascade
+        // into destroying chunks/embeddings/documents. Mark the task as Error
+        // so users see a clear message and can re-upload or retry.
+        if (errorCode === 'NoSuchKey') {
+          await ctx.asyncTaskModel.update(input.taskId, {
+            error: new AsyncTaskError(
+              AsyncTaskErrorType.TaskTriggerError,
+              'File content unavailable in storage. Verify storage access or re-upload.',
+            ),
+            status: AsyncTaskStatus.Error,
+          });
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'File content unavailable in storage.',
+          });
         }
+        // Other fetch errors (network, IAM, etc.) — mark the task as Error so
+        // the user surface stays consistent, then propagate.
+        await ctx.asyncTaskModel.update(input.taskId, {
+          error: new AsyncTaskError(
+            AsyncTaskErrorType.TaskTriggerError,
+            `Failed to fetch file content: ${(e as Error)?.message ?? errorCode ?? 'unknown error'}`,
+          ),
+          status: AsyncTaskStatus.Error,
+        });
+        throw e;
       }
 
       if (!content) return;

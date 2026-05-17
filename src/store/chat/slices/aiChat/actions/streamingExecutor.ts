@@ -15,6 +15,7 @@ import { type ToolsEngine } from '@lobechat/context-engine';
 import { buildTaskDetailPrompt, buildTaskListPrompt } from '@lobechat/prompts';
 import {
   type ConversationContext,
+  type MessageMetadata,
   type RuntimeInitialContext,
   type UIChatMessage,
 } from '@lobechat/types';
@@ -169,7 +170,7 @@ export class StreamingExecutorActionImpl {
     initialContext,
     operationId,
     subAgentId: paramSubAgentId,
-    isSubTask,
+    isSubAgent,
   }: {
     messages: UIChatMessage[];
     parentMessageId: string;
@@ -186,7 +187,7 @@ export class StreamingExecutorActionImpl {
      * - scope: 'sub_agent': Used for agent config but doesn't change message ownership
      */
     subAgentId?: string;
-    isSubTask?: boolean;
+    isSubAgent?: boolean;
   }): {
     state: AgentState;
     context: AgentRuntimeContext;
@@ -211,13 +212,13 @@ export class StreamingExecutorActionImpl {
 
     // Resolve agent config with builtin agent runtime config merged
     // This ensures runtime plugins (e.g., 'lobe-agent-builder' for Agent Builder) are included
-    // - isSubTask: filters out lobe-gtd tools to prevent nested sub-task creation
+    // - isSubAgent: filters out lobe-agent tool to prevent nested sub-agent creation
     // - disableTools: clears all plugins for broadcast scenarios
     const agentConfig = resolveAgentConfig({
       agentId: effectiveAgentId || '',
       disableTools, // Clear plugins for broadcast scenarios
       groupId, // Pass groupId for supervisor detection
-      isSubTask, // Filter out lobe-gtd in sub-task context
+      isSubAgent, // Filter out lobe-agent in sub-agent context
       scope, // Pass scope from operation context
     });
 
@@ -258,9 +259,9 @@ export class StreamingExecutorActionImpl {
         : effectivePluginIds;
 
     log(
-      '[internal_createAgentState] resolved plugins=%o, isSubTask=%s, disableTools=%s, hasTopicReference=%s',
+      '[internal_createAgentState] resolved plugins=%o, isSubAgent=%s, disableTools=%s, hasTopicReference=%s',
       effectivePluginIds,
-      isSubTask,
+      isSubAgent,
       disableTools,
       hasTopicReference,
     );
@@ -473,13 +474,14 @@ export class StreamingExecutorActionImpl {
     initialContext?: AgentRuntimeContext;
     initialState?: AgentState;
     inPortalThread?: boolean;
+    metadata?: Pick<MessageMetadata, 'trigger'>;
     messages: UIChatMessage[];
     operationId?: string;
     parentMessageId: string;
     parentMessageType: 'user' | 'assistant' | 'tool';
     parentOperationId?: string;
     skipCreateFirstMessage?: boolean;
-    isSubTask?: boolean;
+    isSubAgent?: boolean;
   }): Promise<{ cost?: Cost; usage?: Usage } | void> => {
     const {
       disableTools,
@@ -487,7 +489,7 @@ export class StreamingExecutorActionImpl {
       parentMessageId,
       parentMessageType,
       context,
-      isSubTask,
+      isSubAgent,
     } = params;
 
     // Extract values from context
@@ -554,7 +556,7 @@ export class StreamingExecutorActionImpl {
     // ===========================================
     // Step 1: Create Agent State (resolves config once)
     // ===========================================
-    // agentConfig contains isSubTask filtering and is passed to callLLM executor
+    // agentConfig already has isSubAgent filtering applied and is passed to callLLM executor
     const {
       state: initialAgentState,
       context: initialAgentContext,
@@ -571,7 +573,7 @@ export class StreamingExecutorActionImpl {
       initialContext: params.initialContext,
       operationId,
       subAgentId, // Pass subAgentId for agent config retrieval (behavior depends on scope)
-      isSubTask, // Pass isSubTask to filter out lobe-gtd tools in sub-task context
+      isSubAgent, // Pass isSubAgent to filter out lobe-agent tool in sub-agent context
     });
 
     // Use model/provider from resolved agentConfig
@@ -610,6 +612,7 @@ export class StreamingExecutorActionImpl {
       executors: createAgentExecutors({
         agentConfig, // Pass pre-resolved config to callLLM executor
         get: this.#get,
+        metadata: params.metadata,
         messageKey,
         operationId,
         parentId: params.parentMessageId,
@@ -742,7 +745,7 @@ export class StreamingExecutorActionImpl {
       // REMEMBER: There is no test for it (too hard to add), if you want to change it , ask @arvinxx first
       if (
         result.nextContext?.phase &&
-        ['tasks_batch_result', 'tools_batch_result'].includes(result.nextContext?.phase)
+        ['sub_agents_batch_result', 'tools_batch_result'].includes(result.nextContext?.phase)
       ) {
         log(
           `[executeClientAgent] ${result.nextContext?.phase} completed, refreshing messages to sync state`,

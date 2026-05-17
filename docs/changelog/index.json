@@ -3,6 +3,14 @@
   "cloud": [],
   "community": [
     {
+      "image": "/blog/assets4aa1732a45832afc780600e6e329860c.webp",
+      "id": "2026-05-11-agent-tasks-ga",
+      "date": "2026-05-11",
+      "versionRange": [
+        "2.1.57"
+      ]
+    },
+    {
       "image": "/blog/assetsb2bf4ddf0a45ff887a993c18cb7ab983.webp",
       "id": "2026-05-04-task-scheduler",
       "date": "2026-05-04",

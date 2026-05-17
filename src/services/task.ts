@@ -49,6 +49,7 @@ class TaskService {
   create = async (params: {
     assigneeAgentId?: string;
     assigneeUserId?: string;
+    automationMode?: TaskAutomationMode;
     createdByAgentId?: string;
     description?: string;
     identifierPrefix?: string;
@@ -56,6 +57,8 @@ class TaskService {
     name?: string;
     parentTaskId?: string;
     priority?: number;
+    schedulePattern?: string;
+    scheduleTimezone?: string;
   }) => lambdaClient.task.create.mutate(params);
 
   update = async (

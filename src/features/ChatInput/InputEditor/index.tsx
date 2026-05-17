@@ -13,6 +13,7 @@ import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef } from 'r
 import { useHotkeysContext } from 'react-hotkeys-hook';
 
 import { usePasteFile, useUploadFiles } from '@/components/DragUploadZone';
+import { useEnterToSend } from '@/hooks/useEnterToSend';
 import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
 import { chatService } from '@/services/chat';
 import { useAgentStore } from '@/store/agent';
@@ -20,7 +21,6 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useUserStore } from '@/store/user';
 import {
   labPreferSelectors,
-  preferenceSelectors,
   settingsSelectors,
   systemAgentSelectors,
 } from '@/store/user/selectors';
@@ -78,7 +78,7 @@ const InputEditor = memo<{
 
   const { compositionProps, isComposingRef } = useIMECompositionEvent();
 
-  const useCmdEnterToSend = useUserStore(preferenceSelectors.useCmdEnterToSend);
+  const shouldSendOnEnter = useEnterToSend();
 
   // --- Category-based mention system ---
   const categories = useMentionCategories();
@@ -390,26 +390,17 @@ const InputEditor = memo<{
         if (e.shiftKey || isComposingRef.current) return;
         // when user like alt + enter to add ai message
         if (e.altKey && hotkey === combineKeys([KeyEnum.Alt, KeyEnum.Enter])) return true;
-        const commandKey = isCommandPressed(e);
         // In fullscreen mode, Enter inserts newline; only Cmd/Ctrl+Enter sends
         if (expand) {
-          if (commandKey) {
+          if (isCommandPressed(e)) {
             send();
             return true;
           }
           return;
         }
-        // when user like cmd + enter to send message
-        if (useCmdEnterToSend) {
-          if (commandKey) {
-            send();
-            return true;
-          }
-        } else {
-          if (!commandKey) {
-            send();
-            return true;
-          }
+        if (shouldSendOnEnter(e)) {
+          send();
+          return true;
         }
       }}
     />

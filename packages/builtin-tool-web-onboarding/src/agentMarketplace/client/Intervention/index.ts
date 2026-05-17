@@ -1,8 +1,8 @@
 import type { BuiltinIntervention } from '@lobechat/types';
 
-import { AgentMarketplaceApiName } from '../../types';
+import { WebOnboardingApiName } from '../../../types';
 import PickAgentsIntervention from './PickAgents';
 
 export const AgentMarketplaceInterventions: Record<string, BuiltinIntervention> = {
-  [AgentMarketplaceApiName.showAgentMarketplace]: PickAgentsIntervention as BuiltinIntervention,
+  [WebOnboardingApiName.showAgentMarketplace]: PickAgentsIntervention as BuiltinIntervention,
 };

@@ -24,6 +24,7 @@ import {
   HIDDEN_WHEN_COMPLETED_STATUSES,
   sortGroupEntries,
 } from './listViewOptions';
+import TaskItemSkeleton from './TaskItemSkeleton';
 
 interface TaskListProps {
   onShowHiddenCompleted?: () => void;
@@ -192,7 +193,18 @@ const TaskList = memo<TaskListProps>(({ onShowHiddenCompleted, options }) => {
     });
   }, [effectiveSubGroupBy, groupBy, options, visibleTasks]);
 
-  if (!isInit) return null;
+  if (!isInit) {
+    return (
+      <Block gap={2} padding={2} variant={'borderless'}>
+        {Array.from({ length: 5 }).map((_, index) => (
+          <Fragment key={`task-skeleton-${index}`}>
+            <TaskItemSkeleton />
+            {index !== 4 && <Divider dashed style={{ margin: 0 }} />}
+          </Fragment>
+        ))}
+      </Block>
+    );
+  }
 
   if (tasks.length === 0) {
     return (

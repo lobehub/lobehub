@@ -5,6 +5,7 @@ import {
   type GitBranchInfo,
   type GitBranchListItem,
   type GitCheckoutResult,
+  type GitFileRevertResult,
   type GitLinkedPullRequestResult,
   type GitPullResult,
   type GitPushResult,
@@ -83,6 +84,10 @@ class ElectronGitService {
 
   async pushGitBranch(params: { path: string }): Promise<GitPushResult> {
     return this.ipc.git.pushGitBranch(params);
+  }
+
+  async revertGitFile(params: { filePath: string; path: string }): Promise<GitFileRevertResult> {
+    return this.ipc.git.revertGitFile(params);
   }
 }
 

@@ -714,6 +714,13 @@
       "when": 1778164638645,
       "tag": "0101_add_messenger_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "7",
+      "when": 1778602304603,
+      "tag": "0102_add_agent_operations_table",
+      "breakpoints": true
     }
   ],
   "version": "6"

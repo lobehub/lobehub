@@ -128,12 +128,15 @@ export class TaskDetailSliceActionImpl {
 
   createTask = async (params: {
     assigneeAgentId?: string;
+    automationMode?: 'heartbeat' | 'schedule';
     createdByAgentId?: string;
     description?: string;
     instruction: string;
     name?: string;
     parentTaskId?: string;
     priority?: number;
+    schedulePattern?: string;
+    scheduleTimezone?: string;
   }): Promise<CreatedTask | null> => {
     this.#set({ isCreatingTask: true }, false, 'createTask/start');
     try {

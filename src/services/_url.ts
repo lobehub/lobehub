@@ -3,8 +3,6 @@ import { withElectronProtocolIfElectron } from '@/const/protocol';
 export const API_ENDPOINTS = {
   oauth: withElectronProtocolIfElectron('/api/auth'),
 
-  proxy: withElectronProtocolIfElectron('/webapi/proxy'),
-
   // trace
   trace: withElectronProtocolIfElectron('/webapi/trace'),
 

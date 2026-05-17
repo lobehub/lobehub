@@ -230,6 +230,45 @@ describe('BriefModel', () => {
     });
   });
 
+  describe('listUnresolvedByAgentAndTrigger', () => {
+    /**
+     * @example
+     * listUnresolvedByAgentAndTrigger({ agentId, trigger }) returns matching older briefs even when unrelated briefs exceed the cap.
+     */
+    it('should filter by user, unresolved status, trigger, and agent before applying the limit', async () => {
+      const model = new BriefModel(serverDB, userId);
+
+      for (let i = 0; i < 25; i++) {
+        await model.create({
+          agentId: 'other-agent',
+          priority: 'urgent',
+          summary: `Unrelated ${i}`,
+          title: `Unrelated ${i}`,
+          trigger: 'other-trigger',
+          type: 'decision',
+        });
+      }
+
+      await model.create({
+        agentId: 'agent-1',
+        priority: 'normal',
+        summary: 'Matching proposal',
+        title: 'Matching',
+        trigger: 'agent-signal:nightly-review',
+        type: 'decision',
+      });
+
+      const rows = await model.listUnresolvedByAgentAndTrigger({
+        agentId: 'agent-1',
+        limit: 20,
+        trigger: 'agent-signal:nightly-review',
+      });
+
+      expect(rows).toHaveLength(1);
+      expect(rows[0].summary).toBe('Matching proposal');
+    });
+  });
+
   describe('markRead', () => {
     it('should mark brief as read', async () => {
       const model = new BriefModel(serverDB, userId);

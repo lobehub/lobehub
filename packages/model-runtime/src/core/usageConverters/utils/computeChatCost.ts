@@ -53,6 +53,8 @@ export interface PricingComputationResult {
 }
 
 interface UnitQuantityResolverContext {
+  hasDedicatedAudioCacheReadUnit: boolean;
+  hasDedicatedImageCacheReadUnit: boolean;
   hasDedicatedModalityCacheReadUnit: boolean;
 }
 
@@ -108,6 +110,13 @@ const resolveInputVideoTokens = (usage: ModelTokensUsage) => {
   return usage.inputVideoTokens;
 };
 
+const sumDefinedTokens = (...values: Array<number | undefined>) => {
+  const definedValues = values.filter((value): value is number => typeof value === 'number');
+  if (definedValues.length === 0) return undefined;
+
+  return definedValues.reduce((sum, value) => sum + value, 0);
+};
+
 const UNIT_QUANTITY_RESOLVERS: Partial<Record<PricingUnitName, UnitQuantityResolver>> = {
   textInput: (usage) => {
     const toolTokens = usage.inputToolTokens ?? 0;
@@ -143,7 +152,24 @@ const UNIT_QUANTITY_RESOLVERS: Partial<Record<PricingUnitName, UnitQuantityResol
   },
   textInput_cacheRead: (usage, context) => {
     if (hasCachedModalityBreakdown(usage) && context.hasDedicatedModalityCacheReadUnit) {
-      return usage.inputCachedTextTokens;
+      if (typeof usage.inputCachedTokens === 'number') {
+        return Math.max(
+          0,
+          usage.inputCachedTokens -
+            (context.hasDedicatedAudioCacheReadUnit ? (usage.inputCachedAudioTokens ?? 0) : 0) -
+            (context.hasDedicatedImageCacheReadUnit ? (usage.inputCachedImageTokens ?? 0) : 0),
+        );
+      }
+
+      // `textInput_cacheRead` is the fallback bucket for same-price cached modalities.
+      // For Gemini 3.1 Flash-Lite, text/image/video cache reads share one rate while
+      // audio has a dedicated higher rate.
+      return sumDefinedTokens(
+        usage.inputCachedTextTokens,
+        context.hasDedicatedImageCacheReadUnit ? undefined : usage.inputCachedImageTokens,
+        context.hasDedicatedAudioCacheReadUnit ? undefined : usage.inputCachedAudioTokens,
+        usage.inputCachedVideoTokens,
+      );
     }
 
     return usage.inputCachedTokens;
@@ -337,9 +363,13 @@ export const computeChatCost = (
   const currency = pricing.currency || 'USD';
   const usdToCnyRate = options?.usdToCnyRate ?? USD_TO_CNY;
   const pricingUnitNames = new Set(pricing.units.map((unit) => unit.name));
+  const hasDedicatedAudioCacheReadUnit = pricingUnitNames.has('audioInput_cacheRead');
+  const hasDedicatedImageCacheReadUnit = pricingUnitNames.has('imageInput_cacheRead');
   const resolverContext: UnitQuantityResolverContext = {
+    hasDedicatedAudioCacheReadUnit,
+    hasDedicatedImageCacheReadUnit,
     hasDedicatedModalityCacheReadUnit:
-      pricingUnitNames.has('audioInput_cacheRead') || pricingUnitNames.has('imageInput_cacheRead'),
+      hasDedicatedAudioCacheReadUnit || hasDedicatedImageCacheReadUnit,
   };
 
   for (const unit of pricing.units) {

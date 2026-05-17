@@ -39,6 +39,9 @@ declare global {
   /** Vite define: development mode (NODE_ENV !== 'production') */
   const __DEV__: boolean;
 
+  /** Vite define: running under Vitest */
+  const __TEST__: boolean;
+
   /** Vite define: current bundle is mobile variant */
   const __MOBILE__: boolean;
 

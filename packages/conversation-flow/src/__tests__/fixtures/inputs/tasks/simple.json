@@ -20,9 +20,9 @@
       {
         "id": "call_exec_tasks_1",
         "type": "builtin",
-        "apiName": "execTasks",
+        "apiName": "callSubAgents",
         "arguments": "{\"tasks\": [{\"description\": \"Research Hangzhou weather\", \"instruction\": \"Search for Hangzhou weather tomorrow.\"}, {\"description\": \"Research Beijing weather\", \"instruction\": \"Search for Beijing weather tomorrow.\"}]}",
-        "identifier": "lobe-gtd"
+        "identifier": "lobe-agent"
       }
     ],
     "metadata": {
@@ -45,13 +45,13 @@
     "createdAt": 1735526588116,
     "updatedAt": 1735526591337,
     "plugin": {
-      "apiName": "execTasks",
+      "apiName": "callSubAgents",
       "arguments": "{\"tasks\": [{\"description\": \"Research Hangzhou weather\", \"instruction\": \"Search for Hangzhou weather tomorrow.\"}, {\"description\": \"Research Beijing weather\", \"instruction\": \"Search for Beijing weather tomorrow.\"}]}",
-      "identifier": "lobe-gtd",
+      "identifier": "lobe-agent",
       "type": "builtin"
     },
     "pluginState": {
-      "type": "execTasks",
+      "type": "execSubAgents",
       "tasks": [
         {
           "description": "Research Hangzhou weather",

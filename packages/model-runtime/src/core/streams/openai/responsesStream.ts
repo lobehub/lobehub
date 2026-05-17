@@ -205,7 +205,9 @@ export const OpenAIResponsesStream = (
   const streamStack: StreamContext = { id: '' };
 
   const readableStream =
-    stream instanceof ReadableStream ? stream : convertIterableToStream(stream);
+    stream instanceof ReadableStream
+      ? stream
+      : convertIterableToStream(stream, { model: payload?.model, provider: payload?.provider });
 
   // use closure to pass payload to transformOpenAIStream
   const transformWithPayload: typeof transformOpenAIStream = (chunk, streamContext) =>

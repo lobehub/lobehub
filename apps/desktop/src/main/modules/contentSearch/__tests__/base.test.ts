@@ -49,6 +49,10 @@ class TestContentSearch extends BaseContentSearch {
   public testGetDefaultIgnorePatterns(): string[] {
     return this.getDefaultIgnorePatterns();
   }
+
+  public testResolveSearchPath(params: GrepContentParams): string {
+    return this.resolveSearchPath(params);
+  }
 }
 
 describe('BaseContentSearch', () => {
@@ -252,6 +256,33 @@ describe('BaseContentSearch', () => {
         expect(args).toContain('--include');
         expect(args).toContain('*.py');
       });
+    });
+  });
+
+  describe('resolveSearchPath', () => {
+    it('prefers scope when path is not set', () => {
+      const resolved = contentSearch.testResolveSearchPath({
+        pattern: 'x',
+        scope: '/Users/arvinxx/repo',
+      });
+
+      expect(resolved).toBe('/Users/arvinxx/repo');
+    });
+
+    it('honors legacy path over scope when both are set', () => {
+      const resolved = contentSearch.testResolveSearchPath({
+        path: '/legacy/path',
+        pattern: 'x',
+        scope: '/scope/path',
+      });
+
+      expect(resolved).toBe('/legacy/path');
+    });
+
+    it('falls back to process.cwd() when neither is provided', () => {
+      const resolved = contentSearch.testResolveSearchPath({ pattern: 'x' });
+
+      expect(resolved).toBe(process.cwd());
     });
   });
 

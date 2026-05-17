@@ -28,9 +28,14 @@ export const initialSendButtonState: SendButtonProps = {
 
 export type SlashPlacement = 'top' | 'bottom';
 
+export interface ContextWindowMessage {
+  content: string;
+}
+
 export interface PublicState {
   agentId?: string;
   allowExpand?: boolean;
+  contextWindowMessages?: ContextWindowMessage[];
   /**
    * Disable @ mention trigger (no menu, no agent-assignment hint in placeholder)
    */

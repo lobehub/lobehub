@@ -21,6 +21,7 @@ export type {
   ContextNode,
   MessageNode,
   PinnedMessage,
+  SignalCallbacksNode,
   TasksNode,
 } from './contextTree';
 

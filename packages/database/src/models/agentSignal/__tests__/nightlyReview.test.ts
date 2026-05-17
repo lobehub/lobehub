@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { INBOX_SESSION_ID } from '@lobechat/const';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
@@ -93,6 +94,105 @@ describe('AgentSignalNightlyReviewModel', () => {
   });
 
   describe('listActiveAgentTargets', () => {
+    const chatConfigForSelfIteration = (enabled?: boolean) =>
+      enabled === undefined
+        ? { autoCreateTopicThreshold: 2 }
+        : { autoCreateTopicThreshold: 2, selfIteration: { enabled } };
+
+    const seedNightlyCapabilityTargets = async (caseName: string, blockedEnabled?: boolean) => {
+      await serverDB.insert(users).values({ id: enabledUserId });
+
+      const [lobeAiAgent, blockedAgent, enabledAgent] = await serverDB
+        .insert(agents)
+        .values([
+          {
+            chatConfig: chatConfigForSelfIteration(blockedEnabled),
+            id: `nightly-lobe-ai-${caseName}`,
+            slug: INBOX_SESSION_ID,
+            title: 'Lobe AI',
+            userId: enabledUserId,
+            virtual: true,
+          },
+          {
+            chatConfig: chatConfigForSelfIteration(blockedEnabled),
+            id: `nightly-custom-${caseName}`,
+            slug: `custom-${caseName}`,
+            title: 'Custom blocked',
+            userId: enabledUserId,
+          },
+          {
+            chatConfig: chatConfigForSelfIteration(true),
+            id: `nightly-custom-enabled-${caseName}`,
+            slug: `custom-enabled-${caseName}`,
+            title: 'Custom enabled',
+            userId: enabledUserId,
+          },
+        ])
+        .returning();
+
+      await serverDB.insert(topics).values(
+        [lobeAiAgent, blockedAgent, enabledAgent].map((agent) => ({
+          agentId: agent.id,
+          id: `nightly-topic-${agent.id}`,
+          title: agent.title ?? agent.id,
+          userId: enabledUserId,
+        })),
+      );
+      await serverDB.insert(messages).values(
+        [lobeAiAgent, blockedAgent, enabledAgent].map((agent, index) => ({
+          agentId: agent.id,
+          content: `${agent.title} activity`,
+          createdAt: new Date(`2026-05-03T1${index + 2}:00:00.000Z`),
+          id: `nightly-message-${agent.id}`,
+          role: 'user' as const,
+          topicId: `nightly-topic-${agent.id}`,
+          userId: enabledUserId,
+        })),
+      );
+
+      return { blockedAgent, enabledAgent, lobeAiAgent };
+    };
+
+    /**
+     * @example
+     * expect(result.map((item) => item.agentId)).toEqual(['nightly-lobe-ai-disabled']).
+     */
+    it('includes Lobe AI when the agent switch is disabled and excludes non-Lobe disabled agents', async () => {
+      const { blockedAgent, enabledAgent, lobeAiAgent } = await seedNightlyCapabilityTargets(
+        'disabled',
+        false,
+      );
+
+      const model = new AgentSignalNightlyReviewModel(serverDB);
+
+      const result = await model.listActiveAgentTargets(enabledUserId, {
+        windowEnd: new Date('2026-05-03T23:59:59.999Z'),
+        windowStart: new Date('2026-05-03T00:00:00.000Z'),
+      });
+
+      expect(result.map((item) => item.agentId)).toEqual([enabledAgent.id, lobeAiAgent.id]);
+      expect(result.map((item) => item.agentId)).not.toContain(blockedAgent.id);
+    });
+
+    /**
+     * @example
+     * expect(result.map((item) => item.agentId)).toEqual(['nightly-lobe-ai-implicit']).
+     */
+    it('includes Lobe AI when the agent switch is missing and excludes non-Lobe implicit agents', async () => {
+      const { blockedAgent, enabledAgent, lobeAiAgent } =
+        await seedNightlyCapabilityTargets('implicit');
+
+      const model = new AgentSignalNightlyReviewModel(serverDB);
+
+      const result = await model.listActiveAgentTargets(enabledUserId, {
+        windowEnd: new Date('2026-05-03T23:59:59.999Z'),
+        windowStart: new Date('2026-05-03T00:00:00.000Z'),
+      });
+
+      expect(result.map((item) => item.agentId)).toEqual([enabledAgent.id, lobeAiAgent.id]);
+      expect(result.map((item) => item.agentId)).not.toContain(blockedAgent.id);
+    });
+
     it('returns non-virtual agents with activity and failure counts inside the review window', async () => {
       await serverDB.insert(users).values([{ id: enabledUserId }, { id: otherUserId }]);
       await serverDB.insert(userSettings).values({

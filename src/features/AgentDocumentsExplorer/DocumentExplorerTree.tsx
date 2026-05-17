@@ -1,25 +1,33 @@
 import type { MenuProps } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { Trash2Icon } from 'lucide-react';
-import { type CSSProperties, memo, useCallback, useMemo, useRef } from 'react';
+import type { CSSProperties } from 'react';
+import { memo, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMatch, useNavigate } from 'react-router-dom';
 import type { KeyedMutator } from 'swr';
 
-import {
-  ExplorerTree,
-  type ExplorerTreeCanDropCtx,
-  type ExplorerTreeHandle,
-  type ExplorerTreeNode,
+import type {
+  ExplorerTreeCanDropCtx,
+  ExplorerTreeHandle,
+  ExplorerTreeNode,
 } from '@/features/ExplorerTree';
+import { ExplorerTree, FOLDER_ICON_CSS } from '@/features/ExplorerTree';
 import { useChatStore } from '@/store/chat';
 
 import DocumentExplorerToolbar from './DocumentExplorerToolbar';
 import { useDocumentTreeOps } from './hooks/useDocumentTreeOps';
-import { type AgentDocumentItem, isFolderItem } from './types';
+import type { AgentDocumentItem } from './types';
+import {
+  isFolderItem,
+  isManagedSkillItem,
+  isOrphanSkillBundleItem,
+  isSkillIndexItem,
+} from './types';
 import { canDropDocument } from './utils/canDrop';
 
 const PAGE_ROUTE_PATTERN = '/agent/:aid/:topicId/page/:docId?';
+const SKILL_INDEX_FILENAME = 'SKILL.md';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   tree: css`
@@ -33,6 +41,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     --trees-padding-inline-override: 0px;
     --trees-font-size-override: 12px;
     --trees-border-radius-override: 6px;
+
+    /* Drop the doubled outline pierre/trees draws via ::before on a
+     * focused+selected row — the filled background from
+     * --trees-selected-bg-override is already a clear selection signal. */
+    --trees-selected-focused-border-color-override: transparent;
   `,
 }));
 
@@ -86,10 +99,14 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
         data: doc,
         id: doc.id,
         isFolder: isFolderItem(doc),
-        name: doc.title || doc.filename || '',
+        name: isSkillIndexItem(doc) ? SKILL_INDEX_FILENAME : doc.title || doc.filename || '',
         parentId: resolveParentRowId(doc.parentId),
       })),
     [documents, resolveParentRowId],
+  );
+  const defaultExpandedIds = useMemo(
+    () => nodes.filter((node) => node.isFolder && node.parentId == null).map((node) => node.id),
+    [nodes],
   );
 
   const parentMap = useMemo(() => {
@@ -98,13 +115,26 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
     return map;
   }, [documents, resolveParentRowId]);
 
+  const isRecoverableSkillBundle = useCallback(
+    (doc: AgentDocumentItem) => isOrphanSkillBundleItem(doc, documents),
+    [documents],
+  );
+
+  const focusNewRowForRename = useCallback((pendingId: string) => {
+    // Defer past the current task so React commits the inserted row and the
+    // tree adapter rebuilds its id→path map before we trigger rename.
+    setTimeout(() => treeRef.current?.startRenaming(pendingId), 0);
+  }, []);
+
   const handleCreateFolder = useCallback(
-    (parentId: string | null) => ops.createFolder(parentId),
-    [ops],
+    (parentId: string | null) =>
+      ops.createFolder(parentId, { onPendingInserted: focusNewRowForRename }),
+    [focusNewRowForRename, ops],
   );
   const handleCreateDocument = useCallback(
-    (parentId: string | null) => ops.createDocument(parentId),
-    [ops],
+    (parentId: string | null) =>
+      ops.createDocument(parentId, { onPendingInserted: focusNewRowForRename }),
+    [focusNewRowForRename, ops],
   );
 
   const handleNodeClick = useCallback(
@@ -145,12 +175,14 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
   );
 
   const canDrag = useCallback(
-    (node: ExplorerTreeNode<AgentDocumentItem>) => node.data?.sourceType !== 'web',
+    (node: ExplorerTreeNode<AgentDocumentItem>) =>
+      !!node.data && node.data.sourceType !== 'web' && !isManagedSkillItem(node.data),
     [],
   );
 
   const canRename = useCallback(
-    (node: ExplorerTreeNode<AgentDocumentItem>) => node.data?.sourceType !== 'web',
+    (node: ExplorerTreeNode<AgentDocumentItem>) =>
+      !!node.data && node.data.sourceType !== 'web' && !isManagedSkillItem(node.data),
     [],
   );
 
@@ -161,12 +193,16 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
 
   const getContextMenuItems = useCallback(
     (node: ExplorerTreeNode<AgentDocumentItem>): MenuProps['items'] => {
+      if (node.data && isManagedSkillItem(node.data) && !isRecoverableSkillBundle(node.data)) {
+        return [];
+      }
+
       const isFolder = !!node.isFolder;
       const targetParentId = isFolder ? node.id : (node.parentId ?? null);
 
       const items: NonNullable<MenuProps['items']> = [];
 
-      if (isFolder) {
+      if (isFolder && (!node.data || !isManagedSkillItem(node.data))) {
         items.push(
           {
             key: 'new-folder',
@@ -182,37 +218,42 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
         );
       }
 
-      items.push(
-        {
+      if (!node.data || !isManagedSkillItem(node.data)) {
+        items.push({
           key: 'rename',
           label: t('workingPanel.resources.tree.rename'),
           onClick: () => startInlineRename(node.id),
-        },
-        {
-          danger: true,
-          icon: <Trash2Icon size={14} />,
-          key: 'delete',
-          label: t('delete', { ns: 'common' }),
-          onClick: () => ops.deleteDocument(node.id),
-        },
-      );
+        });
+      }
+
+      items.push({
+        danger: true,
+        icon: <Trash2Icon size={14} />,
+        key: 'delete',
+        label: t('delete', { ns: 'common' }),
+        onClick: () => ops.deleteDocument(node.id),
+      });
 
       return items;
     },
-    [handleCreateDocument, handleCreateFolder, ops, startInlineRename, t],
+    [handleCreateDocument, handleCreateFolder, isRecoverableSkillBundle, ops, startInlineRename, t],
   );
 
   return (
     <div className={styles.tree} style={style}>
       <ExplorerTree<AgentDocumentItem>
+        iconsColored
         canDrag={canDrag}
         canDrop={canDrop}
         canRename={canRename}
-        density="relaxed"
+        defaultExpandedIds={defaultExpandedIds}
+        density="compact"
         getContextMenuItems={getContextMenuItems}
+        iconSet="complete"
         nodes={nodes}
         ref={treeRef}
         style={{ height: '100%' }}
+        unsafeCSS={FOLDER_ICON_CSS}
         header={
           <DocumentExplorerToolbar
             onCreateDocument={() => handleCreateDocument(null)}

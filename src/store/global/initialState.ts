@@ -23,12 +23,11 @@ export enum SidebarTabKey {
 
 export enum ChatSettingsTabs {
   Chat = 'chat',
-  Documents = 'documents',
-  Meta = 'meta',
   Modal = 'modal',
   Opening = 'opening',
   Plugin = 'plugin',
   Prompt = 'prompt',
+  SelfIteration = 'selfIteration',
   TTS = 'tts',
 }
 
@@ -37,6 +36,8 @@ export enum GroupSettingsTabs {
   Members = 'members',
   Settings = 'settings',
 }
+
+export type WorkingSidebarTab = 'files' | 'params' | 'resources' | 'review';
 
 export enum SettingsTabs {
   About = 'about',
@@ -267,12 +268,13 @@ export interface SystemStatus {
   videoPanelWidth: number;
   videoTopicPanelWidth?: number;
   videoTopicViewMode?: 'grid' | 'list';
+  workingSidebarRevealRequest?: { nonce: number; path: string };
   /**
    * Active tab inside the agent chat right-side WorkingSidebar.
    * Lifted to global so external triggers (e.g. the diff badge in the input bar)
    * can switch the panel to "review" when revealing the right panel.
    */
-  workingSidebarTab?: 'resources' | 'review';
+  workingSidebarTab?: WorkingSidebarTab;
   zenMode?: boolean;
 }
 
@@ -368,7 +370,7 @@ export const INITIAL_STATUS = {
   showImageTopicPanel: true,
   showLeftPanel: true,
   showPageAgentPanel: true,
-  showRightPanel: true,
+  showRightPanel: false,
   showSystemRole: false,
   showTaskAgentPanel: false,
   showVideoPanel: true,

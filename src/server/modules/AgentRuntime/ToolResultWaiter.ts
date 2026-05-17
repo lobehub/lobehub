@@ -9,6 +9,7 @@ export interface ToolResultPayload {
     message: string;
     type?: string;
   };
+  state?: Record<string, any>;
   success: boolean;
   toolCallId: string;
 }

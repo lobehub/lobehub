@@ -265,6 +265,25 @@ const ccSubagentSpawnResult = (spawnToolUseId: string, finalText: string) => ({
   type: 'user',
 });
 
+/**
+ * Subagent INNER tool_result: a user event tagged with `parent_tool_use_id`,
+ * which the adapter routes through its subagent path so the emitted
+ * `tool_result` + `tool_end` events both carry the `subagent` peer field.
+ */
+const ccSubagentToolResult = (
+  toolUseId: string,
+  parentToolUseId: string,
+  content: string,
+  isError = false,
+) => ({
+  message: {
+    content: [{ content, is_error: isError, tool_use_id: toolUseId, type: 'tool_result' }],
+    role: 'user',
+  },
+  parent_tool_use_id: parentToolUseId,
+  type: 'user',
+});
+
 const ccText = (msgId: string, text: string) => ccAssistant(msgId, [{ text, type: 'text' }]);
 
 const ccThinking = (msgId: string, thinking: string) =>
@@ -2794,6 +2813,91 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(seenToolIds).toContain('toolu_read');
       expect(seenToolIds).not.toContain('toolu_grep');
     });
+
+    /**
+     * Regression for LOBE-8991: the subagent forwarding guard initially only
+     * filtered `stream_chunk` events. `tool_start` / `tool_end` for subagent
+     * inner tools still reached the main gateway handler, where:
+     *   - `tool_start` would fire `dispatchOnBeforeCall` against the MAIN
+     *     context for what is actually a subagent inner tool.
+     *   - `tool_end`  would call `fetchAndReplaceMessages(main)` once per
+     *     subagent inner tool result — wasted work AND a state-drift window
+     *     that surfaced as the "orphan tool call" banner on the spawn's
+     *     Task/Agent bubble in the main topic.
+     *
+     * The guard now covers ALL subagent-tagged events. Main-agent tool
+     * lifecycle events (no `subagent` peer) must still reach the handler
+     * so the main bubble's animation / onAfterCall hooks fire.
+     */
+    it('does NOT forward subagent-tagged tool_start / tool_end events to the gateway handler', async () => {
+      await runWithEvents([
+        ccInit(),
+        // Main emits Task + a parallel Read in the same message.id.
+        ccToolUse('msg_main', 'toolu_task', 'Task', {
+          description: 'inspect',
+          prompt: 'go',
+          subagent_type: 'Explore',
+        }),
+        ccToolUse('msg_main', 'toolu_read', 'Read', { file_path: '/a.ts' }),
+        // Subagent inner tool — adapter emits tool_start(subagent) here.
+        ccSubagentToolUse('msg_sub_1', 'toolu_task', 'toolu_grep', 'Grep', {
+          pattern: 'foo',
+        }),
+        // Subagent inner tool_result with parent_tool_use_id — adapter emits
+        // tool_result(subagent) + tool_end(subagent) here. Without the
+        // broadened guard, tool_end(subagent) would reach the main handler.
+        ccSubagentToolResult('toolu_grep', 'toolu_task', 'grep output'),
+        ccSubagentText('msg_sub_2', 'toolu_task', 'subagent summary'),
+        // Main's own parallel tool result — emits tool_end (no subagent flag),
+        // MUST reach the handler so dispatchOnAfterCall fires on main bucket.
+        ccToolResult('toolu_read', 'read content'),
+        // Spawn result closes the subagent run.
+        ccSubagentSpawnResult('toolu_task', 'task done'),
+        ccResult(),
+      ]);
+
+      const handlerSpy = vi.mocked(createGatewayEventHandler).mock.results[0]?.value as ReturnType<
+        typeof vi.fn
+      >;
+      expect(handlerSpy).toBeDefined();
+
+      const forwardedEvents = handlerSpy.mock.calls.map((call) => call[0]);
+
+      // No forwarded event of ANY type may carry the subagent peer field —
+      // they're all handled inline (tool_result) or routed through the
+      // per-spawn thread-scoped dispatcher (stream_chunk, tool_start,
+      // tool_end). The main gateway handler is main-agent-only.
+      const leakedSubagentEvents = forwardedEvents.filter(
+        (e: any) => e?.data?.subagent !== undefined,
+      );
+      expect(leakedSubagentEvents).toHaveLength(0);
+
+      // Sanity: main-agent tool lifecycle for `toolu_read` still reaches the
+      // handler — this is the path that drives the main bubble's tool card
+      // animation + invalidates renderer caches via dispatchOnAfterCall.
+      const mainToolStarts = forwardedEvents.filter(
+        (e: any) => e?.type === 'tool_start' && e.data?.toolCalling?.id === 'toolu_read',
+      );
+      expect(mainToolStarts.length).toBeGreaterThan(0);
+
+      const mainToolEnds = forwardedEvents.filter(
+        (e: any) => e?.type === 'tool_end' && e.data?.toolCallId === 'toolu_read',
+      );
+      expect(mainToolEnds.length).toBeGreaterThan(0);
+
+      // The subagent's inner Grep tool_start / tool_end specifically must
+      // not appear in the forwarded set — guards against a future regression
+      // that narrows the filter back to stream_chunk only.
+      const grepToolStarts = forwardedEvents.filter(
+        (e: any) => e?.type === 'tool_start' && e.data?.toolCalling?.id === 'toolu_grep',
+      );
+      expect(grepToolStarts).toHaveLength(0);
+
+      const grepToolEnds = forwardedEvents.filter(
+        (e: any) => e?.type === 'tool_end' && e.data?.toolCallId === 'toolu_grep',
+      );
+      expect(grepToolEnds).toHaveLength(0);
+    });
   });
 
   // ────────────────────────────────────────────────────
@@ -2855,12 +2959,11 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
     });
 
     /**
-     * Hypothesis 2 from the issue: a toolless step in the middle.
-     * If Monitor's stdout triggers CC to respond with only text (no tool_use),
-     * the next step must still chain through. This test documents current
-     * behavior: toolless step breaks tool → next-tool chain.
+     * LOBE-8993 regression: a toolless step in the middle must NOT break the
+     * zigzag chain. The next step should chain back to the most recent tool
+     * result ever produced in the run, not to the toolless assistant.
      */
-    it('toolless middle step: chain visibly breaks at text-only step', async () => {
+    it('toolless middle step: next step chains back to last real tool', async () => {
       const idCounter = { tool: 0, assistant: 0 };
       mockCreateMessage.mockImplementation(async (params: any) => {
         if (params.role === 'tool') {
@@ -2889,15 +2992,61 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       );
       expect(assistantCreates.length).toBe(2);
 
-      // Step 1 parent = Monitor tool from step 0 → this IS correct (tool-1)
+      // Step 1 parent = Monitor tool from step 0 (tool-1)
       expect(assistantCreates[0][0].parentId).toBe('tool-1');
 
-      // Step 2 parent: step 1 had NO tools, so toolState.payloads is empty.
-      // Code falls back to currentAssistantMessageId (= step 1 assistant).
-      // BUG: this breaks the assistantGroup chain because collectAssistantChain
-      // only walks tool → assistant, never assistant → assistant.
-      expect(assistantCreates[1][0].parentId).toBe('ast-new-1');
-      // ^ If this assertion passes, the chain IS broken.
+      // Step 2 parent: step 1 was toolless, but the chain must skip back to
+      // step 0's Monitor (tool-1) so MessageCollector's assistant → tool →
+      // assistant walk keeps every assistant in the same group.
+      expect(assistantCreates[1][0].parentId).toBe('tool-1');
+    });
+
+    /**
+     * LOBE-8993 follow-up: N consecutive toolless steps (Monitor pushing
+     * stdout line by line, each line triggering a new LLM call that only
+     * answers with text). All toolless assistants must chain back to the
+     * same originating tool result; otherwise the UI splits one bubble per
+     * Monitor line.
+     */
+    it('consecutive toolless steps: all parents resolve to the originating tool', async () => {
+      const idCounter = { tool: 0, assistant: 0 };
+      mockCreateMessage.mockImplementation(async (params: any) => {
+        if (params.role === 'tool') {
+          idCounter.tool++;
+          return { id: `tool-${idCounter.tool}` };
+        }
+        idCounter.assistant++;
+        return { id: `ast-new-${idCounter.assistant}` };
+      });
+
+      await runWithEvents([
+        ccInit(),
+        // Step 0: Monitor kicks off the long-running task
+        ccToolUse('msg_01', 'toolu_mon_0', 'Monitor', { shell: 'tail -f log' }),
+        ccToolResult('toolu_mon_0', 'Monitor started'),
+        // Step 1, 2, 3: each Monitor stdout line drives a toolless reply
+        ccText('msg_02', '等 list 完。'),
+        ccText('msg_03', '84842 列完，开干。'),
+        ccText('msg_04', '100/84842 全 skip…'),
+        // Step 4: CC finally reacts with a Bash tool
+        ccToolUse('msg_05', 'toolu_bash_1', 'Bash', { command: 'echo ack' }),
+        ccToolResult('toolu_bash_1', 'ack'),
+        ccResult(),
+      ]);
+
+      const assistantCreates = mockCreateMessage.mock.calls.filter(
+        ([p]: any) => p.role === 'assistant',
+      );
+      // 4 new assistants (steps 1–4); step 0 reuses ast-initial
+      expect(assistantCreates.length).toBe(4);
+
+      // All toolless steps chain back to the Monitor tool from step 0
+      expect(assistantCreates[0][0].parentId).toBe('tool-1');
+      expect(assistantCreates[1][0].parentId).toBe('tool-1');
+      expect(assistantCreates[2][0].parentId).toBe('tool-1');
+      // Step 4 also chains to tool-1 — its own step had no tools yet at
+      // step_start, the Bash tool only persists after stream_start fires.
+      expect(assistantCreates[3][0].parentId).toBe('tool-1');
     });
 
     /**
@@ -2942,6 +3091,270 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       // result_msg_id is set by persistToolBatch Phase 2 (queued on persistQueue
       // BEFORE the step_boundary persistQueue.then), so this should work.
       expect(assistantCreates[0][0].parentId).toBe('tool-1');
+    });
+  });
+
+  // ────────────────────────────────────────────────────
+  // LOBE-8998: external signal stamping on Monitor-driven follow-up steps
+  // ────────────────────────────────────────────────────
+
+  describe('LOBE-8998 external signal (metadata.signal)', () => {
+    const ccTaskStarted = (taskId: string, toolUseId: string) => ({
+      session_id: 'cc-sess-1',
+      subtype: 'task_started',
+      task_id: taskId,
+      tool_use_id: toolUseId,
+      type: 'system',
+    });
+    const ccTaskNotification = (taskId: string) => ({
+      session_id: 'cc-sess-1',
+      subtype: 'task_notification',
+      task_id: taskId,
+      type: 'system',
+    });
+
+    it('stamps metadata.signal on assistant turns CC opens without user input while a task is active', async () => {
+      const idCounter = { tool: 0, assistant: 0 };
+      mockCreateMessage.mockImplementation(async (params: any) => {
+        if (params.role === 'tool') {
+          idCounter.tool++;
+          return { id: `tool-${idCounter.tool}` };
+        }
+        idCounter.assistant++;
+        return { id: `ast-new-${idCounter.assistant}` };
+      });
+
+      await runWithEvents([
+        ccInit(),
+        // Step 0: LLM calls Monitor; CC registers it as a long-running
+        // task; Monitor's initial "started" tool_result lands as a user
+        // event — so the FOLLOW-UP turn is a natural confirmation, NOT
+        // a signal callback.
+        ccMessageStart('msg_01'),
+        ccToolUse('msg_01', 'toolu_mon_0', 'Monitor', { shell: 'every 1s' }),
+        ccTaskStarted('task_a', 'toolu_mon_0'),
+        ccToolResult('toolu_mon_0', 'Monitor started'),
+        // Step 1: natural confirmation turn — NO signal tag.
+        ccMessageStart('msg_02'),
+        ccText('msg_02', 'Monitor 已启动。'),
+        // Step 2: Monitor pushed stdout → CC re-invokes LLM. No new
+        // user event was emitted between msg_02 end and msg_03 start.
+        // This IS a signal callback.
+        ccMessageStart('msg_03'),
+        ccText('msg_03', '第 1 次：12:00:01'),
+        // Step 3: another Monitor push → another signal callback.
+        ccMessageStart('msg_04'),
+        ccText('msg_04', '第 2 次：12:00:02'),
+        // Task ends; Step 4 is a natural summary turn, NOT signal.
+        ccTaskNotification('task_a'),
+        ccMessageStart('msg_05'),
+        ccText('msg_05', 'Monitor 任务已完成。'),
+        ccResult(),
+      ]);
+
+      const assistantCreates = mockCreateMessage.mock.calls.filter(
+        ([p]: any) => p.role === 'assistant',
+      );
+      // Step 0 reuses ast-initial; steps 1..4 → 4 fresh creates.
+      expect(assistantCreates.length).toBe(4);
+
+      // Step 1 confirmation: no signal
+      expect(assistantCreates[0][0].metadata?.signal).toBeUndefined();
+      // Step 2 first signal callback
+      expect(assistantCreates[1][0].metadata?.signal).toEqual({
+        sequence: 1,
+        sourceToolCallId: 'toolu_mon_0',
+        sourceToolName: 'Monitor',
+        type: 'tool-stdout',
+      });
+      // Step 3 second signal callback, sequence advances
+      expect(assistantCreates[2][0].metadata?.signal).toEqual({
+        sequence: 2,
+        sourceToolCallId: 'toolu_mon_0',
+        sourceToolName: 'Monitor',
+        type: 'tool-stdout',
+      });
+      // Step 4 post-task summary: tagged with `task-completion` (LOBE-8998)
+      // so MessageCollector renders it inside the same AssistantGroup,
+      // after the SignalCallbacks accordion.
+      expect(assistantCreates[3][0].metadata?.signal).toEqual({
+        sourceToolCallId: 'toolu_mon_0',
+        sourceToolName: 'Monitor',
+        type: 'task-completion',
+      });
+    });
+
+    it('does NOT stamp metadata.signal on turns following a tool_result (main-chain follow-up)', async () => {
+      const idCounter = { tool: 0, assistant: 0 };
+      mockCreateMessage.mockImplementation(async (params: any) => {
+        if (params.role === 'tool') {
+          idCounter.tool++;
+          return { id: `tool-${idCounter.tool}` };
+        }
+        idCounter.assistant++;
+        return { id: `ast-new-${idCounter.assistant}` };
+      });
+
+      await runWithEvents([
+        ccInit(),
+        ccMessageStart('msg_01'),
+        ccToolUse('msg_01', 'toolu_mon_0', 'Monitor', {}),
+        ccTaskStarted('task_a', 'toolu_mon_0'),
+        ccToolResult('toolu_mon_0', 'Monitor started'),
+        // Step 1: Monitor confirmation — main chain, no signal.
+        ccMessageStart('msg_02'),
+        ccText('msg_02', 'ok'),
+        // Step 2: LLM emits Bash. Adapter can't know about tool_use at
+        // stream_start time, so the signal tag IS stamped (Monitor is
+        // active and no user input arrived). Reader-side
+        // (`MessageCollector.getMessageSignal`) ignores the tag when
+        // `tools.length > 0`, so the mismatch is benign.
+        ccMessageStart('msg_03'),
+        ccToolUse('msg_03', 'toolu_bash_0', 'Bash', { command: 'echo' }),
+        ccToolResult('toolu_bash_0', 'echo result'),
+        // Step 3: post-Bash continuation — adapter saw the tool_result,
+        // so the next turn is a natural follow-up, no signal.
+        ccMessageStart('msg_04'),
+        ccText('msg_04', 'bash done'),
+        ccResult(),
+      ]);
+
+      const assistantCreates = mockCreateMessage.mock.calls.filter(
+        ([p]: any) => p.role === 'assistant',
+      );
+      expect(assistantCreates.length).toBe(3);
+      // Step 1 confirmation — no signal
+      expect(assistantCreates[0][0].metadata?.signal).toBeUndefined();
+      // Step 2 with Bash tool — signal IS stamped at stream_start, but
+      // collector defangs it (tools.length > 0).
+      expect(assistantCreates[1][0].metadata?.signal?.sourceToolCallId).toBe('toolu_mon_0');
+      // Step 3 post-Bash continuation — no signal.
+      expect(assistantCreates[2][0].metadata?.signal).toBeUndefined();
+    });
+  });
+
+  // ────────────────────────────────────────────────────
+  // Parallel main tool batch: tool_end must not race ahead of persistQueue
+  // ────────────────────────────────────────────────────
+
+  describe('parallel-tools rollback regression', () => {
+    /**
+     * User-reported bug: when CC fires a large parallel tool batch (e.g. 7
+     * Bash commands at once), the AssistantGroup tool count occasionally
+     * "rolls back" — e.g. UI shows "7 次技能调用" then drops to 6.
+     *
+     * Root cause: the executor's `persistQueue` (DB writes) and the gateway
+     * handler's `processingChain` (in-memory dispatch + fetchAndReplaceMessages
+     * on tool_end) are two independent serial queues with no happens-before
+     * between them. `tool_end` events are forwarded to the handler
+     * SYNCHRONOUSLY at the bottom of `handleStreamEvent` (the
+     * `pendingStepTransition` gate only fires on stream_start(newStep), not
+     * inside a single message.id with parallel tool_use). So when a fast
+     * tool_result lands before persistQueue has flushed the LAST
+     * persistToolBatch's Phase 1/3 write, the handler runs
+     * fetchAndReplaceMessages → reads `assistant.tools` with a partial array
+     * → replaceMessages clobbers in-memory state from N → N-k.
+     *
+     * Observable invariant: by the time the handler is invoked with the FIRST
+     * `tool_end` event (which is what triggers fetchAndReplaceMessages), the
+     * most recent `mockUpdateMessage` call that wrote a `tools` array must
+     * already carry the full cumulative tool list. Otherwise, in real life,
+     * the DB read at that moment would return a shorter array and the UI
+     * would visibly drop tools.
+     *
+     * The test slows down `mockUpdateMessage` whenever `val.tools` is present,
+     * simulating the lag between Phase 1/3 writes and the rest of the stream.
+     * `vi.fn().mock.invocationCallOrder` gives a total ordering across all
+     * mocks so we can compare "when was the Nth tools-write CALLED" against
+     * "when was the first tool_end forwarded to the handler".
+     */
+    it('handler must not receive tool_end before persistQueue flushes full tools[]', async () => {
+      // Slow tools-bearing updateMessage writes — mirrors a real PG/lambda
+      // round trip taking long enough that a fast Bash tool_result can land
+      // before all 7 persistToolBatch operations finish their Phase 1/3.
+      const TOOLS_WRITE_DELAY_MS = 12;
+      mockUpdateMessage.mockImplementation(async (_id: string, val: any) => {
+        if (val?.tools) {
+          await new Promise((r) => setTimeout(r, TOOLS_WRITE_DELAY_MS));
+        }
+      });
+
+      // Give each tool message a deterministic id so we can spot-check.
+      let toolIdx = 0;
+      mockCreateMessage.mockImplementation(async (params: any) => {
+        if (params.role === 'tool') return { id: `tool-msg-${++toolIdx}` };
+        return { id: `ast-${params.role}-${Date.now()}` };
+      });
+
+      const PARALLEL = 7;
+      const toolIds = Array.from({ length: PARALLEL }, (_, i) => `toolu_par_${i + 1}`);
+
+      // 7 parallel tool_use blocks in the SAME message.id (CC partial-messages
+      // mode emits each tool_use in its own assistant event with the shared
+      // msg id; adapter accumulates via toolCallsByMessageId), followed by
+      // 7 tool_results arriving back-to-back.
+      const events: any[] = [ccInit()];
+      for (const id of toolIds) {
+        events.push(ccToolUse('msg_par', id, 'Bash', { command: `echo ${id}` }));
+      }
+      for (const id of toolIds) {
+        events.push(ccToolResult(id, `result of ${id}`));
+      }
+      events.push(ccResult());
+
+      await runWithEvents(events);
+
+      const handlerSpy = vi.mocked(createGatewayEventHandler).mock.results[0]?.value as ReturnType<
+        typeof vi.fn
+      >;
+      expect(handlerSpy).toBeDefined();
+
+      // Find the FIRST tool_end forwarded to the handler — this is the call
+      // that would trigger `fetchAndReplaceMessages` in real life and read
+      // assistant.tools[] from DB.
+      const handlerCalls = handlerSpy.mock.calls.map((args, i) => ({
+        event: args[0] as any,
+        order: handlerSpy.mock.invocationCallOrder[i],
+      }));
+      const firstToolEnd = handlerCalls.find(({ event }) => event?.type === 'tool_end');
+      expect(firstToolEnd).toBeDefined();
+
+      // All `mockUpdateMessage(_, { tools })` calls — these are persistToolBatch
+      // Phase 1 (pre-register) and Phase 3 (backfill) writes. Their invocation
+      // order is the moment Phase 1/3 ENTERED `await messageService.updateMessage`.
+      // Because persistToolBatch awaits each phase before moving on, the order
+      // here is a faithful proxy for the DB-write timeline.
+      const toolsWrites = mockUpdateMessage.mock.calls
+        .map((args, i) => ({
+          tools: (args[1] as any)?.tools,
+          order: mockUpdateMessage.mock.invocationCallOrder[i],
+        }))
+        .filter(({ tools }) => Array.isArray(tools));
+
+      // The latest tools[] write that started BEFORE the handler's first tool_end.
+      // If the executor properly defers tool_end through persistQueue, this
+      // should be the FINAL Phase 3 write carrying all 7 tools.
+      const latestBeforeToolEnd = toolsWrites.findLast(({ order }) => order < firstToolEnd!.order);
+
+      // The bug: without the deferral fix, persistQueue is still mid-flight
+      // (or hasn't started) when tool_end is forwarded, so the latest tools[]
+      // write seen at that point has fewer than PARALLEL entries — exactly
+      // the "7 → 6" rollback the user sees in the UI.
+      const writtenCount = latestBeforeToolEnd?.tools?.length ?? 0;
+      const writtenIds = (latestBeforeToolEnd?.tools ?? []).map((t: any) => t.id);
+      const handlerEventTrail = handlerCalls.map(({ event }) => event?.type).join(',');
+      expect(
+        writtenCount,
+        `tool_end forwarded to handler at order ${firstToolEnd!.order} ` +
+          `but the latest persistToolBatch tools[] write at that point had ` +
+          `${writtenCount}/${PARALLEL} tools — fetchAndReplaceMessages would ` +
+          `read partial assistant.tools[] and roll back the UI. ` +
+          `Handler event trail: [${handlerEventTrail}]`,
+      ).toBe(PARALLEL);
+      // All 7 tool ids must be present in that write — guards against any
+      // weird ordering where the last write happens to have 7 entries but
+      // the wrong ones (e.g. dedupe bug repopulating from a stale set).
+      for (const id of toolIds) expect(writtenIds).toContain(id);
     });
   });
 });

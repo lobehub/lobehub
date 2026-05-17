@@ -19,11 +19,11 @@ A builtin tool is a package the agent runtime can call. It ships **five faces**:
 
 ## Read These First
 
-| Question                                                                             | Doc                                |
-| ------------------------------------------------------------------------------------ | ---------------------------------- |
-| Where do files live? What does each face do? Wiring?                                 | [architecture.md](architecture.md) |
-| How do I name the tool, design APIs, write the manifest, executor, ExecutionRuntime? | [tool-design.md](tool-design.md)   |
-| How do I build Inspector / Render / Placeholder / Streaming / Intervention / Portal? | [ui.md](ui.md)                     |
+| Question                                                                             | Doc                                           |
+| ------------------------------------------------------------------------------------ | --------------------------------------------- |
+| Where do files live? What does each face do? Wiring?                                 | [architecture.md](references/architecture.md) |
+| How do I name the tool, design APIs, write the manifest, executor, ExecutionRuntime? | [tool-design.md](references/tool-design.md)   |
+| How do I build Inspector / Render / Placeholder / Streaming / Intervention / Portal? | [ui.md](references/ui.md)                     |
 
 ---
 
@@ -109,7 +109,7 @@ Before opening the PR:
 - [ ] Placeholder added if the API has a perceivable execution lag (search, list, crawl).
 - [ ] Streaming added for APIs that emit incremental output (run command, write file, code execution).
 - [ ] Intervention added if `humanIntervention` is set in the manifest.
-- [ ] All registry files updated (see [architecture.md → Registry wiring](architecture.md#registry-wiring)).
+- [ ] All registry files updated (see [architecture.md → Registry wiring](references/architecture.md#registry-wiring)).
 - [ ] i18n keys in `src/locales/default/plugin.ts` plus dev seeds in `en-US`/`zh-CN`.
 - [ ] `bunx vitest run --silent='passed-only' 'packages/builtin-tool-<name>'` passes.
 - [ ] `bun run type-check` passes.

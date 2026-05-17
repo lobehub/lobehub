@@ -321,6 +321,8 @@ export class ConversationLifecycleActionImpl {
       message,
       selectedTools,
     });
+    const requestTrigger = (metadata as Pick<MessageMetadata, 'trigger'> | undefined)?.trigger;
+    const requestMetadata = requestTrigger ? { trigger: requestTrigger } : undefined;
 
     const hasFile = !!fileIdList && fileIdList.length > 0;
 
@@ -504,7 +506,7 @@ export class ConversationLifecycleActionImpl {
             newTopic: !operationContext.topicId
               ? {
                   metadata: workingDirectory ? { workingDirectory } : undefined,
-                  title: message.slice(0, 20) || t('defaultTitle', { ns: 'topic' }),
+                  title: message.slice(0, 80) || t('defaultTitle', { ns: 'topic' }),
                   topicMessageIds: messages.map((m) => m.id),
                 }
               : undefined,
@@ -654,6 +656,7 @@ export class ConversationLifecycleActionImpl {
           context: operationContext,
           fileIds: fileIdList,
           message,
+          metadata: requestMetadata,
           parentOperationId: operationId,
         });
 
@@ -738,7 +741,7 @@ export class ConversationLifecycleActionImpl {
           newTopic: !topicId
             ? {
                 topicMessageIds: forceNewTopicFromExisting ? [] : messages.map((m) => m.id),
-                title: message.slice(0, 20) || t('defaultTitle', { ns: 'topic' }),
+                title: message.slice(0, 80) || t('defaultTitle', { ns: 'topic' }),
               }
             : undefined,
           agentId: operationContext.agentId,
@@ -874,9 +877,7 @@ export class ConversationLifecycleActionImpl {
     // Dev-only fast path: fall back to slicing the first user message instead of calling
     // the LLM. Keeps chat logs uncluttered while still giving the topic a usable title.
     // Only honored in non-production builds so a misconfigured prod env can't disable it.
-    const shouldSliceTopicTitle =
-      process.env.NODE_ENV !== 'production' &&
-      process.env.NEXT_PUBLIC_DEV_DISABLE_AUTO_TOPIC === '1';
+    const shouldSliceTopicTitle = __DEV__ && process.env.NEXT_PUBLIC_DEV_DISABLE_AUTO_TOPIC === '1';
 
     const applyTopicTitle = async (topicId: string, messages: UIChatMessage[]) => {
       if (!shouldSliceTopicTitle) {
@@ -885,7 +886,7 @@ export class ConversationLifecycleActionImpl {
       }
 
       const firstUserText = messages.find((m) => m.role === 'user')?.content?.trim() ?? '';
-      const title = firstUserText.slice(0, 30) || 'New Topic';
+      const title = firstUserText.slice(0, 80) || 'New Topic';
       await this.#get().internal_updateTopic(topicId, { title });
       // summaryTopicTitle would normally clear loading via onLoadingChange; do it manually.
       this.#get().internal_updateTopicLoading(topicId, false);
@@ -1015,6 +1016,7 @@ export class ConversationLifecycleActionImpl {
           await executeClientAgent({
             context: execContext,
             initialContext: mergedAgentRuntimeInitialContext,
+            metadata: requestMetadata,
             messages: displayMessages,
             parentMessageId: data.assistantMessageId,
             parentMessageType: 'assistant',

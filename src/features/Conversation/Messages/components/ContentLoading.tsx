@@ -1,5 +1,5 @@
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
-import { Flexbox, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -8,7 +8,7 @@ import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { type OperationType } from '@/store/chat/slices/operation/types';
-import { shinyTextStyles } from '@/styles/loading';
+import { elapsedTimeStyles, shinyTextStyles } from '@/styles/loading';
 
 const ELAPSED_TIME_THRESHOLD = 2100; // Show elapsed time after 2 seconds
 
@@ -22,12 +22,13 @@ const ContentLoading = memo<ContentLoadingProps>(({ id }) => {
   const { t } = useTranslation('chat');
   const runningOp = useChatStore(operationSelectors.getDeepestRunningOperationByMessage(id));
 
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [startTime, setStartTime] = useState(runningOp?.metadata?.startTime);
-
+  const startTime = runningOp?.metadata?.startTime;
   const operationType = runningOp?.type as OperationType | undefined;
 
-  // Track elapsed time, reset when operation type changes
+  const [elapsedSeconds, setElapsedSeconds] = useState(() =>
+    startTime ? Math.floor((Date.now() - startTime) / 1000) : 0,
+  );
+
   useEffect(() => {
     if (!startTime) {
       setElapsedSeconds(0);
@@ -35,8 +36,7 @@ const ContentLoading = memo<ContentLoadingProps>(({ id }) => {
     }
 
     const updateElapsed = () => {
-      const elapsed = Math.floor((Date.now() - startTime) / 1000);
-      setElapsedSeconds(elapsed);
+      setElapsedSeconds(Math.floor((Date.now() - startTime) / 1000));
     };
 
     updateElapsed();
@@ -44,11 +44,6 @@ const ContentLoading = memo<ContentLoadingProps>(({ id }) => {
 
     return () => clearInterval(interval);
   }, [startTime]);
-
-  useEffect(() => {
-    setElapsedSeconds(0);
-    setStartTime(Date.now());
-  }, [operationType, id]);
 
   // Heterogeneous agents interpolate their display name (e.g. "Claude Code is running")
   // so the user can tell which external agent is working.
@@ -78,15 +73,20 @@ const ContentLoading = memo<ContentLoadingProps>(({ id }) => {
     );
   }
 
+  if (operationLabel) {
+    return (
+      <Flexbox horizontal align={'center'} gap={4}>
+        <span className={shinyTextStyles.shinyText}>{operationLabel}...</span>
+        {showElapsedTime && (
+          <span className={elapsedTimeStyles.elapsedTime}>({elapsedSeconds}s)</span>
+        )}
+      </Flexbox>
+    );
+  }
+
   return (
     <Flexbox horizontal align={'center'}>
       <BubblesLoading />
-      {operationLabel && (
-        <Text type={'secondary'}>
-          {operationLabel}...
-          {showElapsedTime && ` (${elapsedSeconds}s)`}
-        </Text>
-      )}
     </Flexbox>
   );
 });

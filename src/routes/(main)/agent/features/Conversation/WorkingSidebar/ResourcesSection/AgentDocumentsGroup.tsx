@@ -3,12 +3,20 @@ import { App, Spin } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
-import { FileTextIcon, GlobeIcon, type LucideIcon, Trash2Icon } from 'lucide-react';
-import { type CSSProperties, memo, type MouseEvent, useMemo, useState } from 'react';
+import type { LucideIcon } from 'lucide-react';
+import { FileTextIcon, FolderIcon, GlobeIcon, Trash2Icon } from 'lucide-react';
+import type { CSSProperties, MouseEvent } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMatch, useNavigate } from 'react-router-dom';
 
 import { DocumentExplorerTree } from '@/features/AgentDocumentsExplorer';
+import {
+  isManagedSkillItem,
+  isOrphanSkillBundleItem,
+  isSkillBundleItem,
+  isSkillIndexItem,
+} from '@/features/AgentDocumentsExplorer/types';
 import { useClientDataSWR } from '@/libs/swr';
 import { agentDocumentService, agentDocumentSWRKeys } from '@/services/agentDocument';
 import { useAgentStore } from '@/store/agent';
@@ -100,107 +108,120 @@ type AgentDocumentListItem = Awaited<ReturnType<typeof agentDocumentService.getD
 interface DocumentItemProps {
   agentId: string;
   document: AgentDocumentListItem;
+  hideDelete?: boolean;
   mutate: () => Promise<unknown>;
+  openDocumentId?: string;
 }
 
-const DocumentItem = memo<DocumentItemProps>(({ agentId, document, mutate }) => {
-  const { t } = useTranslation(['chat', 'common']);
-  const { message, modal } = App.useApp();
-  const [deleting, setDeleting] = useState(false);
-  const openDocument = useChatStore((s) => s.openDocument);
-  const closeDocument = useChatStore((s) => s.closeDocument);
-  const portalDocumentId = useChatStore(chatPortalSelectors.portalDocumentId);
-  const navigate = useNavigate();
-  const pageMatch = useMatch(PAGE_ROUTE_PATTERN);
+const DocumentItem = memo<DocumentItemProps>(
+  ({ agentId, document, hideDelete = false, mutate, openDocumentId }) => {
+    const { t } = useTranslation(['chat', 'common']);
+    const { message, modal } = App.useApp();
+    const [deleting, setDeleting] = useState(false);
+    const openDocument = useChatStore((s) => s.openDocument);
+    const closeDocument = useChatStore((s) => s.closeDocument);
+    const portalDocumentId = useChatStore(chatPortalSelectors.portalDocumentId);
+    const navigate = useNavigate();
+    const pageMatch = useMatch(PAGE_ROUTE_PATTERN);
 
-  const title = document.title || document.filename || '';
-  const description = document.description ?? undefined;
-  const isWeb = document.sourceType === 'web';
-  const IconComponent: LucideIcon = isWeb ? GlobeIcon : FileTextIcon;
-  const updatedAtLabel = document.updatedAt
-    ? t('workingPanel.resources.updatedAt', {
-        ns: 'chat',
-        time: dayjs(document.updatedAt).fromNow(),
-      })
-    : null;
+    const title = document.title || document.filename || '';
+    const description = document.description ?? undefined;
+    const isWeb = document.sourceType === 'web';
+    const isSkillBundle = isSkillBundleItem(document);
+    const targetDocumentId = isSkillBundle
+      ? (openDocumentId ?? document.documentId)
+      : document.documentId;
+    const IconComponent: LucideIcon = isWeb ? GlobeIcon : isSkillBundle ? FolderIcon : FileTextIcon;
+    const updatedAtLabel = document.updatedAt
+      ? t('workingPanel.resources.updatedAt', {
+          ns: 'chat',
+          time: dayjs(document.updatedAt).fromNow(),
+        })
+      : null;
 
-  const activeDocumentId = pageMatch ? pageMatch.params.docId : portalDocumentId;
-  const isActive = activeDocumentId === document.documentId;
+    const activeDocumentId = pageMatch ? pageMatch.params.docId : portalDocumentId;
+    const isActive = activeDocumentId === targetDocumentId;
 
-  const handleOpen = () => {
-    if (!document.documentId) return;
-    if (pageMatch?.params.aid && pageMatch.params.topicId) {
-      navigate(
-        `/agent/${pageMatch.params.aid}/${pageMatch.params.topicId}/page/${document.documentId}`,
-      );
-      return;
-    }
-    openDocument(document.documentId);
-  };
+    const handleOpen = () => {
+      if (!targetDocumentId) return;
+      if (pageMatch?.params.aid && pageMatch.params.topicId) {
+        navigate(
+          `/agent/${pageMatch.params.aid}/${pageMatch.params.topicId}/page/${targetDocumentId}`,
+        );
+        return;
+      }
+      openDocument(targetDocumentId);
+    };
 
-  const handleDelete = (e: MouseEvent) => {
-    e.stopPropagation();
-    modal.confirm({
-      centered: true,
-      okButtonProps: { danger: true },
-      onOk: async () => {
-        setDeleting(true);
-        try {
-          if (isActive) closeDocument();
-          await agentDocumentService.removeDocument({
-            agentId,
-            documentId: document.documentId,
-            id: document.id,
-            topicId: pageMatch?.params.topicId,
-          });
-          await mutate();
-          message.success(t('workingPanel.resources.deleteSuccess', { ns: 'chat' }));
-        } catch (error) {
-          message.error(
-            error instanceof Error
-              ? error.message
-              : t('workingPanel.resources.deleteError', { ns: 'chat' }),
-          );
-        } finally {
-          setDeleting(false);
-        }
-      },
-      title: t('workingPanel.resources.deleteTitle', { ns: 'chat' }),
-    });
-  };
+    const handleDelete = (e: MouseEvent) => {
+      e.stopPropagation();
+      modal.confirm({
+        cancelText: t('cancel', { ns: 'common' }),
+        centered: true,
+        content: t('workingPanel.resources.deleteConfirm', { ns: 'chat' }),
+        okButtonProps: { danger: true, type: 'primary' },
+        okText: t('delete', { ns: 'common' }),
+        onOk: async () => {
+          setDeleting(true);
+          try {
+            if (isActive) closeDocument();
+            await agentDocumentService.removeDocument({
+              agentId,
+              documentId: document.documentId,
+              id: document.id,
+              topicId: pageMatch?.params.topicId,
+            });
+            await mutate();
+            message.success(t('workingPanel.resources.deleteSuccess', { ns: 'chat' }));
+          } catch (error) {
+            message.error(
+              error instanceof Error
+                ? error.message
+                : t('workingPanel.resources.deleteError', { ns: 'chat' }),
+            );
+          } finally {
+            setDeleting(false);
+          }
+        },
+        title: t('workingPanel.resources.deleteTitle', { ns: 'chat' }),
+      });
+    };
 
-  return (
-    <Flexbox
-      horizontal
-      align={'flex-start'}
-      className={`${styles.container} ${isActive ? styles.containerActive : ''}`}
-      gap={8}
-      onClick={handleOpen}
-    >
-      <IconComponent size={16} style={{ flexShrink: 0, marginTop: 2 }} />
-      <Flexbox gap={4} style={{ flex: 1, minWidth: 0 }}>
-        <Flexbox horizontal align={'center'} distribution={'space-between'}>
-          <Text ellipsis className={styles.title}>
-            {title}
-          </Text>
-          <ActionIcon
-            icon={Trash2Icon}
-            loading={deleting}
-            size={'small'}
-            title={t('delete', { ns: 'common' })}
-            onClick={handleDelete}
-          />
+    return (
+      <Flexbox
+        horizontal
+        align={'flex-start'}
+        className={`${styles.container} ${isActive ? styles.containerActive : ''}`}
+        gap={8}
+        onClick={handleOpen}
+      >
+        <IconComponent size={16} style={{ flexShrink: 0, marginTop: 2 }} />
+        <Flexbox gap={4} style={{ flex: 1, minWidth: 0 }}>
+          <Flexbox horizontal align={'center'} distribution={'space-between'}>
+            <Text ellipsis className={styles.title}>
+              {title}
+            </Text>
+            {!hideDelete && (
+              <ActionIcon
+                icon={Trash2Icon}
+                loading={deleting}
+                size={'small'}
+                title={t('delete', { ns: 'common' })}
+                onClick={handleDelete}
+              />
+            )}
+          </Flexbox>
+          {description && (
+            <Text className={styles.description} ellipsis={{ rows: 2 }}>
+              {description}
+            </Text>
+          )}
+          {updatedAtLabel && <Text className={styles.meta}>{updatedAtLabel}</Text>}
         </Flexbox>
-        {description && (
-          <Text className={styles.description} ellipsis={{ rows: 2 }}>
-            {description}
-          </Text>
-        )}
-        {updatedAtLabel && <Text className={styles.meta}>{updatedAtLabel}</Text>}
       </Flexbox>
-    </Flexbox>
-  );
-});
+    );
+  },
+);
 
 DocumentItem.displayName = 'AgentDocumentsGroupItem';
 
@@ -229,8 +250,31 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ style, viewMode = 
     return data;
   }, [data, filter]);
 
+  const visibleFlatData = useMemo(
+    () => filteredData.filter((doc) => !isSkillIndexItem(doc)),
+    [filteredData],
+  );
+
+  const skillIndexDocumentIdByBundleDocumentId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const doc of data) {
+      if (isSkillIndexItem(doc) && doc.parentId) {
+        map.set(doc.parentId, doc.documentId);
+      }
+    }
+    return map;
+  }, [data]);
+
+  const getOpenDocumentId = (document: AgentDocumentListItem): string | undefined =>
+    isSkillBundleItem(document)
+      ? (skillIndexDocumentIdByBundleDocumentId.get(document.documentId) ?? document.documentId)
+      : document.documentId;
+
+  const shouldHideDelete = (document: AgentDocumentListItem): boolean =>
+    isManagedSkillItem(document) && !isOrphanSkillBundleItem(document, data);
+
   const treeGroups = useMemo(() => {
-    const docs = data.filter((doc) => doc.sourceType !== 'web');
+    const docs = data.filter((doc) => doc.sourceType !== 'web' && !isSkillIndexItem(doc));
     const webs = data.filter((doc) => doc.sourceType === 'web');
     return (
       [
@@ -278,7 +322,14 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ style, viewMode = 
             </Text>
             <Flexbox gap={8}>
               {group.items.map((doc) => (
-                <DocumentItem agentId={agentId} document={doc} key={doc.id} mutate={mutate} />
+                <DocumentItem
+                  agentId={agentId}
+                  document={doc}
+                  hideDelete={shouldHideDelete(doc)}
+                  key={doc.id}
+                  mutate={mutate}
+                  openDocumentId={getOpenDocumentId(doc)}
+                />
               ))}
             </Flexbox>
           </Flexbox>
@@ -314,7 +365,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ style, viewMode = 
             style={{ height: '100%' }}
           />
         </Flexbox>
-      ) : filteredData.length === 0 ? (
+      ) : visibleFlatData.length === 0 ? (
         <Center flex={1} gap={8} paddingBlock={24}>
           <Empty
             description={t('workingPanel.resources.empty')}
@@ -323,8 +374,15 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ style, viewMode = 
         </Center>
       ) : (
         <Flexbox gap={8}>
-          {filteredData.map((doc) => (
-            <DocumentItem agentId={agentId} document={doc} key={doc.id} mutate={mutate} />
+          {visibleFlatData.map((doc) => (
+            <DocumentItem
+              agentId={agentId}
+              document={doc}
+              hideDelete={shouldHideDelete(doc)}
+              key={doc.id}
+              mutate={mutate}
+              openDocumentId={getOpenDocumentId(doc)}
+            />
           ))}
         </Flexbox>
       )}

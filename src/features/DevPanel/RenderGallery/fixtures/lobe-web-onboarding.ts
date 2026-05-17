@@ -21,7 +21,6 @@ export default defineFixtures({
         agentName: 'Devtools Tester',
         fullName: 'Arvin',
         interests: ['observability', 'dev-tools', 'agent-runtime'],
-        responseLanguage: 'en-US',
       },
     }),
   },

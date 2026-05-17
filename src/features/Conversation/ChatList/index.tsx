@@ -38,6 +38,12 @@ export interface ChatListProps {
    */
   disableActionsBar?: boolean;
   /**
+   * Optional content rendered as the last item inside the virtualized list —
+   * scrolls with the messages instead of being pinned to the viewport bottom.
+   * Used e.g. for the SubAgent read-only hint after the last message.
+   */
+  footerSlot?: ReactNode;
+  /**
    * Custom item renderer. If not provided, uses default ChatItem.
    */
   itemContent?: (index: number, id: string) => ReactNode;
@@ -56,7 +62,14 @@ export interface ChatListProps {
  * Uses ConversationStore for message data and fetching.
  */
 const ChatList = memo<ChatListProps>(
-  ({ defaultWorkflowExpandLevel, disableActionsBar, welcome, itemContent, showWelcome }) => {
+  ({
+    defaultWorkflowExpandLevel,
+    disableActionsBar,
+    footerSlot,
+    welcome,
+    itemContent,
+    showWelcome,
+  }) => {
     // Fetch messages (SWR key is null when skipFetch is true)
     const context = useConversationStore((s) => s.context);
     const enableUserMemories = useUserStore(settingsSelectors.memoryEnabled);
@@ -97,14 +110,14 @@ const ChatList = memo<ChatListProps>(
           anchoredReceipts.length > 0 || latestUnanchoredReceipts.length > 0 ? (
             <>
               <AgentSignalReceiptList receipts={anchoredReceipts} />
-              <AgentSignalReceiptList showRecentLabel receipts={latestUnanchoredReceipts} />
+              <AgentSignalReceiptList receipts={latestUnanchoredReceipts} />
             </>
           ) : undefined;
 
         return (
           <MessageItem
             defaultWorkflowExpandLevel={defaultWorkflowExpandLevel}
-            endRender={receiptRender}
+            footerRender={receiptRender}
             id={id}
             index={index}
             isLatestItem={isLatestItem}
@@ -143,6 +156,7 @@ const ChatList = memo<ChatListProps>(
       <MessageActionProvider withSingletonActionsBar={!disableActionsBar}>
         <VirtualizedList
           dataSource={displayMessageIds}
+          footerSlot={footerSlot}
           itemContent={itemContent ?? defaultItemContent}
         />
       </MessageActionProvider>

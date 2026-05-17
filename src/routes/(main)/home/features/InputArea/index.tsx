@@ -4,30 +4,41 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
 import { type ActionKeys } from '@/features/ChatInput';
 import { ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
+import { useHomeDailyBrief } from '@/hooks/useHomeDailyBrief';
+import { useInitAgentConfig } from '@/hooks/useInitAgentConfig';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { builtinAgentSelectors } from '@/store/agent/selectors/builtinAgentSelectors';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import {
-  featureFlagsSelectors,
-  serverConfigSelectors,
-  useServerConfigStore,
-} from '@/store/serverConfig';
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
-import SuggestQuestions from '../SuggestQuestions';
 import BotIntegrationBanner, { BOT_INTEGRATION_BANNER_ID } from './BotIntegrationBanner';
+import { stripMarkdownLinks } from './hintFormat';
+import MessengerBanner, { MESSENGER_BANNER_ID } from './MessengerBanner';
 import SkillInstallBanner, { SKILL_INSTALL_BANNER_ID } from './SkillInstallBanner';
 import StarterList from './StarterList';
 import { useSend } from './useSend';
 
-const leftActions: ActionKeys[] = ['model', 'search', 'fileUpload', 'tools'];
+const leftActions: ActionKeys[] = ['agentMode', 'plus'];
+const rightActions: ActionKeys[] = ['modelLabel'];
 
-type BannerKind = 'skill' | 'botIntegration';
+type BannerKind = 'skill' | 'botIntegration' | 'messenger';
 
 const InputArea = () => {
   const { loading, send, agentId } = useSend();
+  // Subscribe to the SWR key so `internal_refreshAgentConfig`'s `mutate(...)`
+  // has a listener after toggleFile / toggleKnowledgeBase — otherwise the
+  // Library submenu doesn't reflect server-side toggles. Pass `agentId`
+  // explicitly so AgentSelect switches refetch too.
+  useInitAgentConfig(agentId);
+  // Use the "config absent from agentMap" loading shape (same as Memory /
+  // Search / History) instead of SWR's `isLoading`, which would flash on
+  // every mount-time revalidation even when inbox data is already cached.
+  const isAgentConfigLoading = useAgentStore((s) =>
+    agentByIdSelectors.isAgentConfigLoadingById(agentId ?? '')(s),
+  );
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
   const isKlavisEnabled = useServerConfigStore(serverConfigSelectors.enableKlavis);
@@ -37,6 +48,9 @@ const InputArea = () => {
   );
   const isBotIntegrationBannerDismissed = useGlobalStore(
     systemStatusSelectors.isBannerDismissed(BOT_INTEGRATION_BANNER_ID),
+  );
+  const isMessengerBannerDismissed = useGlobalStore(
+    systemStatusSelectors.isBannerDismissed(MESSENGER_BANNER_ID),
   );
   const chatInputRef = useRef<HTMLDivElement>(null);
 
@@ -57,6 +71,7 @@ const InputArea = () => {
       candidates.push('skill');
     }
     if (!isBotIntegrationBannerDismissed) candidates.push('botIntegration');
+    if (!isMessengerBannerDismissed) candidates.push('messenger');
     if (candidates.length === 0) return;
 
     hasPickedRef.current = true;
@@ -66,13 +81,15 @@ const InputArea = () => {
     isBotIntegrationBannerDismissed,
     isKlavisEnabled,
     isLobehubSkillEnabled,
+    isMessengerBannerDismissed,
     isSkillBannerDismissed,
     serverConfigInit,
   ]);
 
   const isActiveBannerDismissed =
     (activeBanner === 'skill' && isSkillBannerDismissed) ||
-    (activeBanner === 'botIntegration' && isBotIntegrationBannerDismissed);
+    (activeBanner === 'botIntegration' && isBotIntegrationBannerDismissed) ||
+    (activeBanner === 'messenger' && isMessengerBannerDismissed);
   const visibleBanner = isActiveBannerDismissed ? null : activeBanner;
 
   // Get agent's model info for vision support check. Falls back to an empty
@@ -99,9 +116,11 @@ const InputArea = () => {
     [],
   );
 
-  const { enableAgentTask } = useServerConfigStore(featureFlagsSelectors);
-  // Whitelist users get DailyBrief + an upcoming auto-generated module instead.
-  const showSuggestQuestions = !enableAgentTask;
+  // Daily-generated input hint paired with the home WelcomeText. The hint
+  // tracks whichever pair the WelcomeText typewriter is currently showing,
+  // via the shared rotating index inside `useHomeDailyBrief`.
+  const { currentPair } = useHomeDailyBrief();
+  const dailyHint = currentPair?.hint ? stripMarkdownLinks(currentPair.hint) : undefined;
 
   return (
     <Flexbox gap={16} style={{ marginBottom: 16 }}>
@@ -111,6 +130,7 @@ const InputArea = () => {
       >
         {visibleBanner === 'skill' && <SkillInstallBanner />}
         {visibleBanner === 'botIntegration' && <BotIntegrationBanner />}
+        {visibleBanner === 'messenger' && <MessengerBanner />}
         <DragUploadZone
           style={{ position: 'relative', zIndex: 1 }}
           onUploadFiles={handleUploadFiles}
@@ -119,13 +139,14 @@ const InputArea = () => {
             agentId={agentId}
             allowExpand={false}
             leftActions={leftActions}
+            rightActions={rightActions}
             slashPlacement="bottom"
             chatInputEditorRef={(instance) => {
               if (!instance) return;
               useChatStore.setState({ mainInputEditor: instance });
             }}
             sendButtonProps={{
-              disabled: loading,
+              disabled: loading || isAgentConfigLoading,
               generating: loading,
               onStop: () => {},
               shape: 'round',
@@ -138,6 +159,7 @@ const InputArea = () => {
             <DesktopChatInput
               dropdownPlacement="bottomLeft"
               inputContainerProps={inputContainerProps}
+              placeholder={dailyHint}
               showRuntimeConfig={false}
             />
           </ChatInputProvider>
@@ -145,11 +167,6 @@ const InputArea = () => {
       </Flexbox>
 
       <StarterList />
-      {showSuggestQuestions && (
-        <Flexbox style={{ marginTop: 24 }}>
-          <SuggestQuestions />
-        </Flexbox>
-      )}
     </Flexbox>
   );
 };

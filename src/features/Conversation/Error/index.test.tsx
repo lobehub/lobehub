@@ -110,6 +110,14 @@ vi.mock('@/store/serverConfig', () => ({
   useServerConfigStore: (selector: (s: unknown) => unknown) => selector({}),
 }));
 
+vi.mock('@/features/Conversation/store', () => ({
+  useConversationStore: (selector: (state: unknown) => unknown) =>
+    selector({
+      deleteMessage: vi.fn(),
+      regenerateAssistantMessage: vi.fn(),
+    }),
+}));
+
 describe('ErrorMessageExtra', () => {
   it('renders the auth guide when the refreshed error is missing type but still carries session code', () => {
     render(
@@ -146,6 +154,38 @@ describe('ErrorMessageExtra', () => {
             message: "You've hit your limit · resets 9am (Asia/Shanghai)",
           } as any,
           id: 'msg-rate-limit',
+        }}
+      />,
+    );
+
+    expect(screen.getByText('guide:claude-code:rate_limit')).toBeInTheDocument();
+  });
+
+  it('renders the heterogeneous guide from the session body without relying on the top-level error type', () => {
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'response.ServerAgentRuntimeError' }}
+        data={{
+          error: {
+            body: {
+              agentType: 'claude-code',
+              clearEchoedContent: true,
+              code: HeterogeneousAgentSessionErrorCode.RateLimit,
+              message: "You've hit your limit · resets May 17 at 2am (Asia/Shanghai)",
+              rateLimitInfo: {
+                isUsingOverage: false,
+                overageDisabledReason: 'org_level_disabled',
+                overageStatus: 'rejected',
+                rateLimitType: 'seven_day',
+                resetsAt: 1778954400,
+                status: 'rejected',
+              },
+              stderr: "You've hit your limit · resets May 17 at 2am (Asia/Shanghai)",
+            },
+            message: "You've hit your limit · resets May 17 at 2am (Asia/Shanghai)",
+            type: 'ServerAgentRuntimeError',
+          } as any,
+          id: 'msg-rate-limit-wrapped',
         }}
       />,
     );

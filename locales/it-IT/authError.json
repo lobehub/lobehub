@@ -27,6 +27,7 @@
   "codes.RATE_LIMIT_EXCEEDED": "Troppe richieste, riprova più tardi",
   "codes.SESSION_EXPIRED": "La sessione è scaduta, effettua nuovamente l'accesso",
   "codes.SOCIAL_ACCOUNT_ALREADY_LINKED": "Questo account social è già collegato a un altro utente",
+  "codes.TEMPORARY_EMAIL_NOT_ALLOWED": "Gli indirizzi email temporanei non sono supportati. Si prega di utilizzare un indirizzo email regolare. Tentativi ripetuti potrebbero bloccare questa rete.",
   "codes.UNEXPECTED_ERROR": "Si è verificato un errore imprevisto, riprova",
   "codes.UNKNOWN": "Si è verificato un errore sconosciuto, riprova o contatta il supporto",
   "codes.USER_ALREADY_EXISTS": "L'utente esiste già",

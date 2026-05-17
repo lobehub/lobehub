@@ -1,3 +1,6 @@
+import type { InterestAreaKey } from '@lobechat/const';
+import { INTEREST_AREA_KEYS } from '@lobechat/const';
+import type { LucideIcon } from 'lucide-react';
 import {
   BabyIcon,
   CameraIcon,
@@ -18,38 +21,40 @@ import {
   UsersIcon,
 } from 'lucide-react';
 
-/** Default target when the user opens `/onboarding`. Flip to `'agent'` when agent onboarding is ready to ship as the primary flow. */
-export type DefaultOnboardingEntryVariant = 'agent' | 'classic';
-export const DEFAULT_ONBOARDING_ENTRY_VARIANT: DefaultOnboardingEntryVariant = 'classic';
-
-const resolveDefaultOnboardingPath = (variant: DefaultOnboardingEntryVariant) =>
-  variant === 'agent' ? '/onboarding/agent' : '/onboarding/classic';
-
-export const DEFAULT_ONBOARDING_PATH: '/onboarding/agent' | '/onboarding/classic' =
-  resolveDefaultOnboardingPath(DEFAULT_ONBOARDING_ENTRY_VARIANT);
+export type { OnboardingBranchPath } from './branch';
+export {
+  deriveOnboardingBranchPath,
+  ONBOARDING_AGENT_PATH,
+  ONBOARDING_CLASSIC_PATH,
+} from './branch';
 
 /**
  * Predefined interest areas with icons and translation keys.
  * Use with `t('interests.area.${key}')` from 'onboarding' namespace.
  */
-export const INTEREST_AREAS = [
-  { icon: PenIcon, key: 'writing' },
-  { icon: CodeXmlIcon, key: 'coding' },
-  { icon: PaintBucketIcon, key: 'design' },
-  { icon: GraduationCapIcon, key: 'education' },
-  { icon: ChartNetworkIcon, key: 'business' },
-  { icon: PercentIcon, key: 'marketing' },
-  { icon: TargetIcon, key: 'product' },
-  { icon: HandCoinsIcon, key: 'sales' },
-  { icon: SettingsIcon, key: 'operations' },
-  { icon: UsersIcon, key: 'hr' },
-  { icon: ScaleIcon, key: 'finance-legal' },
-  { icon: CameraIcon, key: 'creator' },
-  { icon: LineChartIcon, key: 'investing' },
-  { icon: BabyIcon, key: 'parenting' },
-  { icon: HeartIcon, key: 'health' },
-  { icon: CompassIcon, key: 'hobbies' },
-  { icon: HomeIcon, key: 'personal' },
-] as const;
+const INTEREST_AREA_ICONS: Record<InterestAreaKey, LucideIcon> = {
+  'business': ChartNetworkIcon,
+  'coding': CodeXmlIcon,
+  'creator': CameraIcon,
+  'design': PaintBucketIcon,
+  'education': GraduationCapIcon,
+  'finance-legal': ScaleIcon,
+  'health': HeartIcon,
+  'hobbies': CompassIcon,
+  'hr': UsersIcon,
+  'investing': LineChartIcon,
+  'marketing': PercentIcon,
+  'operations': SettingsIcon,
+  'parenting': BabyIcon,
+  'personal': HomeIcon,
+  'product': TargetIcon,
+  'sales': HandCoinsIcon,
+  'writing': PenIcon,
+};
 
-export type InterestAreaKey = (typeof INTEREST_AREAS)[number]['key'];
+export const INTEREST_AREAS = INTEREST_AREA_KEYS.map((key) => ({
+  icon: INTEREST_AREA_ICONS[key],
+  key,
+}));
+
+export type { InterestAreaKey } from '@lobechat/const';

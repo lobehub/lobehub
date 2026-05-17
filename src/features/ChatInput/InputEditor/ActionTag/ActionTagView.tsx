@@ -13,24 +13,31 @@ export interface ActionTagViewProps {
 
 const CATEGORY_COLOR: Record<ActionTagCategory, string> = {
   command: 'purple',
+  projectSkill: 'green',
   skill: 'blue',
   tool: 'gold',
 };
 
 const CATEGORY_I18N_KEY: Record<ActionTagCategory, string> = {
   command: 'actionTag.category.command',
+  projectSkill: 'actionTag.category.projectSkill',
   skill: 'actionTag.category.skill',
   tool: 'actionTag.category.tool',
 };
 
 const CATEGORY_TOOLTIP_I18N_KEY: Record<ActionTagCategory, string> = {
   command: 'actionTag.tooltip.command',
+  projectSkill: 'actionTag.tooltip.projectSkill',
   skill: 'actionTag.tooltip.skill',
   tool: 'actionTag.tooltip.tool',
 };
 
-const CATEGORY_STYLE_KEY: Record<ActionTagCategory, 'commandTag' | 'skillTag' | 'toolTag'> = {
+const CATEGORY_STYLE_KEY: Record<
+  ActionTagCategory,
+  'commandTag' | 'projectSkillTag' | 'skillTag' | 'toolTag'
+> = {
   command: 'commandTag',
+  projectSkill: 'projectSkillTag',
   skill: 'skillTag',
   tool: 'toolTag',
 };

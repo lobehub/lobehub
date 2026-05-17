@@ -114,6 +114,7 @@
   "response.ProviderBizError": "Błąd podczas żądania usługi {{provider}}. Spróbuj ponownie lub sprawdź szczegóły.",
   "response.ProviderContentModeration": "Sprawdzenie zgodności z zasadami treści nie powiodło się. Popraw swój prompt i spróbuj ponownie.",
   "response.ProviderContentModerationWarning": "Wykryto powtarzające się naruszenia zasad. Dalsze nadużycia mogą skutkować ograniczeniem Twojego konta.",
+  "response.ProviderImageContentModerationWarning": "Wykryto powtarzające się odrzucenia bezpieczeństwa obrazów. Podobne zapytania mogą tymczasowo wstrzymać generowanie obrazów.",
   "response.QuotaLimitReached": "Przepraszamy, limit tokenów lub liczby żądań dla tego klucza został osiągnięty. Zwiększ limit lub spróbuj później.",
   "response.QuotaLimitReachedCloud": "Usługa modelu jest obecnie bardzo obciążona. Proszę spróbować ponownie później.",
   "response.ServerAgentRuntimeError": "Przepraszamy, usługa Agenta jest obecnie niedostępna. Spróbuj później lub skontaktuj się z nami mailowo.",

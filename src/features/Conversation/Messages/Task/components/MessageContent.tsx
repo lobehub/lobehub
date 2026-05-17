@@ -15,7 +15,7 @@ import SearchGrounding from '../../components/SearchGrounding';
 
 const MessageContent = memo<UIChatMessage>(
   ({ id, tools, content, chunksList, search, imageList, metadata, ...props }) => {
-    const markdownProps = useMarkdown(id);
+    const { drawer, markdownProps } = useMarkdown(id);
     // Use ConversationStore instead of ChatStore
     const generating = useConversationStore(messageStateSelectors.isMessageGenerating(id));
     const isCollapsed = useConversationStore(messageStateSelectors.isMessageCollapsed(id));
@@ -41,12 +41,13 @@ const MessageContent = memo<UIChatMessage>(
 
     return (
       <Flexbox gap={8} id={id}>
+        {drawer}
         {showSearch && (
           <SearchGrounding
-            citations={search?.citations}
-            imageResults={search?.imageResults}
-            imageSearchQueries={search?.imageSearchQueries}
-            searchQueries={search?.searchQueries}
+            citations={search.citations}
+            imageResults={search.imageResults}
+            imageSearchQueries={search.imageSearchQueries}
+            searchQueries={search.searchQueries}
           />
         )}
         {showFileChunks && <FileChunks data={chunksList} />}

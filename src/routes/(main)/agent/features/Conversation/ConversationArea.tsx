@@ -1,8 +1,10 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
+import { cssVar } from 'antd-style';
 import debug from 'debug';
 import { memo, Suspense, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import AgentHome from '@/features/AgentHome';
 import ChatMiniMap from '@/features/ChatMiniMap';
@@ -13,7 +15,7 @@ import { useOperationState } from '@/hooks/useOperationState';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import { threadSelectors, topicSelectors } from '@/store/chat/selectors';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import HeterogeneousChatInput from './HeterogeneousChatInput';
@@ -32,6 +34,7 @@ const log = debug('lobe-render:agent:ConversationArea');
  * Uses ChatList from @/features/Conversation and MainChatInput for custom features.
  */
 const Conversation = memo(() => {
+  const { t } = useTranslation('chat');
   const context = useAgentContext();
 
   // Get raw dbMessages from ChatStore for this context
@@ -55,6 +58,10 @@ const Conversation = memo(() => {
   // toolchain/memory/model are managed by the external runtime, so LobeHub's
   // model/tools/memory/KB/MCP/runtime-mode pickers don't apply.
   const isHeterogeneousAgent = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
+
+  // Subagent threads (spawned by an external agent's subagent tool call) are
+  // read-only — the parent agent drives their execution, so hide the input.
+  const isSubagentThread = useChatStore(threadSelectors.isActiveThreadSubagent);
 
   // Auto-reconnect to running Gateway operation on topic load
   const runningOperation = useChatStore((s) =>
@@ -88,9 +95,30 @@ const Conversation = memo(() => {
         <ChatList
           defaultWorkflowExpandLevel={isHeterogeneousAgent ? { streaming: 'full' } : undefined}
           welcome={<AgentHome />}
+          footerSlot={
+            isSubagentThread ? (
+              <Flexbox
+                horizontal
+                align={'center'}
+                justify={'center'}
+                paddingBlock={6}
+                paddingInline={16}
+              >
+                <span
+                  style={{
+                    color: cssVar.colorTextDescription,
+                    fontSize: 12,
+                    textAlign: 'center',
+                  }}
+                >
+                  {t('thread.subagentReadOnlyHint')}
+                </span>
+              </Flexbox>
+            ) : undefined
+          }
         />
       </Flexbox>
-      {isHeterogeneousAgent ? <HeterogeneousChatInput /> : <MainChatInput />}
+      {!isSubagentThread && (isHeterogeneousAgent ? <HeterogeneousChatInput /> : <MainChatInput />)}
       <ThreadHydration />
       <ChatMiniMap />
       <Suspense>

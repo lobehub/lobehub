@@ -318,7 +318,7 @@ export function registerAgentCommand(program: Command) {
         }
 
         // 1. Exec agent to get operationId
-        const input: Record<string, any> = { prompt: options.prompt };
+        const input: Record<string, any> = { prompt: options.prompt, trigger: 'cli' };
         if (options.agentId) input.agentId = options.agentId;
         if (deviceId) input.deviceId = deviceId;
         if (options.slug) input.slug = options.slug;

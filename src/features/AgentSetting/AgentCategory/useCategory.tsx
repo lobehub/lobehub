@@ -1,6 +1,6 @@
 import { Icon } from '@lobehub/ui';
 import { type MenuItemType } from 'antd/es/menu/interface';
-import { BookText, Bot, BrainCog, Handshake, MessagesSquare, Mic2, UserCircle } from 'lucide-react';
+import { Activity, Bot, BrainCog, Handshake, MessagesSquare, Mic2 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -8,6 +8,7 @@ import { type MenuProps } from '@/components/Menu';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { ChatSettingsTabs } from '@/store/global/initialState';
+import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 interface UseCategoryOptions {
   mobile?: boolean;
@@ -17,24 +18,15 @@ export const useCategory = ({ mobile }: UseCategoryOptions = {}) => {
   const { t } = useTranslation('setting');
   const iconSize = mobile ? 20 : undefined;
   const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
+  const { enableAgentSelfIteration } = useServerConfigStore(featureFlagsSelectors);
 
   const cateItems: MenuProps['items'] = useMemo(
     () =>
       [
-        !isInbox && {
-          icon: <Icon icon={UserCircle} size={iconSize} />,
-          key: ChatSettingsTabs.Meta,
-          label: t('agentTab.meta'),
-        },
         {
           icon: <Icon icon={Bot} size={iconSize} />,
           key: ChatSettingsTabs.Prompt,
           label: t('agentTab.prompt'),
-        },
-        {
-          icon: <Icon icon={BookText} size={iconSize} />,
-          key: ChatSettingsTabs.Documents,
-          label: t('agentTab.documents'),
         },
         (!isInbox && {
           icon: <Icon icon={Handshake} size={iconSize} />,
@@ -51,13 +43,18 @@ export const useCategory = ({ mobile }: UseCategoryOptions = {}) => {
           key: ChatSettingsTabs.Modal,
           label: t('agentTab.modal'),
         },
+        enableAgentSelfIteration && {
+          icon: <Icon icon={Activity} size={iconSize} />,
+          key: ChatSettingsTabs.SelfIteration,
+          label: t('agentTab.selfIteration'),
+        },
         {
           icon: <Icon icon={Mic2} size={iconSize} />,
           key: ChatSettingsTabs.TTS,
           label: t('agentTab.tts'),
         },
       ].filter(Boolean) as MenuProps['items'],
-    [t, isInbox, iconSize],
+    [t, isInbox, iconSize, enableAgentSelfIteration],
   );
 
   return cateItems;

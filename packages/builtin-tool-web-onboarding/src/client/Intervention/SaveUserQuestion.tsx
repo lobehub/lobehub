@@ -131,10 +131,9 @@ AgentIdentitySection.displayName = 'AgentIdentitySection';
 
 interface UserProfileSectionProps {
   fullName?: string;
-  responseLanguage?: string;
 }
 
-const UserProfileSection = memo<UserProfileSectionProps>(({ fullName, responseLanguage }) => {
+const UserProfileSection = memo<UserProfileSectionProps>(({ fullName }) => {
   const { t } = useTranslation('chat');
 
   const fields = useMemo<DetailField[]>(
@@ -144,12 +143,8 @@ const UserProfileSection = memo<UserProfileSectionProps>(({ fullName, responseLa
           label: t('tool.intervention.onboarding.userProfile.fullName'),
           value: fullName,
         },
-        responseLanguage && {
-          label: t('tool.intervention.onboarding.userProfile.responseLanguage'),
-          value: responseLanguage,
-        },
       ].filter(Boolean) as DetailField[],
-    [fullName, responseLanguage, t],
+    [fullName, t],
   );
 
   if (fields.length === 0) return null;
@@ -194,10 +189,9 @@ UserProfileSection.displayName = 'UserProfileSection';
 const SaveUserQuestionIntervention = memo<BuiltinInterventionProps<SaveUserQuestionInput>>(
   ({ args, onArgsChange, registerBeforeApprove }) => {
     const fullName = args.fullName?.trim() || undefined;
-    const responseLanguage = args.responseLanguage?.trim() || undefined;
 
     const hasAgentIdentity = Boolean(args.agentName || args.agentEmoji);
-    const hasUserProfile = Boolean(fullName || responseLanguage);
+    const hasUserProfile = Boolean(fullName);
 
     return (
       <Flexbox gap={16}>
@@ -208,9 +202,7 @@ const SaveUserQuestionIntervention = memo<BuiltinInterventionProps<SaveUserQuest
             onArgsChange={onArgsChange}
           />
         )}
-        {hasUserProfile && (
-          <UserProfileSection fullName={fullName} responseLanguage={responseLanguage} />
-        )}
+        {hasUserProfile && <UserProfileSection fullName={fullName} />}
       </Flexbox>
     );
   },

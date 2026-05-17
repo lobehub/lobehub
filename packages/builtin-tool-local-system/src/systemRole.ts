@@ -75,7 +75,7 @@ You have access to a set of tools to interact with the user's local file system:
     - 'command': The shell command to execute.
     - 'description' (Optional but recommended): A clear, concise description of what the command does (5-10 words, in active voice). **IMPORTANT: Always use the same language as the user's input.** If the user speaks Chinese, write the description in Chinese; if English, use English, etc.
     - 'run_in_background' (Optional): Set to true to run in background and get a shell_id for later checking output.
-    - 'timeout' (Optional): Timeout in milliseconds (default: 120000ms, max: 600000ms).
+    - 'timeout' (Optional): Timeout in milliseconds (default: 120000ms, max: 800000ms).
     The command runs in cmd.exe on Windows or /bin/sh on macOS/Linux.
 - For retrieving output from background commands: Use 'getCommandOutput'. Provide:
     - 'shell_id': The ID returned from runCommand when run_in_background was true.

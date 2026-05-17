@@ -160,6 +160,16 @@ const findBlockById = (
       const block = message.children.find((child) => child.id === blockId);
       if (block) return block;
     }
+    // Post-task summary blocks live in a separate field on virtual
+    // assistantGroup messages so they render AFTER `<SignalCallbacks>`
+    // (LOBE-8998). Same lookup contract as `children` — the renderer
+    // identifies blocks by id regardless of which slot they came from.
+    if ((message as { taskCompletions?: AssistantContentBlock[] }).taskCompletions) {
+      const block = (
+        message as { taskCompletions?: AssistantContentBlock[] }
+      ).taskCompletions!.find((child) => child.id === blockId);
+      if (block) return block;
+    }
     if (message.compressedMessages) {
       const inCompressedMessages = findBlockById(blockId, message.compressedMessages);
       if (inCompressedMessages) return inCompressedMessages;

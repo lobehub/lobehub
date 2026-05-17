@@ -20,6 +20,11 @@ vi.mock('@/store/chat/slices/aiChat/actions/agentSignalBridge', () => ({
   emitClientAgentSignalSourceEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
+const getExecutorMock = vi.fn();
+vi.mock('@/store/tool/slices/builtin/executors', () => ({
+  getExecutor: (...args: unknown[]) => getExecutorMock(...args),
+}));
+
 // ─── Test Helpers ───
 
 function createMockStore() {
@@ -99,6 +104,30 @@ describe('createGatewayEventHandler', () => {
       // No new message to associate, but fetch still happens
       expect(store.associateMessageWithOperation).not.toHaveBeenCalled();
       expect(store.replaceMessages).toHaveBeenCalled();
+    });
+
+    it('should resolve the new assistant from DB on hetero newStep when the event has no assistantMessage id', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      vi.mocked(messageService.getMessages).mockResolvedValueOnce([
+        { id: 'msg-initial', role: 'assistant' } as any,
+        { id: 'tool-1', role: 'tool' } as any,
+        { id: 'msg-step2', role: 'assistant' } as any,
+      ]);
+
+      handler(makeEvent('stream_start', { newStep: true }));
+      handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'world' }));
+      await flush();
+
+      expect(store.associateMessageWithOperation).toHaveBeenCalledWith('msg-step2', 'op-1');
+      expect(store.internal_dispatchMessage).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          id: 'msg-step2',
+          value: { content: 'world' },
+        }),
+        { operationId: 'op-1' },
+      );
     });
 
     it('should reset accumulators on each stream_start', async () => {
@@ -326,6 +355,109 @@ describe('createGatewayEventHandler', () => {
       await flush();
 
       expect(store.replaceMessages).toHaveBeenCalled();
+    });
+
+    it('should dispatch onAfterCall when payload is wrapped as { parentMessageId, toolCalling } (real gateway shape)', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+      const onAfterCall = vi.fn().mockResolvedValue(undefined);
+      getExecutorMock.mockReturnValueOnce({ onAfterCall });
+
+      handler(
+        makeEvent('tool_end', {
+          isSuccess: true,
+          payload: {
+            parentMessageId: 'msg-parent',
+            toolCalling: {
+              apiName: 'deleteTask',
+              arguments: JSON.stringify({ identifier: 'T-3' }),
+              id: 'tc-1',
+              identifier: 'lobe-task',
+            },
+          },
+          result: { content: 'Task deleted', success: true },
+        }),
+      );
+      await flush();
+
+      expect(getExecutorMock).toHaveBeenCalledWith('lobe-task');
+      expect(onAfterCall).toHaveBeenCalledWith({
+        apiName: 'deleteTask',
+        identifier: 'lobe-task',
+        params: { identifier: 'T-3' },
+        result: { content: 'Task deleted', success: true },
+        toolCallId: 'tc-1',
+      });
+    });
+
+    it('should also dispatch onAfterCall when payload is the flat ChatToolPayload', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+      const onAfterCall = vi.fn().mockResolvedValue(undefined);
+      getExecutorMock.mockReturnValueOnce({ onAfterCall });
+
+      handler(
+        makeEvent('tool_end', {
+          isSuccess: true,
+          payload: {
+            apiName: 'createTask',
+            arguments: JSON.stringify({ name: 'New', instruction: 'do thing' }),
+            id: 'tc-2',
+            identifier: 'lobe-task',
+          },
+          result: { success: true },
+        }),
+      );
+      await flush();
+
+      expect(onAfterCall).toHaveBeenCalledWith(
+        expect.objectContaining({
+          apiName: 'createTask',
+          identifier: 'lobe-task',
+          toolCallId: 'tc-2',
+        }),
+      );
+    });
+
+    it('should skip onAfterCall when payload identifier/apiName are missing', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+      const onAfterCall = vi.fn();
+      getExecutorMock.mockReturnValue({ onAfterCall });
+
+      handler(makeEvent('tool_end', { isSuccess: true, payload: { parentMessageId: 'x' } }));
+      await flush();
+
+      expect(onAfterCall).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('tool_start', () => {
+    it('should dispatch onBeforeCall with the unwrapped ChatToolPayload', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+      const onBeforeCall = vi.fn().mockResolvedValue(undefined);
+      getExecutorMock.mockReturnValueOnce({ onBeforeCall });
+
+      handler(
+        makeEvent('tool_start', {
+          parentMessageId: 'msg-parent',
+          toolCalling: {
+            apiName: 'editTask',
+            arguments: JSON.stringify({ identifier: 'T-5', name: 'renamed' }),
+            id: 'tc-3',
+            identifier: 'lobe-task',
+          },
+        }),
+      );
+      await flush();
+
+      expect(onBeforeCall).toHaveBeenCalledWith({
+        apiName: 'editTask',
+        identifier: 'lobe-task',
+        params: { identifier: 'T-5', name: 'renamed' },
+        toolCallId: 'tc-3',
+      });
     });
   });
 

@@ -3,12 +3,14 @@ import { RequestTrigger } from '@lobechat/types';
 import type { Message, SentMessage, Thread } from 'chat';
 import debug from 'debug';
 
+import type { MessengerPlatform } from '@/config/messenger';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
 import { createAbortError, isAbortError } from '@/server/services/agentRuntime/abort';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { GatewayService } from '@/server/services/gateway';
 import { getMessageGatewayClient } from '@/server/services/gateway/MessageGatewayClient';
 import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
 import { SystemAgentService } from '@/server/services/systemAgent';
@@ -709,16 +711,38 @@ export class AgentBridgeService {
       if (botContext?.platformThreadId && botContext?.applicationId) {
         const platform = botContext.platformThreadId.split(':')[0];
         try {
-          const row = await AgentBotProviderModel.findByPlatformAndAppId(
-            this.db,
-            platform,
-            botContext.applicationId,
-          );
-          if (row?.id) {
-            gatewayConnectionId = row.id;
-            gwClient.startTyping(row.id, botContext.platformThreadId!).catch((err) => {
-              log('executeWithWebhooks: gateway startTyping failed: %O', err);
+          if (botContext.messengerInstallationKey) {
+            // Messenger run: shard typing by `(platform, lobeUserId)` so each
+            // user gets their own DO. Solves both the cross-conversation
+            // TypingState overwrite bug (single shared DO) and the 200K-MAU
+            // single-DO hot-spot. The connectionId is registered lazily and
+            // cached per-process — see GatewayService.ensureUserMessengerConnected.
+            const gateway = new GatewayService();
+            const connectionId = await gateway.ensureUserMessengerConnected({
+              installationKey: botContext.messengerInstallationKey,
+              platform: platform as MessengerPlatform,
+              userId: this.userId,
             });
+            if (connectionId) {
+              gatewayConnectionId = connectionId;
+              gwClient.startTyping(connectionId, botContext.platformThreadId!).catch((err) => {
+                log('executeWithWebhooks: messenger gateway startTyping failed: %O', err);
+              });
+            }
+          } else {
+            // Per-agent bot provider: typing keyed by the provider row id —
+            // legacy path for `agent_bot_providers`-backed bots.
+            const row = await AgentBotProviderModel.findByPlatformAndAppId(
+              this.db,
+              platform,
+              botContext.applicationId,
+            );
+            if (row?.id) {
+              gatewayConnectionId = row.id;
+              gwClient.startTyping(row.id, botContext.platformThreadId!).catch((err) => {
+                log('executeWithWebhooks: gateway startTyping failed: %O', err);
+              });
+            }
           }
         } catch (err) {
           log('executeWithWebhooks: gateway provider lookup failed: %O', err);
@@ -759,6 +783,11 @@ export class AgentBridgeService {
     const callbackUrl = '/api/agent/webhooks/bot-callback';
     const webhookBody = {
       applicationId: botContext?.applicationId,
+      // Forward the messenger discriminator (set by MessengerRouter for runs
+      // originated by the shared Messenger bot). The callback uses this — not
+      // the synthetic applicationId shape — to decide which credential source
+      // to read from.
+      messengerInstallationKey: botContext?.messengerInstallationKey,
       platformThreadId: botContext?.platformThreadId,
       progressMessageId: progressMessage?.id,
       // Pass thread name only if it's user-set.
@@ -768,6 +797,13 @@ export class AgentBridgeService {
         channelContext?.thread?.name && /^Thread \d/.test(channelContext.thread.name)
           ? undefined
           : channelContext?.thread?.name,
+      // Forward the lobe userId so messenger callbacks can rebuild the same
+      // per-user gateway connectionId (`messenger:<platform>[:<tenant>]:user-<userId>`)
+      // that we used to start typing here. Without it, `BotCallbackService`
+      // falls back to `connectionId: ''` and `stopGatewayTyping` becomes a
+      // no-op — leaving the typing indicator to expire on the gateway's 60s
+      // alarm timeout instead of stopping at completion.
+      userId: this.userId,
       userMessageId: userMessage.id,
     };
 
@@ -1062,7 +1098,7 @@ export class AgentBridgeService {
                   await this.setReaction(thread, userMessage, client, desiredEmoji, botContext);
                 }
 
-                if (!event.shouldContinue || !progressMessage || displayToolCalls === false) return;
+                if (!event.shouldContinue || !progressMessage || displayToolCalls !== true) return;
 
                 const msgBody = renderStepProgress(
                   {
@@ -1136,6 +1172,7 @@ export class AgentBridgeService {
                   try {
                     const errorBody = renderAgentError(
                       event.errorType,
+                      errorMsg,
                       event.operationId,
                       replyLocale,
                     );

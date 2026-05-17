@@ -8,7 +8,6 @@ import { registerBotCommand } from './commands/bot';
 import { registerCompletionCommand } from './commands/completion';
 import { registerConfigCommand } from './commands/config';
 import { registerConnectCommand } from './commands/connect';
-import { registerCronCommand } from './commands/cron';
 import { registerDeviceCommand } from './commands/device';
 import { registerDocCommand } from './commands/doc';
 import { registerEvalCommand } from './commands/eval';
@@ -60,7 +59,6 @@ export function createProgram() {
   registerAgentCommand(program);
   registerAgentGroupCommand(program);
   registerBotCommand(program);
-  registerCronCommand(program);
   registerGenerateCommand(program);
   registerFileCommand(program);
   registerHeteroCommand(program);

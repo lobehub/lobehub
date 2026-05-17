@@ -19,6 +19,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { AgentBridgeService } from '@/server/services/bot/AgentBridgeService';
+import { buildBotContext } from '@/server/services/bot/buildBotContext';
 import type { PlatformClient } from '@/server/services/bot/platforms';
 import { renderInlineError } from '@/server/services/bot/replyTemplate';
 
@@ -66,6 +67,16 @@ interface MessengerCommandContext {
    *  public channel this is the slash-invocation channel; for text it's the
    *  DM thread. */
   chatId: string;
+  /** Discord slash command interaction handle. Present only when dispatched
+   *  by `handleSlashCommand` on Discord — handlers that emit interactive UI
+   *  (e.g. `/agents` picker) must complete the deferred interaction via the
+   *  follow-up webhook, otherwise Discord shows "Thinking..." indefinitely
+   *  and eventually flips to "The application did not respond". */
+  interaction?: { applicationId: string; token: string };
+  /** True when the command was invoked from a 1:1 DM. Commands that surface
+   *  user-private UI (e.g. `/agents` picker) widen private replies into
+   *  ephemerals when this is false so the channel doesn't see them. */
+  isDM: boolean;
   link: MessengerAccountLinkItem | undefined;
   message?: Message;
   platform: MessengerPlatform;
@@ -91,6 +102,29 @@ const HELP_TEXT = [
   '• /new — start a new conversation',
   '• /stop — stop the current execution',
 ].join('\n');
+
+/**
+ * Pull the Discord interaction id + token off a chat-sdk slash event so
+ * handlers can complete the deferred interaction via the follow-up webhook.
+ *
+ * chat-adapter-discord exposes the raw Discord interaction object on
+ * `event.raw` (see `chat` SlashCommandEvent: "Platform-specific raw payload"),
+ * which carries `application_id` and `token`. Returns undefined for other
+ * platforms or when the shape doesn't match (defensive — the patch only
+ * fires for Discord today).
+ */
+const extractDiscordInteractionContext = (
+  platform: MessengerPlatform,
+  event: SlashCommandEvent,
+): { applicationId: string; token: string } | undefined => {
+  if (platform !== 'discord') return undefined;
+  const raw = event.raw as { application_id?: unknown; token?: unknown } | null | undefined;
+  if (!raw || typeof raw !== 'object') return undefined;
+  if (typeof raw.application_id !== 'string' || typeof raw.token !== 'string') {
+    return undefined;
+  }
+  return { applicationId: raw.application_id, token: raw.token };
+};
 
 /** Parse a leading `/cmd` (with optional args) out of a message. Returns null
  *  when the message isn't a command. Strips a trailing `@BotName` so commands
@@ -197,6 +231,23 @@ export class MessengerRouter {
       const bot = await this.getOrCreateBot(creds);
       if (!bot) {
         return new Response(`Messenger ${platform} bot unavailable`, { status: 503 });
+      }
+
+      // ----- App Home `Messages` tab opener (Slack marketplace welcome) ---
+      // Slack requires a welcome message the first time a user opens the
+      // Messages tab. chat-sdk's slack adapter drops these events, so peek
+      // the raw body here and dispatch via the binder. Dedupe is handled
+      // inside `handleAppHomeOpened` so a per-user welcome fires once.
+      if (bot.binder.extractAppHomeOpened) {
+        try {
+          const opener = await bot.binder.extractAppHomeOpened(reconstructRequest(req, rawBody));
+          if (opener) {
+            await this.handleAppHomeOpened(bot, creds, opener);
+            return new Response('OK', { status: 200 });
+          }
+        } catch (error) {
+          log('extractAppHomeOpened failed for %s: %O', platform, error);
+        }
       }
 
       // ----- Tap-action callbacks (binder peeks raw body) -----------------
@@ -318,7 +369,11 @@ export class MessengerRouter {
     const platform = creds.platform;
     const tenantId = creds.tenantId;
 
-    const handle = async (thread: any, message: Message): Promise<void> => {
+    const handle = async (
+      thread: any,
+      message: Message,
+      bridgeMethod: 'handleMention' | 'handleSubscribedMessage',
+    ): Promise<void> => {
       if (message.author.isBot === true) return;
 
       const senderId = message.author.userId;
@@ -328,6 +383,13 @@ export class MessengerRouter {
       }
 
       const chatId = client.extractChatId(thread.id);
+      // Channel `@mention` (Slack today) — `thread.isDM` is false. The
+      // unlinked path swaps to an ephemeral so the link prompt is visible
+      // only to the mentioner; the no-active-agent prompt is also routed
+      // ephemerally for the same reason. The chat-sdk thread.id carries
+      // the platform's thread anchor (Slack: `slack:<channel>:<threadTs>`)
+      // which the binder splits when posting in-thread.
+      const isChannelMention = thread.isDM === false;
       const link = await MessengerAccountLinkModel.findByPlatformUser(
         serverDB,
         platform,
@@ -340,16 +402,36 @@ export class MessengerRouter {
         if (parsed) {
           const command = this.commands.find((c) => c.name === parsed.name);
           if (command) {
+            // Text-path command reply: in a DM `chat.postMessage` is fine
+            // (the conversation is private already). In a channel `@mention`
+            // we must NOT broadcast — `/new`, `/stop`, `/start` etc. all
+            // surface user-private state. Route the reply through
+            // `replyEphemeral` so only the invoker sees it. Anchor in the
+            // mention's thread (Slack `thread_ts`) so the response sits next
+            // to the trigger. Platforms without `replyEphemeral` (Telegram)
+            // fall back to the regular DM path.
+            const channelThreadTs = isChannelMention ? String(thread.id).split(':')[2] : undefined;
+            const reply =
+              isChannelMention && binder.replyEphemeral
+                ? (text: string) =>
+                    binder.replyEphemeral!({
+                      channelId: chatId,
+                      text,
+                      threadTs: channelThreadTs,
+                      userId: senderId,
+                    })
+                : (text: string) => binder.sendDmText(chatId, text);
             await command.handler({
               args: parsed.args,
               authorUserId: senderId,
               authorUserName: message.author.userName,
               binder,
               chatId,
+              isDM: !isChannelMention,
               link,
               message,
               platform,
-              reply: (text) => binder.sendDmText(chatId, text),
+              reply,
               serverDB,
               source: 'text',
               tenantId,
@@ -361,24 +443,49 @@ export class MessengerRouter {
           // "/foo" prompts the user typed still reach them.
         }
 
-        // Unbound sender → trigger link flow
+        // Unbound sender → trigger link flow. For a channel mention pass
+        // the raw thread.id so the binder can post the prompt as an
+        // ephemeral anchored in the mention's thread instead of a public
+        // DM-style message.
         if (!link) {
           await binder.handleUnlinkedMessage({
             authorUserId: senderId,
             authorUserName: message.author.userName,
+            channelMentionThreadId: isChannelMention ? thread.id : undefined,
             chatId,
             message,
           });
           return;
         }
 
-        // Bound but no active agent → prompt the user to pick one via /agents
+        // Bound but no active agent → prompt the user to pick one via /agents.
+        // In a channel, route the prompt ephemerally so the entire channel
+        // doesn't see the system message.
         if (!link.activeAgentId) {
-          await binder.sendDmText(chatId, 'No active agent selected. Send /agents to pick one.');
+          const noAgentText = 'No active agent selected. Send /agents to pick one.';
+          if (isChannelMention && binder.replyEphemeral) {
+            const threadTs = String(thread.id).split(':')[2];
+            await binder.replyEphemeral({
+              channelId: chatId,
+              text: noAgentText,
+              threadTs,
+              userId: senderId,
+            });
+          } else {
+            await binder.sendDmText(chatId, noAgentText);
+          }
           return;
         }
 
-        await this.dispatchToAgent(thread, message, client, link, link.activeAgentId, platform);
+        await this.dispatchToAgent(
+          thread,
+          message,
+          client,
+          link,
+          link.activeAgentId,
+          platform,
+          bridgeMethod,
+        );
       } catch (error) {
         log('handle: handler error: %O', error);
         try {
@@ -389,70 +496,137 @@ export class MessengerRouter {
       }
     };
 
-    // Chat SDK routes 1:1 conversations to `onDirectMessage`. Follow-up messages
-    // in a subscribed thread go to `onSubscribedMessage`. Messenger is currently
-    // DM-only, so wire the same handler to both — and `thread.subscribe()` on
-    // first contact so future messages (which arrive as "subscribed" rather
-    // than "direct") still route here. `onNewMessage(/./)` does NOT match DMs;
-    // those fall through to `onNewMention` if `onDirectMessage` is unregistered.
-    bot.onDirectMessage(async (thread, message, _channel, _context?: MessageContext) => {
-      log('onDirectMessage: install=%s, msgId=%s', creds.installationKey, (message as any).id);
+    // We intentionally do NOT register `onDirectMessage`. Chat SDK
+    // short-circuits the DM dispatch when that handler is registered
+    // (`chat` core: `dispatchToHandlers` fires DM handlers and returns
+    // before the `isSubscribed` check), which kills the subscription-based
+    // routing that lets follow-up messages reuse the cached topicId.
+    //
+    // Without an `onDirectMessage` handler, chat-sdk forces `isMention =
+    // true` for DMs and falls through to the standard subscription dispatch
+    // (mirrors `BotMessageRouter`, which doesn't register `onDirectMessage`
+    // either):
+    //   - First DM → not subscribed yet → `onNewMention` →
+    //     `handleMention` opens a topic and subscribes the thread.
+    //   - Follow-up DM → subscribed → `onSubscribedMessage` →
+    //     `handleSubscribedMessage` reads the cached topicId and continues.
+    //
+    // Track distinct humans who have spoken in a channel thread. A
+    // single-user thread is effectively a private 1:1 with the bot (just
+    // hosted in a channel), so we relax the @mention requirement and let
+    // every follow-up reach the agent. Once a second human joins we revert
+    // to mention-only mode and announce the switch once so newcomers
+    // understand why follow-ups are suddenly silent.
+    //
+    // Tracking lives in chat-sdk state so the count survives webhook
+    // boundaries (each Slack event delivery is a fresh request). DMs and
+    // bot authors are excluded — DMs are already 1:1 and bots can't drive
+    // a conversation.
+    const PARTICIPANTS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+    const participantsKey = (threadId: string): string => `messenger:thread-humans:${threadId}`;
+    const mentionRequiredAnnouncedKey = (threadId: string): string =>
+      `messenger:thread-mention-required-announced:${threadId}`;
+
+    const trackThreadParticipant = async (
+      thread: any,
+      message: Message,
+    ): Promise<{ count: number; isNewParticipant: boolean }> => {
+      if (thread.isDM) return { count: 0, isNewParticipant: false };
+      const senderId = message.author?.userId;
+      const isHuman =
+        !!senderId &&
+        message.author?.isBot !== true &&
+        (message.author as { isMe?: boolean })?.isMe !== true;
+      if (!isHuman) return { count: 0, isNewParticipant: false };
+
+      const stateAdapter = bot.getState();
+      const key = participantsKey(thread.id);
+      let participants: string[] = [];
       try {
-        await thread.subscribe();
-      } catch {
-        /* idempotent — first contact creates the subscription, later calls no-op */
+        participants = (await stateAdapter.getList<string>(key)) ?? [];
+      } catch (error) {
+        log('trackThreadParticipant: getList failed: %O', error);
       }
-      await handle(thread, message);
-    });
+      if (participants.includes(senderId)) {
+        return { count: participants.length, isNewParticipant: false };
+      }
+      try {
+        await stateAdapter.appendToList(key, senderId, {
+          maxLength: 50,
+          ttlMs: PARTICIPANTS_TTL_MS,
+        });
+      } catch (error) {
+        log('trackThreadParticipant: appendToList failed: %O', error);
+      }
+      return { count: participants.length + 1, isNewParticipant: true };
+    };
 
     bot.onSubscribedMessage(async (thread, message, _context?: MessageContext) => {
       log('onSubscribedMessage: install=%s, msgId=%s', creds.installationKey, (message as any).id);
-      await handle(thread, message);
-    });
 
-    // First-touch @mention in a non-DM context (Slack channel, Discord guild
-    // channel). Without this, an unlinked user's first interaction would be
-    // dropped — chat-sdk routes channel mentions to `onNewMention`, not the
-    // DM/subscribed paths above. We treat the unlinked case as "DM the user
-    // a link button"; the runtime is DM-only today (see binder docstrings),
-    // so a linked user's channel mention is intentionally a no-op.
-    bot.onNewMention(async (thread, message, _context?: MessageContext) => {
-      if (message.author.isBot === true) return;
-      const senderId = message.author.userId;
-      if (!senderId) {
-        log('onNewMention: missing author.userId, dropping');
+      // DM short-circuit — always 1:1 with the bot, no participant gating.
+      if (thread.isDM) {
+        await handle(thread, message, 'handleSubscribedMessage');
         return;
       }
+
+      const isMention = message.isMention === true;
+      const { count } = await trackThreadParticipant(thread, message);
+
+      // Single-human thread → respond without `@`. Multi-human thread →
+      // only @mention triggers a reply, so the bot doesn't insert itself
+      // into human-to-human chatter happening inside a thread it once
+      // opened. `count === 0` covers tracking failures or bot authors —
+      // fall through to `handle()` and let its existing `isBot` filter
+      // drop bot messages.
+      const shouldHandle = isMention || count <= 1;
+      if (!shouldHandle) {
+        // First skip in this thread → tell the room why the bot just went
+        // quiet so participants know to @mention if they need it. Dedupe
+        // by thread id so we never spam more than once.
+        try {
+          const fresh = await bot
+            .getState()
+            .setIfNotExists(mentionRequiredAnnouncedKey(thread.id), '1', PARTICIPANTS_TTL_MS);
+          if (fresh) {
+            await thread.post(
+              "Multiple people are talking in this thread now. From here on I'll only respond when you @mention me.",
+            );
+          }
+        } catch (error) {
+          log('onSubscribedMessage: mention-mode announcement failed: %O', error);
+        }
+        return;
+      }
+
+      // Follow-up on a subscribed thread (DM after the first touch, or a
+      // subscribed channel thread). `handleSubscribedMessage` reads the
+      // cached topicId from chat-sdk thread state and continues that topic;
+      // it falls back to `handleMention` internally if no topicId is cached.
+      await handle(thread, message, 'handleSubscribedMessage');
+    });
+
+    // First-touch entry point for any non-subscribed conversation:
+    //   - DMs (chat-sdk forces `isMention = true` for them — see the
+    //     comment above).
+    //   - Channel `@mention`s where the parent thread isn't subscribed yet.
+    // `handleMention` opens a fresh topic, writes the topicId into chat-sdk
+    // thread state, and (for subscribable platforms / threads — see
+    // `client.shouldSubscribe`) subscribes the thread so subsequent
+    // messages route through `onSubscribedMessage` and continue the topic.
+    bot.onNewMention(async (thread, message, _context?: MessageContext) => {
       log(
         'onNewMention: install=%s, msgId=%s, threadId=%s',
         creds.installationKey,
         (message as any).id,
         thread.id,
       );
-      try {
-        const link = await MessengerAccountLinkModel.findByPlatformUser(
-          serverDB,
-          platform,
-          senderId,
-          tenantId,
-        );
-        if (link) return;
-
-        // Route the link prompt to the user's DM, never the public channel —
-        // the verify-im URL carries a one-shot token. Slack's chat.postMessage
-        // auto-opens an IM when the channel argument is a user id; Discord's
-        // binder calls openDM(authorUserId) and ignores chatId; Telegram uses
-        // the user's chat id directly. So `authorUserId` is the correct
-        // private target across platforms.
-        await binder.handleUnlinkedMessage({
-          authorUserId: senderId,
-          authorUserName: message.author.userName,
-          chatId: senderId,
-          message,
-        });
-      } catch (error) {
-        log('onNewMention: handler error: %O', error);
-      }
+      // Record the original @mentioner so the participant count starts at 1
+      // (not 0) when their first follow-up lands in `onSubscribedMessage`.
+      // Without this the follow-up looks like a "new participant" instead
+      // of the same person continuing.
+      await trackThreadParticipant(thread, message);
+      await handle(thread, message, 'handleMention');
     });
 
     // Native slash commands — wired only for platforms that opt in by
@@ -462,7 +636,7 @@ export class MessengerRouter {
     if (binder.replyPrivately) {
       const slashPaths = this.commands.map((cmd) => `/${cmd.name}`);
       bot.onSlashCommand(slashPaths, async (event) => {
-        await this.handleSlashCommand({ binder, client, creds, event, serverDB });
+        await this.handleSlashCommand({ binder, bot, client, creds, event, serverDB });
       });
     }
 
@@ -481,6 +655,19 @@ export class MessengerRouter {
         }
       });
     }
+
+    // Channel-join welcome (Slack `member_joined_channel`). Counterpart to the
+    // App Home `Messages`-tab welcome in `handleAppHomeOpened` — the marketplace
+    // listing reviewers also test the `/invite @LobeHub` entry point, so the
+    // bot must speak up the first time it lands in a channel. Other events
+    // (regular members joining) are filtered out by the `botUserId` check.
+    bot.onMemberJoinedChannel(async (event) => {
+      const botUserId = (event.adapter as any)?.botUserId as string | undefined;
+      if (!botUserId || event.userId !== botUserId) return;
+      const channelId = client.extractChatId(event.channelId);
+      if (!channelId) return;
+      await this.handleChannelJoin(bot, binder, channelId);
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -502,20 +689,48 @@ export class MessengerRouter {
       {
         description: 'Bind your account to LobeHub',
         handler: async (ctx) => {
-          // For slash invocations the slash may have come from a public
-          // channel — route the link button privately to the user's DM so
-          // the one-shot link token isn't leaked. Slack accepts a user id
-          // as the `chatId` (`chat.postMessage` auto-opens the IM with
-          // `im:write` scope), so we pass `authorUserId`. Text invocations
-          // already arrive in a DM thread, so we use the inbound `chatId`.
-          const linkChatId = ctx.source === 'slash' ? ctx.authorUserId : ctx.chatId;
+          // Already-linked short-circuit: re-running `/start` while bound
+          // would issue a fresh verify-im token and, on completion,
+          // overwrite the user's `messenger_account_links` row via
+          // `confirmLink` → `upsertForPlatform`. That desyncs the cached
+          // chat-sdk thread state (topicId / agent runtime) from the new
+          // active agent and the conversation hangs at "typing…" with no
+          // reply. Treat `/start` as the unbound-only onboarding command.
+          if (ctx.link) {
+            await ctx.reply(
+              'Your account is already linked to LobeHub. Send /agents to switch the active agent, or /new to start a fresh conversation.',
+            );
+            return;
+          }
+          // The verify-im URL is one-shot and account-binding; it must reach
+          // the invoker privately. Two equally-private surfaces depending on
+          // the platform:
+          //   • Slack — `chat.postEphemeral` in the channel is invoker-only
+          //     and keeps the link flow inline (no DM context switch).
+          //   • Discord — no text-channel ephemeral primitive for non-
+          //     interaction messages, so we still open a DM. Telegram has no
+          //     channel slash surface today, falls through to DM as well.
+          // Detection key: presence of `binder.replyEphemeral`, which is what
+          // the @mention path also uses to decide ephemeral-vs-DM.
+          const canEphemeralInChannel = !ctx.isDM && !!ctx.binder.replyEphemeral;
+          const linkChatId = ctx.isDM || canEphemeralInChannel ? ctx.chatId : ctx.authorUserId;
+          // `slack:<channel>:` (empty threadTs) — slash commands fire outside
+          // any thread, so the ephemeral floats inline at the channel root,
+          // which is what we want.
+          const channelMentionThreadId = canEphemeralInChannel
+            ? `${ctx.platform}:${ctx.chatId}:`
+            : undefined;
           await ctx.binder.handleUnlinkedMessage({
             authorUserId: ctx.authorUserId,
             authorUserName: ctx.authorUserName,
+            channelMentionThreadId,
             chatId: linkChatId,
             message: ctx.message,
           });
-          if (ctx.source === 'slash') {
+          // Only nudge the user toward DM when the link actually went there.
+          // For the Slack ephemeral path the prompt is already inline, a
+          // second "check your DM" would be misleading.
+          if (!ctx.isDM && !canEphemeralInChannel) {
             await ctx.reply('Check your DM with LobeHub for the link button.');
           }
         },
@@ -616,12 +831,13 @@ export class MessengerRouter {
    */
   private async handleSlashCommand(params: {
     binder: MessengerPlatformBinder;
+    bot: Chat<any>;
     client: PlatformClient;
     creds: InstallationCredentials;
     event: SlashCommandEvent;
     serverDB: LobeChatDatabase;
   }): Promise<void> {
-    const { binder, client, creds, event, serverDB } = params;
+    const { binder, bot, client, creds, event, serverDB } = params;
     const senderId = event.user.userId;
     if (!senderId) {
       log('handleSlashCommand: missing user id, dropping');
@@ -657,6 +873,43 @@ export class MessengerRouter {
       creds.tenantId,
     );
 
+    // Slash command events have no chat-sdk Thread attached (slash isn't
+    // posted into any specific thread). Worse, chat-sdk's
+    // `handleSlashCommandEvent` constructs the ChannelImpl WITHOUT an
+    // `isDM` flag — it defaults to `false`, so we can't even tell
+    // whether the slash was fired from a DM by inspecting the channel.
+    //
+    // Resolve the user's DM thread on every slash invocation so commands
+    // like `/new` and `/stop` always have a target (the user's canonical
+    // bot conversation). `bot.openDM(userId)` is idempotent — Slack's
+    // `conversations.open` returns the existing IM when one already
+    // exists, so this doesn't create new conversations on each call. If
+    // resolution fails (rate limit, permission), `thread` stays undefined
+    // and handlers fall back to their "open your DM" branch.
+    let thread: any | undefined;
+    try {
+      thread = await bot.openDM(senderId);
+    } catch (error) {
+      log('handleSlashCommand: openDM(%s) failed: %O', senderId, error);
+    }
+
+    // chat-sdk doesn't propagate `isDM` on slash-event Channels (see the
+    // openDM block above). Fall back to a Slack channel-id prefix probe:
+    // raw Slack ids that start with `D` are 1:1 DMs (`G` / `MPDM` are
+    // group DMs, `C` is public). For other platforms (Discord today) the
+    // chat-sdk flag is reliable so we keep that path too.
+    const isDmChannel =
+      event.channel.isDM === true || (creds.platform === 'slack' && chatId.startsWith('D'));
+
+    // Discord slash commands arrive as deferred interactions (the
+    // `patchDiscordForwardedInteractions` patch ack's them with type 5
+    // before dispatch). The interaction token in `event.raw` is the only
+    // way handlers can complete that deferred state via the webhook
+    // follow-up endpoint — without it, Discord keeps spinning "Thinking..."
+    // and eventually flips to "did not respond". Other platforms have no
+    // analogous concept, so the field stays undefined.
+    const interaction = extractDiscordInteractionContext(creds.platform, event);
+
     try {
       await command.handler({
         args,
@@ -664,12 +917,18 @@ export class MessengerRouter {
         authorUserName: event.user.userName,
         binder,
         chatId,
+        interaction,
+        // `isDM` lets handlers like `/agents` keep the picker public in
+        // DMs (so it stays in history) and widen to an ephemeral when
+        // the slash was typed from a public channel.
+        isDM: isDmChannel,
         link,
         platform: creds.platform,
         reply,
         serverDB,
         source: 'slash',
         tenantId: creds.tenantId,
+        thread,
       });
     } catch (error) {
       log('handleSlashCommand: handler error for /%s: %O', cmdName, error);
@@ -725,6 +984,15 @@ export class MessengerRouter {
     if (binder.sendAgentPicker) {
       await binder.sendAgentPicker(chatId, {
         entries: this.toPickerEntries(userAgents, link.activeAgentId),
+        // Channel invocation → render ephemeral so only the invoker sees
+        // their personal agent list (otherwise `/agents` from a public
+        // channel would broadcast everyone's `LobeAI / Claude Code / …`
+        // grid). DMs stay non-ephemeral so the picker persists in history.
+        ephemeralTo: ctx.isDM ? undefined : ctx.authorUserId,
+        // Discord-only: forward the slash interaction so the binder can
+        // complete the deferred reply via the follow-up webhook. Without
+        // this, Discord keeps "Thinking..." until it times out.
+        interaction: ctx.interaction,
         text: 'Tap an agent to make it the active one:',
       });
       return;
@@ -749,6 +1017,108 @@ export class MessengerRouter {
       isActive: agent.id === activeAgentId,
       title: agent.title,
     }));
+  }
+
+  /**
+   * Slack-only welcome on first Messages-tab open. Slack's marketplace
+   * listing rule: apps that enable the Messages tab MUST send a welcome
+   * the first time any user opens it. The `setIfNotExists` gate makes
+   * sure follow-up opens (the same user clicking the tab again, multiple
+   * webhook deliveries from Slack's retry policy) stay silent.
+   *
+   * chat-sdk state is already per-install (Redis keyPrefix in
+   * `createChatBot`), so the gate key is implicitly workspace-scoped.
+   * Unlinked users get the same Link Account CTA they'd see on a first
+   * DM; linked users get a short ready-to-chat note with the active
+   * agent name.
+   */
+  private async handleAppHomeOpened(
+    bot: RegisteredMessengerBot,
+    creds: InstallationCredentials,
+    event: { channelId: string; userId: string },
+  ): Promise<void> {
+    const stateAdapter = bot.chatBot.getState();
+    const gateKey = `app_home_welcomed:${event.userId}`;
+    try {
+      const fresh = await stateAdapter.setIfNotExists(gateKey, '1');
+      if (!fresh) return;
+    } catch (error) {
+      log('handleAppHomeOpened: dedupe gate failed: %O', error);
+      return;
+    }
+
+    try {
+      const serverDB = await getServerDB();
+      const link = await MessengerAccountLinkModel.findByPlatformUser(
+        serverDB,
+        creds.platform,
+        event.userId,
+        creds.tenantId,
+      );
+
+      if (!link) {
+        await bot.binder.handleUnlinkedMessage({
+          authorUserId: event.userId,
+          chatId: event.channelId,
+        });
+        return;
+      }
+
+      let activeAgentName: string | undefined;
+      if (link.activeAgentId) {
+        const userAgents = await this.fetchUserAgents(serverDB, link.userId);
+        activeAgentName = userAgents.find((a) => a.id === link.activeAgentId)?.title;
+      }
+
+      const text = activeAgentName
+        ? `Welcome to LobeHub! Your active agent is *${activeAgentName}*. Send a message to chat, or use \`/agents\` to switch.`
+        : 'Welcome to LobeHub! Send `/agents` to pick an active agent and start chatting.';
+      await bot.binder.sendDmText(event.channelId, text);
+    } catch (error) {
+      log('handleAppHomeOpened: dispatch failed: %O', error);
+    }
+  }
+
+  /**
+   * Slack `member_joined_channel` welcome. Fires the first time the bot
+   * itself joins a channel (via `/invite @LobeHub` or being added through the
+   * channel settings). Slack retries `member_joined_channel` aggressively on
+   * 5xx, and re-adding-then-removing-then-re-adding a bot would fire it again,
+   * so `setIfNotExists` keys on the channel id to keep the greeting one-shot.
+   *
+   * The message lives in the channel (not as an ephemeral) because every
+   * member should see what the bot is and how to start. Account linking is
+   * intentionally pushed to a DM in the copy — verify-im URLs are personal
+   * and must never be broadcast to the channel.
+   */
+  private async handleChannelJoin(
+    chatBot: Chat<any>,
+    binder: MessengerPlatformBinder,
+    channelId: string,
+  ): Promise<void> {
+    const stateAdapter = chatBot.getState();
+    const gateKey = `channel_welcomed:${channelId}`;
+    try {
+      const fresh = await stateAdapter.setIfNotExists(gateKey, '1');
+      if (!fresh) return;
+    } catch (error) {
+      log('handleChannelJoin: dedupe gate failed: %O', error);
+      return;
+    }
+
+    const text = [
+      ":wave: Hi, I'm *LobeHub* — your AI agent in Slack.",
+      '',
+      '• Mention me with `@LobeHub <your question>` to chat in this channel.',
+      '• First time? Send me a *direct message* to link your LobeHub account.',
+      '• Use `/agents` in DM to switch the active agent.',
+    ].join('\n');
+
+    try {
+      await binder.sendDmText(channelId, text);
+    } catch (error) {
+      log('handleChannelJoin: send failed: %O', error);
+    }
   }
 
   /**
@@ -858,6 +1228,7 @@ export class MessengerRouter {
     link: MessengerAccountLinkItem,
     agentId: string,
     platform: MessengerPlatform,
+    bridgeMethod: 'handleMention' | 'handleSubscribedMessage',
   ): Promise<void> {
     log(
       'dispatchToAgent: platform=%s, tenant=%s, sender=%s, agent=%s, user=%s',
@@ -871,19 +1242,49 @@ export class MessengerRouter {
     const serverDB = await getServerDB();
     const bridge = new AgentBridgeService(serverDB, link.userId);
 
-    await bridge.handleMention(thread, message, {
+    // Messenger account-link routing already binds platform sender →
+    // LobeHub user; the dispatch only fires for the linked sender. So
+    // `isOwner` is true iff the inbound message's `author.userId` matches
+    // the linked `platformUserId`. `buildBotContext` enforces the
+    // fail-closed default (never trust when either side is missing).
+    //
+    // `bridgeMethod` is chosen by the caller per entry point, mirroring
+    // BotMessageRouter:
+    // - `handleMention`           — first-touch DMs and channel @mentions;
+    //                               opens a fresh topic and writes its id
+    //                               to chat-sdk thread state.
+    // - `handleSubscribedMessage` — DM follow-ups (after `thread.subscribe()`
+    //                               in `onDirectMessage`); reads the cached
+    //                               topicId and continues in the same topic.
+    //                               Falls back to `handleMention` internally
+    //                               if no topicId is cached (defensive).
+    const bridgeOpts = {
       agentId,
       botContext: {
-        // Per-install applicationId so the agent runtime can distinguish
-        // workspaces in its own bookkeeping (logs, traces, dedupe).
-        applicationId: link.tenantId
-          ? `messenger-${platform}-${link.tenantId}`
-          : `messenger-${platform}`,
-        platform,
-        platformThreadId: thread.id,
+        ...buildBotContext({
+          // Per-install applicationId so the agent runtime can distinguish
+          // workspaces in its own bookkeeping (logs, traces, dedupe).
+          applicationId: link.tenantId
+            ? `messenger-${platform}-${link.tenantId}`
+            : `messenger-${platform}`,
+          authorUserId: message.author?.userId,
+          operatorUserId: link.platformUserId,
+          platform,
+          platformThreadId: thread.id,
+        }),
+        // Explicit, deterministic marker that this run originated from the
+        // shared Messenger bot. `BotCallbackService` uses the presence of this
+        // field to resolve credentials via the messenger install store instead
+        // of `agent_bot_providers` (which has no row for messenger flows).
+        // Format matches `MessengerInstallationStore.resolveByKey` keys.
+        messengerInstallationKey: link.tenantId
+          ? `${platform}:${link.tenantId}`
+          : `${platform}:singleton`,
       },
       client,
-    });
+    };
+
+    await bridge[bridgeMethod](thread, message, bridgeOpts);
   }
 }
 

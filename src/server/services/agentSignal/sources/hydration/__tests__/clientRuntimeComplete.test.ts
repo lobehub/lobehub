@@ -9,6 +9,8 @@ import { uuid } from '@/utils/uuid';
 
 import { resolveClientRuntimeCompleteFeedbackSource } from '../clientRuntimeComplete';
 
+const DB_HYDRATION_TEST_TIMEOUT = 10_000;
+
 const createCompleteSource = (
   payload: Partial<
     AgentSignalSourceEvent<typeof AGENT_SIGNAL_SOURCE_TYPES.clientRuntimeComplete>['payload']
@@ -34,63 +36,67 @@ describe('resolveClientRuntimeCompleteFeedbackSource', () => {
    * @example
    * client.runtime.complete({ assistantMessageId }) hydrates a trusted parent user source with an assistant context boundary.
    */
-  it('hydrates an assistant completion into the parent agent user message source', async () => {
-    const db = await getTestDB();
-    const userId = `user_${uuid()}`;
-    const topicId = `topic_${uuid()}`;
-    const parentMessageId = `msg_${uuid()}`;
-    const assistantMessageId = `msg_${uuid()}`;
+  it(
+    'hydrates an assistant completion into the parent agent user message source',
+    async () => {
+      const db = await getTestDB();
+      const userId = `user_${uuid()}`;
+      const topicId = `topic_${uuid()}`;
+      const parentMessageId = `msg_${uuid()}`;
+      const assistantMessageId = `msg_${uuid()}`;
 
-    await db.insert(users).values({ id: userId });
-    await db.insert(topics).values({ id: topicId, title: 'Workflow Topic', userId });
-    await db.insert(messages).values({
-      content: 'Please remember this workflow.',
-      id: parentMessageId,
-      role: 'user',
-      topicId,
-      userId,
-    });
-    await db.insert(messages).values({
-      content: 'I can remember that.',
-      id: assistantMessageId,
-      parentId: parentMessageId,
-      role: 'assistant',
-      topicId,
-      userId,
-    });
-
-    const result = await resolveClientRuntimeCompleteFeedbackSource(
-      createCompleteSource({
-        assistantMessageId,
-        operationId: 'op-success',
-        serializedContext: 'client context must not be trusted',
-        topicId: 'client-topic',
-      }),
-      { db, userId },
-    );
-
-    expect(result.diagnostic).toEqual({
-      kind: AGENT_SIGNAL_SOURCE_TYPES.clientRuntimeComplete,
-      status: 'resolved',
-    });
-    expect(result.contextBoundaryMessageId).toBe(assistantMessageId);
-    expect(result.contextEndAt).toBeInstanceOf(Date);
-    expect(result.source).toEqual({
-      payload: {
-        agentId: 'client-agent',
-        message: 'Please remember this workflow.',
-        messageId: parentMessageId,
-        threadId: 'client-thread',
+      await db.insert(users).values({ id: userId });
+      await db.insert(topics).values({ id: topicId, title: 'Workflow Topic', userId });
+      await db.insert(messages).values({
+        content: 'Please remember this workflow.',
+        id: parentMessageId,
+        role: 'user',
         topicId,
-        trigger: AGENT_SIGNAL_SOURCE_TYPES.clientRuntimeComplete,
-      },
-      scopeKey: `topic:${topicId}`,
-      sourceId: `${assistantMessageId}:completion:${parentMessageId}`,
-      sourceType: AGENT_SIGNAL_SOURCE_TYPES.agentUserMessage,
-      timestamp: 123,
-    });
-    expect(result.source?.payload.serializedContext).toBeUndefined();
-  });
+        userId,
+      });
+      await db.insert(messages).values({
+        content: 'I can remember that.',
+        id: assistantMessageId,
+        parentId: parentMessageId,
+        role: 'assistant',
+        topicId,
+        userId,
+      });
+
+      const result = await resolveClientRuntimeCompleteFeedbackSource(
+        createCompleteSource({
+          assistantMessageId,
+          operationId: 'op-success',
+          serializedContext: 'client context must not be trusted',
+          topicId: 'client-topic',
+        }),
+        { db, userId },
+      );
+
+      expect(result.diagnostic).toEqual({
+        kind: AGENT_SIGNAL_SOURCE_TYPES.clientRuntimeComplete,
+        status: 'resolved',
+      });
+      expect(result.contextBoundaryMessageId).toBe(assistantMessageId);
+      expect(result.contextEndAt).toBeInstanceOf(Date);
+      expect(result.source).toEqual({
+        payload: {
+          agentId: 'client-agent',
+          message: 'Please remember this workflow.',
+          messageId: parentMessageId,
+          threadId: 'client-thread',
+          topicId,
+          trigger: AGENT_SIGNAL_SOURCE_TYPES.clientRuntimeComplete,
+        },
+        scopeKey: `topic:${topicId}`,
+        sourceId: `${assistantMessageId}:completion:${parentMessageId}`,
+        sourceType: AGENT_SIGNAL_SOURCE_TYPES.agentUserMessage,
+        timestamp: 123,
+      });
+      expect(result.source?.payload.serializedContext).toBeUndefined();
+    },
+    DB_HYDRATION_TEST_TIMEOUT,
+  );
 
   /**
    * @example

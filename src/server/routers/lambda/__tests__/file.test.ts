@@ -4,6 +4,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fileRouter } from '@/server/routers/lambda/file';
 import { AsyncTaskStatus } from '@/types/asyncTask';
 
+const routerMocks = vi.hoisted(() => {
+  const transactionClient = {};
+
+  return {
+    businessFileUploadCheck: vi.fn(),
+    serverDB: {
+      transaction: vi.fn(async (callback: (trx: unknown) => unknown) =>
+        callback(transactionClient),
+      ),
+    },
+    transactionClient,
+  };
+});
+
 // Patch: Use actual router context middleware to inject the correct models/services
 function createCallerWithCtx(partialCtx: any = {}) {
   // All mocks are spies
@@ -76,6 +90,14 @@ vi.mock('@/envs/app', () => ({
   appEnv: {
     APP_URL: 'https://lobehub.com',
   },
+}));
+
+vi.mock('@/database/core/db-adaptor', () => ({
+  getServerDB: vi.fn(() => routerMocks.serverDB),
+}));
+
+vi.mock('@/business/server/lambda-routers/file', () => ({
+  businessFileUploadCheck: routerMocks.businessFileUploadCheck,
 }));
 
 const mockAsyncTaskFindByIds = vi.fn();
@@ -159,6 +181,7 @@ describe('fileRouter', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    routerMocks.businessFileUploadCheck.mockResolvedValue(undefined);
 
     mockFile = {
       id: 'test-id',
@@ -228,6 +251,33 @@ describe('fileRouter', () => {
       });
     });
 
+    it('should run business upload check and file creation in the same transaction', async () => {
+      mockFileModelCheckHash.mockResolvedValue({ isExist: false });
+      mockFileModelCreate.mockResolvedValue({ id: 'new-file-id' });
+
+      await caller.createFile({
+        hash: 'test-hash',
+        fileType: 'text',
+        name: 'test.txt',
+        size: 100,
+        url: 'files/test.txt',
+        metadata: {},
+      });
+
+      expect(routerMocks.serverDB.transaction).toHaveBeenCalledTimes(1);
+      expect(routerMocks.businessFileUploadCheck).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actualSize: 100,
+          transaction: routerMocks.transactionClient,
+        }),
+      );
+      expect(mockFileModelCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ size: 100 }),
+        true,
+        routerMocks.transactionClient,
+      );
+    });
+
     it('should use actual file size from S3 instead of client-provided size (security fix)', async () => {
       // Setup: S3 returns actual size of 5000 bytes
       mockFileServiceGetFileMetadata.mockResolvedValue({
@@ -256,6 +306,7 @@ describe('fileRouter', () => {
           size: 5000, // Actual size from S3, not 100
         }),
         true,
+        routerMocks.transactionClient,
       );
     });
 
@@ -284,6 +335,7 @@ describe('fileRouter', () => {
           size: 100,
         }),
         true,
+        routerMocks.transactionClient,
       );
     });
 
@@ -326,6 +378,7 @@ describe('fileRouter', () => {
           size: 100,
         }),
         true,
+        routerMocks.transactionClient,
       );
     });
 

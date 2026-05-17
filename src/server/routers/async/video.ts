@@ -4,7 +4,12 @@ import {
   buildMappedBusinessModelFields,
   resolveBusinessModelMapping,
 } from '@lobechat/business-model-runtime';
-import { AsyncTaskError, AsyncTaskErrorType, AsyncTaskStatus } from '@lobechat/types';
+import {
+  AsyncTaskError,
+  AsyncTaskErrorType,
+  AsyncTaskStatus,
+  RequestTrigger,
+} from '@lobechat/types';
 import debug from 'debug';
 import { z } from 'zod';
 
@@ -267,6 +272,7 @@ export const videoRouter = router({
       const providerContentPolicyMessage = await getProviderContentPolicyErrorMessage({
         error,
         provider,
+        trigger: RequestTrigger.Video,
         userId: ctx.userId,
       });
 

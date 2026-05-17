@@ -1,5 +1,5 @@
 import type { ToolExecuteData } from '@lobechat/agent-gateway-client';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ClientToolExecutionActionImpl } from '../clientToolExecution';
 
@@ -39,6 +39,7 @@ function setup(options: { hasConnection?: boolean; sendReturns?: boolean } = {})
   const { hasConnection = true, sendReturns = true } = options;
 
   const sendToolResult = vi.fn(() => sendReturns);
+  const abort = vi.fn();
 
   const state: any = {
     gatewayConnections: hasConnection
@@ -57,7 +58,7 @@ function setup(options: { hasConnection?: boolean; sendReturns?: boolean } = {})
       : {},
     operations: {
       'op-1': {
-        abortController: { signal: { aborted: false } },
+        abortController: { abort, signal: { aborted: false } },
         context: {
           agentId: 'agent-1',
           documentId: 'documents-row-id',
@@ -76,7 +77,7 @@ function setup(options: { hasConnection?: boolean; sendReturns?: boolean } = {})
   const get = vi.fn(() => state);
 
   const action = new ClientToolExecutionActionImpl(set, get);
-  return { action, sendToolResult, state, set, get };
+  return { abort, action, sendToolResult, state, set, get };
 }
 
 beforeEach(() => {
@@ -281,6 +282,133 @@ describe('internal_executeClientTool', () => {
           success: false,
         }),
       );
+    });
+  });
+
+  describe('execution timeout (Bug 2)', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('sends a client_executor_timeout failure when the executor exceeds the deadline', async () => {
+      hasExecutorMock.mockReturnValue(true);
+      // Executor never resolves — only the race timeout can wake the action.
+      invokeExecutorMock.mockReturnValue(new Promise(() => {}));
+      const { action, sendToolResult, abort } = setup();
+
+      const promise = action.internal_executeClientTool(makeData({ executionTimeoutMs: 2_000 }), {
+        operationId: 'op-1',
+      });
+
+      // Fast-forward to the safety-buffered deadline (2_000 - 500 = 1_500ms).
+      await vi.advanceTimersByTimeAsync(1_500);
+      await promise;
+
+      expect(abort).toHaveBeenCalledTimes(1);
+      // Error message surfaces the budget so the LLM can adjust on retry.
+      expect(sendToolResult).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: expect.objectContaining({
+            message: expect.stringContaining('2000ms'),
+            type: 'client_executor_timeout',
+          }),
+          success: false,
+          toolCallId: 'call_1',
+        }),
+      );
+    });
+
+    it('does NOT trip the timeout when executor finishes before the deadline', async () => {
+      hasExecutorMock.mockReturnValue(true);
+      invokeExecutorMock.mockResolvedValue({ content: 'fast', success: true });
+      const { action, sendToolResult, abort } = setup();
+
+      await action.internal_executeClientTool(makeData({ executionTimeoutMs: 60_000 }), {
+        operationId: 'op-1',
+      });
+
+      expect(abort).not.toHaveBeenCalled();
+      expect(sendToolResult).toHaveBeenCalledWith(
+        expect.objectContaining({ content: 'fast', success: true }),
+      );
+    });
+  });
+
+  describe('live gateway connection lookup (Bug 3)', () => {
+    it('uses the connection present at send-time, not at action-entry time', async () => {
+      hasExecutorMock.mockReturnValue(true);
+
+      let resolver: (v: any) => void = () => {};
+      invokeExecutorMock.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolver = resolve;
+          }),
+      );
+
+      const { action, state } = setup({ hasConnection: false });
+
+      // Kick off — at this moment gatewayConnections is empty.
+      const promise = action.internal_executeClientTool(makeData(), {
+        operationId: 'op-1',
+      });
+
+      // Simulate a reconnect landing while the executor is still running:
+      // a fresh entry appears in gatewayConnections.
+      const reconnectedSend = vi.fn(() => true);
+      state.gatewayConnections['op-1'] = {
+        client: {
+          connect: vi.fn(),
+          disconnect: vi.fn(),
+          on: vi.fn(),
+          sendInterrupt: vi.fn(),
+          sendToolResult: reconnectedSend,
+        },
+        status: 'connected',
+      };
+
+      resolver({ content: 'late ok', success: true });
+      await promise;
+
+      expect(reconnectedSend).toHaveBeenCalledWith(
+        expect.objectContaining({ content: 'late ok', success: true }),
+      );
+    });
+  });
+
+  describe('exactly-once send tripwire (Bug 4)', () => {
+    it('sends only one tool_result even if the executor resolves *and* the timeout fires', async () => {
+      vi.useFakeTimers();
+      try {
+        hasExecutorMock.mockReturnValue(true);
+        let resolver: (v: any) => void = () => {};
+        invokeExecutorMock.mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              resolver = resolve;
+            }),
+        );
+        const { action, sendToolResult } = setup();
+
+        const promise = action.internal_executeClientTool(makeData({ executionTimeoutMs: 2_000 }), {
+          operationId: 'op-1',
+        });
+
+        // Resolve the executor right around the deadline.
+        await vi.advanceTimersByTimeAsync(1_400);
+        resolver({ content: 'just-in-time', success: true });
+        await vi.advanceTimersByTimeAsync(500);
+        await promise;
+
+        // No matter which side won the race, we must send exactly once.
+        expect(sendToolResult).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 

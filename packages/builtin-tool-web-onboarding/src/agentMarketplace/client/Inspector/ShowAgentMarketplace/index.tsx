@@ -25,7 +25,7 @@ export const ShowAgentMarketplaceInspector = memo<
   if (isArgumentsStreaming && categoryHints.length === 0) {
     return (
       <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{tPlugin('builtins.lobe-agent-marketplace.apiName.showAgentMarketplace')}</span>
+        <span>{tPlugin('builtins.lobe-web-onboarding.apiName.showAgentMarketplace')}</span>
       </div>
     );
   }
@@ -41,7 +41,7 @@ export const ShowAgentMarketplaceInspector = memo<
         (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
       )}
     >
-      <span>{tPlugin('builtins.lobe-agent-marketplace.apiName.showAgentMarketplace')}</span>
+      <span>{tPlugin('builtins.lobe-web-onboarding.apiName.showAgentMarketplace')}</span>
       {visibleHints.map((slug) => {
         const labelKey = CATEGORY_LABEL_I18N_KEYS[slug];
         return (

@@ -591,7 +591,7 @@ Document content here.
       expect(userMessage?.content).toContain('<active_topic_document>');
       expect(userMessage?.content).toContain('document_id="docs_123"');
       expect(userMessage?.content).toContain('agent_document_id="agd_123"');
-      expect(userMessage?.content).toContain('target="currentTopic"');
+      expect(userMessage?.content).toContain('scope="currentTopic"');
       expect(userMessage?.content).toContain('Do not use PageAgent editor tools');
       expect(result.metadata.activeTopicDocumentContextInjected).toBe(true);
     });

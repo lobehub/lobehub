@@ -56,6 +56,13 @@ export class DocumentService {
     return this.documentHistoryServiceInstance;
   }
 
+  private async deleteFileRecordAndStorage(fileId: string) {
+    const file = await this.fileModel.delete(fileId);
+    if (!file?.url || file.url.startsWith('internal://')) return;
+
+    await this.fileService.deleteFile(file.url);
+  }
+
   /**
    * Create a document
    */
@@ -269,13 +276,13 @@ export class DocumentService {
       });
 
       for (const file of childFiles) {
-        await this.fileModel.delete(file.id);
+        await this.deleteFileRecordAndStorage(file.id);
       }
     }
 
     // Delete the associated file record if it exists
     if (document.fileId) {
-      await this.fileModel.delete(document.fileId);
+      await this.deleteFileRecordAndStorage(document.fileId);
     }
 
     // Finally delete the document itself
