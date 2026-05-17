@@ -1,5 +1,5 @@
 import type { ModelTokensUsage } from '@lobechat/types';
-import type { Pricing } from 'model-bank';
+import type { Pricing, PricingUnitName } from 'model-bank';
 import { estimateTokenCount } from 'tokenx';
 
 import type { ChatCompletionTool, OpenAIChatMessage } from '../../../types/chat';
@@ -75,6 +75,9 @@ const estimateSerializableTokens = (value: unknown): number => {
   const text = typeof value === 'string' ? value : JSON.stringify(value);
   return text ? estimateTokenCount(text) : 0;
 };
+
+const hasPricingUnit = (pricing: Pricing | undefined, unitName: PricingUnitName) =>
+  pricing?.units.some((unit) => unit.name === unitName) ?? false;
 
 /**
  * Estimates output tokens for budget pre-checks and UI hints.
@@ -166,12 +169,21 @@ export function estimateChatCostFromTokens(
   const totalInputTokens = inputTextTokens + inputImageTokens + inputAudioTokens + inputVideoTokens;
   const estimatedOutputTokens =
     input.outputTextTokens ?? estimateChatOutputTokens(totalInputTokens);
+  const hasAudioInputUnit = hasPricingUnit(pricing, 'audioInput');
+  const hasImageInputUnit = hasPricingUnit(pricing, 'imageInput');
+  const hasVideoInputUnit = hasPricingUnit(pricing, 'videoInput');
+  // Some model cards price multimodal inputs through text input unless a dedicated unit exists.
+  const billableTextTokens =
+    inputTextTokens +
+    (hasAudioInputUnit ? 0 : inputAudioTokens) +
+    (hasImageInputUnit ? 0 : inputImageTokens) +
+    (hasVideoInputUnit ? 0 : inputVideoTokens);
 
   const usage: ModelTokensUsage = {
-    inputAudioTokens,
-    inputImageTokens,
-    inputTextTokens,
-    inputVideoTokens,
+    inputAudioTokens: hasAudioInputUnit ? inputAudioTokens : undefined,
+    inputImageTokens: hasImageInputUnit ? inputImageTokens : undefined,
+    inputTextTokens: billableTextTokens,
+    inputVideoTokens: hasVideoInputUnit ? inputVideoTokens : undefined,
     outputTextTokens: estimatedOutputTokens,
     totalInputTokens,
     totalOutputTokens: estimatedOutputTokens,

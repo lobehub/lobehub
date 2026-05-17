@@ -146,6 +146,52 @@ describe('estimateChatCost', () => {
     it('returns undefined when pricing is missing', () => {
       expect(estimateChatCostFromTokens(undefined, { textTokens: 1000 })).toBeUndefined();
     });
+
+    it('falls multimodal input back to text pricing when dedicated modality units are missing', () => {
+      const pricing: Pricing = {
+        units: [{ name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' }],
+      };
+
+      const estimate = estimateChatCostFromTokens(pricing, {
+        audioTokens: 400,
+        imageTokens: 200,
+        outputTextTokens: 0,
+        textTokens: 100,
+        videoTokens: 300,
+      });
+
+      expect(estimate?.estimatedCost).toBe(0.001);
+      expect(estimate?.inputAudioTokens).toBe(400);
+      expect(estimate?.inputImageTokens).toBe(200);
+      expect(estimate?.inputTextTokens).toBe(100);
+      expect(estimate?.inputVideoTokens).toBe(300);
+      expect(estimate?.totalInputTokens).toBe(1000);
+      expect(estimate?.breakdown.find((item) => item.unit.name === 'textInput')?.quantity).toBe(
+        1000,
+      );
+    });
+
+    it('keeps modality input separate when dedicated modality units exist', () => {
+      const pricing: Pricing = {
+        units: [
+          { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'imageInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
+        ],
+      };
+
+      const estimate = estimateChatCostFromTokens(pricing, {
+        imageTokens: 200,
+        outputTextTokens: 0,
+        textTokens: 100,
+      });
+
+      expect(estimate?.breakdown.find((item) => item.unit.name === 'textInput')?.quantity).toBe(
+        100,
+      );
+      expect(estimate?.breakdown.find((item) => item.unit.name === 'imageInput')?.quantity).toBe(
+        200,
+      );
+    });
   });
 
   describe('estimateChatCostFromMessages', () => {
@@ -186,6 +232,29 @@ describe('estimateChatCost', () => {
       expect(estimate?.inputVideoTokens).toBe(2000);
       expect(estimate?.totalInputTokens).toBeGreaterThan(2000);
       expect(estimate?.breakdown.map((item) => item.unit.name)).toEqual(['videoInput']);
+    });
+
+    it('bills estimated image inputs through text pricing when image pricing is unavailable', () => {
+      const pricing: Pricing = {
+        units: [{ name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' }],
+      };
+
+      const estimate = estimateChatCostFromMessages(
+        pricing,
+        [
+          {
+            content: [{ image_url: { url: 'https://example.com/image.png' }, type: 'image_url' }],
+            role: 'user',
+          },
+        ],
+        { imageTokenEstimate: 2000 },
+      );
+
+      expect(estimate?.inputImageTokens).toBe(2000);
+      expect(estimate?.totalInputTokens).toBeGreaterThan(2000);
+      expect(estimate?.breakdown.find((item) => item.unit.name === 'textInput')?.quantity).toBe(
+        estimate?.totalInputTokens,
+      );
     });
   });
 });
