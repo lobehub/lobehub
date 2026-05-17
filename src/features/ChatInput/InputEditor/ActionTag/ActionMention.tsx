@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { styles } from './style';
 import type { ActionTagCategory } from './types';
 
-export interface ActionTagViewProps {
+export interface ActionMentionProps {
   category: ActionTagCategory;
   label: string;
 }
@@ -45,7 +45,7 @@ const CATEGORY_STYLE_KEY: Record<
   tool: 'toolTag',
 };
 
-export const ActionTagView = memo<ActionTagViewProps>(({ category, label }) => {
+export const ActionMention = memo<ActionMentionProps>(({ category, label }) => {
   const { t } = useTranslation('editor');
 
   const categoryLabel = t(CATEGORY_I18N_KEY[category] as any);
@@ -71,4 +71,4 @@ export const ActionTagView = memo<ActionTagViewProps>(({ category, label }) => {
   );
 });
 
-ActionTagView.displayName = 'ActionTagView';
+ActionMention.displayName = 'ActionMention';
