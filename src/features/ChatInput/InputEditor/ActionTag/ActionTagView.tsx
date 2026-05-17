@@ -1,5 +1,8 @@
-import { Tag, Tooltip } from '@lobehub/ui';
+import { Icon, Tooltip } from '@lobehub/ui';
+import { SkillsIcon } from '@lobehub/ui/icons';
 import { cx } from 'antd-style';
+import { TerminalIcon, WrenchIcon } from 'lucide-react';
+import type { ComponentType } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,11 +14,11 @@ export interface ActionTagViewProps {
   label: string;
 }
 
-const CATEGORY_COLOR: Record<ActionTagCategory, string> = {
-  command: 'purple',
-  projectSkill: 'green',
-  skill: 'blue',
-  tool: 'gold',
+const CATEGORY_ICON: Record<ActionTagCategory, ComponentType<any>> = {
+  command: TerminalIcon,
+  projectSkill: SkillsIcon,
+  skill: SkillsIcon,
+  tool: WrenchIcon,
 };
 
 const CATEGORY_I18N_KEY: Record<ActionTagCategory, string> = {
@@ -47,25 +50,24 @@ export const ActionTagView = memo<ActionTagViewProps>(({ category, label }) => {
 
   const categoryLabel = t(CATEGORY_I18N_KEY[category] as any);
   const categoryDescription = t(CATEGORY_TOOLTIP_I18N_KEY[category] as any);
-  const color = CATEGORY_COLOR[category];
+  const IconComponent = CATEGORY_ICON[category];
   const styleKey = CATEGORY_STYLE_KEY[category];
 
   return (
-    <span className={cx(styles[styleKey])}>
-      <Tooltip
-        title={
-          <div>
-            <div style={{ fontWeight: 500 }}>{label}</div>
-            <div>{categoryLabel}</div>
-            <div>{categoryDescription}</div>
-          </div>
-        }
-      >
-        <Tag color={color} variant="filled">
-          {label}
-        </Tag>
-      </Tooltip>
-    </span>
+    <Tooltip
+      title={
+        <div>
+          <div style={{ fontWeight: 500 }}>{label}</div>
+          <div>{categoryLabel}</div>
+          <div>{categoryDescription}</div>
+        </div>
+      }
+    >
+      <span className={cx(styles.actionTag, styles[styleKey])}>
+        <Icon icon={IconComponent} size={14} />
+        <span className={styles.actionTagLabel}>{label}</span>
+      </span>
+    </Tooltip>
   );
 });
 
