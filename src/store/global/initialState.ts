@@ -370,7 +370,7 @@ export const INITIAL_STATUS = {
   showImageTopicPanel: true,
   showLeftPanel: true,
   showPageAgentPanel: true,
-  showRightPanel: true,
+  showRightPanel: false,
   showSystemRole: false,
   showTaskAgentPanel: false,
   showVideoPanel: true,
