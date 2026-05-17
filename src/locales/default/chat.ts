@@ -658,6 +658,10 @@ export default {
   'taskDetail.runTask': 'Run',
   'taskDetail.stopTask': 'Stop task',
   'taskDetail.navigation': 'Navigation',
+  'taskDetail.notFound.backToTasks': 'Back to all tasks',
+  'taskDetail.notFound.desc':
+    "This task may have been deleted, or you don't have permission to view it.",
+  'taskDetail.notFound.title': 'Task not found',
   'taskDetail.subIssueOf': 'Sub-issue of',
   'taskDetail.priority.high': 'High',
   'taskDetail.priority.low': 'Low',
