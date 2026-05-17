@@ -1,7 +1,5 @@
 import type { AiFullModelCard, AiModelType, Pricing } from 'model-bank';
 import { loadModels as loadModelBankModels } from 'model-bank';
-import LobeHubModels from 'model-bank/lobehub';
-import { planCardModels as defaultPlanCardModels } from 'model-bank/modelProviders/lobehub';
 
 export interface LobeHubModelConfig {
   models: AiFullModelCard[];
@@ -11,8 +9,8 @@ export interface LobeHubModelConfig {
 }
 
 export const getDefaultLobeHubModelConfig = (): LobeHubModelConfig => ({
-  models: LobeHubModels,
-  planCardModels: defaultPlanCardModels,
+  models: [],
+  planCardModels: [],
   version: 1,
 });
 

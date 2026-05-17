@@ -1,6 +1,4 @@
-import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
-
-import { ModelProvider } from '../const/modelProvider';
+import type { ModelProvider } from '../const/modelProvider';
 import { type AiFullModelCard, type LobeDefaultAiModelListItem } from '../types/aiModel';
 import { default as ai21 } from './ai21';
 import { default as ai302 } from './ai302';
@@ -36,7 +34,6 @@ import { default as internlm } from './internlm';
 import { default as jina } from './jina';
 import { default as kimicodingplan } from './kimiCodingPlan';
 import { default as lmstudio } from './lmstudio';
-import { default as lobehub } from './lobehub/index';
 import { default as longcat } from './longcat';
 import { default as minimax } from './minimax';
 import { default as minimaxcodingplan } from './minimaxCodingPlan';
@@ -144,7 +141,6 @@ const staticModelMap: ModelsMap = {
   kimicodingplan,
   lmstudio,
   longcat,
-  ...(ENABLE_BUSINESS_FEATURES ? { [ModelProvider.LobeHub]: lobehub } : {}),
   minimax,
   minimaxcodingplan,
   mistral,
@@ -250,7 +246,6 @@ export { default as internlm } from './internlm';
 export { default as jina } from './jina';
 export { default as kimicodingplan } from './kimiCodingPlan';
 export { default as lmstudio } from './lmstudio';
-export { gptImage1Schema, default as lobehub } from './lobehub/index';
 export { default as longcat } from './longcat';
 export { default as minimax } from './minimax';
 export { default as minimaxcodingplan } from './minimaxCodingPlan';

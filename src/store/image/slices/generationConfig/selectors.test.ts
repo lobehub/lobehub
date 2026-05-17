@@ -3,7 +3,6 @@ import {
   type ModelParamsSchema,
   type RuntimeImageGenParams,
 } from 'model-bank';
-import { gptImage1Schema } from 'model-bank';
 import { describe, expect, it, vi } from 'vitest';
 
 import { type ImageStore } from '@/store/image';
@@ -12,6 +11,15 @@ import { merge } from '@/utils/merge';
 
 import { DEFAULT_AI_IMAGE_MODEL, DEFAULT_AI_IMAGE_PROVIDER } from './initialState';
 import { imageGenerationConfigSelectors } from './selectors';
+
+const gptImage1Schema = {
+  imageUrls: { default: [], maxCount: 1, maxFileSize: 5 * 1024 * 1024 },
+  prompt: { default: '' },
+  size: {
+    default: 'auto',
+    enum: ['auto', '1024x1024', '1536x1024', '1024x1536'],
+  },
+};
 
 // Mock external dependencies
 vi.mock('@/store/aiInfra', () => ({
