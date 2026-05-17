@@ -28,6 +28,7 @@ vi.mock('@/store/tool/slices/builtin/executors', () => ({
 // ─── Test Helpers ───
 
 function createMockStore() {
+  let reasoningCounter = 0;
   return {
     associateMessageWithOperation: vi.fn(),
     completeOperation: vi.fn(),
@@ -39,6 +40,13 @@ function createMockStore() {
       'op-1': { context: { agentId: 'agent-1', scope: 'session', topicId: 'topic-1' } },
     } as Record<string, any>,
     replaceMessages: vi.fn(),
+    startOperation: vi.fn(() => {
+      reasoningCounter += 1;
+      return {
+        abortController: new AbortController(),
+        operationId: `op-reasoning-${reasoningCounter}`,
+      };
+    }),
   };
 }
 
@@ -226,6 +234,131 @@ describe('createGatewayEventHandler', () => {
       await flush();
 
       expect(store.internal_dispatchMessage).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('reasoning operation lifecycle', () => {
+    it('starts a reasoning op on the first reasoning chunk and associates it with the current assistant', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('stream_chunk', { chunkType: 'reasoning', reasoning: 'pondering' }));
+      handler(makeEvent('stream_chunk', { chunkType: 'reasoning', reasoning: '...' }));
+      await flush();
+
+      // Only one startOperation call — second chunk reuses the existing op
+      expect(store.startOperation).toHaveBeenCalledTimes(1);
+      expect(store.startOperation).toHaveBeenCalledWith({
+        context: expect.objectContaining({
+          agentId: 'agent-1',
+          messageId: 'msg-initial',
+          topicId: 'topic-1',
+        }),
+        parentOperationId: 'op-1',
+        type: 'reasoning',
+      });
+      expect(store.associateMessageWithOperation).toHaveBeenCalledWith(
+        'msg-initial',
+        'op-reasoning-1',
+      );
+      // The reasoning op is NOT completed while only reasoning chunks have arrived
+      expect(store.completeOperation).not.toHaveBeenCalled();
+    });
+
+    it('completes the reasoning op when text starts streaming', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('stream_chunk', { chunkType: 'reasoning', reasoning: 'thinking' }));
+      handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'answer' }));
+      await flush();
+
+      expect(store.completeOperation).toHaveBeenCalledWith('op-reasoning-1');
+    });
+
+    it('completes the reasoning op when tools_calling starts', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('stream_chunk', { chunkType: 'reasoning', reasoning: 'thinking' }));
+      handler(
+        makeEvent('stream_chunk', {
+          chunkType: 'tools_calling',
+          toolsCalling: [{ id: 'tc-1' }],
+        }),
+      );
+      await flush();
+
+      expect(store.completeOperation).toHaveBeenCalledWith('op-reasoning-1');
+    });
+
+    it('starts a new reasoning op when reasoning resumes after text in the same stream', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('stream_chunk', { chunkType: 'reasoning', reasoning: 'first pass' }));
+      handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'partial' }));
+      handler(makeEvent('stream_chunk', { chunkType: 'reasoning', reasoning: 'second pass' }));
+      await flush();
+
+      expect(store.startOperation).toHaveBeenCalledTimes(2);
+      expect(store.completeOperation).toHaveBeenCalledWith('op-reasoning-1');
+      expect(store.completeOperation).not.toHaveBeenCalledWith('op-reasoning-2');
+    });
+
+    it('completes any open reasoning op on stream_end', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('stream_chunk', { chunkType: 'reasoning', reasoning: 'thinking' }));
+      handler(makeEvent('stream_end'));
+      await flush();
+
+      expect(store.completeOperation).toHaveBeenCalledWith('op-reasoning-1');
+    });
+
+    it('completes any open reasoning op on stream_start (carry-over between steps)', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('stream_chunk', { chunkType: 'reasoning', reasoning: 'thinking' }));
+      handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-step2' } }));
+      await flush();
+
+      expect(store.completeOperation).toHaveBeenCalledWith('op-reasoning-1');
+    });
+
+    it('completes any open reasoning op on agent_runtime_end', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('stream_chunk', { chunkType: 'reasoning', reasoning: 'thinking' }));
+      handler(makeEvent('agent_runtime_end'));
+      await flush();
+
+      expect(store.completeOperation).toHaveBeenCalledWith('op-reasoning-1');
+    });
+
+    it('completes any open reasoning op on error', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('stream_chunk', { chunkType: 'reasoning', reasoning: 'thinking' }));
+      handler(makeEvent('error', { message: 'boom' }));
+      await flush();
+
+      expect(store.completeOperation).toHaveBeenCalledWith('op-reasoning-1');
+    });
+
+    it('does not start a reasoning op for text-only streams', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'hello' }));
+      handler(makeEvent('stream_end'));
+      await flush();
+
+      expect(store.startOperation).not.toHaveBeenCalled();
     });
   });
 
