@@ -274,6 +274,8 @@ const PlusAction = memo(() => {
   const {
     autoCount: skillAutoCount,
     editPluginDrawer: skillEditPluginDrawer,
+    marketFooter: skillMarketFooter,
+    marketHeader: skillMarketHeader,
     marketItems: skillItems,
     pinnedCount: skillPinnedCount,
   } = useToolsControls();
@@ -406,6 +408,8 @@ const PlusAction = memo(() => {
             { type: 'divider' },
             {
               children: skillMenuItems,
+              footer: skillMarketFooter,
+              header: skillMarketHeader,
               icon: activeIcon(SkillsIcon, activeSkillCount > 0),
               key: 'tools',
               label: renderLabelWithCount(
@@ -417,7 +421,7 @@ const PlusAction = memo(() => {
                     : 'tools.skillActivateMode.manual.title',
                 ),
               ),
-            },
+            } as ActionDropdownMenuItems[number],
             {
               icon: Store,
               key: 'add-skills',
@@ -548,6 +552,8 @@ const PlusAction = memo(() => {
     tEditor,
     tSetting,
     skillItems,
+    skillMarketFooter,
+    skillMarketHeader,
     upload,
   ]);
 

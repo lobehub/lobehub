@@ -276,15 +276,14 @@ const styles = createStaticStyles(({ css }) => ({
     flex: 1;
     text-align: start;
   `,
-  search: css`
-    width: 100%;
-  `,
   searchBox: css`
     display: flex;
     align-items: center;
 
     height: 36px;
-    padding-inline: 10px;
+    margin-block-start: -4px;
+    margin-inline: -8px;
+    padding-inline: 4px;
     border-radius: 10px;
 
     background: ${cssVar.colorFillQuaternary};
@@ -334,7 +333,9 @@ const styles = createStaticStyles(({ css }) => ({
     display: flex;
     gap: 14px;
     align-items: center;
+
     width: 100%;
+    margin-block-end: -4px;
   `,
   statsSettingsButton: css`
     cursor: pointer;
@@ -1252,33 +1253,49 @@ export const useControls = () => {
     </div>
   );
 
+  const marketHeader = (
+    <div className={cx(styles.searchBox)} onClick={stopPropagation} onKeyDown={stopPropagation}>
+      <SearchBar
+        allowClear
+        placeholder={t('tools.search')}
+        size="small"
+        style={{ flex: 1 }}
+        value={searchKeyword}
+        variant="borderless"
+        onChange={(event) => setSearchKeyword(event.target.value)}
+        onKeyDown={stopPropagation}
+      />
+    </div>
+  );
+
+  const marketFooter =
+    allSkillItems.length > 0 ? (
+      <div className={cx(styles.statsFooter)}>
+        <span className={cx(styles.statsItem)}>
+          <Icon icon={Pin} size={12} />
+          {allPinnedItems.length}
+        </span>
+        <span className={cx(styles.statsItem)}>
+          <Icon icon={Zap} size={12} />
+          {allAutoItems.length}
+        </span>
+        <Tooltip placement="top" title={t('tools.plugins.management')}>
+          <button
+            aria-label={t('tools.plugins.management')}
+            className={cx(styles.statsSettingsButton)}
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              navigate('/settings/skill');
+            }}
+          >
+            <Icon icon={Settings} size={14} />
+          </button>
+        </Tooltip>
+      </div>
+    ) : undefined;
+
   const marketItems: ItemType[] = [
-    {
-      children: [],
-      key: 'skill-search',
-      label: (
-        <div
-          data-skill-menu-search
-          className={cx(styles.search)}
-          onClick={stopPropagation}
-          onKeyDown={stopPropagation}
-        >
-          <div className={cx(styles.searchBox)}>
-            <SearchBar
-              allowClear
-              placeholder={t('tools.search')}
-              size="small"
-              style={{ flex: 1 }}
-              value={searchKeyword}
-              variant="borderless"
-              onChange={(event) => setSearchKeyword(event.target.value)}
-              onKeyDown={stopPropagation}
-            />
-          </div>
-        </div>
-      ),
-      type: 'group' as const,
-    },
     ...(pinnedItems.length > 0
       ? [
           {
@@ -1315,41 +1332,6 @@ export const useControls = () => {
               onToggle: () => setAutoOpen((open) => !open),
             }),
             type: 'group' as const,
-          } as ItemType,
-        ]
-      : []),
-    ...(allSkillItems.length > 0
-      ? [
-          {
-            closeOnClick: false,
-            key: 'skill-stats-footer',
-            label: (
-              <span data-fixed-menu-footer data-skill-stats>
-                <div className={cx(styles.statsFooter)}>
-                  <span className={cx(styles.statsItem)}>
-                    <Icon icon={Pin} size={12} />
-                    {allPinnedItems.length}
-                  </span>
-                  <span className={cx(styles.statsItem)}>
-                    <Icon icon={Zap} size={12} />
-                    {allAutoItems.length}
-                  </span>
-                  <Tooltip placement="top" title={t('tools.plugins.management')}>
-                    <button
-                      aria-label={t('tools.plugins.management')}
-                      className={cx(styles.statsSettingsButton)}
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        navigate('/settings/skill');
-                      }}
-                    >
-                      <Icon icon={Settings} size={14} />
-                    </button>
-                  </Tooltip>
-                </div>
-              </span>
-            ),
           } as ItemType,
         ]
       : []),
@@ -1693,6 +1675,8 @@ export const useControls = () => {
     autoCount: allAutoItems.length,
     editPluginDrawer,
     installedPluginItems,
+    marketFooter,
+    marketHeader,
     marketItems,
     pinnedCount: allPinnedItems.length,
   };

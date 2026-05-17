@@ -120,16 +120,6 @@ const SubmenuScrollStyle = createGlobalStyle`
     border-radius: ${cssVar.borderRadiusSM};
   }
 
-  [data-submenu] > [role='menu'] [role='menuitem']:has([data-skill-stats]) {
-    cursor: default;
-    padding-block: 0 !important;
-  }
-
-  [data-submenu] > [role='menu'] [role='group']:has([data-skill-menu-search]) > *:has([data-skill-menu-search]) {
-    padding-block: 6px 4px !important;
-    padding-inline: 8px !important;
-  }
-
   [data-submenu] > [role='menu'] [role='menuitem']:has([data-fixed-menu-footer]):hover,
   [data-submenu] > [role='menu'] [role='menuitem']:has([data-fixed-menu-footer])[data-highlighted] {
     background: ${cssVar.colorBgElevated};
@@ -138,11 +128,6 @@ const SubmenuScrollStyle = createGlobalStyle`
   [data-submenu] > [role='menu'] [role='menuitem']:has([data-fixed-menu-footer]):hover > *,
   [data-submenu] > [role='menu'] [role='menuitem']:has([data-fixed-menu-footer])[data-highlighted] > * {
     background: ${cssVar.colorFillTertiary};
-  }
-
-  [data-submenu] > [role='menu'] [role='menuitem']:has([data-skill-stats]):hover > *,
-  [data-submenu] > [role='menu'] [role='menuitem']:has([data-skill-stats])[data-highlighted] > * {
-    background: transparent;
   }
 `;
 
