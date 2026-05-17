@@ -1,5 +1,6 @@
 import { isDesktop } from '@lobechat/const';
 import { Center, Empty, Flexbox, Highlighter, Icon, Markdown, Segmented, Text } from '@lobehub/ui';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { CodeIcon, EyeIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,6 +10,12 @@ import { useClientDataSWR } from '@/libs/swr';
 import { localFileService } from '@/services/electron/localFileService';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
+import {
+  parseSkillMarkdownFrontmatter,
+  parseSkillMarkdownFrontmatterFields,
+  parseSkillMarkdownMetadata,
+  type SkillMarkdownMetadataItem,
+} from '@/utils/skillMarkdown';
 
 import { extensionToLanguage, getFileExtension } from './Body.helpers';
 
@@ -102,37 +109,60 @@ ImagePreview.displayName = 'ImagePreview';
 // ============== TextPreviewPane ==============
 
 const MARKDOWN_EXTS = new Set(['md', 'mdx', 'markdown']);
-const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
 
-interface ParsedFrontmatter {
-  body: string;
-  data: { description?: string; name?: string };
-  raw: string;
+const frontmatterStyles = createStaticStyles(({ css }) => ({
+  card: css`
+    margin-block: 8px 12px;
+    margin-inline: 12px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: 8px;
+
+    background: ${cssVar.colorBgContainer};
+  `,
+  key: css`
+    flex-shrink: 0;
+
+    width: 96px;
+
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: 12px;
+    color: ${cssVar.colorTextSecondary};
+  `,
+  row: css`
+    padding-block: 8px;
+    padding-inline: 12px;
+
+    &:not(:last-child) {
+      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+    }
+  `,
+  value: css`
+    min-width: 0;
+    font-size: 12px;
+    white-space: pre-wrap;
+  `,
+}));
+
+interface SkillFrontmatterPreviewCardProps {
+  metadata: SkillMarkdownMetadataItem[];
 }
 
-const parseFrontmatter = (content: string): ParsedFrontmatter | null => {
-  const match = content.match(FRONTMATTER_RE);
-  if (!match) return null;
+const SkillFrontmatterPreviewCard = memo<SkillFrontmatterPreviewCardProps>(({ metadata }) => {
+  if (metadata.length === 0) return null;
 
-  const data: ParsedFrontmatter['data'] = {};
-  for (const line of match[1].split(/\r?\n/)) {
-    const colonIdx = line.indexOf(':');
-    if (colonIdx === -1) continue;
-    const key = line.slice(0, colonIdx).trim();
-    if (key !== 'name' && key !== 'description') continue;
-    let value = line.slice(colonIdx + 1).trim();
-    if (value.startsWith('|') || value.startsWith('>')) continue;
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-    data[key] = value;
-  }
+  return (
+    <Flexbox className={frontmatterStyles.card} style={{ flexShrink: 0 }}>
+      {metadata.map((item) => (
+        <Flexbox horizontal align={'flex-start'} className={frontmatterStyles.row} key={item.key}>
+          <Text className={frontmatterStyles.key}>{item.key}</Text>
+          <Text className={frontmatterStyles.value}>{item.value}</Text>
+        </Flexbox>
+      ))}
+    </Flexbox>
+  );
+});
 
-  return { body: content.slice(match[0].length), data, raw: match[0] };
-};
+SkillFrontmatterPreviewCard.displayName = 'SkillFrontmatterPreviewCard';
 
 type TextPreviewMode = 'render' | 'raw';
 
@@ -147,10 +177,20 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
   ({ content, ext, truncated, truncatedLabel }) => {
     const { t } = useTranslation('chat');
     const isMarkdown = useMemo(() => MARKDOWN_EXTS.has(ext.toLowerCase()), [ext]);
-    const frontmatter = useMemo(
-      () => (isMarkdown ? parseFrontmatter(content) : null),
+
+    const { body, frontmatter } = useMemo(
+      () => (isMarkdown ? parseSkillMarkdownFrontmatter(content) : { body: content }),
       [isMarkdown, content],
     );
+    const frontmatterFields = useMemo(
+      () => (frontmatter ? parseSkillMarkdownFrontmatterFields(frontmatter) : {}),
+      [frontmatter],
+    );
+    const frontmatterMetadata = useMemo(
+      () => (frontmatter ? parseSkillMarkdownMetadata(frontmatter) : []),
+      [frontmatter],
+    );
+
     const [mode, setMode] = useState<TextPreviewMode>(isMarkdown ? 'render' : 'raw');
 
     useEffect(() => {
@@ -169,7 +209,7 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
             style={{ flexShrink: 0 }}
           >
             <Text ellipsis style={{ flex: 1, fontSize: 13, fontWeight: 500, minWidth: 0 }}>
-              {frontmatter?.data.name ?? ''}
+              {frontmatterFields.name ?? ''}
             </Text>
             <Segmented
               size={'small'}
@@ -195,22 +235,19 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
             <span style={{ fontSize: 12, opacity: 0.65 }}>{truncatedLabel}</span>
           </Center>
         )}
-        <Flexbox flex={1} style={{ minHeight: 0, overflow: 'hidden' }}>
+        <Flexbox flex={1} style={{ minHeight: 0, overflow: 'auto' }}>
           {isMarkdown && mode === 'render' ? (
-            <Markdown
-              style={{ height: '100%', overflow: 'auto', paddingBlock: 8, paddingInline: 12 }}
-            >
-              {frontmatter ? frontmatter.body : content}
-            </Markdown>
+            <>
+              <SkillFrontmatterPreviewCard metadata={frontmatterMetadata} />
+              <Markdown style={{ paddingBlock: 8, paddingInline: 12 }}>{body}</Markdown>
+            </>
           ) : (
-            <Flexbox flex={1} style={{ minHeight: 0, overflow: 'auto' }}>
-              <Highlighter
-                language={extensionToLanguage(ext)}
-                style={{ fontSize: 12, minHeight: '100%', overflow: 'visible' }}
-              >
-                {content}
-              </Highlighter>
-            </Flexbox>
+            <Highlighter
+              language={extensionToLanguage(ext)}
+              style={{ fontSize: 12, minHeight: '100%' }}
+            >
+              {content}
+            </Highlighter>
           )}
         </Flexbox>
       </Flexbox>
