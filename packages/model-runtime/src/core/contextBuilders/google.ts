@@ -248,33 +248,16 @@ export const buildGoogleMessages = async (messages: OpenAIChatMessage[]): Promis
     }
   }
 
-  // Check if the last message is a tool message
-  const lastMessage = messages.at(-1);
-  const shouldAddMagicSignature = lastMessage?.role === 'tool';
-
-  if (shouldAddMagicSignature) {
-    // Find the last user message index in filtered contents
-    let lastUserIndex = -1;
-    for (let i = filteredContents.length - 1; i >= 0; i--) {
-      if (filteredContents[i].role === 'user') {
-        // Skip if it's a functionResponse (tool result)
-        const hasFunctionResponse = filteredContents[i].parts?.some((p) => p.functionResponse);
-        if (!hasFunctionResponse) {
-          lastUserIndex = i;
-          break;
-        }
-      }
-    }
-
-    // Add magic signature to all function calls after last user message that don't have thoughtSignature
-    for (let i = lastUserIndex + 1; i < filteredContents.length; i++) {
-      const content = filteredContents[i];
-      if (content.role === 'model' && content.parts) {
-        for (const part of content.parts) {
-          if (part.functionCall && !part.thoughtSignature) {
-            // Only add magic signature if thoughtSignature doesn't exist
-            part.thoughtSignature = GEMINI_MAGIC_THOUGHT_SIGNATURE;
-          }
+  // Add magic signature to all function calls that don't have thoughtSignature.
+  // This handles cross-provider scenarios (e.g., OpenAI → Gemini switch) where
+  // historical tool_calls lack thoughtSignature, as well as multi-turn Gemini
+  // conversations where earlier turns may have lost their signatures.
+  // @see https://linear.app/lobehub/issue/LOBE-8662
+  for (const content of filteredContents) {
+    if (content.role === 'model' && content.parts) {
+      for (const part of content.parts) {
+        if (part.functionCall && !part.thoughtSignature) {
+          part.thoughtSignature = GEMINI_MAGIC_THOUGHT_SIGNATURE;
         }
       }
     }
@@ -308,26 +291,30 @@ export const sanitizeGeminiSchema = (schema: any): any => {
 
   // Strip enum from non-STRING types and empty enums
   // Gemini proto: "enum: only allowed for STRING type"
-  if (sanitized.enum !== undefined) {
-    if (!isStringType(sanitized.type) || !Array.isArray(sanitized.enum) || sanitized.enum.length === 0) {
-      console.warn(
-        '[google] sanitizeGeminiSchema stripped enum — not allowed for non-STRING type or empty',
-        { type: sanitized.type, enumLength: sanitized.enum?.length },
-      );
-      delete sanitized.enum;
-    }
+  if (
+    sanitized.enum !== undefined &&
+    (!isStringType(sanitized.type) || !Array.isArray(sanitized.enum) || sanitized.enum.length === 0)
+  ) {
+    console.warn(
+      '[google] sanitizeGeminiSchema stripped enum — not allowed for non-STRING type or empty',
+      { type: sanitized.type, enumLength: sanitized.enum?.length },
+    );
+    delete sanitized.enum;
   }
 
   // Strip required from non-OBJECT types and empty required arrays
   // Gemini proto: "required: only allowed for OBJECT type"
-  if (sanitized.required !== undefined) {
-    if (!isObjectType(sanitized.type) || !Array.isArray(sanitized.required) || sanitized.required.length === 0) {
-      console.warn(
-        '[google] sanitizeGeminiSchema stripped required — not allowed for non-OBJECT type or empty',
-        { type: sanitized.type, requiredLength: sanitized.required?.length },
-      );
-      delete sanitized.required;
-    }
+  if (
+    sanitized.required !== undefined &&
+    (!isObjectType(sanitized.type) ||
+      !Array.isArray(sanitized.required) ||
+      sanitized.required.length === 0)
+  ) {
+    console.warn(
+      '[google] sanitizeGeminiSchema stripped required — not allowed for non-OBJECT type or empty',
+      { type: sanitized.type, requiredLength: sanitized.required?.length },
+    );
+    delete sanitized.required;
   }
 
   // Recursively sanitize properties
