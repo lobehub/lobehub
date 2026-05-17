@@ -93,16 +93,21 @@ const isMissingSessionsSchemaColumnError = (err: unknown): boolean => {
     text.includes(' on "sessions"') ||
     text.includes('alter table "sessions"') ||
     text.includes('sessions_group_id_session_groups_id_fk') ||
-    text.includes('slug_user_id_unique');
+    text.includes('slug_user_id_unique') ||
+    text.includes('sessions_client_id_user_id_unique') ||
+    text.includes('computeindexattrs');
   if (!sessionsScope) return false;
 
   return (
     text.includes('slug_user_id_unique') ||
+    text.includes('sessions_client_id_user_id_unique') ||
     text.includes('"slug" does not exist') ||
+    text.includes('"client_id" does not exist') ||
     text.includes('sessions_group_id_session_groups_id_fk') ||
     text.includes('column "group_id"') ||
     text.includes('"group_id" does not exist') ||
-    text.includes('transformcolumnnamelist')
+    text.includes('transformcolumnnamelist') ||
+    text.includes('computeindexattrs')
   );
 };
 
@@ -389,10 +394,12 @@ const runLegacySessionsSchemaRepair = async (dbUrl: string) => {
         "name" text NOT NULL,
         "sort" integer,
         "user_id" text,
+        "client_id" text,
         "created_at" timestamp with time zone DEFAULT now() NOT NULL,
         "updated_at" timestamp with time zone DEFAULT now() NOT NULL
       );
 
+      ALTER TABLE IF EXISTS "session_groups" ADD COLUMN IF NOT EXISTS "client_id" text;
       ALTER TABLE IF EXISTS "sessions" ADD COLUMN IF NOT EXISTS "id" text;
       ALTER TABLE IF EXISTS "sessions" ADD COLUMN IF NOT EXISTS "slug" varchar(100);
       ALTER TABLE IF EXISTS "sessions" ADD COLUMN IF NOT EXISTS "title" text;
@@ -402,6 +409,7 @@ const runLegacySessionsSchemaRepair = async (dbUrl: string) => {
       ALTER TABLE IF EXISTS "sessions" ADD COLUMN IF NOT EXISTS "type" text;
       ALTER TABLE IF EXISTS "sessions" ADD COLUMN IF NOT EXISTS "user_id" text;
       ALTER TABLE IF EXISTS "sessions" ADD COLUMN IF NOT EXISTS "group_id" text;
+      ALTER TABLE IF EXISTS "sessions" ADD COLUMN IF NOT EXISTS "client_id" text;
       ALTER TABLE IF EXISTS "sessions" ADD COLUMN IF NOT EXISTS "pinned" boolean DEFAULT false;
       ALTER TABLE IF EXISTS "sessions" ADD COLUMN IF NOT EXISTS "created_at" timestamp with time zone DEFAULT now() NOT NULL;
       ALTER TABLE IF EXISTS "sessions" ADD COLUMN IF NOT EXISTS "updated_at" timestamp with time zone DEFAULT now() NOT NULL;
