@@ -53,4 +53,17 @@ describe('agent skill authoring prompts', () => {
       expect(role).toContain('runtime will not infer');
     }
   });
+
+  /**
+   * @example
+   * Create authoring keeps trigger/provenance context out of persisted skill body markdown.
+   */
+  it('keeps activation and provenance sections out of create bodyMarkdown', () => {
+    expect(AGENT_SKILL_CREATE_SYSTEM_ROLE).toContain(
+      'Put activation conditions only in description',
+    );
+    expect(AGENT_SKILL_CREATE_SYSTEM_ROLE).toContain(
+      'Do not add bodyMarkdown sections named Trigger',
+    );
+  });
 });

@@ -57,6 +57,8 @@ Rules:
 - Prefer concise, future-facing procedural knowledge. The body should say what to do after activation, not why this skill was created.
 - Do not create auxiliary docs or resource files. v1 output is one SKILL.md body represented by bodyMarkdown.
 - If the source already resembles SKILL.md but is poorly organized, normalize it into a clear skill body instead of preserving the messy shape.
+- Put activation conditions only in description, not in bodyMarkdown.
+- Do not add bodyMarkdown sections named Trigger, When to use, Source Feedback, Evidence, Context, or Reason.
 
 Writing quality:
 - Start bodyMarkdown with a clear H1 title.

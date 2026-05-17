@@ -89,6 +89,10 @@ const isMemorySignal = (signal: FeedbackDomainSignal): signal is SignalFeedbackD
   return signal.payload.target === 'memory';
 };
 
+const isPromptSignal = (signal: FeedbackDomainSignal) => {
+  return signal.payload.target === 'prompt';
+};
+
 const isDirectSkillDecisionSignal = (
   signal: FeedbackDomainSignal,
 ): signal is NonSatisfiedSkillActionServiceSignal => {
@@ -425,6 +429,13 @@ export const createFeedbackActionPlannerSignalHandler = (
           actions: [plan.action],
           status: 'dispatch',
         };
+      }
+
+      if (isPromptSignal(signal)) {
+        // TODO: Add a durable prompt/persona artifact path before this lane can mutate anything.
+        // The classifier can recognize prompt-shaped feedback today, but there is no proposal
+        // payload, apply/revert path, or UI projection that can prove a safe durable change yet.
+        return;
       }
 
       if (isDirectSkillDecisionSignal(signal)) {

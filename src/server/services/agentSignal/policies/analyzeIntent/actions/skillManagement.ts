@@ -1405,6 +1405,11 @@ const isMaintainerDecision = (
 ): decision is SkillManagementDecision & { action: 'consolidate' | 'refine' } =>
   decision.action === 'refine' || decision.action === 'consolidate';
 
+/**
+ * Checks whether a model-selected source document ref can be queried as agent_documents.id.
+ */
+const isAgentDocumentDatabaseId = (value: string) => z.string().uuid().safeParse(value).success;
+
 const toSkillActionTarget = (
   skill: Pick<SkillSummary, 'bundle' | 'description' | 'index' | 'title'>,
 ): SkillManagementActionTarget => ({
@@ -1608,6 +1613,10 @@ const readCreateSourceDocument = async (
     return {};
   }
 
+  if (!isAgentDocumentDatabaseId(sourceAgentDocumentId)) {
+    return {};
+  }
+
   const snapshot = await new AgentDocumentsService(
     options.db,
     options.userId,
@@ -1648,7 +1657,8 @@ const runCreateWorkflow = async (
         candidateSkills: input.candidateSkills,
         decision,
         signal: input,
-        ...source,
+        sourceAgentDocumentId: source?.sourceAgentDocumentId,
+        sourceDocumentContent: source?.sourceDocumentContent,
       }),
     ),
   );

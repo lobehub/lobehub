@@ -1275,6 +1275,70 @@ describe('defineSkillManagementActionHandler', () => {
 
   /**
    * @example
+   * A create decision ignores message ids accidentally returned in documentRefs.
+   */
+  it('ignores non-agent-document ids in create decision documentRefs', async () => {
+    // ROOT CAUSE:
+    //
+    // The skill decision model may confuse the eval/client messageId with source document ids
+    // because both are present in the decision prompt. Querying agent_documents.id with that
+    // messageId fails at Postgres UUID coercion before skill creation can run.
+    //
+    // We fixed this by only reading create source documents when documentRefs contains a real
+    // agent_documents.id UUID. Create can still proceed from the feedback and turn context.
+    skillDecisionRunner.mockResolvedValue({
+      action: 'create',
+      documentRefs: ['eval-agent-signal-message-feedback-should-create-skill-1'],
+      reason: 'reusable workflow',
+    });
+
+    const handler = defineSkillManagementActionHandler({
+      db: {} as never,
+      selfIterationEnabled: true,
+      skillCreateRunner,
+      skillDecisionRunner,
+      userId: 'user_1',
+    });
+
+    const result = await handler.handle(
+      {
+        actionId: 'act_skill_create_with_message_ref',
+        actionType: 'action.skill-management.handle',
+        chain: { chainId: 'chain_1', rootSourceId: 'source_1' },
+        payload: {
+          agentId: 'agent_1',
+          idempotencyKey: 'source_1:skill:create_with_message_ref',
+          message: 'Create a reusable PR review checklist.',
+        },
+        signal: {
+          signalId: 'sig_1',
+          signalType: 'signal.feedback.domain.skill',
+        },
+        source: { sourceId: 'source_1', sourceType: 'agent.user.message' },
+        timestamp: 1,
+      },
+      context,
+    );
+
+    expect(skillCreateRunner).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        sourceAgentDocumentId: 'eval-agent-signal-message-feedback-should-create-skill-1',
+      }),
+    );
+    expect(createSkill).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: 'agent_1',
+        sourceAgentDocumentId: undefined,
+      }),
+    );
+    expect(result).toMatchObject({
+      output: { decision: { action: 'create' } },
+      status: 'applied',
+    });
+  });
+
+  /**
+   * @example
    * Duplicate skill creation is reported as skipped while preserving the create decision.
    */
   it('skips duplicate skill creation with a structured create decision', async () => {

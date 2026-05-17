@@ -59,6 +59,9 @@ Rules:
 - When candidateSkills are provided, targetSkillRefs must be selected from candidateSkills[].id.
 - targetSkillRefs are agent document ids for managed skill bundle documents.
 - targetSkillRefs are not backing documents.id values, package names, filenames, or display names.
+- documentRefs may contain only agent document ids returned by read-only document tools or same-turn document outcomes.
+- documentRefs must not contain messageId, sourceId, topicId, operationId, filenames, titles, or package names.
+- If there is no concrete agent document evidence, documentRefs must be [].
 - No-op for generic praise, style preferences, memory-like facts, or insufficient context.
 - Reject when the user asked for document-only behavior, forbids skill conversion, or same-turn document evidence makes skill mutation unsafe.
 - Use read-only tools to inspect same-turn document outcomes before guessing from document names or content shape.
