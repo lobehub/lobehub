@@ -61,6 +61,7 @@ export const useTopicItemDropdownMenu = ({
     markTopicCompleted,
     unmarkTopicCompleted,
     updateTopicTitle,
+    openThreadInPortal,
   ] = useChatStore((s) => [
     s.autoRenameTopicTitle,
     s.duplicateTopic,
@@ -69,6 +70,7 @@ export const useTopicItemDropdownMenu = ({
     s.markTopicCompleted,
     s.unmarkTopicCompleted,
     s.updateTopicTitle,
+    s.openThreadInPortal,
   ]);
 
   const isCompleted = status === 'completed';
@@ -136,33 +138,43 @@ export const useTopicItemDropdownMenu = ({
       },
       ...(isDesktop
         ? [
-            {
-              icon: <Icon icon={PanelTop} />,
-              key: 'openInNewTab',
-              label: t('actions.openInNewTab'),
-              onClick: () => {
-                if (!activeAgentId) return;
-                const url = SESSION_CHAT_TOPIC_URL(activeAgentId, id);
-                const reference = pluginRegistry.parseUrl(url, '');
-                if (reference) {
-                  addTab(reference);
-                  navigate(url);
-                }
-              },
+          {
+            icon: <Icon icon={PanelTop} />,
+            key: 'openInNewTab',
+            label: t('actions.openInNewTab'),
+            onClick: () => {
+              if (!activeAgentId) return;
+              const url = SESSION_CHAT_TOPIC_URL(activeAgentId, id);
+              const reference = pluginRegistry.parseUrl(url, '');
+              if (reference) {
+                addTab(reference);
+                navigate(url);
+              }
             },
-            {
-              icon: <Icon icon={ExternalLink} />,
-              key: 'openInNewWindow',
-              label: t('actions.openInNewWindow'),
-              onClick: () => {
-                if (activeAgentId) openTopicInNewWindow(activeAgentId, id);
-              },
+          },
+          {
+            icon: <Icon icon={ExternalLink} />,
+            key: 'openInNewWindow',
+            label: t('actions.openInNewWindow'),
+            onClick: () => {
+              if (activeAgentId) openTopicInNewWindow(activeAgentId, id);
             },
-            {
-              type: 'divider' as const,
-            },
-          ]
+          },
+          {
+            type: 'divider' as const,
+          },
+        ]
         : []),
+
+      {
+        icon: <Icon icon={PanelTop} />,
+        key: 'openInPortal',
+        label: t('actions.openInPortal'),
+        onClick: () => {
+          openThreadInPortal(id);
+        },
+      },
+
       {
         icon: <Icon icon={Hash} />,
         key: 'copySessionId',
@@ -234,6 +246,7 @@ export const useTopicItemDropdownMenu = ({
     unmarkTopicCompleted,
     removeTopic,
     updateTopicTitle,
+    openThreadInPortal,
     openTopicInNewWindow,
     addTab,
     navigate,
