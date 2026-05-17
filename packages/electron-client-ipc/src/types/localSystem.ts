@@ -410,3 +410,33 @@ export interface ResolveSkillResourcePathResult {
   fullPath?: string;
   success: boolean;
 }
+
+export interface ProjectSkillItem {
+  description?: string;
+  /** Total number of regular files under `skillDir` (recursive, including `SKILL.md`). */
+  fileCount: number;
+  /**
+   * Relative paths (within `skillDir`) of all regular files under the skill,
+   * sorted lexicographically and capped to a safe maximum. Includes `SKILL.md`.
+   */
+  files: string[];
+  name: string;
+  /** Absolute path to the SKILL.md file. */
+  path: string;
+  /** Directory containing the SKILL.md (e.g. `<root>/.agents/skills/spa-routes`). */
+  skillDir: string;
+  /** Source directory the skill was discovered in. */
+  source: '.agents/skills' | '.claude/skills';
+}
+
+export interface ListProjectSkillsParams {
+  /** Working directory used to resolve the project root. */
+  scope: string;
+}
+
+export interface ListProjectSkillsResult {
+  root: string;
+  skills: ProjectSkillItem[];
+  /** Source directory actually scanned (after fallback resolution). */
+  source: ProjectSkillItem['source'] | null;
+}
