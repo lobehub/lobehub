@@ -268,9 +268,15 @@ const PlusAction = memo(() => {
   const [showTypoBar, setShowTypoBar] = useChatInputStore((s) => [s.showTypoBar, s.setShowTypoBar]);
   const { canUploadImage, canUploadVideo } = useVisualMediaUploadAbility(model, provider);
   const enableFC = useModelSupportToolUse(model, provider);
-  const { enabledCount: knowledgeEnabledCount, items: knowledgeItems } = useKnowledgeControls({
-    openAttachKnowledgeModal,
-  });
+  const handleOpenKnowledge = useCallback(() => {
+    setDropdownOpen(false);
+    openAttachKnowledgeModal();
+  }, []);
+  const {
+    enabledCount: knowledgeEnabledCount,
+    footer: knowledgeFooter,
+    items: knowledgeItems,
+  } = useKnowledgeControls({ openAttachKnowledgeModal: handleOpenKnowledge });
   const {
     autoCount: skillAutoCount,
     editPluginDrawer: skillEditPluginDrawer,
@@ -521,6 +527,7 @@ const PlusAction = memo(() => {
       ? [
           {
             children: knowledgeItems,
+            footer: knowledgeFooter,
             icon: activeIcon(LibraryBig, knowledgeEnabledCount > 0),
             key: 'knowledge-base',
             label: renderLabelWithCount(t('knowledgeBase.title'), knowledgeEnabledCount),
@@ -548,6 +555,7 @@ const PlusAction = memo(() => {
     skillAutoCount,
     skillPinnedCount,
     knowledgeItems,
+    knowledgeFooter,
     t,
     tEditor,
     tSetting,
