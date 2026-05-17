@@ -115,7 +115,7 @@ export async function pollOpenAICompatibleVideoStatus(
  *   model: string,
  *   prompt: string,
  *   seconds?: string,      // OpenAI Sora format (string type)
- *   input_reference?: string | object,  // For image-to-video
+ *   input_reference?: { image_url: string } | { file_id: string },  // For image-to-video
  * }
  *
  * Creates a video generation task and returns immediately with inferenceId.
@@ -150,7 +150,9 @@ export async function createOpenAICompatibleVideo(
 
   // Image-to-video support
   if (imageUrl) {
-    body['input_reference'] = imageUrl;
+    // JSON requests reject bare strings, for example:
+    // `input_reference: "https://example.com/image.jpg"`.
+    body['input_reference'] = { image_url: imageUrl };
   }
 
   log('OpenAI-compatible video API request body: %O', body);

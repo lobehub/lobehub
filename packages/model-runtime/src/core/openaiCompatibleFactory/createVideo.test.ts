@@ -95,7 +95,7 @@ describe('createOpenAICompatibleVideo', () => {
       expect(body.size).toBe('1920x1080');
     });
 
-    it('should include imageUrl as input_reference', async () => {
+    it('should include imageUrl as JSON input_reference object', async () => {
       global.fetch = vi.fn().mockResolvedValueOnce({
         ok: true,
         json: async () => ({ id: 'video-task-img' }),
@@ -112,7 +112,7 @@ describe('createOpenAICompatibleVideo', () => {
       await createOpenAICompatibleVideo(payload, mockOptions);
 
       const body = JSON.parse((global.fetch as any).mock.calls[0][1].body);
-      expect(body.input_reference).toBe('https://example.com/image.jpg');
+      expect(body.input_reference).toEqual({ image_url: 'https://example.com/image.jpg' });
     });
   });
 
