@@ -552,7 +552,18 @@ export const topicRouter = router({
             })
             .optional(),
           sessionId: z.string().optional(),
-          status: z.enum(['active', 'completed', 'archived']).nullable().optional(),
+          status: z
+            .enum([
+              'active',
+              'running',
+              'paused',
+              'waitingForHuman',
+              'failed',
+              'completed',
+              'archived',
+            ])
+            .nullable()
+            .optional(),
           title: z.string().optional(),
         }),
       }),

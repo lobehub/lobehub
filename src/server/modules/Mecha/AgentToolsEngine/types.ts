@@ -54,6 +54,12 @@ export interface ServerCreateAgentToolsEngineParams {
   agentConfig: {
     /** Optional agent chat config */
     chatConfig?: {
+      /**
+       * When explicitly `false`, the agent runs in chat mode — the engine
+       * builds rules from `chatModeAllowedToolIds` only and ignores
+       * `plugins` and `alwaysOnToolIds`. Undefined / true → agent mode.
+       */
+      enableAgentMode?: boolean;
       runtimeEnv?: RuntimeEnvConfig;
       searchMode?: 'off' | 'on' | 'auto';
     };

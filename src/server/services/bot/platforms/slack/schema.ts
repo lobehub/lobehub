@@ -12,6 +12,7 @@ import {
   makeGroupPolicyFields,
   makeServerIdField,
   makeUserIdField,
+  watchKeywordsField,
 } from '../const';
 import type { FieldSchema } from '../types';
 import { DEFAULT_SLACK_CONNECTION_MODE, MAX_SLACK_HISTORY_LIMIT } from './const';
@@ -120,6 +121,7 @@ export const schema: FieldSchema[] = [
       makeDmPolicyField({ policy: 'open' }),
       ...makeGroupPolicyFields({ policy: 'open' }),
       allowFromField,
+      watchKeywordsField,
     ],
     type: 'object',
   },

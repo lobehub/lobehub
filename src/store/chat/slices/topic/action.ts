@@ -20,7 +20,7 @@ import { useGlobalStore } from '@/store/global';
 import { type StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { systemAgentSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
-import { type ChatTopic, type CreateTopicParams } from '@/types/topic';
+import { type ChatTopic, type ChatTopicStatus, type CreateTopicParams } from '@/types/topic';
 import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
 
@@ -307,6 +307,22 @@ export class ChatTopicActionImpl {
 
   updateTopicTitle = async (id: string, title: string): Promise<void> => {
     await this.#get().internal_updateTopic(id, { title });
+  };
+
+  /**
+   * Persist the topic's status. Optimistically updates the in-memory map so the
+   * sidebar reflects the change immediately; persistence runs fire-and-forget so
+   * a transient network blip never tears down the agent run that owns the write.
+   */
+  updateTopicStatus = async (id: string, status: ChatTopicStatus): Promise<void> => {
+    const topic = topicSelectors.getTopicById(id)(this.#get());
+    if (!topic || topic.status === status) return;
+
+    this.#get().internal_dispatchTopic({ type: 'updateTopic', id, value: { status } });
+
+    await topicService.updateTopic(id, { status }).catch((err) => {
+      console.error('[updateTopicStatus] persist failed:', err);
+    });
   };
 
   autoRenameTopicTitle = async (id: string): Promise<void> => {

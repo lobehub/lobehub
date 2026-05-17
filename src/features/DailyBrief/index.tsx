@@ -41,21 +41,19 @@ const DailyBrief = memo(() => {
     );
   }
 
-  if (briefs.length === 0 && !recommendationsVisible) return null;
-
-  const showViewAllTasks = briefs.length > 0 || recommendationsVisible;
+  if (briefs.length === 0) {
+    return recommendationsVisible ? <Recommendations /> : null;
+  }
 
   return (
     <GroupBlock
-      actionAlwaysVisible={showViewAllTasks}
+      actionAlwaysVisible
       icon={Newspaper}
       title={t('brief.title')}
       action={
-        showViewAllTasks ? (
-          <Button size={'small'} type={'text'} onClick={() => navigate('/tasks')}>
-            {t('brief.viewAllTasks')}
-          </Button>
-        ) : undefined
+        <Button size={'small'} type={'text'} onClick={() => navigate('/tasks')}>
+          {t('brief.viewAllTasks')}
+        </Button>
       }
     >
       <Flexbox gap={12}>

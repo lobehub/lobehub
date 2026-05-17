@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { PipelineContext } from '../../types';
 import { OnboardingActionHintInjector } from '../OnboardingActionHintInjector';
+import type { OnboardingContext } from '../OnboardingContextInjector';
 
 const createContext = (messages: any[]): PipelineContext => ({
   initialState: { messages: [] },
@@ -10,10 +11,11 @@ const createContext = (messages: any[]): PipelineContext => ({
   metadata: {},
 });
 
-const buildProvider = (phaseGuidance: string) =>
+const buildProvider = (phaseGuidance: string, context?: Partial<OnboardingContext>) =>
   new OnboardingActionHintInjector({
     enabled: true,
     onboardingContext: {
+      ...context,
       personaContent: '# Persona',
       phaseGuidance,
       soulContent: '# SOUL',
@@ -21,6 +23,46 @@ const buildProvider = (phaseGuidance: string) =>
   });
 
 describe('OnboardingActionHintInjector', () => {
+  describe('discovery turn reminder', () => {
+    const phaseGuidance = 'Phase: Discovery. Explore the user world.';
+
+    it('injects current discovery progress when more discovery turns are recommended', async () => {
+      const provider = buildProvider(phaseGuidance, {
+        discoveryUserMessageCount: 1,
+        remainingDiscoveryExchanges: 2,
+      });
+      const result = await provider.process(
+        createContext([
+          { content: 'sys', role: 'system' },
+          { content: 'I mostly write docs', role: 'user' },
+        ]),
+      );
+
+      const last = result.messages.at(-1);
+      expect(last?.content).toContain('SYSTEM REMINDER: Current Discovery turn status');
+      expect(last?.content).toContain('User discovery exchanges observed: 1');
+      expect(last?.content).toContain('Recommended target before Summary: 3');
+      expect(last?.content).toContain('Continue Discovery for about 2 more user exchange(s)');
+    });
+
+    it('reminds the model to move toward summary after the recommended target is reached', async () => {
+      const provider = buildProvider(phaseGuidance, {
+        discoveryUserMessageCount: 3,
+        remainingDiscoveryExchanges: 0,
+      });
+      const result = await provider.process(
+        createContext([
+          { content: 'sys', role: 'system' },
+          { content: 'I need help with planning and writing', role: 'user' },
+        ]),
+      );
+
+      const last = result.messages.at(-1);
+      expect(last?.content).toContain('Recommended Discovery target has been reached');
+      expect(last?.content).toContain('transition to Summary');
+    });
+  });
+
   describe('marketplace detection (Summary phase)', () => {
     const phaseGuidance = 'Phase: Summary. Wrap-up.';
 

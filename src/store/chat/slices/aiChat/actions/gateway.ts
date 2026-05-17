@@ -4,7 +4,7 @@ import {
   type AgentStreamEvent,
   type ConnectionStatus,
 } from '@lobechat/agent-gateway-client';
-import type { ConversationContext, ExecAgentResult } from '@lobechat/types';
+import type { ConversationContext, ExecAgentResult, MessageMetadata } from '@lobechat/types';
 
 import { isDesktop } from '@/const/version';
 import { aiAgentService, type ResumeApprovalParam } from '@/services/aiAgent';
@@ -255,6 +255,8 @@ export class GatewayActionImpl {
     /** File IDs of already-uploaded attachments to attach to the new user message */
     fileIds?: string[];
     message: string;
+    /** Request metadata carried from the originating user message. */
+    metadata?: Pick<MessageMetadata, 'trigger'>;
     /** Called when the gateway session completes (agent finished running) */
     onComplete?: () => void;
     /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
@@ -280,6 +282,7 @@ export class GatewayActionImpl {
       context,
       fileIds,
       message,
+      metadata,
       onComplete,
       parentMessageId,
       parentOperationId,
@@ -335,6 +338,7 @@ export class GatewayActionImpl {
         parentMessageId,
         prompt: message,
         resumeApproval,
+        trigger: metadata?.trigger,
       },
       { signal: abortSignal },
     );
@@ -386,6 +390,7 @@ export class GatewayActionImpl {
 
     if (result.topicId) {
       this.#get().internal_updateTopicLoading(result.topicId, true);
+      void this.#get().updateTopicStatus?.(result.topicId, 'running');
     }
 
     // Create a dedicated operation for gateway execution with correct context.
@@ -433,6 +438,7 @@ export class GatewayActionImpl {
         this.#get().completeOperation(gatewayOpId);
         if (result.topicId) {
           this.#get().internal_updateTopicLoading(result.topicId, false);
+          void this.#get().updateTopicStatus?.(result.topicId, 'active');
           // Clear running operation from topic metadata (best-effort from frontend;
           // if browser was closed, reconnect logic will handle stale entries)
           topicService
@@ -522,6 +528,7 @@ export class GatewayActionImpl {
       onSessionComplete: () => {
         this.#get().completeOperation(gatewayOpId);
         this.#get().internal_updateTopicLoading(topicId, false);
+        void this.#get().updateTopicStatus?.(topicId, 'active');
         topicService.updateTopicMetadata(topicId, { runningOperation: null }).catch(() => {});
       },
       operationId,

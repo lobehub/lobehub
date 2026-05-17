@@ -11,6 +11,7 @@ import {
   makeDmPolicyField,
   makeGroupPolicyFields,
   makeUserIdField,
+  watchKeywordsField,
 } from '../../const';
 import type { FieldSchema } from '../../types';
 import { DEFAULT_FEISHU_CONNECTION_MODE, MAX_FEISHU_HISTORY_LIMIT } from '../const';
@@ -118,6 +119,7 @@ export const sharedSchema: FieldSchema[] = [
       makeDmPolicyField({ policy: 'open' }),
       ...makeGroupPolicyFields({ policy: 'open' }),
       allowFromField,
+      watchKeywordsField,
     ],
     type: 'object',
   },

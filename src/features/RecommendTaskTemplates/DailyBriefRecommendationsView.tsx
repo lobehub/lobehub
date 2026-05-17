@@ -1,9 +1,8 @@
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
-import { BriefCardSkeleton } from '@/features/DailyBrief/BriefCardSkeleton';
-
 import { TaskTemplateCard } from './TaskTemplateCard';
+import { TaskTemplateCardSkeleton } from './TaskTemplateCardSkeleton';
 import type { DailyBriefRecommendationsUIState } from './useDailyBriefRecommendationsUI';
 
 interface DailyBriefRecommendationsViewProps {
@@ -16,8 +15,9 @@ export const DailyBriefRecommendationsView = memo<DailyBriefRecommendationsViewP
     if (state.mode === 'skeleton') {
       return (
         <Flexbox gap={8}>
-          <BriefCardSkeleton />
-          <BriefCardSkeleton />
+          {Array.from({ length: state.skeletonCount }, (_, index) => (
+            <TaskTemplateCardSkeleton key={`task-template-skeleton-${index}`} />
+          ))}
         </Flexbox>
       );
     }

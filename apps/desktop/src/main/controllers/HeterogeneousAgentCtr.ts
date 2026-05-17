@@ -24,11 +24,15 @@ import {
   buildAgentInput,
   materializeImageToPath,
   normalizeImage,
+  resolveCliSpawnPlan,
 } from '@lobechat/heterogeneous-agents/spawn';
 import { app as electronApp, BrowserWindow } from 'electron';
 
 import { getHeterogeneousAgentDriver } from '@/modules/heterogeneousAgent';
-import type { HeterogeneousAgentImageAttachment } from '@/modules/heterogeneousAgent/types';
+import type {
+  HeterogeneousAgentBuildPlan,
+  HeterogeneousAgentImageAttachment,
+} from '@/modules/heterogeneousAgent/types';
 import { buildProxyEnv } from '@/modules/networkProxy/envBuilder';
 import { detectHeterogeneousCliCommand } from '@/modules/toolDetectors';
 import { createLogger } from '@/utils/logger';
@@ -868,169 +872,210 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     }
     const useStdin = spawnPlan.stdinPayload !== undefined;
     const cliArgs = spawnPlan.args;
+    const resolvedCliSpawnPlan = await resolveCliSpawnPlan(session.command, cliArgs);
+
+    logger.info(
+      'Spawning agent:',
+      resolvedCliSpawnPlan.command,
+      resolvedCliSpawnPlan.args.join(' '),
+      `(cwd: ${cwd})`,
+    );
+
+    // `detached: true` on Unix puts the child in a new process group so we
+    // can SIGINT/SIGKILL the whole tree (claude + any tool subprocesses)
+    // via `process.kill(-pid, sig)` on cancel. Without this, SIGINT to just
+    // the claude binary can leave bash/grep/etc. tool children running and
+    // the CLI hung waiting on them. Windows has different semantics — use
+    // taskkill /T /F there; no detached flag needed.
+    // Forward the user's proxy settings to the CLI. The main-process undici
+    // dispatcher doesn't reach child processes — they need env vars.
+    const proxyEnv = buildProxyEnv(this.app.storeManager.get('networkProxy'));
+
+    const spawnOptions = {
+      cwd,
+      detached: process.platform !== 'win32',
+      env: { ...process.env, ...proxyEnv, ...session.env },
+      stdio: [useStdin ? 'pipe' : 'ignore', 'pipe', 'pipe'] as ['pipe' | 'ignore', 'pipe', 'pipe'],
+    };
 
     return new Promise<void>((resolve, reject) => {
-      logger.info('Spawning agent:', session.command, cliArgs.join(' '), `(cwd: ${cwd})`);
-
-      // `detached: true` on Unix puts the child in a new process group so we
-      // can SIGINT/SIGKILL the whole tree (claude + any tool subprocesses)
-      // via `process.kill(-pid, sig)` on cancel. Without this, SIGINT to just
-      // the claude binary can leave bash/grep/etc. tool children running and
-      // the CLI hung waiting on them. Windows has different semantics — use
-      // taskkill /T /F there; no detached flag needed.
-      // Forward the user's proxy settings to the CLI. The main-process undici
-      // dispatcher doesn't reach child processes — they need env vars.
-      const proxyEnv = buildProxyEnv(this.app.storeManager.get('networkProxy'));
-
-      const proc = spawn(session.command, cliArgs, {
-        cwd,
-        detached: process.platform !== 'win32',
-        env: { ...process.env, ...proxyEnv, ...session.env },
-        stdio: [useStdin ? 'pipe' : 'ignore', 'pipe', 'pipe'],
+      const proc = spawn(resolvedCliSpawnPlan.command, resolvedCliSpawnPlan.args, spawnOptions);
+      this.handleSpawnedAgentProcess({
+        intervention,
+        params,
+        proc,
+        reject,
+        resolve,
+        session,
+        traceSession,
+        useStdin,
+        spawnPlan,
       });
+    });
+  }
 
-      // In stdin mode, write the prepared payload and close stdin.
-      if (useStdin && spawnPlan.stdinPayload !== undefined && proc.stdin) {
-        void this.writeCliTraceFile(traceSession, 'stdin.txt', spawnPlan.stdinPayload);
-        const stdin = proc.stdin as Writable;
-        stdin.write(spawnPlan.stdinPayload, () => {
-          stdin.end();
-        });
-      }
-
-      session.process = proc;
-
-      // Producer-side conversion (V3 contract): JSONL framing + adapter +
-      // toStreamEvent all run inside the shared pipeline, so renderer + future
-      // server `heteroIngest` see the same `AgentStreamEvent` wire shape with
-      // no per-consumer adapter. The pipeline auto-wires the Codex
-      // file-change line-stat tracker when `agentType === 'codex'`, so this
-      // controller stays agent-agnostic.
-      const pipeline = new AgentStreamPipeline({
-        agentType: session.agentType,
-        operationId: params.operationId,
+  private handleSpawnedAgentProcess({
+    intervention,
+    params,
+    proc,
+    reject,
+    resolve,
+    session,
+    spawnPlan,
+    traceSession,
+    useStdin,
+  }: {
+    intervention?: Awaited<ReturnType<HeterogeneousAgentCtr['setupInterventionForOp']>>;
+    params: SendPromptParams;
+    proc: ChildProcess;
+    reject: (reason?: unknown) => void;
+    resolve: () => void;
+    session: AgentSession;
+    spawnPlan: HeterogeneousAgentBuildPlan;
+    traceSession: CliTraceSession | undefined;
+    useStdin: boolean;
+  }) {
+    proc.on('error', (err) => {
+      logger.error('Agent process error:', err);
+      void this.writeCliTraceJson(traceSession, 'process-error.json', {
+        message: err.message,
+        name: err.name,
       });
-      let stdoutBroadcastQueue: Promise<void> = Promise.resolve();
-
-      const broadcastPipelineBatch = (produce: () => ReturnType<AgentStreamPipeline['push']>) => {
-        stdoutBroadcastQueue = stdoutBroadcastQueue
-          .then(async () => {
-            const events = await produce();
-            // Adapter-extracted CC/Codex session id powers `--resume` on the
-            // next prompt; surface it through the existing `getSessionInfo`
-            // IPC by mirroring the freshest value onto the session record.
-            if (pipeline.sessionId && pipeline.sessionId !== session.agentSessionId) {
-              session.agentSessionId = pipeline.sessionId;
-            }
-            for (const event of events) {
-              this.broadcast('heteroAgentEvent', {
-                event,
-                sessionId: session.sessionId,
-              });
-            }
-          })
-          .catch((error) => {
-            logger.error('Failed to broadcast agent stream batch:', error);
-          });
-      };
-
-      // Stream stdout events through the producer pipeline.
-      const stdout = proc.stdout as Readable;
-      stdout.on('data', (chunk: Buffer) => {
-        void this.appendCliTraceFile(traceSession, 'stdout.jsonl', chunk);
-        broadcastPipelineBatch(() => pipeline.push(chunk));
+      void this.flushCliTrace(traceSession);
+      const sessionError = this.getSessionErrorPayload(err, session);
+      this.broadcast('heteroAgentSessionError', {
+        error: sessionError,
+        sessionId: session.sessionId,
       });
-      stdout.on('end', () => {
-        broadcastPipelineBatch(() => pipeline.flush());
+      reject(new Error(typeof sessionError === 'string' ? sessionError : sessionError.message));
+    });
+
+    // In stdin mode, write the prepared payload and close stdin.
+    if (useStdin && spawnPlan.stdinPayload !== undefined && proc.stdin) {
+      void this.writeCliTraceFile(traceSession, 'stdin.txt', spawnPlan.stdinPayload);
+      const stdin = proc.stdin as Writable;
+      stdin.write(spawnPlan.stdinPayload, () => {
+        stdin.end();
       });
+    }
 
-      // Capture stderr
-      const stderrChunks: string[] = [];
-      const stderr = proc.stderr as Readable;
-      stderr.on('data', (chunk: Buffer) => {
-        void this.appendCliTraceFile(traceSession, 'stderr.log', chunk);
-        stderrChunks.push(chunk.toString('utf8'));
-      });
+    session.process = proc;
 
-      proc.on('error', (err) => {
-        logger.error('Agent process error:', err);
-        void this.writeCliTraceJson(traceSession, 'process-error.json', {
-          message: err.message,
-          name: err.name,
-        });
-        void this.flushCliTrace(traceSession);
-        const sessionError = this.getSessionErrorPayload(err, session);
-        this.broadcast('heteroAgentSessionError', {
-          error: sessionError,
-          sessionId: session.sessionId,
-        });
-        reject(new Error(typeof sessionError === 'string' ? sessionError : sessionError.message));
-      });
+    // Producer-side conversion (V3 contract): JSONL framing + adapter +
+    // toStreamEvent all run inside the shared pipeline, so renderer + future
+    // server `heteroIngest` see the same `AgentStreamEvent` wire shape with
+    // no per-consumer adapter. The pipeline auto-wires the Codex
+    // file-change line-stat tracker when `agentType === 'codex'`, so this
+    // controller stays agent-agnostic.
+    const pipeline = new AgentStreamPipeline({
+      agentType: session.agentType,
+      operationId: params.operationId,
+    });
+    let stdoutBroadcastQueue: Promise<void> = Promise.resolve();
 
-      proc.on('exit', (code, signal) => {
-        // Node may emit `'exit'` BEFORE stdio finishes draining (documented:
-        // child_process docs note "stdio streams might still be open" at exit
-        // time). Wait for stdout to fully end/close so the `stdout.on('end')`
-        // handler has scheduled `pipeline.flush()` onto `stdoutBroadcastQueue`,
-        // THEN wait for the queue itself to settle. Without this two-step
-        // gate, trailing flushed events (final synthesized tool_end /
-        // tool_result) would race against — and lose to — the
-        // `heteroAgentSessionComplete` broadcast, leaving renderer-side
-        // persistence to finalize on incomplete state.
-        const stdoutDrained = streamFinished(stdout, { writable: false }).catch(() => {
-          /* end / close / error are all "done"; we still want to settle. */
-        });
-
-        void stdoutDrained
-          .then(() => stdoutBroadcastQueue)
-          .finally(async () => {
-            // Tear down the AskUserQuestion bridge / temp `mcp.json` for this
-            // op. Pending MCP handlers get a `session_ended` cancellation so
-            // they return cleanly even if CC was killed mid-tool-call.
-            if (intervention) {
-              await intervention.cleanup().catch((err) => {
-                logger.warn('AskUserQuestion cleanup error:', err);
-              });
-            }
-
-            void this.writeCliTraceJson(traceSession, 'exit.json', {
-              code,
-              finishedAt: new Date().toISOString(),
-              signal,
+    const broadcastPipelineBatch = (produce: () => ReturnType<AgentStreamPipeline['push']>) => {
+      stdoutBroadcastQueue = stdoutBroadcastQueue
+        .then(async () => {
+          const events = await produce();
+          // Adapter-extracted CC/Codex session id powers `--resume` on the
+          // next prompt; surface it through the existing `getSessionInfo`
+          // IPC by mirroring the freshest value onto the session record.
+          if (pipeline.sessionId && pipeline.sessionId !== session.agentSessionId) {
+            session.agentSessionId = pipeline.sessionId;
+          }
+          for (const event of events) {
+            this.broadcast('heteroAgentEvent', {
+              event,
+              sessionId: session.sessionId,
             });
-            await this.flushCliTrace(traceSession);
+          }
+        })
+        .catch((error) => {
+          logger.error('Failed to broadcast agent stream batch:', error);
+        });
+    };
 
-            logger.info('Agent process exited:', { code, sessionId: session.sessionId, signal });
-            session.process = undefined;
+    // Stream stdout events through the producer pipeline.
+    const stdout = proc.stdout as Readable;
+    stdout.on('data', (chunk: Buffer) => {
+      void this.appendCliTraceFile(traceSession, 'stdout.jsonl', chunk);
+      broadcastPipelineBatch(() => pipeline.push(chunk));
+    });
+    stdout.on('end', () => {
+      broadcastPipelineBatch(() => pipeline.flush());
+    });
 
-            // If *we* killed it (cancel / stop / before-quit), treat the non-zero
-            // exit as a clean shutdown — surfacing it as an error would make a
-            // user-initiated cancel look like an agent failure, and an Electron
-            // shutdown affecting OTHER running CC sessions would pollute their
-            // topics with a misleading "Agent exited with code 143" message.
-            if (session.cancelledByUs) {
-              this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
-              resolve();
-              return;
-            }
+    // Capture stderr
+    const stderrChunks: string[] = [];
+    const stderr = proc.stderr as Readable;
+    stderr.on('data', (chunk: Buffer) => {
+      void this.appendCliTraceFile(traceSession, 'stderr.log', chunk);
+      stderrChunks.push(chunk.toString('utf8'));
+    });
 
-            if (code === 0) {
-              this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
-              resolve();
-            } else {
-              const stderrOutput = stderrChunks.join('').trim();
-              const errorMsg = this.getExitErrorMessage(code, session, stderrOutput);
-              const sessionError = this.getSessionErrorPayload(errorMsg, session);
-              this.broadcast('heteroAgentSessionError', {
-                error: sessionError,
-                sessionId: session.sessionId,
-              });
-              reject(
-                new Error(typeof sessionError === 'string' ? sessionError : sessionError.message),
-              );
-            }
-          });
+    proc.on('exit', (code, signal) => {
+      // Node may emit `'exit'` BEFORE stdio finishes draining (documented:
+      // child_process docs note "stdio streams might still be open" at exit
+      // time). Wait for stdout to fully end/close so the `stdout.on('end')`
+      // handler has scheduled `pipeline.flush()` onto `stdoutBroadcastQueue`,
+      // THEN wait for the queue itself to settle. Without this two-step
+      // gate, trailing flushed events (final synthesized tool_end /
+      // tool_result) would race against — and lose to — the
+      // `heteroAgentSessionComplete` broadcast, leaving renderer-side
+      // persistence to finalize on incomplete state.
+      const stdoutDrained = streamFinished(stdout, { writable: false }).catch(() => {
+        /* end / close / error are all "done"; we still want to settle. */
       });
+
+      void stdoutDrained
+        .then(() => stdoutBroadcastQueue)
+        .finally(async () => {
+          // Tear down the AskUserQuestion bridge / temp `mcp.json` for this
+          // op. Pending MCP handlers get a `session_ended` cancellation so
+          // they return cleanly even if CC was killed mid-tool-call.
+          if (intervention) {
+            await intervention.cleanup().catch((err) => {
+              logger.warn('AskUserQuestion cleanup error:', err);
+            });
+          }
+
+          void this.writeCliTraceJson(traceSession, 'exit.json', {
+            code,
+            finishedAt: new Date().toISOString(),
+            signal,
+          });
+          await this.flushCliTrace(traceSession);
+
+          logger.info('Agent process exited:', { code, sessionId: session.sessionId, signal });
+          session.process = undefined;
+
+          // If *we* killed it (cancel / stop / before-quit), treat the non-zero
+          // exit as a clean shutdown — surfacing it as an error would make a
+          // user-initiated cancel look like an agent failure, and an Electron
+          // shutdown affecting OTHER running CC sessions would pollute their
+          // topics with a misleading "Agent exited with code 143" message.
+          if (session.cancelledByUs) {
+            this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+            resolve();
+            return;
+          }
+
+          if (code === 0) {
+            this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+            resolve();
+          } else {
+            const stderrOutput = stderrChunks.join('').trim();
+            const errorMsg = this.getExitErrorMessage(code, session, stderrOutput);
+            const sessionError = this.getSessionErrorPayload(errorMsg, session);
+            this.broadcast('heteroAgentSessionError', {
+              error: sessionError,
+              sessionId: session.sessionId,
+            });
+            reject(
+              new Error(typeof sessionError === 'string' ? sessionError : sessionError.message),
+            );
+          }
+        });
     });
   }
 

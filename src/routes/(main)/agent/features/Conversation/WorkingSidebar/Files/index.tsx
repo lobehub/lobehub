@@ -37,6 +37,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     --trees-font-size-override: 12px;
     --trees-border-radius-override: 6px;
 
+    /* Drop the doubled outline pierre/trees draws via ::before on a
+     * focused+selected row — the filled background from
+     * --trees-selected-bg-override is already a clear selection signal. */
+    --trees-selected-focused-border-color-override: transparent;
+
     flex: 1;
     min-height: 0;
   `,
@@ -100,6 +105,7 @@ const Files = memo<FilesProps>(({ workingDirectory }) => {
   const { t } = useTranslation('chat');
   const { data, isLoading, isValidating, mutate } = useProjectFiles(workingDirectory);
   const { data: gitFiles } = useGitWorkingTreeFiles(workingDirectory, data?.source === 'git');
+  const projectRoot = data?.root ?? workingDirectory;
 
   const entries = useMemo(() => data?.entries ?? [], [data]);
   const nodes = useMemo(() => buildTreeNodes(entries), [entries]);
@@ -161,9 +167,9 @@ const Files = memo<FilesProps>(({ workingDirectory }) => {
         void localFileService.openLocalFileOrFolder(node.data.path, true);
         return;
       }
-      openLocalFile({ filePath: node.data.path, workingDirectory });
+      openLocalFile({ filePath: node.data.path, workingDirectory: projectRoot });
     },
-    [openLocalFile, workingDirectory],
+    [openLocalFile, projectRoot],
   );
 
   const handleNodeClick = useCallback(

@@ -19,7 +19,7 @@ import { useStyles } from './styles';
 import TabItem from './TabItem';
 
 const TAB_WIDTH = 180;
-const TAB_GAP = 2;
+const TAB_GAP = 0;
 
 const TabBar = () => {
   const styles = useStyles;

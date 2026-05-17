@@ -1,78 +1,35 @@
 import { AGENT_SIGNAL_SOURCE_TYPES } from '@lobechat/agent-signal/source';
+import type {
+  DeclareSelfFeedbackIntentInput,
+  DeclareSelfFeedbackIntentPayload,
+  DeclareSelfFeedbackIntentResult,
+  SelfFeedbackIntentAction,
+  SelfFeedbackIntentKind,
+  SelfFeedbackIntentStrength,
+} from '@lobechat/builtin-tool-self-iteration';
+import {
+  SELF_FEEDBACK_INTENT_ACTIONS,
+  SELF_FEEDBACK_INTENT_KINDS,
+} from '@lobechat/builtin-tool-self-iteration';
 
 import type { AgentSignalSourceEventInput } from '@/server/services/agentSignal/emitter';
 
-import type { EvidenceRef } from './selfIteration/types';
 import { buildSelfFeedbackIntentSourceId } from './selfIteration/types';
 
+export type {
+  DeclareSelfFeedbackIntentInput,
+  DeclareSelfFeedbackIntentPayload,
+  DeclareSelfFeedbackIntentResult,
+  SelfFeedbackIntentAction,
+  SelfFeedbackIntentKind,
+  SelfFeedbackIntentStrength,
+} from '@lobechat/builtin-tool-self-iteration';
+
 type MaybePromise<TValue> = TValue | Promise<TValue>;
-
-/** Actions that an agent may declare as self-feedback intent. */
-export type SelfFeedbackIntentAction = 'write' | 'create' | 'refine' | 'consolidate' | 'proposal';
-
-/** Self-feedback target categories accepted from agent-declared intent. */
-export type SelfFeedbackIntentKind = 'memory' | 'skill' | 'gap';
-
-/** Evidence strength assigned to one accepted or rejected declaration. */
-export type SelfFeedbackIntentStrength = 'strong' | 'weak';
 
 /** Source event input emitted by the self-feedback intent declaration service. */
 export type SelfFeedbackIntentSourceEventInput =
   AgentSignalSourceEventInput<'agent.self_feedback_intent.declared'>;
-
-/** Input payload declared by the running agent through the self-feedback intent tool. */
-export interface DeclareSelfFeedbackIntentPayload {
-  /** Self-feedback action the agent believes may be useful. */
-  action: SelfFeedbackIntentAction;
-  /** Agent confidence from 0 to 1. */
-  confidence: number;
-  /** Evidence references that justify the declaration. */
-  evidenceRefs?: EvidenceRef[];
-  /** Target category for the declaration. */
-  kind: SelfFeedbackIntentKind;
-  /** Existing memory id when the declaration targets a known memory. */
-  memoryId?: string;
-  /** Human-readable rationale from the agent. */
-  reason: string;
-  /** Existing skill id when the declaration targets a known skill. */
-  skillId?: string;
-  /** Short declaration summary for downstream review. */
-  summary: string;
-}
-
-/** Input used to declare one agent-facing self-feedback intent source event. */
-export interface DeclareSelfFeedbackIntentInput {
-  /** Stable agent id associated with the running agent. */
-  agentId: string;
-  /** Agent-declared self-feedback intent payload. */
-  input: DeclareSelfFeedbackIntentPayload;
-  /** Runtime operation id when the declaration belongs to a narrower operation scope. */
-  operationId?: string;
-  /** Caller-provided tool-call id. When omitted, the injected id generator is used. */
-  toolCallId?: string;
-  /** Current topic id for stable source ids and topic fallback scope. */
-  topicId: string;
-  /** Stable user id associated with the running agent. */
-  userId: string;
-}
-
-/** Result returned after one declaration attempt. */
-export interface DeclareSelfFeedbackIntentResult {
-  /** Whether the declaration was accepted and emitted to the enqueue boundary. */
-  accepted: boolean;
-  /** Optional rejection reason when no source was enqueued. */
-  reason?:
-    | 'enqueue_gate_rejected'
-    | 'intent_gate_rejected'
-    | 'invalid_action'
-    | 'invalid_confidence'
-    | 'invalid_kind'
-    | 'rate_limited';
-  /** Stable source id built for accepted declarations when available. */
-  sourceId?: string;
-  /** Evidence strength assigned from confidence and evidence presence. */
-  strength: SelfFeedbackIntentStrength;
-}
 
 /** Dependencies used by the pure self-feedback intent declaration service. */
 export interface SelfFeedbackIntentServiceDependencies {
@@ -119,14 +76,8 @@ export interface SelfFeedbackIntentService {
 const DECLARATION_LIMIT_PER_SCOPE = 3;
 const STRONG_CONFIDENCE_THRESHOLD = 0.75;
 
-const validActions = new Set<SelfFeedbackIntentAction>([
-  'write',
-  'create',
-  'refine',
-  'consolidate',
-  'proposal',
-]);
-const validKinds = new Set<SelfFeedbackIntentKind>(['memory', 'skill', 'gap']);
+const validActions = new Set<SelfFeedbackIntentAction>(SELF_FEEDBACK_INTENT_ACTIONS);
+const validKinds = new Set<SelfFeedbackIntentKind>(SELF_FEEDBACK_INTENT_KINDS);
 
 const getStrength = (input: DeclareSelfFeedbackIntentPayload): SelfFeedbackIntentStrength => {
   if (!input.evidenceRefs?.length || input.confidence < STRONG_CONFIDENCE_THRESHOLD) {

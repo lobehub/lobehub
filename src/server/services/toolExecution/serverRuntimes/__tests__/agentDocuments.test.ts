@@ -153,7 +153,7 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
     const runtime = agentDocumentsRuntime.factory(buildContext('task-1'));
 
     await runtime.createDocument(
-      { content: 'body', target: 'currentTopic', title: 'Topic Note' },
+      { content: 'body', scope: 'currentTopic', title: 'Topic Note' },
       { agentId: 'agent-1', topicId: 'topic-1' },
     );
 
@@ -228,7 +228,7 @@ describe('AgentDocumentsExecutionRuntime.createDocument', () => {
     expect(stub.createDocument).not.toHaveBeenCalled();
   });
 
-  it('creates a document in the current topic when target is currentTopic', async () => {
+  it('creates a document in the current topic when scope is currentTopic', async () => {
     const stub = makeStub();
     stub.createTopicDocument.mockResolvedValue({
       documentId: 'documents-row-id',
@@ -239,7 +239,7 @@ describe('AgentDocumentsExecutionRuntime.createDocument', () => {
 
     const runtime = new AgentDocumentsExecutionRuntime(stub);
     const result = await runtime.createDocument(
-      { content: 'body', target: 'currentTopic', title: 'Topic Note' },
+      { content: 'body', scope: 'currentTopic', title: 'Topic Note' },
       { agentId: 'agent-1', topicId: 'topic-1' },
     );
 
@@ -251,7 +251,7 @@ describe('AgentDocumentsExecutionRuntime.createDocument', () => {
     expect(stub.createTopicDocument).toHaveBeenCalledWith({
       agentId: 'agent-1',
       content: 'body',
-      target: 'currentTopic',
+      scope: 'currentTopic',
       title: 'Topic Note',
       topicId: 'topic-1',
     });
@@ -263,7 +263,7 @@ describe('AgentDocumentsExecutionRuntime.createDocument', () => {
     const runtime = new AgentDocumentsExecutionRuntime(stub);
 
     const result = await runtime.createDocument(
-      { content: 'body', target: 'currentTopic', title: 'Topic Note' },
+      { content: 'body', scope: 'currentTopic', title: 'Topic Note' },
       { agentId: 'agent-1' },
     );
 
@@ -363,7 +363,7 @@ describe('AgentDocumentsExecutionRuntime.listDocuments', () => {
 
     const runtime = new AgentDocumentsExecutionRuntime(stub);
     const result = await runtime.listDocuments(
-      { target: 'currentTopic' },
+      { scope: 'currentTopic' },
       { agentId: 'agent-1', topicId: 'topic-1' },
     );
 
@@ -382,7 +382,8 @@ describe('AgentDocumentsExecutionRuntime.listDocuments', () => {
     });
     expect(stub.listTopicDocuments).toHaveBeenCalledWith({
       agentId: 'agent-1',
-      target: 'currentTopic',
+      scope: 'currentTopic',
+      sourceType: 'all',
       topicId: 'topic-1',
     });
     expect(stub.listDocuments).not.toHaveBeenCalled();

@@ -364,6 +364,196 @@ export function normalizeAllowFromEntries(raw: unknown): Array<{ id: string; nam
   return [];
 }
 
+// ---------- Watch keywords (LOBE-8891) ----------
+
+/**
+ * Entry shape persisted under `settings.watchKeywords`. `keyword` is what the
+ * runtime matches against the inbound message text; `instruction` is an
+ * operator-authored prompt that is prepended to the user's message and sent
+ * to the agent when the keyword wakes the bot (so a bare trigger word like
+ * "bug" can carry a directive like "Scan the recent thread and reply if you
+ * spot an actionable bug report"). When `instruction` is empty/absent the
+ * keyword just wakes the bot with the user's raw text — same as a mention.
+ */
+export interface WatchKeywordEntry {
+  instruction?: string;
+  keyword: string;
+}
+
+/**
+ * "Watch Keywords" schema field — when populated, the bot also reacts to
+ * non-@mention messages in subscribed channels whose text contains any of
+ * these keywords. Empty (default) preserves the today behaviour of only
+ * responding to mentions / DMs / subscribed-thread mentions.
+ *
+ * Stored as `Array<{ keyword, instruction? }>`. The optional `instruction`
+ * is appended as a user-side prompt prefix when the keyword wakes the bot —
+ * letting operators wire each trigger to an explicit directive ("scan the
+ * thread for a bug report", "summarise the last 20 messages", …) rather
+ * than only routing the raw message.
+ */
+export const watchKeywordsField: FieldSchema = {
+  key: 'watchKeywords',
+  default: [],
+  description: 'channel.watchKeywordsHint',
+  label: 'channel.watchKeywords',
+  type: 'array',
+  items: {
+    key: 'item',
+    label: '',
+    type: 'object',
+    properties: [
+      {
+        key: 'keyword',
+        label: 'channel.watchKeywordLabel',
+        placeholder: 'channel.watchKeywordPlaceholder',
+        required: true,
+        type: 'string',
+      },
+      {
+        key: 'instruction',
+        label: 'channel.watchKeywordInstructionLabel',
+        placeholder: 'channel.watchKeywordInstructionPlaceholder',
+        type: 'string',
+      },
+    ],
+  },
+};
+
+/**
+ * Parse `settings.watchKeywords` into the canonical entry list. Accepts
+ * three shapes for forward-compat with any future schema migrations:
+ *
+ * 1. `Array<{ keyword, instruction? }>` — current form-produced shape
+ * 2. `string[]` — flat array fallback (no instructions attached)
+ * 3. `string` — comma / newline / whitespace-separated text (legacy / paste)
+ *
+ * Keywords are lowercased and deduplicated (matching is case-insensitive,
+ * so we normalise once at parse time rather than per-message). The first
+ * non-empty `instruction` wins on duplicates so the operator's authoring
+ * order is preserved.
+ */
+export function extractWatchKeywordEntries(
+  settings: Record<string, unknown> | null | undefined,
+): WatchKeywordEntry[] {
+  const raw = settings?.watchKeywords;
+  const byKeyword = new Map<string, WatchKeywordEntry>();
+  const push = (keyword: unknown, instruction?: unknown) => {
+    if (typeof keyword !== 'string') return;
+    const normalised = keyword.trim().toLowerCase();
+    if (!normalised) return;
+    const trimmedInstruction =
+      typeof instruction === 'string' && instruction.trim() ? instruction.trim() : undefined;
+    const existing = byKeyword.get(normalised);
+    if (!existing) {
+      byKeyword.set(normalised, { keyword: normalised, instruction: trimmedInstruction });
+      return;
+    }
+    // Keep the first non-empty instruction so the operator's authoring order
+    // is honoured when the form contains duplicate keywords.
+    if (!existing.instruction && trimmedInstruction) {
+      existing.instruction = trimmedInstruction;
+    }
+  };
+  if (typeof raw === 'string') {
+    for (const piece of raw.split(/[\s,]+/)) push(piece);
+  } else if (Array.isArray(raw)) {
+    for (const entry of raw) {
+      if (typeof entry === 'string') {
+        push(entry);
+        continue;
+      }
+      if (entry && typeof entry === 'object' && 'keyword' in entry) {
+        const obj = entry as { instruction?: unknown; keyword?: unknown };
+        push(obj.keyword, obj.instruction);
+      }
+    }
+  }
+  return Array.from(byKeyword.values());
+}
+
+/**
+ * Convenience wrapper that returns only the lowercased keyword strings —
+ * sufficient for the mention-gate predicate in BotMessageRouter, which
+ * doesn't need the instructions.
+ */
+export function extractWatchKeywords(
+  settings: Record<string, unknown> | null | undefined,
+): string[] {
+  return extractWatchKeywordEntries(settings).map((entry) => entry.keyword);
+}
+
+/**
+ * Test whether the inbound message text contains any of the configured
+ * watch keywords. Case-insensitive, word-boundary aware so `bug` does NOT
+ * match `debug` / `bugfix` (operators expect "say the word `bug` and the
+ * bot replies", not "any substring") — but punctuation-flanked occurrences
+ * still match ("bug!", "(bug)", "bug,").
+ *
+ * Word-boundary only kicks in for ASCII word chars (`[A-Za-z0-9_]`) on the
+ * adjacent side. This keeps the "don't match `bug` inside `debug`" rule for
+ * Latin-script keywords, while letting CJK keywords behave like substring
+ * matches — Chinese / Japanese don't have a whitespace word boundary, so
+ * `\b`-style logic would silently break the feature for the audience this
+ * bot is built for (Feishu / Lark / QQ / WeChat).
+ *
+ * Empty `keywords` short-circuits to `false` so callers can compose with
+ * existing mention gates without re-checking emptiness everywhere.
+ */
+export function messageMatchesWatchKeyword(
+  text: string | undefined | null,
+  keywords: ReadonlyArray<string>,
+): boolean {
+  return findFirstMatchingKeyword(text, keywords) !== null;
+}
+
+/**
+ * Return every entry whose keyword appears in `text`, in the entries'
+ * authoring order. Used by the router to gather operator-authored
+ * instructions for matched keywords so they can be injected as a prompt
+ * prefix when the keyword (and not a mention) is what wakes the bot.
+ */
+export function findMatchingWatchKeywordEntries(
+  text: string | undefined | null,
+  entries: ReadonlyArray<WatchKeywordEntry>,
+): WatchKeywordEntry[] {
+  if (!text || entries.length === 0) return [];
+  const lowered = text.toLowerCase();
+  return entries.filter((entry) => keywordOccursIn(lowered, entry.keyword));
+}
+
+// Underscore is included in the word class so `_bug_` doesn't fire while
+// `bug.` / `(bug)` still do. ASCII-only on purpose — see the CJK note on
+// `messageMatchesWatchKeyword` above.
+const KEYWORD_WORD_CHAR = /\w/;
+
+const keywordOccursIn = (loweredText: string, keyword: string): boolean => {
+  if (!keyword) return false;
+  let idx = loweredText.indexOf(keyword);
+  while (idx !== -1) {
+    const before = idx === 0 ? '' : loweredText[idx - 1];
+    const after =
+      idx + keyword.length >= loweredText.length ? '' : loweredText[idx + keyword.length];
+    const leftBoundary = !before || !KEYWORD_WORD_CHAR.test(before);
+    const rightBoundary = !after || !KEYWORD_WORD_CHAR.test(after);
+    if (leftBoundary && rightBoundary) return true;
+    idx = loweredText.indexOf(keyword, idx + 1);
+  }
+  return false;
+};
+
+const findFirstMatchingKeyword = (
+  text: string | undefined | null,
+  keywords: ReadonlyArray<string>,
+): string | null => {
+  if (!text || keywords.length === 0) return null;
+  const lowered = text.toLowerCase();
+  for (const keyword of keywords) {
+    if (keywordOccursIn(lowered, keyword)) return keyword;
+  }
+  return null;
+};
+
 /**
  * Pull the platform IDs out of an allowlist value, regardless of which
  * historical shape it has on disk. Three shapes are all valid input:

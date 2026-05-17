@@ -6,7 +6,7 @@ import { type ChatMessageError, type ErrorType, type IToolErrorType } from '@lob
 import { ChatErrorType } from '@lobechat/types';
 import { type AlertProps } from '@lobehub/ui';
 import { Block, Highlighter, Skeleton } from '@lobehub/ui';
-import { memo, useMemo } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
@@ -14,6 +14,7 @@ import useBusinessErrorAlertConfig from '@/business/client/hooks/useBusinessErro
 import useBusinessErrorContent from '@/business/client/hooks/useBusinessErrorContent';
 import useRenderBusinessChatErrorMessageExtra from '@/business/client/hooks/useRenderBusinessChatErrorMessageExtra';
 import ErrorContent from '@/features/Conversation/ChatItem/components/ErrorContent';
+import { useConversationStore } from '@/features/Conversation/store';
 import HeterogeneousAgentStatusGuide from '@/features/Electron/HeterogeneousAgent/StatusGuide';
 import { useProviderName } from '@/hooks/useProviderName';
 import dynamic from '@/libs/next/dynamic';
@@ -182,12 +183,24 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(({ error: alertError, data, onRe
   const sessionErrorBody = error?.body;
   const rawErrorMessage = getRawErrorMessage(error) || alertError?.message;
 
+  const regenerateAssistantMessage = useConversationStore((s) => s.regenerateAssistantMessage);
+  const deleteMessage = useConversationStore((s) => s.deleteMessage);
+  const handleRetryAgentMessage = useCallback(() => {
+    if (onRegenerate) {
+      onRegenerate();
+      return;
+    }
+    regenerateAssistantMessage(data.id);
+    if (data.error) deleteMessage(data.id);
+  }, [data.error, data.id, deleteMessage, onRegenerate, regenerateAssistantMessage]);
+
   if (isHeterogeneousAgentStatusGuideError(sessionErrorBody)) {
     return (
       <HeterogeneousAgentStatusGuide
         agentType={sessionErrorBody.agentType}
         error={sessionErrorBody}
         onOpenSystemTools={() => navigate('/settings/system-tools')}
+        onRetry={handleRetryAgentMessage}
       />
     );
   }

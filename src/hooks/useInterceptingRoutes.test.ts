@@ -31,7 +31,7 @@ describe('useOpenChatSettings', () => {
   it('navigates to mobile chat settings with session info', () => {
     useAgentStore.setState({ activeAgentId: '123' });
     vi.mocked(useIsMobile).mockReturnValue(true);
-    const { result } = renderHook(() => useOpenChatSettings(ChatSettingsTabs.Meta));
+    const { result } = renderHook(() => useOpenChatSettings(ChatSettingsTabs.Opening));
 
     act(() => {
       result.current();
@@ -46,7 +46,7 @@ describe('useOpenChatSettings', () => {
     useAgentStore.setState({ activeAgentId: '456' });
     vi.mocked(useIsMobile).mockReturnValue(false);
 
-    const { result } = renderHook(() => useOpenChatSettings(ChatSettingsTabs.Meta));
+    const { result } = renderHook(() => useOpenChatSettings(ChatSettingsTabs.Opening));
 
     act(() => {
       result.current();

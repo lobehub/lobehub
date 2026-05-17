@@ -17,9 +17,9 @@ import { BaseExecutor } from '@lobechat/types';
 
 import { localFileService } from '@/services/electron/localFileService';
 
-import { LocalSystemExecutionRuntime } from '../ExecutionRuntime';
-import { LocalSystemIdentifier } from '../types';
-import { resolveArgsWithScope } from '../utils/path';
+import { LocalSystemExecutionRuntime } from '../../ExecutionRuntime';
+import { LocalSystemIdentifier } from '../../types';
+import { resolveArgsWithScope } from '../../utils/path';
 
 const LocalSystemApiEnum = {
   editFile: 'editFile' as const,
@@ -87,9 +87,10 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
     try {
       const result = await this.runtime.listFiles({
         directoryPath: params.path,
+        limit: params.limit,
         sortBy: params.sortBy,
         sortOrder: params.sortOrder,
-      });
+      } as any);
       return this.toResult(result);
     } catch (error) {
       return this.errorResult(error);
@@ -172,7 +173,14 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
 
   runCommand = async (params: RunCommandParams): Promise<BuiltinToolResult> => {
     try {
-      const result = await this.runtime.runCommand(params);
+      // The manifest exposes `run_in_background`, but ComputerRuntime's RunCommandState
+      // reads `args.background` for the `isBackground` field — without this normalize
+      // the UI/state would always say foreground even for background commands.
+      // The IPC handler reads `run_in_background` itself, so we keep that field too.
+      const result = await this.runtime.runCommand({
+        ...params,
+        background: params.run_in_background,
+      } as any);
       return this.toResult(result);
     } catch (error) {
       return this.errorResult(error);
@@ -183,7 +191,8 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
     try {
       const result = await this.runtime.getCommandOutput({
         commandId: params.shell_id,
-      });
+        filter: params.filter,
+      } as any);
       return this.toResult(result);
     } catch (error) {
       return this.errorResult(error);
@@ -206,10 +215,12 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
   grepContent = async (params: GrepContentParams): Promise<BuiltinToolResult> => {
     try {
       const resolvedParams = resolveArgsWithScope(params, 'path');
-      const result = await this.runtime.grepContent({
-        directory: resolvedParams.path || '',
-        pattern: resolvedParams.pattern,
-      });
+      // Forward the full IPC params (glob / output_mode / -i / -A / -B / -C / -n /
+      // multiline / head_limit / type / tool) instead of stripping to {directory, pattern}.
+      // ComputerRuntime.callService passes args through unchanged, so the runtime type
+      // narrowing was the only blocker — the underlying rg/grep needs these flags to
+      // honor the agent's filter and stop scanning dist/* and tsbuildinfo.
+      const result = await this.runtime.grepContent(resolvedParams as any);
       return this.toResult(result);
     } catch (error) {
       return this.errorResult(error);

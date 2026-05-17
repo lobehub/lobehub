@@ -160,6 +160,13 @@ export const EmojiReactionSchema = z.object({
   users: z.array(z.string()),
 });
 
+export const MessageSignalSchema = z.object({
+  sequence: z.number().optional(),
+  sourceToolCallId: z.string(),
+  sourceToolName: z.string(),
+  type: z.enum(['tool-stdout', 'tool-callback', 'task-completion']),
+});
+
 export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSchema).extend({
   collapsed: z.boolean().optional(),
   inspectExpanded: z.boolean().optional(),
@@ -173,6 +180,8 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   performance: ModelPerformanceSchema.optional(),
   reactions: z.array(EmojiReactionSchema).optional(),
   scope: z.string().optional(),
+  // External-signal lineage for Monitor-style callback turns (LOBE-8998).
+  signal: MessageSignalSchema.optional(),
   subAgentId: z.string().optional(),
   toolExecutionTimeMs: z.number().optional(),
   trigger: z.nativeEnum(RequestTrigger).optional(),
@@ -311,6 +320,24 @@ export interface MessageMetadata {
    */
   scope?: string;
   /**
+   * External-signal lineage for messages produced as reactive replies
+   * to an out-of-band trigger (Monitor stdout push, webhook callback,
+   * scheduled tick, …) rather than a fresh user turn. Phase-1 storage —
+   * Phase 2 (LOBE-8999) promotes this to a dedicated `messages.signal`
+   * jsonb column.
+   *
+   * Conversation-flow groups signal-tagged TOOLLESS assistants into a
+   * SignalCallbacksNode under the source tool. Tool-using assistants
+   * may still carry this tag (the adapter clears the pending signal AT
+   * tool_use time, but the stream_start tag fired one event earlier);
+   * collectors must ignore the tag when `tools.length > 0`.
+   *
+   * Shape mirrors `ExternalSignalContext` in
+   * `packages/heterogeneous-agents/src/types.ts` — duplicated here so
+   * `@lobechat/types` stays free of an adapter-package dependency.
+   */
+  signal?: MessageSignal;
+  /**
    * Sub Agent ID - behavior depends on scope
    * - scope: 'sub_agent': conversation-flow will transform message.agentId to this value for display
    * - scope: 'group' | 'group_agent': indicates the agent that generated this message in group mode
@@ -339,4 +366,31 @@ export interface MessageMetadata {
   /** @deprecated use `metadata.performance` instead */
   ttft?: number;
   usage?: ModelUsage;
+}
+
+/**
+ * Persisted form of an external-signal trigger context — stamped on
+ * messages produced as reactive replies to out-of-band events.
+ *
+ * Phase 1 lives under `MessageMetadata.signal`; Phase 2 (LOBE-8999)
+ * promotes to a dedicated `messages.signal` column with the same
+ * shape (plus `rootSourceId` / `scopeKey` for agent-signal alignment).
+ */
+export interface MessageSignal {
+  /** Nth push from the same source (1 = first repeat result). */
+  sequence?: number;
+  /** Source `tool_use.id` (CC) / function call id whose repeat fired this signal. */
+  sourceToolCallId: string;
+  /** Tool name for UI labelling, e.g. `Monitor`. */
+  sourceToolName: string;
+  /**
+   * Discriminator for the trigger source.
+   *
+   * - `tool-stdout`: reactive turn driven by a long-running tool's stdout push.
+   * - `tool-callback`: (future) one-shot async callback variant.
+   * - `task-completion`: post-task summary turn after the long-running tool
+   *   ended; keeps the summary inside the same AssistantGroup as the
+   *   preceding callbacks.
+   */
+  type: 'tool-stdout' | 'tool-callback' | 'task-completion';
 }

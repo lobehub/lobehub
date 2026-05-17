@@ -347,18 +347,23 @@ export const agentDocumentRouter = router({
     .input(
       z.object({
         agentId: z.string(),
-        target: z.enum(['agent', 'currentTopic']).optional().default('agent'),
+        scope: z.enum(['agent', 'currentTopic']).optional().default('agent'),
+        sourceType: z.enum(['all', 'file', 'web']).optional().default('all'),
         topicId: z.string().optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
-      if (input.target === 'currentTopic') {
+      if (input.scope === 'currentTopic') {
         if (!input.topicId) throw new Error('topicId is required to list current topic documents');
 
-        return ctx.agentDocumentService.listDocumentsForTopic(input.agentId, input.topicId);
+        return ctx.agentDocumentService.listDocumentsForTopic(
+          input.agentId,
+          input.topicId,
+          input.sourceType,
+        );
       }
 
-      return ctx.agentDocumentService.listDocuments(input.agentId);
+      return ctx.agentDocumentService.listDocuments(input.agentId, input.sourceType);
     }),
 
   /**

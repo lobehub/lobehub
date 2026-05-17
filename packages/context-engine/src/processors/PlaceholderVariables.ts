@@ -238,6 +238,39 @@ export const parsePlaceholderVariablesMessages = (
   });
 
 /**
+ * Extract placeholder variable names from a message that are NOT in the
+ * generator set (i.e. likely user typos or missing config).
+ *
+ * Used for diagnostic reporting — not for replacement logic.
+ */
+const extractUnresolvedPlaceholderNames = (message: any, generatorKeys: string[]): string[] => {
+  const generatorSet = new Set(generatorKeys);
+  const texts: string[] = [];
+
+  if (typeof message?.content === 'string') {
+    texts.push(message.content);
+  } else if (Array.isArray(message?.content)) {
+    for (const item of message.content) {
+      if (item?.type === 'text' && typeof item.text === 'string') {
+        texts.push(item.text);
+      }
+    }
+  }
+
+  const unresolved = new Set<string>();
+  for (const text of texts) {
+    const tokens = extractPlaceholderTokens(text);
+    for (const token of tokens) {
+      if (!generatorSet.has(token.key)) {
+        unresolved.add(token.key);
+      }
+    }
+  }
+
+  return [...unresolved];
+};
+
+/**
  * PlaceholderVariables Processor
  * Responsible for handling placeholder variable replacement in messages
  */
@@ -256,39 +289,95 @@ export class PlaceholderVariablesProcessor extends BaseProcessor {
 
     let processedCount = 0;
     const depth = this.config.depth ?? 2;
+    const generators = this.config.variableGenerators;
 
-    log(
-      `Starting placeholder variables processing with ${Object.keys(this.config.variableGenerators).length} generators`,
-    );
-    log('Generator keys: %o', Object.keys(this.config.variableGenerators));
+    // Defensive: guard against a malformed config that reached runtime despite
+    // the TypeScript contract.  A missing generator map is a harness bug, not a
+    // user error — throw early with an actionable message.
+    if (!generators || typeof generators !== 'object') {
+      throw new Error(
+        'PlaceholderVariablesProcessor: variableGenerators config is missing or invalid. ' +
+          `Received: ${JSON.stringify(generators)}`,
+      );
+    }
+
+    const generatorKeys = Object.keys(generators);
+    log(`Starting placeholder variables processing with ${generatorKeys.length} generators`);
+    log('Generator keys: %o', generatorKeys);
+
+    // Collect per-message failures so the caller can see which message(s) failed
+    // and with what placeholder(s), even when the processor recovers and continues.
+    const failures: Array<{
+      error: string;
+      messageId?: string;
+      messageIndex: number;
+      messageRole?: string;
+      contentPreview: string;
+      unresolvedPlaceholders?: string[];
+    }> = [];
 
     // Process placeholder variables for each message
     for (let i = 0; i < clonedContext.messages.length; i++) {
       const message = clonedContext.messages[i];
+
+      const contentPreview =
+        typeof message.content === 'string'
+          ? message.content.slice(0, 200)
+          : JSON.stringify(message.content).slice(0, 200);
 
       log(
         'Processing message %d: role=%s, contentType=%s, contentPreview=%s',
         i,
         message.role,
         typeof message.content,
-        typeof message.content === 'string'
-          ? message.content.slice(0, 200)
-          : JSON.stringify(message.content).slice(0, 200),
+        contentPreview,
       );
 
       try {
-        const originalMessage = JSON.stringify(message);
-        const processedMessage = this.processMessagePlaceholders(message, depth);
+        const { processed, unresolvedPlaceholders } =
+          this.processMessagePlaceholdersWithDiagnostics(message, depth);
 
-        if (JSON.stringify(processedMessage) !== originalMessage) {
-          clonedContext.messages[i] = processedMessage;
+        if (JSON.stringify(processed) !== JSON.stringify(message)) {
+          clonedContext.messages[i] = processed;
           processedCount++;
           log(`Processed placeholders in message ${message.id}, role: ${message.role}`);
         } else {
           log(`No placeholders found/replaced in message ${message.id}, role: ${message.role}`);
         }
+
+        // Even when processing "succeeded", track unresolvable placeholders
+        // so the dashboard can alert on probable user typos.
+        if (unresolvedPlaceholders && unresolvedPlaceholders.length > 0) {
+          log(
+            'Unresolved placeholders in message %d (role=%s): %o',
+            i,
+            message.role,
+            unresolvedPlaceholders,
+          );
+        }
       } catch (error) {
-        log.extend('error')(`Error processing placeholders in message ${message.id}: ${error}`);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+
+        // Extract unresolved placeholder names from the message content for diagnostics
+        const unresolvedPlaceholders = extractUnresolvedPlaceholderNames(message, generatorKeys);
+
+        failures.push({
+          contentPreview,
+          error: errorMessage,
+          messageId: message.id,
+          messageIndex: i,
+          messageRole: message.role,
+          unresolvedPlaceholders,
+        });
+
+        log.extend('error')(
+          `Error processing placeholders in message %d (id=%s, role=%s, unresolved=%o): %s`,
+          i,
+          message.id,
+          message.role,
+          unresolvedPlaceholders,
+          errorMessage,
+        );
         // Continue processing other messages
       }
     }
@@ -296,42 +385,73 @@ export class PlaceholderVariablesProcessor extends BaseProcessor {
     // Update metadata
     clonedContext.metadata.placeholderVariablesProcessed = processedCount;
 
+    // Attach failure diagnostics to metadata so the dashboard can surface them
+    // without requiring debug-level logging.
+    if (failures.length > 0) {
+      (clonedContext.metadata as any).placeholderVariablesFailures = failures;
+    }
+
     log(`Placeholder variables processing completed, processed ${processedCount} messages`);
 
     return this.markAsExecuted(clonedContext);
   }
 
   /**
-   * Process placeholder variables for a single message
+   * Process placeholder variables for a single message, returning both the
+   * processed message and the list of placeholder names that could not be resolved.
+   *
+   * Unresolved placeholders are placeholders whose key exists in the message
+   * but has no matching generator.  They are likely user typos (e.g.
+   * `{{nickname}}` misspelled as `{{nickName}}`) or a missing generator config.
    */
-  private processMessagePlaceholders(message: any, depth: number): any {
-    if (!message?.content) return message;
+  private processMessagePlaceholdersWithDiagnostics(
+    message: any,
+    depth: number,
+  ): { processed: any; unresolvedPlaceholders: string[] } {
+    if (!message?.content) return { processed: message, unresolvedPlaceholders: [] };
 
     const { content } = message;
+    const generatorKeys = Object.keys(this.config.variableGenerators);
+    const generatorSet = new Set(generatorKeys);
 
-    // Handle string type directly
+    // Helper to collect unresolved placeholder names from a text
+    const collectUnresolvedFromText = (text: string): string[] => {
+      const tokens = extractPlaceholderTokens(text);
+      return tokens.filter((t) => !generatorSet.has(t.key)).map((t) => t.key);
+    };
+
     if (typeof content === 'string') {
+      const unresolved = collectUnresolvedFromText(content);
       return {
-        ...message,
-        content: parsePlaceholderVariables(content, this.config.variableGenerators, depth),
+        processed: {
+          ...message,
+          content: parsePlaceholderVariables(content, this.config.variableGenerators, depth),
+        },
+        unresolvedPlaceholders: [...new Set(unresolved)],
       };
     }
 
-    // Handle array type by processing text elements
     if (Array.isArray(content)) {
+      const allUnresolved: string[] = [];
       return {
-        ...message,
-        content: content.map((item) =>
-          item?.type === 'text'
-            ? {
+        processed: {
+          ...message,
+          content: content.map((item) => {
+            if (item?.type === 'text' && typeof item.text === 'string') {
+              const unresolved = collectUnresolvedFromText(item.text);
+              allUnresolved.push(...unresolved);
+              return {
                 ...item,
                 text: parsePlaceholderVariables(item.text, this.config.variableGenerators, depth),
-              }
-            : item,
-        ),
+              };
+            }
+            return item;
+          }),
+        },
+        unresolvedPlaceholders: [...new Set(allUnresolved)],
       };
     }
 
-    return message;
+    return { processed: message, unresolvedPlaceholders: [] };
   }
 }

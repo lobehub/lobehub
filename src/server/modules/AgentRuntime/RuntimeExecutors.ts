@@ -65,6 +65,7 @@ import {
   isPersistFatal,
   markPersistFatal,
 } from './messagePersistErrors';
+import { resolveToolTimeoutMs } from './resolveToolTimeout';
 import { type IStreamEventManager } from './types';
 
 const log = debug('lobe-server:agent-runtime:streaming-executors');
@@ -484,8 +485,10 @@ export const createRuntimeExecutors = (
             ]);
 
             onboardingContext = {
+              discoveryUserMessageCount: onboardingState.discoveryUserMessageCount,
               personaContent: persona?.persona ?? null,
               phaseGuidance: formatWebOnboardingStateMessage(onboardingState),
+              remainingDiscoveryExchanges: onboardingState.remainingDiscoveryExchanges,
               soulContent: soulDoc?.content ?? null,
               userInfo,
             };
@@ -658,10 +661,13 @@ export const createRuntimeExecutors = (
           },
           userMemory: state.metadata?.userMemory,
 
-          // Skills configuration for <available_skills> injection
+          // Skills configuration for <available_skills> injection.
+          // In chat mode the MessagesEngine force-disables this injector via
+          // its `enableAgentMode` param — no extra gate needed here.
           ...(resolvedSkills?.enabledSkills?.length && {
             skillsConfig: { enabledSkills: resolvedSkills.enabledSkills },
           }),
+          enableAgentMode: agentConfig.chatConfig?.enableAgentMode,
 
           // Topic reference summaries
           ...(topicReferences && { topicReferences }),
@@ -1628,9 +1634,15 @@ export const createRuntimeExecutors = (
         };
       } else if (canDispatchToClient) {
         log(`[${operationLogId}] Dispatching tool ${toolName} to client via Agent Gateway`);
+        const timeoutMs = resolveToolTimeoutMs({
+          apiName: chatToolPayload.apiName,
+          args: parsedArgs,
+          manifest: effectiveManifestMap[chatToolPayload.identifier],
+        });
         const dispatchResult = await dispatchClientTool(chatToolPayload, {
           operationId,
           streamManager,
+          timeoutMs,
         });
         execution = { attempts: 1, result: dispatchResult };
       } else {
@@ -2083,9 +2095,15 @@ export const createRuntimeExecutors = (
             };
           } else if (canDispatchToClient) {
             log(`[${operationLogId}] Dispatching tool ${toolName} to client via Agent Gateway`);
+            const timeoutMs = resolveToolTimeoutMs({
+              apiName: chatToolPayload.apiName,
+              args: batchParsedArgs,
+              manifest: batchManifestMap[chatToolPayload.identifier],
+            });
             const dispatchResult = await dispatchClientTool(chatToolPayload, {
               operationId,
               streamManager,
+              timeoutMs,
             });
             execution = { attempts: 1, result: dispatchResult };
           } else {

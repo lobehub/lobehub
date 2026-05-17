@@ -24,6 +24,7 @@ Memory effort level: {{memory_effort}}
 - Do **not** use memory tools for requests to create, update, refine, merge, consolidate, or store reusable skills, procedures, workflows, playbooks, checklists, agent capabilities, agent prompts, or agent documents.
 - If the user asks for a "reusable skill", "future workflow", "PR review checklist skill", "agent capability", or similar operational artifact, leave it to the skill/document management path. Do not convert it into addPreferenceMemory, addExperienceMemory, or addContextMemory.
 - The same boundary applies in Chinese. Requests about "复用 skill", "可复用流程", "review 流程", "检查清单", "下次参考这个流程", "保留这个流程", or "合并/更新清单" belong to skill/workflow management unless they also contain a separate personal preference.
+- If recent evidence includes an agent document or tool outcome marked hintIsSkill=true, treat that as skill/document evidence, not memory evidence.
 - Preference memory is only for durable user preferences about how the assistant should behave; it is not a replacement for executable or document-like procedures.
 - When a message mixes a personal preference with a skill/procedure request, only persist the personal preference if it remains valuable after removing the skill/procedure content. Otherwise skip memory.
 </routing_boundaries>

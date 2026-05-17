@@ -2,7 +2,7 @@ import type { ChatModelCard } from '@lobechat/types';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import debug from 'debug';
-import type { AiModelType } from 'model-bank';
+import type { AiFullModelCard, AiModelType } from 'model-bank';
 import { LOBE_DEFAULT_MODEL_LIST } from 'model-bank';
 import type { ClientOptions } from 'openai';
 import OpenAI from 'openai';
@@ -44,6 +44,11 @@ import { isExceededContextWindowError } from '../../utils/isExceededContextWindo
 import { isInsufficientQuotaError } from '../../utils/isInsufficientQuotaError';
 import { isQuotaLimitError } from '../../utils/isQuotaLimitError';
 import { postProcessModelList } from '../../utils/postProcessModelList';
+import {
+  assertContextWithinWindow,
+  type AssertContextWithinWindowOptions,
+  ContextExceededPreFlightError,
+} from '../../utils/resolveSafeMaxTokens';
 import { StreamingResponse } from '../../utils/response';
 import type { LobeRuntimeAI } from '../BaseAI';
 import { convertOpenAIMessages, convertOpenAIResponseInputs } from '../contextBuilders/openai';
@@ -103,6 +108,23 @@ export interface OpenAICompatibleFactoryOptions<T extends Record<string, any> = 
   apiKey?: string;
   baseURL?: string;
   chatCompletion?: {
+    /**
+     * When set, the factory runs a pre-flight token estimate against the
+     * provided model list before dispatching to upstream. If the estimated
+     * prompt tokens strictly exceed the model's context window, the
+     * request is aborted with a structured `ExceededContextWindow` error
+     * — see LOBE-8974.
+     *
+     * This is for providers like NVIDIA / DeepSeek where the harness does
+     * not cap `max_tokens` itself but we still want to fail fast on doomed
+     * requests instead of round-tripping to the upstream just to get a
+     * 400 back. Providers that manage `max_tokens` themselves (e.g.
+     * MiniMax via `resolveSafeMaxTokens`) still benefit because the
+     * factory's centralised error handler converts the same error class.
+     */
+    contextPreFlight?: AssertContextWithinWindowOptions & {
+      models: AiFullModelCard[];
+    };
     excludeUsage?: boolean;
     forceImageBase64?: boolean;
     forceVideoBase64?: boolean;
@@ -404,6 +426,14 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
         if (shouldUseResponses) {
           processedPayload = { ...payload, apiMode: 'responses' } as any;
+        }
+
+        // Pre-flight: abort doomed requests before invoking handlePayload so
+        // providers don't waste a round-trip to upstream just to get a 400.
+        // See LOBE-8974.
+        if (chatCompletion?.contextPreFlight) {
+          const { models: preFlightModels, ...preFlightOptions } = chatCompletion.contextPreFlight;
+          assertContextWithinWindow(processedPayload, preFlightModels, preFlightOptions);
         }
 
         // Then perform factory-level processing
@@ -966,6 +996,20 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       // refs: https://github.com/lobehub/lobe-chat/issues/842
       if (this.baseURL !== DEFAULT_BASE_URL) {
         desensitizedEndpoint = desensitizeUrl(this.baseURL);
+      }
+
+      // Pre-flight context-window failures get a structured payload so the
+      // UI can offer fork / switch-model affordances instead of surfacing a
+      // raw provider 400. See LOBE-8974.
+      if (error instanceof ContextExceededPreFlightError) {
+        log('pre-flight context exceeded: %s', error.message);
+        return AgentRuntimeError.chat({
+          endpoint: desensitizedEndpoint,
+          error: error.toPayload(),
+          errorType: AgentRuntimeErrorType.ExceededContextWindow,
+          message: error.message,
+          provider: this.id,
+        });
       }
 
       if (chatCompletion?.handleError) {

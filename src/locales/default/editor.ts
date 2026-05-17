@@ -36,9 +36,12 @@ export default {
   'modifier.reject': 'Revert',
   'modifier.rejectAll': 'Revert All',
   'actionTag.category.command': 'Command',
+  'actionTag.category.projectSkill': 'Project skill',
   'actionTag.category.skill': 'Skill',
   'actionTag.category.tool': 'Tool',
   'actionTag.tooltip.command': 'Runs a client-side slash command before sending.',
+  'actionTag.tooltip.projectSkill':
+    "Sent as a slash invocation so the agent's CLI runs the matching project skill.",
   'actionTag.tooltip.skill': 'Loads a reusable skill package for this request.',
   'actionTag.tooltip.tool': 'Marks a tool the user explicitly selected for this request.',
   'slash.compact': 'Compact context',

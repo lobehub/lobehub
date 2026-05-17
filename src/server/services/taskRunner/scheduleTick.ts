@@ -3,6 +3,7 @@ import debug from 'debug';
 
 import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
+import { TaskTopicModel } from '@/database/models/taskTopic';
 import { getServerDB } from '@/database/server';
 
 import { TaskRunnerService } from './index';
@@ -19,6 +20,7 @@ export type ScheduleTickOutcome =
 export type ScheduleTickSkipReason =
   | 'human-waiting'
   | 'in-flight'
+  | 'max-executions-reached'
   | 'mode-changed'
   | 'no-pattern'
   | 'not-found'
@@ -65,6 +67,42 @@ export async function runScheduleTick(
   if (await briefModel.hasUnresolvedUrgentByTask(taskId)) {
     log('skip task=%s reason=human-waiting', taskId);
     return { ran: false, reason: 'human-waiting' };
+  }
+
+  // Defense-in-depth cap check.
+  //
+  // `TaskLifecycleService.onTopicComplete` is the primary stopper — it parks
+  // a schedule-mode task at `completed` (instead of `scheduled`) the instant
+  // it consumes its final allowed run, so the UI reflects the cap immediately
+  // even on low-frequency crons (e.g. daily, maxExecutions=1).
+  //
+  // This pre-tick recheck catches the residual edge cases the lifecycle
+  // hook can miss: a crashed tick that never reached onTopicComplete; a
+  // user editing maxExecutions downward after the cap is already exceeded;
+  // or stale `scheduled` rows from older code paths.
+  const scheduleConfig =
+    ((task.config as { schedule?: { maxExecutions?: number | null } } | null) ?? {}).schedule ?? {};
+  const maxExecutions = scheduleConfig.maxExecutions ?? null;
+  if (maxExecutions != null && maxExecutions > 0) {
+    const scheduler =
+      ((task.context as { scheduler?: { scheduleStartedAt?: string } } | null) ?? {}).scheduler ??
+      {};
+    const startedAtIso = scheduler.scheduleStartedAt;
+    if (startedAtIso) {
+      const startedAt = new Date(startedAtIso);
+      const topicModel = new TaskTopicModel(db, userId);
+      const runCount = await topicModel.countByTask(taskId, { since: startedAt });
+      if (runCount >= maxExecutions) {
+        log(
+          'skip task=%s reason=max-executions-reached (%d/%d) — marking completed',
+          taskId,
+          runCount,
+          maxExecutions,
+        );
+        await taskModel.updateStatus(taskId, 'completed', { completedAt: new Date() });
+        return { ran: false, reason: 'max-executions-reached' };
+      }
+    }
   }
 
   const runner = new TaskRunnerService(db, userId);

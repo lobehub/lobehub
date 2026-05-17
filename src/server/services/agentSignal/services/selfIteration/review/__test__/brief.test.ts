@@ -5,6 +5,7 @@ import { BriefModel } from '@/database/models/brief';
 
 import { ActionStatus, ApplyMode, ReviewRunStatus, Risk, Scope } from '../../types';
 import { createBriefSelfReviewService, createServerSelfReviewBriefWriter } from '../brief';
+import type { SelfReviewBriefTextTranslator } from '../briefText';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -26,6 +27,30 @@ const getNightlySelfReview = (
 const getSelfReviewProposal = (
   brief: ReturnType<ReturnType<typeof createBriefSelfReviewService>['projectNightlyReviewBrief']>,
 ) => getNightlySelfReview(brief)?.selfReviewProposal;
+
+const zhCNBriefText: Record<string, string> = {
+  'brief.agentSignal.selfReview.applied.heading': '已更新',
+  'brief.agentSignal.selfReview.applied.summary': '已应用 {{count}} 条夜间回顾更新。',
+  'brief.agentSignal.selfReview.applied.summary_plural': '已应用 {{count}} 条夜间回顾更新。',
+  'brief.agentSignal.selfReview.applied.title': '夜间回顾已更新资源',
+  'brief.agentSignal.selfReview.error.heading': '问题',
+  'brief.agentSignal.selfReview.error.summary': '部分夜间回顾内容未能完成。',
+  'brief.agentSignal.selfReview.error.title': '夜间回顾遇到了问题',
+  'brief.agentSignal.selfReview.ideas.summary': '已保存夜间回顾记录，供后续查看。',
+  'brief.agentSignal.selfReview.ideas.title': '夜间回顾记录',
+  'brief.agentSignal.selfReview.proposal.heading': '建议',
+  'brief.agentSignal.selfReview.proposal.summary': '有 {{count}} 条夜间回顾建议需要你确认。',
+  'brief.agentSignal.selfReview.proposal.summary_plural': '有 {{count}} 条夜间回顾建议需要你确认。',
+  'brief.agentSignal.selfReview.proposal.title': '有夜间回顾建议需要确认',
+};
+
+const createTranslator =
+  (resources: Record<string, string>): SelfReviewBriefTextTranslator =>
+  (key, options = {}) =>
+    Object.entries(options).reduce(
+      (content, [name, value]) => content.replace(`{{${name}}}`, value),
+      resources[key] ?? key,
+    );
 
 describe('briefSelfReviewService', () => {
   /**
@@ -177,9 +202,44 @@ describe('briefSelfReviewService', () => {
       type: 'decision',
     });
     expect(brief?.priority).toBe('normal');
-    expect(brief?.summary).toContain('1 self-review proposal need review.');
-    expect(brief?.summary).toContain('**Proposal**');
+    expect(brief?.summary).toContain('1 dream suggestion needs your review.');
+    expect(brief?.summary).toContain('**Suggestion**');
     expect(brief?.summary).toContain('- Review skill consolidation proposal.');
+  });
+
+  /**
+   * @example
+   * Nightly proposal briefs use server-translated shell text before persistence.
+   */
+  it('projects proposal results to Chinese decision briefs', () => {
+    const service = createBriefSelfReviewService();
+
+    const brief = service.projectNightlyReviewBrief({
+      agentId: 'agent-1',
+      localDate: '2026-05-09',
+      result: {
+        actions: [
+          {
+            idempotencyKey: 'source:proposal_only:skill:merge',
+            receiptId: 'receipt-2',
+            status: ActionStatus.Proposed,
+            summary: '检查技能合并建议。',
+          },
+        ],
+        status: ReviewRunStatus.Completed,
+      },
+      reviewWindowEnd: '2026-05-09T20:00:00.000Z',
+      reviewWindowStart: '2026-05-09T18:00:00.000Z',
+      t: createTranslator(zhCNBriefText),
+      timezone: 'Asia/Shanghai',
+      userId: 'user-1',
+    });
+
+    expect(brief?.title).toBe('有夜间回顾建议需要确认');
+    expect(brief?.summary).toBe(
+      '有 1 条夜间回顾建议需要你确认。\n\n**建议**\n- 检查技能合并建议。',
+    );
+    expect(brief?.type).toBe('decision');
   });
 
   /**
@@ -333,7 +393,7 @@ describe('briefSelfReviewService', () => {
     });
 
     expect(getNightlySelfReview(projected)?.actionCounts.proposed).toBe(1);
-    expect(projected?.summary).toContain('1 self-review proposal need review.');
+    expect(projected?.summary).toContain('1 dream suggestion needs your review.');
     expect(projected?.summary).not.toContain('No self-iteration change is needed.');
     expect(getSelfReviewProposal(projected)?.actions).toHaveLength(1);
     expect(getSelfReviewProposal(projected)?.actions[0]).toMatchObject({
@@ -443,8 +503,8 @@ describe('briefSelfReviewService', () => {
       id: 'brief-1',
       metadata: {},
       priority: 'info',
-      summary: '1 self-iteration update applied.',
-      title: 'Agent self-review updated resources',
+      summary: '1 dream update was applied.',
+      title: 'Dream updated resources',
       trigger: 'agent-signal:nightly-review',
       type: 'insight',
       userId: 'user-1',

@@ -313,7 +313,7 @@ export const TaskManifest: BuiltinToolManifest = {
           },
           heartbeatInterval: {
             description:
-              'Periodic execution interval in seconds (heartbeat mode). Pass 0 to clear the interval. Recommend ≥600s.',
+              'Periodic execution interval in seconds (heartbeat mode). Pass 0 to clear the interval. Minimum 600s (10 minutes); the server rejects positive values below 600.',
             type: 'number',
           },
           identifier: {

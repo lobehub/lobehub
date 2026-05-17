@@ -5,6 +5,7 @@ import { tracer } from '@lobechat/observability-otel/modules/agent-signal';
 import { AgentSignalNightlyReviewModel } from '@/database/models/agentSignal/nightlyReview';
 import { AgentSignalReviewContextModel } from '@/database/models/agentSignal/reviewContext';
 import { BriefModel } from '@/database/models/brief';
+import { UserModel } from '@/database/models/user';
 import type { BriefItem } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
@@ -13,6 +14,7 @@ import { isAgentSignalEnabledForUser } from '@/server/services/agentSignal/featu
 import { runMemoryActionAgent } from '@/server/services/agentSignal/policies/analyzeIntent/actions/userMemory';
 import { redisSourceEventStore } from '@/server/services/agentSignal/store/adapters/redis/sourceEventStore';
 import { SkillManagementDocumentService } from '@/server/services/skillManagement';
+import { translation } from '@/server/translation';
 
 import { persistAgentSignalReceipts } from '../../receiptService';
 import { createAgentRunner, executeSelfIteration } from '../execute';
@@ -35,6 +37,7 @@ import { createMemoryService, createToolSet } from '../tools/shared';
 import type { EvidenceRef } from '../types';
 import { Risk, Scope } from '../types';
 import { createBriefSelfReviewService, createServerSelfReviewBriefWriter } from './brief';
+import type { SelfReviewBriefTextTranslator } from './briefText';
 import type {
   FeedbackActivityDigest,
   NightlyReviewManagedSkillSummary,
@@ -543,6 +546,7 @@ const updateSelfReviewProposalBrief = async ({
 export const createServerToolSet = ({
   agentId,
   briefModel,
+  briefTextTranslator,
   context,
   db,
   localDate,
@@ -553,6 +557,7 @@ export const createServerToolSet = ({
 }: {
   agentId: string;
   briefModel: BriefModel;
+  briefTextTranslator?: SelfReviewBriefTextTranslator;
   context: Parameters<
     CreateNightlyReviewSourceHandlerDependencies['runSelfReviewAgent']
   >[0]['context'];
@@ -632,6 +637,7 @@ export const createServerToolSet = ({
         result: projection.execution,
         reviewWindowEnd: context.reviewWindowEnd,
         reviewWindowStart: context.reviewWindowStart,
+        t: briefTextTranslator,
         timezone: 'UTC',
         userId,
       });
@@ -1058,6 +1064,12 @@ export const createServerSelfReviewPolicyOptions = ({
     },
   });
   const briefWriter = createServerSelfReviewBriefWriter(db, userId);
+  const resolveBriefTextTranslator = async ({ userId }: { userId: string }) => {
+    const userInfo = await UserModel.getInfoForAIGeneration(db, userId);
+    const { t } = await translation('home', userInfo.responseLanguage ?? 'en-US');
+
+    return t;
+  };
 
   return {
     acquireReviewGuard: (input) =>
@@ -1083,6 +1095,7 @@ export const createServerSelfReviewPolicyOptions = ({
     },
     collectContext: (input) => collector.collect(input),
     runSelfReviewAgent: async ({ context, localDate, sourceId, userId: runnerUserId }) => {
+      const briefTextTranslator = await resolveBriefTextTranslator({ userId: runnerUserId });
       const modelRuntime = await initModelRuntimeFromDB(
         db,
         runnerUserId,
@@ -1091,6 +1104,7 @@ export const createServerSelfReviewPolicyOptions = ({
       const toolSet = createServerToolSet({
         agentId: context.agentId,
         briefModel,
+        briefTextTranslator,
         context,
         db,
         localDate: localDate ?? context.reviewWindowEnd.slice(0, 10),
@@ -1140,6 +1154,7 @@ export const createServerSelfReviewPolicyOptions = ({
         userId: runnerUserId,
       });
     },
+    resolveBriefTextTranslator,
     writeDailyBrief: (brief) => briefWriter.writeDailyBrief(brief),
     writeReceipts: (receipts) => persistAgentSignalReceipts(receipts),
   };

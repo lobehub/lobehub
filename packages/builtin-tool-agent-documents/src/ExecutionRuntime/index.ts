@@ -221,9 +221,10 @@ export class AgentDocumentsExecutionRuntime {
       };
     }
 
-    const target = args.target ?? 'agent';
+    const scope = args.scope ?? 'agent';
+    const sourceType = args.sourceType ?? 'all';
     const topicId = this.resolveTopicId(context);
-    if (target === 'currentTopic' && !topicId) {
+    if (scope === 'currentTopic' && !topicId) {
       return {
         content: 'Cannot list current topic documents without topicId context.',
         success: false,
@@ -231,9 +232,9 @@ export class AgentDocumentsExecutionRuntime {
     }
 
     const docs =
-      target === 'currentTopic'
-        ? await this.service.listTopicDocuments({ agentId, target, topicId: topicId! })
-        : await this.service.listDocuments({ agentId, target });
+      scope === 'currentTopic'
+        ? await this.service.listTopicDocuments({ agentId, scope, sourceType, topicId: topicId! })
+        : await this.service.listDocuments({ agentId, scope, sourceType });
     const list = docs.map((d) => ({
       ...(d.documentId ? { documentId: d.documentId } : {}),
       filename: d.filename ?? d.title ?? '',
@@ -260,9 +261,9 @@ export class AgentDocumentsExecutionRuntime {
       };
     }
 
-    const target = args.target ?? 'agent';
+    const scope = args.scope ?? 'agent';
     const topicId = this.resolveTopicId(context);
-    if (target === 'currentTopic' && !topicId) {
+    if (scope === 'currentTopic' && !topicId) {
       return {
         content: 'Cannot create current topic document without topicId context.',
         success: false,
@@ -271,7 +272,7 @@ export class AgentDocumentsExecutionRuntime {
 
     const toolTriggerInput = this.buildToolTriggerInput(context);
     const created =
-      target === 'currentTopic'
+      scope === 'currentTopic'
         ? await this.service.createTopicDocument({
             ...args,
             ...toolTriggerInput,

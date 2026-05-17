@@ -1,7 +1,7 @@
 import type { ChatTopicMetadata, ChatTopicStatus } from '@lobechat/types';
 import { Flexbox, Icon, Skeleton, Tag } from '@lobehub/ui';
 import { createStaticStyles, cssVar, keyframes, useTheme } from 'antd-style';
-import { CheckCircle2, HashIcon, MessageSquareDashed } from 'lucide-react';
+import { CheckCircle2, Hand, HashIcon, MessageSquareDashed } from 'lucide-react';
 import { memo, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -180,6 +180,8 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
   });
 
   const isCompleted = status === 'completed';
+  const isRunning = status === 'running';
+  const isWaitingForHuman = status === 'waitingForHuman';
 
   const hasUnread = id && isUnreadCompleted;
   const unreadIcon = (
@@ -234,7 +236,10 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
         href={href}
         title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
         icon={(() => {
-          if (isLoading) {
+          if (isWaitingForHuman) {
+            return <Icon icon={Hand} size={'small'} style={{ color: cssVar.colorWarning }} />;
+          }
+          if (isLoading || isRunning) {
             return (
               <RingLoadingIcon
                 ringColor={loadingRingColor}

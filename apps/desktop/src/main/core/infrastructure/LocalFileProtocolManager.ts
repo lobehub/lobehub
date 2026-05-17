@@ -1,4 +1,5 @@
-import { readFile, stat } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 import { app, protocol } from 'electron';
@@ -19,6 +20,7 @@ const LOCAL_FILE_PROTOCOL_PRIVILEGES = {
 } as const;
 
 const logger = createLogger('core:LocalFileProtocolManager');
+const PREVIEW_TOKEN_TTL_MS = 5 * 60 * 1000;
 
 const EXTRA_MIME_TYPES: Record<string, string> = {
   '.avif': 'image/avif',
@@ -34,20 +36,52 @@ const getMimeType = (filePath: string): string => {
   return getExportMimeType(filePath) ?? EXTRA_MIME_TYPES[ext] ?? 'application/octet-stream';
 };
 
+const normalizeAbsolutePath = (filePath: string): string | null => {
+  const normalized = path.normalize(filePath);
+  return path.isAbsolute(normalized) ? normalized : null;
+};
+
+const isPathWithinRoot = (targetPath: string, rootPath: string): boolean => {
+  const relative = path.relative(rootPath, targetPath);
+  return (
+    relative === '' || (!!relative && !relative.startsWith('..') && !path.isAbsolute(relative))
+  );
+};
+
+const buildLocalFileUrl = (absolutePath: string, token: string): string => {
+  const forwardSlashed = absolutePath.replaceAll('\\', '/');
+  const stripped = forwardSlashed.startsWith('/') ? forwardSlashed.slice(1) : forwardSlashed;
+  const encoded = stripped.split('/').map(encodeURIComponent).join('/');
+  const url = new URL(`${LOCAL_FILE_PROTOCOL_SCHEME}://${LOCAL_FILE_PROTOCOL_HOST}/${encoded}`);
+  url.searchParams.set('token', token);
+  return url.toString();
+};
+
+interface PreviewTokenRecord {
+  expiresAt: number;
+  realPath: string;
+}
+
 /**
- * Custom `localfile://` protocol that serves arbitrary local files to the
- * Electron renderer (e.g. previews for the project Files tree).
+ * Custom `localfile://` protocol for project file previews.
  *
- * URL shape: `localfile://file/<percent-encoded-absolute-path>`
+ * URL shape: `localfile://file/<percent-encoded-absolute-path>?token=<main-issued-token>`
  *   - host is fixed to `file` so the scheme behaves as `standard`
  *   - the absolute path is encoded in the URL pathname
+ *   - every request must carry a short-lived token minted by the main process
  *
  * Examples:
- *   localfile://file//Users/alice/Pictures/cat.png
- *   localfile://file/C:/Users/alice/Pictures/cat.png
+ *   localfile://file//Users/alice/project/cat.png?token=...
+ *   localfile://file/C:/Users/alice/project/cat.png?token=...
  */
 export class LocalFileProtocolManager {
+  private readonly approvedWorkspaceRoots = new Set<string>();
+
+  private readonly indexedProjectRoots = new Set<string>();
+
   private handlerRegistered = false;
+
+  private readonly previewTokens = new Map<string, PreviewTokenRecord>();
 
   get protocolScheme() {
     return {
@@ -75,14 +109,28 @@ export class LocalFileProtocolManager {
             return new Response('Invalid path', { status: 400 });
           }
 
-          const fileStat = await stat(resolvedPath);
+          const token = url.searchParams.get('token');
+          if (!token) {
+            return new Response('Forbidden', { status: 403 });
+          }
+
+          if (!this.hasPreviewToken(token)) {
+            return new Response('Forbidden', { status: 403 });
+          }
+
+          const realResolvedPath = normalizeAbsolutePath(await realpath(resolvedPath));
+          if (!realResolvedPath || !this.verifyPreviewToken(token, realResolvedPath)) {
+            return new Response('Forbidden', { status: 403 });
+          }
+
+          const fileStat = await stat(realResolvedPath);
           if (!fileStat.isFile()) {
             return new Response('Not a file', { status: 404 });
           }
 
-          const buffer = await readFile(resolvedPath);
+          const buffer = await readFile(realResolvedPath);
           const headers = new Headers();
-          headers.set('Content-Type', getMimeType(resolvedPath));
+          headers.set('Content-Type', getMimeType(realResolvedPath));
           headers.set('Content-Length', String(buffer.byteLength));
           // Local files are immutable from the renderer's perspective for a
           // single preview session; allow short-lived caching to avoid
@@ -112,6 +160,102 @@ export class LocalFileProtocolManager {
     } else {
       app.whenReady().then(register);
     }
+  }
+
+  async approveWorkspaceRoot(rootPath: string): Promise<string | null> {
+    const normalizedRoot = normalizeAbsolutePath(rootPath);
+    if (!normalizedRoot) return null;
+
+    const realRoot = normalizeAbsolutePath(await realpath(normalizedRoot));
+    if (!realRoot) return null;
+
+    this.approvedWorkspaceRoots.add(realRoot);
+    return realRoot;
+  }
+
+  async approveWorkspaceRoots(rootPaths: string[] = []): Promise<string[]> {
+    const approvedRoots = await Promise.allSettled(
+      rootPaths.map((rootPath) => this.approveWorkspaceRoot(rootPath)),
+    );
+
+    return approvedRoots
+      .map((result) => (result.status === 'fulfilled' ? result.value : null))
+      .filter((rootPath): rootPath is string => !!rootPath);
+  }
+
+  async approveProjectRootFromScope({
+    projectRoot,
+    requestedScope,
+  }: {
+    projectRoot: string;
+    requestedScope: string;
+  }): Promise<string | null> {
+    const [realProjectRoot, realRequestedScope] = await Promise.all([
+      realpath(projectRoot),
+      realpath(requestedScope),
+    ]);
+    const normalizedProjectRoot = normalizeAbsolutePath(realProjectRoot);
+    const normalizedRequestedScope = normalizeAbsolutePath(realRequestedScope);
+    if (!normalizedProjectRoot || !normalizedRequestedScope) return null;
+
+    const scopeIsApproved = [...this.approvedWorkspaceRoots].some(
+      (approvedRoot) =>
+        normalizedRequestedScope === approvedRoot ||
+        isPathWithinRoot(normalizedRequestedScope, approvedRoot),
+    );
+    if (!scopeIsApproved) return null;
+
+    this.approvedWorkspaceRoots.add(normalizedProjectRoot);
+    return normalizedProjectRoot;
+  }
+
+  async approveIndexedProjectRoot(projectRoot: string): Promise<string | null> {
+    const normalizedProjectRoot = normalizeAbsolutePath(projectRoot);
+    if (!normalizedProjectRoot) return null;
+
+    const realProjectRoot = normalizeAbsolutePath(await realpath(normalizedProjectRoot));
+    if (!realProjectRoot) return null;
+
+    this.indexedProjectRoots.add(realProjectRoot);
+    return realProjectRoot;
+  }
+
+  async createPreviewUrl({
+    filePath,
+    workspaceRoot,
+  }: {
+    filePath: string;
+    workspaceRoot: string;
+  }): Promise<string | null> {
+    const normalizedFilePath = normalizeAbsolutePath(filePath);
+    const normalizedWorkspaceRoot = normalizeAbsolutePath(workspaceRoot);
+    if (!normalizedFilePath || !normalizedWorkspaceRoot) return null;
+
+    const [realFilePath, realWorkspaceRoot] = await Promise.all([
+      realpath(normalizedFilePath),
+      realpath(normalizedWorkspaceRoot),
+    ]);
+    const normalizedRealFilePath = normalizeAbsolutePath(realFilePath);
+    const normalizedRealWorkspaceRoot = normalizeAbsolutePath(realWorkspaceRoot);
+
+    if (!normalizedRealFilePath || !normalizedRealWorkspaceRoot) return null;
+    if (
+      !this.approvedWorkspaceRoots.has(normalizedRealWorkspaceRoot) &&
+      !this.indexedProjectRoots.has(normalizedRealWorkspaceRoot)
+    ) {
+      return null;
+    }
+    if (!isPathWithinRoot(normalizedRealFilePath, normalizedRealWorkspaceRoot)) return null;
+
+    this.cleanupExpiredTokens();
+
+    const token = randomUUID();
+    this.previewTokens.set(token, {
+      expiresAt: Date.now() + PREVIEW_TOKEN_TTL_MS,
+      realPath: normalizedRealFilePath,
+    });
+
+    return buildLocalFileUrl(normalizedFilePath, token);
   }
 
   /**
@@ -151,5 +295,33 @@ export class LocalFileProtocolManager {
     if (!path.isAbsolute(normalized)) return null;
 
     return normalized;
+  }
+
+  private cleanupExpiredTokens() {
+    const now = Date.now();
+    for (const [token, record] of this.previewTokens) {
+      if (record.expiresAt <= now) {
+        this.previewTokens.delete(token);
+      }
+    }
+  }
+
+  private hasPreviewToken(token: string): boolean {
+    const record = this.previewTokens.get(token);
+    if (!record) return false;
+
+    if (record.expiresAt <= Date.now()) {
+      this.previewTokens.delete(token);
+      return false;
+    }
+
+    return true;
+  }
+
+  private verifyPreviewToken(token: string, realResolvedPath: string): boolean {
+    const record = this.previewTokens.get(token);
+    if (!record) return false;
+
+    return record.realPath === realResolvedPath;
   }
 }

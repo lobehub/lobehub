@@ -1,4 +1,3 @@
- 
 import type { GrepContentParams, GrepContentResult } from '@lobechat/electron-client-ipc';
 import { execa } from 'execa';
 
@@ -146,7 +145,8 @@ export class WindowsContentSearchImpl extends BaseContentSearch {
    * Grep using ripgrep (rg) - cross-platform
    */
   private async grepWithRipgrep(params: GrepContentParams): Promise<GrepContentResult> {
-    const { path: searchPath = process.cwd(), output_mode = 'files_with_matches' } = params;
+    const { output_mode = 'files_with_matches' } = params;
+    const searchPath = this.resolveSearchPath(params);
     const logPrefix = `[grepContent:rg]`;
 
     try {
@@ -230,7 +230,7 @@ export class WindowsContentSearchImpl extends BaseContentSearch {
 
     try {
       const { stdout } = await execa('rg', args, {
-        cwd: params.path || process.cwd(),
+        cwd: this.resolveSearchPath(params),
         reject: false,
       });
 
@@ -252,11 +252,8 @@ export class WindowsContentSearchImpl extends BaseContentSearch {
    * Note: findstr has limited functionality compared to ripgrep
    */
   private async grepWithFindstr(params: GrepContentParams): Promise<GrepContentResult> {
-    const {
-      pattern,
-      path: searchPath = process.cwd(),
-      output_mode = 'files_with_matches',
-    } = params;
+    const { pattern, output_mode = 'files_with_matches' } = params;
+    const searchPath = this.resolveSearchPath(params);
     const logPrefix = `[grepContent:findstr]`;
 
     try {

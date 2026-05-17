@@ -11,6 +11,10 @@ export default {
   'channel.botTokenPlaceholderNew': 'Paste your bot token here',
   'channel.connectionConfig': 'Connection Configuration',
   'channel.copied': 'Copied to clipboard',
+  'channel.comingSoon': 'Coming Soon',
+  'channel.comingSoonDesc':
+    'We are working on bringing this integration to LobeHub. Stay tuned for updates.',
+  'channel.comingSoonTitle': '{{name}} integration is coming soon',
   'channel.copy': 'Copy',
   'channel.deleteAllChannels': 'Remove All Channels',
   'channel.deleteAllConfirm': 'Are you sure you want to remove all channels?',
@@ -191,6 +195,17 @@ export default {
   'channel.groupAllowFromAdd': 'Add channel',
   'channel.groupAllowFromEmpty': 'No channels added yet — the bot will not respond anywhere.',
   'channel.allowListRemove': 'Remove',
+  'channel.watchKeywords': 'Watch Keywords',
+  'channel.watchKeywordsHint':
+    'A keyword match wakes the bot without an @mention; its instruction is prepended to the user message. Whole-word, case-insensitive.',
+  'channel.watchKeywordLabel': 'Keyword',
+  'channel.watchKeywordPlaceholder': 'e.g. bug',
+  'channel.watchKeywordInstructionLabel': 'Instruction',
+  'channel.watchKeywordInstructionPlaceholder':
+    'e.g. Scan the recent thread and reply if there is an actionable bug report',
+  'channel.watchKeywordsAdd': 'Add keyword',
+  'channel.watchKeywordsEmpty':
+    'No keywords added yet — bot only wakes on @mention or DM in subscribed channels.',
   'channel.settings': 'Advanced Settings',
   'channel.settingsResetConfirm': 'Are you sure you want to reset advanced settings to default?',
   'channel.settingsResetDefault': 'Reset to Default',

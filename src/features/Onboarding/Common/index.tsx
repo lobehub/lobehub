@@ -40,6 +40,7 @@ const CommonOnboardingPage = memo(() => {
 
   const [searchParams, setSearchParams] = useSearchParams();
   const step: 1 | 2 = searchParams.get('step') === '2' ? 2 : 1;
+  const hasStepParam = searchParams.has('step');
 
   // One-time legacy migration: when the user lands on the shared prefix, if
   // their persisted `currentStep` was authored under the old 5-step schema,
@@ -62,25 +63,31 @@ const CommonOnboardingPage = memo(() => {
     remappedRef.current = true;
   }, [isUserStateInit]);
 
+  useEffect(() => {
+    if (__TEST__) return;
+    void import('@/routes/onboarding/agent');
+    void import('@/routes/onboarding/classic');
+  }, []);
+
   const goNextFromTelemetry = useCallback(() => {
     setSearchParams({ step: '2' }, { replace: true });
   }, [setSearchParams]);
 
   const goBackFromLanguage = useCallback(() => {
-    setSearchParams({}, { replace: true });
+    setSearchParams({ step: '1' }, { replace: true });
   }, [setSearchParams]);
 
   const finishCommon = useCallback(() => {
-    // No-op: completion of step 2 writes responseLanguage, which flips
-    // commonStepsCompleted to true; the early-return below then handles
-    // the redirect on the next render.
-  }, []);
+    setSearchParams({}, { replace: true });
+  }, [setSearchParams]);
 
   if (!isUserStateInit) {
     return <Loading debugId="CommonOnboarding/userState" />;
   }
 
-  if (commonStepsCompleted) {
+  // With the prefix complete, a bare `/onboarding` resumes the branch — but an
+  // explicit `?step` (FullNameStep's back button) re-enters the shared prefix.
+  if (commonStepsCompleted && !hasStepParam) {
     if (!serverConfigInit) {
       return <Loading debugId="CommonOnboarding/serverConfig" />;
     }

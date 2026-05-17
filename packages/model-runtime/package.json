@@ -33,6 +33,7 @@
     "ollama": "^0.6.2",
     "openai": "^4.104.0",
     "replicate": "^1.4.0",
+    "tokenx": "^1.3.0",
     "type-fest": "^5.2.0",
     "url-join": "^5.0.0"
   },

@@ -15,7 +15,11 @@ interface TokenProgressProps {
   showIcon?: boolean;
 }
 
-const format = (number: number) => numeral(number).format('0,0');
+export const formatUsageValue = (number: number) => {
+  if (number >= 1_000_000) return numeral(number / 1_000_000).format('0.[0]') + 'M';
+  if (number >= 1_000) return numeral(number / 1_000).format('0.[0]') + 'K';
+  return numeral(number).format('0,0');
+};
 
 const TokenProgress = memo<TokenProgressProps>(({ data, showIcon }) => {
   const total = data.reduce((acc, item) => acc + item.value, 0);
@@ -58,7 +62,7 @@ const TokenProgress = memo<TokenProgressProps>(({ data, showIcon }) => {
               )}
               <div style={{ color: cssVar.colorTextSecondary }}>{item.title}</div>
             </Flexbox>
-            <div style={{ fontWeight: 500 }}>{format(item.value)}</div>
+            <div style={{ fontWeight: 500 }}>{formatUsageValue(item.value)}</div>
           </Flexbox>
         ))}
       </Flexbox>

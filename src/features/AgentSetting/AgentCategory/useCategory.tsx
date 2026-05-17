@@ -1,15 +1,6 @@
 import { Icon } from '@lobehub/ui';
 import { type MenuItemType } from 'antd/es/menu/interface';
-import {
-  Activity,
-  BookText,
-  Bot,
-  BrainCog,
-  Handshake,
-  MessagesSquare,
-  Mic2,
-  UserCircle,
-} from 'lucide-react';
+import { Activity, Bot, BrainCog, Handshake, MessagesSquare, Mic2 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -32,20 +23,10 @@ export const useCategory = ({ mobile }: UseCategoryOptions = {}) => {
   const cateItems: MenuProps['items'] = useMemo(
     () =>
       [
-        !isInbox && {
-          icon: <Icon icon={UserCircle} size={iconSize} />,
-          key: ChatSettingsTabs.Meta,
-          label: t('agentTab.meta'),
-        },
         {
           icon: <Icon icon={Bot} size={iconSize} />,
           key: ChatSettingsTabs.Prompt,
           label: t('agentTab.prompt'),
-        },
-        {
-          icon: <Icon icon={BookText} size={iconSize} />,
-          key: ChatSettingsTabs.Documents,
-          label: t('agentTab.documents'),
         },
         (!isInbox && {
           icon: <Icon icon={Handshake} size={iconSize} />,

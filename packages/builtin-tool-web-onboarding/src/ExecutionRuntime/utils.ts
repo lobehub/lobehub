@@ -57,9 +57,27 @@ export const formatWebOnboardingStateMessage = (state: OnboardingStateContext) =
     'Questioning rule: prefer the `lobe-user-interaction____askUserQuestion` tool call for structured collection or explicit UI input. For natural exploratory questions, plain text is allowed.',
   ];
 
-  if (state.remainingDiscoveryExchanges !== undefined && state.remainingDiscoveryExchanges > 0) {
+  if (
+    state.phase === 'discovery' &&
+    state.remainingDiscoveryExchanges !== undefined &&
+    state.remainingDiscoveryExchanges > 0
+  ) {
+    const currentDiscoveryExchanges = state.discoveryUserMessageCount ?? 0;
+    const recommendedTarget = currentDiscoveryExchanges + state.remainingDiscoveryExchanges;
+
+    parts.push(
+      `Discovery progress: ${currentDiscoveryExchanges}/${recommendedTarget} user exchange(s) observed since Discovery began.`,
+    );
     parts.push(
       `Recommended: ${state.remainingDiscoveryExchanges} more user exchange(s) before moving to summary. Do not rush — keep exploring different aspects of the user's work and life.`,
+    );
+  } else if (
+    state.phase === 'discovery' &&
+    state.discoveryUserMessageCount !== undefined &&
+    state.remainingDiscoveryExchanges === 0
+  ) {
+    parts.push(
+      `Discovery progress: recommended target reached after ${state.discoveryUserMessageCount} user exchange(s). Move to summary once interests/customInterests and the persona are persisted.`,
     );
   }
 

@@ -18,9 +18,9 @@ import type {
   SubAgentResultPayload,
   SubAgentsBatchResultPayload,
 } from '@lobechat/agent-runtime';
-import { calculateMessageTokens, UsageCounter } from '@lobechat/agent-runtime';
+import { UsageCounter } from '@lobechat/agent-runtime';
 import { isDesktop } from '@lobechat/const';
-import type { ToolsEngine } from '@lobechat/context-engine';
+import { countContextTokens, type ToolsEngine } from '@lobechat/context-engine';
 import { chainCompressContext } from '@lobechat/prompts';
 import {
   type ChatMessageError,
@@ -2827,7 +2827,9 @@ export const createAgentExecutors = (context: {
         events.push({ type: 'compression_complete', groupId, parentMessageId });
 
         // Calculate new token count
-        const compressedTokenCount = calculateMessageTokens(compressedMessages);
+        const compressedTokenCount = countContextTokens({
+          messages: compressedMessages,
+        }).rawTotal;
 
         return {
           events,

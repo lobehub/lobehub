@@ -5,10 +5,14 @@ import {
   extractDmSettings,
   extractGroupSettings,
   extractUserAllowlist,
+  extractWatchKeywordEntries,
+  extractWatchKeywords,
+  findMatchingWatchKeywordEntries,
   getBotReplyLocale,
   getStepReactionEmoji,
   makeDmPolicyField,
   makeGroupPolicyFields,
+  messageMatchesWatchKeyword,
   normalizeAllowFromEntries,
   normalizeBotReplyLocale,
   shouldAllowSender,
@@ -661,5 +665,168 @@ describe('validateAccessSettings', () => {
   it('does not require userId for allowlist or disabled — they have no approval flow', () => {
     expect(validateAccessSettings({ dmPolicy: 'allowlist' }).valid).toBe(true);
     expect(validateAccessSettings({ dmPolicy: 'disabled' }).valid).toBe(true);
+  });
+});
+
+describe('extractWatchKeywords', () => {
+  it('returns [] for missing / null / non-string / non-array values', () => {
+    expect(extractWatchKeywords(null)).toEqual([]);
+    expect(extractWatchKeywords(undefined)).toEqual([]);
+    expect(extractWatchKeywords({})).toEqual([]);
+    expect(extractWatchKeywords({ watchKeywords: 42 })).toEqual([]);
+    expect(extractWatchKeywords({ watchKeywords: {} })).toEqual([]);
+  });
+
+  it('parses the canonical [{keyword, instruction?}] form, dropping empties', () => {
+    expect(
+      extractWatchKeywords({
+        watchKeywords: [
+          { instruction: 'scan the thread', keyword: 'bug' },
+          { keyword: '  Outage  ' },
+          { keyword: '' },
+          { keyword: '   ' },
+          { instruction: 'no keyword' },
+        ],
+      }),
+    ).toEqual(['bug', 'outage']);
+  });
+
+  it('accepts a flat string[] for forward compat', () => {
+    expect(extractWatchKeywords({ watchKeywords: ['Bug', '', 'BUY', 'bug'] })).toEqual([
+      'bug',
+      'buy',
+    ]);
+  });
+
+  it('accepts a comma / newline / whitespace-separated string', () => {
+    expect(extractWatchKeywords({ watchKeywords: 'bug, buy\noutage  alert,,, alert' })).toEqual([
+      'bug',
+      'buy',
+      'outage',
+      'alert',
+    ]);
+  });
+
+  it('lowercases and deduplicates so matching is case-insensitive at run time', () => {
+    expect(
+      extractWatchKeywords({
+        watchKeywords: [{ keyword: 'Bug' }, { keyword: 'BUG' }, { keyword: 'bug' }],
+      }),
+    ).toEqual(['bug']);
+  });
+});
+
+describe('messageMatchesWatchKeyword', () => {
+  it('returns false when text or keywords are empty', () => {
+    expect(messageMatchesWatchKeyword('', ['bug'])).toBe(false);
+    expect(messageMatchesWatchKeyword(undefined, ['bug'])).toBe(false);
+    expect(messageMatchesWatchKeyword('bug everywhere', [])).toBe(false);
+  });
+
+  it('matches case-insensitively', () => {
+    expect(messageMatchesWatchKeyword('There is a BUG here', ['bug'])).toBe(true);
+    expect(messageMatchesWatchKeyword('Bug?', ['bug'])).toBe(true);
+  });
+
+  it('respects word boundaries so debug / bugfix do NOT trigger bug', () => {
+    expect(messageMatchesWatchKeyword('debug logs', ['bug'])).toBe(false);
+    expect(messageMatchesWatchKeyword('bugfix landed', ['bug'])).toBe(false);
+    expect(messageMatchesWatchKeyword('the bug landed', ['bug'])).toBe(true);
+  });
+
+  it('keeps scanning past non-boundary occurrences to find a later whole-word match', () => {
+    expect(messageMatchesWatchKeyword('debug logs show a real bug', ['bug'])).toBe(true);
+    expect(messageMatchesWatchKeyword('bugfix landed but the bug is back', ['bug'])).toBe(true);
+    // Still false when every occurrence is embedded.
+    expect(messageMatchesWatchKeyword('debug then bugfix', ['bug'])).toBe(false);
+  });
+
+  it('still matches when keyword is flanked by punctuation', () => {
+    expect(messageMatchesWatchKeyword('(bug)', ['bug'])).toBe(true);
+    expect(messageMatchesWatchKeyword('bug, anyone?', ['bug'])).toBe(true);
+    expect(messageMatchesWatchKeyword('"bug"!', ['bug'])).toBe(true);
+  });
+
+  it('supports CJK keywords (no ASCII \\b assumption)', () => {
+    expect(messageMatchesWatchKeyword('线上故障，需要修复', ['故障'])).toBe(true);
+    // Surrounded by other CJK chars should still match — \b would have failed
+    // here but our predicate uses unicode word-class lookarounds.
+    expect(messageMatchesWatchKeyword('系统故障报告', ['故障'])).toBe(true);
+  });
+
+  it('matches the first keyword in a multi-keyword list', () => {
+    expect(messageMatchesWatchKeyword('user wants to buy', ['bug', 'buy', 'outage'])).toBe(true);
+    expect(messageMatchesWatchKeyword('weather update', ['bug', 'buy', 'outage'])).toBe(false);
+  });
+});
+
+describe('extractWatchKeywordEntries', () => {
+  it('returns [] for missing / non-array, non-string values', () => {
+    expect(extractWatchKeywordEntries(null)).toEqual([]);
+    expect(extractWatchKeywordEntries(undefined)).toEqual([]);
+    expect(extractWatchKeywordEntries({})).toEqual([]);
+    expect(extractWatchKeywordEntries({ watchKeywords: 42 })).toEqual([]);
+  });
+
+  it('keeps the operator-authored instruction alongside the lowercased keyword', () => {
+    expect(
+      extractWatchKeywordEntries({
+        watchKeywords: [
+          { instruction: '  Scan the thread for a bug report  ', keyword: 'Bug' },
+          { keyword: 'outage' },
+        ],
+      }),
+    ).toEqual([
+      { instruction: 'Scan the thread for a bug report', keyword: 'bug' },
+      { instruction: undefined, keyword: 'outage' },
+    ]);
+  });
+
+  it('dedupes by keyword and keeps the first non-empty instruction', () => {
+    expect(
+      extractWatchKeywordEntries({
+        watchKeywords: [
+          { keyword: 'bug' },
+          { instruction: 'first instruction', keyword: 'BUG' },
+          { instruction: 'later instruction', keyword: 'bug' },
+        ],
+      }),
+    ).toEqual([{ instruction: 'first instruction', keyword: 'bug' }]);
+  });
+
+  it('returns entries with no instruction for the string and string[] fallbacks', () => {
+    expect(extractWatchKeywordEntries({ watchKeywords: ['Bug', 'outage'] })).toEqual([
+      { instruction: undefined, keyword: 'bug' },
+      { instruction: undefined, keyword: 'outage' },
+    ]);
+    expect(extractWatchKeywordEntries({ watchKeywords: 'bug, outage' })).toEqual([
+      { instruction: undefined, keyword: 'bug' },
+      { instruction: undefined, keyword: 'outage' },
+    ]);
+  });
+});
+
+describe('findMatchingWatchKeywordEntries', () => {
+  it('returns matched entries in authoring order', () => {
+    const entries = [
+      { instruction: 'scan thread for bug', keyword: 'bug' },
+      { instruction: 'page oncall', keyword: 'outage' },
+      { keyword: 'buy' },
+    ];
+    expect(findMatchingWatchKeywordEntries('we have a bug and a major outage', entries)).toEqual([
+      { instruction: 'scan thread for bug', keyword: 'bug' },
+      { instruction: 'page oncall', keyword: 'outage' },
+    ]);
+  });
+
+  it('respects the same word-boundary rules as the gate predicate', () => {
+    const entries = [{ instruction: 'scan thread', keyword: 'bug' }];
+    expect(findMatchingWatchKeywordEntries('debug logs', entries)).toEqual([]);
+    expect(findMatchingWatchKeywordEntries('the bug landed', entries)).toEqual(entries);
+  });
+
+  it('returns [] on empty text or empty entries', () => {
+    expect(findMatchingWatchKeywordEntries('', [{ keyword: 'bug' }])).toEqual([]);
+    expect(findMatchingWatchKeywordEntries('bug everywhere', [])).toEqual([]);
   });
 });

@@ -150,6 +150,57 @@ describe('GeneralChatAgent', () => {
 
       expect(result).toEqual(expectCompressionInstruction(state.messages));
     });
+
+    // LOBE-8973 Bug B: state.tools must feed into the compression budget,
+    // otherwise large tool manifests (16-22K tokens observed on openrouter)
+    // slip past the threshold and overflow the model context window.
+    it('should fold state.tools into the compression budget on init', async () => {
+      const compressionConfig = {
+        enabled: true,
+        maxWindowToken: 200_000,
+        thresholdRatio: 0.5,
+      };
+      const messages = [
+        {
+          content: '',
+          metadata: { usage: { totalOutputTokens: 50_000 } },
+          role: 'assistant',
+        },
+      ] as any;
+      const context = createMockContext('init', { model: 'gpt-4o-mini', provider: 'openai' });
+
+      // Without tools: raw=50K, adjusted=62.5K vs 100K threshold → no compression.
+      const agentNoTools = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        compressionConfig,
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+      const noToolsResult = await agentNoTools.runner(context, createMockState({ messages }));
+      expect((noToolsResult as any).type).toBe('call_llm');
+
+      // With a chunky tool manifest (~66K tokens) total raw input is ~116K,
+      // drift-adjusted ~145K, which crosses the 100K threshold.
+      const bigTool = {
+        function: {
+          description: 'x'.repeat(400_000),
+          name: 'big_tool',
+          parameters: { properties: {}, type: 'object' },
+        },
+        type: 'function',
+      };
+      const agentWithTools = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        compressionConfig,
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+      const withToolsResult = await agentWithTools.runner(
+        context,
+        createMockState({ messages, tools: [bigTool] as any }),
+      );
+      expect((withToolsResult as any).type).toBe('compress_context');
+    });
   });
 
   describe('llm_result phase', () => {
@@ -713,6 +764,66 @@ describe('GeneralChatAgent', () => {
       const result = await agent.runner(context, state);
 
       expect(result).toEqual(expectCompressionInstruction(state.messages));
+    });
+
+    // LOBE-8973 follow-up: when state.forceFinish is set, RuntimeExecutors strips
+    // every tool before the LLM call (buildStepToolDelta returns deactivatedToolIds
+    // ['*']). The compression budget must mirror that stripping — otherwise the
+    // tool schemas push the budget over threshold and we burn an extra summarization
+    // pass on tokens that won't be sent.
+    it('should skip tools from compression budget on force-finish continuation', async () => {
+      const compressionConfig = {
+        enabled: true,
+        maxWindowToken: 200_000,
+        thresholdRatio: 0.5,
+      };
+      const messages = [
+        { role: 'user', content: 'Hello' },
+        {
+          content: '',
+          metadata: { usage: { totalOutputTokens: 50_000 } },
+          role: 'assistant',
+        },
+        { role: 'tool', content: 'Result', tool_call_id: 'call-1' },
+      ] as any;
+      // Chunky tool manifest that alone is enough to push the request over the
+      // compression threshold when counted in the budget.
+      const bigTool = {
+        function: {
+          description: 'x'.repeat(400_000),
+          name: 'big_tool',
+          parameters: { properties: {}, type: 'object' },
+        },
+        type: 'function',
+      };
+      const context = createMockContext('tool_result', { parentMessageId: 'tool-msg-1' });
+
+      // Sanity check: without forceFinish, the big tool manifest trips compression.
+      const baselineAgent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        compressionConfig,
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+      const baseline = await baselineAgent.runner(
+        context,
+        createMockState({ messages, tools: [bigTool] as any }),
+      );
+      expect((baseline as any).type).toBe('compress_context');
+
+      // With forceFinish set, the executor will drop tools, so the agent must
+      // ignore them in the compression check and go straight to call_llm.
+      const forceFinishAgent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        compressionConfig,
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+      const forced = await forceFinishAgent.runner(
+        context,
+        createMockState({ forceFinish: true, messages, tools: [bigTool] as any }),
+      );
+      expect((forced as any).type).toBe('call_llm');
     });
 
     it('should return request_human_approve when there are pending tools', async () => {

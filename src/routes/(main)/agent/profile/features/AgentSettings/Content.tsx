@@ -4,14 +4,7 @@ import { Avatar, Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { type ItemType } from 'antd/es/menu/interface';
 import { useTheme } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import {
-  ActivityIcon,
-  BookTextIcon,
-  BrainIcon,
-  MessageSquareHeartIcon,
-  MessagesSquareIcon,
-  UserIcon,
-} from 'lucide-react';
+import { ActivityIcon, BrainIcon, MessageSquareHeartIcon, MessagesSquareIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallow } from 'zustand/shallow';
@@ -34,7 +27,7 @@ const Content = memo(() => {
   const config = useAgentStore(agentSelectors.currentAgentConfig, isEqual);
   const meta = useAgentStore(agentSelectors.currentAgentMeta, isEqual);
   const { enableAgentSelfIteration } = useServerConfigStore(featureFlagsSelectors);
-  const [tab, setTab] = useState(isInbox ? ChatSettingsTabs.Modal : ChatSettingsTabs.Meta);
+  const [tab, setTab] = useState(isInbox ? ChatSettingsTabs.Modal : ChatSettingsTabs.Opening);
 
   const updateAgentConfig = async (config: any) => {
     if (!agentId) return;
@@ -51,23 +44,11 @@ const Content = memo(() => {
       [
         !isInbox
           ? {
-              icon: <Icon icon={UserIcon} />,
-              key: ChatSettingsTabs.Meta,
-              label: t('agentTab.meta'),
-            }
-          : null,
-        !isInbox
-          ? {
               icon: <Icon icon={MessageSquareHeartIcon} />,
               key: ChatSettingsTabs.Opening,
               label: t('agentTab.opening'),
             }
           : null,
-        {
-          icon: <Icon icon={BookTextIcon} />,
-          key: ChatSettingsTabs.Documents,
-          label: t('agentTab.documents'),
-        },
         {
           icon: <Icon icon={MessagesSquareIcon} />,
           key: ChatSettingsTabs.Chat,

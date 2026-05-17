@@ -1,5 +1,4 @@
-import { Flexbox, Icon, Text } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { Button, Flexbox, Text } from '@lobehub/ui';
 import { RefreshCw } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -39,16 +38,14 @@ const Recommendations = memo(() => {
           {t('recommendations.subtitle')}
         </Text>
         {taskTemplatesState.mode === 'cards' && (
-          <Flexbox
-            horizontal
-            align={'center'}
-            gap={4}
-            style={{ color: cssVar.colorTextDescription, cursor: 'pointer' }}
+          <Button
+            icon={<RefreshCw size={12} />}
+            size={'small'}
+            type={'text'}
             onClick={taskTemplatesState.onRefresh}
           >
-            <Icon icon={RefreshCw} size={12} />
-            <Text fontSize={12}>{tTaskTemplate('action.refresh.button')}</Text>
-          </Flexbox>
+            {tTaskTemplate('action.refresh.button')}
+          </Button>
         )}
       </Flexbox>
       <Flexbox gap={8}>

@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { topics, users } from '../../schemas';
+import { taskTopics, topics, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { TaskModel } from '../task';
 import { TaskTopicModel } from '../taskTopic';
@@ -195,6 +195,81 @@ describe('TaskTopicModel', () => {
       const t2 = await getTopic('tpc_t2');
       expect(t1.completedAt).toBeInstanceOf(Date);
       expect(t2.completedAt).toBeInstanceOf(Date);
+    });
+  });
+
+  describe('countByTask', () => {
+    it('counts every topic for the task when no options are passed', async () => {
+      const taskModel = new TaskModel(serverDB, userId);
+      const topicModel = new TaskTopicModel(serverDB, userId);
+      const task = await taskModel.create({ instruction: 'Test' });
+      await createTopic('tpc_c1');
+      await createTopic('tpc_c2');
+
+      await topicModel.add(task.id, 'tpc_c1', { seq: 1 });
+      await topicModel.add(task.id, 'tpc_c2', { seq: 2 });
+
+      expect(await topicModel.countByTask(task.id)).toBe(2);
+    });
+
+    it('only counts topics created on/after `since` when provided', async () => {
+      const taskModel = new TaskModel(serverDB, userId);
+      const topicModel = new TaskTopicModel(serverDB, userId);
+      const task = await taskModel.create({ instruction: 'Test' });
+      await createTopic('tpc_old');
+      await createTopic('tpc_new');
+
+      // Age the first topic 10 minutes into the past so the `since` window
+      // (5 minutes ago) excludes it but includes the just-inserted second one.
+      await topicModel.add(task.id, 'tpc_old', { seq: 1 });
+      const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+      await serverDB
+        .update(taskTopics)
+        .set({ createdAt: tenMinutesAgo })
+        .where(eq(taskTopics.topicId, 'tpc_old'));
+
+      await topicModel.add(task.id, 'tpc_new', { seq: 2 });
+
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+      expect(await topicModel.countByTask(task.id, { since: fiveMinutesAgo })).toBe(1);
+      expect(await topicModel.countByTask(task.id)).toBe(2);
+    });
+
+    it('does not bleed across tasks', async () => {
+      const taskModel = new TaskModel(serverDB, userId);
+      const topicModel = new TaskTopicModel(serverDB, userId);
+      const task1 = await taskModel.create({ instruction: 'A' });
+      const task2 = await taskModel.create({ instruction: 'B' });
+      await createTopic('tpc_a1');
+      await createTopic('tpc_b1');
+
+      await topicModel.add(task1.id, 'tpc_a1', { seq: 1 });
+      await topicModel.add(task2.id, 'tpc_b1', { seq: 1 });
+
+      expect(await topicModel.countByTask(task1.id)).toBe(1);
+      expect(await topicModel.countByTask(task2.id)).toBe(1);
+    });
+
+    it('does not count topics owned by a different user', async () => {
+      const taskModel = new TaskModel(serverDB, userId);
+      const topicModel = new TaskTopicModel(serverDB, userId);
+      const otherTopicModel = new TaskTopicModel(serverDB, userId2);
+      const task = await taskModel.create({ instruction: 'Test' });
+      await createTopic('tpc_mine');
+      await createTopic('tpc_theirs', userId2);
+
+      await topicModel.add(task.id, 'tpc_mine', { seq: 1 });
+      // Directly insert a row attributed to userId2 on the same task to prove
+      // the scope is `userId`, not just `taskId`.
+      await serverDB.insert(taskTopics).values({
+        seq: 2,
+        taskId: task.id,
+        topicId: 'tpc_theirs',
+        userId: userId2,
+      });
+
+      expect(await topicModel.countByTask(task.id)).toBe(1);
+      expect(await otherTopicModel.countByTask(task.id)).toBe(1);
     });
   });
 

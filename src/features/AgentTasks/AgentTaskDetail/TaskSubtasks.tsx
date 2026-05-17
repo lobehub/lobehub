@@ -1,6 +1,6 @@
 import type { TaskDetailSubtask } from '@lobechat/types';
 import { ActionIcon, Block, Flexbox, Icon, showContextMenu, Text } from '@lobehub/ui';
-import { App, Button, ConfigProvider, Tree } from 'antd';
+import { App, ConfigProvider, Tree } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import { cssVar } from 'antd-style';
 import { ChevronDown, ListTodoIcon, PlayCircle, Plus } from 'lucide-react';
@@ -328,18 +328,22 @@ const TaskSubtasks = memo(() => {
         </>
       ) : (
         <>
-          <Flexbox horizontal align="flex-start">
-            <Button
-              className={styles.addSubtaskButton}
-              icon={<Icon icon={Plus} size={14} />}
-              shape="round"
-              size="small"
-              type="text"
-              onClick={toggleCreating}
-            >
+          <Block
+            clickable
+            horizontal
+            align="center"
+            gap={8}
+            paddingBlock={4}
+            paddingInline={8}
+            style={{ width: 'fit-content' }}
+            variant="borderless"
+            onClick={toggleCreating}
+          >
+            <Icon color={cssVar.colorTextDescription} icon={Plus} size={16} />
+            <Text color={cssVar.colorTextSecondary} fontSize={13} weight={500}>
               {t('taskDetail.addSubtask')}
-            </Button>
-          </Flexbox>
+            </Text>
+          </Block>
           {isCreating && (
             <CreateTaskInlineEntry
               autoFocus

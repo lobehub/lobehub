@@ -288,6 +288,38 @@ export class MessengerSlackBinder implements MessengerPlatformBinder {
   }
 
   /**
+   * Slack delivers `app_home_opened` whenever a user opens the bot's App
+   * Home — either the Home tab or the Messages tab. chat-sdk's slack
+   * adapter only dispatches the Home variant, so we intercept the Messages
+   * variant here and let the router fire the marketplace-required welcome
+   * once. Returns null for any other inbound (lets the caller hand off to
+   * `extractCallbackAction` and then chat-sdk).
+   */
+  async extractAppHomeOpened(req: Request): Promise<{ channelId: string; userId: string } | null> {
+    const contentType = req.headers.get('content-type') ?? '';
+    if (!contentType.includes('application/json')) return null;
+
+    let payload: any;
+    try {
+      payload = JSON.parse(await req.text());
+    } catch {
+      return null;
+    }
+
+    if (payload?.type !== 'event_callback') return null;
+    const event = payload?.event;
+    if (event?.type !== 'app_home_opened') return null;
+    // Slack ships `tab: "home" | "messages"`. The Home-tab variant is
+    // routed via chat-sdk's `onAppHomeOpened`; only the Messages-tab open
+    // is the trigger Slack's marketplace cares about for the welcome rule.
+    if (event.tab !== 'messages') return null;
+    const userId = typeof event.user === 'string' ? event.user : '';
+    const channelId = typeof event.channel === 'string' ? event.channel : '';
+    if (!userId || !channelId) return null;
+    return { channelId, userId };
+  }
+
+  /**
    * Pull our `messenger:switch:<agentId>` action out of a Slack interactive
    * webhook payload. Slack delivers `block_actions` as
    * `application/x-www-form-urlencoded` with a single `payload` field whose
