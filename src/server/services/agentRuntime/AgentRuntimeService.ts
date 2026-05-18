@@ -17,8 +17,11 @@ import { type LobeChatDatabase } from '@/database/type';
 import { appEnv } from '@/envs/app';
 import { type AgentRuntimeCoordinatorOptions } from '@/server/modules/AgentRuntime';
 import { AgentRuntimeCoordinator, createStreamEventManager } from '@/server/modules/AgentRuntime';
-import { type RuntimeExecutorContext } from '@/server/modules/AgentRuntime/RuntimeExecutors';
-import { createRuntimeExecutors } from '@/server/modules/AgentRuntime/RuntimeExecutors';
+import {
+  createRuntimeExecutors,
+  type ExecSubAgentTaskCallbackParams,
+  type RuntimeExecutorContext,
+} from '@/server/modules/AgentRuntime/RuntimeExecutors';
 import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
 import { emitAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { toAgentSignalTraceEvents } from '@/server/services/agentSignal/observability/traceEvents';
@@ -117,6 +120,12 @@ export interface AgentRuntimeServiceOptions {
    */
   coordinatorOptions?: AgentRuntimeCoordinatorOptions;
   /**
+   * Callback to spawn a sub-agent task from within a running server-side agent.
+   * Injected by AiAgentService to wire up the exec_task / exec_tasks executors
+   * without creating a circular import between RuntimeExecutors and AiAgentService.
+   */
+  execSubAgentTask?: (params: ExecSubAgentTaskCallbackParams) => Promise<void>;
+  /**
    * Custom QueueService
    * Set to null to disable queue scheduling (for synchronous execution tests)
    */
@@ -155,6 +164,7 @@ export class AgentRuntimeService {
   private agentFactory?: (config: GeneralAgentConfig) => Agent;
   private completionLifecycle: CompletionLifecycle;
   private coordinator: AgentRuntimeCoordinator;
+  private execSubAgentTaskCallback?: (params: ExecSubAgentTaskCallbackParams) => Promise<void>;
   private humanIntervention: HumanInterventionHandler;
   private streamManager: IStreamEventManager;
   private queueService: QueueService | null;
@@ -185,6 +195,7 @@ export class AgentRuntimeService {
       options?.snapshotStore ?? this.createDefaultSnapshotStore(),
     );
     this.agentFactory = options?.agentFactory;
+    this.execSubAgentTaskCallback = options?.execSubAgentTask;
     this.serverDB = db;
     this.userId = userId;
     this.messageModel = new MessageModel(db, this.userId);
@@ -1360,6 +1371,7 @@ export class AgentRuntimeService {
       discordContext: metadata?.discordContext,
       userTimezone: metadata?.userTimezone,
       evalContext: metadata?.evalContext,
+      execSubAgentTask: this.execSubAgentTaskCallback,
       hookDispatcher,
       loadAgentState: this.coordinator.loadAgentState.bind(this.coordinator),
       messageModel: this.messageModel,
