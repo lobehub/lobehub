@@ -9,6 +9,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useTaskStore } from '@/store/task';
 
 import { styles } from './style';
+import { useTaskDetailPath } from './taskDetailPath';
 
 interface BreadcrumbProps {
   taskId?: string;
@@ -16,6 +17,7 @@ interface BreadcrumbProps {
 
 const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
   const { t } = useTranslation('chat');
+  const getTaskDetailPath = useTaskDetailPath();
   const taskTitle = useTaskStore((s) => (taskId ? s.taskDetailMap[taskId]?.name : undefined));
   const taskIdentifier = useTaskStore((s) =>
     taskId ? s.taskDetailMap[taskId]?.identifier : undefined,
@@ -44,7 +46,7 @@ const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
   const ancestorCrumbs = ancestors.map((identifier) => ({
     key: identifier,
     title: (
-      <Link to={`/task/${identifier}`}>
+      <Link to={getTaskDetailPath(identifier)}>
         <Text color={'inherit'} weight={500}>
           {identifier}
         </Text>

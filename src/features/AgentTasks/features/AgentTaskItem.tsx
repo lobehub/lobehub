@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTaskStore } from '@/store/task';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
 
+import { taskDetailPath } from '../shared/taskDetailPath';
 import AssigneeAgentSelector from './AssigneeAgentSelector';
 import AssigneeAvatar from './AssigneeAvatar';
 import { formatTaskItemDate } from './formatTaskItemDate';
@@ -57,14 +58,14 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, variant = 'default' }) => {
   const hasName = Boolean(task.name?.trim());
 
   const handleClick = useCallback(() => {
-    navigate(`/task/${task.identifier}`);
-  }, [navigate, task.identifier]);
+    navigate(taskDetailPath(task.identifier, task.assigneeAgentId ?? undefined));
+  }, [navigate, task.assigneeAgentId, task.identifier]);
 
   const handleSubtaskClick = useCallback(
     (identifier: string) => {
-      navigate(`/task/${identifier}`);
+      navigate(taskDetailPath(identifier, task.assigneeAgentId ?? undefined));
     },
-    [navigate],
+    [navigate, task.assigneeAgentId],
   );
 
   const scheduledBadge =

@@ -1,0 +1,23 @@
+import { useCallback } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+
+export const taskDetailPath = (taskId: string, agentId?: string) =>
+  agentId ? `/agent/${agentId}/task/${taskId}` : `/task/${taskId}`;
+
+export const useTaskDetailPath = () => {
+  const { aid } = useParams<{ aid?: string }>();
+
+  return useCallback((taskId: string) => taskDetailPath(taskId, aid), [aid]);
+};
+
+export const useNavigateToTaskDetail = () => {
+  const navigate = useNavigate();
+  const getTaskDetailPath = useTaskDetailPath();
+
+  return useCallback(
+    (taskId: string) => {
+      navigate(getTaskDetailPath(taskId));
+    },
+    [getTaskDetailPath, navigate],
+  );
+};

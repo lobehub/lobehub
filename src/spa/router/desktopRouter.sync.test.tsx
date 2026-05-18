@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
@@ -25,8 +25,8 @@ function normalizePaths(paths: string[]) {
 
 async function readDesktopRouterSources() {
   return Promise.all([
-    readFile(join(process.cwd(), 'src/spa/router/desktopRouter.config.tsx'), 'utf8'),
-    readFile(join(process.cwd(), 'src/spa/router/desktopRouter.config.desktop.tsx'), 'utf8'),
+    readFile(path.join(process.cwd(), 'src/spa/router/desktopRouter.config.tsx'), 'utf8'),
+    readFile(path.join(process.cwd(), 'src/spa/router/desktopRouter.config.desktop.tsx'), 'utf8'),
   ]);
 }
 
@@ -54,6 +54,8 @@ describe('desktopRouter config sync', () => {
 
     expect(asyncSource).toContain("import('@/routes/(main)/(task-workspace)/_layout')");
     expect(syncSource).toContain("from '@/routes/(main)/(task-workspace)/_layout'");
+    expect(asyncSource).toContain("import('@/routes/(main)/agent/task/[taskId]')");
+    expect(syncSource).toContain("from '@/routes/(main)/agent/task/[taskId]'");
     expect(asyncSource).not.toContain("import('@/routes/(main)/task-workspace/_layout')");
     expect(syncSource).not.toContain("from '@/routes/(main)/task-workspace/_layout'");
     expect(asyncSource).not.toContain("import('@/routes/(main)/tasks/_layout')");
