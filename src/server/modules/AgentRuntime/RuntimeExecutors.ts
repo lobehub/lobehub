@@ -2496,6 +2496,7 @@ export const createRuntimeExecutors = (
 
     const effectiveTaskMessageId = taskMessageId ?? parentMessageId;
 
+    let dispatched = false;
     if (ctx.execSubAgentTask && topicId && agentId) {
       try {
         await ctx.execSubAgentTask({
@@ -2508,6 +2509,7 @@ export const createRuntimeExecutors = (
           title: task.description,
           topicId,
         });
+        dispatched = true;
         log('[%s] Spawned sub-agent task for agent %s', taskLogId, targetAgentId);
       } catch (error) {
         log('[%s] Failed to spawn sub-agent task: %O', taskLogId, error);
@@ -2532,7 +2534,7 @@ export const createRuntimeExecutors = (
         payload: {
           parentMessageId: effectiveTaskMessageId,
           result: {
-            success: !!ctx.execSubAgentTask,
+            success: dispatched,
             taskMessageId: effectiveTaskMessageId,
             threadId: '',
           },
@@ -2567,6 +2569,7 @@ export const createRuntimeExecutors = (
     log('[%s] Starting batch of %d tasks', taskLogId, tasks.length);
 
     let lastTaskMessageId: string | undefined;
+    const taskResults: Array<{ success: boolean; taskMessageId: string; threadId: string }> = [];
 
     for (const task of tasks) {
       const targetAgentId = (task as any).targetAgentId ?? agentId;
@@ -2592,6 +2595,7 @@ export const createRuntimeExecutors = (
         log('[%s] Failed to create task message for "%s": %O', taskLogId, task.description, error);
       }
 
+      let taskDispatched = false;
       if (ctx.execSubAgentTask && topicId && agentId) {
         try {
           await ctx.execSubAgentTask({
@@ -2604,6 +2608,7 @@ export const createRuntimeExecutors = (
             title: task.description,
             topicId,
           });
+          taskDispatched = true;
           log(
             '[%s] Spawned sub-agent task "%s" for agent %s',
             taskLogId,
@@ -2623,6 +2628,11 @@ export const createRuntimeExecutors = (
           }
         }
       }
+      taskResults.push({
+        success: taskDispatched,
+        taskMessageId: taskMessageId ?? parentMessageId,
+        threadId: '',
+      });
     }
 
     return {
@@ -2631,7 +2641,7 @@ export const createRuntimeExecutors = (
       nextContext: {
         payload: {
           parentMessageId: lastTaskMessageId ?? parentMessageId,
-          results: tasks.map(() => ({ success: !!ctx.execSubAgentTask, threadId: '' })),
+          results: taskResults,
         },
         phase: 'sub_agents_batch_result',
         session: {
