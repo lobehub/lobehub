@@ -1,4 +1,3 @@
- 
 import type { GrepContentParams, GrepContentResult } from '@lobechat/electron-client-ipc';
 import { execa } from 'execa';
 
@@ -179,7 +178,8 @@ export abstract class UnixContentSearch extends BaseContentSearch {
     tool: 'rg' | 'ag' | 'grep',
     params: GrepContentParams,
   ): Promise<GrepContentResult> {
-    const { path: searchPath = process.cwd(), output_mode = 'files_with_matches' } = params;
+    const { output_mode = 'files_with_matches' } = params;
+    const searchPath = this.resolveSearchPath(params);
     const logPrefix = `[grepContent:${tool}]`;
 
     try {
@@ -272,7 +272,7 @@ export abstract class UnixContentSearch extends BaseContentSearch {
 
     try {
       const { stdout } = await execa(tool, args, {
-        cwd: params.path || process.cwd(),
+        cwd: this.resolveSearchPath(params),
         reject: false,
       });
 

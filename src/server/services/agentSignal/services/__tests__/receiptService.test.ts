@@ -1,6 +1,7 @@
 // @vitest-environment node
 import type { BaseAction, ExecutorResult } from '@lobechat/agent-signal';
 import { createSource } from '@lobechat/agent-signal';
+import { LayersEnum } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AGENT_SIGNAL_POLICY_ACTION_TYPES } from '../../policies/types';
@@ -52,7 +53,7 @@ const result = (input: {
 });
 
 describe('projectAgentSignalReceipts', () => {
-  it('projects applied memory action results', () => {
+  it('projects applied memory action results without unstructured feedback as target', () => {
     expect(
       projectAgentSignalReceipts({
         actions: [
@@ -78,13 +79,56 @@ describe('projectAgentSignalReceipts', () => {
         sourceId: 'source-1',
         sourceType: 'client.gateway.runtime_end',
         status: 'applied',
-        target: {
-          title: 'Remember that future PR reviews should be decision-first.',
-          type: 'memory',
-        },
         title: 'Memory saved',
         topicId: 'topic-1',
         userId: 'user-1',
+      },
+    ]);
+  });
+
+  it('prefers the memory target title from action output over the feedback message', () => {
+    expect(
+      projectAgentSignalReceipts({
+        actions: [
+          action({
+            actionId: 'action-memory-1',
+            actionType: AGENT_SIGNAL_POLICY_ACTION_TYPES.userMemoryHandle,
+            payload: {
+              message:
+                '<speaker id="833816919" username="nivra2000" nickname="Aa T" />\nEvery section is too short. Can it be longer?',
+            },
+          }),
+        ],
+        results: [
+          result({
+            actionId: 'action-memory-1',
+            output: {
+              target: {
+                id: 'preference_1',
+                memoryId: 'mem_1',
+                memoryLayer: LayersEnum.Preference,
+                summary: 'The user prefers longer, more developed answer sections.',
+                title: 'Preference for detailed answer sections',
+                type: 'memory',
+              },
+            },
+            status: 'applied',
+          }),
+        ],
+        source,
+        userId: 'user-1',
+      }),
+    ).toMatchObject([
+      {
+        kind: 'memory',
+        target: {
+          id: 'preference_1',
+          memoryId: 'mem_1',
+          memoryLayer: LayersEnum.Preference,
+          summary: 'The user prefers longer, more developed answer sections.',
+          title: 'Preference for detailed answer sections',
+          type: 'memory',
+        },
       },
     ]);
   });

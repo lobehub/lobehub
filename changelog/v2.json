@@ -1,6 +1,55 @@
 [
   {
     "children": {
+      "features": [
+        "support slack mpim and fix discord dm problem.",
+        "add service model assignments settings.",
+        "inline skill auth in recommended task templates.",
+        "add user activity business hook.",
+        "add Gemini 3.1 Flash-Lite provider cards.",
+        "home daily brief with linkable welcome + paired input hint.",
+        "add signOperationJwt with 4h expiry for hetero-agent operations.",
+        "migrate Notion to LobeHub Market.",
+        "Cloud Claude Code V3 — repo picker, GitHub token, sandbox context."
+      ],
+      "fixes": [
+        "Docs image.",
+        "update Task page placeholder copy.",
+        "sidebar add agent.",
+        "replace ScrollShadow with ScrollArea to fix React #185 infinite render loop.",
+        "reject inactive OIDC access.",
+        "drop unreachable aihubmix empty-apiKey test.",
+        "consume visual content parts in server runtime.",
+        "store onboarding interests as keys.",
+        "remove the old cron job from lobehub.",
+        "refresh content baseline from DB on every ingest call.",
+        "gateway client-tool pluginState + drop redundant Exit code: 0 tail.",
+        "first inject the cloudecc runtime session should use the existingStatus.",
+        "slack connect error & slash commands.",
+        "polish task agent manager.",
+        "remove signin captcha flow.",
+        "add temporary email auth error locale.",
+        "add bot callback service.",
+        "sanitize sensitive comments and examples from production JS bundle.",
+        "multiple account link."
+      ],
+      "improvements": [
+        "use @lobehub/ui built-in HtmlPreview instead of custom component.",
+        "polish desktop header icons, sidebar density, and task menus.",
+        "standardize header action icon sizes.",
+        "add reasoning_effort support for Grok 4.3.",
+        "increase chat topic title length.",
+        "format tool execution time as Xmin Ys instead of X.Y min.",
+        "Add new DeepSeek-V4 models.",
+        "use visible divider between queued messages.",
+        "update auth captcha retry copy."
+      ]
+    },
+    "date": "2026-05-13",
+    "version": "2.1.58"
+  },
+  {
+    "children": {
       "fixes": ["hide runtime-only model aliases."],
       "features": ["set OSS default model to DeepSeek V4 Pro."]
     },

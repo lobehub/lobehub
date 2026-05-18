@@ -43,6 +43,10 @@ import { MemoryInspectors, MemoryManifest } from '@lobechat/builtin-tool-memory/
 import { MessageInspectors, MessageManifest } from '@lobechat/builtin-tool-message/client';
 import { PageAgentInspectors, PageAgentManifest } from '@lobechat/builtin-tool-page-agent/client';
 import {
+  SelfFeedbackIntentInspectors,
+  selfFeedbackIntentManifest,
+} from '@lobechat/builtin-tool-self-iteration/client';
+import {
   SkillStoreInspectors,
   SkillStoreManifest,
 } from '@lobechat/builtin-tool-skill-store/client';
@@ -57,10 +61,11 @@ import {
   WebOnboardingManifest,
 } from '@lobechat/builtin-tool-web-onboarding/client';
 import { createRunCommandInspector } from '@lobechat/shared-tool-ui/inspectors';
-import { type BuiltinInspector } from '@lobechat/types';
+import type { BuiltinInspector } from '@lobechat/types';
 
 import { CodexInspectors } from './codex';
 import { GithubIdentifier, GithubInspectors } from './github';
+import { LinearIdentifier, LinearInspectors } from './linear';
 
 /**
  * Builtin tools inspector registry
@@ -93,6 +98,10 @@ const BuiltinToolInspectors: Record<string, Record<string, BuiltinInspector>> = 
   [MessageManifest.identifier]: MessageInspectors as Record<string, BuiltinInspector>,
   [PageAgentManifest.identifier]: PageAgentInspectors as Record<string, BuiltinInspector>,
   [LobeActivatorManifest.identifier]: LobeActivatorInspectors as Record<string, BuiltinInspector>,
+  [selfFeedbackIntentManifest.identifier]: SelfFeedbackIntentInspectors as Record<
+    string,
+    BuiltinInspector
+  >,
   [SkillStoreManifest.identifier]: SkillStoreInspectors as Record<string, BuiltinInspector>,
   [SkillsManifest.identifier]: SkillsInspectors as Record<string, BuiltinInspector>,
   [TaskManifest.identifier]: TaskInspectors as Record<string, BuiltinInspector>,
@@ -103,6 +112,7 @@ const BuiltinToolInspectors: Record<string, Record<string, BuiltinInspector>> = 
     command_execution: createRunCommandInspector('Run') as BuiltinInspector,
   },
   [GithubIdentifier]: GithubInspectors,
+  [LinearIdentifier]: LinearInspectors,
 };
 
 export interface BuiltinInspectorRegistryEntry {

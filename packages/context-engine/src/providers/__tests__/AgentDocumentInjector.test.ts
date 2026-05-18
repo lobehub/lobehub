@@ -176,25 +176,29 @@ describe('AgentDocumentInjector', () => {
 
     it('should inject progressive documents as index instead of full content', async () => {
       const provider = new AgentDocumentContextInjector({
+        currentTime: new Date('2026-04-29T00:00:00.000Z'),
         documents: [
           {
             content: 'Full content that should NOT appear',
-            description: 'Core safety rules',
-            filename: 'guardrails.md',
-            id: 'doc-1',
+            filename: 'daily-brief.txt',
+            id: '2af6eb88-8bdb-468f-887f-620baa394efa',
             loadPosition: 'before-first-user',
             loadRules: { rule: 'always' },
             policyLoad: 'progressive',
-            title: 'Guardrails',
+            sourceType: 'file',
+            title: 'Daily Brief 提取框架',
+            updatedAt: new Date('2026-04-27T00:00:00.000Z'),
           },
           {
-            content: 'Another full content that should NOT appear',
-            filename: 'notes.txt',
-            id: 'doc-2',
+            content: 'a'.repeat(6000),
+            filename: 'cfg.txt',
+            id: '32e12975-7db2-4818-8415-9b5c3d383f05',
             loadPosition: 'before-first-user',
             loadRules: { rule: 'always' },
             policyLoad: 'progressive',
-            title: 'Notes',
+            sourceType: 'file',
+            title: 'cfg-constrained-decoding',
+            updatedAt: new Date('2026-04-10T00:00:00.000Z'),
           },
         ],
       });
@@ -202,21 +206,106 @@ describe('AgentDocumentInjector', () => {
       const context = createContext([{ content: 'Hello', id: 'user-1', role: 'user' }]);
       const result = await provider.process(context);
 
-      const injected = result.messages[0].content;
-      expect(injected).toContain('<agent_documents_index>');
-      expect(injected).toContain('[doc-1]');
-      expect(injected).toContain('guardrails.md');
-      expect(injected).toContain('"Guardrails"');
-      expect(injected).toContain('Core safety rules');
-      expect(injected).toContain('[doc-2]');
-      expect(injected).toContain('notes.txt');
-      expect(injected).not.toContain('Full content that should NOT appear');
-      expect(injected).not.toContain('Another full content that should NOT appear');
-      expect(injected).toContain('</agent_documents_index>');
+      expect(result.messages[0].content).toMatchInlineSnapshot(`
+        "<agent_documents_index>
+        2 user-created docs. Use readDocument(id) for full content.
+
+        TITLE                     ID                                    SIZE  UPDATED
+        Daily Brief 提取框架          2af6eb88-8bdb-468f-887f-620baa394efa  35    2d ago
+        cfg-constrained-decoding  32e12975-7db2-4818-8415-9b5c3d383f05  6.0k  19d ago
+        </agent_documents_index>"
+      `);
+      expect(result.messages[0].content).not.toContain('Full content that should NOT appear');
+    });
+
+    it('should hide web-crawled docs from the index and surface the count', async () => {
+      const provider = new AgentDocumentContextInjector({
+        currentTime: new Date('2026-04-29T00:00:00.000Z'),
+        documents: [
+          {
+            content: 'user note',
+            filename: 'daily-brief.txt',
+            id: '2af6eb88-8bdb-468f-887f-620baa394efa',
+            loadPosition: 'before-first-user',
+            loadRules: { rule: 'always' },
+            policyLoad: 'progressive',
+            sourceType: 'file',
+            title: 'Daily Brief',
+            updatedAt: new Date('2026-04-27T00:00:00.000Z'),
+          },
+          {
+            content: 'gold price page',
+            filename: 'gold-price-1.html',
+            id: 'web-1',
+            loadPosition: 'before-first-user',
+            loadRules: { rule: 'always' },
+            policyLoad: 'progressive',
+            sourceType: 'web',
+            title: 'Gold price',
+          },
+          {
+            content: 'gold news',
+            filename: 'gold-news.html',
+            id: 'web-2',
+            loadPosition: 'before-first-user',
+            loadRules: { rule: 'always' },
+            policyLoad: 'progressive',
+            sourceType: 'web',
+            title: 'Gold news',
+          },
+        ],
+      });
+
+      const context = createContext([{ content: 'Hello', id: 'user-1', role: 'user' }]);
+      const result = await provider.process(context);
+
+      expect(result.messages[0].content).toMatchInlineSnapshot(`
+        "<agent_documents_index>
+        1 user-created doc. Use readDocument(id) for full content.
+        2 web-crawled docs hidden — call listDocuments(sourceType='web') to see them.
+
+        TITLE        ID                                    SIZE  UPDATED
+        Daily Brief  2af6eb88-8bdb-468f-887f-620baa394efa  9     2d ago
+        </agent_documents_index>"
+      `);
+      expect(result.messages[0].content).not.toContain('Gold price');
+      expect(result.messages[0].content).not.toContain('Gold news');
+    });
+
+    it('should render empty docs with size=empty so the LLM does not retry', async () => {
+      const provider = new AgentDocumentContextInjector({
+        currentTime: new Date('2026-04-29T00:00:00.000Z'),
+        documents: [
+          {
+            content: '',
+            filename: 'placeholder.md',
+            id: 'd14dca54-7b38-44d5-9bdb-f3fed8c5f947',
+            loadPosition: 'before-first-user',
+            loadRules: { rule: 'always' },
+            policyLoad: 'progressive',
+            sourceType: 'file',
+            title: '周报与平台对话分析',
+            updatedAt: new Date('2026-04-16T00:00:00.000Z'),
+          },
+        ],
+      });
+
+      const context = createContext([{ content: 'Hello', id: 'user-1', role: 'user' }]);
+      const result = await provider.process(context);
+
+      expect(result.messages[0].content).toMatchInlineSnapshot(`
+        "<agent_documents_index>
+        1 user-created doc. Use readDocument(id) for full content.
+
+        TITLE      ID                                    SIZE   UPDATED
+        周报与平台对话分析  d14dca54-7b38-44d5-9bdb-f3fed8c5f947  empty  13d ago
+        </agent_documents_index>"
+      `);
     });
 
     it('should mix full-content and progressive documents', async () => {
       const provider = new AgentDocumentContextInjector({
+        currentTime: new Date('2026-04-29T00:00:00.000Z'),
         documents: [
           {
             content: 'Always-loaded full content',
@@ -227,13 +316,14 @@ describe('AgentDocumentInjector', () => {
           },
           {
             content: 'Progressive content hidden',
-            description: 'A summary doc',
             filename: 'summary.md',
             id: 'doc-p',
             loadPosition: 'before-first-user',
             loadRules: { rule: 'always' },
             policyLoad: 'progressive',
+            sourceType: 'file',
             title: 'Summary',
+            updatedAt: new Date('2026-04-28T00:00:00.000Z'),
           },
         ],
       });
@@ -244,7 +334,8 @@ describe('AgentDocumentInjector', () => {
       const injected = result.messages[0].content;
       expect(injected).toContain('Always-loaded full content');
       expect(injected).toContain('<agent_documents_index>');
-      expect(injected).toContain('summary.md');
+      expect(injected).toContain('Summary');
+      expect(injected).toContain('doc-p');
       expect(injected).not.toContain('Progressive content hidden');
     });
   });

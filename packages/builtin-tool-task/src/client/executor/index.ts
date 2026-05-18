@@ -13,15 +13,17 @@ import type {
   BuiltinToolResult,
   TaskAutomationMode,
   TaskStatus,
+  ToolAfterCallContext,
 } from '@lobechat/types';
 import { BaseExecutor } from '@lobechat/types';
 import debug from 'debug';
 
 import { taskService } from '@/services/task';
 import { getTaskStoreState } from '@/store/task';
+import { findSubtaskParentId } from '@/store/task/slices/detail/reducer';
 
-import { normalizeListTasksParams } from '../listTasks';
-import { TaskIdentifier } from '../manifest';
+import { normalizeListTasksParams } from '../../listTasks';
+import { TaskIdentifier } from '../../manifest';
 import type {
   AddTaskCommentParams,
   CreateTaskParams,
@@ -29,14 +31,90 @@ import type {
   DeleteTaskCommentParams,
   RunTasksItemResult,
   UpdateTaskCommentParams,
-} from '../types';
-import { TaskApiName } from '../types';
+} from '../../types';
+import { TaskApiName } from '../../types';
 
 const log = debug('lobe-task:executor');
+
+// APIs whose execution mutates state that's surfaced in the renderer's task
+// list or detail caches. Used by `onAfterCall` to decide what to revalidate.
+const LIST_MUTATING_APIS = new Set<string>([
+  TaskApiName.createTask,
+  TaskApiName.createTasks,
+  TaskApiName.deleteTask,
+  TaskApiName.editTask,
+  TaskApiName.runTask,
+  TaskApiName.runTasks,
+  TaskApiName.setTaskSchedule,
+  TaskApiName.updateTaskStatus,
+]);
+
+const DETAIL_MUTATING_APIS = new Set<string>([
+  TaskApiName.addTaskComment,
+  TaskApiName.deleteTaskComment,
+  TaskApiName.editTask,
+  TaskApiName.runTask,
+  TaskApiName.setTaskSchedule,
+  TaskApiName.updateTaskComment,
+  TaskApiName.updateTaskStatus,
+  TaskApiName.viewTask,
+]);
+
+const extractIdentifier = (params: unknown, result: BuiltinToolResult): string | undefined => {
+  const fromState = (result.state as { identifier?: unknown } | undefined)?.identifier;
+  if (typeof fromState === 'string' && fromState.length > 0) return fromState;
+  const fromParams = (params as { identifier?: unknown } | null | undefined)?.identifier;
+  if (typeof fromParams === 'string' && fromParams.length > 0) return fromParams;
+  return undefined;
+};
 
 class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
   readonly identifier = TaskIdentifier;
   protected readonly apiEnum = TaskApiName;
+
+  onAfterCall = async ({ apiName, params, result }: ToolAfterCallContext): Promise<void> => {
+    if (!result.success) return;
+
+    const store = getTaskStoreState();
+    const identifier = extractIdentifier(params, result);
+
+    // Build the set of task-detail keys to revalidate. Mirrors the pattern
+    // used by `updateTask` in the detail slice so subtask deletions / edits
+    // bubble up: when we mutate a subtask we must also refresh the parent
+    // whose `subtasks[]` array embeds it, otherwise the parent's view keeps
+    // showing the stale child until a manual reload.
+    const detailTargets = new Set<string>();
+    const touchesDetail = DETAIL_MUTATING_APIS.has(apiName) || LIST_MUTATING_APIS.has(apiName);
+    if (touchesDetail) {
+      if (identifier) {
+        // `deleteTask` is not in DETAIL_MUTATING_APIS (the row is gone), but
+        // edit/status/etc. need their own detail key revalidated.
+        if (DETAIL_MUTATING_APIS.has(apiName)) detailTargets.add(identifier);
+
+        const parentId = findSubtaskParentId(store.taskDetailMap, identifier);
+        if (parentId) detailTargets.add(parentId);
+      }
+
+      // Defensive: refresh whatever detail page the user is currently
+      // viewing — covers e.g. a `createTask` whose new identifier we don't
+      // yet know in the local map but whose parent the user is staring at.
+      const { activeTaskId } = store;
+      if (activeTaskId) detailTargets.add(activeTaskId);
+    }
+
+    const refreshes: Promise<unknown>[] = [];
+    if (LIST_MUTATING_APIS.has(apiName)) {
+      refreshes.push(store.refreshTaskList());
+    }
+    for (const id of detailTargets) {
+      refreshes.push(store.internal_refreshTaskDetail(id));
+    }
+
+    if (refreshes.length === 0) return;
+    await Promise.all(refreshes).catch((error) => {
+      log('[TaskExecutor] onAfterCall - refresh failed:', error);
+    });
+  };
 
   addTaskComment = async (
     params: AddTaskCommentParams,

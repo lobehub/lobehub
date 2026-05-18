@@ -100,6 +100,7 @@ const TabItem = memo<TabItemProps>(
           horizontal
           align="center"
           className={cx(electronStylish.nodrag, styles.tab, isActive && styles.tabActive)}
+          data-active={isActive ? 'true' : undefined}
           gap={6}
           onClick={handleClick}
         >

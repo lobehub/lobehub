@@ -2,6 +2,9 @@ import {
   type AgentEvent,
   type AgentInstruction,
   type AgentInstructionCompressContext,
+  type AgentInstructionExecSubAgent,
+  type AgentInstructionExecSubAgents,
+  type AgentRuntimeContext,
   type AgentState,
   type CallLLMPayload,
   type GeneralAgentCallLLMResultPayload,
@@ -30,7 +33,12 @@ import {
 import { parse } from '@lobechat/conversation-flow';
 import { consumeStreamUntilDone } from '@lobechat/model-runtime';
 import { chainCompressContext } from '@lobechat/prompts';
-import { type ChatToolPayload, type MessageToolCall, type UIChatMessage } from '@lobechat/types';
+import {
+  type ChatToolPayload,
+  type ExecSubAgentTaskParams,
+  type MessageToolCall,
+  type UIChatMessage,
+} from '@lobechat/types';
 import { sanitizeToolCallArguments, serializePartsForStorage } from '@lobechat/utils';
 import debug from 'debug';
 
@@ -65,6 +73,7 @@ import {
   isPersistFatal,
   markPersistFatal,
 } from './messagePersistErrors';
+import { resolveToolTimeoutMs } from './resolveToolTimeout';
 import { type IStreamEventManager } from './types';
 
 const log = debug('lobe-server:agent-runtime:streaming-executors');
@@ -209,6 +218,12 @@ export interface RuntimeExecutorContext {
   botPlatformContext?: BotPlatformContext;
   discordContext?: any;
   evalContext?: EvalContext;
+  /**
+   * Callback to spawn a sub-agent task server-side.
+   * Injected by AiAgentService so exec_sub_agent / exec_sub_agents executors
+   * can dispatch callAgent-triggered tasks without a circular import.
+   */
+  execSubAgentTask?: (params: ExecSubAgentTaskParams) => Promise<unknown>;
   hookDispatcher?: HookDispatcher;
   loadAgentState?: (operationId: string) => Promise<AgentState | null>;
   messageModel: MessageModel;
@@ -484,8 +499,10 @@ export const createRuntimeExecutors = (
             ]);
 
             onboardingContext = {
+              discoveryUserMessageCount: onboardingState.discoveryUserMessageCount,
               personaContent: persona?.persona ?? null,
               phaseGuidance: formatWebOnboardingStateMessage(onboardingState),
+              remainingDiscoveryExchanges: onboardingState.remainingDiscoveryExchanges,
               soulContent: soulDoc?.content ?? null,
               userInfo,
             };
@@ -658,10 +675,13 @@ export const createRuntimeExecutors = (
           },
           userMemory: state.metadata?.userMemory,
 
-          // Skills configuration for <available_skills> injection
+          // Skills configuration for <available_skills> injection.
+          // In chat mode the MessagesEngine force-disables this injector via
+          // its `enableAgentMode` param — no extra gate needed here.
           ...(resolvedSkills?.enabledSkills?.length && {
             skillsConfig: { enabledSkills: resolvedSkills.enabledSkills },
           }),
+          enableAgentMode: agentConfig.chatConfig?.enableAgentMode,
 
           // Topic reference summaries
           ...(topicReferences && { topicReferences }),
@@ -1628,9 +1648,15 @@ export const createRuntimeExecutors = (
         };
       } else if (canDispatchToClient) {
         log(`[${operationLogId}] Dispatching tool ${toolName} to client via Agent Gateway`);
+        const timeoutMs = resolveToolTimeoutMs({
+          apiName: chatToolPayload.apiName,
+          args: parsedArgs,
+          manifest: effectiveManifestMap[chatToolPayload.identifier],
+        });
         const dispatchResult = await dispatchClientTool(chatToolPayload, {
           operationId,
           streamManager,
+          timeoutMs,
         });
         execution = { attempts: 1, result: dispatchResult };
       } else {
@@ -1841,6 +1867,15 @@ export const createRuntimeExecutors = (
 
       log('[%s:%d] Tool execution completed', operationId, stepIndex);
 
+      // When the tool result carries an execSubAgent / execSubAgents state the
+      // GeneralChatAgent needs `stop: true` in the payload to detect it and
+      // emit the matching exec_sub_agent / exec_sub_agents instruction.  Without
+      // this flag the agent falls through to the normal LLM-call path and the
+      // sub-agent is never spawned.
+      const execTaskStateType = executionResult.state?.type as string | undefined;
+      const isExecTaskState =
+        execTaskStateType === 'execSubAgent' || execTaskStateType === 'execSubAgents';
+
       return {
         events,
         newState,
@@ -1851,6 +1886,7 @@ export const createRuntimeExecutors = (
             isSuccess,
             // Pass tool message ID as parentMessageId for the next LLM call
             parentMessageId: toolMessageId,
+            ...(isExecTaskState && { stop: true }),
             toolCall: chatToolPayload,
             toolCallId: chatToolPayload.id,
           },
@@ -2083,9 +2119,15 @@ export const createRuntimeExecutors = (
             };
           } else if (canDispatchToClient) {
             log(`[${operationLogId}] Dispatching tool ${toolName} to client via Agent Gateway`);
+            const timeoutMs = resolveToolTimeoutMs({
+              apiName: chatToolPayload.apiName,
+              args: batchParsedArgs,
+              manifest: batchManifestMap[chatToolPayload.identifier],
+            });
             const dispatchResult = await dispatchClientTool(chatToolPayload, {
               operationId,
               streamManager,
+              timeoutMs,
             });
             execution = { attempts: 1, result: dispatchResult };
           } else {
@@ -2405,6 +2447,210 @@ export const createRuntimeExecutors = (
           stepCount: state.stepCount + 1,
         },
       },
+    };
+  },
+
+  /**
+   * Server-side exec_sub_agent executor
+   *
+   * Mirrors the client-side exec_sub_agent executor in createAgentExecutors.ts
+   * but runs entirely server-side (no polling required).  Flow:
+   *   1. Create a task message (role: 'task') as a placeholder visible in the UI.
+   *   2. Fire execSubAgentTask via the injected callback so the sub-agent runs as
+   *      an independent QStash operation.
+   *   3. Return a sub_agent_result context so GeneralChatAgent calls the LLM once
+   *      more and the parent agent can acknowledge the delegation.
+   */
+  exec_sub_agent: async (instruction, state) => {
+    const { payload } = instruction as AgentInstructionExecSubAgent;
+    const { parentMessageId, task } = payload;
+    const events: AgentEvent[] = [];
+    const { operationId } = ctx;
+    const taskLogId = `${operationId}:exec_sub_agent`;
+
+    const topicId = ctx.topicId ?? state.metadata?.topicId;
+    const agentId = state.metadata?.agentId;
+    // targetAgentId is a cloud extension injected by agentManagement.callAgent
+    const targetAgentId = (task as any).targetAgentId ?? agentId;
+
+    let taskMessageId: string | undefined;
+    try {
+      const taskMessage = await ctx.messageModel.create({
+        agentId: agentId!,
+        content: '',
+        metadata: {
+          instruction: task.instruction,
+          taskTitle: task.description,
+          ...(targetAgentId && targetAgentId !== agentId && { targetAgentId }),
+        },
+        parentId: parentMessageId,
+        role: 'task',
+        threadId: state.metadata?.threadId ?? undefined,
+        topicId: topicId!,
+      });
+      taskMessageId = taskMessage.id;
+      log('[%s] Created task message: %s', taskLogId, taskMessageId);
+    } catch (error) {
+      log('[%s] Failed to create task message: %O', taskLogId, error);
+    }
+
+    const effectiveTaskMessageId = taskMessageId ?? parentMessageId;
+
+    let dispatched = false;
+    if (ctx.execSubAgentTask && topicId && agentId) {
+      try {
+        await ctx.execSubAgentTask({
+          agentId: targetAgentId,
+          groupId: state.metadata?.groupId ?? undefined,
+          instruction: task.instruction,
+          parentMessageId: effectiveTaskMessageId,
+          parentOperationId: operationId,
+          timeout: task.timeout,
+          title: task.description,
+          topicId,
+        });
+        dispatched = true;
+        log('[%s] Spawned sub-agent task for agent %s', taskLogId, targetAgentId);
+      } catch (error) {
+        log('[%s] Failed to spawn sub-agent task: %O', taskLogId, error);
+        if (taskMessageId) {
+          try {
+            await ctx.messageModel.update(taskMessageId, {
+              content: `Task failed to start: ${(error as Error).message}`,
+            });
+          } catch {
+            // best-effort
+          }
+        }
+      }
+    } else {
+      log('[%s] execSubAgentTask not available, skipping sub-agent dispatch', taskLogId);
+    }
+
+    return {
+      events,
+      newState: state,
+      nextContext: {
+        payload: {
+          parentMessageId: effectiveTaskMessageId,
+          result: {
+            success: dispatched,
+            taskMessageId: effectiveTaskMessageId,
+            threadId: '',
+          },
+        },
+        phase: 'sub_agent_result',
+        session: {
+          messageCount: state.messages.length,
+          sessionId: operationId,
+          status: 'running',
+          stepCount: state.stepCount + 1,
+        },
+      } as unknown as AgentRuntimeContext,
+    };
+  },
+
+  /**
+   * Server-side exec_sub_agents executor
+   *
+   * Same as exec_sub_agent but for a batch.  Each sub-agent is fired
+   * independently via execSubAgentTask and a task message is created for each.
+   */
+  exec_sub_agents: async (instruction, state) => {
+    const { payload } = instruction as AgentInstructionExecSubAgents;
+    const { parentMessageId, tasks } = payload;
+    const events: AgentEvent[] = [];
+    const { operationId } = ctx;
+    const taskLogId = `${operationId}:exec_sub_agents`;
+
+    const topicId = ctx.topicId ?? state.metadata?.topicId;
+    const agentId = state.metadata?.agentId;
+
+    log('[%s] Starting batch of %d tasks', taskLogId, tasks.length);
+
+    let lastTaskMessageId: string | undefined;
+    const taskResults: Array<{ success: boolean; taskMessageId: string; threadId: string }> = [];
+
+    for (const task of tasks) {
+      const targetAgentId = (task as any).targetAgentId ?? agentId;
+      let taskMessageId: string | undefined;
+
+      try {
+        const taskMessage = await ctx.messageModel.create({
+          agentId: agentId!,
+          content: '',
+          metadata: {
+            instruction: task.instruction,
+            taskTitle: task.description,
+            ...(targetAgentId && targetAgentId !== agentId && { targetAgentId }),
+          },
+          parentId: parentMessageId,
+          role: 'task',
+          threadId: state.metadata?.threadId ?? undefined,
+          topicId: topicId!,
+        });
+        taskMessageId = taskMessage.id;
+        lastTaskMessageId = taskMessageId;
+      } catch (error) {
+        log('[%s] Failed to create task message for "%s": %O', taskLogId, task.description, error);
+      }
+
+      let taskDispatched = false;
+      if (ctx.execSubAgentTask && topicId && agentId) {
+        try {
+          await ctx.execSubAgentTask({
+            agentId: targetAgentId,
+            groupId: state.metadata?.groupId ?? undefined,
+            instruction: task.instruction,
+            parentMessageId: taskMessageId ?? parentMessageId,
+            parentOperationId: operationId,
+            timeout: task.timeout,
+            title: task.description,
+            topicId,
+          });
+          taskDispatched = true;
+          log(
+            '[%s] Spawned sub-agent task "%s" for agent %s',
+            taskLogId,
+            task.description,
+            targetAgentId,
+          );
+        } catch (error) {
+          log('[%s] Failed to spawn task "%s": %O', taskLogId, task.description, error);
+          if (taskMessageId) {
+            try {
+              await ctx.messageModel.update(taskMessageId, {
+                content: `Task failed to start: ${(error as Error).message}`,
+              });
+            } catch {
+              // best-effort
+            }
+          }
+        }
+      }
+      taskResults.push({
+        success: taskDispatched,
+        taskMessageId: taskMessageId ?? parentMessageId,
+        threadId: '',
+      });
+    }
+
+    return {
+      events,
+      newState: state,
+      nextContext: {
+        payload: {
+          parentMessageId: lastTaskMessageId ?? parentMessageId,
+          results: taskResults,
+        },
+        phase: 'sub_agents_batch_result',
+        session: {
+          messageCount: state.messages.length,
+          sessionId: operationId,
+          status: 'running',
+          stepCount: state.stepCount + 1,
+        },
+      } as unknown as AgentRuntimeContext,
     };
   },
 

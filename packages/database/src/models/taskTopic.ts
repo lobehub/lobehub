@@ -1,5 +1,5 @@
 import type { BriefDecision, TaskTopicHandoff } from '@lobechat/types';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gte, sql } from 'drizzle-orm';
 
 import type { TaskTopicItem } from '../schemas/task';
 import { tasks, taskTopics } from '../schemas/task';
@@ -198,6 +198,17 @@ export class TaskTopicModel {
       .where(and(eq(taskTopics.topicId, topicId), eq(taskTopics.userId, this.userId)))
       .limit(1);
     return result[0] || null;
+  }
+
+  async countByTask(taskId: string, options?: { since?: Date }): Promise<number> {
+    const conditions = [eq(taskTopics.taskId, taskId), eq(taskTopics.userId, this.userId)];
+    if (options?.since) conditions.push(gte(taskTopics.createdAt, options.since));
+
+    const rows = await this.db
+      .select({ value: count() })
+      .from(taskTopics)
+      .where(and(...conditions));
+    return rows[0]?.value ?? 0;
   }
 
   async findByTaskId(taskId: string): Promise<TaskTopicItem[]> {

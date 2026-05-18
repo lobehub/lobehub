@@ -2,8 +2,8 @@
 
 import { MAX_ONBOARDING_STEPS } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import { memo } from 'react';
-import { Navigate } from 'react-router-dom';
+import { memo, useCallback } from 'react';
+import { Navigate, useNavigate } from 'react-router-dom';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import ModeSwitch from '@/features/Onboarding/components/ModeSwitch';
@@ -15,6 +15,7 @@ import { useUserStore } from '@/store/user';
 import { onboardingSelectors } from '@/store/user/selectors';
 
 const ClassicOnboardingPage = memo(() => {
+  const navigate = useNavigate();
   const [isUserStateInit, commonStepsCompleted, currentStep, goToNextStep, goToPreviousStep] =
     useUserStore((s) => [
       s.isUserStateInit,
@@ -23,6 +24,12 @@ const ClassicOnboardingPage = memo(() => {
       s.goToNextStep,
       s.goToPreviousStep,
     ]);
+
+  // FullNameStep is the branch's first step, so its back button leaves the
+  // branch and re-enters the shared prefix's ResponseLanguageStep (step 2).
+  const backToResponseLanguageStep = useCallback(() => {
+    navigate('/onboarding?step=2', { replace: true });
+  }, [navigate]);
 
   if (!isUserStateInit) {
     return <Loading debugId="ClassicOnboarding" />;
@@ -35,7 +42,7 @@ const ClassicOnboardingPage = memo(() => {
   const renderStep = () => {
     switch (currentStep) {
       case 1: {
-        return <FullNameStep onBack={goToPreviousStep} onNext={goToNextStep} />;
+        return <FullNameStep onBack={backToResponseLanguageStep} onNext={goToNextStep} />;
       }
       case 2: {
         return <InterestsStep onBack={goToPreviousStep} onNext={goToNextStep} />;

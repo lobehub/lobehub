@@ -1,14 +1,22 @@
 'use client';
 
-import { ContextMenuTrigger, type GenericItemType } from '@lobehub/ui';
+import { ContextMenuTrigger, type GenericItemType, Icon } from '@lobehub/ui';
 import { ScrollArea } from '@lobehub/ui/base-ui';
+import { SkillsIcon } from '@lobehub/ui/icons';
 import { createStaticStyles } from 'antd-style';
-import { XIcon } from 'lucide-react';
+import { FileIcon, XIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
+
+const SKILL_PATH_RE = /\/\.(?:agents|claude)\/skills\/([^/]+)\/SKILL\.md$/;
+
+const resolveSkillName = (filePath: string): string | null => {
+  const match = filePath.match(SKILL_PATH_RE);
+  return match ? match[1] : null;
+};
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   tabClose: css`
@@ -154,6 +162,8 @@ const TabStrip = memo(() => {
     >
       {openLocalFiles.map(({ filePath }, index) => {
         const filename = filePath.split('/').at(-1) ?? filePath;
+        const skillName = resolveSkillName(filePath);
+        const label = skillName ?? filename;
         const isActive = filePath === activeLocalFilePath;
 
         return (
@@ -172,7 +182,8 @@ const TabStrip = memo(() => {
                 }
               }}
             >
-              <span className={styles.tabLabel}>{filename}</span>
+              <Icon icon={skillName ? SkillsIcon : FileIcon} size={12} />
+              <span className={styles.tabLabel}>{label}</span>
               <button
                 aria-label={`Close ${filename}`}
                 className={styles.tabClose}

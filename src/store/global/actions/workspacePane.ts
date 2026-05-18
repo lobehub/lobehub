@@ -3,7 +3,7 @@ import { produce } from 'immer';
 import { INBOX_SESSION_ID } from '@/const/session';
 import { SESSION_CHAT_URL } from '@/const/url';
 import type { GlobalStore } from '@/store/global';
-import type { ModelDetailPanelExpandedKey } from '@/store/global/initialState';
+import type { ModelDetailPanelExpandedKey, WorkingSidebarTab } from '@/store/global/initialState';
 import type { StoreSetter } from '@/store/types';
 import { getStableNavigate } from '@/utils/stableNavigate';
 import { setNamespace } from '@/utils/storeDebug';
@@ -123,7 +123,7 @@ export class GlobalWorkspacePaneActionImpl {
     this.#get().updateSystemStatus({ showSystemRole }, n('toggleMobileTopic', newValue));
   };
 
-  setWorkingSidebarTab = (tab: 'resources' | 'review' | 'files'): void => {
+  setWorkingSidebarTab = (tab: WorkingSidebarTab): void => {
     if (this.#get().status.workingSidebarTab === tab) return;
     this.#get().updateSystemStatus({ workingSidebarTab: tab }, n('setWorkingSidebarTab', tab));
   };

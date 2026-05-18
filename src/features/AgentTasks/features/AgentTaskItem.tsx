@@ -22,6 +22,8 @@ interface TaskItemProps {
   variant?: 'compact' | 'default';
 }
 
+const FLEX_MIN_WIDTH_0 = { minWidth: 0 };
+
 const TASK_STATUS_SET = new Set<TaskStatus>([
   'backlog',
   'canceled',
@@ -162,7 +164,7 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, variant = 'default' }) => {
             />
           </Flexbox>
           <TaskLatestActivity activities={taskDetail?.activities} />
-          <Flexbox horizontal align={'center'} gap={8}>
+          <Flexbox horizontal align={'center'} gap={8} style={FLEX_MIN_WIDTH_0}>
             <TaskPriorityTag priority={task.priority} taskIdentifier={task.identifier} />
             {scheduleNode}
             {timeNode}

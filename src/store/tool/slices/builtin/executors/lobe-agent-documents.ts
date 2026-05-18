@@ -26,8 +26,8 @@ const runtime = new AgentDocumentsExecutionRuntime({
       topicId,
       trigger,
     }),
-  listDocuments: async ({ agentId }) => {
-    const docs = await agentDocumentService.listDocuments({ agentId });
+  listDocuments: async ({ agentId, sourceType }) => {
+    const docs = await agentDocumentService.listDocuments({ agentId, sourceType });
     return docs.map((d) => ({
       documentId: d.documentId,
       filename: d.filename,
@@ -35,10 +35,11 @@ const runtime = new AgentDocumentsExecutionRuntime({
       title: d.title,
     }));
   },
-  listTopicDocuments: async ({ agentId, topicId }) => {
+  listTopicDocuments: async ({ agentId, sourceType, topicId }) => {
     const docs = await agentDocumentService.listDocuments({
       agentId,
-      target: 'currentTopic',
+      scope: 'currentTopic',
+      sourceType,
       topicId,
     });
     return docs.map((d) => ({

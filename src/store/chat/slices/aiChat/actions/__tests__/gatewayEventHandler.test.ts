@@ -20,9 +20,15 @@ vi.mock('@/store/chat/slices/aiChat/actions/agentSignalBridge', () => ({
   emitClientAgentSignalSourceEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
+const getExecutorMock = vi.fn();
+vi.mock('@/store/tool/slices/builtin/executors', () => ({
+  getExecutor: (...args: unknown[]) => getExecutorMock(...args),
+}));
+
 // ─── Test Helpers ───
 
 function createMockStore() {
+  let reasoningCounter = 0;
   return {
     associateMessageWithOperation: vi.fn(),
     completeOperation: vi.fn(),
@@ -34,6 +40,13 @@ function createMockStore() {
       'op-1': { context: { agentId: 'agent-1', scope: 'session', topicId: 'topic-1' } },
     } as Record<string, any>,
     replaceMessages: vi.fn(),
+    startOperation: vi.fn(() => {
+      reasoningCounter += 1;
+      return {
+        abortController: new AbortController(),
+        operationId: `op-reasoning-${reasoningCounter}`,
+      };
+    }),
   };
 }
 
@@ -224,6 +237,131 @@ describe('createGatewayEventHandler', () => {
     });
   });
 
+  describe('reasoning operation lifecycle', () => {
+    it('starts a reasoning op on the first reasoning chunk and associates it with the current assistant', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('stream_chunk', { chunkType: 'reasoning', reasoning: 'pondering' }));
+      handler(makeEvent('stream_chunk', { chunkType: 'reasoning', reasoning: '...' }));
+      await flush();
+
+      // Only one startOperation call — second chunk reuses the existing op
+      expect(store.startOperation).toHaveBeenCalledTimes(1);
+      expect(store.startOperation).toHaveBeenCalledWith({
+        context: expect.objectContaining({
+          agentId: 'agent-1',
+          messageId: 'msg-initial',
+          topicId: 'topic-1',
+        }),
+        parentOperationId: 'op-1',
+        type: 'reasoning',
+      });
+      expect(store.associateMessageWithOperation).toHaveBeenCalledWith(
+        'msg-initial',
+        'op-reasoning-1',
+      );
+      // The reasoning op is NOT completed while only reasoning chunks have arrived
+      expect(store.completeOperation).not.toHaveBeenCalled();
+    });
+
+    it('completes the reasoning op when text starts streaming', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('stream_chunk', { chunkType: 'reasoning', reasoning: 'thinking' }));
+      handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'answer' }));
+      await flush();
+
+      expect(store.completeOperation).toHaveBeenCalledWith('op-reasoning-1');
+    });
+
+    it('completes the reasoning op when tools_calling starts', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('stream_chunk', { chunkType: 'reasoning', reasoning: 'thinking' }));
+      handler(
+        makeEvent('stream_chunk', {
+          chunkType: 'tools_calling',
+          toolsCalling: [{ id: 'tc-1' }],
+        }),
+      );
+      await flush();
+
+      expect(store.completeOperation).toHaveBeenCalledWith('op-reasoning-1');
+    });
+
+    it('starts a new reasoning op when reasoning resumes after text in the same stream', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('stream_chunk', { chunkType: 'reasoning', reasoning: 'first pass' }));
+      handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'partial' }));
+      handler(makeEvent('stream_chunk', { chunkType: 'reasoning', reasoning: 'second pass' }));
+      await flush();
+
+      expect(store.startOperation).toHaveBeenCalledTimes(2);
+      expect(store.completeOperation).toHaveBeenCalledWith('op-reasoning-1');
+      expect(store.completeOperation).not.toHaveBeenCalledWith('op-reasoning-2');
+    });
+
+    it('completes any open reasoning op on stream_end', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('stream_chunk', { chunkType: 'reasoning', reasoning: 'thinking' }));
+      handler(makeEvent('stream_end'));
+      await flush();
+
+      expect(store.completeOperation).toHaveBeenCalledWith('op-reasoning-1');
+    });
+
+    it('completes any open reasoning op on stream_start (carry-over between steps)', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('stream_chunk', { chunkType: 'reasoning', reasoning: 'thinking' }));
+      handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-step2' } }));
+      await flush();
+
+      expect(store.completeOperation).toHaveBeenCalledWith('op-reasoning-1');
+    });
+
+    it('completes any open reasoning op on agent_runtime_end', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('stream_chunk', { chunkType: 'reasoning', reasoning: 'thinking' }));
+      handler(makeEvent('agent_runtime_end'));
+      await flush();
+
+      expect(store.completeOperation).toHaveBeenCalledWith('op-reasoning-1');
+    });
+
+    it('completes any open reasoning op on error', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('stream_chunk', { chunkType: 'reasoning', reasoning: 'thinking' }));
+      handler(makeEvent('error', { message: 'boom' }));
+      await flush();
+
+      expect(store.completeOperation).toHaveBeenCalledWith('op-reasoning-1');
+    });
+
+    it('does not start a reasoning op for text-only streams', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'hello' }));
+      handler(makeEvent('stream_end'));
+      await flush();
+
+      expect(store.startOperation).not.toHaveBeenCalled();
+    });
+  });
+
   describe('stream_end', () => {
     it('should clear tool streaming only', async () => {
       const store = createMockStore();
@@ -350,6 +488,109 @@ describe('createGatewayEventHandler', () => {
       await flush();
 
       expect(store.replaceMessages).toHaveBeenCalled();
+    });
+
+    it('should dispatch onAfterCall when payload is wrapped as { parentMessageId, toolCalling } (real gateway shape)', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+      const onAfterCall = vi.fn().mockResolvedValue(undefined);
+      getExecutorMock.mockReturnValueOnce({ onAfterCall });
+
+      handler(
+        makeEvent('tool_end', {
+          isSuccess: true,
+          payload: {
+            parentMessageId: 'msg-parent',
+            toolCalling: {
+              apiName: 'deleteTask',
+              arguments: JSON.stringify({ identifier: 'T-3' }),
+              id: 'tc-1',
+              identifier: 'lobe-task',
+            },
+          },
+          result: { content: 'Task deleted', success: true },
+        }),
+      );
+      await flush();
+
+      expect(getExecutorMock).toHaveBeenCalledWith('lobe-task');
+      expect(onAfterCall).toHaveBeenCalledWith({
+        apiName: 'deleteTask',
+        identifier: 'lobe-task',
+        params: { identifier: 'T-3' },
+        result: { content: 'Task deleted', success: true },
+        toolCallId: 'tc-1',
+      });
+    });
+
+    it('should also dispatch onAfterCall when payload is the flat ChatToolPayload', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+      const onAfterCall = vi.fn().mockResolvedValue(undefined);
+      getExecutorMock.mockReturnValueOnce({ onAfterCall });
+
+      handler(
+        makeEvent('tool_end', {
+          isSuccess: true,
+          payload: {
+            apiName: 'createTask',
+            arguments: JSON.stringify({ name: 'New', instruction: 'do thing' }),
+            id: 'tc-2',
+            identifier: 'lobe-task',
+          },
+          result: { success: true },
+        }),
+      );
+      await flush();
+
+      expect(onAfterCall).toHaveBeenCalledWith(
+        expect.objectContaining({
+          apiName: 'createTask',
+          identifier: 'lobe-task',
+          toolCallId: 'tc-2',
+        }),
+      );
+    });
+
+    it('should skip onAfterCall when payload identifier/apiName are missing', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+      const onAfterCall = vi.fn();
+      getExecutorMock.mockReturnValue({ onAfterCall });
+
+      handler(makeEvent('tool_end', { isSuccess: true, payload: { parentMessageId: 'x' } }));
+      await flush();
+
+      expect(onAfterCall).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('tool_start', () => {
+    it('should dispatch onBeforeCall with the unwrapped ChatToolPayload', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+      const onBeforeCall = vi.fn().mockResolvedValue(undefined);
+      getExecutorMock.mockReturnValueOnce({ onBeforeCall });
+
+      handler(
+        makeEvent('tool_start', {
+          parentMessageId: 'msg-parent',
+          toolCalling: {
+            apiName: 'editTask',
+            arguments: JSON.stringify({ identifier: 'T-5', name: 'renamed' }),
+            id: 'tc-3',
+            identifier: 'lobe-task',
+          },
+        }),
+      );
+      await flush();
+
+      expect(onBeforeCall).toHaveBeenCalledWith({
+        apiName: 'editTask',
+        identifier: 'lobe-task',
+        params: { identifier: 'T-5', name: 'renamed' },
+        toolCallId: 'tc-3',
+      });
     });
   });
 

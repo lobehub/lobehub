@@ -1,16 +1,27 @@
 'use client';
 
 import type { BuiltinInterventionProps } from '@lobechat/types';
-import { Button, Flexbox, Icon, Tabs, Text } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Tabs, Text, TextArea } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
-import { Check, Send, X } from 'lucide-react';
+import { ArrowLeft, Check, PenLine, Send, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useConversationStore } from '@/features/Conversation/store';
 import { dataSelectors } from '@/features/Conversation/store/slices/data/selectors';
 import { useChatStore } from '@/store/chat';
 
 import type { AskUserQuestionArgs, AskUserQuestionItem } from '../../types';
+
+/**
+ * Sentinel key the bridge formatter (`AskUserMcpServer.formatAnswerForCC`)
+ * looks for to detect escape-mode replies. When present, the payload is just
+ * `{ __freeform__: <text> }` (multi-choice picks are intentionally absent)
+ * and the text is forwarded to CC verbatim — no `User answers:` framing.
+ * Matches the convention `lobe-user-interaction` already uses for its own
+ * "Or type directly" escape hatch.
+ */
+const FREEFORM_PAYLOAD_KEY = '__freeform__';
 
 /**
  * Server-side bridge timeout (matches `AskUserMcpServer.pendingTimeoutMs`).
@@ -30,6 +41,23 @@ const formatRemaining = (msLeft: number): string => {
 };
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
+  // "Or type directly" / "Back to options" link — slim secondary text that
+  // sits alongside Skip in the action bar; matches the
+  // `lobe-user-interaction` escape-toggle styling so the two flows feel
+  // like the same control.
+  escapeLink: css`
+    cursor: pointer;
+
+    display: inline-flex;
+    gap: 4px;
+    align-items: center;
+
+    transition: color 0.12s ease;
+
+    &:hover {
+      color: ${cssVar.colorText};
+    }
+  `,
   // Card sits inline with the chat — no surrounding panel chrome. Hover
   // tints the row so the stack reads as clickable; selection swaps to a
   // filled `colorPrimaryBg` so the pick is visually weighty.
@@ -133,6 +161,7 @@ interface QuestionPanelProps {
 }
 
 const QuestionPanel = memo<QuestionPanelProps>(({ question, answer, disabled, onToggle }) => {
+  const { t } = useTranslation('tool');
   const isOptionSelected = (label: string): boolean =>
     question.multiSelect ? Array.isArray(answer) && answer.includes(label) : answer === label;
 
@@ -142,7 +171,7 @@ const QuestionPanel = memo<QuestionPanelProps>(({ question, answer, disabled, on
         {question.header && <Text type="secondary">{question.header}</Text>}
         {question.multiSelect && (
           <Text fontSize={12} type="secondary">
-            (multi-select)
+            {t('claudeCode.askUserQuestion.multiSelectTag')}
           </Text>
         )}
       </Flexbox>
@@ -189,6 +218,7 @@ QuestionPanel.displayName = 'CCAskUserQuestionPanel';
  */
 const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestionArgs>>(
   ({ args, messageId, onInteractionAction }) => {
+    const { t } = useTranslation('tool');
     const questions = args?.questions ?? [];
 
     // Persisted draft (survives unmount / HMR / refresh) — read from the tool
@@ -201,9 +231,27 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
     });
     const setInterventionDraft = useChatStore((s) => s.setInterventionDraft);
 
-    const [answers, setAnswers] = useState<Record<string, string | string[]>>(
-      () => persistedDraft ?? {},
-    );
+    // Persisted draft may carry both form picks and escape-mode text under
+    // `__freeform__`. Split them so `answers` only contains per-question
+    // picks and `escapeText` owns the freeform string — otherwise a stale
+    // `__freeform__` key would leak into the form-mode submit payload.
+    const [answers, setAnswers] = useState<Record<string, string | string[]>>(() => {
+      if (!persistedDraft) return {};
+      const { [FREEFORM_PAYLOAD_KEY]: _, ...rest } = persistedDraft;
+      return rest;
+    });
+    // Escape-mode mirrors `lobe-user-interaction`'s "Or type directly"
+    // toggle — options and freeform are mutually exclusive, not stacked.
+    // Persisted text under the `__freeform__` key restores the user back
+    // into escape mode on remount; an empty draft starts in form mode.
+    const [escapeText, setEscapeText] = useState<string>(() => {
+      const v = persistedDraft?.[FREEFORM_PAYLOAD_KEY];
+      return typeof v === 'string' ? v : '';
+    });
+    const [escapeActive, setEscapeActive] = useState<boolean>(() => {
+      const v = persistedDraft?.[FREEFORM_PAYLOAD_KEY];
+      return typeof v === 'string' && v.length > 0;
+    });
     const [submitting, setSubmitting] = useState(false);
     const [activeTab, setActiveTab] = useState<string>(() => {
       // Resume on the first unanswered question so coming back lands the user
@@ -240,7 +288,8 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
           } else {
             next = { ...prev, [q.question]: label };
           }
-          // Persist to pluginState so the picks survive remount / refresh.
+          // Persist picks only. Form mode is mutually exclusive with escape
+          // mode, so we never co-mingle `__freeform__` into a form-mode draft.
           setInterventionDraft(messageId, next);
 
           // Single-select auto-advance: if there's a next unanswered question,
@@ -280,7 +329,47 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
       [onInteractionAction, submitting],
     );
 
-    const handleSubmit = useCallback(() => submitWith(answers), [answers, submitWith]);
+    const handleEscapeTextChange = useCallback(
+      (value: string) => {
+        setEscapeText(value);
+        // Only persist the freeform text while escape mode is the active UI.
+        // Stale `__freeform__` entries left in the draft would re-arm escape
+        // mode on the next mount, which is not what the user signalled.
+        setInterventionDraft(messageId, {
+          ...answers,
+          [FREEFORM_PAYLOAD_KEY]: value,
+        });
+      },
+      [answers, messageId, setInterventionDraft],
+    );
+
+    const handleEscapeToggle = useCallback(() => {
+      setEscapeActive((prev) => {
+        const next = !prev;
+        // Mirror the toggle into the draft: turning escape ON saves the
+        // current text (so a refresh resumes here); turning it OFF strips
+        // `__freeform__` so the next mount lands back in form mode.
+        if (next) {
+          setInterventionDraft(messageId, {
+            ...answers,
+            [FREEFORM_PAYLOAD_KEY]: escapeText,
+          });
+        } else {
+          setInterventionDraft(messageId, answers);
+        }
+        return next;
+      });
+    }, [answers, escapeText, messageId, setInterventionDraft]);
+
+    const handleSubmit = useCallback(() => {
+      if (escapeActive) {
+        // Escape mode is mutually exclusive with picks — send the text alone
+        // under `__freeform__`. Bridge formatter forwards it to CC verbatim.
+        void submitWith({ [FREEFORM_PAYLOAD_KEY]: escapeText.trim() });
+      } else {
+        void submitWith(answers);
+      }
+    }, [answers, escapeActive, escapeText, submitWith]);
 
     const handleSkip = useCallback(async () => {
       if (!onInteractionAction || submitting) return;
@@ -307,8 +396,16 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
     // Beats letting the server-side bridge time out into a `cancelled`
     // result — the model gets a structured answer it can act on instead of
     // a "user didn't respond" isError. Single-shot via `submitting` guard.
+    //
+    // Escape-mode special case: if the user is in escape mode with non-empty
+    // text when the countdown hits zero, submit that text as-is rather than
+    // discarding their work and falling back to option 1.
     useEffect(() => {
       if (!expired || submitting || questions.length === 0) return;
+      if (escapeActive && escapeText.trim().length > 0) {
+        void submitWith({ [FREEFORM_PAYLOAD_KEY]: escapeText.trim() });
+        return;
+      }
       const fallback: Record<string, string | string[]> = { ...answers };
       for (const q of questions) {
         const a = fallback[q.question];
@@ -319,14 +416,17 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
         }
       }
       void submitWith(fallback);
-    }, [expired, submitting, questions, answers, submitWith]);
+    }, [expired, submitting, questions, answers, escapeActive, escapeText, submitWith]);
 
     const isMulti = questions.length > 1;
     const activeQuestion = questions[Number(activeTab)] ?? questions[0];
+    const isSubmitDisabled = escapeActive
+      ? !escapeText.trim() || submitting || expired
+      : !allAnswered || expired || submitting;
 
     return (
       <Flexbox gap={12}>
-        {isMulti && (
+        {!escapeActive && isMulti && (
           <Tabs
             compact
             activeKey={activeTab}
@@ -347,34 +447,69 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
           />
         )}
 
-        {activeQuestion && (
-          <QuestionPanel
-            answer={answers[activeQuestion.question]}
+        {escapeActive ? (
+          <TextArea
+            autoSize={{ maxRows: 8, minRows: 3 }}
             disabled={expired || submitting}
-            question={activeQuestion}
-            onToggle={handleToggle}
+            placeholder={t('claudeCode.askUserQuestion.escape.placeholder')}
+            value={escapeText}
+            variant="filled"
+            onChange={(e) => handleEscapeTextChange(e.target.value)}
           />
+        ) : (
+          activeQuestion && (
+            <QuestionPanel
+              answer={answers[activeQuestion.question]}
+              disabled={expired || submitting}
+              question={activeQuestion}
+              onToggle={handleToggle}
+            />
+          )
         )}
 
         <Flexbox horizontal align="center" gap={8} justify="space-between">
-          <Text fontSize={12} type="secondary">
-            {expired
-              ? 'Time expired — using option 1 of each question.'
-              : `Time remaining: ${formatRemaining(deadline - now)} · ` +
-                'unanswered questions default to option 1 on timeout.'}
-          </Text>
+          <Flexbox horizontal align="center" gap={12}>
+            {escapeActive ? (
+              <Text
+                className={styles.escapeLink}
+                fontSize={12}
+                type="secondary"
+                onClick={expired || submitting ? undefined : handleEscapeToggle}
+              >
+                <Icon icon={ArrowLeft} size={12} />
+                {t('claudeCode.askUserQuestion.escape.back')}
+              </Text>
+            ) : (
+              <Text
+                className={styles.escapeLink}
+                fontSize={12}
+                type="secondary"
+                onClick={expired || submitting ? undefined : handleEscapeToggle}
+              >
+                {t('claudeCode.askUserQuestion.escape.enter')}
+                <Icon icon={PenLine} size={12} />
+              </Text>
+            )}
+            <Text fontSize={12} type="secondary">
+              {expired
+                ? t('claudeCode.askUserQuestion.timeExpired')
+                : t('claudeCode.askUserQuestion.timeRemaining', {
+                    time: formatRemaining(deadline - now),
+                  })}
+            </Text>
+          </Flexbox>
           <Flexbox horizontal gap={8}>
             <Button disabled={submitting} icon={X} onClick={handleSkip}>
-              Skip
+              {t('claudeCode.askUserQuestion.skip')}
             </Button>
             <Button
-              disabled={!allAnswered || expired || submitting}
+              disabled={isSubmitDisabled}
               icon={Send}
               loading={submitting}
               type="primary"
               onClick={handleSubmit}
             >
-              Submit
+              {t('claudeCode.askUserQuestion.submit')}
             </Button>
           </Flexbox>
         </Flexbox>

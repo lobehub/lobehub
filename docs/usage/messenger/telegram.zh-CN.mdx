@@ -1,0 +1,76 @@
+---
+title: 在 Telegram 使用 LobeHub
+description: >-
+  将 LobeHub 账号关联到 Telegram 上的官方 LobeHub 机器人。给机器人发送
+  /start，选择默认 Agent，就能在任意 Telegram 会话里直接和你的 AI 助手对话，无需自建机器人。
+tags:
+  - Messenger
+  - Telegram
+  - LobeHub 机器人
+  - 账号关联
+---
+
+# 在 Telegram 使用 LobeHub
+
+Telegram 是 Messenger 里最简单的平台：只有一个全局 LobeHub 机器人，任何 Telegram 账号都能直接私聊它。你只需要把自己的 LobeHub 账号绑一次。
+
+## 前置条件
+
+- 一个 LobeHub 账号
+- 任意设备上的 Telegram 账号
+
+## 第 1 步：打开「设置 → Messenger」
+
+在 LobeHub 中打开 **设置 → Messenger**，点击 **Telegram** 卡片。
+
+{/* TODO: 截图 —— 设置 → Messenger 入口页，高亮 Telegram 卡片 */}
+
+## 第 2 步：点击「连接」
+
+在 Telegram 详情页右上角点击 **连接**。弹窗里会给出两种方式打开机器人。
+
+{/* TODO: 截图 —— Telegram 详情页（Connections 列表为空 + Connect 按钮） */}
+
+## 第 3 步：在 Telegram 中打开机器人
+
+在弹窗里点 **在 Telegram 中打开**，或用手机扫描二维码，Telegram 会自动打开官方 LobeHub 机器人。
+
+{/* TODO: 截图 —— LinkModal 弹窗（含 Open in Telegram 按钮和二维码） */}
+
+## 第 4 步：发送 `/start`
+
+在机器人会话里发送 `/start`。机器人会回复一个一次性确认链接。
+
+{/* TODO: 截图 —— Telegram 机器人会话：用户发送 /start，机器人回复带 Link Account 按钮的消息 */}
+
+## 第 5 步：在浏览器里确认关联
+
+点击机器人回复里的链接，会跳回 LobeHub 网页。如未登录请先登录，然后选择一个 **默认 Agent** —— 之后你在该机器人里发的每条消息都会路由到这个 Agent。
+
+{/* TODO: 截图 —— LobeHub 确认关联页面，含 Agent 选择器 */}
+
+确认后，Telegram 详情页会以 “user” 行的形式显示你的关联，旁边可以看到当前 Agent。
+
+{/* TODO: 截图 —— Telegram 详情页：已连接的 user 行 */}
+
+## 切换接收消息的 Agent
+
+两种等价方式：
+
+- **在 Telegram 里** —— 给机器人发送 `/agents`，挑一个新的 Agent。
+- **在 LobeHub 里** —— 打开 **设置 → Messenger → Telegram**，在你的关联行里使用 Agent 选择器。
+
+切换会对你发送的下一条消息立即生效。
+
+## 断开连接
+
+在 **设置 → Messenger → Telegram** 里点关联行上的 **断开**。断开后机器人不再接收你的消息，直到你重新发送 `/start` 关联。
+
+> 在 LobeHub 里断开不会从 Telegram 聊天列表里删掉机器人 —— 如果不想再看到它，可以在 Telegram 里手动删除该会话。
+
+## 故障排查
+
+- **机器人不回复 `/start`** —— 先确认 **设置 → Messenger** 里有 Telegram 卡片。如果当前部署没启用 Telegram，机器人不会响应。
+- **"This link is already used"** —— 一次性链接只能用一次，重新发送 `/start` 获取新链接。
+- **"This account is already linked"** —— 这个 Telegram 账号已绑定到另一个 LobeHub 账号。请用那个 LobeHub 账号登录管理，或先在那边解绑。
+- **"Another Telegram account is already linked"** —— 你的 LobeHub 账号在 Telegram 上已有关联。先在 **设置 → Messenger → Telegram** 断开旧关联，再绑定新的 Telegram 账号。

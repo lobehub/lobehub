@@ -43,7 +43,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 const MessengerSettings = memo(() => {
-  const { t } = useTranslation('messenger');
+  const { t, ready } = useTranslation('messenger');
   const { message } = App.useApp();
   const navigate = useNavigate();
   const params = useParams<{ sub?: string }>();
@@ -75,6 +75,10 @@ const MessengerSettings = memo(() => {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!selected) return;
+    // Wait for the `messenger` namespace to finish loading; otherwise the
+    // imperative toast captures the raw key as its text (useTranslation has
+    // `useSuspense: false`, so the component doesn't block on namespace load).
+    if (!ready) return;
     const url = new URL(window.location.href);
     const installed = url.searchParams.get('installed');
     const error = url.searchParams.get('error');
@@ -107,7 +111,7 @@ const MessengerSettings = memo(() => {
     url.searchParams.delete('error');
     url.searchParams.delete('workspace');
     window.history.replaceState({}, '', url.pathname + (url.search ? `?${url.searchParams}` : ''));
-  }, [message, t, selected]);
+  }, [message, t, selected, ready]);
 
   const platforms = platformsSWR.data ?? [];
   const selectedMeta = platforms.find((p) => p.id === selected);

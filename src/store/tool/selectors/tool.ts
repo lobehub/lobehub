@@ -23,6 +23,19 @@ const metaList = (s: ToolStoreState): LobeToolMeta[] => {
   return builtinToolSelectors.metaList(s).concat(pluginList).concat(lobehubSkillList);
 };
 
+/**
+ * All installed discoverable tools across every source (builtins, plugins, skills).
+ * Excludes only tools with `discoverable: false` (pure infrastructure / internal).
+ * Includes hidden and runtime-managed builtins (web-browsing, memory, cloud-sandbox, etc.)
+ * that `metaList` hides from the chat toolbar.
+ */
+const discoverableMetaList = (s: ToolStoreState): LobeToolMeta[] => {
+  const pluginList = pluginSelectors.installedPluginMetaList(s) as LobeToolMeta[];
+  const lobehubSkillList = lobehubSkillStoreSelectors.metaList(s) as LobeToolMeta[];
+
+  return builtinToolSelectors.discoverableMetaList(s).concat(pluginList).concat(lobehubSkillList);
+};
+
 const getMetaById =
   (id: string) =>
   (s: ToolStoreState): MetaData | undefined => {
@@ -172,6 +185,7 @@ const availableToolsForDiscovery = (s: ToolStoreState): AvailableToolForDiscover
 
 export const toolSelectors = {
   availableToolsForDiscovery,
+  discoverableMetaList,
   getManifestById,
   getManifestLoadingStatus,
   getMetaById,

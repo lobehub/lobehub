@@ -7,11 +7,13 @@ import type { ChatStreamPayload, ModelRuntime } from '@lobechat/model-runtime';
 import { consumeStreamUntilDone } from '@lobechat/model-runtime';
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import { tracer } from '@lobechat/observability-otel/modules/agent-signal';
+import {
+  createAgentSignalSelfIterationPrompt,
+  createAgentSignalSelfIterationSystemRole,
+  createAgentSignalSelfIterationToolSystemRole,
+} from '@lobechat/prompts';
 import type { ChatToolPayload, MessageToolCall, ModelUsage } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
-import { u } from 'unist-builder';
-import { toXml } from 'xast-util-to-xml';
-import { x } from 'xastscript';
 
 import type { NightlyReviewContext } from './review/collect';
 import type { SelfReviewIdea, SelfReviewProposalBaseSnapshot } from './review/proposal';
@@ -427,27 +429,12 @@ const createToolManifest = (mode: IterationMode): LobeToolManifest => {
       description: 'Read evidence and apply safe resource operations.',
       title: 'Agent Signal Self-Iteration',
     },
-    systemRole:
-      mode === 'review'
-        ? 'Use resource read tools before writes when evidence is incomplete. Use getEvidenceDigest for topic/message/tool_call/agent_document evidenceRefs. Use readSelfReviewProposal only with proposal keys from proposalActivity.active or listSelfReviewProposals, never with evidence ids. Treat write tool results as the source of truth.'
-        : 'Use resource read tools before writes when evidence is incomplete. Direct-apply only safe memory or bounded skill updates. Record approval-gated or unsupported reflection output with recordSelfFeedbackIntent, and record non-actionable thoughts with recordReflectionIdea.',
+    systemRole: createAgentSignalSelfIterationToolSystemRole(mode),
     type: 'builtin',
   };
 };
 
 export const selfIterationToolManifest = createToolManifest('review');
-
-const SELF_ITERATION_SYSTEM_ROLE = [
-  'You are the Agent Signal self-iteration agent.',
-  'Inspect the bounded nightly review context and use the provided self-iteration tools to read evidence or apply safe write operations.',
-  'Evidence ids and proposal keys are different namespaces: read topic/message/tool_call/agent_document evidence with getEvidenceDigest; read proposals with readSelfReviewProposal only when using proposalActivity.active[].proposalKey or keys returned from listSelfReviewProposals.',
-  'Never claim that a write happened unless a write tool result confirms it.',
-  'Use writeMemory for explicit durable user preferences such as response style, summary structure, or verification-reporting preferences. Do not turn those preference memories into skills or proposals.',
-  'Use createSkillIfAbsent only when evidence describes a reusable workflow and you can provide a non-empty skill name and full bodyMarkdown.',
-  'When review evidence supports an approval-gated change, call createSelfReviewProposal in this run; do not offer to draft it later.',
-  'For createSelfReviewProposal actions, use actionType exactly create_skill, refine_skill, consolidate_skill, or record_idea. For refine_skill include target.skillDocumentId and operation { domain: "skill", operation: "refine", input: { skillDocumentId, bodyMarkdown } }. For consolidate_skill include operation { domain: "skill", operation: "consolidate", input: { canonicalSkillDocumentId, sourceSkillIds, bodyMarkdown } }. Prefer recordSelfReviewIdea instead of proposal actions when the output is only a thought or question.',
-  'Stop after the useful self-iteration work is complete and summarize the confirmed outcome.',
-].join('\n');
 
 const TOOL_NAME_SEPARATOR = '____';
 const SELF_ITERATION_TOOL_ERROR_MESSAGE = 'Self-iteration tool call failed.';
@@ -463,79 +450,15 @@ const getIterationWindow = (input: ExecuteSelfIterationInput): IterationWindow =
   timezone: input.window?.timezone,
 });
 
-const createNightlyReviewPromptXml = (
-  input: ExecuteSelfIterationInput,
-  window: IterationWindow,
-) => {
-  return toXml(
-    u('root', [
-      x(
-        'self_iteration_review',
-        {
-          agent_id: input.agentId,
-          review_window_end: window.end,
-          review_window_start: window.start,
-          source_id: input.sourceId,
-          user_id: input.userId,
-        },
-        x(
-          'review_objective',
-          'Inspect this nightly review context and create a self-review proposal when the evidence supports an approval-gated change. Do not finish with only text when a proposal is required.',
-        ),
-        x(
-          'review_policy_markdown',
-          // Keep this as a rule table, not a precomputed proposal payload. The model still has
-          // to decide and call the write tool, so local E2E proves the self-review path instead
-          // of only proving that a hard-coded proposal candidate was copied into the tool call.
-          [
-            'Use these deterministic self-review signal rules before deciding to finish without tools.',
-            '',
-            '| Signal kind | Required decision | Tool call | Notes |',
-            '| --- | --- | --- | --- |',
-            '| `skill_document_with_tool_failure` | Approval-gated skill refinement proposal | `createSelfReviewProposal` with one `refine_skill` action | Use the matching `managedSkills[].documentId` or `documentActivity.skillBucket[].agentDocumentId` as `target.skillDocumentId`; include `operation: { domain: "skill", operation: "refine", input: { skillDocumentId, bodyMarkdown } }`; cite topic/message/agent_document evidence refs. |',
-            '| `repeated_tool_failure` involving `replaceSkillContentCAS` | Do not retry the write directly during nightly review | `createSelfReviewProposal` when the failed args contain a corrected skill body or a clear skill target | Prefer the failed tool args as the proposed body; call `getEvidenceDigest` first if the body or target is not visible in context. |',
-            '| `skill_documents_maybe_overlap` | Consolidation candidate | `createSelfReviewProposal` with `consolidate_skill` only when there is a canonical skill and explicit source skills | Otherwise record no proposal for this signal alone. |',
-            '',
-            'If a rule says `createSelfReviewProposal`, do not stop with only explanatory text. If required fields are missing, use read tools once to gather them; only skip when evidence remains insufficient after reading.',
-          ].join('\n'),
-        ),
-        x('review_window', `Review window: ${window.start} to ${window.end}`),
-        x('nightly_review_context_json', JSON.stringify(input.context)),
-      ),
-    ]),
-  );
-};
-
-const createRuntimePrompt = (input: ExecuteSelfIterationInput) => {
-  const window = getIterationWindow(input);
-  const mode = getIterationMode(input);
-
-  if (mode === 'review') {
-    // TODO:
-    // Rework this compatibility branch with the user before committing. The review prompt should
-    // eventually share the self-iteration wording, but the current seeded local E2E proved that a
-    // naive wording change can drop the Daily Brief proposal path.
-    // NOTICE:
-    // Keep the original nightly review prompt labels for the review mode.
-    // Root cause summary: changing this to the generic self-iteration wording made the local E2E
-    // review source complete without producing the expected Daily Brief proposal.
-    // Source/context: `devtools/agent-signal/self-iteration-e2e/run-local-e2e.ts` requires one
-    // review brief and one approval-gated proposal for the seeded nightly review data.
-    // Removal condition: nightly self-review prompt/eval coverage proves the generic prompt still
-    // produces equivalent proposal behavior.
-    return createNightlyReviewPromptXml(input, window);
-  }
-
-  return [
-    `Agent id: ${input.agentId}`,
-    `User id: ${input.userId}`,
-    `Source id: ${input.sourceId}`,
-    `Mode: ${mode}`,
-    `Evidence window: ${window.start} to ${window.end}`,
-    'Self-iteration context JSON:',
-    JSON.stringify(input.context),
-  ].join('\n');
-};
+const createRuntimePrompt = (input: ExecuteSelfIterationInput) =>
+  createAgentSignalSelfIterationPrompt({
+    agentId: input.agentId,
+    context: input.context,
+    mode: getIterationMode(input),
+    sourceId: input.sourceId,
+    userId: input.userId,
+    window: getIterationWindow(input),
+  });
 
 const toNullableString = (value: unknown) =>
   typeof value === 'string' && value.trim().length > 0 ? value : undefined;
@@ -1025,7 +948,7 @@ const createInitialState = ({
   const createdAt = new Date().toISOString();
   const operationId = `agent-signal-self-iteration:${input.sourceId}`;
   const messages: ChatStreamPayload['messages'] = [
-    { content: SELF_ITERATION_SYSTEM_ROLE, role: 'system' },
+    { content: createAgentSignalSelfIterationSystemRole(), role: 'system' },
     { content: createRuntimePrompt(input), role: 'user' },
   ];
 

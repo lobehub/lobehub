@@ -7,8 +7,8 @@ export const withElectronProtocolIfElectron = (url: string) => {
 };
 
 /**
- * Custom protocol the desktop main process exposes for serving arbitrary
- * absolute local-disk files to the renderer (e.g. project file previews).
+ * Custom protocol the desktop main process exposes for serving approved
+ * local workspace file previews to the renderer.
  * Backed by `LocalFileProtocolManager` in
  * `apps/desktop`.
  */
@@ -17,6 +17,10 @@ export const LOCAL_FILE_PROTOCOL_HOST = 'file';
 
 /**
  * Build a `localfile://file/<abs-path>` URL from an absolute filesystem path.
+ *
+ * The desktop protocol handler requires a main-process authorization token
+ * before serving bytes. Renderer preview code should request that URL through
+ * desktop IPC instead of using this helper directly.
  *
  * - POSIX  `/Users/a/img.png`     -> `localfile://file/Users/a/img.png`
  * - Win32  `C:\\Users\\a\\img.png` -> `localfile://file/C:/Users/a/img.png`

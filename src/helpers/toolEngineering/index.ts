@@ -6,7 +6,7 @@ import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
-import { alwaysOnToolIds, defaultToolIds } from '@lobechat/builtin-tools';
+import { alwaysOnToolIds, chatModeAllowedToolIds, defaultToolIds } from '@lobechat/builtin-tools';
 import { createEnableChecker, type PluginEnableChecker } from '@lobechat/context-engine';
 import { ToolsEngine } from '@lobechat/context-engine';
 import { type ChatCompletionTool, type ToolManifest, type WorkingModel } from '@lobechat/types';
@@ -125,11 +125,45 @@ export const createAgentToolsEngine = (
   const searchConfig = getSearchConfig(workingModel.model, workingModel.provider);
   const agentState = getAgentStoreState();
   const userPlugins = agentSelectors.currentAgentPlugins(agentState);
+  const isChatMode =
+    agentChatConfigSelectors.currentChatConfig(agentState).enableAgentMode === false;
+
+  // Each entry below still respects its own runtime gate; in chat mode this
+  // is the entire whitelist. `allowExplicitActivation` and user plugins /
+  // `alwaysOnToolIds` are deliberately omitted in chat mode so the activator
+  // can't smuggle additional tools in.
+  const kbEnabled = agentSelectors.hasEnabledKnowledgeBases(agentState);
+  const memoryEnabled =
+    agentChatConfigSelectors.currentChatConfig(agentState).memory?.enabled ??
+    settingsSelectors.memoryEnabled(useUserStore.getState());
+  const webBrowsingEnabled = searchConfig.useApplicationBuiltinSearchTool;
+
+  const chatModeRules = {
+    [KnowledgeBaseManifest.identifier]: kbEnabled,
+    [MemoryManifest.identifier]: memoryEnabled,
+    [WebBrowsingManifest.identifier]: webBrowsingEnabled,
+  };
+
+  const agentModeRules = {
+    // Runtime-resolved plugins (from agentConfigResolver for the effective agent,
+    // may include sub-agent/group/page scope plugins not on the active agent)
+    ...(pluginIds && Object.fromEntries(pluginIds.map((id) => [id, true]))),
+    // User-selected plugins (from the active agent)
+    ...Object.fromEntries(userPlugins.map((id) => [id, true])),
+    // Always-on builtin tools
+    ...Object.fromEntries(alwaysOnToolIds.map((id) => [id, true])),
+    // System-level rules (may override user selection for specific tools)
+    [CloudSandboxManifest.identifier]: agentChatConfigSelectors.isCloudSandboxEnabled(agentState),
+    [KnowledgeBaseManifest.identifier]: kbEnabled,
+    [LocalSystemManifest.identifier]: agentChatConfigSelectors.isLocalSystemEnabled(agentState),
+    [MemoryManifest.identifier]: memoryEnabled,
+    [WebBrowsingManifest.identifier]: webBrowsingEnabled,
+  };
 
   return createToolsEngine({
-    defaultToolIds,
+    defaultToolIds: isChatMode ? chatModeAllowedToolIds : defaultToolIds,
     enableChecker: createEnableChecker({
-      allowExplicitActivation: true,
+      allowExplicitActivation: !isChatMode,
       platformFilter: ({ pluginId }) => {
         const toolStoreState = getToolStoreState();
         const installedPlugin = pluginSelectors.getInstalledPluginById(pluginId)(toolStoreState);
@@ -144,24 +178,7 @@ export const createAgentToolsEngine = (
 
         return undefined; // fall through to rules
       },
-      rules: {
-        // Runtime-resolved plugins (from agentConfigResolver for the effective agent,
-        // may include sub-agent/group/page scope plugins not on the active agent)
-        ...(pluginIds && Object.fromEntries(pluginIds.map((id) => [id, true]))),
-        // User-selected plugins (from the active agent)
-        ...Object.fromEntries(userPlugins.map((id) => [id, true])),
-        // Always-on builtin tools
-        ...Object.fromEntries(alwaysOnToolIds.map((id) => [id, true])),
-        // System-level rules (may override user selection for specific tools)
-        [CloudSandboxManifest.identifier]:
-          agentChatConfigSelectors.isCloudSandboxEnabled(agentState),
-        [KnowledgeBaseManifest.identifier]: agentSelectors.hasEnabledKnowledgeBases(agentState),
-        [LocalSystemManifest.identifier]: agentChatConfigSelectors.isLocalSystemEnabled(agentState),
-        [MemoryManifest.identifier]:
-          agentChatConfigSelectors.currentChatConfig(agentState).memory?.enabled ??
-          settingsSelectors.memoryEnabled(useUserStore.getState()),
-        [WebBrowsingManifest.identifier]: searchConfig.useApplicationBuiltinSearchTool,
-      },
+      rules: isChatMode ? chatModeRules : agentModeRules,
     }),
   });
 };

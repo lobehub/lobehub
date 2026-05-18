@@ -705,4 +705,111 @@ describe('FlatListBuilder', () => {
       expect(groupTasksMsg!.updatedAt).toBe(300);
     });
   });
+
+  // ────────────────────────────────────────────────────
+  // LOBE-8998: signal callbacks attached on virtual AssistantGroup
+  // ────────────────────────────────────────────────────
+  describe('signal callbacks (LOBE-8998)', () => {
+    it('attaches signalCallbacks to the virtual group and processes callback messages', () => {
+      const signalMeta = (sequence: number) =>
+        ({
+          signal: {
+            sequence,
+            sourceToolCallId: 'toolu_mon_0',
+            sourceToolName: 'Monitor',
+            type: 'tool-stdout' as const,
+          },
+        }) as any;
+
+      const messages: Message[] = [
+        // User
+        { content: 'go', createdAt: 0, id: 'u-1', role: 'user', updatedAt: 0 },
+        // Step 0: assistant with Monitor tool
+        {
+          agentId: 'a',
+          content: 'starting',
+          createdAt: 0,
+          id: 'ast-0',
+          parentId: 'u-1',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'Monitor',
+              arguments: '{}',
+              id: 'toolu_mon_0',
+              identifier: 'claude-code',
+              type: 'default',
+            },
+          ],
+          updatedAt: 0,
+        },
+        // Tool result
+        {
+          content: 'started',
+          createdAt: 0,
+          id: 'tool-1',
+          parentId: 'ast-0',
+          role: 'tool',
+          tool_call_id: 'toolu_mon_0',
+          updatedAt: 0,
+        },
+        // 3 signal callbacks under tool-1
+        {
+          agentId: 'a',
+          content: '等 list 完。',
+          createdAt: 0,
+          id: 'cb-1',
+          metadata: signalMeta(1),
+          model: 'claude-opus-4-7',
+          parentId: 'tool-1',
+          role: 'assistant',
+          updatedAt: 0,
+        },
+        {
+          agentId: 'a',
+          content: '84842 列完，开干。',
+          createdAt: 0,
+          id: 'cb-2',
+          metadata: signalMeta(2),
+          model: 'claude-opus-4-7',
+          parentId: 'tool-1',
+          role: 'assistant',
+          updatedAt: 0,
+        },
+        {
+          agentId: 'a',
+          content: '100/84842 全 skip…',
+          createdAt: 0,
+          id: 'cb-3',
+          metadata: signalMeta(3),
+          model: 'claude-opus-4-7',
+          parentId: 'tool-1',
+          role: 'assistant',
+          updatedAt: 0,
+        },
+      ];
+
+      const builder = createBuilder(messages);
+      const result = builder.flatten(messages);
+
+      // Expect: user msg + one assistantGroup virtual message. NO standalone
+      // bubbles for cb-1/cb-2/cb-3 — they belong to the group.
+      const ids = result.map((m) => m.id);
+      expect(ids).not.toContain('cb-1');
+      expect(ids).not.toContain('cb-2');
+      expect(ids).not.toContain('cb-3');
+      const group = result.find((m) => m.role === ('assistantGroup' as any));
+      expect(group).toBeDefined();
+      expect(group!.signalCallbacks).toHaveLength(1);
+      const block = group!.signalCallbacks![0];
+      expect(block).toMatchObject({
+        sourceToolCallId: 'toolu_mon_0',
+        sourceToolMessageId: 'tool-1',
+        sourceToolName: 'Monitor',
+      });
+      expect(block.callbacks.map((c) => c.id)).toEqual(['cb-1', 'cb-2', 'cb-3']);
+      expect(block.callbacks.map((c) => c.sequence)).toEqual([1, 2, 3]);
+      expect(block.callbacks[0].content).toBe('等 list 完。');
+    });
+  });
 });

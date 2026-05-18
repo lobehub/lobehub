@@ -4,7 +4,6 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
-    "./executor": "./src/executor/index.ts",
     "./client": "./src/client/index.ts"
   },
   "main": "./src/index.ts",

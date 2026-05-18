@@ -263,7 +263,10 @@ export class AiAgentService {
     this.taskModel = new TaskModel(db, userId);
     this.threadModel = new ThreadModel(db, userId);
     this.topicModel = new TopicModel(db, userId);
-    this.agentRuntimeService = new AgentRuntimeService(db, userId, options?.runtimeOptions);
+    this.agentRuntimeService = new AgentRuntimeService(db, userId, {
+      ...options?.runtimeOptions,
+      execSubAgentTask: this.execSubAgentTask.bind(this),
+    });
     this.marketService = new MarketService({ userInfo: { userId } });
     this.klavisService = new KlavisService({ db, userId });
   }
@@ -1649,6 +1652,11 @@ export class AiAgentService {
 
     await throwIfExecutionAborted('message creation');
 
+    const requestTriggerMetadata =
+      trigger && Object.values(RequestTrigger).includes(trigger as RequestTrigger)
+        ? { trigger: trigger as RequestTrigger }
+        : undefined;
+
     // 13. Create user message in database
     // Include threadId if provided (for SubAgent task execution in isolated Thread)
     const userMessageRecord = effectiveResume
@@ -1657,6 +1665,7 @@ export class AiAgentService {
           agentId: resolvedAgentId,
           content: prompt,
           files: fileIds,
+          metadata: requestTriggerMetadata,
           role: 'user',
           threadId: appContext?.threadId ?? undefined,
           topicId,

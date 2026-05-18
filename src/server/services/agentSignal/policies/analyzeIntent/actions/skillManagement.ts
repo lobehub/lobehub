@@ -27,6 +27,7 @@ import {
   AGENT_SKILL_CREATE_SYSTEM_ROLE,
   AGENT_SKILL_MANAGER_DECISION_SYSTEM_ROLE,
   AGENT_SKILL_REFINE_SYSTEM_ROLE,
+  createAgentSignalSkillLanguageInstruction,
   createAgentSkillConsolidatePrompt,
   createAgentSkillCreatePrompt,
   createAgentSkillManagerDecisionPrompt,
@@ -145,6 +146,8 @@ export interface SkillManagementActionHandlerOptions {
   db: LobeChatDatabase;
   /** Optional procedure state used to read user-stage skill intent records. */
   procedureState?: Pick<ProcedureStateService, 'skillIntentRecords'>;
+  /** User-visible response language used as the default for newly-authored skill artifacts. */
+  responseLanguage?: string;
   selfIterationEnabled: boolean;
   skillCandidateSkillsFactory?: (input: {
     agentId: string;
@@ -285,6 +288,8 @@ export interface SkillManagementAgentModelConfig {
 
 export interface SkillMaintainerWorkflowInput {
   decision: SkillManagementDecision;
+  /** Language instruction block for persisted skill artifact text. */
+  languageInstruction?: string;
   signal: SkillManagementActionInput;
   targetSkills: Array<{
     content: string;
@@ -309,6 +314,8 @@ export interface SkillMaintainerWorkflowResult {
 export interface SkillCreateAuthoringInput {
   candidateSkills?: SkillManagementCandidateSkill[];
   decision: SkillManagementDecision;
+  /** Language instruction block for persisted skill artifact text. */
+  languageInstruction?: string;
   signal: SkillManagementActionInput;
   sourceAgentDocumentId?: string;
   sourceDocumentContent?: string;
@@ -1225,6 +1232,7 @@ class SkillMaintainerWorkflowAgentService {
     const isRefine = input.type === 'refine';
     const content = isRefine
       ? createAgentSkillRefinePrompt({
+          languageInstruction: input.languageInstruction,
           reason: input.decision.reason ?? input.signal.reason ?? 'Refine selected skill.',
           signalContext: {
             evidence: input.signal.evidence,
@@ -1236,6 +1244,7 @@ class SkillMaintainerWorkflowAgentService {
           skillMetadata: input.targetSkills[0]?.metadata ?? {},
         })
       : createAgentSkillConsolidatePrompt({
+          languageInstruction: input.languageInstruction,
           reason: input.decision.reason ?? input.signal.reason ?? 'Consolidate selected skills.',
           sourceSkills: input.targetSkills,
         });
@@ -1298,6 +1307,7 @@ class SkillCreateAuthoringAgentService {
               ...(input.candidateSkills?.length ? { candidateSkills: input.candidateSkills } : {}),
               evidence: input.signal.evidence ?? [],
               feedbackMessage: input.signal.message,
+              languageInstruction: input.languageInstruction,
               sourceAgentDocumentId: input.sourceAgentDocumentId,
               sourceDocumentContent: input.sourceDocumentContent,
               turnContext: input.signal.serializedContext,
@@ -1405,6 +1415,11 @@ const isMaintainerDecision = (
 ): decision is SkillManagementDecision & { action: 'consolidate' | 'refine' } =>
   decision.action === 'refine' || decision.action === 'consolidate';
 
+/**
+ * Checks whether a model-selected source document ref can be queried as agent_documents.id.
+ */
+const isAgentDocumentDatabaseId = (value: string) => z.string().uuid().safeParse(value).success;
+
 const toSkillActionTarget = (
   skill: Pick<SkillSummary, 'bundle' | 'description' | 'index' | 'title'>,
 ): SkillManagementActionTarget => ({
@@ -1429,6 +1444,26 @@ const readTargetSkills = async (
 
   return results.filter((skill): skill is SkillDetail => Boolean(skill));
 };
+
+const readSkillPrimaryLanguage = (skill?: SkillDetail) => {
+  const frontmatter = skill?.frontmatter;
+  if (!frontmatter || typeof frontmatter !== 'object') return undefined;
+
+  const language = (frontmatter as unknown as Record<string, unknown>).language;
+
+  return typeof language === 'string' && language.trim().length > 0 ? language.trim() : undefined;
+};
+
+const createSkillArtifactLanguageInstruction = (input: {
+  existingSkillLanguage?: string;
+  mode: 'consolidate' | 'create' | 'refine';
+  responseLanguage?: string;
+}) =>
+  createAgentSignalSkillLanguageInstruction({
+    existingSkillLanguage: input.existingSkillLanguage,
+    mode: input.mode,
+    responseLanguage: input.responseLanguage ?? 'en-US',
+  });
 
 const runMaintainerWorkflow = async (
   input: SkillManagementActionInput,
@@ -1480,6 +1515,11 @@ const runMaintainerWorkflow = async (
     SkillMaintainerWorkflowResultSchema.parse(
       await workflowRunner({
         decision,
+        languageInstruction: createSkillArtifactLanguageInstruction({
+          existingSkillLanguage: readSkillPrimaryLanguage(targetSkills[0]),
+          mode: decision.action,
+          responseLanguage: options.responseLanguage,
+        }),
         signal: input,
         targetSkills: targetSkills.map((skill) => ({
           content: skill.content ?? '',
@@ -1608,6 +1648,10 @@ const readCreateSourceDocument = async (
     return {};
   }
 
+  if (!isAgentDocumentDatabaseId(sourceAgentDocumentId)) {
+    return {};
+  }
+
   const snapshot = await new AgentDocumentsService(
     options.db,
     options.userId,
@@ -1647,8 +1691,13 @@ const runCreateWorkflow = async (
       await createRunner({
         candidateSkills: input.candidateSkills,
         decision,
+        languageInstruction: createSkillArtifactLanguageInstruction({
+          mode: 'create',
+          responseLanguage: options.responseLanguage,
+        }),
         signal: input,
-        ...source,
+        sourceAgentDocumentId: source?.sourceAgentDocumentId,
+        sourceDocumentContent: source?.sourceDocumentContent,
       }),
     ),
   );

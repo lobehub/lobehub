@@ -5,6 +5,24 @@ import { defineFixtures, single, variants } from './_helpers';
 export default defineFixtures({
   identifier: 'lobe-agent',
   fixtures: {
+    analyzeVisualMedia: single({
+      args: {
+        question: 'Describe the primary controls and layout in this interface.',
+        refs: ['msg_devtools.image_1'],
+      },
+      pluginState: {
+        files: [
+          {
+            id: 'image_devtools_interface',
+            name: 'interface-preview.png',
+            ref: 'msg_devtools.image_1',
+            type: 'image',
+          },
+        ],
+        model: 'gpt-5.4',
+        provider: 'openai',
+      },
+    }),
     callSubAgent: single({
       pluginState: {
         task: {

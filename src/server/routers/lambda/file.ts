@@ -156,32 +156,43 @@ export const fileRouter = router({
         // If metadata fetch fails, use original size from input
       }
 
-      await businessFileUploadCheck({
-        actualSize,
-        clientIp: ctx.clientIp ?? undefined,
-        inputSize: input.size,
-        url: input.url,
-        userId: ctx.userId,
-      });
-
       if (actualSize < 0) {
+        await businessFileUploadCheck({
+          actualSize,
+          clientIp: ctx.clientIp ?? undefined,
+          inputSize: input.size,
+          url: input.url,
+          userId: ctx.userId,
+        });
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'File size cannot be negative' });
       }
 
-      const { id } = await ctx.fileModel.create(
-        {
-          fileHash: input.hash,
-          fileType: input.fileType,
-          knowledgeBaseId: input.knowledgeBaseId,
-          metadata: input.metadata,
-          name: input.name,
-          parentId: resolvedParentId,
-          size: actualSize,
+      const { id } = await ctx.serverDB.transaction(async (trx) => {
+        await businessFileUploadCheck({
+          actualSize,
+          clientIp: ctx.clientIp ?? undefined,
+          inputSize: input.size,
+          transaction: trx,
           url: input.url,
-        },
-        // if the file is not exist in global file, create a new one
-        !isExist,
-      );
+          userId: ctx.userId,
+        });
+
+        return ctx.fileModel.create(
+          {
+            fileHash: input.hash,
+            fileType: input.fileType,
+            knowledgeBaseId: input.knowledgeBaseId,
+            metadata: input.metadata,
+            name: input.name,
+            parentId: resolvedParentId,
+            size: actualSize,
+            url: input.url,
+          },
+          // if the file is not exist in global file, create a new one
+          !isExist,
+          trx,
+        );
+      });
 
       return { id, url: getFileProxyUrl(id) };
     }),

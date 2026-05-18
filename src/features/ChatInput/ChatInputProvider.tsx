@@ -14,6 +14,7 @@ export const ChatInputProvider = memo<ChatInputProviderProps>(
   ({
     agentId,
     children,
+    contextWindowMessages,
     disableMention,
     disableSlash,
     leftActions,
@@ -37,6 +38,7 @@ export const ChatInputProvider = memo<ChatInputProviderProps>(
         createStore={() =>
           createStore({
             allowExpand,
+            contextWindowMessages,
             disableMention,
             disableSlash,
             editor,
@@ -55,6 +57,7 @@ export const ChatInputProvider = memo<ChatInputProviderProps>(
           agentId={agentId}
           allowExpand={allowExpand}
           chatInputEditorRef={chatInputEditorRef}
+          contextWindowMessages={contextWindowMessages}
           disableMention={disableMention}
           disableSlash={disableSlash}
           getMessages={getMessages}

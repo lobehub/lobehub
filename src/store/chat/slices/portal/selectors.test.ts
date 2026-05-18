@@ -387,6 +387,30 @@ ${htmlContent}
       expect(chatPortalSelectors.artifactCode('test-id')(state)).toBe(htmlContent);
     });
 
+    it('should remove an opening markdown code fence while the artifact streams', () => {
+      const htmlContent = `<!DOCTYPE html>
+<html>
+<body>
+  <div>Streaming content</div>`;
+      const state = createState({
+        dbMessagesMap: {
+          'test-id_null': [
+            {
+              id: 'test-id',
+              content: `<lobeArtifact type="text/html">
+\`\`\`html
+${htmlContent}`,
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+              role: 'user',
+              sessionId: 'test-id',
+            } as UIChatMessage,
+          ],
+        },
+      });
+      expect(chatPortalSelectors.artifactCode('test-id')(state)).toBe(htmlContent);
+    });
+
     it('should extract specific artifact content by identifier', () => {
       const content1 = 'First artifact content';
       const content2 = 'Second artifact content';

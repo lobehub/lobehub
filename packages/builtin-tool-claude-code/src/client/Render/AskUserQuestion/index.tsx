@@ -3,7 +3,7 @@
 import type { BuiltinRenderProps } from '@lobechat/types';
 import { Flexbox, Icon, Text } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
-import { Check } from 'lucide-react';
+import { Check, PenLine } from 'lucide-react';
 import { memo } from 'react';
 
 import type { AskUserQuestionArgs, AskUserQuestionItem } from '../../../types';
@@ -112,7 +112,33 @@ const AskUserQuestion = memo<
 >(({ args, pluginError, pluginState }) => {
   const questions = args?.questions ?? [];
   const answers = pluginState?.askUserAnswers;
+  const freeform = answers?.['__freeform__'];
+  const freeformText = typeof freeform === 'string' ? freeform.trim() : '';
   const isError = !!pluginError;
+
+  // Escape-mode reply: the user opted out of the multi-choice form and
+  // wrote freeform text instead. The form picks are intentionally absent,
+  // so render the questions for context (header + body only) plus the
+  // typed reply as one card — Q&A pairs would render as empty rows.
+  if (freeformText) {
+    return (
+      <Flexbox className={styles.container} gap={12}>
+        {questions.map((q, idx) => (
+          <Flexbox gap={4} key={`${q.question}-${idx}`}>
+            {q.header && <span className={styles.header}>{q.header}</span>}
+            <Text className={styles.question}>{q.question}</Text>
+          </Flexbox>
+        ))}
+        <Flexbox horizontal align="flex-start" className={cx(styles.answerRow)} gap={8}>
+          <Icon className={styles.check} icon={PenLine} size={14} />
+          <Text className={styles.answer}>{freeformText}</Text>
+        </Flexbox>
+        {isError && (
+          <Text type="warning">(No answer received — model continued without their input.)</Text>
+        )}
+      </Flexbox>
+    );
+  }
 
   return (
     <Flexbox className={styles.container} gap={12}>

@@ -2,7 +2,15 @@
 
 import type { ConversationContext } from '@lobechat/types';
 import type { DropdownItem } from '@lobehub/ui';
-import { ActionIcon, copyToClipboard, Drawer, DropdownMenu, Flexbox, Text } from '@lobehub/ui';
+import {
+  ActionIcon,
+  copyToClipboard,
+  Drawer,
+  DropdownMenu,
+  Flexbox,
+  Freeze,
+  Text,
+} from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { Copy, MoreHorizontal, Share2 } from 'lucide-react';
 import dynamic from 'next/dynamic';
@@ -200,17 +208,20 @@ const TopicChatDrawer = memo(() => {
     )
   ) : null;
 
+  // Freeze title/extra/body during the close animation so the drawer keeps
+  // its last rendered state instead of flashing to the empty/"untitled" view
+  // while topicId/agentId clear.
   return (
     <Drawer
       destroyOnHidden
       containerMaxWidth={'auto'}
-      extra={extra}
+      extra={<Freeze frozen={!open}>{extra}</Freeze>}
       getContainer={false}
       mask={false}
       open={open}
       placement={'right'}
       push={false}
-      title={title}
+      title={<Freeze frozen={!open}>{title}</Freeze>}
       width={640}
       styles={{
         body: { padding: 0 },
@@ -228,9 +239,11 @@ const TopicChatDrawer = memo(() => {
       }}
       onClose={closeTopicDrawer}
     >
-      {open && activeTaskId && (
-        <TopicChatDrawerBody agentId={agentId!} taskId={activeTaskId} topicId={topicId!} />
-      )}
+      <Freeze frozen={!open}>
+        {open && activeTaskId && (
+          <TopicChatDrawerBody agentId={agentId!} taskId={activeTaskId} topicId={topicId!} />
+        )}
+      </Freeze>
     </Drawer>
   );
 });

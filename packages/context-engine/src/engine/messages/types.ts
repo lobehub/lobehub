@@ -223,6 +223,13 @@ export interface MessagesEngineParams {
   timezone?: string | null;
 
   // ========== Agent configuration ==========
+  /**
+   * Whether the agent runs in agent mode. When explicitly `false` (chat mode)
+   * the engine force-disables agentic-only injectors — skills (`<available_skills>`)
+   * and agent documents — regardless of whether their data is supplied.
+   * Undefined / true → agent mode (default).
+   */
+  enableAgentMode?: boolean;
   /** Whether to enable history message count limit */
   enableHistoryCount?: boolean;
   /** Force finish flag: when true, injects summary prompt for max-steps completion */

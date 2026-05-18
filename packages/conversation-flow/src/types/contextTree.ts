@@ -20,7 +20,8 @@ interface BaseNode {
     | 'agentCouncil'
     | 'tasks'
     | 'compressedGroup'
-    | 'compareGroup';
+    | 'compareGroup'
+    | 'signalCallbacks';
 }
 
 /**
@@ -140,6 +141,30 @@ export interface CompareGroupNode extends BaseNode {
 }
 
 /**
+ * Signal callbacks node — toolless assistant messages produced as
+ * reactive replies to an external signal (e.g. Monitor stdout pushes
+ * triggering CC follow-up turns). Rendered as an independent block
+ * inside `AssistantGroupNode.children`, NOT folded into the main
+ * `assistant → tool → assistant` zigzag.
+ *
+ * Each block belongs to one source tool — the tool whose repeat
+ * `tool_result` (CC `tool_use.id`) fired the signal. Multiple source
+ * tools in the same AssistantGroup produce multiple SignalCallbacks
+ * blocks, one per source.
+ */
+export interface SignalCallbacksNode extends BaseNode {
+  /** Toolless assistant messages, ordered by `metadata.signal.sequence`. */
+  callbacks: MessageNode[];
+  /** Source tool's `tool_call_id` (CC `tool_use.id`). */
+  sourceToolCallId: string;
+  /** Source tool message's db id. */
+  sourceToolMessageId: string;
+  /** Tool name for UI labelling, e.g. `Monitor`. */
+  sourceToolName: string;
+  type: 'signalCallbacks';
+}
+
+/**
  * Union type of all display nodes
  */
 export type ContextNode =
@@ -150,4 +175,5 @@ export type ContextNode =
   | AgentCouncilNode
   | TasksNode
   | CompressedGroupNode
-  | CompareGroupNode;
+  | CompareGroupNode
+  | SignalCallbacksNode;

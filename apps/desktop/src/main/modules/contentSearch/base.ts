@@ -47,6 +47,18 @@ export abstract class BaseContentSearch {
   abstract checkToolAvailable(tool: string): Promise<boolean>;
 
   /**
+   * Resolve the directory to run the search in.
+   *
+   * The builtin-tool manifest documents `scope`, while the legacy IPC type also accepts
+   * `path`. Read both so an agent calling with `scope` (per the manifest) doesn't silently
+   * fall through to `process.cwd()` — which in a packaged Electron app isn't the project
+   * root and therefore has no `.gitignore` for ripgrep to honor.
+   */
+  protected resolveSearchPath(params: GrepContentParams): string {
+    return params.path ?? params.scope ?? process.cwd();
+  }
+
+  /**
    * Build command-line arguments for grep tools
    */
   protected buildGrepArgs(tool: 'rg' | 'ag' | 'grep', params: GrepContentParams): string[] {
@@ -141,11 +153,8 @@ export abstract class BaseContentSearch {
    * Grep using Node.js native implementation (fallback)
    */
   protected async grepWithNodejs(params: GrepContentParams): Promise<GrepContentResult> {
-    const {
-      pattern,
-      path: searchPath = process.cwd(),
-      output_mode = 'files_with_matches',
-    } = params;
+    const { pattern, output_mode = 'files_with_matches' } = params;
+    const searchPath = this.resolveSearchPath(params);
     const logPrefix = `[grepContent:nodejs]`;
 
     const flags = `${params['-i'] ? 'i' : ''}${params.multiline ? 's' : ''}`;

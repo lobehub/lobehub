@@ -12,6 +12,7 @@ import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 
 import HeaderActions from './HeaderActions';
+import ParamsPanelToggle from './ParamsPanelToggle';
 import ShareButton from './ShareButton';
 import Tags from './Tags';
 import WorkingPanelToggle from './WorkingPanelToggle';
@@ -76,6 +77,7 @@ const Header = memo(() => {
               <OpenInAppButton workingDirectory={effectiveWorkingDirectory} />
             )}
             <ShareButton />
+            <ParamsPanelToggle />
             <WorkingPanelToggle />
           </Flexbox>
         }

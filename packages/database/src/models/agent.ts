@@ -616,7 +616,12 @@ export class AgentModel {
     const persistConfig = getAgentPersistConfig(slug);
     if (!persistConfig) return null;
 
-    // 4. Create the builtin agent with persist config
+    // 4. Create the builtin agent with persist config.
+    // Idempotent under concurrent callers: two parallel requests for the same
+    // (userId, slug) both see no existing row and race to insert. Without
+    // `onConflictDoNothing`, the loser hits the `agents_slug_user_id_unique`
+    // constraint; with it, the loser's `.returning()` is empty and we re-read
+    // the row that won.
     const result = await this.db
       .insert(agents)
       .values({
@@ -626,8 +631,15 @@ export class AgentModel {
         userId: this.userId,
         virtual: true,
       })
+      .onConflictDoNothing({ target: [agents.slug, agents.userId] })
       .returning();
 
-    return result[0];
+    if (result[0]) return result[0];
+
+    return (
+      (await this.db.query.agents.findFirst({
+        where: and(eq(agents.slug, slug), eq(agents.userId, this.userId)),
+      })) ?? null
+    );
   };
 }

@@ -677,6 +677,10 @@ export const contextEngineering = async ({
     selectedSkills: initialContext?.selectedSkills,
     selectedTools: initialContext?.selectedTools,
 
+    // Pass enableAgentMode through; MessagesEngine force-disables skills /
+    // agent-document injectors when this is `false` (chat mode).
+    enableAgentMode: agentChatConfigSelectors.currentChatConfig(agentStoreState).enableAgentMode,
+
     // Skills configuration
     // In auto mode: expose all installed skills so the AI can discover and activate them
     // In manual mode: only expose user-selected skills (filtered by pluginIds)
