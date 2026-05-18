@@ -364,6 +364,148 @@ describe('resolveMemoryActionTargetFromState', () => {
     });
   });
 
+  it('resolves update identity targets from nested set arguments', () => {
+    const target = resolveMemoryActionTargetFromState({
+      messages: [
+        {
+          id: 'msg_update_identity',
+          role: 'assistant',
+          tool_calls: [
+            {
+              function: {
+                arguments: JSON.stringify({
+                  id: 'identity-existing',
+                  mergeStrategy: 'replace',
+                  set: {
+                    details: 'The user clarified that they maintain LobeHub Agent Signal code.',
+                    summary: 'The user maintains Agent Signal memory receipt behavior.',
+                    title: 'Maintains Agent Signal receipts',
+                  },
+                }),
+                name: 'lobe-user-memory____updateIdentityMemory',
+              },
+              id: 'call_update_identity',
+              type: 'function',
+            },
+          ],
+        },
+        {
+          content: 'Identity memory updated: identity-existing',
+          pluginState: { identityId: 'identity-existing' },
+          role: 'tool',
+          tool_call_id: 'call_update_identity',
+        },
+      ],
+    } as never);
+
+    expect(target).toEqual({
+      id: 'identity-existing',
+      memoryLayer: LayersEnum.Identity,
+      summary: 'The user maintains Agent Signal memory receipt behavior.',
+      title: 'Maintains Agent Signal receipts',
+      type: 'memory',
+    });
+  });
+
+  it('resolves receipt targets from persisted tool snapshots', () => {
+    const target = resolveMemoryActionTargetFromState({
+      messages: [
+        {
+          id: 'msg_persisted_tool',
+          role: 'assistant',
+          tools: [
+            null,
+            {
+              apiName: 'addPreferenceMemory',
+              arguments: {
+                title: 'Persisted preference title',
+                withPreference: {
+                  conclusionDirectives: 'Use persisted tool metadata for receipt targets.',
+                },
+              },
+              id: 'call_persisted',
+              identifier: 'lobe-user-memory',
+            },
+          ],
+        },
+        {
+          content: 'Preference memory saved',
+          plugin: { id: 'call_persisted' },
+          pluginState: { memoryId: 'mem_persisted', preferenceId: 'pref_persisted' },
+          role: 'tool',
+        },
+      ],
+    } as never);
+
+    expect(target).toEqual({
+      id: 'pref_persisted',
+      memoryId: 'mem_persisted',
+      memoryLayer: LayersEnum.Preference,
+      summary: 'Use persisted tool metadata for receipt targets.',
+      title: 'Persisted preference title',
+      type: 'memory',
+    });
+  });
+
+  it('skips confirmed memory tool calls with invalid arguments', () => {
+    const target = resolveMemoryActionTargetFromState({
+      messages: [
+        {
+          id: 'msg_confirmed',
+          role: 'assistant',
+          tool_calls: [
+            {
+              function: {
+                arguments: JSON.stringify({
+                  details: 'Fallback details for a valid confirmed target.',
+                  title: 'Valid confirmed preference',
+                }),
+                name: 'lobe-user-memory____addPreferenceMemory',
+              },
+              id: 'call_confirmed',
+              type: 'function',
+            },
+          ],
+        },
+        {
+          content:
+            'Preference memory "Valid confirmed preference" saved with memoryId: "mem_confirmed" and preferenceId: "pref_confirmed"',
+          role: 'tool',
+          tool_call_id: 'call_confirmed',
+        },
+        {
+          id: 'msg_invalid',
+          role: 'assistant',
+          tool_calls: [
+            {
+              function: {
+                arguments: '{,',
+                name: 'lobe-user-memory____addPreferenceMemory',
+              },
+              id: 'call_invalid',
+              type: 'function',
+            },
+          ],
+        },
+        {
+          content:
+            'Preference memory "Invalid latest preference" saved with memoryId: "mem_invalid" and preferenceId: "pref_invalid"',
+          role: 'tool',
+          tool_call_id: 'call_invalid',
+        },
+      ],
+    } as never);
+
+    expect(target).toEqual({
+      id: 'pref_confirmed',
+      memoryId: 'mem_confirmed',
+      memoryLayer: LayersEnum.Preference,
+      summary: 'Fallback details for a valid confirmed target.',
+      title: 'Valid confirmed preference',
+      type: 'memory',
+    });
+  });
+
   it('ignores unconfirmed memory write tool calls when resolving receipt targets', () => {
     const target = resolveMemoryActionTargetFromState({
       messages: [

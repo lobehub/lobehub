@@ -244,7 +244,9 @@ const getToolCallsFromMessage = (message: unknown): MemoryToolCallSnapshot[] => 
   return toolCalls;
 };
 
-const isMemoryWriteToolCall = (toolCall: MemoryToolCallSnapshot) => {
+const isMemoryWriteToolCall = (
+  toolCall: MemoryToolCallSnapshot,
+): toolCall is MemoryToolCallSnapshot & { apiName: string } => {
   if (!toolCall.apiName || !MEMORY_WRITE_API_NAME_SET.has(toolCall.apiName)) return false;
 
   return !toolCall.identifier || toolCall.identifier === MemoryIdentifier;
@@ -311,22 +313,24 @@ const getNestedString = (payload: Record<string, unknown>, keys: string[]) => {
   return getString(current);
 };
 
+const getToolArgumentString = (args: Record<string, unknown>, key: string) => {
+  return getString(args[key]) ?? getNestedString(args, ['set', key]);
+};
+
 const createTargetFromToolArguments = (
   args: Record<string, unknown>,
-  toolCall: MemoryToolCallSnapshot,
+  toolCall: MemoryToolCallSnapshot & { apiName: string },
   resultIds?: Record<string, string>,
 ): MemoryActionTarget | undefined => {
-  const title = getString(args.title);
+  const title = getToolArgumentString(args, 'title');
   if (!title) return;
 
-  const targetConfig = toolCall.apiName
-    ? MEMORY_WRITE_TARGET_BY_API_NAME[toolCall.apiName]
-    : undefined;
+  const targetConfig = MEMORY_WRITE_TARGET_BY_API_NAME[toolCall.apiName];
   const id = targetConfig ? resultIds?.[targetConfig.idKey] : undefined;
   const memoryId = resultIds?.memoryId;
   const summary =
-    getString(args.summary) ??
-    getString(args.details) ??
+    getToolArgumentString(args, 'summary') ??
+    getToolArgumentString(args, 'details') ??
     getNestedString(args, ['withPreference', 'conclusionDirectives']);
 
   return {
