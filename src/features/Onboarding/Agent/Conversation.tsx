@@ -8,7 +8,7 @@ import { Flexbox } from '@lobehub/ui';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
-import type { ActionKeys } from '@/features/ChatInput';
+import type { ActionKeys, ChatInputFeature } from '@/features/ChatInput';
 import {
   ChatInput,
   ChatList,
@@ -43,6 +43,11 @@ interface AgentOnboardingConversationProps {
 
 const chatInputLeftActions: ActionKeys[] = isDev ? ['model'] : [];
 const chatInputRightActions: ActionKeys[] = [];
+const chatInputFeature = {
+  inputCompletion: false,
+  mention: false,
+  slash: false,
+} satisfies ChatInputFeature;
 
 const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
   ({
@@ -212,10 +217,9 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
             )}
             <ChatInput
               disableFollowUpVariant
-              disableMention
               disableQueue
-              disableSlash
               allowExpand={false}
+              feature={chatInputFeature}
               leftActions={chatInputLeftActions}
               rightActions={chatInputRightActions}
               showRuntimeConfig={false}

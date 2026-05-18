@@ -32,19 +32,24 @@ export interface ContextWindowMessage {
   content: string;
 }
 
+export interface ChatInputFeature {
+  inputCompletion?: boolean;
+  mention?: boolean;
+  slash?: boolean;
+}
+
+export const DEFAULT_CHAT_INPUT_FEATURE = {
+  inputCompletion: true,
+  mention: true,
+  slash: true,
+} as const satisfies Required<ChatInputFeature>;
+
 export interface PublicState {
   agentId?: string;
   allowExpand?: boolean;
   contextWindowMessages?: ContextWindowMessage[];
-  /**
-   * Disable @ mention trigger (no menu, no agent-assignment hint in placeholder)
-   */
-  disableMention?: boolean;
-  /**
-   * Disable / slash command trigger
-   */
-  disableSlash?: boolean;
   expand?: boolean;
+  feature?: ChatInputFeature;
   getMessages?: () => OpenAIChatMessage[];
   leftActions: ActionKeys[];
   mentionItems?: SlashOptions['items'];
@@ -72,6 +77,7 @@ export interface State extends PublicState {
 export const initialState: State = {
   allowExpand: true,
   expand: false,
+  feature: DEFAULT_CHAT_INPUT_FEATURE,
   isContentEmpty: false,
   leftActions: [],
   markdownContent: '',
