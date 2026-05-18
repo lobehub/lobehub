@@ -11,10 +11,11 @@ import {
   createAgentSignalMemoryWriterPrompt,
   createAgentSignalMemoryWriterSystemRole,
 } from '@lobechat/prompts';
-import { LayersEnum, RequestTrigger } from '@lobechat/types';
+import { LayersEnum, RequestTrigger, ThreadType } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 
 import { PluginModel } from '@/database/models/plugin';
+import { ThreadModel } from '@/database/models/thread';
 import type { LobeChatDatabase } from '@/database/type';
 import {
   InMemoryAgentStateManager,
@@ -98,6 +99,7 @@ export interface UserMemoryActionHandlerOptions {
     reason?: string;
     serializedContext?: string;
     sourceHints?: AgentSignalFeedbackSourceHints;
+    sourceMessageId?: string;
     topicId?: string;
   }) => Promise<MemoryAgentActionResult>;
   pluginModel?: Pick<PluginModel, 'query'>;
@@ -378,6 +380,13 @@ export const runMemoryActionAgent = async (
     reason?: string;
     serializedContext?: string;
     sourceHints?: AgentSignalFeedbackSourceHints;
+    /**
+     * The assistant message id that triggered this memory action.
+     * When provided together with topicId, a child thread is created
+     * under this message so that memory-agent messages are isolated
+     * from the main topic conversation.
+     */
+    sourceMessageId?: string;
     topicId?: string;
   },
   options: UserMemoryActionHandlerOptions,
@@ -458,11 +467,34 @@ export const runMemoryActionAgent = async (
     streamEventManager,
   });
 
+  // Create a child thread under the triggering assistant message so that
+  // memory-agent messages are isolated from the main topic conversation
+  // instead of being flattened into it.
+  let threadId: string | undefined;
+  if (input.topicId && input.sourceMessageId) {
+    try {
+      const threadModel = new ThreadModel(options.db, options.userId);
+      const thread = await threadModel.create({
+        agentId: input.agentId,
+        metadata: { operationId },
+        sourceMessageId: input.sourceMessageId,
+        title: 'Agent Signal Memory',
+        topicId: input.topicId,
+        type: ThreadType.Isolation,
+      });
+      threadId = thread?.id;
+    } catch {
+      // Non-fatal: fall back to writing into the main topic if thread creation fails.
+    }
+  }
+
   await runtimeService.createOperation({
     agentConfig: memoryRuntimeAgentConfig,
     appContext: {
       agentId: input.agentId,
       scope: 'chat',
+      sourceMessageId: input.sourceMessageId,
+      threadId: threadId ?? null,
       topicId: input.topicId ?? null,
       trigger: RequestTrigger.AgentSignal,
     },
@@ -589,6 +621,14 @@ export const handleUserMemoryAction = async (
         typeof action.payload.sourceHints === 'object' && action.payload.sourceHints
           ? action.payload.sourceHints
           : undefined,
+      // The assistant message that triggered this signal — used to anchor the
+      // memory-agent thread under that message rather than the main topic.
+      sourceMessageId:
+        typeof action.payload.assistantMessageId === 'string'
+          ? action.payload.assistantMessageId
+          : typeof action.payload.messageId === 'string'
+            ? action.payload.messageId
+            : undefined,
       topicId: typeof action.payload.topicId === 'string' ? action.payload.topicId : undefined,
     };
     const runner = options.memoryActionRunner ?? ((input) => runMemoryActionAgent(input, options));
