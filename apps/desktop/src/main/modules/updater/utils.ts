@@ -1,6 +1,11 @@
-import path from 'node:path';
-
 import semver from 'semver';
+
+const STATIC_ASSET_PATH_PREFIXES = ['/assets/', '/_next/', '/static/'];
+const ROOT_STATIC_FILE_RE = /^\/[^/]+\.[^/]+$/;
+
+const isStaticAssetPath = (pathname: string) =>
+  ROOT_STATIC_FILE_RE.test(pathname) ||
+  STATIC_ASSET_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 
 /**
  * Determine if application update is needed rather than just renderer update
@@ -37,8 +42,8 @@ export const shouldUpdateApp = (currentVersion: string, nextVersion: string): bo
 /**
  * Extract a restorable SPA route (`pathname + search`) from a renderer window URL.
  * Returns `null` when the URL is not a restorable route — splash/error pages
- * (`file:` protocol), static assets (path has an extension), or the root route
- * (identical to the default, nothing worth restoring).
+ * (`file:` protocol), known static asset paths, or the root route (identical
+ * to the default, nothing worth restoring).
  */
 export const extractRestoreRoute = (rawUrl: string): string | null => {
   let url: URL;
@@ -49,7 +54,7 @@ export const extractRestoreRoute = (rawUrl: string): string | null => {
   }
 
   if (url.protocol === 'file:') return null;
-  if (path.extname(url.pathname)) return null;
+  if (isStaticAssetPath(url.pathname)) return null;
 
   // `lng` is re-appended by Browser.buildUrlWithLocale on the next load
   url.searchParams.delete('lng');

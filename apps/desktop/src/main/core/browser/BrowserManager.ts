@@ -257,14 +257,20 @@ export class BrowserManager {
   }
 
   /**
-   * Resolve the main window initial path, consuming a route captured before an
-   * update restart. The captured route is restored on exactly one launch, then
-   * cleared so a subsequent normal launch never restores a stale route.
+   * Consume a route captured before an update restart. The captured route is
+   * cleared before any navigation decision so a subsequent normal launch never
+   * restores a stale route.
    */
-  private resolveMainWindowInitialPath(isOnboardingCompleted: boolean): string {
+  private consumePendingRestoreRoute(): string {
     const pendingRestoreRoute = this.app.storeManager.get('pendingRestoreRoute', '');
     if (pendingRestoreRoute) this.app.storeManager.set('pendingRestoreRoute', '');
+    return pendingRestoreRoute;
+  }
 
+  private resolveMainWindowInitialPath(
+    isOnboardingCompleted: boolean,
+    pendingRestoreRoute: string,
+  ): string {
     if (!isOnboardingCompleted) return '/desktop-onboarding';
     if (pendingRestoreRoute) return pendingRestoreRoute;
     return '/';
@@ -285,7 +291,11 @@ export class BrowserManager {
 
       // Dynamically determine initial path for main window
       if (browser.identifier === BrowsersIdentifiers.app) {
-        const initialPath = this.resolveMainWindowInitialPath(isOnboardingCompleted);
+        const pendingRestoreRoute = this.consumePendingRestoreRoute();
+        const initialPath = this.resolveMainWindowInitialPath(
+          isOnboardingCompleted,
+          pendingRestoreRoute,
+        );
         browser = {
           ...browser,
           keepAlive: isLinux ? false : browser.keepAlive,

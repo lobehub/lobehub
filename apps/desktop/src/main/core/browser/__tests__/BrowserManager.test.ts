@@ -111,7 +111,10 @@ describe('BrowserManager', () => {
         isRemoteServerConfigured: vi.fn().mockResolvedValue(true),
       }),
       storeManager: {
-        get: vi.fn().mockReturnValue(''),
+        get: vi.fn((key: string) => {
+          if (key === 'pendingRestoreRoute') return '';
+          return '';
+        }),
         set: vi.fn(),
       },
     } as unknown as AppCore;
@@ -272,7 +275,10 @@ describe('BrowserManager', () => {
     });
 
     it('restores a captured route as the main window initial path', async () => {
-      (mockApp.storeManager.get as any).mockReturnValue('/agent/abc');
+      (mockApp.storeManager.get as any).mockImplementation((key: string) => {
+        if (key === 'pendingRestoreRoute') return '/agent/abc';
+        return '';
+      });
 
       await manager.initializeBrowsers();
 
@@ -280,7 +286,10 @@ describe('BrowserManager', () => {
     });
 
     it('clears the captured route after consuming it', async () => {
-      (mockApp.storeManager.get as any).mockReturnValue('/agent/abc');
+      (mockApp.storeManager.get as any).mockImplementation((key: string) => {
+        if (key === 'pendingRestoreRoute') return '/agent/abc';
+        return '';
+      });
 
       await manager.initializeBrowsers();
 
@@ -288,7 +297,10 @@ describe('BrowserManager', () => {
     });
 
     it('ignores the captured route when onboarding is not completed', async () => {
-      (mockApp.storeManager.get as any).mockReturnValue('/agent/abc');
+      (mockApp.storeManager.get as any).mockImplementation((key: string) => {
+        if (key === 'pendingRestoreRoute') return '/agent/abc';
+        return '';
+      });
       (mockApp.getController as any).mockReturnValue({
         isRemoteServerConfigured: vi.fn().mockResolvedValue(false),
       });

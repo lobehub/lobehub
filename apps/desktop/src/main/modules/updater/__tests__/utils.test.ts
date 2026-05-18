@@ -33,6 +33,16 @@ describe('extractRestoreRoute', () => {
     expect(extractRestoreRoute('app://renderer/assets/index.js')).toBeNull();
   });
 
+  it('returns null for root static files', () => {
+    expect(extractRestoreRoute('app://renderer/favicon.ico')).toBeNull();
+  });
+
+  it('preserves dotted SPA route slugs', () => {
+    expect(extractRestoreRoute('app://renderer/community/skill/github.owner.repo')).toBe(
+      '/community/skill/github.owner.repo',
+    );
+  });
+
   it('returns null for an unparseable URL', () => {
     expect(extractRestoreRoute('not a url')).toBeNull();
   });
