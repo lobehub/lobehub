@@ -63,9 +63,9 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, variant = 'default' }) => {
 
   const handleSubtaskClick = useCallback(
     (identifier: string, assigneeAgentId?: string) => {
-      navigate(taskDetailPath(identifier, assigneeAgentId ?? task.assigneeAgentId ?? undefined));
+      navigate(taskDetailPath(identifier, assigneeAgentId));
     },
-    [navigate, task.assigneeAgentId],
+    [navigate],
   );
 
   const scheduledBadge =

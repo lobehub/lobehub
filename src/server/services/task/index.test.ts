@@ -164,7 +164,12 @@ describe('TaskService', () => {
         totalTopics: 0,
       };
 
-      const parentTask = { id: 'task_001', identifier: 'TASK-1', name: 'Parent Task' };
+      const parentTask = {
+        assigneeAgentId: 'agt_parent',
+        id: 'task_001',
+        identifier: 'TASK-1',
+        name: 'Parent Task',
+      };
 
       mockTaskModel.resolve.mockResolvedValue(task);
       mockTaskModel.findAllDescendants.mockResolvedValue([]);
@@ -181,7 +186,11 @@ describe('TaskService', () => {
       const service = new TaskService(db, userId);
       const result = await service.getTaskDetail('TASK-2');
 
-      expect(result?.parent).toEqual({ identifier: 'TASK-1', name: 'Parent Task' });
+      expect(result?.parent).toEqual({
+        agentId: 'agt_parent',
+        identifier: 'TASK-1',
+        name: 'Parent Task',
+      });
       expect(mockTaskModel.findById).toHaveBeenCalledWith('task_001');
     });
 

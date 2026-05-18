@@ -168,4 +168,23 @@ describe('AgentTaskItem', () => {
 
     expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_child/task/T-23');
   });
+
+  it('falls back to the global route when the clicked subtask has no assignee', () => {
+    mocks.taskDetailMap = {
+      'T-22': {
+        subtasks: [
+          {
+            identifier: 'T-23',
+            status: 'backlog',
+          },
+        ],
+      },
+    };
+
+    render(<AgentTaskItem task={createTask('agt_parent')} />);
+
+    fireEvent.click(screen.getAllByTestId('subtask-progress')[0]);
+
+    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-23');
+  });
 });

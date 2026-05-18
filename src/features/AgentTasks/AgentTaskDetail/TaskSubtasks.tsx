@@ -7,6 +7,7 @@ import { ChevronDown, ListTodoIcon, PlayCircle, Plus } from 'lucide-react';
 import type { Key, MouseEvent } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 import { taskService } from '@/services/task';
 import { useTaskStore } from '@/store/task';
@@ -22,7 +23,7 @@ import TaskTriggerTag from '../features/TaskTriggerTag';
 import { useTaskContextMenuActions } from '../features/useTaskItemContextMenu';
 import AccordionArrowIcon from '../shared/AccordionArrowIcon';
 import { styles } from '../shared/style';
-import { useNavigateToTaskDetail } from '../shared/taskDetailPath';
+import { taskDetailPath } from '../shared/taskDetailPath';
 import RunSubtasksPreview from './RunSubtasksPreview';
 
 type TaskStatus = 'backlog' | 'canceled' | 'completed' | 'failed' | 'paused' | 'running';
@@ -127,7 +128,7 @@ const toTreeData = (tree: TaskTreeNode[]): DataNode[] => {
 const TaskSubtasks = memo(() => {
   const { t } = useTranslation('chat');
   const { message, modal } = App.useApp();
-  const navigateToTaskDetail = useNavigateToTaskDetail();
+  const navigate = useNavigate();
   const agentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
   const subtasks = useTaskStore(taskDetailSelectors.activeTaskSubtasks);
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
@@ -154,9 +155,9 @@ const TaskSubtasks = memo(() => {
   const handleNavigate = useCallback(
     (identifier: string) => {
       const subtask = subtaskMap.get(identifier);
-      navigateToTaskDetail(identifier, subtask?.assignee?.id ?? undefined);
+      navigate(taskDetailPath(identifier, subtask?.assignee?.id ?? undefined));
     },
-    [navigateToTaskDetail, subtaskMap],
+    [navigate, subtaskMap],
   );
 
   const treeData = useMemo(() => {

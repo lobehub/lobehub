@@ -2,6 +2,7 @@ import type { TaskDetailData, TaskDetailSubtask } from '@lobechat/types';
 import { Button, Flexbox, Text } from '@lobehub/ui';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 import { taskService } from '@/services/task';
 import { useTaskStore } from '@/store/task';
@@ -9,7 +10,7 @@ import { taskDetailSelectors } from '@/store/task/selectors';
 
 import TaskStatusIcon from '../features/TaskStatusIcon';
 import TaskSubtaskProgressTag from '../features/TaskSubtaskProgressTag';
-import { useNavigateToTaskDetail } from '../shared/taskDetailPath';
+import { taskDetailPath } from '../shared/taskDetailPath';
 
 const TASK_STATUS_SET = new Set([
   'backlog',
@@ -27,14 +28,19 @@ const toTaskStatus = (status?: string): TaskStatus =>
 
 const TaskParentBar = memo(() => {
   const { t } = useTranslation('chat');
-  const navigateToTaskDetail = useNavigateToTaskDetail();
+  const navigate = useNavigate();
   const parent = useTaskStore(taskDetailSelectors.activeTaskParent);
   const currentIdentifier = useTaskStore(taskDetailSelectors.activeTaskDetail)?.identifier;
 
+  const [fetchedParentAgent, setFetchedParentAgent] = useState<
+    { agentId?: string | null; identifier: string } | undefined
+  >();
   const [parentSubtasks, setParentSubtasks] = useState<TaskDetailSubtask[]>([]);
   const [parentStatus, setParentStatus] = useState<TaskStatus>('backlog');
 
   useEffect(() => {
+    let isActive = true;
+    setFetchedParentAgent(undefined);
     setParentSubtasks([]);
     setParentStatus('backlog');
     if (!parent?.identifier) return;
@@ -42,16 +48,30 @@ const TaskParentBar = memo(() => {
     taskService
       .getDetail(parent.identifier)
       .then((res) => {
+        if (!isActive) return;
         const detail = res.data as TaskDetailData;
+        setFetchedParentAgent({ agentId: detail.agentId, identifier: parent.identifier });
         setParentStatus(toTaskStatus(detail.status));
         setParentSubtasks(detail.subtasks ?? []);
       })
       .catch((err) => {
+        if (!isActive) return;
         console.error('[TaskParentBar] Failed to load parent subtasks', err);
       });
+
+    return () => {
+      isActive = false;
+    };
   }, [parent?.identifier]);
 
   if (!parent) return null;
+
+  const parentAgentId =
+    parent.agentId === undefined
+      ? fetchedParentAgent?.identifier === parent.identifier
+        ? fetchedParentAgent.agentId
+        : undefined
+      : parent.agentId;
 
   return (
     <Flexbox horizontal align="center" gap={8}>
@@ -62,7 +82,7 @@ const TaskParentBar = memo(() => {
         icon={<TaskStatusIcon size={16} status={parentStatus} />}
         size={'small'}
         type={'text'}
-        onClick={() => navigateToTaskDetail(parent.identifier)}
+        onClick={() => navigate(taskDetailPath(parent.identifier, parentAgentId ?? undefined))}
       >
         <Text weight={500}>{parent.name}</Text>
       </Button>
@@ -70,7 +90,9 @@ const TaskParentBar = memo(() => {
         <TaskSubtaskProgressTag
           currentIdentifier={currentIdentifier}
           subtasks={parentSubtasks}
-          onSubtaskClick={navigateToTaskDetail}
+          onSubtaskClick={(identifier, assigneeAgentId) =>
+            navigate(taskDetailPath(identifier, assigneeAgentId))
+          }
         />
       )}
     </Flexbox>

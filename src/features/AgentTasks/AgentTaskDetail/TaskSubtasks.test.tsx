@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import TaskSubtasks from './TaskSubtasks';
 
 const mocks = vi.hoisted(() => ({
-  navigateToTaskDetail: vi.fn(),
+  navigate: vi.fn(),
   runReadySubtasks: vi.fn(),
   taskState: {
     activeTaskId: 'T-parent',
@@ -28,7 +28,7 @@ const mocks = vi.hoisted(() => ({
         ],
       },
     },
-  },
+  } as any,
 }));
 
 vi.mock('@lobehub/ui', () => ({
@@ -83,6 +83,10 @@ vi.mock('antd-style', () => ({
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
+}));
+
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => mocks.navigate,
 }));
 
 vi.mock('@/services/task', () => ({
@@ -142,17 +146,21 @@ vi.mock('../shared/style', () => ({
   styles: { subtaskTree: 'subtask-tree' },
 }));
 
-vi.mock('../shared/taskDetailPath', () => ({
-  useNavigateToTaskDetail: () => mocks.navigateToTaskDetail,
-}));
-
 vi.mock('./RunSubtasksPreview', () => ({
   default: () => <div>preview</div>,
 }));
 
 describe('TaskSubtasks', () => {
   beforeEach(() => {
-    mocks.navigateToTaskDetail.mockClear();
+    mocks.navigate.mockClear();
+    mocks.taskState.taskDetailMap['T-parent'].subtasks = [
+      {
+        assignee: { avatar: null, backgroundColor: null, id: 'agt_child', title: 'Child' },
+        identifier: 'T-child',
+        name: 'Child task',
+        status: 'backlog',
+      },
+    ];
   });
 
   afterEach(() => {
@@ -164,6 +172,22 @@ describe('TaskSubtasks', () => {
 
     fireEvent.click(screen.getByTestId('subtask-tree-node'));
 
-    expect(mocks.navigateToTaskDetail).toHaveBeenCalledWith('T-child', 'agt_child');
+    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_child/task/T-child');
+  });
+
+  it('falls back to the global task route when the selected subtask has no assignee', () => {
+    mocks.taskState.taskDetailMap['T-parent'].subtasks = [
+      {
+        identifier: 'T-child',
+        name: 'Child task',
+        status: 'backlog',
+      },
+    ];
+
+    render(<TaskSubtasks />);
+
+    fireEvent.click(screen.getByTestId('subtask-tree-node'));
+
+    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-child');
   });
 });
