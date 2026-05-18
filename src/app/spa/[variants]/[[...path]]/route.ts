@@ -229,6 +229,78 @@ export async function GET(
   html = html.replace('<!--SEO_META-->', seoMeta);
   html = html.replace('<!--ANALYTICS_SCRIPTS-->', '');
 
+  // Inject ChinnaHub branding overrides into the mobile CDN-served template.
+  // The mobile bundle loads from web-assets.lobehub.com and has LobeHub branding
+  // baked in. We patch it at serve-time with CSS + a MutationObserver script.
+  if (isMobile) {
+    const mobileBrandingPatch = `
+  <style>
+    /* Hide LobeHub wordmark SVG (viewBox 940x320) */
+    svg[viewBox="0 0 940 320"] { display: none !important; }
+    /* Loading screen override */
+    #loading-brand svg { display: none !important; }
+    #loading-brand::before {
+      content: 'ChinnaHub';
+      font: 800 20px/1 system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      letter-spacing: -0.04em;
+    }
+  </style>
+  <script>
+    (function () {
+      var BRAND_MAP = { 'Lobe AI': 'Chinna', 'LobeHub': 'ChinnaHub', 'Lobe Chat': 'ChinnaHub' };
+
+      function replaceTextNodes(root) {
+        var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+        var node;
+        while ((node = walker.nextNode())) {
+          var val = node.nodeValue;
+          if (!val) continue;
+          var updated = val;
+          for (var key in BRAND_MAP) {
+            if (updated.includes(key)) updated = updated.split(key).join(BRAND_MAP[key]);
+          }
+          if (updated !== val) node.nodeValue = updated;
+        }
+      }
+
+      function replaceLobeHubSvgs(root) {
+        root.querySelectorAll('svg[viewBox="0 0 940 320"]').forEach(function (svg) {
+          var span = document.createElement('span');
+          span.textContent = 'ChinnaHub';
+          span.style.cssText =
+            'font:800 20px/1 system-ui,-apple-system,sans-serif;letter-spacing:-0.04em';
+          if (svg.parentNode) svg.parentNode.replaceChild(span, svg);
+        });
+      }
+
+      function patch(root) {
+        replaceLobeHubSvgs(root);
+        replaceTextNodes(root);
+      }
+
+      // Start observing as soon as <body> exists so we catch the very first React render
+      var observer = new MutationObserver(function () {
+        if (document.body) patch(document.body);
+      });
+
+      function startObserver() {
+        patch(document.body);
+        observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+        // Disconnect after 60 s — the app will have fully hydrated by then
+        setTimeout(function () { observer.disconnect(); }, 60000);
+      }
+
+      if (document.body) {
+        startObserver();
+      } else {
+        document.addEventListener('DOMContentLoaded', startObserver);
+      }
+    })();
+  </script>`;
+
+    html = html.replace('</head>', mobileBrandingPatch + '\n  </head>');
+  }
+
   return new Response(html, {
     headers: {
       'Cache-Control': 'no-cache',
