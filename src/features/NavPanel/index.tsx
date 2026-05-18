@@ -28,6 +28,12 @@ const setNavPanelSnapshot = (snapshot: NavPanelSnapshot) => {
   listeners.forEach((listener) => listener());
 };
 
+export const resetNavPanel = () => {
+  if (!currentSnapshot) return;
+
+  setNavPanelSnapshot(null);
+};
+
 const FALLBACK_NAV_KEY = 'home';
 
 const getActiveNavKey = () => currentSnapshot?.key ?? FALLBACK_NAV_KEY;
