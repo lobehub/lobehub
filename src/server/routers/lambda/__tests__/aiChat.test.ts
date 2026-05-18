@@ -11,6 +11,8 @@ import { AiChatService } from '@/server/services/aiChat';
 
 import { aiChatRouter } from '../aiChat';
 
+const flushAsyncTasks = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
 vi.mock('@/database/models/agent');
 vi.mock('@/database/models/message');
 vi.mock('@/database/models/thread');
@@ -27,13 +29,16 @@ describe('aiChatRouter', () => {
   const mockCtx = { userId: 'u1' };
   const mockMessageModel = (mockCreateMessage: ReturnType<typeof vi.fn>) => {
     const mockCreateUserAndAssistantMessages = vi.fn(
-      async ({
-        assistantMessage,
-        userMessage,
-      }: {
-        assistantMessage: CreateMessageParams;
-        userMessage: CreateMessageParams;
-      }) => {
+      async (
+        {
+          assistantMessage,
+          userMessage,
+        }: {
+          assistantMessage: CreateMessageParams;
+          userMessage: CreateMessageParams;
+        },
+        _options?: unknown,
+      ) => {
         const userMessageItem = await mockCreateMessage(userMessage);
         const assistantMessageItem = await mockCreateMessage({
           ...assistantMessage,
@@ -111,6 +116,10 @@ describe('aiChatRouter', () => {
       }),
     );
     expect(mockCreateUserAndAssistantMessages).toHaveBeenCalledTimes(1);
+    expect(mockCreateUserAndAssistantMessages).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ touchTopicUpdatedAt: false }),
+    );
 
     expect(mockGet).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -136,7 +145,7 @@ describe('aiChatRouter', () => {
       .mockResolvedValueOnce({ id: 'm-assistant' });
     const mockGet = vi.fn().mockResolvedValue({ messages: [], topics: undefined });
 
-    mockMessageModel(mockCreateMessage);
+    const mockCreateUserAndAssistantMessages = mockMessageModel(mockCreateMessage);
     vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
 
     const caller = aiChatRouter.createCaller(mockCtx as any);
@@ -149,6 +158,10 @@ describe('aiChatRouter', () => {
     } as any);
 
     expect(mockCreateMessage).toHaveBeenCalled();
+    expect(mockCreateUserAndAssistantMessages).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ touchTopicUpdatedAt: true }),
+    );
     expect(mockGet).toHaveBeenCalledWith(
       expect.objectContaining({
         includeTopic: false,
@@ -768,6 +781,48 @@ describe('aiChatRouter', () => {
 
       // Verify touchUpdatedAt was called with the agentId
       expect(mockTouchUpdatedAt).toHaveBeenCalledWith('agent-1');
+    });
+
+    it('should create messages while agent updatedAt touch is still pending', async () => {
+      const mockCreateTopic = vi.fn().mockResolvedValue({ id: 't1' });
+      const mockCreateMessage = vi
+        .fn()
+        .mockResolvedValueOnce({ id: 'm-user' })
+        .mockResolvedValueOnce({ id: 'm-assistant' });
+      const mockGet = vi.fn().mockResolvedValue({ messages: [], topics: [{}] });
+      let resolveTouchUpdatedAt: () => void = () => {};
+      const touchUpdatedAtPromise = new Promise<void>((resolve) => {
+        resolveTouchUpdatedAt = resolve;
+      });
+      const mockTouchUpdatedAt = vi.fn(() => touchUpdatedAtPromise);
+
+      vi.mocked(TopicModel).mockImplementation(() => ({ create: mockCreateTopic }) as any);
+      const mockCreateUserAndAssistantMessages = mockMessageModel(mockCreateMessage);
+      vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
+      vi.mocked(AgentModel).mockImplementation(
+        () => ({ touchUpdatedAt: mockTouchUpdatedAt }) as any,
+      );
+
+      const caller = aiChatRouter.createCaller(mockCtx as any);
+
+      const request = caller.sendMessageInServer({
+        agentId: 'agent-1',
+        newAssistantMessage: { model: 'gpt-4o', provider: 'openai' },
+        newTopic: { title: 'New Topic' },
+        newUserMessage: { content: 'hi' },
+        sessionId: 's1',
+      } as any);
+
+      await flushAsyncTasks();
+
+      try {
+        expect(mockTouchUpdatedAt).toHaveBeenCalledWith('agent-1');
+        expect(mockCreateUserAndAssistantMessages).toHaveBeenCalledTimes(1);
+      } finally {
+        resolveTouchUpdatedAt();
+      }
+
+      await request;
     });
 
     it('should not touch agent updatedAt when creating topic without agentId', async () => {

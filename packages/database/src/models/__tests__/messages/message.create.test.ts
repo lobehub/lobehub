@@ -277,7 +277,9 @@ describe('MessageModel Create Tests', () => {
           },
         },
         {
-          log: (event) => timingEvents.push(event),
+          timing: {
+            log: (event) => timingEvents.push(event),
+          },
         },
       );
 
@@ -315,6 +317,54 @@ describe('MessageModel Create Tests', () => {
           (event) => event === 'db.message.createUserAndAssistant.topic.touchUpdatedAt:start',
         ),
       ).toHaveLength(1);
+    });
+
+    it('should skip topic touch when creating a pair for an already-created topic', async () => {
+      await serverDB.insert(topics).values({
+        id: 'topic-pair-no-touch',
+        sessionId: '1',
+        title: 'Topic pair no touch',
+        userId,
+      });
+
+      const timingEvents: string[] = [];
+      const result = await messageModel.createUserAndAssistantMessages(
+        {
+          assistantMessage: {
+            content: '',
+            model: 'gpt-4o',
+            provider: 'openai',
+            role: 'assistant',
+            sessionId: '1',
+            topicId: 'topic-pair-no-touch',
+          },
+          userMessage: {
+            content: 'hello',
+            role: 'user',
+            sessionId: '1',
+            topicId: 'topic-pair-no-touch',
+          },
+        },
+        {
+          timing: {
+            log: (event) => timingEvents.push(event),
+          },
+          touchTopicUpdatedAt: false,
+        },
+      );
+
+      expect(result.userMessage.id).toBeDefined();
+      expect(result.assistantMessage.parentId).toBe(result.userMessage.id);
+      expect(
+        timingEvents.filter(
+          (event) => event === 'db.message.createUserAndAssistant.messages.insert:start',
+        ),
+      ).toHaveLength(1);
+      expect(
+        timingEvents.filter(
+          (event) => event === 'db.message.createUserAndAssistant.topic.touchUpdatedAt:start',
+        ),
+      ).toHaveLength(0);
     });
 
     describe('create with advanced parameters', () => {

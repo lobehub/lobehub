@@ -97,6 +97,7 @@ export const aiChatRouter = router({
       let createdThreadId: string | undefined;
 
       let isCreateNewTopic = false;
+      let agentTouchUpdatedAtPromise: Promise<unknown> | undefined;
 
       // create topic if there should be a new topic
       if (input.newTopic) {
@@ -133,13 +134,13 @@ export const aiChatRouter = router({
 
         // update agent's updatedAt to reflect new activity
         if (input.agentId) {
-          await runTimedStage(
+          agentTouchUpdatedAtPromise = runTimedStage(
             timingContext,
             'lambda.aiChat.agent.touchUpdatedAt',
             () => ctx.agentModel.touchUpdatedAt(input.agentId!),
             { hasAgentId: true },
           );
-          log('agent updatedAt touched for agentId: %s', input.agentId);
+          log('agent updatedAt touch scheduled for agentId: %s', input.agentId);
         }
       }
 
@@ -225,54 +226,58 @@ export const aiChatRouter = router({
             }
           : undefined;
 
-      const { assistantMessage: assistantMessageItem, userMessage: userMessageItem } =
-        await runTimedStage(
-          timingContext,
-          'lambda.aiChat.messages.createUserAndAssistant',
-          () => {
-            const userMessage = {
-              agentId: input.agentId,
-              content: input.newUserMessage.content,
-              editorData: input.newUserMessage.editorData,
-              files: input.newUserMessage.files,
-              groupId: input.groupId,
-              metadata: userMessageMetadata,
-              parentId,
-              role: 'user',
-              sessionId,
-              threadId,
-              topicId,
-            } satisfies CreateMessageParams;
-            const assistantMessage = {
-              agentId: input.agentId,
-              content: LOADING_FLAT,
-              groupId: input.groupId,
-              metadata: input.newAssistantMessage.metadata,
-              model: input.newAssistantMessage.model,
-              provider: input.newAssistantMessage.provider,
-              role: 'assistant',
-              sessionId,
-              threadId,
-              topicId,
-            } satisfies CreateMessageParams;
-            const modelTiming = createPrefixedTimingContext(
-              timingContext,
-              'lambda.aiChat.messages.createUserAndAssistant',
-            );
-            return modelTiming
-              ? ctx.messageModel.createUserAndAssistantMessages(
-                  { assistantMessage, userMessage },
-                  modelTiming,
-                )
-              : ctx.messageModel.createUserAndAssistantMessages({ assistantMessage, userMessage });
-          },
-          {
-            contentLength: input.newUserMessage.content.length,
-            fileCount: input.newUserMessage.files?.length ?? 0,
+      const createMessagePairPromise = runTimedStage(
+        timingContext,
+        'lambda.aiChat.messages.createUserAndAssistant',
+        () => {
+          const userMessage = {
+            agentId: input.agentId,
+            content: input.newUserMessage.content,
+            editorData: input.newUserMessage.editorData,
+            files: input.newUserMessage.files,
+            groupId: input.groupId,
+            metadata: userMessageMetadata,
+            parentId,
+            role: 'user',
+            sessionId,
+            threadId,
+            topicId,
+          } satisfies CreateMessageParams;
+          const assistantMessage = {
+            agentId: input.agentId,
+            content: LOADING_FLAT,
+            groupId: input.groupId,
+            metadata: input.newAssistantMessage.metadata,
             model: input.newAssistantMessage.model,
             provider: input.newAssistantMessage.provider,
-          },
-        );
+            role: 'assistant',
+            sessionId,
+            threadId,
+            topicId,
+          } satisfies CreateMessageParams;
+          const modelTiming = createPrefixedTimingContext(
+            timingContext,
+            'lambda.aiChat.messages.createUserAndAssistant',
+          );
+          return ctx.messageModel.createUserAndAssistantMessages(
+            { assistantMessage, userMessage },
+            {
+              ...(modelTiming ? { timing: modelTiming } : {}),
+              touchTopicUpdatedAt: !isCreateNewTopic,
+            },
+          );
+        },
+        {
+          contentLength: input.newUserMessage.content.length,
+          fileCount: input.newUserMessage.files?.length ?? 0,
+          model: input.newAssistantMessage.model,
+          provider: input.newAssistantMessage.provider,
+        },
+      );
+      const { assistantMessage: assistantMessageItem, userMessage: userMessageItem } =
+        agentTouchUpdatedAtPromise
+          ? (await Promise.all([createMessagePairPromise, agentTouchUpdatedAtPromise]))[0]
+          : await createMessagePairPromise;
 
       const messageId = userMessageItem.id;
       log('user message created with id: %s', messageId);

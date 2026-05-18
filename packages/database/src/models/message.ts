@@ -148,6 +148,11 @@ interface CreateUserAndAssistantMessagesParams {
   userMessage: CreateMessageParams;
 }
 
+interface CreateUserAndAssistantMessagesOptions {
+  timing?: ModelTimingContext;
+  touchTopicUpdatedAt?: boolean;
+}
+
 interface CreateMessageInsertParams {
   createdAt?: CreateMessageParams['createdAt'];
   fromModel?: CreateMessageParams['model'];
@@ -1705,7 +1710,7 @@ export class MessageModel {
 
   createUserAndAssistantMessages = async (
     { userMessage, assistantMessage }: CreateUserAndAssistantMessagesParams,
-    timing?: ModelTimingContext,
+    { timing, touchTopicUpdatedAt = true }: CreateUserAndAssistantMessagesOptions = {},
   ): Promise<{ assistantMessage: DBMessageItem; userMessage: DBMessageItem }> => {
     const userMessageId = this.genId();
     const assistantMessageId = this.genId();
@@ -1769,7 +1774,7 @@ export class MessageModel {
             'db.message.createUserAndAssistant.assistant',
           );
 
-          if (topicIds.length > 0) {
+          if (touchTopicUpdatedAt && topicIds.length > 0) {
             await runTimedStage(
               timing,
               'db.message.createUserAndAssistant.topic.touchUpdatedAt',
