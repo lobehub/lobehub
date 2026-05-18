@@ -95,7 +95,7 @@ const TASK_CREATE_RESULT_PATTERN = /^Task #(\d+) created successfully/;
 const TASK_UPDATE_RESULT_PATTERN = /^Updated task #\d+/;
 
 /**
- * One line of `TaskList`'s plain-text output: `#1 [in_progress] 读 hosts`.
+ * One line of `TaskList`'s plain-text output: `#1 [in_progress] read hosts`.
  * Used as the resume reconciliation path — when this adapter joins a CC
  * session mid-stream and missed earlier Create / Update events, parsing
  * TaskList rebuilds id / subject / status. `activeForm` and `description`
