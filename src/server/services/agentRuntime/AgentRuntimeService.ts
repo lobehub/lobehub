@@ -8,7 +8,12 @@ import { AgentRuntime, findInMessages, GeneralChatAgent } from '@lobechat/agent-
 import type { ISnapshotStore } from '@lobechat/agent-tracing';
 import { dynamicInterventionAudits } from '@lobechat/builtin-tools/dynamicInterventionAudits';
 import { getModelPropertyWithFallback } from '@lobechat/model-runtime';
-import { AgentRuntimeErrorType, ChatErrorType, type ChatMessageError } from '@lobechat/types';
+import {
+  AgentRuntimeErrorType,
+  ChatErrorType,
+  type ChatMessageError,
+  type ExecSubAgentTaskParams,
+} from '@lobechat/types';
 import debug from 'debug';
 import urlJoin from 'url-join';
 
@@ -19,7 +24,6 @@ import { type AgentRuntimeCoordinatorOptions } from '@/server/modules/AgentRunti
 import { AgentRuntimeCoordinator, createStreamEventManager } from '@/server/modules/AgentRuntime';
 import {
   createRuntimeExecutors,
-  type ExecSubAgentTaskCallbackParams,
   type RuntimeExecutorContext,
 } from '@/server/modules/AgentRuntime/RuntimeExecutors';
 import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
@@ -124,7 +128,7 @@ export interface AgentRuntimeServiceOptions {
    * Injected by AiAgentService to wire up the exec_task / exec_tasks executors
    * without creating a circular import between RuntimeExecutors and AiAgentService.
    */
-  execSubAgentTask?: (params: ExecSubAgentTaskCallbackParams) => Promise<void>;
+  execSubAgentTask?: (params: ExecSubAgentTaskParams) => Promise<unknown>;
   /**
    * Custom QueueService
    * Set to null to disable queue scheduling (for synchronous execution tests)
@@ -164,7 +168,7 @@ export class AgentRuntimeService {
   private agentFactory?: (config: GeneralAgentConfig) => Agent;
   private completionLifecycle: CompletionLifecycle;
   private coordinator: AgentRuntimeCoordinator;
-  private execSubAgentTaskCallback?: (params: ExecSubAgentTaskCallbackParams) => Promise<void>;
+  private execSubAgentTaskCallback?: (params: ExecSubAgentTaskParams) => Promise<unknown>;
   private humanIntervention: HumanInterventionHandler;
   private streamManager: IStreamEventManager;
   private queueService: QueueService | null;

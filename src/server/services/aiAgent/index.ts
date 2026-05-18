@@ -265,9 +265,7 @@ export class AiAgentService {
     this.topicModel = new TopicModel(db, userId);
     this.agentRuntimeService = new AgentRuntimeService(db, userId, {
       ...options?.runtimeOptions,
-      execSubAgentTask: async (params) => {
-        await this.execSubAgentTask(params);
-      },
+      execSubAgentTask: this.execSubAgentTask.bind(this),
     });
     this.marketService = new MarketService({ userInfo: { userId } });
     this.klavisService = new KlavisService({ db, userId });

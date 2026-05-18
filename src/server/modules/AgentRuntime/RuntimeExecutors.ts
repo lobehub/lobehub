@@ -2,8 +2,8 @@ import {
   type AgentEvent,
   type AgentInstruction,
   type AgentInstructionCompressContext,
-  type AgentInstructionExecTask,
-  type AgentInstructionExecTasks,
+  type AgentInstructionExecSubAgent,
+  type AgentInstructionExecSubAgents,
   type AgentRuntimeContext,
   type AgentState,
   type CallLLMPayload,
@@ -33,7 +33,12 @@ import {
 import { parse } from '@lobechat/conversation-flow';
 import { consumeStreamUntilDone } from '@lobechat/model-runtime';
 import { chainCompressContext } from '@lobechat/prompts';
-import { type ChatToolPayload, type MessageToolCall, type UIChatMessage } from '@lobechat/types';
+import {
+  type ChatToolPayload,
+  type ExecSubAgentTaskParams,
+  type MessageToolCall,
+  type UIChatMessage,
+} from '@lobechat/types';
 import { sanitizeToolCallArguments, serializePartsForStorage } from '@lobechat/utils';
 import debug from 'debug';
 
@@ -208,17 +213,6 @@ const buildToolDiscoveryConfig = (operationToolSet: OperationToolSet, enabledToo
   return { availableTools };
 };
 
-export interface ExecSubAgentTaskCallbackParams {
-  agentId: string;
-  groupId?: string;
-  instruction: string;
-  parentMessageId: string;
-  parentOperationId?: string;
-  timeout?: number;
-  title?: string;
-  topicId: string;
-}
-
 export interface RuntimeExecutorContext {
   agentConfig?: any;
   botPlatformContext?: BotPlatformContext;
@@ -226,10 +220,10 @@ export interface RuntimeExecutorContext {
   evalContext?: EvalContext;
   /**
    * Callback to spawn a sub-agent task server-side.
-   * Injected by AiAgentService so exec_task / exec_tasks executors
+   * Injected by AiAgentService so exec_sub_agent / exec_sub_agents executors
    * can dispatch callAgent-triggered tasks without a circular import.
    */
-  execSubAgentTask?: (params: ExecSubAgentTaskCallbackParams) => Promise<void>;
+  execSubAgentTask?: (params: ExecSubAgentTaskParams) => Promise<unknown>;
   hookDispatcher?: HookDispatcher;
   loadAgentState?: (operationId: string) => Promise<AgentState | null>;
   messageModel: MessageModel;
@@ -1873,13 +1867,14 @@ export const createRuntimeExecutors = (
 
       log('[%s:%d] Tool execution completed', operationId, stepIndex);
 
-      // When the tool result carries an execTask / execTasks state the
+      // When the tool result carries an execSubAgent / execSubAgents state the
       // GeneralChatAgent needs `stop: true` in the payload to detect it and
-      // emit the matching exec_task / exec_tasks instruction.  Without this
-      // flag the agent falls through to the normal LLM-call path and the
-      // sub-agent task is never spawned.
+      // emit the matching exec_sub_agent / exec_sub_agents instruction.  Without
+      // this flag the agent falls through to the normal LLM-call path and the
+      // sub-agent is never spawned.
       const execTaskStateType = executionResult.state?.type as string | undefined;
-      const isExecTaskState = execTaskStateType === 'execTask' || execTaskStateType === 'execTasks';
+      const isExecTaskState =
+        execTaskStateType === 'execSubAgent' || execTaskStateType === 'execSubAgents';
 
       return {
         events,
@@ -2456,22 +2451,22 @@ export const createRuntimeExecutors = (
   },
 
   /**
-   * Server-side exec_task executor
+   * Server-side exec_sub_agent executor
    *
-   * Mirrors the client-side exec_task executor in createAgentExecutors.ts but
-   * runs entirely server-side (no polling required).  Flow:
+   * Mirrors the client-side exec_sub_agent executor in createAgentExecutors.ts
+   * but runs entirely server-side (no polling required).  Flow:
    *   1. Create a task message (role: 'task') as a placeholder visible in the UI.
    *   2. Fire execSubAgentTask via the injected callback so the sub-agent runs as
    *      an independent QStash operation.
-   *   3. Return a task_result context so GeneralChatAgent calls the LLM once more
-   *      and the parent agent can acknowledge the delegation.
+   *   3. Return a sub_agent_result context so GeneralChatAgent calls the LLM once
+   *      more and the parent agent can acknowledge the delegation.
    */
-  exec_task: async (instruction, state) => {
-    const { payload } = instruction as AgentInstructionExecTask;
+  exec_sub_agent: async (instruction, state) => {
+    const { payload } = instruction as AgentInstructionExecSubAgent;
     const { parentMessageId, task } = payload;
     const events: AgentEvent[] = [];
     const { operationId } = ctx;
-    const taskLogId = `${operationId}:exec_task`;
+    const taskLogId = `${operationId}:exec_sub_agent`;
 
     const topicId = ctx.topicId ?? state.metadata?.topicId;
     const agentId = state.metadata?.agentId;
@@ -2542,29 +2537,29 @@ export const createRuntimeExecutors = (
             threadId: '',
           },
         },
-        phase: 'task_result',
+        phase: 'sub_agent_result',
         session: {
           messageCount: state.messages.length,
           sessionId: operationId,
           status: 'running',
           stepCount: state.stepCount + 1,
         },
-      } as AgentRuntimeContext,
+      } as unknown as AgentRuntimeContext,
     };
   },
 
   /**
-   * Server-side exec_tasks executor
+   * Server-side exec_sub_agents executor
    *
-   * Same as exec_task but for a batch of tasks.  Each task is fired
+   * Same as exec_sub_agent but for a batch.  Each sub-agent is fired
    * independently via execSubAgentTask and a task message is created for each.
    */
-  exec_tasks: async (instruction, state) => {
-    const { payload } = instruction as AgentInstructionExecTasks;
+  exec_sub_agents: async (instruction, state) => {
+    const { payload } = instruction as AgentInstructionExecSubAgents;
     const { parentMessageId, tasks } = payload;
     const events: AgentEvent[] = [];
     const { operationId } = ctx;
-    const taskLogId = `${operationId}:exec_tasks`;
+    const taskLogId = `${operationId}:exec_sub_agents`;
 
     const topicId = ctx.topicId ?? state.metadata?.topicId;
     const agentId = state.metadata?.agentId;
@@ -2638,14 +2633,14 @@ export const createRuntimeExecutors = (
           parentMessageId: lastTaskMessageId ?? parentMessageId,
           results: tasks.map(() => ({ success: !!ctx.execSubAgentTask, threadId: '' })),
         },
-        phase: 'tasks_batch_result',
+        phase: 'sub_agents_batch_result',
         session: {
           messageCount: state.messages.length,
           sessionId: operationId,
           status: 'running',
           stepCount: state.stepCount + 1,
         },
-      } as AgentRuntimeContext,
+      } as unknown as AgentRuntimeContext,
     };
   },
 
