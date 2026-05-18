@@ -713,6 +713,7 @@ export class ConversationLifecycleActionImpl {
       const toolContext = formatSelectedToolsContext(dedupedTools);
       const contextSuffix = [skillContext, toolContext].filter(Boolean).join('\n');
       const persistedContent = contextSuffix ? `${message}\n\n${contextSuffix}` : message;
+      const newTopicTitle = message.slice(0, 80) || t('defaultTitle', { ns: 'topic' });
 
       data = await aiChatService.sendMessageInServer(
         {
@@ -743,7 +744,7 @@ export class ConversationLifecycleActionImpl {
           newTopic: !topicId
             ? {
                 topicMessageIds: forceNewTopicFromExisting ? [] : messages.map((m) => m.id),
-                title: message.slice(0, 80) || t('defaultTitle', { ns: 'topic' }),
+                title: newTopicTitle,
               }
             : undefined,
           agentId: operationContext.agentId,
@@ -788,7 +789,7 @@ export class ConversationLifecycleActionImpl {
             type: 'addTopic',
             value: {
               id: data.topicId,
-              title: message.slice(0, 80) || t('defaultTitle', { ns: 'topic' }),
+              title: newTopicTitle,
             },
           },
           'sendMessage/createTopicPlaceholder',

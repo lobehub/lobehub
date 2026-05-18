@@ -160,7 +160,7 @@ export const AiSendMessageServerSchema = z.object({
       includeTriggers: z.array(z.string()).optional(),
     })
     .optional(),
-  topicPageSize: z.number().max(100).optional(),
+  topicPageSize: z.number().int().min(1).max(100).optional(),
   topicId: z.string().optional(),
 });
 
