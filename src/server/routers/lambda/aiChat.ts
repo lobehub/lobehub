@@ -293,6 +293,7 @@ export const aiChatRouter = router({
             threadId,
             topicFilter: input.topicFilter,
             topicId,
+            topicPageSize: input.topicPageSize,
             ...(timingContext
               ? {
                   timingRequestId: timingContext.requestId,

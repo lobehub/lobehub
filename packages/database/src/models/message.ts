@@ -148,6 +148,40 @@ interface CreateUserAndAssistantMessagesParams {
   userMessage: CreateMessageParams;
 }
 
+interface CreateMessageInsertParams {
+  createdAt?: CreateMessageParams['createdAt'];
+  fromModel?: CreateMessageParams['model'];
+  fromProvider?: CreateMessageParams['provider'];
+  message: Omit<
+    CreateMessageParams,
+    | 'createdAt'
+    | 'fileChunks'
+    | 'files'
+    | 'model'
+    | 'plugin'
+    | 'pluginIntervention'
+    | 'pluginState'
+    | 'provider'
+    | 'ragQueryId'
+    | 'updatedAt'
+  >;
+  updatedAt?: CreateMessageParams['updatedAt'];
+}
+
+interface CreateMessageRelationParams {
+  fileChunks?: CreateMessageParams['fileChunks'];
+  files?: CreateMessageParams['files'];
+  plugin?: CreateMessageParams['plugin'];
+  pluginIntervention?: CreateMessageParams['pluginIntervention'];
+  pluginState?: CreateMessageParams['pluginState'];
+  ragQueryId?: CreateMessageParams['ragQueryId'];
+}
+
+interface SplitCreateMessageParams {
+  insert: CreateMessageInsertParams;
+  relations: CreateMessageRelationParams;
+}
+
 export class MessageModel {
   private userId: string;
   private db: LobeChatDatabase;
@@ -1490,54 +1524,72 @@ export class MessageModel {
 
   // **************** Create *************** //
 
-  private createInTransaction = async (
-    trx: Transaction,
-    {
-      model: fromModel,
-      provider: fromProvider,
+  private splitCreateMessageParams = ({
+    fileChunks,
+    files,
+    model: fromModel,
+    plugin,
+    pluginIntervention,
+    pluginState,
+    provider: fromProvider,
+    ragQueryId,
+    updatedAt,
+    createdAt,
+    ...message
+  }: CreateMessageParams): SplitCreateMessageParams => ({
+    insert: {
+      createdAt,
+      fromModel,
+      fromProvider,
+      message,
+      updatedAt,
+    },
+    relations: {
+      fileChunks,
       files,
       plugin,
       pluginIntervention,
       pluginState,
-      fileChunks,
       ragQueryId,
-      updatedAt,
-      createdAt,
-      ...message
-    }: CreateMessageParams,
+    },
+  });
+
+  private buildMessageInsertValue = (
+    { createdAt, fromModel, fromProvider, message, updatedAt }: CreateMessageInsertParams,
     id: string,
-    timing?: ModelTimingContext,
-    timingPrefix: string = 'db.message.create',
-  ): Promise<DBMessageItem> => {
+  ) => {
     // Ensure group message does not populate sessionId
     const normalizedMessage = message.groupId ? { ...message, sessionId: null } : message;
 
-    const [item] = (await runTimedStage(
-      timing,
-      `${timingPrefix}.messages.insert`,
-      () =>
-        trx
-          .insert(messages)
-          .values({
-            ...normalizedMessage,
-            // Sanitize content to strip null bytes that PostgreSQL rejects
-            content: sanitizeNullBytes(normalizedMessage.content),
-            // TODO: remove this when the client is updated
-            createdAt: createdAt ? new Date(createdAt) : undefined,
-            id,
-            model: fromModel,
-            provider: fromProvider,
-            updatedAt: updatedAt ? new Date(updatedAt) : undefined,
-            userId: this.userId,
-          })
-          .returning(),
-      {
-        hasGroupId: !!message.groupId,
-        hasTopicId: !!message.topicId,
-        role: message.role,
-      },
-    )) as DBMessageItem[];
+    return {
+      ...normalizedMessage,
+      // Sanitize content to strip null bytes that PostgreSQL rejects
+      content: sanitizeNullBytes(normalizedMessage.content),
+      // TODO: remove this when the client is updated
+      createdAt: createdAt ? new Date(createdAt) : undefined,
+      id,
+      model: fromModel,
+      provider: fromProvider,
+      updatedAt: updatedAt ? new Date(updatedAt) : undefined,
+      userId: this.userId,
+    };
+  };
 
+  private insertMessageRelationsInTransaction = async (
+    trx: Transaction,
+    {
+      fileChunks,
+      files,
+      plugin,
+      pluginIntervention,
+      pluginState,
+      ragQueryId,
+    }: CreateMessageRelationParams,
+    message: CreateMessageInsertParams['message'],
+    id: string,
+    timing?: ModelTimingContext,
+    timingPrefix: string = 'db.message.create',
+  ): Promise<void> => {
     // Insert the plugin data if the message is a tool
     if (message.role === 'tool') {
       await runTimedStage(timing, `${timingPrefix}.plugin.insert`, () =>
@@ -1584,6 +1636,36 @@ export class MessageModel {
         { chunkCount: fileChunks.length },
       );
     }
+  };
+
+  private createInTransaction = async (
+    trx: Transaction,
+    params: CreateMessageParams,
+    id: string,
+    timing?: ModelTimingContext,
+    timingPrefix: string = 'db.message.create',
+  ): Promise<DBMessageItem> => {
+    const { insert, relations } = this.splitCreateMessageParams(params);
+
+    const [item] = (await runTimedStage(
+      timing,
+      `${timingPrefix}.messages.insert`,
+      () => trx.insert(messages).values(this.buildMessageInsertValue(insert, id)).returning(),
+      {
+        hasGroupId: !!insert.message.groupId,
+        hasTopicId: !!insert.message.topicId,
+        role: insert.message.role,
+      },
+    )) as DBMessageItem[];
+
+    await this.insertMessageRelationsInTransaction(
+      trx,
+      relations,
+      insert.message,
+      id,
+      timing,
+      timingPrefix,
+    );
 
     return item;
   };
@@ -1653,16 +1735,35 @@ export class MessageModel {
       'db.message.createUserAndAssistant.transaction',
       () =>
         this.db.transaction(async (trx) => {
-          const userMessageItem = await this.createInTransaction(
+          const userPayload = this.splitCreateMessageParams(userMessageWithTimestamp);
+          const assistantPayload = this.splitCreateMessageParams(assistantMessageWithParent);
+          const insertedMessages = (await runTimedStage(
+            timing,
+            'db.message.createUserAndAssistant.messages.insert',
+            () =>
+              trx
+                .insert(messages)
+                .values([
+                  this.buildMessageInsertValue(userPayload.insert, userMessageId),
+                  this.buildMessageInsertValue(assistantPayload.insert, assistantMessageId),
+                ])
+                .returning(),
+            { hasTopicId: topicIds.length > 0, messageCount: 2 },
+          )) as DBMessageItem[];
+          const messageMap = new Map(insertedMessages.map((message) => [message.id, message]));
+
+          await this.insertMessageRelationsInTransaction(
             trx,
-            userMessageWithTimestamp,
+            userPayload.relations,
+            userPayload.insert.message,
             userMessageId,
             timing,
             'db.message.createUserAndAssistant.user',
           );
-          const assistantMessageItem = await this.createInTransaction(
+          await this.insertMessageRelationsInTransaction(
             trx,
-            assistantMessageWithParent,
+            assistantPayload.relations,
+            assistantPayload.insert.message,
             assistantMessageId,
             timing,
             'db.message.createUserAndAssistant.assistant',
@@ -1675,6 +1776,13 @@ export class MessageModel {
               () => this.touchTopicUpdatedAt(trx, topicIds),
               { topicCount: topicIds.length },
             );
+          }
+
+          const userMessageItem = messageMap.get(userMessageId);
+          const assistantMessageItem = messageMap.get(assistantMessageId);
+
+          if (!userMessageItem || !assistantMessageItem) {
+            throw new Error('Failed to create user and assistant messages');
           }
 
           return { assistantMessage: assistantMessageItem, userMessage: userMessageItem };

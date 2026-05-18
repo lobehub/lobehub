@@ -37,10 +37,12 @@ export class AiChatService {
       includeTriggers?: string[];
     };
     topicId?: string;
+    topicPageSize?: number;
     timingRequestId?: string;
     timingStartedAt?: number;
   }) {
-    const { topicFilter, timingRequestId, timingStartedAt, ...messageParams } = params;
+    const { topicFilter, topicPageSize, timingRequestId, timingStartedAt, ...messageParams } =
+      params;
     const timingContext = toTimingContext({ timingRequestId, timingStartedAt });
     const messageTiming = createPrefixedTimingContext(
       timingContext,
@@ -73,6 +75,7 @@ export class AiChatService {
               this.topicModel.query({
                 agentId: params.agentId,
                 groupId: params.groupId,
+                pageSize: topicPageSize,
                 ...(topicTiming ? { timing: topicTiming } : {}),
                 ...topicFilter,
               }),

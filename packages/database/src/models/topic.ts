@@ -541,45 +541,55 @@ export class TopicModel {
     id: string = this.genId(),
     timing?: ModelTimingContext,
   ): Promise<TopicItem> => {
+    const insertData = {
+      ...params,
+      agentId: params.agentId || null,
+      groupId: params.groupId || null,
+      id,
+      sessionId: params.sessionId || null,
+      userId: this.userId,
+    };
+    const insertMeta = {
+      hasAgentId: !!params.agentId,
+      hasGroupId: !!params.groupId,
+      hasSessionId: !!params.sessionId,
+    };
+
+    if (!messageIds || messageIds.length === 0) {
+      const [topic] = await runTimedStage(
+        timing,
+        'db.topic.create.topics.insert',
+        () => this.db.insert(topics).values(insertData).returning(),
+        insertMeta,
+      );
+
+      return topic;
+    }
+
     return runTimedStage(
       timing,
       'db.topic.create.transaction',
       () =>
         this.db.transaction(async (tx) => {
-          const insertData = {
-            ...params,
-            agentId: params.agentId || null,
-            groupId: params.groupId || null,
-            id,
-            sessionId: params.sessionId || null,
-            userId: this.userId,
-          };
-
           // Insert new topic
           const [topic] = await runTimedStage(
             timing,
             'db.topic.create.topics.insert',
             () => tx.insert(topics).values(insertData).returning(),
-            {
-              hasAgentId: !!params.agentId,
-              hasGroupId: !!params.groupId,
-              hasSessionId: !!params.sessionId,
-            },
+            insertMeta,
           );
 
           // Update associated messages' topicId
-          if (messageIds && messageIds.length > 0) {
-            await runTimedStage(
-              timing,
-              'db.topic.create.messages.updateTopic',
-              () =>
-                tx
-                  .update(messages)
-                  .set({ topicId: topic.id })
-                  .where(and(eq(messages.userId, this.userId), inArray(messages.id, messageIds))),
-              { messageCount: messageIds.length },
-            );
-          }
+          await runTimedStage(
+            timing,
+            'db.topic.create.messages.updateTopic',
+            () =>
+              tx
+                .update(messages)
+                .set({ topicId: topic.id })
+                .where(and(eq(messages.userId, this.userId), inArray(messages.id, messageIds))),
+            { messageCount: messageIds.length },
+          );
 
           return topic;
         }),

@@ -307,6 +307,11 @@ describe('MessageModel Create Tests', () => {
       expect(messageFiles).toHaveLength(1);
       expect(
         timingEvents.filter(
+          (event) => event === 'db.message.createUserAndAssistant.messages.insert:start',
+        ),
+      ).toHaveLength(1);
+      expect(
+        timingEvents.filter(
           (event) => event === 'db.message.createUserAndAssistant.topic.touchUpdatedAt:start',
         ),
       ).toHaveLength(1);

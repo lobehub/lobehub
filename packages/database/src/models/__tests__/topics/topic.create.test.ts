@@ -95,7 +95,10 @@ describe('TopicModel - Create', () => {
 
       const topicId = 'new-topic';
 
-      const createdTopic = await topicModel.create(topicData, topicId);
+      const timingEvents: string[] = [];
+      const createdTopic = await topicModel.create(topicData, topicId, {
+        log: (event) => timingEvents.push(event),
+      });
 
       expect(createdTopic).toEqual({
         id: topicId,
@@ -123,6 +126,8 @@ describe('TopicModel - Create', () => {
       const dbTopic = await serverDB.select().from(topics).where(eq(topics.id, topicId));
       expect(dbTopic).toHaveLength(1);
       expect(dbTopic[0]).toEqual(createdTopic);
+      expect(timingEvents).toContain('db.topic.create.topics.insert:start');
+      expect(timingEvents).not.toContain('db.topic.create.transaction:start');
     });
 
     it('should create a new topic with agentId', async () => {

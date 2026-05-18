@@ -77,6 +77,7 @@ describe('aiChatRouter', () => {
       newTopic: { title: 'T', topicMessageIds: ['a', 'b'] },
       newUserMessage: { content: 'hi', files: ['f1'] },
       sessionId: 's1',
+      topicPageSize: 20,
     } as any;
 
     const res = await caller.sendMessageInServer(input);
@@ -112,7 +113,12 @@ describe('aiChatRouter', () => {
     expect(mockCreateUserAndAssistantMessages).toHaveBeenCalledTimes(1);
 
     expect(mockGet).toHaveBeenCalledWith(
-      expect.objectContaining({ includeTopic: true, sessionId: 's1', topicId: 't1' }),
+      expect.objectContaining({
+        includeTopic: true,
+        sessionId: 's1',
+        topicId: 't1',
+        topicPageSize: 20,
+      }),
     );
     expect(res.assistantMessageId).toBe('m-assistant');
     expect(res.userMessageId).toBe('m-user');

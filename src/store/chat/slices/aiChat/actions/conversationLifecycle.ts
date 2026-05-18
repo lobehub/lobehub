@@ -523,6 +523,7 @@ export class ConversationLifecycleActionImpl {
               operationContext.agentId,
               operationContext.groupId ?? undefined,
             ),
+            topicPageSize: systemStatusSelectors.topicPageSize(useGlobalStore.getState()),
             topicId: operationContext.topicId ?? undefined,
           },
           abortController,
@@ -730,6 +731,7 @@ export class ConversationLifecycleActionImpl {
             operationContext.agentId,
             operationContext.groupId ?? undefined,
           ),
+          topicPageSize: systemStatusSelectors.topicPageSize(useGlobalStore.getState()),
           threadId: operationContext.threadId ?? undefined,
           // Support creating new thread along with message
           newThread: newThread
