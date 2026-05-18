@@ -178,7 +178,7 @@ export default {
   'historySummary': 'Historical Message Summary',
   'inactive': 'Inactive',
   'inbox.desc': 'Collaborate in one Workspace and move ideas into outcomes.',
-  'inbox.title': 'Chinna AI',
+  'inbox.title': 'Chinna',
   'input.addAi': 'Add an AI message',
   'input.addUser': 'Add a user message',
   'input.disclaimer': 'Agents can make mistakes. Use your judgment for critical info.',
