@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import semver from 'semver';
 
 /**
@@ -30,4 +32,30 @@ export const shouldUpdateApp = (currentVersion: string, nextVersion: string): bo
     // Default to application update when parsing fails
     return true;
   }
+};
+
+/**
+ * Extract a restorable SPA route (`pathname + search`) from a renderer window URL.
+ * Returns `null` when the URL is not a restorable route — splash/error pages
+ * (`file:` protocol), static assets (path has an extension), or the root route
+ * (identical to the default, nothing worth restoring).
+ */
+export const extractRestoreRoute = (rawUrl: string): string | null => {
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    return null;
+  }
+
+  if (url.protocol === 'file:') return null;
+  if (path.extname(url.pathname)) return null;
+
+  // `lng` is re-appended by Browser.buildUrlWithLocale on the next load
+  url.searchParams.delete('lng');
+
+  const route = `${url.pathname}${url.search}`;
+  if (route === '/' || route === '') return null;
+
+  return route;
 };
