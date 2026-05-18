@@ -759,7 +759,7 @@ export class ConversationLifecycleActionImpl {
         abortController,
       );
       // Use created topicId/threadId if available, otherwise use original from context
-      let finalTopicId = operationContext.topicId;
+      let finalTopicId = data.topicId ?? operationContext.topicId;
       const finalThreadId = data.createdThreadId ?? operationContext.threadId;
 
       // refresh the total data
@@ -782,6 +782,18 @@ export class ConversationLifecycleActionImpl {
           // Record the created topicId in metadata (not context)
           this.#get().updateOperationMetadata(operationId, { createdTopicId: data.topicId });
         }
+      } else if (data.isCreateNewTopic && data.topicId && !context.isolatedTopic) {
+        this.#get().internal_dispatchTopic(
+          {
+            type: 'addTopic',
+            value: {
+              id: data.topicId,
+              title: message.slice(0, 80) || t('defaultTitle', { ns: 'topic' }),
+            },
+          },
+          'sendMessage/createTopicPlaceholder',
+        );
+        this.#get().updateOperationMetadata(operationId, { createdTopicId: data.topicId });
       } else if (operationContext.topicId) {
         // Optimistically update topic's updatedAt so sidebar re-groups immediately
         this.#get().internal_dispatchTopic({
