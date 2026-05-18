@@ -21,6 +21,12 @@ import type {
   UpdateMessageRAGParams,
 } from '@lobechat/types';
 import { MessageGroupType, ThreadType } from '@lobechat/types';
+import type { TimingSink } from '@lobechat/utils';
+import {
+  getDurationMs,
+  logTimingSink as logTiming,
+  runTimedSinkStage as runTimedStage,
+} from '@lobechat/utils';
 import type { HeatmapsProps } from '@lobehub/charts';
 import dayjs from 'dayjs';
 import type { SQL } from 'drizzle-orm';
@@ -84,6 +90,7 @@ export interface QueryMessagesOptions {
    * Post-process function for file URLs
    */
   postProcessUrl?: (path: string | null, file: { fileType: string }) => Promise<string>;
+  timing?: ModelTimingContext;
   /**
    * Topic ID for MessageGroup aggregation queries
    */
@@ -93,6 +100,8 @@ export interface QueryMessagesOptions {
    */
   where?: SQL;
 }
+
+export interface ModelTimingContext extends TimingSink {}
 
 export class MessageModel {
   private userId: string;
@@ -134,26 +143,55 @@ export class MessageModel {
     }: QueryMessageParams = {},
     options: {
       postProcessUrl?: (path: string | null, file: { fileType: string }) => Promise<string>;
+      timing?: ModelTimingContext;
     } = {},
   ) => {
+    const queryStartedAt = Date.now();
+    const timing = options.timing;
+    logTiming(timing, 'db.message.query:start', {
+      current,
+      hasAgentId: !!agentId,
+      hasGroupId: !!groupId,
+      hasSessionId: !!sessionId,
+      hasThreadId: !!threadId,
+      hasTopicId: !!topicId,
+      pageSize,
+    });
+
     // Build agent condition (handles legacy sessionId lookup)
     let agentCondition: SQL | undefined;
     if (agentId) {
-      agentCondition = await this.buildAgentCondition(agentId);
+      agentCondition = await runTimedStage(
+        timing,
+        'db.message.query.buildAgentCondition',
+        () => this.buildAgentCondition(agentId),
+        { hasAgentId: true },
+      );
     } else if (sessionId) {
       agentCondition = this.matchSession(sessionId);
     }
 
     // For thread queries, we need to fetch complete thread data (parent + thread messages)
     if (threadId) {
-      const threadCondition = await this.buildThreadQueryCondition(threadId);
-      return this.queryWithWhere({
+      const threadCondition = await runTimedStage(
+        timing,
+        'db.message.query.buildThreadCondition',
+        () => this.buildThreadQueryCondition(threadId),
+        { hasThreadId: true },
+      );
+      const messageItems = await this.queryWithWhere({
         current,
         pageSize,
         postProcessUrl: options.postProcessUrl,
+        timing,
         // Thread queries optionally add agent/session scope if provided
         where: agentCondition ? and(agentCondition, threadCondition) : threadCondition,
       });
+      logTiming(timing, 'db.message.query:done', {
+        messageCount: messageItems.length,
+        stageMs: getDurationMs(queryStartedAt),
+      });
+      return messageItems;
     }
 
     // For Group Chat queries: filter by groupId only (not agentId)
@@ -166,13 +204,19 @@ export class MessageModel {
         this.matchThread(threadId),
       );
 
-      return this.queryWithWhere({
+      const messageItems = await this.queryWithWhere({
         current,
         pageSize,
         postProcessUrl: options.postProcessUrl,
+        timing,
         topicId: topicId ?? undefined,
         where: whereCondition,
       });
+      logTiming(timing, 'db.message.query:done', {
+        messageCount: messageItems.length,
+        stageMs: getDurationMs(queryStartedAt),
+      });
+      return messageItems;
     }
 
     // Standard query with session/topic/group filters
@@ -183,13 +227,19 @@ export class MessageModel {
       this.matchThread(threadId),
     );
 
-    return this.queryWithWhere({
+    const messageItems = await this.queryWithWhere({
       current,
       pageSize,
       postProcessUrl: options.postProcessUrl,
+      timing,
       topicId: topicId ?? undefined,
       where: whereCondition,
     });
+    logTiming(timing, 'db.message.query:done', {
+      messageCount: messageItems.length,
+      stageMs: getDurationMs(queryStartedAt),
+    });
+    return messageItems;
   };
 
   /**
@@ -208,76 +258,84 @@ export class MessageModel {
    * @returns Messages with all related data, including MessageGroup nodes
    */
   queryWithWhere = async (options: QueryMessagesOptions = {}): Promise<UIChatMessage[]> => {
-    const { where, current = 0, pageSize = 1000, postProcessUrl, topicId } = options;
+    const { where, current = 0, pageSize = 1000, postProcessUrl, topicId, timing } = options;
+    const totalStartedAt = Date.now();
     const offset = current * pageSize;
 
     // 1. get basic messages with joins, excluding messages that belong to MessageGroups
-    const result = await this.db
-      .select({
-        id: messages.id,
-        role: messages.role,
-        content: messages.content,
-        editorData: messages.editorData,
-        reasoning: messages.reasoning,
-        search: messages.search,
-        metadata: messages.metadata,
-        error: messages.error,
+    const result = await runTimedStage(
+      timing,
+      'db.message.queryWithWhere.baseSelect',
+      () =>
+        this.db
+          .select({
+            id: messages.id,
+            role: messages.role,
+            content: messages.content,
+            editorData: messages.editorData,
+            reasoning: messages.reasoning,
+            search: messages.search,
+            metadata: messages.metadata,
+            error: messages.error,
 
-        model: messages.model,
-        provider: messages.provider,
+            model: messages.model,
+            provider: messages.provider,
 
-        createdAt: messages.createdAt,
-        updatedAt: messages.updatedAt,
+            createdAt: messages.createdAt,
+            updatedAt: messages.updatedAt,
 
-        sessionId: messages.sessionId,
-        topicId: messages.topicId,
-        parentId: messages.parentId,
-        threadId: messages.threadId,
+            sessionId: messages.sessionId,
+            topicId: messages.topicId,
+            parentId: messages.parentId,
+            threadId: messages.threadId,
 
-        // Group chat fields
-        groupId: messages.groupId,
-        agentId: messages.agentId,
-        targetId: messages.targetId,
+            // Group chat fields
+            groupId: messages.groupId,
+            agentId: messages.agentId,
+            targetId: messages.targetId,
 
-        tools: messages.tools,
-        tool_call_id: messagePlugins.toolCallId,
+            tools: messages.tools,
+            tool_call_id: messagePlugins.toolCallId,
 
-        plugin: {
-          apiName: messagePlugins.apiName,
-          arguments: messagePlugins.arguments,
-          identifier: messagePlugins.identifier,
-          type: messagePlugins.type,
-        },
-        pluginError: messagePlugins.error,
-        pluginIntervention: messagePlugins.intervention,
-        pluginState: messagePlugins.state,
+            plugin: {
+              apiName: messagePlugins.apiName,
+              arguments: messagePlugins.arguments,
+              identifier: messagePlugins.identifier,
+              type: messagePlugins.type,
+            },
+            pluginError: messagePlugins.error,
+            pluginIntervention: messagePlugins.intervention,
+            pluginState: messagePlugins.state,
 
-        translate: {
-          content: messageTranslates.content,
-          from: messageTranslates.from,
-          to: messageTranslates.to,
-        },
+            translate: {
+              content: messageTranslates.content,
+              from: messageTranslates.from,
+              to: messageTranslates.to,
+            },
 
-        ttsId: messageTTS.id,
-        ttsContentMd5: messageTTS.contentMd5,
-        ttsFile: messageTTS.fileId,
-        ttsVoice: messageTTS.voice,
-      })
-      .from(messages)
-      .where(
-        and(
-          eq(messages.userId, this.userId),
-          // Filter out messages that belong to MessageGroups
-          isNull(messages.messageGroupId),
-          where,
-        ),
-      )
-      .leftJoin(messagePlugins, eq(messagePlugins.id, messages.id))
-      .leftJoin(messageTranslates, eq(messageTranslates.id, messages.id))
-      .leftJoin(messageTTS, eq(messageTTS.id, messages.id))
-      .orderBy(asc(messages.createdAt))
-      .limit(pageSize)
-      .offset(offset);
+            ttsId: messageTTS.id,
+            ttsContentMd5: messageTTS.contentMd5,
+            ttsFile: messageTTS.fileId,
+            ttsVoice: messageTTS.voice,
+          })
+          .from(messages)
+          .where(
+            and(
+              eq(messages.userId, this.userId),
+              // Filter out messages that belong to MessageGroups
+              isNull(messages.messageGroupId),
+              where,
+            ),
+          )
+          .leftJoin(messagePlugins, eq(messagePlugins.id, messages.id))
+          .leftJoin(messageTranslates, eq(messageTranslates.id, messages.id))
+          .leftJoin(messageTTS, eq(messageTTS.id, messages.id))
+          .orderBy(asc(messages.createdAt))
+          .limit(pageSize)
+          .offset(offset),
+      { current, pageSize },
+    );
+    logTiming(timing, 'db.message.queryWithWhere.baseSelect:rows', { rowCount: result.length });
 
     const messageIds = result.map((message) => message.id as string);
 
@@ -289,27 +347,51 @@ export class MessageModel {
     if (topicId && result.length > 0) {
       if (current === 0) {
         // First page: fetch all groups to include compressed history
-        messageGroupNodes = await this.queryMessageGroupNodes(topicId, undefined, postProcessUrl);
+        messageGroupNodes = await runTimedStage(
+          timing,
+          'db.message.queryWithWhere.messageGroups',
+          () => this.queryMessageGroupNodes(topicId, undefined, postProcessUrl, timing),
+          { current, hasMessages: result.length > 0, topicId },
+        );
       } else {
         // Subsequent pages: filter by time range to avoid duplicates
         const firstMessageTime = result[0].createdAt;
         const lastMessageTime = result.at(-1)!.createdAt;
-        messageGroupNodes = await this.queryMessageGroupNodes(
-          topicId,
-          {
-            endTime: lastMessageTime,
-            startTime: firstMessageTime,
-          },
-          postProcessUrl,
+        messageGroupNodes = await runTimedStage(
+          timing,
+          'db.message.queryWithWhere.messageGroups',
+          () =>
+            this.queryMessageGroupNodes(
+              topicId,
+              {
+                endTime: lastMessageTime,
+                startTime: firstMessageTime,
+              },
+              postProcessUrl,
+              timing,
+            ),
+          { current, hasMessages: true, topicId },
         );
       }
     } else if (topicId && current === 0) {
       // First page with no messages: still fetch all groups
-      messageGroupNodes = await this.queryMessageGroupNodes(topicId, undefined, postProcessUrl);
+      messageGroupNodes = await runTimedStage(
+        timing,
+        'db.message.queryWithWhere.messageGroups',
+        () => this.queryMessageGroupNodes(topicId, undefined, postProcessUrl, timing),
+        { current, hasMessages: false, topicId },
+      );
     }
 
     // If no messages and no group nodes, return empty
-    if (messageIds.length === 0 && messageGroupNodes.length === 0) return [];
+    if (messageIds.length === 0 && messageGroupNodes.length === 0) {
+      logTiming(timing, 'db.message.queryWithWhere:done', {
+        messageGroupCount: 0,
+        rowCount: 0,
+        stageMs: getDurationMs(totalStartedAt),
+      });
+      return [];
+    }
 
     // 3. get relative files (only if we have messages)
     let relatedFileList: {
@@ -322,24 +404,41 @@ export class MessageModel {
     }[] = [];
 
     if (messageIds.length > 0) {
-      const rawRelatedFileList = await this.db
-        .select({
-          fileType: files.fileType,
-          id: messagesFiles.fileId,
-          messageId: messagesFiles.messageId,
-          name: files.name,
-          size: files.size,
-          url: files.url,
-        })
-        .from(messagesFiles)
-        .leftJoin(files, eq(files.id, messagesFiles.fileId))
-        .where(inArray(messagesFiles.messageId, messageIds));
+      const rawRelatedFileList = await runTimedStage(
+        timing,
+        'db.message.queryWithWhere.relatedFiles.select',
+        () =>
+          this.db
+            .select({
+              fileType: files.fileType,
+              id: messagesFiles.fileId,
+              messageId: messagesFiles.messageId,
+              name: files.name,
+              size: files.size,
+              url: files.url,
+            })
+            .from(messagesFiles)
+            .leftJoin(files, eq(files.id, messagesFiles.fileId))
+            .where(inArray(messagesFiles.messageId, messageIds)),
+        { messageCount: messageIds.length },
+      );
+      logTiming(timing, 'db.message.queryWithWhere.relatedFiles.select:rows', {
+        rowCount: rawRelatedFileList.length,
+      });
 
-      relatedFileList = await Promise.all(
-        rawRelatedFileList.map(async (file) => ({
-          ...file,
-          url: postProcessUrl ? await postProcessUrl(file.url, file as any) : (file.url as string),
-        })),
+      relatedFileList = await runTimedStage(
+        timing,
+        'db.message.queryWithWhere.relatedFiles.postProcess',
+        () =>
+          Promise.all(
+            rawRelatedFileList.map(async (file) => ({
+              ...file,
+              url: postProcessUrl
+                ? await postProcessUrl(file.url, file as any)
+                : (file.url as string),
+            })),
+          ),
+        { fileCount: rawRelatedFileList.length },
       );
     }
 
@@ -349,13 +448,19 @@ export class MessageModel {
     let documentsMap: Record<string, string> = {};
 
     if (fileIds.length > 0) {
-      const documentsList = await this.db
-        .select({
-          content: documents.content,
-          fileId: documents.fileId,
-        })
-        .from(documents)
-        .where(inArray(documents.fileId, fileIds));
+      const documentsList = await runTimedStage(
+        timing,
+        'db.message.queryWithWhere.documents.select',
+        () =>
+          this.db
+            .select({
+              content: documents.content,
+              fileId: documents.fileId,
+            })
+            .from(documents)
+            .where(inArray(documents.fileId, fileIds)),
+        { fileCount: fileIds.length },
+      );
 
       documentsMap = documentsList.reduce(
         (acc, doc) => {
@@ -385,22 +490,31 @@ export class MessageModel {
     }[] = [];
 
     if (messageIds.length > 0) {
-      chunksList = await this.db
-        .select({
-          fileId: files.id,
-          fileType: files.fileType,
-          fileUrl: files.url,
-          filename: files.name,
-          id: chunks.id,
-          messageId: messageQueryChunks.messageId,
-          similarity: messageQueryChunks.similarity,
-          text: chunks.text,
-        })
-        .from(messageQueryChunks)
-        .leftJoin(chunks, eq(chunks.id, messageQueryChunks.chunkId))
-        .leftJoin(fileChunks, eq(fileChunks.chunkId, chunks.id))
-        .innerJoin(files, eq(fileChunks.fileId, files.id))
-        .where(inArray(messageQueryChunks.messageId, messageIds));
+      chunksList = await runTimedStage(
+        timing,
+        'db.message.queryWithWhere.chunks.select',
+        () =>
+          this.db
+            .select({
+              fileId: files.id,
+              fileType: files.fileType,
+              fileUrl: files.url,
+              filename: files.name,
+              id: chunks.id,
+              messageId: messageQueryChunks.messageId,
+              similarity: messageQueryChunks.similarity,
+              text: chunks.text,
+            })
+            .from(messageQueryChunks)
+            .leftJoin(chunks, eq(chunks.id, messageQueryChunks.chunkId))
+            .leftJoin(fileChunks, eq(fileChunks.chunkId, chunks.id))
+            .innerJoin(files, eq(fileChunks.fileId, files.id))
+            .where(inArray(messageQueryChunks.messageId, messageIds)),
+        { messageCount: messageIds.length },
+      );
+      logTiming(timing, 'db.message.queryWithWhere.chunks.select:rows', {
+        rowCount: chunksList.length,
+      });
     }
 
     // 5. get relative message query
@@ -412,15 +526,24 @@ export class MessageModel {
     }[] = [];
 
     if (messageIds.length > 0) {
-      messageQueriesList = await this.db
-        .select({
-          id: messageQueries.id,
-          messageId: messageQueries.messageId,
-          rewriteQuery: messageQueries.rewriteQuery,
-          userQuery: messageQueries.userQuery,
-        })
-        .from(messageQueries)
-        .where(inArray(messageQueries.messageId, messageIds));
+      messageQueriesList = await runTimedStage(
+        timing,
+        'db.message.queryWithWhere.messageQueries.select',
+        () =>
+          this.db
+            .select({
+              id: messageQueries.id,
+              messageId: messageQueries.messageId,
+              rewriteQuery: messageQueries.rewriteQuery,
+              userQuery: messageQueries.userQuery,
+            })
+            .from(messageQueries)
+            .where(inArray(messageQueries.messageId, messageIds)),
+        { messageCount: messageIds.length },
+      );
+      logTiming(timing, 'db.message.queryWithWhere.messageQueries.select:rows', {
+        rowCount: messageQueriesList.length,
+      });
     }
 
     // 5. get thread info for task messages
@@ -429,18 +552,27 @@ export class MessageModel {
     let threadMap = new Map<string, TaskDetail>();
 
     if (taskMessageIds.length > 0) {
-      const threadData = await this.db
-        .select({
-          metadata: threads.metadata,
-          sourceMessageId: threads.sourceMessageId,
-          status: threads.status,
-          threadId: threads.id,
-          title: threads.title,
-        })
-        .from(threads)
-        .where(
-          and(eq(threads.userId, this.userId), inArray(threads.sourceMessageId, taskMessageIds)),
-        );
+      const threadData = await runTimedStage(
+        timing,
+        'db.message.queryWithWhere.taskThreads.select',
+        () =>
+          this.db
+            .select({
+              metadata: threads.metadata,
+              sourceMessageId: threads.sourceMessageId,
+              status: threads.status,
+              threadId: threads.id,
+              title: threads.title,
+            })
+            .from(threads)
+            .where(
+              and(
+                eq(threads.userId, this.userId),
+                inArray(threads.sourceMessageId, taskMessageIds),
+              ),
+            ),
+        { taskMessageCount: taskMessageIds.length },
+      );
 
       threadMap = new Map(
         threadData.map((t) => {
@@ -464,59 +596,72 @@ export class MessageModel {
     }
 
     // 6. Transform regular messages
-    const transformedMessages = result.map(
-      ({ model, provider, translate, ttsId, ttsFile, ttsContentMd5, ttsVoice, ...item }) => {
-        const messageQuery = messageQueriesList.find((relation) => relation.messageId === item.id);
-        return {
-          ...item,
-          chunksList: chunksList
-            .filter((relation) => relation.messageId === item.id)
-            .map((c) => ({
-              ...c,
-              similarity: c.similarity === null ? undefined : Number(c.similarity),
-            })),
+    const transformedMessages = await runTimedStage(
+      timing,
+      'db.message.queryWithWhere.transform',
+      () =>
+        result.map(
+          ({ model, provider, translate, ttsId, ttsFile, ttsContentMd5, ttsVoice, ...item }) => {
+            const messageQuery = messageQueriesList.find(
+              (relation) => relation.messageId === item.id,
+            );
+            return {
+              ...item,
+              chunksList: chunksList
+                .filter((relation) => relation.messageId === item.id)
+                .map((c) => ({
+                  ...c,
+                  similarity: c.similarity === null ? undefined : Number(c.similarity),
+                })),
 
-          extra: {
-            model,
-            provider,
-            translate,
-            tts: ttsId
-              ? {
-                  contentMd5: ttsContentMd5,
-                  file: ttsFile,
-                  voice: ttsVoice,
-                }
-              : undefined,
+              extra: {
+                model,
+                provider,
+                translate,
+                tts: ttsId
+                  ? {
+                      contentMd5: ttsContentMd5,
+                      file: ttsFile,
+                      voice: ttsVoice,
+                    }
+                  : undefined,
+              },
+              fileList: fileList
+                .filter((relation) => relation.messageId === item.id)
+
+                .map<ChatFileItem>(({ id, url, size, fileType, name }) => ({
+                  content: documentsMap[id],
+                  fileType: fileType!,
+                  id,
+                  name: name!,
+                  size: size!,
+                  url,
+                })),
+              imageList: imageList
+                .filter((relation) => relation.messageId === item.id)
+
+                .map<ChatImageItem>(({ id, url, name }) => ({ alt: name!, id, url })),
+
+              model,
+
+              provider,
+              ragQuery: messageQuery?.rewriteQuery,
+              ragQueryId: messageQuery?.id,
+              ragRawQuery: messageQuery?.userQuery,
+              // Add taskDetail for task messages
+              taskDetail: item.role === 'task' ? threadMap.get(item.id as string) : undefined,
+              videoList: videoList
+                .filter((relation) => relation.messageId === item.id)
+
+                .map<ChatVideoItem>(({ id, url, name }) => ({ alt: name!, id, url })),
+            } as unknown as UIChatMessage;
           },
-          fileList: fileList
-            .filter((relation) => relation.messageId === item.id)
-
-            .map<ChatFileItem>(({ id, url, size, fileType, name }) => ({
-              content: documentsMap[id],
-              fileType: fileType!,
-              id,
-              name: name!,
-              size: size!,
-              url,
-            })),
-          imageList: imageList
-            .filter((relation) => relation.messageId === item.id)
-
-            .map<ChatImageItem>(({ id, url, name }) => ({ alt: name!, id, url })),
-
-          model,
-
-          provider,
-          ragQuery: messageQuery?.rewriteQuery,
-          ragQueryId: messageQuery?.id,
-          ragRawQuery: messageQuery?.userQuery,
-          // Add taskDetail for task messages
-          taskDetail: item.role === 'task' ? threadMap.get(item.id as string) : undefined,
-          videoList: videoList
-            .filter((relation) => relation.messageId === item.id)
-
-            .map<ChatVideoItem>(({ id, url, name }) => ({ alt: name!, id, url })),
-        } as unknown as UIChatMessage;
+        ),
+      {
+        chunkCount: chunksList.length,
+        fileCount: relatedFileList.length,
+        messageQueryCount: messageQueriesList.length,
+        rowCount: result.length,
       },
     );
 
@@ -526,6 +671,13 @@ export class MessageModel {
       const aTime = new Date(a.createdAt).getTime();
       const bTime = new Date(b.createdAt).getTime();
       return aTime - bTime;
+    });
+
+    logTiming(timing, 'db.message.queryWithWhere:done', {
+      messageGroupCount: messageGroupNodes.length,
+      resultCount: allItems.length,
+      rowCount: result.length,
+      stageMs: getDurationMs(totalStartedAt),
     });
 
     return allItems;
@@ -804,6 +956,7 @@ export class MessageModel {
     topicId: string,
     timeRange?: { endTime: Date; startTime: Date },
     postProcessUrl?: (path: string | null, file: { fileType: string }) => Promise<string>,
+    timing?: ModelTimingContext,
   ): Promise<UIChatMessage[]> => {
     // 1. Query MessageGroups for this topic, optionally filtered by time range
     const whereConditions = [
@@ -819,30 +972,51 @@ export class MessageModel {
       );
     }
 
-    const groups = await this.db
-      .select()
-      .from(messageGroups)
-      .where(and(...whereConditions))
-      .orderBy(asc(messageGroups.createdAt));
+    const groups = await runTimedStage(
+      timing,
+      'db.message.messageGroups.groups.select',
+      () =>
+        this.db
+          .select()
+          .from(messageGroups)
+          .where(and(...whereConditions))
+          .orderBy(asc(messageGroups.createdAt)),
+      { hasTimeRange: !!timeRange, topicId },
+    );
+    logTiming(timing, 'db.message.messageGroups.groups.select:rows', { rowCount: groups.length });
 
     if (groups.length === 0) return [];
 
     const groupIds = groups.map((g) => g.id);
 
     // 2. Get all message IDs that belong to these groups (using messageGroupId relation)
-    const groupMessageRecords = await this.db
-      .select({
-        favorite: messages.favorite,
-        id: messages.id,
-        messageGroupId: messages.messageGroupId,
-      })
-      .from(messages)
-      .where(and(eq(messages.userId, this.userId), inArray(messages.messageGroupId, groupIds)))
-      .orderBy(asc(messages.createdAt));
+    const groupMessageRecords = await runTimedStage(
+      timing,
+      'db.message.messageGroups.messages.select',
+      () =>
+        this.db
+          .select({
+            favorite: messages.favorite,
+            id: messages.id,
+            messageGroupId: messages.messageGroupId,
+          })
+          .from(messages)
+          .where(and(eq(messages.userId, this.userId), inArray(messages.messageGroupId, groupIds)))
+          .orderBy(asc(messages.createdAt)),
+      { groupCount: groupIds.length },
+    );
+    logTiming(timing, 'db.message.messageGroups.messages.select:rows', {
+      rowCount: groupMessageRecords.length,
+    });
 
     // 3. Query full message data using queryByIds (reuses all transformation logic)
     const allMessageIds = groupMessageRecords.map((m) => m.id as string);
-    const fullMessages = await this.queryByIds(allMessageIds, { postProcessUrl });
+    const fullMessages = await runTimedStage(
+      timing,
+      'db.message.messageGroups.queryByIds',
+      () => this.queryByIds(allMessageIds, { postProcessUrl }),
+      { messageCount: allMessageIds.length },
+    );
 
     // Create a map for quick lookup
     const messageMap = new Map(fullMessages.map((m) => [m.id, m]));
@@ -1259,67 +1433,110 @@ export class MessageModel {
       ...message
     }: CreateMessageParams,
     id: string = this.genId(),
+    timing?: ModelTimingContext,
   ): Promise<DBMessageItem> => {
-    return this.db.transaction(async (trx) => {
-      // Ensure group message does not populate sessionId
-      const normalizedMessage = message.groupId ? { ...message, sessionId: null } : message;
+    return runTimedStage(
+      timing,
+      'db.message.create.transaction',
+      () =>
+        this.db.transaction(async (trx) => {
+          // Ensure group message does not populate sessionId
+          const normalizedMessage = message.groupId ? { ...message, sessionId: null } : message;
 
-      const [item] = (await trx
-        .insert(messages)
-        .values({
-          ...normalizedMessage,
-          // Sanitize content to strip null bytes that PostgreSQL rejects
-          content: sanitizeNullBytes(normalizedMessage.content),
-          // TODO: remove this when the client is updated
-          createdAt: createdAt ? new Date(createdAt) : undefined,
-          id,
-          model: fromModel,
-          provider: fromProvider,
-          updatedAt: updatedAt ? new Date(updatedAt) : undefined,
-          userId: this.userId,
-        })
-        .returning()) as DBMessageItem[];
+          const [item] = (await runTimedStage(
+            timing,
+            'db.message.create.messages.insert',
+            () =>
+              trx
+                .insert(messages)
+                .values({
+                  ...normalizedMessage,
+                  // Sanitize content to strip null bytes that PostgreSQL rejects
+                  content: sanitizeNullBytes(normalizedMessage.content),
+                  // TODO: remove this when the client is updated
+                  createdAt: createdAt ? new Date(createdAt) : undefined,
+                  id,
+                  model: fromModel,
+                  provider: fromProvider,
+                  updatedAt: updatedAt ? new Date(updatedAt) : undefined,
+                  userId: this.userId,
+                })
+                .returning(),
+            {
+              hasGroupId: !!message.groupId,
+              hasTopicId: !!message.topicId,
+              role: message.role,
+            },
+          )) as DBMessageItem[];
 
-      // Insert the plugin data if the message is a tool
-      if (message.role === 'tool') {
-        await trx.insert(messagePlugins).values({
-          apiName: plugin?.apiName,
-          arguments: sanitizeNullBytes(plugin?.arguments),
-          id,
-          identifier: plugin?.identifier,
-          intervention: pluginIntervention,
-          state: sanitizeNullBytes(pluginState),
-          toolCallId: message.tool_call_id,
-          type: plugin?.type,
-          userId: this.userId,
-        });
-      }
+          // Insert the plugin data if the message is a tool
+          if (message.role === 'tool') {
+            await runTimedStage(timing, 'db.message.create.plugin.insert', () =>
+              trx.insert(messagePlugins).values({
+                apiName: plugin?.apiName,
+                arguments: sanitizeNullBytes(plugin?.arguments),
+                id,
+                identifier: plugin?.identifier,
+                intervention: pluginIntervention,
+                state: sanitizeNullBytes(pluginState),
+                toolCallId: message.tool_call_id,
+                type: plugin?.type,
+                userId: this.userId,
+              }),
+            );
+          }
 
-      if (files && files.length > 0) {
-        await trx
-          .insert(messagesFiles)
-          .values(files.map((file) => ({ fileId: file, messageId: id, userId: this.userId })));
-      }
+          if (files && files.length > 0) {
+            await runTimedStage(
+              timing,
+              'db.message.create.files.insert',
+              () =>
+                trx
+                  .insert(messagesFiles)
+                  .values(
+                    files.map((file) => ({ fileId: file, messageId: id, userId: this.userId })),
+                  ),
+              { fileCount: files.length },
+            );
+          }
 
-      if (fileChunks && fileChunks.length > 0 && ragQueryId) {
-        await trx.insert(messageQueryChunks).values(
-          fileChunks.map((chunk) => ({
-            chunkId: chunk.id,
-            messageId: id,
-            queryId: ragQueryId,
-            similarity: chunk.similarity?.toString(),
-            userId: this.userId,
-          })),
-        );
-      }
+          if (fileChunks && fileChunks.length > 0 && ragQueryId) {
+            await runTimedStage(
+              timing,
+              'db.message.create.fileChunks.insert',
+              () =>
+                trx.insert(messageQueryChunks).values(
+                  fileChunks.map((chunk) => ({
+                    chunkId: chunk.id,
+                    messageId: id,
+                    queryId: ragQueryId,
+                    similarity: chunk.similarity?.toString(),
+                    userId: this.userId,
+                  })),
+                ),
+              { chunkCount: fileChunks.length },
+            );
+          }
 
-      // Touch topic's updatedAt when creating a message in a topic
-      if (message.topicId) {
-        await this.touchTopicUpdatedAt(trx, [message.topicId]);
-      }
+          // Touch topic's updatedAt when creating a message in a topic
+          if (message.topicId) {
+            await runTimedStage(
+              timing,
+              'db.message.create.topic.touchUpdatedAt',
+              () => this.touchTopicUpdatedAt(trx, [message.topicId!]),
+              { topicCount: 1 },
+            );
+          }
 
-      return item;
-    });
+          return item;
+        }),
+      {
+        fileChunkCount: fileChunks?.length ?? 0,
+        fileCount: files?.length ?? 0,
+        hasTopicId: !!message.topicId,
+        role: message.role,
+      },
+    );
   };
 
   batchCreate = async (newMessages: DBMessageItem[]) => {
@@ -1352,39 +1569,74 @@ export class MessageModel {
   update = async (
     id: string,
     { imageList, metadata, ...message }: Partial<UpdateMessageParams>,
+    timing?: ModelTimingContext,
   ): Promise<{ success: boolean }> => {
     try {
-      await this.db.transaction(async (trx) => {
-        // 1. insert message files
-        if (imageList && imageList.length > 0) {
-          await trx
-            .insert(messagesFiles)
-            .values(
-              imageList.map((file) => ({ fileId: file.id, messageId: id, userId: this.userId })),
+      await runTimedStage(
+        timing,
+        'db.message.update.transaction',
+        () =>
+          this.db.transaction(async (trx) => {
+            // 1. insert message files
+            if (imageList && imageList.length > 0) {
+              await runTimedStage(
+                timing,
+                'db.message.update.imageFiles.insert',
+                () =>
+                  trx.insert(messagesFiles).values(
+                    imageList.map((file) => ({
+                      fileId: file.id,
+                      messageId: id,
+                      userId: this.userId,
+                    })),
+                  ),
+                { imageCount: imageList.length },
+              );
+            }
+
+            // 2. Handle metadata merge if provided
+            let mergedMetadata: Record<string, any> | undefined;
+            if (metadata) {
+              const [existingMessage] = await runTimedStage(
+                timing,
+                'db.message.update.metadata.select',
+                () =>
+                  trx
+                    .select({ metadata: messages.metadata })
+                    .from(messages)
+                    .where(and(eq(messages.id, id), eq(messages.userId, this.userId))),
+              );
+              mergedMetadata = merge(existingMessage?.metadata || {}, metadata);
+            }
+
+            const [updated] = await runTimedStage(
+              timing,
+              'db.message.update.messages.update',
+              () =>
+                trx
+                  .update(messages)
+                  .set({ ...message, ...(mergedMetadata && { metadata: mergedMetadata }) })
+                  .where(and(eq(messages.id, id), eq(messages.userId, this.userId)))
+                  .returning({ topicId: messages.topicId }),
+              { hasMetadata: !!metadata, valueKeys: Object.keys(message) },
             );
-        }
 
-        // 2. Handle metadata merge if provided
-        let mergedMetadata: Record<string, any> | undefined;
-        if (metadata) {
-          const [existingMessage] = await trx
-            .select({ metadata: messages.metadata })
-            .from(messages)
-            .where(and(eq(messages.id, id), eq(messages.userId, this.userId)));
-          mergedMetadata = merge(existingMessage?.metadata || {}, metadata);
-        }
-
-        const [updated] = await trx
-          .update(messages)
-          .set({ ...message, ...(mergedMetadata && { metadata: mergedMetadata }) })
-          .where(and(eq(messages.id, id), eq(messages.userId, this.userId)))
-          .returning({ topicId: messages.topicId });
-
-        // Touch topic's updatedAt when updating a message
-        if (updated?.topicId) {
-          await this.touchTopicUpdatedAt(trx, [updated.topicId]);
-        }
-      });
+            // Touch topic's updatedAt when updating a message
+            if (updated?.topicId) {
+              await runTimedStage(
+                timing,
+                'db.message.update.topic.touchUpdatedAt',
+                () => this.touchTopicUpdatedAt(trx, [updated.topicId!]),
+                { topicCount: 1 },
+              );
+            }
+          }),
+        {
+          hasImageList: !!imageList?.length,
+          hasMetadata: !!metadata,
+          valueKeys: Object.keys(message),
+        },
+      );
 
       return { success: true };
     } catch (error) {

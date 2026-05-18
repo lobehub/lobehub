@@ -1,8 +1,13 @@
 import { type LobeChatDatabase } from '@lobechat/database';
+import { createTimingHelpers } from '@lobechat/utils';
 
 import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
 import { FileService } from '@/server/services/file';
+
+const { createPrefixedTimingContext, runTimedStage, toTimingContext } = createTimingHelpers(
+  'lobe-server:chat:lobehub:timing',
+);
 
 export class AiChatService {
   private userId: string;
@@ -32,18 +37,47 @@ export class AiChatService {
       includeTriggers?: string[];
     };
     topicId?: string;
+    timingRequestId?: string;
+    timingStartedAt?: number;
   }) {
-    const { topicFilter, ...messageParams } = params;
+    const { topicFilter, timingRequestId, timingStartedAt, ...messageParams } = params;
+    const timingContext = toTimingContext({ timingRequestId, timingStartedAt });
+    const messageTiming = createPrefixedTimingContext(
+      timingContext,
+      'lambda.aiChat.messagesAndTopics.messageModel.query',
+    );
+    const topicTiming = createPrefixedTimingContext(
+      timingContext,
+      'lambda.aiChat.messagesAndTopics.topicModel.query',
+    );
     const [messages, topics] = await Promise.all([
-      this.messageModel.query(messageParams, {
-        postProcessUrl: (path) => this.fileService.getFullFileUrl(path),
-      }),
+      runTimedStage(
+        timingContext,
+        'lambda.aiChat.messagesAndTopics.messageModel.query',
+        () =>
+          this.messageModel.query(messageParams, {
+            postProcessUrl: (path) => this.fileService.getFullFileUrl(path),
+            ...(messageTiming ? { timing: messageTiming } : {}),
+          }),
+        {
+          hasAgentId: !!params.agentId,
+          hasThreadId: !!params.threadId,
+          hasTopicId: !!params.topicId,
+        },
+      ),
       params.includeTopic
-        ? this.topicModel.query({
-            agentId: params.agentId,
-            groupId: params.groupId,
-            ...topicFilter,
-          })
+        ? runTimedStage(
+            timingContext,
+            'lambda.aiChat.messagesAndTopics.topicModel.query',
+            () =>
+              this.topicModel.query({
+                agentId: params.agentId,
+                groupId: params.groupId,
+                ...(topicTiming ? { timing: topicTiming } : {}),
+                ...topicFilter,
+              }),
+            { hasAgentId: !!params.agentId, hasGroupId: !!params.groupId },
+          )
         : undefined,
     ]);
 

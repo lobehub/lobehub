@@ -20,6 +20,7 @@ export * from './pricing';
 export * from './safeParseJSON';
 export * from './sanitizeToolCallArguments';
 export * from './sleep';
+export * from './timing';
 export * from './uriParser';
 export * from './url';
 export * from './uuid';
