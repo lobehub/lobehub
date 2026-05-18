@@ -15,22 +15,6 @@ const nvidiaChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 200_000,
-    description:
-      "GLM-5 is Zhipu AI's new flagship foundation model for agent engineering, achieving open-source SOTA performance in coding and agent capabilities. It matches Claude Opus 4.5 in performance.",
-    displayName: 'GLM-5',
-    id: 'z-ai/glm5',
-    maxOutput: 131_072,
-    settings: {
-      extendParams: ['enableReasoning'],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
     },
     contextWindowTokens: 128_000,
     description: 'An advanced LLM strong at reasoning, math, common sense, and function calling.',
