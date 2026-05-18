@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { LayersEnum } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -27,6 +28,9 @@ const receipt = {
   sourceType: 'client.gateway.runtime_end',
   status: 'applied' as const,
   target: {
+    id: 'preference-1',
+    memoryId: 'memory-1',
+    memoryLayer: LayersEnum.Preference,
     summary: 'Use short answers in future chats',
     title: 'Short answer preference',
     type: 'memory' as const,
@@ -61,6 +65,9 @@ describe('redis receipt store', () => {
       sourceType: 'client.gateway.runtime_end',
       status: 'applied',
       target: JSON.stringify({
+        id: 'preference-1',
+        memoryId: 'memory-1',
+        memoryLayer: LayersEnum.Preference,
         summary: 'Use short answers in future chats',
         title: 'Short answer preference',
         type: 'memory',

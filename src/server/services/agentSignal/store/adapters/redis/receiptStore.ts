@@ -1,3 +1,5 @@
+import { LayersEnum } from '@lobechat/types';
+
 import { AGENT_SIGNAL_KEYS } from '../../../constants';
 import type { AgentSignalReceipt } from '../../../services/receiptService';
 import type { AgentSignalReceiptStore } from '../../types';
@@ -21,6 +23,9 @@ const toReceiptHash = (receipt: AgentSignalReceipt): Record<string, string> => (
   userId: receipt.userId,
 });
 
+const isMemoryLayer = (value: unknown): value is LayersEnum =>
+  Object.values(LayersEnum).includes(value as LayersEnum);
+
 const parseReceiptTarget = (value?: string): AgentSignalReceipt['target'] | undefined => {
   if (!value) return;
 
@@ -38,6 +43,14 @@ const parseReceiptTarget = (value?: string): AgentSignalReceipt['target'] | unde
         ? { documentId: target.documentId }
         : {}),
       ...(typeof target.id === 'string' && target.id.length > 0 ? { id: target.id } : {}),
+      ...(target.type === 'memory' &&
+      typeof target.memoryId === 'string' &&
+      target.memoryId.length > 0
+        ? { memoryId: target.memoryId }
+        : {}),
+      ...(target.type === 'memory' && isMemoryLayer(target.memoryLayer)
+        ? { memoryLayer: target.memoryLayer }
+        : {}),
       ...(typeof target.summary === 'string' && target.summary.length > 0
         ? { summary: target.summary }
         : {}),
