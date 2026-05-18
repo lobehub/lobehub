@@ -251,6 +251,19 @@ export const mobileRoutes: RouteObject[] = [
             errorElement: <ErrorBoundary resetPath="/tasks" />,
             path: 'task',
           },
+          {
+            children: [
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/agent/task/[taskId]'),
+                  'Mobile > Agent Task Detail',
+                ),
+                path: ':aid/task/:taskId',
+              },
+            ],
+            errorElement: <ErrorBoundary resetPath="/tasks" />,
+            path: 'agent',
+          },
         ],
         element: dynamicLayout(
           () => import('@/routes/(main)/(task-workspace)/_layout'),

@@ -9,6 +9,7 @@ import AgentTaskItem from './AgentTaskItem';
 
 const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
+  taskDetailMap: {} as Record<string, { subtasks?: any[] }>,
   useFetchTaskDetail: vi.fn(),
 }));
 
@@ -48,7 +49,7 @@ vi.mock('react-router-dom', () => ({
 vi.mock('@/store/task', () => ({
   useTaskStore: (selector: any) =>
     selector({
-      taskDetailMap: {},
+      taskDetailMap: mocks.taskDetailMap,
       useFetchTaskDetail: mocks.useFetchTaskDetail,
     }),
 }));
@@ -78,7 +79,28 @@ vi.mock('./TaskStatusTag', () => ({
 }));
 
 vi.mock('./TaskSubtaskProgressTag', () => ({
-  default: () => null,
+  default: ({
+    onSubtaskClick,
+    subtasks,
+  }: {
+    onSubtaskClick?: (identifier: string, assigneeAgentId?: string) => void;
+    subtasks?: any[];
+  }) => {
+    const subtask = subtasks?.[0];
+    if (!subtask) return null;
+
+    return (
+      <span
+        data-testid="subtask-progress"
+        onClick={(event) => {
+          event.stopPropagation();
+          onSubtaskClick?.(subtask.identifier, subtask.assignee?.id ?? undefined);
+        }}
+      >
+        subtask
+      </span>
+    );
+  },
 }));
 
 vi.mock('./TaskTriggerTag', () => ({
@@ -103,6 +125,7 @@ const createTask = (assigneeAgentId?: string | null) =>
 describe('AgentTaskItem', () => {
   beforeEach(() => {
     mocks.navigate.mockClear();
+    mocks.taskDetailMap = {};
     mocks.useFetchTaskDetail.mockClear();
   });
 
@@ -124,5 +147,25 @@ describe('AgentTaskItem', () => {
     fireEvent.click(screen.getByTestId('task-card'));
 
     expect(mocks.navigate).toHaveBeenCalledWith('/task/T-22');
+  });
+
+  it("opens a subtask inside the clicked subtask's assignee route", () => {
+    mocks.taskDetailMap = {
+      'T-22': {
+        subtasks: [
+          {
+            assignee: { id: 'agt_child' },
+            identifier: 'T-23',
+            status: 'backlog',
+          },
+        ],
+      },
+    };
+
+    render(<AgentTaskItem task={createTask('agt_parent')} />);
+
+    fireEvent.click(screen.getAllByTestId('subtask-progress')[0]);
+
+    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_child/task/T-23');
   });
 });

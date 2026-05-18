@@ -62,8 +62,8 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, variant = 'default' }) => {
   }, [navigate, task.assigneeAgentId, task.identifier]);
 
   const handleSubtaskClick = useCallback(
-    (identifier: string) => {
-      navigate(taskDetailPath(identifier, task.assigneeAgentId ?? undefined));
+    (identifier: string, assigneeAgentId?: string) => {
+      navigate(taskDetailPath(identifier, assigneeAgentId ?? task.assigneeAgentId ?? undefined));
     },
     [navigate, task.assigneeAgentId],
   );

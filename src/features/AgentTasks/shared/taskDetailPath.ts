@@ -7,7 +7,10 @@ export const taskDetailPath = (taskId: string, agentId?: string) =>
 export const useTaskDetailPath = () => {
   const { aid } = useParams<{ aid?: string }>();
 
-  return useCallback((taskId: string) => taskDetailPath(taskId, aid), [aid]);
+  return useCallback(
+    (taskId: string, agentId?: string) => taskDetailPath(taskId, agentId ?? aid),
+    [aid],
+  );
 };
 
 export const useNavigateToTaskDetail = () => {
@@ -15,8 +18,8 @@ export const useNavigateToTaskDetail = () => {
   const getTaskDetailPath = useTaskDetailPath();
 
   return useCallback(
-    (taskId: string) => {
-      navigate(getTaskDetailPath(taskId));
+    (taskId: string, agentId?: string) => {
+      navigate(getTaskDetailPath(taskId, agentId));
     },
     [getTaskDetailPath, navigate],
   );
