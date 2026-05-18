@@ -4,9 +4,11 @@
 
 # LobeHub
 
-LobeHub is the ultimate space for work and life: <br/>
-to find, build, and collaborate with agent teammates that grow with you.<br/>
-We’re building the world’s largest human–agent co-evolving network.
+LobeHub organizes your agents into 7×24 operation.
+
+It hires, schedules, reports on your entire AI team.
+
+You stay in charge — without staying online.
 
 **English** · [简体中文](./README.zh-CN.md) · [Official Site][official-site] · [Changelog][changelog] · [Documents][docs] · [Blog][blog] · [Feedback][github-issues-link]
 
@@ -37,7 +39,7 @@ We’re building the world’s largest human–agent co-evolving network.
 [![][share-mastodon-shield]][share-mastodon-link]
 [![][share-linkedin-shield]][share-linkedin-link]
 
-<sup>Agent teammates that grow with you</sup>
+<sup>Your Chief Agent Operator</sup>
 
 [![][github-trending-shield]][github-trending-url]
 
@@ -52,6 +54,7 @@ We’re building the world’s largest human–agent co-evolving network.
 
 - [👋🏻 Getting Started & Join Our Community](#-getting-started--join-our-community)
 - [✨ Features](#-features)
+  - [Operator: Agents as the Unit of Work](#operator-agents-as-the-unit-of-work)
   - [Create: Agents as the Unit of Work](#create-agents-as-the-unit-of-work)
   - [Collaborate: Scale New Forms of Collaboration Networks](#collaborate-scale-new-forms-of-collaboration-networks)
   - [Evolve: Co-evolution of Humans and Agents](#evolve-co-evolution-of-humans-and-agents)
@@ -74,7 +77,7 @@ We’re building the world’s largest human–agent co-evolving network.
 
 <br/>
 
-<https://github.com/user-attachments/assets/6710ad97-03d0-4175-bd75-adff9b55eca2>
+<video src="https://github.com/user-attachments/assets/0a33365f-b786-48b5-9ed6-f8af7927bccb" />
 
 ## 👋🏻 Getting Started & Join Our Community
 
@@ -83,9 +86,9 @@ By adopting the Bootstrapping approach, we aim to provide developers and users w
 
 Whether for users or professional developers, LobeHub will be your AI Agent playground. Please be aware that LobeHub is currently under active development, and feedback is welcome for any [issues][issues-link] encountered.
 
-| [![](https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1065874&theme=light&t=1769347414733)](https://www.producthunt.com/products/lobehub?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-lobehub) | We are live on Product Hunt! We are thrilled to bring LobeHub to the world. If you believe in a future where humans and agents co-evolve, please support our journey. |
-| :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [![][discord-shield-badge]][discord-link]                                                                                                                                                                                                         | Join our Discord community! This is where you can connect with developers and other enthusiastic users of LobeHub.                                                    |
+| [![](https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1065874&theme=light&t=1769347414733)](https://www.producthunt.com/products/lobehub?launch=lobehub-2&embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-lobehub) | We are live on Product Hunt! We are thrilled to bring LobeHub to the world. If you believe in a future where humans and agents co-evolve, please support our journey. |
+| :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [![][discord-shield-badge]][discord-link]                                                                                                                                                                                                                          | Join our Discord community! This is where you can connect with developers and other enthusiastic users of LobeHub.                                                    |
 
 > \[!IMPORTANT]
 >
@@ -109,7 +112,26 @@ Today’s agents are one-off, task-driven tools. They lack context, live in isol
 
 LobeHub is a work-and-lifestyle space to find, build, and collaborate with agent teammates that grow with you. In LobeHub, we treat **Agents as the unit of work**, providing an infrastructure where humans and agents co-evolve.
 
-![](https://hub-apac-1.lobeobjects.space/blog/assets/2204cde2228fb3f583f3f2c090bc49fb.webp)
+![](https://github.com/user-attachments/assets/89d1c402-a62b-4794-82ea-17e5ee1a6165)
+
+### Operator: Agents as the Unit of Work
+
+Hires, schedules, and reports on your entire AI team.
+
+- **More productivity. Fewer tools**: Bring all your agents under one roof.
+- **IM Gateway**: Agents where you already chat.
+
+![](https://github.com/user-attachments/assets/7b08d6d9-9dff-4b06-a919-324630554509)
+
+[![][back-to-top]](#readme-top)
+
+<div align="right">
+
+[![][back-to-top]](#readme-top)
+
+</div>
+
+![](https://github.com/user-attachments/assets/81e89324-fc66-4024-99a3-aa8e16ec8184)
 
 ### Create: Agents as the Unit of Work
 
@@ -117,6 +139,8 @@ Building a personalized AI team starts with the **Agent Builder**. You can descr
 
 - **Unified Intelligence**: Seamlessly access any model and any modality—all under your control.
 - **10,000+ Skills**: Connect your agents to the skills you use every day with a library of over 10,000 tools and MCP-compatible plugins.
+
+![](https://github.com/user-attachments/assets/949b8166-486d-4750-ad7a-cfe7bfcb84e3)
 
 [![][back-to-top]](#readme-top)
 
@@ -137,6 +161,8 @@ LobeHub introduces **Agent Groups**, allowing you to work with agents like real 
 - **Project**: Organize work by project to keep everything structured and easy to track.
 - **Workspace**: A shared space for teams to collaborate with agents, ensuring clear ownership and visibility across the organization.
 
+![](https://github.com/user-attachments/assets/e51526c6-e09c-4a5a-9cec-dcd3fd68a3a8)
+
 [![][back-to-top]](#readme-top)
 
 <div align="right">
@@ -153,6 +179,8 @@ The best AI is one that understands you deeply. LobeHub features **Personal Memo
 
 - **Continual Learning**: Your agents learn from how you work, adapting their behavior to act at the right moment.
 - **White-Box Memory**: We believe in transparency. Your agents use structured, editable memory, giving you full control over what they remember.
+
+![](https://github.com/user-attachments/assets/5c6e16f0-7f47-4baf-9aeb-3a00deb8ff5b)
 
 <div align="right">
 

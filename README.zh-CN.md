@@ -4,8 +4,11 @@
 
 # LobeHub
 
-LobeHub 是一个工作与生活空间，用于发现、构建并与会随着您一起成长的 Agent 队友协作。<br/>
-在 LobeHub 中，我们将 **Agent 视为工作单元**，提供一个让人类与 Agent 共同进化的基础设施。
+LobeHub 帮你把专属 Agent 组织成 7×24 不打烊的高效队伍：
+
+自动为你招募适配的 AI 队友、调度任务排班、汇总生成工作报告，
+
+你始终掌控全局，从此不用再时刻在线盯守，真正解放自己的时间。
 
 [English](./README.md) · **简体中文** · [官网][official-site] · [更新日志][changelog] · [文档][docs] · [博客][blog] · [反馈问题][github-issues-link]
 
@@ -35,7 +38,7 @@ LobeHub 是一个工作与生活空间，用于发现、构建并与会随着您
 [![][share-weibo-shield]][share-weibo-link]
 [![][share-mastodon-shield]][share-mastodon-link]
 
-<sup>Agent teammates that grow with you</sup>
+<sup>你的首席 Agent 运营官</sup>
 
 [![][github-trending-shield]][github-trending-url]
 [![][github-hello-shield]][github-hello-url]
@@ -49,6 +52,7 @@ LobeHub 是一个工作与生活空间，用于发现、构建并与会随着您
 
 - [👋🏻 开始使用 & 交流](#-开始使用--交流)
 - [✨ 特性一览](#-特性一览)
+  - [运营：你制定策略，我们负责运行 Agent。](#运营你制定策略我们负责运行-agent)
   - [创建：以 Agent 为工作单元](#创建以-agent-为工作单元)
   - [协作：扩展新型协作网络](#协作扩展新型协作网络)
   - [进化：人类与 Agent 的共生进化](#进化人类与-agent-的共生进化)
@@ -72,7 +76,7 @@ LobeHub 是一个工作与生活空间，用于发现、构建并与会随着您
 
 <br/>
 
-<https://github.com/user-attachments/assets/6710ad97-03d0-4175-bd75-adff9b55eca2>
+<video src="https://github.com/user-attachments/assets/0a33365f-b786-48b5-9ed6-f8af7927bccb" />
 
 ## 👋🏻 开始使用 & 交流
 
@@ -81,9 +85,9 @@ LobeHub 是一个工作与生活空间，用于发现、构建并与会随着您
 
 不论普通用户与专业开发者，LobeHub 旨在成为所有人的 AI Agent 实验场。LobeHub 目前正在积极开发中，有任何需求或者问题，欢迎提交 [issues][issues-link]
 
-| [![](https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1065874&theme=light&t=1769347414733)](https://www.producthunt.com/products/lobehub?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-lobehub) | 我们已在 Product Hunt 上线！我们很高兴将 LobeHub 推向世界。如果您相信人类与 Agent 共同进化的未来，请支持我们的旅程。 |
-| :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :------------------------------------------------------------------------------------------------------------------- |
-| [![][discord-shield-badge]][discord-link]                                                                                                                                                                                                         | 加入我们的 Discord 社区！这是你可以与开发者和其他 LobeHub 热衷用户交流的地方                                         |
+| [![](https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1065874&theme=light&t=1769347414733)](https://www.producthunt.com/products/lobehub?launch=lobehub-2&embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-lobehub) | 我们已在 Product Hunt 上线！我们很高兴将 LobeHub 推向世界。如果您相信人类与 Agent 共同进化的未来，请支持我们的旅程。 |
+| :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------- |
+| [![][discord-shield-badge]][discord-link]                                                                                                                                                                                                                          | 加入我们的 Discord 社区！这是你可以与开发者和其他 LobeHub 热衷用户交流的地方                                         |
 
 > \[!IMPORTANT]
 >
@@ -106,7 +110,26 @@ LobeHub 是一个工作与生活空间，用于发现、构建并与会随着您
 
 LobeHub 是一个工作与生活空间，用于发现、构建并与会随着您一起成长的 Agent 队友协作。在 LobeHub 中，我们将 **Agent 视为工作单元**，提供一个让人类与 Agent 共同进化的基础设施。
 
-![](https://hub-apac-1.lobeobjects.space/blog/assets/2204cde2228fb3f583f3f2c090bc49fb.webp)
+![](https://github.com/user-attachments/assets/89d1c402-a62b-4794-82ea-17e5ee1a6165)
+
+### 运营：你制定策略，我们负责运行 Agent。
+
+雇用、排程并汇报你整个 AI 团队的工作
+
+- **更高生产力，更少工具**：将你所有的 Agent 集中在一个平台。
+- **IM 网关**： Agent 连接到您每天使用的技能。
+
+![](https://github.com/user-attachments/assets/7b08d6d9-9dff-4b06-a919-324630554509)
+
+[![][back-to-top]](#readme-top)
+
+<div align="right">
+
+[![][back-to-top]](#readme-top)
+
+</div>
+
+![](https://github.com/user-attachments/assets/81e89324-fc66-4024-99a3-aa8e16ec8184)
 
 ### 创建：以 Agent 为工作单元
 
@@ -114,6 +137,8 @@ LobeHub 是一个工作与生活空间，用于发现、构建并与会随着您
 
 - **统一智能**：无缝访问任何模型与任何模态 —— 全部由您掌控。
 - **1 万 + 技能**：通过超过 10,000 个工具和与 MCP 兼容的插件，将 Agent 连接到您每天使用的技能。
+
+![](https://github.com/user-attachments/assets/949b8166-486d-4750-ad7a-cfe7bfcb84e3)
 
 [![][back-to-top]](#readme-top)
 
@@ -134,6 +159,8 @@ LobeHub 引入了 **Agent Groups**，让您可以像对待真实队友一样与 
 - **项目（Project）**：按项目组织工作，保持一切结构化且易于跟踪。
 - **工作区（Workspace）**：供团队与 Agent 协作的共享空间，确保明确的所有权和组织内的可见性。
 
+![](https://github.com/user-attachments/assets/e51526c6-e09c-4a5a-9cec-dcd3fd68a3a8)
+
 [![][back-to-top]](#readme-top)
 
 <div align="right">
@@ -150,6 +177,8 @@ LobeHub 引入了 **Agent Groups**，让您可以像对待真实队友一样与 
 
 - **持续学习**：您的 Agent 会从您的工作方式中学习，调整其行为以在恰当时刻采取行动。
 - **白盒记忆**：我们相信透明性。您的 Agent 使用结构化、可编辑的记忆，让您完全掌控它们记住的内容。
+
+![](https://github.com/user-attachments/assets/5c6e16f0-7f47-4baf-9aeb-3a00deb8ff5b)
 
 <div align="right">
 
