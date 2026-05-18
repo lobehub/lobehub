@@ -165,9 +165,15 @@ export interface SendMessageServerResponse {
    * If a new thread was created, this will be the thread ID
    */
   createdThreadId?: string;
+  /** Newly created topic. Only present when `isCreateNewTopic` is true. */
+  createdTopic?: ChatTopic;
   isCreateNewTopic: boolean;
   messages: UIChatMessage[];
   topicId: string;
+  /**
+   * @deprecated Prefer `createdTopic`. Capped to a small page size; retained
+   * only as a fallback for older clients.
+   */
   topics?: {
     items: ChatTopic[];
     total: number;

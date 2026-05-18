@@ -552,7 +552,18 @@ export class ConversationLifecycleActionImpl {
 
       // Handle new topic creation
       if (heteroData.isCreateNewTopic && heteroData.topicId) {
-        if (heteroData.topics) {
+        // Prefer the lightweight `createdTopic` payload (single-row prepend)
+        // over the legacy `topics` bulk write.
+        if (heteroData.createdTopic) {
+          // Pin to the operation's original agent/group so the prepend lands
+          // in the right cache even if the user has navigated away.
+          this.#get().internal_dispatchTopic(
+            { type: 'addTopic', value: heteroData.createdTopic },
+            'sendMessageInServer/createTopic',
+            { agentId: operationContext.agentId, groupId: operationContext.groupId },
+          );
+        } else if (heteroData.topics) {
+          // Fallback for older servers without `createdTopic`.
           const pageSize = systemStatusSelectors.topicPageSize(useGlobalStore.getState());
           this.#get().internal_updateTopics(operationContext.agentId, {
             groupId: operationContext.groupId,
@@ -761,7 +772,26 @@ export class ConversationLifecycleActionImpl {
       const finalThreadId = data.createdThreadId ?? operationContext.threadId;
 
       // refresh the total data
-      if (data?.topics) {
+      if (data?.createdTopic) {
+        // Preferred path: server returned just the freshly created topic;
+        // prepend it via the reducer so the side-bar updates without forcing
+        // a full topic-list write.
+        finalTopicId = data.topicId;
+
+        if (!context.isolatedTopic) {
+          // Pin to the operation's original agent/group so the prepend lands
+          // in the right cache even if the user has navigated away.
+          this.#get().internal_dispatchTopic(
+            { type: 'addTopic', value: data.createdTopic },
+            'sendMessageInServer/createTopic',
+            { agentId: operationContext.agentId, groupId: operationContext.groupId },
+          );
+
+          // Record the created topicId in metadata (not context)
+          this.#get().updateOperationMetadata(operationId, { createdTopicId: data.topicId });
+        }
+      } else if (data?.topics) {
+        // Fallback for older servers without `createdTopic`.
         finalTopicId = data.topicId;
 
         // Skip writing the returned topic list into the main chat's topicDataMap

@@ -95,4 +95,55 @@ describe('AiChatService', () => {
     expect(mockQueryMessages).toHaveBeenCalled();
     expect(res.topics).toBeUndefined();
   });
+
+  it('getMessagesAndTopics should forward topicPageSize to topicModel.query', async () => {
+    const serverDB = {} as unknown as LobeChatDatabase;
+
+    const mockQueryMessages = vi.fn().mockResolvedValue([]);
+    const mockQueryTopics = vi.fn().mockResolvedValue({ items: [], total: 0 });
+
+    vi.mocked(MessageModel).mockImplementation(() => ({ query: mockQueryMessages }) as any);
+    vi.mocked(TopicModel).mockImplementation(() => ({ query: mockQueryTopics }) as any);
+    vi.mocked(FileService).mockImplementation(
+      () => ({ getFullFileUrl: vi.fn().mockResolvedValue('url') }) as any,
+    );
+
+    const service = new AiChatService(serverDB, 'u1');
+
+    await service.getMessagesAndTopics({
+      agentId: 'agent-1',
+      includeTopic: true,
+      topicPageSize: 20,
+    });
+
+    expect(mockQueryTopics).toHaveBeenCalledWith(expect.objectContaining({ pageSize: 20 }));
+    // topicPageSize must not leak into messageModel.query.
+    expect(mockQueryMessages).toHaveBeenCalledWith(
+      expect.not.objectContaining({ topicPageSize: expect.anything() }),
+      expect.objectContaining({ postProcessUrl: expect.any(Function) }),
+    );
+  });
+
+  it('getMessagesAndTopics should NOT pass pageSize when topicPageSize is omitted', async () => {
+    // Backwards-compat: callers that don't pass topicPageSize must not be
+    // silently capped — some intentionally rely on the model's default.
+    const serverDB = {} as unknown as LobeChatDatabase;
+
+    const mockQueryMessages = vi.fn().mockResolvedValue([]);
+    const mockQueryTopics = vi.fn().mockResolvedValue({ items: [], total: 0 });
+
+    vi.mocked(MessageModel).mockImplementation(() => ({ query: mockQueryMessages }) as any);
+    vi.mocked(TopicModel).mockImplementation(() => ({ query: mockQueryTopics }) as any);
+    vi.mocked(FileService).mockImplementation(
+      () => ({ getFullFileUrl: vi.fn().mockResolvedValue('url') }) as any,
+    );
+
+    const service = new AiChatService(serverDB, 'u1');
+
+    await service.getMessagesAndTopics({ agentId: 'agent-1', includeTopic: true });
+
+    expect(mockQueryTopics).toHaveBeenCalledWith(
+      expect.not.objectContaining({ pageSize: expect.anything() }),
+    );
+  });
 });

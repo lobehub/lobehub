@@ -5,7 +5,20 @@ import { type ChatTopic, type CreateTopicParams } from '@/types/topic';
 
 type AddChatTopicAction = {
   type: 'addTopic';
-  value: CreateTopicParams & { id?: string };
+  /**
+   * Accepts `CreateTopicParams` plus optional fields the caller may already
+   * know (id, createdAt, updatedAt, etc.). When the reducer is fed a fully-
+   * formed topic from the server, those values win over local defaults.
+   *
+   * `trigger` is widened to `string | null | undefined` because
+   * `CreateTopicParams.trigger` is `string | undefined` while `ChatTopic.trigger`
+   * is `string | null`; both shapes need to satisfy the same dispatch type.
+   */
+  value: Omit<CreateTopicParams, 'trigger'> &
+    Partial<Omit<ChatTopic, 'sessionId' | 'trigger'>> & {
+      id?: string;
+      trigger?: string | null;
+    };
 };
 
 type UpdateChatTopicAction = {
@@ -27,11 +40,13 @@ export const topicReducer = (state: ChatTopic[] = [], payload: ChatTopicDispatch
       return produce(state, (draftState) => {
         draftState.unshift({
           ...payload.value,
-          createdAt: Date.now(),
-          favorite: false,
+          // Prefer caller-supplied values; fall back to local defaults so the
+          // existing optimistic `internal_createTopic` path keeps working.
+          createdAt: payload.value.createdAt ?? Date.now(),
+          favorite: payload.value.favorite ?? false,
           id: payload.value.id ?? Date.now().toString(),
-          sessionId: payload.value.sessionId ? payload.value.sessionId : undefined,
-          updatedAt: Date.now(),
+          sessionId: payload.value.sessionId || undefined,
+          updatedAt: payload.value.updatedAt ?? Date.now(),
         });
 
         return draftState.sort((a, b) => Number(b.favorite) - Number(a.favorite));

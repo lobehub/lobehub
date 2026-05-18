@@ -16,6 +16,32 @@ import { FileService } from '@/server/services/file';
 
 const log = debug('lobe-lambda-router:ai-chat');
 
+/**
+ * Cap the topic preview list returned alongside `sendMessageInServer` so
+ * users with many topics don't pay an O(N) round-trip on every new-topic
+ * creation. Aligned with the client side-bar's default page size.
+ */
+const TOPIC_PREVIEW_PAGE_SIZE = 20;
+
+/** Project a `topicModel.create` row down to the `ChatTopic` wire shape. */
+const pickCreatedTopicFields = (
+  topic: Awaited<ReturnType<TopicModel['create']>>,
+): NonNullable<SendMessageServerResponse['createdTopic']> =>
+  // Cast via `unknown` because the wire shape carries `Date`s while the type
+  // declares numeric timestamps — matches the existing convention used by
+  // `topicModel.query` results that flow into the same client store.
+  ({
+    completedAt: topic.completedAt,
+    createdAt: topic.createdAt,
+    favorite: topic.favorite ?? false,
+    historySummary: topic.historySummary ?? undefined,
+    id: topic.id,
+    metadata: topic.metadata ?? undefined,
+    status: topic.status,
+    title: topic.title ?? '',
+    updatedAt: topic.updatedAt,
+  }) as unknown as NonNullable<SendMessageServerResponse['createdTopic']>;
+
 const aiChatProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
 
@@ -77,6 +103,7 @@ export const aiChatRouter = router({
       let createdThreadId: string | undefined;
 
       let isCreateNewTopic = false;
+      let createdTopicItem: Awaited<ReturnType<TopicModel['create']>> | undefined;
 
       // create topic if there should be a new topic
       if (input.newTopic) {
@@ -91,6 +118,7 @@ export const aiChatRouter = router({
           trigger: input.newTopic.trigger,
         });
         topicId = topicItem.id;
+        createdTopicItem = topicItem;
         isCreateNewTopic = true;
         log('new topic created with id: %s', topicId);
 
@@ -210,6 +238,7 @@ export const aiChatRouter = router({
         threadId,
         topicFilter: input.topicFilter,
         topicId,
+        topicPageSize: TOPIC_PREVIEW_PAGE_SIZE,
       });
 
       log('retrieved %d messages, %d topics', messages.length, topics?.items?.length ?? 0);
@@ -217,6 +246,7 @@ export const aiChatRouter = router({
       return {
         assistantMessageId: assistantMessageItem.id,
         createdThreadId,
+        createdTopic: createdTopicItem ? pickCreatedTopicFields(createdTopicItem) : undefined,
         isCreateNewTopic,
         messages,
         topicId,

@@ -32,8 +32,14 @@ export class AiChatService {
       includeTriggers?: string[];
     };
     topicId?: string;
+    /**
+     * Page size cap for the topic preview list. Omit to use the model's
+     * default. Callers that only need a small preview should pass a small
+     * number to keep the response bounded.
+     */
+    topicPageSize?: number;
   }) {
-    const { topicFilter, ...messageParams } = params;
+    const { topicFilter, topicPageSize, ...messageParams } = params;
     const [messages, topics] = await Promise.all([
       this.messageModel.query(messageParams, {
         postProcessUrl: (path) => this.fileService.getFullFileUrl(path),
@@ -42,6 +48,7 @@ export class AiChatService {
         ? this.topicModel.query({
             agentId: params.agentId,
             groupId: params.groupId,
+            ...(topicPageSize !== undefined ? { pageSize: topicPageSize } : {}),
             ...topicFilter,
           })
         : undefined,

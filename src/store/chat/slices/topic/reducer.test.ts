@@ -26,6 +26,66 @@ describe('topicReducer', () => {
 
       expect(newState[0].id).toBeDefined();
     });
+
+    it('should prefer caller-provided createdAt/updatedAt/favorite over Date.now()/false', () => {
+      // Server-supplied timestamps must win so the side-bar order matches
+      // the next SWR fetch result.
+      const createdAt = new Date('2026-05-09T15:00:00Z').getTime();
+      const updatedAt = new Date('2026-05-09T15:00:01Z').getTime();
+      const payload: ChatTopicDispatch = {
+        type: 'addTopic',
+        value: {
+          createdAt,
+          favorite: true,
+          id: 'tpc_server',
+          title: 'From Server',
+          updatedAt,
+        },
+      };
+
+      const newState = topicReducer(state, payload);
+
+      expect(newState[0].id).toBe('tpc_server');
+      expect(newState[0].createdAt).toBe(createdAt);
+      expect(newState[0].updatedAt).toBe(updatedAt);
+      expect(newState[0].favorite).toBe(true);
+    });
+
+    it('should fall back to Date.now()/false when caller omits the optional fields', () => {
+      // Existing optimistic `internal_createTopic` callers only know the title.
+      const before = Date.now();
+      const payload: ChatTopicDispatch = {
+        type: 'addTopic',
+        value: { title: 'Local Optimistic' },
+      };
+
+      const newState = topicReducer(state, payload);
+      const after = Date.now();
+
+      expect(newState[0].favorite).toBe(false);
+      expect(typeof newState[0].createdAt).toBe('number');
+      expect(typeof newState[0].updatedAt).toBe('number');
+      expect(newState[0].createdAt as number).toBeGreaterThanOrEqual(before);
+      expect(newState[0].createdAt as number).toBeLessThanOrEqual(after);
+    });
+
+    it('should keep favorite topics ahead of newly prepended non-favorite topic', () => {
+      // Sort invariant: favorites stay on top regardless of insertion order.
+      const favTopic: ChatTopic = {
+        id: 'fav',
+        title: 'Pinned',
+        favorite: true,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      const newState = topicReducer([favTopic], {
+        type: 'addTopic',
+        value: { id: 'fresh', title: 'Just Created' },
+      });
+
+      expect(newState[0].id).toBe('fav');
+      expect(newState[1].id).toBe('fresh');
+    });
   });
 
   describe('updateTopic', () => {

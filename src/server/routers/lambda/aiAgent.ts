@@ -777,6 +777,8 @@ export const aiAgentRouter = router({
         groupId,
         includeTopic: result.isCreateNewTopic,
         topicId: result.topicId,
+        // Cap preview to align with the client side-bar's default page size.
+        topicPageSize: 20,
       });
 
       // Return result with messages/topics - includes error/success fields
