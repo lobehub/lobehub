@@ -146,42 +146,42 @@ describe('computeChatPricing', () => {
     it.each([
       {
         expectedCredits: {
-          textInput: 14_000,
-          textInput_cacheRead: 280,
-          textOutput: 28_000,
+          textInput: 140_000,
+          textInput_cacheRead: 2800,
+          textOutput: 280_000,
         },
         expectedUnits: [
-          { name: 'textInput_cacheRead', rate: 0.00028, strategy: 'fixed', unit: 'millionTokens' },
-          { name: 'textInput', rate: 0.014, strategy: 'fixed', unit: 'millionTokens' },
-          { name: 'textOutput', rate: 0.028, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textInput_cacheRead', rate: 0.0028, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textInput', rate: 0.14, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textOutput', rate: 0.28, strategy: 'fixed', unit: 'millionTokens' },
         ],
         modelId: 'deepseek-v4-flash',
       },
       {
         expectedCredits: {
-          textInput: 43_500,
-          textInput_cacheRead: 363,
-          textOutput: 87_000,
+          textInput: 435_000,
+          textInput_cacheRead: 3625,
+          textOutput: 870_000,
         },
         expectedUnits: [
           {
             name: 'textInput_cacheRead',
             originalRate: 0.0145,
-            rate: 0.0003625,
+            rate: 0.003625,
             strategy: 'fixed',
             unit: 'millionTokens',
           },
           {
             name: 'textInput',
             originalRate: 1.74,
-            rate: 0.0435,
+            rate: 0.435,
             strategy: 'fixed',
             unit: 'millionTokens',
           },
           {
             name: 'textOutput',
             originalRate: 3.48,
-            rate: 0.087,
+            rate: 0.87,
             strategy: 'fixed',
             unit: 'millionTokens',
           },
@@ -190,32 +190,32 @@ describe('computeChatPricing', () => {
       },
       {
         expectedCredits: {
-          textInput: 14_000,
-          textInput_cacheRead: 280,
-          textOutput: 28_000,
+          textInput: 140_000,
+          textInput_cacheRead: 2800,
+          textOutput: 280_000,
         },
         expectedUnits: [
-          { name: 'textInput_cacheRead', rate: 0.00028, strategy: 'fixed', unit: 'millionTokens' },
-          { name: 'textInput', rate: 0.014, strategy: 'fixed', unit: 'millionTokens' },
-          { name: 'textOutput', rate: 0.028, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textInput_cacheRead', rate: 0.0028, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textInput', rate: 0.14, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textOutput', rate: 0.28, strategy: 'fixed', unit: 'millionTokens' },
         ],
         modelId: 'deepseek-chat',
       },
       {
         expectedCredits: {
-          textInput: 14_000,
-          textInput_cacheRead: 280,
-          textOutput: 28_000,
+          textInput: 140_000,
+          textInput_cacheRead: 2800,
+          textOutput: 280_000,
         },
         expectedUnits: [
-          { name: 'textInput_cacheRead', rate: 0.00028, strategy: 'fixed', unit: 'millionTokens' },
-          { name: 'textInput', rate: 0.014, strategy: 'fixed', unit: 'millionTokens' },
-          { name: 'textOutput', rate: 0.028, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textInput_cacheRead', rate: 0.0028, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textInput', rate: 0.14, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textOutput', rate: 0.28, strategy: 'fixed', unit: 'millionTokens' },
         ],
         modelId: 'deepseek-reasoner',
       },
     ])(
-      'applies 10% hosted discount pricing for $modelId',
+      'applies LobeHub-hosted official pricing for $modelId',
       ({ expectedCredits, expectedUnits, modelId }) => {
         const pricing = lobehubChatModels.find((model) => model.id === modelId)?.pricing;
         expect(pricing).toBeDefined();
