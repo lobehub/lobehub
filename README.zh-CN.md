@@ -76,7 +76,7 @@ LobeHub 帮你把专属 Agent 组织成 7×24 不打烊的高效队伍：
 
 <br/>
 
-<video src="https://github.com/user-attachments/assets/0a33365f-b786-48b5-9ed6-f8af7927bccb" />
+<https://github.com/user-attachments/assets/0a33365f-b786-48b5-9ed6-f8af7927bccb>
 
 ## 👋🏻 开始使用 & 交流
 
@@ -548,7 +548,7 @@ This project is [LobeHub Community License](./LICENSE) licensed.
 [github-stars-shield]: https://github.com/user-attachments/assets/3216e25b-186f-4a54-9cb4-2f124aec0471
 [github-trending-shield]: https://trendshift.io/api/badge/repositories/2256
 [github-trending-url]: https://trendshift.io/repositories/2256
-[image-banner]: https://github.com/user-attachments/assets/0fe626a3-0ddc-4f67-b595-3c5b3f1701e0
+[image-banner]: https://github.com/user-attachments/assets/5f78ae58-ed4f-4d38-8037-96109fbba58c
 [image-star]: https://github.com/user-attachments/assets/c3b482e7-cef5-4e94-bef9-226900ecfaab
 [issues-link]: https://img.shields.io/github/issues/lobehub/lobehub.svg?style=flat
 [lobe-chat-plugins]: https://github.com/lobehub/lobe-chat-plugins
