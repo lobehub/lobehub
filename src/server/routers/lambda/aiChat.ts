@@ -225,77 +225,58 @@ export const aiChatRouter = router({
             }
           : undefined;
 
-      const userMessageItem = await runTimedStage(
-        timingContext,
-        'lambda.aiChat.userMessage.create',
-        () => {
-          const payload = {
-            agentId: input.agentId,
-            content: input.newUserMessage.content,
-            editorData: input.newUserMessage.editorData,
-            files: input.newUserMessage.files,
-            groupId: input.groupId,
-            metadata: userMessageMetadata,
-            parentId,
-            role: 'user',
-            sessionId,
-            threadId,
-            topicId,
-          } satisfies CreateMessageParams;
-          const modelTiming = createPrefixedTimingContext(
-            timingContext,
-            'lambda.aiChat.userMessage.create',
-          );
-          return modelTiming
-            ? ctx.messageModel.create(payload, undefined, modelTiming)
-            : ctx.messageModel.create(payload);
-        },
-        {
-          contentLength: input.newUserMessage.content.length,
-          fileCount: input.newUserMessage.files?.length ?? 0,
-        },
-      );
+      const { assistantMessage: assistantMessageItem, userMessage: userMessageItem } =
+        await runTimedStage(
+          timingContext,
+          'lambda.aiChat.messages.createUserAndAssistant',
+          () => {
+            const userMessage = {
+              agentId: input.agentId,
+              content: input.newUserMessage.content,
+              editorData: input.newUserMessage.editorData,
+              files: input.newUserMessage.files,
+              groupId: input.groupId,
+              metadata: userMessageMetadata,
+              parentId,
+              role: 'user',
+              sessionId,
+              threadId,
+              topicId,
+            } satisfies CreateMessageParams;
+            const assistantMessage = {
+              agentId: input.agentId,
+              content: LOADING_FLAT,
+              groupId: input.groupId,
+              metadata: input.newAssistantMessage.metadata,
+              model: input.newAssistantMessage.model,
+              provider: input.newAssistantMessage.provider,
+              role: 'assistant',
+              sessionId,
+              threadId,
+              topicId,
+            } satisfies CreateMessageParams;
+            const modelTiming = createPrefixedTimingContext(
+              timingContext,
+              'lambda.aiChat.messages.createUserAndAssistant',
+            );
+            return modelTiming
+              ? ctx.messageModel.createUserAndAssistantMessages(
+                  { assistantMessage, userMessage },
+                  modelTiming,
+                )
+              : ctx.messageModel.createUserAndAssistantMessages({ assistantMessage, userMessage });
+          },
+          {
+            contentLength: input.newUserMessage.content.length,
+            fileCount: input.newUserMessage.files?.length ?? 0,
+            model: input.newAssistantMessage.model,
+            provider: input.newAssistantMessage.provider,
+          },
+        );
 
       const messageId = userMessageItem.id;
       log('user message created with id: %s', messageId);
 
-      // create assistant message
-      log(
-        'creating assistant message with model: %s, provider: %s, metadata: %O',
-        input.newAssistantMessage.model,
-        input.newAssistantMessage.provider,
-        input.newAssistantMessage.metadata,
-      );
-      const assistantMessageItem = await runTimedStage(
-        timingContext,
-        'lambda.aiChat.assistantMessage.create',
-        () => {
-          const payload = {
-            agentId: input.agentId,
-            content: LOADING_FLAT,
-            groupId: input.groupId,
-            metadata: input.newAssistantMessage.metadata,
-            model: input.newAssistantMessage.model,
-            parentId: messageId,
-            provider: input.newAssistantMessage.provider,
-            role: 'assistant',
-            sessionId,
-            threadId,
-            topicId,
-          } satisfies CreateMessageParams;
-          const modelTiming = createPrefixedTimingContext(
-            timingContext,
-            'lambda.aiChat.assistantMessage.create',
-          );
-          return modelTiming
-            ? ctx.messageModel.create(payload, undefined, modelTiming)
-            : ctx.messageModel.create(payload);
-        },
-        {
-          model: input.newAssistantMessage.model,
-          provider: input.newAssistantMessage.provider,
-        },
-      );
       log('assistant message created with id: %s', assistantMessageItem.id);
 
       // retrieve latest messages and topic with

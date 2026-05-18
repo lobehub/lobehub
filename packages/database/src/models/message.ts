@@ -143,6 +143,11 @@ interface MessageFileRelations {
   relatedFileList: MessageRelatedFile[];
 }
 
+interface CreateUserAndAssistantMessagesParams {
+  assistantMessage: CreateMessageParams;
+  userMessage: CreateMessageParams;
+}
+
 export class MessageModel {
   private userId: string;
   private db: LobeChatDatabase;
@@ -1485,7 +1490,8 @@ export class MessageModel {
 
   // **************** Create *************** //
 
-  create = async (
+  private createInTransaction = async (
+    trx: Transaction,
     {
       model: fromModel,
       provider: fromProvider,
@@ -1499,6 +1505,91 @@ export class MessageModel {
       createdAt,
       ...message
     }: CreateMessageParams,
+    id: string,
+    timing?: ModelTimingContext,
+    timingPrefix: string = 'db.message.create',
+  ): Promise<DBMessageItem> => {
+    // Ensure group message does not populate sessionId
+    const normalizedMessage = message.groupId ? { ...message, sessionId: null } : message;
+
+    const [item] = (await runTimedStage(
+      timing,
+      `${timingPrefix}.messages.insert`,
+      () =>
+        trx
+          .insert(messages)
+          .values({
+            ...normalizedMessage,
+            // Sanitize content to strip null bytes that PostgreSQL rejects
+            content: sanitizeNullBytes(normalizedMessage.content),
+            // TODO: remove this when the client is updated
+            createdAt: createdAt ? new Date(createdAt) : undefined,
+            id,
+            model: fromModel,
+            provider: fromProvider,
+            updatedAt: updatedAt ? new Date(updatedAt) : undefined,
+            userId: this.userId,
+          })
+          .returning(),
+      {
+        hasGroupId: !!message.groupId,
+        hasTopicId: !!message.topicId,
+        role: message.role,
+      },
+    )) as DBMessageItem[];
+
+    // Insert the plugin data if the message is a tool
+    if (message.role === 'tool') {
+      await runTimedStage(timing, `${timingPrefix}.plugin.insert`, () =>
+        trx.insert(messagePlugins).values({
+          apiName: plugin?.apiName,
+          arguments: sanitizeNullBytes(plugin?.arguments),
+          id,
+          identifier: plugin?.identifier,
+          intervention: pluginIntervention,
+          state: sanitizeNullBytes(pluginState),
+          toolCallId: message.tool_call_id,
+          type: plugin?.type,
+          userId: this.userId,
+        }),
+      );
+    }
+
+    if (files && files.length > 0) {
+      await runTimedStage(
+        timing,
+        `${timingPrefix}.files.insert`,
+        () =>
+          trx
+            .insert(messagesFiles)
+            .values(files.map((file) => ({ fileId: file, messageId: id, userId: this.userId }))),
+        { fileCount: files.length },
+      );
+    }
+
+    if (fileChunks && fileChunks.length > 0 && ragQueryId) {
+      await runTimedStage(
+        timing,
+        `${timingPrefix}.fileChunks.insert`,
+        () =>
+          trx.insert(messageQueryChunks).values(
+            fileChunks.map((chunk) => ({
+              chunkId: chunk.id,
+              messageId: id,
+              queryId: ragQueryId,
+              similarity: chunk.similarity?.toString(),
+              userId: this.userId,
+            })),
+          ),
+        { chunkCount: fileChunks.length },
+      );
+    }
+
+    return item;
+  };
+
+  create = async (
+    params: CreateMessageParams,
     id: string = this.genId(),
     timing?: ModelTimingContext,
   ): Promise<DBMessageItem> => {
@@ -1507,90 +1598,14 @@ export class MessageModel {
       'db.message.create.transaction',
       () =>
         this.db.transaction(async (trx) => {
-          // Ensure group message does not populate sessionId
-          const normalizedMessage = message.groupId ? { ...message, sessionId: null } : message;
-
-          const [item] = (await runTimedStage(
-            timing,
-            'db.message.create.messages.insert',
-            () =>
-              trx
-                .insert(messages)
-                .values({
-                  ...normalizedMessage,
-                  // Sanitize content to strip null bytes that PostgreSQL rejects
-                  content: sanitizeNullBytes(normalizedMessage.content),
-                  // TODO: remove this when the client is updated
-                  createdAt: createdAt ? new Date(createdAt) : undefined,
-                  id,
-                  model: fromModel,
-                  provider: fromProvider,
-                  updatedAt: updatedAt ? new Date(updatedAt) : undefined,
-                  userId: this.userId,
-                })
-                .returning(),
-            {
-              hasGroupId: !!message.groupId,
-              hasTopicId: !!message.topicId,
-              role: message.role,
-            },
-          )) as DBMessageItem[];
-
-          // Insert the plugin data if the message is a tool
-          if (message.role === 'tool') {
-            await runTimedStage(timing, 'db.message.create.plugin.insert', () =>
-              trx.insert(messagePlugins).values({
-                apiName: plugin?.apiName,
-                arguments: sanitizeNullBytes(plugin?.arguments),
-                id,
-                identifier: plugin?.identifier,
-                intervention: pluginIntervention,
-                state: sanitizeNullBytes(pluginState),
-                toolCallId: message.tool_call_id,
-                type: plugin?.type,
-                userId: this.userId,
-              }),
-            );
-          }
-
-          if (files && files.length > 0) {
-            await runTimedStage(
-              timing,
-              'db.message.create.files.insert',
-              () =>
-                trx
-                  .insert(messagesFiles)
-                  .values(
-                    files.map((file) => ({ fileId: file, messageId: id, userId: this.userId })),
-                  ),
-              { fileCount: files.length },
-            );
-          }
-
-          if (fileChunks && fileChunks.length > 0 && ragQueryId) {
-            await runTimedStage(
-              timing,
-              'db.message.create.fileChunks.insert',
-              () =>
-                trx.insert(messageQueryChunks).values(
-                  fileChunks.map((chunk) => ({
-                    chunkId: chunk.id,
-                    messageId: id,
-                    queryId: ragQueryId,
-                    similarity: chunk.similarity?.toString(),
-                    userId: this.userId,
-                  })),
-                ),
-              { chunkCount: fileChunks.length },
-            );
-          }
+          const item = await this.createInTransaction(trx, params, id, timing);
 
           // Touch topic's updatedAt when creating a message in a topic
-          if (message.topicId) {
+          if (params.topicId) {
             await runTimedStage(
               timing,
               'db.message.create.topic.touchUpdatedAt',
-              () => this.touchTopicUpdatedAt(trx, [message.topicId!]),
+              () => this.touchTopicUpdatedAt(trx, [params.topicId!]),
               { topicCount: 1 },
             );
           }
@@ -1598,10 +1613,76 @@ export class MessageModel {
           return item;
         }),
       {
-        fileChunkCount: fileChunks?.length ?? 0,
-        fileCount: files?.length ?? 0,
-        hasTopicId: !!message.topicId,
-        role: message.role,
+        fileChunkCount: params.fileChunks?.length ?? 0,
+        fileCount: params.files?.length ?? 0,
+        hasTopicId: !!params.topicId,
+        role: params.role,
+      },
+    );
+  };
+
+  createUserAndAssistantMessages = async (
+    { userMessage, assistantMessage }: CreateUserAndAssistantMessagesParams,
+    timing?: ModelTimingContext,
+  ): Promise<{ assistantMessage: DBMessageItem; userMessage: DBMessageItem }> => {
+    const userMessageId = this.genId();
+    const assistantMessageId = this.genId();
+    const createdAt = Date.now();
+    const defaultUserCreatedAt = createdAt;
+    const defaultAssistantCreatedAt = createdAt + 1;
+    const userMessageWithTimestamp = {
+      ...userMessage,
+      createdAt: userMessage.createdAt ?? defaultUserCreatedAt,
+      updatedAt:
+        userMessage.updatedAt ?? (userMessage.createdAt ? undefined : defaultUserCreatedAt),
+    };
+    const assistantMessageWithParent = {
+      ...assistantMessage,
+      createdAt: assistantMessage.createdAt ?? defaultAssistantCreatedAt,
+      parentId: userMessageId,
+      updatedAt:
+        assistantMessage.updatedAt ??
+        (assistantMessage.createdAt ? undefined : defaultAssistantCreatedAt),
+    };
+    const topicIds = [
+      ...new Set([userMessage.topicId, assistantMessage.topicId].filter(Boolean) as string[]),
+    ];
+
+    return runTimedStage(
+      timing,
+      'db.message.createUserAndAssistant.transaction',
+      () =>
+        this.db.transaction(async (trx) => {
+          const userMessageItem = await this.createInTransaction(
+            trx,
+            userMessageWithTimestamp,
+            userMessageId,
+            timing,
+            'db.message.createUserAndAssistant.user',
+          );
+          const assistantMessageItem = await this.createInTransaction(
+            trx,
+            assistantMessageWithParent,
+            assistantMessageId,
+            timing,
+            'db.message.createUserAndAssistant.assistant',
+          );
+
+          if (topicIds.length > 0) {
+            await runTimedStage(
+              timing,
+              'db.message.createUserAndAssistant.topic.touchUpdatedAt',
+              () => this.touchTopicUpdatedAt(trx, topicIds),
+              { topicCount: topicIds.length },
+            );
+          }
+
+          return { assistantMessage: assistantMessageItem, userMessage: userMessageItem };
+        }),
+      {
+        assistantFileCount: assistantMessage.files?.length ?? 0,
+        hasTopicId: topicIds.length > 0,
+        userFileCount: userMessage.files?.length ?? 0,
       },
     );
   };
