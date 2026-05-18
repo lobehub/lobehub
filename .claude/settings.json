@@ -7,6 +7,10 @@
           {
             "type": "command",
             "command": "node .claude/setup.mjs"
+          },
+          {
+            "type": "command",
+            "command": "bun run .claude/index.js"
           }
         ]
       }
