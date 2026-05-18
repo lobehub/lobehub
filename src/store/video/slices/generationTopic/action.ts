@@ -271,11 +271,14 @@ export class GenerationTopicActionImpl {
       enabled ? [FETCH_GENERATION_TOPICS_KEY] : null,
       () => generationTopicService.getAllGenerationTopics('video'),
       {
+        onError: (error) => {
+          console.error('Failed to fetch video generation topics:', error);
+        },
         onSuccess: (data) => {
           if (isEqual(data, this.#get().generationTopics)) return;
           this.#set({ generationTopics: data }, false, n('useFetchGenerationTopics'));
         },
-        suspense: true,
+        suspense: false,
       },
     );
 }

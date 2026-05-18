@@ -12,6 +12,16 @@ import { generationTopics } from '../schemas/generation';
 import type { LobeChatDatabase } from '../type';
 import type { GenerationTopicType } from '../types/generation';
 
+const isMissingTypeColumnError = (error: unknown) => {
+  if (!error || typeof error !== 'object') return false;
+
+  const dbError = error as { code?: string; message?: string };
+  if (dbError.code !== '42703') return false;
+
+  const message = dbError.message || '';
+  return message.includes('"type"') || message.includes('type');
+};
+
 export class GenerationTopicModel {
   private userId: string;
   private db: LobeChatDatabase;
@@ -24,41 +34,92 @@ export class GenerationTopicModel {
   }
 
   queryAll = async (type?: GenerationTopicType) => {
-    const conditions = [eq(generationTopics.userId, this.userId)];
-    if (type) {
-      conditions.push(eq(generationTopics.type, type));
-    }
+    let topics: GenerationTopicItem[];
 
-    const topics = await this.db
-      .select()
-      .from(generationTopics)
-      .orderBy(desc(generationTopics.updatedAt))
-      .where(and(...conditions));
+    try {
+      const conditions = [eq(generationTopics.userId, this.userId)];
+      if (type) {
+        conditions.push(eq(generationTopics.type, type));
+      }
+
+      topics = await this.db
+        .select()
+        .from(generationTopics)
+        .orderBy(desc(generationTopics.updatedAt))
+        .where(and(...conditions));
+    } catch (error) {
+      // Compatibility fallback for deployments where migration adding generation_topics.type
+      // has not been applied yet. Old rows are image-only.
+      if (!isMissingTypeColumnError(error)) throw error;
+
+      const legacyTopics = await this.db
+        .select({
+          coverUrl: generationTopics.coverUrl,
+          createdAt: generationTopics.createdAt,
+          id: generationTopics.id,
+          title: generationTopics.title,
+          updatedAt: generationTopics.updatedAt,
+          userId: generationTopics.userId,
+        })
+        .from(generationTopics)
+        .orderBy(desc(generationTopics.updatedAt))
+        .where(eq(generationTopics.userId, this.userId));
+
+      topics =
+        type === 'video'
+          ? []
+          : legacyTopics.map(
+              (topic) => ({ ...topic, type: 'image' }) as unknown as GenerationTopicItem,
+            );
+    }
 
     return Promise.all(
       topics.map(async (topic) => {
-        if (topic.coverUrl) {
-          return {
-            ...topic,
-            coverUrl: await this.fileService.getFullFileUrl(topic.coverUrl),
-          };
-        }
-        return topic;
+        if (!topic.coverUrl) return topic;
+
+        return {
+          ...topic,
+          coverUrl: await this.fileService.getFullFileUrl(topic.coverUrl),
+        };
       }),
     );
   };
 
   create = async (title: string, type?: GenerationTopicType) => {
-    const [newGenerationTopic] = await this.db
-      .insert(generationTopics)
-      .values({
-        title,
-        type: type ?? 'image',
-        userId: this.userId,
-      })
-      .returning();
+    try {
+      const [newGenerationTopic] = await this.db
+        .insert(generationTopics)
+        .values({
+          title,
+          type: type ?? 'image',
+          userId: this.userId,
+        })
+        .returning();
 
-    return newGenerationTopic;
+      return newGenerationTopic;
+    } catch (error) {
+      if (!isMissingTypeColumnError(error)) throw error;
+
+      // Legacy schema has no `type` column and only supports image topics.
+      if (type === 'video') throw error;
+
+      const [legacyTopic] = await this.db
+        .insert(generationTopics)
+        .values({
+          title,
+          userId: this.userId,
+        })
+        .returning({
+          coverUrl: generationTopics.coverUrl,
+          createdAt: generationTopics.createdAt,
+          id: generationTopics.id,
+          title: generationTopics.title,
+          updatedAt: generationTopics.updatedAt,
+          userId: generationTopics.userId,
+        });
+
+      return { ...legacyTopic, type: 'image' } as GenerationTopicItem;
+    }
   };
 
   update = async (

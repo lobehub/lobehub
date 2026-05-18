@@ -212,7 +212,12 @@ export class GenerationTopicActionImpl {
       enabled ? [FETCH_GENERATION_TOPICS_KEY] : null,
       () => generationTopicService.getAllGenerationTopics('image'),
       {
-        suspense: true,
+        // Avoid crashing /image page when backend/database is temporarily inconsistent.
+        // We keep existing data and surface errors via console + SWR state.
+        suspense: false,
+        onError: (error) => {
+          console.error('Failed to fetch image generation topics:', error);
+        },
         onSuccess: (data) => {
           // No need to update if data is the same
           if (isEqual(data, this.#get().generationTopics)) return;

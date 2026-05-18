@@ -11,6 +11,7 @@ const parametersSchema = (s: GenerationConfigState) => s.parametersSchema;
 const isSupportedParam = (paramName: RuntimeImageGenParamsKeys) => {
   return (s: GenerationConfigState) => {
     const _parametersSchema = parametersSchema(s);
+    if (!_parametersSchema || typeof _parametersSchema !== 'object') return false;
     return Boolean(paramName in _parametersSchema);
   };
 };

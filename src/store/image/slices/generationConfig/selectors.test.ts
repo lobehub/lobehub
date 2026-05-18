@@ -197,6 +197,11 @@ describe('imageGenerationConfigSelectors', () => {
       ).toBe(false);
     });
 
+    it('should return false when parametersSchema is missing', () => {
+      const state = { ...initialStore, parametersSchema: undefined as any };
+      expect(imageGenerationConfigSelectors.isSupportedParam('prompt')(state)).toBe(false);
+    });
+
     it('should work correctly with gpt-image-1 parameters', () => {
       const state = merge(initialStore, { parametersSchema: gptImage1Schema });
 
