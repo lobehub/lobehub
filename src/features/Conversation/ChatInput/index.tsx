@@ -61,13 +61,13 @@ export interface ChatInputProps {
    */
   disableQueue?: boolean;
   /**
-   * Chat input capability switches. Omitted capabilities keep the default enabled state.
-   */
-  feature?: ChatInputFeature;
-  /**
    * Extra action items to append to the ActionBar
    */
   extraActionItems?: ChatInputActionsProps['items'];
+  /**
+   * Chat input capability switches. Omitted capabilities keep the default enabled state.
+   */
+  feature?: ChatInputFeature;
   /**
    * Swap the action bar and send area for skeleton placeholders while
    * the underlying agent/session config is still hydrating. The editor
