@@ -621,14 +621,14 @@ export const handleUserMemoryAction = async (
         typeof action.payload.sourceHints === 'object' && action.payload.sourceHints
           ? action.payload.sourceHints
           : undefined,
-      // The assistant message that triggered this signal — used to anchor the
-      // memory-agent thread under that message rather than the main topic.
+      // The assistant message that completed the turn — used to anchor the
+      // memory-agent child thread under that message instead of the main topic.
+      // Populated by planUserMemory via extractAssistantMessageIdFromSourceId;
+      // absent for non-clientRuntimeComplete sources where no assistant boundary exists.
       sourceMessageId:
         typeof action.payload.assistantMessageId === 'string'
           ? action.payload.assistantMessageId
-          : typeof action.payload.messageId === 'string'
-            ? action.payload.messageId
-            : undefined,
+          : undefined,
       topicId: typeof action.payload.topicId === 'string' ? action.payload.topicId : undefined,
     };
     const runner = options.memoryActionRunner ?? ((input) => runMemoryActionAgent(input, options));
