@@ -755,6 +755,16 @@ describe('AuthCtr', () => {
         expect(mockRemoteServerConfigCtr.refreshAccessToken).not.toHaveBeenCalled();
       });
 
+      it('should check expiry with a small buffer, not the 24h default', async () => {
+        vi.mocked(mockRemoteServerConfigCtr.isTokenExpiringSoon).mockReturnValue(false);
+
+        await authCtr.onAppActivate();
+
+        const [buffer] = vi.mocked(mockRemoteServerConfigCtr.isTokenExpiringSoon).mock.calls[0];
+        expect(buffer).toBeGreaterThan(0);
+        expect(buffer).toBeLessThanOrEqual(60 * 60 * 1000);
+      });
+
       it('should skip refresh when remote server is not active', async () => {
         vi.mocked(mockRemoteServerConfigCtr.isRemoteServerConfigured).mockResolvedValue(false);
         vi.mocked(mockRemoteServerConfigCtr.isTokenExpiringSoon).mockReturnValue(true);
@@ -821,6 +831,17 @@ describe('AuthCtr', () => {
         await new Promise((resolve) => setTimeout(resolve, 100));
 
         expect(mockRemoteServerConfigCtr.refreshAccessToken).not.toHaveBeenCalled();
+      });
+
+      it('should check expiry with a small buffer, not the 24h default', async () => {
+        vi.mocked(mockRemoteServerConfigCtr.isTokenExpiringSoon).mockReturnValue(false);
+
+        authCtr.afterAppReady();
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        const [buffer] = vi.mocked(mockRemoteServerConfigCtr.isTokenExpiringSoon).mock.calls[0];
+        expect(buffer).toBeGreaterThan(0);
+        expect(buffer).toBeLessThanOrEqual(60 * 60 * 1000);
       });
 
       it('should skip initialization when no access token exists', async () => {

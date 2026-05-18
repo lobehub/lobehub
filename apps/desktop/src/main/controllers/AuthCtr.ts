@@ -22,6 +22,12 @@ const logger = createLogger('controllers:AuthCtr');
 const MAX_POLL_TIME = 2 * 60 * 1000; // 2 minutes (reduced from 5 minutes for better UX)
 const POLL_INTERVAL = 3000; // 3 seconds
 
+// Refresh the access token only once it is within this window of its expiry. Kept
+// small (minutes) on purpose: a buffer that is large relative to the server's
+// access-token lifetime makes the token look "expiring soon" right after login,
+// refreshing on every launch/activation and churning refresh-token rotations.
+const TOKEN_REFRESH_BUFFER = 10 * 60 * 1000; // 10 minutes
+
 /**
  * Authentication Controller
  * Implements OAuth authorization flow using intermediate page + polling mechanism
@@ -291,8 +297,7 @@ export default class AuthCtr extends ControllerModule {
 
     this.autoRefreshTimer = setInterval(async () => {
       try {
-        // Check if token is expiring soon (refresh 5 minutes in advance)
-        if (!this.remoteServerConfigCtr.isTokenExpiringSoon()) {
+        if (!this.remoteServerConfigCtr.isTokenExpiringSoon(TOKEN_REFRESH_BUFFER)) {
           return;
         }
         const expiresAt = this.remoteServerConfigCtr.getTokenExpiresAt();
@@ -713,7 +718,7 @@ export default class AuthCtr extends ControllerModule {
       // Refresh proactively only when the token is actually near expiry. The access
       // token is long-lived; refreshing on every launch just multiplies refresh-token
       // rotations — and the chance of a lost-response logout — for no benefit.
-      if (this.remoteServerConfigCtr.isTokenExpiringSoon()) {
+      if (this.remoteServerConfigCtr.isTokenExpiringSoon(TOKEN_REFRESH_BUFFER)) {
         logger.info('Token is expired or expiring soon, refreshing on startup');
         await this.performProactiveRefresh();
         return;
@@ -779,7 +784,7 @@ export default class AuthCtr extends ControllerModule {
       }
 
       // Refresh only when the token is actually near expiry (see initializeAutoRefresh).
-      if (this.remoteServerConfigCtr.isTokenExpiringSoon()) {
+      if (this.remoteServerConfigCtr.isTokenExpiringSoon(TOKEN_REFRESH_BUFFER)) {
         logger.info('Token is expiring soon on app activation, refreshing token');
         await this.performProactiveRefresh();
       } else {
