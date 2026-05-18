@@ -235,7 +235,7 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
             <span style={{ fontSize: 12, opacity: 0.65 }}>{truncatedLabel}</span>
           </Center>
         )}
-        <Flexbox flex={1} style={{ minHeight: 0, overflow: 'auto' }}>
+        <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
           {isMarkdown && mode === 'render' ? (
             <>
               <SkillFrontmatterPreviewCard metadata={frontmatterMetadata} />
@@ -249,7 +249,7 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
               {content}
             </Highlighter>
           )}
-        </Flexbox>
+        </div>
       </Flexbox>
     );
   },
