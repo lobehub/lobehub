@@ -3880,7 +3880,7 @@ describe('RuntimeExecutors', () => {
             }),
             id: 'tool-call-1',
             identifier: 'lobe-agent-management',
-            type: 'default',
+            type: 'default' as const,
           },
         },
         type: 'call_tool' as const,
