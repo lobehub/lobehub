@@ -172,10 +172,10 @@ class UploadService {
     });
 
     xhr.open('PUT', preSignUrl);
-    xhr.setRequestHeader('Content-Type', file.type);
+    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
     const data = await file.arrayBuffer();
 
-    await new Promise((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       xhr.addEventListener('load', () => {
         if (xhr.status >= 200 && xhr.status < 300) {
           onProgress?.('success', {
@@ -183,18 +183,30 @@ class UploadService {
             restTime: 0,
             speed: file.size / ((Date.now() - startTime) / 1000),
           });
-          resolve(xhr.response);
+          resolve();
         } else {
-          reject(xhr.statusText);
+          const errorMessage = `S3 upload failed with status ${xhr.status}: ${xhr.statusText}`;
+          console.error('[Upload]', errorMessage, xhr.responseText);
+          reject(new Error(errorMessage));
         }
       });
       xhr.addEventListener('error', () => {
-        if (xhr.status === 0) reject(UPLOAD_NETWORK_ERROR);
-        else reject(xhr.statusText);
+        const errorMessage =
+          xhr.status === 0
+            ? 'Network error during upload. Please check your connection.'
+            : `Upload error: ${xhr.statusText}`;
+        console.error('[Upload] XHR Error:', errorMessage, xhr.status);
+        if (xhr.status === 0) reject(new Error(UPLOAD_NETWORK_ERROR));
+        else reject(new Error(errorMessage));
       });
       xhr.addEventListener('abort', () => {
         onProgress?.('cancelled', { progress: 0, restTime: 0, speed: 0 });
         reject(new Error('Upload cancelled by user'));
+      });
+      xhr.addEventListener('timeout', () => {
+        const errorMessage = 'Upload timeout. File is too large or connection is too slow.';
+        console.error('[Upload] Timeout:', errorMessage);
+        reject(new Error(errorMessage));
       });
       xhr.send(data);
     });
@@ -213,15 +225,24 @@ class UploadService {
     // Generate file path metadata
     const { date, dirname, filename, pathname } = generateFilePathMetadata(file.name, options);
 
-    const preSignUrl = await lambdaClient.upload.createS3PreSignedUrl.mutate({ pathname });
+    try {
+      const preSignUrl = await lambdaClient.upload.createS3PreSignedUrl.mutate({
+        contentType: file.type || 'application/octet-stream',
+        fileSize: file.size,
+        pathname,
+      });
 
-    return {
-      date,
-      dirname,
-      filename,
-      path: pathname,
-      preSignUrl,
-    };
+      return {
+        date,
+        dirname,
+        filename,
+        path: pathname,
+        preSignUrl,
+      };
+    } catch (error) {
+      console.error('[Upload] Failed to get signed URL:', error);
+      throw error;
+    }
   };
 }
 

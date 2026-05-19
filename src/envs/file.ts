@@ -46,7 +46,9 @@ export const getFileConfig = () => {
       EMBEDDING_BATCH_SIZE: z.coerce.number().int().positive().default(50),
       EMBEDDING_CONCURRENCY: z.coerce.number().int().positive().default(10),
 
-      // S3
+      // S3 Configuration for File Uploads
+      // All S3_* variables are required for file upload functionality
+      // Supported providers: AWS S3, MinIO, Cloudflare R2
       S3_ACCESS_KEY_ID: z.string().optional(),
       S3_BUCKET: z.string().optional(),
       S3_ENABLE_PATH_STYLE: z.boolean(),

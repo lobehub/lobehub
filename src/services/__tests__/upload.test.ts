@@ -43,9 +43,11 @@ describe('UploadService', () => {
   });
 
   describe('uploadFileToS3', () => {
+    let xhrMock: any;
+
     beforeEach(() => {
       // Mock XMLHttpRequest for server upload
-      const xhrMock = {
+      xhrMock = {
         addEventListener: vi.fn((event, handler) => {
           if (event === 'load') {
             setTimeout(() => handler({ target: { status: 200 } }), 0);
@@ -77,6 +79,33 @@ describe('UploadService', () => {
       });
     });
 
+    it('should send Content-Type header when uploading', async () => {
+      await uploadService.uploadFileToS3(mockFile, {});
+
+      // Verify setRequestHeader was called with Content-Type
+      expect(xhrMock.setRequestHeader).toHaveBeenCalledWith('Content-Type', 'image/png');
+    });
+
+    it('should pass contentType to createS3PreSignedUrl', async () => {
+      await uploadService.uploadFileToS3(mockFile, {});
+
+      expect(vi.mocked(lambdaClient.upload.createS3PreSignedUrl.mutate)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          contentType: 'image/png',
+        }),
+      );
+    });
+
+    it('should pass fileSize to createS3PreSignedUrl', async () => {
+      await uploadService.uploadFileToS3(mockFile, {});
+
+      expect(vi.mocked(lambdaClient.upload.createS3PreSignedUrl.mutate)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fileSize: mockFile.size,
+        }),
+      );
+    });
+
     it('should use custom pathname when provided', async () => {
       const customPath = 'custom/path/file.png';
       const result = await uploadService.uploadFileToS3(mockFile, {
@@ -94,6 +123,38 @@ describe('UploadService', () => {
 
       expect(result.success).toBe(true);
       expect(result.data.dirname).toContain('custom/dir');
+    });
+
+    it('should handle upload errors with detailed message', async () => {
+      xhrMock.addEventListener = vi.fn((event, handler) => {
+        if (event === 'load') {
+          xhrMock.status = 403;
+          xhrMock.statusText = 'Forbidden';
+          xhrMock.responseText = 'Access Denied';
+          setTimeout(() => handler({ target: { status: 403 } }), 0);
+        }
+      });
+
+      await expect(
+        uploadService.uploadFileToS3(mockFile, {
+          onProgress: vi.fn(),
+        }),
+      ).rejects.toThrow('S3 upload failed with status 403');
+    });
+
+    it('should handle network errors', async () => {
+      xhrMock.addEventListener = vi.fn((event, handler) => {
+        if (event === 'error') {
+          xhrMock.status = 0;
+          setTimeout(() => handler(), 0);
+        }
+      });
+
+      await expect(
+        uploadService.uploadFileToS3(mockFile, {
+          onProgress: vi.fn(),
+        }),
+      ).rejects.toThrow(UPLOAD_NETWORK_ERROR);
     });
   });
 

@@ -728,6 +728,13 @@
       "when": 1778910974184,
       "tag": "0103_legacy_auth_schema_repair",
       "breakpoints": true
+    },
+    {
+      "idx": 104,
+      "version": "7",
+      "when": 1779201960853,
+      "tag": "0104_normal_mercury",
+      "breakpoints": true
     }
   ],
   "version": "6"

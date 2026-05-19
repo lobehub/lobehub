@@ -9,6 +9,8 @@ import {
 import DesktopOnboarding from '@/routes/(desktop)/desktop-onboarding';
 // Layouts — sync import (Electron local, no network overhead)
 import DesktopMainLayout from '@/routes/(main)/_layout';
+import AudioPage from '@/routes/(main)/(create)/audio';
+import DesktopAudioLayout from '@/routes/(main)/(create)/audio/_layout';
 import ImagePage from '@/routes/(main)/(create)/image';
 import DesktopImageLayout from '@/routes/(main)/(create)/image/_layout';
 import VideoPage from '@/routes/(main)/(create)/video';
@@ -420,6 +422,19 @@ export const desktopRoutes: RouteObject[] = [
         element: <DesktopImageLayout />,
         errorElement: <ErrorBoundary />,
         path: 'image',
+      },
+
+      // Audio routes
+      {
+        children: [
+          {
+            element: <AudioPage />,
+            index: true,
+          },
+        ],
+        element: <DesktopAudioLayout />,
+        errorElement: <ErrorBoundary />,
+        path: 'audio',
       },
 
       ...BusinessDesktopRoutesWithMainLayout,

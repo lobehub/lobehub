@@ -9,6 +9,7 @@ import { taskTemplateRouter } from '@/business/server/lambda-routers/taskTemplat
 import { topUpRouter } from '@/business/server/lambda-routers/topUp';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 
+import { audioRouter } from './audio';
 import { agentRouter } from './agent';
 import { adminRouter } from './admin';
 import { agentBotProviderRouter } from './agentBotProvider';
@@ -86,6 +87,7 @@ export const lambdaRouter = router({
   aiModel: aiModelRouter,
   aiProvider: aiProviderRouter,
   apiKey: apiKeyRouter,
+  audio: audioRouter,
   chunk: chunkRouter,
   comfyui: comfyuiRouter,
   config: configRouter,

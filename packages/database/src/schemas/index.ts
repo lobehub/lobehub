@@ -8,6 +8,7 @@ export * from './agentSkill';
 export * from './aiInfra';
 export * from './apiKey';
 export * from './asyncTask';
+export * from './audio';
 export * from './betterAuth';
 export * from './chatGroup';
 export * from './documentHistory';

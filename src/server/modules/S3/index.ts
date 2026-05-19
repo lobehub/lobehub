@@ -132,10 +132,11 @@ export class S3 {
     };
   }
 
-  public async createPreSignedUrl(key: string): Promise<string> {
+  public async createPreSignedUrl(key: string, contentType?: string): Promise<string> {
     const command = new PutObjectCommand({
       ACL: this.setAcl ? 'public-read' : undefined,
       Bucket: this.bucket,
+      ContentType: contentType || 'application/octet-stream',
       Key: key,
     });
 

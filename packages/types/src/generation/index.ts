@@ -45,15 +45,40 @@ export interface VideoGenerationAsset extends BaseGenerationAsset {
   width?: number;
 }
 
-export type GenerationAsset = ImageGenerationAsset | VideoGenerationAsset;
+export interface AudioGenerationAsset extends BaseGenerationAsset {
+  /**
+   * Duration of the audio in seconds
+   */
+  duration?: number;
+  /**
+   * CDN URL from the API provider, typically expires quickly
+   */
+  originalUrl?: string;
+  /**
+   * URL stored in own OSS
+   */
+  url?: string;
+}
+
+export type GenerationAsset = ImageGenerationAsset | VideoGenerationAsset | AudioGenerationAsset;
+
+export interface AudioGenerationTopic {
+  coverUrl?: string | null;
+  createdAt: Date;
+  id: string;
+  title?: string | null;
+  updatedAt: Date;
+}
 
 export interface GenerationConfig {
   aspectRatio?: string;
   cfg?: number;
+  duration?: number; // For audio: 15-120 seconds
   endImageUrl?: string | null;
   height?: number;
   imageUrl?: string | null;
   imageUrls?: string[];
+  musicStyle?: string; // For audio: pop|rock|jazz|lo-fi|classical|ambient|hip-hop
   prompt: string;
   resolution?: string;
   size?: string;

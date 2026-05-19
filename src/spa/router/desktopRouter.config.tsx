@@ -514,6 +514,25 @@ export const desktopRoutes: RouteObject[] = [
         path: 'image',
       },
 
+      // Audio routes
+      {
+        children: [
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/(create)/audio'),
+              'Desktop > Audio',
+            ),
+            index: true,
+          },
+        ],
+        element: dynamicLayout(
+          () => import('@/routes/(main)/(create)/audio/_layout'),
+          'Desktop > Audio > Layout',
+        ),
+        errorElement: <ErrorBoundary />,
+        path: 'audio',
+      },
+
       ...BusinessDesktopRoutesWithMainLayout,
 
       // Eval routes
