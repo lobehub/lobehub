@@ -1,0 +1,201 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                   CHINNAHUB DEPLOYMENT - QUICK REFERENCE                  ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+🎯 TARGET: root@187.127.156.186
+📦 VERSION: agents/code-audit-white-label-optimization
+🔧 LATEST FIX: Audio component lucide-react replacement
+
+═══════════════════════════════════════════════════════════════════════════════
+
+SINGLE COMMAND DEPLOYMENT
+─────────────────────────────────────────────────────────────────────────────
+
+Copy and paste this entire section into your terminal:
+
+ssh root@187.127.156.186 << 'DEPLOY'
+cd /home/chinnahub && \
+git pull origin agents/code-audit-white-label-optimization && \
+docker build -t chinnahub-app:latest . && \
+docker compose up -d --force-recreate app && \
+echo "Waiting for startup..." && \
+sleep 15 && \
+docker ps | grep chinnahub && \
+echo "Checking logs..." && \
+docker compose logs --tail=50 app
+DEPLOY
+
+═══════════════════════════════════════════════════════════════════════════════
+
+STEP-BY-STEP DEPLOYMENT (if you prefer manual steps)
+─────────────────────────────────────────────────────────────────────────────
+
+1. SSH to VPS:
+   ssh root@187.127.156.186
+
+2. Navigate to deployment directory:
+   cd /home/chinnahub
+
+3. Pull latest code:
+   git pull origin agents/code-audit-white-label-optimization
+
+4. Build Docker image (this takes 5-10 minutes):
+   docker build -t chinnahub-app:latest .
+
+5. Restart containers:
+   docker compose up -d --force-recreate app
+
+6. Wait 10-15 seconds, then verify:
+   docker ps | grep chinnahub
+
+7. Monitor logs (press Ctrl+C to exit):
+   docker compose logs -f app
+
+═══════════════════════════════════════════════════════════════════════════════
+
+VERIFICATION COMMANDS
+─────────────────────────────────────────────────────────────────────────────
+
+# Check if container is running
+docker ps | grep chinnahub
+
+# Check if port 3210 is listening
+netstat -tulpn | grep 3210
+
+# Test API response
+curl -I http://localhost:3210
+
+# View detailed logs
+docker compose logs -f app
+
+# Check disk space (if build fails)
+df -h
+
+═══════════════════════════════════════════════════════════════════════════════
+
+EXPECTED SUCCESS INDICATORS
+─────────────────────────────────────────────────────────────────────────────
+
+When you see these messages, deployment is successful:
+
+✓ "Server listening on port 3210"
+✓ Container status: "Up X minutes"
+✓ curl returns 200 OK
+✓ No error messages in logs
+
+═══════════════════════════════════════════════════════════════════════════════
+
+WHAT'S INCLUDED IN THIS DEPLOYMENT
+─────────────────────────────────────────────────────────────────────────────
+
+✅ Audio Generation Fixes
+   • Replaced react-icons with lucide-react in audio components
+   • Suno AI integration verified and stable
+   • Audio streaming optimized
+
+✅ File Upload Improvements
+   • S3 configuration validated
+   • Upload path handling optimized
+   • File processing pipeline enhanced
+
+✅ Infrastructure Updates
+   • Docker build optimized for production
+   • Multi-stage build reduces image size
+   • Security hardened configuration
+
+═══════════════════════════════════════════════════════════════════════════════
+
+TROUBLESHOOTING
+─────────────────────────────────────────────────────────────────────────────
+
+❌ Docker build fails
+   → Ensure 10GB+ free disk space: df -h
+   → Check network connectivity: ping 8.8.8.8
+   → Check Docker version: docker --version
+
+❌ Container won't start
+   → Check logs: docker compose logs app
+   → Verify environment variables: cat .env
+   → Check DATABASE_URL is set correctly
+
+❌ Application not responding
+   → Wait 2-3 minutes for full initialization
+   → Check port is open: netstat -tulpn | grep 3210
+   → Verify network connectivity: curl http://localhost:3210
+
+❌ Audio generation fails
+   → Verify SUNO_API_KEY is set: docker exec <id> env | grep SUNO
+   → Check Suno API credentials are valid
+   → Check network connectivity to Suno API
+
+❌ File uploads fail
+   → Verify S3_* env vars: docker exec <id> env | grep S3
+   → Check S3 bucket permissions
+   → Verify available storage: df -h
+
+═══════════════════════════════════════════════════════════════════════════════
+
+POST-DEPLOYMENT VERIFICATION
+─────────────────────────────────────────────────────────────────────────────
+
+Run these after successful deployment:
+
+# 1. Verify container status
+docker ps | grep chinnahub
+
+# 2. Test API health endpoint
+curl -s http://localhost:3210/api/health | head
+
+# 3. Check for errors in logs
+docker compose logs app | grep -i error | tail -5
+
+# 4. Verify database connection
+docker exec $(docker ps -q -f name=chinnahub) \
+  psql -U postgres -d postgres -c "SELECT 1" 2>/dev/null && \
+  echo "✓ Database connected" || echo "✗ Database error"
+
+═══════════════════════════════════════════════════════════════════════════════
+
+ENVIRONMENT VARIABLES TO VERIFY BEFORE DEPLOYMENT
+─────────────────────────────────────────────────────────────────────────────
+
+Check these are set in your .env file on the VPS:
+
+DATABASE_URL=postgresql://user:pass@host:5432/dbname
+S3_ENDPOINT=https://s3.example.com
+S3_ACCESS_KEY_ID=your_key_id
+S3_SECRET_ACCESS_KEY=your_secret_key
+SUNO_API_KEY=your_suno_key
+AUTH_SECRET=your_auth_secret
+APP_URL=https://your-domain.com
+
+If any are missing, deployment will fail or features won't work!
+
+═══════════════════════════════════════════════════════════════════════════════
+
+DEPLOYMENT STATUS TRACKING
+─────────────────────────────────────────────────────────────────────────────
+
+After successful deployment, update the todo status:
+
+UPDATE todos SET status = 'done' WHERE id = 'deploy-vps';
+
+═══════════════════════════════════════════════════════════════════════════════
+
+⏱️ TIMELINE
+─────────────────────────────────────────────────────────────────────────────
+
+Git pull:               1-2 minutes
+Docker build:           5-10 minutes (first time slower)
+Container startup:      30-60 seconds
+App initialization:     1-2 minutes
+─────────────────────────
+TOTAL:                  8-15 minutes
+
+═══════════════════════════════════════════════════════════════════════════════
+
+For more detailed information, see:
+- DEPLOYMENT_SUMMARY.txt
+- DEPLOYMENT_INSTRUCTIONS.md
+- DEPLOYMENT_CHECKLIST.md
+
