@@ -155,9 +155,7 @@ export class HeterogeneousAgentService {
 
     // Clear runningOperation from topic metadata so reconnect doesn't retrigger
     // after completion — mirrors the same cleanup done in RuntimeExecutors for
-    // the normal LLM path.  Also read completionWebhook here so a second
-    // heteroFinish call (signal + normal exit replay) finds it already gone and
-    // skips delivery, preventing duplicate IM replies.
+    // the normal LLM path.
     let completionWebhook: AgentHookWebhook | undefined;
     try {
       const topic = await this.topicModel.findById(topicId);
@@ -171,14 +169,21 @@ export class HeterogeneousAgentService {
     // The hetero path bypasses the normal AgentHook registration flow, so
     // we persist the webhook config in topic.metadata.runningOperation and
     // deliver it here instead.
-    if (completionWebhook?.url) {
+    //
+    // Skip on `cancelled` — heteroFinish may be called twice when the CLI
+    // receives a termination signal (cancelled) followed by normal exit
+    // (success/error). Delivering on cancelled would send a truncated reply;
+    // the subsequent success/error call will deliver the real content instead.
+    // Transport-level retries of the same result are accepted: BotCallbackService
+    // reads the latest DB content each time, so duplicates are idempotent.
+    if (completionWebhook?.url && result !== 'cancelled') {
       try {
         await deliverWebhook(completionWebhook, {
           hookId: 'bot-completion',
           hookType: 'onComplete',
           ...completionWebhook.body,
         });
-        log('heteroFinish: completionWebhook delivered for op=%s', operationId);
+        log('heteroFinish: completionWebhook delivered for op=%s result=%s', operationId, result);
       } catch (err) {
         log('heteroFinish: completionWebhook delivery failed (non-fatal): %O', err);
       }
