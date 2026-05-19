@@ -3365,6 +3365,37 @@ describe('RuntimeExecutors', () => {
       );
     });
 
+    it('should disable llm execution retry for the branding provider', async () => {
+      const mockChat = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('network timeout'))
+        .mockResolvedValueOnce(new Response('done'));
+
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({ chat: mockChat } as any);
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+      const instruction = {
+        payload: {
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'gpt-4',
+          parentMessageId: 'parent-msg-123',
+          provider: 'lobehub',
+          tools: [],
+        },
+        type: 'call_llm' as const,
+      };
+
+      await expect(executors.call_llm!(instruction, state)).rejects.toThrow('network timeout');
+
+      expect(mockChat).toHaveBeenCalledTimes(1);
+      expect(
+        mockStreamManager.publishStreamEvent.mock.calls.some(
+          ([, event]: [string, { type: string }]) => event.type === 'stream_retry',
+        ),
+      ).toBe(false);
+    });
+
     it('should retry llm execution, emit stream_retry, and commit only the successful attempt', async () => {
       vi.useFakeTimers();
 

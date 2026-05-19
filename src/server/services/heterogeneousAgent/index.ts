@@ -7,6 +7,8 @@ import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
 import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
+import { deliverWebhook } from '@/server/services/agentRuntime/hooks/HookDispatcher';
+import type { AgentHookWebhook } from '@/server/services/agentRuntime/hooks/types';
 
 import { HeterogeneousPersistenceHandler } from './HeterogeneousPersistenceHandler';
 
@@ -59,6 +61,7 @@ export interface HeterogeneousAgentServiceOptions {
  */
 export class HeterogeneousAgentService {
   private readonly db: LobeChatDatabase;
+  private readonly messageModel: MessageModel;
   private readonly persistenceHandler: HeterogeneousPersistenceHandler;
   private readonly streamEventManager: IStreamEventManager;
   private readonly topicModel: TopicModel;
@@ -71,12 +74,13 @@ export class HeterogeneousAgentService {
   ) {
     this.db = db;
     this.userId = userId;
+    this.messageModel = new MessageModel(db, userId);
     this.streamEventManager = options.streamEventManager ?? createStreamEventManager();
     this.topicModel = options.topicModel ?? new TopicModel(db, userId);
     this.persistenceHandler =
       options.persistenceHandler ??
       new HeterogeneousPersistenceHandler({
-        messageModel: new MessageModel(db, userId),
+        messageModel: this.messageModel,
         threadModel: new ThreadModel(db, userId),
         topicModel: this.topicModel,
       });
@@ -150,6 +154,65 @@ export class HeterogeneousAgentService {
       stepIndex: 0,
       type: 'agent_runtime_end',
     });
+
+    // Fire the IM bot-callback completion webhook if one was registered.
+    // The hetero path bypasses the normal AgentHook registration flow, so
+    // we persist the webhook config in topic.metadata.runningOperation and
+    // deliver it here instead.
+    //
+    // Skip on `cancelled` — heteroFinish may be called twice: first with
+    // result=cancelled (termination signal) then with result=success/error
+    // (normal process exit). We must NOT clear runningOperation on cancelled
+    // so the subsequent success/error call can still find completionWebhook
+    // and assistantMessageId. runningOperation is only cleared on the
+    // delivering call (success/error) so reconnect doesn't retrigger after
+    // completion — mirrors RuntimeExecutors cleanup for the normal LLM path.
+    // Transport-level retries of the same result are accepted: BotCallbackService
+    // reads the latest DB content each time, so duplicates are idempotent.
+    if (result === 'cancelled') return;
+
+    let completionWebhook: AgentHookWebhook | undefined;
+    let assistantMessageId: string | undefined;
+    try {
+      const topic = await this.topicModel.findById(topicId);
+      completionWebhook = topic?.metadata?.runningOperation?.completionWebhook;
+      assistantMessageId = topic?.metadata?.runningOperation?.assistantMessageId;
+      await this.topicModel.updateMetadata(topicId, { runningOperation: null });
+    } catch (err) {
+      log('heteroFinish: failed to clear runningOperation (non-fatal): %O', err);
+    }
+
+    if (completionWebhook?.url) {
+      try {
+        // Read the final assistant message content so BotCallbackService.handleCompletion
+        // has lastAssistantContent to render.  Without it the handler skips delivery.
+        let lastAssistantContent: string | undefined;
+        if (assistantMessageId) {
+          const msg = await this.messageModel.findById(assistantMessageId);
+          lastAssistantContent = msg?.content as string | undefined;
+        }
+
+        // Map hetero result → reason expected by handleCompletion
+        const reason = result === 'success' ? 'done' : 'error';
+
+        await deliverWebhook(completionWebhook, {
+          // Dynamic completion fields (event-like payload)
+          ...(error ? { errorMessage: error.message, errorType: error.type } : {}),
+          hookId: 'bot-completion',
+          hookType: 'onComplete',
+          lastAssistantContent,
+          operationId,
+          reason,
+          // Static IM context stored at hook registration time — spread last so
+          // platform fields (applicationId, platformThreadId, type, userPrompt)
+          // are authoritative, matching HookDispatcher's { ...event, ...body } order.
+          ...completionWebhook.body,
+        });
+        log('heteroFinish: completionWebhook delivered for op=%s result=%s', operationId, result);
+      } catch (err) {
+        log('heteroFinish: completionWebhook delivery failed (non-fatal): %O', err);
+      }
+    }
   }
 
   /**

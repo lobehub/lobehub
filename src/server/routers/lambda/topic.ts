@@ -625,6 +625,13 @@ export const topicRouter = router({
           runningOperation: z
             .object({
               assistantMessageId: z.string(),
+              completionWebhook: z
+                .object({
+                  body: z.record(z.unknown()).optional(),
+                  delivery: z.enum(['fetch', 'qstash']).optional(),
+                  url: z.string(),
+                })
+                .optional(),
               operationId: z.string(),
               scope: z.string().optional(),
               threadId: z.string().nullable().optional(),
