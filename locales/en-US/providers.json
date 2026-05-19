@@ -50,6 +50,7 @@
   "opencodecodingplan.description": "OpenCode Go is a $10/month subscription providing reliable access to curated open coding models: GLM, Kimi, MiMo, Qwen, MiniMax.",
   "opencodezen.description": "OpenCode Zen provides access to curated models from OpenAI, Anthropic, Moonshot, MiniMax, Zhipu, Qwen, and more via a single API key.",
   "openrouter.description": "OpenRouter provides access to many frontier models from OpenAI, Anthropic, LLaMA, and more, letting users pick the best model and price for their use case.",
+  "orcarouter.description": "OrcaRouter is an adaptive LLM routing gateway that uses a LinUCB contextual bandit over cost, latency, and quality signals to pick the best upstream per request — one API key, 150+ frontier models from OpenAI, Anthropic, Google, DeepSeek, xAI, and more.",
   "perplexity.description": "Perplexity provides advanced chat models, including Llama 3.1 variants, for online and offline use and complex NLP workloads.",
   "ppio.description": "PPIO provides reliable, cost-effective open-model APIs, including DeepSeek, Llama, Qwen, and other leading models.",
   "qiniu.description": "Qiniu provides reliable, cost-effective real-time and batch AI inference services that are easy to use.",

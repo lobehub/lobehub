@@ -50,6 +50,7 @@ export enum ModelProvider {
   OpenCodeCodingPlan = 'opencodecodingplan',
   OpenCodeZen = 'opencodezen',
   OpenRouter = 'openrouter',
+  OrcaRouter = 'orcarouter',
   Perplexity = 'perplexity',
   PPIO = 'ppio',
   Qiniu = 'qiniu',

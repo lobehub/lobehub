@@ -52,6 +52,7 @@ import { default as openai } from './openai';
 import { default as opencodecodingplan } from './opencodeCodingPlan';
 import { default as opencodezen } from './opencodeZen';
 import { default as openrouter } from './openrouter';
+import { default as orcarouter } from './orcarouter';
 import { default as perplexity } from './perplexity';
 import { default as ppio } from './ppio';
 import { default as qiniu } from './qiniu';
@@ -154,6 +155,7 @@ export const LOBE_DEFAULT_MODEL_LIST = buildDefaultModelList({
   opencodecodingplan,
   opencodezen,
   openrouter,
+  orcarouter,
   perplexity,
   ppio,
   qiniu,
@@ -237,6 +239,7 @@ export { default as openai, openaiChatModels } from './openai';
 export { default as opencodecodingplan } from './opencodeCodingPlan';
 export { default as opencodezen } from './opencodeZen';
 export { default as openrouter } from './openrouter';
+export { default as orcarouter } from './orcarouter';
 export { default as perplexity } from './perplexity';
 export { default as ppio } from './ppio';
 export { default as qiniu } from './qiniu';
