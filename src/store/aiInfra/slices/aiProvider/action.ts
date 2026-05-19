@@ -471,7 +471,7 @@ export class AiProviderActionImpl {
       shouldFetch ? [AiProviderSwrKey.fetchAiProviderRuntimeState, isLogin] : null,
       async ([, isLogin]) => {
         const [{ loadModels }, { DEFAULT_MODEL_PROVIDER_LIST }] = await Promise.all([
-          import('@/business/model-bank/loadModels'),
+          import('@/business/client/model-bank/loadModels'),
           import('model-bank/modelProviders'),
         ]);
         const builtinAiModelList = await loadModels();

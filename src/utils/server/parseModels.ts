@@ -143,7 +143,7 @@ export const transformToAiModelList = async ({
   }
 
   // Asynchronously load configuration
-  const { loadModels } = await import('@/business/model-bank/loadModels');
+  const { loadModels } = await import('@/business/client/model-bank/loadModels');
   const builtinModels = await loadModels();
 
   return produce(chatModels, (draft) => {

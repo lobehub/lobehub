@@ -874,7 +874,7 @@ export class AiAgentService {
     let agentPlugins: string[] = [...(agentConfig?.plugins ?? []), ...(additionalPluginIds || [])];
 
     // Model metadata is needed both for tool support checks and agent-management context.
-    const { loadModels } = await import('@/business/model-bank/loadModels');
+    const { loadModels } = await import('@/business/client/model-bank/loadModels');
     const builtinModels = await loadModels();
     // Resolve S3 keys in imageList/videoList before visual tool activation checks and context build.
     const fileService = new FileService(this.db, this.userId);

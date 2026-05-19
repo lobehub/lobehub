@@ -396,7 +396,7 @@ export const createRuntimeExecutors = (
       const agentConfig = ctx.agentConfig;
       let processedMessages;
       if (agentConfig) {
-        const { loadModels } = await import('@/business/model-bank/loadModels');
+        const { loadModels } = await import('@/business/client/model-bank/loadModels');
         const builtinModels = await loadModels();
 
         // Extract <refer_topic> tags from messages and fetch summaries.

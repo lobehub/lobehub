@@ -76,7 +76,7 @@ import { MarketService } from '@/server/services/market';
 const log = debug('lobe-server:discover');
 
 const loadBuiltinModels = async () => {
-  const { loadModels } = await import('@/business/model-bank/loadModels');
+  const { loadModels } = await import('@/business/client/model-bank/loadModels');
   return loadModels();
 };
 

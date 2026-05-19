@@ -212,7 +212,7 @@ describe('genServerAiProvidersConfig Error Handling', () => {
       ],
     }));
 
-    vi.doMock('@/business/model-bank/loadModels', () => ({
+    vi.doMock('@/business/client/model-bank/loadModels', () => ({
       loadModels: vi.fn(async () => [
         {
           abilities: {},
