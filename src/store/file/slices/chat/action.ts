@@ -1,5 +1,6 @@
 import { type ChatContextContent } from '@lobechat/types';
 import { COMPRESSIBLE_IMAGE_TYPES, compressImageFile } from '@lobechat/utils/compressImage';
+import { toast } from '@lobehub/ui/base-ui';
 import { Buffer } from 'buffer.js';
 import { t } from 'i18next';
 
@@ -18,6 +19,7 @@ import { sleep } from '@/utils/sleep';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type FileStore } from '../../store';
+import { filterSupportedChatUploadFiles } from './uploadGuard';
 
 const n = setNamespace('chat');
 
@@ -111,9 +113,22 @@ export class FileActionImpl {
     const { dispatchChatUploadFileList } = this.#get();
     // 0. skip file in blacklist
     const filteredFiles = rawFiles.filter((file) => !FILE_UPLOAD_BLACKLIST.includes(file.name));
+    const { supportedFiles, unsupportedFiles } = filterSupportedChatUploadFiles(filteredFiles);
+
+    if (unsupportedFiles.length > 0) {
+      toast.error(
+        t('upload.validation.unsupportedFileType', {
+          files: unsupportedFiles.map((file) => file.name).join(', '),
+          ns: 'chat',
+        }),
+      );
+    }
+
+    if (supportedFiles.length === 0) return;
+
     // 1. compress images and add files with base64
     const files = await Promise.all(
-      filteredFiles.map((file) =>
+      supportedFiles.map((file) =>
         COMPRESSIBLE_IMAGE_TYPES.has(file.type) ? compressImageFile(file) : file,
       ),
     );

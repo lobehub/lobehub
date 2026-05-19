@@ -1,7 +1,8 @@
 import { type LobeChatDatabase } from '@lobechat/database';
 import { type DocumentItem } from '@lobechat/database/schemas';
 import { documents, files } from '@lobechat/database/schemas';
-import { loadFile } from '@lobechat/file-loaders';
+import { loadFile, UnsupportedFileTypeError } from '@lobechat/file-loaders';
+import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
 import isEqual from 'fast-deep-equal';
@@ -28,6 +29,18 @@ import type {
 } from './types';
 
 const log = debug('lobe-chat:service:document');
+
+const normalizeParseFileError = (error: unknown) => {
+  if (error instanceof UnsupportedFileTypeError) {
+    return new TRPCError({
+      cause: error,
+      code: 'BAD_REQUEST',
+      message: error.message,
+    });
+  }
+
+  return error;
+};
 
 export class DocumentService {
   userId: string;
@@ -433,8 +446,9 @@ export class DocumentService {
 
       return document as LobeDocument;
     } catch (error) {
-      console.error(`${logPrefix} File parsing failed:`, error);
-      throw error;
+      const parseError = normalizeParseFileError(error);
+      console.error(`${logPrefix} File parsing failed:`, parseError);
+      throw parseError;
     } finally {
       cleanup();
     }
@@ -486,8 +500,9 @@ export class DocumentService {
 
       return document as LobeDocument;
     } catch (error) {
-      console.error(`${logPrefix} File parsing failed:`, error);
-      throw error;
+      const parseError = normalizeParseFileError(error);
+      console.error(`${logPrefix} File parsing failed:`, parseError);
+      throw parseError;
     } finally {
       cleanup();
     }

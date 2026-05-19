@@ -846,6 +846,8 @@ export default {
   'upload.preview.prepareTasks': 'Preparing chunks...',
   'upload.preview.status.pending': 'Preparing to upload...',
   'upload.preview.status.processing': 'Processing file...',
+  'upload.validation.unsupportedFileType':
+    'Unsupported file type: {{files}}. Supported images: JPG, PNG, GIF, WebP. Supported documents include PDF, Word, Excel, PowerPoint, Markdown, text, CSV, JSON, and code files.',
   'upload.validation.videoSizeExceeded':
     'Video file size must not exceed 20MB. Current file size is {{actualSize}}.',
   'viewMode.fullWidth': 'Full Width',
