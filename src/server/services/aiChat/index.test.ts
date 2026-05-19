@@ -1,5 +1,4 @@
 import type { LobeChatDatabase } from '@lobechat/database';
-import type { UIChatMessage } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
 import { MessageModel } from '@/database/models/message';
@@ -88,46 +87,6 @@ describe('AiChatService', () => {
       expect.not.objectContaining({ topicPageSize: 20 }),
       expect.objectContaining({ postProcessUrl: expect.any(Function) }),
     );
-  });
-
-  it('getMessagesAndTopics should use prefetched messages without querying messageModel', async () => {
-    const serverDB = {} as unknown as LobeChatDatabase;
-
-    const mockQueryMessages = vi.fn().mockResolvedValue([{ id: 'm-from-query' }]);
-    const mockQueryTopics = vi.fn().mockResolvedValue({ items: [{ id: 't1' }], total: 1 });
-    const prefetchedMessages = [
-      {
-        content: 'hi',
-        createdAt: 1,
-        id: 'm1',
-        role: 'user',
-        updatedAt: 1,
-      },
-    ] as UIChatMessage[];
-
-    vi.mocked(MessageModel).mockImplementation(() => ({ query: mockQueryMessages }) as any);
-    vi.mocked(TopicModel).mockImplementation(() => ({ query: mockQueryTopics }) as any);
-    vi.mocked(FileService).mockImplementation(
-      () => ({ getFullFileUrl: vi.fn().mockResolvedValue('url') }) as any,
-    );
-
-    const service = new AiChatService(serverDB, 'u1');
-
-    const res = await service.getMessagesAndTopics({
-      agentId: 'agent-1',
-      includeTopic: true,
-      prefetchedMessages,
-      topicPageSize: 20,
-    });
-
-    expect(mockQueryMessages).not.toHaveBeenCalled();
-    expect(mockQueryTopics).toHaveBeenCalledWith({
-      agentId: 'agent-1',
-      groupId: undefined,
-      pageSize: 20,
-    });
-    expect(res.messages).toBe(prefetchedMessages);
-    expect(res.topics).toEqual({ items: [{ id: 't1' }], total: 1 });
   });
 
   it('getMessagesAndTopics should not query topics when includeTopic is false', async () => {

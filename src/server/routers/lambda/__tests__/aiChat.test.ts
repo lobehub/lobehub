@@ -1,5 +1,5 @@
 // @vitest-environment node
-import type { CreateMessageParams, DBMessageItem, UIChatMessage } from '@lobechat/types';
+import type { CreateMessageParams } from '@lobechat/types';
 import { ThreadType } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -12,35 +12,6 @@ import { AiChatService } from '@/server/services/aiChat';
 import { aiChatRouter } from '../aiChat';
 
 const flushAsyncTasks = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
-const createMockDbMessage = (
-  params: CreateMessageParams & { id: string },
-): DBMessageItem & Pick<UIChatMessage, 'editorData' | 'groupId'> => ({
-  agentId: params.agentId ?? null,
-  clientId: null,
-  content: params.content ?? '',
-  createdAt: new Date('2025-01-01T00:00:00.000Z'),
-  editorData: params.editorData,
-  error: null,
-  favorite: false,
-  groupId: params.groupId ?? undefined,
-  id: params.id,
-  metadata: params.metadata ?? null,
-  model: params.model ?? null,
-  observationId: null,
-  parentId: params.parentId ?? null,
-  provider: params.provider ?? null,
-  quotaId: null,
-  reasoning: null,
-  role: params.role,
-  search: null,
-  sessionId: params.sessionId ?? null,
-  threadId: params.threadId ?? null,
-  tools: params.tools ?? null,
-  topicId: params.topicId ?? null,
-  traceId: null,
-  updatedAt: new Date('2025-01-01T00:00:01.000Z'),
-  userId: 'u1',
-});
 
 vi.mock('@/database/models/agent');
 vi.mock('@/database/models/message');
@@ -158,7 +129,6 @@ describe('aiChatRouter', () => {
         topicPageSize: 20,
       }),
     );
-    expect(mockGet.mock.calls[0]?.[0]).not.toHaveProperty('prefetchedMessages');
     expect(res.assistantMessageId).toBe('m-assistant');
     expect(res.userMessageId).toBe('m-user');
     expect(res.isCreateNewTopic).toBe(true);
@@ -166,123 +136,6 @@ describe('aiChatRouter', () => {
     expect(res.messages?.length).toBe(2);
     expect(res.topics?.items.length).toBe(1);
     expect(res.topics?.total).toBe(1);
-  });
-
-  it('should reuse inserted messages when creating a relation-free text topic', async () => {
-    const mockCreateTopic = vi.fn().mockResolvedValue({ id: 't1' });
-    const mockCreateMessage = vi
-      .fn()
-      .mockImplementationOnce(async (params: CreateMessageParams) =>
-        createMockDbMessage({ ...params, id: 'm-user' }),
-      )
-      .mockImplementationOnce(async (params: CreateMessageParams) =>
-        createMockDbMessage({ ...params, id: 'm-assistant' }),
-      );
-    const mockGet = vi
-      .fn()
-      .mockResolvedValue({ messages: [{ id: 'm-user' }, { id: 'm-assistant' }] });
-
-    vi.mocked(TopicModel).mockImplementation(() => ({ create: mockCreateTopic }) as any);
-    mockMessageModel(mockCreateMessage);
-    vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
-
-    const caller = aiChatRouter.createCaller(mockCtx as any);
-
-    const res = await caller.sendMessageInServer({
-      newAssistantMessage: { model: 'gpt-4o', provider: 'openai' },
-      newTopic: { title: 'T' },
-      newUserMessage: { content: 'hi' },
-      sessionId: 's1',
-      topicPageSize: 20,
-    } as any);
-
-    const callParams = mockGet.mock.calls[0]?.[0];
-
-    expect(callParams).toEqual(
-      expect.objectContaining({
-        includeTopic: false,
-        sessionId: 's1',
-        topicId: 't1',
-        topicPageSize: 20,
-      }),
-    );
-    expect(callParams.prefetchedMessages).toMatchObject([
-      {
-        chunksList: [],
-        content: 'hi',
-        fileList: [],
-        id: 'm-user',
-        imageList: [],
-        role: 'user',
-        topicId: 't1',
-        videoList: [],
-      },
-      {
-        chunksList: [],
-        fileList: [],
-        id: 'm-assistant',
-        imageList: [],
-        model: 'gpt-4o',
-        parentId: 'm-user',
-        provider: 'openai',
-        role: 'assistant',
-        topicId: 't1',
-        videoList: [],
-      },
-    ]);
-    expect(callParams.prefetchedMessages[0].createdAt).toEqual(expect.any(Number));
-    expect(callParams.prefetchedMessages[1].updatedAt).toEqual(expect.any(Number));
-    expect(res.messages).toHaveLength(2);
-    expect(res.topics).toBeUndefined();
-  });
-
-  it('should query topics when the new topic carries metadata', async () => {
-    const topicMetadata = { workingDirectory: '/repo' };
-    const mockCreateTopic = vi.fn().mockResolvedValue({ id: 't1' });
-    const mockCreateMessage = vi
-      .fn()
-      .mockImplementationOnce(async (params: CreateMessageParams) =>
-        createMockDbMessage({ ...params, id: 'm-user' }),
-      )
-      .mockImplementationOnce(async (params: CreateMessageParams) =>
-        createMockDbMessage({ ...params, id: 'm-assistant' }),
-      );
-    const mockGet = vi.fn().mockResolvedValue({
-      messages: [{ id: 'm-user' }, { id: 'm-assistant' }],
-      topics: { items: [{ id: 't1', metadata: topicMetadata }], total: 1 },
-    });
-
-    vi.mocked(TopicModel).mockImplementation(() => ({ create: mockCreateTopic }) as any);
-    mockMessageModel(mockCreateMessage);
-    vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
-
-    const caller = aiChatRouter.createCaller(mockCtx as any);
-
-    const res = await caller.sendMessageInServer({
-      newAssistantMessage: { model: 'gpt-4o', provider: 'openai' },
-      newTopic: { metadata: topicMetadata, title: 'T' },
-      newUserMessage: { content: 'hi' },
-      sessionId: 's1',
-      topicPageSize: 20,
-    } as any);
-
-    expect(mockCreateTopic).toHaveBeenCalledWith(
-      expect.objectContaining({
-        metadata: topicMetadata,
-        sessionId: 's1',
-        title: 'T',
-      }),
-    );
-    expect(mockGet).toHaveBeenCalledWith(
-      expect.objectContaining({
-        includeTopic: true,
-        sessionId: 's1',
-        topicId: 't1',
-        topicPageSize: 20,
-      }),
-    );
-    expect(mockGet.mock.calls[0]?.[0]).not.toHaveProperty('prefetchedMessages');
-    expect(res.topics?.items[0]).toEqual({ id: 't1', metadata: topicMetadata });
   });
 
   it('should reuse existing topic when topicId provided', async () => {

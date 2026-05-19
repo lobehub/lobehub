@@ -1,9 +1,4 @@
-import type {
-  CreateMessageParams,
-  DBMessageItem,
-  SendMessageServerResponse,
-  UIChatMessage,
-} from '@lobechat/types';
+import type { CreateMessageParams, SendMessageServerResponse } from '@lobechat/types';
 import { AiSendMessageServerSchema, RequestTrigger, StructureOutputSchema } from '@lobechat/types';
 import { createTimingHelpers, createTimingRequestId } from '@lobechat/utils';
 import debug from 'debug';
@@ -24,58 +19,6 @@ const log = debug('lobe-lambda-router:ai-chat');
 const { createPrefixedTimingContext, logTiming, runTimedStage } = createTimingHelpers(
   'lobe-server:chat:lobehub:timing',
 );
-
-type BootstrapMessageItem = DBMessageItem & {
-  editorData?: UIChatMessage['editorData'];
-  groupId?: string | null;
-  targetId?: string | null;
-};
-
-const toTimestamp = (value: Date | number | string | undefined): number => {
-  if (value instanceof Date) return value.getTime();
-  if (typeof value === 'number') return value;
-  if (typeof value === 'string') {
-    const timestamp = new Date(value).getTime();
-
-    return Number.isNaN(timestamp) ? Date.now() : timestamp;
-  }
-
-  return Date.now();
-};
-
-const toBootstrapUIMessage = (message: BootstrapMessageItem): UIChatMessage => ({
-  agentId: message.agentId ?? undefined,
-  chunksList: [],
-  content: message.content ?? '',
-  createdAt: toTimestamp(message.createdAt),
-  editorData: message.editorData,
-  error: message.error,
-  extra: {
-    model: message.model ?? undefined,
-    provider: message.provider ?? undefined,
-  },
-  fileList: [],
-  groupId: message.groupId ?? undefined,
-  id: message.id,
-  imageList: [],
-  metadata: message.metadata,
-  model: message.model ?? undefined,
-  observationId: message.observationId ?? undefined,
-  parentId: message.parentId ?? undefined,
-  provider: message.provider ?? undefined,
-  quotaId: message.quotaId ?? undefined,
-  reasoning: message.reasoning,
-  role: message.role as UIChatMessage['role'],
-  search: message.search,
-  sessionId: message.sessionId ?? undefined,
-  targetId: message.targetId ?? undefined,
-  threadId: message.threadId ?? undefined,
-  topicId: message.topicId ?? undefined,
-  tools: message.tools ?? undefined,
-  traceId: message.traceId ?? undefined,
-  updatedAt: toTimestamp(message.updatedAt),
-  videoList: [],
-});
 
 const aiChatProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -345,23 +288,6 @@ export const aiChatRouter = router({
 
       log('assistant message created with id: %s', assistantMessageItem.id);
 
-      // This fast path skips the full message/topic queries and returns the inserted pair directly.
-      // Keep it limited to plain new-topic messages that do not need related rows or topic metadata.
-      const canUseRelationFreeNewTopicFastPath =
-        isCreateNewTopic &&
-        !input.newThread &&
-        !input.threadId &&
-        !input.groupId &&
-        !input.newUserMessage.parentId &&
-        !input.newTopic?.metadata &&
-        !input.newTopic?.topicMessageIds?.length &&
-        !input.preloadMessages?.length &&
-        !input.newUserMessage.files?.length;
-      const prefetchedMessages = canUseRelationFreeNewTopicFastPath
-        ? [toBootstrapUIMessage(userMessageItem), toBootstrapUIMessage(assistantMessageItem)]
-        : undefined;
-      const includeTopic = isCreateNewTopic && !prefetchedMessages;
-
       // retrieve latest messages and topic with
       log('retrieving messages and topics');
       const { messages, topics } = await runTimedStage(
@@ -371,13 +297,12 @@ export const aiChatRouter = router({
           ctx.aiChatService.getMessagesAndTopics({
             agentId: input.agentId,
             groupId: input.groupId,
-            includeTopic,
+            includeTopic: isCreateNewTopic,
             sessionId,
             threadId,
             topicFilter: input.topicFilter,
             topicId,
             topicPageSize: input.topicPageSize,
-            ...(prefetchedMessages ? { prefetchedMessages } : {}),
             ...(timingContext
               ? {
                   timingRequestId: timingContext.requestId,
@@ -385,7 +310,7 @@ export const aiChatRouter = router({
                 }
               : {}),
           }),
-        { includeTopic },
+        { includeTopic: isCreateNewTopic },
       );
 
       log('retrieved %d messages, %d topics', messages.length, topics?.items?.length ?? 0);
