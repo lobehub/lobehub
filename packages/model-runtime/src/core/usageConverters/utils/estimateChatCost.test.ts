@@ -210,6 +210,9 @@ describe('estimateChatCost', () => {
       expect(estimate?.estimatedCost).toBeGreaterThan(0);
       expect(estimate?.estimatedOutputTokens).toBeGreaterThan(0);
       expect(estimate?.totalInputTokens).toBeGreaterThan(0);
+      expect(estimate?.usage.totalTokens).toBe(
+        estimate!.totalInputTokens + estimate!.estimatedOutputTokens,
+      );
     });
 
     it('forwards video inputs to video pricing units', () => {

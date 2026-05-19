@@ -187,6 +187,7 @@ export function estimateChatCostFromTokens(
     outputTextTokens: estimatedOutputTokens,
     totalInputTokens,
     totalOutputTokens: estimatedOutputTokens,
+    totalTokens: totalInputTokens + estimatedOutputTokens,
   };
 
   const result = computeChatCost(pricing, usage, options);
