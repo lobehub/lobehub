@@ -1,4 +1,4 @@
-import { type IEditor } from '@lobehub/editor';
+import type { IEditor } from '@lobehub/editor';
 import { debounce } from 'es-toolkit/compat';
 import { useCallback, useEffect, useMemo } from 'react';
 
@@ -27,7 +27,7 @@ export const useChatInputDraft = () => {
     [storeApi],
   );
 
-  useEffect(() => () => saveDraftDebounced.cancel(), [saveDraftDebounced]);
+  useEffect(() => () => saveDraftDebounced.flush(), [saveDraftDebounced]);
 
   const restoreDraft = useCallback(
     (editor: IEditor) => {
