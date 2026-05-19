@@ -29,6 +29,7 @@ function createCallerWithCtx(partialCtx: any = {}) {
     query: vi.fn().mockResolvedValue([]),
     delete: vi.fn().mockResolvedValue(undefined),
     deleteMany: vi.fn().mockResolvedValue([]),
+    updateGlobalFile: vi.fn().mockResolvedValue(undefined),
     clear: vi.fn().mockResolvedValue({} as any),
   };
 
@@ -128,6 +129,7 @@ const mockFileModelDeleteMany = vi.fn();
 const mockFileModelFindById = vi.fn();
 const mockFileModelFindByIds = vi.fn();
 const mockFileModelQuery = vi.fn();
+const mockFileModelUpdateGlobalFile = vi.fn();
 const mockFileModelClear = vi.fn();
 
 vi.mock('@/database/models/file', () => ({
@@ -139,6 +141,7 @@ vi.mock('@/database/models/file', () => ({
     findById: mockFileModelFindById,
     findByIds: mockFileModelFindByIds,
     query: mockFileModelQuery,
+    updateGlobalFile: mockFileModelUpdateGlobalFile,
     clear: mockFileModelClear,
   })),
 }));
@@ -215,6 +218,47 @@ describe('fileRouter', () => {
       ctx.fileModel.checkHash.mockResolvedValue(undefined);
       await expect(caller.checkFileHash({ hash: 'test-hash' })).resolves.toBeUndefined();
     });
+
+    it('should return existing hash when the stored object is still available', async () => {
+      const checkResult = {
+        isExist: true,
+        metadata: { path: 'files/existing.png' },
+        url: 'files/existing.png',
+      };
+      mockFileModelCheckHash.mockResolvedValue(checkResult);
+      mockFileServiceGetFileMetadata.mockResolvedValue({
+        contentLength: 100,
+        contentType: 'image/png',
+      });
+
+      await expect(caller.checkFileHash({ hash: 'test-hash' })).resolves.toEqual(checkResult);
+
+      expect(mockFileServiceGetFileMetadata).toHaveBeenCalledWith('files/existing.png');
+    });
+
+    it('should treat stale hash records as missing when the stored object is unavailable', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      mockFileModelCheckHash.mockResolvedValue({
+        isExist: true,
+        metadata: { path: 'generations/images/missing_raw.jpg' },
+        url: 'generations/images/missing_raw.jpg',
+      });
+      mockFileServiceGetFileMetadata.mockRejectedValue(new Error('NoSuchKey'));
+
+      await expect(caller.checkFileHash({ hash: 'test-hash' })).resolves.toEqual({
+        isExist: false,
+      });
+
+      expect(mockFileServiceGetFileMetadata).toHaveBeenCalledWith(
+        'generations/images/missing_raw.jpg',
+      );
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Failed to verify existing file hash storage object:',
+        expect.any(Error),
+      );
+
+      consoleSpy.mockRestore();
+    });
   });
 
   describe('createFile', () => {
@@ -249,6 +293,72 @@ describe('fileRouter', () => {
         id: 'new-file-id',
         url: 'https://lobehub.com/f/new-file-id',
       });
+    });
+
+    it('should refresh global file metadata when an existing hash points to a missing object', async () => {
+      mockFileModelCheckHash.mockResolvedValue({
+        isExist: true,
+        metadata: { path: 'old/path.txt' },
+        url: 'old/path.txt',
+      });
+      mockFileModelCreate.mockResolvedValue({ id: 'new-file-id' });
+      mockFileServiceGetFileMetadata
+        .mockResolvedValueOnce({ contentLength: 100, contentType: 'text/plain' })
+        .mockRejectedValueOnce(new Error('NoSuchKey'));
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      await caller.createFile({
+        hash: 'test-hash',
+        fileType: 'text',
+        metadata: { path: 'new/path.txt' },
+        name: 'test.txt',
+        size: 100,
+        url: 'new/path.txt',
+      });
+
+      expect(mockFileModelUpdateGlobalFile).toHaveBeenCalledWith(
+        'test-hash',
+        {
+          metadata: { path: 'new/path.txt' },
+          url: 'new/path.txt',
+        },
+        routerMocks.transactionClient,
+      );
+      expect(mockFileModelCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ fileHash: 'test-hash', url: 'new/path.txt' }),
+        false,
+        routerMocks.transactionClient,
+      );
+      consoleSpy.mockRestore();
+    });
+
+    it('should keep the global file pointer when an existing hash object is still available', async () => {
+      mockFileModelCheckHash.mockResolvedValue({
+        isExist: true,
+        metadata: { path: 'old/path.txt' },
+        url: 'old/path.txt',
+      });
+      mockFileModelCreate.mockResolvedValue({ id: 'new-file-id' });
+      mockFileServiceGetFileMetadata.mockResolvedValue({
+        contentLength: 100,
+        contentType: 'text/plain',
+      });
+
+      await caller.createFile({
+        hash: 'test-hash',
+        fileType: 'text',
+        metadata: { path: 'new/path.txt' },
+        name: 'test.txt',
+        size: 100,
+        url: 'new/path.txt',
+      });
+
+      expect(mockFileModelUpdateGlobalFile).not.toHaveBeenCalled();
+      expect(mockFileModelCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ fileHash: 'test-hash', url: 'new/path.txt' }),
+        false,
+        routerMocks.transactionClient,
+      );
     });
 
     it('should run business upload check and file creation in the same transaction', async () => {
