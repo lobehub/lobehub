@@ -19,7 +19,7 @@ import { isModifierClick } from '@/utils/navigation';
 import { prefetchRoute } from '@/utils/router';
 
 import Agent from './Agent';
-import { CustomizeSidebarModal, openCustomizeSidebarModal } from './CustomizeSidebarModal';
+import { openCustomizeSidebarModal } from './CustomizeSidebarModal';
 
 export enum GroupKey {
   Agent = 'agent',
@@ -101,6 +101,11 @@ const Body = memo(() => {
     return map;
   }, [topNavItems, bottomMenuItems]);
 
+  const bottomNavKeys = useMemo(
+    () => new Set(bottomMenuItems.map((item) => item.key)),
+    [bottomMenuItems],
+  );
+
   // Items that must always be visible regardless of hiddenSections
   const isVisible = useCallback(
     (k: string) => k === GroupKey.Agent || !hiddenSections.includes(k),
@@ -162,6 +167,7 @@ const Body = memo(() => {
   const content = useMemo(() => {
     const elements: ReactElement[] = [];
     let accGroup: { element: ReactElement; key: string }[] = [];
+    let bottomSpacerInserted = false;
 
     const flushAccordion = () => {
       if (accGroup.length > 0) {
@@ -188,17 +194,36 @@ const Body = memo(() => {
       } else {
         flushAccordion();
         const link = renderNavLink(key);
-        if (link) elements.push(link);
+        if (!link) continue;
+
+        if (!bottomSpacerInserted && bottomNavKeys.has(key)) {
+          elements.push(
+            <div
+              aria-hidden
+              data-sidebar-bottom-spacer
+              key={'bottom-nav-spacer'}
+              style={{ flex: '1 1 0', minHeight: 0 }}
+            />,
+          );
+          bottomSpacerInserted = true;
+        }
+
+        elements.push(link);
       }
     }
     flushAccordion();
     return elements;
-  }, [visibleKeys, renderNavLink, sidebarExpandedKeys, handleAccordionExpandedChange]);
+  }, [
+    visibleKeys,
+    renderNavLink,
+    sidebarExpandedKeys,
+    handleAccordionExpandedChange,
+    bottomNavKeys,
+  ]);
 
   return (
-    <Flexbox flex={1} gap={1} paddingInline={4}>
+    <Flexbox flex={1} gap={1} paddingInline={4} style={{ minHeight: '100%' }}>
       {content}
-      <CustomizeSidebarModal />
     </Flexbox>
   );
 });

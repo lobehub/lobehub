@@ -78,7 +78,6 @@ vi.mock('./Agent', () => ({
 }));
 
 vi.mock('./CustomizeSidebarModal', () => ({
-  CustomizeSidebarModal: () => null,
   openCustomizeSidebarModal: vi.fn(),
 }));
 
