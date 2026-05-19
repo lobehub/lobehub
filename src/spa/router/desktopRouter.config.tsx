@@ -476,61 +476,77 @@ export const desktopRoutes: RouteObject[] = [
         path: 'memory',
       },
 
-      // Video routes
+      // Create (generation) routes - Video, Image, Audio
       {
         children: [
           {
             element: dynamicElement(
-              () => import('@/routes/(main)/(create)/video'),
-              'Desktop > Video',
+              () => import('@/routes/(main)/(create)'),
+              'Desktop > Create > Redirect',
             ),
             index: true,
           },
-        ],
-        element: dynamicLayout(
-          () => import('@/routes/(main)/(create)/video/_layout'),
-          'Desktop > Video > Layout',
-        ),
-        errorElement: <ErrorBoundary />,
-        path: 'video',
-      },
-
-      // Image routes
-      {
-        children: [
           {
-            element: dynamicElement(
-              () => import('@/routes/(main)/(create)/image'),
-              'Desktop > Image',
+            // Video routes
+            children: [
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/(create)/video'),
+                  'Desktop > Create > Video',
+                ),
+                index: true,
+              },
+            ],
+            element: dynamicLayout(
+              () => import('@/routes/(main)/(create)/video/_layout'),
+              'Desktop > Create > Video > Layout',
             ),
-            index: true,
+            errorElement: <ErrorBoundary />,
+            path: 'video',
           },
-        ],
-        element: dynamicLayout(
-          () => import('@/routes/(main)/(create)/image/_layout'),
-          'Desktop > Image > Layout',
-        ),
-        errorElement: <ErrorBoundary />,
-        path: 'image',
-      },
-
-      // Audio routes
-      {
-        children: [
           {
-            element: dynamicElement(
-              () => import('@/routes/(main)/(create)/audio'),
-              'Desktop > Audio',
+            // Image routes
+            children: [
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/(create)/image'),
+                  'Desktop > Create > Image',
+                ),
+                index: true,
+              },
+            ],
+            element: dynamicLayout(
+              () => import('@/routes/(main)/(create)/image/_layout'),
+              'Desktop > Create > Image > Layout',
             ),
-            index: true,
+            errorElement: <ErrorBoundary />,
+            path: 'image',
+          },
+          {
+            // Audio routes
+            children: [
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/(create)/audio'),
+                  'Desktop > Create > Audio',
+                ),
+                index: true,
+              },
+            ],
+            element: dynamicLayout(
+              () => import('@/routes/(main)/(create)/audio/_layout'),
+              'Desktop > Create > Audio > Layout',
+            ),
+            errorElement: <ErrorBoundary />,
+            path: 'audio',
           },
         ],
         element: dynamicLayout(
-          () => import('@/routes/(main)/(create)/audio/_layout'),
-          'Desktop > Audio > Layout',
+          () => import('@/routes/(main)/(create)/_layout'),
+          'Desktop > Create > Layout',
         ),
         errorElement: <ErrorBoundary />,
-        path: 'audio',
+        path: 'create',
       },
 
       ...BusinessDesktopRoutesWithMainLayout,

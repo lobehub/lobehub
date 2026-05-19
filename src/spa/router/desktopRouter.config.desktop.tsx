@@ -9,6 +9,8 @@ import {
 import DesktopOnboarding from '@/routes/(desktop)/desktop-onboarding';
 // Layouts — sync import (Electron local, no network overhead)
 import DesktopMainLayout from '@/routes/(main)/_layout';
+import CreateIndexRedirect from '@/routes/(main)/(create)';
+import DesktopCreateLayout from '@/routes/(main)/(create)/_layout';
 import AudioPage from '@/routes/(main)/(create)/audio';
 import DesktopAudioLayout from '@/routes/(main)/(create)/audio/_layout';
 import ImagePage from '@/routes/(main)/(create)/image';
@@ -16,6 +18,9 @@ import DesktopImageLayout from '@/routes/(main)/(create)/image/_layout';
 import VideoPage from '@/routes/(main)/(create)/video';
 import DesktopVideoLayout from '@/routes/(main)/(create)/video/_layout';
 import TaskWorkspaceLayout from '@/routes/(main)/(task-workspace)/_layout';
+import AdminOverviewPage from '@/routes/(main)/admin';
+import AdminLayout from '@/routes/(main)/admin/_layout';
+import AdminUsersPage from '@/routes/(main)/admin/users';
 // Pages — sync import
 import AgentPage from '@/routes/(main)/agent';
 import DesktopChatLayout from '@/routes/(main)/agent/_layout';
@@ -78,9 +83,6 @@ import ResourceLibrarySlugPage from '@/routes/(main)/resource/library/[slug]';
 import SettingsTabPage from '@/routes/(main)/settings';
 import SettingsLayout from '@/routes/(main)/settings/_layout';
 import { ProviderDetailPage, ProviderLayout } from '@/routes/(main)/settings/provider';
-import AdminLayout from '@/routes/(main)/admin/_layout';
-import AdminOverviewPage from '@/routes/(main)/admin';
-import AdminUsersPage from '@/routes/(main)/admin/users';
 import TaskDetailRoute from '@/routes/(main)/task/[taskId]';
 import AllTasksPage from '@/routes/(main)/tasks';
 import ShareTopicPage from '@/routes/share/t/[id]';
@@ -398,43 +400,53 @@ export const desktopRoutes: RouteObject[] = [
         path: 'memory',
       },
 
-      // Video routes
+      // Create (generation) routes - Video, Image, Audio
       {
         children: [
           {
-            element: <VideoPage />,
+            element: <CreateIndexRedirect />,
             index: true,
           },
-        ],
-        element: <DesktopVideoLayout />,
-        errorElement: <ErrorBoundary />,
-        path: 'video',
-      },
-
-      // Image routes
-      {
-        children: [
           {
-            element: <ImagePage />,
-            index: true,
+            // Video routes
+            children: [
+              {
+                element: <VideoPage />,
+                index: true,
+              },
+            ],
+            element: <DesktopVideoLayout />,
+            errorElement: <ErrorBoundary />,
+            path: 'video',
           },
-        ],
-        element: <DesktopImageLayout />,
-        errorElement: <ErrorBoundary />,
-        path: 'image',
-      },
-
-      // Audio routes
-      {
-        children: [
           {
-            element: <AudioPage />,
-            index: true,
+            // Image routes
+            children: [
+              {
+                element: <ImagePage />,
+                index: true,
+              },
+            ],
+            element: <DesktopImageLayout />,
+            errorElement: <ErrorBoundary />,
+            path: 'image',
+          },
+          {
+            // Audio routes
+            children: [
+              {
+                element: <AudioPage />,
+                index: true,
+              },
+            ],
+            element: <DesktopAudioLayout />,
+            errorElement: <ErrorBoundary />,
+            path: 'audio',
           },
         ],
-        element: <DesktopAudioLayout />,
+        element: <DesktopCreateLayout />,
         errorElement: <ErrorBoundary />,
-        path: 'audio',
+        path: 'create',
       },
 
       ...BusinessDesktopRoutesWithMainLayout,
