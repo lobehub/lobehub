@@ -66,12 +66,13 @@ export class CommonActionImpl {
       await userService.updateInterests(interests);
       await this.#get().refreshUserState();
     } catch (error) {
-      // Only roll back when no later edit has superseded this optimistic value —
-      // otherwise we'd discard a newer in-flight update.
-      const currentInterests = this.#get().user?.interests;
-      if (previousUser && isEqual(currentInterests, interests)) {
+      // Roll back only when no later edit has superseded this optimistic value,
+      // and merge into the current user so concurrent updates to other fields
+      // (avatar, fullName, ...) are preserved.
+      const currentUser = this.#get().user;
+      if (currentUser && isEqual(currentUser.interests, interests)) {
         this.#set(
-          { user: { ...previousUser, interests: previousInterests } },
+          { user: { ...currentUser, interests: previousInterests } },
           false,
           n('updateInterests/rollback'),
         );

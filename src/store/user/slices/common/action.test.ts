@@ -102,6 +102,31 @@ describe('createCommonSlice', () => {
       // The rollback must not clobber the newer in-flight value.
       expect(useUserStore.getState().user?.interests).toEqual(['newer']);
     });
+
+    it('preserves concurrent updates to other user fields during rollback', async () => {
+      act(() => {
+        useUserStore.setState({
+          user: { id: 'u1', avatar: 'old.png', interests: ['old'] } as any,
+        });
+      });
+
+      vi.spyOn(userService, 'updateInterests').mockRejectedValue(new Error('boom'));
+
+      const pending = useUserStore.getState().updateInterests(['new']);
+
+      // Simulate `updateAvatar` landing while the interests request is in flight.
+      act(() => {
+        useUserStore.setState({
+          user: { id: 'u1', avatar: 'new.png', interests: ['new'] } as any,
+        });
+      });
+
+      await expect(pending).rejects.toThrow('boom');
+
+      const user = useUserStore.getState().user as any;
+      expect(user.interests).toEqual(['old']); // rolled back
+      expect(user.avatar).toBe('new.png'); // concurrent avatar update kept
+    });
   });
 
   describe('useInitUserState', () => {
