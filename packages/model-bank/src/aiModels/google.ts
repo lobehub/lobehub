@@ -746,7 +746,9 @@ export const nanoBanana2Parameters: ModelParamsSchema = {
   prompt: { default: '' },
   resolution: {
     default: '1K',
-    enum: ['512px', '1K', '2K', '4K'],
+    // Gemini image generation API accepts `"512" | "1K" | "2K" | "4K"`.
+    // See https://ai.google.dev/gemini-api/docs/image-generation
+    enum: ['512', '1K', '2K', '4K'],
   },
 };
 

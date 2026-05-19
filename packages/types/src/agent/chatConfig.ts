@@ -106,9 +106,9 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
    */
   imageResolution?: '1K' | '2K' | '4K';
   /**
-   * Image resolution for image generation models (with 512px support)
+   * Image resolution for image generation models (with 512 support)
    */
-  imageResolution2?: '512px' | '1K' | '2K' | '4K';
+  imageResolution2?: '512' | '1K' | '2K' | '4K';
   inputTemplate?: string;
   /**
    * Effort level for Claude Opus 4.7 (adds xhigh tier between high and max)
@@ -227,7 +227,7 @@ export const AgentChatConfigSchema = z
     imageAspectRatio: z.string().optional(),
     imageAspectRatio2: z.string().optional(),
     imageResolution: z.enum(['1K', '2K', '4K']).optional(),
-    imageResolution2: z.enum(['512px', '1K', '2K', '4K']).optional(),
+    imageResolution2: z.enum(['512', '1K', '2K', '4K']).optional(),
     opus47Effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
     runtimeEnv: RuntimeEnvConfigSchema.optional(),
     reasoningBudgetToken: z.number().optional(),
