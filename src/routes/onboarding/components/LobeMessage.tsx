@@ -23,7 +23,7 @@ const LobeMessage = memo<LobeMessageProps>(
 
     return (
       <Flexbox gap={gap} {...rest}>
-        <Flexbox align={'center'} justify={'center'}>
+        <Flexbox align={'flex-start'}>
           {avatar ? (
             <Avatar avatar={avatar} size={avatarSize || fontSize * 2} />
           ) : (

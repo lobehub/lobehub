@@ -60,9 +60,11 @@ const ClassicOnboardingPage = memo(() => {
     }
   };
 
+  const contentMaxWidth = currentStep === MAX_ONBOARDING_STEPS ? 780 : 600;
+
   return (
     <OnboardingContainer>
-      <Flexbox gap={24} style={{ maxWidth: 600, width: '100%' }}>
+      <Flexbox gap={24} style={{ maxWidth: contentMaxWidth, width: '100%' }}>
         <ModeSwitch />
         {renderStep()}
       </Flexbox>

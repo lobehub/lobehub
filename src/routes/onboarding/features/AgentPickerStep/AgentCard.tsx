@@ -42,7 +42,11 @@ const AgentCard = memo<AgentCardProps>(({ onToggle, selected, template }) => {
           <div className={styles.cardDescription}>{template.description}</div>
         )}
       </div>
-      {selected && <Icon className={styles.cardCheck} icon={CheckIcon} size={16} />}
+      <Icon
+        className={cx(styles.cardCheck, !selected && styles.cardCheckHidden)}
+        icon={CheckIcon}
+        size={16}
+      />
     </div>
   );
 });

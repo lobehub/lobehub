@@ -51,6 +51,9 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     flex: none;
     color: ${cssVar.colorPrimary};
   `,
+  cardCheckHidden: css`
+    visibility: hidden;
+  `,
   cardDescription: css`
     overflow: hidden;
     display: -webkit-box;
