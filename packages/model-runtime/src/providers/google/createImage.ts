@@ -141,16 +141,21 @@ async function generateImageByChatModel(
     },
   ];
 
+  // Build imageConfig independently for aspectRatio and resolution so that
+  // selecting only one (e.g. resolution=4K while aspectRatio stays 'auto')
+  // still reaches the Google API. Previously both fields were gated on
+  // aspectRatio !== 'auto', which silently dropped the user's resolution.
+  const imageConfig: { aspectRatio?: string; imageSize?: string } = {};
+  if (params.aspectRatio && params.aspectRatio !== 'auto') {
+    imageConfig.aspectRatio = params.aspectRatio;
+  }
+  if (params.resolution) {
+    imageConfig.imageSize = params.resolution;
+  }
+
   const config: GenerateContentConfig = {
     responseModalities: ['Image'],
-    ...(params.aspectRatio && params.aspectRatio !== 'auto'
-      ? {
-          imageConfig: {
-            aspectRatio: params.aspectRatio,
-            imageSize: params.resolution,
-          },
-        }
-      : {}),
+    ...(Object.keys(imageConfig).length > 0 ? { imageConfig } : {}),
   };
 
   const response = await client.models.generateContent({
