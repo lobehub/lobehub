@@ -1,76 +1,9 @@
 'use client';
 
 import { Flexbox, Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
 import { BarChart3Icon, LayoutDashboardIcon, ShieldIcon, UsersIcon } from 'lucide-react';
-import { type FC, type ReactNode } from 'react';
+import { type CSSProperties, type FC, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-
-const useStyles = createStyles(({ css, token }) => ({
-  active: css`
-    font-weight: 600;
-    color: ${token.colorPrimary};
-    background: ${token.colorPrimaryBg};
-  `,
-  container: css`
-    height: 100%;
-    background: ${token.colorBgContainer};
-  `,
-  content: css`
-    overflow-y: auto;
-    flex: 1;
-
-    height: 100%;
-    padding: 24px;
-
-    background: ${token.colorBgLayout};
-  `,
-  header: css`
-    padding-block: 20px 12px;
-    padding-inline: 16px;
-    border-block-end: 1px solid ${token.colorBorderSecondary};
-  `,
-  headerTitle: css`
-    font-size: 13px;
-    font-weight: 600;
-    color: ${token.colorTextTertiary};
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-  `,
-  menuItem: css`
-    cursor: pointer;
-
-    display: flex;
-    gap: 10px;
-    align-items: center;
-
-    margin-block: 2px;
-    margin-inline: 8px;
-    padding-block: 9px;
-    padding-inline: 16px;
-    border-radius: 8px;
-
-    font-size: 14px;
-    color: ${token.colorTextSecondary};
-
-    transition: all 0.15s ease;
-
-    &:hover {
-      color: ${token.colorText};
-      background: ${token.colorFillTertiary};
-    }
-  `,
-  sidebar: css`
-    overflow-y: auto;
-
-    width: 220px;
-    min-width: 220px;
-    height: 100%;
-    border-inline-end: 1px solid ${token.colorBorderSecondary};
-
-    background: ${token.colorBgContainer};
-  `,
-}));
 
 const NAV_ITEMS = [
   { icon: LayoutDashboardIcon, label: 'Overview', path: '/admin' },
@@ -84,20 +17,75 @@ interface AdminLayoutProps {
 }
 
 const AdminLayout: FC<AdminLayoutProps> = ({ children }) => {
-  const { styles, cx } = useStyles();
   const navigate = useNavigate();
   const { pathname } = useLocation();
 
+  const containerStyle: CSSProperties = {
+    height: '100%',
+    display: 'flex',
+    backgroundColor: 'var(--lobe-color-bg-container, #fff)',
+  };
+
+  const sidebarStyle: CSSProperties = {
+    width: 220,
+    minWidth: 220,
+    height: '100%',
+    borderRight: '1px solid var(--lobe-color-border-secondary, #e5e5e5)',
+    backgroundColor: 'var(--lobe-color-bg-container, #fff)',
+    overflowY: 'auto',
+  };
+
+  const headerStyle: CSSProperties = {
+    padding: '20px 16px 12px',
+    borderBottom: '1px solid var(--lobe-color-border-secondary, #e5e5e5)',
+  };
+
+  const headerTitleStyle: CSSProperties = {
+    fontSize: 13,
+    fontWeight: 600,
+    color: 'var(--lobe-color-text-tertiary, #999)',
+    letterSpacing: '0.06em',
+    textTransform: 'uppercase',
+  };
+
+  const menuItemStyle: CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: '9px 16px',
+    borderRadius: 8,
+    margin: '2px 8px',
+    cursor: 'pointer',
+    fontSize: 14,
+    color: 'var(--lobe-color-text-secondary, #666)',
+    transition: 'all 0.15s ease',
+  };
+
+  const activeMenuItemStyle: CSSProperties = {
+    ...menuItemStyle,
+    color: 'var(--lobe-color-primary, #1890ff)',
+    backgroundColor: 'var(--lobe-color-primary-bg, #e6f7ff)',
+    fontWeight: 600,
+  };
+
+  const contentStyle: CSSProperties = {
+    flex: 1,
+    height: '100%',
+    overflowY: 'auto',
+    padding: 24,
+    backgroundColor: 'var(--lobe-color-bg-layout, #fafafa)',
+  };
+
   return (
-    <Flexbox horizontal className={styles.container}>
-      <div className={styles.sidebar}>
-        <div className={styles.header}>
-          <span className={styles.headerTitle}>Admin Panel</span>
+    <Flexbox horizontal style={containerStyle}>
+      <div style={sidebarStyle}>
+        <div style={headerStyle}>
+          <span style={headerTitleStyle}>Admin Panel</span>
         </div>
         {NAV_ITEMS.map(({ icon, label, path }) => (
           <div
-            className={cx(styles.menuItem, pathname === path && styles.active)}
             key={path}
+            style={pathname === path ? activeMenuItemStyle : menuItemStyle}
             onClick={() => navigate(path)}
           >
             <Icon icon={icon} size={16} />
@@ -105,7 +93,7 @@ const AdminLayout: FC<AdminLayoutProps> = ({ children }) => {
           </div>
         ))}
       </div>
-      <div className={styles.content}>{children}</div>
+      <div style={contentStyle}>{children}</div>
     </Flexbox>
   );
 };
