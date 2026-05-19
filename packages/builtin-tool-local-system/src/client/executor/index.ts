@@ -66,7 +66,8 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
   }): BuiltinToolResult {
     const errorMessage =
       typeof output.error?.message === 'string' ? output.error.message : undefined;
-    const safeContent = output.content || errorMessage || 'Tool execution failed';
+    const safeContent =
+      output.content || errorMessage || '[UNKNOWN_EXEC_ERROR] Tool execution failed';
 
     if (!output.success) {
       return {
