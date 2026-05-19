@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { ModelProvider } from '../const/modelProvider';
-import { loadModels, LOBE_DEFAULT_MODEL_LIST } from './index';
+import { ModelProvider } from '../../const/modelProvider';
+import { loadModels, LOBE_DEFAULT_MODEL_LIST } from '../index';
 
 describe('loadModels', () => {
   it('returns the static model list by default', async () => {
