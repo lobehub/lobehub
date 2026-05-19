@@ -1177,54 +1177,6 @@ export const openaiChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
-      //search: true,
-    },
-    contextWindowTokens: 128_000,
-    description: 'GPT-4o Audio Preview model with audio input and output.',
-    displayName: 'GPT-4o Audio Preview',
-    id: 'gpt-4o-audio-preview',
-    maxOutput: 16_384,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2024-12-17',
-    /*
-    settings: {
-      searchImpl: 'params',
-    },
-    */
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      //search: true,
-    },
-    contextWindowTokens: 128_000,
-    description: 'GPT-4o mini Audio model with audio input and output.',
-    displayName: 'GPT-4o mini Audio',
-    id: 'gpt-4o-mini-audio-preview',
-    maxOutput: 16_384,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2024-12-17',
-    /*
-    settings: {
-      searchImpl: 'params',
-    },
-    */
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
       vision: true,
     },
     contextWindowTokens: 128_000,

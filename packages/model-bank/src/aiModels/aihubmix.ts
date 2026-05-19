@@ -1321,24 +1321,6 @@ const aihubmixChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'DeepSeek V3.1 Fast is the high-TPS fast variant of DeepSeek V3.1. Hybrid thinking mode: via chat templates, one model supports both thinking and non-thinking. Smarter tool use: post-training boosts tool and agent task performance.',
-    displayName: 'DeepSeek V3.1 (Fast)',
-    id: 'DeepSeek-V3.1-Fast',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 1.096, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 3.288, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
       structuredOutput: true,
     },
     contextWindowTokens: 131_072,
