@@ -86,7 +86,7 @@ export const runTimedStage = async <T>(
   task: () => T | Promise<T>,
   metadata?: TimingMetadata,
 ): Promise<Awaited<T>> => {
-  if (!context) return task();
+  if (!context) return await task();
 
   const startedAt = Date.now();
   logTiming(logger, context, `${stage}:start`, metadata);
@@ -116,7 +116,7 @@ export const runTimedSinkStage = async <T>(
   task: () => T | Promise<T>,
   metadata?: TimingMetadata,
 ): Promise<Awaited<T>> => {
-  if (!timing) return task();
+  if (!timing) return await task();
 
   const startedAt = Date.now();
   logTimingSink(timing, `${stage}:start`, metadata);
