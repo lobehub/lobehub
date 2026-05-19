@@ -159,7 +159,7 @@ export class MessengerDiscordBinder implements MessengerPlatformBinder {
     // where the unlinked message handler runs after the chat-sdk has already
     // dispatched the message — so we stick to a markdown link for v1.
     const text = [
-      "Hi, I'm LobeHub — your AI agent in Discord.",
+      "Hi, I'm LobeHub — your AI agent on Discord.",
       'To start, link your LobeHub account.',
       '',
       `🔗 [Link Account](${verifyUrl})`,

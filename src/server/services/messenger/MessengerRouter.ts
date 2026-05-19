@@ -1107,7 +1107,7 @@ export class MessengerRouter {
     }
 
     const text = [
-      ":wave: Hi, I'm *LobeHub* — your AI agent in Slack.",
+      ":wave: Hi, I'm *LobeHub* — your AI agent on Slack.",
       '',
       '• Mention me with `@LobeHub <your question>` to chat in this channel.',
       '• First time? Send me a *direct message* to link your LobeHub account.',
