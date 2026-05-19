@@ -15,6 +15,7 @@ export interface LobeUser {
   id: string;
   interests?: string[];
   latestName?: string | null;
+  role?: string | null;
   username?: string | null;
 }
 

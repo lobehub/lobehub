@@ -49,9 +49,10 @@ export const useMenu = () => {
   const hasNewVersion = useNewVersion();
   const { t } = useTranslation(['common', 'setting', 'auth']);
   const { showCloudPromotion, hideDocs } = useServerConfigStore(featureFlagsSelectors);
-  const [isLogin, isLoginWithAuth] = useUserStore((s) => [
+  const [isLogin, isLoginWithAuth, isAdmin] = useUserStore((s) => [
     authSelectors.isLogin(s),
     authSelectors.isLoginWithAuth(s),
+    authSelectors.isAdmin(s),
   ]);
   const { userPanel } = useNavLayout();
   const businessMenuItems = useBusinessMenuItems(isLogin);
@@ -78,11 +79,15 @@ export const useMenu = () => {
         </Link>
       ),
     },
-    {
-      icon: <Icon icon={ShieldIcon} />,
-      key: 'admin',
-      label: <Link to="/admin">Admin Panel</Link>,
-    },
+    ...(isAdmin
+      ? [
+          {
+            icon: <Icon icon={ShieldIcon} />,
+            key: 'admin',
+            label: <Link to="/admin">Admin Panel</Link>,
+          },
+        ]
+      : []),
     ...(userPanel.showMemory
       ? [
           {

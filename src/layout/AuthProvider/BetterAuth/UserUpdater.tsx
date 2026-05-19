@@ -49,6 +49,7 @@ const UserUpdater = memo(() => {
             email: betterAuthUser.email,
             fullName: betterAuthUser.name,
             id: betterAuthUser.id,
+            role: (betterAuthUser as any).role ?? null,
             username: betterAuthUser.username,
           } as LobeUser,
         };

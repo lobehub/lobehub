@@ -59,7 +59,7 @@ export const adminRouter = router({
     }),
 
   updateUserRole: adminProcedure
-    .input(z.object({ role: z.enum(['admin', 'user']), userId: z.string() }))
+    .input(z.object({ role: z.enum(['user', 'admin', 'pro']), userId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       await ctx.serverDB
         .update(users)

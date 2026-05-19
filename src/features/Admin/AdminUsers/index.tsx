@@ -1,6 +1,6 @@
 'use client';
 
-import { App, Badge, Button, Input, Space, Table, Tag } from 'antd';
+import { App, Badge, Button, Input, Select, Space, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { createStaticStyles } from 'antd-style';
 import { memo, useState } from 'react';
@@ -29,6 +29,25 @@ const useStyles = createStaticStyles(({ css, token }) => ({
     overflow: hidden;
   `,
 }));
+
+const ROLE_OPTIONS = [
+  { label: 'User', value: 'user' },
+  { label: 'Pro User', value: 'pro' },
+  { label: 'Admin', value: 'admin' },
+] as const;
+
+type AppRole = (typeof ROLE_OPTIONS)[number]['value'];
+
+const ROLE_COLORS: Record<string, string> = {
+  admin: 'gold',
+  pro: 'purple',
+  user: 'blue',
+};
+
+const roleTag = (role: string | null) => {
+  const label = ROLE_OPTIONS.find((r) => r.value === role)?.label ?? role ?? 'User';
+  return <Tag color={ROLE_COLORS[role ?? 'user'] ?? 'default'}>{label}</Tag>;
+};
 
 type UserRow = {
   banned: boolean | null;
@@ -89,8 +108,7 @@ const AdminUsers = memo(() => {
     },
     {
       dataIndex: 'role',
-      render: (v: string | null) =>
-        v === 'admin' ? <Tag color="gold">Admin</Tag> : <Tag color="blue">User</Tag>,
+      render: (v: string | null) => roleTag(v),
       title: 'Role',
     },
     {
@@ -108,19 +126,14 @@ const AdminUsers = memo(() => {
       fixed: 'right',
       render: (_: unknown, row: UserRow) => (
         <Space size="small">
-          <Button
+          <Select<AppRole>
             loading={roleMutation.isPending}
+            options={ROLE_OPTIONS}
             size="small"
-            type="link"
-            onClick={() =>
-              roleMutation.mutate({
-                role: row.role === 'admin' ? 'user' : 'admin',
-                userId: row.id,
-              })
-            }
-          >
-            {row.role === 'admin' ? 'Demote' : 'Make Admin'}
-          </Button>
+            style={{ width: 110 }}
+            value={(row.role as AppRole) ?? 'user'}
+            onChange={(newRole) => roleMutation.mutate({ role: newRole, userId: row.id })}
+          />
           <Button
             danger={!row.banned}
             loading={banMutation.isPending}
@@ -133,7 +146,7 @@ const AdminUsers = memo(() => {
         </Space>
       ),
       title: 'Actions',
-      width: 180,
+      width: 200,
     },
   ];
 
