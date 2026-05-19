@@ -4,10 +4,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { HotkeyId } from '@/types/hotkey';
 
-import { isTaskPanelRoute, useToggleRightPanelHotkey } from './globalScope';
+import {
+  isAgentProfilePanelRoute,
+  isTaskPanelRoute,
+  useToggleRightPanelHotkey,
+} from './globalScope';
 
 interface MockGlobalState {
   status: { zenMode: boolean };
+  toggleAgentBuilderPanel: () => void;
   toggleRightPanel: () => void;
   toggleTaskAgentPanel: () => void;
   updateSystemStatus: () => void;
@@ -18,6 +23,7 @@ type HotkeyRegistrationArgs = [HotkeyId, () => void, ...unknown[]];
 const mocks = vi.hoisted(() => ({
   hotkeyCallback: undefined as (() => void) | undefined,
   pathname: '/',
+  toggleAgentBuilderPanel: vi.fn(),
   toggleRightPanel: vi.fn(),
   toggleTaskAgentPanel: vi.fn(),
   useHotkeyById: vi.fn(),
@@ -39,6 +45,7 @@ vi.mock('@/store/global', () => ({
   useGlobalStore: (selector: (state: MockGlobalState) => unknown) =>
     selector({
       status: { zenMode: false },
+      toggleAgentBuilderPanel: mocks.toggleAgentBuilderPanel,
       toggleRightPanel: mocks.toggleRightPanel,
       toggleTaskAgentPanel: mocks.toggleTaskAgentPanel,
       updateSystemStatus: vi.fn(),
@@ -53,6 +60,7 @@ describe('globalScope hotkeys', () => {
   beforeEach(() => {
     mocks.hotkeyCallback = undefined;
     mocks.pathname = '/';
+    mocks.toggleAgentBuilderPanel.mockReset();
     mocks.toggleRightPanel.mockReset();
     mocks.toggleTaskAgentPanel.mockReset();
     mocks.useHotkeyById.mockReset();
@@ -69,6 +77,16 @@ describe('globalScope hotkeys', () => {
       expect(isTaskPanelRoute('/task/T-1')).toBe(true);
       expect(isTaskPanelRoute('/agent/inbox')).toBe(false);
       expect(isTaskPanelRoute('/task-template')).toBe(false);
+    });
+  });
+
+  describe('isAgentProfilePanelRoute', () => {
+    it('should match agent profile routes only', () => {
+      expect(isAgentProfilePanelRoute('/agent/agent-1/profile')).toBe(true);
+      expect(isAgentProfilePanelRoute('/agent/agent-1/profile/')).toBe(true);
+      expect(isAgentProfilePanelRoute('/agent/agent-1')).toBe(false);
+      expect(isAgentProfilePanelRoute('/agent/agent-1/profile/edit')).toBe(false);
+      expect(isAgentProfilePanelRoute('/group/group-1/profile')).toBe(false);
     });
   });
 
@@ -109,6 +127,21 @@ describe('globalScope hotkeys', () => {
       });
 
       expect(mocks.toggleRightPanel).toHaveBeenCalledTimes(1);
+      expect(mocks.toggleAgentBuilderPanel).not.toHaveBeenCalled();
+      expect(mocks.toggleTaskAgentPanel).not.toHaveBeenCalled();
+    });
+
+    it('should toggle the agent builder panel on agent profile routes', () => {
+      mocks.pathname = '/agent/agent-1/profile';
+
+      renderHook(() => useToggleRightPanelHotkey());
+
+      act(() => {
+        mocks.hotkeyCallback?.();
+      });
+
+      expect(mocks.toggleAgentBuilderPanel).toHaveBeenCalledTimes(1);
+      expect(mocks.toggleRightPanel).not.toHaveBeenCalled();
       expect(mocks.toggleTaskAgentPanel).not.toHaveBeenCalled();
     });
   });
