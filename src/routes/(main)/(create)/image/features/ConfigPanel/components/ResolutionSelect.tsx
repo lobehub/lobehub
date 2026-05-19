@@ -4,6 +4,9 @@ import { useTranslation } from 'react-i18next';
 
 import { useGenerationConfigParam } from '@/store/image/slices/generationConfig/hooks';
 
+const getResolutionFallbackLabel = (resolution: string) =>
+  resolution === '512' ? '512px' : resolution;
+
 const ResolutionSelect = memo(() => {
   const { t } = useTranslation('image');
   const { value, setValue, enumValues } = useGenerationConfigParam('resolution');
@@ -18,7 +21,9 @@ const ResolutionSelect = memo(() => {
   const options = useMemo(() => {
     if (!enumValues || enumValues.length === 0) return [];
     return enumValues.map((resolution) => ({
-      label: t(`config.resolution.options.${resolution}`, { defaultValue: resolution }),
+      label: t(`config.resolution.options.${resolution}`, {
+        defaultValue: getResolutionFallbackLabel(resolution),
+      }),
       value: resolution,
     }));
   }, [enumValues, t]);
