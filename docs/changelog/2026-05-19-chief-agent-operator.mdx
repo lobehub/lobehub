@@ -1,0 +1,39 @@
+---
+title: Chief Agent Operator — Self-Reviewing Agents That Run Themselves
+description: >-
+  v2.2.0 introduces Chief Agent Operator: long-running agents that self-review, form teams, and pause for human input only when they need to.
+tags:
+  - Chief Agent Operator
+  - Agent Signal
+  - Heterogeneous Agent
+  - Models
+---
+
+# Chief Agent Operator — Self-Reviewing Agents That Run Themselves
+
+## Chief Agent Operator (v2.2.0)
+
+Chief Agent Operator turns single-shot chats into long-running operators. Agents can now self-review their own work and auto-execute the approved follow-up actions — so a task that previously needed you to nudge "ok, do that next" now keeps moving on its own. When the operator hits something it genuinely can't decide on its own, it flips into a `waitingForHuman` state and surfaces an `AskUserQuestion` with freeform notes instead of guessing.
+
+Operators can also spin up teammates on the fly. The new heterogeneous AssistantGroup lets one agent assemble a team of sub-agents whose threads stream back via monitor-style signal callbacks. You can step into any branch to inspect what each teammate is doing, but their threads stay read-only so the operator keeps the wheel.
+
+## Features
+
+- Self-review actions: Agent Signal auto-executes approved follow-up actions instead of pausing for confirmation
+- Agent team orchestration: heterogeneous AssistantGroup with monitor-style signal callbacks and read-only sub-agent inspection
+- `waitingForHuman` operator status with `AskUserQuestion` freeform notes
+- Hardened task scheduler: `maxExecutions` cap, sub-10-minute heartbeat block, race-free SchedulerForm
+- Agent documents index: a cleaner table-format view that hides web crawls
+- Project skills in the working sidebar with inline markdown preview
+- Scene-specific follow-up config: pick a different model per follow-up extraction context
+- New models: Baidu Ernie 5.1, with DeepSeek restored to official pricing and Anthropic-compatible base URLs normalized
+
+## Improvements and fixes
+
+- Desktop no longer logs you out from token-refresh retry loops, and restores your route after an app-update restart.
+- Chat input action chips swapped for icon + colored label format; only the last markdown block animates.
+- Chrome-style dividers between inactive tabs; long Kanban schedule pills no longer wrap.
+- Local-file shell auto-enables hidden-file matching for dot-prefixed patterns; `grepContent` params forward end-to-end.
+- Document handler now rejects unsupported parser types, and tool errors fall back to `stderr` with a clear `UNKNOWN_EXEC_ERROR` prefix.
+- Gemini tool-call `thoughtSignature` and enum/required type sanitization fixed; per-tool timeout is now honored end-to-end.
+- Task routes preserve agent context; Agent Signal isolates memory-agent messages from the main thread.
