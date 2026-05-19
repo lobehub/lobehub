@@ -51,21 +51,4 @@ jobs:
             The growth of project is inseparable from user feedback and contribution, thanks for your contribution! If you are interesting with the lobehub developer community, please join our [discord](https://discord.com/invite/AYFPHvv2jT) and then dm @arvinxx or @canisminor1990. They will invite you to our private developer channel. We are talking about the lobe-chat development or sharing ai newsletter around the world.
           emoji: 'hooray'
           pr-emoji: '+1, heart'
-      - name: Remove inactive label when author responds
-        if: github.event.issue.state == 'open' && github.actor == github.event.issue.user.login
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GH_TOKEN }}
-          script: |
-            const issue = context.payload.issue;
-            const hasInactiveLabel = issue.labels.some(l => l.name === 'Inactive');
 
-            if (hasInactiveLabel) {
-              console.log(`Removing Inactive label from issue #${issue.number}`);
-              await github.rest.issues.removeLabel({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issue.number,
-                name: 'Inactive',
-              });
-            }
