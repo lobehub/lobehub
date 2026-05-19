@@ -236,6 +236,55 @@ describe('aiChatRouter', () => {
     expect(res.topics).toBeUndefined();
   });
 
+  it('should query topics when the new topic carries metadata', async () => {
+    const topicMetadata = { workingDirectory: '/repo' };
+    const mockCreateTopic = vi.fn().mockResolvedValue({ id: 't1' });
+    const mockCreateMessage = vi
+      .fn()
+      .mockImplementationOnce(async (params: CreateMessageParams) =>
+        createMockDbMessage({ ...params, id: 'm-user' }),
+      )
+      .mockImplementationOnce(async (params: CreateMessageParams) =>
+        createMockDbMessage({ ...params, id: 'm-assistant' }),
+      );
+    const mockGet = vi.fn().mockResolvedValue({
+      messages: [{ id: 'm-user' }, { id: 'm-assistant' }],
+      topics: { items: [{ id: 't1', metadata: topicMetadata }], total: 1 },
+    });
+
+    vi.mocked(TopicModel).mockImplementation(() => ({ create: mockCreateTopic }) as any);
+    mockMessageModel(mockCreateMessage);
+    vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
+
+    const caller = aiChatRouter.createCaller(mockCtx as any);
+
+    const res = await caller.sendMessageInServer({
+      newAssistantMessage: { model: 'gpt-4o', provider: 'openai' },
+      newTopic: { metadata: topicMetadata, title: 'T' },
+      newUserMessage: { content: 'hi' },
+      sessionId: 's1',
+      topicPageSize: 20,
+    } as any);
+
+    expect(mockCreateTopic).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: topicMetadata,
+        sessionId: 's1',
+        title: 'T',
+      }),
+    );
+    expect(mockGet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        includeTopic: true,
+        sessionId: 's1',
+        topicId: 't1',
+        topicPageSize: 20,
+      }),
+    );
+    expect(mockGet.mock.calls[0]?.[0]).not.toHaveProperty('prefetchedMessages');
+    expect(res.topics?.items[0]).toEqual({ id: 't1', metadata: topicMetadata });
+  });
+
   it('should reuse existing topic when topicId provided', async () => {
     const mockCreateMessage = vi
       .fn()
@@ -879,6 +928,52 @@ describe('aiChatRouter', () => {
 
       // Verify touchUpdatedAt was called with the agentId
       expect(mockTouchUpdatedAt).toHaveBeenCalledWith('agent-1');
+    });
+
+    it('should keep the message response when agent updatedAt touch fails', async () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const mockCreateTopic = vi.fn().mockResolvedValue({ id: 't1' });
+      const mockCreateMessage = vi
+        .fn()
+        .mockResolvedValueOnce({ id: 'm-user' })
+        .mockResolvedValueOnce({ id: 'm-assistant' });
+      const mockGet = vi.fn().mockResolvedValue({
+        messages: [{ id: 'm-user' }, { id: 'm-assistant' }],
+        topics: undefined,
+      });
+      const touchError = new Error('touch failed');
+      const mockTouchUpdatedAt = vi.fn().mockRejectedValue(touchError);
+
+      try {
+        vi.mocked(TopicModel).mockImplementation(() => ({ create: mockCreateTopic }) as any);
+        mockMessageModel(mockCreateMessage);
+        vi.mocked(AiChatService).mockImplementation(
+          () => ({ getMessagesAndTopics: mockGet }) as any,
+        );
+        vi.mocked(AgentModel).mockImplementation(
+          () => ({ touchUpdatedAt: mockTouchUpdatedAt }) as any,
+        );
+
+        const caller = aiChatRouter.createCaller(mockCtx as any);
+
+        const res = await caller.sendMessageInServer({
+          agentId: 'agent-1',
+          newAssistantMessage: { model: 'gpt-4o', provider: 'openai' },
+          newTopic: { title: 'New Topic' },
+          newUserMessage: { content: 'hi' },
+          sessionId: 's1',
+        } as any);
+
+        expect(res.userMessageId).toBe('m-user');
+        expect(res.assistantMessageId).toBe('m-assistant');
+        expect(mockTouchUpdatedAt).toHaveBeenCalledWith('agent-1');
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          '[aiChat] Failed to touch agent updatedAt:',
+          touchError,
+        );
+      } finally {
+        consoleErrorSpy.mockRestore();
+      }
     });
 
     it('should create messages while agent updatedAt touch is still pending', async () => {

@@ -154,7 +154,7 @@ export const aiChatRouter = router({
       let createdThreadId: string | undefined;
 
       let isCreateNewTopic = false;
-      let agentTouchUpdatedAtPromise: Promise<unknown> | undefined;
+      let agentTouchUpdatedAtTask: Promise<void> | undefined;
 
       // create topic if there should be a new topic
       if (input.newTopic) {
@@ -191,12 +191,16 @@ export const aiChatRouter = router({
 
         // update agent's updatedAt to reflect new activity
         if (input.agentId) {
-          agentTouchUpdatedAtPromise = runTimedStage(
+          agentTouchUpdatedAtTask = runTimedStage(
             timingContext,
             'lambda.aiChat.agent.touchUpdatedAt',
-            () => ctx.agentModel.touchUpdatedAt(input.agentId!),
+            async () => {
+              await ctx.agentModel.touchUpdatedAt(input.agentId!);
+            },
             { hasAgentId: true },
-          );
+          ).catch((error) => {
+            console.error('[aiChat] Failed to touch agent updatedAt:', error);
+          });
           log('agent updatedAt touch scheduled for agentId: %s', input.agentId);
         }
       }
@@ -332,8 +336,8 @@ export const aiChatRouter = router({
         },
       );
       const { assistantMessage: assistantMessageItem, userMessage: userMessageItem } =
-        agentTouchUpdatedAtPromise
-          ? (await Promise.all([createMessagePairPromise, agentTouchUpdatedAtPromise]))[0]
+        agentTouchUpdatedAtTask
+          ? (await Promise.all([createMessagePairPromise, agentTouchUpdatedAtTask]))[0]
           : await createMessagePairPromise;
 
       const messageId = userMessageItem.id;
@@ -341,16 +345,19 @@ export const aiChatRouter = router({
 
       log('assistant message created with id: %s', assistantMessageItem.id);
 
-      const canUseBootstrapMessages =
+      // This fast path skips the full message/topic queries and returns the inserted pair directly.
+      // Keep it limited to plain new-topic messages that do not need related rows or topic metadata.
+      const canUseRelationFreeNewTopicFastPath =
         isCreateNewTopic &&
         !input.newThread &&
         !input.threadId &&
         !input.groupId &&
         !input.newUserMessage.parentId &&
+        !input.newTopic?.metadata &&
         !input.newTopic?.topicMessageIds?.length &&
         !input.preloadMessages?.length &&
         !input.newUserMessage.files?.length;
-      const prefetchedMessages = canUseBootstrapMessages
+      const prefetchedMessages = canUseRelationFreeNewTopicFastPath
         ? [toBootstrapUIMessage(userMessageItem), toBootstrapUIMessage(assistantMessageItem)]
         : undefined;
       const includeTopic = isCreateNewTopic && !prefetchedMessages;
