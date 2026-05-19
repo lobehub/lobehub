@@ -298,7 +298,10 @@ export abstract class ComputerRuntime {
       if (!result.success) {
         return this.errorOutput(result, {
           error: result.error?.message,
+          exitCode: result.result?.exitCode ?? result.result?.exit_code,
           isBackground: args.background || false,
+          stderr: result.result?.stderr,
+          stdout: result.result?.stdout,
           success: false,
         });
       }
