@@ -1,0 +1,156 @@
+name: chinnahub
+
+services:
+  app:
+    build:
+      context: /opt/chinnahub
+      dockerfile: Dockerfile
+    image: chinnahub-app:latest
+    container_name: chinnahub-app
+    restart: always
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rustfs:
+        condition: service_healthy
+      rustfs-init:
+        condition: service_completed_successfully
+    environment:
+      - NODE_ENV=production
+      - HOSTNAME=0.0.0.0
+      - PORT=3210
+      - NEXT_TELEMETRY_DISABLED=1
+      - AUTH_TRUST_HOST=true
+      - KEY_VAULTS_SECRET=${KEY_VAULTS_SECRET}
+      - AUTH_SECRET=${AUTH_SECRET}
+      - APP_URL=${APP_URL}
+      - NEXTAUTH_URL=${APP_URL}
+      - NEXT_PUBLIC_APP_URL=${APP_URL}
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@chinnahub-postgres:5432/${LOBE_DB_NAME}
+      - DATABASE_DRIVER=node
+      - INTERNAL_APP_URL=http://localhost:3210
+      - REDIS_URL=redis://chinnahub-redis:6379
+      - REDIS_PREFIX=chinnahub
+      - REDIS_TLS=0
+      - S3_ENDPOINT=${S3_ENDPOINT}
+      - S3_BUCKET=${S3_BUCKET}
+      - S3_PUBLIC_DOMAIN=${S3_PUBLIC_DOMAIN}
+      - S3_ENABLE_PATH_STYLE=1
+      - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID}
+      - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY}
+      - S3_SET_ACL=0
+      - LLM_VISION_IMAGE_USE_BASE64=1
+      - SEARXNG_URL=http://chinnahub-searxng:8080
+      - AUTH_GOOGLE_ID=${AUTH_GOOGLE_ID}
+      - AUTH_GOOGLE_SECRET=${AUTH_GOOGLE_SECRET}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - SMTP_FROM=${SMTP_FROM}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - OLLAMA_PROXY_URL=${OLLAMA_PROXY_URL}
+    networks:
+      - chinnahub-net
+    labels:
+      - "deployment=chinnahub"
+
+  postgresql:
+    image: paradedb/paradedb:latest-pg17
+    container_name: chinnahub-postgres
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=${LOBE_DB_NAME}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_USER=postgres
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: always
+    networks:
+      - chinnahub-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: chinnahub-redis
+    command: redis-server --save 60 1000 --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', '-a', '${REDIS_PASSWORD}', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: always
+    networks:
+      - chinnahub-net
+
+  rustfs:
+    image: rustfs/rustfs:latest
+    container_name: chinnahub-rustfs
+    environment:
+      - RUSTFS_CONSOLE_ENABLE=true
+      - RUSTFS_ACCESS_KEY=${S3_ACCESS_KEY_ID}
+      - RUSTFS_SECRET_KEY=${S3_SECRET_ACCESS_KEY}
+    volumes:
+      - rustfs-data:/data
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:9000/health >/dev/null 2>&1 || exit 1']
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    command:
+      ['--access-key', '${S3_ACCESS_KEY_ID}', '--secret-key', '${S3_SECRET_ACCESS_KEY}', '/data']
+    restart: always
+    networks:
+      - chinnahub-net
+
+  rustfs-init:
+    image: minio/mc:latest
+    container_name: chinnahub-rustfs-init
+    depends_on:
+      rustfs:
+        condition: service_healthy
+    volumes:
+      - ../deploy/bucket.config.json:/bucket.config.json:ro
+    entrypoint: /bin/sh
+    command: -c '
+        set -eux;
+        mc alias set rustfs "http://chinnahub-rustfs:9000" "${S3_ACCESS_KEY_ID}" "${S3_SECRET_ACCESS_KEY}";
+        mc mb "rustfs/${S3_BUCKET}" --ignore-existing;
+        mc anonymous set-json "/bucket.config.json" "rustfs/${S3_BUCKET}";
+      '
+    restart: 'no'
+    networks:
+      - chinnahub-net
+
+  searxng:
+    image: searxng/searxng
+    container_name: chinnahub-searxng
+    volumes:
+      - ../dev/searxng-settings.yml:/etc/searxng/settings.yml
+    environment:
+      - SEARXNG_SETTINGS_FILE=/etc/searxng/settings.yml
+    restart: always
+    networks:
+      - chinnahub-net
+
+networks:
+  chinnahub-net:
+    name: chinnahub-net
+    external: true
+
+volumes:
+  postgres-data:
+    name: chinnahub_postgres_data
+  redis-data:
+    name: chinnahub_redis_data
+  rustfs-data:
+    name: chinnahub_rustfs_data
