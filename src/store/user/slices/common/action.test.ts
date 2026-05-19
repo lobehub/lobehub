@@ -41,6 +41,49 @@ describe('createCommonSlice', () => {
     });
   });
 
+  describe('updateInterests', () => {
+    it('optimistically updates user.interests before the service call resolves', async () => {
+      act(() => {
+        useUserStore.setState({ user: { id: 'u1', interests: ['old'] } as any });
+      });
+
+      let resolveService: () => void = () => {};
+      const updateSpy = vi.spyOn(userService, 'updateInterests').mockImplementation(
+        () =>
+          new Promise<void>((r) => {
+            resolveService = r;
+          }) as any,
+      );
+
+      let pending: Promise<void> | undefined;
+      act(() => {
+        pending = useUserStore.getState().updateInterests(['new']);
+      });
+
+      // optimistic: interests reflect the new value immediately
+      expect(useUserStore.getState().user?.interests).toEqual(['new']);
+
+      await act(async () => {
+        resolveService();
+        await pending;
+      });
+
+      expect(updateSpy).toHaveBeenCalledWith(['new']);
+    });
+
+    it('rolls back user.interests when the service call fails', async () => {
+      act(() => {
+        useUserStore.setState({ user: { id: 'u1', interests: ['old'] } as any });
+      });
+
+      vi.spyOn(userService, 'updateInterests').mockRejectedValue(new Error('boom'));
+
+      await expect(useUserStore.getState().updateInterests(['new'])).rejects.toThrow('boom');
+
+      expect(useUserStore.getState().user?.interests).toEqual(['old']);
+    });
+  });
+
   describe('useInitUserState', () => {
     const mockServerConfig = {
       defaultAgent: 'agent1',

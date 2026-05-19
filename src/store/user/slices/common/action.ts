@@ -54,8 +54,26 @@ export class CommonActionImpl {
   };
 
   updateInterests = async (interests: string[]): Promise<void> => {
-    await userService.updateInterests(interests);
-    await this.#get().refreshUserState();
+    const previousUser = this.#get().user;
+    const previousInterests = previousUser?.interests;
+
+    if (previousUser) {
+      this.#set({ user: { ...previousUser, interests } }, false, n('updateInterests/optimistic'));
+    }
+
+    try {
+      await userService.updateInterests(interests);
+      await this.#get().refreshUserState();
+    } catch (error) {
+      if (previousUser) {
+        this.#set(
+          { user: { ...previousUser, interests: previousInterests } },
+          false,
+          n('updateInterests/rollback'),
+        );
+      }
+      throw error;
+    }
   };
 
   updateKeyVaultConfig = async (provider: string, config: any): Promise<void> => {
