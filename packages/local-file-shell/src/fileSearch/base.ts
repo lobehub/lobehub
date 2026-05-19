@@ -1,79 +1,67 @@
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
 
-import type { GlobFilesParams, GlobFilesResult } from '@lobechat/electron-client-ipc';
-
-import type { ToolDetectorManager } from '@/core/infrastructure/ToolDetectorManager';
-
-import type { FileResult, SearchOptions } from './types';
+import type { ToolDetector } from '../toolDetector';
+import type { FileResult, GlobFilesParams, GlobFilesResult, SearchFilesParams } from '../types';
 
 /**
  * Content type mapping for common file extensions
  */
 const CONTENT_TYPE_MAP: Record<string, string> = {
-  // Archive
   '7z': 'archive',
-  'gz': 'archive',
-  'rar': 'archive',
-  'tar': 'archive',
-  'zip': 'archive',
-  // Audio
   'aac': 'audio',
-  'mp3': 'audio',
-  'ogg': 'audio',
-  'wav': 'audio',
-  // Video
+  'app': 'application',
   'avi': 'video',
-  'mkv': 'video',
-  'mov': 'video',
-  'mp4': 'video',
-  // Image
-  'gif': 'image',
-  'heic': 'image',
-  'ico': 'image',
-  'jpeg': 'image',
-  'jpg': 'image',
-  'png': 'image',
-  'svg': 'image',
-  'webp': 'image',
-  // Document
-  'doc': 'document',
-  'docx': 'document',
-  'pdf': 'document',
-  'rtf': 'text',
-  'txt': 'text',
-  // Spreadsheet
-  'xls': 'spreadsheet',
-  'xlsx': 'spreadsheet',
-  // Presentation
-  'ppt': 'presentation',
-  'pptx': 'presentation',
-  // Code
   'bat': 'code',
   'c': 'code',
   'cmd': 'code',
   'cpp': 'code',
   'cs': 'code',
   'css': 'code',
-  'html': 'code',
-  'java': 'code',
-  'js': 'code',
-  'json': 'code',
-  'ps1': 'code',
-  'py': 'code',
-  'sh': 'code',
-  'swift': 'code',
-  'ts': 'code',
-  'tsx': 'code',
-  'vbs': 'code',
-  // Application/Installer (platform-specific)
-  'app': 'application',
   'deb': 'package',
   'dmg': 'disk-image',
+  'doc': 'document',
+  'docx': 'document',
   'exe': 'application',
+  'gif': 'image',
+  'gz': 'archive',
+  'heic': 'image',
+  'html': 'code',
+  'ico': 'image',
   'iso': 'disk-image',
+  'java': 'code',
+  'jpeg': 'image',
+  'jpg': 'image',
+  'js': 'code',
+  'json': 'code',
+  'mkv': 'video',
+  'mov': 'video',
+  'mp3': 'audio',
+  'mp4': 'video',
   'msi': 'installer',
+  'ogg': 'audio',
+  'pdf': 'document',
+  'png': 'image',
+  'ppt': 'presentation',
+  'pptx': 'presentation',
+  'ps1': 'code',
+  'py': 'code',
+  'rar': 'archive',
   'rpm': 'package',
+  'rtf': 'text',
+  'sh': 'code',
+  'svg': 'image',
+  'swift': 'code',
+  'tar': 'archive',
+  'ts': 'code',
+  'tsx': 'code',
+  'txt': 'text',
+  'vbs': 'code',
+  'wav': 'audio',
+  'webp': 'image',
+  'xls': 'spreadsheet',
+  'xlsx': 'spreadsheet',
+  'zip': 'archive',
 };
 
 /**
@@ -81,33 +69,22 @@ const CONTENT_TYPE_MAP: Record<string, string> = {
  * Defines the interface that different platform file search implementations need to implement
  */
 export abstract class BaseFileSearch {
-  protected toolDetectorManager?: ToolDetectorManager;
+  protected toolDetector?: ToolDetector;
 
-  constructor(toolDetectorManager?: ToolDetectorManager) {
-    this.toolDetectorManager = toolDetectorManager;
+  constructor(toolDetector?: ToolDetector) {
+    this.toolDetector = toolDetector;
   }
 
-  /**
-   * Set the tool detector manager
-   * @param manager ToolDetectorManager instance
-   */
-  setToolDetectorManager(manager: ToolDetectorManager): void {
-    this.toolDetectorManager = manager;
+  setToolDetector(detector: ToolDetector): void {
+    this.toolDetector = detector;
   }
 
-  /**
-   * Determine content type from file extension
-   * @param extension File extension (without dot)
-   * @returns Content type description
-   */
   protected determineContentType(extension: string): string {
     return CONTENT_TYPE_MAP[extension.toLowerCase()] || 'unknown';
   }
 
   /**
    * Escape special glob characters in the search pattern
-   * @param pattern The pattern to escape
-   * @returns Escaped pattern safe for glob matching
    */
   protected escapeGlobPattern(pattern: string): string {
     return pattern.replaceAll(/[$()*+.?[\\\]^{|}]/g, '\\$&');
@@ -115,14 +92,10 @@ export abstract class BaseFileSearch {
 
   /**
    * Process file paths and return FileResult objects
-   * @param filePaths Array of file path strings
-   * @param options Search options
-   * @param engine Optional search engine identifier
-   * @returns Formatted file result list
    */
   protected async processFilePaths(
     filePaths: string[],
-    options: SearchOptions,
+    options: SearchFilesParams,
     engine?: string,
   ): Promise<FileResult[]> {
     const results: FileResult[] = [];
@@ -153,16 +126,9 @@ export abstract class BaseFileSearch {
     return this.sortResults(results, options.sortBy, options.sortDirection);
   }
 
-  /**
-   * Sort results based on options
-   * @param results Result list
-   * @param sortBy Sort field
-   * @param direction Sort direction
-   * @returns Sorted result list
-   */
   protected sortResults(
     results: FileResult[],
-    sortBy?: 'name' | 'date' | 'size',
+    sortBy?: 'date' | 'name' | 'size',
     direction: 'asc' | 'desc' = 'asc',
   ): FileResult[] {
     if (!sortBy) return results;
@@ -187,30 +153,11 @@ export abstract class BaseFileSearch {
     });
   }
 
-  /**
-   * Perform file search
-   * @param options Search options
-   * @returns Promise of search result list
-   */
-  abstract search(options: SearchOptions): Promise<FileResult[]>;
+  abstract search(options: SearchFilesParams): Promise<FileResult[]>;
 
-  /**
-   * Perform glob pattern matching
-   * @param params Glob parameters
-   * @returns Promise of glob result
-   */
   abstract glob(params: GlobFilesParams): Promise<GlobFilesResult>;
 
-  /**
-   * Check search service status
-   * @returns Promise indicating if service is available
-   */
   abstract checkSearchServiceStatus(): Promise<boolean>;
 
-  /**
-   * Update search index
-   * @param path Optional specified path
-   * @returns Promise indicating operation success
-   */
   abstract updateSearchIndex(path?: string): Promise<boolean>;
 }

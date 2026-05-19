@@ -2,43 +2,33 @@ import { type Stats } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import * as os from 'node:os';
 
-import { type GlobFilesParams, type GlobFilesResult } from '@lobechat/electron-client-ipc';
 import { execa } from 'execa';
 import fg from 'fast-glob';
 
-import { type ToolDetectorManager } from '@/core/infrastructure/ToolDetectorManager';
-import { createLogger } from '@/utils/logger';
-
+import { createLogger } from '../../logger';
+import { type ToolDetector } from '../../toolDetector';
+import type { FileResult, GlobFilesParams, GlobFilesResult, SearchFilesParams } from '../../types';
 import { BaseFileSearch } from '../base';
-import { type FileResult, type SearchOptions } from '../types';
 
-const logger = createLogger('module:FileSearch:unix');
+const logger = createLogger('fileSearch:unix');
 
 /**
  * Fallback tool type for Unix file search
  * Priority: fd > find > fast-glob
  */
-export type UnixSearchTool = 'fd' | 'find' | 'fast-glob';
+export type UnixSearchTool = 'fast-glob' | 'fd' | 'find';
 
 /**
  * Unix file search base class
  * Provides common search implementations for macOS and Linux
  */
 export abstract class UnixFileSearch extends BaseFileSearch {
-  /**
-   * Current fallback tool being used
-   */
   protected currentTool: UnixSearchTool | null = null;
 
-  constructor(toolDetectorManager?: ToolDetectorManager) {
-    super(toolDetectorManager);
+  constructor(toolDetector?: ToolDetector) {
+    super(toolDetector);
   }
 
-  /**
-   * Check if a tool is available using 'which' command
-   * @param tool Tool name to check
-   * @returns Promise indicating if tool is available
-   */
   protected async checkToolAvailable(tool: string): Promise<boolean> {
     try {
       await execa('which', [tool], { timeout: 3000 });
@@ -48,14 +38,9 @@ export abstract class UnixFileSearch extends BaseFileSearch {
     }
   }
 
-  /**
-   * Determine the best available Unix tool based on priority
-   * Priority: fd > find > fast-glob
-   * @returns The best available tool
-   */
   protected async determineBestUnixTool(): Promise<UnixSearchTool> {
-    if (this.toolDetectorManager) {
-      const bestTool = await this.toolDetectorManager.getBestTool('file-search');
+    if (this.toolDetector) {
+      const bestTool = await this.toolDetector.getBestTool('file-search');
       if (bestTool && ['fd', 'find'].includes(bestTool)) {
         return bestTool as UnixSearchTool;
       }
@@ -72,11 +57,6 @@ export abstract class UnixFileSearch extends BaseFileSearch {
     return 'fast-glob';
   }
 
-  /**
-   * Fallback to the next available tool
-   * @param currentTool Current tool that failed
-   * @returns Next tool to try
-   */
   protected async fallbackToNextTool(currentTool: UnixSearchTool): Promise<UnixSearchTool> {
     const priority: UnixSearchTool[] = ['fd', 'find', 'fast-glob'];
     const currentIndex = priority.indexOf(currentTool);
@@ -84,7 +64,7 @@ export abstract class UnixFileSearch extends BaseFileSearch {
     for (let i = currentIndex + 1; i < priority.length; i++) {
       const nextTool = priority[i];
       if (nextTool === 'fast-glob') {
-        return 'fast-glob'; // Always available
+        return 'fast-glob';
       }
       if (await this.checkToolAvailable(nextTool)) {
         return nextTool;
@@ -94,15 +74,9 @@ export abstract class UnixFileSearch extends BaseFileSearch {
     return 'fast-glob';
   }
 
-  /**
-   * Search using the specified Unix tool
-   * @param tool Tool to use for search
-   * @param options Search options
-   * @returns Search results
-   */
   protected async searchWithUnixTool(
     tool: UnixSearchTool,
-    options: SearchOptions,
+    options: SearchFilesParams,
   ): Promise<FileResult[]> {
     switch (tool) {
       case 'fd': {
@@ -117,13 +91,8 @@ export abstract class UnixFileSearch extends BaseFileSearch {
     }
   }
 
-  /**
-   * Search using fd (fast find alternative)
-   * @param options Search options
-   * @returns Search results
-   */
-  protected async searchWithFd(options: SearchOptions): Promise<FileResult[]> {
-    const searchDir = options.onlyIn || os.homedir() || '/';
+  protected async searchWithFd(options: SearchFilesParams): Promise<FileResult[]> {
+    const searchDir = options.onlyIn || options.directory || os.homedir() || '/';
     const limit = options.limit || 30;
 
     logger.debug('Performing fd search', { keywords: options.keywords, searchDir });
@@ -131,14 +100,12 @@ export abstract class UnixFileSearch extends BaseFileSearch {
     try {
       const args: string[] = [];
 
-      // Pattern matching
       if (options.keywords) {
         args.push(options.keywords);
       } else {
-        args.push('.'); // Match all files
+        args.push('.');
       }
 
-      // Search directory and options
       args.push(searchDir, '--type', 'f', '--hidden', '--ignore-case', '--max-depth', '10');
       args.push(
         '--max-results',
@@ -178,13 +145,8 @@ export abstract class UnixFileSearch extends BaseFileSearch {
     }
   }
 
-  /**
-   * Search using find (Unix standard tool)
-   * @param options Search options
-   * @returns Search results
-   */
-  protected async searchWithFind(options: SearchOptions): Promise<FileResult[]> {
-    const searchDir = options.onlyIn || os.homedir() || '/';
+  protected async searchWithFind(options: SearchFilesParams): Promise<FileResult[]> {
+    const searchDir = options.onlyIn || options.directory || os.homedir() || '/';
     const limit = options.limit || 30;
 
     logger.debug('Performing find search', { keywords: options.keywords, searchDir });
@@ -210,9 +172,6 @@ export abstract class UnixFileSearch extends BaseFileSearch {
         '-o',
       ];
 
-      // Limit depth and exclude common directories
-
-      // Pattern matching
       if (options.keywords) {
         args.push('-iname', `*${options.keywords}*`);
       }
@@ -247,19 +206,13 @@ export abstract class UnixFileSearch extends BaseFileSearch {
     }
   }
 
-  /**
-   * Search using fast-glob (pure Node.js implementation)
-   * @param options Search options
-   * @returns Search results
-   */
-  protected async searchWithFastGlob(options: SearchOptions): Promise<FileResult[]> {
-    const searchDir = options.onlyIn || os.homedir() || '/';
+  protected async searchWithFastGlob(options: SearchFilesParams): Promise<FileResult[]> {
+    const searchDir = options.onlyIn || options.directory || os.homedir() || '/';
     const limit = options.limit || 30;
 
     logger.debug('Performing fast-glob search', { keywords: options.keywords, searchDir });
 
     try {
-      // Build glob pattern from keywords
       const pattern = options.keywords
         ? `**/*${this.escapeGlobPattern(options.keywords)}*`
         : '**/*';
@@ -268,7 +221,7 @@ export abstract class UnixFileSearch extends BaseFileSearch {
         absolute: true,
         caseSensitiveMatch: false,
         cwd: searchDir,
-        deep: 10, // Limit depth for performance
+        deep: 10,
         dot: true,
         ignore: this.getDefaultIgnorePatterns(),
         onlyFiles: true,
@@ -285,11 +238,6 @@ export abstract class UnixFileSearch extends BaseFileSearch {
     }
   }
 
-  /**
-   * Get default ignore patterns for fast-glob
-   * Can be overridden by subclasses for platform-specific patterns
-   * @returns Array of ignore patterns
-   */
   protected getDefaultIgnorePatterns(): string[] {
     return ['**/node_modules/**', '**/.git/**', '**/.*cache*/**'];
   }
@@ -297,23 +245,14 @@ export abstract class UnixFileSearch extends BaseFileSearch {
   /**
    * Perform glob pattern matching
    * Uses fd > find > fast-glob fallback strategy
-   * @param params Glob parameters
-   * @returns Promise of glob result
    */
   async glob(params: GlobFilesParams): Promise<GlobFilesResult> {
-    // Determine the best available tool
     const tool = await this.determineBestUnixTool();
     logger.info(`Using glob tool: ${tool}`);
 
     return this.globWithUnixTool(tool, params);
   }
 
-  /**
-   * Glob using the specified Unix tool
-   * @param tool Tool to use for glob
-   * @param params Glob parameters
-   * @returns Glob results
-   */
   protected async globWithUnixTool(
     tool: UnixSearchTool,
     params: GlobFilesParams,
@@ -331,13 +270,8 @@ export abstract class UnixFileSearch extends BaseFileSearch {
     }
   }
 
-  /**
-   * Glob using fd
-   * @param params Glob parameters
-   * @returns Glob results
-   */
   protected async globWithFd(params: GlobFilesParams): Promise<GlobFilesResult> {
-    const searchPath = params.scope || os.homedir() || process.cwd();
+    const searchPath = params.scope || params.cwd || os.homedir() || process.cwd();
     const logPrefix = `[glob:fd: ${params.pattern}]`;
 
     logger.debug(`${logPrefix} Starting fd glob`, { searchPath });
@@ -350,6 +284,10 @@ export abstract class UnixFileSearch extends BaseFileSearch {
         '--absolute-path',
         '--hidden',
         '--no-ignore',
+        '--exclude',
+        'node_modules',
+        '--exclude',
+        '.git',
       ];
 
       const { stdout, exitCode } = await execa('fd', args, {
@@ -367,7 +305,6 @@ export abstract class UnixFileSearch extends BaseFileSearch {
         .split('\n')
         .filter((line) => line.trim());
 
-      // Get stats for sorting by mtime
       const filesWithStats = await this.getFilesWithStats(files);
       const sortedFiles = filesWithStats.sort((a, b) => b.mtime - a.mtime).map((f) => f.path);
 
@@ -386,30 +323,19 @@ export abstract class UnixFileSearch extends BaseFileSearch {
     }
   }
 
-  /**
-   * Glob using find
-   * Note: find has limited glob support, converts pattern to -name/-path
-   * @param params Glob parameters
-   * @returns Glob results
-   */
   protected async globWithFind(params: GlobFilesParams): Promise<GlobFilesResult> {
-    const searchPath = params.scope || os.homedir() || process.cwd();
+    const searchPath = params.scope || params.cwd || os.homedir() || process.cwd();
     const logPrefix = `[glob:find: ${params.pattern}]`;
 
     logger.debug(`${logPrefix} Starting find glob`, { searchPath });
 
     try {
-      // Convert glob pattern to find -name pattern
-      // find doesn't support full glob, so we do basic conversion
       const pattern = params.pattern;
       const args: string[] = [searchPath];
 
-      // Check if pattern contains directory separators
       if (pattern.includes('/')) {
-        // Use -path for patterns with directories
         args.push('-path', pattern);
       } else {
-        // Use -name for simple patterns
         args.push('-name', pattern);
       }
 
@@ -430,7 +356,6 @@ export abstract class UnixFileSearch extends BaseFileSearch {
         .split('\n')
         .filter((line) => line.trim());
 
-      // Get stats for sorting by mtime
       const filesWithStats = await this.getFilesWithStats(files);
       const sortedFiles = filesWithStats.sort((a, b) => b.mtime - a.mtime).map((f) => f.path);
 
@@ -449,13 +374,8 @@ export abstract class UnixFileSearch extends BaseFileSearch {
     }
   }
 
-  /**
-   * Glob using fast-glob (Node.js fallback)
-   * @param params Glob parameters
-   * @returns Glob results
-   */
   protected async globWithFastGlob(params: GlobFilesParams): Promise<GlobFilesResult> {
-    const searchPath = params.scope || os.homedir() || process.cwd();
+    const searchPath = params.scope || params.cwd || os.homedir() || process.cwd();
     const logPrefix = `[glob:fast-glob: ${params.pattern}]`;
 
     logger.debug(`${logPrefix} Starting fast-glob`, { searchPath });
@@ -465,11 +385,11 @@ export abstract class UnixFileSearch extends BaseFileSearch {
         absolute: true,
         cwd: searchPath,
         dot: true,
+        ignore: ['**/node_modules/**', '**/.git/**'],
         onlyFiles: false,
         stats: true,
       });
 
-      // Sort by modification time (most recent first)
       const sortedFiles = (files as unknown as Array<{ path: string; stats: Stats }>)
         .sort((a, b) => b.stats.mtime.getTime() - a.stats.mtime.getTime())
         .map((f) => f.path);
@@ -494,11 +414,6 @@ export abstract class UnixFileSearch extends BaseFileSearch {
     }
   }
 
-  /**
-   * Get file stats for sorting
-   * @param files File paths
-   * @returns Files with mtime
-   */
   private async getFilesWithStats(
     files: string[],
   ): Promise<Array<{ mtime: number; path: string }>> {
@@ -509,7 +424,6 @@ export abstract class UnixFileSearch extends BaseFileSearch {
         const stats = await stat(filePath);
         results.push({ mtime: stats.mtime.getTime(), path: filePath });
       } catch {
-        // Skip files that can't be stat'd
         results.push({ mtime: 0, path: filePath });
       }
     }

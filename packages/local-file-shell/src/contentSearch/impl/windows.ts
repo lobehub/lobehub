@@ -1,39 +1,30 @@
-import type { GrepContentParams, GrepContentResult } from '@lobechat/electron-client-ipc';
 import { execa } from 'execa';
 
-import type { ToolDetectorManager } from '@/core/infrastructure/ToolDetectorManager';
-import { createLogger } from '@/utils/logger';
-
+import { createLogger } from '../../logger';
+import type { ToolDetector } from '../../toolDetector';
+import type { GrepContentParams, GrepContentResult } from '../../types';
 import { BaseContentSearch } from '../base';
 
-const logger = createLogger('module:ContentSearch:windows');
+const logger = createLogger('contentSearch:windows');
 
 /**
  * Windows content search tool type
  * Priority: rg > findstr/powershell > nodejs
  */
-type WindowsContentSearchTool = 'rg' | 'findstr' | 'nodejs';
+type WindowsContentSearchTool = 'findstr' | 'nodejs' | 'rg';
 
 /**
  * Windows content search implementation
  * Uses rg > findstr > nodejs fallback strategy
  */
 export class WindowsContentSearchImpl extends BaseContentSearch {
-  /**
-   * Current tool being used
-   */
   private currentTool: WindowsContentSearchTool | null = null;
 
-  constructor(toolDetectorManager?: ToolDetectorManager) {
-    super(toolDetectorManager);
+  constructor(toolDetector?: ToolDetector) {
+    super(toolDetector);
     logger.debug('WindowsContentSearchImpl initialized');
   }
 
-  /**
-   * Check if a tool is available using 'where' command (Windows equivalent of 'which')
-   * @param tool Tool name to check
-   * @returns Promise indicating if tool is available
-   */
   async checkToolAvailable(tool: string): Promise<boolean> {
     try {
       await execa('where', [tool], { timeout: 3000 });
@@ -43,13 +34,9 @@ export class WindowsContentSearchImpl extends BaseContentSearch {
     }
   }
 
-  /**
-   * Determine the best available tool based on priority
-   * Priority: rg > findstr > nodejs
-   */
   private async determineBestTool(): Promise<WindowsContentSearchTool> {
-    if (this.toolDetectorManager) {
-      const bestTool = await this.toolDetectorManager.getBestTool('content-search');
+    if (this.toolDetector) {
+      const bestTool = await this.toolDetector.getBestTool('content-search');
       if (bestTool === 'rg') {
         return 'rg';
       }
@@ -63,9 +50,6 @@ export class WindowsContentSearchImpl extends BaseContentSearch {
     return 'findstr';
   }
 
-  /**
-   * Fallback to the next available tool
-   */
   private async fallbackToNextTool(
     currentTool: WindowsContentSearchTool,
   ): Promise<WindowsContentSearchTool> {
@@ -75,7 +59,7 @@ export class WindowsContentSearchImpl extends BaseContentSearch {
     for (let i = currentIndex + 1; i < priority.length; i++) {
       const nextTool = priority[i];
       if (nextTool === 'nodejs' || nextTool === 'findstr') {
-        return nextTool; // Always available
+        return nextTool;
       }
       if (await this.checkToolAvailable(nextTool)) {
         return nextTool;
@@ -85,15 +69,11 @@ export class WindowsContentSearchImpl extends BaseContentSearch {
     return 'nodejs';
   }
 
-  /**
-   * Perform content search (grep)
-   */
   async grep(params: GrepContentParams): Promise<GrepContentResult> {
     const { tool: preferredTool } = params;
     const logPrefix = `[grepContent: ${params.pattern}]`;
 
     try {
-      // If user specified ripgrep, try to use it
       if (preferredTool === 'rg') {
         if (await this.checkToolAvailable('rg')) {
           logger.debug(`${logPrefix} Using preferred tool: rg`);
@@ -102,7 +82,6 @@ export class WindowsContentSearchImpl extends BaseContentSearch {
         logger.warn(`${logPrefix} ripgrep (rg) not available, falling back to other tools`);
       }
 
-      // Determine the best available tool on first search
       if (this.currentTool === null) {
         this.currentTool = await this.determineBestTool();
         logger.info(`Using content search tool: ${this.currentTool}`);
@@ -121,9 +100,6 @@ export class WindowsContentSearchImpl extends BaseContentSearch {
     }
   }
 
-  /**
-   * Search using the specified tool
-   */
   private async grepWithTool(
     tool: WindowsContentSearchTool,
     params: GrepContentParams,
@@ -141,9 +117,6 @@ export class WindowsContentSearchImpl extends BaseContentSearch {
     }
   }
 
-  /**
-   * Grep using ripgrep (rg) - cross-platform
-   */
   private async grepWithRipgrep(params: GrepContentParams): Promise<GrepContentResult> {
     const { output_mode = 'files_with_matches' } = params;
     const searchPath = this.resolveSearchPath(params);
@@ -158,7 +131,6 @@ export class WindowsContentSearchImpl extends BaseContentSearch {
         reject: false,
       });
 
-      // ripgrep returns 1 when no matches found, which is not an error
       if (exitCode !== 0 && exitCode !== 1 && stderr) {
         logger.warn(`${logPrefix} rg exited with code ${exitCode}: ${stderr}`);
       }
@@ -195,7 +167,6 @@ export class WindowsContentSearchImpl extends BaseContentSearch {
         }
       }
 
-      // Apply head_limit
       if (params.head_limit && matches.length > params.head_limit) {
         matches = matches.slice(0, params.head_limit);
       }
@@ -218,9 +189,6 @@ export class WindowsContentSearchImpl extends BaseContentSearch {
     }
   }
 
-  /**
-   * Get actual match count using ripgrep
-   */
   private async getActualMatchCount(params: GrepContentParams): Promise<number> {
     const countParams = { ...params, '-A': undefined, '-B': undefined, '-C': undefined };
     const args = this.buildGrepArgs('rg', {
@@ -247,31 +215,25 @@ export class WindowsContentSearchImpl extends BaseContentSearch {
     }
   }
 
-  /**
-   * Grep using Windows findstr command
-   * Note: findstr has limited functionality compared to ripgrep
-   */
   private async grepWithFindstr(params: GrepContentParams): Promise<GrepContentResult> {
     const { pattern, output_mode = 'files_with_matches' } = params;
     const searchPath = this.resolveSearchPath(params);
     const logPrefix = `[grepContent:findstr]`;
 
     try {
-      const args: string[] = ['/S']; // Recursive search
+      const args: string[] = ['/S'];
 
       if (params['-i']) {
-        args.push('/I'); // Case insensitive
+        args.push('/I');
       }
 
       if (params['-n']) {
-        args.push('/N'); // Line numbers
+        args.push('/N');
       }
 
-      // Pattern
-      args.push('/R'); // Regex
+      args.push('/R');
       args.push(`"${pattern}"`);
 
-      // Search files pattern
       const filePattern = params.glob || params.type ? `*.${params.type || '*'}` : '*.*';
       args.push(filePattern);
 
@@ -282,7 +244,6 @@ export class WindowsContentSearchImpl extends BaseContentSearch {
         reject: false,
       });
 
-      // findstr returns 1 when no matches found
       if (exitCode !== 0 && exitCode !== 1) {
         logger.warn(`${logPrefix} findstr exited with code ${exitCode}`);
       }
@@ -293,7 +254,6 @@ export class WindowsContentSearchImpl extends BaseContentSearch {
 
       switch (output_mode) {
         case 'files_with_matches': {
-          // Extract unique file names from output
           const files = new Set<string>();
           for (const line of lines) {
             const match = line.match(/^([^:]+):/);
@@ -301,7 +261,7 @@ export class WindowsContentSearchImpl extends BaseContentSearch {
               files.add(match[1]);
             }
           }
-          matches = Array.from(files);
+          matches = [...files];
           totalMatches = matches.length;
           break;
         }
@@ -311,7 +271,6 @@ export class WindowsContentSearchImpl extends BaseContentSearch {
           break;
         }
         case 'count': {
-          // Count matches per file
           const fileCounts = new Map<string, number>();
           for (const line of lines) {
             const match = line.match(/^([^:]+):/);
@@ -319,13 +278,12 @@ export class WindowsContentSearchImpl extends BaseContentSearch {
               fileCounts.set(match[1], (fileCounts.get(match[1]) || 0) + 1);
             }
           }
-          matches = Array.from(fileCounts.entries()).map(([file, count]) => `${file}:${count}`);
+          matches = [...fileCounts.entries()].map(([file, count]) => `${file}:${count}`);
           totalMatches = lines.length;
           break;
         }
       }
 
-      // Apply head_limit
       if (params.head_limit && matches.length > params.head_limit) {
         matches = matches.slice(0, params.head_limit);
       }
@@ -348,9 +306,6 @@ export class WindowsContentSearchImpl extends BaseContentSearch {
     }
   }
 
-  /**
-   * Get Windows-specific ignore patterns
-   */
   protected override getDefaultIgnorePatterns(): string[] {
     return [
       ...super.getDefaultIgnorePatterns(),

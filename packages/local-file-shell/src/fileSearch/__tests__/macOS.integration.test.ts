@@ -20,14 +20,14 @@ describe.skipIf(process.platform !== 'darwin')('MacOSSearchServiceImpl Integrati
   const searchService = new MacOSSearchServiceImpl();
   const ensureResults = (results: unknown[], context: string) => {
     if (results.length > 0) return true;
-     
+
     console.warn(`⚠️  Spotlight returned 0 results for ${context} - indexing may be incomplete`);
     return false;
   };
 
   const ensureResultsOrSkipAssertions = (results: unknown[], hint: string) => {
     if (results.length > 0) return true;
-     
+
     console.warn(
       `⚠️  Spotlight returned 0 results for "${hint}". This usually means indexing is incomplete/disabled. Skipping strict assertions.`,
     );
@@ -107,7 +107,6 @@ describe.skipIf(process.platform !== 'darwin')('MacOSSearchServiceImpl Integrati
           expect(result.path).toContain('apps/desktop');
         });
       } else {
-         
         console.warn(
           '⚠️  No results found in apps/desktop - Spotlight indexing may not be complete',
         );
@@ -373,6 +372,5 @@ describe.skipIf(process.platform !== 'darwin')('MacOSSearchServiceImpl Integrati
 
 // Skip message for non-macOS platforms
 if (process.platform !== 'darwin') {
-   
   console.log('⏭️  Skipping macOS integration tests on', process.platform, '(only runs on darwin)');
 }

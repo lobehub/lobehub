@@ -7,7 +7,7 @@ vi.mock('node:os', () => ({
   platform: vi.fn().mockReturnValue('linux'),
 }));
 
-vi.mock('@/utils/logger', () => ({
+vi.mock('../../logger', () => ({
   createLogger: () => ({
     debug: vi.fn(),
     error: vi.fn(),

@@ -13,7 +13,7 @@ vi.mock('node:os', () => ({
 }));
 
 // Mock logger
-vi.mock('@/utils/logger', () => ({
+vi.mock('../../logger', () => ({
   createLogger: () => ({
     debug: vi.fn(),
     error: vi.fn(),
@@ -55,12 +55,12 @@ describe('createContentSearchImpl', () => {
     expect(impl).toBeInstanceOf(LinuxContentSearchImpl);
   });
 
-  it('should pass toolDetectorManager to implementation', () => {
+  it('should pass toolDetector to implementation', () => {
     vi.mocked(os.platform).mockReturnValue('linux');
-    const mockManager = {} as any;
+    const mockDetector = { getBestTool: async () => null } as any;
 
-    const impl = createContentSearchImpl(mockManager);
+    const impl = createContentSearchImpl(mockDetector);
 
-    expect((impl as any).toolDetectorManager).toBe(mockManager);
+    expect((impl as any).toolDetector).toBe(mockDetector);
   });
 });

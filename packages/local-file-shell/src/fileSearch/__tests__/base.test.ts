@@ -1,11 +1,10 @@
-import type { GlobFilesParams, GlobFilesResult } from '@lobechat/electron-client-ipc';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { FileResult, GlobFilesParams, GlobFilesResult, SearchOptions } from '../../types';
 import { BaseFileSearch } from '../base';
-import type { FileResult, SearchOptions } from '../types';
 
 // Mock logger
-vi.mock('@/utils/logger', () => ({
+vi.mock('../../logger', () => ({
   createLogger: () => ({
     debug: vi.fn(),
     error: vi.fn(),
@@ -279,13 +278,13 @@ describe('BaseFileSearch', () => {
     });
   });
 
-  describe('setToolDetectorManager', () => {
+  describe('setToolDetector', () => {
     it('should set the tool detector manager', () => {
       const mockManager = {} as any;
 
-      fileSearch.setToolDetectorManager(mockManager);
+      fileSearch.setToolDetector(mockManager);
 
-      expect((fileSearch as any).toolDetectorManager).toBe(mockManager);
+      expect((fileSearch as any).toolDetector).toBe(mockManager);
     });
   });
 

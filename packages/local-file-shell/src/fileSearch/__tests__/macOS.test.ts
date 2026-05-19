@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { buildFilenameKeywordExpression } from '../impl/macOS';
 
-vi.mock('@/utils/logger', () => ({
+vi.mock('../../logger', () => ({
   createLogger: () => ({
     debug: vi.fn(),
     error: vi.fn(),

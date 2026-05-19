@@ -2,45 +2,34 @@ import { type Stats } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import * as os from 'node:os';
 
-import { type GlobFilesParams, type GlobFilesResult } from '@lobechat/electron-client-ipc';
 import { execa } from 'execa';
 import fg from 'fast-glob';
 
-import { type ToolDetectorManager } from '@/core/infrastructure/ToolDetectorManager';
-import { createLogger } from '@/utils/logger';
-
+import { createLogger } from '../../logger';
+import { type ToolDetector } from '../../toolDetector';
+import type { FileResult, GlobFilesParams, GlobFilesResult, SearchFilesParams } from '../../types';
 import { BaseFileSearch } from '../base';
-import { type FileResult, type SearchOptions } from '../types';
 
-const logger = createLogger('module:FileSearch:windows');
+const logger = createLogger('fileSearch:windows');
 
 /**
  * Fallback tool type for Windows file search
  * Priority: fd > powershell > fast-glob
  */
-type WindowsFallbackTool = 'fd' | 'powershell' | 'fast-glob';
+type WindowsFallbackTool = 'fast-glob' | 'fd' | 'powershell';
 
 /**
  * Windows file search implementation
  * Uses fd > PowerShell > fast-glob fallback strategy
  */
 export class WindowsSearchServiceImpl extends BaseFileSearch {
-  /**
-   * Current fallback tool being used
-   */
   private currentTool: WindowsFallbackTool | null = null;
 
-  constructor(toolDetectorManager?: ToolDetectorManager) {
-    super(toolDetectorManager);
+  constructor(toolDetector?: ToolDetector) {
+    super(toolDetector);
   }
 
-  /**
-   * Perform file search
-   * @param options Search options
-   * @returns Promise of search result list
-   */
-  async search(options: SearchOptions): Promise<FileResult[]> {
-    // Determine the best available tool on first search
+  async search(options: SearchFilesParams): Promise<FileResult[]> {
     if (this.currentTool === null) {
       this.currentTool = await this.determineBestTool();
       logger.info(`Using file search tool: ${this.currentTool}`);
@@ -49,13 +38,9 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
     return this.searchWithTool(this.currentTool, options);
   }
 
-  /**
-   * Determine the best available tool based on priority
-   * Priority: fd > powershell > fast-glob
-   */
   private async determineBestTool(): Promise<WindowsFallbackTool> {
-    if (this.toolDetectorManager) {
-      const bestTool = await this.toolDetectorManager.getBestTool('file-search');
+    if (this.toolDetector) {
+      const bestTool = await this.toolDetector.getBestTool('file-search');
       if (bestTool && ['fd', 'powershell'].includes(bestTool)) {
         return bestTool as WindowsFallbackTool;
       }
@@ -65,15 +50,9 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
       return 'fd';
     }
 
-    // PowerShell is always available on Windows
     return 'powershell';
   }
 
-  /**
-   * Check if a tool is available using 'where' command (Windows equivalent of 'which')
-   * @param tool Tool name to check
-   * @returns Promise indicating if tool is available
-   */
   private async checkToolAvailable(tool: string): Promise<boolean> {
     try {
       await execa('where', [tool], { timeout: 3000 });
@@ -83,12 +62,9 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
     }
   }
 
-  /**
-   * Search using the specified tool
-   */
   private async searchWithTool(
     tool: WindowsFallbackTool,
-    options: SearchOptions,
+    options: SearchFilesParams,
   ): Promise<FileResult[]> {
     switch (tool) {
       case 'fd': {
@@ -103,9 +79,6 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
     }
   }
 
-  /**
-   * Fallback to the next available tool
-   */
   private async fallbackToNextTool(currentTool: WindowsFallbackTool): Promise<WindowsFallbackTool> {
     const priority: WindowsFallbackTool[] = ['fd', 'powershell', 'fast-glob'];
     const currentIndex = priority.indexOf(currentTool);
@@ -113,7 +86,7 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
     for (let i = currentIndex + 1; i < priority.length; i++) {
       const nextTool = priority[i];
       if (nextTool === 'fast-glob' || nextTool === 'powershell') {
-        return nextTool; // Always available
+        return nextTool;
       }
       if (await this.checkToolAvailable(nextTool)) {
         return nextTool;
@@ -123,13 +96,8 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
     return 'fast-glob';
   }
 
-  /**
-   * Search using fd (cross-platform fast find alternative)
-   * @param options Search options
-   * @returns Search results
-   */
-  private async searchWithFd(options: SearchOptions): Promise<FileResult[]> {
-    const searchDir = options.onlyIn || os.homedir() || 'C:\\';
+  private async searchWithFd(options: SearchFilesParams): Promise<FileResult[]> {
+    const searchDir = options.onlyIn || options.directory || os.homedir() || 'C:\\';
     const limit = options.limit || 30;
 
     logger.debug('Performing fd search', { keywords: options.keywords, searchDir });
@@ -137,14 +105,12 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
     try {
       const args: string[] = [];
 
-      // Pattern matching
       if (options.keywords) {
         args.push(options.keywords);
       } else {
-        args.push('.'); // Match all files
+        args.push('.');
       }
 
-      // Search directory and options
       args.push(searchDir, '--type', 'f', '--hidden', '--ignore-case', '--max-depth', '10');
       args.push(
         '--max-results',
@@ -184,26 +150,15 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
     }
   }
 
-  /**
-   * Search using PowerShell Get-ChildItem
-   * @param options Search options
-   * @returns Search results
-   */
-  private async searchWithPowerShell(options: SearchOptions): Promise<FileResult[]> {
-    const searchDir = options.onlyIn || os.homedir() || 'C:\\';
+  private async searchWithPowerShell(options: SearchFilesParams): Promise<FileResult[]> {
+    const searchDir = options.onlyIn || options.directory || os.homedir() || 'C:\\';
     const limit = options.limit || 30;
 
     logger.debug('Performing PowerShell search', { keywords: options.keywords, searchDir });
 
     try {
-      // Build PowerShell command
       const filter = options.keywords ? `*${options.keywords}*` : '*';
 
-      // PowerShell command to search files
-      // -Recurse: recursive search
-      // -File: only files
-      // -Depth: limit search depth
-      // -ErrorAction SilentlyContinue: ignore permission errors
       const psCommand = `
         Get-ChildItem -Path '${searchDir}' -Filter '${filter}' -Recurse -File -Depth 10 -ErrorAction SilentlyContinue |
         Where-Object {
@@ -246,19 +201,13 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
     }
   }
 
-  /**
-   * Search using fast-glob (pure Node.js implementation)
-   * @param options Search options
-   * @returns Search results
-   */
-  private async searchWithFastGlob(options: SearchOptions): Promise<FileResult[]> {
-    const searchDir = options.onlyIn || os.homedir() || 'C:\\';
+  private async searchWithFastGlob(options: SearchFilesParams): Promise<FileResult[]> {
+    const searchDir = options.onlyIn || options.directory || os.homedir() || 'C:\\';
     const limit = options.limit || 30;
 
     logger.debug('Performing fast-glob search', { keywords: options.keywords, searchDir });
 
     try {
-      // Build glob pattern from keywords
       const pattern = options.keywords
         ? `**/*${this.escapeGlobPattern(options.keywords)}*`
         : '**/*';
@@ -268,7 +217,8 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
         caseSensitiveMatch: false,
         cwd: searchDir,
         deep: 10,
-        dot: false, // Windows hidden files use attributes, not dot prefix
+        // Windows hidden files use attributes, not dot prefix
+        dot: false,
         ignore: [
           '**/node_modules/**',
           '**/.git/**',
@@ -293,33 +243,16 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
     }
   }
 
-  /**
-   * Check search service status
-   * @returns Promise indicating if service is available (always true)
-   */
   async checkSearchServiceStatus(): Promise<boolean> {
-    // At minimum, fast-glob is always available
     return true;
   }
 
-  /**
-   * Update search index
-   * Windows Search index is managed by the OS
-   * @returns Promise indicating operation result (always false)
-   */
   async updateSearchIndex(): Promise<boolean> {
     logger.warn('updateSearchIndex is not supported (using fast-glob instead of Windows Search)');
     return false;
   }
 
-  /**
-   * Perform glob pattern matching
-   * Uses fd > fast-glob fallback strategy
-   * @param params Glob parameters
-   * @returns Promise of glob result
-   */
   async glob(params: GlobFilesParams): Promise<GlobFilesResult> {
-    // Check if fd is available
     if (await this.checkToolAvailable('fd')) {
       logger.info('Using glob tool: fd');
       return this.globWithFd(params);
@@ -329,13 +262,8 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
     return this.globWithFastGlob(params);
   }
 
-  /**
-   * Glob using fd
-   * @param params Glob parameters
-   * @returns Glob results
-   */
   private async globWithFd(params: GlobFilesParams): Promise<GlobFilesResult> {
-    const searchPath = params.scope || os.homedir() || process.cwd();
+    const searchPath = params.scope || params.cwd || os.homedir() || process.cwd();
     const logPrefix = `[glob:fd: ${params.pattern}]`;
 
     logger.debug(`${logPrefix} Starting fd glob`, { searchPath });
@@ -348,6 +276,10 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
         '--absolute-path',
         '--hidden',
         '--no-ignore',
+        '--exclude',
+        'node_modules',
+        '--exclude',
+        '.git',
       ];
 
       const { stdout, exitCode } = await execa('fd', args, {
@@ -362,10 +294,9 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
 
       const files = stdout
         .trim()
-        .split('\r\n') // Windows uses \r\n
+        .split('\r\n')
         .filter((line) => line.trim());
 
-      // Get stats for sorting by mtime
       const filesWithStats = await this.getFilesWithStats(files);
       const sortedFiles = filesWithStats.sort((a, b) => b.mtime - a.mtime).map((f) => f.path);
 
@@ -384,13 +315,8 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
     }
   }
 
-  /**
-   * Glob using fast-glob (Node.js fallback)
-   * @param params Glob parameters
-   * @returns Glob results
-   */
   private async globWithFastGlob(params: GlobFilesParams): Promise<GlobFilesResult> {
-    const searchPath = params.scope || os.homedir() || process.cwd();
+    const searchPath = params.scope || params.cwd || os.homedir() || process.cwd();
     const logPrefix = `[glob:fast-glob: ${params.pattern}]`;
 
     logger.debug(`${logPrefix} Starting fast-glob`, { searchPath });
@@ -399,12 +325,13 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
       const files = await fg(params.pattern, {
         absolute: true,
         cwd: searchPath,
-        dot: false, // Windows hidden files use attributes, not dot prefix
+        // Windows hidden files use attributes, not dot prefix
+        dot: false,
+        ignore: ['**/node_modules/**', '**/.git/**'],
         onlyFiles: false,
         stats: true,
       });
 
-      // Sort by modification time (most recent first)
       const sortedFiles = (files as unknown as Array<{ path: string; stats: Stats }>)
         .sort((a, b) => b.stats.mtime.getTime() - a.stats.mtime.getTime())
         .map((f) => f.path);
@@ -429,11 +356,6 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
     }
   }
 
-  /**
-   * Get file stats for sorting
-   * @param files File paths
-   * @returns Files with mtime
-   */
   private async getFilesWithStats(
     files: string[],
   ): Promise<Array<{ mtime: number; path: string }>> {
@@ -444,7 +366,6 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
         const stats = await stat(filePath);
         results.push({ mtime: stats.mtime.getTime(), path: filePath });
       } catch {
-        // Skip files that can't be stat'd
         results.push({ mtime: 0, path: filePath });
       }
     }

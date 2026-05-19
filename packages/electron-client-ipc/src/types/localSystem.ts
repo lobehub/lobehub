@@ -254,51 +254,14 @@ export interface KillCommandResult {
   success: boolean;
 }
 
-// Grep types
-export interface GrepContentParams {
-  '-A'?: number;
-  '-B'?: number;
-  '-C'?: number;
-  '-i'?: boolean;
-  '-n'?: boolean;
-  'glob'?: string;
-  'head_limit'?: number;
-  'multiline'?: boolean;
-  'output_mode'?: 'content' | 'files_with_matches' | 'count';
-  /** Legacy alias for `scope`. Takes precedence when set; prefer `scope` (the manifest-documented name) for new callers. */
-  'path'?: string;
-  'pattern': string;
-  /** Working directory scope. Limits the search to this directory. Defaults to `process.cwd()`. */
-  'scope'?: string;
-  /** Preferred search tool: 'rg' | 'ag' | 'grep' */
-  'tool'?: 'rg' | 'ag' | 'grep';
-  'type'?: string;
-}
-
-export interface GrepContentResult {
-  /** Search engine used: 'rg' | 'ag' | 'grep' | 'nodejs' */
-  engine?: string;
-  error?: string;
-  matches: string[];
-  success: boolean;
-  total_matches: number;
-}
-
-// Glob types
-export interface GlobFilesParams {
-  pattern: string;
-  /** Working directory scope. When `pattern` is relative, it is joined with this scope. Defaults to the current working directory. */
-  scope?: string;
-}
-
-export interface GlobFilesResult {
-  /** Search engine used: 'fd' | 'find' | 'fast-glob' */
-  engine?: string;
-  error?: string;
-  files: string[];
-  success: boolean;
-  total_files: number;
-}
+// Grep + Glob types — single source of truth lives in `@lobechat/local-file-shell`
+// so the IPC handler, the desktop service, and the CLI share the same shape.
+export type {
+  GlobFilesParams,
+  GlobFilesResult,
+  GrepContentParams,
+  GrepContentResult,
+} from '@lobechat/local-file-shell';
 
 // Edit types
 export interface EditLocalFileParams {

@@ -1,10 +1,10 @@
-import type { GrepContentParams, GrepContentResult } from '@lobechat/electron-client-ipc';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { GrepContentParams, GrepContentResult } from '../../types';
 import { BaseContentSearch } from '../base';
 
 // Mock logger
-vi.mock('@/utils/logger', () => ({
+vi.mock('../../logger', () => ({
   createLogger: () => ({
     debug: vi.fn(),
     error: vi.fn(),
@@ -344,13 +344,13 @@ describe('BaseContentSearch', () => {
     });
   });
 
-  describe('setToolDetectorManager', () => {
+  describe('setToolDetector', () => {
     it('should set the tool detector manager', () => {
       const mockManager = {} as any;
 
-      contentSearch.setToolDetectorManager(mockManager);
+      contentSearch.setToolDetector(mockManager);
 
-      expect((contentSearch as any).toolDetectorManager).toBe(mockManager);
+      expect((contentSearch as any).toolDetector).toBe(mockManager);
     });
   });
 });

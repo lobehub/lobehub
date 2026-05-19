@@ -4,14 +4,12 @@ import path from 'node:path';
 
 import { execa } from 'execa';
 
-import type { ToolDetectorManager } from '@/core/infrastructure/ToolDetectorManager';
-import { createLogger } from '@/utils/logger';
+import { createLogger } from '../../logger';
+import type { ToolDetector } from '../../toolDetector';
+import type { FileResult, SearchFilesParams } from '../../types';
+import { UnixFileSearch, type UnixSearchTool } from './unix';
 
-import type { FileResult, SearchOptions } from '../types';
-import type { UnixSearchTool } from './unix';
-import { UnixFileSearch } from './unix';
-
-const logger = createLogger('module:FileSearch:macOS');
+const logger = createLogger('fileSearch:macOS');
 
 /**
  * Build the kMDItemFSName expression for a free-form keyword string.
@@ -19,8 +17,6 @@ const logger = createLogger('module:FileSearch:macOS');
  * Splits on whitespace and ANDs each token as a case/diacritic-insensitive
  * substring match, so "Foo Bar" matches both `Bar_Foo.pdf` and `Foo Bar.pdf`
  * — instead of requiring the literal phrase "Foo Bar" to appear.
- *
- * Returns an empty string when the keywords contain no usable token.
  */
 export const buildFilenameKeywordExpression = (keywords: string): string => {
   const tokens = keywords
@@ -43,28 +39,14 @@ export const buildFilenameKeywordExpression = (keywords: string): string => {
 type MacOSSearchTool = 'mdfind' | UnixSearchTool;
 
 export class MacOSSearchServiceImpl extends UnixFileSearch {
-  /**
-   * Cache for Spotlight availability status
-   * null = not checked, true = available, false = not available
-   */
   private spotlightAvailable: boolean | null = null;
-
-  /**
-   * Current tool being used (macOS specific, includes mdfind)
-   */
   private macOSCurrentTool: MacOSSearchTool | null = null;
 
-  constructor(toolDetectorManager?: ToolDetectorManager) {
-    super(toolDetectorManager);
+  constructor(toolDetector?: ToolDetector) {
+    super(toolDetector);
   }
 
-  /**
-   * Perform file search
-   * @param options Search options
-   * @returns Promise of search result list
-   */
-  async search(options: SearchOptions): Promise<FileResult[]> {
-    // Determine the best available tool on first search
+  async search(options: SearchFilesParams): Promise<FileResult[]> {
     if (this.macOSCurrentTool === null) {
       this.macOSCurrentTool = await this.determineBestTool();
       logger.info(`Using file search tool: ${this.macOSCurrentTool}`);
@@ -73,13 +55,9 @@ export class MacOSSearchServiceImpl extends UnixFileSearch {
     return this.searchWithTool(this.macOSCurrentTool, options);
   }
 
-  /**
-   * Determine the best available tool based on priority
-   * Priority: mdfind > fd > find > fast-glob
-   */
   private async determineBestTool(): Promise<MacOSSearchTool> {
-    if (this.toolDetectorManager) {
-      const bestTool = await this.toolDetectorManager.getBestTool('file-search');
+    if (this.toolDetector) {
+      const bestTool = await this.toolDetector.getBestTool('file-search');
       if (bestTool && ['mdfind', 'fd', 'find'].includes(bestTool)) {
         return bestTool as MacOSSearchTool;
       }
@@ -89,40 +67,26 @@ export class MacOSSearchServiceImpl extends UnixFileSearch {
       return 'mdfind';
     }
 
-    // Fallback to Unix tool detection
     return this.determineBestUnixTool();
   }
 
-  /**
-   * Search using the specified tool
-   */
   private async searchWithTool(
     tool: MacOSSearchTool,
-    options: SearchOptions,
+    options: SearchFilesParams,
   ): Promise<FileResult[]> {
     if (tool === 'mdfind') {
       return this.searchWithSpotlight(options);
     }
-    // Use parent class Unix tool implementation
     return this.searchWithUnixTool(tool, options);
   }
 
-  /**
-   * Fallback to the next available tool (macOS specific)
-   */
   private async fallbackFromMdfind(): Promise<MacOSSearchTool> {
     return this.determineBestUnixTool();
   }
 
-  /**
-   * Search using Spotlight (mdfind)
-   */
-  private async searchWithSpotlight(options: SearchOptions): Promise<FileResult[]> {
+  private async searchWithSpotlight(options: SearchFilesParams): Promise<FileResult[]> {
     const { cmd, args, commandString, hasQuery } = this.buildSearchCommand(options);
 
-    // Spotlight (mdfind) requires a query expression; running it with only flags
-    // (e.g. -onlyin) makes mdfind print its usage to stdout and we'd treat each
-    // line as a fake file. Short-circuit to an empty result instead.
     if (!hasQuery) {
       logger.warn('Skipping mdfind: no keywords/contentContains/fileTypes/date filter provided');
       return [];
@@ -146,7 +110,6 @@ export class MacOSSearchServiceImpl extends UnixFileSearch {
         .split('\n')
         .filter((line) => line.trim());
 
-      // If exited with error code and we have stderr and no results, fallback
       if (exitCode !== 0 && stderr && results.length === 0) {
         if (!stderr.includes('Index is unavailable') && !stderr.includes('kMD')) {
           logger.warn(
@@ -163,7 +126,6 @@ export class MacOSSearchServiceImpl extends UnixFileSearch {
         }
       }
 
-      // Apply limit
       const limitedResults =
         options.limit && results.length > options.limit ? results.slice(0, options.limit) : results;
 
@@ -177,34 +139,19 @@ export class MacOSSearchServiceImpl extends UnixFileSearch {
     }
   }
 
-  /**
-   * Get macOS-specific ignore patterns including Library/Caches
-   */
   protected override getDefaultIgnorePatterns(): string[] {
     return [...super.getDefaultIgnorePatterns(), '**/Library/Caches/**'];
   }
 
-  /**
-   * Check search service status
-   * @returns Promise indicating if Spotlight service is available
-   */
   async checkSearchServiceStatus(): Promise<boolean> {
     return this.checkSpotlightStatus();
   }
 
-  /**
-   * Update search index
-   * @param path Optional specified path
-   * @returns Promise indicating operation success
-   */
   async updateSearchIndex(updatePath?: string): Promise<boolean> {
     return this.updateSpotlightIndex(updatePath);
   }
 
-  /**
-   * Build mdfind command string
-   */
-  private buildSearchCommand(options: SearchOptions): {
+  private buildSearchCommand(options: SearchFilesParams): {
     args: string[];
     cmd: string;
     commandString: string;
@@ -213,8 +160,9 @@ export class MacOSSearchServiceImpl extends UnixFileSearch {
     const cmd = 'mdfind';
     const args: string[] = [];
 
-    if (options.onlyIn) {
-      args.push('-onlyin', options.onlyIn);
+    const onlyIn = options.onlyIn || options.directory;
+    if (onlyIn) {
+      args.push('-onlyin', onlyIn);
     }
 
     if (options.liveUpdate) {
@@ -236,30 +184,25 @@ export class MacOSSearchServiceImpl extends UnixFileSearch {
     let queryExpression = '';
 
     if (options.keywords) {
-      if (!options.keywords.includes('kMDItem')) {
-        queryExpression = buildFilenameKeywordExpression(options.keywords);
-      } else {
+      if (options.keywords.includes('kMDItem')) {
         queryExpression = options.keywords;
+      } else {
+        queryExpression = buildFilenameKeywordExpression(options.keywords);
       }
     }
 
     if (options.contentContains) {
-      if (queryExpression) {
-        queryExpression = `${queryExpression} && kMDItemTextContent == "*${options.contentContains}*"cd`;
-      } else {
-        queryExpression = `kMDItemTextContent == "*${options.contentContains}*"cd`;
-      }
+      const contentTerm = `kMDItemTextContent == "*${options.contentContains}*"cd`;
+      queryExpression = queryExpression ? `${queryExpression} && ${contentTerm}` : contentTerm;
     }
 
     if (options.fileTypes && options.fileTypes.length > 0) {
       const typeConditions = options.fileTypes
         .map((type) => `kMDItemContentType == "${type}"`)
         .join(' || ');
-      if (queryExpression) {
-        queryExpression = `${queryExpression} && (${typeConditions})`;
-      } else {
-        queryExpression = `(${typeConditions})`;
-      }
+      queryExpression = queryExpression
+        ? `${queryExpression} && (${typeConditions})`
+        : `(${typeConditions})`;
     }
 
     if (options.modifiedAfter || options.modifiedBefore) {
@@ -276,11 +219,9 @@ export class MacOSSearchServiceImpl extends UnixFileSearch {
         dateCondition += `kMDItemFSContentChangeDate <= $time.iso(${dateString})`;
       }
 
-      if (queryExpression) {
-        queryExpression = `${queryExpression} && (${dateCondition})`;
-      } else {
-        queryExpression = dateCondition;
-      }
+      queryExpression = queryExpression
+        ? `${queryExpression} && (${dateCondition})`
+        : dateCondition;
     }
 
     if (options.createdAfter || options.createdBefore) {
@@ -297,11 +238,9 @@ export class MacOSSearchServiceImpl extends UnixFileSearch {
         dateCondition += `kMDItemFSCreationDate <= $time.iso(${dateString})`;
       }
 
-      if (queryExpression) {
-        queryExpression = `${queryExpression} && (${dateCondition})`;
-      } else {
-        queryExpression = dateCondition;
-      }
+      queryExpression = queryExpression
+        ? `${queryExpression} && (${dateCondition})`
+        : dateCondition;
     }
 
     const hasQuery = Boolean(queryExpression);
@@ -315,12 +254,9 @@ export class MacOSSearchServiceImpl extends UnixFileSearch {
     return { args, cmd, commandString, hasQuery };
   }
 
-  /**
-   * Process Spotlight search results with optional metadata
-   */
   private async processSpotlightResults(
     filePaths: string[],
-    options: SearchOptions,
+    options: SearchFilesParams,
     engine?: string,
   ): Promise<FileResult[]> {
     const resultPromises = filePaths.map(async (filePath): Promise<FileResult | null> => {
@@ -369,14 +305,11 @@ export class MacOSSearchServiceImpl extends UnixFileSearch {
     return results;
   }
 
-  /**
-   * Get detailed metadata for a file using mdls
-   */
-  private async getDetailedMetadata(filePath: string): Promise<Record<string, any>> {
+  private async getDetailedMetadata(filePath: string): Promise<Record<string, unknown>> {
     try {
       const { stdout } = await execa('mdls', [filePath]);
 
-      const metadata: Record<string, any> = {};
+      const metadata: Record<string, unknown> = {};
       const lines = stdout.split('\n');
 
       let currentKey = '';
@@ -417,10 +350,7 @@ export class MacOSSearchServiceImpl extends UnixFileSearch {
     }
   }
 
-  /**
-   * Parse metadata value from mdls output
-   */
-  private parseMetadataValue(input: string): any {
+  private parseMetadataValue(input: string): unknown {
     let value = input;
     if (value.startsWith('"') && value.endsWith('"')) {
       value = value.slice(1, -1);
@@ -445,9 +375,6 @@ export class MacOSSearchServiceImpl extends UnixFileSearch {
     return value;
   }
 
-  /**
-   * Check Spotlight service status
-   */
   private async checkSpotlightStatus(): Promise<boolean> {
     if (this.spotlightAvailable !== null) {
       return this.spotlightAvailable;
@@ -476,9 +403,6 @@ export class MacOSSearchServiceImpl extends UnixFileSearch {
     }
   }
 
-  /**
-   * Update Spotlight index
-   */
   private async updateSpotlightIndex(updatePath?: string): Promise<boolean> {
     try {
       await execa('mdutil', ['-E', updatePath || '/']);

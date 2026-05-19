@@ -1,67 +1,54 @@
 import { readFile, stat } from 'node:fs/promises';
 
-import type { GrepContentParams, GrepContentResult } from '@lobechat/electron-client-ipc';
 import fg from 'fast-glob';
 
-import type { ToolDetectorManager } from '@/core/infrastructure/ToolDetectorManager';
-import { createLogger } from '@/utils/logger';
+import { createLogger } from '../logger';
+import type { ToolDetector } from '../toolDetector';
+import type { GrepContentParams, GrepContentResult } from '../types';
 
-const logger = createLogger('module:ContentSearch:base');
+const logger = createLogger('contentSearch:base');
 
 /**
  * Content search tool type
  */
-export type ContentSearchTool = 'rg' | 'ag' | 'grep' | 'nodejs';
+export type ContentSearchTool = 'ag' | 'grep' | 'nodejs' | 'rg';
 
 /**
  * Content Search Service Implementation Abstract Class
  * Defines the interface that different platform content search implementations need to implement
  */
 export abstract class BaseContentSearch {
-  protected toolDetectorManager?: ToolDetectorManager;
+  protected toolDetector?: ToolDetector;
 
-  constructor(toolDetectorManager?: ToolDetectorManager) {
-    this.toolDetectorManager = toolDetectorManager;
+  constructor(toolDetector?: ToolDetector) {
+    this.toolDetector = toolDetector;
   }
 
-  /**
-   * Set the tool detector manager
-   * @param manager ToolDetectorManager instance
-   */
-  setToolDetectorManager(manager: ToolDetectorManager): void {
-    this.toolDetectorManager = manager;
+  setToolDetector(detector: ToolDetector): void {
+    this.toolDetector = detector;
   }
 
-  /**
-   * Perform content search (grep)
-   * @param params Grep parameters
-   * @returns Promise of grep result
-   */
   abstract grep(params: GrepContentParams): Promise<GrepContentResult>;
 
-  /**
-   * Check if a specific tool is available
-   * @param tool Tool name to check
-   * @returns Promise indicating if tool is available
-   */
   abstract checkToolAvailable(tool: string): Promise<boolean>;
 
   /**
    * Resolve the directory to run the search in.
    *
-   * The builtin-tool manifest documents `scope`, while the legacy IPC type also accepts
-   * `path`. Read both so an agent calling with `scope` (per the manifest) doesn't silently
-   * fall through to `process.cwd()` — which in a packaged Electron app isn't the project
-   * root and therefore has no `.gitignore` for ripgrep to honor.
+   * The builtin-tool manifest documents `scope`, while the legacy type also accepts
+   * `path` / `cwd`. Read all so an agent calling with `scope` (per the manifest)
+   * doesn't silently fall through to `process.cwd()` — which in a packaged
+   * Electron app isn't the project root and therefore has no `.gitignore` for
+   * ripgrep to honor.
    */
   protected resolveSearchPath(params: GrepContentParams): string {
-    return params.path ?? params.scope ?? process.cwd();
+    return params.path ?? params.scope ?? params.cwd ?? process.cwd();
   }
 
   /**
    * Build command-line arguments for grep tools
    */
-  protected buildGrepArgs(tool: 'rg' | 'ag' | 'grep', params: GrepContentParams): string[] {
+  protected buildGrepArgs(tool: 'ag' | 'grep' | 'rg', params: GrepContentParams): string[] {
     const { pattern, output_mode = 'files_with_matches' } = params;
     const args: string[] = [];
 
@@ -73,7 +60,6 @@ export abstract class BaseContentSearch {
 
     switch (tool) {
       case 'rg': {
-        // ripgrep arguments
         if (params['-i']) args.push('-i');
         if (params['-n']) args.push('-n');
         if (params['-A']) args.push('-A', String(params['-A']));
@@ -84,7 +70,6 @@ export abstract class BaseContentSearch {
         if (params.glob) args.push('-g', params.glob);
         if (params.type) args.push('-t', params.type);
 
-        // Output mode
         switch (output_mode) {
           case 'files_with_matches': {
             args.push('-l');
@@ -96,13 +81,11 @@ export abstract class BaseContentSearch {
           }
         }
 
-        // Ignore common directories (use **/ prefix to match nested paths)
         args.push('--glob', '!**/node_modules/**', '--glob', '!**/.git/**', pattern, '.');
         break;
       }
 
       case 'ag': {
-        // Silver Searcher arguments
         if (params['-i']) args.push('-i');
         if (params['-A']) args.push('-A', String(params['-A']));
         if (params['-B']) args.push('-B', String(params['-B']));
@@ -110,7 +93,6 @@ export abstract class BaseContentSearch {
         if (wantsHidden) args.push('--hidden');
         if (params.glob) args.push('-G', params.glob);
 
-        // Output mode
         switch (output_mode) {
           case 'files_with_matches': {
             args.push('-l');
@@ -127,8 +109,7 @@ export abstract class BaseContentSearch {
       }
 
       case 'grep': {
-        // GNU grep arguments
-        args.push('-r'); // recursive
+        args.push('-r');
         if (params['-i']) args.push('-i');
         if (params['-n']) args.push('-n');
         if (params['-A']) args.push('-A', String(params['-A']));
@@ -137,7 +118,6 @@ export abstract class BaseContentSearch {
         if (params.glob) args.push('--include', params.glob);
         if (params.type) args.push('--include', `*.${params.type}`);
 
-        // Output mode
         switch (output_mode) {
           case 'files_with_matches': {
             args.push('-l');
@@ -168,14 +148,12 @@ export abstract class BaseContentSearch {
     const flags = `${params['-i'] ? 'i' : ''}${params.multiline ? 's' : ''}`;
     const regex = new RegExp(pattern, flags);
 
-    // Determine files to search
     let filesToSearch: string[];
     const stats = await stat(searchPath);
 
     if (stats.isFile()) {
       filesToSearch = [searchPath];
     } else {
-      // Use glob pattern if provided, otherwise search all files
       let globPattern = params.glob || '**/*';
       if (params.glob && !params.glob.includes('/') && !params.glob.startsWith('**')) {
         globPattern = `**/${params.glob}`;
@@ -188,7 +166,6 @@ export abstract class BaseContentSearch {
         ignore: this.getDefaultIgnorePatterns(),
       });
 
-      // Filter by type if provided
       if (params.type) {
         const ext = `.${params.type}`;
         filesToSearch = filesToSearch.filter((file) => file.endsWith(ext));

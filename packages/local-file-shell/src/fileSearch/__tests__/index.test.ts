@@ -14,7 +14,7 @@ vi.mock('node:os', () => ({
 }));
 
 // Mock logger
-vi.mock('@/utils/logger', () => ({
+vi.mock('../../logger', () => ({
   createLogger: () => ({
     debug: vi.fn(),
     error: vi.fn(),
@@ -56,12 +56,12 @@ describe('createFileSearchModule', () => {
     expect(impl).toBeInstanceOf(LinuxSearchServiceImpl);
   });
 
-  it('should pass toolDetectorManager to implementation', () => {
+  it('should pass toolDetector to implementation', () => {
     vi.mocked(platform).mockReturnValue('linux');
-    const mockManager = {} as any;
+    const mockDetector = { getBestTool: async () => null } as any;
 
-    const impl = createFileSearchModule(mockManager);
+    const impl = createFileSearchModule(mockDetector);
 
-    expect((impl as any).toolDetectorManager).toBe(mockManager);
+    expect((impl as any).toolDetector).toBe(mockDetector);
   });
 });

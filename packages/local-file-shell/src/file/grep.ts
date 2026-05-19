@@ -4,15 +4,17 @@ import type { GrepContentParams, GrepContentResult } from '../types';
 import { expandTilde } from './expandTilde';
 import { hasHiddenSegment } from './hasHiddenSegment';
 
+/**
+ * Lightweight grep — spawns `rg` directly and returns the raw `--json`
+ * events. For the platform-aware fallback chain (rg → ag → grep → nodejs)
+ * with rich `output_mode` / `-A/-B/-C` support, use
+ * `createContentSearchImpl()` from `@lobechat/local-file-shell/contentSearch`.
+ */
 export async function grepContent({
   pattern,
   cwd,
   filePattern,
 }: GrepContentParams): Promise<GrepContentResult> {
-  // When the filePattern explicitly references a dot-prefixed segment, the
-  // caller wants to scan inside a hidden directory — pass `--hidden` to rg so
-  // it doesn't silently skip these paths. We still rely on rg's built-in
-  // `.git/` exclusion via .gitignore semantics, plus add an explicit guard.
   const wantsHidden = hasHiddenSegment(filePattern);
   const hint = wantsHidden
     ? `Auto-enabled hidden-file matching because filePattern contains a dot-prefixed segment.`

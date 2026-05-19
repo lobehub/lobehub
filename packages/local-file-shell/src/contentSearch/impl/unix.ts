@@ -1,38 +1,29 @@
-import type { GrepContentParams, GrepContentResult } from '@lobechat/electron-client-ipc';
 import { execa } from 'execa';
 
-import type { ToolDetectorManager } from '@/core/infrastructure/ToolDetectorManager';
-import { createLogger } from '@/utils/logger';
-
+import { createLogger } from '../../logger';
+import type { ToolDetector } from '../../toolDetector';
+import type { GrepContentParams, GrepContentResult } from '../../types';
 import { BaseContentSearch } from '../base';
 
-const logger = createLogger('module:ContentSearch:unix');
+const logger = createLogger('contentSearch:unix');
 
 /**
  * Unix content search tool type
  * Priority: rg (1) > ag (2) > grep (3)
  */
-export type UnixContentSearchTool = 'rg' | 'ag' | 'grep' | 'nodejs';
+export type UnixContentSearchTool = 'ag' | 'grep' | 'nodejs' | 'rg';
 
 /**
  * Unix content search base class
  * Provides common search implementations for macOS and Linux
  */
 export abstract class UnixContentSearch extends BaseContentSearch {
-  /**
-   * Current tool being used
-   */
   protected currentTool: UnixContentSearchTool | null = null;
 
-  constructor(toolDetectorManager?: ToolDetectorManager) {
-    super(toolDetectorManager);
+  constructor(toolDetector?: ToolDetector) {
+    super(toolDetector);
   }
 
-  /**
-   * Check if a tool is available using 'which' command
-   * @param tool Tool name to check
-   * @returns Promise indicating if tool is available
-   */
   async checkToolAvailable(tool: string): Promise<boolean> {
     try {
       await execa('which', [tool], { timeout: 3000 });
@@ -42,14 +33,9 @@ export abstract class UnixContentSearch extends BaseContentSearch {
     }
   }
 
-  /**
-   * Determine the best available Unix tool based on priority
-   * Priority: rg > ag > grep > nodejs
-   * @returns The best available tool
-   */
   protected async determineBestUnixTool(): Promise<UnixContentSearchTool> {
-    if (this.toolDetectorManager) {
-      const bestTool = await this.toolDetectorManager.getBestTool('content-search');
+    if (this.toolDetector) {
+      const bestTool = await this.toolDetector.getBestTool('content-search');
       if (bestTool && ['rg', 'ag', 'grep'].includes(bestTool)) {
         return bestTool as UnixContentSearchTool;
       }
@@ -70,11 +56,6 @@ export abstract class UnixContentSearch extends BaseContentSearch {
     return 'nodejs';
   }
 
-  /**
-   * Fallback to the next available tool
-   * @param currentTool Current tool that failed
-   * @returns Next tool to try
-   */
   protected async fallbackToNextTool(
     currentTool: UnixContentSearchTool,
   ): Promise<UnixContentSearchTool> {
@@ -84,7 +65,7 @@ export abstract class UnixContentSearch extends BaseContentSearch {
     for (let i = currentIndex + 1; i < priority.length; i++) {
       const nextTool = priority[i];
       if (nextTool === 'nodejs') {
-        return 'nodejs'; // Always available
+        return 'nodejs';
       }
       if (await this.checkToolAvailable(nextTool)) {
         return nextTool;
@@ -94,21 +75,16 @@ export abstract class UnixContentSearch extends BaseContentSearch {
     return 'nodejs';
   }
 
-  /**
-   * Perform content search (grep)
-   */
   async grep(params: GrepContentParams): Promise<GrepContentResult> {
     const { tool: preferredTool } = params;
     const logPrefix = `[grepContent: ${params.pattern}]`;
 
     try {
-      // If user specified a grep tool, try to use it
       if (preferredTool && ['rg', 'ag', 'grep'].includes(preferredTool)) {
         logger.debug(`${logPrefix} Using preferred tool: ${preferredTool}`);
         return this.grepWithTool(preferredTool as UnixContentSearchTool, params);
       }
 
-      // Determine the best available tool on first search
       if (this.currentTool === null) {
         this.currentTool = await this.determineBestUnixTool();
         logger.info(`Using content search tool: ${this.currentTool}`);
@@ -127,9 +103,6 @@ export abstract class UnixContentSearch extends BaseContentSearch {
     }
   }
 
-  /**
-   * Search using the specified tool
-   */
   protected async grepWithTool(
     tool: UnixContentSearchTool,
     params: GrepContentParams,
@@ -150,32 +123,20 @@ export abstract class UnixContentSearch extends BaseContentSearch {
     }
   }
 
-  /**
-   * Grep using ripgrep (rg)
-   */
   protected async grepWithRipgrep(params: GrepContentParams): Promise<GrepContentResult> {
     return this.grepWithExternalTool('rg', params);
   }
 
-  /**
-   * Grep using The Silver Searcher (ag)
-   */
   protected async grepWithAg(params: GrepContentParams): Promise<GrepContentResult> {
     return this.grepWithExternalTool('ag', params);
   }
 
-  /**
-   * Grep using GNU grep
-   */
   protected async grepWithGrep(params: GrepContentParams): Promise<GrepContentResult> {
     return this.grepWithExternalTool('grep', params);
   }
 
-  /**
-   * Grep using external tools (rg, ag, grep)
-   */
   protected async grepWithExternalTool(
-    tool: 'rg' | 'ag' | 'grep',
+    tool: 'ag' | 'grep' | 'rg',
     params: GrepContentParams,
   ): Promise<GrepContentResult> {
     const { output_mode = 'files_with_matches' } = params;
@@ -188,10 +149,9 @@ export abstract class UnixContentSearch extends BaseContentSearch {
 
       const { stdout, stderr, exitCode } = await execa(tool, args, {
         cwd: searchPath,
-        reject: false, // Don't throw on non-zero exit code
+        reject: false,
       });
 
-      // ripgrep returns 1 when no matches found, which is not an error
       if (exitCode !== 0 && exitCode !== 1 && stderr) {
         logger.warn(`${logPrefix} Tool exited with code ${exitCode}: ${stderr}`);
       }
@@ -208,11 +168,8 @@ export abstract class UnixContentSearch extends BaseContentSearch {
         }
         case 'content': {
           matches = lines;
-          // When context lines are used, lines.length includes context lines
-          // We need to get the actual match count separately
           const hasContext = params['-A'] || params['-B'] || params['-C'];
           if (hasContext) {
-            // Run a separate count query to get accurate match count
             totalMatches = await this.getActualMatchCount(tool, params);
           } else {
             totalMatches = lines.length;
@@ -220,7 +177,6 @@ export abstract class UnixContentSearch extends BaseContentSearch {
           break;
         }
         case 'count': {
-          // Parse count output (file:count format)
           for (const line of lines) {
             const match = line.match(/:(\d+)$/);
             if (match) {
@@ -232,7 +188,6 @@ export abstract class UnixContentSearch extends BaseContentSearch {
         }
       }
 
-      // Apply head_limit
       if (params.head_limit && matches.length > params.head_limit) {
         matches = matches.slice(0, params.head_limit);
       }
@@ -250,18 +205,14 @@ export abstract class UnixContentSearch extends BaseContentSearch {
       };
     } catch (error) {
       logger.warn(`${logPrefix} External tool failed, falling back to next tool:`, error);
-      // Fallback to next tool
       this.currentTool = await this.fallbackToNextTool(tool as UnixContentSearchTool);
       logger.info(`Falling back to: ${this.currentTool}`);
       return this.grepWithTool(this.currentTool, params);
     }
   }
 
-  /**
-   * Get actual match count for content mode when context lines are used
-   */
   protected async getActualMatchCount(
-    tool: 'rg' | 'ag' | 'grep',
+    tool: 'ag' | 'grep' | 'rg',
     params: GrepContentParams,
   ): Promise<number> {
     const countParams = { ...params, '-A': undefined, '-B': undefined, '-C': undefined };

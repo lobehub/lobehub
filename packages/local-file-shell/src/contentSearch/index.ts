@@ -1,7 +1,6 @@
 import * as os from 'node:os';
 
-import type { ToolDetectorManager } from '@/core/infrastructure/ToolDetectorManager';
-
+import type { ToolDetector } from '../toolDetector';
 import type { BaseContentSearch } from './base';
 import { LinuxContentSearchImpl } from './impl/linux';
 import { MacOSContentSearchImpl } from './impl/macOS';
@@ -15,24 +14,19 @@ export { WindowsContentSearchImpl } from './impl/windows';
 
 /**
  * Create platform-specific content search implementation
- * @param toolDetectorManager Optional tool detector manager
- * @returns Platform-specific content search implementation
  */
-export function createContentSearchImpl(
-  toolDetectorManager?: ToolDetectorManager,
-): BaseContentSearch {
+export function createContentSearchImpl(toolDetector?: ToolDetector): BaseContentSearch {
   const platform = os.platform();
 
   switch (platform) {
     case 'darwin': {
-      return new MacOSContentSearchImpl(toolDetectorManager);
+      return new MacOSContentSearchImpl(toolDetector);
     }
     case 'win32': {
-      return new WindowsContentSearchImpl(toolDetectorManager);
+      return new WindowsContentSearchImpl(toolDetector);
     }
     default: {
-      // Linux and other Unix-like systems
-      return new LinuxContentSearchImpl(toolDetectorManager);
+      return new LinuxContentSearchImpl(toolDetector);
     }
   }
 }
