@@ -1,5 +1,5 @@
-import { type UserStore } from '@/store/user';
-import { type UserState } from '@/store/user/initialState';
+import type { UserStore } from '@/store/user';
+import type { UserState } from '@/store/user/initialState';
 import { initialState } from '@/store/user/initialState';
 import { merge } from '@/utils/merge';
 
