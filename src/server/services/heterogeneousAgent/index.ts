@@ -61,6 +61,7 @@ export interface HeterogeneousAgentServiceOptions {
  */
 export class HeterogeneousAgentService {
   private readonly db: LobeChatDatabase;
+  private readonly messageModel: MessageModel;
   private readonly persistenceHandler: HeterogeneousPersistenceHandler;
   private readonly streamEventManager: IStreamEventManager;
   private readonly topicModel: TopicModel;
@@ -73,12 +74,13 @@ export class HeterogeneousAgentService {
   ) {
     this.db = db;
     this.userId = userId;
+    this.messageModel = new MessageModel(db, userId);
     this.streamEventManager = options.streamEventManager ?? createStreamEventManager();
     this.topicModel = options.topicModel ?? new TopicModel(db, userId);
     this.persistenceHandler =
       options.persistenceHandler ??
       new HeterogeneousPersistenceHandler({
-        messageModel: new MessageModel(db, userId),
+        messageModel: this.messageModel,
         threadModel: new ThreadModel(db, userId),
         topicModel: this.topicModel,
       });
@@ -155,11 +157,14 @@ export class HeterogeneousAgentService {
 
     // Clear runningOperation from topic metadata so reconnect doesn't retrigger
     // after completion — mirrors the same cleanup done in RuntimeExecutors for
-    // the normal LLM path.
+    // the normal LLM path.  Read completionWebhook and assistantMessageId first
+    // so they are available for webhook delivery below.
     let completionWebhook: AgentHookWebhook | undefined;
+    let assistantMessageId: string | undefined;
     try {
       const topic = await this.topicModel.findById(topicId);
       completionWebhook = topic?.metadata?.runningOperation?.completionWebhook;
+      assistantMessageId = topic?.metadata?.runningOperation?.assistantMessageId;
       await this.topicModel.updateMetadata(topicId, { runningOperation: null });
     } catch (err) {
       log('heteroFinish: failed to clear runningOperation (non-fatal): %O', err);
@@ -178,9 +183,28 @@ export class HeterogeneousAgentService {
     // reads the latest DB content each time, so duplicates are idempotent.
     if (completionWebhook?.url && result !== 'cancelled') {
       try {
+        // Read the final assistant message content so BotCallbackService.handleCompletion
+        // has lastAssistantContent to render.  Without it the handler skips delivery.
+        let lastAssistantContent: string | undefined;
+        if (assistantMessageId) {
+          const msg = await this.messageModel.findById(assistantMessageId);
+          lastAssistantContent = msg?.content as string | undefined;
+        }
+
+        // Map hetero result → reason expected by handleCompletion
+        const reason = result === 'success' ? 'done' : 'error';
+
         await deliverWebhook(completionWebhook, {
+          // Dynamic completion fields (event-like payload)
+          ...(error ? { errorMessage: error.message, errorType: error.type } : {}),
           hookId: 'bot-completion',
           hookType: 'onComplete',
+          lastAssistantContent,
+          operationId,
+          reason,
+          // Static IM context stored at hook registration time — spread last so
+          // platform fields (applicationId, platformThreadId, type, userPrompt)
+          // are authoritative, matching HookDispatcher's { ...event, ...body } order.
           ...completionWebhook.body,
         });
         log('heteroFinish: completionWebhook delivered for op=%s result=%s', operationId, result);
