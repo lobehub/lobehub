@@ -8,6 +8,7 @@ import { TopicModel } from '@/database/models/topic';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
 import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
 import { deliverWebhook } from '@/server/services/agentRuntime/hooks/HookDispatcher';
+import type { AgentHookWebhook } from '@/server/services/agentRuntime/hooks/types';
 
 import { HeterogeneousPersistenceHandler } from './HeterogeneousPersistenceHandler';
 
@@ -152,23 +153,35 @@ export class HeterogeneousAgentService {
       type: 'agent_runtime_end',
     });
 
+    // Clear runningOperation from topic metadata so reconnect doesn't retrigger
+    // after completion — mirrors the same cleanup done in RuntimeExecutors for
+    // the normal LLM path.  Also read completionWebhook here so a second
+    // heteroFinish call (signal + normal exit replay) finds it already gone and
+    // skips delivery, preventing duplicate IM replies.
+    let completionWebhook: AgentHookWebhook | undefined;
+    try {
+      const topic = await this.topicModel.findById(topicId);
+      completionWebhook = topic?.metadata?.runningOperation?.completionWebhook;
+      await this.topicModel.updateMetadata(topicId, { runningOperation: null });
+    } catch (err) {
+      log('heteroFinish: failed to clear runningOperation (non-fatal): %O', err);
+    }
+
     // Fire the IM bot-callback completion webhook if one was registered.
     // The hetero path bypasses the normal AgentHook registration flow, so
     // we persist the webhook config in topic.metadata.runningOperation and
     // deliver it here instead.
-    try {
-      const topic = await this.topicModel.findById(topicId);
-      const completionWebhook = topic?.metadata?.runningOperation?.completionWebhook;
-      if (completionWebhook?.url) {
+    if (completionWebhook?.url) {
+      try {
         await deliverWebhook(completionWebhook, {
-          ...completionWebhook.body,
           hookId: 'bot-completion',
           hookType: 'onComplete',
+          ...completionWebhook.body,
         });
         log('heteroFinish: completionWebhook delivered for op=%s', operationId);
+      } catch (err) {
+        log('heteroFinish: completionWebhook delivery failed (non-fatal): %O', err);
       }
-    } catch (err) {
-      log('heteroFinish: completionWebhook delivery failed (non-fatal): %O', err);
     }
   }
 
