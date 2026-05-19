@@ -85,7 +85,7 @@ type ModelProviderLoader = () => Promise<AiFullModelCard[]>;
 type ModelsMap = Record<string, AiFullModelCard[]>;
 
 export interface LoadModelsOptions {
-  providerLoaders?: Partial<Record<ModelProvider, ModelProviderLoader>>;
+  providerLoaders?: Partial<Record<ModelProvider, ModelProviderLoader | undefined>>;
 }
 
 const buildDefaultModelList = (map: ModelsMap): LobeDefaultAiModelListItem[] => {
@@ -198,11 +198,17 @@ export const loadModels = async (
     return LOBE_DEFAULT_MODEL_LIST;
   }
 
+  const validProviderLoaders = Object.entries(providerLoaders).flatMap(([provider, loader]) =>
+    typeof loader === 'function' ? ([[provider as ModelProvider, loader]] as const) : [],
+  );
+
+  if (validProviderLoaders.length === 0) {
+    return LOBE_DEFAULT_MODEL_LIST;
+  }
+
   const modelMap = { ...staticModelMap };
   const entries = await Promise.all(
-    (Object.entries(providerLoaders) as Array<[ModelProvider, ModelProviderLoader]>).map(
-      async ([provider, loader]) => [provider, await loader()] as const,
-    ),
+    validProviderLoaders.map(async ([provider, loader]) => [provider, await loader()] as const),
   );
 
   for (const [provider, models] of entries) {

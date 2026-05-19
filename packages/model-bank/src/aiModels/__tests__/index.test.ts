@@ -37,6 +37,16 @@ describe('loadModels', () => {
     );
   });
 
+  it('ignores undefined provider loaders', async () => {
+    await expect(
+      loadModels({
+        providerLoaders: {
+          [ModelProvider.LobeHub]: undefined,
+        },
+      }),
+    ).resolves.toBe(LOBE_DEFAULT_MODEL_LIST);
+  });
+
   it('propagates injected loader errors without falling back to static models', async () => {
     const loader = vi.fn().mockRejectedValue(new Error('model config missing'));
 
