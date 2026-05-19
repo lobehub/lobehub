@@ -2,6 +2,8 @@ import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { MessagesEngine } from '@lobechat/context-engine';
 import { type OpenAIChatMessage } from '@lobechat/types';
 
+import { fileEnv } from '@/envs/file';
+
 import { type ServerMessagesEngineParams } from './types';
 
 /**
@@ -91,8 +93,9 @@ export const serverMessagesEngine = async ({
     enableAgentMode,
     enableHistoryCount,
 
-    // File context refs must stay stable; media URLs are sent through structured parts.
-    fileContext: { enabled: true, includeFileUrl: false },
+    // File context refs stay stable by default; set INCLUDE_FILE_URL_IN_CONTEXT=1
+    // to inject public URLs (useful when the S3 bucket is public and MCP tools need image URLs).
+    fileContext: { enabled: true, includeFileUrl: fileEnv.INCLUDE_FILE_URL_IN_CONTEXT },
 
     // Force finish mode (inject summary prompt when maxSteps exceeded)
     forceFinish,
