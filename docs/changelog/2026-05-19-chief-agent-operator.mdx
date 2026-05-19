@@ -1,39 +1,39 @@
 ---
-title: Chief Agent Operator — Self-Reviewing Agents That Run Themselves
+title: Introducing CAO — Your Chief Agent Operator
 description: >-
-  v2.2.0 introduces Chief Agent Operator: long-running agents that self-review, form teams, and pause for human input only when they need to.
+  Meet CAO: agents that review their own work, recruit teammates when they need help, and only stop to ask you when it really matters.
 tags:
-  - Chief Agent Operator
-  - Agent Signal
-  - Heterogeneous Agent
+  - CAO
+  - Agent Teams
+  - Tasks
   - Models
 ---
 
-# Chief Agent Operator — Self-Reviewing Agents That Run Themselves
+# Introducing CAO — Your Chief Agent Operator
 
-## Chief Agent Operator (v2.2.0)
+## Meet CAO
 
-Chief Agent Operator turns single-shot chats into long-running operators. Agents can now self-review their own work and auto-execute the approved follow-up actions — so a task that previously needed you to nudge "ok, do that next" now keeps moving on its own. When the operator hits something it genuinely can't decide on its own, it flips into a `waitingForHuman` state and surfaces an `AskUserQuestion` with freeform notes instead of guessing.
+CAO (Chief Agent Operator) turns short back-and-forth chats into agents that just keep going. Instead of waiting for you to say "ok, next step", your agent now checks its own work, decides what to do next, and gets on with it. When something genuinely needs your call, it pauses, tells you what it tried, and asks a clear question — no more guessing in the dark.
 
-Operators can also spin up teammates on the fly. The new heterogeneous AssistantGroup lets one agent assemble a team of sub-agents whose threads stream back via monitor-style signal callbacks. You can step into any branch to inspect what each teammate is doing, but their threads stay read-only so the operator keeps the wheel.
+CAO can also bring in help. If a task gets big, your agent can put together a small team of sub-agents and hand pieces off to them. You can peek into any of their conversations to see what they're up to, while your main agent stays in charge of the overall plan.
 
-## Features
+[Learn more about CAO →](https://x.com/lobehub/status/2056371816265097337?s=20)
 
-- Self-review actions: Agent Signal auto-executes approved follow-up actions instead of pausing for confirmation
-- Agent team orchestration: heterogeneous AssistantGroup with monitor-style signal callbacks and read-only sub-agent inspection
-- `waitingForHuman` operator status with `AskUserQuestion` freeform notes
-- Hardened task scheduler: `maxExecutions` cap, sub-10-minute heartbeat block, race-free SchedulerForm
-- Agent documents index: a cleaner table-format view that hides web crawls
-- Project skills in the working sidebar with inline markdown preview
-- Scene-specific follow-up config: pick a different model per follow-up extraction context
-- New models: Baidu Ernie 5.1, with DeepSeek restored to official pricing and Anthropic-compatible base URLs normalized
+## What else is new
+
+- Recurring tasks are more reliable, with a cap on how many times a task can run and protection against schedules that fire too often
+- A cleaner Agent Documents view — easier to find what you put there, and no more clutter from old web crawls
+- Project skills now show up in the working sidebar, with a built-in markdown preview
+- You can pick a different model for each kind of follow-up suggestion
+- New model: Baidu Ernie 5.1
+- DeepSeek pricing is back to official rates
 
 ## Improvements and fixes
 
-- Desktop no longer logs you out from token-refresh retry loops, and restores your route after an app-update restart.
-- Chat input action chips swapped for icon + colored label format; only the last markdown block animates.
-- Chrome-style dividers between inactive tabs; long Kanban schedule pills no longer wrap.
-- Local-file shell auto-enables hidden-file matching for dot-prefixed patterns; `grepContent` params forward end-to-end.
-- Document handler now rejects unsupported parser types, and tool errors fall back to `stderr` with a clear `UNKNOWN_EXEC_ERROR` prefix.
-- Gemini tool-call `thoughtSignature` and enum/required type sanitization fixed; per-tool timeout is now honored end-to-end.
-- Task routes preserve agent context; Agent Signal isolates memory-agent messages from the main thread.
+- Desktop no longer signs you out from background token refreshes, and remembers which page you were on after an app update.
+- Chat input actions show as icon + label, and only the latest reply animates as it streams.
+- Cleaner tab bar styling, and task schedule labels no longer wrap awkwardly.
+- Local-file search handles hidden files starting with `.`, and grep parameters now flow through correctly.
+- Documents fail clearly when they aren't supported, instead of producing confusing errors.
+- Gemini tool calls handle thinking signatures and enums correctly, and per-tool timeouts now stick.
+- Task pages keep the right agent context; memory updates stay out of your main thread.

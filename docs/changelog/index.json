@@ -3,6 +3,7 @@
   "cloud": [],
   "community": [
     {
+      "image": "https://hub-apac-1.lobeobjects.space/billboard/covers/1778838542538-MDEMAEav.png",
       "id": "2026-05-19-chief-agent-operator",
       "date": "2026-05-19",
       "versionRange": ["2.1.58", "2.2.0"]
