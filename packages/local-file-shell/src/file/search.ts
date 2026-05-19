@@ -14,9 +14,12 @@ export async function searchLocalFiles({
 }: SearchFilesParams): Promise<SearchFilesResult[]> {
   try {
     const cwd = expandTilde(directory) || process.cwd();
+    // If the caller is searching for a dot-prefixed name (e.g. `.env`, `.github`),
+    // auto-enable hidden matching so the file/directory is actually reachable.
+    const wantsHidden = keywords.startsWith('.');
     const files = await fg(`**/*${keywords}*`, {
       cwd,
-      dot: false,
+      dot: wantsHidden,
       ignore: ['**/node_modules/**', '**/.git/**'],
     });
 
