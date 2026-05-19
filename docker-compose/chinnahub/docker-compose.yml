@@ -26,12 +26,10 @@ services:
       - KEY_VAULTS_SECRET=${KEY_VAULTS_SECRET}
       - AUTH_SECRET=${AUTH_SECRET}
       - APP_URL=${APP_URL}
-      - NEXTAUTH_URL=${APP_URL}
-      - NEXT_PUBLIC_APP_URL=${APP_URL}
       - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@chinnahub-postgres:5432/${LOBE_DB_NAME}
       - DATABASE_DRIVER=node
       - INTERNAL_APP_URL=http://localhost:3210
-      - REDIS_URL=redis://chinnahub-redis:6379
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@chinnahub-redis:6379
       - REDIS_PREFIX=chinnahub
       - REDIS_TLS=0
       - S3_ENDPOINT=${S3_ENDPOINT}
