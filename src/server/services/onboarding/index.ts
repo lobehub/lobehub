@@ -314,7 +314,6 @@ export class OnboardingService {
 
     // User fields
     if (!userState.fullName?.trim()) missingFields.push('fullName');
-    if (!(userState.interests?.length ?? 0)) missingFields.push('interests');
 
     return missingFields;
   };
@@ -462,7 +461,6 @@ export class OnboardingService {
   ): Promise<OnboardingPhase> => {
     if (missingStructuredFields.includes('agentName')) return 'agent_identity';
     if (missingStructuredFields.includes('fullName')) return 'user_identity';
-    if (missingStructuredFields.includes('interests')) return 'discovery';
 
     // All fields complete — check pacing gate
     if (discoveryContext) {
