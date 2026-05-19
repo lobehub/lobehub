@@ -1,58 +1,10 @@
 'use client';
 
-import { createStaticStyles } from 'antd-style';
-import { BanIcon, ShieldCheckIcon, UsersIcon } from 'lucide-react';
-import { memo } from 'react';
-
 import { Flexbox, Icon, Skeleton } from '@lobehub/ui';
+import { BanIcon, ShieldCheckIcon, UsersIcon } from 'lucide-react';
+import { type CSSProperties, memo } from 'react';
 
 import { lambdaQuery } from '@/libs/trpc/client';
-
-const useStyles = createStaticStyles(({ css, token }) => ({
-  card: css`
-    flex: 1;
-    min-width: 180px;
-    padding: 20px 24px;
-    border-radius: 12px;
-    background: ${token.colorBgContainer};
-    border: 1px solid ${token.colorBorderSecondary};
-    box-shadow: ${token.boxShadowTertiary};
-  `,
-  cardIcon: css`
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-bottom: 12px;
-  `,
-  cardLabel: css`
-    font-size: 13px;
-    color: ${token.colorTextSecondary};
-    margin-bottom: 6px;
-  `,
-  cardValue: css`
-    font-size: 28px;
-    font-weight: 700;
-    color: ${token.colorText};
-    line-height: 1;
-  `,
-  heading: css`
-    font-size: 20px;
-    font-weight: 700;
-    color: ${token.colorText};
-    margin-bottom: 4px;
-  `,
-  root: css`
-    width: 100%;
-  `,
-  sub: css`
-    font-size: 13px;
-    color: ${token.colorTextTertiary};
-    margin-bottom: 24px;
-  `,
-}));
 
 interface StatCardProps {
   bg: string;
@@ -64,32 +16,81 @@ interface StatCardProps {
 }
 
 const StatCard = memo<StatCardProps>(({ bg, color, icon, label, loading, value }) => {
-  const { styles } = useStyles();
+  const cardStyle: CSSProperties = {
+    flex: 1,
+    minWidth: 180,
+    padding: '20px 24px',
+    borderRadius: 12,
+    background: 'var(--lobe-color-bg-container, #fff)',
+    border: '1px solid var(--lobe-color-border-secondary, #e5e5e5)',
+    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+  };
+
+  const cardIconStyle: CSSProperties = {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    background: bg,
+  };
+
+  const cardLabelStyle: CSSProperties = {
+    fontSize: 13,
+    color: 'var(--lobe-color-text-secondary, #666)',
+    marginBottom: 6,
+  };
+
+  const cardValueStyle: CSSProperties = {
+    fontSize: 28,
+    fontWeight: 700,
+    color: 'var(--lobe-color-text, #000)',
+    lineHeight: 1,
+  };
+
   return (
-    <div className={styles.card}>
-      <div className={styles.cardIcon} style={{ background: bg }}>
+    <div style={cardStyle}>
+      <div style={cardIconStyle}>
         <Icon color={color} icon={icon} size={20} />
       </div>
-      <div className={styles.cardLabel}>{label}</div>
+      <div style={cardLabelStyle}>{label}</div>
       {loading ? (
         <Skeleton.Button active size="small" style={{ width: 60 }} />
       ) : (
-        <div className={styles.cardValue}>{value?.toLocaleString() ?? 0}</div>
+        <div style={cardValueStyle}>{value?.toLocaleString() ?? 0}</div>
       )}
     </div>
   );
 });
 
 const AdminOverview = memo(() => {
-  const { styles } = useStyles();
   const { data, isLoading } = lambdaQuery.admin.getSystemStats.useQuery();
 
-  return (
-    <div className={styles.root}>
-      <div className={styles.heading}>Dashboard Overview</div>
-      <div className={styles.sub}>Real-time stats for your Chinna Hub instance</div>
+  const rootStyle: CSSProperties = {
+    width: '100%',
+  };
 
-      <Flexbox gap={16} horizontal wrap="wrap">
+  const headingStyle: CSSProperties = {
+    fontSize: 20,
+    fontWeight: 700,
+    color: 'var(--lobe-color-text, #000)',
+    marginBottom: 4,
+  };
+
+  const subStyle: CSSProperties = {
+    fontSize: 13,
+    color: 'var(--lobe-color-text-tertiary, #999)',
+    marginBottom: 24,
+  };
+
+  return (
+    <div style={rootStyle}>
+      <div style={headingStyle}>Dashboard Overview</div>
+      <div style={subStyle}>Real-time stats for your Chinna Hub instance</div>
+
+      <Flexbox horizontal gap={16} wrap="wrap">
         <StatCard
           bg="#e6f4ff"
           color="#1677ff"

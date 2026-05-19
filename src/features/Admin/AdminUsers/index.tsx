@@ -1,34 +1,11 @@
 'use client';
 
+import { Flexbox } from '@lobehub/ui';
 import { App, Badge, Button, Input, Select, Space, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { createStaticStyles } from 'antd-style';
-import { memo, useState } from 'react';
-
-import { Flexbox } from '@lobehub/ui';
+import { type CSSProperties, memo, useState } from 'react';
 
 import { lambdaQuery } from '@/libs/trpc/client';
-
-const useStyles = createStaticStyles(({ css, token }) => ({
-  heading: css`
-    font-size: 20px;
-    font-weight: 700;
-    color: ${token.colorText};
-  `,
-  root: css`
-    width: 100%;
-  `,
-  searchBar: css`
-    width: 280px;
-  `,
-  tableWrap: css`
-    margin-top: 16px;
-    background: ${token.colorBgContainer};
-    border-radius: 12px;
-    border: 1px solid ${token.colorBorderSecondary};
-    overflow: hidden;
-  `,
-}));
 
 const ROLE_OPTIONS = [
   { label: 'User', value: 'user' },
@@ -60,11 +37,33 @@ type UserRow = {
 };
 
 const AdminUsers = memo(() => {
-  const { styles } = useStyles();
-  const { message } = App.useApp();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
+
+  const { message } = App.useApp();
+
+  const rootStyle: CSSProperties = {
+    width: '100%',
+  };
+
+  const headingStyle: CSSProperties = {
+    fontSize: 20,
+    fontWeight: 700,
+    color: 'var(--lobe-color-text, #000)',
+  };
+
+  const searchBarStyle: CSSProperties = {
+    width: 280,
+  };
+
+  const tableWrapStyle: CSSProperties = {
+    marginTop: 16,
+    background: 'var(--lobe-color-bg-container, #fff)',
+    borderRadius: 12,
+    border: '1px solid var(--lobe-color-border-secondary, #e5e5e5)',
+    overflow: 'hidden',
+  };
 
   const { data, isLoading, refetch } = lambdaQuery.admin.listUsers.useQuery({
     page,
@@ -151,13 +150,13 @@ const AdminUsers = memo(() => {
   ];
 
   return (
-    <div className={styles.root}>
-      <Flexbox align="center" horizontal justify="space-between" style={{ marginBottom: 16 }}>
-        <span className={styles.heading}>Users</span>
+    <div style={rootStyle}>
+      <Flexbox horizontal align="center" justify="space-between" style={{ marginBottom: 16 }}>
+        <span style={headingStyle}>Users</span>
         <Input.Search
           allowClear
-          className={styles.searchBar}
           placeholder="Search by username or email"
+          style={searchBarStyle}
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
           onSearch={(v) => {
@@ -167,11 +166,15 @@ const AdminUsers = memo(() => {
         />
       </Flexbox>
 
-      <div className={styles.tableWrap}>
+      <div style={tableWrapStyle}>
         <Table<UserRow>
           columns={columns}
           dataSource={data?.items ?? []}
           loading={isLoading}
+          rowKey="id"
+          scroll={{ x: 900 }}
+          size="middle"
+          style={{ borderRadius: 0 }}
           pagination={{
             current: page,
             onChange: setPage,
@@ -179,10 +182,6 @@ const AdminUsers = memo(() => {
             showTotal: (t) => `${t} users`,
             total: data?.total ?? 0,
           }}
-          rowKey="id"
-          scroll={{ x: 900 }}
-          size="middle"
-          style={{ borderRadius: 0 }}
         />
       </div>
     </div>
