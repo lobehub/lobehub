@@ -38,8 +38,8 @@ export default {
   'cancelPlan.title': 'Cancel Subscription',
   'cancelSubscription': 'Cancel Subscription',
   'compare.hobbyCreditTooltip':
-    'Does not include monthly computing credits, you need to configure your own model API',
-  'compare.monthlyCredit': 'Monthly Computing Credits',
+    'Does not include monthly credits, you need to configure your own model API',
+  'compare.monthlyCredit': 'Monthly Credits',
   'compare.title': 'Plan Comparison',
   'compareAllPlans': 'View All Plans',
   'comparePlans': 'View Plans',
@@ -157,8 +157,8 @@ export default {
     'Your top-up credits are now active. Enjoy AI chatting. Your current plan includes:',
   'limitation.chat.topupSuccess.title': 'Top-up Successful',
   'limitation.expired.desc':
-    'Your {{plan}} computing credits expired on {{expiredAt}}. Upgrade your plan now to get computing credits.',
-  'limitation.expired.title': 'Computing Credits Expired',
+    'Your {{plan}} credits expired on {{expiredAt}}. Upgrade your plan now to get credits.',
+  'limitation.expired.title': 'Credits Expired',
   'limitation.insufficientBudget.approximateDesc':
     'This request may need more credits. Top up credits or upgrade your plan.',
   'limitation.insufficientBudget.available': 'Available Credits',
@@ -175,7 +175,7 @@ export default {
   'limitation.hobby.action': 'Configured, continue chatting',
   'limitation.hobby.configAPI': 'Configure API',
   'limitation.hobby.desc':
-    'Your free computing credits have been exhausted. Please configure a custom model API to continue.',
+    'Your free credits have been exhausted. Please configure a custom model API to continue.',
   'limitation.hobby.docs': 'View configuration docs',
   'limitation.hobby.tip': 'Remember to switch to a model with custom API Key',
   'limitation.hobby.title': 'Please Configure Model Service API',
@@ -204,11 +204,11 @@ export default {
   'limitation.limited.action': 'Upgrade Now',
   'limitation.limited.advanceFeature': 'Upgrade to enjoy premium features:',
   'limitation.limited.desc':
-    'Your {{plan}} computing credits have been exhausted. Upgrade now to get more credits.',
+    'Your {{plan}} credits have been exhausted. Upgrade now to get more credits.',
   'limitation.limited.descUltimate':
-    'Your {{plan}} computing credits have been exhausted. Please top up credits to continue.',
+    'Your {{plan}} credits have been exhausted. Please top up credits to continue.',
   'limitation.limited.referralTip': 'Invite friends, both get {{reward}}M',
-  'limitation.limited.title': 'Computing Credits Exhausted',
+  'limitation.limited.title': 'Credits Exhausted',
   'limitation.limited.topup': 'Top-Up Credits',
   'limitation.limited.upgrade': 'Upgrade to Higher Plan',
   'limitation.limited.upgradeToPlan': 'Upgrade to {{plan}}',
@@ -226,7 +226,7 @@ export default {
   'limitation.providers.tooltip': 'Custom API service is only available for paid plans',
   'modelPricing.button': 'View Pricing Documentation',
   'modelPricing.desc':
-    '{{name}} uses Credits to measure AI model usage. The table below shows computing credits per 1M Tokens.',
+    '{{name}} uses Credits to measure AI model usage. The table below shows credits per 1M Tokens.',
   'modelPricing.title': 'Text Model Pricing',
   'models.input': 'Input',
   'models.intro': 'Introduction',
@@ -272,12 +272,12 @@ export default {
   'plans.credit.apiDesc': 'Requires your own model API configuration',
   'plans.credit.apiProvider':
     'Supports 20+ mainstream model providers including OpenAI / Anthropic / OpenRouter',
-  'plans.credit.buy': 'Purchase Computing Credits',
-  'plans.credit.buyDesc': 'Also supports purchasing computing credits on demand',
-  'plans.credit.none': 'No built-in computing credits',
+  'plans.credit.buy': 'Purchase Credits',
+  'plans.credit.buyDesc': 'Also supports purchasing credits on demand',
+  'plans.credit.none': 'No built-in credits',
   'plans.credit.tip': '{{credit}} free credits per month',
-  'plans.credit.title': 'Computing Credits',
-  'plans.credit.tooltip': 'Monthly model message computing credits',
+  'plans.credit.title': 'Credits',
+  'plans.credit.tooltip': 'Monthly model message credits',
   'plans.current': 'Current Plan',
   'plans.downgradePlan': 'Target Downgrade Plan',
   'plans.downgradeTip':
@@ -358,17 +358,17 @@ export default {
     'If your question is not answered, check <1>Product Documentation</1> for more FAQs, or contact us.',
   'qa.detail': 'View Details',
   'qa.list.credit.a':
-    'Computing credits are a metric used by {{cloud}} to measure AI model usage when calling models. Different AI models consume different amounts of computing credits.',
-  'qa.list.credit.q': 'What are computing credits?',
+    'Credits are how {{cloud}} measures AI model usage. Different AI models consume different amounts of credits.',
+  'qa.list.credit.q': 'What are credits?',
   'qa.list.embeddings.a':
     'Vector storage is not equal to the original size of your uploaded or imported dataset, but is calculated based on the vectorization of pure text content in your files. For example, a 1-page PDF file (1000-1500 characters) may only take up about 1 vector storage entry when extracted and vectorized into pure text. You can view your usage under "{{usage}}".',
   'qa.list.embeddings.q': 'How is vector storage calculated?',
   'qa.list.free.a':
-    '{{name}} has always adhered to open source principles. For professional developers, you can use all open source capabilities through self-deployment of the community version. In {{cloud}}, we provide all registered users with {{credit}} free computing credits per month, ready to use without complex configuration. If you need more usage, you can subscribe to {{starter}}, {{premium}} or {{ultimate}}.',
+    '{{name}} has always adhered to open source principles. For professional developers, you can use all open source capabilities through self-deployment of the community version. In {{cloud}}, we provide all registered users with {{credit}} free credits per month, ready to use without complex configuration. If you need more usage, you can subscribe to {{starter}}, {{premium}} or {{ultimate}}.',
   'qa.list.free.q': 'Can {{name}} be used for free?',
   'qa.list.limit.a':
-    '{{cloud}} subscription plans are divided into {{starter}}, {{premium}} and {{ultimate}}, each providing different computing credits. If your current plan credits are insufficient, we recommend upgrading. You can also purchase credit packages on the <fundsLink>"{{funds}}"</fundsLink> page for pay-as-you-go usage. Alternatively, you can set up a custom model API key to use API credits purchased from other sources.',
-  'qa.list.limit.q': 'What if I run out of computing credits?',
+    '{{cloud}} subscription plans are divided into {{starter}}, {{premium}} and {{ultimate}}, each providing different credit amounts. If your current plan credits are insufficient, we recommend upgrading. You can also purchase credit packages on the <fundsLink>"{{funds}}"</fundsLink> page for pay-as-you-go usage. Alternatively, you can set up a custom model API key to use API credits purchased from other sources.',
+  'qa.list.limit.q': 'What if I run out of credits?',
   'qa.list.highUsage.a':
     'Credit consumption depends heavily on conversation length. As a conversation grows, each new message sends the entire history as input tokens, which increases cost significantly. We recommend starting a new conversation when topics change. Also, if there is a long gap between messages, the prompt cache may expire, causing a spike in cost. Some models like the Gemini Pro series use tiered pricing — input beyond 200K tokens is charged at double the rate.',
   'qa.list.highUsage.q': 'Why are my credits being consumed faster than expected?',
@@ -500,7 +500,7 @@ export default {
   'usage.credit.time.days': '{{days}} days',
   'usage.credit.time.daysAndHours': '{{days}} days {{hours}} hours',
   'usage.credit.time.hours': '{{hours}} hours',
-  'usage.credit.title': 'Computing Credits Usage',
+  'usage.credit.title': 'Credit Usage',
   'usage.overview.charge': 'Charges',
   'usage.overview.included': 'Plan Usage',
   'usage.overview.onDemand': 'On-demand',

@@ -347,7 +347,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
           : formatPriceByCurrency(pricing.approximatePricePerImage, currency);
         return t(
           isCreditPricing
-            ? 'ModelSwitchPanel.detail.pricing.creditPerImage'
+            ? 'ModelSwitchPanel.detail.pricing.credits.perImage'
             : 'ModelSwitchPanel.detail.pricing.perImage',
           {
             amount,
@@ -363,7 +363,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
           : formatPriceByCurrency(pricing.approximatePricePerVideo, currency);
         return t(
           isCreditPricing
-            ? 'ModelSwitchPanel.detail.pricing.creditPerVideo'
+            ? 'ModelSwitchPanel.detail.pricing.credits.perVideo'
             : 'ModelSwitchPanel.detail.pricing.perVideo',
           {
             amount,
@@ -376,14 +376,14 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
       return null;
     }, [isCreditPricing, pricing, pricingMode, t]);
 
-    const getCreditUnitSuffix = (unit: PricingUnit['unit']) =>
-      t(`ModelSwitchPanel.detail.pricing.creditUnitSuffix.${unit}` as any, {
+    const getCreditsUnitLabel = (unit: PricingUnit['unit']) =>
+      t(`ModelSwitchPanel.detail.pricing.credits.${unit}` as any, {
         defaultValue: `credits${UNIT_LABEL_MAP[unit] || ''}`,
       });
 
     const getPricingTooltip = (key: 'cachedInput' | 'input' | 'output', amount: string): string => {
       if (isCreditPricing) {
-        return t(`ModelSwitchPanel.detail.pricing.credit.${key}` as any, { amount });
+        return t(`ModelSwitchPanel.detail.pricing.credits.${key}` as any, { amount });
       }
 
       const fallbackKey =
@@ -598,7 +598,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
                             )}
                             suffix={
                               isCreditPricing
-                                ? ` ${getCreditUnitSuffix(unit.unit)}`
+                                ? ` ${getCreditsUnitLabel(unit.unit)}`
                                 : UNIT_LABEL_MAP[unit.unit] || ''
                             }
                           />

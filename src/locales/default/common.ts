@@ -3,9 +3,9 @@ export default {
   'advanceSettings': 'Advanced Settings',
   'alert.cloud.action': 'Try now',
   'alert.cloud.desc':
-    'All registered users get {{credit}} free computing credits per month—no setup needed. Includes global cloud sync and advanced web search.',
+    'All registered users get {{credit}} free credits per month—no setup needed. Includes global cloud sync and advanced web search.',
   'alert.cloud.descOnMobile':
-    'All registered users get {{credit}} free computing credits per month—no setup needed.',
+    'All registered users get {{credit}} free credits per month—no setup needed.',
   'alert.cloud.title': '{{name}} beta is live',
   'agentOnboardingPromo.actionLabel': 'Try it now',
   'agentOnboardingPromo.description':
