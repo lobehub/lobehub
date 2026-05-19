@@ -396,6 +396,32 @@ export const desktopRoutes: RouteObject[] = [
         path: 'settings',
       },
 
+      // Admin routes
+      {
+        children: [
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/admin'),
+              'Desktop > Admin > Overview',
+            ),
+            index: true,
+          },
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/admin/users'),
+              'Desktop > Admin > Users',
+            ),
+            path: 'users',
+          },
+        ],
+        element: dynamicLayout(
+          () => import('@/routes/(main)/admin/_layout'),
+          'Desktop > Admin > Layout',
+        ),
+        errorElement: <ErrorBoundary />,
+        path: 'admin',
+      },
+
       // Memory routes
       {
         children: [

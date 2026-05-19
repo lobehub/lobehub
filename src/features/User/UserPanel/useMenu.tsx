@@ -2,7 +2,7 @@ import { LOBE_CHAT_CLOUD, UTM_SOURCE } from '@lobechat/business-const';
 import { DOWNLOAD_URL, isDesktop } from '@lobechat/const';
 import { Flexbox, Hotkey, Icon, Tag } from '@lobehub/ui';
 import { type ItemType } from 'antd/es/menu/interface';
-import { BrainCircuit, Cloudy, Download, HardDriveDownload, LogOut, Settings2 } from 'lucide-react';
+import { BrainCircuit, Cloudy, Download, HardDriveDownload, LogOut, Settings2, ShieldIcon } from 'lucide-react';
 import { type PropsWithChildren } from 'react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -77,6 +77,11 @@ export const useMenu = () => {
           <NewVersionBadge showBadge={hasNewVersion}>{t('userPanel.setting')}</NewVersionBadge>
         </Link>
       ),
+    },
+    {
+      icon: <Icon icon={ShieldIcon} />,
+      key: 'admin',
+      label: <Link to="/admin">Admin Panel</Link>,
     },
     ...(userPanel.showMemory
       ? [

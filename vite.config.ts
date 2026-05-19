@@ -98,6 +98,23 @@ const openExternalBrowser = async (
 };
 
 export default defineConfig({
+
+  resolve: {
+    dedupe: ['react', 'react-dom', 'react-i18next', 'i18next'],
+    alias: {
+      react: path.resolve(__dirname, 'node_modules/react'),
+      'react-dom': path.resolve(__dirname, 'node_modules/react-dom'),
+      'react/jsx-runtime': path.resolve(__dirname, 'node_modules/react/jsx-runtime.js'),
+      'react/jsx-dev-runtime': path.resolve(__dirname, 'node_modules/react/jsx-dev-runtime.js'),
+      'react-i18next': path.resolve(__dirname, 'node_modules/react-i18next'),
+      i18next: path.resolve(__dirname, 'node_modules/i18next'),
+    },
+  },
+  optimizeDeps: {
+    include: ['react', 'react-dom', 'react-dom/client', 'react-i18next', 'i18next'],
+    force: true,
+  },
+
   base: isDev ? '/' : process.env.VITE_CDN_BASE || '/_spa/',
   build: {
     outDir: isMobile ? 'dist/mobile' : 'dist/desktop',

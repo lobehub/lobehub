@@ -76,6 +76,9 @@ import ResourceLibrarySlugPage from '@/routes/(main)/resource/library/[slug]';
 import SettingsTabPage from '@/routes/(main)/settings';
 import SettingsLayout from '@/routes/(main)/settings/_layout';
 import { ProviderDetailPage, ProviderLayout } from '@/routes/(main)/settings/provider';
+import AdminLayout from '@/routes/(main)/admin/_layout';
+import AdminOverviewPage from '@/routes/(main)/admin';
+import AdminUsersPage from '@/routes/(main)/admin/users';
 import TaskDetailRoute from '@/routes/(main)/task/[taskId]';
 import AllTasksPage from '@/routes/(main)/tasks';
 import ShareTopicPage from '@/routes/share/t/[id]';
@@ -341,6 +344,23 @@ export const desktopRoutes: RouteObject[] = [
         element: <SettingsLayout />,
         errorElement: <ErrorBoundary />,
         path: 'settings',
+      },
+
+      // Admin routes
+      {
+        children: [
+          {
+            element: <AdminOverviewPage />,
+            index: true,
+          },
+          {
+            element: <AdminUsersPage />,
+            path: 'users',
+          },
+        ],
+        element: <AdminLayout />,
+        errorElement: <ErrorBoundary />,
+        path: 'admin',
       },
 
       // Memory routes

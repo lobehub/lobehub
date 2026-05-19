@@ -7,13 +7,6 @@ const DEFAULT_APP_ICON_512 = '/icons/icon-bot-512.png';
 
 const appIcon192 = appEnv.BRANDING_APP_ICON_192_URL || DEFAULT_APP_ICON_192;
 const appIcon512 = appEnv.BRANDING_APP_ICON_512_URL || DEFAULT_APP_ICON_512;
-const hasCustomBrandingAssets = Boolean(
-  appEnv.BRANDING_LOGO_URL ||
-  appEnv.BRANDING_FAVICON_URL ||
-  appEnv.BRANDING_APPLE_TOUCH_ICON_URL ||
-  appEnv.BRANDING_APP_ICON_192_URL ||
-  appEnv.BRANDING_APP_ICON_512_URL,
-);
 
 const manifest = async (): Promise<MetadataRoute.Manifest> => {
   // Skip heavy module compilation in development
@@ -69,50 +62,7 @@ const manifest = async (): Promise<MetadataRoute.Manifest> => {
     ],
     id: kebabCase(BRANDING_NAME),
     name: BRANDING_NAME,
-    screenshots: hasCustomBrandingAssets
-      ? []
-      : [
-          {
-            form_factor: 'narrow',
-            url: '/screenshots/shot-1.mobile.png',
-          },
-          {
-            form_factor: 'narrow',
-            url: '/screenshots/shot-2.mobile.png',
-          },
-          {
-            form_factor: 'narrow',
-            url: '/screenshots/shot-3.mobile.png',
-          },
-          {
-            form_factor: 'narrow',
-            url: '/screenshots/shot-4.mobile.png',
-          },
-          {
-            form_factor: 'narrow',
-            url: '/screenshots/shot-5.mobile.png',
-          },
-          {
-            form_factor: 'wide',
-            url: '/screenshots/shot-1.desktop.png',
-          },
-          {
-            form_factor: 'wide',
-            url: '/screenshots/shot-2.desktop.png',
-          },
-          {
-            form_factor: 'wide',
-            url: '/screenshots/shot-3.desktop.png',
-          },
-          {
-            form_factor: 'wide',
-            url: '/screenshots/shot-4.desktop.png',
-          },
-          {
-            form_factor: 'wide',
-            url: '/screenshots/shot-5.desktop.png',
-          },
-        ],
+    screenshots: [],
   });
 };
 

@@ -1,52 +1,51 @@
 'use client';
 
-import 'antd/dist/reset.css';
-
-import { ConfigProvider, ThemeProvider } from '@lobehub/ui';
-import { App } from 'antd';
-import * as m from 'motion/react-m';
-import Link from 'next/link';
-import { type PropsWithChildren } from 'react';
-import { memo } from 'react';
-
-import AntdStaticMethods from '@/components/AntdStaticMethods';
-import Image from '@/libs/next/Image';
-
-import { useIsDarkInAuth } from './AuthThemeProvider';
+import { ThemeProvider } from '@lobehub/ui';
+import type { PropsWithChildren } from 'react';
+import { memo, useEffect, useState } from 'react';
 
 interface AuthThemeLiteProps extends PropsWithChildren {
-  globalCDN?: boolean;
+  defaultAppearance?: 'dark' | 'light' | 'auto';
+  appearance?: 'dark' | 'light' | 'auto';
 }
 
-const AuthThemeLite = memo<AuthThemeLiteProps>(({ children, globalCDN }) => {
-  const isDark = useIsDarkInAuth();
-  const currentAppearance = isDark ? 'dark' : 'light';
+const AuthThemeLite = memo<AuthThemeLiteProps>(({ children, appearance, defaultAppearance }) => {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const currentAppearance = appearance || defaultAppearance || 'dark';
+
+  if (!mounted) {
+    return (
+      <div
+        className="auth-layout"
+        style={{
+          height: '100%',
+          minHeight: 'inherit',
+          width: 'inherit',
+        }}
+        suppressHydrationWarning
+      >
+        {children}
+      </div>
+    );
+  }
 
   return (
     <ThemeProvider
       appearance={currentAppearance}
-      className={'auth-layout'}
+      className="auth-layout"
       defaultAppearance={currentAppearance}
-      defaultThemeMode={currentAppearance}
-      style={{ height: '100%' }}
-      theme={{
-        cssVar: { key: 'lobe-vars' },
+      style={{
+        height: '100%',
+        minHeight: 'inherit',
+        width: 'inherit',
       }}
     >
-      <App style={{ height: '100%' }}>
-        <AntdStaticMethods />
-        <ConfigProvider
-          motion={m}
-          config={{
-            aAs: Link,
-            imgAs: Image,
-            imgUnoptimized: true,
-            proxy: globalCDN ? 'unpkg' : undefined,
-          }}
-        >
-          {children}
-        </ConfigProvider>
-      </App>
+      {children}
     </ThemeProvider>
   );
 });
