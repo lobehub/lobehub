@@ -82,6 +82,26 @@ describe('createCommonSlice', () => {
 
       expect(useUserStore.getState().user?.interests).toEqual(['old']);
     });
+
+    it('skips rollback when a later edit has already superseded the optimistic value', async () => {
+      act(() => {
+        useUserStore.setState({ user: { id: 'u1', interests: ['old'] } as any });
+      });
+
+      vi.spyOn(userService, 'updateInterests').mockRejectedValue(new Error('boom'));
+
+      const pending = useUserStore.getState().updateInterests(['new']);
+
+      // Simulate a second edit landing before the first request rejects.
+      act(() => {
+        useUserStore.setState({ user: { id: 'u1', interests: ['newer'] } as any });
+      });
+
+      await expect(pending).rejects.toThrow('boom');
+
+      // The rollback must not clobber the newer in-flight value.
+      expect(useUserStore.getState().user?.interests).toEqual(['newer']);
+    });
   });
 
   describe('useInitUserState', () => {

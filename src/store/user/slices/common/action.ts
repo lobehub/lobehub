@@ -1,6 +1,7 @@
 import { isDesktop } from '@lobechat/const';
 import type { UserGeneralConfig } from '@lobechat/types';
 import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
+import isEqual from 'fast-deep-equal';
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 import { type PartialDeep } from 'type-fest';
@@ -65,7 +66,10 @@ export class CommonActionImpl {
       await userService.updateInterests(interests);
       await this.#get().refreshUserState();
     } catch (error) {
-      if (previousUser) {
+      // Only roll back when no later edit has superseded this optimistic value —
+      // otherwise we'd discard a newer in-flight update.
+      const currentInterests = this.#get().user?.interests;
+      if (previousUser && isEqual(currentInterests, interests)) {
         this.#set(
           { user: { ...previousUser, interests: previousInterests } },
           false,
