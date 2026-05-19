@@ -9,55 +9,115 @@ permissions:
 
 jobs:
   issue-check-inactive:
-    permissions:
-      issues: write # for actions-cool/issues-helper to update issues
-      pull-requests: write # for actions-cool/issues-helper to update PRs
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
     steps:
-      - name: check-inactive
-        uses: actions-cool/issues-helper@v3
+      - name: Check inactive issues
+        uses: actions/github-script@v7
         with:
-          actions: 'check-inactive'
-          token: ${{ secrets.GH_TOKEN }}
-          inactive-label: 'Inactive'
-          inactive-day: 60
+          github-token: ${{ secrets.GH_TOKEN }}
+          script: |
+            const INACTIVE_LABEL = 'Inactive';
+            const INACTIVE_DAYS = 60;
+
+            const cutoff = new Date();
+            cutoff.setDate(cutoff.getDate() - INACTIVE_DAYS);
+
+            const issues = await github.paginate(
+              github.rest.issues.listForRepo,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                sort: 'updated',
+                direction: 'asc',
+                per_page: 100,
+              }
+            );
+
+            for (const issue of issues) {
+              // Skip pull requests (GitHub API returns PRs as issues)
+              if (issue.pull_request) continue;
+
+              const updatedAt = new Date(issue.updated_at);
+              if (updatedAt > cutoff) break; // Issues are sorted by updated asc, stop when we hit active ones
+
+              const hasInactiveLabel = issue.labels.some(l => l.name === INACTIVE_LABEL);
+              if (hasInactiveLabel) {
+                console.log(`Issue #${issue.number} already has ${INACTIVE_LABEL} label, skipping`);
+                continue;
+              }
+
+              console.log(`Adding ${INACTIVE_LABEL} label to issue #${issue.number} (last updated: ${issue.updated_at})`);
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                labels: [INACTIVE_LABEL],
+              });
+            }
+
+            console.log('Check inactive complete');
 
   issue-close-require:
-    permissions:
-      issues: write # for actions-cool/issues-helper to update issues
-      pull-requests: write # for actions-cool/issues-helper to update PRs
+    needs: issue-check-inactive
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
     steps:
-      - name: need reproduce
-        uses: actions-cool/issues-helper@v3
+      - name: Close issues with specific labels
+        uses: actions/github-script@v7
         with:
-          actions: 'close-issues'
-          token: ${{ secrets.GH_TOKEN }}
-          labels: '✅ Fixed'
-          inactive-day: 3
-          body: |
-            👋 @{{ author }}
-            <br/>
-            Since the issue was labeled with `✅ Fixed`, but no response in 3 days. This issue will be closed. If you have any questions, you can comment and reply.
-      - name: need reproduce
-        uses: actions-cool/issues-helper@v3
-        with:
-          actions: 'close-issues'
-          token: ${{ secrets.GH_TOKEN }}
-          labels: '🤔 Need Reproduce'
-          inactive-day: 3
-          body: |
-            👋 @{{ author }}
-            <br/>
-            Since the issue was labeled with `🤔 Need Reproduce`, but no response in 3 days. This issue will be closed. If you have any questions, you can comment and reply.
-      - name: need reproduce
-        uses: actions-cool/issues-helper@v3
-        with:
-          actions: 'close-issues'
-          token: ${{ secrets.GH_TOKEN }}
-          labels: "🙅🏻‍♀️ WON'T DO"
-          inactive-day: 3
-          body: |
-            👋 @{{ github.event.issue.user.login }}
-            <br/>
-            Since the issue was labeled with `🙅🏻‍♀️ WON'T DO`, and no response in 3 days. This issue will be closed. If you have any questions, you can comment and reply.
+          github-token: ${{ secrets.GH_TOKEN }}
+          script: |
+            const CLOSE_CONFIGS = [
+              { label: '✅ Fixed', days: 3, message: 'Since the issue was labeled with `✅ Fixed`, but no response in 3 days. This issue will be closed. If you have any questions, you can comment and reply.' },
+              { label: '🤔 Need Reproduce', days: 3, message: 'Since the issue was labeled with `🤔 Need Reproduce`, but no response in 3 days. This issue will be closed. If you have any questions, you can comment and reply.' },
+              { label: "🙅🏻‍♀️ WON'T DO", days: 3, message: "Since the issue was labeled with `🙅🏻‍♀️ WON'T DO`, and no response in 3 days. This issue will be closed. If you have any questions, you can comment and reply." },
+            ];
+
+            for (const config of CLOSE_CONFIGS) {
+              const cutoff = new Date();
+              cutoff.setDate(cutoff.getDate() - config.days);
+
+              const issues = await github.paginate(
+                github.rest.issues.listForRepo,
+                {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  state: 'open',
+                  labels: config.label,
+                  sort: 'updated',
+                  direction: 'asc',
+                  per_page: 100,
+                }
+              );
+
+              for (const issue of issues) {
+                if (issue.pull_request) continue;
+
+                const updatedAt = new Date(issue.updated_at);
+                if (updatedAt > cutoff) break;
+
+                const author = issue.user.login;
+                const body = `👋 @${author}\n<br/>\n${config.message}`;
+
+                console.log(`Closing issue #${issue.number} with label "${config.label}"`);
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  body,
+                });
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  state: 'closed',
+                  state_reason: 'not_planned',
+                });
+              }
+            }
+
+            console.log('Close issues complete');
