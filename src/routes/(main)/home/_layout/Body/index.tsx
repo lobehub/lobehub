@@ -165,54 +165,60 @@ const Body = memo(() => {
   // Render the flat list: group consecutive accordion items into an Accordion,
   // interleave non-accordion keys as nav links.
   const content = useMemo(() => {
-    const elements: ReactElement[] = [];
-    let accGroup: { element: ReactElement; key: string }[] = [];
-    let bottomSpacerInserted = false;
+    const renderSection = (keys: string[], section: 'bottom' | 'top') => {
+      const elements: ReactElement[] = [];
+      let accGroup: { element: ReactElement; key: string }[] = [];
 
-    const flushAccordion = () => {
-      if (accGroup.length > 0) {
-        const accordionKeys = accGroup.map((item) => item.key);
+      const flushAccordion = () => {
+        if (accGroup.length > 0) {
+          const accordionKeys = accGroup.map((item) => item.key);
 
-        elements.push(
-          <Accordion
-            expandedKeys={sidebarExpandedKeys}
-            gap={8}
-            key={`acc-${elements.length}`}
-            onExpandedChange={(keys) => handleAccordionExpandedChange(accordionKeys, keys)}
-          >
-            {accGroup.map((item) => item.element)}
-          </Accordion>,
-        );
-        accGroup = [];
+          elements.push(
+            <Accordion
+              expandedKeys={sidebarExpandedKeys}
+              gap={8}
+              key={`${section}-acc-${elements.length}`}
+              onExpandedChange={(keys) => handleAccordionExpandedChange(accordionKeys, keys)}
+            >
+              {accGroup.map((item) => item.element)}
+            </Accordion>,
+          );
+          accGroup = [];
+        }
+      };
+
+      for (const key of keys) {
+        if (ACCORDION_KEYS.has(key)) {
+          const comp = accordionComponents[key]?.(key);
+          if (comp) accGroup.push({ element: comp, key });
+        } else {
+          flushAccordion();
+          const link = renderNavLink(key);
+          if (link) elements.push(link);
+        }
       }
+      flushAccordion();
+
+      return elements;
     };
 
-    for (const key of visibleKeys) {
-      if (ACCORDION_KEYS.has(key)) {
-        const comp = accordionComponents[key]?.(key);
-        if (comp) accGroup.push({ element: comp, key });
-      } else {
-        flushAccordion();
-        const link = renderNavLink(key);
-        if (!link) continue;
+    const topKeys = visibleKeys.filter((key) => !bottomNavKeys.has(key));
+    const bottomKeys = visibleKeys.filter((key) => bottomNavKeys.has(key));
+    const topElements = renderSection(topKeys, 'top');
+    const bottomElements = renderSection(bottomKeys, 'bottom');
 
-        if (!bottomSpacerInserted && bottomNavKeys.has(key)) {
-          elements.push(
-            <div
-              aria-hidden
-              data-sidebar-bottom-spacer
-              key={'bottom-nav-spacer'}
-              style={{ flex: '1 1 0', minHeight: 0 }}
-            />,
-          );
-          bottomSpacerInserted = true;
-        }
+    if (bottomElements.length === 0) return topElements;
 
-        elements.push(link);
-      }
-    }
-    flushAccordion();
-    return elements;
+    return [
+      ...topElements,
+      <div
+        aria-hidden
+        data-sidebar-bottom-spacer
+        key={'bottom-nav-spacer'}
+        style={{ flex: '1 1 0', minHeight: 0 }}
+      />,
+      ...bottomElements,
+    ];
   }, [
     visibleKeys,
     renderNavLink,
