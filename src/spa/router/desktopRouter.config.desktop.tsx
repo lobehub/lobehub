@@ -15,6 +15,7 @@ import {
   BusinessDesktopRoutesWithMainLayout,
   BusinessDesktopRoutesWithoutMainLayout,
 } from '@/business/client/BusinessDesktopRoutes';
+import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
 import DesktopOnboarding from '@/routes/(desktop)/desktop-onboarding';
 // Layouts — sync import (Electron local, no network overhead)
@@ -545,6 +546,7 @@ export const desktopRoutes: RouteObject[] = [
             children: [
               {
                 element: <AllTasksPage />,
+                handle: { meta: tasksRouteMeta },
                 index: true,
               },
             ],
@@ -555,6 +557,7 @@ export const desktopRoutes: RouteObject[] = [
             children: [
               {
                 element: <TaskDetailRoute />,
+                handle: { meta: taskRouteMeta },
                 path: ':taskId',
               },
             ],

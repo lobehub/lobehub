@@ -15,6 +15,7 @@ import {
   BusinessDesktopRoutesWithMainLayout,
   BusinessDesktopRoutesWithoutMainLayout,
 } from '@/business/client/BusinessDesktopRoutes';
+import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
 import { agentRouteMeta } from '@/routes/(main)/agent/features/routeMeta';
 import { agentTopicPageRouteMeta } from '@/routes/(main)/agent/features/topicPageRouteMeta';
@@ -657,6 +658,7 @@ export const desktopRoutes: RouteObject[] = [
             children: [
               {
                 element: dynamicElement(() => import('@/routes/(main)/tasks'), 'Desktop > Tasks'),
+                handle: { meta: tasksRouteMeta },
                 index: true,
               },
             ],
@@ -670,6 +672,7 @@ export const desktopRoutes: RouteObject[] = [
                   () => import('@/routes/(main)/task/[taskId]'),
                   'Desktop > Task Detail',
                 ),
+                handle: { meta: taskRouteMeta },
                 path: ':taskId',
               },
             ],
