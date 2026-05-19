@@ -155,10 +155,22 @@ export class HeterogeneousAgentService {
       type: 'agent_runtime_end',
     });
 
-    // Clear runningOperation from topic metadata so reconnect doesn't retrigger
-    // after completion — mirrors the same cleanup done in RuntimeExecutors for
-    // the normal LLM path.  Read completionWebhook and assistantMessageId first
-    // so they are available for webhook delivery below.
+    // Fire the IM bot-callback completion webhook if one was registered.
+    // The hetero path bypasses the normal AgentHook registration flow, so
+    // we persist the webhook config in topic.metadata.runningOperation and
+    // deliver it here instead.
+    //
+    // Skip on `cancelled` — heteroFinish may be called twice: first with
+    // result=cancelled (termination signal) then with result=success/error
+    // (normal process exit). We must NOT clear runningOperation on cancelled
+    // so the subsequent success/error call can still find completionWebhook
+    // and assistantMessageId. runningOperation is only cleared on the
+    // delivering call (success/error) so reconnect doesn't retrigger after
+    // completion — mirrors RuntimeExecutors cleanup for the normal LLM path.
+    // Transport-level retries of the same result are accepted: BotCallbackService
+    // reads the latest DB content each time, so duplicates are idempotent.
+    if (result === 'cancelled') return;
+
     let completionWebhook: AgentHookWebhook | undefined;
     let assistantMessageId: string | undefined;
     try {
@@ -170,18 +182,7 @@ export class HeterogeneousAgentService {
       log('heteroFinish: failed to clear runningOperation (non-fatal): %O', err);
     }
 
-    // Fire the IM bot-callback completion webhook if one was registered.
-    // The hetero path bypasses the normal AgentHook registration flow, so
-    // we persist the webhook config in topic.metadata.runningOperation and
-    // deliver it here instead.
-    //
-    // Skip on `cancelled` — heteroFinish may be called twice when the CLI
-    // receives a termination signal (cancelled) followed by normal exit
-    // (success/error). Delivering on cancelled would send a truncated reply;
-    // the subsequent success/error call will deliver the real content instead.
-    // Transport-level retries of the same result are accepted: BotCallbackService
-    // reads the latest DB content each time, so duplicates are idempotent.
-    if (completionWebhook?.url && result !== 'cancelled') {
+    if (completionWebhook?.url) {
       try {
         // Read the final assistant message content so BotCallbackService.handleCompletion
         // has lastAssistantContent to render.  Without it the handler skips delivery.
