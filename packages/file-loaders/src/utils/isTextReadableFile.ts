@@ -68,6 +68,13 @@ export const TEXT_READABLE_FILE_TYPES = [
   'patch',
   'diff',
   'db', // Often text-based, like SQLite journals
+
+  // LaTeX
+  'tex',
+  'sty',
+  'cls',
+  'bib',
+  'bbl',
 ];
 
 /**
