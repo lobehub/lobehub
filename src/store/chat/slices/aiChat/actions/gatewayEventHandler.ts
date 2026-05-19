@@ -301,7 +301,10 @@ export const createGatewayEventHandler = (
             payload: {
               agentId: context.agentId,
               ...(currentAssistantMessageId
-                ? { assistantMessageId: currentAssistantMessageId }
+                ? {
+                    anchorMessageId: currentAssistantMessageId,
+                    assistantMessageId: currentAssistantMessageId,
+                  }
                 : {}),
               operationId,
               stepIndex: event.stepIndex,
@@ -470,7 +473,10 @@ export const createGatewayEventHandler = (
             payload: {
               agentId: context.agentId,
               ...(currentAssistantMessageId
-                ? { assistantMessageId: currentAssistantMessageId }
+                ? {
+                    anchorMessageId: currentAssistantMessageId,
+                    assistantMessageId: currentAssistantMessageId,
+                  }
                 : {}),
               operationId,
               topicId: context.topicId ?? undefined,

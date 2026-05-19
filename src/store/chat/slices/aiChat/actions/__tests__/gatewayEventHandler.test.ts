@@ -94,8 +94,10 @@ describe('createGatewayEventHandler', () => {
       expect(emitClientAgentSignalSourceEvent).toHaveBeenCalledWith(
         expect.objectContaining({
           payload: expect.objectContaining({
+            anchorMessageId: 'msg-step2',
             assistantMessageId: 'msg-step2',
             operationId: 'op-1',
+            stepIndex: 0,
           }),
           sourceType: 'client.gateway.stream_start',
         }),
@@ -639,6 +641,7 @@ describe('createGatewayEventHandler', () => {
       expect(emitClientAgentSignalSourceEvent).toHaveBeenLastCalledWith(
         expect.objectContaining({
           payload: expect.objectContaining({
+            anchorMessageId: 'msg-step2',
             assistantMessageId: 'msg-step2',
             operationId: 'op-1',
           }),

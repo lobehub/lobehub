@@ -20,6 +20,7 @@ const toReceiptHash = (receipt: AgentSignalReceipt): Record<string, string> => (
   ...(receipt.target ? { target: JSON.stringify(receipt.target) } : {}),
   title: receipt.title,
   topicId: receipt.topicId,
+  ...(receipt.triggerMessageId ? { triggerMessageId: receipt.triggerMessageId } : {}),
   userId: receipt.userId,
 });
 
@@ -113,6 +114,7 @@ const fromReceiptHash = (payload: Record<string, string>): AgentSignalReceipt | 
     ...(target ? { target } : {}),
     title: payload.title,
     topicId: payload.topicId,
+    triggerMessageId: payload.triggerMessageId,
     userId: payload.userId,
   };
 };

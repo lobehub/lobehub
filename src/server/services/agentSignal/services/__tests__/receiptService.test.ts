@@ -53,6 +53,99 @@ const result = (input: {
 });
 
 describe('projectAgentSignalReceipts', () => {
+  it('prefers anchorMessageId over assistantMessageId for receipt anchoring', () => {
+    const anchoredSource = createSource({
+      payload: {
+        agentId: 'agent-1',
+        anchorMessageId: 'assistant-anchor-1',
+        assistantMessageId: 'assistant-legacy-1',
+        topicId: 'topic-1',
+      },
+      scope: { topicId: 'topic-1', userId: 'user-1' },
+      scopeKey: 'topic:topic-1',
+      sourceId: 'source-anchor-1',
+      sourceType: 'client.runtime.complete',
+      timestamp: 1_700_000,
+    });
+
+    expect(
+      projectAgentSignalReceipts({
+        actions: [
+          action({
+            actionId: 'action-memory-1',
+            actionType: AGENT_SIGNAL_POLICY_ACTION_TYPES.userMemoryHandle,
+            payload: {},
+          }),
+        ],
+        results: [result({ actionId: 'action-memory-1', status: 'applied' })],
+        source: anchoredSource,
+        userId: 'user-1',
+      }),
+    ).toMatchObject([{ anchorMessageId: 'assistant-anchor-1' }]);
+  });
+
+  it('falls back to assistantMessageId for legacy receipt anchoring payloads', () => {
+    expect(
+      projectAgentSignalReceipts({
+        actions: [
+          action({
+            actionId: 'action-memory-1',
+            actionType: AGENT_SIGNAL_POLICY_ACTION_TYPES.userMemoryHandle,
+            payload: {},
+          }),
+        ],
+        results: [result({ actionId: 'action-memory-1', status: 'applied' })],
+        source,
+        userId: 'user-1',
+      }),
+    ).toMatchObject([{ anchorMessageId: 'assistant-1' }]);
+  });
+
+  it('projects triggerMessageId and falls back to messageId for legacy trigger payloads', () => {
+    const triggerSource = createSource({
+      payload: {
+        agentId: 'agent-1',
+        messageId: 'message-legacy-1',
+        topicId: 'topic-1',
+        triggerMessageId: 'message-trigger-1',
+      },
+      scope: { topicId: 'topic-1', userId: 'user-1' },
+      scopeKey: 'topic:topic-1',
+      sourceId: 'source-trigger-1',
+      sourceType: 'agent.user.message',
+      timestamp: 1_700_000,
+    });
+    const legacyTriggerSource = createSource({
+      payload: {
+        agentId: 'agent-1',
+        messageId: 'message-legacy-1',
+        topicId: 'topic-1',
+      },
+      scope: { topicId: 'topic-1', userId: 'user-1' },
+      scopeKey: 'topic:topic-1',
+      sourceId: 'source-trigger-2',
+      sourceType: 'agent.user.message',
+      timestamp: 1_700_000,
+    });
+
+    const project = (projectSource: typeof triggerSource) =>
+      projectAgentSignalReceipts({
+        actions: [
+          action({
+            actionId: 'action-memory-1',
+            actionType: AGENT_SIGNAL_POLICY_ACTION_TYPES.userMemoryHandle,
+            payload: {},
+          }),
+        ],
+        results: [result({ actionId: 'action-memory-1', status: 'applied' })],
+        source: projectSource,
+        userId: 'user-1',
+      });
+
+    expect(project(triggerSource)).toMatchObject([{ triggerMessageId: 'message-trigger-1' }]);
+    expect(project(legacyTriggerSource)).toMatchObject([{ triggerMessageId: 'message-legacy-1' }]);
+  });
+
   it('projects applied memory action results without unstructured feedback as target', () => {
     expect(
       projectAgentSignalReceipts({

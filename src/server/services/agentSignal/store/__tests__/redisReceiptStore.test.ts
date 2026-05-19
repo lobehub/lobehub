@@ -37,6 +37,7 @@ const receipt = {
   },
   title: 'Memory saved',
   topicId: 'topic-1',
+  triggerMessageId: 'user-message-1',
   userId: 'user-1',
 };
 
@@ -74,6 +75,7 @@ describe('redis receipt store', () => {
       }),
       title: 'Memory saved',
       topicId: 'topic-1',
+      triggerMessageId: 'user-message-1',
       userId: 'user-1',
     });
     expect(mockRedis.zadd).toHaveBeenCalledWith(
@@ -141,6 +143,23 @@ describe('redis receipt store', () => {
             title: 'GitHub PR review workflow',
             type: 'skill',
           },
+        },
+      ],
+    });
+  });
+
+  it('round-trips triggerMessageId with the receipt payload', async () => {
+    const store = await loadStore();
+
+    await store.appendReceipt(receipt, 259_200);
+
+    await expect(
+      store.listReceipts({ agentId: 'agent-1', limit: 10, topicId: 'topic-1', userId: 'user-1' }),
+    ).resolves.toMatchObject({
+      receipts: [
+        {
+          anchorMessageId: 'assistant-1',
+          triggerMessageId: 'user-message-1',
         },
       ],
     });

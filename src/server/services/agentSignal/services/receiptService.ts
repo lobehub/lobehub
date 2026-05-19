@@ -109,6 +109,8 @@ export interface AgentSignalReceipt {
   title: string;
   /** Topic where the receipt should be listed. */
   topicId: string;
+  /** Message that triggered the Agent Signal source, when known. */
+  triggerMessageId?: string;
   /** Owner used to enforce topic index isolation. */
   userId: string;
 }
@@ -539,6 +541,14 @@ export const projectAgentSignalReceipts = ({
   if (!agentId || !topicId) return [];
 
   const actionById = new Map(actions.map((action) => [action.actionId, action]));
+  const anchorMessageId =
+    getPayloadString(payload, 'anchorMessageId') ??
+    // TODO: Remove after producers stop emitting only assistantMessageId.
+    getPayloadString(payload, 'assistantMessageId');
+  const triggerMessageId =
+    getPayloadString(payload, 'triggerMessageId') ??
+    // TODO: Remove after producers stop emitting only messageId.
+    getPayloadString(payload, 'messageId');
 
   return results.flatMap((result) => {
     if (result.status !== 'applied') return [];
@@ -555,7 +565,7 @@ export const projectAgentSignalReceipts = ({
       {
         ...visibleOutcome,
         agentId,
-        anchorMessageId: getPayloadString(payload, 'assistantMessageId'),
+        ...(anchorMessageId ? { anchorMessageId } : {}),
         createdAt: source.timestamp,
         id: `${source.sourceId}:${result.actionId}:${visibleOutcome.kind}`,
         operationId: getPayloadString(payload, 'operationId'),
@@ -563,6 +573,7 @@ export const projectAgentSignalReceipts = ({
         sourceType: source.sourceType,
         topicId,
         ...(target ? { target } : {}),
+        ...(triggerMessageId ? { triggerMessageId } : {}),
         userId,
       },
     ];
