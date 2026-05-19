@@ -1,5 +1,5 @@
+import { gptImage2Schema } from '../const/imageParameters';
 import type { AIChatModelCard, AIImageModelCard } from '../types/aiModel';
-import { gptImage2Schema } from './openaiImageParameters';
 
 const aihubmixChatModels: AIChatModelCard[] = [
   {

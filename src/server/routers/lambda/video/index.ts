@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
-import { isLobeHubModelAvailable } from '@lobechat/business-model-bank/model-config';
+import { loadModels } from '@lobechat/business-model-bank/model-config';
 import {
   buildMappedBusinessModelFields,
   resolveBusinessModelMapping,
@@ -10,6 +10,7 @@ import { ChatErrorType, RequestTrigger } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
+import { isProviderModelAvailable } from 'model-bank';
 import { after } from 'next/server';
 import { z } from 'zod';
 
@@ -81,7 +82,7 @@ export const videoRouter = router({
     // model is no longer in the model bank.
     if (
       provider === BRANDING_PROVIDER &&
-      !(await isLobeHubModelAvailable(resolvedModelId, 'video'))
+      !isProviderModelAvailable(await loadModels(), BRANDING_PROVIDER, resolvedModelId, 'video')
     ) {
       throw new TRPCError({
         cause: { data: { modelType: 'video', requestedModel: model } },

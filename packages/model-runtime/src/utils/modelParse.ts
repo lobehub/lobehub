@@ -204,7 +204,6 @@ const AI_MODEL_TYPE_SET = new Set<AiModelType>(AiModelTypeSchema.options);
 const BUSINESS_MODEL_CONFIG_MODULE = '@lobechat/business-model-bank/model-config';
 
 interface BusinessModelConfigModule {
-  loadLobeHubModels: () => Promise<AiFullModelCard[]>;
   loadModels: () => Promise<LobeDefaultAiModelListItem[]>;
 }
 
@@ -465,10 +464,11 @@ const getProviderLocalConfig = async (
   if (!provider) return null;
 
   if (provider === ModelProvider.LobeHub) {
-    const { loadLobeHubModels } = (await import(
+    const { loadModels } = (await import(
       /* @vite-ignore */ BUSINESS_MODEL_CONFIG_MODULE
     )) as BusinessModelConfigModule;
-    return loadLobeHubModels();
+    const models = await loadModels();
+    return models.filter((model) => model.providerId === ModelProvider.LobeHub);
   }
 
   try {

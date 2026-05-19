@@ -1,5 +1,6 @@
-import { type AIChatModelCard, type AIImageModelCard } from '../types/aiModel';
-import { imagenGenParameters, nanoBananaParameters } from './google';
+import { nanoBananaParameters } from '../const/imageParameters';
+import type { AIChatModelCard, AIImageModelCard } from '../types/aiModel';
+import { imagenGenParameters } from './google';
 
 // ref: https://cloud.google.com/vertex-ai/generative-ai/docs/learn/models
 const vertexaiChatModels: AIChatModelCard[] = [

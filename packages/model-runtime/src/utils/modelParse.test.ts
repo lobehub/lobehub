@@ -128,7 +128,6 @@ vi.mock('model-bank', () => ({
 }));
 
 vi.mock('@lobechat/business-model-bank/model-config', () => ({
-  loadLobeHubModels: vi.fn().mockResolvedValue([]),
   loadModels: loadModelsMock,
 }));
 

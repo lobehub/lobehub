@@ -53,7 +53,7 @@
     "./ollama": "./src/aiModels/ollama.ts",
     "./ollamacloud": "./src/aiModels/ollamacloud.ts",
     "./openai": "./src/aiModels/openai.ts",
-    "./openaiImageParameters": "./src/aiModels/openaiImageParameters.ts",
+    "./imageParameters": "./src/const/imageParameters.ts",
     "./opencodeCodingPlan": "./src/aiModels/opencodeCodingPlan.ts",
     "./opencodeZen": "./src/aiModels/opencodeZen.ts",
     "./openrouter": "./src/aiModels/openrouter.ts",

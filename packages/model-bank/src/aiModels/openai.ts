@@ -1,3 +1,4 @@
+import { gptImage1Schema, gptImage2Schema } from '../const/imageParameters';
 import type {
   AIChatModelCard,
   AIEmbeddingModelCard,
@@ -7,7 +8,6 @@ import type {
   AITTSModelCard,
   AIVideoModelCard,
 } from '../types/aiModel';
-import { gptImage1Schema, gptImage2Schema } from './openaiImageParameters';
 
 export const openaiChatModels: AIChatModelCard[] = [
   {
