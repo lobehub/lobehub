@@ -3,6 +3,7 @@ export {
   fetchAgentTemplates,
   type FetchAgentTemplatesOptions,
   getTemplatesByCategories,
+  getTemplatesByCategoryPriority,
   normalizeAgentTemplate,
   type OnboardingFullResponse,
   type RawAgentTemplate,

@@ -201,7 +201,7 @@ describe('CommonOnboardingPage', () => {
       await waitFor(() => expect(setOnboardingStep).toHaveBeenCalledWith(2));
     });
 
-    it('remaps legacy step 4+ (old Language/ProSettings) to MAX', async () => {
+    it('remaps legacy step 4+ (old Language/ProSettings) to the ProSettings step', async () => {
       const setOnboardingStep = vi.fn();
       await renderCommon({ commonStepsCompleted: false, persistedStep: 5, setOnboardingStep });
       await waitFor(() => expect(setOnboardingStep).toHaveBeenCalledWith(3));

@@ -11,6 +11,8 @@ export default {
   'agent.layout.skipConfirm.title': 'Skip onboarding for now?',
   'agent.layout.switchMessage':
     'Not feeling it today? You can switch to <modeLink><modeText>{{mode}}</modeText></modeLink> or <skipLink><skipText>{{skip}}</skipText></skipLink>.',
+  'agent.layout.switchMessageClassic':
+    'Not feeling it today? You can switch to <modeLink><modeText>{{mode}}</modeText></modeLink>.',
   'agent.modeSwitch.agent': 'Conversational',
   'agent.modeSwitch.classic': 'Classic',
   'agent.modeSwitch.collapse': 'Collapse',
@@ -75,6 +77,13 @@ export default {
   'agent.telemetryDecline': 'No thanks',
   'agent.telemetryHint': 'You can also answer in your own words.',
   'agent.title': 'Conversation Onboarding',
+  'agentPicker.allCategories': 'All',
+  'agentPicker.continue': 'Continue',
+  'agentPicker.skip': 'Skip for now',
+  'agentPicker.subtitle': 'Add a few to your library now — discover more anytime later.',
+  'agentPicker.title': "Let's add a few agents to your library",
+  'agentPicker.title2': 'Pick the ones that match how you work',
+  'agentPicker.title3': 'You can always add more later — start with a few',
   'back': 'Back',
   'finish': 'Get Started',
   'interests.area.business': 'Business & Strategy',

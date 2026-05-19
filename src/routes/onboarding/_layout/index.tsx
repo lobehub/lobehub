@@ -2,8 +2,9 @@
 
 import { AGENT_ONBOARDING_ENABLED } from '@lobechat/business-const';
 import { isDesktop } from '@lobechat/const';
-import { Center, Flexbox, FluentEmoji, Text } from '@lobehub/ui';
-import { Divider, Popconfirm } from 'antd';
+import { MAX_ONBOARDING_STEPS } from '@lobechat/types';
+import { Center, Flexbox, Text } from '@lobehub/ui';
+import { Divider } from 'antd';
 import { cx, useTheme } from 'antd-style';
 import { type FC, type MouseEvent, type PropsWithChildren, useCallback } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
@@ -21,10 +22,10 @@ import { styles } from './style';
 const OnBoardingContainer: FC<PropsWithChildren> = ({ children }) => {
   const isDarkMode = useIsDark();
   const theme = useTheme();
-  const { t } = useTranslation(['onboarding', 'common']);
+  const { t } = useTranslation('onboarding');
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const finishOnboarding = useUserStore((s) => s.finishOnboarding);
+  const setOnboardingStep = useUserStore((s) => s.setOnboardingStep);
   const enableAgentOnboarding = useServerConfigStore((s) => s.featureFlags.enableAgentOnboarding);
   const serverConfigInit = useServerConfigStore((s) => s.serverConfigInit);
   const isAgentOnboarding = pathname.startsWith('/onboarding/agent');
@@ -37,10 +38,10 @@ const OnBoardingContainer: FC<PropsWithChildren> = ({ children }) => {
     !!enableAgentOnboarding &&
     isBranchOnboarding;
 
-  const handleConfirmSkip = useCallback(() => {
-    finishOnboarding();
-    navigate('/');
-  }, [finishOnboarding, navigate]);
+  const handleSkip = useCallback(() => {
+    void setOnboardingStep(MAX_ONBOARDING_STEPS);
+    navigate('/onboarding/classic?entry=skip');
+  }, [navigate, setOnboardingStep]);
 
   const switchMode = useCallback(
     (e: MouseEvent) => {
@@ -82,7 +83,6 @@ const OnBoardingContainer: FC<PropsWithChildren> = ({ children }) => {
           <Center paddingBlock={'0 8px'} paddingInline={16}>
             <Text fontSize={12} type={'secondary'}>
               <Trans
-                i18nKey={'agent.layout.switchMessage'}
                 ns={'onboarding'}
                 components={{
                   modeLink: (
@@ -93,35 +93,15 @@ const OnBoardingContainer: FC<PropsWithChildren> = ({ children }) => {
                   ),
                   modeText: <Text as={'span'} />,
                   skipLink: (
-                    <Popconfirm
-                      arrow={false}
-                      cancelButtonProps={{ type: 'text' }}
-                      cancelText={t('cancel', { ns: 'common' })}
-                      okText={t('agent.layout.skipConfirm.ok', { ns: 'onboarding' })}
-                      style={{ cursor: 'pointer' }}
-                      description={
-                        <Text fontSize={13} style={{ marginBottom: 8 }} type={'secondary'}>
-                          {t('agent.layout.skipConfirm.content', { ns: 'onboarding' })}
-                        </Text>
-                      }
-                      icon={
-                        <FluentEmoji
-                          emoji={'😗'}
-                          size={24}
-                          style={{ marginRight: 8 }}
-                          type={'anim'}
-                        />
-                      }
-                      title={
-                        <Text fontSize={15}>
-                          {t('agent.completionTitle', { ns: 'onboarding' })}
-                        </Text>
-                      }
-                      onConfirm={handleConfirmSkip}
-                    />
+                    <Text as={'span'} style={{ cursor: 'pointer' }} onClick={handleSkip} />
                   ),
                   skipText: <Text as={'span'} style={{ cursor: 'pointer' }} />,
                 }}
+                i18nKey={
+                  isAgentOnboarding
+                    ? 'agent.layout.switchMessage'
+                    : 'agent.layout.switchMessageClassic'
+                }
                 values={{
                   mode: isAgentOnboarding
                     ? t('agent.layout.mode.classic')

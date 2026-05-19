@@ -4,13 +4,14 @@ import {
 } from '@lobechat/builtin-tool-web-onboarding';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { installMarketplaceAgents } from '@/services/installMarketplaceAgents';
+
 import {
   prepareCustomInteractionSubmit,
   recordCustomInteractionResolution,
 } from './customInteractionHandlers';
-import { installMarketplaceAgents } from './installMarketplaceAgents';
 
-vi.mock('./installMarketplaceAgents', () => ({
+vi.mock('@/services/installMarketplaceAgents', () => ({
   installMarketplaceAgents: vi.fn(),
 }));
 
