@@ -79,6 +79,39 @@ describe('resolveClientVisualMediaUris', () => {
     expect(imageUrlToBase64).toHaveBeenNthCalledWith(2, 'http://127.0.0.1:3210/uploads/local.mp4');
   });
 
+  it('should reject desktop local URLs when fetched MIME type does not match the item type', async () => {
+    vi.mocked(imageUrlToBase64).mockResolvedValue({
+      base64: 'not-found',
+      mimeType: 'text/plain',
+    });
+
+    const localImage = createVisualItem({
+      name: 'missing.png',
+      uri: 'http://127.0.0.1:3210/uploads/missing.png',
+    });
+
+    await expect(resolveClientVisualMediaUris([localImage])).rejects.toThrow(
+      'Unable to read image attachment "missing.png": expected image/* MIME type, received text/plain.',
+    );
+  });
+
+  it('should reject desktop local video URLs when fetched MIME type is an image', async () => {
+    vi.mocked(imageUrlToBase64).mockResolvedValue({
+      base64: 'poster',
+      mimeType: 'image/png',
+    });
+
+    const localVideo = createVisualItem({
+      name: 'clip.mp4',
+      type: 'video',
+      uri: 'http://127.0.0.1:3210/uploads/clip.mp4',
+    });
+
+    await expect(resolveClientVisualMediaUris([localVideo])).rejects.toThrow(
+      'Unable to read video attachment "clip.mp4": expected video/* MIME type, received image/png.',
+    );
+  });
+
   it('should only convert attachment refs when building visual media payload items', async () => {
     vi.mocked(imageUrlToBase64).mockResolvedValue({
       base64: 'attachment-base64',

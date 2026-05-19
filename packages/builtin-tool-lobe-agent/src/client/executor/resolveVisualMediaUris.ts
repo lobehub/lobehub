@@ -9,6 +9,22 @@ interface ResolveClientVisualMediaPayloadItemsParams {
   selectedUrls: VisualFileItem[];
 }
 
+const VISUAL_MEDIA_MIME_TYPE_PREFIXES = {
+  image: 'image/',
+  video: 'video/',
+} as const satisfies Record<VisualFileItem['type'], string>;
+
+const assertExpectedVisualMediaMimeType = (item: VisualFileItem, mimeType: string) => {
+  const expectedPrefix = VISUAL_MEDIA_MIME_TYPE_PREFIXES[item.type];
+  const normalizedMimeType = mimeType.trim().toLowerCase();
+
+  if (normalizedMimeType.startsWith(expectedPrefix)) return;
+
+  throw new TypeError(
+    `Unable to read ${item.type} attachment "${item.name}": expected ${expectedPrefix}* MIME type, received ${normalizedMimeType || 'unknown'}.`,
+  );
+};
+
 /**
  * Desktop attachments are exposed through a 127.0.0.1 static file server.
  * Convert those URLs in the client before sending a remote visual request;
@@ -24,6 +40,7 @@ export const resolveClientVisualMediaUris = async (
       if (type !== 'url' || !isDesktopLocalStaticServerUrl(item.uri)) return item;
 
       const { base64, mimeType } = await imageUrlToBase64(item.uri);
+      assertExpectedVisualMediaMimeType(item, mimeType);
 
       return {
         ...item,
