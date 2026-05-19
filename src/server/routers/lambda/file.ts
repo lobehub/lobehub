@@ -137,9 +137,10 @@ export const fileRouter = router({
     .input(z.object({ hash: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const existingFile = await ctx.fileModel.checkHash(input.hash);
-      if (!existingFile?.isExist || !existingFile.url) return existingFile;
+      const existingHashUrl = existingFile?.isExist ? existingFile.url : undefined;
+      if (!existingHashUrl) return existingFile;
 
-      const isStorageAvailable = await isStoredObjectAvailable(ctx.fileService, existingFile.url);
+      const isStorageAvailable = await isStoredObjectAvailable(ctx.fileService, existingHashUrl);
 
       return isStorageAvailable ? existingFile : { isExist: false };
     }),
