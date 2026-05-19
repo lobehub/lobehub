@@ -23,7 +23,7 @@ export interface DeepSeekModelCard {
 const DEFAULT_DEEPSEEK_BASE_URL = 'https://api.deepseek.com/v1';
 const DEFAULT_DEEPSEEK_ANTHROPIC_BASE_URL = 'https://api.deepseek.com/anthropic';
 const DEEPSEEK_ANTHROPIC_BASE_URL_PATTERN = /\/anthropic\/?$/;
-const DEEPSEEK_ANTHROPIC_MESSAGES_PATH_PATTERN = /\/v1(?:\/messages)?\/?$/;
+const DEEPSEEK_ANTHROPIC_MESSAGES_PATH_PATTERN = /\/v1\/messages\/?$/;
 
 type DeepSeekSDKType = 'anthropic' | 'openai';
 
@@ -42,8 +42,6 @@ const toContentArray = (content: any) =>
     ? content
     : [{ text: isEmptyContent(content) ? ' ' : content, type: 'text' as const }];
 
-// Anthropic SDK appends `/v1/messages`; gateways configured as `/v1` must be
-// normalized to avoid requests like `/v1/v1/messages`.
 const normalizeDeepSeekAnthropicBaseURL = (baseURL?: string | null) =>
   baseURL?.replace(DEEPSEEK_ANTHROPIC_MESSAGES_PATH_PATTERN, '');
 

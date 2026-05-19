@@ -102,11 +102,11 @@ describe('LobeDeepSeekAI', () => {
       expect((runtime as any).baseURL).toBe('https://aihubmix.com');
     });
 
-    it('should normalize /v1 before creating an Anthropic SDK runtime', async () => {
+    it('should let Anthropic-compatible runtime normalize /v1 baseURL', async () => {
       const { option } = await resolveFirstRouterOption('https://aihubmix.com/v1', 'anthropic');
       const runtime = new LobeDeepSeekAnthropicAI({ apiKey: 'test', baseURL: option.baseURL });
 
-      expect(option.baseURL).toBe('https://aihubmix.com');
+      expect(option.baseURL).toBe('https://aihubmix.com/v1');
       expect(runtime).toBeInstanceOf(LobeDeepSeekAnthropicAI);
       expect((runtime as any).baseURL).toBe('https://aihubmix.com');
     });
