@@ -33,6 +33,11 @@ export const createCommonSlice = (set: Setter, get: () => UserStore, _api?: unkn
 export class CommonActionImpl {
   readonly #get: () => UserStore;
   readonly #set: Setter;
+  // Tail of a chain that serializes outgoing `updateInterests` mutations so the
+  // server applies clicks in user order, and a per-call sequence number so only
+  // the latest request triggers `refreshUserState`.
+  #interestsQueue: Promise<unknown> = Promise.resolve();
+  #interestsSeq = 0;
 
   constructor(set: Setter, get: () => UserStore, _api?: unknown) {
     void _api;
@@ -57,14 +62,24 @@ export class CommonActionImpl {
   updateInterests = async (interests: string[]): Promise<void> => {
     const previousUser = this.#get().user;
     const previousInterests = previousUser?.interests;
+    const seq = ++this.#interestsSeq;
 
     if (previousUser) {
       this.#set({ user: { ...previousUser, interests } }, false, n('updateInterests/optimistic'));
     }
 
+    // Chain onto the previous in-flight request so the server applies clicks in order;
+    // a failed call is swallowed in the chain so it doesn't block subsequent edits.
+    const task = this.#interestsQueue.then(() => userService.updateInterests(interests));
+    this.#interestsQueue = task.catch(() => undefined);
+
     try {
-      await userService.updateInterests(interests);
-      await this.#get().refreshUserState();
+      await task;
+      // Only the latest enqueued request refreshes the user state — earlier ones
+      // would pull intermediate values and cause UI flicker.
+      if (seq === this.#interestsSeq) {
+        await this.#get().refreshUserState();
+      }
     } catch (error) {
       // Roll back only when no later edit has superseded this optimistic value,
       // and merge into the current user so concurrent updates to other fields

@@ -56,8 +56,12 @@ describe('createCommonSlice', () => {
       );
 
       let pending: Promise<void> | undefined;
-      act(() => {
+      await act(async () => {
         pending = useUserStore.getState().updateInterests(['new']);
+        // Drain the queue-then-mock microtask chain so `resolveService` points
+        // at the real resolver before we call it below.
+        await Promise.resolve();
+        await Promise.resolve();
       });
 
       // optimistic: interests reflect the new value immediately
@@ -126,6 +130,56 @@ describe('createCommonSlice', () => {
       const user = useUserStore.getState().user as any;
       expect(user.interests).toEqual(['old']); // rolled back
       expect(user.avatar).toBe('new.png'); // concurrent avatar update kept
+    });
+
+    it('serializes service calls and refreshes only after the latest one', async () => {
+      act(() => {
+        useUserStore.setState({ user: { id: 'u1', interests: [] } as any });
+      });
+
+      const order: string[] = [];
+      const resolvers: Array<() => void> = [];
+      vi.spyOn(userService, 'updateInterests').mockImplementation(((tag: string[]) => {
+        order.push(`start:${tag.join(',')}`);
+        return new Promise<void>((r) => {
+          resolvers.push(() => {
+            order.push(`end:${tag.join(',')}`);
+            r();
+          });
+        });
+      }) as any);
+
+      const refreshSpy = vi.spyOn(useUserStore.getState(), 'refreshUserState').mockResolvedValue();
+
+      let first: Promise<void> | undefined;
+      let second: Promise<void> | undefined;
+      await act(async () => {
+        first = useUserStore.getState().updateInterests(['a']);
+        second = useUserStore.getState().updateInterests(['a', 'b']);
+        // Drain microtasks so the first request reaches the service.
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      // Only the first call has reached the service; the second waits in the queue.
+      expect(order).toEqual(['start:a']);
+
+      // Resolve the first; the second should then fire.
+      await act(async () => {
+        resolvers[0]?.();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(order).toEqual(['start:a', 'end:a', 'start:a,b']);
+
+      await act(async () => {
+        resolvers[1]?.();
+        await first;
+        await second;
+      });
+
+      // Only one refresh (after the latest), not one per request.
+      expect(refreshSpy).toHaveBeenCalledTimes(1);
     });
   });
 
