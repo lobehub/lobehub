@@ -7,6 +7,7 @@ import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
 import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
+import { deliverWebhook } from '@/server/services/agentRuntime/hooks/HookDispatcher';
 
 import { HeterogeneousPersistenceHandler } from './HeterogeneousPersistenceHandler';
 
@@ -150,6 +151,25 @@ export class HeterogeneousAgentService {
       stepIndex: 0,
       type: 'agent_runtime_end',
     });
+
+    // Fire the IM bot-callback completion webhook if one was registered.
+    // The hetero path bypasses the normal AgentHook registration flow, so
+    // we persist the webhook config in topic.metadata.runningOperation and
+    // deliver it here instead.
+    try {
+      const topic = await this.topicModel.findById(topicId);
+      const completionWebhook = topic?.metadata?.runningOperation?.completionWebhook;
+      if (completionWebhook?.url) {
+        await deliverWebhook(completionWebhook, {
+          ...completionWebhook.body,
+          hookId: 'bot-completion',
+          hookType: 'onComplete',
+        });
+        log('heteroFinish: completionWebhook delivered for op=%s', operationId);
+      }
+    } catch (err) {
+      log('heteroFinish: completionWebhook delivery failed (non-fatal): %O', err);
+    }
   }
 
   /**

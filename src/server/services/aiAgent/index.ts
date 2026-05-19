@@ -738,9 +738,12 @@ export class AiAgentService {
       };
 
       // Seed topic.metadata.runningOperation so heteroIngest can validate the operation.
+      // completionWebhook is stored so heteroFinish can call back to the IM bot-callback
+      // endpoint even though the hetero path bypasses the normal hook registration flow.
       await this.topicModel.updateMetadata(topicId, {
         runningOperation: {
           assistantMessageId: assistantMsg.id,
+          completionWebhook: hooks?.find((h) => h.type === 'onComplete')?.webhook,
           operationId,
           scope: appContext?.scope ?? undefined,
           threadId: appContext?.threadId ?? undefined,
