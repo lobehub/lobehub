@@ -127,6 +127,11 @@ vi.mock('model-bank', () => ({
   ],
 }));
 
+vi.mock('@lobechat/business-model-bank/model-config', () => ({
+  loadLobeHubModels: vi.fn().mockResolvedValue([]),
+  loadModels: loadModelsMock,
+}));
+
 describe('modelParse', () => {
   beforeEach(() => {
     loadModelsMock.mockResolvedValue(mockDefaultModelList);
@@ -558,6 +563,41 @@ describe('modelParse', () => {
       expect(unknown.functionCall).toBe(false);
       expect(unknown.reasoning).toBe(false);
       expect(unknown.vision).toBe(false);
+    });
+
+    it('should use business model metadata when parsing mixed provider models', async () => {
+      loadModelsMock.mockResolvedValueOnce([
+        ...mockDefaultModelList,
+        {
+          abilities: {
+            functionCall: true,
+            reasoning: true,
+            vision: true,
+          },
+          contextWindowTokens: 131_072,
+          displayName: 'Business Only Model',
+          enabled: true,
+          id: 'business-only-model',
+          maxOutput: 8192,
+          source: 'builtin',
+          type: 'chat',
+        },
+      ]);
+
+      const result = await processMultiProviderModelList([{ id: 'business-only-model' }]);
+
+      expect(loadModelsMock).toHaveBeenCalledTimes(1);
+      expect(result).toEqual([
+        expect.objectContaining({
+          contextWindowTokens: 131_072,
+          displayName: 'Business Only Model',
+          functionCall: true,
+          id: 'business-only-model',
+          maxOutput: 8192,
+          reasoning: true,
+          vision: true,
+        }),
+      ]);
     });
 
     it('should ignore invalid remote type values in mixed provider processing', async () => {

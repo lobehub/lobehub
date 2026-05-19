@@ -5,6 +5,7 @@ import type {
   AiModelSettings,
   AiModelType,
   ExtendParamsType,
+  LobeDefaultAiModelListItem,
 } from 'model-bank';
 import { AiModelTypeSchema, ModelProvider } from 'model-bank';
 
@@ -204,6 +205,7 @@ const BUSINESS_MODEL_CONFIG_MODULE = '@lobechat/business-model-bank/model-config
 
 interface BusinessModelConfigModule {
   loadLobeHubModels: () => Promise<AiFullModelCard[]>;
+  loadModels: () => Promise<LobeDefaultAiModelListItem[]>;
 }
 
 const normalizeModelType = (value: unknown): AiModelType | undefined => {
@@ -708,7 +710,8 @@ export const processMultiProviderModelList = async (
   modelList: Array<{ id: string }>,
   providerid?: ModelProviderKey,
 ): Promise<ChatModelCard[]> => {
-  const { loadModels } = await import('model-bank');
+  const { loadModels } =
+    (await import('@lobechat/business-model-bank/model-config')) as BusinessModelConfigModule;
   const builtinModels = await loadModels();
 
   // If providerid is provided, try to get the local configuration for that provider
