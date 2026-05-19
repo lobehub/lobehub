@@ -1,9 +1,9 @@
 'use client';
 
-import { Card, Flexbox } from '@lobehub/ui';
-import { Button, Progress, Tag } from 'antd';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Button, Card, Progress, Tag } from 'antd';
+import { DownloadIcon, PlayIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
-import { MdDownload, MdPlayArrow } from 'react-icons/md';
 
 interface AudioCardProps {
   batch: any;
@@ -13,48 +13,49 @@ interface AudioCardProps {
 const AudioCard = memo<AudioCardProps>(({ batch, generation }) => {
   const status = generation.task?.status || 'pending';
   const audioUrl = generation.asset?.url;
-  
+
   const statusColor = useMemo(() => {
     switch (status) {
-      case 'pending':
+      case 'pending': {
         return 'blue';
-      case 'processing':
+      }
+      case 'processing': {
         return 'orange';
-      case 'completed':
+      }
+      case 'completed': {
         return 'green';
-      case 'failed':
+      }
+      case 'failed': {
         return 'red';
-      default:
+      }
+      default: {
         return 'default';
+      }
     }
   }, [status]);
 
   return (
     <Card
-      style={{
-        marginBottom: '12px',
-        borderRadius: '8px',
-      }}
+      size="small"
+      style={{ marginBottom: '12px' }}
+      title={
+        <Flexbox horizontal align="center" justify="space-between">
+          <span>{generation.prompt?.slice(0, 50)}</span>
+          <Tag color={statusColor}>{status}</Tag>
+        </Flexbox>
+      }
     >
-      <Flexbox gap="md" padding="md">
-        <div>
-          <h4>{batch.prompt}</h4>
-          <p>Music Style: {batch.config?.musicStyle || 'unknown'}</p>
-          <p>Duration: {batch.config?.duration || 30}s</p>
+      <Flexbox vertical gap="sm">
+        <div style={{ fontSize: '12px', color: '#999' }}>
+          Style: {generation.musicStyle || 'auto'} | Duration: {generation.duration}s
         </div>
 
-        <Flexbox horizontal gap="sm" align="center">
-          <Tag color={statusColor}>{status.toUpperCase()}</Tag>
-        </Flexbox>
-
-        {status === 'processing' && (
-          <Progress percent={50} status="active" />
-        )}
+        {status === 'processing' && <Progress percent={50} status="active" />}
 
         {audioUrl && (
           <Flexbox horizontal gap="sm">
             <Button
-              icon={<MdPlayArrow />}
+              icon={<Icon icon={PlayIcon} />}
               onClick={() => {
                 const audio = new Audio(audioUrl);
                 audio.play();
@@ -63,7 +64,7 @@ const AudioCard = memo<AudioCardProps>(({ batch, generation }) => {
               Play
             </Button>
             <Button
-              icon={<MdDownload />}
+              icon={<Icon icon={DownloadIcon} />}
               onClick={() => {
                 const a = document.createElement('a');
                 a.href = audioUrl;
@@ -79,7 +80,5 @@ const AudioCard = memo<AudioCardProps>(({ batch, generation }) => {
     </Card>
   );
 });
-
-AudioCard.displayName = 'AudioCard';
 
 export default AudioCard;

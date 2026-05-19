@@ -1,7 +1,7 @@
 'use client';
 
-import { Divider, Flexbox } from '@lobehub/ui';
-import { Slider, Input, Select } from 'antd';
+import { Flexbox } from '@lobehub/ui';
+import { Divider, Input, Select, Slider } from 'antd';
 import { memo, useCallback } from 'react';
 
 import { useAudioStore } from '@/store/audio';
@@ -42,7 +42,7 @@ const ConfigPanel = memo(() => {
     <Flexbox gap="md" padding="md">
       <div>
         <label>Model Version</label>
-        <Input value="v5.5" disabled />
+        <Input disabled value="v5.5" />
       </div>
 
       <Divider />
@@ -50,10 +50,10 @@ const ConfigPanel = memo(() => {
       <div>
         <label>Music Style</label>
         <Select
-          value={musicStyle}
-          onChange={handleStyleChange}
           options={MUSIC_STYLES}
           style={{ width: '100%' }}
+          value={musicStyle}
+          onChange={handleStyleChange}
         />
       </div>
 
@@ -61,11 +61,11 @@ const ConfigPanel = memo(() => {
         <label>Duration (seconds)</label>
         <Flexbox align="center" gap="sm">
           <Slider
-            min={15}
             max={120}
+            min={15}
+            style={{ flex: 1 }}
             value={duration}
             onChange={handleDurationChange}
-            style={{ flex: 1 }}
           />
           <span>{duration}s</span>
         </Flexbox>
