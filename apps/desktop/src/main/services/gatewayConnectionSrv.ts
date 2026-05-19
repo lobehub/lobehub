@@ -351,7 +351,7 @@ export default class GatewayConnectionService extends ServiceModule {
     // does not suspend it during display sleep, which would drop the WebSocket.
     if (status === 'connected') {
       this.startPowerSaveBlocker();
-    } else if (status === 'disconnected') {
+    } else {
       this.stopPowerSaveBlocker();
     }
 
