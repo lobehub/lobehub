@@ -209,12 +209,17 @@ export const parsePlaceholderVariables = (text: string, depth = 2): string => {
   return result;
 };
 
+interface PlaceholderMessage {
+  content?: string | unknown[];
+  [key: string]: unknown;
+}
+
 /**
  * Parse message content, replace placeholder variables
  * @param messages Original message array
  * @returns Processed message array
  */
-export const parsePlaceholderVariablesMessages = (messages: any[]): any[] =>
+export const parsePlaceholderVariablesMessages = (messages: PlaceholderMessage[]): PlaceholderMessage[] =>
   messages.map((message) => {
     if (!message?.content) return message;
 
