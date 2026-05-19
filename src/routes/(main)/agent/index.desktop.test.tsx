@@ -66,10 +66,6 @@ vi.mock('./features/Conversation/WorkingSidebar', () => ({
   default: () => <div data-testid="working-sidebar" />,
 }));
 
-vi.mock('./features/PageTitle', () => ({
-  default: () => <div data-testid="page-title" />,
-}));
-
 vi.mock('./features/Portal', () => ({
   default: () => <div data-testid="portal" />,
 }));

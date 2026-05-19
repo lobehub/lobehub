@@ -8,7 +8,6 @@ import { useTranslation } from 'react-i18next';
 
 import DotsLoading from '@/components/DotsLoading';
 import { isDesktop } from '@/const/version';
-import { pluginRegistry } from '@/features/Electron/titlebar/RecentlyViewed/plugins';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useFocusTopicPopup } from '@/features/TopicPopupGuard/useTopicPopupsRegistry';
 import { useAgentGroupStore } from '@/store/agentGroup';
@@ -137,12 +136,9 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, stat
       toggleMobileTopic(false);
       return;
     }
-    const reference = pluginRegistry.parseUrl(`/group/${activeGroupId}`, `topic=${id}`);
-    if (reference) {
-      addTab(reference);
-      switchTopic(id);
-      toggleMobileTopic(false);
-    }
+    addTab(`/group/${activeGroupId}?topic=${id}`);
+    switchTopic(id);
+    toggleMobileTopic(false);
   }, [id, activeGroupId, addTab, focusTopicPopup, switchTopic, toggleMobileTopic]);
 
   const dropdownMenu = useTopicItemDropdownMenu({

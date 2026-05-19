@@ -1,11 +1,21 @@
 'use client';
 
+import {
+  BrainCircuit,
+  FilePenIcon,
+  Home,
+  Image,
+  LibraryBigIcon,
+  Settings,
+  ShapesIcon,
+} from 'lucide-react';
 import type { RouteObject } from 'react-router-dom';
 
 import {
   BusinessDesktopRoutesWithMainLayout,
   BusinessDesktopRoutesWithoutMainLayout,
 } from '@/business/client/BusinessDesktopRoutes';
+import { pageRouteMeta } from '@/features/Pages/routeMeta';
 import DesktopOnboarding from '@/routes/(desktop)/desktop-onboarding';
 // Layouts — sync import (Electron local, no network overhead)
 import DesktopMainLayout from '@/routes/(main)/_layout';
@@ -21,6 +31,8 @@ import DesktopAgentChatLayout from '@/routes/(main)/agent/(chat)/_layout';
 import AgentTopicNotebookRedirectPage from '@/routes/(main)/agent/[topicId]/page';
 import AgentTopicNotebookDocPage from '@/routes/(main)/agent/[topicId]/page/[docId]';
 import AgentChannelPage from '@/routes/(main)/agent/channel';
+import { agentRouteMeta } from '@/routes/(main)/agent/features/routeMeta';
+import { agentTopicPageRouteMeta } from '@/routes/(main)/agent/features/topicPageRouteMeta';
 import AgentPageRedirectPage from '@/routes/(main)/agent/page';
 import AgentProfilePage from '@/routes/(main)/agent/profile';
 import AgentTaskDetailRoute from '@/routes/(main)/agent/task/[taskId]';
@@ -57,6 +69,7 @@ import EvalRunDetailPage from '@/routes/(main)/eval/bench/[benchmarkId]/runs/[ru
 import EvalCaseDetailPage from '@/routes/(main)/eval/bench/[benchmarkId]/runs/[runId]/cases/[caseId]';
 import GroupPage from '@/routes/(main)/group';
 import DesktopGroupLayout from '@/routes/(main)/group/_layout';
+import { groupRouteMeta } from '@/routes/(main)/group/features/routeMeta';
 import GroupProfilePage from '@/routes/(main)/group/profile';
 import DesktopMemoryLayout from '@/routes/(main)/memory/_layout';
 import MemoryHomePage from '@/routes/(main)/memory/(home)';
@@ -81,6 +94,7 @@ import TaskDetailRoute from '@/routes/(main)/task/[taskId]';
 import AllTasksPage from '@/routes/(main)/tasks';
 import ShareTopicPage from '@/routes/share/t/[id]';
 import ShareTopicLayout from '@/routes/share/t/[id]/_layout';
+import { routeMeta } from '@/spa/router/routeMeta';
 import { ErrorBoundary, redirectElement } from '@/utils/router';
 
 // Desktop router configuration — all sync imports for Electron local build
@@ -100,22 +114,26 @@ export const desktopRoutes: RouteObject[] = [
                 children: [
                   {
                     element: <AgentPage />,
+                    handle: { meta: agentRouteMeta },
                     index: true,
                   },
                   {
                     children: [
                       {
                         element: <AgentPage />,
+                        handle: { meta: agentRouteMeta },
                         index: true,
                       },
                       {
                         children: [
                           {
                             element: <AgentTopicNotebookRedirectPage />,
+                            handle: { meta: agentTopicPageRouteMeta },
                             index: true,
                           },
                           {
                             element: <AgentTopicNotebookDocPage />,
+                            handle: { meta: agentTopicPageRouteMeta },
                             path: ':docId',
                           },
                         ],
@@ -163,6 +181,7 @@ export const desktopRoutes: RouteObject[] = [
             children: [
               {
                 element: <GroupPage />,
+                handle: { meta: groupRouteMeta },
                 index: true,
               },
               {
@@ -188,6 +207,12 @@ export const desktopRoutes: RouteObject[] = [
                 children: [
                   {
                     element: <CommunityListAgentPage />,
+                    handle: {
+                      meta: routeMeta({
+                        icon: ShapesIcon,
+                        titleKey: 'navigation.discoverAssistants',
+                      }),
+                    },
                     index: true,
                   },
                 ],
@@ -198,6 +223,9 @@ export const desktopRoutes: RouteObject[] = [
                 children: [
                   {
                     element: <CommunityListModelPage />,
+                    handle: {
+                      meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverModels' }),
+                    },
                     index: true,
                   },
                 ],
@@ -206,12 +234,18 @@ export const desktopRoutes: RouteObject[] = [
               },
               {
                 element: <CommunityListProviderPage />,
+                handle: {
+                  meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverProviders' }),
+                },
                 path: 'provider',
               },
               {
                 children: [
                   {
                     element: <CommunityListSkillPage />,
+                    handle: {
+                      meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discover' }),
+                    },
                     index: true,
                   },
                 ],
@@ -222,6 +256,9 @@ export const desktopRoutes: RouteObject[] = [
                 children: [
                   {
                     element: <CommunityListMcpPage />,
+                    handle: {
+                      meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverMcp' }),
+                    },
                     index: true,
                   },
                 ],
@@ -230,6 +267,9 @@ export const desktopRoutes: RouteObject[] = [
               },
               {
                 element: <CommunityListHomePage />,
+                handle: {
+                  meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discover' }),
+                },
                 index: true,
               },
             ],
@@ -283,6 +323,9 @@ export const desktopRoutes: RouteObject[] = [
             children: [
               {
                 element: <ResourceHomePage />,
+                handle: {
+                  meta: routeMeta({ icon: LibraryBigIcon, titleKey: 'navigation.resources' }),
+                },
                 index: true,
               },
             ],
@@ -293,10 +336,16 @@ export const desktopRoutes: RouteObject[] = [
             children: [
               {
                 element: <ResourceLibraryPage />,
+                handle: {
+                  meta: routeMeta({ icon: LibraryBigIcon, titleKey: 'navigation.knowledgeBase' }),
+                },
                 index: true,
               },
               {
                 element: <ResourceLibrarySlugPage />,
+                handle: {
+                  meta: routeMeta({ icon: LibraryBigIcon, titleKey: 'navigation.knowledgeBase' }),
+                },
                 path: ':slug',
               },
             ],
@@ -325,21 +374,33 @@ export const desktopRoutes: RouteObject[] = [
               },
               {
                 element: <ProviderDetailPage />,
+                handle: {
+                  meta: routeMeta({ icon: Settings, titleKey: 'navigation.provider' }),
+                },
                 path: ':providerId',
               },
             ],
             element: <ProviderLayout />,
+            handle: {
+              meta: routeMeta({ icon: Settings, titleKey: 'navigation.provider' }),
+            },
             path: 'provider',
           },
           // Other settings tabs
           {
             element: <SettingsTabPage />,
+            handle: {
+              meta: routeMeta({ icon: Settings, titleKey: 'navigation.settings' }),
+            },
             path: ':tab',
           },
           // Tabs that need a sub-segment (e.g. /settings/messenger/discord) reuse
           // the same tab page; nested feature components read `:sub` via useParams.
           {
             element: <SettingsTabPage />,
+            handle: {
+              meta: routeMeta({ icon: Settings, titleKey: 'navigation.settings' }),
+            },
             path: ':tab/:sub',
           },
         ],
@@ -353,26 +414,44 @@ export const desktopRoutes: RouteObject[] = [
         children: [
           {
             element: <MemoryHomePage />,
+            handle: {
+              meta: routeMeta({ icon: BrainCircuit, titleKey: 'navigation.memory' }),
+            },
             index: true,
           },
           {
             element: <MemoryIdentitiesPage />,
+            handle: {
+              meta: routeMeta({ icon: BrainCircuit, titleKey: 'navigation.memoryIdentities' }),
+            },
             path: 'identities',
           },
           {
             element: <MemoryContextsPage />,
+            handle: {
+              meta: routeMeta({ icon: BrainCircuit, titleKey: 'navigation.memoryContexts' }),
+            },
             path: 'contexts',
           },
           {
             element: <MemoryPreferencesPage />,
+            handle: {
+              meta: routeMeta({ icon: BrainCircuit, titleKey: 'navigation.memoryPreferences' }),
+            },
             path: 'preferences',
           },
           {
             element: <MemoryExperiencesPage />,
+            handle: {
+              meta: routeMeta({ icon: BrainCircuit, titleKey: 'navigation.memoryExperiences' }),
+            },
             path: 'experiences',
           },
           {
             element: <MemoryActivitiesPage />,
+            handle: {
+              meta: routeMeta({ icon: BrainCircuit, titleKey: 'navigation.memory' }),
+            },
             path: 'activities',
           },
         ],
@@ -399,6 +478,9 @@ export const desktopRoutes: RouteObject[] = [
         children: [
           {
             element: <ImagePage />,
+            handle: {
+              meta: routeMeta({ icon: Image, titleKey: 'navigation.image' }),
+            },
             index: true,
           },
         ],
@@ -488,10 +570,14 @@ export const desktopRoutes: RouteObject[] = [
         children: [
           {
             element: <PageIndexPage />,
+            handle: {
+              meta: routeMeta({ icon: FilePenIcon, titleKey: 'navigation.pages' }),
+            },
             index: true,
           },
           {
             element: <PageDetailPage />,
+            handle: { meta: pageRouteMeta },
             path: ':id',
           },
         ],
@@ -502,6 +588,9 @@ export const desktopRoutes: RouteObject[] = [
 
       // Default route - home page (handled by persistent layout)
       {
+        handle: {
+          meta: routeMeta({ icon: Home, titleKey: 'navigation.home' }),
+        },
         index: true,
       },
       // Catch-all route

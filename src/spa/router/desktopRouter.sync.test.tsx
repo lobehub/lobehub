@@ -15,6 +15,31 @@ function extractIndexCount(source: string) {
   return [...source.matchAll(/index:\s*true/g)].length;
 }
 
+function extractHandleMetas(source: string) {
+  const metas: string[] = [];
+  const marker = 'handle:';
+
+  let cursor = source.indexOf(marker);
+  while (cursor !== -1) {
+    const braceStart = source.indexOf('{', cursor + marker.length);
+    let depth = 0;
+    let end = braceStart;
+    for (; end < source.length; end += 1) {
+      const char = source[end];
+      if (char === '{') depth += 1;
+      else if (char === '}') {
+        depth -= 1;
+        if (depth === 0) break;
+      }
+    }
+
+    metas.push(source.slice(braceStart, end + 1).replaceAll(/\s+/g, ' '));
+    cursor = source.indexOf(marker, end + 1);
+  }
+
+  return metas.sort();
+}
+
 function extractPaths(source: string) {
   return [...source.matchAll(/path:\s*'([^']+)'/g)].map((match) => match[1]);
 }
@@ -46,6 +71,20 @@ describe('desktopRouter config sync', () => {
     expect(extraInSync, `Extra in desktop config: ${extraInSync.join(', ')}`).toEqual([]);
     expect(syncIndexCount, 'Desktop config index route count must match async config').toBe(
       asyncIndexCount,
+    );
+  });
+
+  it('route handle.meta declarations must match between web and desktop configs', async () => {
+    const [asyncSource, syncSource] = await readDesktopRouterSources();
+
+    const asyncMetas = extractHandleMetas(asyncSource);
+    const syncMetas = extractHandleMetas(syncSource);
+
+    expect(asyncMetas.length, 'Async config must declare at least one handle.meta').toBeGreaterThan(
+      0,
+    );
+    expect(syncMetas, 'Desktop config handle.meta declarations must match async config').toEqual(
+      asyncMetas,
     );
   });
 

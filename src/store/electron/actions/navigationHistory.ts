@@ -1,3 +1,4 @@
+import { type DynamicRouteMeta } from '@/spa/router/routeMeta';
 import { type StoreSetter } from '@/store/types';
 
 import { type ElectronStore } from '../store';
@@ -17,10 +18,9 @@ export interface HistoryEntry {
 
 export interface NavigationHistoryState {
   /**
-   * Current page title from PageTitle component
-   * Used to get dynamic titles without setTimeout hack
+   * Live resolved meta of the active route, published by RouteMetaBridge
    */
-  currentPageTitle: string;
+  currentRouteMeta: DynamicRouteMeta | null;
   /**
    * Current position in history (-1 means empty)
    */
@@ -41,7 +41,7 @@ export interface NavigationHistoryState {
 // ======== Initial State ======== //
 
 export const navigationHistoryInitialState: NavigationHistoryState = {
-  currentPageTitle: '',
+  currentRouteMeta: null,
   historyCurrentIndex: -1,
   historyEntries: [],
   isNavigatingHistory: false,
@@ -198,8 +198,8 @@ export class NavigationHistoryActionImpl {
     );
   };
 
-  setCurrentPageTitle = (title: string): void => {
-    this.#set({ currentPageTitle: title }, false, 'setCurrentPageTitle');
+  setCurrentRouteMeta = (meta: DynamicRouteMeta | null): void => {
+    this.#set({ currentRouteMeta: meta }, false, 'setCurrentRouteMeta');
   };
 
   setIsNavigatingHistory = (value: boolean): void => {

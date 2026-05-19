@@ -63,9 +63,6 @@ vi.mock('@/const/version', () => ({ isDesktop: false }));
 vi.mock('@/const/url', () => ({
   SESSION_CHAT_TOPIC_URL: (agentId: string, topicId: string) => `/agent/${agentId}/${topicId}`,
 }));
-vi.mock('@/features/Electron/titlebar/RecentlyViewed/plugins', () => ({
-  pluginRegistry: { parseUrl: vi.fn() },
-}));
 vi.mock('@/features/NavPanel/components/NavItem', () => ({
   default: ({ active, title }: { active?: boolean; title?: ReactNode }) => (
     <div data-active={String(active)} data-testid="nav-item">
