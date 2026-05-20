@@ -144,6 +144,17 @@ export const botMessageRouter = router({
   sendMessage: botMessageProcedure
     .input(
       z.object({
+        attachments: z
+          .array(
+            z.object({
+              data: z.string().optional(),
+              fetchUrl: z.string().url().optional(),
+              mimeType: z.string().optional(),
+              name: z.string().optional(),
+              type: z.enum(['image', 'file', 'video', 'audio']),
+            }),
+          )
+          .optional(),
         botId: z.string(),
         channelId: z.string(),
         content: z.string(),
@@ -154,6 +165,7 @@ export const botMessageRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { service, platform } = await resolveBot(ctx.agentBotProviderModel, input.botId);
       return service.sendMessage({
+        attachments: input.attachments,
         channelId: input.channelId,
         content: input.content,
         embeds: input.embeds,

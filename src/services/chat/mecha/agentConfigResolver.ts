@@ -1,6 +1,7 @@
 import { type BuiltinAgentSlug } from '@lobechat/builtin-agents';
 import { BUILTIN_AGENT_SLUGS, getAgentRuntimeConfig } from '@lobechat/builtin-agents';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
+import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import { type LobeToolManifest } from '@lobechat/context-engine';
 import {
   type ChatCompletionTool,
@@ -86,10 +87,11 @@ export interface AgentConfigResolverContext {
   groupId?: string;
 
   /**
-   * Whether this is a sub-task execution.
-   * When true, filters out lobe-gtd tools to prevent nested sub-task creation.
+   * Whether this is a sub-agent execution.
+   * When true, filters out the lobe-agent tool (which owns the sub-agent
+   * dispatch APIs) to prevent nested sub-agent creation.
    */
-  isSubTask?: boolean;
+  isSubAgent?: boolean;
 
   /** Current model being used (for template variables) */
   model?: string;
@@ -142,20 +144,21 @@ export interface ResolvedAgentConfig {
  * For regular agents, this simply returns the config from the store.
  */
 export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAgentConfig => {
-  const { agentId, model, documentContent, plugins, targetAgentConfig, isSubTask, disableTools } =
+  const { agentId, model, documentContent, plugins, targetAgentConfig, isSubAgent, disableTools } =
     ctx;
 
   log(
-    'resolveAgentConfig called with agentId: %s, scope: %s, isSubTask: %s, disableTools: %s',
+    'resolveAgentConfig called with agentId: %s, scope: %s, isSubAgent: %s, disableTools: %s',
     agentId,
     ctx.scope,
-    isSubTask,
+    isSubAgent,
     disableTools,
   );
 
   // Helper to apply plugin filters:
   // 1. If disableTools is true, return empty array (for broadcast scenarios)
-  // 2. If isSubTask is true, filter out lobe-gtd to prevent nested sub-task creation
+  // 2. If isSubAgent is true, filter out lobe-agent (which owns the sub-agent
+  //    dispatch APIs) to prevent nested sub-agent creation.
   const applyPluginFilters = (pluginIds: string[]) => {
     if (disableTools) {
       log('disableTools is true, returning empty plugins');
@@ -168,7 +171,7 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
       nextPluginIds = nextPluginIds.filter((id) => id !== PageAgentIdentifier);
     }
 
-    return isSubTask ? nextPluginIds.filter((id) => id !== 'lobe-gtd') : nextPluginIds;
+    return isSubAgent ? nextPluginIds.filter((id) => id !== 'lobe-agent') : nextPluginIds;
   };
 
   const agentStoreState = getAgentStoreState();
@@ -295,6 +298,31 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
       };
     }
 
+    if (ctx.scope === 'task') {
+      const taskAgentPlugins = finalPlugins.includes(TaskIdentifier)
+        ? finalPlugins
+        : [TaskIdentifier, ...finalPlugins];
+      const taskAgentRuntime = getAgentRuntimeConfig(BUILTIN_AGENT_SLUGS.taskAgent, {});
+      const taskAgentSystemRole = taskAgentRuntime?.systemRole || '';
+      const mergedSystemRole = taskAgentSystemRole
+        ? systemRoleWithLocale
+          ? `${systemRoleWithLocale}\n\n${taskAgentSystemRole}`
+          : taskAgentSystemRole
+        : systemRoleWithLocale || '';
+
+      finalAgentConfig = {
+        ...finalAgentConfig,
+        systemRole: mergedSystemRole,
+      };
+
+      return {
+        agentConfig: finalAgentConfig,
+        chatConfig: finalChatConfig,
+        isBuiltinAgent: false,
+        plugins: applyPluginFilters(taskAgentPlugins),
+      };
+    }
+
     // Not in page scope - return standard config
     return {
       agentConfig: finalAgentConfig,
@@ -404,6 +432,21 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
       ...resolvedChatConfig,
       enableHistoryCount: false,
     };
+  }
+
+  if (ctx.scope === 'task' && slug !== BUILTIN_AGENT_SLUGS.taskAgent) {
+    if (!finalPlugins.includes(TaskIdentifier)) {
+      finalPlugins = [TaskIdentifier, ...finalPlugins];
+    }
+
+    const taskAgentRuntime = getAgentRuntimeConfig(BUILTIN_AGENT_SLUGS.taskAgent, {});
+    const taskAgentSystemRole = taskAgentRuntime?.systemRole || '';
+
+    if (taskAgentSystemRole) {
+      resolvedSystemRole = resolvedSystemRole
+        ? `${resolvedSystemRole}\n\n${taskAgentSystemRole}`
+        : taskAgentSystemRole;
+    }
   }
 
   // Merge runtime systemRole into agent config

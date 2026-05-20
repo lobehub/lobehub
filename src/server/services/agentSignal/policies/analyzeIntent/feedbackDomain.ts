@@ -1,25 +1,27 @@
-import { type BaseSignal, type RuntimeProcessorResult } from '@lobechat/agent-signal';
+import type { RuntimeProcessorResult } from '@lobechat/agent-signal';
 
 import type { LobeChatDatabase } from '@/database/type';
 
+import { classifyDomain, transitionToSignals } from '../../processors';
 import { defineSignalHandler } from '../../runtime/middleware';
-import {
-  AGENT_SIGNAL_POLICY_SIGNAL_TYPES,
-  type AgentSignalFeedbackDomainConflictPolicy,
-  type AgentSignalFeedbackEvidence,
-  type SignalFeedbackSatisfaction,
-} from '../types';
+import type {
+  ClassifierDiagnosticsService,
+  DomainClassifierService,
+  SkillIntentClassifierService,
+} from '../../services';
+import { AGENT_SIGNAL_POLICY_SIGNAL_TYPES, type SignalFeedbackSatisfaction } from '../types';
 import {
   type FeedbackDomainJudgeAgentModelConfig,
   type FeedbackDomainJudgeAgentResult,
   FeedbackDomainJudgeAgentService,
 } from './feedbackDomainAgent';
+import { classifySkillIntent, SkillIntentClassifierAgentService } from './skillIntent';
 
 interface FeedbackDomainJudgeResolverInput {
   chain: SignalFeedbackSatisfaction['chain'];
   feedback: Pick<
     SignalFeedbackSatisfaction['payload'],
-    'confidence' | 'evidence' | 'message' | 'messageId' | 'reason' | 'result'
+    'confidence' | 'evidence' | 'message' | 'messageId' | 'reason' | 'result' | 'serializedContext'
   >;
   source: SignalFeedbackSatisfaction['source'];
   sourceHints: SignalFeedbackSatisfaction['payload']['sourceHints'];
@@ -30,9 +32,13 @@ interface FeedbackDomainJudgeResolverInput {
  * Dependencies for the feedback-domain judge signal handler.
  */
 export interface CreateFeedbackDomainJudgeSignalHandlerOptions {
+  /** Optional diagnostics sink for malformed structured classifier output. */
+  classifierDiagnostics?: ClassifierDiagnosticsService;
   resolveDomains?: (
     input: FeedbackDomainJudgeResolverInput,
   ) => Promise<FeedbackDomainJudgeAgentResult['targets']>;
+  /** Optional skill-intent classifier used after skill-domain routing. */
+  skillIntentClassifier?: SkillIntentClassifierService;
 }
 
 /**
@@ -43,80 +49,11 @@ export interface CreateFeedbackDomainJudgePolicyOptions {
     db: LobeChatDatabase;
     userId: string;
   };
+  skillIntentClassifier?: Partial<FeedbackDomainJudgeAgentModelConfig> & {
+    db: LobeChatDatabase;
+    userId: string;
+  };
 }
-
-const toConflictPolicy = (
-  target: FeedbackDomainJudgeAgentResult['targets'][number]['target'],
-): AgentSignalFeedbackDomainConflictPolicy => {
-  switch (target) {
-    case 'memory': {
-      return { forbiddenWith: ['none'], mode: 'fanout', priority: 100 };
-    }
-    case 'prompt': {
-      return { forbiddenWith: ['memory', 'none', 'skill'], mode: 'exclusive', priority: 90 };
-    }
-    case 'skill': {
-      return { forbiddenWith: ['none'], mode: 'fanout', priority: 80 };
-    }
-    default: {
-      return {
-        forbiddenWith: ['memory', 'prompt', 'skill'],
-        mode: 'exclusive',
-        priority: 0,
-      };
-    }
-  }
-};
-
-const toSignalType = (target: FeedbackDomainJudgeAgentResult['targets'][number]['target']) => {
-  switch (target) {
-    case 'memory': {
-      return AGENT_SIGNAL_POLICY_SIGNAL_TYPES.feedbackDomainMemory;
-    }
-    case 'skill': {
-      return AGENT_SIGNAL_POLICY_SIGNAL_TYPES.feedbackDomainSkill;
-    }
-    case 'prompt': {
-      return AGENT_SIGNAL_POLICY_SIGNAL_TYPES.feedbackDomainPrompt;
-    }
-    default: {
-      return AGENT_SIGNAL_POLICY_SIGNAL_TYPES.feedbackDomainNone;
-    }
-  }
-};
-
-const buildDomainSignals = (
-  signal: SignalFeedbackSatisfaction,
-  targets: FeedbackDomainJudgeAgentResult['targets'],
-): BaseSignal[] => {
-  return targets.map((target) => ({
-    chain: {
-      chainId: signal.chain.chainId,
-      parentNodeId: signal.signalId,
-      rootSourceId: signal.chain.rootSourceId,
-    },
-    payload: {
-      agentId: signal.payload.agentId,
-      confidence: target.confidence,
-      conflictPolicy: toConflictPolicy(target.target),
-      evidence:
-        target.evidence.length > 0
-          ? (target.evidence as AgentSignalFeedbackEvidence[])
-          : signal.payload.evidence,
-      message: signal.payload.message,
-      messageId: signal.payload.messageId,
-      reason: target.reason,
-      satisfactionResult: signal.payload.result,
-      sourceHints: signal.payload.sourceHints,
-      target: target.target,
-      topicId: signal.payload.topicId,
-    },
-    signalId: `${signal.signalId}:domain:${target.target}`,
-    signalType: toSignalType(target.target),
-    source: signal.source,
-    timestamp: Date.now(),
-  }));
-};
 
 const createDomainResolver = (
   options: CreateFeedbackDomainJudgePolicyOptions = {},
@@ -138,9 +75,20 @@ const createDomainResolver = (
         message: signal.feedback.message,
         reason: signal.feedback.reason,
         result: signal.feedback.result,
+        serializedContext: signal.feedback.serializedContext,
       })
     ).targets;
   };
+};
+
+export const createSkillIntentClassifier = (
+  options: CreateFeedbackDomainJudgePolicyOptions = {},
+): SkillIntentClassifierService | undefined => {
+  const runtimeDeps = options.skillIntentClassifier;
+
+  if (!runtimeDeps) return undefined;
+
+  return new SkillIntentClassifierAgentService(runtimeDeps.db, runtimeDeps.userId, runtimeDeps);
 };
 
 /**
@@ -165,34 +113,88 @@ export const createFeedbackDomainJudgeSignalHandler = (
   options: CreateFeedbackDomainJudgeSignalHandlerOptions = {},
 ) => {
   const resolveDomains = options.resolveDomains;
+  const skillIntentClassifier = options.skillIntentClassifier;
 
   return defineSignalHandler(
     AGENT_SIGNAL_POLICY_SIGNAL_TYPES.feedbackSatisfaction,
     'signal.feedback-domain-judge',
-    async (signal): Promise<RuntimeProcessorResult | void> => {
-      if (!resolveDomains || signal.payload.result === 'neutral') {
+    async (signal, ctx): Promise<RuntimeProcessorResult | void> => {
+      const enrichSkillTargets = async (
+        targets: FeedbackDomainJudgeAgentResult['targets'],
+      ): Promise<FeedbackDomainJudgeAgentResult['targets']> => {
+        return Promise.all(
+          targets.map(async (target) => {
+            if (target.target !== 'skill') return target;
+
+            const classification = await classifySkillIntent(
+              {
+                message: signal.payload.message,
+                serializedContext: signal.payload.serializedContext,
+              },
+              {
+                diagnostics: options.classifierDiagnostics,
+                fallback: skillIntentClassifier,
+                scopeKey: ctx.scopeKey,
+                sourceId: signal.source?.sourceId,
+              },
+            );
+
+            return {
+              ...target,
+              skillActionIntent: classification.actionIntent,
+              skillIntentError: classification.classifierError,
+              skillIntentConfidence: classification.confidence,
+              skillIntentExplicitness: classification.explicitness,
+              skillIntentReason: classification.reason,
+              skillRoute: classification.route,
+            };
+          }),
+        );
+      };
+      const classifier: DomainClassifierService | undefined = resolveDomains
+        ? {
+            async classify(input) {
+              const targets = await resolveDomains({
+                chain: input.chain,
+                feedback: {
+                  confidence: input.payload.confidence,
+                  evidence: input.payload.evidence,
+                  message: input.payload.message,
+                  messageId: input.payload.messageId,
+                  reason: input.payload.reason,
+                  result: input.payload.result,
+                  serializedContext: input.payload.serializedContext,
+                },
+                source: input.source,
+                sourceHints: input.payload.sourceHints,
+                topicId: input.payload.topicId,
+              });
+
+              return enrichSkillTargets(targets);
+            },
+          }
+        : undefined;
+      const result = await classifyDomain(signal, ctx, {
+        diagnostics: options.classifierDiagnostics,
+        domainClassifier: classifier,
+      });
+
+      if (result.type === 'continue') {
+        return transitionToSignals(result.value, {
+          maxSignals: 4,
+          reason: result.reason,
+        }).result;
+      }
+
+      if (result.reason === 'neutral feedback satisfaction') {
         return;
       }
 
-      const domainTargets = await resolveDomains({
-        chain: signal.chain,
-        feedback: {
-          confidence: signal.payload.confidence,
-          evidence: signal.payload.evidence,
-          message: signal.payload.message,
-          messageId: signal.payload.messageId,
-          reason: signal.payload.reason,
-          result: signal.payload.result,
-        },
-        source: signal.source,
-        sourceHints: signal.payload.sourceHints,
-        topicId: signal.payload.topicId,
-      });
+      if (result.reason === 'domain classifier unavailable') {
+        return;
+      }
 
-      return {
-        signals: buildDomainSignals(signal, domainTargets),
-        status: 'dispatch',
-      };
+      return result.result;
     },
   );
 };

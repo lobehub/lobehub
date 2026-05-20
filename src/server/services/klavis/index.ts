@@ -1,5 +1,6 @@
-import { type LobeToolManifest } from '@lobechat/context-engine';
-import { type LobeChatDatabase } from '@lobechat/database';
+import { KLAVIS_SERVER_TYPES } from '@lobechat/const';
+import type { LobeToolManifest } from '@lobechat/context-engine';
+import type { LobeChatDatabase } from '@lobechat/database';
 import debug from 'debug';
 
 import { PluginModel } from '@/database/models/plugin';
@@ -7,6 +8,8 @@ import { getKlavisClient, isKlavisClientAvailable } from '@/libs/klavis';
 import { type ToolExecutionResult } from '@/server/services/toolExecution/types';
 
 const log = debug('lobe-server:klavis-service');
+
+const VALID_KLAVIS_IDENTIFIERS = new Set(KLAVIS_SERVER_TYPES.map((type) => type.identifier));
 
 export interface KlavisToolExecuteParams {
   args: Record<string, any>;
@@ -188,9 +191,11 @@ export class KlavisService {
       // Get all plugins from database
       const allPlugins = await this.pluginModel.query();
 
-      // Filter plugins that have klavis customParams and are authenticated
+      // Filter plugins that have klavis customParams, are still supported, and are authenticated.
       const klavisPlugins = allPlugins.filter(
-        (plugin) => plugin.customParams?.klavis?.isAuthenticated === true,
+        (plugin) =>
+          VALID_KLAVIS_IDENTIFIERS.has(plugin.identifier) &&
+          plugin.customParams?.klavis?.isAuthenticated === true,
       );
 
       log('getKlavisManifests: found %d authenticated Klavis plugins', klavisPlugins.length);

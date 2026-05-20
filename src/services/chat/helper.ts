@@ -1,14 +1,25 @@
 import { ModelProvider } from 'model-bank';
 
 import { getAiInfraStoreState } from '@/store/aiInfra';
-import { aiModelSelectors, aiProviderSelectors } from '@/store/aiInfra/selectors';
+import { aiProviderSelectors } from '@/store/aiInfra/selectors';
+
+const getModelAbilities = (model: string, provider: string) => {
+  const state = getAiInfraStoreState();
+  const exactModel = state.enabledAiModels?.find(
+    (item) => item.id === model && item.providerId === provider,
+  );
+
+  if (exactModel || provider !== ModelProvider.LobeHub) return exactModel?.abilities;
+
+  return state.enabledAiModels?.find((item) => item.id === model)?.abilities;
+};
 
 export const isCanUseVision = (model: string, provider: string): boolean => {
-  return aiModelSelectors.isModelSupportVision(model, provider)(getAiInfraStoreState());
+  return getModelAbilities(model, provider)?.vision || false;
 };
 
 export const isCanUseVideo = (model: string, provider: string): boolean => {
-  return aiModelSelectors.isModelSupportVideo(model, provider)(getAiInfraStoreState()) || false;
+  return getModelAbilities(model, provider)?.video || false;
 };
 
 /**

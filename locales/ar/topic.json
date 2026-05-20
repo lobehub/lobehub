@@ -56,6 +56,8 @@
   "renameModal.title": "إعادة تسمية الموضوع",
   "searchPlaceholder": "ابحث في المواضيع...",
   "searchResultEmpty": "لم يتم العثور على نتائج.",
+  "sidebar.title": "المواضيع",
+  "taskManager.agent": "وكيل المهام",
   "taskManager.welcome": "اسألني عن مهامك",
   "temp": "مؤقت",
   "title": "الموضوع"

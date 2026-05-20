@@ -9,6 +9,61 @@ import { registerTextCommand } from './text';
 import { registerTtsCommand } from './tts';
 import { registerVideoCommand } from './video';
 
+/**
+ * Parse a tRPC/server error and return a user-friendly message for gen status/download.
+ *
+ * getGenerationStatus throws NOT_FOUND in two distinct cases:
+ *   1. "Async task not found"  → asyncTaskId is wrong (user passed gen_xxx instead of UUID)
+ *   2. "Generation not found"  → generationId is wrong
+ *
+ * INTERNAL_SERVER_ERROR with a message mentioning "async_tasks" also indicates a bad asyncTaskId
+ * (e.g. the server SQL query fails when a non-UUID is passed).
+ */
+function parseGenStatusError(
+  err: any,
+  generationId: string,
+  asyncTaskId: string,
+  command: 'status' | 'download',
+): string | null {
+  const code = err?.data?.code || err?.shape?.data?.code;
+  const message: string = err?.message || err?.shape?.message || '';
+
+  const isAsyncTaskNotFound =
+    (code === 'NOT_FOUND' && message.includes('Async task not found')) ||
+    (code === 'INTERNAL_SERVER_ERROR' && message.includes('async_tasks'));
+
+  const isGenerationNotFound = code === 'NOT_FOUND' && message.includes('Generation not found');
+
+  if (isAsyncTaskNotFound) {
+    return (
+      `${pc.red('✗')} Async task not found: ${pc.bold(asyncTaskId)}\n` +
+      `\n` +
+      `  The second argument must be the ${pc.bold('asyncTaskId')} — the UUID printed after\n` +
+      `  "→ Task" in the video/image output, not the generation ID (gen_xxx).\n` +
+      `\n` +
+      `  Example output from "lh gen video":\n` +
+      `    Generation ${pc.bold('gen_abc123')} → Task ${pc.dim('7ad0eb13-e9a5-4403-8070-1f7fe95b2f95')}\n` +
+      `\n` +
+      `  Correct usage:\n` +
+      `    ${pc.cyan(`lh gen ${command} gen_abc123 7ad0eb13-e9a5-4403-8070-1f7fe95b2f95`)}`
+    );
+  }
+
+  if (isGenerationNotFound) {
+    return (
+      `${pc.red('✗')} Generation not found: ${pc.bold(generationId)}\n` +
+      `\n` +
+      `  The first argument must be the ${pc.bold('generationId')} (gen_xxx) from the\n` +
+      `  video/image output.\n` +
+      `\n` +
+      `  Correct usage:\n` +
+      `    ${pc.cyan(`lh gen ${command} <generationId> <asyncTaskId>`)}`
+    );
+  }
+
+  return null;
+}
+
 export function registerGenerateCommand(program: Command) {
   const generate = program
     .command('generate')
@@ -23,15 +78,26 @@ export function registerGenerateCommand(program: Command) {
 
   // ── status ──────────────────────────────────────────
   generate
-    .command('status <generationId> <taskId>')
+    .command('status <generationId> <asyncTaskId>')
     .description('Check generation task status')
     .option('--json', 'Output raw JSON')
-    .action(async (generationId: string, taskId: string, options: { json?: boolean }) => {
+    .action(async (generationId: string, asyncTaskId: string, options: { json?: boolean }) => {
       const client = await getTrpcClient();
-      const result = await client.generation.getGenerationStatus.query({
-        asyncTaskId: taskId,
-        generationId,
-      });
+
+      let result: any;
+      try {
+        result = await client.generation.getGenerationStatus.query({
+          asyncTaskId,
+          generationId,
+        });
+      } catch (err: any) {
+        const msg = parseGenStatusError(err, generationId, asyncTaskId, 'status');
+        if (msg) {
+          console.error(msg);
+          process.exit(1);
+        }
+        throw err;
+      }
 
       if (options.json) {
         console.log(JSON.stringify(result, null, 2));
@@ -53,7 +119,7 @@ export function registerGenerateCommand(program: Command) {
 
   // ── download ──────────────────────────────────────────
   generate
-    .command('download <generationId> <taskId>')
+    .command('download <generationId> <asyncTaskId>')
     .description('Wait for generation to complete and download the result')
     .option('-o, --output <path>', 'Output file path (default: auto-detect from asset)')
     .option('--interval <sec>', 'Polling interval in seconds', '5')
@@ -61,7 +127,7 @@ export function registerGenerateCommand(program: Command) {
     .action(
       async (
         generationId: string,
-        taskId: string,
+        asyncTaskId: string,
         options: { interval?: string; output?: string; timeout?: string },
       ) => {
         const client = await getTrpcClient();
@@ -73,10 +139,20 @@ export function registerGenerateCommand(program: Command) {
 
         // Poll for completion
         while (true) {
-          const result = (await client.generation.getGenerationStatus.query({
-            asyncTaskId: taskId,
-            generationId,
-          })) as any;
+          let result: any;
+          try {
+            result = await client.generation.getGenerationStatus.query({
+              asyncTaskId,
+              generationId,
+            });
+          } catch (err: any) {
+            const msg = parseGenStatusError(err, generationId, asyncTaskId, 'download');
+            if (msg) {
+              console.error(`\n${msg}`);
+              process.exit(1);
+            }
+            throw err;
+          }
 
           if (result.status === 'success' && result.generation) {
             const gen = result.generation;
@@ -125,7 +201,7 @@ export function registerGenerateCommand(program: Command) {
             console.log(
               `${pc.red('✗')} Timed out after ${options.timeout}s. Task still ${result.status}.`,
             );
-            console.log(pc.dim(`Run "lh gen status ${generationId} ${taskId}" to check later.`));
+            console.log(pc.dim(`Run "lh gen status ${generationId} ${asyncTaskId}" to check later.`));
             process.exit(1);
           }
 

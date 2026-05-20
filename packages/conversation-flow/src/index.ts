@@ -8,6 +8,7 @@ export type {
   CompareNode,
   ContextNode,
   MessageNode,
+  SignalCallbacksNode,
 } from './types';
 
 // Flat Message List Types - for virtual list rendering

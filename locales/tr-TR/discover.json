@@ -624,6 +624,8 @@
   "user.logout": "Çıkış Yap",
   "user.myProfile": "Profilim",
   "user.noAgents": "Bu kullanıcı henüz Ajans yayınlamadı",
+  "user.noAgents.ownerDescription": "İlk Aracınızı oluşturun ve Toplulukla paylaşın.",
+  "user.noAgents.title": "Henüz Aracınız yok",
   "user.noFavoriteAgents": "Henüz kaydedilen Ajans yok",
   "user.noFavoritePlugins": "Henüz kaydedilen Beceri yok",
   "user.noForkedAgentGroups": "Henüz çatallanmış ajan grubu yok",

@@ -24,6 +24,7 @@ import { documentService } from '@/services/document';
 import { useDocumentStore } from '@/store/document';
 import { editorSelectors } from '@/store/document/slices/editor';
 
+import { usePageAgentPanelControl } from '../RightPanel/OverrideContext';
 import { selectors, usePageEditorStore } from '../store';
 import { openDocumentCompareModal } from './CompareModal';
 import { formatHistoryAbsoluteTime } from './formatHistoryDate';
@@ -85,6 +86,8 @@ const HistoryPanel = memo(() => {
   const documentId = usePageEditorStore(selectors.documentId);
   const editor = usePageEditorStore(selectors.editor);
   const setRightPanelMode = usePageEditorStore((s) => s.setRightPanelMode);
+
+  const { expand: showPageAgentPanel, toggle: togglePageAgentPanel } = usePageAgentPanelControl();
 
   const markDirty = useDocumentStore((s) => s.markDirty);
   const performSave = useDocumentStore((s) => s.performSave);
@@ -237,7 +240,11 @@ const HistoryPanel = memo(() => {
             >
               {t('pageEditor.history.backToCopilot', { ns: 'file' })}
             </Button>
-            <ToggleRightPanelButton showActive={false} />
+            <ToggleRightPanelButton
+              expand={showPageAgentPanel}
+              showActive={false}
+              onToggle={() => togglePageAgentPanel()}
+            />
           </>
         }
       />

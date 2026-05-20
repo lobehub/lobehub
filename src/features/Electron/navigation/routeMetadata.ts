@@ -58,7 +58,7 @@ const routePatterns: RoutePattern[] = [
   },
   {
     icon: MessageSquare,
-    test: (p) => p.startsWith('/agent/'),
+    test: (p) => p.startsWith('/agent/') && !/^\/agent\/[^/]+\/task\//.test(p),
     titleKey: 'navigation.chat',
     useDynamicTitle: true,
   },
@@ -123,7 +123,8 @@ const routePatterns: RoutePattern[] = [
   // Tasks routes (cross-agent global view + singular task detail)
   {
     icon: tasksIcon,
-    test: (p) => p.startsWith('/tasks') || p.startsWith('/task/'),
+    test: (p) =>
+      p.startsWith('/tasks') || p.startsWith('/task/') || /^\/agent\/[^/]+\/task\//.test(p),
     titleKey: 'navigation.tasks',
   },
 

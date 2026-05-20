@@ -1,257 +1,91 @@
 ---
 name: store-data-structures
 description: Zustand store data structure patterns for LobeHub. Covers List vs Detail data structures, Map + Reducer patterns, type definitions, and when to use each pattern. Use when designing store state, choosing data structures, or implementing list/detail pages.
+user-invocable: false
 ---
 
 # LobeHub Store Data Structures
 
-This guide covers how to structure data in Zustand stores for optimal performance and user experience.
+How to structure data in Zustand stores for fast list rendering, multi-detail caching, and ergonomic optimistic updates.
 
 ## Core Principles
 
 ### ✅ DO
 
-1. **Separate List and Detail** - Use different structures for list pages and detail pages
-2. **Use Map for Details** - Cache multiple detail pages with `Record<string, Detail>`
-3. **Use Array for Lists** - Simple arrays for list display
-4. **Types from @lobechat/types** - Never use `@lobechat/database` types in stores
-5. **Distinguish List and Detail types** - List types may have computed UI fields
+1. **Separate List and Detail** — different structures for list pages and detail pages
+2. **Use Map for Details** — cache multiple detail pages with `Record<string, Detail>`
+3. **Use Array for Lists** — simple arrays for list display
+4. **Types from `@lobechat/types`** — never use `@lobechat/database` types in stores
+5. **Distinguish List and Detail types** — List types may have computed UI fields
 
 ### ❌ DON'T
 
-1. **Don't use single detail object** - Can't cache multiple pages
-2. **Don't mix List and Detail types** - They have different purposes
-3. **Don't use database types** - Use types from `@lobechat/types`
-4. **Don't use Map for lists** - Simple arrays are sufficient
+1. **Don't use a single detail object** — can't cache multiple pages
+2. **Don't mix List and Detail types** — they have different purposes
+3. **Don't use database types** — use types from `@lobechat/types`
+4. **Don't use Map for lists** — simple arrays are sufficient
 
 ---
 
 ## Type Definitions
 
-Types should be organized by entity in separate files:
+Each entity gets its own file under `@lobechat/types/`. Each file exports two types:
 
-```
-@lobechat/types/src/eval/
-├── benchmark.ts        # Benchmark types
-├── agentEvalDataset.ts # Dataset types
-├── agentEvalRun.ts     # Run types
-└── index.ts           # Re-exports
-```
+- **Detail type** — full entity, including heavy fields (rubrics, content, editor state, …)
+- **List item type** — a **subset** that excludes heavy fields, may add computed UI fields (counts, timestamps formatted for display)
 
-### Example: Benchmark Types
+**Important:** the List type is a **subset**, not an `extends` of Detail. Extending pulls the heavy fields right back in.
 
-```typescript
-// packages/types/src/eval/benchmark.ts
-import type { EvalBenchmarkRubric } from './rubric';
-
-// ============================================
-// Detail Type - Full entity (for detail pages)
-// ============================================
-
-/**
- * Full benchmark entity with all fields including heavy data
- */
-export interface AgentEvalBenchmark {
-  createdAt: Date;
-  description?: string | null;
-  id: string;
-  identifier: string;
-  isSystem: boolean;
-  metadata?: Record<string, unknown> | null;
-  name: string;
-  referenceUrl?: string | null;
-  rubrics: EvalBenchmarkRubric[]; // Heavy field
-  updatedAt: Date;
-}
-
-// ============================================
-// List Type - Lightweight (for list display)
-// ============================================
-
-/**
- * Lightweight benchmark item - excludes heavy fields
- * May include computed statistics for UI
- */
-export interface AgentEvalBenchmarkListItem {
-  createdAt: Date;
-  description?: string | null;
-  id: string;
-  identifier: string;
-  isSystem: boolean;
-  name: string;
-  // Note: rubrics NOT included (heavy field)
-
-  // Computed statistics for UI display
-  datasetCount?: number;
-  runCount?: number;
-  testCaseCount?: number;
-}
-```
-
-### Example: Document Types (with heavy content)
-
-```typescript
-// packages/types/src/document.ts
-
-/**
- * Full document entity - includes heavy content fields
- */
-export interface Document {
-  id: string;
-  title: string;
-  description?: string;
-  content: string; // Heavy field - full markdown content
-  editorData: any; // Heavy field - editor state
-  metadata?: Record<string, unknown>;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-/**
- * Lightweight document item - excludes heavy content
- */
-export interface DocumentListItem {
-  id: string;
-  title: string;
-  description?: string;
-  // Note: content and editorData NOT included
-  createdAt: Date;
-  updatedAt: Date;
-
-  // Computed statistics
-  wordCount?: number;
-  lastEditedBy?: string;
-}
-```
-
-**Key Points:**
-
-- **Detail types** include ALL fields from database (full entity)
-- **List types** are **subsets** that exclude heavy/large fields
-- List types may add computed statistics for UI (e.g., `testCaseCount`)
-- **Each entity gets its own file** (not mixed together)
-- **All types** exported from `@lobechat/types`, NOT `@lobechat/database`
-
-**Heavy fields to exclude from List:**
-
-- Large text content (`content`, `editorData`, `fullDescription`)
-- Complex objects (`rubrics`, `config`, `metrics`)
-- Binary data (`image`, `file`)
-- Large arrays (`messages`, `items`)
+> See [`references/types.md`](./references/types.md) for full worked examples (Benchmark, Document) and the heavy-field exclusion checklist.
 
 ---
 
 ## When to Use Map vs Array
 
-### Use Map + Reducer (for Detail Data)
+### Use Map + Reducer — for Detail Data
 
-✅ **Detail page data caching** - Cache multiple detail pages simultaneously
-✅ **Optimistic updates** - Update UI before API responds
-✅ **Per-item loading states** - Track which items are being updated
-✅ **Multiple pages open** - User can navigate between details without refetching
-
-**Structure:**
+✅ Detail page data caching — multiple detail pages cached simultaneously
+✅ Optimistic updates — update UI before API responds
+✅ Per-item loading states — track which items are being updated
+✅ Multi-page navigation — user can switch between details without refetching
 
 ```typescript
 benchmarkDetailMap: Record<string, AgentEvalBenchmark>;
 ```
 
-**Example:** Benchmark detail pages, Dataset detail pages, User profiles
+Examples: benchmark detail pages, dataset detail pages, user profiles.
 
-### Use Simple Array (for List Data)
+### Use Simple Array — for List Data
 
-✅ **List display** - Lists, tables, cards
-✅ **Read-only or refresh-as-whole** - Entire list refreshes together
-✅ **No per-item updates** - No need to update individual items
-✅ **Simple data flow** - Easier to understand and maintain
-
-**Structure:**
+✅ List display — lists, tables, cards
+✅ Refresh as a whole — entire list refreshes together
+✅ No per-item updates — no need to mutate individual rows in place
+✅ Simple data flow — fewer moving parts
 
 ```typescript
-benchmarkList: AgentEvalBenchmarkListItem[]
+benchmarkList: AgentEvalBenchmarkListItem[];
 ```
 
-**Example:** Benchmark list, Dataset list, User list
+Examples: benchmark list, dataset list, user list.
 
 ---
 
 ## State Structure Pattern
-
-### Complete Example
-
-```typescript
-// packages/types/src/eval/benchmark.ts
-import type { EvalBenchmarkRubric } from './rubric';
-
-/**
- * Full benchmark entity (for detail pages)
- */
-export interface AgentEvalBenchmark {
-  id: string;
-  name: string;
-  description?: string | null;
-  identifier: string;
-  rubrics: EvalBenchmarkRubric[]; // Heavy field
-  metadata?: Record<string, unknown> | null;
-  isSystem: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-/**
- * Lightweight benchmark (for list display)
- * Excludes heavy fields like rubrics
- */
-export interface AgentEvalBenchmarkListItem {
-  id: string;
-  name: string;
-  description?: string | null;
-  identifier: string;
-  isSystem: boolean;
-  createdAt: Date;
-  // Note: rubrics excluded
-
-  // Computed statistics
-  testCaseCount?: number;
-  datasetCount?: number;
-  runCount?: number;
-}
-```
 
 ```typescript
 // src/store/eval/slices/benchmark/initialState.ts
 import type { AgentEvalBenchmark, AgentEvalBenchmarkListItem } from '@lobechat/types';
 
 export interface BenchmarkSliceState {
-  // ============================================
-  // List Data - Simple Array
-  // ============================================
-  /**
-   * List of benchmarks for list page display
-   * May include computed fields like testCaseCount
-   */
+  // List — simple array
   benchmarkList: AgentEvalBenchmarkListItem[];
   benchmarkListInit: boolean;
 
-  // ============================================
-  // Detail Data - Map for Caching
-  // ============================================
-  /**
-   * Map of benchmark details keyed by ID
-   * Caches detail page data for multiple benchmarks
-   * Enables optimistic updates and per-item loading
-   */
+  // Detail — map for multi-entity caching
   benchmarkDetailMap: Record<string, AgentEvalBenchmark>;
+  loadingBenchmarkDetailIds: string[]; // per-item loading
 
-  /**
-   * Track which benchmark details are being loaded/updated
-   * For showing spinners on specific items
-   */
-  loadingBenchmarkDetailIds: string[];
-
-  // ============================================
-  // Mutation States
-  // ============================================
+  // Mutation states (drive form-level UI)
   isCreatingBenchmark: boolean;
   isUpdatingBenchmark: boolean;
   isDeletingBenchmark: boolean;
@@ -272,180 +106,51 @@ export const benchmarkInitialState: BenchmarkSliceState = {
 
 ## Reducer Pattern (for Detail Map)
 
-### Why Use Reducer?
+When the Detail Map needs optimistic updates (i.e. the user edits a row and the UI should reflect it before the server confirms), wire a typed reducer instead of inlining `set` calls. This keeps mutations testable and the dispatch surface small.
 
-- **Immutable updates** - Immer ensures immutability
-- **Type-safe actions** - TypeScript discriminated unions
-- **Testable** - Pure functions easy to test
-- **Reusable** - Same reducer for optimistic updates and server data
-
-### Reducer Structure
-
-```typescript
-// src/store/eval/slices/benchmark/reducer.ts
-import { produce } from 'immer';
-import type { AgentEvalBenchmark } from '@lobechat/types';
-
-// ============================================
-// Action Types
-// ============================================
-
-type SetBenchmarkDetailAction = {
-  id: string;
-  type: 'setBenchmarkDetail';
-  value: AgentEvalBenchmark;
-};
-
-type UpdateBenchmarkDetailAction = {
-  id: string;
-  type: 'updateBenchmarkDetail';
-  value: Partial<AgentEvalBenchmark>;
-};
-
-type DeleteBenchmarkDetailAction = {
-  id: string;
-  type: 'deleteBenchmarkDetail';
-};
-
-export type BenchmarkDetailDispatch =
-  | SetBenchmarkDetailAction
-  | UpdateBenchmarkDetailAction
-  | DeleteBenchmarkDetailAction;
-
-// ============================================
-// Reducer Function
-// ============================================
-
-export const benchmarkDetailReducer = (
-  state: Record<string, AgentEvalBenchmark> = {},
-  payload: BenchmarkDetailDispatch,
-): Record<string, AgentEvalBenchmark> => {
-  switch (payload.type) {
-    case 'setBenchmarkDetail': {
-      return produce(state, (draft) => {
-        draft[payload.id] = payload.value;
-      });
-    }
-
-    case 'updateBenchmarkDetail': {
-      return produce(state, (draft) => {
-        if (draft[payload.id]) {
-          draft[payload.id] = { ...draft[payload.id], ...payload.value };
-        }
-      });
-    }
-
-    case 'deleteBenchmarkDetail': {
-      return produce(state, (draft) => {
-        delete draft[payload.id];
-      });
-    }
-
-    default:
-      return state;
-  }
-};
-```
-
-### Internal Dispatch Methods
-
-```typescript
-// In action.ts
-export interface BenchmarkAction {
-  // ... other methods ...
-
-  // Internal methods - not for direct UI use
-  internal_dispatchBenchmarkDetail: (payload: BenchmarkDetailDispatch) => void;
-  internal_updateBenchmarkDetailLoading: (id: string, loading: boolean) => void;
-}
-
-export const createBenchmarkSlice: StateCreator<...> = (set, get) => ({
-  // ... other methods ...
-
-  // Internal - Dispatch to reducer
-  internal_dispatchBenchmarkDetail: (payload) => {
-    const currentMap = get().benchmarkDetailMap;
-    const nextMap = benchmarkDetailReducer(currentMap, payload);
-
-    // Only update if changed
-    if (isEqual(nextMap, currentMap)) return;
-
-    set(
-      { benchmarkDetailMap: nextMap },
-      false,
-      `dispatchBenchmarkDetail/${payload.type}`,
-    );
-  },
-
-  // Internal - Update loading state
-  internal_updateBenchmarkDetailLoading: (id, loading) => {
-    set(
-      (state) => {
-        if (loading) {
-          return { loadingBenchmarkDetailIds: [...state.loadingBenchmarkDetailIds, id] };
-        }
-        return {
-          loadingBenchmarkDetailIds: state.loadingBenchmarkDetailIds.filter((i) => i !== id),
-        };
-      },
-      false,
-      'updateBenchmarkDetailLoading',
-    );
-  },
-});
-```
+> See [`references/reducer.md`](./references/reducer.md) for the full discriminated-union action types, the `produce`-based reducer, and the `internal_dispatch*` slice methods that connect them to Zustand.
 
 ---
 
 ## Data Structure Comparison
 
-### ❌ WRONG - Single Detail Object
+### ❌ WRONG — Single Detail Object
 
 ```typescript
 interface BenchmarkSliceState {
-  // ❌ Can only cache one detail
   benchmarkDetail: AgentEvalBenchmark | null;
-
-  // ❌ Global loading state
   isLoadingBenchmarkDetail: boolean;
 }
 ```
 
-**Problems:**
+Problems:
 
 - Can only cache one detail page at a time
-- Switching between details causes unnecessary refetches
+- Switching between details forces refetch
 - No optimistic updates
 - No per-item loading states
 
-### ✅ CORRECT - Separate List and Detail
+### ✅ CORRECT — Separate List and Detail
 
 ```typescript
-import type { AgentEvalBenchmark, AgentEvalBenchmarkListItem } from '@lobechat/types';
-
 interface BenchmarkSliceState {
-  // ✅ List data - simple array
   benchmarkList: AgentEvalBenchmarkListItem[];
   benchmarkListInit: boolean;
 
-  // ✅ Detail data - map for caching
   benchmarkDetailMap: Record<string, AgentEvalBenchmark>;
-
-  // ✅ Per-item loading
   loadingBenchmarkDetailIds: string[];
 
-  // ✅ Mutation states
   isCreatingBenchmark: boolean;
   isUpdatingBenchmark: boolean;
   isDeletingBenchmark: boolean;
 }
 ```
 
-**Benefits:**
+Benefits:
 
 - Cache multiple detail pages
 - Fast navigation between cached details
-- Optimistic updates with reducer
+- Optimistic updates via reducer
 - Per-item loading states
 - Clear separation of concerns
 
@@ -455,22 +160,16 @@ interface BenchmarkSliceState {
 
 ### Accessing List Data
 
-```typescript
+```tsx
 const BenchmarkList = () => {
-  // Simple array access
   const benchmarks = useEvalStore((s) => s.benchmarkList);
   const isInit = useEvalStore((s) => s.benchmarkListInit);
 
   if (!isInit) return <Loading />;
-
   return (
     <div>
-      {benchmarks.map(b => (
-        <BenchmarkCard
-          key={b.id}
-          name={b.name}
-          testCaseCount={b.testCaseCount} // Computed field
-        />
+      {benchmarks.map((b) => (
+        <BenchmarkCard key={b.id} name={b.name} testCaseCount={b.testCaseCount} />
       ))}
     </div>
   );
@@ -479,22 +178,18 @@ const BenchmarkList = () => {
 
 ### Accessing Detail Data
 
-```typescript
+```tsx
 const BenchmarkDetail = () => {
   const { benchmarkId } = useParams<{ benchmarkId: string }>();
 
-  // Get from map
   const benchmark = useEvalStore((s) =>
     benchmarkId ? s.benchmarkDetailMap[benchmarkId] : undefined,
   );
-
-  // Check loading
   const isLoading = useEvalStore((s) =>
     benchmarkId ? s.loadingBenchmarkDetailIds.includes(benchmarkId) : false,
   );
 
   if (!benchmark) return <Loading />;
-
   return (
     <div>
       <h1>{benchmark.name}</h1>
@@ -510,7 +205,6 @@ const BenchmarkDetail = () => {
 // src/store/eval/slices/benchmark/selectors.ts
 export const benchmarkSelectors = {
   getBenchmarkDetail: (id: string) => (s: EvalStore) => s.benchmarkDetailMap[id],
-
   isLoadingBenchmarkDetail: (id: string) => (s: EvalStore) =>
     s.loadingBenchmarkDetailIds.includes(id),
 };
@@ -524,7 +218,7 @@ const isLoading = useEvalStore(benchmarkSelectors.isLoadingBenchmarkDetail(bench
 
 ## Decision Tree
 
-```
+```text
 Need to store data?
 │
 ├─ Is it a LIST for display?
@@ -547,43 +241,40 @@ Need to store data?
 
 When designing store state structure:
 
-- [ ] **Organize types by entity** in separate files (e.g., `benchmark.ts`, `agentEvalDataset.ts`)
+- [ ] **Organize types by entity** in separate files (e.g. `benchmark.ts`, `agentEvalDataset.ts`)
 - [ ] Create **Detail** type (full entity with all fields including heavy ones)
 - [ ] Create **ListItem** type:
-  - [ ] Subset of Detail type (exclude heavy fields)
+  - [ ] Subset of Detail (exclude heavy fields)
   - [ ] May include computed statistics for UI
-  - [ ] **NOT** extending Detail type (it's a subset, not extension)
+  - [ ] **NOT** `extends` Detail
 - [ ] Use **array** for list data: `xxxList: XxxListItem[]`
 - [ ] Use **Map** for detail data: `xxxDetailMap: Record<string, Xxx>`
-- [ ] Add per-item loading: `loadingXxxDetailIds: string[]`
-- [ ] Create **reducer** for detail map if optimistic updates needed
-- [ ] Add **internal dispatch** and **loading** methods
-- [ ] Create **selectors** for clean access (optional but recommended)
-- [ ] Document in comments:
-  - [ ] What fields are excluded from List and why
-  - [ ] What computed fields mean
-  - [ ] What each Map is for
+- [ ] Per-item loading: `loadingXxxDetailIds: string[]`
+- [ ] **Reducer** for detail map if optimistic updates needed (see [`references/reducer.md`](./references/reducer.md))
+- [ ] **Internal dispatch** and **loading** methods
+- [ ] **Selectors** for clean access (optional but recommended)
+- [ ] Document in comments which fields are excluded from List and why
 
 ---
 
 ## Best Practices
 
-1. **File organization** - One entity per file, not mixed together
-2. **List is subset** - ListItem excludes heavy fields, not extends Detail
-3. **Clear naming** - `xxxList` for arrays, `xxxDetailMap` for maps
-4. **Consistent patterns** - All detail maps follow same structure
-5. **Type safety** - Never use `any`, always use proper types
-6. **Document exclusions** - Comment which fields are excluded from List and why
-7. **Selectors** - Encapsulate access patterns
-8. **Loading states** - Per-item for details, global for lists
-9. **Immutability** - Use Immer in reducers
+1. **File organization** — one entity per file, not mixed
+2. **List is a subset** — ListItem excludes heavy fields, does not `extends` Detail
+3. **Clear naming** — `xxxList` for arrays, `xxxDetailMap` for maps
+4. **Consistent patterns** — all detail maps follow the same shape
+5. **Type safety** — never use `any`, always use proper types
+6. **Document exclusions** — comment which fields are excluded and why
+7. **Selectors** — encapsulate access patterns
+8. **Loading states** — per-item for details, global for mutations
+9. **Immutability** — use Immer in reducers
 
 ### Common Mistakes to Avoid
 
 ❌ **DON'T extend Detail in List:**
 
 ```typescript
-// Wrong - List should not extend Detail
+// Wrong — pulls heavy fields back in
 export interface BenchmarkListItem extends Benchmark {
   testCaseCount?: number;
 }
@@ -592,7 +283,6 @@ export interface BenchmarkListItem extends Benchmark {
 ✅ **DO create separate subset:**
 
 ```typescript
-// Correct - List is a subset with computed fields
 export interface BenchmarkListItem {
   id: string;
   name: string;
@@ -603,14 +293,14 @@ export interface BenchmarkListItem {
 
 ❌ **DON'T mix entities in one file:**
 
-```typescript
-// Wrong - all entities in agentEvalEntities.ts
+```text
+// Wrong — all entities in agentEvalEntities.ts
 ```
 
 ✅ **DO separate by entity:**
 
-```typescript
-// Correct - separate files
+```text
+// Correct — separate files
 // benchmark.ts
 // agentEvalDataset.ts
 // agentEvalRun.ts
@@ -620,5 +310,5 @@ export interface BenchmarkListItem {
 
 ## Related Skills
 
-- `data-fetching` - How to fetch and update this data
-- `zustand` - General Zustand patterns
+- `data-fetching` — how to fetch and update this data
+- `zustand` — general Zustand patterns

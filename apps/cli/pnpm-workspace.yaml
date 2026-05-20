@@ -1,6 +1,10 @@
 packages:
   - '../../packages/agent-gateway-client'
   - '../../packages/device-gateway-client'
+  - '../../packages/heterogeneous-agents'
   - '../../packages/local-file-shell'
+  - '../../packages/types'
+  - '../../packages/model-bank'
+  - '../../packages/business/const'
   - '../../packages/file-loaders'
   - '.'

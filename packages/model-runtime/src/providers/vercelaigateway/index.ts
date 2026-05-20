@@ -17,6 +17,7 @@ export interface VercelAIGatewayModelCard {
     input_cache_write?: string | number;
     output?: string | number;
   };
+  released?: number | string;
   tags?: string[];
   type?: string;
 }
@@ -104,7 +105,7 @@ export const params = {
 
       return {
         contextWindowTokens: m.context_window ?? undefined,
-        created: m.created,
+        created: m.released ?? m.created,
         description: m.description ?? '',
         displayName,
         functionCall: tags.includes('tool-use') || false,
@@ -122,14 +123,7 @@ export const params = {
         // Merge all applicable extendParams for settings
         ...(() => {
           const extendParams: string[] = [];
-          if (
-            tags.includes('reasoning') &&
-            m.id.includes('gpt-5') &&
-            !m.id.includes('gpt-5.1') &&
-            !m.id.includes('gpt-5.2') &&
-            !m.id.includes('gpt-5.4') &&
-            !m.id.includes('gpt-5.5')
-          ) {
+          if (tags.includes('reasoning') && m.id.includes('gpt-5') && !m.id.includes('gpt-5.')) {
             extendParams.push('gpt5ReasoningEffort', 'textVerbosity');
           }
           if (tags.includes('reasoning') && m.id.includes('gpt-5.1') && !m.id.includes('gpt-5.2')) {

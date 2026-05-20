@@ -39,6 +39,12 @@ export class TrayManager {
   initializeTrays() {
     logger.debug('Initialize application tray');
 
+    if (!this.app.storeManager.get('appTrayVisible', true)) {
+      logger.debug('Application tray is disabled by user settings');
+      this.destroyAll();
+      return;
+    }
+
     // Initialize main tray
     const mainTray = this.initializeMainTray();
 
@@ -56,6 +62,19 @@ export class TrayManager {
    */
   getMainTray() {
     return this.retrieveByIdentifier('main');
+  }
+
+  /**
+   * Toggle the application tray at runtime.
+   */
+  setAppTrayVisible(visible: boolean) {
+    logger.debug(`Set application tray visible: ${visible}`);
+
+    if (visible) {
+      this.initializeTrays();
+    } else {
+      this.destroyAll();
+    }
   }
 
   /**

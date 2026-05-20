@@ -22,13 +22,10 @@ export enum SidebarTabKey {
 }
 
 export enum ChatSettingsTabs {
-  Chat = 'chat',
-  Documents = 'documents',
-  Meta = 'meta',
-  Modal = 'modal',
   Opening = 'opening',
   Plugin = 'plugin',
   Prompt = 'prompt',
+  SelfIteration = 'selfIteration',
   TTS = 'tts',
 }
 
@@ -37,6 +34,8 @@ export enum GroupSettingsTabs {
   Members = 'members',
   Settings = 'settings',
 }
+
+export type WorkingSidebarTab = 'files' | 'params' | 'resources' | 'review';
 
 export enum SettingsTabs {
   About = 'about',
@@ -57,6 +56,7 @@ export enum SettingsTabs {
   Image = 'image',
   LLM = 'llm',
   Memory = 'memory',
+  Messenger = 'messenger',
   Notification = 'notification',
   // business
   Plans = 'plans',
@@ -87,6 +87,22 @@ export enum ProfileTabs {
   Stats = 'stats',
   Usage = 'usage',
 }
+
+export const MODEL_DETAIL_PANEL_EXPANDED_KEYS = [
+  'context',
+  'abilities',
+  'pricing',
+  'config',
+] as const;
+
+export type ModelDetailPanelExpandedKey = (typeof MODEL_DETAIL_PANEL_EXPANDED_KEYS)[number];
+
+export const DEFAULT_MODEL_DETAIL_PANEL_EXPANDED_KEYS = [
+  'pricing',
+  'config',
+] as const satisfies readonly ModelDetailPanelExpandedKey[];
+
+export const DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS = ['recents', 'agent'];
 
 export interface SystemStatus {
   /**
@@ -123,6 +139,11 @@ export interface SystemStatus {
   hidePWAInstaller?: boolean;
   hideThreadLimitAlert?: boolean;
   hideTopicSharePrivacyWarning?: boolean;
+  /**
+   * Agent picked from the home AgentSelect dropdown. When unset the home page
+   * falls back to the inbox agent. Persisted so the choice survives reloads.
+   */
+  homeSelectedAgentId?: string;
   imagePanelWidth: number;
   imageTopicPanelWidth?: number;
   imageTopicViewMode?: 'grid' | 'list';
@@ -147,6 +168,12 @@ export interface SystemStatus {
   leftPanelWidth: number;
   mobileShowPortal?: boolean;
   mobileShowTopic?: boolean;
+  /**
+   * Persisted expanded keys of the ModelDetailPanel Accordion
+   * (Pricing / Context / Abilities / Model Config). Single shared preference
+   * across all entries (model picker submenu, ChatInput extend-params popover).
+   */
+  modelDetailPanelExpandedKeys?: ModelDetailPanelExpandedKey[];
   /**
    * ModelSwitchPanel grouping mode
    */
@@ -175,19 +202,35 @@ export interface SystemStatus {
     name: number;
     size: number;
   };
+  /**
+   * Visibility of the Agent profile right-side Agent Builder panel.
+   * Independent from `showRightPanel` so builder creation flows do not affect chat pages.
+   */
+  showAgentBuilderPanel?: boolean;
   showCommandMenu?: boolean;
   showFilePanel?: boolean;
   showHotkeyHelper?: boolean;
   showImagePanel?: boolean;
   showImageTopicPanel?: boolean;
   showLeftPanel?: boolean;
+  /**
+   * Visibility of the PageEditor right-side agent panel (Copilot / History).
+   * Independent from `showRightPanel` so toggling it does not affect other pages.
+   */
+  showPageAgentPanel?: boolean;
   showRightPanel?: boolean;
   showSystemRole?: boolean;
+  /**
+   * Visibility of the Task layout right-side AgentTaskManager panel.
+   * Independent from `showRightPanel` so toggling it does not affect other pages.
+   */
+  showTaskAgentPanel?: boolean;
   showVideoPanel?: boolean;
   showVideoTopicPanel?: boolean;
   /**
    * Flat ordered list of sidebar items.
    */
+  sidebarExpandedKeys?: string[];
   sidebarItems?: string[];
   /**
    * Legacy accordion-only ordering (recents/agent) from the pre-rework sidebar.
@@ -228,6 +271,13 @@ export interface SystemStatus {
   videoPanelWidth: number;
   videoTopicPanelWidth?: number;
   videoTopicViewMode?: 'grid' | 'list';
+  workingSidebarRevealRequest?: { nonce: number; path: string };
+  /**
+   * Active tab inside the agent chat right-side WorkingSidebar.
+   * Lifted to global so external triggers (e.g. the diff badge in the input bar)
+   * can switch the panel to "review" when revealing the right panel.
+   */
+  workingSidebarTab?: WorkingSidebarTab;
   zenMode?: boolean;
 }
 
@@ -303,6 +353,7 @@ export const INITIAL_STATUS = {
   knowledgeBaseModalViewMode: 'list' as const,
   leftPanelWidth: 320,
   mobileShowTopic: false,
+  modelDetailPanelExpandedKeys: [...DEFAULT_MODEL_DETAIL_PANEL_EXPANDED_KEYS],
   modelSwitchPanelGroupMode: 'byProvider',
   modelSwitchPanelWidth: 460,
   noWideScreen: true,
@@ -320,11 +371,15 @@ export const INITIAL_STATUS = {
   showHotkeyHelper: false,
   showImagePanel: true,
   showImageTopicPanel: true,
+  showAgentBuilderPanel: false,
   showLeftPanel: true,
-  showRightPanel: true,
+  showPageAgentPanel: true,
+  showRightPanel: false,
   showSystemRole: false,
+  showTaskAgentPanel: false,
   showVideoPanel: true,
   showVideoTopicPanel: true,
+  sidebarExpandedKeys: [...DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS],
   systemRoleExpandedMap: {},
   tokenDisplayFormatShort: true,
   topicPageSize: 20,

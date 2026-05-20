@@ -2,49 +2,43 @@ import { type BriefType } from '@lobechat/types';
 import { Block, Icon } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import type { CircleDot } from 'lucide-react';
-import { CheckCheckIcon, EyeIcon, Lightbulb, PencilRulerIcon, SirenIcon } from 'lucide-react';
+import { CheckCheckIcon, EyeIcon, HandIcon, Lightbulb, SirenIcon } from 'lucide-react';
 import { memo } from 'react';
 
 const BRIEF_TYPE_ICON: Record<BriefType, typeof CircleDot> = {
-  decision: PencilRulerIcon,
+  decision: HandIcon,
   error: SirenIcon,
   insight: EyeIcon,
   result: CheckCheckIcon,
 };
 
 const BRIEF_TYPE_COLOR: Record<BriefType, string | undefined> = {
-  decision: cssVar.colorWarning,
+  decision: cssVar.colorInfo,
   error: cssVar.colorError,
   insight: cssVar.colorInfo,
   result: cssVar.colorSuccess,
 } as const;
 
 const BRIEF_TYPE_COLOR_BG: Record<BriefType, string | undefined> = {
-  decision: cssVar.colorWarningBgHover,
+  decision: cssVar.colorInfoBgHover,
   error: cssVar.colorErrorBgHover,
   insight: cssVar.colorInfoBgHover,
   result: cssVar.colorSuccessBgHover,
 } as const;
 
 interface BriefIconProps {
+  muted?: boolean;
   size?: number;
   type: BriefType;
 }
 
-const BriefIcon = memo<BriefIconProps>(({ size = 28, type }) => {
+const BriefIcon = memo<BriefIconProps>(({ size = 28, type, muted = false }) => {
   const icon = BRIEF_TYPE_ICON[type] || Lightbulb;
-  const color = BRIEF_TYPE_COLOR[type] || cssVar.colorPrimary;
+  const color = muted ? cssVar.colorTextQuaternary : BRIEF_TYPE_COLOR[type] || cssVar.colorPrimary;
+  const background = muted ? cssVar.colorFillQuaternary : BRIEF_TYPE_COLOR_BG[type];
 
   return (
-    <Block
-      align={'center'}
-      height={size}
-      justify={'center'}
-      width={size}
-      style={{
-        background: BRIEF_TYPE_COLOR_BG[type],
-      }}
-    >
+    <Block align={'center'} height={size} justify={'center'} style={{ background }} width={size}>
       <Icon color={color} icon={icon} size={size * 0.6} />
     </Block>
   );

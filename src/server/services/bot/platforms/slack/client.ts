@@ -13,6 +13,7 @@ import {
   type BotPlatformRuntimeContext,
   type BotProviderConfig,
   ClientFactory,
+  messengerContentText,
   type PlatformClient,
   type PlatformMessenger,
   type UsageStats,
@@ -50,11 +51,16 @@ function createMessenger(config: BotProviderConfig, platformThreadId: string): P
 
   return {
     addReaction: (messageId, emoji) => slack.addReaction(channelId, messageId, emoji),
-    createMessage: (content) =>
-      threadTs
-        ? slack.postMessageInThread(channelId, threadTs, content).then(() => {})
-        : slack.postMessage(channelId, content).then(() => {}),
-    editMessage: (messageId, content) => slack.updateMessage(channelId, messageId, content),
+    // Attachments are silently dropped for now — Slack outbound media is
+    // its own follow-up; reply text still ships.
+    createMessage: (content) => {
+      const text = messengerContentText(content);
+      return threadTs
+        ? slack.postMessageInThread(channelId, threadTs, text).then(() => {})
+        : slack.postMessage(channelId, text).then(() => {});
+    },
+    editMessage: (messageId, content) =>
+      slack.updateMessage(channelId, messageId, messengerContentText(content)),
     removeReaction: (messageId, emoji) => slack.removeReaction(channelId, messageId, emoji),
     replaceReaction: async (messageId, prevEmoji, nextEmoji) => {
       if (prevEmoji === nextEmoji) return;

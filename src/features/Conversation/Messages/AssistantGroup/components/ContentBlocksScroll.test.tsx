@@ -10,7 +10,7 @@ import type { RenderableAssistantContentBlock } from './types';
 
 vi.mock('@lobehub/ui', () => ({
   Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  ScrollShadow: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  ScrollArea: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
 }));
 
 vi.mock('antd-style', () => ({

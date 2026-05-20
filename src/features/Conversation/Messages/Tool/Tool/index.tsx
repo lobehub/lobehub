@@ -82,7 +82,6 @@ const Tool = memo<InspectorProps>(
           itemKey={'tool'}
           paddingBlock={4}
           paddingInline={4}
-          title={<Inspectors apiName={apiName} identifier={identifier} result={result} />}
           action={
             !disableEditing && (
               <Actions
@@ -95,6 +94,14 @@ const Tool = memo<InspectorProps>(
                 showDebug={showDebug}
               />
             )
+          }
+          title={
+            <Inspectors
+              apiName={apiName}
+              identifier={identifier}
+              result={result}
+              toolCallId={toolCallId}
+            />
           }
         >
           <Flexbox gap={8} paddingBlock={8}>

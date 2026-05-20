@@ -694,7 +694,7 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
           mainWindow.show();
           mainWindow.broadcast('navigate', { path: '/settings' });
         },
-        label: t('file.preferences'),
+        label: t('tray.settings'),
       },
       { type: 'separator' },
       { label: t('tray.quit'), role: 'quit' },

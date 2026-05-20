@@ -368,18 +368,25 @@ describe('AgentBotProviderModel', () => {
       expect(results[0].credentials.signingSecret).toBe('ss-123');
     });
 
-    it('should skip providers without botToken', async () => {
+    it('should return providers regardless of credential field shape (platform validates its own fields)', async () => {
       await serverDB.insert(agentBotProviders).values({
         agentId,
-        applicationId: 'no-token-app',
-        credentials: JSON.stringify({ publicKey: 'pk-only' }),
+        applicationId: 'line-app',
+        credentials: JSON.stringify({
+          channelAccessToken: 'cat-123',
+          channelSecret: 'cs-456',
+        }),
         enabled: true,
-        platform: 'discord',
+        platform: 'line',
         userId,
       });
 
-      const results = await AgentBotProviderModel.findEnabledByPlatform(serverDB, 'discord');
-      expect(results).toHaveLength(0);
+      const results = await AgentBotProviderModel.findEnabledByPlatform(serverDB, 'line');
+      expect(results).toHaveLength(1);
+      expect(results[0].credentials).toEqual({
+        channelAccessToken: 'cat-123',
+        channelSecret: 'cs-456',
+      });
     });
 
     it('should skip providers with null credentials', async () => {

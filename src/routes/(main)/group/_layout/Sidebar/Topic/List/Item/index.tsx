@@ -1,9 +1,9 @@
 import type { ChatTopicStatus } from '@lobechat/types';
 import { Flexbox, Icon, Skeleton, Tag } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { CheckCircle2, HashIcon, Loader2Icon, MessageSquareDashed } from 'lucide-react';
+import { CheckCircle2, Hand, HashIcon, Loader2Icon, MessageSquareDashed } from 'lucide-react';
 import { AnimatePresence, m } from 'motion/react';
-import { memo, Suspense, useCallback, useMemo, useRef } from 'react';
+import { memo, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import DotsLoading from '@/components/DotsLoading';
@@ -58,6 +58,18 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
+// Module-scoped so a click on any topic cancels a pending click on another.
+// Per-item refs can't do that, which lets rapid clicks across items all
+// fire — each racing to write activeTopicId (see LOBE-7785).
+let pendingSingleClickTimer: ReturnType<typeof setTimeout> | null = null;
+
+const cancelPendingSingleClick = () => {
+  if (pendingSingleClickTimer) {
+    clearTimeout(pendingSingleClickTimer);
+    pendingSingleClickTimer = null;
+  }
+};
+
 interface TopicItemProps {
   active?: boolean;
   fav?: boolean;
@@ -96,13 +108,12 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, stat
     [id],
   );
 
-  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   const handleClick = useCallback(() => {
     if (editing) return;
     if (isDesktop) {
-      clickTimerRef.current = setTimeout(() => {
-        clickTimerRef.current = null;
+      cancelPendingSingleClick();
+      pendingSingleClickTimer = setTimeout(() => {
+        pendingSingleClickTimer = null;
         void (async () => {
           await focusTopicPopup(id);
           switchTopic(id);
@@ -120,10 +131,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, stat
 
   const handleDoubleClick = useCallback(async () => {
     if (!id || !activeGroupId || !isDesktop) return;
-    if (clickTimerRef.current) {
-      clearTimeout(clickTimerRef.current);
-      clickTimerRef.current = null;
-    }
+    cancelPendingSingleClick();
     if (await focusTopicPopup(id)) {
       switchTopic(id);
       toggleMobileTopic(false);
@@ -144,6 +152,8 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, stat
   });
 
   const isCompleted = status === 'completed';
+  const isRunning = status === 'running';
+  const isWaitingForHuman = status === 'waitingForHuman';
 
   const hasUnread = id && isUnreadCompleted;
   const infoColor = cssVar.colorInfo;
@@ -228,7 +238,10 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, stat
         href={!editing ? href : undefined}
         title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
         icon={(() => {
-          if (isLoading) {
+          if (isWaitingForHuman) {
+            return <Icon icon={Hand} size={'small'} style={{ color: cssVar.colorWarning }} />;
+          }
+          if (isLoading || isRunning) {
             return (
               <Icon spin icon={Loader2Icon} size={'small'} style={{ color: cssVar.colorWarning }} />
             );

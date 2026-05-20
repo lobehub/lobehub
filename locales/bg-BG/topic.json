@@ -56,6 +56,8 @@
   "renameModal.title": "Преименуване на тема",
   "searchPlaceholder": "Търсене в темите...",
   "searchResultEmpty": "Няма намерени резултати от търсенето.",
+  "sidebar.title": "Теми",
+  "taskManager.agent": "Агент за задачи",
   "taskManager.welcome": "Попитай ме за твоите задачи",
   "temp": "Временна",
   "title": "Тема"

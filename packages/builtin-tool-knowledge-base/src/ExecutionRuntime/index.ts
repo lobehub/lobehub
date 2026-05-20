@@ -53,6 +53,18 @@ interface FileListItemResult {
   updatedAt: Date;
 }
 
+interface FileResourceResult {
+  createdAt: Date;
+  fileType: string;
+  id: string;
+  metadata?: Record<string, any> | null;
+  name: string;
+  size: number;
+  sourceType: string;
+  updatedAt: Date;
+  url: string;
+}
+
 interface DocumentResult {
   id: string;
 }
@@ -62,7 +74,12 @@ interface RagService {
   semanticSearchForChat: (
     params: { knowledgeIds?: string[]; query: string; topK: number },
     signal?: AbortSignal,
-  ) => Promise<{ chunks: any[]; fileResults: any[] }>;
+  ) => Promise<{
+    chunks: any[];
+    documents?: any[];
+    errors?: { bm25?: string; vector?: string };
+    fileResults: any[];
+  }>;
 }
 
 interface KnowledgeBaseService {
@@ -90,14 +107,14 @@ interface DocumentService {
 }
 
 interface FileService {
-  getFileItemById: (id: string) => Promise<FileListItemResult | undefined>;
+  getFileItemById: (id: string) => Promise<FileResourceResult | undefined>;
   getKnowledgeItems: (params: {
     category?: string;
     limit: number;
     offset: number;
     q?: string | null;
     showFilesInKnowledgeBase?: boolean;
-  }) => Promise<{ hasMore: boolean; items: FileListItemResult[] }>;
+  }) => Promise<{ hasMore: boolean; items: FileResourceResult[] }>;
 }
 
 export class KnowledgeBaseExecutionRuntime {
@@ -168,7 +185,7 @@ export class KnowledgeBaseExecutionRuntime {
 
   async viewKnowledgeBase(
     args: ViewKnowledgeBaseArgs,
-    options?: { signal?: AbortSignal },
+    _options?: { signal?: AbortSignal },
   ): Promise<BuiltinServerRuntimeOutput> {
     try {
       if (!this.knowledgeBaseService) {
@@ -252,18 +269,41 @@ export class KnowledgeBaseExecutionRuntime {
     try {
       const { query, topK = 20 } = args;
 
-      const { chunks, fileResults } = await this.ragService.semanticSearchForChat(
+      const result = await this.ragService.semanticSearchForChat(
         { knowledgeIds: options?.knowledgeBaseIds, query, topK },
         options?.signal,
       );
+      const chunks = result.chunks ?? [];
+      const fileResults = result.fileResults ?? [];
+      const documents = result.documents ?? [];
+      const errors = result.errors;
+      const totalResults = chunks.length + documents.length;
 
-      if (chunks.length === 0) {
-        const state: SearchKnowledgeBaseState = { chunks: [], fileResults: [], totalResults: 0 };
-        return { content: promptNoSearchResults(query), state, success: true };
+      if (totalResults === 0) {
+        const state: SearchKnowledgeBaseState = {
+          chunks: [],
+          documents: [],
+          errors,
+          fileResults: [],
+          totalResults: 0,
+        };
+        // Surface failure details via formatSearchResults when errors are present
+        // so they aren't silently dropped — otherwise fall back to the empty
+        // template prompt.
+        const content = errors
+          ? formatSearchResults(fileResults, query, documents, errors)
+          : promptNoSearchResults(query);
+        return { content, state, success: true };
       }
 
-      const formattedContent = formatSearchResults(fileResults, query);
-      const state: SearchKnowledgeBaseState = { chunks, fileResults, totalResults: chunks.length };
+      const formattedContent = formatSearchResults(fileResults, query, documents, errors);
+      const state: SearchKnowledgeBaseState = {
+        chunks,
+        documents,
+        errors,
+        fileResults,
+        totalResults,
+      };
 
       return { content: formattedContent, state, success: true };
     } catch (e) {
@@ -471,13 +511,13 @@ export class KnowledgeBaseExecutionRuntime {
       });
 
       const files: FileInfo[] = result.items.map((item) => ({
-        createdAt: item.updatedAt,
+        createdAt: item.createdAt,
         fileType: item.fileType,
         id: item.id,
         name: item.name,
         size: item.size,
         sourceType: item.sourceType,
-        url: '',
+        url: item.url,
       }));
 
       if (files.length === 0) {
@@ -524,15 +564,15 @@ export class KnowledgeBaseExecutionRuntime {
       }
 
       const file: FileDetail = {
-        createdAt: item.updatedAt,
+        createdAt: item.createdAt,
         fileType: item.fileType,
         id: item.id,
-        metadata: null,
+        metadata: item.metadata ?? null,
         name: item.name,
         size: item.size,
         sourceType: item.sourceType,
         updatedAt: item.updatedAt,
-        url: '',
+        url: item.url,
       };
 
       const content = [
@@ -540,7 +580,9 @@ export class KnowledgeBaseExecutionRuntime {
         `- Type: ${file.fileType}`,
         `- Size: ${file.size} bytes`,
         `- Source: ${file.sourceType}`,
+        `- Created: ${file.createdAt}`,
         `- Updated: ${file.updatedAt}`,
+        `- URL: ${file.url}`,
       ].join('\n');
 
       const state: GetFileDetailState = { file };

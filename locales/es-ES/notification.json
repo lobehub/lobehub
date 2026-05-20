@@ -1,10 +1,18 @@
 {
+  "agent_cron_job_failed": "Tu tarea programada \"{{jobName}}\" ha fallado. Abre la tarea para ver el error completo.",
+  "agent_cron_job_failed_insufficient_budget": "Tu tarea programada \"{{jobName}}\" no pudo ejecutarse porque tu cuenta no tiene créditos suficientes. Recarga o actualiza tu plan para reanudar las próximas ejecuciones.",
+  "agent_cron_job_failed_insufficient_budget_title": "Tarea programada en pausa: créditos insuficientes",
+  "agent_cron_job_failed_title": "Fallo en la tarea programada",
   "billboard.learnMore": "Más información",
   "billboard.menuLabel": "Anuncios",
+  "image_generation_completed": "Tu imagen \"{{prompt}}\" está lista.",
+  "image_generation_completed_title": "Generación de imagen completada",
   "inbox.archiveAll": "Archivar todo",
   "inbox.empty": "Aún no hay notificaciones",
   "inbox.emptyUnread": "No hay notificaciones sin leer",
   "inbox.filterUnread": "Mostrar solo sin leer",
   "inbox.markAllRead": "Marcar todo como leído",
-  "inbox.title": "Notificaciones"
+  "inbox.title": "Notificaciones",
+  "video_generation_completed": "Tu video \"{{prompt}}\" está listo.",
+  "video_generation_completed_title": "Generación de video completada"
 }

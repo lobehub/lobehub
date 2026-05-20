@@ -625,6 +625,51 @@ describe('TaskModel', () => {
       const pinned = await model.getPinnedDocuments(task.id);
       expect(pinned).toHaveLength(1);
     });
+
+    it('getDocumentsPinnedSince filters by createdAt and joins title/kind', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({ instruction: 'Test' });
+
+      const [oldDoc] = await serverDB
+        .insert(documents)
+        .values({
+          content: '',
+          fileType: 'text/plain',
+          source: 'test',
+          sourceType: 'file',
+          title: 'Old',
+          totalCharCount: 0,
+          totalLineCount: 0,
+          userId,
+        })
+        .returning();
+      const [newDoc] = await serverDB
+        .insert(documents)
+        .values({
+          content: '',
+          fileType: 'text/markdown',
+          source: 'test',
+          sourceType: 'file',
+          title: 'New',
+          totalCharCount: 0,
+          totalLineCount: 0,
+          userId,
+        })
+        .returning();
+
+      await model.pinDocument(task.id, oldDoc.id);
+      const cutoff = new Date(Date.now() + 100); // pin newDoc after this point
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      await model.pinDocument(task.id, newDoc.id);
+
+      const pinnedSince = await model.getDocumentsPinnedSince(task.id, cutoff);
+      expect(pinnedSince).toHaveLength(1);
+      expect(pinnedSince[0]).toEqual({
+        id: newDoc.id,
+        kind: 'text/markdown',
+        title: 'New',
+      });
+    });
   });
 
   describe('checkpoint', () => {

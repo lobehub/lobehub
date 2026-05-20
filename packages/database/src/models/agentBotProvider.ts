@@ -172,8 +172,6 @@ export class AgentBotProviderModel {
           ? JSON.parse((await gateKeeper.decrypt(r.credentials)).plaintext)
           : JSON.parse(r.credentials);
 
-        if (!credentials.botToken && !credentials.appSecret) continue;
-
         decrypted.push({ ...r, credentials });
       } catch {
         // skip rows with invalid / undecryptable credentials

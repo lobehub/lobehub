@@ -43,6 +43,11 @@ vi.mock('model-bank', () => ({
       id: 'no-tools-model',
       providerId: 'test-provider',
     },
+    {
+      abilities: { functionCall: true, video: true, vision: true },
+      id: 'gemini-3.1-flash-lite-preview',
+      providerId: 'google',
+    },
   ],
 }));
 
@@ -1181,8 +1186,11 @@ describe('RuntimeExecutors', () => {
         expect(callArgs.capabilities.isCanUseVideo('unknown', 'unknown')).toBe(false);
 
         // Aggregator (e.g. lobehub) routes a known model id under a different
-        // provider — vision flag falls back to the upstream model card.
+        // provider — visual capability flags fall back to the upstream model card.
         expect(callArgs.capabilities.isCanUseVision('gpt-4', 'lobehub')).toBe(true);
+        expect(
+          callArgs.capabilities.isCanUseVideo('gemini-3.1-flash-lite-preview', 'lobehub'),
+        ).toBe(true);
         expect(callArgs.capabilities.isCanUseVision('no-tools-model', 'lobehub')).toBe(false);
       });
 
@@ -2909,6 +2917,45 @@ describe('RuntimeExecutors', () => {
         }),
       );
     });
+
+    it('should pass Agent Signal procedure identity fields to executeTool', async () => {
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState({
+        metadata: {
+          agentId: 'agent-docs-123',
+          sourceMessageId: 'user-msg-123',
+          threadId: 'thread-123',
+          topicId: 'topic-123',
+        },
+      });
+
+      const instruction = {
+        payload: {
+          parentMessageId: 'assistant-msg-123',
+          toolsCalling: [
+            {
+              apiName: 'createDocument',
+              arguments: '{"title":"Test","content":"Hello"}',
+              id: 'tool-call-1',
+              identifier: 'lobe-agent-documents',
+              type: 'builtin' as const,
+            },
+          ],
+        },
+        type: 'call_tools_batch' as const,
+      };
+
+      await executors.call_tools_batch!(instruction, state);
+
+      expect(mockToolExecutionService.executeTool).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          messageId: 'user-msg-123',
+          operationId: 'op-123',
+          toolCallId: 'tool-call-1',
+        }),
+      );
+    });
   });
 
   describe('resolve_aborted_tools executor', () => {
@@ -3316,6 +3363,37 @@ describe('RuntimeExecutors', () => {
           }),
         }),
       );
+    });
+
+    it('should disable llm execution retry for the branding provider', async () => {
+      const mockChat = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('network timeout'))
+        .mockResolvedValueOnce(new Response('done'));
+
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({ chat: mockChat } as any);
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+      const instruction = {
+        payload: {
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'gpt-4',
+          parentMessageId: 'parent-msg-123',
+          provider: 'lobehub',
+          tools: [],
+        },
+        type: 'call_llm' as const,
+      };
+
+      await expect(executors.call_llm!(instruction, state)).rejects.toThrow('network timeout');
+
+      expect(mockChat).toHaveBeenCalledTimes(1);
+      expect(
+        mockStreamManager.publishStreamEvent.mock.calls.some(
+          ([, event]: [string, { type: string }]) => event.type === 'stream_retry',
+        ),
+      ).toBe(false);
     });
 
     it('should retry llm execution, emit stream_retry, and commit only the successful attempt', async () => {
@@ -3777,6 +3855,149 @@ describe('RuntimeExecutors', () => {
           undefined, // serializedHooks from state.metadata._hooks
         );
       });
+    });
+  });
+
+  // ─── callAgent server-side exec_sub_agent fix ──────────────────────────────
+  describe('call_tool → exec_sub_agent (callAgent async mode)', () => {
+    const createMockState = (overrides?: Partial<AgentState>): AgentState => ({
+      cost: createMockCost(),
+      createdAt: new Date().toISOString(),
+      lastModified: new Date().toISOString(),
+      maxSteps: 100,
+      messages: [],
+      metadata: {
+        agentId: 'parent-agent-id',
+        topicId: 'topic-123',
+      },
+      modelRuntimeConfig: { model: 'gpt-4', provider: 'openai' },
+      operationId: 'op-123',
+      status: 'running',
+      stepCount: 0,
+      toolManifestMap: {},
+      usage: createMockUsage(),
+      ...overrides,
+    });
+
+    it('call_tool sets stop:true in tool_result payload when tool returns execSubAgent state', async () => {
+      // Simulate agentManagement.callAgent returning execSubAgent state
+      mockToolExecutionService.executeTool.mockResolvedValue({
+        content: '🚀 Triggered async task to call agent "target-agent"',
+        executionTime: 10,
+        state: {
+          parentMessageId: 'tool-msg-id',
+          task: {
+            description: 'Call agent target-agent',
+            instruction: 'Do something',
+            targetAgentId: 'target-agent-id',
+            timeout: 1_800_000,
+          },
+          type: 'execSubAgent',
+        },
+        success: true,
+      });
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+      const instruction = {
+        payload: {
+          parentMessageId: 'assistant-msg-id',
+          toolCalling: {
+            apiName: 'callAgent',
+            arguments: JSON.stringify({
+              agentId: 'target-agent-id',
+              instruction: 'Do something',
+              runAsTask: true,
+            }),
+            id: 'tool-call-1',
+            identifier: 'lobe-agent-management',
+            type: 'default' as const,
+          },
+        },
+        type: 'call_tool' as const,
+      };
+
+      const result = await executors.call_tool!(instruction, state);
+
+      expect(result.nextContext?.phase).toBe('tool_result');
+      expect((result.nextContext?.payload as any).stop).toBe(true);
+    });
+
+    it('exec_sub_agent executor creates task message and calls execSubAgentTask callback', async () => {
+      const mockExecSubAgentTask = vi
+        .fn()
+        .mockResolvedValue({ success: true, operationId: 'child-op', threadId: 'thread-child' });
+      const ctxWithCallback = {
+        ...ctx,
+        execSubAgentTask: mockExecSubAgentTask,
+        topicId: 'topic-123',
+      };
+
+      const executors = createRuntimeExecutors(ctxWithCallback);
+      const state = createMockState();
+
+      const instruction = {
+        payload: {
+          parentMessageId: 'tool-msg-id',
+          task: {
+            description: 'Call agent target-agent',
+            instruction: 'Do something useful',
+            targetAgentId: 'target-agent-id',
+            timeout: 1_800_000,
+          },
+        },
+        type: 'exec_sub_agent' as const,
+      };
+
+      const result = await executors.exec_sub_agent!(instruction as any, state);
+
+      // Task message created with role:'task'
+      expect(mockMessageModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentId: 'parent-agent-id',
+          role: 'task',
+          parentId: 'tool-msg-id',
+          topicId: 'topic-123',
+        }),
+      );
+
+      // execSubAgentTask callback fired with targetAgentId
+      expect(mockExecSubAgentTask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentId: 'target-agent-id',
+          instruction: 'Do something useful',
+          topicId: 'topic-123',
+          parentOperationId: 'op-123',
+        }),
+      );
+
+      // Returns sub_agent_result so GeneralChatAgent continues with LLM call
+      expect(result.nextContext?.phase).toBe('sub_agent_result');
+    });
+
+    it('exec_sub_agent gracefully skips dispatch when execSubAgentTask not injected', async () => {
+      // No callback injected (e.g. in tests that don't set it up)
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+
+      const instruction = {
+        payload: {
+          parentMessageId: 'tool-msg-id',
+          task: {
+            description: 'Call agent target-agent',
+            instruction: 'Do something',
+            targetAgentId: 'target-agent-id',
+          },
+        },
+        type: 'exec_sub_agent' as const,
+      };
+
+      const result = await executors.exec_sub_agent!(instruction as any, state);
+
+      // Should still return sub_agent_result (not crash)
+      expect(result.nextContext?.phase).toBe('sub_agent_result');
+      // Task message still created for UI
+      expect(mockMessageModel.create).toHaveBeenCalled();
     });
   });
 });

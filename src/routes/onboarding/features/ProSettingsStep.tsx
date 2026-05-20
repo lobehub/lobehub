@@ -5,7 +5,6 @@ import { cssVar } from 'antd-style';
 import { Undo2Icon } from 'lucide-react';
 import { memo, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
 import ModelSelect from '@/features/ModelSelect';
 import LobeMessage from '@/routes/onboarding/components/LobeMessage';
@@ -17,18 +16,15 @@ import KlavisServerList from '../components/KlavisServerList';
 
 interface ProSettingsStepProps {
   onBack: () => void;
+  onNext: () => void;
 }
 
-const ProSettingsStep = memo<ProSettingsStepProps>(({ onBack }) => {
+const ProSettingsStep = memo<ProSettingsStepProps>(({ onBack, onNext }) => {
   const { t } = useTranslation('onboarding');
-  const navigate = useNavigate();
 
   const enableKlavis = useServerConfigStore(serverConfigSelectors.enableKlavis);
 
-  const [updateDefaultModel, finishOnboarding] = useUserStore((s) => [
-    s.updateDefaultModel,
-    s.finishOnboarding,
-  ]);
+  const updateDefaultModel = useUserStore((s) => s.updateDefaultModel);
 
   const defaultAgentConfig = useUserStore(
     (s) => settingsSelectors.currentSettings(s).defaultAgent?.config,
@@ -37,13 +33,12 @@ const ProSettingsStep = memo<ProSettingsStepProps>(({ onBack }) => {
   const [isNavigating, setIsNavigating] = useState(false);
   const isNavigatingRef = useRef(false);
 
-  const handleFinish = useCallback(async () => {
+  const handleNext = useCallback(() => {
     if (isNavigatingRef.current) return;
     isNavigatingRef.current = true;
     setIsNavigating(true);
-    await finishOnboarding();
-    navigate('/');
-  }, [finishOnboarding, navigate]);
+    onNext();
+  }, [onNext]);
 
   const handleBack = useCallback(() => {
     if (isNavigatingRef.current) return;
@@ -98,9 +93,9 @@ const ProSettingsStep = memo<ProSettingsStepProps>(({ onBack }) => {
           disabled={isNavigating}
           style={{ minWidth: 120 }}
           type="primary"
-          onClick={() => void handleFinish()}
+          onClick={handleNext}
         >
-          {t('finish')}
+          {t('next')}
         </Button>
       </Flexbox>
     </Flexbox>

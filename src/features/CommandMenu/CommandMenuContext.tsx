@@ -1,11 +1,12 @@
 'use client';
 
-import { type Dispatch, type ReactNode, type SetStateAction } from 'react';
+import type { Dispatch, ReactNode, SetStateAction } from 'react';
 import { createContext, use, useCallback, useMemo, useState } from 'react';
 
-import { type MenuContext, type PageType, type SelectedAgent } from './types';
+import type { MenuContext, PageType, SelectedAgent } from './types';
 import { detectContext } from './utils/context';
-import { type ValidSearchType } from './utils/queryParser';
+import type { ValidSearchType } from './utils/queryParser';
+import { parseSearchQuery } from './utils/queryParser';
 
 interface CommandMenuContextValue {
   activeAgentId: string | undefined;
@@ -53,7 +54,17 @@ export const CommandMenuProvider = ({ children, onClose, pathname }: CommandMenu
   const viewMode: MenuViewMode = search.trim().length > 0 ? 'search' : 'default';
 
   // Memoize setters to maintain stable references
-  const setSearch = useCallback((value: string) => setSearchState(value), []);
+  const setSearch = useCallback((value: string) => {
+    const parsedQuery = parseSearchQuery(value);
+
+    if (parsedQuery.typeFilter) {
+      setTypeFilterState(parsedQuery.typeFilter);
+      setSearchState(parsedQuery.cleanQuery);
+      return;
+    }
+
+    setSearchState(value);
+  }, []);
   const setTypeFilter = useCallback(
     (value: ValidSearchType | undefined) => setTypeFilterState(value),
     [],

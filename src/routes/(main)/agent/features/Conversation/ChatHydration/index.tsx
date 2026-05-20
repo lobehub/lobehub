@@ -2,7 +2,6 @@
 
 import { memo, useLayoutEffect, useRef } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { createStoreUpdater } from 'zustand-utils';
 
 import { SESSION_CHAT_TOPIC_URL, SESSION_CHAT_URL } from '@/const/url';
 import { useQueryState } from '@/hooks/useQueryParam';
@@ -16,17 +15,27 @@ const getSearchSuffix = (searchParams: URLSearchParams) => {
 
 // sync outside state to useChatStore
 const ChatHydration = memo(() => {
-  const useStoreUpdater = createStoreUpdater(useChatStore);
   const location = useLocation();
   const navigate = useNavigate();
   const params = useParams<{ aid?: string; topicId?: string }>();
   const [searchParams] = useSearchParams();
 
   const [thread, setThread] = useQueryState('thread', { history: 'replace', throttleMs: 500 });
-  const routeTopicId = params.topicId ?? searchParams.get('topic');
+  const routeTopicId = params.topicId;
 
-  useStoreUpdater('activeTopicId', routeTopicId ?? undefined);
-  useStoreUpdater('activeThreadId', thread!);
+  useLayoutEffect(() => {
+    const target = routeTopicId ?? null;
+    if (useChatStore.getState().activeTopicId !== target) {
+      useChatStore.setState({ activeTopicId: target! }, false, 'ChatHydration/syncTopicFromUrl');
+    }
+  }, [routeTopicId]);
+
+  useLayoutEffect(() => {
+    const target = thread ?? null;
+    if (useChatStore.getState().activeThreadId !== target) {
+      useChatStore.setState({ activeThreadId: target! }, false, 'ChatHydration/syncThreadFromUrl');
+    }
+  }, [thread]);
 
   const locationRef = useRef(location);
   const paramsRef = useRef(params);
@@ -35,31 +44,6 @@ const ChatHydration = memo(() => {
   locationRef.current = location;
   paramsRef.current = params;
   searchParamsRef.current = searchParams;
-
-  useLayoutEffect(() => {
-    const legacyTopicId = searchParams.get('topic');
-
-    if (!params.aid || !legacyTopicId) return;
-
-    const normalizedTopicId = params.topicId ?? legacyTopicId;
-    const nextSearchParams = new URLSearchParams(searchParams);
-    nextSearchParams.delete('topic');
-
-    const nextUrl = `${SESSION_CHAT_TOPIC_URL(params.aid, normalizedTopicId)}${getSearchSuffix(nextSearchParams)}${location.hash}`;
-    const currentUrl = `${location.pathname}${location.search}${location.hash}`;
-
-    if (currentUrl !== nextUrl) {
-      navigate(nextUrl, { replace: true });
-    }
-  }, [
-    location.hash,
-    location.pathname,
-    location.search,
-    navigate,
-    params.aid,
-    params.topicId,
-    searchParams,
-  ]);
 
   useLayoutEffect(() => {
     const unsubscribeTopic = useChatStore.subscribe(
@@ -84,7 +68,7 @@ const ChatHydration = memo(() => {
     const unsubscribeThread = useChatStore.subscribe(
       (s) => s.activeThreadId,
       (state) => {
-        setThread(!state ? null : state);
+        setThread(state || null);
       },
     );
 

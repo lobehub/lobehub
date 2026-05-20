@@ -118,6 +118,7 @@ export interface ExecutorResultBase {
   attempt: SignalAttempt | AgenticAttempt;
   detail?: string;
   emittedSignalIds?: string[];
+  output?: Record<string, unknown>;
 }
 
 /**

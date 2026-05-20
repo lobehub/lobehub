@@ -7,6 +7,11 @@ import { WechatApiClient } from '@lobechat/chat-adapter-wechat';
 
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import {
+  assertBotAccessSettings,
+  invalidateBotAfterUpdate,
+  mergeBotSettingsForPersist,
+} from '@/server/services/bot/agentBotProviderSettings';
 import { platformRegistry } from '@/server/services/bot/platforms';
 import { DiscordApi } from '@/server/services/bot/platforms/discord/api';
 import { DiscordMessageService } from '@/server/services/bot/platforms/discord/service';
@@ -102,11 +107,24 @@ export const messageRuntime: ServerRuntimeRegistration = {
         return { status };
       },
       createBot: async (params) => {
-        const result = await providerModel.create(params);
+        const settings = mergeBotSettingsForPersist(params.platform, params.settings);
+        assertBotAccessSettings(settings);
+        const result = await providerModel.create({ ...params, settings });
         return { id: result.id, platform: params.platform };
       },
       deleteBot: async (botId) => {
+        const existing = await providerModel.findById(botId);
         await providerModel.delete(botId);
+        if (existing) {
+          await invalidateBotAfterUpdate(
+            {
+              applicationId: existing.applicationId,
+              platform: existing.platform,
+              userId: context.userId!,
+            },
+            { enabled: false },
+          );
+        }
       },
       getBotDetail: async (botId) => {
         const bot = await providerModel.findById(botId);
@@ -159,10 +177,40 @@ export const messageRuntime: ServerRuntimeRegistration = {
         });
       },
       toggleBot: async (botId, enabled) => {
+        const existing = await providerModel.findById(botId);
+        if (!existing) throw new Error(`Bot not found: ${botId}`);
         await providerModel.update(botId, { enabled });
+        await invalidateBotAfterUpdate(
+          {
+            applicationId: existing.applicationId,
+            platform: existing.platform,
+            userId: context.userId!,
+          },
+          { enabled },
+        );
       },
       updateBot: async (botId, params) => {
-        await providerModel.update(botId, params);
+        const existing = await providerModel.findById(botId);
+        if (!existing) throw new Error(`Bot not found: ${botId}`);
+
+        const value: { credentials?: Record<string, string>; settings?: Record<string, unknown> } =
+          {};
+        if (params.credentials !== undefined) value.credentials = params.credentials;
+        if (params.settings !== undefined) {
+          const merged = mergeBotSettingsForPersist(existing.platform, params.settings);
+          assertBotAccessSettings(merged);
+          value.settings = merged;
+        }
+
+        await providerModel.update(botId, value);
+        await invalidateBotAfterUpdate(
+          {
+            applicationId: existing.applicationId,
+            platform: existing.platform,
+            userId: context.userId!,
+          },
+          {},
+        );
       },
     };
 

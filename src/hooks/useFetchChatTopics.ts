@@ -1,9 +1,9 @@
+import { MAIN_SIDEBAR_EXCLUDE_TRIGGERS } from '@/const/topic';
 import { useFetchTopics } from '@/hooks/useFetchTopics';
 import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';
 
 const EXCLUDE_STATUSES_COMPLETED = ['completed'];
-const EXCLUDE_TRIGGERS = ['cron', 'eval'];
 
 /**
  * Canonical topic fetch for chat sidebars (agent + group). Reads every
@@ -21,6 +21,6 @@ export const useFetchChatTopics = () => {
 
   return useFetchTopics({
     excludeStatuses: includeCompleted ? undefined : EXCLUDE_STATUSES_COMPLETED,
-    excludeTriggers: EXCLUDE_TRIGGERS,
+    excludeTriggers: MAIN_SIDEBAR_EXCLUDE_TRIGGERS,
   });
 };

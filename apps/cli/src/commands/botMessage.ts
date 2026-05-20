@@ -1,3 +1,6 @@
+import { readFile } from 'node:fs/promises';
+import { basename, extname } from 'node:path';
+
 import { DEFAULT_BOT_HISTORY_LIMIT } from '@lobechat/const';
 import type { Command } from 'commander';
 import pc from 'picocolors';
@@ -5,6 +8,69 @@ import pc from 'picocolors';
 import { getTrpcClient } from '../api/client';
 import { confirm, outputJson, printTable, truncate } from '../utils/format';
 import { log } from '../utils/logger';
+
+type AttachmentInput = {
+  data?: string;
+  fetchUrl?: string;
+  mimeType?: string;
+  name?: string;
+  type: 'image' | 'file' | 'video' | 'audio';
+};
+
+const MIME_EXT_MAP: Record<string, string> = {
+  '.bmp': 'image/bmp',
+  '.gif': 'image/gif',
+  '.jpeg': 'image/jpeg',
+  '.jpg': 'image/jpeg',
+  '.m4a': 'audio/mp4',
+  '.mp3': 'audio/mpeg',
+  '.mp4': 'video/mp4',
+  '.ogg': 'audio/ogg',
+  '.pdf': 'application/pdf',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.txt': 'text/plain',
+  '.wav': 'audio/wav',
+  '.webm': 'video/webm',
+  '.webp': 'image/webp',
+};
+
+const inferMime = (path: string): string | undefined => MIME_EXT_MAP[extname(path).toLowerCase()];
+
+const inferAttachmentType = (mimeType?: string): AttachmentInput['type'] => {
+  if (!mimeType) return 'file';
+  if (mimeType.startsWith('image/')) return 'image';
+  if (mimeType.startsWith('video/')) return 'video';
+  if (mimeType.startsWith('audio/')) return 'audio';
+  return 'file';
+};
+
+/**
+ * Parse a single `--attachment <value>` argument. Accepted forms:
+ *   - `https://…` / `http://…`           → fetchUrl, type inferred from extension
+ *   - any other string                    → treated as a local file path;
+ *                                           bytes are read + base64-encoded
+ */
+const parseAttachmentArg = async (raw: string): Promise<AttachmentInput> => {
+  if (/^https?:\/\//.test(raw)) {
+    const pathname = new URL(raw).pathname;
+    const mimeType = inferMime(pathname);
+    return {
+      fetchUrl: raw,
+      mimeType,
+      name: basename(pathname) || undefined,
+      type: inferAttachmentType(mimeType),
+    };
+  }
+  const bytes = await readFile(raw);
+  const mimeType = inferMime(raw);
+  return {
+    data: bytes.toString('base64'),
+    mimeType,
+    name: basename(raw),
+    type: inferAttachmentType(mimeType),
+  };
+};
 
 export function registerBotMessageCommands(bot: Command) {
   const message = bot
@@ -18,15 +84,42 @@ export function registerBotMessageCommands(bot: Command) {
     .description('Send a message to a channel')
     .requiredOption('--target <channelId>', 'Target channel / conversation ID')
     .requiredOption('--message <text>', 'Message content')
+    .option(
+      '--attachment <pathOrUrl>',
+      'Attach a file by local path or remote URL (repeatable). ' +
+        'Local paths are base64-encoded; http(s) URLs are passed as fetchUrl.',
+      collectOptions,
+      [],
+    )
     .option('--reply-to <messageId>', 'Reply to a specific message')
     .option('--json', 'Output JSON')
     .action(
       async (
         botId: string,
-        options: { json?: boolean; message: string; replyTo?: string; target: string },
+        options: {
+          attachment: string[];
+          json?: boolean;
+          message: string;
+          replyTo?: string;
+          target: string;
+        },
       ) => {
+        let attachments: AttachmentInput[] | undefined;
+        if (options.attachment.length > 0) {
+          attachments = [];
+          for (const raw of options.attachment) {
+            try {
+              attachments.push(await parseAttachmentArg(raw));
+            } catch (error) {
+              log.error(`Failed to load attachment "${raw}": ${(error as Error).message}`);
+              process.exit(1);
+            }
+          }
+        }
+
         const client = await getTrpcClient();
         const result = await client.botMessage.sendMessage.mutate({
+          attachments,
           botId,
           channelId: options.target,
           content: options.message,
@@ -39,8 +132,9 @@ export function registerBotMessageCommands(bot: Command) {
         }
 
         const r = result as any;
+        const suffix = attachments?.length ? ` with ${attachments.length} attachment(s)` : '';
         console.log(
-          `${pc.green('✓')} Message sent${r.messageId ? ` (${pc.dim(r.messageId)})` : ''}`,
+          `${pc.green('✓')} Message sent${r.messageId ? ` (${pc.dim(r.messageId)})` : ''}${suffix}`,
         );
       },
     );

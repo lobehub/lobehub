@@ -120,7 +120,6 @@ const xiaomimimoChatModels: AIChatModelCard[] = [
     description:
       'MiMo-V2-Pro is specifically designed for high-intensity agent workflows in real-world scenarios. It features over 1 trillion total parameters (42B activated parameters), adopts an innovative hybrid attention architecture, and supports an ultra-long context length of up to 1 million tokens. Built on a powerful foundational model, we continuously scale computational resources across a broader range of agent scenarios, further expanding the action space of intelligence and achieving significant generalization—from coding to real-world task execution (“claw”).',
     displayName: 'MiMo-V2 Pro',
-    enabled: true,
     id: 'mimo-v2-pro',
     maxOutput: 131_072,
     pricing: {
@@ -175,7 +174,6 @@ const xiaomimimoChatModels: AIChatModelCard[] = [
     description:
       'MiMo-V2-Omni is purpose-built for complex multimodal interaction and execution scenarios in the real world. We constructed a full-modality foundation from the ground up, integrating text, vision, and speech, and unified “perception” and “action” within a single architecture. This not only breaks the traditional limitation of models that emphasize understanding over execution, but also endows the model with native capabilities in multimodal perception, tool usage, function execution, and GUI operations. MiMo-V2-Omni can seamlessly integrate with major agent frameworks, achieving a leap from understanding to control while significantly lowering the barrier to deploying fully multimodal agents.',
     displayName: 'MiMo-V2 Omni',
-    enabled: true,
     id: 'mimo-v2-omni',
     maxOutput: 131_072,
     pricing: {

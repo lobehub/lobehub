@@ -2,6 +2,9 @@ import {
   type AgentEvent,
   type AgentInstruction,
   type AgentInstructionCompressContext,
+  type AgentInstructionExecSubAgent,
+  type AgentInstructionExecSubAgents,
+  type AgentRuntimeContext,
   type AgentState,
   type CallLLMPayload,
   type GeneralAgentCallLLMResultPayload,
@@ -10,10 +13,13 @@ import {
   UsageCounter,
 } from '@lobechat/agent-runtime';
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
+import { CredsIdentifier, type CredSummary, generateCredsList } from '@lobechat/builtin-tool-creds';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
+import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import {
   AGENT_DOCUMENT_INJECTION_POSITIONS,
   type AgentContextDocument,
+  type BotPlatformContext,
   buildStepSkillDelta,
   buildStepToolDelta,
   type LobeToolManifest,
@@ -28,18 +34,29 @@ import {
 import { parse } from '@lobechat/conversation-flow';
 import { consumeStreamUntilDone } from '@lobechat/model-runtime';
 import { chainCompressContext } from '@lobechat/prompts';
-import { type ChatToolPayload, type MessageToolCall, type UIChatMessage } from '@lobechat/types';
+import {
+  type ChatToolPayload,
+  type ExecSubAgentTaskParams,
+  type MessageToolCall,
+  type UIChatMessage,
+} from '@lobechat/types';
 import { sanitizeToolCallArguments, serializePartsForStorage } from '@lobechat/utils';
 import debug from 'debug';
 
 import { type MessageModel, MessageModel as MessageModelClass } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
+import { UserModel } from '@/database/models/user';
 import { type LobeChatDatabase } from '@/database/type';
 import { serverMessagesEngine } from '@/server/modules/Mecha/ContextEngineering';
 import { type EvalContext } from '@/server/modules/Mecha/ContextEngineering/types';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import type { HookDispatcher } from '@/server/services/agentRuntime/hooks/HookDispatcher';
+import {
+  type DeviceAccessReason,
+  isDeviceToolIdentifier,
+  logDeviceToolAudit,
+} from '@/server/services/aiAgent/deviceToolAudit';
 import { FileService } from '@/server/services/file';
 import { MessageService } from '@/server/services/message';
 import { OnboardingService } from '@/server/services/onboarding';
@@ -57,6 +74,7 @@ import {
   isPersistFatal,
   markPersistFatal,
 } from './messagePersistErrors';
+import { resolveToolTimeoutMs } from './resolveToolTimeout';
 import { type IStreamEventManager } from './types';
 
 const log = debug('lobe-server:agent-runtime:streaming-executors');
@@ -120,6 +138,11 @@ const buildPostProcessUrl = (ctx: Pick<RuntimeExecutorContext, 'serverDB' | 'use
 
 const shouldRetryLLM = (kind: LLMErrorKind, attempt: number, maxRetries: number) =>
   kind === 'retry' && attempt <= maxRetries;
+
+const resolveLLMMaxRetries = (provider: string) =>
+  // The branded provider already routes through its own fallback chain. Retrying
+  // again here multiplies the same failed routed request across every channel.
+  provider === BRANDING_PROVIDER ? 0 : LLM_MAX_RETRIES;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -198,9 +221,15 @@ const buildToolDiscoveryConfig = (operationToolSet: OperationToolSet, enabledToo
 
 export interface RuntimeExecutorContext {
   agentConfig?: any;
-  botPlatformContext?: any;
+  botPlatformContext?: BotPlatformContext;
   discordContext?: any;
   evalContext?: EvalContext;
+  /**
+   * Callback to spawn a sub-agent task server-side.
+   * Injected by AiAgentService so exec_sub_agent / exec_sub_agents executors
+   * can dispatch callAgent-triggered tasks without a circular import.
+   */
+  execSubAgentTask?: (params: ExecSubAgentTaskParams) => Promise<unknown>;
   hookDispatcher?: HookDispatcher;
   loadAgentState?: (operationId: string) => Promise<AgentState | null>;
   messageModel: MessageModel;
@@ -231,8 +260,19 @@ export const createRuntimeExecutors = (
     // Fallback to state's modelRuntimeConfig if not in payload
     const model = llmPayload.model || state.modelRuntimeConfig?.model;
     const provider = llmPayload.provider || state.modelRuntimeConfig?.provider;
-    // Resolve tools via ToolResolver (unified tool injection)
-    const activeDeviceId = state.metadata?.activeDeviceId;
+    // Resolve tools via ToolResolver (unified tool injection).
+    //
+    // Belt-and-suspenders: even if `aiAgent.execAgent` ever forgets to clear
+    // `state.metadata.activeDeviceId` for a non-trusted sender, swallowing
+    // it here keeps `buildStepToolDelta` from re-injecting `local-system` —
+    // the engine's enabledToolIds exclusion alone is not enough, since the
+    // delta builder treats activeDeviceId as an independent activation
+    // signal and only dedupes against already-enabled tools.
+    const devicePolicy = state.metadata?.deviceAccessPolicy as
+      | { canUseDevice: boolean; reason: DeviceAccessReason }
+      | undefined;
+    const activeDeviceId =
+      devicePolicy?.canUseDevice === false ? undefined : state.metadata?.activeDeviceId;
     const operationToolSet: OperationToolSet = state.operationToolSet ?? {
       enabledToolIds: [],
       executorMap: state.toolExecutorMap ?? {},
@@ -438,35 +478,40 @@ export const createRuntimeExecutors = (
           try {
             const { formatWebOnboardingStateMessage } =
               await import('@lobechat/builtin-tool-web-onboarding/utils');
+            const { UserPersonaModel } = await import('@/database/models/userMemory/persona');
             const onboardingService = new OnboardingService(ctx.serverDB, ctx.userId);
-            const onboardingState = await onboardingService.getState();
-            const phaseGuidance = formatWebOnboardingStateMessage(onboardingState);
+            const docService = new AgentDocumentsService(ctx.serverDB, ctx.userId);
+            const personaModel = new UserPersonaModel(ctx.serverDB, ctx.userId);
 
-            // Fetch SOUL.md from inbox agent's documents
-            let soulContent: string | null = null;
-            try {
-              const inboxAgentId = await onboardingService.getInboxAgentId();
-              if (inboxAgentId) {
-                const docService = new AgentDocumentsService(ctx.serverDB, ctx.userId);
-                const soulDoc = await docService.getDocumentByFilename(inboxAgentId, 'SOUL.md');
-                soulContent = soulDoc?.content ?? null;
-              }
-            } catch (error) {
-              log('Failed to fetch SOUL.md for onboarding context: %O', error);
-            }
+            const [onboardingState, soulDoc, persona, userInfo] = await Promise.all([
+              onboardingService.getState(),
+              onboardingService
+                .getInboxAgentId()
+                .then((inboxAgentId) =>
+                  inboxAgentId ? docService.getDocumentByFilename(inboxAgentId, 'SOUL.md') : null,
+                )
+                .catch((error) => {
+                  log('Failed to fetch SOUL.md for onboarding context: %O', error);
+                  return null;
+                }),
+              personaModel.getLatestPersonaDocument().catch((error) => {
+                log('Failed to fetch user persona for onboarding context: %O', error);
+                return null;
+              }),
+              onboardingService.getInitialUserInfo().catch((error) => {
+                log('Failed to fetch initial user info for onboarding context: %O', error);
+                return undefined;
+              }),
+            ]);
 
-            // Fetch user persona
-            let personaContent: string | null = null;
-            try {
-              const { UserPersonaModel } = await import('@/database/models/userMemory/persona');
-              const personaModel = new UserPersonaModel(ctx.serverDB, ctx.userId);
-              const persona = await personaModel.getLatestPersonaDocument();
-              personaContent = persona?.persona ?? null;
-            } catch (error) {
-              log('Failed to fetch user persona for onboarding context: %O', error);
-            }
-
-            onboardingContext = { personaContent, phaseGuidance, soulContent };
+            onboardingContext = {
+              discoveryUserMessageCount: onboardingState.discoveryUserMessageCount,
+              personaContent: persona?.persona ?? null,
+              phaseGuidance: formatWebOnboardingStateMessage(onboardingState),
+              remainingDiscoveryExchanges: onboardingState.remainingDiscoveryExchanges,
+              soulContent: soulDoc?.content ?? null,
+              userInfo,
+            };
             log('Built onboarding context for agent %s, phase: %s', agentId, onboardingState.phase);
           } catch (error) {
             log('Failed to build onboarding context: %O', error);
@@ -511,11 +556,72 @@ export const createRuntimeExecutors = (
           topic_title: lobehubSkillTopicTitle,
         };
 
+        // ── Tool-specific template variable resolution ────────────────────
+        // The client-side contextEngineering.ts resolves these via Zustand stores
+        // and lambdaClient. In execAgent (server/bot) mode we must fetch from DB
+        // directly. Each block is gated on the relevant tool being enabled.
+
+        // {{username}} / {{language}} — used by memory and creds system roles.
+        // Single indexed DB lookup; cheap enough to run on each call_llm step.
+        let serverUsername = '';
+        let serverLanguage = '';
+        if (ctx.serverDB && ctx.userId) {
+          try {
+            const userInfo = await UserModel.getInfoForAIGeneration(ctx.serverDB, ctx.userId);
+            serverUsername = userInfo.userName;
+            serverLanguage = userInfo.responseLanguage;
+          } catch (error) {
+            log('Failed to fetch user info for {{username}}/{{language}} substitution: %O', error);
+          }
+        }
+
+        // {{sandbox_enabled}} — mirrors client-side check for lobe-cloud-sandbox.
+        const sandboxEnabled = String(resolved.enabledToolIds.includes('lobe-cloud-sandbox'));
+
+        // {{memory_effort}} — read from agentConfig chatConfig; no extra query needed.
+        const memoryEffort = String(
+          (state.metadata?.agentConfig as any)?.chatConfig?.memory?.effort ?? '',
+        );
+
+        // {{CREDS_LIST}} — used by lobe-creds system role.
+        // Mirrors client-side: lambdaClient.market.creds.list.query()
+        const isCredsEnabled = resolved.enabledToolIds.includes(CredsIdentifier);
+        let credsListStr = '';
+        if (isCredsEnabled && ctx.userId) {
+          try {
+            const { MarketService } = await import('@/server/services/market');
+            const marketService = new MarketService({ userInfo: { userId: ctx.userId } });
+            const credsResult = await marketService.market.creds.list();
+            const userCreds = (credsResult as any)?.data ?? [];
+            credsListStr = generateCredsList(
+              userCreds.map(
+                (cred: any): CredSummary => ({
+                  description: cred.description,
+                  key: cred.key,
+                  name: cred.name,
+                  type: cred.type,
+                }),
+              ),
+            );
+            log('Fetched %d creds for {{CREDS_LIST}} substitution', userCreds.length);
+          } catch (error) {
+            log('Failed to fetch creds for {{CREDS_LIST}} substitution: %O', error);
+          }
+        }
+
         const contextEngineInput = {
           agentDocuments,
           additionalVariables: {
             ...state.metadata?.deviceSystemInfo,
             ...lobehubSkillVariables,
+            // User identity variables
+            username: serverUsername,
+            language: serverLanguage,
+            // Creds tool variables
+            sandbox_enabled: sandboxEnabled,
+            ...(isCredsEnabled && { CREDS_LIST: credsListStr }),
+            // Memory tool variables
+            memory_effort: memoryEffort,
           },
           userTimezone: ctx.userTimezone,
           capabilities: {
@@ -526,9 +632,9 @@ export const createRuntimeExecutors = (
               return info?.abilities?.functionCall ?? true;
             },
             isCanUseVideo: (m: string, p: string) => {
-              const info = LOBE_DEFAULT_MODEL_LIST.find(
-                (item) => item.id === m && item.providerId === p,
-              );
+              const info =
+                LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === m && item.providerId === p) ??
+                LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === m);
               return info?.abilities?.video ?? false;
             },
             isCanUseVision: (m: string, p: string) => {
@@ -575,10 +681,13 @@ export const createRuntimeExecutors = (
           },
           userMemory: state.metadata?.userMemory,
 
-          // Skills configuration for <available_skills> injection
+          // Skills configuration for <available_skills> injection.
+          // In chat mode the MessagesEngine force-disables this injector via
+          // its `enableAgentMode` param — no extra gate needed here.
           ...(resolvedSkills?.enabledSkills?.length && {
             skillsConfig: { enabledSkills: resolvedSkills.enabledSkills },
           }),
+          enableAgentMode: agentConfig.chatConfig?.enableAgentMode,
 
           // Topic reference summaries
           ...(topicReferences && { topicReferences }),
@@ -680,7 +789,8 @@ export const createRuntimeExecutors = (
         }
       };
 
-      const maxAttempts = LLM_MAX_RETRIES + 1;
+      const llmMaxRetries = resolveLLMMaxRetries(provider);
+      const maxAttempts = llmMaxRetries + 1;
 
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         let content = '';
@@ -690,6 +800,7 @@ export const createRuntimeExecutors = (
         const imageList: any[] = [];
         let grounding: any = null;
         let currentStepUsage: any = undefined;
+        let currentStepFinishReason: string | undefined = undefined;
         let streamError: any = undefined;
         const contentParts: ContentPart[] = [];
         const reasoningParts: ContentPart[] = [];
@@ -730,6 +841,12 @@ export const createRuntimeExecutors = (
                 // Capture usage (may or may not include cost)
                 if (data.usage) {
                   currentStepUsage = data.usage;
+                }
+                // Capture provider's terminal finishReason so soft interrupts
+                // (e.g. Gemini RECITATION / MAX_TOKENS with empty content)
+                // are visible in tracing instead of being silently swallowed.
+                if (data.finishReason) {
+                  currentStepFinishReason = data.finishReason;
                 }
               },
               onGrounding: async (groundingData) => {
@@ -869,7 +986,13 @@ export const createRuntimeExecutors = (
 
           // Add a complete llm_stream event (including all streaming chunks)
           events.push({
-            result: { content, reasoning: thinkingContent, tool_calls, usage: currentStepUsage },
+            result: {
+              content,
+              finishReason: currentStepFinishReason,
+              reasoning: thinkingContent,
+              tool_calls,
+              usage: currentStepUsage,
+            },
             type: 'llm_result',
           });
 
@@ -1020,7 +1143,7 @@ export const createRuntimeExecutors = (
           const classified = classifyLLMError(error);
           const interrupted = await isOperationInterrupted(ctx);
 
-          if (!interrupted && shouldRetryLLM(classified.kind, attempt, LLM_MAX_RETRIES)) {
+          if (!interrupted && shouldRetryLLM(classified.kind, attempt, llmMaxRetries)) {
             const delayMs = getLLMRetryDelayMs(attempt);
 
             log(
@@ -1406,7 +1529,9 @@ export const createRuntimeExecutors = (
         typeof chatToolPayload.arguments === 'string'
           ? JSON.parse(chatToolPayload.arguments)
           : (chatToolPayload.arguments ?? {});
-    } catch {}
+    } catch {
+      // Keep malformed tool arguments as an empty preview payload; execution still uses raw args.
+    }
 
     try {
       // Check if this is a client-side function tool — pause instead of executing
@@ -1501,6 +1626,28 @@ export const createRuntimeExecutors = (
         : null;
 
       let execution: { result: ToolExecutionResultResponse; attempts: number };
+      if (isDeviceToolIdentifier(chatToolPayload.identifier) && !hookResult?.isMocked) {
+        // Per-call audit for device tools (local-system / remote-device).
+        // Emitted before dispatch so the record exists even if dispatch
+        // throws. We rely on the engine's enable gate to keep `canUseDevice`
+        // true here; recording the policy reason inline lets an operator
+        // distinguish first-party vs bot-owner runs without joining logs.
+        const policy = state.metadata?.deviceAccessPolicy as
+          | { canUseDevice: boolean; reason: DeviceAccessReason }
+          | undefined;
+        logDeviceToolAudit({
+          apiName: chatToolPayload.apiName,
+          botContext: state.metadata?.botContext,
+          canUseDevice: policy?.canUseDevice ?? true,
+          messageId: state.metadata?.sourceMessageId,
+          operationId,
+          reason: policy?.reason ?? 'first-party',
+          toolIdentifier: chatToolPayload.identifier,
+          topicId: ctx.topicId,
+          userId: ctx.userId,
+        });
+      }
+
       if (hookResult?.isMocked) {
         log(`[${operationLogId}] Tool ${toolName} mocked by beforeToolCall hook`);
         toolCallMocked = true;
@@ -1510,9 +1657,15 @@ export const createRuntimeExecutors = (
         };
       } else if (canDispatchToClient) {
         log(`[${operationLogId}] Dispatching tool ${toolName} to client via Agent Gateway`);
+        const timeoutMs = resolveToolTimeoutMs({
+          apiName: chatToolPayload.apiName,
+          args: parsedArgs,
+          manifest: effectiveManifestMap[chatToolPayload.identifier],
+        });
         const dispatchResult = await dispatchClientTool(chatToolPayload, {
           operationId,
           streamManager,
+          timeoutMs,
         });
         execution = { attempts: 1, result: dispatchResult };
       } else {
@@ -1530,10 +1683,15 @@ export const createRuntimeExecutors = (
               activeDeviceId: state.metadata?.activeDeviceId,
               agentId: state.metadata?.agentId,
               documentId: state.metadata?.documentId,
+              groupId: state.metadata?.groupId,
               memoryToolPermission: agentConfig?.chatConfig?.memory?.toolPermission,
+              messageId: state.metadata?.sourceMessageId,
+              operationId,
               scope: state.metadata?.scope,
               serverDB: ctx.serverDB,
               taskId: state.metadata?.taskId,
+              threadId: state.metadata?.threadId,
+              toolCallId: chatToolPayload.id,
               toolManifestMap: effectiveManifestMap,
               toolResultMaxLength,
               topicId: ctx.topicId,
@@ -1718,6 +1876,15 @@ export const createRuntimeExecutors = (
 
       log('[%s:%d] Tool execution completed', operationId, stepIndex);
 
+      // When the tool result carries an execSubAgent / execSubAgents state the
+      // GeneralChatAgent needs `stop: true` in the payload to detect it and
+      // emit the matching exec_sub_agent / exec_sub_agents instruction.  Without
+      // this flag the agent falls through to the normal LLM-call path and the
+      // sub-agent is never spawned.
+      const execTaskStateType = executionResult.state?.type as string | undefined;
+      const isExecTaskState =
+        execTaskStateType === 'execSubAgent' || execTaskStateType === 'execSubAgents';
+
       return {
         events,
         newState,
@@ -1728,6 +1895,7 @@ export const createRuntimeExecutors = (
             isSuccess,
             // Pass tool message ID as parentMessageId for the next LLM call
             parentMessageId: toolMessageId,
+            ...(isExecTaskState && { stop: true }),
             toolCall: chatToolPayload,
             toolCallId: chatToolPayload.id,
           },
@@ -1884,7 +2052,9 @@ export const createRuntimeExecutors = (
             typeof chatToolPayload.arguments === 'string'
               ? JSON.parse(chatToolPayload.arguments)
               : (chatToolPayload.arguments ?? {});
-        } catch {}
+        } catch {
+          // Keep malformed tool arguments as an empty preview payload; execution still uses raw args.
+        }
 
         try {
           log(`[${operationLogId}] Executing tool ${toolName} ...`);
@@ -1933,6 +2103,23 @@ export const createRuntimeExecutors = (
               })()
             : null;
 
+          if (isDeviceToolIdentifier(chatToolPayload.identifier) && !batchHookResult?.isMocked) {
+            const policy = state.metadata?.deviceAccessPolicy as
+              | { canUseDevice: boolean; reason: DeviceAccessReason }
+              | undefined;
+            logDeviceToolAudit({
+              apiName: chatToolPayload.apiName,
+              botContext: state.metadata?.botContext,
+              canUseDevice: policy?.canUseDevice ?? true,
+              messageId: state.metadata?.sourceMessageId,
+              operationId,
+              reason: policy?.reason ?? 'first-party',
+              toolIdentifier: chatToolPayload.identifier,
+              topicId: ctx.topicId,
+              userId: ctx.userId,
+            });
+          }
+
           let execution: { result: ToolExecutionResultResponse; attempts: number };
           if (batchHookResult?.isMocked) {
             log(`[${operationLogId}] Tool ${toolName} mocked by beforeToolCall hook`);
@@ -1943,9 +2130,15 @@ export const createRuntimeExecutors = (
             };
           } else if (canDispatchToClient) {
             log(`[${operationLogId}] Dispatching tool ${toolName} to client via Agent Gateway`);
+            const timeoutMs = resolveToolTimeoutMs({
+              apiName: chatToolPayload.apiName,
+              args: batchParsedArgs,
+              manifest: batchManifestMap[chatToolPayload.identifier],
+            });
             const dispatchResult = await dispatchClientTool(chatToolPayload, {
               operationId,
               streamManager,
+              timeoutMs,
             });
             execution = { attempts: 1, result: dispatchResult };
           } else {
@@ -1964,10 +2157,15 @@ export const createRuntimeExecutors = (
                   activeDeviceId: state.metadata?.activeDeviceId,
                   agentId: state.metadata?.agentId,
                   documentId: state.metadata?.documentId,
+                  groupId: state.metadata?.groupId,
                   memoryToolPermission: batchAgentConfig?.chatConfig?.memory?.toolPermission,
+                  messageId: state.metadata?.sourceMessageId,
+                  operationId,
                   scope: state.metadata?.scope,
                   serverDB: ctx.serverDB,
                   taskId: state.metadata?.taskId,
+                  threadId: state.metadata?.threadId,
+                  toolCallId: chatToolPayload.id,
                   toolManifestMap: batchManifestMap,
                   toolResultMaxLength: batchAgentConfig?.chatConfig?.toolResultMaxLength,
                   topicId: ctx.topicId,
@@ -2260,6 +2458,210 @@ export const createRuntimeExecutors = (
           stepCount: state.stepCount + 1,
         },
       },
+    };
+  },
+
+  /**
+   * Server-side exec_sub_agent executor
+   *
+   * Mirrors the client-side exec_sub_agent executor in createAgentExecutors.ts
+   * but runs entirely server-side (no polling required).  Flow:
+   *   1. Create a task message (role: 'task') as a placeholder visible in the UI.
+   *   2. Fire execSubAgentTask via the injected callback so the sub-agent runs as
+   *      an independent QStash operation.
+   *   3. Return a sub_agent_result context so GeneralChatAgent calls the LLM once
+   *      more and the parent agent can acknowledge the delegation.
+   */
+  exec_sub_agent: async (instruction, state) => {
+    const { payload } = instruction as AgentInstructionExecSubAgent;
+    const { parentMessageId, task } = payload;
+    const events: AgentEvent[] = [];
+    const { operationId } = ctx;
+    const taskLogId = `${operationId}:exec_sub_agent`;
+
+    const topicId = ctx.topicId ?? state.metadata?.topicId;
+    const agentId = state.metadata?.agentId;
+    // targetAgentId is a cloud extension injected by agentManagement.callAgent
+    const targetAgentId = (task as any).targetAgentId ?? agentId;
+
+    let taskMessageId: string | undefined;
+    try {
+      const taskMessage = await ctx.messageModel.create({
+        agentId: agentId!,
+        content: '',
+        metadata: {
+          instruction: task.instruction,
+          taskTitle: task.description,
+          ...(targetAgentId && targetAgentId !== agentId && { targetAgentId }),
+        },
+        parentId: parentMessageId,
+        role: 'task',
+        threadId: state.metadata?.threadId ?? undefined,
+        topicId: topicId!,
+      });
+      taskMessageId = taskMessage.id;
+      log('[%s] Created task message: %s', taskLogId, taskMessageId);
+    } catch (error) {
+      log('[%s] Failed to create task message: %O', taskLogId, error);
+    }
+
+    const effectiveTaskMessageId = taskMessageId ?? parentMessageId;
+
+    let dispatched = false;
+    if (ctx.execSubAgentTask && topicId && agentId) {
+      try {
+        await ctx.execSubAgentTask({
+          agentId: targetAgentId,
+          groupId: state.metadata?.groupId ?? undefined,
+          instruction: task.instruction,
+          parentMessageId: effectiveTaskMessageId,
+          parentOperationId: operationId,
+          timeout: task.timeout,
+          title: task.description,
+          topicId,
+        });
+        dispatched = true;
+        log('[%s] Spawned sub-agent task for agent %s', taskLogId, targetAgentId);
+      } catch (error) {
+        log('[%s] Failed to spawn sub-agent task: %O', taskLogId, error);
+        if (taskMessageId) {
+          try {
+            await ctx.messageModel.update(taskMessageId, {
+              content: `Task failed to start: ${(error as Error).message}`,
+            });
+          } catch {
+            // best-effort
+          }
+        }
+      }
+    } else {
+      log('[%s] execSubAgentTask not available, skipping sub-agent dispatch', taskLogId);
+    }
+
+    return {
+      events,
+      newState: state,
+      nextContext: {
+        payload: {
+          parentMessageId: effectiveTaskMessageId,
+          result: {
+            success: dispatched,
+            taskMessageId: effectiveTaskMessageId,
+            threadId: '',
+          },
+        },
+        phase: 'sub_agent_result',
+        session: {
+          messageCount: state.messages.length,
+          sessionId: operationId,
+          status: 'running',
+          stepCount: state.stepCount + 1,
+        },
+      } as unknown as AgentRuntimeContext,
+    };
+  },
+
+  /**
+   * Server-side exec_sub_agents executor
+   *
+   * Same as exec_sub_agent but for a batch.  Each sub-agent is fired
+   * independently via execSubAgentTask and a task message is created for each.
+   */
+  exec_sub_agents: async (instruction, state) => {
+    const { payload } = instruction as AgentInstructionExecSubAgents;
+    const { parentMessageId, tasks } = payload;
+    const events: AgentEvent[] = [];
+    const { operationId } = ctx;
+    const taskLogId = `${operationId}:exec_sub_agents`;
+
+    const topicId = ctx.topicId ?? state.metadata?.topicId;
+    const agentId = state.metadata?.agentId;
+
+    log('[%s] Starting batch of %d tasks', taskLogId, tasks.length);
+
+    let lastTaskMessageId: string | undefined;
+    const taskResults: Array<{ success: boolean; taskMessageId: string; threadId: string }> = [];
+
+    for (const task of tasks) {
+      const targetAgentId = (task as any).targetAgentId ?? agentId;
+      let taskMessageId: string | undefined;
+
+      try {
+        const taskMessage = await ctx.messageModel.create({
+          agentId: agentId!,
+          content: '',
+          metadata: {
+            instruction: task.instruction,
+            taskTitle: task.description,
+            ...(targetAgentId && targetAgentId !== agentId && { targetAgentId }),
+          },
+          parentId: parentMessageId,
+          role: 'task',
+          threadId: state.metadata?.threadId ?? undefined,
+          topicId: topicId!,
+        });
+        taskMessageId = taskMessage.id;
+        lastTaskMessageId = taskMessageId;
+      } catch (error) {
+        log('[%s] Failed to create task message for "%s": %O', taskLogId, task.description, error);
+      }
+
+      let taskDispatched = false;
+      if (ctx.execSubAgentTask && topicId && agentId) {
+        try {
+          await ctx.execSubAgentTask({
+            agentId: targetAgentId,
+            groupId: state.metadata?.groupId ?? undefined,
+            instruction: task.instruction,
+            parentMessageId: taskMessageId ?? parentMessageId,
+            parentOperationId: operationId,
+            timeout: task.timeout,
+            title: task.description,
+            topicId,
+          });
+          taskDispatched = true;
+          log(
+            '[%s] Spawned sub-agent task "%s" for agent %s',
+            taskLogId,
+            task.description,
+            targetAgentId,
+          );
+        } catch (error) {
+          log('[%s] Failed to spawn task "%s": %O', taskLogId, task.description, error);
+          if (taskMessageId) {
+            try {
+              await ctx.messageModel.update(taskMessageId, {
+                content: `Task failed to start: ${(error as Error).message}`,
+              });
+            } catch {
+              // best-effort
+            }
+          }
+        }
+      }
+      taskResults.push({
+        success: taskDispatched,
+        taskMessageId: taskMessageId ?? parentMessageId,
+        threadId: '',
+      });
+    }
+
+    return {
+      events,
+      newState: state,
+      nextContext: {
+        payload: {
+          parentMessageId: lastTaskMessageId ?? parentMessageId,
+          results: taskResults,
+        },
+        phase: 'sub_agents_batch_result',
+        session: {
+          messageCount: state.messages.length,
+          sessionId: operationId,
+          status: 'running',
+          stepCount: state.stepCount + 1,
+        },
+      } as unknown as AgentRuntimeContext,
     };
   },
 

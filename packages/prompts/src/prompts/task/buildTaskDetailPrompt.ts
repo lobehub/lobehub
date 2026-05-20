@@ -1,7 +1,9 @@
 import type { TaskDetailData, TaskDetailWorkspaceNode } from './index';
 import { briefIcon, priorityLabel, statusIcon, timeAgo } from './index';
+import type { TaskManagerPromptDefaults } from './taskManagerDefaults';
+import { buildTaskManagerDefaultsBlock } from './taskManagerDefaults';
 
-export interface BuildTaskDetailPromptInput {
+export interface BuildTaskDetailPromptInput extends TaskManagerPromptDefaults {
   task: TaskDetailData;
 }
 
@@ -15,6 +17,7 @@ export const buildTaskDetailPrompt = (input: BuildTaskDetailPromptInput, now?: D
 
   const lines: string[] = [
     `<page_context>The user is currently viewing the detail page of task ${task.identifier}. When the user says "this task" or refers ambiguously, it means ${task.identifier}.</page_context>`,
+    ...buildTaskManagerDefaultsBlock(input),
     '<task>',
     `<hint>This tag contains the complete context of the task the user is viewing. Do NOT call viewTask to re-fetch it.</hint>`,
     `${task.identifier} ${task.name || '(unnamed)'}`,
@@ -116,7 +119,7 @@ export const buildTaskDetailPrompt = (input: BuildTaskDetailPromptInput, now?: D
         const author = act.agentId ? '🤖 agent' : '👤 user';
         const content = act.content || '';
         const truncated = content.length > 200 ? content.slice(0, 200) + '...' : content;
-        lines.push(`  💭 ${ago} ${author} ${truncated}`);
+        lines.push(`  💭 ${ago} ${author} ${truncated}${idSuffix}`);
       }
     }
   }

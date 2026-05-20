@@ -1,9 +1,13 @@
+import { INTEREST_AREA_KEYS } from '@lobechat/const';
 import type { BuiltinToolManifest, HumanInterventionRule } from '@lobechat/types';
 
+import { MARKETPLACE_CATEGORY_VALUES } from './agentMarketplace/types';
 import { toolSystemPrompt } from './toolSystemRole';
 import { WebOnboardingApiName, WebOnboardingIdentifier } from './types';
 
-const agentIdentityConfirmationRules: HumanInterventionRule[] = [
+// Agent identity (name/emoji) surface a confirmation card;
+// user profile fields (fullName) and interest saves bypass intervention.
+const saveUserQuestionConfirmationRules: HumanInterventionRule[] = [
   {
     match: {
       agentName: { pattern: '\\S', type: 'regex' },
@@ -23,18 +27,8 @@ export const WebOnboardingManifest: BuiltinToolManifest = {
   api: [
     {
       description:
-        'Read a lightweight onboarding summary. Note: phase and missing-fields are automatically injected into your system context each turn, so this tool is only needed as a fallback when you are uncertain about the current state.',
-      name: WebOnboardingApiName.getOnboardingState,
-      parameters: {
-        properties: {},
-        type: 'object',
-      },
-      renderDisplayControl: 'collapsed',
-    },
-    {
-      description:
-        'Persist structured onboarding fields. Use for agentName and agentEmoji (updates inbox agent title/avatar and requires user confirmation), fullName, interests, and responseLanguage.',
-      humanIntervention: agentIdentityConfirmationRules,
+        'Persist structured onboarding fields. agentName and agentEmoji (updates inbox agent title/avatar) require user confirmation; interests/customInterests saves run without confirmation.',
+      humanIntervention: saveUserQuestionConfirmationRules,
       name: WebOnboardingApiName.saveUserQuestion,
       parameters: {
         additionalProperties: false,
@@ -50,14 +44,21 @@ export const WebOnboardingManifest: BuiltinToolManifest = {
           fullName: {
             type: 'string',
           },
-          interests: {
+          customInterests: {
+            description:
+              'Specific freeform user interests that do not fit the predefined interest keys.',
             items: {
               type: 'string',
             },
             type: 'array',
           },
-          responseLanguage: {
-            type: 'string',
+          interests: {
+            description: 'Predefined interest keys selected from the supported enum values.',
+            items: {
+              enum: [...INTEREST_AREA_KEYS],
+              type: 'string',
+            },
+            type: 'array',
           },
         },
         type: 'object',
@@ -110,7 +111,9 @@ export const WebOnboardingManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Update an existing document by applying structured hunks. Preferred over writeDocument for every incremental edit — cheaper, safer, less error-prone. Each hunk picks ONE mode:\n' +
+        'Update an existing document by applying structured hunks **in a single call**. Preferred over writeDocument for every incremental edit — cheaper, safer, less error-prone.\n\n' +
+        '**BATCH RULE (mandatory):** put EVERY change you want to make this turn into the `hunks` array of ONE call. Do NOT call updateDocument multiple times in a row for the same document — sequential calls waste a full LLM round-trip each and are forbidden. If you have 4 things to record, send 1 call with 4 hunks, not 4 calls with 1 hunk.\n\n' +
+        'Each hunk picks ONE mode:\n' +
         '- `replace` (default): byte-exact SEARCH → REPLACE. For small textual tweaks.\n' +
         '- `delete`: remove the byte-exact SEARCH region.\n' +
         '- `deleteLines`: drop lines [startLine, endLine] (1-based, inclusive). Use the line numbers shown in <current_*_document>.\n' +
@@ -122,7 +125,7 @@ export const WebOnboardingManifest: BuiltinToolManifest = {
         properties: {
           hunks: {
             description:
-              'Ordered list of hunks. Content-based hunks (replace/delete) run first in order; line-based hunks (deleteLines/insertAt/replaceLines) run afterward, highest line first.',
+              'Ordered list of hunks — pack ALL changes for this turn into this single array. Content-based hunks (replace/delete) run first in order; line-based hunks (deleteLines/insertAt/replaceLines) run afterward, highest line first. Calling updateDocument again in the next turn for changes you could have included here is forbidden.',
             items: {
               oneOf: [
                 {
@@ -217,6 +220,60 @@ export const WebOnboardingManifest: BuiltinToolManifest = {
           },
         },
         required: ['type', 'hunks'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Open an Agent Marketplace picker card in the UI, prioritizing tabs by the provided category hints. Returns the request in pending state.',
+      humanIntervention: 'always',
+      name: WebOnboardingApiName.showAgentMarketplace,
+      parameters: {
+        properties: {
+          categoryHints: {
+            description:
+              'One or more fixed MarketplaceCategory slugs used to move matching picker tabs to the front.',
+            items: {
+              enum: [...MARKETPLACE_CATEGORY_VALUES],
+              type: 'string',
+            },
+            minItems: 1,
+            type: 'array',
+          },
+          description: {
+            description: 'Optional secondary line shown below the prompt.',
+            type: 'string',
+          },
+          prompt: {
+            description:
+              'Short, natural sentence shown to the user explaining what the marketplace is for.',
+            type: 'string',
+          },
+          requestId: {
+            description: 'Unique identifier for this pick request.',
+            type: 'string',
+          },
+        },
+        required: ['categoryHints', 'prompt', 'requestId'],
+        type: 'object',
+      },
+      renderDisplayControl: 'collapsed',
+    },
+    {
+      description:
+        "Record the user's template selection for a pending pick request. Normally client-handled after the user submits in the UI.",
+      name: WebOnboardingApiName.submitAgentPick,
+      parameters: {
+        properties: {
+          requestId: { description: 'The pick request ID to submit.', type: 'string' },
+          selectedTemplateIds: {
+            description: 'Template IDs the user selected from the marketplace.',
+            items: { type: 'string' },
+            minItems: 1,
+            type: 'array',
+          },
+        },
+        required: ['requestId', 'selectedTemplateIds'],
         type: 'object',
       },
     },

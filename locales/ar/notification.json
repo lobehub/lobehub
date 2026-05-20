@@ -1,10 +1,18 @@
 {
+  "agent_cron_job_failed": "فشل تنفيذ مهمتك المجدولة \"{{jobName}}\". افتح المهمة لعرض الخطأ الكامل.",
+  "agent_cron_job_failed_insufficient_budget": "تعذّر تشغيل مهمتك المجدولة \"{{jobName}}\" بسبب نفاد رصيد الحساب. يُرجى شحن الرصيد أو ترقية خطتك لاستئناف التشغيل المستقبلي.",
+  "agent_cron_job_failed_insufficient_budget_title": "إيقاف المهمة المجدولة: رصيد غير كافٍ",
+  "agent_cron_job_failed_title": "فشل المهمة المجدولة",
   "billboard.learnMore": "معرفة المزيد",
   "billboard.menuLabel": "الإعلانات",
+  "image_generation_completed": "الصورة الخاصة بك \"{{prompt}}\" جاهزة.",
+  "image_generation_completed_title": "اكتملت عملية إنشاء الصورة",
   "inbox.archiveAll": "أرشفة الكل",
   "inbox.empty": "لا توجد إشعارات بعد",
   "inbox.emptyUnread": "لا توجد إشعارات غير مقروءة",
   "inbox.filterUnread": "عرض غير المقروء فقط",
   "inbox.markAllRead": "تحديد الكل كمقروء",
-  "inbox.title": "الإشعارات"
+  "inbox.title": "الإشعارات",
+  "video_generation_completed": "الفيديو الخاص بك \"{{prompt}}\" جاهز.",
+  "video_generation_completed_title": "اكتملت عملية إنشاء الفيديو"
 }

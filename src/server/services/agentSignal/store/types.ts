@@ -1,3 +1,5 @@
+import type { AgentSignalReceiptStore } from '../services/receiptService';
+
 /** Persisted policy-state payload for one AgentSignal scope. */
 export interface AgentSignalPolicyStatePayload {
   [key: string]: string;
@@ -34,3 +36,5 @@ export interface AgentSignalSourceEventStore {
     ttlSeconds: number,
   ) => Promise<void>;
 }
+
+export type { AgentSignalReceiptStore };

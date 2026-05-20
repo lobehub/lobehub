@@ -1,9 +1,9 @@
-import { Flexbox, Highlighter } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { memo, useCallback } from 'react';
 
 import SafeBoundary from '@/components/ErrorBoundary';
 import { LOADING_FLAT } from '@/const/message';
-import { useErrorContent } from '@/features/Conversation/Error';
+import ErrorMessageExtra, { useErrorContent } from '@/features/Conversation/Error';
 
 import ErrorContent from '../../../ChatItem/components/ErrorContent';
 import { messageStateSelectors, useConversationStore } from '../../../store';
@@ -26,9 +26,11 @@ const ContentBlock = memo<ContentBlockProps>(
     reasoning,
     error,
     domId,
+    contentOverride,
     assistantId,
     disableEditing,
     disableMarkdownStreaming,
+    hasToolsOverride,
   }) => {
     const errorContent = useErrorContent(error);
     const showImageItems = !!imageList && imageList.length > 0;
@@ -37,7 +39,7 @@ const ContentBlock = memo<ContentBlockProps>(
       s.deleteDBMessage,
       s.continueGeneration,
     ]);
-    const hasTools = tools && tools.length > 0;
+    const hasTools = !!tools?.length;
     const showReasoning =
       (!!reasoning && reasoning.content?.trim() !== '') || (!reasoning && isReasoning);
     const hasContent = !!content && content !== LOADING_FLAT;
@@ -52,21 +54,16 @@ const ContentBlock = memo<ContentBlockProps>(
       return (
         <ErrorContent
           id={id}
+          customErrorRender={(alertError) => (
+            <ErrorMessageExtra
+              data={{ error, id }}
+              error={alertError}
+              onRegenerate={handleRegenerate}
+            />
+          )}
           error={
             errorContent && error && (content === LOADING_FLAT || !content)
-              ? {
-                  ...errorContent,
-                  extra: error?.body && (
-                    <Highlighter
-                      actionIconSize={'small'}
-                      language={'json'}
-                      padding={8}
-                      variant={'borderless'}
-                    >
-                      {JSON.stringify(error?.body, null, 2)}
-                    </Highlighter>
-                  ),
-                }
+              ? errorContent
               : undefined
           }
           onRegenerate={handleRegenerate}
@@ -85,9 +82,9 @@ const ContentBlock = memo<ContentBlockProps>(
         {showMessageContent && (
           <SafeBoundary variant="alert">
             <MessageContent
-              content={content}
+              contentOverride={contentOverride}
               disableStreaming={disableMarkdownStreaming}
-              hasTools={hasTools}
+              hasToolsOverride={hasToolsOverride}
               id={id}
             />
           </SafeBoundary>
@@ -101,7 +98,7 @@ const ContentBlock = memo<ContentBlockProps>(
 
         {hasTools && (
           <SafeBoundary>
-            <Tools disableEditing={disableEditing} messageId={id} tools={tools} />
+            <Tools disableEditing={disableEditing} messageId={id} />
           </SafeBoundary>
         )}
       </Flexbox>

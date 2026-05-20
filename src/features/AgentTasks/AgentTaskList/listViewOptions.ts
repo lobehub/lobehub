@@ -89,11 +89,11 @@ const PRIORITY_RANK_MAP: Record<number, number> = {
 };
 
 const STATUS_GROUP_RANK_MAP: Record<NonNullable<TaskGroupMeta['status']>, number> = {
-  backlog: 0,
-  running: 1,
-  paused: 2,
-  completed: 3,
-  failed: 4,
+  paused: 0,
+  failed: 1,
+  running: 2,
+  backlog: 3,
+  completed: 4,
   canceled: 5,
 };
 
@@ -104,6 +104,7 @@ const TASK_STATUS_TO_GROUP_MAP: Record<string, NonNullable<TaskGroupMeta['status
   failed: 'failed',
   paused: 'paused',
   running: 'running',
+  scheduled: 'running',
 };
 
 const getPriorityValue = (task: TaskListItem) => task.priority ?? 0;

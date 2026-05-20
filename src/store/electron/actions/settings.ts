@@ -18,6 +18,7 @@ import { type ElectronStore } from '../store';
 
 const ELECTRON_PROXY_SETTINGS_KEY = 'electron:getProxySettings';
 const ELECTRON_DESKTOP_HOTKEYS_KEY = 'electron:getDesktopHotkeys';
+const ELECTRON_APP_TRAY_VISIBLE_KEY = 'electron:getAppTrayVisible';
 
 type Setter = StoreSetter<ElectronStore>;
 export const settingsSlice = (set: Setter, get: () => ElectronStore, _api?: unknown) =>
@@ -37,8 +38,18 @@ export class ElectronSettingsActionImpl {
     await mutate(ELECTRON_DESKTOP_HOTKEYS_KEY);
   };
 
+  refreshAppTrayVisible = async (): Promise<void> => {
+    await mutate(ELECTRON_APP_TRAY_VISIBLE_KEY);
+  };
+
   refreshProxySettings = async (): Promise<void> => {
     await mutate(ELECTRON_PROXY_SETTINGS_KEY);
+  };
+
+  setAppTrayVisible = async (visible: boolean): Promise<void> => {
+    await desktopSettingsService.setAppTrayVisible(visible);
+    this.#set({ appTrayVisible: visible });
+    await this.#get().refreshAppTrayVisible();
   };
 
   setProxySettings = async (values: Partial<NetworkProxySettings>): Promise<void> => {
@@ -74,6 +85,20 @@ export class ElectronSettingsActionImpl {
         onSuccess: (data) => {
           if (!isEqual(data, this.#get().desktopHotkeys)) {
             this.#set({ desktopHotkeys: data, isDesktopHotkeysInit: true });
+          }
+        },
+      },
+    );
+  };
+
+  useGetAppTrayVisible = (enabled = true): SWRResponse => {
+    return useSWR<boolean>(
+      enabled ? ELECTRON_APP_TRAY_VISIBLE_KEY : null,
+      async () => desktopSettingsService.getAppTrayVisible(),
+      {
+        onSuccess: (data) => {
+          if (data !== this.#get().appTrayVisible) {
+            this.#set({ appTrayVisible: data });
           }
         },
       },

@@ -1,7 +1,9 @@
 import type { TaskSummary } from './index';
 import { priorityLabel, statusIcon, timeAgo } from './index';
+import type { TaskManagerPromptDefaults } from './taskManagerDefaults';
+import { buildTaskManagerDefaultsBlock } from './taskManagerDefaults';
 
-export interface BuildTaskListPromptInput {
+export interface BuildTaskListPromptInput extends TaskManagerPromptDefaults {
   tasks: Array<TaskSummary & { createdAt?: string | Date }>;
   total: number;
 }
@@ -16,6 +18,7 @@ export const buildTaskListPrompt = (input: BuildTaskListPromptInput, now?: Date)
   const lines: string[] = [
     '<task_list>',
     `<hint>The user is currently viewing the tasks list page. These are the ${shown} task(s) displayed in the UI. Do NOT call listTasks to re-fetch them.</hint>`,
+    ...buildTaskManagerDefaultsBlock(input),
   ];
 
   if (shown === 0) {

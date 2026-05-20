@@ -20,7 +20,7 @@ import { useGlobalStore } from '@/store/global';
 import { type StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { systemAgentSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
-import { type ChatTopic, type CreateTopicParams } from '@/types/topic';
+import { type ChatTopic, type ChatTopicStatus, type CreateTopicParams } from '@/types/topic';
 import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
 
@@ -69,6 +69,12 @@ export const chatTopic = (set: Setter, get: () => ChatStore, _api?: unknown) =>
 export class ChatTopicActionImpl {
   readonly #get: () => ChatStore;
   readonly #set: Setter;
+
+  // Monotonic token for switchTopic. Each call increments it and captures a
+  // local copy; after awaited work, a mismatch means a newer switch has
+  // started and our continuation is stale — drop it rather than let it
+  // clobber the newer topic (see LOBE-7785).
+  #switchTopicEpoch = 0;
 
   constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
     void _api;
@@ -303,6 +309,22 @@ export class ChatTopicActionImpl {
     await this.#get().internal_updateTopic(id, { title });
   };
 
+  /**
+   * Persist the topic's status. Optimistically updates the in-memory map so the
+   * sidebar reflects the change immediately; persistence runs fire-and-forget so
+   * a transient network blip never tears down the agent run that owns the write.
+   */
+  updateTopicStatus = async (id: string, status: ChatTopicStatus): Promise<void> => {
+    const topic = topicSelectors.getTopicById(id)(this.#get());
+    if (!topic || topic.status === status) return;
+
+    this.#get().internal_dispatchTopic({ type: 'updateTopic', id, value: { status } });
+
+    await topicService.updateTopic(id, { status }).catch((err) => {
+      console.error('[updateTopicStatus] persist failed:', err);
+    });
+  };
+
   autoRenameTopicTitle = async (id: string): Promise<void> => {
     const { activeAgentId: agentId, summaryTopicTitle, internal_updateTopicLoading } = this.#get();
 
@@ -521,6 +543,7 @@ export class ChatTopicActionImpl {
 
   switchTopic = async (id?: string | null, options?: SwitchTopicOptions): Promise<void> => {
     const opts = options ?? {};
+    const epoch = ++this.#switchTopicEpoch;
 
     const { activeAgentId, activeGroupId } = this.#get();
 
@@ -561,6 +584,14 @@ export class ChatTopicActionImpl {
     }
 
     if (opts.skipRefreshMessage) return;
+
+    // Yield a microtask so any switchTopic calls queued behind us can run
+    // their sync bodies (and bump #switchTopicEpoch) before we commit to a
+    // refresh. On the other side of the yield, an epoch mismatch means a
+    // newer switch has taken over — skip the redundant SWR mutate.
+    await Promise.resolve();
+    if (epoch !== this.#switchTopicEpoch) return;
+
     await this.#get().refreshMessages();
   };
 
@@ -747,6 +778,13 @@ export class ChatTopicActionImpl {
           ...this.#get().topicDataMap,
           [key]: {
             currentPage,
+            // Carry filter fields forward so subsequent reads (e.g. the
+            // sendMessageInServer `topicFilter` helper) keep seeing the
+            // filter the SWR fetch was using; otherwise the next request
+            // forgets to exclude completed/cron topics until SWR
+            // revalidates.
+            excludeStatuses: currentData?.excludeStatuses,
+            excludeTriggers: currentData?.excludeTriggers,
             hasMore: items.length >= pageSize,
             isExpandingPageSize: false,
             isLoadingMore: false,

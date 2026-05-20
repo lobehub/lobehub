@@ -18,6 +18,7 @@ export interface SendNewMessage {
   editorData?: Record<string, any>;
   // if message has attached with files, then add files to message and the agent
   files?: string[];
+  metadata?: MessageMetadata;
   /** Page selections attached to this message (for Ask AI functionality) */
   pageSelections?: PageSelection[];
   parentId?: string;
@@ -82,8 +83,23 @@ export interface SendMessageServerParams {
   preloadMessages?: SendPreloadMessage[];
   sessionId?: string;
   threadId?: string;
+  /**
+   * Filters applied to the topic list returned alongside the message.
+   * Callers pass whatever filter the active sidebar is using so the server
+   * doesn't echo back topics the UI was already excluding (e.g. completed
+   * status), which would overwrite the filtered list in `topicDataMap`.
+   */
+  topicFilter?: {
+    excludeStatuses?: string[];
+    excludeTriggers?: string[];
+    includeTriggers?: string[];
+  };
   // if there is activeTopicId, then add topicId to message
   topicId?: string;
+  /**
+   * Page size for the topic list returned after creating a new topic.
+   */
+  topicPageSize?: number;
 }
 
 export const CreateThreadWithMessageSchema = z.object({
@@ -131,11 +147,20 @@ export const AiSendMessageServerSchema = z.object({
     content: z.string(),
     editorData: z.record(z.unknown()).optional(),
     files: z.array(z.string()).optional(),
+    metadata: MessageMetadataSchema.optional(),
     pageSelections: z.array(PageSelectionSchema).optional(),
     parentId: z.string().optional(),
   }),
   sessionId: z.string().optional(),
   threadId: z.string().optional(),
+  topicFilter: z
+    .object({
+      excludeStatuses: z.array(z.string()).optional(),
+      excludeTriggers: z.array(z.string()).optional(),
+      includeTriggers: z.array(z.string()).optional(),
+    })
+    .optional(),
+  topicPageSize: z.number().int().min(1).max(100).optional(),
   topicId: z.string().optional(),
 });
 

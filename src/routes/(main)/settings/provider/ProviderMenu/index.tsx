@@ -58,9 +58,9 @@ const Layout = memo(({ children, mobile }: ProviderMenuProps) => {
       >
         <SearchBar
           allowClear
-          defaultValue={providerSearchKeyword}
           placeholder={t('menu.searchProviders')}
           style={{ width: '100%' }}
+          value={providerSearchKeyword}
           variant={'borderless'}
           prefix={
             <Icon
@@ -77,9 +77,8 @@ const Layout = memo(({ children, mobile }: ProviderMenuProps) => {
               paddingLeft: 6,
             },
           }}
-          onSearch={(v) => useAiInfraStore.setState({ providerSearchKeyword: v })}
           onInputChange={(v) => {
-            if (!v) useAiInfraStore.setState({ providerSearchKeyword: '' });
+            useAiInfraStore.setState({ providerSearchKeyword: v });
           }}
         />
         <AddNew />

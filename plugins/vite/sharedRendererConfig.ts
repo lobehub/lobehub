@@ -173,6 +173,7 @@ export function sharedRendererDefine(options: { isElectron: boolean; isMobile: b
     '__DEV__': process.env.NODE_ENV !== 'production' ? 'true' : 'false',
     '__ELECTRON__': JSON.stringify(options.isElectron),
     '__MOBILE__': JSON.stringify(options.isMobile),
+    '__TEST__': 'false',
     ...nextPublicDefine,
     // Keep a safe fallback so generic `process.env` access won't crash in browser runtime.
     'process.env': '{}',

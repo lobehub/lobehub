@@ -4,13 +4,13 @@ import { Alert, Flexbox, Tag } from '@lobehub/ui';
 import { Button, Form as AntdForm, type FormInstance } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { RefreshCw, Save, Trash2 } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
 
-import type { ChannelFormValues, TestResult } from './index';
+import type { ChannelFormValues, CurrentConfig, TestResult } from './index';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   actionBar: css`
@@ -50,6 +50,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 interface FooterProps {
   connecting: boolean;
   connectResult?: TestResult;
+  currentConfig?: CurrentConfig;
   form: FormInstance<ChannelFormValues>;
   hasConfig: boolean;
   onCopied: () => void;
@@ -66,6 +67,7 @@ interface FooterProps {
 const Footer = memo<FooterProps>(
   ({
     platformDef,
+    currentConfig,
     form,
     hasConfig,
     connectResult,
@@ -87,6 +89,33 @@ const Footer = memo<FooterProps>(
     const settingsConnectionMode = AntdForm.useWatch(['settings', 'connectionMode'], form);
 
     const showWebhookUrl = platformDef.showWebhookUrl || settingsConnectionMode === 'webhook';
+
+    // Strong reminder when an already-saved bot is missing the operator's
+    // User ID. Without it, AI tools can't push notifications back to the
+    // operator and the pairing approver identity is undefined. Skipped on
+    // first-time config and on platforms whose schema doesn't expose
+    // `userId` (e.g. WeChat, which auto-manages identity via QR).
+    const hasUserIdField = useMemo(() => {
+      const settings = platformDef.schema.find((f) => f.key === 'settings');
+      return settings?.properties?.some((f) => f.key === 'userId') ?? false;
+    }, [platformDef.schema]);
+    const watchedUserId = AntdForm.useWatch(['settings', 'userId'], form);
+    // `useWatch` returns `undefined` until antd Form hydrates from the
+    // parent's `initialValues`. Fall back to the saved value only during
+    // that pre-hydration window so we don't flash the alert for every
+    // saved bot. Once the form has reported a value, trust the watched
+    // value — including `undefined`, so "Reset to Default" (which clears
+    // settings.userId) correctly re-surfaces the alert.
+    const savedUserId = currentConfig?.settings?.userId;
+    const [formHydrated, setFormHydrated] = useState(false);
+    useEffect(() => {
+      if (watchedUserId !== undefined) setFormHydrated(true);
+    }, [watchedUserId]);
+    const effectiveUserId = formHydrated ? watchedUserId : savedUserId;
+    const userIdMissing =
+      hasConfig &&
+      hasUserIdField &&
+      !(typeof effectiveUserId === 'string' && effectiveUserId.trim());
 
     const webhookUrl = applicationId
       ? `${origin}/api/agent/webhooks/${platformId}/${applicationId}`
@@ -167,13 +196,23 @@ const Footer = memo<FooterProps>(
           />
         )}
 
+        {userIdMissing && (
+          <Alert
+            closable
+            showIcon
+            description={t('channel.userIdMissingDesc')}
+            message={t('channel.userIdMissingTitle')}
+            type="info"
+          />
+        )}
+
         {hasConfig && showWebhookUrl && platformId === 'qq' && (
           <Alert
             closable
             showIcon
             description={t('channel.qq.webhookMigrationDesc')}
             message={t('channel.qq.webhookMigrationTitle')}
-            type="warning"
+            type="info"
           />
         )}
 
@@ -183,7 +222,7 @@ const Footer = memo<FooterProps>(
             showIcon
             description={t('channel.slack.webhookMigrationDesc')}
             message={t('channel.slack.webhookMigrationTitle')}
-            type="warning"
+            type="info"
           />
         )}
 
@@ -193,7 +232,7 @@ const Footer = memo<FooterProps>(
             showIcon
             description={t('channel.feishu.webhookMigrationDesc')}
             message={t('channel.feishu.webhookMigrationTitle')}
-            type="warning"
+            type="info"
           />
         )}
 

@@ -9,7 +9,7 @@ import {
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
 
 const agentChatElement = dynamicElement(() => import('@/routes/(main)/agent'), 'Desktop > Chat');
-const isDev = process.env.NODE_ENV === 'development';
+
 // Desktop router configuration (declarative mode)
 export const desktopRoutes: RouteObject[] = [
   {
@@ -79,17 +79,17 @@ export const desktopRoutes: RouteObject[] = [
               },
               {
                 element: dynamicElement(
-                  () => import('@/routes/(main)/agent/cron/[cronId]'),
-                  'Desktop > Chat > Cron Detail',
-                ),
-                path: 'cron/:cronId',
-              },
-              {
-                element: dynamicElement(
                   () => import('@/routes/(main)/agent/channel'),
                   'Desktop > Chat > Channel',
                 ),
                 path: 'channel',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/agent/task/[taskId]'),
+                  'Desktop > Chat > Task Detail',
+                ),
+                path: 'task/:taskId',
               },
             ],
             element: dynamicLayout(
@@ -384,6 +384,15 @@ export const desktopRoutes: RouteObject[] = [
             ),
             path: ':tab',
           },
+          // Tabs that need a sub-segment (e.g. /settings/messenger/discord) reuse
+          // the same tab page; nested feature components read `:sub` via useParams.
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/settings'),
+              'Desktop > Settings > Tab > Sub',
+            ),
+            path: ':tab/:sub',
+          },
         ],
         element: dynamicElement(
           () => import('@/routes/(main)/settings/_layout'),
@@ -559,39 +568,37 @@ export const desktopRoutes: RouteObject[] = [
         path: 'eval',
       },
 
-      // Tasks routes (cross-agent)
+      // Task workspace routes (cross-agent)
       {
         children: [
           {
-            element: dynamicElement(() => import('@/routes/(main)/tasks'), 'Desktop > Tasks'),
-            index: true,
+            children: [
+              {
+                element: dynamicElement(() => import('@/routes/(main)/tasks'), 'Desktop > Tasks'),
+                index: true,
+              },
+            ],
+            errorElement: <ErrorBoundary resetPath="/" />,
+            path: 'tasks',
           },
-        ],
-        element: dynamicLayout(
-          () => import('@/routes/(main)/tasks/_layout'),
-          'Desktop > Tasks > Layout',
-        ),
-        errorElement: <ErrorBoundary resetPath="/" />,
-        path: 'tasks',
-      },
-
-      // Task detail route (cross-agent entry — resolves by task identifier)
-      {
-        children: [
           {
-            element: dynamicElement(
-              () => import('@/routes/(main)/task/[taskId]'),
-              'Desktop > Task Detail',
-            ),
-            path: ':taskId',
+            children: [
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/task/[taskId]'),
+                  'Desktop > Task Detail',
+                ),
+                path: ':taskId',
+              },
+            ],
+            errorElement: <ErrorBoundary resetPath="/tasks" />,
+            path: 'task',
           },
         ],
         element: dynamicLayout(
-          () => import('@/routes/(main)/task/_layout'),
-          'Desktop > Task > Layout',
+          () => import('@/routes/(main)/(task-workspace)/_layout'),
+          'Desktop > Task Workspace > Layout',
         ),
-        errorElement: <ErrorBoundary resetPath="/tasks" />,
-        path: 'task',
       },
 
       // Pages routes
@@ -651,7 +658,7 @@ export const desktopRoutes: RouteObject[] = [
   },
 
   // Devtools route (outside main layout, dev-only)
-  ...(isDev
+  ...(__DEV__
     ? [
         {
           children: [

@@ -1,13 +1,15 @@
 {
+  "features.agentSelfIteration.desc": "Permite que el asistente reflexione, desarrolle autoconsciencia y realice iteraciones continuas a lo largo de intentos e interacciones.",
+  "features.agentSelfIteration.title": "Autoiteración del agente",
   "features.assistantMessageGroup.desc": "Agrupa los mensajes del agente y los resultados de sus herramientas para mostrarlos juntos",
   "features.assistantMessageGroup.title": "Agrupación de Mensajes del Agente",
   "features.gatewayMode.desc": "Ejecuta las tareas del agente en el servidor a través del WebSocket de Gateway en lugar de hacerlo localmente. Permite una ejecución más rápida y reduce el uso de recursos del cliente.",
   "features.gatewayMode.title": "Ejecución del agente del lado del servidor (Gateway)",
   "features.groupChat.desc": "Activa la coordinación de chat grupal con múltiples agentes.",
   "features.groupChat.title": "Chat Grupal (Multiagente)",
-  "features.heterogeneousAgent.desc": "Habilita la ejecución de agentes heterogéneos con Claude Code, Codex CLI y otras interfaces de línea de comandos de agentes externos. Crea una opción de \"Agente Claude Code\" en el menú lateral de agentes.",
-  "features.heterogeneousAgent.title": "Agente heterogéneo (Claude Code)",
   "features.inputMarkdown.desc": "Renderiza Markdown en el área de entrada en tiempo real (texto en negrita, bloques de código, tablas, etc.).",
   "features.inputMarkdown.title": "Renderizado de Markdown en la Entrada",
+  "features.messenger.desc": "Habla con tus agentes desde Telegram (y otros mensajeros) a través del bot compartido de LobeHub. Agrega una pestaña de Mensajería en Configuración para vincular tu cuenta y elegir qué agente recibe los mensajes.",
+  "features.messenger.title": "Mensajero",
   "title": "Laboratorios"
 }

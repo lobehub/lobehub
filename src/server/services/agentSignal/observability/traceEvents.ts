@@ -16,6 +16,12 @@ export interface AgentSignalTraceEvent {
     | 'agent_signal.source';
 }
 
+const readRecord = (value: unknown): Record<string, unknown> | undefined => {
+  return typeof value === 'object' && value !== null
+    ? (value as Record<string, unknown>)
+    : undefined;
+};
+
 /** Formats AgentSignal nodes into compact tracing events. */
 export const toAgentSignalTraceEvents = (input: {
   actions: BaseAction[];
@@ -35,16 +41,30 @@ export const toAgentSignalTraceEvents = (input: {
     type: 'agent_signal.source',
   };
 
-  const signalEvents: AgentSignalTraceEvent[] = input.signals.map((signal) => ({
-    data: {
-      parentNodeId: signal.chain.parentNodeId,
-      signalId: signal.signalId,
-      signalType: signal.signalType,
-      sourceId: signal.source.sourceId,
-    },
-    timestamp: signal.timestamp,
-    type: 'agent_signal.signal',
-  }));
+  const signalEvents: AgentSignalTraceEvent[] = input.signals.map((signal) => {
+    const payload = readRecord(signal.payload);
+
+    return {
+      data: {
+        classifierConfidence: payload?.skillIntentConfidence,
+        classifierError: payload?.skillIntentError,
+        classifierReason: payload?.skillIntentReason,
+        confidence: payload?.confidence,
+        parentNodeId: signal.chain.parentNodeId,
+        reason: payload?.reason,
+        satisfactionResult: payload?.satisfactionResult ?? payload?.result,
+        signalId: signal.signalId,
+        signalType: signal.signalType,
+        sourceId: signal.source.sourceId,
+        skillActionIntent: payload?.skillActionIntent,
+        skillIntentExplicitness: payload?.skillIntentExplicitness,
+        skillRoute: payload?.skillRoute,
+        target: payload?.target,
+      },
+      timestamp: signal.timestamp,
+      type: 'agent_signal.signal',
+    };
+  });
 
   const actionEvents: AgentSignalTraceEvent[] = input.actions.map((action) => ({
     data: {
@@ -64,6 +84,15 @@ export const toAgentSignalTraceEvents = (input: {
       attemptStatus: result.attempt.status,
       detail: result.detail,
       errorCode: result.status === 'failed' ? result.error.code : undefined,
+      errorMessage: result.status === 'failed' ? result.error.message : undefined,
+      outputDecision:
+        result.output &&
+        typeof result.output === 'object' &&
+        'decision' in result.output &&
+        result.output.decision &&
+        typeof result.output.decision === 'object'
+          ? result.output.decision
+          : undefined,
       runId: 'runId' in result.attempt ? result.attempt.runId : undefined,
       status: result.status,
     },

@@ -47,6 +47,11 @@ export interface UserInfoForAIGeneration {
   userName: string;
 }
 
+interface LastActiveAtTransition {
+  previousLastActiveAt: Date;
+  userCreatedAt: Date;
+}
+
 export class UserModel {
   private userId: string;
   private db: LobeChatDatabase;
@@ -98,6 +103,7 @@ export class UserModel {
         settingsLanguageModel: userSettings.languageModel,
         settingsMarket: userSettings.market,
         settingsMemory: userSettings.memory,
+        settingsNotification: userSettings.notification,
         settingsSystemAgent: userSettings.systemAgent,
         settingsTTS: userSettings.tts,
         settingsTool: userSettings.tool,
@@ -132,6 +138,7 @@ export class UserModel {
       languageModel: state.settingsLanguageModel || {},
       market: state.settingsMarket || undefined,
       memory: state.settingsMemory || {},
+      notification: state.settingsNotification || {},
       systemAgent: state.settingsSystemAgent || {},
       tool: state.settingsTool || {},
       tts: state.settingsTTS || {},
@@ -194,6 +201,45 @@ export class UserModel {
       .update(users)
       .set({ ...nextValue, updatedAt: new Date() })
       .where(eq(users.id, this.userId));
+  };
+
+  /**
+   * Atomically advances `lastActiveAt` and returns the previous DB value.
+   *
+   * The previous timestamp must stay inside the SQL statement because Postgres
+   * keeps microseconds while JS `Date` rounds to milliseconds. For example,
+   * `2026-03-01T00:00:00.123456Z` is read as `...123Z`, so comparing the JS
+   * value back against `last_active_at` can miss the row.
+   */
+  advanceLastActiveAt = async (currentTime: Date): Promise<LastActiveAtTransition | undefined> => {
+    const result = await this.db.execute(sql`
+      WITH previous_user AS MATERIALIZED (
+        SELECT id, created_at, last_active_at
+        FROM ${users}
+        WHERE id = ${this.userId}
+      ),
+      updated_user AS (
+        UPDATE ${users}
+        SET last_active_at = ${currentTime}, updated_at = ${currentTime}
+        FROM previous_user
+        WHERE ${users.id} = previous_user.id
+          AND ${users.lastActiveAt} = previous_user.last_active_at
+        RETURNING
+          previous_user.created_at AS "userCreatedAt",
+          previous_user.last_active_at AS "previousLastActiveAt"
+      )
+      SELECT "userCreatedAt", "previousLastActiveAt" FROM updated_user
+    `);
+
+    const row = result.rows[0] as
+      | { previousLastActiveAt: Date | string; userCreatedAt: Date | string }
+      | undefined;
+    if (!row) return;
+
+    return {
+      previousLastActiveAt: new Date(row.previousLastActiveAt),
+      userCreatedAt: new Date(row.userCreatedAt),
+    };
   };
 
   deleteSetting = async () => {

@@ -84,9 +84,9 @@ export interface ChatStreamPayload {
    */
   imageAspectRatio?: string;
   /**
-   * @title Image resolution for image generation (e.g., '512px', '1K', '2K', '4K')
+   * @title Image resolution for image generation (e.g., '512', '1K', '2K', '4K')
    */
-  imageResolution?: '512px' | '1K' | '2K' | '4K';
+  imageResolution?: '512' | '1K' | '2K' | '4K';
   logprobs?: boolean;
   /**
    * @title Maximum length of generated text
@@ -128,7 +128,7 @@ export interface ChatStreamPayload {
     effort?: string;
     summary?: string;
   };
-  reasoning_effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+  reasoning_effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   response_format?: ChatResponseFormat;
   responseMode?: 'stream' | 'json';
   /**
@@ -225,6 +225,13 @@ export interface ChatCompletionTool {
 
 export interface OnFinishData {
   error?: any;
+  /**
+   * The terminal finishReason emitted by the provider in the `stop` SSE chunk
+   * (e.g. Google: STOP / SAFETY / RECITATION / MAX_TOKENS; OpenAI: stop / length;
+   * Anthropic: end_turn / max_tokens / tool_use). Used to detect "soft interrupts"
+   * where the provider returns empty content with a non-normal finishReason.
+   */
+  finishReason?: string;
   grounding?: any;
   speed?: ModelPerformance;
   text: string;

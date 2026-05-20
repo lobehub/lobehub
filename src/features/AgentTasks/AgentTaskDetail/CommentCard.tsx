@@ -14,11 +14,11 @@ import {
 } from '@lobehub/ui';
 import { App } from 'antd';
 import { cssVar } from 'antd-style';
-import dayjs from 'dayjs';
 import { MessageCircle, MoreHorizontal, Pencil, Trash } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActivityTime } from '@/hooks/useActivityTime';
 import { useTaskStore } from '@/store/task';
 
 import { styles } from '../shared/style';
@@ -37,7 +37,7 @@ const CommentCard = memo<CommentCardProps>(({ activity }) => {
   const [submitting, setSubmitting] = useState(false);
   const editor = useEditor();
 
-  const relTime = activity.time ? dayjs(activity.time).fromNow() : '';
+  const { text: relTime, title: relTimeTitle } = useActivityTime(activity.time);
   const content = activity.content || t('taskDetail.activities.fallback.comment');
   const commentId = activity.id;
 
@@ -98,7 +98,8 @@ const CommentCard = memo<CommentCardProps>(({ activity }) => {
     <Block
       className={styles.commentCard}
       gap={8}
-      padding={12}
+      paddingBlock={12}
+      paddingInline={8}
       style={{ borderRadius: cssVar.borderRadiusLG }}
       variant={'outlined'}
     >
@@ -114,7 +115,7 @@ const CommentCard = memo<CommentCardProps>(({ activity }) => {
           {activity.author?.name || t('taskDetail.activities.fallback.comment')}
         </Text>
         {relTime && (
-          <Text fontSize={12} type={'secondary'}>
+          <Text fontSize={12} title={relTimeTitle} type={'secondary'}>
             {relTime}
           </Text>
         )}

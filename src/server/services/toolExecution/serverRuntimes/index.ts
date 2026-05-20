@@ -6,25 +6,28 @@
  * - Pre-instantiated runtimes (e.g., WebBrowsing - no per-request context needed)
  * - Per-request runtimes (e.g., CloudSandbox - needs topicId, userId)
  */
-import { type ToolExecutionContext } from '../types';
+import type { ToolExecutionContext } from '../types';
 import { activatorRuntime } from './activator';
 import { agentDocumentsRuntime } from './agentDocuments';
+import { agentManagementRuntime } from './agentManagement';
 import { briefRuntime } from './brief';
 import { calculatorRuntime } from './calculator';
 import { cloudSandboxRuntime } from './cloudSandbox';
 import { credsRuntime } from './creds';
-import { cronRuntime } from './cron';
-import { gtdRuntime } from './gtd';
+import { knowledgeBaseRuntime } from './knowledgeBase';
+import { lobeAgentRuntime } from './lobeAgent';
 import { localSystemRuntime } from './localSystem';
 import { memoryRuntime } from './memory';
 import { messageRuntime } from './message';
 import { notebookRuntime } from './notebook';
 import { remoteDeviceRuntime } from './remoteDevice';
+import { selfFeedbackIntentRuntime } from './selfFeedbackIntent';
+import { skillManagementRuntime } from './skillManagement';
 import { skillsRuntime } from './skills';
 import { skillStoreRuntime } from './skillStore';
 import { taskRuntime } from './task';
 import { topicReferenceRuntime } from './topicReference';
-import { type ServerRuntimeFactory, type ServerRuntimeRegistration } from './types';
+import type { ServerRuntimeFactory, ServerRuntimeRegistration } from './types';
 import { userInteractionRuntime } from './userInteraction';
 import { webBrowsingRuntime } from './webBrowsing';
 import { webOnboardingRuntime } from './webOnboarding';
@@ -49,6 +52,8 @@ registerRuntimes([
   cloudSandboxRuntime,
   calculatorRuntime,
   agentDocumentsRuntime,
+  agentManagementRuntime,
+  skillManagementRuntime,
   notebookRuntime,
   skillStoreRuntime,
   skillsRuntime,
@@ -62,9 +67,10 @@ registerRuntimes([
   topicReferenceRuntime,
   userInteractionRuntime,
   credsRuntime,
-  cronRuntime,
-  gtdRuntime,
+  knowledgeBaseRuntime,
   webOnboardingRuntime,
+  lobeAgentRuntime,
+  selfFeedbackIntentRuntime,
 ]);
 
 // ==================== Registry API ====================

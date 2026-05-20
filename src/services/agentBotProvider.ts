@@ -68,6 +68,10 @@ class AgentBotProviderService {
     return lambdaClient.agentBotProvider.testConnection.mutate(params);
   };
 
+  lineFetchBotInfo = async (channelAccessToken: string) => {
+    return lambdaClient.agentBotProvider.lineFetchBotInfo.mutate({ channelAccessToken });
+  };
+
   wechatGetQrCode = async () => {
     return lambdaClient.agentBotProvider.wechatGetQrCode.mutate();
   };

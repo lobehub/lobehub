@@ -218,12 +218,6 @@ export const topicRouter = router({
     return ctx.topicModel.queryAll();
   }),
 
-  getCronTopicsGroupedByCronJob: topicProcedure
-    .input(z.object({ agentId: z.string() }))
-    .query(async ({ input, ctx }) => {
-      return ctx.topicModel.getCronTopicsGroupedByCronJob(input.agentId);
-    }),
-
   getShareInfo: topicProcedure
     .input(z.object({ topicId: z.string() }))
     .query(async ({ input, ctx }) => {
@@ -240,7 +234,7 @@ export const topicRouter = router({
         groupId: z.string().nullable().optional(),
         includeTriggers: z.array(z.string()).optional(),
         isInbox: z.boolean().optional(),
-        pageSize: z.number().optional(),
+        pageSize: z.number().max(100).optional(),
         sessionId: z.string().nullable().optional(),
         triggers: z.array(z.string()).optional(),
       }),
@@ -340,12 +334,12 @@ export const topicRouter = router({
       return result;
     }),
 
-  rankTopics: topicProcedure.input(z.number().optional()).query(async ({ ctx, input }) => {
+  rankTopics: topicProcedure.input(z.number().max(50).optional()).query(async ({ ctx, input }) => {
     return ctx.topicModel.rank(input);
   }),
 
   recentTopics: topicProcedure
-    .input(z.object({ limit: z.number().optional() }).optional())
+    .input(z.object({ limit: z.number().max(50).optional() }).optional())
     .query(async ({ ctx, input }): Promise<RecentTopic[]> => {
       const recentTopics = await ctx.topicModel.queryRecent(input?.limit ?? 12);
 
@@ -558,7 +552,18 @@ export const topicRouter = router({
             })
             .optional(),
           sessionId: z.string().optional(),
-          status: z.enum(['active', 'completed', 'archived']).nullable().optional(),
+          status: z
+            .enum([
+              'active',
+              'running',
+              'paused',
+              'waitingForHuman',
+              'failed',
+              'completed',
+              'archived',
+            ])
+            .nullable()
+            .optional(),
           title: z.string().optional(),
         }),
       }),
@@ -594,26 +599,46 @@ export const topicRouter = router({
           onboardingSession: z
             .object({
               agentIdentityCompletedAt: z.string().optional(),
+              agentMarketplacePick: z
+                .object({
+                  categoryHints: z.array(z.string()),
+                  installedAgentIds: z.array(z.string()).optional(),
+                  requestId: z.string(),
+                  resolvedAt: z.string(),
+                  selectedTemplateIds: z.array(z.string()).optional(),
+                  skipReason: z.string().optional(),
+                  skippedAgentIds: z.array(z.string()).optional(),
+                  status: z.enum(['cancelled', 'skipped', 'submitted']),
+                })
+                .optional(),
               discoveryCompletedAt: z.string().optional(),
               finalAgentNames: z.array(z.string()).optional(),
               finishedAt: z.string().optional(),
-              lastActiveAt: z.string(),
-              phase: z.enum(['agent_identity', 'user_identity', 'discovery', 'summary']),
-              startedAt: z.string(),
+              lastActiveAt: z.string().optional(),
+              phase: z.enum(['agent_identity', 'user_identity', 'discovery', 'summary']).optional(),
+              startedAt: z.string().optional(),
               userIdentityCompletedAt: z.string().optional(),
-              version: z.number(),
+              version: z.number().optional(),
             })
             .optional(),
           provider: z.string().optional(),
           runningOperation: z
             .object({
               assistantMessageId: z.string(),
+              completionWebhook: z
+                .object({
+                  body: z.record(z.unknown()).optional(),
+                  delivery: z.enum(['fetch', 'qstash']).optional(),
+                  url: z.string(),
+                })
+                .optional(),
               operationId: z.string(),
               scope: z.string().optional(),
               threadId: z.string().nullable().optional(),
             })
             .nullable()
             .optional(),
+          repos: z.array(z.string()).optional(),
           workingDirectory: z.string().optional(),
         }),
       }),

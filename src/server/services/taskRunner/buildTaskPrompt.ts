@@ -27,7 +27,7 @@ export async function buildTaskPrompt(
 
   const [topics, briefs, comments, subtasks, dependencies, documents] = await Promise.all([
     task.totalTopics && task.totalTopics > 0
-      ? taskTopicModel.findWithHandoff(task.id).catch(() => [])
+      ? taskTopicModel.findWithHandoff(task.id, 4).catch(() => [])
       : Promise.resolve([]),
     briefModel.findByTaskId(task.id).catch(() => []),
     taskModel.getComments(task.id).catch(() => []),

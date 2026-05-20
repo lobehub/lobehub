@@ -27,6 +27,7 @@ export interface TaskListQuery {
 export interface TaskListDisplayFilters {
   assigneeAgentId?: string;
   isDefaultScope: boolean;
+  isForAllAgents?: boolean;
   isForCurrentAgent?: boolean;
   parentIdentifier?: string;
   priorities?: number[];
@@ -35,6 +36,7 @@ export interface TaskListDisplayFilters {
 
 interface NormalizeListTasksOptions {
   currentAgentId?: string;
+  defaultScope?: 'allAgents' | 'currentAgent';
 }
 
 export const normalizeOptionalFilterValues = <T>(values?: T[]) =>
@@ -58,20 +60,23 @@ export const normalizeListTasksParams = (
   displayFilters: TaskListDisplayFilters;
   query: TaskListQuery;
 } => {
-  const { currentAgentId } = options;
+  const { currentAgentId, defaultScope = 'currentAgent' } = options;
   const isDefaultScope = !hasExplicitFilter(params);
   const priorities = normalizeOptionalFilterValues(params.priorities);
   const statuses =
     normalizeOptionalFilterValues(params.statuses) ??
     (isDefaultScope ? [...UNFINISHED_TASK_STATUSES] : undefined);
 
-  const assigneeAgentId = params.assigneeAgentId ?? (isDefaultScope ? currentAgentId : undefined);
+  const shouldUseCurrentAgent = isDefaultScope && defaultScope === 'currentAgent';
+  const assigneeAgentId =
+    params.assigneeAgentId ?? (shouldUseCurrentAgent ? currentAgentId : undefined);
 
   return {
     displayFilters: {
       assigneeAgentId,
       isDefaultScope,
-      isForCurrentAgent: isDefaultScope && Boolean(currentAgentId),
+      isForAllAgents: isDefaultScope && defaultScope === 'allAgents',
+      isForCurrentAgent: shouldUseCurrentAgent && Boolean(currentAgentId),
       parentIdentifier: params.parentIdentifier,
       priorities,
       statuses,

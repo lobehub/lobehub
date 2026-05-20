@@ -37,12 +37,12 @@ export const MODEL_LIST_CONFIGS = {
   },
   google: {
     excludeKeywords: ['tts'],
-    functionCallKeywords: ['gemini', '!-image-'],
+    functionCallKeywords: ['gemini', '!-image-', 'gemma-4'],
     imageOutputKeywords: ['-image-'],
-    reasoningKeywords: ['thinking', '-2.5-', '!-image-', '-3-'],
-    searchKeywords: ['-search', '!-image-'],
+    reasoningKeywords: ['thinking', '-2.5-', '!-image-', '-3-', 'gemma-4'],
+    searchKeywords: ['-search', '!-image-', 'gemma-4'],
     videoKeywords: ['-2.5-', '!-image-', '-3-'],
-    visionKeywords: ['gemini', 'learnlm'],
+    visionKeywords: ['gemini', 'learnlm', 'gemma-4'],
   },
   inclusionai: {
     functionCallKeywords: ['ling-'],
@@ -150,7 +150,7 @@ export const MODEL_OWNER_DETECTION_CONFIG = {
   anthropic: ['claude'],
   comfyui: ['comfyui/'], // ComfyUI models detection - all ComfyUI models have comfyui/ prefix
   deepseek: ['deepseek'],
-  google: ['gemini', 'imagen'],
+  google: ['gemini', 'imagen', 'gemma'],
   inclusionai: ['ling-', 'ming-', 'ring-'],
   llama: ['llama', 'llava'],
   longcat: ['longcat'],

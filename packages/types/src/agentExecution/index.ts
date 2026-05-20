@@ -5,14 +5,26 @@ import type { ChatTopic } from '../topic';
  * Application context for message storage
  */
 export interface ExecAgentAppContext {
+  /** Optional default assignee candidate for task manager prompts */
+  defaultTaskAssigneeAgentId?: string;
   /** Current document ID for page-scoped conversations */
   documentId?: string | null;
   /** Group ID for group chat */
   groupId?: string | null;
+  /**
+   * Initial metadata to merge into the topic when a new topic is created for
+   * this execution. Ignored when a topicId is already provided (existing topic).
+   */
+  initialTopicMetadata?: {
+    repos?: string[];
+    workingDirectory?: string;
+  };
   /** Scope identifier */
   scope?: string | null;
   /** Session ID */
   sessionId?: string;
+  /** Current task identifier when executing from a task detail surface */
+  taskId?: string | null;
   /** Thread ID for threaded conversations */
   threadId?: string | null;
   /** Topic ID */
@@ -53,6 +65,12 @@ export interface ExecAgentParams {
   instructions?: string;
   /** Override the agent's default model */
   model?: string;
+  /**
+   * Parent operation ID when this run is a sub-agent invocation. Forwarded
+   * to `agent_operations.parent_operation_id` so analytics can join the
+   * sub-tree back to its root.
+   */
+  parentOperationId?: string;
   /** The user input/prompt */
   prompt: string;
   /** Override the agent's default provider */

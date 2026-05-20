@@ -41,6 +41,79 @@ export class SlackApi {
     return { ts: data.ts };
   }
 
+  /**
+   * Post a message with a single URL button rendered as an actions block.
+   * `text` is also sent as fallback for clients that can't render blocks
+   * (notifications, screen readers, etc.).
+   */
+  async postMessageWithUrlButton(
+    channel: string,
+    text: string,
+    button: { text: string; url: string },
+  ): Promise<{ ts: string }> {
+    log('postMessageWithUrlButton: channel=%s', channel);
+    const fallback = this.truncateText(text);
+    const data = await this.call('chat.postMessage', {
+      blocks: [
+        { text: { text: fallback, type: 'mrkdwn' }, type: 'section' },
+        {
+          elements: [
+            {
+              text: { emoji: true, text: button.text, type: 'plain_text' },
+              type: 'button',
+              url: button.url,
+            },
+          ],
+          type: 'actions',
+        },
+      ],
+      channel,
+      text: fallback,
+    });
+    return { ts: data.ts };
+  }
+
+  /**
+   * Post a message that combines a Block Kit URL button AND the same URL
+   * rendered as a plain inline link below it (email-style fallback). Mirrors how
+   * email templates render "Click [Verify] / Or copy this link: …" so users
+   * have a path through every Slack client (mobile, screen reader, copy-to-
+   * other-device, future Block Kit regressions).
+   *
+   * Posted via `chat.postMessage` (NOT `chat.postEphemeral`) so the message
+   * stays in DM history and the user can come back to it.
+   */
+  async postMessageWithButtonAndLink(
+    channel: string,
+    intro: string,
+    button: { text: string; url: string },
+    linkLabel: string,
+  ): Promise<{ ts: string }> {
+    log('postMessageWithButtonAndLink: channel=%s', channel);
+    const fallback = this.truncateText(intro);
+    const data = await this.call('chat.postMessage', {
+      blocks: [
+        { text: { text: fallback, type: 'mrkdwn' }, type: 'section' },
+        {
+          elements: [
+            {
+              text: { emoji: true, text: button.text, type: 'plain_text' },
+              type: 'button',
+              url: button.url,
+            },
+          ],
+          type: 'actions',
+        },
+        // mrkdwn auto-linkifies the URL when rendered; older clients that
+        // can't render the actions block above still see this section.
+        { text: { text: this.truncateText(linkLabel), type: 'mrkdwn' }, type: 'section' },
+      ],
+      channel,
+      text: fallback,
+    });
+    return { ts: data.ts };
+  }
+
   async postMessageInThread(
     channel: string,
     threadTs: string,
@@ -55,9 +128,161 @@ export class SlackApi {
     return { ts: data.ts };
   }
 
+  /**
+   * Post a message with a grid of action buttons (Block Kit `actions` block).
+   * Each button carries an `action_id` (≤ 255 chars) which the bot receives
+   * back via the interactive webhook (`block_actions` payload) when tapped.
+   * `text` is also sent as fallback for clients that can't render blocks.
+   *
+   * Slack caps a single `actions` block at 25 elements; if the keyboard is
+   * larger we split across multiple actions blocks.
+   */
+  async postMessageWithButtonGrid(
+    channel: string,
+    text: string,
+    buttons: Array<{
+      actionId: string;
+      style?: 'primary' | 'danger';
+      text: string;
+      value?: string;
+    }>,
+  ): Promise<{ ts: string }> {
+    log('postMessageWithButtonGrid: channel=%s, buttons=%d', channel, buttons.length);
+    const fallback = this.truncateText(text);
+    const data = await this.call('chat.postMessage', {
+      blocks: this.buildButtonGridBlocks(fallback, buttons),
+      channel,
+      text: fallback,
+    });
+    return { ts: data.ts };
+  }
+
+  /**
+   * Ephemeral variant of `postMessageWithButtonGrid` — only the targeted
+   * `user` sees the picker. Used by the messenger `/agents` flow when
+   * invoked from a public channel so we don't broadcast the user's
+   * personal agent list to the whole channel. Pair with
+   * `respondToActionUrl({ replaceOriginal: true })` in the action callback
+   * — `chat.update` cannot edit ephemerals.
+   */
+  async postEphemeralWithButtonGrid(
+    channel: string,
+    user: string,
+    text: string,
+    buttons: Array<{
+      actionId: string;
+      style?: 'primary' | 'danger';
+      text: string;
+      value?: string;
+    }>,
+    options?: { threadTs?: string },
+  ): Promise<void> {
+    log(
+      'postEphemeralWithButtonGrid: channel=%s, user=%s, buttons=%d',
+      channel,
+      user,
+      buttons.length,
+    );
+    const fallback = this.truncateText(text);
+    const payload: Record<string, unknown> = {
+      blocks: this.buildButtonGridBlocks(fallback, buttons),
+      channel,
+      text: fallback,
+      user,
+    };
+    if (options?.threadTs) payload.thread_ts = options.threadTs;
+    await this.call('chat.postEphemeral', payload);
+  }
+
+  /**
+   * Replace an ephemeral picker in place via the action callback's
+   * `response_url`. `chat.update` cannot edit ephemerals, so this is the
+   * only path. The `response_url` is valid for ~30 minutes / 5 calls per
+   * interaction.
+   */
+  async updateEphemeralButtonGrid(
+    responseUrl: string,
+    text: string,
+    buttons: Array<{
+      actionId: string;
+      style?: 'primary' | 'danger';
+      text: string;
+      value?: string;
+    }>,
+  ): Promise<void> {
+    log('updateEphemeralButtonGrid: buttons=%d', buttons.length);
+    const fallback = this.truncateText(text);
+    const response = await fetch(responseUrl, {
+      body: JSON.stringify({
+        blocks: this.buildButtonGridBlocks(fallback, buttons),
+        replace_original: true,
+        text: fallback,
+      }),
+      headers: { 'content-type': 'application/json; charset=utf-8' },
+      method: 'POST',
+    });
+    if (!response.ok) {
+      const errText = await response.text();
+      log('updateEphemeralButtonGrid: status=%d body=%s', response.status, errText);
+      throw new Error(`Slack response_url POST failed: ${response.status} ${errText}`);
+    }
+  }
+
+  /**
+   * Replace an existing message's text + button grid in place. Used to
+   * re-render the picker after one of its options is selected so the new
+   * active marker is visible.
+   */
+  async updateMessageWithButtonGrid(
+    channel: string,
+    ts: string,
+    text: string,
+    buttons: Array<{
+      actionId: string;
+      style?: 'primary' | 'danger';
+      text: string;
+      value?: string;
+    }>,
+  ): Promise<void> {
+    log('updateMessageWithButtonGrid: channel=%s, ts=%s', channel, ts);
+    const fallback = this.truncateText(text);
+    await this.call('chat.update', {
+      blocks: this.buildButtonGridBlocks(fallback, buttons),
+      channel,
+      text: fallback,
+      ts,
+    });
+  }
+
   async updateMessage(channel: string, ts: string, text: string): Promise<void> {
     log('updateMessage: channel=%s, ts=%s', channel, ts);
     await this.call('chat.update', { channel, text: this.truncateText(text), ts });
+  }
+
+  /**
+   * Post an ephemeral message visible only to `user` in `channel`. Slack has
+   * no native button-tap toast (unlike Telegram's `answerCallbackQuery`) so
+   * this is what we use to surface short feedback after an interactive
+   * action — e.g. "Switched to Foo." Requires the `chat:write` scope.
+   *
+   * `threadTs` anchors the ephemeral in a Slack thread (e.g. when responding
+   * to an `@mention` so the prompt appears next to the mention, not at the
+   * bottom of the channel). Slack ignores `thread_ts` for DMs.
+   */
+  async postEphemeral(
+    channel: string,
+    user: string,
+    text: string,
+    options?: { threadTs?: string },
+  ): Promise<void> {
+    log('postEphemeral: channel=%s, user=%s, threadTs=%s', channel, user, options?.threadTs);
+    const payload: Record<string, unknown> = {
+      channel,
+      text: this.truncateText(text),
+      user,
+    };
+    if (options?.threadTs) payload.thread_ts = options.threadTs;
+    await this.call('chat.postEphemeral', payload);
   }
 
   async removeReaction(channel: string, timestamp: string, name: string): Promise<void> {
@@ -164,7 +389,7 @@ export class SlackApi {
     const data = await this.call('conversations.list', {
       exclude_archived: true,
       limit: 200,
-      types: 'public_channel,private_channel',
+      types: 'public_channel,private_channel,mpim',
       ...options,
     });
     return {
@@ -183,6 +408,29 @@ export class SlackApi {
     log('getReplies: channel=%s, threadTs=%s', channel, threadTs);
     const data = await this.call('conversations.replies', { channel, ts: threadTs });
     return { messages: data.messages ?? [] };
+  }
+
+  /**
+   * Verify the bot token is still valid for this install. Used by the
+   * messenger settings page to reconcile stale local install rows when Slack
+   * app removal didn't reach our lifecycle webhook.
+   */
+  async authTest(): Promise<{
+    appId?: string;
+    botId?: string;
+    team?: string;
+    teamId?: string;
+    userId?: string;
+  }> {
+    log('authTest');
+    const data = await this.call('auth.test', {});
+    return {
+      appId: data.app_id,
+      botId: data.bot_id,
+      team: data.team,
+      teamId: data.team_id,
+      userId: data.user_id,
+    };
   }
 
   // ==================== File Download ====================
@@ -229,6 +477,33 @@ export class SlackApi {
     // Slack message limit is ~40000, but we respect the user-configured charLimit
     if (text.length > 40_000) return text.slice(0, 39_997) + '...';
     return text;
+  }
+
+  private buildButtonGridBlocks(
+    text: string,
+    buttons: Array<{
+      actionId: string;
+      style?: 'primary' | 'danger';
+      text: string;
+      value?: string;
+    }>,
+  ): unknown[] {
+    const elements = buttons.map((b) => ({
+      action_id: b.actionId,
+      text: { emoji: true, text: b.text, type: 'plain_text' },
+      type: 'button',
+      ...(b.style ? { style: b.style } : {}),
+      ...(b.value !== undefined ? { value: b.value } : {}),
+    }));
+
+    // Slack caps each `actions` block at 25 elements — chunk if larger.
+    const chunks: unknown[][] = [];
+    for (let i = 0; i < elements.length; i += 25) chunks.push(elements.slice(i, i + 25));
+
+    return [
+      { text: { text, type: 'mrkdwn' }, type: 'section' },
+      ...chunks.map((els) => ({ elements: els, type: 'actions' })),
+    ];
   }
 
   private async call(method: string, body: Record<string, unknown>): Promise<any> {

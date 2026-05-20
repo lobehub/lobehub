@@ -19,7 +19,6 @@ import type {
   ListLocalFilesParams,
   MoveLocalFilesParams,
   ReadLocalFileParams,
-  RenameLocalFileParams,
   RunCommandParams,
   SandboxCallToolResult,
   SandboxExportFileResult,
@@ -85,7 +84,7 @@ class CloudSandboxExecutor extends BaseExecutor<typeof CloudSandboxApiName> {
 
   // ==================== File Operations ====================
 
-  listLocalFiles = async (
+  listFiles = async (
     params: ListLocalFilesParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
@@ -94,7 +93,7 @@ class CloudSandboxExecutor extends BaseExecutor<typeof CloudSandboxApiName> {
     return this.toBuiltinResult(result);
   };
 
-  readLocalFile = async (
+  readFile = async (
     params: ReadLocalFileParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
@@ -103,7 +102,7 @@ class CloudSandboxExecutor extends BaseExecutor<typeof CloudSandboxApiName> {
     return this.toBuiltinResult(result);
   };
 
-  writeLocalFile = async (
+  writeFile = async (
     params: WriteLocalFileParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
@@ -112,7 +111,7 @@ class CloudSandboxExecutor extends BaseExecutor<typeof CloudSandboxApiName> {
     return this.toBuiltinResult(result);
   };
 
-  editLocalFile = async (
+  editFile = async (
     params: EditLocalFileParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
@@ -121,7 +120,7 @@ class CloudSandboxExecutor extends BaseExecutor<typeof CloudSandboxApiName> {
     return this.toBuiltinResult(result);
   };
 
-  searchLocalFiles = async (
+  searchFiles = async (
     params: SearchLocalFilesParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
@@ -130,21 +129,12 @@ class CloudSandboxExecutor extends BaseExecutor<typeof CloudSandboxApiName> {
     return this.toBuiltinResult(result);
   };
 
-  moveLocalFiles = async (
+  moveFiles = async (
     params: MoveLocalFilesParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     const runtime = this.getRuntime(ctx);
     const result = await runtime.moveFiles(params);
-    return this.toBuiltinResult(result);
-  };
-
-  renameLocalFile = async (
-    params: RenameLocalFileParams,
-    ctx: BuiltinToolContext,
-  ): Promise<BuiltinToolResult> => {
-    const runtime = this.getRuntime(ctx);
-    const result = await runtime.renameFile(params);
     return this.toBuiltinResult(result);
   };
 
@@ -199,7 +189,7 @@ class CloudSandboxExecutor extends BaseExecutor<typeof CloudSandboxApiName> {
     return this.toBuiltinResult(result);
   };
 
-  globLocalFiles = async (
+  globFiles = async (
     params: GlobLocalFilesParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {

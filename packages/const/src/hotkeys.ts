@@ -41,7 +41,6 @@ export const KeyEnum = {
 
 export const HotkeyEnum = {
   AddUserMessage: 'addUserMessage',
-  ClearCurrentMessages: 'clearCurrentMessages',
   CommandPalette: 'commandPalette',
   DeleteAndRegenerateMessage: 'deleteAndRegenerateMessage',
   DeleteLastMessage: 'deleteLastMessage',
@@ -166,12 +165,6 @@ export const HOTKEYS_REGISTRATION: HotkeyRegistration = [
     id: HotkeyEnum.EditMessage,
     keys: combineKeys([KeyEnum.Alt, KeyEnum.LeftDoubleClick]),
     nonEditable: true,
-    scopes: [HotkeyScopeEnum.Chat],
-  },
-  {
-    group: HotkeyGroupEnum.Conversation,
-    id: HotkeyEnum.ClearCurrentMessages,
-    keys: combineKeys([KeyEnum.Alt, KeyEnum.Shift, KeyEnum.Backspace]),
     scopes: [HotkeyScopeEnum.Chat],
   },
   {

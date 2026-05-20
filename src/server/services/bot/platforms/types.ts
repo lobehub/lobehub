@@ -43,6 +43,8 @@ export interface FieldSchema {
   devOnly?: boolean;
   /** Enum options for select fields */
   enum?: string[];
+  /** Per-option help text rendered alongside each enum option (1:1 with `enum`). */
+  enumDescriptions?: string[];
   /** Display labels for enum options */
   enumLabels?: string[];
   /** Array item schema */
@@ -58,6 +60,12 @@ export interface FieldSchema {
   properties?: FieldSchema[];
   required?: boolean;
   /**
+   * i18n key for an extra `?` tooltip rendered next to the field label. Use
+   * for "how to find this value" guidance that's too long for the inline
+   * `description` (e.g. platform-specific UI paths for fetching User IDs).
+   */
+  tooltip?: string;
+  /**
    * Field type, maps to UI component:
    * - 'string' → Input
    * - 'password' → Password input
@@ -71,6 +79,42 @@ export interface FieldSchema {
   visibleWhen?: { field: string; value: unknown };
 }
 
+// --------------- Bot Message Attachment ---------------
+
+/**
+ * JSON-safe attachment carried through the bot callback path
+ * (agent runtime → webhook body → BotCallbackService → PlatformMessenger).
+ *
+ * Either `data` (base64-encoded bytes) or `fetchUrl` (remote URL the
+ * messenger can fetch) must be set. Prefer `fetchUrl` when possible to keep
+ * webhook payload sizes manageable.
+ */
+export interface BotMessageAttachment {
+  /** Base64-encoded bytes. Used when no fetchable URL exists. */
+  data?: string;
+  /** Remote URL the messenger can GET to retrieve the bytes. */
+  fetchUrl?: string;
+  mimeType?: string;
+  name?: string;
+  type: 'image' | 'file' | 'video' | 'audio';
+}
+
+/**
+ * Input accepted by `PlatformMessenger.createMessage` / `editMessage`.
+ *
+ * Plain string is the legacy form; object form carries optional attachments.
+ * Platforms that don't support attachments treat the object form as
+ * `{ content }` and silently drop attachments.
+ */
+export type MessengerContent = string | { attachments?: BotMessageAttachment[]; content?: string };
+
+/**
+ * Helper for messenger implementations that don't (yet) support attachments:
+ * coerces `MessengerContent` to its text payload.
+ */
+export const messengerContentText = (input: MessengerContent): string =>
+  typeof input === 'string' ? input : (input.content ?? '');
+
 // --------------- Platform Messenger ---------------
 
 /**
@@ -82,8 +126,8 @@ export interface PlatformMessenger {
    * can omit this). Callers must no-op on platforms that don't implement it.
    */
   addReaction?: (messageId: string, emoji: string) => Promise<void>;
-  createMessage: (content: string) => Promise<void>;
-  editMessage: (messageId: string, content: string) => Promise<void>;
+  createMessage: (content: MessengerContent) => Promise<void>;
+  editMessage: (messageId: string, content: MessengerContent) => Promise<void>;
   removeReaction: (messageId: string, emoji: string) => Promise<void>;
   /**
    * Transition the bot's reaction on a message from `prevEmoji` to
@@ -213,6 +257,26 @@ export interface PlatformClient {
 
   readonly id: string;
 
+  /**
+   * Optional hook called from the router when a non-DM message wakes the
+   * bot via a watch-keyword match (LOBE-8891). Platforms that prefer to
+   * isolate the reply in a sub-thread (Discord, where the chat-sdk
+   * auto-creates a thread only on @-mention) should spawn one off the
+   * triggering message and return the upgraded composite threadId so the
+   * downstream `bridge.handleMention` posts inside the new thread.
+   *
+   * Return `undefined` (or omit the method) to leave the threadId
+   * unchanged — the bot then replies in the original channel, which is
+   * the right behaviour for threadless platforms (Telegram / WeChat / QQ)
+   * and for Slack / Lark / Feishu where channel-level replies are the
+   * conventional response shape.
+   *
+   * Implementations must be best-effort: any platform error should be
+   * caught and `undefined` returned so the router falls back to the
+   * original threadId rather than swallowing the user message.
+   */
+  openThreadForChannelWake?: (threadId: string, messageRaw: unknown) => Promise<string | undefined>;
+
   /** Parse a composite message ID into the platform-native format. */
   parseMessageId: (compositeId: string) => string | number;
 
@@ -222,7 +286,21 @@ export interface PlatformClient {
    * Optional — platforms that don't support command menus can omit this.
    */
   registerBotCommands?: (
-    commands: Array<{ command: string; description: string }>,
+    commands: Array<{
+      command: string;
+      description: string;
+      /**
+       * Argument schema for platforms with structured slash commands
+       * (Discord, Slack). Without this, Discord registers as zero-arg and
+       * users have no UI to pass a value — adapters that don't support
+       * options should silently ignore this field.
+       */
+      options?: Array<{
+        description: string;
+        name: string;
+        required?: boolean;
+      }>;
+    }>,
   ) => Promise<void>;
 
   /**

@@ -1,7 +1,7 @@
 import { DEFAULT_LANG } from '@/const/locale';
 import { type Locales, normalizeLocale } from '@/locales/resources';
 
-import type { FieldSchema } from './types';
+import type { FieldSchema, ValidationResult } from './types';
 
 export const displayToolCallsField: FieldSchema = {
   key: 'displayToolCalls',
@@ -11,19 +11,60 @@ export const displayToolCallsField: FieldSchema = {
   type: 'boolean',
 };
 
-export const serverIdField: FieldSchema = {
-  key: 'serverId',
-  description: 'channel.serverIdHint',
-  label: 'channel.serverId',
-  type: 'string',
+/**
+ * Per-platform "how to find this ID" tooltip keys. Each platform paints a
+ * different path to the value the operator has to paste — Discord wants
+ * Developer Mode + right-click, Telegram wants @userinfobot, Slack uses
+ * profile menus, etc. The factory below picks the right key so the field's
+ * `?` tooltip renders concrete steps; the inline `description` stays
+ * platform-agnostic so it doesn't compete with the tooltip.
+ *
+ * Platforms not listed render no tooltip — only the generic description.
+ */
+const USER_ID_TOOLTIP_BY_PLATFORM: Record<string, string> = {
+  discord: 'channel.userIdHint.discord',
+  // Feishu and Lark share `sharedSchema`, which always passes 'feishu' — the
+  // tooltip copy mentions both products so it reads naturally for either.
+  feishu: 'channel.userIdHint.feishu',
+  line: 'channel.userIdHint.line',
+  qq: 'channel.userIdHint.qq',
+  slack: 'channel.userIdHint.slack',
+  telegram: 'channel.userIdHint.telegram',
 };
 
-export const userIdField: FieldSchema = {
-  key: 'userId',
-  description: 'channel.userIdHint',
-  label: 'channel.userId',
-  type: 'string',
+const SERVER_ID_TOOLTIP_BY_PLATFORM: Record<string, string> = {
+  discord: 'channel.serverIdHint.discord',
+  slack: 'channel.serverIdHint.slack',
 };
+
+/**
+ * Build the operator's "Default Server ID" field for `platform`. The inline
+ * description stays generic; platform-specific "how to find" guidance lives
+ * in the `?` tooltip next to the label.
+ */
+export function makeServerIdField(platform?: string): FieldSchema {
+  return {
+    key: 'serverId',
+    description: 'channel.serverIdHint',
+    label: 'channel.serverId',
+    tooltip: platform ? SERVER_ID_TOOLTIP_BY_PLATFORM[platform] : undefined,
+    type: 'string',
+  };
+}
+
+/**
+ * Build the operator's "Your Platform User ID" field for `platform`. See
+ * {@link makeServerIdField} — same factory pattern, swapped vocabulary.
+ */
+export function makeUserIdField(platform?: string): FieldSchema {
+  return {
+    key: 'userId',
+    description: 'channel.userIdHint',
+    label: 'channel.userId',
+    tooltip: platform ? USER_ID_TOOLTIP_BY_PLATFORM[platform] : undefined,
+    type: 'string',
+  };
+}
 
 // ---------- Bot reply locale ----------
 
@@ -118,7 +159,7 @@ export function normalizeBotReplyLocale(
  * crosses scopes (`allowFrom` is consulted by every gate); a prefixed name
  * advertises the field is the property of one specific scope.
  */
-export type DmPolicy = 'open' | 'allowlist' | 'disabled';
+export type DmPolicy = 'open' | 'allowlist' | 'pairing' | 'disabled';
 
 /** User-ID allowlist shared across user-scope policies (DM today). */
 export interface UserAllowlist {
@@ -138,7 +179,7 @@ export interface GroupSettings {
   policy: GroupPolicy;
 }
 
-const DM_POLICIES: ReadonlySet<DmPolicy> = new Set(['open', 'allowlist', 'disabled']);
+const DM_POLICIES: ReadonlySet<DmPolicy> = new Set(['open', 'allowlist', 'pairing', 'disabled']);
 const GROUP_POLICIES: ReadonlySet<GroupPolicy> = new Set(['open', 'allowlist', 'disabled']);
 
 /**
@@ -149,6 +190,12 @@ const GROUP_POLICIES: ReadonlySet<GroupPolicy> = new Set(['open', 'allowlist', '
  * - `allowlist`: DMs require the sender to be in the global `allowFrom`
  *   list. Distinct from `open` only when `allowFrom` is empty: `allowlist`
  *   then **fails closed** (no DMs), while `open` still lets anyone DM.
+ * - `pairing`: same gate as `allowlist`, but a non-listed sender receives a
+ *   one-time pairing code instead of a flat rejection. The owner approves
+ *   via `/approve <code>`, which appends the applicant to `allowFrom` so
+ *   subsequent DMs flow normally. Requires `settings.userId` (the owner's
+ *   platform user ID, used both as approver identity and as the implicit
+ *   "always allowed" sender for an empty allowFrom).
  * - `disabled`: ignore all DMs (the sender gets a one-line system reply
  *   pointing them at @mentioning the bot in a shared channel instead)
  */
@@ -157,8 +204,19 @@ export function makeDmPolicyField(defaults: { policy: DmPolicy }): FieldSchema {
     key: 'dmPolicy',
     default: defaults.policy,
     description: 'channel.dmPolicyHint',
-    enum: ['open', 'allowlist', 'disabled'],
-    enumLabels: ['channel.dmPolicyOpen', 'channel.dmPolicyAllowlist', 'channel.dmPolicyDisabled'],
+    enum: ['open', 'allowlist', 'pairing', 'disabled'],
+    enumDescriptions: [
+      'channel.dmPolicyOpenHint',
+      'channel.dmPolicyAllowlistHint',
+      'channel.dmPolicyPairingHint',
+      'channel.dmPolicyDisabledHint',
+    ],
+    enumLabels: [
+      'channel.dmPolicyOpen',
+      'channel.dmPolicyAllowlist',
+      'channel.dmPolicyPairing',
+      'channel.dmPolicyDisabled',
+    ],
     label: 'channel.dmPolicy',
     type: 'string',
   };
@@ -175,7 +233,7 @@ export function makeDmPolicyField(defaults: { policy: DmPolicy }): FieldSchema {
  * field's actual semantics.
  *
  * Stored as `Array<{ id, name? }>` so the operator can label each entry
- * (e.g. `name: '产品同事 Ada'`) and recognise IDs months later. The runtime
+ * (e.g. `name: 'Product colleague Ada'`) and recognise IDs months later. The runtime
  * only consults `id` — see {@link parseIdList} for the back-compat parser
  * that still accepts the legacy comma-separated string and bare string[].
  */
@@ -223,6 +281,11 @@ export function makeGroupPolicyFields(defaults: { policy: GroupPolicy }): FieldS
       default: defaults.policy,
       description: 'channel.groupPolicyHint',
       enum: ['open', 'allowlist', 'disabled'],
+      enumDescriptions: [
+        'channel.groupPolicyOpenHint',
+        'channel.groupPolicyAllowlistHint',
+        'channel.groupPolicyDisabledHint',
+      ],
       enumLabels: [
         'channel.groupPolicyOpen',
         'channel.groupPolicyAllowlist',
@@ -261,6 +324,235 @@ export function makeGroupPolicyFields(defaults: { policy: GroupPolicy }): FieldS
     },
   ];
 }
+
+/**
+ * Like {@link parseIdList} but preserves `name` so writers (e.g. the
+ * pairing approval flow) can round-trip the operator-facing labels rather
+ * than collapsing every entry to a bare ID. Same back-compat coverage:
+ * accepts the current `{ id, name? }[]`, the legacy `string[]`, and the
+ * original comma-separated string shape.
+ */
+export function normalizeAllowFromEntries(raw: unknown): Array<{ id: string; name?: string }> {
+  if (typeof raw === 'string') {
+    return raw
+      .split(/[\s,]+/)
+      .map((id) => id.trim())
+      .filter(Boolean)
+      .map((id) => ({ id }));
+  }
+  if (Array.isArray(raw)) {
+    const out: Array<{ id: string; name?: string }> = [];
+    for (const entry of raw) {
+      if (typeof entry === 'string') {
+        const id = entry.trim();
+        if (id) out.push({ id });
+        continue;
+      }
+      if (entry && typeof entry === 'object' && 'id' in entry) {
+        const id = (entry as { id?: unknown }).id;
+        if (typeof id !== 'string' || !id.trim()) continue;
+        const name = (entry as { name?: unknown }).name;
+        out.push(
+          typeof name === 'string' && name.trim()
+            ? { id: id.trim(), name: name.trim() }
+            : { id: id.trim() },
+        );
+      }
+    }
+    return out;
+  }
+  return [];
+}
+
+// ---------- Watch keywords (LOBE-8891) ----------
+
+/**
+ * Entry shape persisted under `settings.watchKeywords`. `keyword` is what the
+ * runtime matches against the inbound message text; `instruction` is an
+ * operator-authored prompt that is prepended to the user's message and sent
+ * to the agent when the keyword wakes the bot (so a bare trigger word like
+ * "bug" can carry a directive like "Scan the recent thread and reply if you
+ * spot an actionable bug report"). When `instruction` is empty/absent the
+ * keyword just wakes the bot with the user's raw text — same as a mention.
+ */
+export interface WatchKeywordEntry {
+  instruction?: string;
+  keyword: string;
+}
+
+/**
+ * "Watch Keywords" schema field — when populated, the bot also reacts to
+ * non-@mention messages in subscribed channels whose text contains any of
+ * these keywords. Empty (default) preserves the today behaviour of only
+ * responding to mentions / DMs / subscribed-thread mentions.
+ *
+ * Stored as `Array<{ keyword, instruction? }>`. The optional `instruction`
+ * is appended as a user-side prompt prefix when the keyword wakes the bot —
+ * letting operators wire each trigger to an explicit directive ("scan the
+ * thread for a bug report", "summarise the last 20 messages", …) rather
+ * than only routing the raw message.
+ */
+export const watchKeywordsField: FieldSchema = {
+  key: 'watchKeywords',
+  default: [],
+  description: 'channel.watchKeywordsHint',
+  label: 'channel.watchKeywords',
+  type: 'array',
+  items: {
+    key: 'item',
+    label: '',
+    type: 'object',
+    properties: [
+      {
+        key: 'keyword',
+        label: 'channel.watchKeywordLabel',
+        placeholder: 'channel.watchKeywordPlaceholder',
+        required: true,
+        type: 'string',
+      },
+      {
+        key: 'instruction',
+        label: 'channel.watchKeywordInstructionLabel',
+        placeholder: 'channel.watchKeywordInstructionPlaceholder',
+        type: 'string',
+      },
+    ],
+  },
+};
+
+/**
+ * Parse `settings.watchKeywords` into the canonical entry list. Accepts
+ * three shapes for forward-compat with any future schema migrations:
+ *
+ * 1. `Array<{ keyword, instruction? }>` — current form-produced shape
+ * 2. `string[]` — flat array fallback (no instructions attached)
+ * 3. `string` — comma / newline / whitespace-separated text (legacy / paste)
+ *
+ * Keywords are lowercased and deduplicated (matching is case-insensitive,
+ * so we normalise once at parse time rather than per-message). The first
+ * non-empty `instruction` wins on duplicates so the operator's authoring
+ * order is preserved.
+ */
+export function extractWatchKeywordEntries(
+  settings: Record<string, unknown> | null | undefined,
+): WatchKeywordEntry[] {
+  const raw = settings?.watchKeywords;
+  const byKeyword = new Map<string, WatchKeywordEntry>();
+  const push = (keyword: unknown, instruction?: unknown) => {
+    if (typeof keyword !== 'string') return;
+    const normalised = keyword.trim().toLowerCase();
+    if (!normalised) return;
+    const trimmedInstruction =
+      typeof instruction === 'string' && instruction.trim() ? instruction.trim() : undefined;
+    const existing = byKeyword.get(normalised);
+    if (!existing) {
+      byKeyword.set(normalised, { keyword: normalised, instruction: trimmedInstruction });
+      return;
+    }
+    // Keep the first non-empty instruction so the operator's authoring order
+    // is honoured when the form contains duplicate keywords.
+    if (!existing.instruction && trimmedInstruction) {
+      existing.instruction = trimmedInstruction;
+    }
+  };
+  if (typeof raw === 'string') {
+    for (const piece of raw.split(/[\s,]+/)) push(piece);
+  } else if (Array.isArray(raw)) {
+    for (const entry of raw) {
+      if (typeof entry === 'string') {
+        push(entry);
+        continue;
+      }
+      if (entry && typeof entry === 'object' && 'keyword' in entry) {
+        const obj = entry as { instruction?: unknown; keyword?: unknown };
+        push(obj.keyword, obj.instruction);
+      }
+    }
+  }
+  return Array.from(byKeyword.values());
+}
+
+/**
+ * Convenience wrapper that returns only the lowercased keyword strings —
+ * sufficient for the mention-gate predicate in BotMessageRouter, which
+ * doesn't need the instructions.
+ */
+export function extractWatchKeywords(
+  settings: Record<string, unknown> | null | undefined,
+): string[] {
+  return extractWatchKeywordEntries(settings).map((entry) => entry.keyword);
+}
+
+/**
+ * Test whether the inbound message text contains any of the configured
+ * watch keywords. Case-insensitive, word-boundary aware so `bug` does NOT
+ * match `debug` / `bugfix` (operators expect "say the word `bug` and the
+ * bot replies", not "any substring") — but punctuation-flanked occurrences
+ * still match ("bug!", "(bug)", "bug,").
+ *
+ * Word-boundary only kicks in for ASCII word chars (`[A-Za-z0-9_]`) on the
+ * adjacent side. This keeps the "don't match `bug` inside `debug`" rule for
+ * Latin-script keywords, while letting CJK keywords behave like substring
+ * matches — Chinese / Japanese don't have a whitespace word boundary, so
+ * `\b`-style logic would silently break the feature for the audience this
+ * bot is built for (Feishu / Lark / QQ / WeChat).
+ *
+ * Empty `keywords` short-circuits to `false` so callers can compose with
+ * existing mention gates without re-checking emptiness everywhere.
+ */
+export function messageMatchesWatchKeyword(
+  text: string | undefined | null,
+  keywords: ReadonlyArray<string>,
+): boolean {
+  return findFirstMatchingKeyword(text, keywords) !== null;
+}
+
+/**
+ * Return every entry whose keyword appears in `text`, in the entries'
+ * authoring order. Used by the router to gather operator-authored
+ * instructions for matched keywords so they can be injected as a prompt
+ * prefix when the keyword (and not a mention) is what wakes the bot.
+ */
+export function findMatchingWatchKeywordEntries(
+  text: string | undefined | null,
+  entries: ReadonlyArray<WatchKeywordEntry>,
+): WatchKeywordEntry[] {
+  if (!text || entries.length === 0) return [];
+  const lowered = text.toLowerCase();
+  return entries.filter((entry) => keywordOccursIn(lowered, entry.keyword));
+}
+
+// Underscore is included in the word class so `_bug_` doesn't fire while
+// `bug.` / `(bug)` still do. ASCII-only on purpose — see the CJK note on
+// `messageMatchesWatchKeyword` above.
+const KEYWORD_WORD_CHAR = /\w/;
+
+const keywordOccursIn = (loweredText: string, keyword: string): boolean => {
+  if (!keyword) return false;
+  let idx = loweredText.indexOf(keyword);
+  while (idx !== -1) {
+    const before = idx === 0 ? '' : loweredText[idx - 1];
+    const after =
+      idx + keyword.length >= loweredText.length ? '' : loweredText[idx + keyword.length];
+    const leftBoundary = !before || !KEYWORD_WORD_CHAR.test(before);
+    const rightBoundary = !after || !KEYWORD_WORD_CHAR.test(after);
+    if (leftBoundary && rightBoundary) return true;
+    idx = loweredText.indexOf(keyword, idx + 1);
+  }
+  return false;
+};
+
+const findFirstMatchingKeyword = (
+  text: string | undefined | null,
+  keywords: ReadonlyArray<string>,
+): string | null => {
+  if (!text || keywords.length === 0) return null;
+  const lowered = text.toLowerCase();
+  for (const keyword of keywords) {
+    if (keywordOccursIn(lowered, keyword)) return keyword;
+  }
+  return null;
+};
 
 /**
  * Pull the platform IDs out of an allowlist value, regardless of which
@@ -366,34 +658,59 @@ export function shouldAllowSender(params: {
 }
 
 /**
+ * Three-state outcome of the DM gate. `pair` is distinct from `reject`
+ * because the router branches on it (issue a pairing code instead of
+ * dropping the sender). Existing pass / fail call-sites can keep treating
+ * `'pair'` as not-allow — the only thing that promotes pairing into a
+ * useful behaviour is the router's pairing branch.
+ */
+export type DmDecision = 'allow' | 'pair' | 'reject';
+
+/**
  * Gate inbound DM handling. Non-DM threads pass through unconditionally —
  * those are governed by `shouldHandleGroup` instead.
  *
  * Callers are expected to apply {@link shouldAllowSender} first, so this
  * function only encodes the per-scope semantics:
  *
- * - `policy='disabled'` → block all DMs.
- * - `policy='open'` → allow any sender (the global `allowFrom` filter, if
+ * - `policy='disabled'` → `'reject'` for everyone.
+ * - `policy='open'` → `'allow'` (the global `allowFrom` filter, when
  *   populated, is enforced earlier by the caller).
- * - `policy='allowlist'` → require the sender to be in the global
- *   `userAllowlist`, **and fail closed when the list is empty** (this is
- *   the only behavioural difference from `open`; `open` lets anyone DM
- *   when `allowFrom` is empty, `allowlist` does not).
+ * - `policy='allowlist'` → `'allow'` for senders in `userAllowlist`,
+ *   `'reject'` otherwise. Fails closed when the list is empty (this is
+ *   the only behavioural difference from `open`).
+ * - `policy='pairing'` → same gate as `allowlist`, but a non-listed sender
+ *   gets `'pair'` instead of `'reject'` so the router can issue a pairing
+ *   code. The owner (`operatorUserId`) is implicitly always allowed —
+ *   without this, a fresh pairing bot with an empty allowFrom would refuse
+ *   its own owner's DMs and they'd be told to ask themselves to approve.
  */
 export function shouldHandleDm(params: {
   authorUserId: string | undefined;
   dmSettings: DmSettings;
   isDM: boolean;
+  /**
+   * The owning operator's platform user ID (`settings.userId`). Only
+   * consulted under `pairing` policy, where the owner bypasses the
+   * allowlist gate so they can DM their own bot before anyone is
+   * approved. Pass `undefined` for non-pairing policies — the validator
+   * already enforces presence at save time for pairing.
+   */
+  operatorUserId?: string;
   userAllowlist: UserAllowlist;
-}): boolean {
-  const { authorUserId, dmSettings, isDM, userAllowlist } = params;
-  if (!isDM) return true;
-  if (dmSettings.policy === 'disabled') return false;
-  if (dmSettings.policy === 'open') return true;
-  // allowlist: require non-empty list AND user in it (fail closed otherwise)
-  if (!authorUserId) return false;
-  if (userAllowlist.ids.length === 0) return false;
-  return userAllowlist.ids.includes(authorUserId);
+}): DmDecision {
+  const { authorUserId, dmSettings, isDM, operatorUserId, userAllowlist } = params;
+  if (!isDM) return 'allow';
+  if (dmSettings.policy === 'disabled') return 'reject';
+  if (dmSettings.policy === 'open') return 'allow';
+  // allowlist & pairing share the same gate; they differ only on miss.
+  if (!authorUserId) return 'reject';
+  if (dmSettings.policy === 'pairing' && operatorUserId && authorUserId === operatorUserId) {
+    return 'allow';
+  }
+  const inList = userAllowlist.ids.length > 0 && userAllowlist.ids.includes(authorUserId);
+  if (inList) return 'allow';
+  return dmSettings.policy === 'pairing' ? 'pair' : 'reject';
 }
 
 /**
@@ -425,6 +742,39 @@ export function shouldHandleGroup(params: {
   const candidates = candidateChannelIds.filter((id): id is string => Boolean(id));
   if (candidates.length === 0) return false;
   return candidates.some((id) => groupSettings.allowFrom.includes(id));
+}
+
+/**
+ * Validate cross-platform access-policy settings at save time.
+ *
+ * Catches misconfigurations that would silently break runtime gating
+ * before they hit the DB. Today this only enforces one rule:
+ *
+ * - `dmPolicy='pairing'` requires `settings.userId` (the owner's platform
+ *   user ID). Without it nobody can issue `/approve`, so inbound pairing
+ *   requests would land in a permanent limbo — surface the missing field
+ *   at save time so operators don't paint themselves into the corner.
+ *
+ * Per-platform rules (e.g. Telegram bot tokens, Discord intents) belong
+ * in `ClientFactory.validateSettings`; this function only encodes shared
+ * invariants that apply regardless of platform.
+ */
+export function validateAccessSettings(
+  settings: Record<string, unknown> | null | undefined,
+): ValidationResult {
+  const errors: Array<{ field: string; message: string }> = [];
+  const dmSettings = extractDmSettings(settings);
+  if (dmSettings.policy === 'pairing') {
+    const operatorId = (settings?.userId as string | undefined)?.trim();
+    if (!operatorId) {
+      errors.push({
+        field: 'userId',
+        message:
+          "Pairing policy requires the owner's Platform User ID. Fill in 'Your Platform User ID' or pick a different DM Policy.",
+      });
+    }
+  }
+  return errors.length > 0 ? { errors, valid: false } : { valid: true };
 }
 
 // ---------- Step-aware reactions ----------

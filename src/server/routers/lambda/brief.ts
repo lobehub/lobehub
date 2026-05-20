@@ -5,6 +5,8 @@ import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { AgentSignalSelfReviewBriefService } from '@/server/services/agentSignal/services/briefs/selfReview';
+import { NIGHTLY_REVIEW_BRIEF_TRIGGER } from '@/server/services/agentSignal/services/selfIteration/review/brief';
 import { BriefService } from '@/server/services/brief';
 
 const briefProcedure = authedProcedure.use(serverDatabase);
@@ -33,7 +35,15 @@ const listSchema = z.object({
 export const briefRouter = router({
   create: briefProcedure.input(createSchema).mutation(async ({ input, ctx }) => {
     try {
-      const createData = { ...input };
+      const { artifacts, ...rest } = input;
+      // Legacy clients pass artifacts as a flat doc-id list; the storage shape
+      // is the structured `BriefArtifacts` object. Adapt at the boundary.
+      const createData: Parameters<BriefModel['create']>[0] = {
+        ...rest,
+        artifacts: artifacts?.length
+          ? { documents: artifacts.map((id) => ({ id, kind: null, title: null })) }
+          : undefined,
+      };
 
       // Resolve taskId if it's an identifier
       if (createData.taskId) {
@@ -126,7 +136,6 @@ export const briefRouter = router({
     try {
       const service = new BriefService(ctx.serverDB, ctx.userId);
       const data = await service.listUnresolved();
-
       return { data, success: true };
     } catch (error) {
       console.error('[brief:listUnresolved]', error);
@@ -166,11 +175,22 @@ export const briefRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       try {
-        const service = new BriefService(ctx.serverDB, ctx.userId);
-        const brief = await service.resolve(input.id, {
+        const model = new BriefModel(ctx.serverDB, ctx.userId);
+        const currentBrief = await model.findById(input.id);
+        if (!currentBrief) throw new TRPCError({ code: 'NOT_FOUND', message: 'Brief not found' });
+
+        const resolveOptions = {
           action: input.action,
           comment: input.comment,
-        });
+        };
+        const brief =
+          currentBrief.trigger === NIGHTLY_REVIEW_BRIEF_TRIGGER
+            ? await new AgentSignalSelfReviewBriefService(ctx.serverDB, ctx.userId).resolve(
+                currentBrief,
+                resolveOptions,
+              )
+            : await new BriefService(ctx.serverDB, ctx.userId).resolve(input.id, resolveOptions);
+
         if (!brief) throw new TRPCError({ code: 'NOT_FOUND', message: 'Brief not found' });
         return { data: brief, message: 'Brief resolved', success: true };
       } catch (error) {

@@ -541,6 +541,7 @@ export class AgentEvalRunService {
         agentId: targetAgentId,
         appContext,
         autoStart: true,
+        trigger: RequestTrigger.Eval,
         hooks: [
           {
             handler: async (event) => {
@@ -567,6 +568,7 @@ export class AgentEvalRunService {
             type: 'onComplete' as const,
             webhook: {
               body: { runId, testCaseId, userId },
+              delivery: 'qstash' as const,
               url: webhookUrl,
             },
           },
@@ -681,6 +683,7 @@ export class AgentEvalRunService {
         agentId: targetAgentId,
         appContext,
         autoStart: true,
+        trigger: RequestTrigger.Eval,
         hooks: [
           {
             handler: async (event) => {
@@ -708,6 +711,7 @@ export class AgentEvalRunService {
             type: 'onComplete' as const,
             webhook: {
               body: { runId, testCaseId, threadId, topicId, userId },
+              delivery: 'qstash' as const,
               url: webhookUrl,
             },
           },
@@ -961,6 +965,7 @@ export class AgentEvalRunService {
         agentId: run.targetAgentId ?? undefined,
         appContext: { topicId },
         autoStart: true,
+        trigger: RequestTrigger.Eval,
         hooks: [
           {
             handler: async (event) => {
@@ -987,6 +992,7 @@ export class AgentEvalRunService {
             type: 'onComplete' as const,
             webhook: {
               body: { runId, testCaseId, userId },
+              delivery: 'qstash' as const,
               url: webhookUrl,
             },
           },
@@ -1116,6 +1122,7 @@ export class AgentEvalRunService {
         agentId: run.targetAgentId ?? undefined,
         appContext: { threadId, topicId },
         autoStart: true,
+        trigger: RequestTrigger.Eval,
         hooks: [
           {
             handler: async (event) => {
@@ -1143,6 +1150,7 @@ export class AgentEvalRunService {
             type: 'onComplete' as const,
             webhook: {
               body: { runId, testCaseId, threadId, topicId, userId },
+              delivery: 'qstash' as const,
               url: webhookUrl,
             },
           },

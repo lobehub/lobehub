@@ -5,13 +5,21 @@ import {
   WebOnboardingIdentifier,
 } from '@lobechat/builtin-tool-web-onboarding';
 import {
+  AgentMarketplaceExecutionRuntime,
+  type ShowAgentMarketplaceArgs,
+  type SubmitAgentPickArgs,
+} from '@lobechat/builtin-tool-web-onboarding/agentMarketplace';
+import {
   createDocumentReadResult,
   createWebOnboardingToolResult,
-  formatWebOnboardingStateMessage,
 } from '@lobechat/builtin-tool-web-onboarding/utils';
 import { type BuiltinToolContext, type BuiltinToolResult } from '@lobechat/types';
 import { BaseExecutor } from '@lobechat/types';
 
+import {
+  trackOnboardingMarketplacePicked,
+  trackOnboardingMarketplaceShown,
+} from '@/services/onboardingMetrics';
 import { userService } from '@/services/user';
 import { useAgentStore } from '@/store/agent';
 import { useUserStore } from '@/store/user';
@@ -24,19 +32,14 @@ const syncUserOnboardingState = async () => {
   }
 };
 
+const marketplaceRuntime = new AgentMarketplaceExecutionRuntime({
+  onPicked: (payload) => trackOnboardingMarketplacePicked(payload),
+  onShown: (payload) => trackOnboardingMarketplaceShown(payload),
+});
+
 class WebOnboardingExecutor extends BaseExecutor<typeof WebOnboardingApiName> {
   readonly identifier = WebOnboardingIdentifier;
   protected readonly apiEnum = WebOnboardingApiName;
-
-  getOnboardingState = async (): Promise<BuiltinToolResult> => {
-    const result = await userService.getOnboardingState();
-
-    return {
-      content: formatWebOnboardingStateMessage(result),
-      state: result,
-      success: true,
-    };
-  };
 
   saveUserQuestion = async (
     params: Parameters<typeof userService.saveUserQuestion>[0],
@@ -107,6 +110,20 @@ class WebOnboardingExecutor extends BaseExecutor<typeof WebOnboardingApiName> {
         success: false,
       };
     }
+  };
+
+  showAgentMarketplace = async (
+    params: ShowAgentMarketplaceArgs,
+    ctx: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    return marketplaceRuntime.showAgentMarketplace(params, { topicId: ctx.topicId });
+  };
+
+  submitAgentPick = async (
+    params: SubmitAgentPickArgs,
+    _ctx: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    return marketplaceRuntime.submitAgentPick(params);
   };
 }
 

@@ -187,13 +187,11 @@ describe('OnboardingService', () => {
     const parsed = SaveUserQuestionInputSchema.parse({
       fullName: 'Ada Lovelace',
       interests: ['AI tooling'],
-      responseLanguage: 'en-US',
     });
 
     expect(parsed).toEqual({
       fullName: 'Ada Lovelace',
       interests: ['AI tooling'],
-      responseLanguage: 'en-US',
     });
   });
 
@@ -203,37 +201,46 @@ describe('OnboardingService', () => {
 
     expect(context).toEqual({
       finished: false,
-      missingStructuredFields: [
-        'agentName',
-        'agentEmoji',
-        'fullName',
-        'interests',
-        'responseLanguage',
-      ],
+      missingStructuredFields: ['agentName', 'agentEmoji', 'fullName'],
       phase: 'agent_identity',
       topicId: undefined,
       version: CURRENT_ONBOARDING_VERSION,
     });
   });
 
-  it('persists fullName, interests, and responseLanguage through saveUserQuestion', async () => {
+  it('persists fullName and interests through saveUserQuestion', async () => {
     const service = new OnboardingService(mockDb, userId);
     const result = await service.saveUserQuestion({
+      customInterests: ['AI tooling'],
       fullName: 'Ada Lovelace',
-      interests: ['AI tooling'],
-      responseLanguage: 'en-US',
+      interests: ['coding'],
     });
 
     expect(result).toEqual({
-      content: 'Saved full name, interests, and response language.',
+      content: 'Saved full name and interests.',
       ignoredFields: [],
-      savedFields: ['fullName', 'interests', 'responseLanguage'],
+      savedFields: ['fullName', 'interests'],
       success: true,
       unchangedFields: [],
     });
     expect(persistedUserState.fullName).toBe('Ada Lovelace');
-    expect(persistedUserState.interests).toEqual(['AI tooling']);
-    expect(persistedUserState.settings.general.responseLanguage).toBe('en-US');
+    expect(persistedUserState.interests).toEqual(['coding', 'AI tooling']);
+  });
+
+  it('ignores responseLanguage if the agent still tries to send it', async () => {
+    const service = new OnboardingService(mockDb, userId);
+    const result = await service.saveUserQuestion({
+      fullName: 'Ada Lovelace',
+      // The schema no longer accepts responseLanguage. Test the reachable
+      // shape — extra props arrive via parseToolArguments and land in
+      // ignoredFields rather than blowing up the call.
+      ...({ responseLanguage: 'en-US' } as Record<string, string>),
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.savedFields).toEqual(['fullName']);
+    expect(result.ignoredFields).toEqual(['responseLanguage']);
+    expect(persistedUserState.settings.general.responseLanguage).toBeUndefined();
   });
 
   it('rejects saveUserQuestion when no supported fields are provided', async () => {
@@ -256,7 +263,6 @@ describe('OnboardingService', () => {
     });
     persistedUserState.fullName = 'Ada Lovelace';
     persistedUserState.interests = ['AI tooling'];
-    persistedUserState.settings.general.responseLanguage = 'en-US';
 
     const service = new OnboardingService(mockDb, userId);
     const context = await service.getState();
@@ -266,7 +272,7 @@ describe('OnboardingService', () => {
     expect(context.finished).toBe(false);
   });
 
-  it('creates a topic and welcome message during onboarding bootstrap', async () => {
+  it('creates a topic during onboarding bootstrap without persisting a welcome message', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-04-17T08:00:00.000Z'));
 
@@ -276,7 +282,9 @@ describe('OnboardingService', () => {
     expect(result.topicId).toBe('topic-1');
     expect(result.agentOnboarding.activeTopicId).toBe('topic-1');
     expect(result.feedbackSubmitted).toBe(false);
-    expect(mockMessageModel.create).toHaveBeenCalledTimes(1);
+    // The welcome is rendered client-side from i18n, so the bootstrap
+    // must NOT seed an assistant message into the topic.
+    expect(mockMessageModel.create).not.toHaveBeenCalled();
     expect(persistedTopics['topic-1']?.metadata?.onboardingSession).toEqual({
       lastActiveAt: '2026-04-17T08:00:00.000Z',
       phase: 'agent_identity',
@@ -314,6 +322,14 @@ describe('OnboardingService', () => {
       id: 'topic-1',
       metadata: {
         onboardingSession: {
+          agentMarketplacePick: {
+            categoryHints: ['engineering'],
+            installedAgentIds: ['agent-1'],
+            requestId: 'req-1',
+            resolvedAt: '2026-04-16T00:30:00.000Z',
+            selectedTemplateIds: ['template-1'],
+            status: 'submitted',
+          },
           lastActiveAt: '2026-04-16T00:00:00.000Z',
           phase: 'summary',
           startedAt: '2026-04-16T00:00:00.000Z',
@@ -393,6 +409,14 @@ describe('OnboardingService', () => {
       'Coder',
       'Ops',
     ]);
+    expect(persistedTopics['topic-1']?.metadata?.onboardingSession?.agentMarketplacePick).toEqual({
+      categoryHints: ['engineering'],
+      installedAgentIds: ['agent-1'],
+      requestId: 'req-1',
+      resolvedAt: '2026-04-16T00:30:00.000Z',
+      selectedTemplateIds: ['template-1'],
+      status: 'submitted',
+    });
   });
 
   it('is idempotent when finishOnboarding is called after completion', async () => {
@@ -470,7 +494,6 @@ describe('OnboardingService', () => {
     );
 
     persistedUserState.interests = ['AI tooling'];
-    persistedUserState.settings.general.responseLanguage = 'en-US';
     persistedUserState.agentOnboarding.discoveryStartUserMessageCount = 0;
     mockDb.select.mockReturnValue({
       from: vi.fn(() => ({
@@ -499,18 +522,16 @@ describe('OnboardingService', () => {
       title: 'Jarvis',
     });
     persistedUserState.fullName = 'Ada Lovelace';
-    persistedUserState.interests = ['AI tooling'];
-    persistedUserState.settings.general.responseLanguage = 'en-US';
     persistedUserState.agentOnboarding = {
       activeTopicId: 'topic-1',
       discoveryStartUserMessageCount: 3,
       version: CURRENT_ONBOARDING_VERSION,
     };
 
-    // 4 user messages total, baseline was 3 → only 1 discovery exchange (< MIN_DISCOVERY_USER_MESSAGES=5)
+    // 3 user messages total, baseline was 3 → 0 discovery exchanges (< MIN_DISCOVERY_USER_MESSAGES=1)
     mockDb.select.mockReturnValue({
       from: vi.fn(() => ({
-        where: vi.fn(async () => [{ count: 4 }]),
+        where: vi.fn(async () => [{ count: 3 }]),
       })),
     });
 
@@ -518,9 +539,9 @@ describe('OnboardingService', () => {
     const context = await service.getState();
 
     expect(context.phase).toBe('discovery');
-    expect(context.discoveryUserMessageCount).toBe(1);
-    // remaining = RECOMMENDED_DISCOVERY_USER_MESSAGES(8) - 1 = 7
-    expect(context.remainingDiscoveryExchanges).toBe(7);
+    expect(context.discoveryUserMessageCount).toBe(0);
+    // remaining = RECOMMENDED_DISCOVERY_USER_MESSAGES(1) - 0 = 1
+    expect(context.remainingDiscoveryExchanges).toBe(1);
   });
 
   it('advances to summary when discovery exchanges reach minimum threshold', async () => {
@@ -531,14 +552,13 @@ describe('OnboardingService', () => {
     });
     persistedUserState.fullName = 'Ada Lovelace';
     persistedUserState.interests = ['AI tooling'];
-    persistedUserState.settings.general.responseLanguage = 'en-US';
     persistedUserState.agentOnboarding = {
       activeTopicId: 'topic-1',
       discoveryStartUserMessageCount: 3,
       version: CURRENT_ONBOARDING_VERSION,
     };
 
-    // 8 user messages total, baseline was 3 → 5 discovery exchanges (= MIN_DISCOVERY_USER_MESSAGES)
+    // 8 user messages total, baseline was 3 → 5 discovery exchanges (>= MIN_DISCOVERY_USER_MESSAGES=1)
     mockDb.select.mockReturnValue({
       from: vi.fn(() => ({
         where: vi.fn(async () => [{ count: 8 }]),
@@ -558,7 +578,7 @@ describe('OnboardingService', () => {
       title: 'Jarvis',
     });
     persistedUserState.fullName = 'Ada Lovelace';
-    // interests NOT set — so phase would be discovery due to missing field
+    // agentName + fullName set → past pre-discovery; 0 discovery exchanges keeps phase in discovery
     persistedUserState.agentOnboarding = {
       activeTopicId: 'topic-1',
       version: CURRENT_ONBOARDING_VERSION,

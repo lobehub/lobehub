@@ -1,6 +1,7 @@
 ---
 name: spa-routes
 description: MUST use when editing src/routes/ segments, src/spa/router/desktopRouter.config.tsx or desktopRouter.config.desktop.tsx (always change both together), mobileRouter.config.tsx, or when moving UI/logic between routes and src/features/.
+user-invocable: false
 ---
 
 # SPA Routes and Features Guide
@@ -84,10 +85,10 @@ Each feature should:
 
 ## 3a. Desktop router pair (`desktopRouter.config` × 2)
 
-| File | Role |
-|------|------|
-| `desktopRouter.config.tsx` | Dynamic imports via `dynamicElement` / `dynamicLayout` — code-splitting; used by `entry.web.tsx` and `entry.desktop.tsx`. |
-| `desktopRouter.config.desktop.tsx` | Same route tree with **synchronous** imports — kept for Electron / local parity and predictable bundling. |
+| File                               | Role                                                                                                                      |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `desktopRouter.config.tsx`         | Dynamic imports via `dynamicElement` / `dynamicLayout` — code-splitting; used by `entry.web.tsx` and `entry.desktop.tsx`. |
+| `desktopRouter.config.desktop.tsx` | Same route tree with **synchronous** imports — kept for Electron / local parity and predictable bundling.                 |
 
 Anything that changes the tree (new segment, renamed `path`, moved layout, new child route) must be reflected in **both** files in one PR or commit. Remove routes from both when deleting.
 

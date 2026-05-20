@@ -3,15 +3,27 @@ import type {
   StepCompleteData,
   StreamChunkData,
   StreamStartData,
+  ToolEndData,
   ToolExecuteData,
+  ToolStartData,
 } from '@lobechat/agent-gateway-client';
-import type { ChatMessageError, ConversationContext } from '@lobechat/types';
+import type { BuiltinToolResult, ChatMessageError, ConversationContext } from '@lobechat/types';
 import { AgentRuntimeErrorType } from '@lobechat/types';
 
 import { messageService } from '@/services/message';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/aiChat/actions/agentSignalBridge';
 import type { ChatStore } from '@/store/chat/store';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
+
+// Lazy-loaded to break the import cycle:
+//   gateway.ts → gatewayEventHandler.ts → executors/index.ts (which pulls in
+//   tool client barrels that import `@/store/chat/store`) → chat store
+//   creation → `new GatewayActionImpl(...)` while gateway.ts is still
+//   mid-evaluation, so the class binding is undefined.
+const loadGetExecutor = async () => {
+  const mod = await import('@/store/tool/slices/builtin/executors');
+  return mod.getExecutor;
+};
 
 /**
  * Fetch messages from DB and replace them in the chat store's dbMessagesMap.
@@ -21,6 +33,121 @@ import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNo
 const fetchAndReplaceMessages = async (get: () => ChatStore, context: ConversationContext) => {
   const messages = await messageService.getMessages(context);
   get().replaceMessages(messages, { context });
+  return messages;
+};
+
+interface ChatToolPayloadLike {
+  apiName?: unknown;
+  arguments?: unknown;
+  id?: unknown;
+  identifier?: unknown;
+}
+
+interface ToolPayloadIdentity {
+  apiName: string;
+  identifier: string;
+  params: unknown;
+  toolCallId?: string;
+}
+
+/**
+ * Extract `{ identifier, apiName, params, toolCallId }` from a stream event's
+ * tool payload. Returns `undefined` when the payload is malformed so the
+ * caller can skip dispatch without throwing.
+ */
+const readToolPayload = (
+  payload: ChatToolPayloadLike | undefined,
+): ToolPayloadIdentity | undefined => {
+  const identifier = typeof payload?.identifier === 'string' ? payload.identifier : undefined;
+  const apiName = typeof payload?.apiName === 'string' ? payload.apiName : undefined;
+  if (!identifier || !apiName) return undefined;
+
+  let params: unknown = payload?.arguments;
+  if (typeof params === 'string') {
+    try {
+      params = JSON.parse(params);
+    } catch {
+      params = {};
+    }
+  } else if (params == null) {
+    params = {};
+  }
+
+  const toolCallId = typeof payload?.id === 'string' ? payload.id : undefined;
+  return { apiName, identifier, params, toolCallId };
+};
+
+/**
+ * Route a `tool_start` event to the executor's optional `onBeforeCall` hook so
+ * tool packages can react before their own mutations dispatch (e.g.
+ * optimistic UI). Fires for both client- and server-runtime tools.
+ */
+const dispatchOnBeforeCall = async (data: ToolStartData | undefined): Promise<void> => {
+  const payload = data?.toolCalling as ChatToolPayloadLike | undefined;
+  const identity = readToolPayload(payload);
+  if (!identity) return;
+
+  const getExecutor = await loadGetExecutor();
+  const executor = getExecutor(identity.identifier);
+  if (!executor?.onBeforeCall) return;
+
+  await executor.onBeforeCall(identity);
+};
+
+/**
+ * Real gateway `tool_end` events ship `data.payload` as the
+ * `{ parentMessageId, toolCalling }` wrapper, NOT a flat `ChatToolPayload`
+ * (see `src/server/modules/AgentRuntime/RuntimeExecutors.ts` — both the
+ * single-tool and batch publish sites). Unwrap defensively, falling back to
+ * the flat shape so we tolerate test fixtures / future emission paths that
+ * pass the payload directly.
+ */
+const unwrapToolPayload = (raw: unknown): ChatToolPayloadLike | undefined => {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const wrapper = raw as { toolCalling?: unknown };
+  if (wrapper.toolCalling && typeof wrapper.toolCalling === 'object') {
+    return wrapper.toolCalling as ChatToolPayloadLike;
+  }
+  return raw as ChatToolPayloadLike;
+};
+
+/**
+ * Route a `tool_end` event to the executor's optional `onAfterCall` hook so
+ * tool packages can react to their own mutations (e.g. invalidate store
+ * caches) regardless of whether the tool ran client- or server-side.
+ */
+const dispatchOnAfterCall = async (data: ToolEndData | undefined): Promise<void> => {
+  const identity = readToolPayload(unwrapToolPayload(data?.payload));
+  if (!identity) return;
+
+  const getExecutor = await loadGetExecutor();
+  const executor = getExecutor(identity.identifier);
+  if (!executor?.onAfterCall) return;
+
+  await executor.onAfterCall({
+    ...identity,
+    result: (data?.result ?? {}) as BuiltinToolResult,
+  });
+};
+
+type GatewayMessageLike = { id: string; role?: string };
+type HeteroStreamStartData = StreamStartData & { newStep?: boolean };
+
+const findNextAssistantMessageId = (
+  messages: GatewayMessageLike[] | undefined,
+  currentAssistantMessageId: string,
+) => {
+  if (!messages?.length) return;
+
+  const currentIndex = messages.findIndex((message) => message.id === currentAssistantMessageId);
+  if (currentIndex === -1) return;
+
+  for (let index = currentIndex + 1; index < messages.length; index += 1) {
+    const message = messages[index];
+    if (message.role === 'assistant') {
+      return message.id;
+    }
+  }
 };
 
 const toChatMessageError = (data: unknown): ChatMessageError => {
@@ -87,6 +214,30 @@ export const createGatewayEventHandler = (
   let accumulatedContent = '';
   let accumulatedReasoning = '';
 
+  // Active reasoning sub-op id. Mirrors the LLM `StreamingHandler` lifecycle so
+  // `isMessageInReasoning(messageId)` (which drives the Thinking UI's
+  // "thinking..." title + auto-expand) flips to `true` while thinking is
+  // streaming. Without this, heterogeneous server-mode messages render the
+  // collapsed "completed" state from the first chunk on.
+  let reasoningOperationId: string | undefined;
+
+  const startReasoningIfNeeded = () => {
+    if (reasoningOperationId) return;
+    const { operationId: reasoningOpId } = get().startOperation({
+      context: { ...context, messageId: currentAssistantMessageId },
+      parentOperationId: operationId,
+      type: 'reasoning',
+    });
+    get().associateMessageWithOperation(currentAssistantMessageId, reasoningOpId);
+    reasoningOperationId = reasoningOpId;
+  };
+
+  const endReasoningIfNeeded = () => {
+    if (!reasoningOperationId) return;
+    get().completeOperation(reasoningOperationId);
+    reasoningOperationId = undefined;
+  };
+
   // Sequential processing queue — ensures stream_chunk waits for stream_start's fetch
   let processingChain: Promise<void> = Promise.resolve();
 
@@ -104,7 +255,7 @@ export const createGatewayEventHandler = (
     switch (event.type) {
       case 'stream_start': {
         enqueue(async () => {
-          const data = event.data as StreamStartData | undefined;
+          const data = event.data as HeteroStreamStartData | undefined;
 
           const newAssistantMessageId = data?.assistantMessage?.id;
 
@@ -115,14 +266,46 @@ export const createGatewayEventHandler = (
             get().associateMessageWithOperation(currentAssistantMessageId, operationId);
           }
 
+          // Close any reasoning op carried over from the previous step.
+          // Safe to run after the assistant-id swap: the op was started with
+          // its own messageId context, so completion doesn't depend on the
+          // current id.
+          endReasoningIfNeeded();
+
           // Reset accumulators for the new stream
           accumulatedContent = '';
           accumulatedReasoning = '';
 
-          // Fetch from DB so the new message exists in dbMessagesMap before chunks arrive
+          // Heterogeneous CLI adapters emit `stream_start { newStep: true }`
+          // without a server-side assistant id. Pull the freshly created step
+          // assistant from DB so subsequent live chunks update the RIGHT row
+          // instead of appending onto the previous step's assistant.
+          const messages = await fetchAndReplaceMessages(get, context).catch((error) => {
+            console.error(error);
+            return undefined;
+          });
+
+          if (!newAssistantMessageId && data?.newStep) {
+            const resolvedAssistantMessageId = findNextAssistantMessageId(
+              messages as GatewayMessageLike[] | undefined,
+              currentAssistantMessageId,
+            );
+
+            if (resolvedAssistantMessageId) {
+              currentAssistantMessageId = resolvedAssistantMessageId;
+              get().associateMessageWithOperation(currentAssistantMessageId, operationId);
+            }
+          }
+
           void emitClientAgentSignalSourceEvent({
             payload: {
               agentId: context.agentId,
+              ...(currentAssistantMessageId
+                ? {
+                    anchorMessageId: currentAssistantMessageId,
+                    assistantMessageId: currentAssistantMessageId,
+                  }
+                : {}),
               operationId,
               stepIndex: event.stepIndex,
               topicId: context.topicId ?? undefined,
@@ -130,7 +313,6 @@ export const createGatewayEventHandler = (
             sourceId: `${operationId}:gateway:start:${event.stepIndex}`,
             sourceType: 'client.gateway.stream_start',
           });
-          await fetchAndReplaceMessages(get, context).catch(console.error);
         });
         break;
       }
@@ -141,6 +323,9 @@ export const createGatewayEventHandler = (
           if (!data) return;
 
           if (data.chunkType === 'text' && data.content) {
+            // Text after reasoning marks the end of the thinking pass — see
+            // `StreamingHandler.handleText` for the same transition.
+            endReasoningIfNeeded();
             accumulatedContent += data.content;
             get().internal_dispatchMessage(
               {
@@ -153,6 +338,7 @@ export const createGatewayEventHandler = (
           }
 
           if (data.chunkType === 'reasoning' && data.reasoning) {
+            startReasoningIfNeeded();
             accumulatedReasoning += data.reasoning;
             get().internal_dispatchMessage(
               {
@@ -165,6 +351,7 @@ export const createGatewayEventHandler = (
           }
 
           if (data.chunkType === 'tools_calling' && data.toolsCalling) {
+            endReasoningIfNeeded();
             get().internal_dispatchMessage(
               {
                 id: currentAssistantMessageId,
@@ -199,6 +386,7 @@ export const createGatewayEventHandler = (
           // until agent_runtime_end so users don't think the session ended
           // during tool execution gaps between steps
           get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
+          endReasoningIfNeeded();
         });
         break;
       }
@@ -206,6 +394,10 @@ export const createGatewayEventHandler = (
       case 'tool_start': {
         // Server creates tool messages in DB.
         // Loading is already active from stream_start (not cleared by stream_end).
+        const data = event.data as ToolStartData | undefined;
+        enqueue(async () => {
+          await dispatchOnBeforeCall(data).catch(console.error);
+        });
         break;
       }
 
@@ -218,6 +410,10 @@ export const createGatewayEventHandler = (
 
         if (data?.phase === 'human_approval' && data.requiresApproval && data.pendingToolsCalling) {
           void notifyDesktopHumanApprovalRequired(get, context);
+          // Persist a paused marker so the sidebar reflects "waiting on user" across reload.
+          // Resume back to 'running' is free: approve / reject both spawn a new op via the
+          // executor entries, which already write 'running'.
+          if (context.topicId) void get().updateTopicStatus?.(context.topicId, 'paused');
         }
 
         break;
@@ -239,8 +435,12 @@ export const createGatewayEventHandler = (
       }
 
       case 'tool_end': {
+        const data = event.data as ToolEndData | undefined;
         enqueue(async () => {
-          await fetchAndReplaceMessages(get, context).catch(console.error);
+          await Promise.all([
+            fetchAndReplaceMessages(get, context).catch(console.error),
+            dispatchOnAfterCall(data).catch(console.error),
+          ]);
         });
         break;
       }
@@ -272,6 +472,12 @@ export const createGatewayEventHandler = (
           void emitClientAgentSignalSourceEvent({
             payload: {
               agentId: context.agentId,
+              ...(currentAssistantMessageId
+                ? {
+                    anchorMessageId: currentAssistantMessageId,
+                    assistantMessageId: currentAssistantMessageId,
+                  }
+                : {}),
               operationId,
               topicId: context.topicId ?? undefined,
             },
@@ -279,6 +485,7 @@ export const createGatewayEventHandler = (
             sourceType: 'client.gateway.runtime_end',
           });
           get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
+          endReasoningIfNeeded();
           get().completeOperation(operationId);
 
           const completedOp = get().operations[operationId];
@@ -308,6 +515,7 @@ export const createGatewayEventHandler = (
           });
 
           get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
+          endReasoningIfNeeded();
           get().completeOperation(operationId);
 
           const updateResult = await messageService

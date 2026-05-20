@@ -15,7 +15,7 @@ interface WrapUpHintProps {
   phase?: OnboardingPhase;
 }
 
-const MIN_DISCOVERY_MESSAGES_FOR_WRAP_UP = 3;
+const MIN_DISCOVERY_MESSAGES_FOR_WRAP_UP = 2;
 
 const isEligible = (phase: OnboardingPhase, discoveryUserMessageCount?: number) => {
   if (phase === 'summary') return true;

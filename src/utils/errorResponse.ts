@@ -30,7 +30,8 @@ const getStatus = (errorType: ILobeAgentRuntimeErrorType | ErrorType) => {
 
     case AgentRuntimeErrorType.ExceededContextWindow:
     case ChatErrorType.SubscriptionKeyMismatch:
-    case ChatErrorType.SystemTimeNotMatchError: {
+    case ChatErrorType.SystemTimeNotMatchError:
+    case ChatErrorType.LobeHubModelDeprecated: {
       return 400;
     }
 

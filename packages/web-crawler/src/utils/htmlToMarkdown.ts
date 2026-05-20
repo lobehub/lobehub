@@ -6,7 +6,7 @@ import { NodeHtmlMarkdown } from 'node-html-markdown';
 import type { FilterOptions } from '../type';
 
 /** Truncate HTML to 1 MB before DOM parsing to prevent CPU spikes on large pages */
-const MAX_HTML_SIZE = 1024 * 1024;
+export const MAX_HTML_SIZE = 1024 * 1024;
 
 const cleanObj = <T extends object>(
   obj: T,
@@ -36,53 +36,60 @@ export const htmlToMarkdown = (
     url,
   });
 
-  const document = window.document;
-  document.body.innerHTML = html;
-
-  let parsedContent: ReturnType<Readability<string>['parse']> = null;
   try {
-    // @ts-expect-error reason: Readability expects a Document type
-    parsedContent = new Readability(document).parse();
-  } catch {
-    // happy-dom may throw on pages with invalid CSS selectors — fall back to raw HTML
+    const document = window.document;
+    document.body.innerHTML = html;
+
+    let parsedContent: ReturnType<Readability<string>['parse']> = null;
+    try {
+      // @ts-expect-error reason: Readability expects a Document type
+      parsedContent = new Readability(document).parse();
+    } catch {
+      // happy-dom may throw on pages with invalid CSS selectors — fall back to raw HTML
+    }
+
+    const useReadability = filterOptions.enableReadability ?? true;
+
+    let htmlNode = html;
+
+    if (useReadability && parsedContent?.content) {
+      htmlNode = parsedContent?.content;
+    }
+
+    const customTranslators = (
+      filterOptions.pureText
+        ? {
+            a: {
+              postprocess: (_: string, content: string) => content,
+            },
+            img: {
+              ignore: true,
+            },
+          }
+        : {}
+    ) as TranslatorConfigObject;
+
+    const nodeHtmlMarkdown = new NodeHtmlMarkdown({}, customTranslators);
+
+    const content = nodeHtmlMarkdown.translate(htmlNode);
+
+    const result = {
+      author: parsedContent?.byline,
+      content,
+      description: parsedContent?.excerpt,
+      dir: parsedContent?.dir,
+      lang: parsedContent?.lang,
+      length: parsedContent?.length,
+      publishedTime: parsedContent?.publishedTime,
+      siteName: parsedContent?.siteName,
+      title: parsedContent?.title,
+    };
+
+    return cleanObj(result) as HtmlToMarkdownOutput;
+  } finally {
+    // Release the happy-dom Window so its DOM tree is GC-able immediately, instead
+    // of waiting for the function scope to drop. JS evaluation is disabled so the
+    // returned promise resolves synchronously in practice — fire and forget.
+    void window.happyDOM.close();
   }
-
-  const useReadability = filterOptions.enableReadability ?? true;
-
-  let htmlNode = html;
-
-  if (useReadability && parsedContent?.content) {
-    htmlNode = parsedContent?.content;
-  }
-
-  const customTranslators = (
-    filterOptions.pureText
-      ? {
-          a: {
-            postprocess: (_: string, content: string) => content,
-          },
-          img: {
-            ignore: true,
-          },
-        }
-      : {}
-  ) as TranslatorConfigObject;
-
-  const nodeHtmlMarkdown = new NodeHtmlMarkdown({}, customTranslators);
-
-  const content = nodeHtmlMarkdown.translate(htmlNode);
-
-  const result = {
-    author: parsedContent?.byline,
-    content,
-    description: parsedContent?.excerpt,
-    dir: parsedContent?.dir,
-    lang: parsedContent?.lang,
-    length: parsedContent?.length,
-    publishedTime: parsedContent?.publishedTime,
-    siteName: parsedContent?.siteName,
-    title: parsedContent?.title,
-  };
-
-  return cleanObj(result) as HtmlToMarkdownOutput;
 };

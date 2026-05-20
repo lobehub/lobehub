@@ -45,7 +45,7 @@ describe('composeEnabledTools', () => {
     });
 
     it('dedupes injected manifests by identifier', () => {
-      const duplicate = makeManifest('lobe-agent-documents', 'editDocument');
+      const duplicate = makeManifest('lobe-agent-documents', 'replaceDocumentContent');
 
       const result = composeEnabledTools({
         context: {},
@@ -55,7 +55,9 @@ describe('composeEnabledTools', () => {
 
       expect(result.enabledToolIds).toEqual(['lobe-agent-documents']);
       expect(result.enabledManifests).toEqual([OTHER_MANIFEST]);
-      expect(result.tools?.some((t) => t.function?.name?.includes('editDocument'))).toBe(false);
+      expect(result.tools?.some((t) => t.function?.name?.includes('replaceDocumentContent'))).toBe(
+        false,
+      );
     });
 
     it('appends new injected manifest and adds its tools', () => {

@@ -8,6 +8,8 @@ import { lazy, memo, type PropsWithChildren, Suspense, useLayoutEffect } from 'r
 import { LobeAnalyticsProviderWrapper } from '@/components/Analytics/LobeAnalyticsProviderWrapper';
 import { DragUploadProvider } from '@/components/DragUploadZone/DragUploadProvider';
 import { isDesktop } from '@/const/version';
+import AgentMockDevtools from '@/features/AgentMockDevtools';
+import DevFeatureFlagPanel from '@/features/DevFeatureFlagPanel';
 import AuthProvider from '@/layout/AuthProvider';
 import AppTheme from '@/layout/GlobalProvider/AppTheme';
 import DynamicFavicon from '@/layout/GlobalProvider/DynamicFavicon';
@@ -82,6 +84,12 @@ const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
             <Suspense>
               <ImportSettings />
               {/* DevPanel disabled in SPA: depends on node:fs */}
+              {__DEV__ && (
+                <>
+                  <AgentMockDevtools />
+                  <DevFeatureFlagPanel />
+                </>
+              )}
             </Suspense>
           </ServerConfigStoreProvider>
         </AppTheme>

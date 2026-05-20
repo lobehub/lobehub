@@ -23,16 +23,17 @@ export enum AsyncTaskErrorType {
   FreePlanLimit = 'FreePlanLimit',
 
   InvalidProviderAPIKey = 'InvalidProviderAPIKey',
-  /* ↑ cloud slot ↑ */
-
   /**
    * Model not found on server
    */
   ModelNotFound = 'ModelNotFound',
+  /* ↑ cloud slot ↑ */
+
   /**
    * the chunk parse result it empty
    */
   NoChunkError = 'NoChunkError',
+  ProviderContentModeration = 'ProviderContentModeration',
   ServerError = 'ServerError',
   /**
    * Subscription plan limit reached (paid users run out of credits)
@@ -50,9 +51,21 @@ export enum AsyncTaskErrorType {
 }
 
 export interface AsyncTaskStructuredErrorItem {
+  /**
+   * Structured error cause when the top-level error wraps a lower-level failure.
+   */
+  cause?: AsyncTaskStructuredErrorItem;
+  /**
+   * Machine-readable error code from lower-level libraries or database drivers.
+   */
+  code?: string;
   layer?: string;
   memoryIndex?: number;
   message: string;
+  /**
+   * Error class name, for example `DrizzleQueryError` or `PostgresError`.
+   */
+  name?: string;
   preview?: string;
   sourceId?: string;
   sourceType?: string;

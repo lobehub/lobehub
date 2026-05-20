@@ -335,7 +335,7 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
    * @returns Glob results
    */
   private async globWithFd(params: GlobFilesParams): Promise<GlobFilesResult> {
-    const searchPath = params.scope || process.cwd();
+    const searchPath = params.scope || os.homedir() || process.cwd();
     const logPrefix = `[glob:fd: ${params.pattern}]`;
 
     logger.debug(`${logPrefix} Starting fd glob`, { searchPath });
@@ -390,7 +390,7 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
    * @returns Glob results
    */
   private async globWithFastGlob(params: GlobFilesParams): Promise<GlobFilesResult> {
-    const searchPath = params.scope || process.cwd();
+    const searchPath = params.scope || os.homedir() || process.cwd();
     const logPrefix = `[glob:fast-glob: ${params.pattern}]`;
 
     logger.debug(`${logPrefix} Starting fast-glob`, { searchPath });

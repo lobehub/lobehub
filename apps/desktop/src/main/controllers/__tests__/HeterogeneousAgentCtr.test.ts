@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { access, mkdtemp, readdir, readFile, rm, unlink, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import * as os from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
 
@@ -9,10 +9,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import HeterogeneousAgentCtr from '../HeterogeneousAgentCtr';
 
+vi.mock('node:os', async () => {
+  const actual = await vi.importActual<typeof os>('node:os');
+  return { ...actual, platform: vi.fn(() => 'linux') };
+});
+
 const FAKE_DESKTOP_PATH = '/Users/fake/Desktop';
 
+const { mockGetAllWindows } = vi.hoisted(() => ({
+  mockGetAllWindows: vi.fn<() => any[]>(() => []),
+}));
+
 vi.mock('electron', () => ({
-  BrowserWindow: { getAllWindows: () => [] },
+  BrowserWindow: { getAllWindows: () => mockGetAllWindows() },
   app: {
     getPath: vi.fn((name: string) => (name === 'desktop' ? FAKE_DESKTOP_PATH : `/fake/${name}`)),
     isPackaged: false,
@@ -107,20 +116,31 @@ describe('HeterogeneousAgentCtr', () => {
   let appStoragePath: string;
 
   beforeEach(async () => {
-    appStoragePath = await mkdtemp(path.join(tmpdir(), 'lobehub-hetero-'));
+    appStoragePath = await mkdtemp(path.join(os.tmpdir(), 'lobehub-hetero-'));
   });
 
   afterEach(async () => {
     await rm(appStoragePath, { force: true, recursive: true });
   });
 
-  describe('resolveImage', () => {
+  describe('image cache (delegates to shared `normalizeImage`)', () => {
+    // Image fetch + cache moved to `@lobechat/heterogeneous-agents/spawn`'s
+    // `normalizeImage`. The desktop controller passes its own cacheDir so the
+    // path-traversal invariant — id segments like `../../foo` MUST be hashed,
+    // never used as path segments — is enforced by the shared helper. Verify
+    // that invariant against the same cacheDir the controller would use.
+    const fixtureCacheDir = (storage: string) => path.join(storage, 'heteroAgent/files');
+    const importNormalize = async () => {
+      const { mkdir } = await import('node:fs/promises');
+      const mod = await import('@lobechat/heterogeneous-agents/spawn');
+      return { mkdir, normalizeImage: mod.normalizeImage };
+    };
+
     it('stores traversal-looking ids inside the cache root via a stable hash key', async () => {
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
-      const cacheDir = path.join(appStoragePath, 'heteroAgent/files');
+      const { mkdir, normalizeImage } = await importNormalize();
+      const cacheDir = fixtureCacheDir(appStoragePath);
+      await mkdir(cacheDir, { recursive: true });
+
       const escapedTargetName = `${path.basename(appStoragePath)}-outside-storage`;
       const escapePath = path.join(cacheDir, `../../../${escapedTargetName}`);
 
@@ -130,10 +150,14 @@ describe('HeterogeneousAgentCtr', () => {
         // best-effort cleanup
       }
 
-      await (ctr as any).resolveImage({
-        id: `../../../${escapedTargetName}`,
-        url: 'data:text/plain;base64,T1VUU0lERQ==',
-      });
+      await normalizeImage(
+        {
+          id: `../../../${escapedTargetName}`,
+          type: 'url',
+          url: 'data:text/plain;base64,T1VUU0lERQ==',
+        },
+        { cacheDir, fetcher: (async () => new Response('OUTSIDE', { status: 200 })) as any },
+      );
 
       const cacheEntries = await readdir(cacheDir);
 
@@ -149,11 +173,10 @@ describe('HeterogeneousAgentCtr', () => {
     });
 
     it('does not trust pre-seeded out-of-root traversal cache files as cache hits', async () => {
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
-      const cacheDir = path.join(appStoragePath, 'heteroAgent/files');
+      const { mkdir, normalizeImage } = await importNormalize();
+      const cacheDir = fixtureCacheDir(appStoragePath);
+      await mkdir(cacheDir, { recursive: true });
+
       const traversalId = '../../preexisting-secret';
       const outOfRootDataPath = path.join(cacheDir, traversalId);
       const outOfRootMetaPath = path.join(cacheDir, `${traversalId}.meta`);
@@ -164,13 +187,20 @@ describe('HeterogeneousAgentCtr', () => {
         JSON.stringify({ id: traversalId, mimeType: 'text/plain' }),
       );
 
-      const result = await (ctr as any).resolveImage({
-        id: traversalId,
-        url: 'data:text/plain;base64,SUdOT1JFRA==',
-      });
+      const result = await normalizeImage(
+        { id: traversalId, type: 'url', url: 'data:text/plain;base64,SUdOT1JFRA==' },
+        {
+          cacheDir,
+          fetcher: (async () =>
+            new Response('IGNORED', {
+              headers: { 'content-type': 'text/plain' },
+              status: 200,
+            })) as any,
+        },
+      );
 
       expect(Buffer.from(result.buffer).toString('utf8')).toBe('IGNORED');
-      expect(result.mimeType).toBe('text/plain');
+      expect(result.mediaType).toBe('text/plain');
       await expect(readFile(outOfRootDataPath, 'utf8')).resolves.toBe('SECRET');
     });
   });
@@ -185,6 +215,7 @@ describe('HeterogeneousAgentCtr', () => {
       prompt: string,
       sessionOverrides: Record<string, any> = {},
       stdoutLines: string[] = [],
+      sendPromptOverrides: Partial<{ imageList: Array<{ id: string; url: string }> }> = {},
     ) => {
       const { proc, writes } = createFakeProc({ stdoutLines });
       nextFakeProc = proc;
@@ -198,7 +229,7 @@ describe('HeterogeneousAgentCtr', () => {
         command: 'claude',
         ...sessionOverrides,
       });
-      await ctr.sendPrompt({ prompt, sessionId });
+      await ctr.sendPrompt({ operationId: 'op-test', prompt, sessionId, ...sendPromptOverrides });
 
       const { args: cliArgs, command, options } = spawnCalls[0];
       return { cliArgs, command, ctr, options, sessionId, writes };
@@ -261,6 +292,23 @@ describe('HeterogeneousAgentCtr', () => {
       expect(options.cwd).toBe(explicitCwd);
     });
 
+    it('omits the empty text block when only images are attached', async () => {
+      const { writes } = await runSendPrompt('', {}, [], {
+        imageList: [{ id: 'image-1', url: 'data:image/png;base64,UE5HX1RFU1Q=' }],
+      });
+
+      expect(writes).toHaveLength(1);
+      const msg = JSON.parse(writes[0].trimEnd());
+      // Anthropic rejects `{ text: '', type: 'text' }` with
+      // "messages: text content blocks must be non-empty".
+      expect(msg.message.content).toEqual([
+        {
+          source: { data: 'UE5HX1RFU1Q=', media_type: 'image/png', type: 'base64' },
+          type: 'image',
+        },
+      ]);
+    });
+
     it('captures the Claude Code session id from stream-json init events', async () => {
       const { ctr, sessionId } = await runSendPrompt('hello', {}, [
         `${JSON.stringify({ session_id: 'sess_cc_123', subtype: 'init', type: 'system' })}\n`,
@@ -296,7 +344,7 @@ describe('HeterogeneousAgentCtr', () => {
         command: 'codex',
         ...sessionOverrides,
       });
-      await ctr.sendPrompt({ prompt, sessionId, ...sendPromptOverrides });
+      await ctr.sendPrompt({ operationId: 'op-test', prompt, sessionId, ...sendPromptOverrides });
 
       const { args: cliArgs, command, options } = spawnCalls[0];
       return { cliArgs, command, ctr, options, sessionId, writes };
@@ -314,9 +362,9 @@ describe('HeterogeneousAgentCtr', () => {
         command: 'codex',
       });
 
-      await expect(ctr.sendPrompt({ prompt: 'hello', sessionId })).rejects.toThrow(
-        'Codex CLI was not found',
-      );
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
+      ).rejects.toThrow('Codex CLI was not found');
 
       expect(detect).toHaveBeenCalledWith('codex', true);
       expect(spawnCalls).toHaveLength(0);
@@ -334,9 +382,9 @@ describe('HeterogeneousAgentCtr', () => {
         command: 'claude',
       });
 
-      await expect(ctr.sendPrompt({ prompt: 'hello', sessionId })).rejects.toThrow(
-        'Claude Code CLI was not found',
-      );
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
+      ).rejects.toThrow('Claude Code CLI was not found');
 
       expect(detect).toHaveBeenCalledWith('claude', true);
       expect(spawnCalls).toHaveLength(0);
@@ -372,9 +420,9 @@ describe('HeterogeneousAgentCtr', () => {
         command: 'claude-alt',
       });
 
-      await expect(ctr.sendPrompt({ prompt: 'hello', sessionId })).rejects.toThrow(
-        'Claude Code CLI was not found',
-      );
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
+      ).rejects.toThrow('Claude Code CLI was not found');
 
       expect(detect).not.toHaveBeenCalled();
       expect(spawnCalls).toHaveLength(0);
@@ -475,6 +523,7 @@ describe('HeterogeneousAgentCtr', () => {
       await expect(
         ctr.sendPrompt({
           imageList,
+          operationId: 'op-test',
           prompt: 'inspect the screenshots',
           sessionId,
         }),
@@ -508,9 +557,9 @@ describe('HeterogeneousAgentCtr', () => {
         command: 'codex',
       });
 
-      await expect(ctr.sendPrompt({ prompt: 'hello', sessionId })).rejects.toThrow(
-        'Agent exited with code 1',
-      );
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
+      ).rejects.toThrow('Agent exited with code 1');
     });
 
     it('uses codex exec resume syntax when continuing an existing thread', async () => {
@@ -652,6 +701,237 @@ describe('HeterogeneousAgentCtr', () => {
         stderr:
           'Failed to authenticate. API Error: 401 {"type":"error","error":{"type":"authentication_error","message":"Invalid authentication credentials"}}',
       });
+    });
+  });
+
+  /**
+   * Node may emit `proc.on('exit')` BEFORE stdout fully drains (documented in
+   * child_process docs as "stdio streams might still be open"). The phase 0
+   * refactor moved adapter ownership to main, so renderer no longer flushes
+   * its own adapter on session-complete — meaning trailing events from
+   * `pipeline.flush()` (e.g. Codex's synthesized `tool_end` for unfinished
+   * tool calls) would race against — and lose to — the
+   * `heteroAgentSessionComplete` broadcast without an explicit gate.
+   *
+   * The fix in `proc.on('exit')` is to await stdout `'end'/'close'` (so the
+   * `stdout.on('end')` handler can schedule `pipeline.flush()` onto the
+   * broadcast queue), then drain the queue, then broadcast complete.
+   */
+  describe('exit-before-end ordering (LOBE-8516 phase 0 race)', () => {
+    let broadcasts: Array<{ channel: string; data: any }>;
+
+    beforeEach(() => {
+      spawnCalls.length = 0;
+      execFileMock.mockReset();
+      broadcasts = [];
+      mockGetAllWindows.mockImplementation(() => [
+        {
+          isDestroyed: () => false,
+          webContents: {
+            send: (channel: string, data: any) => broadcasts.push({ channel, data }),
+          },
+        },
+      ]);
+    });
+
+    afterEach(() => {
+      mockGetAllWindows.mockReset();
+      mockGetAllWindows.mockReturnValue([]);
+    });
+
+    it('delivers pipeline.flush() events BEFORE heteroAgentSessionComplete even when proc exit precedes stdout end', async () => {
+      // Codex `item.started` for a tool — adapter buffers it as a pending
+      // tool call. On flush, adapter synthesizes a trailing `tool_end`. This
+      // is exactly the kind of event the race would lose against complete.
+      const itemStarted = `${JSON.stringify({
+        item: {
+          aggregated_output: '',
+          command: 'echo hi',
+          id: 'cmd-1',
+          status: 'in_progress',
+          type: 'command_execution',
+        },
+        type: 'item.started',
+      })}\n`;
+      const threadStarted = `${JSON.stringify({ thread_id: 't1', type: 'thread.started' })}\n`;
+
+      const proc = new EventEmitter() as any;
+      const stdout = new PassThrough();
+      const stderr = new PassThrough();
+      proc.stdout = stdout;
+      proc.stderr = stderr;
+      proc.stdin = {
+        end: vi.fn(),
+        write: vi.fn((_chunk: any, cb?: () => void) => {
+          cb?.();
+          return true;
+        }),
+      };
+      proc.kill = vi.fn();
+      proc.killed = false;
+      proc.__start = () => {
+        setImmediate(() => {
+          stdout.write(threadStarted);
+          stdout.write(itemStarted);
+          stderr.end();
+          // ⚠️ Reproduce the documented Node race: emit exit BEFORE stdout
+          // ends. Without the streamFinished gate in the controller, the
+          // broadcast queue settles immediately (no flush queued yet) and
+          // complete fires before the trailing tool_end ever broadcasts.
+          proc.emit('exit', 0);
+          setImmediate(() => stdout.end());
+        });
+      };
+      nextFakeProc = proc;
+
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({ agentType: 'codex', command: 'codex' });
+      await ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId });
+
+      const events = broadcasts.filter((b) => b.channel === 'heteroAgentEvent');
+      const completeIdx = broadcasts.findIndex((b) => b.channel === 'heteroAgentSessionComplete');
+      const lastEventIdx = broadcasts.findLastIndex((b) => b.channel === 'heteroAgentEvent');
+
+      expect(completeIdx).toBeGreaterThan(-1);
+      expect(events.length).toBeGreaterThan(0);
+      // Every stream event must land before complete — no trailing events
+      // sneak in after the renderer has been told the session is done.
+      expect(lastEventIdx).toBeLessThan(completeIdx);
+
+      // Specifically: the synthesized tool_end for the pending command
+      // execution (emitted only by adapter.flush()) is in the broadcast.
+      const toolEnds = events.filter((b) => (b.data as any)?.event?.type === 'tool_end');
+      expect(toolEnds.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('app-quit cleanup of AskUserQuestion temp configs (LOBE-8725)', () => {
+    // The async exit-handler cleanup races Electron's main-process teardown
+    // and used to leak `lobe-cc-mcp-<opId>.json` files in `os.tmpdir()` on
+    // every quit. The controller now unlinks pending intervention temp
+    // configs *synchronously* from `before-quit` AND from process signal
+    // handlers (SIGTERM / SIGINT — `before-quit` doesn't fire on external
+    // kills). These tests exercise both paths against real files.
+
+    /**
+     * Drop a temp `lobe-cc-mcp-<id>.json` and stash it on the controller's
+     * `opIdToIntervention` map under the same key, so the quit hook treats
+     * it like a real pending intervention and tries to unlink it.
+     */
+    const seedPendingIntervention = async (ctr: HeterogeneousAgentCtr, opId: string) => {
+      const tmpConfigPath = path.join(os.tmpdir(), `lobe-cc-mcp-test-${opId}.json`);
+      await writeFile(tmpConfigPath, '{"mcpServers":{}}');
+      const slot = {
+        bridge: {} as any,
+        pumpDone: Promise.resolve(),
+        tmpConfigPath,
+      };
+      (ctr as any).opIdToIntervention.set(opId, slot);
+      return tmpConfigPath;
+    };
+
+    const captureRegisteredHandler = (
+      registerSpy: ReturnType<typeof vi.fn> | ReturnType<typeof vi.spyOn>,
+      eventName: string,
+    ): (() => void) => {
+      const calls = (registerSpy as any).mock.calls as Array<[string, () => void]>;
+      const match = calls.findLast(([evt]) => evt === eventName);
+      if (!match) throw new Error(`no handler registered for "${eventName}"`);
+      return match[1];
+    };
+
+    it('before-quit synchronously unlinks every pending intervention temp config', async () => {
+      const electron = (await import('electron')) as any;
+      electron.app.on.mockClear();
+
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+
+      const fileA = await seedPendingIntervention(ctr, 'opA');
+      const fileB = await seedPendingIntervention(ctr, 'opB');
+
+      ctr.afterAppReady();
+      const beforeQuit = captureRegisteredHandler(electron.app.on, 'before-quit');
+      beforeQuit();
+
+      await expect(access(fileA)).rejects.toThrow();
+      await expect(access(fileB)).rejects.toThrow();
+    });
+
+    it('SIGTERM handler unlinks pending intervention temp configs (external-kill path)', async () => {
+      // External kills (test harness, OS shutdown) skip Electron's lifecycle
+      // events entirely — `before-quit` never fires, so the controller has to
+      // hook the raw process signal too. Stub `process.on` so the handler is
+      // *recorded* but never actually attached to the test runner's process
+      // (otherwise the test leaks a SIGTERM listener that survives the test).
+      // Same for `process.exit` — the controller's fail-safe shouldn't get a
+      // chance to actually exit the worker if its `setTimeout(...).unref()`
+      // ever fires before mockRestore.
+      const electron = (await import('electron')) as any;
+      electron.app.on.mockClear();
+      const processOnSpy = vi.spyOn(process, 'on').mockImplementation(() => process);
+      const processExitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const file = await seedPendingIntervention(ctr, 'opSigterm');
+
+      ctr.afterAppReady();
+      const sigterm = captureRegisteredHandler(processOnSpy, 'SIGTERM');
+      sigterm();
+
+      await expect(access(file)).rejects.toThrow();
+
+      processOnSpy.mockRestore();
+      processExitSpy.mockRestore();
+    });
+
+    it('SIGINT handler unlinks pending intervention temp configs (Ctrl-C path)', async () => {
+      const electron = (await import('electron')) as any;
+      electron.app.on.mockClear();
+      const processOnSpy = vi.spyOn(process, 'on').mockImplementation(() => process);
+      const processExitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const file = await seedPendingIntervention(ctr, 'opSigint');
+
+      ctr.afterAppReady();
+      const sigint = captureRegisteredHandler(processOnSpy, 'SIGINT');
+      sigint();
+
+      await expect(access(file)).rejects.toThrow();
+
+      processOnSpy.mockRestore();
+      processExitSpy.mockRestore();
+    });
+
+    it('cleanup is idempotent — already-deleted files do not throw', async () => {
+      const electron = (await import('electron')) as any;
+      electron.app.on.mockClear();
+
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const file = await seedPendingIntervention(ctr, 'opIdempotent');
+
+      // Pre-delete the file out from under the controller — simulates a
+      // partial cleanup race where the async exit handler beat us to it.
+      await unlink(file);
+
+      ctr.afterAppReady();
+      const beforeQuit = captureRegisteredHandler(electron.app.on, 'before-quit');
+      expect(() => beforeQuit()).not.toThrow();
     });
   });
 });

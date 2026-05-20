@@ -10,6 +10,7 @@ import type {
 import { GatewayClient } from '@lobechat/device-gateway-client';
 import type { Command } from 'commander';
 
+import { getValidToken } from '../auth/refresh';
 import { resolveToken } from '../auth/resolveToken';
 import { CLI_API_KEY_ENV } from '../constants/auth';
 import { OFFICIAL_GATEWAY_URL } from '../constants/urls';
@@ -284,8 +285,44 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     updateStatus('reconnecting');
   });
 
-  // Handle auth failed
-  client.on('auth_failed', (reason) => {
+  // Proactive token refresh — schedule before JWT expires
+  const startProactiveRefresh = () =>
+    scheduleProactiveRefresh(
+      auth,
+      (refreshed) => {
+        client.updateToken(refreshed.token);
+        auth = refreshed;
+        // Schedule next refresh based on the new token
+        cancelRefreshTimer = startProactiveRefresh();
+      },
+      info,
+      error,
+    );
+  let cancelRefreshTimer = startProactiveRefresh();
+
+  // Handle auth failed — attempt token refresh once before giving up
+  // (e.g., auto-reconnect may send an expired JWT before proactive refresh fires)
+  let authFailedRefreshAttempted = false;
+  client.on('auth_failed', async (reason) => {
+    if (auth.tokenType === 'jwt' && !authFailedRefreshAttempted) {
+      authFailedRefreshAttempted = true;
+      info(`Authentication failed (${reason}). Attempting token refresh...`);
+      try {
+        const refreshed = await resolveToken({});
+        if (refreshed && refreshed.token !== auth.token) {
+          info('Token refreshed successfully. Reconnecting...');
+          client.updateToken(refreshed.token);
+          auth = refreshed;
+          authFailedRefreshAttempted = false;
+          cancelRefreshTimer = startProactiveRefresh();
+          await client.reconnect();
+          return;
+        }
+      } catch {
+        // fall through
+      }
+    }
+
     error(`Authentication failed: ${reason}`);
     error(
       `Run 'lh login', or set ${CLI_API_KEY_ENV} and run 'lh login --server <url>' to configure API key authentication.`,
@@ -308,8 +345,8 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
       if (refreshed) {
         info('Token refreshed successfully. Reconnecting...');
         client.updateToken(refreshed.token);
-        // Update cached auth so subsequent refreshes use the latest token
         auth = refreshed;
+        cancelRefreshTimer = startProactiveRefresh();
         await client.reconnect();
         return;
       }
@@ -330,6 +367,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   // Graceful shutdown
   const cleanup = () => {
     info('Shutting down...');
+    cancelRefreshTimer?.();
     cleanupAllProcesses();
     client.disconnect();
     removeStatus();
@@ -372,6 +410,69 @@ function formatUptime(startedAt: Date): string {
   if (hours > 0) return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
   if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
   return `${seconds}s`;
+}
+
+// How far before expiry to proactively refresh (1 hour)
+const PROACTIVE_REFRESH_BUFFER = 60 * 60;
+
+/**
+ * Parse the `exp` claim from a JWT without verifying the signature.
+ */
+function parseJwtExp(token: string): number | undefined {
+  try {
+    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
+    return typeof payload.exp === 'number' ? payload.exp : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Schedule a proactive token refresh before the JWT expires.
+ * Returns a cleanup function that cancels the scheduled timer.
+ */
+function scheduleProactiveRefresh(
+  auth: { token: string; tokenType: string },
+  onRefreshed: (newAuth: Awaited<ReturnType<typeof resolveToken>>) => void,
+  info: (msg: string) => void,
+  error: (msg: string) => void,
+): (() => void) | null {
+  if (auth.tokenType !== 'jwt') return null;
+
+  const exp = parseJwtExp(auth.token);
+  if (!exp) return null;
+
+  const refreshAt = (exp - PROACTIVE_REFRESH_BUFFER) * 1000;
+  const delay = refreshAt - Date.now();
+
+  if (delay < 0) {
+    // Already past the refresh window — refresh immediately on next tick
+    void doRefresh();
+    return null;
+  }
+
+  const timer = setTimeout(() => void doRefresh(), delay);
+  return () => clearTimeout(timer);
+
+  async function doRefresh() {
+    try {
+      // Use the same buffer so getValidToken actually triggers a refresh
+      const result = await getValidToken(PROACTIVE_REFRESH_BUFFER);
+      if (!result) {
+        error('Proactive token refresh failed — no valid credentials.');
+        return;
+      }
+
+      const refreshed = await resolveToken({});
+      // Only notify if the token actually changed to avoid reschedule loops
+      if (refreshed.token !== auth.token) {
+        info('Proactively refreshed token.');
+        onRefreshed(refreshed);
+      }
+    } catch {
+      error('Proactive token refresh failed.');
+    }
+  }
 }
 
 function collectSystemInfo(): DeviceSystemInfo {

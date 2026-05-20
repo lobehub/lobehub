@@ -1,4 +1,6 @@
-import { sql } from 'drizzle-orm';
+import type { TaskStatus } from '@lobechat/types';
+import { and, desc, eq, inArray, isNotNull, isNull, ne, not, or, sql } from 'drizzle-orm';
+import { unionAll } from 'drizzle-orm/pg-core';
 
 import { agents, DOCUMENT_FOLDER_TYPE, documents, tasks, topics } from '../schemas';
 import type { LobeChatDatabase } from '../type';
@@ -8,10 +10,23 @@ export interface RecentDbItem {
   metadata?: any;
   routeGroupId: string | null;
   routeId: string | null;
+  /** Task lifecycle status when `type === 'task'`; null for topic/document. */
+  status: TaskStatus | null;
   title: string;
   type: 'topic' | 'document' | 'task';
   updatedAt: Date;
 }
+
+// Mirrors `MAIN_SIDEBAR_EXCLUDE_TRIGGERS` in `src/const/topic.ts` plus the
+// legacy `task_manager` trigger from the previous Task Manager panel.
+// System-trigger topics live in their own surfaces and would clutter Recent.
+const SYSTEM_TOPIC_TRIGGERS = ['cron', 'eval', 'task_manager', 'task'];
+
+// Excluded so tool-owned document rows don't surface as generic recent docs;
+// only user-authored pages ('api') and legacy 'topic' rows remain.
+const TOOL_DOCUMENT_SOURCE_TYPES = ['agent', 'agent-signal', 'file', 'web'] as const;
+
+const TASK_FINAL_STATUSES = ['completed', 'canceled'];
 
 export class RecentModel {
   private userId: string;
@@ -23,69 +38,89 @@ export class RecentModel {
   }
 
   queryRecent = async (limit: number = 10): Promise<RecentDbItem[]> => {
-    const query = sql`
-      SELECT * FROM (
-        SELECT
-          ${topics.id} as id,
-          COALESCE(${topics.title}, 'Untitled Topic') as title,
-          'topic' as type,
-          ${topics.agentId} as route_id,
-          ${topics.groupId} as route_group_id,
-          ${topics.updatedAt} as updated_at,
-          ${topics.metadata} as metadata
-        FROM ${topics}
-        LEFT JOIN ${agents} ON ${topics.agentId} = ${agents.id}
-        WHERE ${topics.userId} = ${this.userId}
-          AND (
-            ${topics.groupId} IS NOT NULL
-            OR ${agents.slug} = 'inbox'
-            OR (${topics.groupId} IS NULL AND ${agents.virtual} != true)
-          )
+    const topicArm = this.db
+      .select({
+        id: topics.id,
+        metadata: sql<any>`${topics.metadata}`.as('metadata'),
+        routeGroupId: sql<string | null>`${topics.groupId}`.as('route_group_id'),
+        routeId: sql<string | null>`${topics.agentId}`.as('route_id'),
+        status: sql<TaskStatus | null>`NULL`.as('status'),
+        title: sql<string>`COALESCE(${topics.title}, 'Untitled Topic')`.as('title'),
+        type: sql<RecentDbItem['type']>`'topic'`.as('type'),
+        updatedAt: topics.updatedAt,
+      })
+      .from(topics)
+      .leftJoin(agents, eq(topics.agentId, agents.id))
+      .where(
+        and(
+          eq(topics.userId, this.userId),
+          or(
+            isNotNull(topics.groupId),
+            eq(agents.slug, 'inbox'),
+            and(isNull(topics.groupId), ne(agents.virtual, true)),
+          ),
+          or(isNull(topics.trigger), not(inArray(topics.trigger, SYSTEM_TOPIC_TRIGGERS))),
+        ),
+      );
 
-        UNION ALL
+    const documentArm = this.db
+      .select({
+        id: documents.id,
+        metadata: sql<any>`NULL`.as('metadata'),
+        routeGroupId: sql<string | null>`NULL`.as('route_group_id'),
+        routeId: sql<string | null>`NULL`.as('route_id'),
+        status: sql<TaskStatus | null>`NULL`.as('status'),
+        title:
+          sql<string>`COALESCE(${documents.title}, ${documents.filename}, 'Untitled Document')`.as(
+            'title',
+          ),
+        type: sql<RecentDbItem['type']>`'document'`.as('type'),
+        updatedAt: documents.updatedAt,
+      })
+      .from(documents)
+      .where(
+        and(
+          eq(documents.userId, this.userId),
+          not(inArray(documents.sourceType, TOOL_DOCUMENT_SOURCE_TYPES)),
+          isNull(documents.knowledgeBaseId),
+          ne(documents.fileType, DOCUMENT_FOLDER_TYPE),
+        ),
+      );
 
-        SELECT
-          ${documents.id} as id,
-          COALESCE(${documents.title}, ${documents.filename}, 'Untitled Document') as title,
-          'document' as type,
-          NULL as route_id,
-          NULL as route_group_id,
-          ${documents.updatedAt} as updated_at,
-          NULL as metadata
-        FROM ${documents}
-        WHERE ${documents.userId} = ${this.userId}
-          AND ${documents.sourceType} != 'file'
-          AND ${documents.knowledgeBaseId} IS NULL
-          AND ${documents.fileType} != ${DOCUMENT_FOLDER_TYPE}
+    const taskArm = this.db
+      .select({
+        id: tasks.id,
+        metadata: sql<any>`NULL`.as('metadata'),
+        routeGroupId: sql<string | null>`NULL`.as('route_group_id'),
+        routeId: sql<string | null>`${tasks.assigneeAgentId}`.as('route_id'),
+        status: sql<TaskStatus | null>`${tasks.status}`.as('status'),
+        title: sql<string>`COALESCE(${tasks.name}, ${tasks.instruction}, 'Untitled Task')`.as(
+          'title',
+        ),
+        type: sql<RecentDbItem['type']>`'task'`.as('type'),
+        updatedAt: tasks.updatedAt,
+      })
+      .from(tasks)
+      .where(
+        and(
+          eq(tasks.createdByUserId, this.userId),
+          not(inArray(tasks.status, TASK_FINAL_STATUSES)),
+        ),
+      );
 
-        UNION ALL
+    const rows = await unionAll(topicArm, documentArm, taskArm)
+      .orderBy(desc(sql`updated_at`))
+      .limit(limit);
 
-        SELECT
-          ${tasks.id} as id,
-          COALESCE(${tasks.name}, ${tasks.instruction}, 'Untitled Task') as title,
-          'task' as type,
-          ${tasks.assigneeAgentId} as route_id,
-          NULL as route_group_id,
-          ${tasks.updatedAt} as updated_at,
-          NULL as metadata
-        FROM ${tasks}
-        WHERE ${tasks.createdByUserId} = ${this.userId}
-          AND ${tasks.status} NOT IN ('completed', 'canceled')
-      ) AS combined
-      ORDER BY updated_at DESC
-      LIMIT ${limit}
-    `;
-
-    const result = await this.db.execute(query);
-
-    return result.rows.map((row: any) => ({
+    return rows.map((row) => ({
       id: row.id,
       metadata: row.metadata ?? undefined,
-      routeGroupId: row.route_group_id,
-      routeId: row.route_id,
+      routeGroupId: row.routeGroupId,
+      routeId: row.routeId,
+      status: row.status,
       title: row.title,
-      type: row.type as RecentDbItem['type'],
-      updatedAt: new Date(row.updated_at),
+      type: row.type,
+      updatedAt: row.updatedAt instanceof Date ? row.updatedAt : new Date(row.updatedAt as any),
     }));
   };
 }

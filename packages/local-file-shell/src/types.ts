@@ -57,10 +57,14 @@ export interface ReadFileResult {
   filename: string;
   fileType: string;
   lineCount: number;
+  /** Number of returned lines truncated because they exceeded the per-line character cap. */
+  linesTruncated?: number;
   loc: [number, number];
   modifiedTime: Date;
   totalCharCount: number;
   totalLineCount: number;
+  /** True when the returned content was truncated because it exceeded the total character cap. */
+  truncated?: boolean;
 }
 
 export interface WriteFileParams {
@@ -120,6 +124,8 @@ export interface GlobFilesParams {
 export interface GlobFilesResult {
   error?: string;
   files: string[];
+  /** Diagnostic note returned when the engine had to adjust behavior, e.g. auto-enabling hidden-file matching. */
+  hint?: string;
 }
 
 export interface SearchFilesParams {
@@ -169,6 +175,8 @@ export interface GrepContentParams {
 
 export interface GrepContentResult {
   error?: string;
+  /** Diagnostic note returned when the engine had to adjust behavior, e.g. auto-enabling hidden-file matching. */
+  hint?: string;
   matches: any[];
   success: boolean;
 }

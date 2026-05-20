@@ -1,4 +1,7 @@
-import { EMPTY_DOCUMENT_MESSAGES } from '@lobechat/builtin-tool-web-onboarding/utils';
+import {
+  EMPTY_DOCUMENT_MESSAGES,
+  formatWebOnboardingStateMessage,
+} from '@lobechat/builtin-tool-web-onboarding/utils';
 import { isDesktop } from '@lobechat/const';
 import { applyMarkdownPatch, formatMarkdownPatchError } from '@lobechat/markdown-patch';
 import {
@@ -20,7 +23,11 @@ import { after } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 
-import { getReferralStatus, getSubscriptionPlan } from '@/business/server/user';
+import {
+  getReferralStatus,
+  getSubscriptionPlan,
+  onUserActivityForBusiness,
+} from '@/business/server/user';
 import { MessageModel } from '@/database/models/message';
 import { SessionModel } from '@/database/models/session';
 import { UserModel } from '@/database/models/user';
@@ -87,7 +94,21 @@ export const userRouter = router({
     try {
       after(async () => {
         try {
-          await ctx.userModel.updateUser({ lastActiveAt: new Date() });
+          const currentTime = new Date();
+          const transition = await ctx.userModel.advanceLastActiveAt(currentTime);
+
+          if (transition) {
+            try {
+              await onUserActivityForBusiness({
+                currentTime,
+                previousLastActiveAt: transition.previousLastActiveAt,
+                userCreatedAt: transition.userCreatedAt,
+                userId: ctx.userId,
+              });
+            } catch (err) {
+              console.error('user activity hook failed, error:', err);
+            }
+          }
         } catch (err) {
           console.error('update lastActiveAt failed, error:', err);
         }
@@ -234,10 +255,30 @@ export const userRouter = router({
     return onboardingService.getOrCreateState();
   }),
 
-  getOnboardingState: userProcedure.query(async ({ ctx }) => {
+  getOnboardingAgentContext: userProcedure.query(async ({ ctx }) => {
     const onboardingService = new OnboardingService(ctx.serverDB, ctx.userId);
+    const docService = new AgentDocumentsService(ctx.serverDB, ctx.userId);
+    const { UserPersonaModel } = await import('@/database/models/userMemory/persona');
+    const personaModel = new UserPersonaModel(ctx.serverDB, ctx.userId);
 
-    return onboardingService.getState();
+    const [state, soulDoc, persona, userInfo] = await Promise.all([
+      onboardingService.getState(),
+      onboardingService
+        .getInboxAgentId()
+        .then((inboxAgentId) => docService.getDocumentByFilename(inboxAgentId, 'SOUL.md'))
+        .catch(() => null),
+      personaModel.getLatestPersonaDocument().catch(() => null),
+      onboardingService.getInitialUserInfo().catch(() => undefined),
+    ]);
+
+    return {
+      discoveryUserMessageCount: state.discoveryUserMessageCount,
+      personaContent: persona?.persona || null,
+      phaseGuidance: formatWebOnboardingStateMessage(state),
+      remainingDiscoveryExchanges: state.remainingDiscoveryExchanges,
+      soulContent: soulDoc?.content || null,
+      userInfo,
+    };
   }),
 
   saveUserQuestion: userProcedure

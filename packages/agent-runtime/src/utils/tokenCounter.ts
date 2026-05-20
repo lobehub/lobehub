@@ -1,13 +1,26 @@
-import { estimateTokenCount } from 'tokenx';
+import { countContextTokens, DEFAULT_DRIFT_MULTIPLIER } from '@lobechat/context-engine';
+import type { UIChatMessage } from '@lobechat/types';
 
 /**
  * Options for token counting and compression threshold calculation
  */
 export interface TokenCountOptions {
+  /**
+   * Optional drift multiplier override forwarded to {@link countContextTokens}.
+   * Default {@link DEFAULT_DRIFT_MULTIPLIER} (1.25).
+   */
+  driftMultiplier?: number;
   /** Model's max context window token count */
   maxWindowToken?: number;
-  /** Threshold ratio for triggering compression, default 0.75 */
+  /** Threshold ratio for triggering compression, default 0.5 */
   thresholdRatio?: number;
+  /**
+   * Optional top-level tool definitions for the upcoming LLM call. When
+   * provided, tool definition tokens are counted toward the budget — matches
+   * what the provider actually charges. Pass the same `tools` array that will
+   * be sent in the request payload.
+   */
+  tools?: unknown[];
 }
 
 /** Default max context window (128k tokens) */
@@ -17,59 +30,7 @@ export const DEFAULT_MAX_CONTEXT = 128_000;
 export const DEFAULT_THRESHOLD_RATIO = 0.5;
 
 /**
- * Message interface for token counting
- */
-export interface TokenCountMessage {
-  content?: string | unknown;
-  metadata?: {
-    usage?: {
-      totalOutputTokens?: number;
-    };
-  } | null;
-  role: string;
-}
-
-/**
- * Estimate token count for text content using tokenx
- * @param content - Text content or object to estimate tokens for
- * @returns Estimated token count
- */
-export function estimateTokens(content: string | unknown): number {
-  // Handle null/undefined early
-  if (content === null || content === undefined) return 0;
-
-  const text = typeof content === 'string' ? content : JSON.stringify(content);
-  if (!text) return 0;
-  return estimateTokenCount(text);
-}
-
-/**
- * Calculate total token count for a list of messages
- * - Assistant messages: Use metadata.usage.totalOutputTokens if available (exact value)
- * - User/System messages: Use tokenx estimation
- *
- * @param messages - List of messages to count tokens for
- * @returns Total token count
- */
-export function calculateMessageTokens(messages: TokenCountMessage[]): number {
-  return messages.reduce((total, msg) => {
-    // For assistant messages, prefer the recorded token count from usage metadata
-    if (msg.role === 'assistant') {
-      const outputTokens = msg.metadata?.usage?.totalOutputTokens;
-      if (outputTokens && outputTokens > 0) {
-        return total + outputTokens;
-      }
-    }
-
-    // For user/system messages or assistant messages without usage data, estimate tokens
-    return total + estimateTokens(msg.content);
-  }, 0);
-}
-
-/**
  * Calculate the compression threshold based on max context window
- * @param options - Token count options
- * @returns Compression threshold in tokens
  */
 export function getCompressionThreshold(options: TokenCountOptions = {}): number {
   const maxContext = options.maxWindowToken ?? DEFAULT_MAX_CONTEXT;
@@ -81,30 +42,43 @@ export function getCompressionThreshold(options: TokenCountOptions = {}): number
  * Result of compression check
  */
 export interface CompressionCheckResult {
-  /** Current total token count */
+  /**
+   * Best raw estimate of current input tokens (sum of message content +
+   * tool calls + reasoning + tool_call_id + tool definitions).
+   */
   currentTokenCount: number;
-  /** Whether compression is needed */
+  /**
+   * `true` when `adjustedTokenCount > threshold`. The adjusted count includes
+   * a drift multiplier (default 1.25×) to compensate for the gap between
+   * `tokenx`'s heuristic and provider tokenizers, so compression fires before
+   * upstream tokenizers actually overflow the model's context window.
+   */
   needsCompression: boolean;
-  /** Compression threshold */
+  /** Compression threshold (`maxWindowToken × thresholdRatio`) */
   threshold: number;
 }
 
 /**
- * Check if messages need compression based on token count
- * @param messages - List of messages to check
- * @param options - Token count options
- * @returns Compression check result
+ * Check if messages need compression based on token count.
+ *
+ * Uses {@link countContextTokens} under the hood, so the input estimate
+ * accounts for tool calls, reasoning, and tool definitions in addition to
+ * `content` (see LOBE-8964 for the calibration data).
  */
 export function shouldCompress(
-  messages: TokenCountMessage[],
+  messages: UIChatMessage[],
   options: TokenCountOptions = {},
 ): CompressionCheckResult {
-  const currentTokenCount = calculateMessageTokens(messages);
+  const accounting = countContextTokens({
+    messages,
+    options: { driftMultiplier: options.driftMultiplier ?? DEFAULT_DRIFT_MULTIPLIER },
+    tools: options.tools,
+  });
   const threshold = getCompressionThreshold(options);
 
   return {
-    currentTokenCount,
-    needsCompression: currentTokenCount > threshold,
+    currentTokenCount: accounting.rawTotal,
+    needsCompression: accounting.adjustedTotal > threshold,
     threshold,
   };
 }

@@ -97,7 +97,7 @@ export const KnowledgeBaseManifest: BuiltinToolManifest = {
     // ---- Search & Read ----
     {
       description:
-        'Search through knowledge base using semantic vector search to find relevant files and chunks. Returns a summary of matching files with their relevance scores and brief excerpts. Use this first to discover which files contain relevant information. IMPORTANT: Since this uses vector-based search, always resolve pronouns and references to concrete entities (e.g., use "authentication system" instead of "it").',
+        'Search the knowledge base. Returns two result types: (1) <files> — uploaded files matched by semantic vector search at chunk-level (file_* IDs); (2) <documents> — inline notes/documents matched by full-text BM25 search at document-level (docs_* IDs). Use this to discover relevant content first, then call readKnowledge with the returned IDs to get full content. Resolve pronouns/references to concrete entities for best vector recall.',
       name: KnowledgeBaseApiName.searchKnowledgeBase,
       parameters: {
         properties: {
@@ -121,13 +121,13 @@ export const KnowledgeBaseManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Read the full content of specific files from the knowledge base. Use this after searchKnowledgeBase to get complete information from relevant files. You can read multiple files at once.',
+        'Read the full content of specific resources from the knowledge base. Accepts both file IDs (file_*) for uploaded files and document IDs (docs_*) for inline documents created via createDocument. Use this after searchKnowledgeBase or viewKnowledgeBase to get complete content. You can read multiple resources at once.',
       name: KnowledgeBaseApiName.readKnowledge,
       parameters: {
         properties: {
           fileIds: {
             description:
-              'Array of file IDs to read. Get these IDs from searchKnowledgeBase results.',
+              'Array of resource IDs to read. Accepts file IDs (file_*) and document IDs (docs_*) returned by searchKnowledgeBase or viewKnowledgeBase.',
             items: {
               type: 'string',
             },

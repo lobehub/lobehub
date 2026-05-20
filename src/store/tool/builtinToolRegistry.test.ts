@@ -1,5 +1,4 @@
 import { WEB_ONBOARDING } from '@lobechat/builtin-agents';
-import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
 import {
   GroupAgentBuilderApiName,
   GroupAgentBuilderIdentifier,
@@ -7,7 +6,12 @@ import {
 import { GroupAgentBuilderInspectors } from '@lobechat/builtin-tool-group-agent-builder/client';
 import { SkillStoreApiName, SkillStoreIdentifier } from '@lobechat/builtin-tool-skill-store';
 import { SkillStoreInspectors, SkillStoreRenders } from '@lobechat/builtin-tool-skill-store/client';
-import { WebOnboardingIdentifier } from '@lobechat/builtin-tool-web-onboarding';
+import { UserInteractionIdentifier } from '@lobechat/builtin-tool-user-interaction';
+import {
+  WebOnboardingApiName,
+  WebOnboardingIdentifier,
+  WebOnboardingManifest,
+} from '@lobechat/builtin-tool-web-onboarding';
 import { builtinToolIdentifiers } from '@lobechat/builtin-tools/identifiers';
 import { describe, expect, it } from 'vitest';
 
@@ -32,13 +36,19 @@ describe('builtin tool registry', () => {
     expect(GroupAgentBuilderInspectors[GroupAgentBuilderApiName.createGroup]).toBeDefined();
   });
 
-  it('includes agent and group management tools in web onboarding runtime', () => {
+  it('includes user interaction and web onboarding in web onboarding runtime plugins', () => {
     const runtime =
       typeof WEB_ONBOARDING.runtime === 'function'
         ? WEB_ONBOARDING.runtime({ userLocale: 'en-US' })
         : WEB_ONBOARDING.runtime;
 
-    expect(runtime.plugins).toContain(AgentManagementIdentifier);
-    expect(runtime.plugins).toContain(GroupAgentBuilderIdentifier);
+    expect(runtime.plugins).toContain(UserInteractionIdentifier);
+    expect(runtime.plugins).toContain(WebOnboardingIdentifier);
+  });
+
+  it('exposes the marketplace APIs under the web onboarding manifest', () => {
+    const apiNames = WebOnboardingManifest.api.map((entry) => entry.name);
+    expect(apiNames).toContain(WebOnboardingApiName.showAgentMarketplace);
+    expect(apiNames).toContain(WebOnboardingApiName.submitAgentPick);
   });
 });

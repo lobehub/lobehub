@@ -1,21 +1,29 @@
-import { type AgentRuntimeContext } from '@lobechat/agent-runtime';
+import { type AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { parse } from '@lobechat/conversation-flow';
 import { type TaskCurrentActivity, type TaskStatusResult } from '@lobechat/types';
-import { ThreadStatus, ThreadType, UserInterventionConfigSchema } from '@lobechat/types';
+import {
+  RequestTrigger,
+  ThreadStatus,
+  ThreadType,
+  UserInterventionConfigSchema,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import pMap from 'p-map';
 import { z } from 'zod';
 
 import { MessageModel } from '@/database/models/message';
+import { TaskModel } from '@/database/models/task';
+import { TaskTopicModel } from '@/database/models/taskTopic';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { authedProcedure, heteroAuthedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { AiChatService } from '@/server/services/aiChat';
-import { nanoid } from '@/utils/uuid';
+import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
+import { TaskLifecycleService } from '@/server/services/taskLifecycle';
 
 const log = debug('lobe-server:ai-agent-router');
 
@@ -66,23 +74,6 @@ const formatTaskError = (error: unknown): Record<string, unknown> | undefined =>
 
   return message ? { ...taskError, message } : taskError;
 };
-
-// Zod schemas for agent operation
-const CreateAgentOperationSchema = z.object({
-  agentConfig: z.record(z.any()).optional().default({}),
-  agentId: z.string().optional(),
-  autoStart: z.boolean().optional().default(true),
-  messages: z.array(z.any()).optional().default([]),
-  modelRuntimeConfig: z.object({
-    model: z.string(),
-    provider: z.string(),
-  }),
-  threadId: z.string().optional().nullable(),
-  toolManifestMap: z.record(z.string(), z.any()).default({}),
-  tools: z.array(z.any()).optional(),
-  topicId: z.string().optional().nullable(),
-  userId: z.string().optional(),
-});
 
 const GetOperationStatusSchema = z.object({
   historyLimit: z.number().optional().default(10),
@@ -137,10 +128,18 @@ const ExecAgentSchema = z
     /** Application context for message storage */
     appContext: z
       .object({
+        defaultTaskAssigneeAgentId: z.string().optional(),
         documentId: z.string().optional().nullable(),
         groupId: z.string().optional().nullable(),
+        initialTopicMetadata: z
+          .object({
+            repos: z.array(z.string()).optional(),
+            workingDirectory: z.string().optional(),
+          })
+          .optional(),
         scope: z.string().optional().nullable(),
         sessionId: z.string().optional(),
+        taskId: z.string().optional().nullable(),
         threadId: z.string().optional().nullable(),
         topicId: z.string().optional().nullable(),
       })
@@ -183,6 +182,13 @@ const ExecAgentSchema = z
       .optional(),
     /** The agent slug to run (either agentId or slug is required) */
     slug: z.string().optional(),
+    /**
+     * What initiated this operation, persisted to `agent_operations.trigger`.
+     * Defaults to `'chat'` when omitted — first-party SPA / desktop user
+     * messages are the dominant caller. Pass a more specific value (`'cli'`,
+     * `'openapi'`, `'eval'`, …) to override.
+     */
+    trigger: z.string().optional(),
     /**
      * User intervention configuration for tool approvals.
      * Pass `{ approvalMode: 'headless' }` from headless clients (CLI, cron, bots)
@@ -324,6 +330,69 @@ const InterruptTaskSchema = z
     message: 'Either threadId or operationId must be provided',
   });
 
+/**
+ * Wire shape of an `AgentStreamEvent` produced by `lh hetero exec`. Mirrors
+ * `AgentStreamEvent` in `@lobechat/agent-gateway-client` (kept here as a Zod
+ * schema for tRPC input validation; tRPC's type inference takes care of the
+ * client-side typing). Republished verbatim through `StreamEventManager` so
+ * gateway WS subscribers see the same shape regardless of producer.
+ */
+const AgentStreamEventSchema = z.object({
+  data: z.any(),
+  operationId: z.string(),
+  stepIndex: z.number().int().nonnegative(),
+  timestamp: z.number().int().nonnegative(),
+  type: z.enum([
+    'agent_runtime_init',
+    'agent_runtime_end',
+    'stream_start',
+    'stream_chunk',
+    'stream_end',
+    'stream_retry',
+    'tool_start',
+    'tool_end',
+    'tool_execute',
+    'tool_result',
+    'agent_intervention_request',
+    'agent_intervention_response',
+    'step_start',
+    'step_complete',
+    'error',
+  ]),
+});
+
+/**
+ * Schema for `aiAgent.heteroIngest` — accepts a batch of producer-side
+ * `AgentStreamEvent`s from `lh hetero exec`. `topicId` is required (operationId
+ * → topic reverse-lookup is unreliable per LOBE-8516 design decision).
+ */
+const HeteroIngestSchema = z.object({
+  agentType: z.enum(['claude-code', 'codex']),
+  events: z.array(AgentStreamEventSchema).min(1),
+  operationId: z.string().min(1),
+  topicId: z.string().min(1),
+});
+
+/**
+ * Schema for `aiAgent.heteroFinish` — terminal call, mirrors the CLI process
+ * exit. `result` is the high-level outcome; `error` carries CLI-classified
+ * details when `result === 'error'`. `sessionId` is the native CLI session
+ * (CC's per-cwd id), kept here so the server can resume next time.
+ */
+const HeteroFinishSchema = z.object({
+  agentType: z.enum(['claude-code', 'codex']),
+  error: z
+    .object({
+      message: z.string(),
+      type: z.string(),
+    })
+    .optional(),
+  operationId: z.string().min(1),
+  result: z.enum(['success', 'error', 'cancelled']),
+  sessionId: z.string().optional(),
+  topicId: z.string().min(1),
+});
+
 const aiAgentProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
 
@@ -332,9 +401,23 @@ const aiAgentProcedure = authedProcedure.use(serverDatabase).use(async (opts) =>
       agentRuntimeService: new AgentRuntimeService(ctx.serverDB, ctx.userId),
       aiAgentService: new AiAgentService(ctx.serverDB, ctx.userId),
       aiChatService: new AiChatService(ctx.serverDB, ctx.userId),
+      heterogeneousAgentService: new HeterogeneousAgentService(ctx.serverDB, ctx.userId),
       messageModel: new MessageModel(ctx.serverDB, ctx.userId),
       threadModel: new ThreadModel(ctx.serverDB, ctx.userId),
       topicModel: new TopicModel(ctx.serverDB, ctx.userId),
+    },
+  });
+});
+
+// Dedicated procedure for hetero-agent ingest/finish endpoints.
+// Requires a `hetero-operation` JWT (4h expiry) — normal user tokens are rejected,
+// so only the sandbox/device that received the JWT from execAgent can call these.
+const heteroAgentProcedure = heteroAuthedProcedure.use(serverDatabase).use(async (opts) => {
+  const { ctx } = opts;
+
+  return opts.next({
+    ctx: {
+      heterogeneousAgentService: new HeterogeneousAgentService(ctx.serverDB, ctx.userId),
     },
   });
 });
@@ -522,93 +605,6 @@ export const aiAgentRouter = router({
       }
     }),
 
-  createOperation: aiAgentProcedure
-    .input(CreateAgentOperationSchema)
-    .mutation(async ({ input, ctx }) => {
-      const {
-        agentConfig = {},
-        agentId,
-        autoStart = true,
-        messages = [],
-        modelRuntimeConfig,
-        threadId,
-        topicId,
-        tools,
-        toolManifestMap,
-      } = input;
-      log('input: %O', input);
-
-      // Validate required parameters
-      if (!modelRuntimeConfig.model || !modelRuntimeConfig.provider) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: 'modelRuntimeConfig.model and modelRuntimeConfig.provider are required',
-        });
-      }
-
-      // Generate runtime operation ID: agt_{timestamp}_{agentId}_{topicId}_{random}
-      const timestamp = Date.now();
-      const operationId = `agt_${timestamp}_${agentId || 'unknown'}_${topicId || 'none'}_${nanoid(8)}`;
-
-      log(`Creating operation ${operationId} for user ${ctx.userId}`);
-
-      // Create initial context
-      const initialContext: AgentRuntimeContext = {
-        payload: {},
-        phase: 'user_input' as const,
-        session: {
-          messageCount: messages.length,
-          sessionId: operationId,
-          status: 'idle' as const,
-          stepCount: 0,
-        },
-      };
-
-      // Create operation using AgentRuntimeService
-      const result = await ctx.agentRuntimeService.createOperation({
-        agentConfig,
-        appContext: {
-          agentId,
-          threadId,
-          topicId,
-        },
-        autoStart,
-        initialContext,
-        initialMessages: messages,
-        modelRuntimeConfig,
-        operationId,
-        toolSet: {
-          manifestMap: toolManifestMap,
-          tools,
-        },
-        userId: ctx.userId,
-      });
-
-      let firstStepResult;
-      if (result.autoStarted) {
-        firstStepResult = {
-          context: initialContext,
-          messageId: result.messageId,
-          scheduled: true,
-        };
-
-        log(
-          `Operation ${operationId} created and first step scheduled (messageId: ${result.messageId})`,
-        );
-      } else {
-        log(`Operation ${operationId} created without auto-start`);
-      }
-
-      return {
-        autoStart,
-        createdAt: new Date().toISOString(),
-        firstStep: firstStepResult,
-        operationId,
-        status: 'created',
-        success: true,
-      };
-    }),
-
   execAgent: aiAgentProcedure.input(ExecAgentSchema).mutation(async ({ input, ctx }) => {
     const {
       agentId,
@@ -622,6 +618,7 @@ export const aiAgentRouter = router({
       fileIds,
       parentMessageId,
       resumeApproval,
+      trigger,
       userInterventionConfig,
     } = input;
 
@@ -643,6 +640,7 @@ export const aiAgentRouter = router({
         resume: !!parentMessageId,
         resumeApproval,
         slug,
+        trigger: trigger ?? RequestTrigger.Chat,
         userInterventionConfig,
       });
     } catch (error: any) {
@@ -690,6 +688,7 @@ export const aiAgentRouter = router({
         deviceId,
         existingMessageIds = [],
         parentMessageId,
+        trigger,
       } = task;
 
       try {
@@ -704,6 +703,7 @@ export const aiAgentRouter = router({
           // When parentMessageId is provided, this is a regeneration/continue — skip user message creation
           resume: !!parentMessageId,
           slug,
+          trigger: trigger ?? RequestTrigger.Chat,
         });
 
         return {
@@ -1145,6 +1145,114 @@ export const aiAgentRouter = router({
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Operation ID not found' });
       }
       throw error;
+    }
+  }),
+
+  /**
+   * Ingest a batch of `AgentStreamEvent`s from a `lh hetero exec` producer
+   * (CLI standalone, sandboxed CC, etc.) and republish them through the
+   * existing stream fanout so renderer-side gateway WS subscribers see them
+   * unchanged. Phase 2a: pub/sub only — no DB persistence (phase 2b adds it).
+   */
+  heteroIngest: heteroAgentProcedure.input(HeteroIngestSchema).mutation(async ({ input, ctx }) => {
+    const { agentType, events, operationId, topicId } = input;
+
+    log(
+      'heteroIngest: topic=%s op=%s type=%s count=%d',
+      topicId,
+      operationId,
+      agentType,
+      events.length,
+    );
+
+    try {
+      // Zod's z.any() infers `data?: any`, but the wire shape always includes
+      // a `data` field (may be null). Cast at the boundary instead of widening
+      // the shared `AgentStreamEvent` type or the service signature.
+      await ctx.heterogeneousAgentService.heteroIngest({
+        agentType,
+        events: events as AgentStreamEvent[],
+        operationId,
+        topicId,
+      });
+      return { ack: true as const };
+    } catch (error: any) {
+      log('heteroIngest failed: %s', error?.message);
+      throw new TRPCError({
+        cause: error,
+        code: 'INTERNAL_SERVER_ERROR',
+        message: error?.message || 'Failed to ingest heterogeneous agent events',
+      });
+    }
+  }),
+
+  /**
+   * Terminal handshake from a `lh hetero exec` producer: signals process exit
+   * and carries the run's high-level outcome. Always emits a final
+   * `agent_runtime_end` so renderer subscribers can shut down even when the
+   * CLI's own end-event was lost mid-flight.
+   */
+  heteroFinish: heteroAgentProcedure.input(HeteroFinishSchema).mutation(async ({ input, ctx }) => {
+    const { agentType, error, operationId, result, sessionId, topicId } = input;
+
+    log('heteroFinish: topic=%s op=%s type=%s result=%s', topicId, operationId, agentType, result);
+
+    try {
+      await ctx.heterogeneousAgentService.heteroFinish({
+        agentType,
+        error,
+        operationId,
+        result,
+        sessionId,
+        topicId,
+      });
+
+      // Trigger task lifecycle transition — mirrors the onComplete hook that the
+      // normal LLM execAgent path dispatches after AgentRuntimeService finishes.
+      // The hetero path spawns the sandbox fire-and-forget and returns early, so
+      // the hook is never registered or dispatched; we must call onTopicComplete
+      // explicitly here when the CLI signals process exit.
+      //
+      // Guard: heteroFinish can be called more than once for the same operation
+      // (signal path sends cancelled, normal exit sends the real result, and
+      // transient transport failures can replay). onTopicComplete is NOT
+      // idempotent (reason='error' creates briefs), so skip the call when the
+      // topic is already in a terminal state.
+      const TERMINAL_TOPIC_STATUSES = new Set(['canceled', 'completed', 'failed', 'timeout']);
+      try {
+        const taskTopicModel = new TaskTopicModel(ctx.serverDB, ctx.userId);
+        const taskTopic = await taskTopicModel.findByTopicId(topicId);
+        if (taskTopic && !TERMINAL_TOPIC_STATUSES.has(taskTopic.status)) {
+          const taskModel = new TaskModel(ctx.serverDB, ctx.userId);
+          const task = await taskModel.findById(taskTopic.taskId);
+          if (task) {
+            const reason =
+              result === 'success' ? 'done' : result === 'cancelled' ? 'interrupted' : 'error';
+            const taskLifecycle = new TaskLifecycleService(ctx.serverDB, ctx.userId);
+            await taskLifecycle.onTopicComplete({
+              errorMessage: error?.message,
+              operationId,
+              reason,
+              taskId: task.id,
+              taskIdentifier: task.identifier,
+              topicId,
+            });
+          }
+        }
+      } catch (lifecycleErr: any) {
+        // Non-fatal: log but do not fail the heteroFinish ack. The CLI has
+        // already finished; failing here would cause it to retry unnecessarily.
+        log('heteroFinish: task lifecycle update failed (non-fatal): %s', lifecycleErr?.message);
+      }
+
+      return { ack: true as const };
+    } catch (err: any) {
+      log('heteroFinish failed: %s', err?.message);
+      throw new TRPCError({
+        cause: err,
+        code: 'INTERNAL_SERVER_ERROR',
+        message: err?.message || 'Failed to finalize heterogeneous agent run',
+      });
     }
   }),
 

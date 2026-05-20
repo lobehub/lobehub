@@ -15,8 +15,10 @@ import {
 
 import { agentService } from '@/services/agent';
 import { discoverService } from '@/services/discover';
-import { useAgentStore } from '@/store/agent';
+import { getAgentStoreState, useAgentStore } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
+import { selectRuntimeType } from '@/store/chat/slices/aiChat/actions/agentDispatcher';
 import { dbMessageSelectors } from '@/store/chat/slices/message/selectors';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
@@ -117,7 +119,7 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
     } = params;
 
     if (runAsTask) {
-      // Execute as async task using GTD exec_task pattern
+      // Dispatch as a sub-agent using the lobe-agent exec_sub_agent pattern
       // Pre-load target agent config to ensure it exists
       const targetAgentExists = useAgentStore.getState().agentMap[agentId];
       if (!targetAgentExists) {
@@ -139,8 +141,8 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
         }
       }
 
-      // Return special state that will be recognized by AgentRuntime's exec_task executor
-      // Following GTD execTask pattern: stop: true + state.type = 'execTask'
+      // Return special state that will be recognized by AgentRuntime's exec_sub_agent executor
+      // Follows the lobe-agent callSubAgent pattern: stop: true + state.type = 'execSubAgent'
       return {
         content: `🚀 Triggered async task to call agent "${agentId}"${taskTitle ? `: ${taskTitle}` : ''}`,
         state: {
@@ -151,7 +153,7 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
             targetAgentId: agentId, // Special field for callAgent - indicates target agent
             timeout: timeout || 1_800_000,
           },
-          type: 'execTask', // Use same type as GTD to reuse existing executor
+          type: 'execSubAgent', // Same wire-level type as lobe-agent so the runtime reuses its executor
         },
         stop: true,
         success: true,
@@ -218,7 +220,7 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
         const conversationContext: ConversationContext = {
           agentId: ctx.agentId || '',
           topicId: ctx.topicId || null,
-          // subAgentId will be set when calling internal_execAgentRuntime
+          // subAgentId will be set when calling executeClientAgent
         };
 
         // Get current messages
@@ -247,15 +249,35 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
             ]
           : messages;
 
+        // callAgent inherits the parent's runtime selection — a hetero/gateway
+        // parent must keep the called sub-agent on the same path. See LOBE-8519.
+        const parentAgentConfig = conversationContext.agentId
+          ? agentSelectors.getAgentConfigById(conversationContext.agentId)(getAgentStoreState())
+          : undefined;
+        const runtimeType = selectRuntimeType({
+          heterogeneousProvider: parentAgentConfig?.agencyConfig?.heterogeneousProvider,
+          isGatewayMode: get().isGatewayModeEnabled(),
+        });
+
+        // TODO(LOBE-8519 follow-up): only client sub-agent dispatch is wired.
+        // Gateway / hetero callAgent invocations fall through to client and
+        // will need their own runner once Step 2 lands.
+        if (runtimeType !== 'client') {
+          console.warn(
+            `[callAgent] runtime=${runtimeType} not yet supported for sub-agent dispatch; ` +
+              'falling through to client mode',
+          );
+        }
+
         try {
-          await get().internal_execAgentRuntime({
+          await get().executeClientAgent({
             context: { ...conversationContext, subAgentId: agentId, scope: 'sub_agent' },
             messages: messagesWithInstruction,
             parentMessageId: ctx.messageId,
             parentMessageType: 'tool',
           });
         } catch (error) {
-          console.error('[callAgent] internal_execAgentRuntime failed:', error);
+          console.error('[callAgent] executeClientAgent failed:', error);
           throw error;
         }
       });

@@ -92,7 +92,31 @@ export interface SendDirectMessageState {
 
 // --- Core Message Operations ---
 
+/**
+ * JSON-safe outbound attachment for `sendMessage`. Either `data` (base64) or
+ * `fetchUrl` (remote URL) must be set. Prefer `fetchUrl` to keep payload size
+ * small when the binary already lives somewhere reachable.
+ *
+ * Mirrors `BotMessageAttachment` on the bot-reply callback path so the agent
+ * runtime, callback service, and Messager tool/CLI all speak the same shape.
+ */
+export interface SendMessageAttachment {
+  /** Base64-encoded bytes. Used when no fetchable URL exists. */
+  data?: string;
+  /** Remote URL the platform server can GET to retrieve the bytes. */
+  fetchUrl?: string;
+  mimeType?: string;
+  name?: string;
+  type: 'image' | 'file' | 'video' | 'audio';
+}
+
 export interface SendMessageParams {
+  /**
+   * Optional: outbound media attachments (images / files / video / audio).
+   * Platforms that don't support outbound media silently drop these so the
+   * text leg still ships.
+   */
+  attachments?: SendMessageAttachment[];
   /** Channel / conversation / room ID */
   channelId: string;
   /** Message content (text, markdown depending on platform support) */
@@ -442,6 +466,11 @@ export interface CreateBotParams {
   credentials: Record<string, string>;
   /** Target platform */
   platform: string;
+  /**
+   * Optional initial settings (DM policy, allowlist, server/user IDs, etc.).
+   * Same shape as `UpdateBotParams.settings`. Omit to use schema defaults.
+   */
+  settings?: Record<string, unknown>;
 }
 
 export interface CreateBotState {

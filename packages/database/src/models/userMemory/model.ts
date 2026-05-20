@@ -46,7 +46,7 @@ import {
   userMemoriesPreferences,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import { SAFE_BM25_QUERY_OPTIONS, sanitizeBm25Query } from '../../utils/bm25';
+import { normalizeBm25MatchQuery, SAFE_BM25_QUERY_OPTIONS } from '../../utils/bm25';
 import { selectNonVectorColumns } from '../../utils/columns';
 import { TopicModel } from '../topic';
 import type { UserMemoryHybridSearchAggregatedResult } from './query';
@@ -81,6 +81,59 @@ const coerceDate = (input: unknown): Date | null => {
   }
 
   return null;
+};
+
+const escapeLikePattern = (value: string) =>
+  value.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_');
+
+const buildContainsCondition = (column: unknown, q?: string) => {
+  const normalized = q?.trim();
+  if (!normalized) return undefined;
+
+  return sql<boolean>`${column} ILIKE ${`%${escapeLikePattern(normalized)}%`} ESCAPE '\\'`;
+};
+
+const isPGliteDatabase = (db: LobeChatDatabase) => {
+  const client = (
+    db as unknown as {
+      $client?: {
+        dataDir?: unknown;
+        waitReady?: unknown;
+      };
+    }
+  ).$client;
+
+  return 'waitReady' in (client ?? {}) && 'dataDir' in (client ?? {});
+};
+
+const buildTextSearchCondition = (params: {
+  bm25MatchQuery: string;
+  groups: { fallbackColumns: unknown[]; fields: string[]; keyColumn: AnyColumn }[];
+  normalizedQuery: string;
+  supportsBm25: boolean;
+}) => {
+  const { bm25MatchQuery, groups, normalizedQuery, supportsBm25 } = params;
+
+  if (!normalizedQuery) return undefined;
+
+  const conditions = supportsBm25
+    ? groups
+        .map(({ fields, keyColumn }) => {
+          if (fields.length === 0) return undefined;
+
+          const matchQueries = fields.map(
+            (field) => sql`paradedb.match(${field}, ${bm25MatchQuery}, conjunction_mode => true)`,
+          );
+
+          return sql<boolean>`${keyColumn} @@@ paradedb.boolean(should => ARRAY[${sql.join(matchQueries, sql`, `)}])`;
+        })
+        .filter((condition): condition is SQL<boolean> => Boolean(condition))
+    : groups
+        .flatMap(({ fallbackColumns }) => fallbackColumns)
+        .map((column) => buildContainsCondition(column, normalizedQuery))
+        .filter((condition): condition is SQL<boolean> => Boolean(condition));
+
+  return conditions.length > 0 ? or(...conditions) : undefined;
 };
 
 const parseAssociationExtra = (
@@ -900,9 +953,27 @@ export class UserMemoryModel {
 
     const normalizedQuery = typeof q === 'string' ? q.trim() : '';
     const resolvedLayer = layer ?? LayersEnum.Context;
-    const bm25Query = normalizedQuery
-      ? sanitizeBm25Query(normalizedQuery, SAFE_BM25_QUERY_OPTIONS)
+    const bm25MatchQuery = normalizedQuery
+      ? normalizeBm25MatchQuery(normalizedQuery, SAFE_BM25_QUERY_OPTIONS)
       : '';
+    // NOTICE:
+    // Why this workaround is needed.
+    // PGlite-based tests do not provide ParadeDB `pg_search`, so BM25 `@@@`
+    // operators fail during local/test execution.
+    //
+    // Root cause summary.
+    // `getTestDB.ts` intentionally skips migrations containing `pg_search` or
+    // `bm25` for PGlite compatibility, which means lexical search paths in this
+    // model cannot rely on BM25 there.
+    //
+    // Source/context.
+    // See `packages/database/src/core/getTestDB.ts` where those migration
+    // statements are filtered out before executing test migrations.
+    //
+    // Removal condition.
+    // Remove this fallback once the test database can execute the same BM25
+    // operators/indexes as the production PostgreSQL environment.
+    const supportsBm25 = !isPGliteDatabase(this.db);
 
     const conditions: Array<SQL | undefined> = [
       eq(userMemories.userId, this.userId),
@@ -969,9 +1040,27 @@ export class UserMemoryModel {
 
         const contextFilters: Array<SQL | undefined> = [
           whereClause,
-          normalizedQuery
-            ? sql`(${userMemories.title} @@@ ${bm25Query} OR ${userMemories.summary} @@@ ${bm25Query} OR ${userMemories.details} @@@ ${bm25Query} OR ${userMemoriesContexts.title} @@@ ${bm25Query} OR ${userMemoriesContexts.description} @@@ ${bm25Query} OR ${userMemoriesContexts.currentStatus} @@@ ${bm25Query})`
-            : undefined,
+          buildTextSearchCondition({
+            bm25MatchQuery,
+            groups: [
+              {
+                fallbackColumns: [userMemories.title, userMemories.summary, userMemories.details],
+                fields: ['title', 'summary', 'details'],
+                keyColumn: userMemories.id,
+              },
+              {
+                fallbackColumns: [
+                  userMemoriesContexts.title,
+                  userMemoriesContexts.description,
+                  userMemoriesContexts.currentStatus,
+                ],
+                fields: ['title', 'description', 'current_status'],
+                keyColumn: userMemoriesContexts.id,
+              },
+            ],
+            normalizedQuery,
+            supportsBm25,
+          }),
           types && types.length > 0 ? inArray(userMemoriesContexts.type, types) : undefined,
           tags && tags.length > 0
             ? or(
@@ -1058,9 +1147,27 @@ export class UserMemoryModel {
 
         const activityFilters: Array<SQL | undefined> = [
           whereClause,
-          normalizedQuery
-            ? sql`(${userMemories.title} @@@ ${bm25Query} OR ${userMemories.summary} @@@ ${bm25Query} OR ${userMemories.details} @@@ ${bm25Query} OR ${userMemoriesActivities.narrative} @@@ ${bm25Query} OR ${userMemoriesActivities.notes} @@@ ${bm25Query} OR ${userMemoriesActivities.feedback} @@@ ${bm25Query})`
-            : undefined,
+          buildTextSearchCondition({
+            bm25MatchQuery,
+            groups: [
+              {
+                fallbackColumns: [userMemories.title, userMemories.summary, userMemories.details],
+                fields: ['title', 'summary', 'details'],
+                keyColumn: userMemories.id,
+              },
+              {
+                fallbackColumns: [
+                  userMemoriesActivities.narrative,
+                  userMemoriesActivities.notes,
+                  userMemoriesActivities.feedback,
+                ],
+                fields: ['narrative', 'notes', 'feedback'],
+                keyColumn: userMemoriesActivities.id,
+              },
+            ],
+            normalizedQuery,
+            supportsBm25,
+          }),
           types && types.length > 0 ? inArray(userMemoriesActivities.type, types) : undefined,
           status && status.length > 0 ? inArray(userMemoriesActivities.status, status) : undefined,
           tags && tags.length > 0
@@ -1155,9 +1262,27 @@ export class UserMemoryModel {
 
         const experienceFilters: Array<SQL | undefined> = [
           whereClause,
-          normalizedQuery
-            ? sql`(${userMemories.title} @@@ ${bm25Query} OR ${userMemories.summary} @@@ ${bm25Query} OR ${userMemories.details} @@@ ${bm25Query} OR ${userMemoriesExperiences.situation} @@@ ${bm25Query} OR ${userMemoriesExperiences.keyLearning} @@@ ${bm25Query} OR ${userMemoriesExperiences.action} @@@ ${bm25Query})`
-            : undefined,
+          buildTextSearchCondition({
+            bm25MatchQuery,
+            groups: [
+              {
+                fallbackColumns: [userMemories.title, userMemories.summary, userMemories.details],
+                fields: ['title', 'summary', 'details'],
+                keyColumn: userMemories.id,
+              },
+              {
+                fallbackColumns: [
+                  userMemoriesExperiences.situation,
+                  userMemoriesExperiences.keyLearning,
+                  userMemoriesExperiences.action,
+                ],
+                fields: ['situation', 'key_learning', 'action'],
+                keyColumn: userMemoriesExperiences.id,
+              },
+            ],
+            normalizedQuery,
+            supportsBm25,
+          }),
           types && types.length > 0 ? inArray(userMemoriesExperiences.type, types) : undefined,
           tags && tags.length > 0
             ? or(...tags.map((tag) => sql<boolean>`${tag} = ANY(${userMemoriesExperiences.tags})`))
@@ -1232,9 +1357,23 @@ export class UserMemoryModel {
 
         const identityFilters: Array<SQL | undefined> = [
           whereClause,
-          normalizedQuery
-            ? sql`(${userMemories.title} @@@ ${bm25Query} OR ${userMemories.summary} @@@ ${bm25Query} OR ${userMemories.details} @@@ ${bm25Query} OR ${userMemoriesIdentities.description} @@@ ${bm25Query} OR ${userMemoriesIdentities.role} @@@ ${bm25Query})`
-            : undefined,
+          buildTextSearchCondition({
+            bm25MatchQuery,
+            groups: [
+              {
+                fallbackColumns: [userMemories.title, userMemories.summary, userMemories.details],
+                fields: ['title', 'summary', 'details'],
+                keyColumn: userMemories.id,
+              },
+              {
+                fallbackColumns: [userMemoriesIdentities.description, userMemoriesIdentities.role],
+                fields: ['description', 'role'],
+                keyColumn: userMemoriesIdentities.id,
+              },
+            ],
+            normalizedQuery,
+            supportsBm25,
+          }),
           types && types.length > 0 ? inArray(userMemoriesIdentities.type, types) : undefined,
           tags && tags.length > 0
             ? or(...tags.map((tag) => sql<boolean>`${tag} = ANY(${userMemoriesIdentities.tags})`))
@@ -1316,9 +1455,26 @@ export class UserMemoryModel {
 
         const preferenceFilters: Array<SQL | undefined> = [
           whereClause,
-          normalizedQuery
-            ? sql`(${userMemories.title} @@@ ${bm25Query} OR ${userMemories.summary} @@@ ${bm25Query} OR ${userMemories.details} @@@ ${bm25Query} OR ${userMemoriesPreferences.conclusionDirectives} @@@ ${bm25Query} OR ${userMemoriesPreferences.suggestions} @@@ ${bm25Query})`
-            : undefined,
+          buildTextSearchCondition({
+            bm25MatchQuery,
+            groups: [
+              {
+                fallbackColumns: [userMemories.title, userMemories.summary, userMemories.details],
+                fields: ['title', 'summary', 'details'],
+                keyColumn: userMemories.id,
+              },
+              {
+                fallbackColumns: [
+                  userMemoriesPreferences.conclusionDirectives,
+                  userMemoriesPreferences.suggestions,
+                ],
+                fields: ['conclusion_directives', 'suggestions'],
+                keyColumn: userMemoriesPreferences.id,
+              },
+            ],
+            normalizedQuery,
+            supportsBm25,
+          }),
           types && types.length > 0 ? inArray(userMemoriesPreferences.type, types) : undefined,
           tags && tags.length > 0
             ? or(...tags.map((tag) => sql<boolean>`${tag} = ANY(${userMemoriesPreferences.tags})`))
@@ -2533,7 +2689,7 @@ export class UserMemoryModel {
       .select(selectNonVectorColumns(userMemoriesIdentities))
       .from(userMemoriesIdentities)
       .where(eq(userMemoriesIdentities.userId, this.userId))
-      .orderBy(desc(userMemoriesIdentities.capturedAt));
+      .orderBy(desc(userMemoriesIdentities.capturedAt), desc(userMemoriesIdentities.createdAt));
 
     return res;
   };
@@ -2547,7 +2703,7 @@ export class UserMemoryModel {
       .from(userMemoriesIdentities)
       .innerJoin(userMemories, eq(userMemories.id, userMemoriesIdentities.userMemoryId))
       .where(eq(userMemoriesIdentities.userId, this.userId))
-      .orderBy(desc(userMemoriesIdentities.capturedAt));
+      .orderBy(desc(userMemoriesIdentities.capturedAt), desc(userMemoriesIdentities.createdAt));
 
     return res;
   };
@@ -2559,7 +2715,7 @@ export class UserMemoryModel {
       .where(
         and(eq(userMemoriesIdentities.userId, this.userId), eq(userMemoriesIdentities.type, type)),
       )
-      .orderBy(desc(userMemoriesIdentities.capturedAt));
+      .orderBy(desc(userMemoriesIdentities.capturedAt), desc(userMemoriesIdentities.createdAt));
 
     return res;
   };

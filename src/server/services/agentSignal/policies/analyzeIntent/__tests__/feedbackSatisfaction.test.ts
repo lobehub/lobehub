@@ -1,4 +1,5 @@
 // @vitest-environment node
+import type { SourceAgentUserMessage } from '@lobechat/agent-signal/source';
 import { RequestTrigger } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -6,7 +7,6 @@ import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
 import { createRuntimeProcessorContext } from '../../../runtime/context';
-import type { SourceAgentUserMessage } from '../../../sourceTypes';
 import { createFeedbackSatisfactionJudgeProcessor } from '../feedbackSatisfaction';
 
 vi.mock('@/server/modules/ModelRuntime', () => ({
@@ -17,12 +17,13 @@ const createUserMessageSource = (
   sourceId: string,
   message: string,
   serializedContext = 'topic=repo-review;assistant_behavior=verbose',
+  intents: SourceAgentUserMessage['payload']['intents'] = ['document', 'memory'],
 ): SourceAgentUserMessage => ({
   chain: { chainId: `chain:${sourceId}`, rootSourceId: sourceId },
   payload: {
     agentId: 'agent_1',
     documentPayload: { section: 'answer-style' },
-    intents: ['document', 'memory'],
+    intents,
     memoryPayload: { preplanned: true },
     message,
     messageId: `msg:${sourceId}`,
@@ -152,7 +153,7 @@ describe('feedbackSatisfactionJudge', () => {
         ],
         model: 'gpt-test',
       }),
-      { metadata: { trigger: RequestTrigger.Memory } },
+      { metadata: { trigger: RequestTrigger.AgentSignal } },
     );
     expect(result).toEqual(
       expect.objectContaining({
@@ -171,6 +172,222 @@ describe('feedbackSatisfactionJudge', () => {
   it('fails fast when no judge or runtime context is configured', () => {
     expect(() => createFeedbackSatisfactionJudgeProcessor()).toThrow(
       'Feedback satisfaction judge requires either an injected judge or both db and userId.',
+    );
+  });
+
+  /**
+   * @example
+   * explicit skill-management wording still uses the satisfaction judge; skill intent is resolved later.
+   */
+  it('keeps explicit skill-management wording in the satisfaction stage', async () => {
+    const judge = {
+      judgeSatisfaction: vi.fn().mockResolvedValue({
+        confidence: 0.81,
+        evidence: [
+          {
+            cue: 'accepted draft',
+            excerpt: 'SKILL.md 草稿可以用',
+          },
+        ],
+        reason: 'positive acceptance of the foreground draft',
+        result: 'satisfied',
+      }),
+    };
+    const ctx = createRuntimeProcessorContext({
+      backend: {
+        async getGuardState() {
+          return {};
+        },
+        async touchGuardState() {
+          return {};
+        },
+      },
+      scopeKey: 'topic:thread_1',
+    });
+    const processor = createFeedbackSatisfactionJudgeProcessor({ judge });
+    const result = await processor.handle(
+      createUserMessageSource(
+        'source_skill_convert',
+        '刚才 chat agent 写的 SKILL.md 草稿可以用，把它转成真正的 skills/bundle。',
+        'topic=repo-review',
+        ['skill'],
+      ),
+      ctx,
+    );
+
+    expect(judge.judgeSatisfaction).toHaveBeenCalledWith({
+      message: '刚才 chat agent 写的 SKILL.md 草稿可以用，把它转成真正的 skills/bundle。',
+      serializedContext: 'topic=repo-review',
+    });
+    expect(result).toEqual(
+      expect.objectContaining({
+        signals: [
+          expect.objectContaining({
+            payload: expect.objectContaining({
+              reason: 'positive acceptance of the foreground draft',
+              result: 'satisfied',
+            }),
+          }),
+        ],
+      }),
+    );
+  });
+
+  it('keeps explicit skill merge requests in the satisfaction judge', async () => {
+    const judge = {
+      judgeSatisfaction: vi.fn().mockResolvedValue({
+        confidence: 0.84,
+        evidence: [
+          {
+            cue: 'merge request',
+            excerpt: 'combine the repeated parts',
+          },
+        ],
+        reason: 'explicit request to change reusable workflow material',
+        result: 'not_satisfied',
+      }),
+    };
+    const ctx = createRuntimeProcessorContext({
+      backend: {
+        async getGuardState() {
+          return {};
+        },
+        async touchGuardState() {
+          return {};
+        },
+      },
+      scopeKey: 'topic:thread_1',
+    });
+    const processor = createFeedbackSatisfactionJudgeProcessor({ judge });
+    const result = await processor.handle(
+      createUserMessageSource(
+        'source_skill_merge',
+        'The PR review checklist and release-risk checklist overlap; combine the repeated parts.',
+        'topic=repo-review',
+        ['skill'],
+      ),
+      ctx,
+    );
+
+    expect(judge.judgeSatisfaction).toHaveBeenCalledWith({
+      message:
+        'The PR review checklist and release-risk checklist overlap; combine the repeated parts.',
+      serializedContext: 'topic=repo-review',
+    });
+    expect(result).toEqual(
+      expect.objectContaining({
+        signals: [
+          expect.objectContaining({
+            payload: expect.objectContaining({
+              reason: 'explicit request to change reusable workflow material',
+              result: 'not_satisfied',
+            }),
+          }),
+        ],
+      }),
+    );
+  });
+
+  it('falls back to the judge for implicit strong skill learning instructions', async () => {
+    const judge = {
+      judgeSatisfaction: vi.fn().mockResolvedValue({
+        confidence: 0.86,
+        evidence: [
+          {
+            cue: 'future scoped procedure reuse',
+            excerpt: '以后遇到这种数据库迁移 review，就按刚才那套检查顺序来。',
+          },
+        ],
+        reason: 'implicit but strong future skill-learning instruction',
+        result: 'not_satisfied',
+      }),
+    };
+    const ctx = createRuntimeProcessorContext({
+      backend: {
+        async getGuardState() {
+          return {};
+        },
+        async touchGuardState() {
+          return {};
+        },
+      },
+      scopeKey: 'topic:thread_1',
+    });
+    const processor = createFeedbackSatisfactionJudgeProcessor({ judge });
+    const result = await processor.handle(
+      createUserMessageSource(
+        'source_skill_implicit_strong',
+        '以后遇到这种数据库迁移 review，就按刚才那套检查顺序来。',
+        'topic=database-migration-review',
+        ['skill'],
+      ),
+      ctx,
+    );
+
+    expect(judge.judgeSatisfaction).toHaveBeenCalledWith({
+      message: '以后遇到这种数据库迁移 review，就按刚才那套检查顺序来。',
+      serializedContext: 'topic=database-migration-review',
+    });
+    expect(result).toEqual(
+      expect.objectContaining({
+        signals: [
+          expect.objectContaining({
+            payload: expect.objectContaining({
+              reason: 'implicit but strong future skill-learning instruction',
+              result: 'not_satisfied',
+            }),
+          }),
+        ],
+      }),
+    );
+  });
+
+  it('falls back to the judge for generic weak positive skill feedback', async () => {
+    const judge = {
+      judgeSatisfaction: vi.fn().mockResolvedValue({
+        confidence: 0.78,
+        evidence: [{ cue: 'generic praise', excerpt: '这个解释挺有帮助的。' }],
+        reason: 'generic positive feedback without a durable learning instruction',
+        result: 'satisfied',
+      }),
+    };
+    const ctx = createRuntimeProcessorContext({
+      backend: {
+        async getGuardState() {
+          return {};
+        },
+        async touchGuardState() {
+          return {};
+        },
+      },
+      scopeKey: 'topic:thread_1',
+    });
+    const processor = createFeedbackSatisfactionJudgeProcessor({ judge });
+    const result = await processor.handle(
+      createUserMessageSource(
+        'source_skill_weak_positive',
+        '这个解释挺有帮助的。',
+        'topic=debugging-help',
+        ['skill'],
+      ),
+      ctx,
+    );
+
+    expect(judge.judgeSatisfaction).toHaveBeenCalledWith({
+      message: '这个解释挺有帮助的。',
+      serializedContext: 'topic=debugging-help',
+    });
+    expect(result).toEqual(
+      expect.objectContaining({
+        signals: [
+          expect.objectContaining({
+            payload: expect.objectContaining({
+              reason: 'generic positive feedback without a durable learning instruction',
+              result: 'satisfied',
+            }),
+          }),
+        ],
+      }),
     );
   });
 });

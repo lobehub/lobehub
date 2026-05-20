@@ -4,9 +4,10 @@ export const WebOnboardingIdentifier = 'lobe-web-onboarding';
 
 export const WebOnboardingApiName = {
   finishOnboarding: 'finishOnboarding',
-  getOnboardingState: 'getOnboardingState',
   readDocument: 'readDocument',
   saveUserQuestion: 'saveUserQuestion',
+  showAgentMarketplace: 'showAgentMarketplace',
+  submitAgentPick: 'submitAgentPick',
   updateDocument: 'updateDocument',
   writeDocument: 'writeDocument',
 } as const;

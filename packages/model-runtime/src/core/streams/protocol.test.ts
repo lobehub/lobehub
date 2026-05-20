@@ -243,28 +243,137 @@ describe('createTokenSpeedCalculator', async () => {
 });
 
 describe('convertIterableToStream', () => {
+  const drain = async (readable: ReadableStream<any>) => {
+    const reader = readable.getReader();
+    const chunks: any[] = [];
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+    return chunks;
+  };
+
   it('should surface errors from subsequent pulls as error chunks', async () => {
     async function* erroringStream() {
       yield 'first';
       throw new Error('rate limit');
     }
 
-    const readable = convertIterableToStream(erroringStream()).pipeThrough(
-      createFirstErrorHandleTransformer(),
+    const chunks = await drain(
+      convertIterableToStream(erroringStream()).pipeThrough(createFirstErrorHandleTransformer()),
     );
-
-    const reader = readable.getReader();
-    const chunks: any[] = [];
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      chunks.push(value);
-    }
 
     expect(chunks[0]).toBe('first');
     expect(chunks[1][FIRST_CHUNK_ERROR_KEY]).toBe(true);
     expect(chunks[1].message).toBe('rate limit');
+  });
+
+  it('should enrich error chunks with provider/model context', async () => {
+    async function* erroringStream() {
+      yield 'first';
+      throw new Error('connection reset');
+    }
+
+    const chunks = await drain(
+      convertIterableToStream(erroringStream(), {
+        model: 'deepseek-v4-flash',
+        provider: 'lobehub',
+      }).pipeThrough(createFirstErrorHandleTransformer(undefined, 'lobehub')),
+    );
+
+    expect(chunks[1].message).toBe('connection reset');
+    expect(chunks[1].provider).toBe('lobehub');
+    expect(chunks[1].model).toBe('deepseek-v4-flash');
+  });
+
+  it('should extract parse position from JSON SyntaxError messages', async () => {
+    async function* erroringStream() {
+      yield 'first';
+      // Reproduce the V8 JSON.parse SyntaxError shape that surfaces from the
+      // OpenAI SDK iterator when an upstream SSE chunk contains an illegal
+      // backslash escape — see LobeHub op_1778403331540 for a real instance.
+      throw new SyntaxError(
+        'Bad escaped character in JSON at position 160050 (line 1 column 160051)',
+      );
+    }
+
+    const chunks = await drain(
+      convertIterableToStream(erroringStream(), { provider: 'lobehub' }).pipeThrough(
+        createFirstErrorHandleTransformer(undefined, 'lobehub'),
+      ),
+    );
+
+    expect(chunks[1].name).toBe('SyntaxError');
+    expect(chunks[1].parsePosition).toBe(160050);
+  });
+
+  it('should surface error.cause when present', async () => {
+    async function* erroringStream() {
+      yield 'first';
+      throw new Error('wrapper', { cause: new SyntaxError('inner parse failure') });
+    }
+
+    const chunks = await drain(
+      convertIterableToStream(erroringStream()).pipeThrough(createFirstErrorHandleTransformer()),
+    );
+
+    expect(chunks[1].causeName).toBe('SyntaxError');
+    expect(chunks[1].causeMessage).toBe('inner parse failure');
+  });
+
+  it('should extract parsePosition from a wrapped SyntaxError cause', async () => {
+    // Many provider SDKs rethrow JSON.parse failures wrapped in their own
+    // error class (e.g. APIError) — the outer name is no longer
+    // 'SyntaxError', so the offset has to be pulled from `cause`.
+    class APIError extends Error {
+      constructor(message: string, options?: { cause?: unknown }) {
+        super(message, options);
+        this.name = 'APIError';
+      }
+    }
+
+    async function* erroringStream() {
+      yield 'first';
+      throw new APIError('upstream failed', {
+        cause: new SyntaxError(
+          'Bad escaped character in JSON at position 160050 (line 1 column 160051)',
+        ),
+      });
+    }
+
+    const chunks = await drain(
+      convertIterableToStream(erroringStream()).pipeThrough(createFirstErrorHandleTransformer()),
+    );
+
+    expect(chunks[1].name).toBe('APIError');
+    expect(chunks[1].causeName).toBe('SyntaxError');
+    expect(chunks[1].parsePosition).toBe(160050);
+  });
+
+  it('should not throw when cause contains BigInt or circular refs', async () => {
+    // structuredClone accepts both of these; JSON.stringify does not. If the
+    // outer stringify in buildStreamErrorPayload fails, the FIRST_CHUNK_ERROR
+    // chunk is never emitted and the stream silently dies — test that the
+    // diagnostic path stays intact.
+    const circular: Record<string, unknown> = { kind: 'detail' };
+    circular.self = circular;
+    const badCause = { big: 9_007_199_254_740_993n, ref: circular };
+
+    async function* erroringStream() {
+      yield 'first';
+      throw new Error('upstream blew up', { cause: badCause });
+    }
+
+    const chunks = await drain(
+      convertIterableToStream(erroringStream()).pipeThrough(createFirstErrorHandleTransformer()),
+    );
+
+    expect(chunks[1].message).toBe('upstream blew up');
+    // Cause is an object, not an Error, so it goes through `toJsonSafe`.
+    expect(chunks[1].cause).toBeDefined();
+    expect(chunks[1].cause.big).toBe('9007199254740993');
+    expect(chunks[1].cause.ref.self).toBe('[Circular]');
   });
 });
 
@@ -590,6 +699,78 @@ describe('createCallbacksTransformer', () => {
 
     expect(onCompletion).toHaveBeenCalledWith(expectedData);
     expect(onFinal).toHaveBeenCalledWith(expectedData);
+  });
+
+  it('should capture finishReason from stop chunks and include in final data', async () => {
+    const onCompletion = vi.fn();
+    const onFinal = vi.fn();
+    const transformer = createCallbacksTransformer({ onCompletion, onFinal });
+
+    // Simulates the Gemini "soft interrupt" path: empty content + non-STOP finishReason
+    // (e.g. RECITATION / MAX_TOKENS) — we MUST capture the reason so downstream
+    // tracing/UI can surface it instead of silently rendering empty.
+    const chunks = [
+      'event: stop\n',
+      `data: ${JSON.stringify('RECITATION')}\n\n`,
+      'event: usage\n',
+      `data: ${JSON.stringify({ totalTokens: 10 })}\n\n`,
+    ];
+
+    await processChunks(transformer, chunks);
+
+    expect(onCompletion).toHaveBeenCalledWith(
+      expect.objectContaining({ finishReason: 'RECITATION' }),
+    );
+    expect(onFinal).toHaveBeenCalledWith(expect.objectContaining({ finishReason: 'RECITATION' }));
+  });
+
+  it('should keep the first finishReason when multiple stop chunks are emitted', async () => {
+    // Anthropic emits message_delta (carrying real stop_reason) followed by a
+    // message_stop sentinel — the meaningful reason must not be clobbered.
+    const onCompletion = vi.fn();
+    const transformer = createCallbacksTransformer({ onCompletion });
+
+    const chunks = [
+      'event: stop\n',
+      `data: ${JSON.stringify('max_tokens')}\n\n`,
+      'event: stop\n',
+      `data: ${JSON.stringify('message_stop')}\n\n`,
+    ];
+
+    await processChunks(transformer, chunks);
+
+    expect(onCompletion).toHaveBeenCalledWith(
+      expect.objectContaining({ finishReason: 'max_tokens' }),
+    );
+  });
+
+  it('should fall back to a later stop chunk when the first one is empty', async () => {
+    const onCompletion = vi.fn();
+    const transformer = createCallbacksTransformer({ onCompletion });
+
+    const chunks = [
+      'event: stop\n',
+      `data: ${JSON.stringify('')}\n\n`,
+      'event: stop\n',
+      `data: ${JSON.stringify('end_turn')}\n\n`,
+    ];
+
+    await processChunks(transformer, chunks);
+
+    expect(onCompletion).toHaveBeenCalledWith(
+      expect.objectContaining({ finishReason: 'end_turn' }),
+    );
+  });
+
+  it('should leave finishReason undefined when no stop chunk is received', async () => {
+    const onFinal = vi.fn();
+    const transformer = createCallbacksTransformer({ onFinal });
+
+    const chunks = ['event: text\n', 'data: "Hi"\n\n'];
+
+    await processChunks(transformer, chunks);
+
+    expect(onFinal).toHaveBeenCalledWith(expect.objectContaining({ finishReason: undefined }));
   });
 
   it('should handle speed chunks and include in final data', async () => {

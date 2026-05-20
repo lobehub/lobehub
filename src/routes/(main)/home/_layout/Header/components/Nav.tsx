@@ -30,7 +30,7 @@ const Nav = memo(() => {
   return (
     <Flexbox gap={1} paddingInline={4}>
       {items
-        .filter((item) => HEADER_KEYS.has(item.key))
+        .filter((item) => HEADER_KEYS.has(item.key) && !item.hidden)
         .map((item) => {
           const extra = item.isNew ? newBadge : undefined;
 

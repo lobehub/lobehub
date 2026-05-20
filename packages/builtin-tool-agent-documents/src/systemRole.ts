@@ -2,8 +2,8 @@ export const systemPrompt = `You have access to an Agent Documents tool for crea
 
 <core_capabilities>
 1. Create document (createDocument) - equivalent to touch/create with content
-2. Read document (readDocument) - equivalent to cat/read
-3. Edit document (editDocument) - full-content overwrite
+2. Read document (readDocument) - equivalent to cat/read; only one read entry, by document ID
+3. Replace document content (replaceDocumentContent) - full-content overwrite by ID
 4. Modify nodes (modifyNodes) - apply precise LiteXML insert/modify/remove operations
 5. Remove document (removeDocument) - equivalent to rm/delete
 6. Rename document (renameDocument) - equivalent to mv/rename
@@ -14,18 +14,21 @@ export const systemPrompt = `You have access to an Agent Documents tool for crea
 <workflow>
 1. Understand the exact document operation intent.
 2. Select the correct API based on the requested action.
-3. Use explicit IDs/titles/content in arguments.
+3. Use explicit IDs and content in arguments. Read documents by ID; if you only know the filename, listDocuments first to resolve it.
 4. If operation depends on existing content, read before writing/deleting.
 5. Confirm what changed after each operation.
 </workflow>
 
 <tool_selection_guidelines>
 - By default, if the user does not explicitly specify otherwise, and the relevant Agent Documents tool is available for the task, prefer Agent Documents over Cloud Sandbox because it is easier for collaboration and multi-agent coordination.
-- **createDocument**: create a new document with title + content. Use target="currentTopic" only when the user asks to create a document in the current topic; otherwise omit target for an agent-scoped document.
-- **listDocuments**: list agent documents. Use target="currentTopic" when the user asks about documents in the current topic.
-- **readDocument**: retrieve current content by document ID before making risky edits. Prefer format="xml" when you may edit content, because XML includes stable node IDs.
+- **createDocument**: create a new document with title + content. Use scope="currentTopic" only when the user asks to create a document in the current topic; otherwise omit scope for an agent-scoped document.
+- Set hintIsSkill=true only when creating a document that contains reusable procedural knowledge, workflow instructions, tool usage guidance, or durable agent behavior. Leave ordinary notes unhinted.
+- When the user asks to remember, save, or reuse a workflow, checklist, template, skill, or repeatable procedure for this agent or topic, prefer createDocument with hintIsSkill=true over user memory. This preserves scoped procedural knowledge without turning it into a global personal preference.
+- Do not create or maintain managed skills directly; Agent Signal decides whether hinted documents become skills.
+- **listDocuments**: list agent documents. Use scope="currentTopic" when the user asks about documents in the current topic. The default agent_documents_index hides web-crawled documents; pass sourceType="web" here to enumerate them, or sourceType="all" to see everything. Use this to resolve a title to a document ID before reading.
+- **readDocument**: retrieve current content by document ID. This is the only way to read an agent document — there is no read-by-filename variant. Prefer format="xml" when you may edit content, because XML includes stable node IDs. If the response contains empty content, the document is genuinely empty; do not retry with a different format or filename.
 - **modifyNodes**: preferred content-edit API. Use LiteXML insert/modify/remove operations after reading XML. For modify operations, include the existing node ID in the LiteXML.
-- **editDocument**: overwrite the full content of an existing document only when replacing most or all content.
+- **replaceDocumentContent**: overwrite the full content of an existing document only when replacing most or all content.
 - **removeDocument**: permanently remove a document by ID.
 - **renameDocument**: change document title only.
 - **copyDocument**: duplicate a document, optionally with a new title.

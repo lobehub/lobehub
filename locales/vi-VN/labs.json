@@ -1,13 +1,15 @@
 {
+  "features.agentSelfIteration.desc": "Cho phép trợ lý tự phản tư, xây dựng khả năng tự nhận thức và liên tục cải thiện thông qua các nỗ lực và tương tác đang diễn ra.",
+  "features.agentSelfIteration.title": "Tự lặp của tác nhân",
   "features.assistantMessageGroup.desc": "Nhóm các tin nhắn của tác nhân và kết quả gọi công cụ lại với nhau để hiển thị",
   "features.assistantMessageGroup.title": "Nhóm Tin Nhắn Tác Nhân",
   "features.gatewayMode.desc": "Thực thi các tác vụ của tác nhân trên máy chủ thông qua Gateway WebSocket thay vì chạy cục bộ. Giúp tăng tốc độ xử lý và giảm mức sử dụng tài nguyên trên thiết bị của người dùng.",
   "features.gatewayMode.title": "Thực thi tác nhân phía máy chủ (Gateway)",
   "features.groupChat.desc": "Kích hoạt phối hợp trò chuyện nhóm với nhiều tác nhân.",
   "features.groupChat.title": "Trò Chuyện Nhóm (Đa Tác Nhân)",
-  "features.heterogeneousAgent.desc": "Kích hoạt thực thi tác nhân không đồng nhất với Claude Code, Codex CLI và các CLI tác nhân bên ngoài khác. Tạo tùy chọn \"Tác nhân Claude Code\" trong menu tác nhân ở thanh bên.",
-  "features.heterogeneousAgent.title": "Tác nhân không đồng nhất (Claude Code)",
   "features.inputMarkdown.desc": "Hiển thị Markdown trong khu vực nhập liệu theo thời gian thực (văn bản in đậm, khối mã, bảng, v.v.).",
   "features.inputMarkdown.title": "Hiển Thị Markdown Trong Ô Nhập",
+  "features.messenger.desc": "Trò chuyện với các đại lý của bạn từ Telegram (và các ứng dụng nhắn tin khác) thông qua bot LobeHub được chia sẻ. Thêm một tab Messenger trong Cài đặt để liên kết tài khoản của bạn và chọn đại lý nhận tin nhắn.",
+  "features.messenger.title": "Nhắn tin",
   "title": "Phòng Thí Nghiệm"
 }

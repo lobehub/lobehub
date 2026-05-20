@@ -122,6 +122,85 @@ describe('GeneralChatAgent', () => {
         },
       });
     });
+
+    it('should trigger compression using thresholdRatio from compressionConfig', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        compressionConfig: {
+          enabled: true,
+          maxWindowToken: 200_000,
+          thresholdRatio: 0.5,
+        },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const state = createMockState({
+        messages: [
+          {
+            content: '',
+            metadata: { usage: { totalOutputTokens: 100_001 } },
+            role: 'assistant',
+          },
+        ] as any,
+      });
+      const context = createMockContext('init', { model: 'gpt-4o-mini', provider: 'openai' });
+
+      const result = await agent.runner(context, state);
+
+      expect(result).toEqual(expectCompressionInstruction(state.messages));
+    });
+
+    // LOBE-8973 Bug B: state.tools must feed into the compression budget,
+    // otherwise large tool manifests (16-22K tokens observed on openrouter)
+    // slip past the threshold and overflow the model context window.
+    it('should fold state.tools into the compression budget on init', async () => {
+      const compressionConfig = {
+        enabled: true,
+        maxWindowToken: 200_000,
+        thresholdRatio: 0.5,
+      };
+      const messages = [
+        {
+          content: '',
+          metadata: { usage: { totalOutputTokens: 50_000 } },
+          role: 'assistant',
+        },
+      ] as any;
+      const context = createMockContext('init', { model: 'gpt-4o-mini', provider: 'openai' });
+
+      // Without tools: raw=50K, adjusted=62.5K vs 100K threshold → no compression.
+      const agentNoTools = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        compressionConfig,
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+      const noToolsResult = await agentNoTools.runner(context, createMockState({ messages }));
+      expect((noToolsResult as any).type).toBe('call_llm');
+
+      // With a chunky tool manifest (~66K tokens) total raw input is ~116K,
+      // drift-adjusted ~145K, which crosses the 100K threshold.
+      const bigTool = {
+        function: {
+          description: 'x'.repeat(400_000),
+          name: 'big_tool',
+          parameters: { properties: {}, type: 'object' },
+        },
+        type: 'function',
+      };
+      const agentWithTools = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        compressionConfig,
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+      const withToolsResult = await agentWithTools.runner(
+        context,
+        createMockState({ messages, tools: [bigTool] as any }),
+      );
+      expect((withToolsResult as any).type).toBe('compress_context');
+    });
   });
 
   describe('llm_result phase', () => {
@@ -145,6 +224,41 @@ describe('GeneralChatAgent', () => {
         type: 'finish',
         reason: 'completed',
         reasonDetail: 'LLM response completed without tool calls',
+      });
+    });
+
+    // Regression for LOBE-8696: when the LLM emits tool_calls whose names
+    // can't be resolved (e.g. `activateTools` instead of
+    // `lobe-activator____activateTools`), the agent used to silently finish
+    // with "completed without tool calls". Surface the unresolved names so
+    // dashboards can spot the regression.
+    it('should report unresolvable tool_calls in reasonDetail', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const state = createMockState();
+      const context = createMockContext('llm_result', {
+        hasToolsCalling: true,
+        toolsCalling: [],
+        parentMessageId: 'msg-1',
+        result: {
+          content: '',
+          tool_calls: [
+            { id: 't1', type: 'function', function: { name: 'activateTools', arguments: '{}' } },
+            { id: 't2', type: 'function', function: { name: 'activateSkill', arguments: '{}' } },
+          ],
+        },
+      });
+
+      const result = await agent.runner(context, state);
+
+      expect(result).toEqual({
+        type: 'finish',
+        reason: 'completed',
+        reasonDetail: 'LLM returned 2 unresolvable tool_calls: activateTools, activateSkill',
       });
     });
 
@@ -388,8 +502,8 @@ describe('GeneralChatAgent', () => {
   });
 
   describe('tool_result phase', () => {
-    describe('GTD async tasks', () => {
-      it('should return exec_task for single async task (execTask)', async () => {
+    describe('Lobe Agent sub-agents (execSubAgent state)', () => {
+      it('should return exec_sub_agent for single sub-agent (execSubAgent)', async () => {
         const agent = new GeneralChatAgent({
           agentConfig: { maxSteps: 100 },
           operationId: 'test-session',
@@ -402,7 +516,7 @@ describe('GeneralChatAgent', () => {
           stop: true,
           data: {
             state: {
-              type: 'execTask',
+              type: 'execSubAgent',
               parentMessageId: 'exec-parent-msg',
               task: { instruction: 'Do something async', timeout: 30000 },
             },
@@ -412,7 +526,7 @@ describe('GeneralChatAgent', () => {
         const result = await agent.runner(context, state);
 
         expect(result).toEqual({
-          type: 'exec_task',
+          type: 'exec_sub_agent',
           payload: {
             parentMessageId: 'exec-parent-msg',
             task: { instruction: 'Do something async', timeout: 30000 },
@@ -420,7 +534,7 @@ describe('GeneralChatAgent', () => {
         });
       });
 
-      it('should return exec_tasks for multiple async tasks (execTasks)', async () => {
+      it('should return exec_sub_agents for multiple sub-agents (execSubAgents)', async () => {
         const agent = new GeneralChatAgent({
           agentConfig: { maxSteps: 100 },
           operationId: 'test-session',
@@ -437,7 +551,7 @@ describe('GeneralChatAgent', () => {
           stop: true,
           data: {
             state: {
-              type: 'execTasks',
+              type: 'execSubAgents',
               parentMessageId: 'exec-parent-msg',
               tasks,
             },
@@ -447,7 +561,7 @@ describe('GeneralChatAgent', () => {
         const result = await agent.runner(context, state);
 
         expect(result).toEqual({
-          type: 'exec_tasks',
+          type: 'exec_sub_agents',
           payload: {
             parentMessageId: 'exec-parent-msg',
             tasks,
@@ -455,7 +569,7 @@ describe('GeneralChatAgent', () => {
         });
       });
 
-      it('should return exec_client_task for single client-side async task (execClientTask)', async () => {
+      it('should return exec_client_sub_agent for single client-side sub-agent (execClientSubAgent)', async () => {
         const agent = new GeneralChatAgent({
           agentConfig: { maxSteps: 100 },
           operationId: 'test-session',
@@ -468,7 +582,7 @@ describe('GeneralChatAgent', () => {
           stop: true,
           data: {
             state: {
-              type: 'execClientTask',
+              type: 'execClientSubAgent',
               parentMessageId: 'exec-parent-msg',
               task: { type: 'localFile', path: '/path/to/file' },
             },
@@ -478,7 +592,7 @@ describe('GeneralChatAgent', () => {
         const result = await agent.runner(context, state);
 
         expect(result).toEqual({
-          type: 'exec_client_task',
+          type: 'exec_client_sub_agent',
           payload: {
             parentMessageId: 'exec-parent-msg',
             task: { type: 'localFile', path: '/path/to/file' },
@@ -486,7 +600,7 @@ describe('GeneralChatAgent', () => {
         });
       });
 
-      it('should return exec_client_tasks for multiple client-side async tasks (execClientTasks)', async () => {
+      it('should return exec_client_sub_agents for multiple client-side sub-agents (execClientSubAgents)', async () => {
         const agent = new GeneralChatAgent({
           agentConfig: { maxSteps: 100 },
           operationId: 'test-session',
@@ -503,7 +617,7 @@ describe('GeneralChatAgent', () => {
           stop: true,
           data: {
             state: {
-              type: 'execClientTasks',
+              type: 'execClientSubAgents',
               parentMessageId: 'exec-parent-msg',
               tasks,
             },
@@ -513,7 +627,7 @@ describe('GeneralChatAgent', () => {
         const result = await agent.runner(context, state);
 
         expect(result).toEqual({
-          type: 'exec_client_tasks',
+          type: 'exec_client_sub_agents',
           payload: {
             parentMessageId: 'exec-parent-msg',
             tasks,
@@ -521,7 +635,7 @@ describe('GeneralChatAgent', () => {
         });
       });
 
-      it('should not trigger exec_task when stop is false', async () => {
+      it('should not trigger exec_sub_agent when stop is false', async () => {
         const agent = new GeneralChatAgent({
           agentConfig: { maxSteps: 100 },
           operationId: 'test-session',
@@ -537,10 +651,10 @@ describe('GeneralChatAgent', () => {
         });
         const context = createMockContext('tool_result', {
           parentMessageId: 'tool-msg-1',
-          stop: false, // stop is false, should not trigger exec_task
+          stop: false, // stop is false, should not trigger exec_sub_agent
           data: {
             state: {
-              type: 'execTask',
+              type: 'execSubAgent',
               parentMessageId: 'exec-parent-msg',
               task: { instruction: 'Do something async' },
             },
@@ -549,7 +663,7 @@ describe('GeneralChatAgent', () => {
 
         const result = await agent.runner(context, state);
 
-        // Should return call_llm instead of exec_task
+        // Should return call_llm instead of exec_sub_agent
         expect(result).toEqual({
           type: 'call_llm',
           payload: {
@@ -562,7 +676,7 @@ describe('GeneralChatAgent', () => {
         });
       });
 
-      it('should not trigger exec_task when data.state is undefined', async () => {
+      it('should not trigger exec_sub_agent when data.state is undefined', async () => {
         const agent = new GeneralChatAgent({
           agentConfig: { maxSteps: 100 },
           operationId: 'test-session',
@@ -584,7 +698,7 @@ describe('GeneralChatAgent', () => {
 
         const result = await agent.runner(context, state);
 
-        // Should return call_llm instead of exec_task
+        // Should return call_llm instead of exec_sub_agent
         expect(result).toEqual({
           type: 'call_llm',
           payload: {
@@ -650,6 +764,66 @@ describe('GeneralChatAgent', () => {
       const result = await agent.runner(context, state);
 
       expect(result).toEqual(expectCompressionInstruction(state.messages));
+    });
+
+    // LOBE-8973 follow-up: when state.forceFinish is set, RuntimeExecutors strips
+    // every tool before the LLM call (buildStepToolDelta returns deactivatedToolIds
+    // ['*']). The compression budget must mirror that stripping — otherwise the
+    // tool schemas push the budget over threshold and we burn an extra summarization
+    // pass on tokens that won't be sent.
+    it('should skip tools from compression budget on force-finish continuation', async () => {
+      const compressionConfig = {
+        enabled: true,
+        maxWindowToken: 200_000,
+        thresholdRatio: 0.5,
+      };
+      const messages = [
+        { role: 'user', content: 'Hello' },
+        {
+          content: '',
+          metadata: { usage: { totalOutputTokens: 50_000 } },
+          role: 'assistant',
+        },
+        { role: 'tool', content: 'Result', tool_call_id: 'call-1' },
+      ] as any;
+      // Chunky tool manifest that alone is enough to push the request over the
+      // compression threshold when counted in the budget.
+      const bigTool = {
+        function: {
+          description: 'x'.repeat(400_000),
+          name: 'big_tool',
+          parameters: { properties: {}, type: 'object' },
+        },
+        type: 'function',
+      };
+      const context = createMockContext('tool_result', { parentMessageId: 'tool-msg-1' });
+
+      // Sanity check: without forceFinish, the big tool manifest trips compression.
+      const baselineAgent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        compressionConfig,
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+      const baseline = await baselineAgent.runner(
+        context,
+        createMockState({ messages, tools: [bigTool] as any }),
+      );
+      expect((baseline as any).type).toBe('compress_context');
+
+      // With forceFinish set, the executor will drop tools, so the agent must
+      // ignore them in the compression check and go straight to call_llm.
+      const forceFinishAgent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        compressionConfig,
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+      const forced = await forceFinishAgent.runner(
+        context,
+        createMockState({ forceFinish: true, messages, tools: [bigTool] as any }),
+      );
+      expect((forced as any).type).toBe('call_llm');
     });
 
     it('should return request_human_approve when there are pending tools', async () => {
@@ -1439,7 +1613,7 @@ describe('GeneralChatAgent', () => {
     });
   });
 
-  describe('task_result phase (single task)', () => {
+  describe('sub_agent_result phase (single sub-agent)', () => {
     it('should return call_llm when task completed', async () => {
       const agent = new GeneralChatAgent({
         agentConfig: { maxSteps: 100 },
@@ -1455,7 +1629,7 @@ describe('GeneralChatAgent', () => {
         ] as any,
       });
 
-      const context = createMockContext('task_result', {
+      const context = createMockContext('sub_agent_result', {
         parentMessageId: 'task-parent-msg',
         result: {
           success: true,
@@ -1494,7 +1668,7 @@ describe('GeneralChatAgent', () => {
         ] as any,
       });
 
-      const context = createMockContext('task_result', {
+      const context = createMockContext('sub_agent_result', {
         parentMessageId: 'task-parent-msg',
         result: {
           success: false,
@@ -1529,7 +1703,7 @@ describe('GeneralChatAgent', () => {
         ] as any,
       });
 
-      const context = createMockContext('task_result', {
+      const context = createMockContext('sub_agent_result', {
         parentMessageId: 'task-parent-msg',
       });
 
@@ -1539,7 +1713,7 @@ describe('GeneralChatAgent', () => {
     });
   });
 
-  describe('tasks_batch_result phase (multiple tasks)', () => {
+  describe('sub_agents_batch_result phase (multiple sub-agents)', () => {
     it('should return call_llm when tasks completed', async () => {
       const agent = new GeneralChatAgent({
         agentConfig: { maxSteps: 100 },
@@ -1556,7 +1730,7 @@ describe('GeneralChatAgent', () => {
         ] as any,
       });
 
-      const context = createMockContext('tasks_batch_result', {
+      const context = createMockContext('sub_agents_batch_result', {
         parentMessageId: 'task-parent-msg',
         results: [
           { success: true, taskMessageId: 'task-1', threadId: 'thread-1', result: 'Task 1 result' },
@@ -1601,7 +1775,7 @@ describe('GeneralChatAgent', () => {
         ] as any,
       });
 
-      const context = createMockContext('tasks_batch_result', {
+      const context = createMockContext('sub_agents_batch_result', {
         parentMessageId: 'task-parent-msg',
         results: [
           { success: true, taskMessageId: 'task-1', threadId: 'thread-1', result: 'Task 1 result' },
@@ -1647,7 +1821,7 @@ describe('GeneralChatAgent', () => {
         ] as any,
       });
 
-      const context = createMockContext('tasks_batch_result', {
+      const context = createMockContext('sub_agents_batch_result', {
         parentMessageId: 'task-parent-msg',
       });
 

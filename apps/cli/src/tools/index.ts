@@ -11,14 +11,22 @@ import {
 import { getCommandOutput, killCommand, runCommand } from './shell';
 
 const methodMap: Record<string, (args: any) => Promise<unknown>> = {
-  editLocalFile,
+  editFile: editLocalFile,
   getCommandOutput,
-  globLocalFiles,
+  globFiles: globLocalFiles,
   grepContent,
   killCommand,
+  listFiles: listLocalFiles,
+  readFile: readLocalFile,
+  runCommand,
+  searchFiles: searchLocalFiles,
+  writeFile: writeLocalFile,
+
+  // Legacy aliases — older Gateway versions may still send the long form
+  editLocalFile,
+  globLocalFiles,
   listLocalFiles,
   readLocalFile,
-  runCommand,
   searchLocalFiles,
   writeLocalFile,
 };

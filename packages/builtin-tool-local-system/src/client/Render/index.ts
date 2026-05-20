@@ -10,13 +10,24 @@ import WriteFile from './WriteFile';
 
 /**
  * Local System Render Components Registry
+ *
+ * Register each component under both the new short API name (used going
+ * forward) and the legacy long name (kept so old DB messages with
+ * apiName: 'readLocalFile' etc. still render after the rename).
  */
 export const LocalSystemRenders = {
-  [LocalSystemApiName.editLocalFile]: EditLocalFile,
-  [LocalSystemApiName.listLocalFiles]: ListFiles,
-  [LocalSystemApiName.moveLocalFiles]: MoveLocalFiles,
-  [LocalSystemApiName.readLocalFile]: ReadLocalFile,
+  [LocalSystemApiName.editFile]: EditLocalFile,
+  [LocalSystemApiName.listFiles]: ListFiles,
+  [LocalSystemApiName.moveFiles]: MoveLocalFiles,
+  [LocalSystemApiName.readFile]: ReadLocalFile,
   [LocalSystemApiName.runCommand]: RunCommandRender,
-  [LocalSystemApiName.searchLocalFiles]: SearchFiles,
-  [LocalSystemApiName.writeLocalFile]: WriteFile,
+  [LocalSystemApiName.searchFiles]: SearchFiles,
+  [LocalSystemApiName.writeFile]: WriteFile,
+  // Legacy aliases — keep these so historical messages keep rendering
+  editLocalFile: EditLocalFile,
+  listLocalFiles: ListFiles,
+  moveLocalFiles: MoveLocalFiles,
+  readLocalFile: ReadLocalFile,
+  searchLocalFiles: SearchFiles,
+  writeLocalFile: WriteFile,
 };

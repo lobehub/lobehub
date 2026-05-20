@@ -13,6 +13,7 @@ import ImagePage from '@/routes/(main)/(create)/image';
 import DesktopImageLayout from '@/routes/(main)/(create)/image/_layout';
 import VideoPage from '@/routes/(main)/(create)/video';
 import DesktopVideoLayout from '@/routes/(main)/(create)/video/_layout';
+import TaskWorkspaceLayout from '@/routes/(main)/(task-workspace)/_layout';
 // Pages — sync import
 import AgentPage from '@/routes/(main)/agent';
 import DesktopChatLayout from '@/routes/(main)/agent/_layout';
@@ -20,9 +21,9 @@ import DesktopAgentChatLayout from '@/routes/(main)/agent/(chat)/_layout';
 import AgentTopicNotebookRedirectPage from '@/routes/(main)/agent/[topicId]/page';
 import AgentTopicNotebookDocPage from '@/routes/(main)/agent/[topicId]/page/[docId]';
 import AgentChannelPage from '@/routes/(main)/agent/channel';
-import AgentCronDetailPage from '@/routes/(main)/agent/cron/[cronId]';
 import AgentPageRedirectPage from '@/routes/(main)/agent/page';
 import AgentProfilePage from '@/routes/(main)/agent/profile';
+import AgentTaskDetailRoute from '@/routes/(main)/agent/task/[taskId]';
 import CommunityLayout from '@/routes/(main)/community/_layout';
 import CommunityDetailLayout from '@/routes/(main)/community/(detail)/_layout';
 import CommunityDetailAgentPage from '@/routes/(main)/community/(detail)/agent';
@@ -76,15 +77,11 @@ import ResourceLibrarySlugPage from '@/routes/(main)/resource/library/[slug]';
 import SettingsTabPage from '@/routes/(main)/settings';
 import SettingsLayout from '@/routes/(main)/settings/_layout';
 import { ProviderDetailPage, ProviderLayout } from '@/routes/(main)/settings/provider';
-import TaskDetailLayout from '@/routes/(main)/task/_layout';
 import TaskDetailRoute from '@/routes/(main)/task/[taskId]';
 import AllTasksPage from '@/routes/(main)/tasks';
-import AllTasksLayout from '@/routes/(main)/tasks/_layout';
 import ShareTopicPage from '@/routes/share/t/[id]';
 import ShareTopicLayout from '@/routes/share/t/[id]/_layout';
 import { ErrorBoundary, redirectElement } from '@/utils/router';
-
-const isDev = process.env.NODE_ENV === 'development';
 
 // Desktop router configuration — all sync imports for Electron local build
 export const desktopRoutes: RouteObject[] = [
@@ -139,12 +136,12 @@ export const desktopRoutes: RouteObject[] = [
                 path: 'profile',
               },
               {
-                element: <AgentCronDetailPage />,
-                path: 'cron/:cronId',
-              },
-              {
                 element: <AgentChannelPage />,
                 path: 'channel',
+              },
+              {
+                element: <AgentTaskDetailRoute />,
+                path: 'task/:taskId',
               },
             ],
             element: <DesktopChatLayout />,
@@ -339,6 +336,12 @@ export const desktopRoutes: RouteObject[] = [
             element: <SettingsTabPage />,
             path: ':tab',
           },
+          // Tabs that need a sub-segment (e.g. /settings/messenger/discord) reuse
+          // the same tab page; nested feature components read `:sub` via useParams.
+          {
+            element: <SettingsTabPage />,
+            path: ':tab/:sub',
+          },
         ],
         element: <SettingsLayout />,
         errorElement: <ErrorBoundary />,
@@ -453,30 +456,31 @@ export const desktopRoutes: RouteObject[] = [
         path: 'eval',
       },
 
-      // Tasks routes (cross-agent)
+      // Task workspace routes (cross-agent)
       {
         children: [
           {
-            element: <AllTasksPage />,
-            index: true,
+            children: [
+              {
+                element: <AllTasksPage />,
+                index: true,
+              },
+            ],
+            errorElement: <ErrorBoundary resetPath="/" />,
+            path: 'tasks',
           },
-        ],
-        element: <AllTasksLayout />,
-        errorElement: <ErrorBoundary resetPath="/" />,
-        path: 'tasks',
-      },
-
-      // Task detail route (cross-agent entry — resolves by task identifier)
-      {
-        children: [
           {
-            element: <TaskDetailRoute />,
-            path: ':taskId',
+            children: [
+              {
+                element: <TaskDetailRoute />,
+                path: ':taskId',
+              },
+            ],
+            errorElement: <ErrorBoundary resetPath="/tasks" />,
+            path: 'task',
           },
         ],
-        element: <TaskDetailLayout />,
-        errorElement: <ErrorBoundary resetPath="/tasks" />,
-        path: 'task',
+        element: <TaskWorkspaceLayout />,
       },
 
       // Pages routes
@@ -526,7 +530,7 @@ export const desktopRoutes: RouteObject[] = [
   },
 
   // Devtools route (outside main layout, dev-only)
-  ...(isDev
+  ...(__DEV__
     ? [
         {
           children: [

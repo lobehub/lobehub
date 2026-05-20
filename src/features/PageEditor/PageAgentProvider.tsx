@@ -1,7 +1,7 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { isChatGroupSessionId } from '@lobechat/types';
-import { type ReactNode } from 'react';
-import { memo, useMemo } from 'react';
+import type { ReactNode } from 'react';
+import { memo, useEffect, useMemo, useRef } from 'react';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import { ConversationProvider } from '@/features/Conversation';
@@ -9,7 +9,7 @@ import { useOperationState } from '@/hooks/useOperationState';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
-import { type MessageMapKeyInput } from '@/store/chat/utils/messageMapKey';
+import type { MessageMapKeyInput } from '@/store/chat/utils/messageMapKey';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 interface PageAgentProviderProps {
@@ -21,6 +21,8 @@ export const PageAgentProvider = memo<PageAgentProviderProps>(({ children }) => 
   const pageAgentId = useAgentStore(builtinAgentSelectors.pageAgentId);
   const activeTopicId = useChatStore((s) => s.activeTopicId);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
+  const setActiveAgentId = useAgentStore((s) => s.setActiveAgentId);
+  const syncedAgentIdRef = useRef<string | undefined>(undefined);
 
   useInitBuiltinAgent(BUILTIN_AGENT_SLUGS.pageAgent);
 
@@ -28,6 +30,33 @@ export const PageAgentProvider = memo<PageAgentProviderProps>(({ children }) => 
   // Ignore chat-group ids in page scope and fall back to page agent.
   const selectedAgentId =
     !activeAgentId || isChatGroupSessionId(activeAgentId) ? pageAgentId : activeAgentId;
+
+  useEffect(() => {
+    if (!selectedAgentId) return;
+
+    if (useAgentStore.getState().activeAgentId !== selectedAgentId) {
+      setActiveAgentId(selectedAgentId);
+    }
+
+    const chatState = useChatStore.getState();
+    const shouldResetTopic =
+      chatState.activeAgentId !== selectedAgentId || !!chatState.activeTopicId;
+
+    if (chatState.activeAgentId !== selectedAgentId) {
+      useChatStore.setState(
+        { activeAgentId: selectedAgentId },
+        false,
+        'PageEditor/PageAgentProvider/syncActiveAgentId',
+      );
+    }
+
+    if (syncedAgentIdRef.current === selectedAgentId) return;
+    syncedAgentIdRef.current = selectedAgentId;
+
+    if (shouldResetTopic) {
+      void chatState.switchTopic(null, { scope: 'page', skipRefreshMessage: true });
+    }
+  }, [selectedAgentId, setActiveAgentId]);
 
   const context = useMemo<MessageMapKeyInput>(
     () => ({

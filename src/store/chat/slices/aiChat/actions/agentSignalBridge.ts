@@ -1,10 +1,9 @@
 import type {
   AgentSignalSourcePayloadMap,
   AgentSignalSourceType,
-} from '@/server/services/agentSignal/sourceTypes';
+} from '@lobechat/agent-signal/source';
+
 import { agentSignalService } from '@/services/agentSignal';
-import { labPreferSelectors, preferenceSelectors } from '@/store/user/selectors';
-import { getUserStoreState } from '@/store/user/store';
 
 type ClientAgentSignalSourceType = Extract<AgentSignalSourceType, `client.${string}`>;
 
@@ -31,15 +30,6 @@ const shouldEmitClientAgentSignalSourceEvent = () => {
   if (
     serverConfigState?.serverConfigInit &&
     serverConfigState.featureFlags.enableAgentSelfIteration !== true
-  ) {
-    return false;
-  }
-
-  const userState = getUserStoreState();
-
-  if (
-    preferenceSelectors.isPreferenceInit(userState) &&
-    labPreferSelectors.enableAgentSelfIteration(userState) !== true
   ) {
     return false;
   }

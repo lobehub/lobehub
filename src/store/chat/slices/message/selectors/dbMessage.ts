@@ -172,8 +172,7 @@ export const selectActivatedToolIdsFromMessages = (
   for (const msg of messages) {
     if (
       msg.role === 'tool' &&
-      (msg.plugin?.identifier === LobeActivatorIdentifier ||
-        msg.plugin?.identifier === 'lobe-tools') &&
+      msg.plugin?.identifier === LobeActivatorIdentifier &&
       msg.pluginState?.activatedTools
     ) {
       const activatedTools = msg.pluginState.activatedTools as Array<{ identifier?: string }>;
@@ -211,8 +210,7 @@ export const selectActivatedSkillsFromMessages = (
       msg.role !== 'tool' ||
       !(
         msg.plugin?.identifier === SkillsIdentifier ||
-        msg.plugin?.identifier === LobeActivatorIdentifier ||
-        msg.plugin?.identifier === 'lobe-tools'
+        msg.plugin?.identifier === LobeActivatorIdentifier
       )
     )
       continue;
@@ -251,14 +249,14 @@ export const selectActivatedSkillsFromMessages = (
   return skillsMap.size > 0 ? [...skillsMap.values()] : undefined;
 };
 
-// ============= GTD Todos Selectors ========== //
+// ============= Todos Selectors ========== //
 
 /**
  * Select the latest todos state from messages array
  *
  * Searches messages in reverse order to find the most recent tool message
  * that carries a `pluginState.todos` payload — regardless of which tool
- * produced it. `pluginState.todos` is treated as a shared contract: GTD
+ * produced it. `pluginState.todos` is treated as a shared contract: lobe-agent
  * writes it via its client state mutation, and heterogeneous agent adapters
  * (Claude Code TodoWrite, future ACP/Codex equivalents) synthesize it onto
  * the tool_result event. Any new producer that honors the shape gets picked

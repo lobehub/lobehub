@@ -202,6 +202,38 @@ describe('SlackSocketModeConnection', () => {
       expectSlackSignature(forwardCall, body);
     });
 
+    it('should forward message.mpim events without dropping them', async () => {
+      const { connectPromise, ws } = await connectAndGetWs();
+      ws.simulateMessage({ type: 'hello' });
+      await connectPromise;
+
+      const eventPayload = {
+        event: {
+          channel: 'G_MPIM_123',
+          channel_type: 'mpim',
+          text: 'hello from group dm',
+          ts: '1700000000.000100',
+          type: 'message',
+          user: 'U_USER_1',
+        },
+        type: 'event_callback',
+      };
+      ws.simulateMessage({
+        envelope_id: 'env_mpim',
+        payload: eventPayload,
+        type: 'events_api',
+      });
+
+      await vi.advanceTimersByTimeAsync(10);
+
+      const forwardCall = getForwardCall();
+      expect(forwardCall).toBeDefined();
+
+      const body = forwardCall![1]!.body as string;
+      expect(JSON.parse(body)).toEqual(eventPayload);
+      expectSlackSignature(forwardCall, body);
+    });
+
     it('should forward slash commands as form-urlencoded payloads', async () => {
       const { connectPromise, ws } = await connectAndGetWs();
       ws.simulateMessage({ type: 'hello' });

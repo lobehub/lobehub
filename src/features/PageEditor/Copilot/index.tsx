@@ -12,14 +12,18 @@ import Conversation from './Conversation';
  * Help write, read, and edit the page
  */
 const Copilot = memo(() => {
-  const [width, updateSystemStatus] = useGlobalStore((s) => [
+  const [width, expand, togglePageAgentPanel, updateSystemStatus] = useGlobalStore((s) => [
     systemStatusSelectors.pageAgentPanelWidth(s),
+    systemStatusSelectors.showPageAgentPanel(s),
+    s.togglePageAgentPanel,
     s.updateSystemStatus,
   ]);
 
   return (
     <RightPanel
       defaultWidth={width}
+      expand={expand}
+      onExpandChange={(next) => togglePageAgentPanel(next)}
       onSizeChange={(size) => {
         if (size?.width) {
           const w = typeof size.width === 'string' ? Number.parseInt(size.width) : size.width;

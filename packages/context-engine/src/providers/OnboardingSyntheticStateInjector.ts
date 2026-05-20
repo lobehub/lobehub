@@ -2,7 +2,11 @@ import debug from 'debug';
 
 import { BaseProcessor } from '../base/BaseProcessor';
 import type { Message, PipelineContext, ProcessorOptions } from '../types';
-import type { OnboardingContextInjectorConfig } from './OnboardingContextInjector';
+import type {
+  OnboardingContextInjectorConfig,
+  OnboardingUserInfo,
+} from './OnboardingContextInjector';
+import { formatOnboardingUserInfo } from './OnboardingContextInjector';
 
 const log = debug('context-engine:provider:OnboardingSyntheticStateInjector');
 
@@ -43,6 +47,7 @@ export class OnboardingSyntheticStateInjector extends BaseProcessor {
       ctx.phaseGuidance,
       ctx.soulContent,
       ctx.personaContent,
+      ctx.userInfo,
     );
 
     const clonedContext = this.cloneContext(context);
@@ -74,7 +79,7 @@ export class OnboardingSyntheticStateInjector extends BaseProcessor {
         {
           function: {
             arguments: '{}',
-            name: 'lobe-web-onboarding____getOnboardingState____builtin',
+            name: 'lobe-web-onboarding____getOnboardingState',
           },
           id: toolCallId,
           type: 'function',
@@ -99,6 +104,7 @@ export class OnboardingSyntheticStateInjector extends BaseProcessor {
     phaseGuidance: string,
     soulContent?: string | null,
     personaContent?: string | null,
+    userInfo?: OnboardingUserInfo | null,
   ): string {
     const parts: string[] = [phaseGuidance];
 
@@ -107,6 +113,11 @@ export class OnboardingSyntheticStateInjector extends BaseProcessor {
     }
     if (personaContent) {
       parts.push(`<current_user_persona>\n${personaContent}\n</current_user_persona>`);
+    }
+
+    const formattedUserInfo = formatOnboardingUserInfo(userInfo);
+    if (formattedUserInfo) {
+      parts.push(formattedUserInfo);
     }
 
     return parts.join('\n\n');

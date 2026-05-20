@@ -1,10 +1,18 @@
 {
+  "agent_cron_job_failed": "Tác vụ đã lên lịch \"{{jobName}}\" của bạn đã gặp lỗi. Mở tác vụ để xem chi tiết đầy đủ.",
+  "agent_cron_job_failed_insufficient_budget": "Tác vụ đã lên lịch \"{{jobName}}\" không thể chạy vì tài khoản của bạn đã hết tín dụng. Vui lòng nạp thêm hoặc nâng cấp gói để tiếp tục các lần chạy sau.",
+  "agent_cron_job_failed_insufficient_budget_title": "Tác vụ tạm dừng: không đủ tín dụng",
+  "agent_cron_job_failed_title": "Tác vụ đã lên lịch thất bại",
   "billboard.learnMore": "Tìm hiểu thêm",
   "billboard.menuLabel": "Thông báo",
+  "image_generation_completed": "Hình ảnh \"{{prompt}}\" của bạn đã sẵn sàng.",
+  "image_generation_completed_title": "Hoàn tất tạo hình ảnh",
   "inbox.archiveAll": "Lưu trữ tất cả",
   "inbox.empty": "Chưa có thông báo nào",
   "inbox.emptyUnread": "Không có thông báo chưa đọc",
   "inbox.filterUnread": "Chỉ hiển thị chưa đọc",
   "inbox.markAllRead": "Đánh dấu tất cả là đã đọc",
-  "inbox.title": "Thông báo"
+  "inbox.title": "Thông báo",
+  "video_generation_completed": "Video \"{{prompt}}\" của bạn đã sẵn sàng.",
+  "video_generation_completed_title": "Hoàn tất tạo video"
 }

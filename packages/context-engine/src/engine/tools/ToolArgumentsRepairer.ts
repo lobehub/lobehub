@@ -50,7 +50,7 @@ const safeParseJSON = <T = Record<string, unknown>>(text?: string): T | undefine
  * @example Usage:
  * ```typescript
  * const repairer = new ToolArgumentsRepairer(manifest);
- * const args = repairer.parse('execTask', argumentsString);
+ * const args = repairer.parse('callSubAgent', argumentsString);
  * ```
  */
 export class ToolArgumentsRepairer {

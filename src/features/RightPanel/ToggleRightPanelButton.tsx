@@ -17,22 +17,37 @@ import { settingsSelectors } from '@/store/user/selectors';
 export const TOGGLE_BUTTON_ID = 'toggle_right_panel_button';
 
 interface ToggleRightPanelButtonProps {
+  /**
+   * Override the panel's expanded state. When provided together with `onToggle`,
+   * the button uses these instead of the global `showRightPanel` store.
+   */
+  expand?: boolean;
   hideWhenExpanded?: boolean;
   icon?: ActionIconProps['icon'];
+  onToggle?: () => void;
   showActive?: boolean;
   size?: ActionIconProps['size'];
   title?: ReactNode;
 }
 
 const ToggleRightPanelButton = memo<ToggleRightPanelButtonProps>(
-  ({ title, showActive, icon, hideWhenExpanded, size }) => {
-    const [expand, togglePanel] = useGlobalStore((s) => [
+  ({ title, showActive, icon, hideWhenExpanded, size, expand: expandProp, onToggle }) => {
+    const [globalExpand, globalToggle, isStatusInit] = useGlobalStore((s) => [
       systemStatusSelectors.showRightPanel(s),
       s.toggleRightPanel,
+      systemStatusSelectors.isStatusInit(s),
     ]);
     const hotkey = useUserStore(settingsSelectors.getHotkeyById(HotkeyEnum.ToggleRightPanel));
 
     const { t } = useTranslation(['chat', 'hotkey']);
+
+    const expand = expandProp ?? globalExpand;
+    const handleClick = onToggle ?? (() => globalToggle());
+
+    // Defer render until status hydrates when relying on the global store —
+    // toggleRightPanel is a no-op while !isStatusInit and clicks would be
+    // silently dropped. Callers that pass `expand`+`onToggle` override this.
+    if (expandProp === undefined && !isStatusInit) return null;
 
     if (hideWhenExpanded && expand) return null;
     return (
@@ -46,7 +61,7 @@ const ToggleRightPanelButton = memo<ToggleRightPanelButtonProps>(
           hotkey,
           placement: 'bottom',
         }}
-        onClick={() => togglePanel()}
+        onClick={handleClick}
       />
     );
   },

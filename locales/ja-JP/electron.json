@@ -35,6 +35,7 @@
   "navigation.recentView": "最近の閲覧",
   "navigation.resources": "リソース",
   "navigation.settings": "設定",
+  "navigation.tasks": "タスク",
   "navigation.unpin": "ピン留めを解除",
   "notification.finishChatGeneration": "AI メッセージの生成が完了しました",
   "proxy.auth": "認証が必要",

@@ -40,13 +40,21 @@ const mockDisplayBalloon = vi.fn();
 const mockUpdateIcon = vi.fn();
 const mockUpdateTooltip = vi.fn();
 const mockGetMainTray = vi.fn();
+const mockSetAppTrayVisible = vi.fn();
+const mockStoreGet = vi.fn(() => true);
+const mockStoreSet = vi.fn();
 
 const mockApp = {
   browserManager: {
     getMainWindow: mockGetMainWindow,
   },
+  storeManager: {
+    get: mockStoreGet,
+    set: mockStoreSet,
+  },
   trayManager: {
     getMainTray: mockGetMainTray,
+    setAppTrayVisible: mockSetAppTrayVisible,
   },
 } as unknown as App;
 
@@ -58,7 +66,29 @@ describe('TrayMenuCtr', () => {
     ipcMainHandleMock.mockClear();
     // Reset mockedTray for each test
     mockGetMainTray.mockReset();
+    mockStoreGet.mockReturnValue(true);
     trayMenuCtr = new TrayMenuCtr(mockApp);
+  });
+
+  describe('getAppTrayVisible', () => {
+    it('should return stored app tray visibility', () => {
+      mockStoreGet.mockReturnValue(false);
+
+      const result = trayMenuCtr.getAppTrayVisible();
+
+      expect(mockStoreGet).toHaveBeenCalledWith('appTrayVisible', true);
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('setAppTrayVisible', () => {
+    it('should persist and apply app tray visibility', () => {
+      const result = trayMenuCtr.setAppTrayVisible(false);
+
+      expect(mockStoreSet).toHaveBeenCalledWith('appTrayVisible', false);
+      expect(mockSetAppTrayVisible).toHaveBeenCalledWith(false);
+      expect(result).toEqual({ success: true });
+    });
   });
 
   // Restore platform settings after all tests complete

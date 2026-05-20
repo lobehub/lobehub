@@ -14,6 +14,16 @@ const mockSignInOauth2 = vi.hoisted(() => vi.fn());
 const mockSignInEmail = vi.hoisted(() => vi.fn());
 const mockSignInMagicLink = vi.hoisted(() => vi.fn());
 const mockRequestPasswordReset = vi.hoisted(() => vi.fn());
+const mockLocalStorage = vi.hoisted(() => {
+  const store = new Map<string, string>();
+
+  return {
+    clear: () => store.clear(),
+    getItem: (key: string) => store.get(key) ?? null,
+    removeItem: (key: string) => store.delete(key),
+    setItem: (key: string, value: string) => store.set(key, value),
+  };
+});
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
@@ -46,9 +56,7 @@ vi.mock('@lobechat/business-const', () => ({
 
 vi.mock('@/business/client/hooks/useBusinessSignin', () => ({
   useBusinessSignin: () => ({
-    businessElement: null,
     getAdditionalData: async () => ({}),
-    getFetchOptions: async () => undefined,
     preSocialSigninCheck: async () => true,
     ssoProviders: [],
   }),
@@ -92,10 +100,12 @@ vi.mock('antd', async () => {
 // Mock global fetch
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
+vi.stubGlobal('localStorage', mockLocalStorage);
 
 describe('useSignIn', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockLocalStorage.clear();
     mockSearchParamsGet.mockReturnValue(null);
   });
 
@@ -343,6 +353,21 @@ describe('useSignIn', () => {
         await result.current.handleSocialSignIn('google');
       });
 
+      expect(mockMessageError).toHaveBeenCalled();
+    });
+
+    it('should not retry social sign in when captcha is returned unexpectedly', async () => {
+      mockSignInSocial.mockResolvedValue({
+        error: { code: 'CAPTCHA_REQUIRED', message: 'Missing CAPTCHA response', status: 400 },
+      });
+
+      const { result } = renderHook(() => useSignIn());
+
+      await act(async () => {
+        await result.current.handleSocialSignIn('google');
+      });
+
+      expect(mockSignInSocial).toHaveBeenCalledTimes(1);
       expect(mockMessageError).toHaveBeenCalled();
     });
 

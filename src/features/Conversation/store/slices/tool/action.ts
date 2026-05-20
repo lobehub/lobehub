@@ -1,49 +1,29 @@
-import { type StateCreator } from 'zustand';
-
 import { useChatStore } from '@/store/chat';
+import { type StoreSetter } from '@/store/types';
 
 import { type Store as ConversationStore } from '../../action';
 
 /**
  * Tool Interaction Actions
  *
- * Handles tool call approval and rejection
+ * Handles tool call approval, rejection, and intervention submit/skip/cancel.
  */
-export interface ToolAction {
-  /**
-   * Approve a tool call
-   */
-  approveToolCall: (toolMessageId: string, assistantGroupId: string) => Promise<void>;
+type Setter = StoreSetter<ConversationStore>;
 
-  cancelToolInteraction: (toolMessageId: string) => Promise<void>;
+export const toolSlice = (set: Setter, get: () => ConversationStore, _api?: unknown) =>
+  new ToolActionImpl(set, get, _api);
 
-  /**
-   * Reject a tool call and continue the conversation
-   */
-  rejectAndContinueToolCall: (toolMessageId: string, reason?: string) => Promise<void>;
+export class ToolActionImpl {
+  readonly #get: () => ConversationStore;
 
-  /**
-   * Reject a tool call
-   */
-  rejectToolCall: (toolMessageId: string, reason?: string) => Promise<void>;
+  constructor(_set: Setter, get: () => ConversationStore, _api?: unknown) {
+    void _set;
+    void _api;
+    this.#get = get;
+  }
 
-  skipToolInteraction: (toolMessageId: string, reason?: string) => Promise<void>;
-
-  submitToolInteraction: (
-    toolMessageId: string,
-    response: Record<string, unknown>,
-  ) => Promise<void>;
-}
-
-export const toolSlice: StateCreator<
-  ConversationStore,
-  [['zustand/devtools', never]],
-  [],
-  ToolAction
-> = (set, get) => ({
-  approveToolCall: async (toolMessageId: string, assistantGroupId: string) => {
-    const state = get();
-    const { hooks, context, waitForPendingArgsUpdate } = state;
+  approveToolCall = async (toolMessageId: string, assistantGroupId: string): Promise<void> => {
+    const { hooks, context, waitForPendingArgsUpdate } = this.#get();
 
     // Wait for any pending args update to complete before approval
     await waitForPendingArgsUpdate(toolMessageId);
@@ -62,16 +42,16 @@ export const toolSlice: StateCreator<
     if (hooks.onToolCallComplete) {
       hooks.onToolCallComplete(toolMessageId, undefined);
     }
-  },
+  };
 
-  cancelToolInteraction: async (toolMessageId: string) => {
-    const { context } = get();
+  cancelToolInteraction = async (toolMessageId: string): Promise<void> => {
+    const { context } = this.#get();
     const chatStore = useChatStore.getState();
     await chatStore.cancelToolInteraction(toolMessageId, context);
-  },
+  };
 
-  rejectAndContinueToolCall: async (toolMessageId: string, reason?: string) => {
-    const { context, hooks, waitForPendingArgsUpdate } = get();
+  rejectAndContinueToolCall = async (toolMessageId: string, reason?: string): Promise<void> => {
+    const { context, hooks, waitForPendingArgsUpdate } = this.#get();
 
     // Wait for any pending args update to complete before rejection
     await waitForPendingArgsUpdate(toolMessageId);
@@ -96,11 +76,10 @@ export const toolSlice: StateCreator<
     // `chatStore.rejectToolCalling` call before resuming the local runtime.
     const chatStore = useChatStore.getState();
     await chatStore.rejectAndContinueToolCalling(toolMessageId, reason, context);
-  },
+  };
 
-  rejectToolCall: async (toolMessageId: string, reason?: string) => {
-    const state = get();
-    const { context, hooks, waitForPendingArgsUpdate } = state;
+  rejectToolCall = async (toolMessageId: string, reason?: string): Promise<void> => {
+    const { context, hooks, waitForPendingArgsUpdate } = this.#get();
 
     // Wait for any pending args update to complete before rejection
     await waitForPendingArgsUpdate(toolMessageId);
@@ -119,17 +98,27 @@ export const toolSlice: StateCreator<
     // lookup that used to live here is redundant.
     const chatStore = useChatStore.getState();
     await chatStore.rejectToolCalling(toolMessageId, reason, context);
-  },
+  };
 
-  skipToolInteraction: async (toolMessageId: string, reason?: string) => {
-    const { context } = get();
+  skipToolInteraction = async (toolMessageId: string, reason?: string): Promise<void> => {
+    const { context } = this.#get();
     const chatStore = useChatStore.getState();
     await chatStore.skipToolInteraction(toolMessageId, reason, context);
-  },
+  };
 
-  submitToolInteraction: async (toolMessageId: string, response: Record<string, unknown>) => {
-    const { context } = get();
+  submitToolInteraction = async (
+    toolMessageId: string,
+    response: Record<string, unknown>,
+    options?: {
+      createUserMessage?: boolean;
+      pluginState?: Record<string, unknown>;
+      toolResultContent?: string;
+    },
+  ): Promise<void> => {
+    const { context } = this.#get();
     const chatStore = useChatStore.getState();
-    await chatStore.submitToolInteraction(toolMessageId, response, context);
-  },
-});
+    await chatStore.submitToolInteraction(toolMessageId, response, context, options);
+  };
+}
+
+export type ToolAction = Pick<ToolActionImpl, keyof ToolActionImpl>;

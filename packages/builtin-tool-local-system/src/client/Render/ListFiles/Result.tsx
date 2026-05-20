@@ -1,7 +1,9 @@
 import { useToolRenderCapabilities } from '@lobechat/shared-tool-ui';
 import type { ChatMessagePluginError } from '@lobechat/types';
-import { Flexbox, Skeleton } from '@lobehub/ui';
+import { Block, Empty, Flexbox, Skeleton } from '@lobehub/ui';
+import { FolderOpenIcon } from 'lucide-react';
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import FileItem from '../../components/FileItem';
 
@@ -13,6 +15,7 @@ interface SearchFilesProps {
 
 const SearchFiles = memo<SearchFilesProps>(({ listResults = [], messageId }) => {
   const { isLoading } = useToolRenderCapabilities();
+  const { t } = useTranslation('tool');
   const loading = isLoading?.(messageId);
 
   if (loading) {
@@ -23,6 +26,14 @@ const SearchFiles = memo<SearchFilesProps>(({ listResults = [], messageId }) => 
         <Skeleton.Button active block style={{ height: 16 }} />
         <Skeleton.Button active block style={{ height: 16 }} />
       </Flexbox>
+    );
+  }
+
+  if (listResults.length === 0) {
+    return (
+      <Block variant={'outlined'}>
+        <Empty description={t('localFiles.listFiles.emptyDirectory')} icon={FolderOpenIcon} />
+      </Block>
     );
   }
 

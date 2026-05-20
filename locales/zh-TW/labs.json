@@ -1,13 +1,15 @@
 {
+  "features.agentSelfIteration.desc": "允許助理進行反思、建立自我認知，並透過持續的嘗試與互動不斷迭代提升。",
+  "features.agentSelfIteration.title": "代理自我迭代",
   "features.assistantMessageGroup.desc": "將助手訊息及其工具調用結果彙整成群組顯示",
   "features.assistantMessageGroup.title": "助手訊息彙整群組",
   "features.gatewayMode.desc": "透過 Gateway WebSocket 在伺服器端執行代理任務，而非在本機運行。可加快執行速度並降低用戶端資源使用。",
   "features.gatewayMode.title": "伺服器端代理執行（Gateway）",
   "features.groupChat.desc": "啟用多智能體群組聊天編排功能。",
   "features.groupChat.title": "群組聊天（多智能體）",
-  "features.heterogeneousAgent.desc": "啟用異質代理執行，支援 Claude Code、Codex CLI 及其他外部代理 CLI。將在側邊欄的代理選單中建立「Claude Code 代理」選項。",
-  "features.heterogeneousAgent.title": "異質代理（Claude Code）",
   "features.inputMarkdown.desc": "在輸入區即時渲染 Markdown（粗體、程式碼區塊、表格等）。",
   "features.inputMarkdown.title": "輸入框 Markdown 渲染",
+  "features.messenger.desc": "透過共享的 LobeHub 機器人，從 Telegram（以及其他即時通訊工具）與您的代理進行對話。在設定中新增「Messenger」標籤，用於綁定您的帳戶並選擇接收訊息的代理。",
+  "features.messenger.title": "即時通訊",
   "title": "實驗室"
 }

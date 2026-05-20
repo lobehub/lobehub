@@ -3,7 +3,7 @@ import { Accordion, AccordionItem, ActionIcon, Block, Flexbox, Icon, Text } from
 import { cssVar } from 'antd-style';
 import { AlertTriangle, Check, HandIcon, Maximize2, Minimize2, X } from 'lucide-react';
 import { AnimatePresence, m as motion } from 'motion/react';
-import { type Key, memo, useEffect, useMemo, useRef, useState } from 'react';
+import { type Key, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
@@ -174,6 +174,12 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
     );
     const streamingInitialLevel: WorkflowExpandLevel = streamingDefault ?? 'semi';
     const completionInitialLevel: WorkflowExpandLevel = completionDefault ?? 'collapsed';
+    /** When a consumer opts any phase into `full`, treat the workflow as a
+     *  "fully expanded" experience — manual expands from collapsed go to
+     *  `full` instead of the legacy `semi` cap. Heterogeneous agents rely on
+     *  this so all 40+ tool calls stay visible after the user re-expands. */
+    const manualExpandLevel: WorkflowExpandLevel =
+      streamingDefault === 'full' || completionDefault === 'full' ? 'full' : 'semi';
 
     const [expandLevel, setExpandLevel] = useState<WorkflowExpandLevel>(() =>
       allComplete ? completionInitialLevel : streamingInitialLevel,
@@ -298,17 +304,25 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
       !pendingInterventionPresent &&
       workingElapsedSeconds >= WORKFLOW_WORKING_ELAPSED_SHOW_AFTER_MS / TIME_MS_PER_SECOND;
 
-    const handleExpandedChange = (keys: Key[]) => {
-      const nowExpanded = keys.includes('workflow');
-      if (forceExpanded && !nowExpanded) return;
+    // Stable refs so the underlying Accordion's memoized contextValue can
+    // remain reference-stable across WorkflowCollapse re-renders — otherwise
+    // every nested AccordionItem (each GroupTool) re-renders due to "context
+    // changed" on every streaming chunk.
+    const handleExpandedChange = useCallback(
+      (keys: Key[]) => {
+        const nowExpanded = keys.includes('workflow');
+        if (forceExpanded && !nowExpanded) return;
 
-      if (nowExpanded) {
-        setExpandLevel('semi');
-        userOpenedRef.current = true;
-      } else {
-        setExpandLevel('collapsed');
-      }
-    };
+        if (nowExpanded) {
+          setExpandLevel(manualExpandLevel);
+          userOpenedRef.current = true;
+        } else {
+          setExpandLevel('collapsed');
+        }
+      },
+      [forceExpanded, manualExpandLevel],
+    );
+    const expandedKeys = useMemo(() => (isExpanded ? ['workflow'] : []), [isExpanded]);
     const constrained = expandLevel === 'semi';
 
     const { ref: scrollRef, handleScroll: handleAutoScroll } = useAutoScroll<HTMLDivElement>({
@@ -401,7 +415,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
             }}
           >
             <div style={{ minWidth: 0, overflow: 'hidden' }}>
-              <AnimatePresence initial={false} mode="wait">
+              <AnimatePresence initial={false} mode="popLayout">
                 <motion.div
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
@@ -460,7 +474,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
 
     return (
       <Accordion
-        expandedKeys={isExpanded ? ['workflow'] : []}
+        expandedKeys={expandedKeys}
         variant="borderless"
         onExpandedChange={handleExpandedChange}
       >

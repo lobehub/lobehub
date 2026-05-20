@@ -32,6 +32,42 @@ beforeEach(() => {
 
 describe('LobeQwenAI - custom features', () => {
   describe('thinking payload mapping', () => {
+    it('should forward enable_thinking and reasoning_effort for deepseek-v4 models', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'deepseek-v4-pro',
+        reasoning_effort: 'high',
+        thinking: {
+          budget_tokens: 2048,
+          type: 'enabled',
+        },
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+
+      expect(calledPayload.enable_thinking).toBe(true);
+      expect(calledPayload.reasoning_effort).toBe('high');
+      expect(calledPayload.thinking_budget).toBeUndefined();
+    });
+
+    it('should remove reasoning_effort when deepseek-v4 thinking is disabled', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'deepseek-v4-flash',
+        reasoning_effort: 'high',
+        thinking: {
+          budget_tokens: 2048,
+          type: 'disabled',
+        },
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+
+      expect(calledPayload.enable_thinking).toBe(false);
+      expect(calledPayload.reasoning_effort).toBeUndefined();
+      expect(calledPayload.thinking_budget).toBeUndefined();
+    });
+
     it('should only send thinking_budget for budget-only non-thinking models', async () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],

@@ -4,8 +4,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type CheckUserResponseData } from '@/app/(backend)/api/auth/check-user/route';
-import { type ResolveUsernameResponseData } from '@/app/(backend)/api/auth/resolve-username/route';
+import type { CheckUserResponseData } from '@/app/(backend)/api/auth/check-user/route';
+import type { ResolveUsernameResponseData } from '@/app/(backend)/api/auth/resolve-username/route';
 import { useBusinessSignin } from '@/business/client/hooks/useBusinessSignin';
 import { message } from '@/components/AntdStaticMethods';
 import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
@@ -52,13 +52,7 @@ export const useSignIn = () => {
   });
   const serverConfigInit = useAuthServerConfigStore((s) => s.serverConfigInit);
   const oAuthSSOProviders = useAuthServerConfigStore((s) => s.serverConfig.oAuthSSOProviders) || [];
-  const {
-    businessElement,
-    ssoProviders,
-    preSocialSigninCheck,
-    getAdditionalData,
-    getFetchOptions,
-  } = useBusinessSignin();
+  const { getAdditionalData, preSocialSigninCheck, ssoProviders } = useBusinessSignin();
 
   useEffect(() => {
     const emailParam = searchParams.get('email');
@@ -227,20 +221,21 @@ export const useSignIn = () => {
 
       const callbackUrl = searchParams.get('callbackUrl') || '/';
       const additionalData = await getAdditionalData();
-      const fetchOptions = await getFetchOptions();
-      const result = isBuiltinProvider(normalizedProvider)
-        ? await signIn.social({
-            additionalData,
-            callbackURL: callbackUrl,
-            fetchOptions,
-            provider: normalizedProvider,
-          })
-        : await signIn.oauth2({
-            additionalData,
-            callbackURL: callbackUrl,
-            fetchOptions,
-            providerId: normalizedProvider,
-          });
+      const signInWithAdditionalData = async () =>
+        isBuiltinProvider(normalizedProvider)
+          ? await signIn.social({
+              additionalData,
+              callbackURL: callbackUrl,
+              provider: normalizedProvider,
+            })
+          : await signIn.oauth2({
+              additionalData,
+              callbackURL: callbackUrl,
+              providerId: normalizedProvider,
+            });
+
+      const result = await signInWithAdditionalData();
+
       if (result && 'error' in result && result.error) throw result.error;
     } catch (error) {
       console.error(`${normalizedProvider} sign in error:`, error);
@@ -289,7 +284,6 @@ export const useSignIn = () => {
     : resolvedProviders;
 
   return {
-    businessElement,
     disableEmailPassword,
     email,
     form,

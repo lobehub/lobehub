@@ -22,7 +22,7 @@ export {
 // Type-only exports (interfaces)
 export type { AgentDocumentPolicy, DocumentLoadRules } from '@lobechat/agent-templates';
 
-export type AgentDocumentSourceType = 'file' | 'web' | 'api' | 'topic';
+export type AgentDocumentSourceType = 'file' | 'web' | 'api' | 'topic' | 'agent' | 'agent-signal';
 
 export interface AgentDocument {
   accessPublic: number;
@@ -39,8 +39,10 @@ export interface AgentDocument {
   documentId: string;
   editorData: Record<string, any> | null;
   filename: string;
+  fileType: string;
   id: string;
   metadata: Record<string, any> | null;
+  parentId: string | null;
   policy: AgentDocumentPolicy | null;
   policyLoad: PolicyLoad;
   policyLoadFormat: DocumentLoadFormat;

@@ -2,12 +2,13 @@ import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 
 import type {
+  AgentRunRequestMessage,
   SystemInfoRequestMessage,
   ToolCallRequestMessage,
 } from '@lobechat/device-gateway-client';
 import { GatewayClient } from '@lobechat/device-gateway-client';
 import type { GatewayConnectionStatus } from '@lobechat/electron-client-ipc';
-import { app } from 'electron';
+import { app, powerSaveBlocker } from 'electron';
 
 import { createLogger } from '@/utils/logger';
 
@@ -21,6 +22,10 @@ interface ToolCallHandler {
   (apiName: string, args: any): Promise<unknown>;
 }
 
+interface AgentRunHandler {
+  (request: AgentRunRequestMessage): Promise<{ reason?: string; status: 'accepted' | 'rejected' }>;
+}
+
 /**
  * GatewayConnectionService
  *
@@ -31,10 +36,12 @@ export default class GatewayConnectionService extends ServiceModule {
   private client: GatewayClient | null = null;
   private status: GatewayConnectionStatus = 'disconnected';
   private deviceId: string | null = null;
+  private powerSaveBlockerId: number | null = null;
 
   private tokenProvider: (() => Promise<string | null>) | null = null;
   private tokenRefresher: (() => Promise<{ error?: string; success: boolean }>) | null = null;
   private toolCallHandler: ToolCallHandler | null = null;
+  private agentRunHandler: AgentRunHandler | null = null;
 
   // ─── Configuration ───
 
@@ -57,6 +64,10 @@ export default class GatewayConnectionService extends ServiceModule {
    */
   setToolCallHandler(handler: ToolCallHandler) {
     this.toolCallHandler = handler;
+  }
+
+  setAgentRunHandler(handler: AgentRunHandler) {
+    this.agentRunHandler = handler;
   }
 
   // ─── Device ID ───
@@ -178,6 +189,10 @@ export default class GatewayConnectionService extends ServiceModule {
       this.handleSystemInfoRequest(client, request);
     });
 
+    client.on('agent_run_request', (request) => {
+      this.handleAgentRunRequest(client, request);
+    });
+
     client.on('auth_expired', () => {
       logger.warn('Received auth_expired, will reconnect with refreshed token');
       this.handleAuthExpired();
@@ -239,6 +254,30 @@ export default class GatewayConnectionService extends ServiceModule {
     });
   }
 
+  // ─── Agent Run ───
+
+  private handleAgentRunRequest = async (
+    client: GatewayClient,
+    request: AgentRunRequestMessage,
+  ) => {
+    logger.info(
+      `Received agent_run_request: operationId=${request.operationId} type=${request.agentType}`,
+    );
+
+    if (!this.agentRunHandler) {
+      logger.warn('No agent run handler configured, rejecting request');
+      client.sendAgentRunAck({
+        operationId: request.operationId,
+        reason: 'no handler',
+        status: 'rejected',
+      });
+      return;
+    }
+
+    const result = await this.agentRunHandler(request);
+    client.sendAgentRunAck({ operationId: request.operationId, ...result });
+  };
+
   // ─── Tool Call Routing ───
 
   private handleToolCallRequest = async (
@@ -280,6 +319,26 @@ export default class GatewayConnectionService extends ServiceModule {
     }
   };
 
+  // ─── Power Save Blocker ───
+
+  /**
+   * Start power save blocker to prevent macOS App Nap from suspending the process
+   * while the gateway connection is active. Uses 'prevent-app-suspension' so the
+   * display can still sleep — only the app process is kept alive.
+   */
+  private startPowerSaveBlocker() {
+    if (this.powerSaveBlockerId !== null) return;
+    this.powerSaveBlockerId = powerSaveBlocker.start('prevent-app-suspension');
+    logger.info(`Power save blocker started (id=${this.powerSaveBlockerId})`);
+  }
+
+  private stopPowerSaveBlocker() {
+    if (this.powerSaveBlockerId === null) return;
+    powerSaveBlocker.stop(this.powerSaveBlockerId);
+    logger.info(`Power save blocker stopped (id=${this.powerSaveBlockerId})`);
+    this.powerSaveBlockerId = null;
+  }
+
   // ─── Status Broadcasting ───
 
   private setStatus(status: GatewayConnectionStatus) {
@@ -287,6 +346,15 @@ export default class GatewayConnectionService extends ServiceModule {
 
     logger.info(`Connection status: ${this.status} → ${status}`);
     this.status = status;
+
+    // Keep the app process alive while gateway is connected so macOS App Nap
+    // does not suspend it during display sleep, which would drop the WebSocket.
+    if (status === 'connected') {
+      this.startPowerSaveBlocker();
+    } else {
+      this.stopPowerSaveBlocker();
+    }
+
     this.app.browserManager.broadcastToAllWindows('gatewayConnectionStatusChanged', { status });
   }
 

@@ -54,31 +54,26 @@ const isAgentConfigLoadingById = (agentId: string) => (s: AgentStoreState) =>
   !agentId || !s.agentMap[agentId];
 
 /**
- * Get agent mode by agentId
- * Now reads from chatConfig.agentMode and chatConfig.enableAgentMode
+ * Get agent mode by agentId.
+ * Agent mode is the default — only an explicit `chatConfig.enableAgentMode === false`
+ * collapses the agent to chat mode.
  */
 const getAgentModeById =
   (agentId: string) =>
   (s: AgentStoreState): AgentMode | undefined => {
-    const config = agentSelectors.getAgentConfigById(agentId)(s);
-
-    // Fallback: convert enableAgentMode to mode
-    if (config?.enableAgentMode) {
-      return 'auto';
-    }
-
-    return undefined;
+    const chatConfig = agentSelectors.getAgentConfigById(agentId)(s)?.chatConfig;
+    return chatConfig?.enableAgentMode === false ? undefined : 'auto';
   };
 
 /**
- * Check if agent mode is enabled by agentId
- * Supports backward compatibility with deprecated enableAgentMode field
+ * Check if agent mode is enabled by agentId.
+ * Defaults to true; only explicit `chatConfig.enableAgentMode === false` returns false.
  */
 const getAgentEnableModeById =
   (agentId: string) =>
   (s: AgentStoreState): boolean => {
-    const mode = getAgentModeById(agentId)(s);
-    return mode !== undefined;
+    const chatConfig = agentSelectors.getAgentConfigById(agentId)(s)?.chatConfig;
+    return chatConfig?.enableAgentMode !== false;
   };
 
 /**

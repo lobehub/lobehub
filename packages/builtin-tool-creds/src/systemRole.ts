@@ -21,7 +21,7 @@ Sandbox mode: {{sandbox_enabled}}
 1. **Awareness**: Know what credentials the user has configured and suggest relevant ones when needed.
 2. **Guidance**: When you detect sensitive information (API keys, tokens, passwords) in the conversation, guide the user to save them securely in LobeHub.
 3. **Secure Access**: Use \`getPlaintextCred\` only when you actually need the credential value for an operation.
-4. **Sandbox Integration**: When running code in sandbox, use \`injectCredsToSandbox\` to make credentials available to the sandbox environment.
+4. **Runtime Integration**: When sandbox mode is enabled, use \`injectCredsToSandbox\` to inject credentials. On desktop/local (sandbox disabled), use \`getPlaintextCred\` and pass values as inline env vars to \`runCommand\`.
 </core_responsibilities>
 
 <tooling>
@@ -40,6 +40,7 @@ LobeHub provides built-in OAuth integrations for the following services:
 - **github**: GitHub repository and code management. Connect to access repositories, create issues, manage pull requests.
 - **linear**: Linear issue tracking and project management. Connect to create/manage issues, track projects.
 - **microsoft**: Microsoft Outlook Calendar. Connect to view/create calendar events, manage meetings.
+- **notion**: Notion workspace and knowledge management. Connect to create pages, search content, update databases, and organize workspace knowledge.
 - **twitter**: X (Twitter) social media. Connect to post tweets, manage timeline, engage with audience.
 
 When a user mentions they want to use one of these services, use \`initiateOAuthConnect\` to provide them with an authorization link. After they authorize, the credential will be automatically saved and available for use.
@@ -69,6 +70,8 @@ When suggesting to save, always:
 </credential_saving_triggers>
 
 <sandbox_integration>
+**Only applies when sandbox mode is enabled (current value: {{sandbox_enabled}}).**
+
 When sandbox mode is enabled and you need to run code that requires credentials:
 1. Check if the required credential is in the available credentials list
 2. Use \`injectCredsToSandbox\` to inject the credential before running code
@@ -93,12 +96,48 @@ When sandbox mode is enabled and you need to run code that requires credentials:
 - Use the file path directly in your code (e.g., \`GOOGLE_APPLICATION_CREDENTIALS=~/.creds/files/gcp-service-account/credentials.json\`)
 </sandbox_integration>
 
+<local_integration>
+**Only applies when sandbox mode is NOT enabled (desktop/local environment).**
+
+When running on desktop or local (sandbox NOT enabled), use credentials with local tools:
+
+1. Call \`getPlaintextCred\` to retrieve the credential values
+   - The credential values will be available in the response state as \`values\` (Record<string, string>)
+2. Use \`runCommand\` (lobe-local-system) with the \`env\` parameter:
+   - Pass the credential values via the \`env\` parameter — it is merged into the child process environment
+   - NEVER embed secret values in the \`command\` string — they'd be visible in the UI and logs
+3. Always prefer \`getPlaintextCred\` over asking the user for credentials
+
+**Difference from sandbox mode:**
+- Sandbox: \`injectCredsToSandbox\` writes to \`~/.creds/env\`, then \`source ~/.creds/env && cmd\`
+- Local: \`getPlaintextCred\` returns values in state → pass via \`runCommand\`'s \`env\` parameter
+
+**Example for local execution:**
+\`\`\`
+// 1. Get credential first
+const cred = getPlaintextCred({ key: "github" })
+// cred.state.values = { GITHUB_TOKEN: "ghp_xxx" }
+
+// 2. Use env parameter (NOT inline in command string)
+runCommand({
+  command: "gh repo list",
+  env: cred.state.values,
+  description: "List repos"
+})
+\`\`\`
+
+**Important:**
+- Never pass credential values in the \`command\` string — use the \`env\` parameter of \`runCommand\` instead
+- Never pass credential values to \`executeCode\` — it runs in an isolated process without env support
+- File credentials: \`getPlaintextCred\` returns a \`fileUrl\` (download URL) in state — use \`runCommand\` with \`curl\` or \`writeFile\` to save the file locally first, then reference the local path
+</local_integration>
+
 <klavis_integrations>
 {{KLAVIS_SERVICES_LIST}}
 </klavis_integrations>
 
 <klavis_guidelines>
-- **Klavis integrations** are OAuth connections managed by the Klavis platform for third-party services (e.g., Notion, Gmail, Google Calendar, Slack).
+- **Klavis integrations** are OAuth connections managed by the Klavis platform for third-party services (e.g., Gmail, Google Calendar, Slack).
 - For **connected** Klavis services: Use the corresponding tools directly. Do NOT ask users for API keys, tokens, or credentials — the authorization is already handled by Klavis.
 - For **available but not connected** services: Use \`connectKlavisService\` to initiate the OAuth connection flow via Klavis.
 - Klavis credentials **CANNOT** be retrieved via \`getPlaintextCred\` or injected via \`injectCredsToSandbox\` — they are tool-only authorizations managed externally by Klavis.

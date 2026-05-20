@@ -87,6 +87,8 @@ describe('thinkingResolver', () => {
       'gemini-3.0-pro',
       'gemini-3.0-flash',
       'gemini-3-pro-image-preview',
+      'gemma-4-31b-it',
+      'gemma-4-26b-a4b-it',
     ])('should return true for %s', (model) => {
       expect(isGemini3Model(model)).toBe(true);
     });
@@ -389,6 +391,29 @@ describe('thinkingResolver', () => {
       });
     });
 
+    describe('gemma-4-31b-it (supports thinkingLevel)', () => {
+      const model = 'gemma-4-31b-it';
+
+      it('should not set thinkingBudget by default (let API decide)', () => {
+        const result = resolveGoogleThinkingConfig(model, {});
+
+        expect(result).toEqual({
+          includeThoughts: undefined,
+          thinkingBudget: undefined,
+        });
+      });
+
+      it('should include thinkingLevel when provided', () => {
+        const result = resolveGoogleThinkingConfig(model, { thinkingLevel: 'medium' });
+
+        expect(result).toEqual({
+          includeThoughts: true,
+          thinkingBudget: undefined,
+          thinkingLevel: 'medium',
+        });
+      });
+    });
+
     describe('gemini-2.5-flash-lite', () => {
       const model = 'gemini-2.5-flash-lite';
 
@@ -480,7 +505,7 @@ describe('resolveGoogleThinkingBudget', () => {
  */
 describe('thinkingBudget and thinkingLevel mutual exclusivity', () => {
   describe('Gemini 3.0+ models (supports thinkingLevel)', () => {
-    const models = ['gemini-3-pro', 'gemini-3-flash', 'gemini-3.0-pro-preview'];
+    const models = ['gemini-3-pro', 'gemini-3-flash', 'gemini-3.0-pro-preview', 'gemma-4-31b-it'];
 
     it.each(models)('%s: should use thinkingLevel only when set', (model) => {
       const result = resolveGoogleThinkingConfig(model, { thinkingLevel: 'high' });

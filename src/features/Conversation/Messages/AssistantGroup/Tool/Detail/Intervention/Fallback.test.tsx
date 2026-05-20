@@ -17,6 +17,9 @@ vi.mock('@lobehub/ui', () => ({
   ActionIcon: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
     <button {...props}>{children}</button>
   ),
+  Avatar: ({ avatar, title }: { avatar?: string; title?: string }) => (
+    <img alt={title} src={avatar} />
+  ),
   Flexbox: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
     <div {...props}>{children}</div>
   ),
@@ -96,5 +99,41 @@ describe('FallbackIntervention', () => {
     expect(
       screen.getByText('Tools & Skills Activator → Activate Tools (Web Search, Calculator)'),
     ).toBeInTheDocument();
+  });
+
+  it('shows the activation reason for activateTools interventions', () => {
+    const reason = 'I need lobe-agent tools to create and manage the requested task list.';
+
+    render(
+      <FallbackIntervention
+        apiName="activateTools"
+        assistantGroupId="assistant-group-1"
+        id="message-1"
+        identifier="lobe-activator"
+        requestArgs={JSON.stringify({ identifiers: ['search'], reason })}
+        toolCallId="tool-call-1"
+      />,
+    );
+
+    expect(screen.getByText(reason)).toBeInTheDocument();
+  });
+
+  it('renders URL avatars as images instead of visible text', () => {
+    const iconUrl = 'https://example.com/icon.png';
+    metaMap.search.avatar = iconUrl;
+
+    render(
+      <FallbackIntervention
+        apiName="search"
+        assistantGroupId="assistant-group-1"
+        id="message-1"
+        identifier="search"
+        requestArgs="{}"
+        toolCallId="tool-call-1"
+      />,
+    );
+
+    expect(screen.queryByText(iconUrl)).not.toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Web Search' })).toHaveAttribute('src', iconUrl);
   });
 });

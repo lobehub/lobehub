@@ -14,6 +14,7 @@ export interface ScreenCaptureWindowInfo {
 export interface ScreenCaptureAgentOption {
   avatar?: string | null;
   backgroundColor?: string | null;
+  heterogeneousType?: string | null;
   id: string;
   title: string;
 }

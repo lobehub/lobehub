@@ -10,6 +10,10 @@ vi.mock('@/store/user/store', () => ({
   getUserStoreState: vi.fn(),
 }));
 
+vi.mock('@/store/chat/store', () => ({
+  getChatStoreState: vi.fn(() => ({})),
+}));
+
 describe('emitClientAgentSignalSourceEvent', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -42,6 +46,7 @@ describe('emitClientAgentSignalSourceEvent', () => {
         parentMessageType: 'user',
         threadId: 'thread-1',
         topicId: 'topic-1',
+        triggerMessageId: 'msg-1',
       },
       sourceId: 'op-1:client:start',
       sourceType: 'client.runtime.start',
@@ -56,6 +61,7 @@ describe('emitClientAgentSignalSourceEvent', () => {
         parentMessageType: 'user',
         threadId: 'thread-1',
         topicId: 'topic-1',
+        triggerMessageId: 'msg-1',
       },
       sourceId: 'op-1:client:start',
       sourceType: 'client.runtime.start',
@@ -76,10 +82,13 @@ describe('emitClientAgentSignalSourceEvent', () => {
     await emitClientAgentSignalSourceEvent({
       payload: {
         agentId: 'agent-1',
+        anchorMessageId: 'asst-1',
+        assistantMessageId: 'asst-1',
         operationId: 'op-1',
-        status: 'done',
+        status: 'completed',
         threadId: 'thread-1',
         topicId: 'topic-1',
+        triggerMessageId: 'msg-1',
       },
       sourceId: 'op-1:client:complete',
       sourceType: 'client.runtime.complete',
@@ -89,10 +98,13 @@ describe('emitClientAgentSignalSourceEvent', () => {
     expect(agentSignalService.emitClientGatewaySourceEvent).toHaveBeenCalledWith({
       payload: {
         agentId: 'agent-1',
+        anchorMessageId: 'asst-1',
+        assistantMessageId: 'asst-1',
         operationId: 'op-1',
-        status: 'done',
+        status: 'completed',
         threadId: 'thread-1',
         topicId: 'topic-1',
+        triggerMessageId: 'msg-1',
       },
       sourceId: 'op-1:client:complete',
       sourceType: 'client.runtime.complete',
@@ -133,7 +145,7 @@ describe('emitClientAgentSignalSourceEvent', () => {
     expect(agentSignalService.emitClientGatewaySourceEvent).not.toHaveBeenCalled();
   });
 
-  it('skips emitting when user preference is initialized but the lab toggle is disabled', async () => {
+  it('emits when the feature flag is enabled even if the lab toggle is disabled', async () => {
     const { agentSignalService } = await import('@/services/agentSignal');
     const { getUserStoreState } = await import('@/store/user/store');
     const { emitClientAgentSignalSourceEvent } = await import('./agentSignalBridge');
@@ -155,7 +167,7 @@ describe('emitClientAgentSignalSourceEvent', () => {
       timestamp: 1,
     });
 
-    expect(agentSignalService.emitClientGatewaySourceEvent).not.toHaveBeenCalled();
+    expect(agentSignalService.emitClientGatewaySourceEvent).toHaveBeenCalledOnce();
   });
 
   it('keeps emitting before local stores finish initialization so the server can decide', async () => {

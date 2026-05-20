@@ -23,14 +23,16 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextQuaternary};
   `,
   card: css`
-    .brief-comment-btn {
+    .brief-comment-btn,
+    .brief-view-run-btn {
       opacity: 0;
     }
 
     &:hover {
       border-color: ${cssVar.colorBorder} !important;
 
-      .brief-comment-btn {
+      .brief-comment-btn,
+      .brief-view-run-btn {
         opacity: 1;
       }
     }

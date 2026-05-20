@@ -37,20 +37,21 @@ import {
   ForceFinishSummaryInjector,
   GroupAgentBuilderContextInjector,
   GroupContextInjector,
-  GTDPlanInjector,
-  GTDTodoInjector,
   HistorySummaryProvider,
   KnowledgeInjector,
+  LocalSystemToolSnapshotInjector,
   OnboardingActionHintInjector,
   OnboardingContextInjector,
   OnboardingSyntheticStateInjector,
   PageEditorContextInjector,
   PageSelectionsInjector,
+  PlanInjector,
   SelectedSkillInjector,
   SkillContextProvider,
   SystemDateProvider,
   SystemRoleInjector,
   TaskManagerContextInjector,
+  TodoInjector,
   ToolDiscoveryProvider,
   ToolSystemRoleProvider,
   TopicReferenceContextInjector,
@@ -137,6 +138,7 @@ export class MessagesEngine {
       provider,
       systemRole,
       inputTemplate,
+      enableAgentMode,
       enableHistoryCount,
       historyCount,
       forceFinish,
@@ -161,7 +163,7 @@ export class MessagesEngine {
       groupAgentBuilderContext,
       agentGroup,
       agentDocuments,
-      gtd,
+      planTodo,
       userMemory,
       initialContext,
       stepContext,
@@ -172,7 +174,6 @@ export class MessagesEngine {
     } = this.params;
 
     const isAgentBuilderEnabled = !!agentBuilderContext;
-    const isAgentManagementEnabled = !!agentManagementContext;
 
     const isGroupAgentBuilderEnabled = !!groupAgentBuilderContext;
     const isAgentGroupEnabled = agentGroup?.agentMap && Object.keys(agentGroup.agentMap).length > 0;
@@ -182,13 +183,20 @@ export class MessagesEngine {
     const hasSelectedSkills = (selectedSkills?.length ?? 0) > 0;
     const hasSelectedTools = (selectedTools?.length ?? 0) > 0;
 
-    const hasAgentDocuments = !!agentDocuments && agentDocuments.length > 0;
+    // Chat mode (`enableAgentMode === false`) suppresses agentic-only injectors:
+    // skill discovery (<available_skills>), agent documents, and the
+    // agent-management context (<current_agent> + <available_agents>).
+    // Anything else — system role, knowledge bases, memory, web-browsing tool
+    // prompts — remains untouched.
+    const isAgentMode = enableAgentMode !== false;
+    const isAgentManagementEnabled = !!agentManagementContext && isAgentMode;
+    const hasAgentDocuments = !!agentDocuments && agentDocuments.length > 0 && isAgentMode;
     // Page editor is enabled if either direct pageContentContext or initialContext.pageEditor is provided
     const isPageEditorEnabled = !!pageContentContext || !!initialContext?.pageEditor;
     const hasActiveTopicDocument = !!initialContext?.activeTopicDocument;
-    // GTD is enabled if gtd.enabled is true and either plan or todos is provided
-    const isGTDPlanEnabled = gtd?.enabled && gtd?.plan;
-    const isGTDTodoEnabled = gtd?.enabled && gtd?.todos;
+    // Plan/Todo is enabled if planTodo.enabled is true and either plan or todos is provided
+    const isPlanEnabled = planTodo?.enabled && planTodo?.plan;
+    const isTodoEnabled = planTodo?.enabled && planTodo?.todos;
 
     // System date is redundant when web-browsing or memory tools are enabled,
     // as they already include current date in their system prompts
@@ -235,9 +243,12 @@ export class MessagesEngine {
       }),
       // System date
       new SystemDateProvider({ enabled: isSystemDateEnabled, timezone }),
-      // Skill context (available skills list + activated skill content)
+      // Skill context (available skills list + activated skill content).
+      // Disabled in chat mode — pairs with the tools-engine gate so the LLM
+      // sees neither the manifests nor the discovery prompt.
       new SkillContextProvider({
-        enabled: !!(skillsConfig?.enabledSkills && skillsConfig.enabledSkills.length > 0),
+        enabled:
+          isAgentMode && !!(skillsConfig?.enabledSkills && skillsConfig.enabledSkills.length > 0),
         enabledSkills: skillsConfig?.enabledSkills,
       }),
       // Tool system role (tool manifests and API definitions)
@@ -275,8 +286,8 @@ export class MessagesEngine {
       }),
       // Discord context (channel/guild info)
       new DiscordContextProvider({ context: discordContext, enabled: !!discordContext }),
-      // GTD Plan
-      new GTDPlanInjector({ enabled: !!isGTDPlanEnabled, plan: gtd?.plan }),
+      // Plan (high-level plan document)
+      new PlanInjector({ enabled: !!isPlanEnabled, plan: planTodo?.plan }),
       // Knowledge (agent files + knowledge bases)
       new KnowledgeInjector({
         fileContents: knowledge?.fileContents,
@@ -329,6 +340,8 @@ export class MessagesEngine {
       new SelectedToolInjector({ enabled: hasSelectedTools, selectedTools }),
       // Page selections (inject user-selected text into each user message)
       new PageSelectionsInjector({ enabled: isPageEditorEnabled }),
+      // Local-system file snapshots (replay send-time @file reads as real tool results)
+      new LocalSystemToolSnapshotInjector({ enabled: true }),
       // Page Editor context (inject current page content to last user message)
       new PageEditorContextInjector({
         enabled: isPageEditorEnabled,
@@ -351,8 +364,8 @@ export class MessagesEngine {
         contextPrompt: initialContext?.taskManager?.contextPrompt,
         enabled: !!initialContext?.taskManager?.contextPrompt,
       }),
-      // GTD Todo (at end of last user message)
-      new GTDTodoInjector({ enabled: !!isGTDTodoEnabled, todos: gtd?.todos }),
+      // Todo list (at end of last user message)
+      new TodoInjector({ enabled: !!isTodoEnabled, todos: planTodo?.todos }),
       // Topic Reference context (referenced topic summaries to last user message)
       new TopicReferenceContextInjector({
         enabled: !!(topicReferences && topicReferences.length > 0),
@@ -435,7 +448,7 @@ export class MessagesEngine {
       new ReactionFeedbackProcessor({ enabled: true }),
       // Message content processing (image encoding, multimodal)
       new MessageContentProcessor({
-        fileContext: fileContext || { enabled: true, includeFileUrl: true },
+        fileContext: fileContext || { enabled: true, includeFileUrl: false },
         isCanUseVideo: capabilities?.isCanUseVideo || (() => false),
         isCanUseVision: capabilities?.isCanUseVision || (() => true),
         model,

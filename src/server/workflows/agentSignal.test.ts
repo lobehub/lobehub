@@ -59,6 +59,7 @@ describe('AgentSignalWorkflow', () => {
         key: 'agent-signal.run.scope.topic_topic-1',
         parallelism: 1,
       },
+      headers: {},
       url: 'http://localhost:3011/api/workflows/agent-signal/run',
     });
   });

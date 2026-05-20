@@ -20,23 +20,23 @@ export interface HeterogeneousAgentBuildPlanParams {
   args: string[];
   helpers: HeterogeneousAgentBuildPlanHelpers;
   imageList: HeterogeneousAgentImageAttachment[];
+  /**
+   * Optional path to an MCP config JSON written by the controller (e.g. for
+   * the local `lobe_cc` AskUserQuestion server). Drivers that recognize the
+   * field append `--mcp-config <path>`; others ignore it.
+   */
+  mcpConfigPath?: string;
   prompt: string;
   resumeSessionId?: string;
 }
 
-export interface HeterogeneousAgentParsedOutput {
-  agentSessionId?: string;
-  payload: any;
-}
-
-export interface HeterogeneousAgentStreamProcessor {
-  flush: () => HeterogeneousAgentParsedOutput[];
-  push: (chunk: Buffer | string) => HeterogeneousAgentParsedOutput[];
-}
-
+/**
+ * Per-agent CLI flag composition + stdin shape. Stream framing is no longer the
+ * driver's concern — `AgentStreamPipeline` (`@lobechat/heterogeneous-agents/spawn`)
+ * runs JSONL parsing + adapter conversion uniformly for every agent type.
+ */
 export interface HeterogeneousAgentDriver {
   buildSpawnPlan: (
     params: HeterogeneousAgentBuildPlanParams,
   ) => Promise<HeterogeneousAgentBuildPlan>;
-  createStreamProcessor: () => HeterogeneousAgentStreamProcessor;
 }

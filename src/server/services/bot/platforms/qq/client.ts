@@ -15,6 +15,7 @@ import {
   type BotPlatformRuntimeContext,
   type BotProviderConfig,
   ClientFactory,
+  messengerContentText,
   type PlatformClient,
   type PlatformMessenger,
   type UsageStats,
@@ -265,10 +266,13 @@ class QQGatewayClient implements PlatformClient {
     const targetId = extractChatId(platformThreadId);
     const threadType = extractThreadType(platformThreadId);
     return {
-      createMessage: (content) => sendQQMessage(api, threadType, targetId, content),
+      // Attachments are silently dropped for now — QQ outbound media is its
+      // own follow-up; reply text still ships.
+      createMessage: (content) =>
+        sendQQMessage(api, threadType, targetId, messengerContentText(content)),
       editMessage: (_messageId, content) =>
         // QQ does not support editing — send a new message as fallback
-        sendQQMessage(api, threadType, targetId, content),
+        sendQQMessage(api, threadType, targetId, messengerContentText(content)),
       // QQ Bot API doesn't support reactions or typing
       removeReaction: () => Promise.resolve(),
     };
@@ -365,8 +369,12 @@ class QQWebhookClient implements PlatformClient {
     const targetId = extractChatId(platformThreadId);
     const threadType = extractThreadType(platformThreadId);
     return {
-      createMessage: (content) => sendQQMessage(api, threadType, targetId, content),
-      editMessage: (_messageId, content) => sendQQMessage(api, threadType, targetId, content),
+      // Attachments are silently dropped for now — QQ outbound media is its
+      // own follow-up; reply text still ships.
+      createMessage: (content) =>
+        sendQQMessage(api, threadType, targetId, messengerContentText(content)),
+      editMessage: (_messageId, content) =>
+        sendQQMessage(api, threadType, targetId, messengerContentText(content)),
       removeReaction: () => Promise.resolve(),
     };
   }

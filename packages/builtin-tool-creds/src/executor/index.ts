@@ -11,14 +11,14 @@ import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 
 import { CredsIdentifier } from '../manifest';
-import {
-  type ConnectKlavisServiceParams,
-  CredsApiName,
-  type GetPlaintextCredParams,
-  type InitiateOAuthConnectParams,
-  type InjectCredsToSandboxParams,
-  type SaveCredsParams,
+import type {
+  ConnectKlavisServiceParams,
+  GetPlaintextCredParams,
+  InitiateOAuthConnectParams,
+  InjectCredsToSandboxParams,
+  SaveCredsParams,
 } from '../types';
+import { CredsApiName, LOBEHUB_OAUTH_PROVIDER_LIST } from '../types';
 
 const log = debug('lobe-creds:executor');
 
@@ -170,7 +170,7 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
       if (!providerConfig) {
         return {
           error: {
-            message: `Unknown OAuth provider: ${provider}. Available providers: github, linear, microsoft, twitter`,
+            message: `Unknown OAuth provider: ${provider}. Available providers: ${LOBEHUB_OAUTH_PROVIDER_LIST}`,
             type: 'UnknownProvider',
           },
           success: false,
@@ -191,7 +191,11 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
       }
 
       // Get the authorization URL from the market API
-      const redirectUri = `${typeof window !== 'undefined' ? window.location.origin : ''}/oauth/callback/success?provider=${provider}`;
+      // Skip redirectUri on desktop (app:// protocol) since the system browser can't navigate to it
+      const redirectUri =
+        typeof window !== 'undefined' && window.location.protocol.startsWith('http')
+          ? `${window.location.origin}/oauth/callback/success?provider=${provider}`
+          : undefined;
       const response = await toolsClient.market.connectGetAuthorizeUrl.query({
         provider,
         redirectUri,

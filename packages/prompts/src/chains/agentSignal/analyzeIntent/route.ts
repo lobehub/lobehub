@@ -26,6 +26,7 @@ export const chainAgentSignalAnalyzeIntentRoute = (input: {
   message: string;
   reason: string;
   result: 'neutral' | 'not_satisfied' | 'satisfied';
+  serializedContext?: string;
 }): Partial<ChatStreamPayload> => {
   return {
     messages: [

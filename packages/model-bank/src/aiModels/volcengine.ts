@@ -14,6 +14,7 @@ const doubaoChatModels: AIChatModelCard[] = [
       reasoning: true,
       video: true,
       vision: true,
+      search: true,
     },
     config: {
       deploymentName: 'doubao-seed-2-0-pro-260215',
@@ -66,6 +67,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     releasedAt: '2026-02-15',
     settings: {
       extendParams: ['gpt5ReasoningEffort'],
+      searchImpl: 'params',
     },
     type: 'chat',
   },
@@ -75,9 +77,10 @@ const doubaoChatModels: AIChatModelCard[] = [
       reasoning: true,
       video: true,
       vision: true,
+      search: true,
     },
     config: {
-      deploymentName: 'doubao-seed-2-0-lite-260215',
+      deploymentName: 'doubao-seed-2-0-lite-260428',
     },
     contextWindowTokens: 256_000,
     description:
@@ -127,6 +130,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     releasedAt: '2026-02-15',
     settings: {
       extendParams: ['gpt5ReasoningEffort'],
+      searchImpl: 'params',
     },
     type: 'chat',
   },
@@ -136,9 +140,10 @@ const doubaoChatModels: AIChatModelCard[] = [
       reasoning: true,
       video: true,
       vision: true,
+      search: true,
     },
     config: {
-      deploymentName: 'doubao-seed-2-0-mini-260215',
+      deploymentName: 'doubao-seed-2-0-mini-260428',
     },
     contextWindowTokens: 256_000,
     description:
@@ -187,6 +192,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     releasedAt: '2026-02-15',
     settings: {
       extendParams: ['gpt5ReasoningEffort'],
+      searchImpl: 'params',
     },
     type: 'chat',
   },
@@ -196,6 +202,7 @@ const doubaoChatModels: AIChatModelCard[] = [
       reasoning: true,
       video: true,
       vision: true,
+      search: true,
     },
     config: {
       deploymentName: 'doubao-seed-2-0-code-preview-260215',
@@ -247,6 +254,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     releasedAt: '2026-02-15',
     settings: {
       extendParams: ['gpt5ReasoningEffort'],
+      searchImpl: 'params',
     },
     type: 'chat',
   },
@@ -256,6 +264,7 @@ const doubaoChatModels: AIChatModelCard[] = [
       reasoning: true,
       video: true,
       vision: true,
+      search: true,
     },
     config: {
       deploymentName: 'doubao-seed-1-8-251228',
@@ -308,6 +317,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     releasedAt: '2025-12-18',
     settings: {
       extendParams: ['gpt5ReasoningEffort'],
+      searchImpl: 'params',
     },
     type: 'chat',
   },
@@ -317,6 +327,7 @@ const doubaoChatModels: AIChatModelCard[] = [
       reasoning: true,
       video: true,
       vision: true,
+      search: true,
     },
     config: {
       deploymentName: 'doubao-seed-code-preview-251028',
@@ -362,6 +373,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     settings: {
       extendParams: ['enableReasoning'],
+      searchImpl: 'params',
     },
     type: 'chat',
   },
@@ -515,55 +527,9 @@ const doubaoChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-    },
-    config: {
-      deploymentName: 'kimi-k2-thinking-251104',
-    },
-    contextWindowTokens: 262_144,
-    description:
-      'Kimi-K2 is a MoE architecture basic model launched by Moonshot AI with super strong code and agent capabilities. It has a total parameter of 1T and an activation parameter of 32B.In benchmark performance tests in major categories such as general knowledge reasoning, programming, mathematics, and agents, the performance of the K2 model exceeds that of other mainstream open source models.',
-    displayName: 'Kimi K2 Thinking',
-    id: 'kimi-k2-thinking',
-    maxOutput: 32_768,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput_cacheRead', rate: 0.8, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 16, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    config: {
-      deploymentName: 'kimi-k2-250905',
-    },
-    contextWindowTokens: 262_144,
-    description:
-      'Kimi-K2 is a MoE base model from Moonshot AI with strong coding and agent capabilities, totaling 1T parameters with 32B active. On benchmarks for general reasoning, coding, math, and agent tasks, it outperforms other mainstream open models.',
-    displayName: 'Kimi K2',
-    id: 'kimi-k2',
-    maxOutput: 32_768,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput_cacheRead', rate: 0.8, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 16, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
       video: true,
       vision: true,
+      search: true,
     },
     config: {
       deploymentName: 'doubao-seed-1-6-vision-250815',
@@ -608,6 +574,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     settings: {
       extendParams: ['enableReasoning'],
+      searchImpl: 'params',
     },
     type: 'chat',
   },
@@ -617,56 +584,7 @@ const doubaoChatModels: AIChatModelCard[] = [
       reasoning: true,
       video: true,
       vision: true,
-    },
-    config: {
-      deploymentName: 'doubao-seed-1-6-thinking-250715',
-    },
-    contextWindowTokens: 256_000,
-    description:
-      'Doubao-Seed-1.6-thinking significantly strengthens reasoning, further improving core abilities in coding, math, and logical reasoning over Doubao-1.5-thinking-pro, while adding vision understanding. It supports a 256k context window and up to 16k output tokens.',
-    displayName: 'Doubao Seed 1.6 Thinking',
-    id: 'doubao-seed-1.6-thinking',
-    maxOutput: 32_000,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 0.8,
-              '[0.032, 0.128]': 1.2,
-              '[0.128, infinity]': 2.4,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 8,
-              '[0.032, 0.128]': 16,
-              '[0.128, infinity]': 24,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        { name: 'textInput_cacheRead', rate: 0.16, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      video: true,
-      vision: true,
+      search: true,
     },
     config: {
       deploymentName: 'doubao-seed-1-6-251015',
@@ -712,6 +630,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     settings: {
       extendParams: ['gpt5ReasoningEffort'],
+      searchImpl: 'params',
     },
     type: 'chat',
   },
@@ -721,6 +640,7 @@ const doubaoChatModels: AIChatModelCard[] = [
       reasoning: true,
       video: true,
       vision: true,
+      search: true,
     },
     config: {
       deploymentName: 'doubao-seed-1-6-lite-251015',
@@ -766,6 +686,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     settings: {
       extendParams: ['gpt5ReasoningEffort'],
+      searchImpl: 'params',
     },
     type: 'chat',
   },
@@ -775,6 +696,7 @@ const doubaoChatModels: AIChatModelCard[] = [
       reasoning: true,
       video: true,
       vision: true,
+      search: true,
     },
     config: {
       deploymentName: 'doubao-seed-1-6-flash-250828',
@@ -819,113 +741,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     settings: {
       extendParams: ['enableReasoning'],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      video: true,
-      vision: true,
-    },
-    config: {
-      deploymentName: 'doubao-1-5-ui-tars-250428',
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'Doubao-1.5-UI-TARS is a native GUI-focused agent model that seamlessly interacts with interfaces through human-like perception, reasoning, and action.',
-    displayName: 'Doubao 1.5 UI TARS',
-    id: 'doubao-1.5-ui-tars',
-    maxOutput: 16_000,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 3.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    settings: {
-      extendParams: ['thinking'],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      video: true,
-      vision: true,
-    },
-    config: {
-      deploymentName: 'doubao-1-5-thinking-vision-pro-250428',
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'A new visual deep-reasoning model with stronger multimodal understanding and reasoning, achieving SOTA results on 37 of 59 public benchmarks.',
-    displayName: 'Doubao 1.5 Thinking Vision Pro',
-    id: 'doubao-1.5-thinking-vision-pro',
-    maxOutput: 16_000,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    settings: {
-      extendParams: ['thinking'],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    config: {
-      deploymentName: 'doubao-1-5-thinking-pro-250415',
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'Doubao-1.5 is a new deep-reasoning model that excels in math, coding, scientific reasoning, and general tasks like creative writing. It reaches or approaches top-tier results on benchmarks such as AIME 2024, Codeforces, and GPQA. It supports a 128k context window and 16k output.',
-    displayName: 'Doubao 1.5 Thinking Pro',
-    id: 'doubao-1.5-thinking-pro',
-    maxOutput: 16_000,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 16, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      video: true,
-      vision: true,
-    },
-    config: {
-      deploymentName: 'doubao-1-5-thinking-pro-m-250428',
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'Doubao-1.5 is a new deep-reasoning model (the m version includes native multimodal deep reasoning) that excels in math, coding, scientific reasoning, and general tasks like creative writing. It reaches or approaches top-tier results on benchmarks such as AIME 2024, Codeforces, and GPQA. It supports a 128k context window and 16k output.',
-    displayName: 'Doubao 1.5 Thinking Pro M',
-    id: 'doubao-1.5-thinking-pro-m',
-    maxOutput: 16_000,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 16, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    settings: {
-      extendParams: ['thinking'],
+      searchImpl: 'params',
     },
     type: 'chat',
   },
@@ -1063,56 +879,6 @@ const doubaoChatModels: AIChatModelCard[] = [
     type: 'chat',
   },
   {
-    abilities: {
-      functionCall: true,
-      video: true,
-      vision: true,
-    },
-    config: {
-      deploymentName: 'doubao-1-5-vision-pro-250328',
-    },
-    contextWindowTokens: 128_000,
-    description:
-      'Doubao-1.5-vision-pro is an upgraded multimodal model that supports images at any resolution and extreme aspect ratios, enhancing visual reasoning, document recognition, detail understanding, and instruction following.',
-    displayName: 'Doubao 1.5 Vision Pro',
-    id: 'doubao-1.5-vision-pro',
-    maxOutput: 16_384,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-03-28',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      video: true,
-      vision: true,
-    },
-    config: {
-      deploymentName: 'doubao-1-5-vision-lite-250315',
-    },
-    contextWindowTokens: 128_000,
-    description:
-      'Doubao-1.5-vision-lite is an upgraded multimodal model that supports images at any resolution and extreme aspect ratios, enhancing visual reasoning, document recognition, detail understanding, and instruction following. It supports a 128k context window and up to 16k output tokens.',
-    displayName: 'Doubao 1.5 Vision Lite',
-    id: 'doubao-1.5-vision-lite',
-    maxOutput: 16_384,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 4.5, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-03-15',
-    type: 'chat',
-  },
-  {
     config: {
       deploymentName: 'doubao-lite-32k-240828',
     },
@@ -1243,27 +1009,6 @@ const volcengineImageModels: AIImageModelCard[] = [
       units: [{ name: 'imageGeneration', rate: 0.259, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2025-04-15',
-    type: 'image',
-  },
-  {
-    description:
-      'The Doubao image model from ByteDance Seed supports text and image inputs with highly controllable, high-quality image generation. It supports text-guided image editing, with output sizes between 512 and 1536 on the long side.',
-    displayName: 'SeedEdit 3.0 Image-to-Image',
-    id: 'doubao-seededit-3-0-i2i-250628',
-    parameters: {
-      cfg: { default: 5.5, max: 10, min: 1, step: 0.1 },
-      imageUrl: { default: null, maxFileSize: 10 * 1024 * 1024 },
-      prompt: {
-        default: '',
-      },
-      seed: { default: null },
-      watermark: { default: false },
-    },
-    pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0.259, strategy: 'fixed', unit: 'image' }],
-    },
-    releasedAt: '2025-06-28',
     type: 'image',
   },
 ];

@@ -237,7 +237,7 @@ async function createVideoTask(
     if (media.length > 0) {
       input.media = media;
     }
-  } else if (model.startsWith('wan2.7')) {
+  } else if (model.startsWith('wan2.7') || model.startsWith('happyhorse')) {
     const media = [];
     if (imageUrl) {
       media.push({

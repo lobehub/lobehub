@@ -152,7 +152,10 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
 
     setIsConnecting(true);
     try {
-      const redirectUri = `${window.location.origin}/oauth/callback/success?provider=${encodeURIComponent(provider.id)}`;
+      // Skip redirectUri on desktop (app:// protocol) since the system browser can't navigate to it
+      const redirectUri = window.location.protocol.startsWith('http')
+        ? `${window.location.origin}/oauth/callback/success?provider=${encodeURIComponent(provider.id)}`
+        : undefined;
       const { authorizeUrl } = await getAuthorizeUrl(provider.id, { redirectUri });
       openOAuthWindow(authorizeUrl);
     } catch (error) {

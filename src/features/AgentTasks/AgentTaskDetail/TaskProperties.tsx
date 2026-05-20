@@ -22,6 +22,7 @@ const STATUS_META: Record<TaskStatus, StatusMeta> = {
   failed: { labelKey: 'status.failed' },
   paused: { labelKey: 'status.paused' },
   running: { labelKey: 'status.running' },
+  scheduled: { labelKey: 'status.scheduled' },
 };
 
 interface PriorityMeta {
@@ -43,6 +44,9 @@ const TaskProperties = memo(() => {
   const status = useTaskStore(taskDetailSelectors.activeTaskStatus) as TaskStatus | undefined;
   const priority = useTaskStore(taskDetailSelectors.activeTaskPriority);
   const heartbeatInterval = useTaskStore(taskDetailSelectors.activeTaskPeriodicInterval);
+  const automationMode = useTaskStore(taskDetailSelectors.activeTaskAutomationMode);
+  const schedulePattern = useTaskStore(taskDetailSelectors.activeTaskSchedulePattern);
+  const scheduleTimezone = useTaskStore(taskDetailSelectors.activeTaskScheduleTimezone);
 
   if (!taskId) return null;
 
@@ -91,7 +95,13 @@ const TaskProperties = memo(() => {
           paddingInline={8}
           variant={'borderless'}
         >
-          <TaskTriggerTag heartbeatInterval={heartbeatInterval} mode="inline" />
+          <TaskTriggerTag
+            automationMode={automationMode}
+            heartbeatInterval={heartbeatInterval}
+            mode="inline"
+            schedulePattern={schedulePattern}
+            scheduleTimezone={scheduleTimezone}
+          />
         </Block>
       </TaskScheduleConfig>
     </Block>

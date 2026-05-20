@@ -27,7 +27,7 @@ module.exports = defineConfig({
   ],
   temperature: 0,
   saveImmediately: true,
-  modelName: 'gpt-5.1-chat-latest',
+  modelName: 'gpt-4o',
   experimental: {
     jsonMode: true,
   },

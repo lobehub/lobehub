@@ -23,6 +23,10 @@ export interface MoonshotModelCard {
 
 const DEFAULT_MOONSHOT_BASE_URL = 'https://api.moonshot.cn/v1';
 const DEFAULT_MOONSHOT_ANTHROPIC_BASE_URL = 'https://api.moonshot.cn/anthropic';
+const MOONSHOT_ANTHROPIC_BASE_URL_PATTERN = /\/anthropic\/?$/;
+const MOONSHOT_ANTHROPIC_MESSAGES_PATH_PATTERN = /\/v1\/messages\/?$/;
+
+type MoonshotSDKType = 'anthropic' | 'openai';
 
 // Shared constants and helpers
 const MOONSHOT_SEARCH_TOOL = { function: { name: '$web_search' }, type: 'builtin_function' } as any;
@@ -37,6 +41,20 @@ const isKimiNativeThinkingModel = (model: string) => model.startsWith('kimi-k2-t
 const isEmptyContent = (content: any) =>
   content === '' || content === null || content === undefined;
 const hasValidReasoning = (reasoning: any) => reasoning?.content && !reasoning?.signature;
+
+const normalizeMoonshotAnthropicBaseURL = (baseURL?: string | null) =>
+  baseURL?.replace(MOONSHOT_ANTHROPIC_MESSAGES_PATH_PATTERN, '');
+
+/**
+ * `sdkType` explicitly selects the Moonshot SDK wrapper for router-runtime channels.
+ * Legacy baseURL suffix matching is only kept for existing configs that have not set it.
+ */
+const resolveMoonshotSDKType = (sdkType: unknown): MoonshotSDKType | undefined => {
+  if (sdkType === undefined || sdkType === null || sdkType === '') return undefined;
+  if (sdkType === 'anthropic' || sdkType === 'openai') return sdkType;
+
+  throw new Error(`Unsupported Moonshot sdkType: ${String(sdkType)}`);
+};
 
 const getKimiThinkingToggleParams = (isThinkingEnabled: boolean) => ({
   temperature: isThinkingEnabled ? 1 : 0.6,
@@ -253,24 +271,54 @@ export const LobeMoonshotOpenAI = createOpenAICompatibleRuntime({
 
 /**
  * RouterRuntime configuration for Moonshot
- * Routes to Anthropic format for /anthropic URLs, otherwise uses OpenAI format
+ * Routes to Anthropic format for /anthropic URLs, otherwise uses OpenAI format.
+ * `sdkType` can explicitly select the format when a gateway URL does not expose
+ * the legacy /anthropic suffix, such as an Anthropic-compatible /v1/messages URL.
  */
+const createAnthropicRouter = ({
+  baseURL,
+  baseURLPattern,
+}: {
+  baseURL?: string;
+  baseURLPattern?: RegExp;
+} = {}) => ({
+  apiType: 'anthropic' as const,
+  ...(baseURLPattern ? { baseURLPattern } : {}),
+  options: {
+    ...(baseURL ? { baseURL } : {}),
+  },
+  runtime: LobeMoonshotAnthropicAI,
+});
+
+const createOpenAIRouter = () => ({
+  apiType: 'openai' as const,
+  options: {},
+  runtime: LobeMoonshotOpenAI,
+});
+
 export const params: CreateRouterRuntimeOptions = {
   id: ModelProvider.Moonshot,
   models: fetchMoonshotModels,
-  routers: [
-    {
-      apiType: 'anthropic',
-      baseURLPattern: /\/anthropic\/?$/,
-      options: {},
-      runtime: LobeMoonshotAnthropicAI,
-    },
-    {
-      apiType: 'openai',
-      options: {},
-      runtime: LobeMoonshotOpenAI,
-    },
-  ],
+  routers: (options) => {
+    const sdkType = resolveMoonshotSDKType(options.sdkType);
+
+    if (sdkType === 'anthropic') {
+      return [
+        createAnthropicRouter({
+          baseURL: normalizeMoonshotAnthropicBaseURL(options.baseURL),
+        }),
+      ];
+    }
+
+    if (sdkType === 'openai') {
+      return [createOpenAIRouter()];
+    }
+
+    return [
+      createAnthropicRouter({ baseURLPattern: MOONSHOT_ANTHROPIC_BASE_URL_PATTERN }),
+      createOpenAIRouter(),
+    ];
+  },
 };
 
 export const LobeMoonshotAI = createRouterRuntime(params);

@@ -5,11 +5,12 @@ import { ArrowLeftIcon, MoreHorizontal } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
+import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { AutoSaveHint } from '@/features/EditorCanvas';
 import NavHeader from '@/features/NavHeader';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 
+import { usePageAgentPanelControl } from '../RightPanel/OverrideContext';
 import { usePageEditorStore } from '../store';
 import Breadcrumb from './Breadcrumb';
 import { useMenu } from './useMenu';
@@ -23,6 +24,7 @@ const Header = memo(() => {
     s.parentId,
     s.onBack,
   ]);
+  const { expand: showPageAgentPanel, toggle: togglePageAgentPanel } = usePageAgentPanelControl();
   const { menuItems } = useMenu();
 
   return (
@@ -59,9 +61,14 @@ const Header = memo(() => {
               },
             }}
           >
-            <ActionIcon icon={MoreHorizontal} size={DESKTOP_HEADER_ICON_SIZE} />
+            <ActionIcon icon={MoreHorizontal} size={DESKTOP_HEADER_ICON_SMALL_SIZE} />
           </DropdownMenu>
-          <ToggleRightPanelButton hideWhenExpanded showActive={false} />
+          <ToggleRightPanelButton
+            hideWhenExpanded
+            expand={showPageAgentPanel}
+            showActive={false}
+            onToggle={() => togglePageAgentPanel()}
+          />
         </>
       }
     />

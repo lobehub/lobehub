@@ -21,6 +21,46 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      # Remind contributors when a non-release PR targets `main`.
+      # Day-to-day PRs should target `canary`; `main` is reserved for releases
+      # (see .agents/skills/version-release/SKILL.md). Allowed exceptions:
+      #   - PR title matches `🚀 release: v{x.y.z}` (minor release)
+      #   - head branch matches `hotfix/*` or `release/*` (patch release)
+      - name: Remind contributor if base branch is not canary
+        if: github.event.action == 'opened' && github.event.pull_request.base.ref == 'main'
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          if [[ "$HEAD_REF" == hotfix/* ]] || [[ "$HEAD_REF" == release/* ]]; then
+            echo "✅ Release/hotfix branch ($HEAD_REF) -> main is allowed"
+            exit 0
+          fi
+          if [[ "$PR_TITLE" =~ ^🚀[[:space:]]+release: ]]; then
+            echo "✅ Release-titled PR -> main is allowed"
+            exit 0
+          fi
+          echo "⚠️ Non-release PR targets main; posting reminder comment."
+          gh pr comment "$PR_NUMBER" --body "$(cat <<'EOF'
+          👋 Thanks for your contribution!
+
+          This PR currently targets the **`main`** branch, but `main` is reserved for release PRs only. Day-to-day development (features, fixes, refactors, docs, etc.) should target the **`canary`** branch.
+
+          ### How to fix
+
+          On the PR page, click **Edit** next to the title, then change the base branch from `main` to `canary`.
+
+          ### When targeting `main` is allowed
+
+          - PR title starts with `🚀 release: v{x.y.z}` (minor release)
+          - Head branch matches `hotfix/*` or `release/*` (patch release)
+
+          If your PR fits one of these cases, please ignore this message.
+          EOF
+          )"
+
       - name: Check if author is a team member
         id: check-team
         run: |

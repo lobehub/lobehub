@@ -15,11 +15,7 @@ import type {
 import type { MenuProps } from '@lobehub/ui';
 import { useMemo } from 'react';
 
-import {
-  getToolRenderFixture,
-  getToolRenderMeta,
-  type ToolRenderFixture,
-} from './toolRenderFixtures';
+import { getToolRenderFixture, getToolRenderMeta, type ToolRenderFixture } from './fixtures';
 
 export interface ApiEntry {
   apiName: string;

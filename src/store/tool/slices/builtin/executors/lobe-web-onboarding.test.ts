@@ -68,12 +68,20 @@ describe('webOnboardingExecutor', () => {
         properties: {
           agentEmoji: { description: expect.any(String), type: 'string' },
           agentName: { description: expect.any(String), type: 'string' },
-          fullName: { type: 'string' },
-          interests: {
+          customInterests: {
+            description: expect.any(String),
             items: { type: 'string' },
             type: 'array',
           },
-          responseLanguage: { type: 'string' },
+          fullName: { type: 'string' },
+          interests: {
+            description: expect.any(String),
+            items: {
+              enum: expect.arrayContaining(['coding', 'writing']),
+              type: 'string',
+            },
+            type: 'array',
+          },
         },
         type: 'object',
       },

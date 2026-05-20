@@ -14,6 +14,7 @@ import {
   type BotProviderConfig,
   ClientFactory,
   type ExtractFilesResult,
+  messengerContentText,
   type PlatformClient,
   type PlatformMessenger,
   type UsageStats,
@@ -175,9 +176,16 @@ class TelegramWebhookClient implements PlatformClient {
     return {
       addReaction: (messageId, emoji) =>
         telegram.setMessageReaction(chatId, parseTelegramMessageId(messageId), emoji),
-      createMessage: (content) => telegram.sendMessage(chatId, content).then(() => {}),
+      // Attachments are silently dropped — Telegram outbound media support
+      // is tracked in its own follow-up; reply text still ships.
+      createMessage: (content) =>
+        telegram.sendMessage(chatId, messengerContentText(content)).then(() => {}),
       editMessage: (messageId, content) =>
-        telegram.editMessageText(chatId, parseTelegramMessageId(messageId), content),
+        telegram.editMessageText(
+          chatId,
+          parseTelegramMessageId(messageId),
+          messengerContentText(content),
+        ),
       removeReaction: (messageId) =>
         telegram.removeMessageReaction(chatId, parseTelegramMessageId(messageId)),
       // Telegram replaces the whole reaction list in one call — one API
@@ -209,10 +217,19 @@ class TelegramWebhookClient implements PlatformClient {
   }
 
   async registerBotCommands(
-    commands: Array<{ command: string; description: string }>,
+    commands: Array<{
+      command: string;
+      description: string;
+      // Telegram setMyCommands has no options schema (users type free-form
+      // text after the command); the field is accepted for interface
+      // parity with platforms that need it (Discord) and ignored here.
+      options?: Array<{ description: string; name: string; required?: boolean }>;
+    }>,
   ): Promise<void> {
     const telegram = new TelegramApi(this.config.credentials.botToken);
-    await telegram.setMyCommands(commands);
+    await telegram.setMyCommands(
+      commands.map((c) => ({ command: c.command, description: c.description })),
+    );
     log('TelegramBot appId=%s registered %d commands', this.applicationId, commands.length);
   }
 

@@ -36,6 +36,8 @@ export async function createWenxinImage(
 
     if (model.startsWith('musesteamer')) {
       endpoint = `${baseURL}/musesteamer/images/generations`;
+    } else if (model.startsWith('ernie-image')) {
+      endpoint = `${baseURL}/ernie-image/images/generations`;
     } else {
       if (images) {
         endpoint = `${baseURL}/images/edits`;

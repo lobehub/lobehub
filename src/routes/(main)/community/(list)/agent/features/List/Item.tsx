@@ -111,6 +111,7 @@ const AssistantItem = memo<DiscoverAssistantItem>(
     return (
       <Block
         clickable
+        data-agent-type={type ?? 'agent'}
         data-testid="assistant-item"
         height={'100%'}
         variant={'outlined'}

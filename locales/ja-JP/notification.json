@@ -1,10 +1,18 @@
 {
+  "agent_cron_job_failed": "スケジュールされたタスク「{{jobName}}」が失敗しました。エラーの詳細はタスクを開いてご確認ください。",
+  "agent_cron_job_failed_insufficient_budget": "スケジュールされたタスク「{{jobName}}」は、クレジット残高が不足しているため実行できませんでした。今後の実行を再開するには、クレジットを追加するかプランをアップグレードしてください。",
+  "agent_cron_job_failed_insufficient_budget_title": "スケジュールされたタスクを一時停止：クレジット不足",
+  "agent_cron_job_failed_title": "スケジュールされたタスクが失敗しました",
   "billboard.learnMore": "詳細はこちら",
   "billboard.menuLabel": "お知らせ",
+  "image_generation_completed": "画像「{{prompt}}」の生成が完了しました。",
+  "image_generation_completed_title": "画像生成が完了しました",
   "inbox.archiveAll": "すべてをアーカイブ",
   "inbox.empty": "通知はまだありません",
   "inbox.emptyUnread": "未読の通知はありません",
   "inbox.filterUnread": "未読のみ表示",
   "inbox.markAllRead": "すべてを既読にする",
-  "inbox.title": "通知"
+  "inbox.title": "通知",
+  "video_generation_completed": "動画「{{prompt}}」の生成が完了しました。",
+  "video_generation_completed_title": "動画生成が完了しました"
 }

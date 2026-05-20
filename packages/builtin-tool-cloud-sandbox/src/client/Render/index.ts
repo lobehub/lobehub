@@ -10,17 +10,27 @@ import ExportFile from './ExportFile';
  *
  * Reuses local-system renders for shared file/shell operations.
  * Only cloud-specific tools (executeCode, exportFile) have their own renders.
+ *
+ * Each component is also registered under the legacy long API name so old DB
+ * messages with apiName like 'readLocalFile' still render after the rename.
  */
 export const CloudSandboxRenders = {
-  [CloudSandboxApiName.editLocalFile]: LocalSystemRenders.editLocalFile,
+  [CloudSandboxApiName.editFile]: LocalSystemRenders.editFile,
   [CloudSandboxApiName.executeCode]: ExecuteCode,
   [CloudSandboxApiName.exportFile]: ExportFile,
-  [CloudSandboxApiName.listLocalFiles]: LocalSystemRenders.listLocalFiles,
-  [CloudSandboxApiName.moveLocalFiles]: LocalSystemRenders.moveLocalFiles,
-  [CloudSandboxApiName.readLocalFile]: LocalSystemRenders.readLocalFile,
+  [CloudSandboxApiName.listFiles]: LocalSystemRenders.listFiles,
+  [CloudSandboxApiName.moveFiles]: LocalSystemRenders.moveFiles,
+  [CloudSandboxApiName.readFile]: LocalSystemRenders.readFile,
   [CloudSandboxApiName.runCommand]: RunCommandRender,
-  [CloudSandboxApiName.searchLocalFiles]: LocalSystemRenders.searchLocalFiles,
-  [CloudSandboxApiName.writeLocalFile]: LocalSystemRenders.writeLocalFile,
+  [CloudSandboxApiName.searchFiles]: LocalSystemRenders.searchFiles,
+  [CloudSandboxApiName.writeFile]: LocalSystemRenders.writeFile,
+  // Legacy aliases — keep these so historical messages keep rendering
+  editLocalFile: LocalSystemRenders.editFile,
+  listLocalFiles: LocalSystemRenders.listFiles,
+  moveLocalFiles: LocalSystemRenders.moveFiles,
+  readLocalFile: LocalSystemRenders.readFile,
+  searchLocalFiles: LocalSystemRenders.searchFiles,
+  writeLocalFile: LocalSystemRenders.writeFile,
 };
 
 // Export API names for use in other modules

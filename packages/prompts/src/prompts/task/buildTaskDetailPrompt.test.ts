@@ -24,6 +24,20 @@ describe('buildTaskDetailPrompt', () => {
     expect(result).not.toContain('<high_priority_instruction>');
   });
 
+  it('includes default Lobe AI assignee hint when provided', () => {
+    const result = buildTaskDetailPrompt(
+      {
+        defaultAssigneeAgentId: 'agt_inbox',
+        task: baseTask,
+      },
+      NOW,
+    );
+
+    expect(result).toContain('<task_manager_defaults>');
+    expect(result).toContain('Default Lobe AI agent id: agt_inbox');
+    expect(result).toContain('Use this id as assigneeAgentId');
+  });
+
   it('includes subtasks, dependencies, and review', () => {
     const result = buildTaskDetailPrompt(
       {

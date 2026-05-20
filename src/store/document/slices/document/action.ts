@@ -1,19 +1,21 @@
 'use client';
 
 import { EDITOR_DEBOUNCE_TIME, EDITOR_MAX_WAIT } from '@lobechat/const';
-import { type DocumentItem } from '@lobechat/database/schemas';
-import { type IEditor } from '@lobehub/editor';
+import type { DocumentItem } from '@lobechat/database/schemas';
+import type { IEditor } from '@lobehub/editor';
 import { debounce } from 'es-toolkit/compat';
-import { type SWRResponse } from 'swr';
+import type { SWRResponse } from 'swr';
 
 import { useClientDataSWRWithSync } from '@/libs/swr';
 import { documentService } from '@/services/document';
 import { documentSWRKeys } from '@/services/document/swrKeys';
-import { type StoreSetter } from '@/store/types';
+import { usePageStore } from '@/store/page';
+import type { StoreSetter } from '@/store/types';
+import { isSkillMarkdownDocument, parseSkillMarkdownFrontmatter } from '@/utils/skillMarkdown';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { type DocumentStore } from '../../store';
-import { type DocumentSourceType } from '../editor/initialState';
+import type { DocumentStore } from '../../store';
+import type { DocumentContentFormat, DocumentSourceType } from '../editor/initialState';
 
 const n = setNamespace('document/document');
 
@@ -27,6 +29,7 @@ export interface InitDocumentParams {
    */
   autoSave?: boolean;
   content?: string | null;
+  contentFormat?: DocumentContentFormat;
   documentId: string;
   editor: IEditor;
   editorData?: unknown;
@@ -136,9 +139,22 @@ export class DocumentActionImpl {
    * Content is loaded into editor via onEditorInit when Editor component is ready.
    */
   initDocumentWithEditor = (params: InitDocumentParams): void => {
-    const { autoSave, content, documentId, editor, editorData, sourceType, topicId } = params;
+    const {
+      autoSave,
+      content,
+      contentFormat,
+      documentId,
+      editor,
+      editorData,
+      sourceType,
+      topicId,
+    } = params;
 
     const { internal_dispatchDocument } = this.#get();
+    const skillFrontmatter =
+      contentFormat === 'skillMarkdown'
+        ? parseSkillMarkdownFrontmatter(content).frontmatter
+        : undefined;
 
     // Add or update document via reducer
     internal_dispatchDocument({
@@ -147,11 +163,13 @@ export class DocumentActionImpl {
       value: {
         autoSave,
         content: content ?? undefined,
+        contentFormat,
         editorData,
 
         lastSavedContent: content ?? undefined,
         lastSavedEditorData: editorData,
         sourceType,
+        skillFrontmatter,
         topicId,
       },
     });
@@ -224,6 +242,7 @@ export class DocumentActionImpl {
           this.#get().initDocumentWithEditor({
             autoSave,
             content: document.content,
+            contentFormat: isSkillMarkdownDocument(document) ? 'skillMarkdown' : 'markdown',
             documentId,
             editor,
             editorData: document.editorData,
@@ -231,6 +250,13 @@ export class DocumentActionImpl {
             sourceType,
             topicId: topicId ?? undefined,
           });
+
+          // Mirror page metadata (title/emoji) into pageStore so PageExplorer
+          // selectors resolve correctly when the page is opened from a context
+          // that didn't pre-load the documents list (e.g. task workspace modal).
+          if (sourceType === 'page') {
+            usePageStore.getState().upsertDocument(document);
+          }
         },
         revalidateOnFocus: true,
       },

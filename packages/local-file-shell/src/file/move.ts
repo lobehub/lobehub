@@ -3,6 +3,7 @@ import { access, mkdir, rename } from 'node:fs/promises';
 import path from 'node:path';
 
 import type { MoveFileResultItem, MoveFilesParams } from '../types';
+import { expandTilde } from './expandTilde';
 
 export async function moveLocalFiles({ items }: MoveFilesParams): Promise<MoveFileResultItem[]> {
   const results: MoveFileResultItem[] = [];
@@ -12,7 +13,8 @@ export async function moveLocalFiles({ items }: MoveFilesParams): Promise<MoveFi
   }
 
   for (const item of items) {
-    const { oldPath: sourcePath, newPath } = item;
+    const sourcePath = expandTilde(item.oldPath) ?? item.oldPath;
+    const newPath = expandTilde(item.newPath) ?? item.newPath;
     const resultItem: MoveFileResultItem = {
       newPath: undefined,
       sourcePath,

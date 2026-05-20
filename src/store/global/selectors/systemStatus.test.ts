@@ -2,8 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { merge } from '@/utils/merge';
 
-import { type GlobalState } from '../initialState';
-import { INITIAL_STATUS, initialState } from '../initialState';
+import type { GlobalState } from '../initialState';
+import {
+  DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS,
+  DEFAULT_MODEL_DETAIL_PANEL_EXPANDED_KEYS,
+  INITIAL_STATUS,
+  initialState,
+} from '../initialState';
 import { DEFAULT_SIDEBAR_ITEMS, reorderSidebarItems, systemStatusSelectors } from './systemStatus';
 
 // Mock version constants
@@ -41,6 +46,7 @@ describe('systemStatusSelectors', () => {
         showSystemRole: true,
         mobileShowTopic: true,
         mobileShowPortal: true,
+        showAgentBuilderPanel: true,
         showRightPanel: true,
         showLeftPanel: true,
         showFilePanel: true,
@@ -59,6 +65,7 @@ describe('systemStatusSelectors', () => {
       expect(systemStatusSelectors.showSystemRole(s)).toBe(true);
       expect(systemStatusSelectors.mobileShowTopic(s)).toBe(true);
       expect(systemStatusSelectors.mobileShowPortal(s)).toBe(true);
+      expect(systemStatusSelectors.showAgentBuilderPanel(s)).toBe(true);
       expect(systemStatusSelectors.showRightPanel(s)).toBe(true);
       expect(systemStatusSelectors.showLeftPanel(s)).toBe(true);
       expect(systemStatusSelectors.showFilePanel(s)).toBe(true);
@@ -76,6 +83,7 @@ describe('systemStatusSelectors', () => {
       const zenState = merge(s, {
         status: { zenMode: true },
       });
+      expect(systemStatusSelectors.showAgentBuilderPanel(zenState)).toBe(false);
       expect(systemStatusSelectors.showRightPanel(zenState)).toBe(false);
       expect(systemStatusSelectors.showLeftPanel(zenState)).toBe(false);
       expect(systemStatusSelectors.showChatHeader(zenState)).toBe(false);
@@ -89,13 +97,48 @@ describe('systemStatusSelectors', () => {
     });
   });
 
+  describe('modelDetailPanelExpandedKeys', () => {
+    it('should expand pricing and config by default', () => {
+      const s: GlobalState = {
+        ...initialState,
+        status: {
+          ...initialState.status,
+          modelDetailPanelExpandedKeys: undefined,
+        },
+      };
+
+      expect(systemStatusSelectors.modelDetailPanelExpandedKeys(s)).toEqual(
+        DEFAULT_MODEL_DETAIL_PANEL_EXPANDED_KEYS,
+      );
+    });
+
+    it('should return stored user preference when set', () => {
+      const s: GlobalState = merge(initialState, {
+        status: {
+          modelDetailPanelExpandedKeys: ['pricing'],
+        },
+      });
+
+      expect(systemStatusSelectors.modelDetailPanelExpandedKeys(s)).toEqual(['pricing']);
+    });
+  });
+
   describe('sidebarItems', () => {
     it('should return DEFAULT_SIDEBAR_ITEMS when no data is set', () => {
       expect(systemStatusSelectors.sidebarItems(initialState)).toEqual(DEFAULT_SIDEBAR_ITEMS);
     });
 
     it('should return stored items when set', () => {
-      const custom = ['agent', 'recents', 'pages', 'tasks', 'community', 'resource', 'memory'];
+      const custom = [
+        'agent',
+        'recents',
+        'pages',
+        'tasks',
+        'image',
+        'community',
+        'resource',
+        'memory',
+      ];
       const s: GlobalState = merge(initialState, {
         status: { sidebarItems: custom },
       });
@@ -123,10 +166,11 @@ describe('systemStatusSelectors', () => {
       const items = systemStatusSelectors.sidebarItems(s);
       // accordion slot in the default list now uses the user's legacy order
       expect(items).toEqual([
-        'pages',
         'tasks',
+        'pages',
         'agent',
         'recents',
+        'image',
         'community',
         'resource',
         'memory',
@@ -150,6 +194,30 @@ describe('systemStatusSelectors', () => {
       });
       const items = systemStatusSelectors.sidebarItems(s);
       expect(items.indexOf('recents')).toBeLessThan(items.indexOf('agent'));
+    });
+  });
+
+  describe('sidebarExpandedKeys', () => {
+    it('should expand sidebar accordion sections by default', () => {
+      const s: GlobalState = {
+        ...initialState,
+        status: {
+          ...initialState.status,
+          sidebarExpandedKeys: undefined,
+        },
+      };
+
+      expect(systemStatusSelectors.sidebarExpandedKeys(s)).toEqual(
+        DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS,
+      );
+    });
+
+    it('should preserve an empty stored preference when all sections are collapsed', () => {
+      const s: GlobalState = merge(initialState, {
+        status: { sidebarExpandedKeys: [] },
+      });
+
+      expect(systemStatusSelectors.sidebarExpandedKeys(s)).toEqual([]);
     });
   });
 

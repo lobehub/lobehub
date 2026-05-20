@@ -35,15 +35,15 @@ describe('dedupeBy', () => {
 
   it('should deduplicate tools by function name (real-world scenario)', () => {
     const tools = [
-      { function: { name: 'lobe-web-browsing____search____builtin' }, type: 'function' },
+      { function: { name: 'lobe-web-browsing____search' }, type: 'function' },
       { function: { name: 'get_weather' }, type: 'function' },
-      { function: { name: 'lobe-web-browsing____search____builtin' }, type: 'function' },
+      { function: { name: 'lobe-web-browsing____search' }, type: 'function' },
     ];
 
     const result = dedupeBy(tools, (tool) => tool.function.name);
 
     expect(result).toHaveLength(2);
-    expect(result[0].function.name).toBe('lobe-web-browsing____search____builtin');
+    expect(result[0].function.name).toBe('lobe-web-browsing____search');
     expect(result[1].function.name).toBe('get_weather');
   });
 });

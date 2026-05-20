@@ -134,6 +134,17 @@ export const ExtendedHumanInterventionConfigSchema = z.union([
 ]);
 
 export interface LobeChatPluginApi {
+  /**
+   * Default execution timeout in milliseconds for this API.
+   *
+   * Used as the fallback when the LLM does not supply `arguments.timeout`.
+   * Falls back to the global default (120_000 ms) if not set.
+   *
+   * The resolved value (clamped to `[1_000, 800_000]` server-side) drives
+   * both `dispatchClientTool` BLPOP deadline and the renderer's race
+   * deadline, keeping server and client aligned on a single budget.
+   */
+  defaultTimeoutMs?: number;
   description: string;
   /**
    * Human intervention configuration
@@ -166,6 +177,7 @@ export interface LobeChatPluginApi {
 }
 
 export const LobeChatPluginApiSchema = z.object({
+  defaultTimeoutMs: z.number().int().positive().optional(),
   description: z.string(),
   humanIntervention: ExtendedHumanInterventionConfigSchema.optional(),
   name: z.string(),
@@ -335,8 +347,8 @@ export interface BuiltinInterventionProps<Arguments = any> {
   onInteractionAction?: (
     action:
       | { type: 'submit'; payload: Record<string, unknown> }
-      | { type: 'skip'; reason?: string }
-      | { type: 'cancel' },
+      | { type: 'skip'; payload?: Record<string, unknown>; reason?: string }
+      | { type: 'cancel'; payload?: Record<string, unknown> },
   ) => Promise<void>;
   /**
    * Register a callback to be called before approval
@@ -463,11 +475,26 @@ export interface BuiltinToolContext {
   signal?: AbortSignal;
 
   /**
+   * The source user message ID for tools that need to inspect the current turn.
+   */
+  sourceMessageId?: string;
+
+  /**
    * Step context computed at the beginning of each step
-   * Contains dynamic state like GTD todos that changes between steps
+   * Contains dynamic state like lobe-agent todos that changes between steps
    * Computed by AgentRuntime and passed to Tool Executors
    */
   stepContext?: RuntimeStepContext;
+
+  /**
+   * Current task identifier or database id when the conversation is scoped to a task detail page.
+   */
+  taskId?: string | null;
+
+  /**
+   * The tool call ID from the assistant message.
+   */
+  toolCallId?: string;
 
   /**
    * The current topic ID (only available when operating within a topic)
@@ -700,6 +727,52 @@ export interface IBuiltinToolExecutor {
    * @returns The execution result
    */
   invoke: (apiName: string, params: any, ctx: BuiltinToolContext) => Promise<BuiltinToolResult>;
+
+  /**
+   * Optional renderer-side hook fired AFTER a tool call completes — regardless
+   * of whether it actually executed in the client (this executor) or server-side
+   * (server runtime). Use to invalidate SWR caches, refresh stores, or trigger
+   * any other UI-side reaction to the mutation. Implementations should narrow
+   * `ctx.params` themselves based on `ctx.apiName`.
+   */
+  onAfterCall?: (ctx: ToolAfterCallContext) => void | Promise<void>;
+
+  /**
+   * Optional renderer-side hook fired BEFORE a tool call dispatches, regardless
+   * of whether the tool will execute client- or server-side. Use to optimistically
+   * update UI, set loading states, etc.
+   */
+  onBeforeCall?: (ctx: ToolBeforeCallContext) => void | Promise<void>;
+}
+
+/**
+ * Shared base for all renderer-side tool lifecycle hooks. New fields go here
+ * (or on the variants below) — keeping the call signature as a single object
+ * so additions stay non-breaking.
+ */
+export interface ToolHookContext {
+  /** API name being invoked (e.g. `'deleteTask'`). */
+  apiName: string;
+  /** Tool identifier (e.g. `'lobe-task'`). */
+  identifier: string;
+  /**
+   * Parsed tool arguments. Arrives JSON-decoded when the event comes off the
+   * agent stream; never the raw string. Hook implementations narrow per
+   * `apiName`.
+   */
+  params: unknown;
+  /**
+   * Stable id for this specific tool invocation (`ChatToolPayload.id`).
+   * Useful for correlating before/after hooks against the same call.
+   */
+  toolCallId?: string;
+}
+
+export interface ToolBeforeCallContext extends ToolHookContext {}
+
+export interface ToolAfterCallContext extends ToolHookContext {
+  /** Execution result returned by either the client executor or server runtime. */
+  result: BuiltinToolResult;
 }
 
 /**

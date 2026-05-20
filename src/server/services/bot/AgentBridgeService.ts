@@ -3,12 +3,14 @@ import { RequestTrigger } from '@lobechat/types';
 import type { Message, SentMessage, Thread } from 'chat';
 import debug from 'debug';
 
+import type { MessengerPlatform } from '@/config/messenger';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
 import { createAbortError, isAbortError } from '@/server/services/agentRuntime/abort';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { GatewayService } from '@/server/services/gateway';
 import { getMessageGatewayClient } from '@/server/services/gateway/MessageGatewayClient';
 import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
 import { SystemAgentService } from '@/server/services/systemAgent';
@@ -24,6 +26,7 @@ import {
 } from './platforms';
 import { clearReactionState, saveReactionState } from './reactionState';
 import {
+  renderAgentError,
   renderError,
   renderErrorWithDetails,
   renderFinalReply,
@@ -34,6 +37,53 @@ import {
 } from './replyTemplate';
 
 const log = debug('lobe-server:bot:agent-bridge');
+
+/**
+ * Convert hook-event JSON-safe attachments (`{ data?: base64, fetchUrl? }`)
+ * into chat-sdk `Attachment` shape (`{ data?: Buffer, url? }`) so they can
+ * ride along `thread.post({ markdown, attachments })` in local mode. Returns
+ * `undefined` when there are no attachments to send.
+ */
+function hookEventAttachmentsToChatSdk(
+  attachments:
+    | Array<{
+        data?: string;
+        fetchUrl?: string;
+        mimeType?: string;
+        name?: string;
+        type: 'image' | 'file' | 'video' | 'audio';
+      }>
+    | undefined,
+):
+  | Array<{
+      data?: Buffer;
+      mimeType?: string;
+      name?: string;
+      type: 'image' | 'file' | 'video' | 'audio';
+      url?: string;
+    }>
+  | undefined {
+  if (!attachments?.length) return undefined;
+  const out = [];
+  for (const att of attachments) {
+    if (att.fetchUrl) {
+      out.push({
+        mimeType: att.mimeType,
+        name: att.name,
+        type: att.type,
+        url: att.fetchUrl,
+      });
+    } else if (att.data) {
+      out.push({
+        data: Buffer.from(att.data, 'base64'),
+        mimeType: att.mimeType,
+        name: att.name,
+        type: att.type,
+      });
+    }
+  }
+  return out.length > 0 ? out : undefined;
+}
 
 const EXECUTION_TIMEOUT = 30 * 60 * 1000; // 30 minutes
 
@@ -349,9 +399,11 @@ export class AgentBridgeService {
 
     AgentBridgeService.clearActiveThread(thread.id);
 
-    const errorContent = stopped
-      ? renderStopped(errorMessage, replyLocale)
-      : renderError(operationId, replyLocale);
+    const errorContent = {
+      markdown: stopped
+        ? renderStopped(errorMessage, replyLocale)
+        : renderError(operationId, replyLocale),
+    };
 
     if (progressMessage) {
       try {
@@ -461,9 +513,10 @@ export class AgentBridgeService {
           log('handleMention: stored topicId=%s in thread=%s state', topicId, thread.id);
         }
       } catch (error) {
-        log('handleMention error: %O', error);
+        const operationId = AgentBridgeService.activeOperations.get(thread.id);
+        log('handleMention error: operationId=%s, %O', operationId, error);
         try {
-          await thread.post(renderError(undefined, replyLocale));
+          await thread.post({ markdown: renderError(operationId, replyLocale) });
         } catch (postError) {
           log('handleMention: failed to post error message: %O', postError);
         }
@@ -601,9 +654,12 @@ export class AgentBridgeService {
           return this.handleMention(thread, message, opts);
         }
 
-        log('handleSubscribedMessage error: %O', error);
+        const operationId = AgentBridgeService.activeOperations.get(thread.id);
+        log('handleSubscribedMessage error: operationId=%s, %O', operationId, error);
         try {
-          await thread.post(renderErrorWithDetails(errMsg, replyLocale));
+          await thread.post({
+            markdown: renderErrorWithDetails(errMsg, replyLocale, operationId),
+          });
         } catch (postError) {
           log('handleSubscribedMessage: failed to post error message: %O', postError);
         }
@@ -702,16 +758,38 @@ export class AgentBridgeService {
       if (botContext?.platformThreadId && botContext?.applicationId) {
         const platform = botContext.platformThreadId.split(':')[0];
         try {
-          const row = await AgentBotProviderModel.findByPlatformAndAppId(
-            this.db,
-            platform,
-            botContext.applicationId,
-          );
-          if (row?.id) {
-            gatewayConnectionId = row.id;
-            gwClient.startTyping(row.id, botContext.platformThreadId!).catch((err) => {
-              log('executeWithWebhooks: gateway startTyping failed: %O', err);
+          if (botContext.messengerInstallationKey) {
+            // Messenger run: shard typing by `(platform, lobeUserId)` so each
+            // user gets their own DO. Solves both the cross-conversation
+            // TypingState overwrite bug (single shared DO) and the 200K-MAU
+            // single-DO hot-spot. The connectionId is registered lazily and
+            // cached per-process — see GatewayService.ensureUserMessengerConnected.
+            const gateway = new GatewayService();
+            const connectionId = await gateway.ensureUserMessengerConnected({
+              installationKey: botContext.messengerInstallationKey,
+              platform: platform as MessengerPlatform,
+              userId: this.userId,
             });
+            if (connectionId) {
+              gatewayConnectionId = connectionId;
+              gwClient.startTyping(connectionId, botContext.platformThreadId!).catch((err) => {
+                log('executeWithWebhooks: messenger gateway startTyping failed: %O', err);
+              });
+            }
+          } else {
+            // Per-agent bot provider: typing keyed by the provider row id —
+            // legacy path for `agent_bot_providers`-backed bots.
+            const row = await AgentBotProviderModel.findByPlatformAndAppId(
+              this.db,
+              platform,
+              botContext.applicationId,
+            );
+            if (row?.id) {
+              gatewayConnectionId = row.id;
+              gwClient.startTyping(row.id, botContext.platformThreadId!).catch((err) => {
+                log('executeWithWebhooks: gateway startTyping failed: %O', err);
+              });
+            }
           }
         } catch (err) {
           log('executeWithWebhooks: gateway provider lookup failed: %O', err);
@@ -752,6 +830,11 @@ export class AgentBridgeService {
     const callbackUrl = '/api/agent/webhooks/bot-callback';
     const webhookBody = {
       applicationId: botContext?.applicationId,
+      // Forward the messenger discriminator (set by MessengerRouter for runs
+      // originated by the shared Messenger bot). The callback uses this — not
+      // the synthetic applicationId shape — to decide which credential source
+      // to read from.
+      messengerInstallationKey: botContext?.messengerInstallationKey,
       platformThreadId: botContext?.platformThreadId,
       progressMessageId: progressMessage?.id,
       // Pass thread name only if it's user-set.
@@ -761,6 +844,13 @@ export class AgentBridgeService {
         channelContext?.thread?.name && /^Thread \d/.test(channelContext.thread.name)
           ? undefined
           : channelContext?.thread?.name,
+      // Forward the lobe userId so messenger callbacks can rebuild the same
+      // per-user gateway connectionId (`messenger:<platform>[:<tenant>]:user-<userId>`)
+      // that we used to start typing here. Without it, `BotCallbackService`
+      // falls back to `connectionId: ''` and `stopGatewayTyping` becomes a
+      // no-op — leaving the typing indicator to expire on the gateway's 60s
+      // alarm timeout instead of stopping at completion.
+      userId: this.userId,
       userMessageId: userMessage.id,
     };
 
@@ -1007,6 +1097,11 @@ export class AgentBridgeService {
 
     let { progressMessage } = opts;
     let operationStartTime = 0;
+    // Tracks the last markdown body written to `progressMessage` so we can
+    // skip redundant edits. Telegram rejects edits with identical content
+    // ("message is not modified"), and the final reply often matches the
+    // last streamed progress frame.
+    let lastProgressText: string | undefined;
 
     const stopGatewayTyping = () => {
       if (gatewayConnectionId && botContext?.platformThreadId) {
@@ -1050,7 +1145,7 @@ export class AgentBridgeService {
                   await this.setReaction(thread, userMessage, client, desiredEmoji, botContext);
                 }
 
-                if (!event.shouldContinue || !progressMessage || displayToolCalls === false) return;
+                if (!event.shouldContinue || !progressMessage || displayToolCalls !== true) return;
 
                 const msgBody = renderStepProgress(
                   {
@@ -1079,11 +1174,20 @@ export class AgentBridgeService {
                   totalCost: event.totalCost ?? 0,
                   totalTokens: event.totalTokens ?? 0,
                 };
-                const formatted = client?.formatMarkdown?.(msgBody) ?? msgBody;
-                const progressText = client?.formatReply?.(formatted, stats) ?? formatted;
+                // Local mode goes through the Chat SDK adapter, which only
+                // applies the platform's markdown parse_mode when the message
+                // is `{ markdown }`. Pre-converting via `formatMarkdown` (HTML
+                // for Telegram, mrkdwn for Slack, …) would land in a plain
+                // string branch and render literal `**` / `<b>`. `formatReply`
+                // only appends a plain stats line, so it composes cleanly with
+                // the markdown body.
+                const progressBody = client?.formatReply?.(msgBody, stats) ?? msgBody;
+
+                if (progressBody === lastProgressText) return;
 
                 try {
-                  progressMessage = await progressMessage.edit(progressText);
+                  progressMessage = await progressMessage.edit({ markdown: progressBody });
+                  lastProgressText = progressBody;
                 } catch (error) {
                   log('executeWithCallback[local]: failed to edit progress message: %O', error);
                 }
@@ -1107,28 +1211,44 @@ export class AgentBridgeService {
                 if (reason === 'error') {
                   const errorMsg = event.errorMessage || 'Agent execution failed';
                   log(
-                    'onComplete: agent run failed, operationId=%s, errorMessage=%s',
+                    'onComplete: agent run failed, operationId=%s, errorType=%s, errorMessage=%s',
                     event.operationId,
+                    event.errorType,
                     errorMsg,
                   );
                   try {
-                    const errorText = renderError(event.operationId, replyLocale);
+                    const errorBody = renderAgentError(
+                      event.errorType,
+                      errorMsg,
+                      event.operationId,
+                      replyLocale,
+                    );
+                    // Wrap in `{ markdown }` so the Chat SDK adapter sets the
+                    // platform's markdown parse_mode (e.g. Telegram `Markdown`,
+                    // Slack `mrkdwn`) and converts the body. Plain strings are
+                    // sent without parse_mode and would render literal `**`.
                     if (progressMessage) {
-                      await progressMessage.edit(errorText);
+                      await progressMessage.edit({ markdown: errorBody });
                     } else {
-                      await thread.post(errorText);
+                      await thread.post({ markdown: errorBody });
                     }
                   } catch {
                     // ignore send failure
                   }
-                  reject(new Error(errorMsg));
+                  // Resolve (not reject) — the friendly error has already been
+                  // posted to the user. Rejecting would bubble up to the outer
+                  // try/catch in handleMention and cause a duplicate generic
+                  // "Agent Execution Failed" message on top of the friendly one.
+                  resolve({ reply: '', topicId: resolvedTopicId });
                   return;
                 }
 
                 if (reason === 'interrupted') {
                   if (progressMessage) {
                     try {
-                      await progressMessage.edit(renderStopped(undefined, replyLocale));
+                      await progressMessage.edit({
+                        markdown: renderStopped(undefined, replyLocale),
+                      });
                     } catch {
                       // ignore edit failure
                     }
@@ -1139,31 +1259,58 @@ export class AgentBridgeService {
 
                 try {
                   const lastAssistantContent = event.lastAssistantContent;
+                  // Convert hook-event attachments (JSON-safe) to chat-sdk
+                  // Attachment shape. Only the *last* chunk carries
+                  // attachments so a multi-chunk reply doesn't repeat the
+                  // image/file once per chunk.
+                  const lastChunkAttachments = hookEventAttachmentsToChatSdk(
+                    event.attachments as any,
+                  );
+                  const hasText = !!lastAssistantContent;
+                  const hasAttachments = !!lastChunkAttachments?.length;
 
-                  if (lastAssistantContent) {
-                    const replyBody = renderFinalReply(lastAssistantContent);
-                    const replyStats = {
-                      elapsedMs: event.duration ?? getElapsedMs(),
-                      llmCalls: event.llmCalls ?? 0,
-                      toolCalls: event.toolCalls ?? 0,
-                      totalCost: event.cost ?? 0,
-                      totalTokens: event.totalTokens ?? 0,
-                    };
-                    const formattedBody = client?.formatMarkdown?.(replyBody) ?? replyBody;
-                    const finalText =
-                      client?.formatReply?.(formattedBody, replyStats) ?? formattedBody;
+                  if (hasText || hasAttachments) {
+                    let chunks: string[];
+                    if (hasText) {
+                      const replyBody = renderFinalReply(lastAssistantContent!);
+                      const replyStats = {
+                        elapsedMs: event.duration ?? getElapsedMs(),
+                        llmCalls: event.llmCalls ?? 0,
+                        toolCalls: event.toolCalls ?? 0,
+                        totalCost: event.cost ?? 0,
+                        totalTokens: event.totalTokens ?? 0,
+                      };
+                      // See progress-handler note above: keep the body as
+                      // markdown and let the Chat SDK adapter render it with the
+                      // platform's parse_mode. `formatReply` only appends a
+                      // plain-text stats line.
+                      const finalText = client?.formatReply?.(replyBody, replyStats) ?? replyBody;
+                      chunks = splitMessage(finalText, charLimit);
+                      if (chunks.length === 0) chunks = [''];
+                    } else {
+                      // Attachment-only reply — drive one empty chunk so the
+                      // attachments still get posted via buildPostable.
+                      chunks = [''];
+                    }
 
-                    const chunks = splitMessage(finalText, charLimit);
+                    const lastIdx = chunks.length - 1;
+                    const buildPostable = (chunk: string, idx: number) =>
+                      idx === lastIdx && hasAttachments
+                        ? { attachments: lastChunkAttachments!, markdown: chunk }
+                        : { markdown: chunk };
 
                     try {
                       if (progressMessage) {
-                        await progressMessage.edit(chunks[0]);
+                        if (chunks[0] !== lastProgressText) {
+                          await progressMessage.edit(buildPostable(chunks[0], 0));
+                          lastProgressText = chunks[0];
+                        }
                         for (let i = 1; i < chunks.length; i++) {
-                          await thread.post(chunks[i]);
+                          await thread.post(buildPostable(chunks[i], i));
                         }
                       } else {
-                        for (const chunk of chunks) {
-                          await thread.post(chunk);
+                        for (let i = 0; i < chunks.length; i++) {
+                          await thread.post(buildPostable(chunks[i], i));
                         }
                       }
                     } catch (error) {
@@ -1171,14 +1318,18 @@ export class AgentBridgeService {
                     }
 
                     log(
-                      'executeWithCallback[local]: got response (%d chars, %d chunks)',
-                      lastAssistantContent.length,
+                      'executeWithCallback[local]: got response (%d chars, %d chunks, %d attachments)',
+                      lastAssistantContent?.length ?? 0,
                       chunks.length,
+                      lastChunkAttachments?.length ?? 0,
                     );
-                    resolve({ reply: lastAssistantContent, topicId: resolvedTopicId });
+                    resolve({ reply: lastAssistantContent ?? '', topicId: resolvedTopicId });
 
-                    // Fire-and-forget: summarize topic title in DB
-                    if (resolvedTopicId && prompt) {
+                    // Fire-and-forget: summarize topic title in DB. Only when
+                    // we have text to summarize on — image-only replies skip
+                    // title generation (the prompt itself still drives it on
+                    // the next round).
+                    if (resolvedTopicId && prompt && lastAssistantContent) {
                       const topicModel = new TopicModel(this.db, this.userId);
                       topicModel
                         .findById(resolvedTopicId)
@@ -1241,7 +1392,9 @@ export class AgentBridgeService {
 
             if (progressMessage) {
               try {
-                await progressMessage.edit(renderError(result.operationId, replyLocale));
+                await progressMessage.edit({
+                  markdown: renderError(result.operationId, replyLocale),
+                });
               } catch (error) {
                 log('executeWithCallback[local]: failed to edit startup error: %O', error);
               }
@@ -1279,7 +1432,9 @@ export class AgentBridgeService {
           if (isAbortError(error)) {
             if (progressMessage) {
               try {
-                await progressMessage.edit(renderStopped(error.message, replyLocale));
+                await progressMessage.edit({
+                  markdown: renderStopped(error.message, replyLocale),
+                });
               } catch (editError) {
                 log('executeWithCallback[local]: failed to edit stopped message: %O', editError);
               }
@@ -1301,9 +1456,17 @@ export class AgentBridgeService {
             return;
           }
 
+          // If execAgent rejected after the operation was registered (e.g. an
+          // error inside the resolved-then path), the operationId may already
+          // have been stashed in activeOperations — surface it so the failure
+          // is traceable instead of opaque.
+          const fallbackOperationId = AgentBridgeService.activeOperations.get(thread.id);
+
           if (progressMessage) {
             try {
-              await progressMessage.edit(renderError(undefined, replyLocale));
+              await progressMessage.edit({
+                markdown: renderError(fallbackOperationId, replyLocale),
+              });
             } catch (editError) {
               log('executeWithCallback[local]: failed to edit startup error: %O', editError);
             }

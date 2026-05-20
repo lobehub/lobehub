@@ -1,13 +1,15 @@
 {
+  "features.agentSelfIteration.desc": "Позволяет помощнику проводить самоанализ, формировать самосознание и постоянно совершенствоваться через непрерывные попытки и взаимодействия.",
+  "features.agentSelfIteration.title": "Самоитерация агента",
   "features.assistantMessageGroup.desc": "Группируйте сообщения агента и результаты вызова инструментов для совместного отображения",
   "features.assistantMessageGroup.title": "Группировка сообщений агента",
   "features.gatewayMode.desc": "Выполняйте задачи агента на сервере через WebSocket Gateway вместо локального запуска. Обеспечивает более быструю работу и снижает нагрузку на ресурсы клиента.",
   "features.gatewayMode.title": "Серверное выполнение агента (Gateway)",
   "features.groupChat.desc": "Включите координацию группового чата с несколькими агентами.",
   "features.groupChat.title": "Групповой чат (мультиагентный)",
-  "features.heterogeneousAgent.desc": "Включает выполнение разнородных агентов с помощью Claude Code, Codex CLI и других внешних агентских CLI. Добавляет вариант «Агент Claude Code» в боковое меню выбора агентов.",
-  "features.heterogeneousAgent.title": "Разнородный агент (Claude Code)",
   "features.inputMarkdown.desc": "Отображение Markdown в поле ввода в реальном времени (жирный текст, блоки кода, таблицы и т. д.).",
   "features.inputMarkdown.title": "Отображение Markdown при вводе",
+  "features.messenger.desc": "Общайтесь с вашими агентами через Telegram (и другие мессенджеры) с помощью общего бота LobeHub. Добавляет вкладку 'Мессенджер' в Настройки для привязки вашего аккаунта и выбора агента, который будет получать сообщения.",
+  "features.messenger.title": "Мессенджер",
   "title": "Лаборатория"
 }

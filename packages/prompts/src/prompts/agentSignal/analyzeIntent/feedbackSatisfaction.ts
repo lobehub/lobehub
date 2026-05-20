@@ -44,6 +44,7 @@ Rules:
 - Use only the provided feedback message and serialized context.
 - Treat future-facing preference corrections as actionable satisfaction feedback, not neutral.
 - If the user is steering future assistant behavior toward a new preference or format, prefer "not_satisfied" unless the message clearly reinforces something already working well.
+- Treat explicit requests to create, update, refine, merge, or preserve a reusable skill, workflow, checklist, template, or playbook as actionable feedback. Prefer "not_satisfied" when phrased as a requested change, even if the user is not complaining.
 - Do not infer domains such as memory, prompt, skill, or experience.
 - Do not output action plans, routing targets, or hidden intermediate reasoning.
 - Keep "reason" short and decision-specific.
@@ -60,6 +61,12 @@ Output: {"result":"not_satisfied","confidence":0.97,"reason":"explicit dissatisf
 
 Input message: "Going forward, I usually want the conclusion first and the explanation after it."
 Output: {"result":"not_satisfied","confidence":0.89,"reason":"future-facing preference correction for answer structure","evidence":[{"cue":"going forward","excerpt":"Going forward, I usually want the conclusion first and the explanation after it."},{"cue":"usually want","excerpt":"Going forward, I usually want the conclusion first and the explanation after it."}]}
+
+Input message: "Create a reusable skill for future PR reviews: always check correctness, tests, security, rollout risk, and rollback risk."
+Output: {"result":"not_satisfied","confidence":0.91,"reason":"explicit request to create a reusable assistant artifact","evidence":[{"cue":"create reusable skill","excerpt":"Create a reusable skill for future PR reviews"},{"cue":"future PR reviews","excerpt":"future PR reviews"}]}
+
+Input message: "这个 review 流程挺好，下次也可以参考。"
+Output: {"result":"satisfied","confidence":0.82,"reason":"positive reinforcement for a reusable workflow","evidence":[{"cue":"流程挺好","excerpt":"这个 review 流程挺好"},{"cue":"下次也可以参考","excerpt":"下次也可以参考"}]}
 
 Input message: "Thanks."
 Output: {"result":"neutral","confidence":0.78,"reason":"acknowledgement without clear satisfaction judgment","evidence":[{"cue":"brief acknowledgement","excerpt":"Thanks."}]}

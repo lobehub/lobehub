@@ -68,7 +68,7 @@ sequenceDiagram
 
 用户发送消息后，`sendMessage()`
 （`src/store/chat/slices/aiChat/actions/conversationLifecycle.ts`）
-创建用户消息和助手消息占位，然后调用 `internal_execAgentRuntime()`。
+创建用户消息和助手消息占位，然后调用 `executeClientAgent()`。
 
 ### 2. Agent Runtime 驱动循环
 
@@ -293,7 +293,7 @@ Agent Runtime 循环的执行位置取决于场景：
 
 - **客户端循环**（浏览器）：常规 1:1 对话、继续生成、
   群组编排决策。循环在浏览器中运行，
-  入口为 `internal_execAgentRuntime()`
+  入口为 `executeClientAgent()`
   （`src/store/chat/slices/aiChat/actions/streamingExecutor.ts`）
 - **服务端循环**（队列 / 本地）：群聊 supervisor agent、
   子 agent 任务、API/Cron 触发。循环在服务端运行，

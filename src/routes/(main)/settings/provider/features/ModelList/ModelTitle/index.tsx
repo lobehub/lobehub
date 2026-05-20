@@ -2,7 +2,7 @@ import { ActionIcon, Button, DropdownMenu, Flexbox, Skeleton, Text } from '@lobe
 import { App, Space } from 'antd';
 import { cssVar } from 'antd-style';
 import { CircleX, EllipsisVertical, LucideRefreshCcwDot, PlusIcon } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
@@ -49,6 +49,10 @@ const ModelTitle = memo<ModelFetcherProps>(
     const [showModal, setShowModal] = useState(false);
 
     const mobile = useIsMobile();
+
+    useEffect(() => {
+      useAiInfraStore.setState({ modelSearchKeyword: '' });
+    }, [provider]);
 
     return (
       <Flexbox

@@ -10,10 +10,9 @@ import { useFetchChatTopics } from '@/hooks/useFetchChatTopics';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
-import { useUserStore } from '@/store/user';
-import { preferenceSelectors } from '@/store/user/selectors';
 
 import AllTopicsDrawer from '../AllTopicsDrawer';
+import { useAgentTopicGroupMode } from '../hooks/useAgentTopicGroupMode';
 import ByProjectMode from '../TopicListContent/ByProjectMode';
 import ByTimeMode from '../TopicListContent/ByTimeMode';
 import FlatMode from '../TopicListContent/FlatMode';
@@ -30,7 +29,7 @@ const TopicList = memo(() => {
     s.closeAllTopicsDrawer,
   ]);
 
-  const topicGroupMode = useUserStore(preferenceSelectors.topicGroupMode);
+  const { topicGroupMode } = useAgentTopicGroupMode();
 
   useFetchChatTopics();
 

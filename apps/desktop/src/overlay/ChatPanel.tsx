@@ -57,6 +57,25 @@ export interface ChatPanelProps {
   viewportWidth: number;
 }
 
+export const shouldShowOverlayModelSelector = (agent?: ScreenCaptureAgentOption) =>
+  !agent?.heterogeneousType;
+
+export const resolveOverlayModelSelectionPayload = ({
+  agent,
+  model,
+  modelId,
+}: {
+  agent?: ScreenCaptureAgentOption;
+  model?: ScreenCaptureModelOption;
+  modelId?: string;
+}) => {
+  if (!shouldShowOverlayModelSelector(agent)) {
+    return { modelId: undefined, provider: undefined };
+  }
+
+  return { modelId, provider: model?.provider };
+};
+
 const formatBytes = (rect: Rect): string =>
   `${Math.round(rect.width)} × ${Math.round(rect.height)} · ${OVERLAY_COPY.selectionFormatLabel}`;
 
@@ -140,6 +159,7 @@ const ChatPanel = memo<ChatPanelProps>(
       () => models?.find((item) => item.id === modelId),
       [models, modelId],
     );
+    const showModelSelector = shouldShowOverlayModelSelector(currentAgent);
 
     useEffect(() => {
       if (!initialAgentId) return;
@@ -276,14 +296,29 @@ const ChatPanel = memo<ChatPanelProps>(
 
     const submit = useCallback(() => {
       if (selections.length === 0 || !prompt.trim() || !allUploadsReady) return;
+      const modelSelection = resolveOverlayModelSelectionPayload({
+        agent: currentAgent,
+        model: currentModel,
+        modelId,
+      });
+
       onSubmit({
         agentId,
         captureIds: selections.map((item) => item.captureId),
-        modelId,
+        modelId: modelSelection.modelId,
         prompt: prompt.trim(),
-        provider: currentModel?.provider,
+        provider: modelSelection.provider,
       });
-    }, [selections, prompt, agentId, modelId, currentModel, onSubmit, allUploadsReady]);
+    }, [
+      selections,
+      prompt,
+      agentId,
+      currentAgent,
+      modelId,
+      currentModel,
+      onSubmit,
+      allUploadsReady,
+    ]);
 
     const handleKeyDown = useCallback(
       (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
@@ -464,38 +499,40 @@ const ChatPanel = memo<ChatPanelProps>(
                 </select>
               </label>
 
-              <label
-                aria-label={OVERLAY_COPY.modelSelectLabel}
-                className={cn(styles.selectChip, !hasModels && styles.selectChipDisabled)}
-              >
-                {currentModel ? (
-                  <span className={styles.modelIconBox}>
-                    <ModelIcon model={currentModel.id} size={16} />
-                  </span>
-                ) : (
-                  <span className={styles.modelIconBoxFallback} />
-                )}
-                <span className={styles.chipLabel}>
-                  {currentModel?.displayName ??
-                    currentModel?.id ??
-                    OVERLAY_COPY.modelSelectPlaceholder}
-                </span>
-                <ChevronDownIcon className={styles.chevron} size={12} strokeWidth={2} />
-                <select
+              {showModelSelector && (
+                <label
                   aria-label={OVERLAY_COPY.modelSelectLabel}
-                  className={styles.nativeSelect}
-                  disabled={!hasModels}
-                  value={modelId ?? ''}
-                  onChange={handleModelChange}
+                  className={cn(styles.selectChip, !hasModels && styles.selectChipDisabled)}
                 >
-                  {!hasModels && <option value="">{OVERLAY_COPY.modelSelectPlaceholder}</option>}
-                  {models?.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.displayName ?? item.id}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  {currentModel ? (
+                    <span className={styles.modelIconBox}>
+                      <ModelIcon model={currentModel.id} size={16} />
+                    </span>
+                  ) : (
+                    <span className={styles.modelIconBoxFallback} />
+                  )}
+                  <span className={styles.chipLabel}>
+                    {currentModel?.displayName ??
+                      currentModel?.id ??
+                      OVERLAY_COPY.modelSelectPlaceholder}
+                  </span>
+                  <ChevronDownIcon className={styles.chevron} size={12} strokeWidth={2} />
+                  <select
+                    aria-label={OVERLAY_COPY.modelSelectLabel}
+                    className={styles.nativeSelect}
+                    disabled={!hasModels}
+                    value={modelId ?? ''}
+                    onChange={handleModelChange}
+                  >
+                    {!hasModels && <option value="">{OVERLAY_COPY.modelSelectPlaceholder}</option>}
+                    {models?.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.displayName ?? item.id}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
             </div>
 
             <div className={styles.actionBarRight}>

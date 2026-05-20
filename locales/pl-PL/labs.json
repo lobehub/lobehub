@@ -1,13 +1,15 @@
 {
+  "features.agentSelfIteration.desc": "Pozwala asystentowi na refleksję, budowanie samoświadomości oraz ciągłe doskonalenie poprzez kolejne próby i interakcje.",
+  "features.agentSelfIteration.title": "Samoiteracja agenta",
   "features.assistantMessageGroup.desc": "Grupuj wiadomości agenta i wyniki wywołań narzędzi razem do wyświetlenia",
   "features.assistantMessageGroup.title": "Grupowanie Wiadomości Agenta",
   "features.gatewayMode.desc": "Wykonuj zadania agenta na serwerze przez Gateway WebSocket zamiast lokalnie. Umożliwia to szybsze wykonywanie i zmniejsza wykorzystanie zasobów po stronie klienta.",
   "features.gatewayMode.title": "Wykonywanie agenta po stronie serwera (Gateway)",
   "features.groupChat.desc": "Włącz koordynację czatu grupowego z wieloma agentami.",
   "features.groupChat.title": "Czat Grupowy (Wielu Agentów)",
-  "features.heterogeneousAgent.desc": "Włącz wykonywanie heterogenicznych agentów z użyciem Claude Code, Codex CLI i innych zewnętrznych interfejsów CLI agentów. Tworzy opcję „Claude Code Agent” w bocznym menu wyboru agentów.",
-  "features.heterogeneousAgent.title": "Heterogeniczny agent (Claude Code)",
   "features.inputMarkdown.desc": "Renderuj Markdown w polu wprowadzania w czasie rzeczywistym (pogrubiony tekst, bloki kodu, tabele itp.).",
   "features.inputMarkdown.title": "Renderowanie Markdown w Polu Wprowadzania",
+  "features.messenger.desc": "Rozmawiaj ze swoimi agentami za pośrednictwem Telegrama (i innych komunikatorów) za pomocą wspólnego bota LobeHub. Dodaje zakładkę Messenger w Ustawieniach, umożliwiając powiązanie konta i wybór agenta, który odbiera wiadomości.",
+  "features.messenger.title": "Komunikator",
   "title": "Laboratorium"
 }

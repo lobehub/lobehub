@@ -24,11 +24,14 @@ export const useTopicNavigation = () => {
   const toggleConfig = useGlobalStore((s) => s.toggleMobileTopic);
   const switchTopic = useChatStore((s) => s.switchTopic);
   const routeAgentId = params.aid ?? activeAgentId;
+  // URL is the source of truth. Sidebar mounts at `/agent/:aid` so `params.topicId`
+  // is undefined here — fall back to parsing pathname directly so consumers can compare
+  // their item id against the URL's topic id without waiting for store hydration.
+  const urlTopicId = params.topicId;
   const routeTopicId = params.topicId ?? activeTopicId ?? undefined;
   const topicBasePath =
     routeAgentId && routeTopicId ? SESSION_CHAT_TOPIC_URL(routeAgentId, routeTopicId) : undefined;
-  // URL-derived topic path (no store fallback) — used for sub-route detection so a cached
-  // activeTopicId cannot mask a non-topic page like /agent/:aid/profile.
+
   const urlTopicBasePath =
     routeAgentId && params.topicId
       ? SESSION_CHAT_TOPIC_URL(routeAgentId, params.topicId)
@@ -87,5 +90,6 @@ export const useTopicNavigation = () => {
     isInTopicContextRoute: isInTopicContextRoute(),
     navigateToTopic,
     routeTopicId,
+    urlTopicId,
   };
 };

@@ -1,59 +1,80 @@
 import { Block, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import type { TFunction } from 'i18next';
 import { ClockIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const formatInterval = (seconds: number, t: TFunction<'chat'>) => {
-  if (seconds < 60) return t('taskSchedule.unit.second', { count: seconds });
-  if (seconds % 3600 === 0) return t('taskSchedule.unit.hour', { count: seconds / 3600 });
-  if (seconds % 60 === 0) return t('taskSchedule.unit.minute', { count: seconds / 60 });
-  return t('taskSchedule.unit.second', { count: seconds });
-};
+import {
+  formatIntervalLabel,
+  formatScheduleDescription,
+  formatTimezoneName,
+} from '@/features/AgentTasks/AgentTaskDetail/scheduler/helpers';
 
 interface TaskTriggerTagProps {
+  automationMode?: 'heartbeat' | 'schedule' | null;
   heartbeatInterval?: number | null;
   mode?: 'inline' | 'tag';
   schedulePattern?: string | null;
   scheduleTimezone?: string | null;
 }
 
+const FLEX_MIN_WIDTH_0 = { minWidth: 0 };
+const PILL_STYLE = { borderRadius: 24, minWidth: 0 };
+
 const TaskTriggerTag = memo<TaskTriggerTagProps>(
-  ({ heartbeatInterval, mode = 'tag', schedulePattern, scheduleTimezone }) => {
-    const { t } = useTranslation('chat');
-    const data = useMemo(() => {
-      if (schedulePattern) {
-        const timezone = scheduleTimezone ? ` (${scheduleTimezone})` : '';
+  ({ automationMode, heartbeatInterval, mode = 'tag', schedulePattern, scheduleTimezone }) => {
+    const { t, i18n } = useTranslation('chat');
+    const data = useMemo<
+      | {
+          primary: string;
+          secondary?: string;
+          tooltip: string;
+        }
+      | undefined
+    >(() => {
+      // automationMode is the source of truth — DB may carry stale fields from
+      // a previous mode (e.g. a heartbeat task that was once on a schedule).
+      if (automationMode === 'schedule' && schedulePattern) {
+        const primary = formatScheduleDescription(schedulePattern, t);
+        const tzName = scheduleTimezone
+          ? formatTimezoneName(scheduleTimezone, i18n.language)
+          : undefined;
         return {
-          tooltip: t('taskSchedule.tag.schedule', {
-            schedule: schedulePattern,
-            timezone,
-          }),
-          text: `${schedulePattern} ${timezone}`,
+          primary,
+          secondary: tzName,
+          tooltip: tzName ? `${primary} · ${tzName}` : primary,
         };
       }
 
-      if (heartbeatInterval && heartbeatInterval > 0) {
+      if (automationMode === 'heartbeat' && heartbeatInterval && heartbeatInterval > 0) {
         const every = t('taskSchedule.tag.every', {
-          interval: formatInterval(heartbeatInterval, t),
+          interval: formatIntervalLabel(heartbeatInterval, t),
         });
         return {
+          primary: every,
           tooltip: t('taskSchedule.tag.heartbeat', { every }),
-          text: every,
         };
       }
 
       return undefined;
-    }, [heartbeatInterval, schedulePattern, scheduleTimezone, t]);
+    }, [automationMode, heartbeatInterval, schedulePattern, scheduleTimezone, t, i18n.language]);
 
     if (mode === 'inline') {
+      // Single-line row regardless of mode/content length — long primaries
+      // (e.g. "Every Mon/Tue/Wed/Thu/Fri/Sat at HH:MM") used to wrap to two
+      // lines and shift the rows below. Tooltip still surfaces the full text
+      // plus timezone on hover, so no information is lost.
       return (
         <Tooltip title={data?.tooltip}>
-          <Flexbox horizontal align="center" gap={10}>
+          <Flexbox horizontal align="center" gap={10} style={FLEX_MIN_WIDTH_0}>
             <Icon color={cssVar.colorTextDescription} icon={ClockIcon} size={16} />
-            <Text type={data ? undefined : 'secondary'} weight={data ? 500 : undefined}>
-              {data?.text ?? t('taskSchedule.tag.add')}
+            <Text
+              ellipsis
+              style={FLEX_MIN_WIDTH_0}
+              type={data ? undefined : 'secondary'}
+              weight={data ? 500 : undefined}
+            >
+              {data?.primary ?? t('taskSchedule.tag.add')}
             </Text>
           </Flexbox>
         </Tooltip>
@@ -62,6 +83,8 @@ const TaskTriggerTag = memo<TaskTriggerTagProps>(
 
     if (!data) return null;
 
+    // Pill height (24px) only fits one line — drop the timezone here; the
+    // tooltip surfaces it on hover.
     return (
       <Tooltip title={data.tooltip}>
         <Block
@@ -70,12 +93,12 @@ const TaskTriggerTag = memo<TaskTriggerTagProps>(
           gap={4}
           height={24}
           paddingInline={'4px 8px'}
-          style={{ borderRadius: 24 }}
+          style={PILL_STYLE}
           variant={'outlined'}
         >
           <Icon color={cssVar.colorTextDescription} icon={ClockIcon} size={16} />
-          <Text fontSize={12} type={'secondary'}>
-            {data.text}
+          <Text ellipsis fontSize={12} style={FLEX_MIN_WIDTH_0} type={'secondary'}>
+            {data.primary}
           </Text>
         </Block>
       </Tooltip>

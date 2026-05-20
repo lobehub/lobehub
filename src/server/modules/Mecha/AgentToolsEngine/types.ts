@@ -1,5 +1,5 @@
 import { type LobeToolManifest, type PluginEnableChecker } from '@lobechat/context-engine';
-import { type LobeTool, type RuntimeEnvConfig } from '@lobechat/types';
+import { type LobeBuiltinTool, type LobeTool, type RuntimeEnvConfig } from '@lobechat/types';
 
 /**
  * Installed plugin with manifest
@@ -22,10 +22,26 @@ export interface ServerAgentToolsContext {
 export interface ServerAgentToolsEngineConfig {
   /** Additional manifests to include (e.g., Klavis tools) */
   additionalManifests?: LobeToolManifest[];
+  /**
+   * Override the list of builtin tools fed into the engine's
+   * `manifestSchemas`. Defaults to the full `builtinTools` array from
+   * `@lobechat/builtin-tools`. Callers gating device tools per-turn pass
+   * `buildAllowedBuiltinTools(...)` here so an external bot sender cannot
+   * resolve `lobe-remote-device` via the activator (LOBE-8768).
+   */
+  builtinTools?: readonly LobeBuiltinTool[];
   /** Default tool IDs that will always be added */
   defaultToolIds?: string[];
   /** Custom enable checker for plugins */
   enableChecker?: PluginEnableChecker;
+  /**
+   * Identifiers to drop from `manifestSchemas` after combining plugin,
+   * builtin, and additional manifests. Filtering builtins alone is not
+   * enough: an installed plugin or a Skill/Klavis manifest can declare
+   * `identifier: 'lobe-remote-device'` and slip past `buildAllowedBuiltinTools`.
+   * This is the final post-merge wall referenced in LOBE-8768.
+   */
+  excludeIdentifiers?: ReadonlySet<string>;
 }
 
 /**
@@ -38,12 +54,27 @@ export interface ServerCreateAgentToolsEngineParams {
   agentConfig: {
     /** Optional agent chat config */
     chatConfig?: {
+      /**
+       * When explicitly `false`, the agent runs in chat mode — the engine
+       * builds rules from `chatModeAllowedToolIds` only and ignores
+       * `plugins` and `alwaysOnToolIds`. Undefined / true → agent mode.
+       */
+      enableAgentMode?: boolean;
       runtimeEnv?: RuntimeEnvConfig;
       searchMode?: 'off' | 'on' | 'auto';
     };
     /** Plugin IDs enabled for this agent */
     plugins?: string[];
   };
+  /**
+   * Whether device tools (local-system / remote-device) are allowed this turn.
+   * Computed by `resolveDeviceAccessPolicy` from the caller identity:
+   * first-party UI and bot-owner senders pass; external bot senders and
+   * unconfigured bot owners do not. The engine treats this as the FINAL
+   * answer — never re-derive from `isBotConversation` or `botContext`.
+   * Defaults to `false` (fail-closed) when the caller forgets to plumb it.
+   */
+  canUseDevice?: boolean;
   /**
    * Runtime of the client initiating this request. When `'desktop'`, the
    * caller itself is an Electron client connected via the Agent Gateway WS,
@@ -59,6 +90,8 @@ export interface ServerCreateAgentToolsEngineParams {
     deviceOnline?: boolean;
     gatewayConfigured: boolean;
   };
+  /** Whether to suppress the local-system builtin while preserving other tools. */
+  disableLocalSystem?: boolean;
   /** Whether the user's global memory setting is enabled */
   globalMemoryEnabled?: boolean;
   /** Whether agent has agent documents */

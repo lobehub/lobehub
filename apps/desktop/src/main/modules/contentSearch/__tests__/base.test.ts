@@ -49,6 +49,10 @@ class TestContentSearch extends BaseContentSearch {
   public testGetDefaultIgnorePatterns(): string[] {
     return this.getDefaultIgnorePatterns();
   }
+
+  public testResolveSearchPath(params: GrepContentParams): string {
+    return this.resolveSearchPath(params);
+  }
 }
 
 describe('BaseContentSearch', () => {
@@ -139,6 +143,30 @@ describe('BaseContentSearch', () => {
         expect(args).toContain('*.ts');
       });
 
+      it('should add --hidden when glob references a dot-prefixed segment', () => {
+        const params: GrepContentParams = {
+          glob: '.github/workflows/*.yml',
+          pattern: 'jobs',
+        };
+
+        const args = contentSearch.testBuildGrepArgs('rg', params);
+
+        expect(args).toContain('--hidden');
+        expect(args).toContain('-g');
+        expect(args).toContain('.github/workflows/*.yml');
+      });
+
+      it('should not add --hidden for a normal glob', () => {
+        const params: GrepContentParams = {
+          glob: '*.ts',
+          pattern: 'test',
+        };
+
+        const args = contentSearch.testBuildGrepArgs('rg', params);
+
+        expect(args).not.toContain('--hidden');
+      });
+
       it('should build rg args with type filter', () => {
         const params: GrepContentParams = {
           pattern: 'test',
@@ -201,6 +229,17 @@ describe('BaseContentSearch', () => {
         expect(args).toContain('*.tsx');
       });
 
+      it('should add --hidden when glob references a dot-prefixed segment', () => {
+        const params: GrepContentParams = {
+          glob: '.github/workflows/*.yml',
+          pattern: 'jobs',
+        };
+
+        const args = contentSearch.testBuildGrepArgs('ag', params);
+
+        expect(args).toContain('--hidden');
+      });
+
       it('should build ag args for count mode', () => {
         const params: GrepContentParams = {
           output_mode: 'count',
@@ -252,6 +291,33 @@ describe('BaseContentSearch', () => {
         expect(args).toContain('--include');
         expect(args).toContain('*.py');
       });
+    });
+  });
+
+  describe('resolveSearchPath', () => {
+    it('prefers scope when path is not set', () => {
+      const resolved = contentSearch.testResolveSearchPath({
+        pattern: 'x',
+        scope: '/Users/arvinxx/repo',
+      });
+
+      expect(resolved).toBe('/Users/arvinxx/repo');
+    });
+
+    it('honors legacy path over scope when both are set', () => {
+      const resolved = contentSearch.testResolveSearchPath({
+        path: '/legacy/path',
+        pattern: 'x',
+        scope: '/scope/path',
+      });
+
+      expect(resolved).toBe('/legacy/path');
+    });
+
+    it('falls back to process.cwd() when neither is provided', () => {
+      const resolved = contentSearch.testResolveSearchPath({ pattern: 'x' });
+
+      expect(resolved).toBe(process.cwd());
     });
   });
 

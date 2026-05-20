@@ -111,6 +111,9 @@ export class MarketOIDC {
     authUrl.searchParams.set('state', pkceParams.state);
     authUrl.searchParams.set('code_challenge', pkceParams.codeChallenge);
     authUrl.searchParams.set('code_challenge_method', 'S256');
+    // Required so the OIDC provider always runs the consent step, which prevents
+    // offline_access from being silently dropped when a prior grant exists.
+    authUrl.searchParams.set('prompt', 'consent');
 
     console.info('[MarketOIDC] Authorization URL built:', authUrl.toString());
     return authUrl.toString();

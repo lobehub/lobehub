@@ -113,7 +113,7 @@ class SimpleAgent implements Agent {
 
   // Agent decision logic - based on execution phase and context
   async runner(context: AgentRuntimeContext, state: AgentState) {
-    console.log(`[${context.phase}] 对话状态: ${this.conversationState}`);
+    console.log(`[${context.phase}] Conversation state: ${this.conversationState}`);
 
     switch (context.phase) {
       case 'init': {
@@ -125,7 +125,7 @@ class SimpleAgent implements Agent {
       case 'user_input': {
         // User input phase
         const userPayload = context.payload as { isFirstMessage: boolean; message: any };
-        console.log(`👤 用户消息: ${userPayload.message.content}`);
+        console.log(`👤 User message: ${userPayload.message.content}`);
 
         // Only process when in waiting_user state
         if (this.conversationState === 'waiting_user') {
@@ -140,7 +140,7 @@ class SimpleAgent implements Agent {
         }
 
         // Do not process user input in other states, end conversation
-        console.log(`⚠️ 忽略用户输入，当前状态: ${this.conversationState}`);
+        console.log(`⚠️ Ignoring user input, current state: ${this.conversationState}`);
         return {
           reason: `Not in waiting_user state: ${this.conversationState}`,
           type: 'finish' as const,
@@ -164,7 +164,7 @@ class SimpleAgent implements Agent {
           this.conversationState = 'executing_tools';
 
           console.log(
-            '🔧 需要执行工具:',
+            '🔧 Tools to execute:',
             toolCalls.map((call: any) => call.function.name),
           );
 
@@ -187,7 +187,7 @@ class SimpleAgent implements Agent {
       case 'tool_result': {
         // Tool execution result phase
         const toolPayload = context.payload as { result: any; toolMessage: any };
-        console.log(`🛠️ 工具执行完成: ${JSON.stringify(toolPayload.result)}`);
+        console.log(`🛠️ Tool execution completed: ${JSON.stringify(toolPayload.result)}`);
 
         // Remove the executed tool
         this.pendingToolCalls = this.pendingToolCalls.slice(1);
@@ -219,7 +219,7 @@ class SimpleAgent implements Agent {
       case 'error': {
         // Error phase
         const errorPayload = context.payload as { error: any };
-        console.error('❌ 错误状态:', errorPayload.error);
+        console.error('❌ Error state:', errorPayload.error);
         return { reason: 'Error occurred', type: 'finish' as const };
       }
 
@@ -232,10 +232,10 @@ class SimpleAgent implements Agent {
 
 // Main function
 async function main() {
-  console.log('🚀 简单的 OpenAI Tools Agent 示例\n');
+  console.log('🚀 Simple OpenAI Tools Agent Example\n');
 
   if (!process.env.OPENAI_API_KEY) {
-    console.error('❌ 请设置 OPENAI_API_KEY 环境变量');
+    console.error('❌ Please set the OPENAI_API_KEY environment variable');
     return;
   }
 
@@ -245,7 +245,7 @@ async function main() {
 
   // Test message
   const testMessage = process.argv[2] || 'What time is it? Also calculate 15 * 8 + 7';
-  console.log(`💬 用户: ${testMessage}\n`);
+  console.log(`💬 User: ${testMessage}\n`);
 
   // Create initial state
   let state = AgentRuntime.createInitialState({
@@ -273,21 +273,21 @@ async function main() {
         }
         case 'llm_result': {
           if ((event as any).result.tool_calls) {
-            console.log('\n\n🔧 需要调用工具...');
+            console.log('\n\n🔧 Calling tools...');
           }
           break;
         }
         case 'tool_result': {
-          console.log(`\n🛠️ 工具执行结果:`, event.result);
+          console.log(`\n🛠️ Tool execution result:`, event.result);
           console.log('\n🤖 AI: ');
           break;
         }
         case 'done': {
-          console.log('\n\n✅ 对话完成');
+          console.log('\n\n✅ Conversation complete');
           break;
         }
         case 'error': {
-          console.error('\n❌ 错误:', event.error);
+          console.error('\n❌ Error:', event.error);
           break;
         }
       }
@@ -297,7 +297,7 @@ async function main() {
     nextContext = result.nextContext; // use the returned nextContext
   }
 
-  console.log(`\n📊 总共执行了 ${state.stepCount} 个步骤`);
+  console.log(`\n📊 Total steps executed: ${state.stepCount}`);
 }
 
 main().catch(console.error);

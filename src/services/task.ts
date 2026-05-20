@@ -49,6 +49,7 @@ class TaskService {
   create = async (params: {
     assigneeAgentId?: string;
     assigneeUserId?: string;
+    automationMode?: TaskAutomationMode;
     createdByAgentId?: string;
     description?: string;
     identifierPrefix?: string;
@@ -56,6 +57,8 @@ class TaskService {
     name?: string;
     parentTaskId?: string;
     priority?: number;
+    schedulePattern?: string;
+    scheduleTimezone?: string;
   }) => lambdaClient.task.create.mutate(params);
 
   update = async (
@@ -74,7 +77,12 @@ class TaskService {
       heartbeatTimeout?: number | null;
       instruction?: string;
       name?: string;
+      parentTaskId?: string | null;
       priority?: number;
+      // schedulePattern: cron expression for scheduled automation (e.g. '0 9 * * *')
+      schedulePattern?: string | null;
+      // scheduleTimezone: IANA timezone for the cron expression (e.g. 'Asia/Shanghai')
+      scheduleTimezone?: string | null;
     },
   ) => lambdaClient.task.update.mutate({ id, ...data });
 
@@ -82,17 +90,21 @@ class TaskService {
 
   clearAll = async () => lambdaClient.task.clearAll.mutate();
 
-  updateStatus = async (
-    id: string,
-    status: 'backlog' | 'canceled' | 'completed' | 'failed' | 'paused' | 'running',
-    error?: string,
-  ) => lambdaClient.task.updateStatus.mutate({ error, id, status });
+  updateStatus = async (id: string, status: TaskStatus, error?: string) =>
+    lambdaClient.task.updateStatus.mutate({ error, id, status });
 
   run = async (id: string, params?: { continueTopicId?: string; prompt?: string }) =>
     lambdaClient.task.run.mutate({ id, ...params });
 
-  addComment = async (id: string, content: string, opts?: { briefId?: string; topicId?: string }) =>
-    lambdaClient.task.addComment.mutate({ content, id, ...opts });
+  previewSubtaskLayers = async (id: string) => lambdaClient.task.previewSubtaskLayers.query({ id });
+
+  runReadySubtasks = async (id: string) => lambdaClient.task.runReadySubtasks.mutate({ id });
+
+  addComment = async (
+    id: string,
+    content: string,
+    opts?: { authorAgentId?: string; briefId?: string; topicId?: string },
+  ) => lambdaClient.task.addComment.mutate({ content, id, ...opts });
 
   deleteComment = async (commentId: string) =>
     lambdaClient.task.deleteComment.mutate({ commentId });
