@@ -92,15 +92,40 @@ const NameSuggestions = memo<NameSuggestionsProps>(({ variant = 'cards' }) => {
   if (variant === 'chips') {
     return (
       <Flexbox gap={6} paddingInline={24}>
-        <Flexbox horizontal align={'center'} gap={4} justify={'space-between'}>
-          <Text fontSize={12} type={'secondary'}>
-            {t('agent.welcome.suggestion.title')}
-          </Text>
+        <Text fontSize={12} type={'secondary'}>
+          {t('agent.welcome.suggestion.title')}
+        </Text>
+        <Flexbox horizontal align={'center'} gap={8}>
+          <Flexbox
+            horizontal
+            className={styles.chipRow}
+            gap={6}
+            style={{ flex: 1, minWidth: 0 }}
+          >
+            {items.map((item) => {
+              const { name, prompt } = resolveNameSuggestion(item, i18n.language);
+              return (
+                <Flexbox
+                  horizontal
+                  align={'center'}
+                  className={styles.chip}
+                  gap={6}
+                  key={item.id}
+                  onClick={() => handleSelect(prompt, item.emoji)}
+                >
+                  <FluentEmoji emoji={item.emoji} size={16} type={'anim'} />
+                  <Text fontSize={13} weight={500}>
+                    {name}
+                  </Text>
+                </Flexbox>
+              );
+            })}
+          </Flexbox>
           <Flexbox
             horizontal
             align={'center'}
             gap={2}
-            style={{ cursor: 'pointer' }}
+            style={{ cursor: 'pointer', flexShrink: 0 }}
             onClick={handleRefresh}
           >
             <ActionIcon icon={RefreshCw} size={'small'} />
@@ -108,26 +133,6 @@ const NameSuggestions = memo<NameSuggestionsProps>(({ variant = 'cards' }) => {
               {t('agent.welcome.suggestion.switch')}
             </Text>
           </Flexbox>
-        </Flexbox>
-        <Flexbox horizontal className={styles.chipRow} gap={6}>
-          {items.map((item) => {
-            const { name, prompt } = resolveNameSuggestion(item, i18n.language);
-            return (
-              <Flexbox
-                horizontal
-                align={'center'}
-                className={styles.chip}
-                gap={6}
-                key={item.id}
-                onClick={() => handleSelect(prompt, item.emoji)}
-              >
-                <FluentEmoji emoji={item.emoji} size={16} type={'anim'} />
-                <Text fontSize={13} weight={500}>
-                  {name}
-                </Text>
-              </Flexbox>
-            );
-          })}
         </Flexbox>
       </Flexbox>
     );
