@@ -14,7 +14,6 @@ const mocks = vi.hoisted(() => ({
   goToPreviousStep: vi.fn(),
   isUserStateInit: true,
   serverConfigInit: true,
-  setOnboardingStep: vi.fn(),
 }));
 
 vi.mock('@lobehub/ui', () => ({
@@ -108,7 +107,6 @@ vi.mock('@/store/user', () => ({
       goToNextStep: () => void;
       goToPreviousStep: () => void;
       isUserStateInit: boolean;
-      setOnboardingStep: (step: number) => void;
     }) => T,
   ) =>
     selector({
@@ -117,7 +115,6 @@ vi.mock('@/store/user', () => ({
       goToNextStep: mocks.goToNextStep,
       goToPreviousStep: mocks.goToPreviousStep,
       isUserStateInit: mocks.isUserStateInit,
-      setOnboardingStep: mocks.setOnboardingStep,
     }),
 }));
 
@@ -143,7 +140,6 @@ beforeEach(() => {
   mocks.goToPreviousStep.mockReset();
   mocks.isUserStateInit = true;
   mocks.serverConfigInit = true;
-  mocks.setOnboardingStep.mockReset();
 });
 
 afterEach(() => {
@@ -158,8 +154,7 @@ describe('ClassicOnboardingPage', () => {
     renderClassic();
     fireEvent.click(screen.getByText('interests-next'));
 
-    expect(mocks.setOnboardingStep).toHaveBeenCalledWith(MAX_ONBOARDING_STEPS);
-    expect(mocks.goToNextStep).not.toHaveBeenCalled();
+    expect(mocks.goToNextStep).toHaveBeenCalledTimes(2);
   });
 
   it('moves back from the agent picker to interests when ProSettings is skipped', () => {
@@ -169,8 +164,7 @@ describe('ClassicOnboardingPage', () => {
     renderClassic();
     fireEvent.click(screen.getByText('agent-back'));
 
-    expect(mocks.setOnboardingStep).toHaveBeenCalledWith(2);
-    expect(mocks.goToPreviousStep).not.toHaveBeenCalled();
+    expect(mocks.goToPreviousStep).toHaveBeenCalledTimes(2);
   });
 
   it('waits for server config before deciding whether to skip ProSettings', () => {
@@ -182,7 +176,6 @@ describe('ClassicOnboardingPage', () => {
     fireEvent.click(screen.getByText('interests-next'));
 
     expect(mocks.goToNextStep).toHaveBeenCalled();
-    expect(mocks.setOnboardingStep).not.toHaveBeenCalled();
   });
 
   it('shows loading at ProSettings until server config initializes', () => {
@@ -193,7 +186,7 @@ describe('ClassicOnboardingPage', () => {
     renderClassic();
 
     expect(screen.getByText('Loading:ClassicOnboarding/serverConfig')).toBeInTheDocument();
-    expect(mocks.setOnboardingStep).not.toHaveBeenCalled();
+    expect(mocks.goToNextStep).not.toHaveBeenCalled();
   });
 
   it('skips a persisted ProSettings step when Klavis is disabled', async () => {
@@ -202,7 +195,7 @@ describe('ClassicOnboardingPage', () => {
 
     renderClassic();
 
-    await waitFor(() => expect(mocks.setOnboardingStep).toHaveBeenCalledWith(MAX_ONBOARDING_STEPS));
+    await waitFor(() => expect(mocks.goToNextStep).toHaveBeenCalledTimes(1));
     expect(screen.queryByText('ProSettingsStep')).not.toBeInTheDocument();
   });
 
@@ -214,7 +207,7 @@ describe('ClassicOnboardingPage', () => {
     renderClassic();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(mocks.setOnboardingStep).not.toHaveBeenCalled();
+    expect(mocks.goToNextStep).not.toHaveBeenCalled();
   });
 
   it('keeps ProSettings in the flow when Klavis is enabled', () => {
@@ -226,6 +219,5 @@ describe('ClassicOnboardingPage', () => {
 
     expect(screen.getByText('ProSettingsStep')).toBeInTheDocument();
     expect(mocks.goToNextStep).toHaveBeenCalled();
-    expect(mocks.setOnboardingStep).not.toHaveBeenCalled();
   });
 });

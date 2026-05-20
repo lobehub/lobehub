@@ -30,14 +30,12 @@ const ClassicOnboardingPage = memo(() => {
     currentStep,
     goToNextStep,
     goToPreviousStep,
-    setOnboardingStep,
   ] = useUserStore((s) => [
     s.isUserStateInit,
     onboardingSelectors.commonStepsCompleted(s),
     onboardingSelectors.currentStep(s),
     s.goToNextStep,
     s.goToPreviousStep,
-    s.setOnboardingStep,
   ]);
   const enableKlavis = useServerConfigStore(serverConfigSelectors.enableKlavis);
   const serverConfigInit = useServerConfigStore((s) => s.serverConfigInit);
@@ -59,32 +57,28 @@ const ClassicOnboardingPage = memo(() => {
       return;
     }
 
-    void setOnboardingStep(MAX_ONBOARDING_STEPS);
-  }, [
-    commonStepsCompleted,
-    currentStep,
-    isUserStateInit,
-    setOnboardingStep,
-    shouldSkipProSettingsStep,
-  ]);
+    goToNextStep();
+  }, [commonStepsCompleted, currentStep, goToNextStep, isUserStateInit, shouldSkipProSettingsStep]);
 
   const goToNextStepFromInterests = useCallback(() => {
     if (shouldSkipProSettingsStep) {
-      void setOnboardingStep(MAX_ONBOARDING_STEPS);
+      goToNextStep();
+      goToNextStep();
       return;
     }
 
     goToNextStep();
-  }, [goToNextStep, setOnboardingStep, shouldSkipProSettingsStep]);
+  }, [goToNextStep, shouldSkipProSettingsStep]);
 
   const goToPreviousStepFromAgentPicker = useCallback(() => {
     if (shouldSkipProSettingsStep) {
-      void setOnboardingStep(INTERESTS_STEP);
+      goToPreviousStep();
+      goToPreviousStep();
       return;
     }
 
     goToPreviousStep();
-  }, [goToPreviousStep, setOnboardingStep, shouldSkipProSettingsStep]);
+  }, [goToPreviousStep, shouldSkipProSettingsStep]);
 
   if (!isUserStateInit) {
     return <Loading debugId="ClassicOnboarding" />;
