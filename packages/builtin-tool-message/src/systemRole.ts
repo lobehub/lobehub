@@ -40,6 +40,29 @@ The first entry of a given platform in the response also carries \`recommended: 
 The send APIs accept **exactly one** of \`botId\` / \`messengerInstallationId\` — the server will reject both-or-neither. Set the field that matches the chosen entry's \`source\`.
 </outbound_routing>
 
+<system_bot_management>
+The **System Bot** is the LobeHub-owned shared bot the user installs via \`Settings → Messenger\` OAuth. It's separate from per-agent bots (\`createBot\` / \`listBots\`). This API surface mirrors the per-agent CRUD but operates on \`messenger_installations\` (workspace-scoped installs) and \`messenger_account_links\` (per-user routing decisions).
+
+**Read**
+1. **listMessengers** — List the user's installs across workspaces. Returns \`installationId\`, \`platform\`, \`tenantId\`, \`tenantName\`, \`installedAt\`. Use this when the user asks about their connected workspaces.
+2. **getMessengerDetail** — Single install detail by \`installationId\`. Adds \`revokedAt\` (null when active). Use before \`uninstallMessenger\` so the confirmation prompt names the tenant.
+3. **listMessengerPlatforms** — Platforms available for OAuth install + their deep-link \`appId\` / \`botUsername\`. Use when guiding the user to install a new platform.
+4. **listMessengerLinks** — User's per-platform account links — one entry per (platform, tenantId) showing which agent receives inbound IM.
+
+**Mutate**
+5. **uninstallMessenger** — **Revokes the workspace install** for everyone in that workspace. For Slack this freezes the bot (dispatch is token-gated); for Discord it only removes the audit entry (an admin must remove the bot from the guild separately). **Always confirm with the user before calling** — surface the tenant name.
+6. **unlinkMessenger** — Removes only the **current user's account link** for one (platform, tenantId). Other users in the same workspace are unaffected. Use this when the user says "stop routing my Slack DMs here" — NOT \`uninstallMessenger\`, which is destructive for the whole workspace.
+7. **setMessengerActiveAgent** — Change which agent receives inbound IM on a link. Pass \`agentId: null\` to clear the active agent. Scope to one workspace via \`tenantId\`; omit for global-bot platforms (Telegram). The agent must belong to the current user — server rejects cross-user ids.
+
+**Critical disambiguation — \`uninstallMessenger\` vs \`unlinkMessenger\`:**
+- "remove my account from Slack" / "stop receiving DMs from this workspace on my LobeHub" → \`unlinkMessenger\`
+- "uninstall the LobeHub bot from my workspace" / "remove the integration for everyone" → \`uninstallMessenger\` (workspace-admin level decision)
+
+When in doubt, ask. Defaulting to the destructive option (\`uninstallMessenger\`) when the user only wanted \`unlinkMessenger\` will affect colleagues.
+
+**Why there's no \`createMessenger\`**: OAuth install requires browser redirect — the tool cannot start the flow. When \`listMessengers\` returns nothing for a platform the user wants, tell them: "Open \`Settings → Messenger\` and install for <platform>". You can list the available platforms via \`listMessengerPlatforms\` and surface the \`appId\` so the user knows what they're installing.
+</system_bot_management>
+
 <access_policies>
 The bot's \`settings\` JSON column controls **who can talk to the bot** on every platform. Use \`updateBot({ botId, settings: {...} })\` to change any of the keys below. Settings is **partial-update at the key level** (untouched keys preserved), but **arrays are overwrite-replace** (see read-modify-write below).
 

@@ -69,6 +69,26 @@ export const MessageApiName = {
   listPlatforms: 'listPlatforms',
   toggleBot: 'toggleBot',
   updateBot: 'updateBot',
+
+  // ==================== System Bot Messenger Management ====================
+  // Operates on `messenger_installations` (workspace-scoped OAuth installs)
+  // and `messenger_account_links` (per-user routing decisions). Mirrors the
+  // per-agent bot CRUD surface but for the LobeHub System Bot, which can't
+  // be created via tool calls (OAuth requires browser flow).
+  /** List the current user's System Bot installations across workspaces. */
+  listMessengers: 'listMessengers',
+  /** Get one install's detail by installationId. */
+  getMessengerDetail: 'getMessengerDetail',
+  /** Revoke a workspace install (cascades to all users in that workspace). */
+  uninstallMessenger: 'uninstallMessenger',
+  /** List the platforms where the user can install the LobeHub System Bot. */
+  listMessengerPlatforms: 'listMessengerPlatforms',
+  /** List the user's account links — one row per (platform, tenant). */
+  listMessengerLinks: 'listMessengerLinks',
+  /** Change which agent receives inbound IM on a specific link. */
+  setMessengerActiveAgent: 'setMessengerActiveAgent',
+  /** Remove the user's account link for a platform (does not uninstall). */
+  unlinkMessenger: 'unlinkMessenger',
 } as const;
 
 export type MessageApiNameType = (typeof MessageApiName)[keyof typeof MessageApiName];
@@ -589,4 +609,133 @@ export interface ConnectBotParams {
 
 export interface ConnectBotState {
   status: string;
+}
+
+// --- System Bot Messenger Management ---
+
+/**
+ * Summary of a System Bot installation surfaced to the LLM / caller. Mirrors
+ * the safe metadata shape returned by `messenger.listMyInstallations` — never
+ * the credentials.
+ */
+export interface MessengerInfo {
+  /** Platform application/bot id (Slack appId, Discord applicationId, …). */
+  applicationId: string;
+  /** Slack-only: enterprise grid id when this is an enterprise install. */
+  enterpriseId?: string | null;
+  /** Stable installation id — pass back on `uninstallMessenger` / `getMessengerDetail`. */
+  id: string;
+  /** ISO timestamp of when the install was created (or Date instance). */
+  installedAt?: string | Date;
+  /** Slack-only: whether this install is at the enterprise (org-wide) level. */
+  isEnterpriseInstall?: boolean;
+  /** Messaging platform (slack / discord / telegram / …). */
+  platform: string;
+  /** OAuth scope string granted at install time (Slack-only typically). */
+  scope?: string;
+  /** Tenant identifier — Slack workspace, Discord guild, … (empty for Telegram). */
+  tenantId: string;
+  /** Optional human-friendly tenant label (workspace / guild name). */
+  tenantName?: string;
+}
+
+/**
+ * Summary of a user-platform account link. One row per (userId, platform,
+ * tenantId) — controls which agent the user's inbound IM messages route to.
+ */
+export interface MessengerLinkInfo {
+  /** The agent currently set as active for inbound messages (null = unset). */
+  activeAgentId: string | null;
+  /** When the link was created. */
+  createdAt?: string | Date;
+  platform: string;
+  /** Platform-side user id (Slack user id, Discord user id, Telegram chat id). */
+  platformUserId?: string;
+  /** Display name surfaced when verify-im completed. */
+  platformUsername?: string;
+  /** Tenant scope for the link — empty for global-bot platforms (Telegram). */
+  tenantId?: string;
+}
+
+/**
+ * Subset of `messenger.availablePlatforms` payload surfaced to the LLM.
+ * Includes the deep-link fields the verify-im flow uses to direct the user
+ * to the right install URL.
+ */
+export interface MessengerPlatformInfo {
+  /** Slack appId or Discord applicationId — feeds deep-link URLs. */
+  appId?: string;
+  /** Telegram-only deep-link target (`https://t.me/<botUsername>`). */
+  botUsername?: string;
+  /** Platform id (slack / discord / telegram / …). */
+  id: string;
+  /** Display name. */
+  name: string;
+}
+
+export interface ListMessengersParams {
+  /** No parameters needed — returns all installs for the current user. */
+}
+
+export interface ListMessengersState {
+  installations: MessengerInfo[];
+}
+
+export interface GetMessengerDetailParams {
+  /** Stable installation id from `listMessengers`. */
+  installationId: string;
+}
+
+export interface GetMessengerDetailState extends MessengerInfo {
+  /** ISO timestamp of when the install was revoked (null when active). */
+  revokedAt?: string | Date | null;
+}
+
+export interface UninstallMessengerParams {
+  installationId: string;
+}
+
+export interface UninstallMessengerState {
+  success: boolean;
+}
+
+export interface ListMessengerPlatformsParams {
+  /** No parameters needed. */
+}
+
+export interface ListMessengerPlatformsState {
+  platforms: MessengerPlatformInfo[];
+}
+
+export interface ListMessengerLinksParams {
+  /** No parameters needed — returns all links for the current user. */
+}
+
+export interface ListMessengerLinksState {
+  links: MessengerLinkInfo[];
+}
+
+export interface SetMessengerActiveAgentParams {
+  /**
+   * Agent id to route inbound messages to. Pass `null` to clear the active
+   * agent (next message hits the "/agents to pick" prompt).
+   */
+  agentId: string | null;
+  platform: string;
+  /** Optional: scope to a specific workspace (Slack). Omit for global-bot platforms. */
+  tenantId?: string;
+}
+
+export interface SetMessengerActiveAgentState {
+  success: boolean;
+}
+
+export interface UnlinkMessengerParams {
+  platform: string;
+  /** Optional: scope to a specific workspace (Slack). Omit for global-bot platforms. */
+  tenantId?: string;
+}
+
+export interface UnlinkMessengerState {
+  success: boolean;
 }

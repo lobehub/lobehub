@@ -861,6 +861,117 @@ export const MessageManifest: BuiltinToolManifest = {
         type: 'object',
       },
     },
+
+    // ==================== System Bot Messenger Management ====================
+    {
+      description:
+        "List the current user's LobeHub System Bot installations across workspaces (Slack workspaces, Discord guilds, Telegram). Each entry returns an `id` to pass back as `installationId` on `getMessengerDetail` / `uninstallMessenger`, or as `messengerInstallationId` on send APIs (see `listOutboundChannels`). Use this when the user asks about their connected workspaces or wants to disconnect one.",
+      name: MessageApiName.listMessengers,
+      parameters: {
+        additionalProperties: false,
+        properties: {},
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Get detailed metadata about a single System Bot installation. Returns the same fields as `listMessengers` plus `revokedAt` (null when active). Use before `uninstallMessenger` to surface tenant info in the confirmation prompt.',
+      name: MessageApiName.getMessengerDetail,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          installationId: {
+            description: 'Stable installation id from `listMessengers`.',
+            type: 'string',
+          },
+        },
+        required: ['installationId'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        "Revoke a System Bot workspace install. **This affects every user in that workspace** — for Slack it freezes the workspace's bot since dispatch is gated on the install token; for Discord it removes the audit entry (the bot itself stays in the guild until an admin removes it). Always confirm with the user before calling. To disconnect only the current user's account (not the whole workspace), use `unlinkMessenger` instead.",
+      name: MessageApiName.uninstallMessenger,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          installationId: {
+            description: 'Installation id to revoke.',
+            type: 'string',
+          },
+        },
+        required: ['installationId'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'List the platforms where the user can install the LobeHub System Bot. Returns `appId` / `botUsername` for deep-link install URLs. Use when guiding the user through `Settings → Messenger` install for a new platform — note the actual install flow requires browser OAuth and cannot be initiated from this tool.',
+      name: MessageApiName.listMessengerPlatforms,
+      parameters: {
+        additionalProperties: false,
+        properties: {},
+        type: 'object',
+      },
+    },
+    {
+      description:
+        "List the user's per-platform account links — one entry per (platform, tenant). Each link determines which agent receives inbound IM messages from that platform/tenant. Use before `setMessengerActiveAgent` to find the current routing.",
+      name: MessageApiName.listMessengerLinks,
+      parameters: {
+        additionalProperties: false,
+        properties: {},
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Change which agent receives inbound IM messages on a specific platform link. Pass `agentId: null` to clear the active agent (next message gets the "/agents to pick" prompt). Pass `tenantId` to scope to one Slack workspace; omit for Telegram (global bot).',
+      name: MessageApiName.setMessengerActiveAgent,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          agentId: {
+            description:
+              'Agent id to route to, or null to clear. The agent must belong to the current user.',
+            type: ['string', 'null'],
+          },
+          platform: {
+            description: 'Target platform',
+            enum: platformEnum,
+            type: 'string',
+          },
+          tenantId: {
+            description: 'Optional tenant scope (Slack workspace id).',
+            type: 'string',
+          },
+        },
+        required: ['platform', 'agentId'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        "Remove the current user's account link for a platform. The workspace install stays — other users can still use the System Bot in that workspace; only the current user's inbound routing is removed. To revoke the install for everyone, use `uninstallMessenger`.",
+      name: MessageApiName.unlinkMessenger,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          platform: {
+            description: 'Target platform',
+            enum: platformEnum,
+            type: 'string',
+          },
+          tenantId: {
+            description: 'Optional tenant scope (Slack workspace id).',
+            type: 'string',
+          },
+        },
+        required: ['platform'],
+        type: 'object',
+      },
+    },
   ],
   identifier: MessageToolIdentifier,
   meta: {

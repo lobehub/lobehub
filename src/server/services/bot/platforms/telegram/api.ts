@@ -547,31 +547,52 @@ export class TelegramApi {
   ): Promise<{ message_id: number }> {
     const caption = params.caption ? this.truncateCaption(params.caption) : undefined;
 
-    if ('url' in params.source) {
-      const data = await this.call(method, {
-        caption,
-        chat_id: params.chatId,
-        parse_mode: caption ? 'HTML' : undefined,
-        [binaryField]: params.source.url,
-      });
+    // Captions render as HTML so links/formatting survive — but the LLM/user
+    // content can contain unbalanced or stray `<`,`>`,`&`. Without this
+    // fallback the whole attachment send fails and the message degrades to
+    // text-only delivery; mirror the sendMessage retry-as-plain-text path.
+    const send = (useHtml: boolean): Promise<any> => {
+      const captionForSend =
+        caption && !useHtml ? this.truncateCaption(stripHTML(caption)) : caption;
+
+      if ('url' in params.source) {
+        return this.call(method, {
+          caption: captionForSend,
+          chat_id: params.chatId,
+          parse_mode: captionForSend && useHtml ? 'HTML' : undefined,
+          [binaryField]: params.source.url,
+        });
+      }
+
+      return this.callMultipart(
+        method,
+        {
+          caption: captionForSend,
+          chat_id: params.chatId,
+          parse_mode: captionForSend && useHtml ? 'HTML' : undefined,
+        },
+        {
+          binaryField,
+          buffer: params.source.buffer,
+          filename: params.source.filename,
+          mimeType: params.source.mimeType,
+        },
+      );
+    };
+
+    try {
+      const data = await send(true);
+      return { message_id: data.result.message_id };
+    } catch (error) {
+      if (!caption || !isParseEntitiesError(error)) throw error;
+      log(
+        '%s: caption HTML parse failed, retrying as plain text. chatId=%s',
+        method,
+        params.chatId,
+      );
+      const data = await send(false);
       return { message_id: data.result.message_id };
     }
-
-    const data = await this.callMultipart(
-      method,
-      {
-        caption,
-        chat_id: params.chatId,
-        parse_mode: caption ? 'HTML' : undefined,
-      },
-      {
-        binaryField,
-        buffer: params.source.buffer,
-        filename: params.source.filename,
-        mimeType: params.source.mimeType,
-      },
-    );
-    return { message_id: data.result.message_id };
   }
 
   async sendPhoto(params: {

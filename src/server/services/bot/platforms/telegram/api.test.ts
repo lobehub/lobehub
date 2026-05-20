@@ -89,6 +89,55 @@ describe('TelegramApi HTML parse fallback', () => {
     );
   });
 
+  it('sendPhoto retries caption without parse_mode on HTML parse error', async () => {
+    fetchSpy
+      .mockResolvedValueOnce(
+        telegramErrorResponse(
+          400,
+          'Bad Request: can\'t parse entities: Unsupported start tag "foo" at byte offset 5',
+        ),
+      )
+      .mockResolvedValueOnce(okResponse({ message_id: 7 }));
+
+    const api = new TelegramApi(BOT_TOKEN);
+    const result = await api.sendPhoto({
+      caption: 'look at <foo> & the answer is 42',
+      chatId: 'chat-1',
+      source: { url: 'https://example.com/img.png' },
+    });
+
+    expect(result).toEqual({ message_id: 7 });
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+
+    const retryBody = JSON.parse((fetchSpy.mock.calls[1][1] as RequestInit).body as string);
+    expect(retryBody.parse_mode).toBeUndefined();
+    expect(retryBody.caption).not.toContain('<foo>');
+    expect(retryBody.caption).toContain('the answer is 42');
+  });
+
+  it('sendDocument with Buffer source retries caption without HTML on parse error', async () => {
+    fetchSpy
+      .mockResolvedValueOnce(
+        telegramErrorResponse(400, "Bad Request: can't parse entities: Unsupported start tag"),
+      )
+      .mockResolvedValueOnce(okResponse({ message_id: 11 }));
+
+    const api = new TelegramApi(BOT_TOKEN);
+    const result = await api.sendDocument({
+      caption: '<b>bad',
+      chatId: 'chat-1',
+      source: { buffer: Buffer.from('hello'), filename: 'note.txt', mimeType: 'text/plain' },
+    });
+
+    expect(result).toEqual({ message_id: 11 });
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+
+    const retryInit = fetchSpy.mock.calls[1][1] as RequestInit;
+    const retryForm = retryInit.body as FormData;
+    expect(retryForm.get('parse_mode')).toBeNull();
+    expect(retryForm.get('caption')).toBe('bad');
+  });
+
   it('TELEGRAM_API_BASE is exported', () => {
     expect(TELEGRAM_API_BASE).toBe('https://api.telegram.org');
   });

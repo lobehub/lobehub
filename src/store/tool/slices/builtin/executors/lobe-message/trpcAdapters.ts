@@ -123,6 +123,91 @@ export const trpcBotProvider: BotProviderQuery = {
       platform: bot.platform,
     });
   },
+
+  // ─── System Bot messenger management ─────────────────────────────────
+  // Adapters around the existing `messenger.*` TRPC procedures, surfaced
+  // through the same runtime so the frontend reuses the runtime's
+  // formatting + empty-state copy. No new TRPC endpoints — `getMessengerDetail`
+  // filters the list client-side because installs are small (<10 per user)
+  // and the alternative is a one-off backend procedure.
+  listMessengers: async () => {
+    const installations = (await lambdaClient.messenger.listMyInstallations.query()) as any[];
+    return installations.map((i) => ({
+      applicationId: i.applicationId,
+      enterpriseId: i.enterpriseId ?? null,
+      id: i.id,
+      installedAt:
+        i.installedAt instanceof Date ? i.installedAt.toISOString() : String(i.installedAt),
+      isEnterpriseInstall: i.isEnterpriseInstall === true,
+      platform: i.platform,
+      scope: i.scope ?? '',
+      tenantId: i.tenantId,
+      tenantName: i.tenantName ?? '',
+    }));
+  },
+
+  getMessengerDetail: async (installationId) => {
+    const installations = (await lambdaClient.messenger.listMyInstallations.query()) as any[];
+    const install = installations.find((i) => i.id === installationId);
+    if (!install) return null;
+    return {
+      applicationId: install.applicationId,
+      enterpriseId: install.enterpriseId ?? null,
+      id: install.id,
+      installedAt:
+        install.installedAt instanceof Date
+          ? install.installedAt.toISOString()
+          : String(install.installedAt),
+      isEnterpriseInstall: install.isEnterpriseInstall === true,
+      platform: install.platform,
+      // `listMyInstallations` already filters revoked rows out, so any hit is active.
+      revokedAt: null,
+      scope: install.scope ?? '',
+      tenantId: install.tenantId,
+      tenantName: install.tenantName ?? '',
+    };
+  },
+
+  uninstallMessenger: async (installationId) => {
+    await lambdaClient.messenger.uninstallInstallation.mutate({ installationId });
+  },
+
+  listMessengerPlatforms: async () => {
+    const platforms = (await lambdaClient.messenger.availablePlatforms.query()) as any[];
+    return platforms.map((p) => ({
+      appId: p.appId,
+      botUsername: p.botUsername,
+      id: p.id,
+      name: p.name,
+    }));
+  },
+
+  listMessengerLinks: async () => {
+    const links = (await lambdaClient.messenger.listMyLinks.query()) as any[];
+    return links.map((l) => ({
+      activeAgentId: l.activeAgentId ?? null,
+      createdAt: l.createdAt instanceof Date ? l.createdAt.toISOString() : String(l.createdAt),
+      platform: l.platform,
+      platformUserId: l.platformUserId,
+      platformUsername: l.platformUsername ?? undefined,
+      tenantId: l.tenantId || undefined,
+    }));
+  },
+
+  setMessengerActiveAgent: async (params) => {
+    await lambdaClient.messenger.setActiveAgent.mutate({
+      agentId: params.agentId,
+      platform: params.platform as any,
+      tenantId: params.tenantId,
+    });
+  },
+
+  unlinkMessenger: async (params) => {
+    await lambdaClient.messenger.unlink.mutate({
+      platform: params.platform as any,
+      tenantId: params.tenantId,
+    });
+  },
 };
 
 // ────────────────────────────────────────────────────────────────────────

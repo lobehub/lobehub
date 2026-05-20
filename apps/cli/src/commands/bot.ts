@@ -6,6 +6,7 @@ import { getTrpcClient } from '../api/client';
 import { confirm, outputJson, printBoxTable, printTable, timeAgo } from '../utils/format';
 import { log } from '../utils/logger';
 import { registerBotMessageCommands } from './botMessage';
+import { registerBotMessengersCommands } from './botMessengers';
 
 // ── Access policy helpers ──────────────────────────────
 
@@ -474,6 +475,9 @@ export function registerBotCommand(program: Command) {
 
   // Register message subcommand group
   registerBotMessageCommands(bot);
+
+  // Register messengers subcommand group (System Bot installations + account links)
+  registerBotMessengersCommands(bot);
 
   // ── platforms ───────────────────────────────────────────
 
