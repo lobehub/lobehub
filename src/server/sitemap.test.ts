@@ -1,14 +1,24 @@
 // @vitest-environment node
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { DiscoverService } from '@/server/services/discover';
 import { getCanonicalUrl } from '@/server/utils/url';
 
 import { LAST_MODIFIED, Sitemap, SitemapType } from './sitemap';
 
 const LOCALE_COUNT = 18;
 
+interface SitemapWithDiscoverService {
+  discoverService: Pick<DiscoverService, 'getModelIdentifiers'>;
+}
+
 describe('Sitemap', () => {
   const sitemap = new Sitemap();
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
 
   describe('getIndex', () => {
     it('should return a valid sitemap index with pagination', async () => {
@@ -36,6 +46,24 @@ describe('Sitemap', () => {
       expect(index).toContain(`<loc>${getCanonicalUrl('/sitemap/models-2.xml')}</loc>`);
 
       expect(index).toContain(`<lastmod>${LAST_MODIFIED}</lastmod>`);
+    });
+  });
+
+  describe('getModelPageCount', () => {
+    it('should not block sitemap generation when model identifiers never resolve', async () => {
+      vi.useFakeTimers();
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const isolatedSitemap = new Sitemap({ modelPageCountTimeoutMs: 100 });
+      const isolatedSitemapWithService = isolatedSitemap as unknown as SitemapWithDiscoverService;
+      vi.spyOn(isolatedSitemapWithService.discoverService, 'getModelIdentifiers').mockReturnValue(
+        new Promise(() => {}),
+      );
+
+      const pageCountPromise = isolatedSitemap.getModelPageCount();
+      await vi.advanceTimersByTimeAsync(100);
+
+      await expect(pageCountPromise).resolves.toBe(0);
     });
   });
 
