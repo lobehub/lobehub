@@ -7,6 +7,7 @@ import { Navigate, useNavigate } from 'react-router-dom';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import ModeSwitch from '@/features/Onboarding/components/ModeSwitch';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import OnboardingContainer from '@/routes/onboarding/_layout';
 import AgentPickerStep from '@/routes/onboarding/features/AgentPickerStep';
 import FullNameStep from '@/routes/onboarding/features/FullNameStep';
@@ -18,6 +19,7 @@ import { isDev } from '@/utils/env';
 
 const ClassicOnboardingPage = memo(() => {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const [isUserStateInit, commonStepsCompleted, currentStep, goToNextStep, goToPreviousStep] =
     useUserStore((s) => [
       s.isUserStateInit,
@@ -65,7 +67,11 @@ const ClassicOnboardingPage = memo(() => {
 
   return (
     <OnboardingContainer>
-      <Flexbox gap={24} style={{ maxWidth: contentMaxWidth, width: '100%' }}>
+      <Flexbox
+        gap={24}
+        paddingInline={isMobile ? 16 : 0}
+        style={{ maxWidth: contentMaxWidth, width: '100%' }}
+      >
         {isDev && <ModeSwitch />}
         {renderStep()}
       </Flexbox>
