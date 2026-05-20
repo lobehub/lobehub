@@ -10,6 +10,7 @@ import { HotkeysProvider } from 'react-hotkeys-hook';
 import { Outlet } from 'react-router-dom';
 
 import Loading from '@/components/Loading/BrandTextLoading';
+import MediaKeyBlocker from '@/components/MediaKeyBlocker';
 import { isDesktop } from '@/const/version';
 import { BANNER_HEIGHT } from '@/features/AlertBanner/CloudBanner';
 import DesktopFileMenuBridge from '@/features/DesktopFileMenuBridge';
@@ -51,6 +52,7 @@ const Layout: FC = () => {
 
   return (
     <HotkeysProvider initiallyActiveScopes={[HotkeyScopeEnum.Global]}>
+      <MediaKeyBlocker />
       <Suspense fallback={null}>
         {isDesktop && <DesktopAutoOidcOnFirstOpen />}
         {isDesktop && <DesktopNavigationBridge />}

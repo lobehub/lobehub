@@ -14,6 +14,7 @@ import hotkeyMeta from '@/locales/default/hotkey';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 import { type HotkeyItem } from '@/types/hotkey';
+import { isValidHotkeyString } from '@/utils/keyboard';
 
 const HotkeySetting = memo(() => {
   const { t } = useTranslation(['setting', 'hotkey']);
@@ -81,6 +82,13 @@ const HotkeySetting = memo(() => {
       itemsType={'group'}
       variant={'filled'}
       onValuesChange={async (values) => {
+        // Reject media-key or modifier-only bindings
+        for (const [id, keys] of Object.entries(values)) {
+          if (typeof keys === 'string' && keys && !isValidHotkeyString(keys)) {
+            form.setFieldValue(id, hotkey[id] || '');
+            return;
+          }
+        }
         setLoading(true);
         try {
           await setSettings({ hotkey: values });

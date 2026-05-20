@@ -9,6 +9,7 @@ import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 import { type HotkeyId } from '@/types/hotkey';
 import { isDev } from '@/utils/env';
+import { isValidHotkeyKey } from '@/utils/keyboard';
 
 type OptionsOrDependencyArray = Options | DependencyList;
 
@@ -46,6 +47,10 @@ export const useHotkeyById = (
       preventDefault: true,
       ..._options,
       enabled: !mobile && _options?.enabled,
+      ignoreEventWhen: (e) => {
+        if (_options?.ignoreEventWhen?.(e)) return true;
+        return !isValidHotkeyKey(e);
+      },
       scopes: uniq([hotkeyId, ...(item?.scopes || []), ...(_options?.scopes || [])]),
     },
     _deps,
