@@ -20,7 +20,6 @@ import type {
   ListMessengerLinksParams,
   ListMessengerPlatformsParams,
   ListMessengersParams,
-  ListOutboundChannelsParams,
   ListPinsParams,
   ListPlatformsParams,
   ListThreadsParams,
@@ -207,13 +206,6 @@ class MessageExecutor extends BaseExecutor<typeof MessageApiName> {
     _ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     return this.runtime.listBots(params);
-  };
-
-  listOutboundChannels = async (
-    params: ListOutboundChannelsParams,
-    _ctx?: BuiltinToolContext,
-  ): Promise<BuiltinToolResult> => {
-    return this.runtime.listOutboundChannels(params);
   };
 
   getBotDetail = async (

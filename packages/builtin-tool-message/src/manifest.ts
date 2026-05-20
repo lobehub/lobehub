@@ -160,7 +160,7 @@ export const MessageManifest: BuiltinToolManifest = {
     // ==================== Direct Messaging ====================
     {
       description:
-        'Send a direct/private message to a user by their platform user ID. Creates a DM channel automatically. Use this when the user asks to "DM me" or "send me a private message". Supports optional outbound media `attachments` (images / files / video / audio). Discover the right `botId` / `messengerInstallationId` via `listOutboundChannels` — pick the entry where `recommended: true` for the target platform.',
+        'Send a direct/private message to a user by their platform user ID. Creates a DM channel automatically. Use this when the user asks to "DM me" or "send me a private message". Supports optional outbound media `attachments` (images / files / video / audio). To pick the target: call `listBots` for the platform first — if there\'s an entry, use its `botId`; otherwise call `listMessengers` and use that entry\'s `id` as `messengerInstallationId`.',
       name: MessageApiName.sendDirectMessage,
       parameters: {
         additionalProperties: false,
@@ -168,7 +168,7 @@ export const MessageManifest: BuiltinToolManifest = {
           attachments: attachmentsSchema,
           botId: {
             description:
-              'Per-agent bot id — set when the chosen `listOutboundChannels` entry has `source: "agent_bot"`. Provide exactly one of `botId` or `messengerInstallationId`.',
+              'Per-agent bot id from `listBots`. Provide exactly one of `botId` or `messengerInstallationId`.',
             type: 'string',
           },
           content: {
@@ -177,7 +177,7 @@ export const MessageManifest: BuiltinToolManifest = {
           },
           messengerInstallationId: {
             description:
-              'System Bot messenger installation id — set when the chosen `listOutboundChannels` entry has `source: "system_messenger"`. Provide exactly one of `botId` or `messengerInstallationId`.',
+              'System Bot installation id from `listMessengers`. Provide exactly one of `botId` or `messengerInstallationId`.',
             type: 'string',
           },
           platform: {
@@ -198,7 +198,7 @@ export const MessageManifest: BuiltinToolManifest = {
     // ==================== Core Message Operations ====================
     {
       description:
-        'Send a message to a specific channel or conversation on the target platform. Supports optional outbound media `attachments` (images / files / video / audio) — use this when you need to deliver a generated image, document, or other binary alongside your reply. Discover the right `botId` / `messengerInstallationId` via `listOutboundChannels` — pick the entry where `recommended: true` for the target platform.',
+        "Send a message to a specific channel or conversation on the target platform. Supports optional outbound media `attachments` (images / files / video / audio) — use this when you need to deliver a generated image, document, or other binary alongside your reply. To pick the target: call `listBots` first — if there's an entry for the platform, use its `botId`; otherwise call `listMessengers` and use that entry's `id` as `messengerInstallationId`.",
       name: MessageApiName.sendMessage,
       parameters: {
         additionalProperties: false,
@@ -206,7 +206,7 @@ export const MessageManifest: BuiltinToolManifest = {
           attachments: attachmentsSchema,
           botId: {
             description:
-              'Per-agent bot id — set when the chosen `listOutboundChannels` entry has `source: "agent_bot"`. Provide exactly one of `botId` or `messengerInstallationId`.',
+              'Per-agent bot id from `listBots`. Provide exactly one of `botId` or `messengerInstallationId`.',
             type: 'string',
           },
           channelId: {
@@ -226,7 +226,7 @@ export const MessageManifest: BuiltinToolManifest = {
           },
           messengerInstallationId: {
             description:
-              'System Bot messenger installation id — set when the chosen `listOutboundChannels` entry has `source: "system_messenger"`. Provide exactly one of `botId` or `messengerInstallationId`.',
+              'System Bot installation id from `listMessengers`. Provide exactly one of `botId` or `messengerInstallationId`.',
             type: 'string',
           },
           platform: {
@@ -629,7 +629,7 @@ export const MessageManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Send a reply to a thread. Supports optional outbound media `attachments` (images / files / video / audio). Discover the right `botId` / `messengerInstallationId` via `listOutboundChannels` — pick the entry where `recommended: true` for the target platform.',
+        "Send a reply to a thread. Supports optional outbound media `attachments` (images / files / video / audio). To pick the target: call `listBots` first — if there's an entry for the platform, use its `botId`; otherwise call `listMessengers` and use that entry's `id` as `messengerInstallationId`.",
       name: MessageApiName.replyToThread,
       parameters: {
         additionalProperties: false,
@@ -637,7 +637,7 @@ export const MessageManifest: BuiltinToolManifest = {
           attachments: attachmentsSchema,
           botId: {
             description:
-              'Per-agent bot id — set when the chosen `listOutboundChannels` entry has `source: "agent_bot"`. Provide exactly one of `botId` or `messengerInstallationId`.',
+              'Per-agent bot id from `listBots`. Provide exactly one of `botId` or `messengerInstallationId`.',
             type: 'string',
           },
           content: {
@@ -646,7 +646,7 @@ export const MessageManifest: BuiltinToolManifest = {
           },
           messengerInstallationId: {
             description:
-              'System Bot messenger installation id — set when the chosen `listOutboundChannels` entry has `source: "system_messenger"`. Provide exactly one of `botId` or `messengerInstallationId`.',
+              'System Bot installation id from `listMessengers`. Provide exactly one of `botId` or `messengerInstallationId`.',
             type: 'string',
           },
           platform: {
@@ -719,18 +719,8 @@ export const MessageManifest: BuiltinToolManifest = {
     },
     {
       description:
-        "List all per-agent bot integrations configured for the current agent. **For routing send calls, prefer `listOutboundChannels`** — it merges per-agent bots with the user's System Bot messenger installs and marks the recommended pick per platform. Use `listBots` for management flows (createBot / updateBot / toggleBot / deleteBot / getBotDetail).",
+        "List all per-agent bot integrations configured for the current agent (with runtime status). Returns this agent's per-agent bots only — use `listMessengers` to see the user's System Bot installations (a separate outbound channel source). For sending decisions, try `listBots` first; if it has no entry for the target platform, fall back to `listMessengers`.",
       name: MessageApiName.listBots,
-      parameters: {
-        additionalProperties: false,
-        properties: {},
-        type: 'object',
-      },
-    },
-    {
-      description:
-        '**Canonical discovery API for sending.** Returns every outbound channel the agent can deliver through, merging per-agent bots and System Bot messenger installs in a single list. For each platform, the first entry is the recommended pick (`recommended: true`) — per-agent bots win; System Bot installs are the fallback. Each entry tells you exactly which send-API field to use: `source: "agent_bot"` → pass `botId`; `source: "system_messenger"` → pass `messengerInstallationId`. If the user wants a non-default channel, ask which to pick. If the list is empty for the target platform, guide the user to install the LobeHub System Bot via Settings → Messenger, or to provision a per-agent bot with `createBot`.',
-      name: MessageApiName.listOutboundChannels,
       parameters: {
         additionalProperties: false,
         properties: {},
@@ -865,7 +855,7 @@ export const MessageManifest: BuiltinToolManifest = {
     // ==================== System Bot Messenger Management ====================
     {
       description:
-        "List the current user's LobeHub System Bot installations across workspaces (Slack workspaces, Discord guilds, Telegram). Each entry returns an `id` to pass back as `installationId` on `getMessengerDetail` / `uninstallMessenger`, or as `messengerInstallationId` on send APIs (see `listOutboundChannels`). Use this when the user asks about their connected workspaces or wants to disconnect one.",
+        "List the current user's LobeHub System Bot installations across workspaces (Slack workspaces, Discord guilds, Telegram). Each entry returns an `id` to pass back as `installationId` on `getMessengerDetail` / `uninstallMessenger`, or as `messengerInstallationId` on send APIs. Use this when the user asks about their connected workspaces, or as the fallback when `listBots` has no entry for the target platform.",
       name: MessageApiName.listMessengers,
       parameters: {
         additionalProperties: false,

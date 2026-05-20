@@ -61,14 +61,6 @@ export const trpcBotProvider: BotProviderQuery = {
     }));
   },
 
-  listOutboundChannels: async () => {
-    // Shape passthrough — `OutboundChannelRow` (server) matches
-    // `OutboundChannelInfo` (runtime) field-for-field, including
-    // `recommended`, `source`, `tenantName`, etc.
-    const channels = (await lambdaClient.botMessage.listOutboundChannels.query()) as any[];
-    return channels;
-  },
-
   getBotDetail: async (botId) => {
     const providers = (await lambdaClient.agentBotProvider.list.query()) as any[];
     const bot = providers.find((b) => b.id === botId);

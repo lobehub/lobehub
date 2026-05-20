@@ -55,17 +55,6 @@ export const MessageApiName = {
   deleteBot: 'deleteBot',
   getBotDetail: 'getBotDetail',
   listBots: 'listBots',
-  /**
-   * Unified outbound channel discovery — merges per-agent bots
-   * (`agent_bot_providers`) and System Bot messenger installs
-   * (`messenger_installations`) the current user has connected. Each
-   * entry tells the caller exactly which send-API field to pass
-   * (`botId` vs `messengerInstallationId`), and the list is ordered so
-   * the first entry per platform is the recommended pick (per-agent bot
-   * wins; system bot is the fallback). This is the canonical discovery
-   * API for sending — `listBots` remains for management flows.
-   */
-  listOutboundChannels: 'listOutboundChannels',
   listPlatforms: 'listPlatforms',
   toggleBot: 'toggleBot',
   updateBot: 'updateBot',
@@ -450,62 +439,6 @@ export interface CreatePollState {
 }
 
 // --- Bot Management ---
-
-/**
- * Discriminator for the two outbound channel sources a send call can
- * target. The send-API field name (`botId` vs `messengerInstallationId`)
- * is derived from this — callers should never have to know "which list
- * did this come from" beyond reading `source`.
- */
-export type OutboundChannelSource = 'agent_bot' | 'system_messenger';
-
-/**
- * One entry returned by `listOutboundChannels` — describes a single
- * deliverable channel and tells the caller which send-API field to use.
- *
- * For per-agent bots (`source: 'agent_bot'`) `botId` is set;
- * for system bot installs (`source: 'system_messenger'`)
- * `messengerInstallationId` is set. The two are never both populated.
- */
-export interface OutboundChannelInfo {
-  /** Platform application/bot id (informational). */
-  applicationId: string;
-  /** Set when `source === 'agent_bot'`. Pass as `botId` to send APIs. */
-  botId?: string;
-  installedAt?: string;
-  /**
-   * Set when `source === 'system_messenger'`. Pass as
-   * `messengerInstallationId` to send APIs.
-   */
-  messengerInstallationId?: string;
-  /** Messaging platform (discord / slack / telegram / …). */
-  platform: string;
-  /**
-   * `true` for the first entry of a given platform — i.e. the entry
-   * that the routing strategy says to prefer. Per-agent bots win;
-   * system bot installs are the fallback.
-   */
-  recommended: boolean;
-  /**
-   * Runtime status of a per-agent bot (only populated when
-   * `source === 'agent_bot'`). Useful when picking among multiple
-   * per-agent bots on the same platform.
-   */
-  runtimeStatus?: string;
-  source: OutboundChannelSource;
-  /** Tenant identifier — Slack workspace, Discord guild, … */
-  tenantId?: string;
-  /** Optional human-friendly tenant label (workspace / guild name). */
-  tenantName?: string;
-}
-
-export interface ListOutboundChannelsParams {
-  /** No parameters needed — returns all channels for the current agent + user. */
-}
-
-export interface ListOutboundChannelsState {
-  channels: OutboundChannelInfo[];
-}
 
 export interface ListPlatformsParams {
   /** No parameters needed */
