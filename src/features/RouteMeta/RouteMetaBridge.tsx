@@ -21,6 +21,11 @@ interface MatchedRouteMeta {
   routeId: string;
 }
 
+interface DynamicRouteMetaState {
+  meta: DynamicRouteMeta;
+  routeId: string | null;
+}
+
 const useMatchedRouteMeta = (): MatchedRouteMeta | null => {
   const matches = useMatches();
 
@@ -42,19 +47,28 @@ const RouteMetaBridge = memo(() => {
   const { t } = useTranslation('electron');
   const setCurrentRouteMeta = useElectronStore((s) => s.setCurrentRouteMeta);
   const matched = useMatchedRouteMeta();
-  const [dynamic, setDynamic] = useState<DynamicRouteMeta>({});
+  const matchedRouteId = matched?.routeId ?? null;
+  const [dynamic, setDynamic] = useState<DynamicRouteMetaState>({ meta: {}, routeId: null });
 
   const handleResolve = useCallback(
     (resolved: DynamicRouteMeta) => {
-      setDynamic(resolved);
+      setDynamic({ meta: resolved, routeId: matchedRouteId });
       if (isDesktop) setCurrentRouteMeta(resolved);
     },
-    [setCurrentRouteMeta],
+    [matchedRouteId, setCurrentRouteMeta],
   );
 
   const translate = t as unknown as Translate;
   const titleKey = matched?.meta.titleKey;
-  const title = dynamic.title || (titleKey ? translate(titleKey) : '');
+  const currentDynamic = dynamic.routeId === matchedRouteId ? dynamic.meta : {};
+  const title = matched ? currentDynamic.title || (titleKey ? translate(titleKey) : '') : '';
+
+  useEffect(() => {
+    if (matchedRouteId) return;
+
+    setDynamic({ meta: {}, routeId: null });
+    if (isDesktop) setCurrentRouteMeta(null);
+  }, [matchedRouteId, setCurrentRouteMeta]);
 
   useEffect(() => {
     document.title = title ? `${title} · ${BRANDING_NAME}` : BRANDING_NAME;
