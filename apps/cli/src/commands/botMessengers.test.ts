@@ -149,6 +149,23 @@ describe('bot messengers', () => {
       expect(errorSpy).toHaveBeenCalled();
       expect(exitSpy).toHaveBeenCalledWith(1);
     });
+
+    it('--json missing install emits JSON null + exit 1 (scriptable)', async () => {
+      mockTrpcClient.messenger.listMyInstallations.query.mockResolvedValueOnce([]);
+      await createProgram().parseAsync([
+        'node',
+        'test',
+        'bot',
+        'messengers',
+        'view',
+        'inst_missing',
+        '--json',
+      ]);
+      // No human-readable error log; the JSON-pipe consumer gets `null`.
+      expect(errorSpy).not.toHaveBeenCalled();
+      expect(consoleSpy.mock.calls.map((c) => String(c[0])).join('\n')).toContain('null');
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
   });
 
   describe('uninstall', () => {

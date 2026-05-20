@@ -86,7 +86,14 @@ export function registerBotMessengersCommands(bot: Command) {
       const install = installations.find((i) => i.id === installationId);
 
       if (!install) {
-        console.error(pc.red(`Installation not found: ${installationId}`));
+        // Under `--json`, scripts need a parseable output even on miss —
+        // emit `null` to stdout (rather than a human-readable error), then
+        // exit non-zero so error handling still works in pipelines.
+        if (options.json) {
+          outputJson(null);
+        } else {
+          console.error(pc.red(`Installation not found: ${installationId}`));
+        }
         process.exit(1);
         return;
       }

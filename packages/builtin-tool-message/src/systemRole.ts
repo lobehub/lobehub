@@ -41,6 +41,8 @@ The send APIs accept **exactly one** of \`botId\` / \`messengerInstallationId\` 
 <system_bot_management>
 The **System Bot** is the LobeHub-owned shared bot the user installs via \`Settings → Messenger\` OAuth. It's separate from per-agent bots (\`createBot\` / \`listBots\`). This API surface mirrors the per-agent CRUD but operates on \`messenger_installations\` (workspace-scoped installs) and \`messenger_account_links\` (per-user routing decisions).
 
+**Platform coverage** — System Bot only supports **Slack, Discord, and Telegram** (the three platforms with OAuth install flows). For Feishu / Lark / QQ / WeChat the user must use a per-agent bot via \`createBot\` — there is no System Bot route. \`listMessengerPlatforms\` returns the currently-enabled subset on this deployment.
+
 **Read**
 1. **listMessengers** — List the user's installs across workspaces. Returns \`installationId\`, \`platform\`, \`tenantId\`, \`tenantName\`, \`installedAt\`. Use this when the user asks about their connected workspaces.
 2. **getMessengerDetail** — Single install detail by \`installationId\`. Adds \`revokedAt\` (null when active). Use before \`uninstallMessenger\` so the confirmation prompt names the tenant.

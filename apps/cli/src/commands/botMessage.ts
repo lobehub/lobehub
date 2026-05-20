@@ -125,7 +125,7 @@ export function registerBotMessageCommands(bot: Command) {
     .command('send <botIdOrAtKey>')
     .description(
       'Send a message to a channel. Pass a per-agent bot id, or "@<messenger-install-id>" ' +
-        'to send through a System Bot messenger installation (see `lh bot messenger list`).',
+        'to send through a System Bot messenger installation (see `lh bot messengers list`).',
     )
     .requiredOption('--target <channelId>', 'Target channel / conversation ID')
     .requiredOption('--message <text>', 'Message content')
