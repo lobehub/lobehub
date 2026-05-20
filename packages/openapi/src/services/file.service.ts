@@ -148,6 +148,11 @@ export class FileUploadService extends BaseService {
         throw this.createAuthorizationError(isPermitted.message || '无权上传文件');
       }
 
+      const MAX_BATCH_FILES = 20;
+      if (request.files.length > MAX_BATCH_FILES) {
+        throw this.createValidationError(`批量上传文件数量不能超过 ${MAX_BATCH_FILES} 个`);
+      }
+
       const results: BatchFileUploadResponse = {
         failed: [],
         successful: [],
@@ -1104,7 +1109,8 @@ export class FileUploadService extends BaseService {
     const now = new Date();
     const datePath = now.toISOString().slice(0, 10); // YYYY-MM-DD
     const dir = directory || 'uploads';
-    const filename = `${nanoid()}_${file.name}`;
+    const safeName = file.name.replaceAll(/[/\\]/g, '_').replaceAll(/\.\./g, '_');
+    const filename = `${nanoid()}_${safeName}`;
     const path = `${dir}/${datePath}/${filename}`;
 
     return {
