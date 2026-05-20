@@ -9,7 +9,6 @@ import { Outlet } from 'react-router-dom';
 
 import { isDesktop } from '@/const/version';
 import ProtocolUrlHandler from '@/features/ProtocolUrlHandler';
-import { RouteMetaBridge } from '@/features/RouteMeta';
 import { MarketAuthProvider } from '@/layout/AuthProvider/MarketAuth';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
@@ -27,7 +26,6 @@ const PopupLayout: FC = () => {
 
   return (
     <HotkeysProvider initiallyActiveScopes={[HotkeyScopeEnum.Global]}>
-      <RouteMetaBridge />
       <MarketAuthProvider isDesktop={isDesktop}>
         <Flexbox
           className={styles.container}
