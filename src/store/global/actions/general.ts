@@ -1,20 +1,23 @@
 import isEqual from 'fast-deep-equal';
 import { gt, parse, valid } from 'semver';
-import { type SWRResponse } from 'swr';
+import type { SWRResponse } from 'swr';
 
+import { SESSION_CHAT_TOPIC_URL } from '@/const/url';
 import { CURRENT_VERSION, isDesktop } from '@/const/version';
 import { useOnlyFetchOnceSWR } from '@/libs/swr';
 import { globalService } from '@/services/global';
 import { getElectronStoreState } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
-import { type SystemStatus } from '@/store/global/initialState';
-import { type StoreSetter } from '@/store/types';
-import { type LocaleMode } from '@/types/locale';
+import type { SystemStatus } from '@/store/global/initialState';
+import { DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS } from '@/store/global/initialState';
+import type { StoreSetter } from '@/store/types';
+import type { LocaleMode } from '@/types/locale';
 import { switchLang } from '@/utils/client/switchLang';
 import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { type GlobalStore } from '../store';
+import { DEFAULT_HIDDEN_SECTIONS, DEFAULT_SIDEBAR_ITEMS } from '../selectors/systemStatus';
+import type { GlobalStore } from '../store';
 
 const n = setNamespace('g');
 
@@ -64,17 +67,17 @@ export class GlobalGeneralActionImpl {
   };
 
   openTopicInNewWindow = async (agentId: string, topicId: string): Promise<void> => {
-    const url = `/agent/${agentId}?topic=${topicId}${isDesktop ? '&mode=single' : ''}`;
+    const popupPath = `/popup/agent/${agentId}/${topicId}`;
+    const browserUrl = SESSION_CHAT_TOPIC_URL(agentId, topicId);
 
     if (isDesktop) {
       try {
         const { ensureElectronIpc } = await import('@/utils/electron/ipc');
-        const path = `/agent/${agentId}?topic=${topicId}&mode=single`;
 
         const result = await ensureElectronIpc().windows.createMultiInstanceWindow({
-          path,
-          templateId: 'chatSingle',
-          uniqueId: `chat_${agentId}_${topicId}`,
+          path: popupPath,
+          templateId: 'topicPopup',
+          uniqueId: `topicPopup_agent_${agentId}_${topicId}`,
         });
 
         if (!result.success) {
@@ -90,7 +93,37 @@ export class GlobalGeneralActionImpl {
       const left = (window.screen.width - width) / 2;
       const top = (window.screen.height - height) / 2;
       const features = `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,status=yes`;
-      window.open(url, `agent_${agentId}_topic_${topicId}`, features);
+      window.open(browserUrl, `agent_${agentId}_topic_${topicId}`, features);
+    }
+  };
+
+  openGroupTopicInNewWindow = async (groupId: string, topicId: string): Promise<void> => {
+    const popupPath = `/popup/group/${groupId}/${topicId}`;
+    const browserUrl = `/group/${groupId}?topic=${topicId}`;
+
+    if (isDesktop) {
+      try {
+        const { ensureElectronIpc } = await import('@/utils/electron/ipc');
+
+        const result = await ensureElectronIpc().windows.createMultiInstanceWindow({
+          path: popupPath,
+          templateId: 'topicPopup',
+          uniqueId: `topicPopup_group_${groupId}_${topicId}`,
+        });
+
+        if (!result.success) {
+          console.error('Failed to open group topic in new window:', result.error);
+        }
+      } catch (error) {
+        console.error('Error opening group topic in new window:', error);
+      }
+    } else {
+      const width = 1200;
+      const height = 800;
+      const left = (window.screen.width - width) / 2;
+      const top = (window.screen.height - height) / 2;
+      const features = `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,status=yes`;
+      window.open(browserUrl, `group_${groupId}_topic_${topicId}`, features);
     }
   };
 
@@ -128,6 +161,17 @@ export class GlobalGeneralActionImpl {
         [column]: width,
       },
     });
+  };
+
+  resetSidebarCustomization = (): void => {
+    this.#get().updateSystemStatus(
+      {
+        hiddenSidebarSections: DEFAULT_HIDDEN_SECTIONS,
+        sidebarExpandedKeys: DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS,
+        sidebarItems: DEFAULT_SIDEBAR_ITEMS,
+      },
+      n('resetSidebarCustomization'),
+    );
   };
 
   updateSystemStatus = (status: Partial<SystemStatus>, action?: any): void => {
@@ -229,6 +273,7 @@ export class GlobalGeneralActionImpl {
             ...status,
             showCommandMenu: false,
             showHotkeyHelper: false,
+            workingSidebarRevealRequest: undefined,
           };
 
           this.#get().updateSystemStatus(statusWithResetTransientStates, 'initSystemStatus');

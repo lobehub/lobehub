@@ -24,7 +24,7 @@ const mapActionsToItems = (keys: ActionKeys[]): ChatInputActionsProps['items'] =
       }
       const Render = actionMap[actionKey];
       return {
-        alwaysDisplay: actionKey === 'mainToken',
+        alwaysDisplay: actionKey === 'contextWindow',
         children: <Render key={actionKey} />,
         key: actionKey,
       };
@@ -80,6 +80,7 @@ const ActionToolbar = memo<ActionToolbarProps>(
           defaultGroupCollapse={true}
           groupCollapse={!expandInputActionbar}
           items={items}
+          style={{ paddingLeft: 6 }}
           onGroupCollapseChange={(v) => {
             toggleExpandInputActionbar(!v);
           }}

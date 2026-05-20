@@ -16,9 +16,10 @@ describe('handleOpenAIError', () => {
 
       const result = handleOpenAIError(apiError);
 
-      expect(result).toEqual({
-        errorResult: { error: { message: 'API error', type: 'invalid_request' } },
+      expect(result.errorResult).toEqual({
+        error: { message: 'API error', type: 'invalid_request' },
       });
+      expect(result.message).toBe(apiError.message);
       expect(result.RuntimeError).toBeUndefined();
     });
 
@@ -31,9 +32,8 @@ describe('handleOpenAIError', () => {
 
       const result = handleOpenAIError(apiError);
 
-      expect(result).toEqual({
-        errorResult: cause,
-      });
+      expect(result.errorResult).toEqual(cause);
+      expect(result.message).toBe(apiError.message);
       expect(result.RuntimeError).toBeUndefined();
     });
 
@@ -50,6 +50,7 @@ describe('handleOpenAIError', () => {
         headers: { headers, status: 401 },
         status: 472,
       });
+      expect(result.message).toBe(apiError.message);
       expect(result.RuntimeError).toBeUndefined();
     });
 
@@ -64,9 +65,8 @@ describe('handleOpenAIError', () => {
       const result = handleOpenAIError(apiError);
 
       // Should prioritize error over cause
-      expect(result).toEqual({
-        errorResult: { error: errorObject },
-      });
+      expect(result.errorResult).toEqual({ error: errorObject });
+      expect(result.message).toBe(apiError.message);
     });
   });
 
@@ -84,6 +84,7 @@ describe('handleOpenAIError', () => {
           message: 'Generic error',
           name: 'Error',
         },
+        message: 'Generic error',
       });
     });
 
@@ -99,6 +100,7 @@ describe('handleOpenAIError', () => {
           message: 'Simple error',
           name: 'Error',
         },
+        message: 'Simple error',
       });
     });
 
@@ -120,6 +122,7 @@ describe('handleOpenAIError', () => {
           message: 'Custom error message',
           name: 'CustomError',
         },
+        message: 'Custom error message',
       });
     });
 
@@ -138,6 +141,7 @@ describe('handleOpenAIError', () => {
           message: 'Object error',
           name: undefined,
         },
+        message: 'Object error',
       });
     });
   });

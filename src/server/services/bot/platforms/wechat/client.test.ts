@@ -3,17 +3,46 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mockCreateWechatAdapter = vi.hoisted(() => vi.fn());
 const mockGetUpdates = vi.hoisted(() => vi.fn());
 const mockStartTyping = vi.hoisted(() => vi.fn());
+const mockSendMessage = vi.hoisted(() => vi.fn().mockResolvedValue({ ret: 0 }));
+const mockSendItem = vi.hoisted(() => vi.fn().mockResolvedValue({ ret: 0 }));
+const mockUploadCdnMedia = vi.hoisted(() =>
+  vi.fn().mockResolvedValue({
+    aesKey: 'aes-key',
+    cipherSize: 128,
+    encryptQueryParam: 'enc-param',
+  }),
+);
+const mockDownloadMediaFromRawMessage = vi.hoisted(() => vi.fn());
 const MessageState = vi.hoisted(() => ({ FINISH: 2 }));
 const MessageType = vi.hoisted(() => ({ BOT: 2, USER: 1 }));
+const MessageItemType = vi.hoisted(() => ({
+  FILE: 4,
+  IMAGE: 1,
+  TEXT: 0,
+  VIDEO: 3,
+  VOICE: 2,
+}));
+const WechatUploadMediaType = vi.hoisted(() => ({
+  FILE: 4,
+  IMAGE: 1,
+  VIDEO: 3,
+  VOICE: 2,
+}));
 
 vi.mock('@lobechat/chat-adapter-wechat', () => ({
   createWechatAdapter: mockCreateWechatAdapter,
+  downloadMediaFromRawMessage: mockDownloadMediaFromRawMessage,
+  MessageItemType,
   MessageState,
   MessageType,
   WechatApiClient: vi.fn().mockImplementation(() => ({
     getUpdates: mockGetUpdates,
+    sendItem: mockSendItem,
+    sendMessage: mockSendMessage,
     startTyping: mockStartTyping,
+    uploadCdnMedia: mockUploadCdnMedia,
   })),
+  WechatUploadMediaType,
 }));
 
 const { WechatClientFactory } = await import('./client');
@@ -165,5 +194,276 @@ describe('WechatGatewayClient', () => {
         { appUrl: 'https://example.com', redisClient: runtimeRedis as any },
       ),
     ).toThrowError('Bot Token is required');
+  });
+
+  describe('extractFiles', () => {
+    // Verifies the post-Redis re-download path: when WeChat messages
+    // round-trip through the chat-sdk debounce/queue, `Message.toJSON`
+    // strips the `att.buffer` field that the adapter pre-populated. We
+    // recover by walking `message.raw.item_list` and re-running the same
+    // download logic via the package-exported helper.
+    const createClient = () =>
+      new WechatClientFactory().createClient(
+        {
+          applicationId: 'wechat-app',
+          credentials: { botId: 'bot-id', botToken: 'bot-token' },
+          platform: 'wechat',
+          settings: {},
+        },
+        { appUrl: 'https://example.com', redisClient: runtimeRedis as any },
+      );
+
+    /** Build a fake Chat SDK Message with a WeChat raw payload. */
+    const makeMessage = (raw: Record<string, unknown>, id = 'wechat-msg-1') =>
+      ({ id, attachments: [], raw, text: '' }) as any;
+
+    it('returns undefined when raw has no item_list', async () => {
+      const client = createClient();
+      const result = await client.extractFiles!(makeMessage({}));
+      expect(mockDownloadMediaFromRawMessage).not.toHaveBeenCalled();
+      expect(result).toBeUndefined();
+    });
+
+    it('returns undefined when item_list is empty', async () => {
+      const client = createClient();
+      const result = await client.extractFiles!(makeMessage({ item_list: [] }));
+      expect(mockDownloadMediaFromRawMessage).not.toHaveBeenCalled();
+      expect(result).toBeUndefined();
+    });
+
+    it('delegates to downloadMediaFromRawMessage and maps the result to AttachmentSource[]', async () => {
+      const buffer = Buffer.from('wechat-image-bytes');
+      mockDownloadMediaFromRawMessage.mockResolvedValue([
+        {
+          buffer,
+          mimeType: 'image/jpeg',
+          name: 'image.jpg',
+          type: 'image',
+          url: '',
+        },
+      ]);
+
+      const client = createClient();
+      const raw = {
+        item_list: [
+          {
+            image_item: {
+              aeskey: 'hex-key',
+              media: { encrypt_query_param: 'enc-1' },
+            },
+            type: 1, // MessageItemType.IMAGE
+          },
+        ],
+      };
+      const result = await client.extractFiles!(makeMessage(raw));
+
+      expect(mockDownloadMediaFromRawMessage).toHaveBeenCalledTimes(1);
+      // Confirm we pass the api client + raw payload (the helper handles the rest).
+      expect(mockDownloadMediaFromRawMessage).toHaveBeenCalledWith(
+        expect.anything(), // WechatApiClient instance
+        raw,
+      );
+      expect(result).toEqual([
+        { buffer, mimeType: 'image/jpeg', name: 'image.jpg', size: undefined },
+      ]);
+    });
+
+    it('returns undefined when downloadMediaFromRawMessage resolves to an empty array', async () => {
+      mockDownloadMediaFromRawMessage.mockResolvedValue([]);
+      const client = createClient();
+      const result = await client.extractFiles!(makeMessage({ item_list: [{ type: 99 }] }));
+      expect(mockDownloadMediaFromRawMessage).toHaveBeenCalledTimes(1);
+      expect(result).toBeUndefined();
+    });
+
+    it('maps file attachments preserving name + size', async () => {
+      const buffer = Buffer.from('pdf-bytes');
+      mockDownloadMediaFromRawMessage.mockResolvedValue([
+        {
+          buffer,
+          mimeType: 'application/pdf',
+          name: 'report.pdf',
+          size: 4096,
+          type: 'file',
+          url: '',
+        },
+      ]);
+      const client = createClient();
+      const result = await client.extractFiles!(
+        makeMessage({
+          item_list: [
+            {
+              file_item: {
+                file_name: 'report.pdf',
+                len: '4096',
+                media: { encrypt_query_param: 'enc-pdf' },
+              },
+              type: 4, // MessageItemType.FILE
+            },
+          ],
+        }),
+      );
+      expect(result).toEqual([
+        { buffer, mimeType: 'application/pdf', name: 'report.pdf', size: 4096 },
+      ]);
+    });
+
+    it('maps multiple attachments in a single message', async () => {
+      const imageBuf = Buffer.from('img');
+      const voiceBuf = Buffer.from('voice');
+      mockDownloadMediaFromRawMessage.mockResolvedValue([
+        { buffer: imageBuf, mimeType: 'image/jpeg', name: 'image.jpg', type: 'image', url: '' },
+        { buffer: voiceBuf, mimeType: 'audio/silk', type: 'audio', url: '' },
+      ]);
+      const client = createClient();
+      const result = await client.extractFiles!(
+        makeMessage({
+          item_list: [
+            { image_item: { media: { encrypt_query_param: 'a' } }, type: 1 },
+            { type: 2, voice_item: { media: { encrypt_query_param: 'b' } } },
+          ],
+        }),
+      );
+      expect(result).toEqual([
+        { buffer: imageBuf, mimeType: 'image/jpeg', name: 'image.jpg', size: undefined },
+        { buffer: voiceBuf, mimeType: 'audio/silk', name: undefined, size: undefined },
+      ]);
+    });
+
+    it('propagates errors from downloadMediaFromRawMessage as undefined gracefully', async () => {
+      // The helper itself swallows per-item errors; if it throws as a whole,
+      // that's an unexpected programmer error and we let it propagate.
+      // This test verifies we DON'T silently swallow whole-helper failures —
+      // we want them to surface in logs / be debuggable.
+      mockDownloadMediaFromRawMessage.mockRejectedValue(new Error('helper crashed'));
+      const client = createClient();
+      await expect(
+        client.extractFiles!(makeMessage({ item_list: [{ image_item: {}, type: 1 }] })),
+      ).rejects.toThrow('helper crashed');
+    });
+  });
+
+  describe('messenger.createMessage with attachments', () => {
+    const createClient = () =>
+      new WechatClientFactory().createClient(
+        {
+          applicationId: 'wechat-app',
+          credentials: { botId: 'bot-id', botToken: 'bot-token' },
+          platform: 'wechat',
+          settings: {},
+        },
+        { appUrl: 'https://example.com', redisClient: runtimeRedis as any },
+      );
+
+    it('forwards inline base64 image attachments to uploadCdnMedia + sendItem', async () => {
+      const client = createClient();
+      const messenger = client.getMessenger('wechat:p2p:user-1@im.wechat');
+
+      // Pre-seed an in-memory context token; the adapter caches per-user.
+      runtimeRedis.get.mockResolvedValueOnce('ctx-from-redis');
+
+      await messenger.createMessage({
+        attachments: [
+          {
+            data: Buffer.from('image-bytes').toString('base64'),
+            mimeType: 'image/png',
+            name: 'foo.png',
+            type: 'image',
+          },
+        ],
+        content: 'Here you go',
+      });
+
+      // Text leg goes through the standard sendMessage call.
+      expect(mockSendMessage).toHaveBeenCalledWith(
+        'user-1@im.wechat',
+        'Here you go',
+        'ctx-from-redis',
+      );
+      // Attachment leg: upload bytes, then send a media item.
+      expect(mockUploadCdnMedia).toHaveBeenCalledWith(
+        'user-1@im.wechat',
+        WechatUploadMediaType.IMAGE,
+        expect.any(Buffer),
+      );
+      expect(mockSendItem).toHaveBeenCalledWith(
+        'user-1@im.wechat',
+        expect.objectContaining({
+          image_item: expect.objectContaining({
+            media: expect.objectContaining({
+              aes_key: 'aes-key',
+              encrypt_query_param: 'enc-param',
+            }),
+          }),
+          type: MessageItemType.IMAGE,
+        }),
+        'ctx-from-redis',
+      );
+    });
+
+    it('fetches and uploads attachments delivered as fetchUrl', async () => {
+      const client = createClient();
+      const messenger = client.getMessenger('wechat:p2p:user-2@im.wechat');
+
+      runtimeRedis.get.mockResolvedValueOnce('ctx-2');
+      const fetchMock = vi.mocked(fetch);
+      fetchMock.mockResolvedValueOnce(
+        new Response(new Uint8Array([1, 2, 3, 4]), {
+          headers: { 'Content-Type': 'image/png' },
+          status: 200,
+        }) as any,
+      );
+
+      await messenger.createMessage({
+        attachments: [
+          {
+            fetchUrl: 'https://cdn.example.com/pic.png',
+            name: 'pic.png',
+            type: 'image',
+          },
+        ],
+        content: 'pic',
+      });
+
+      expect(fetchMock).toHaveBeenCalledWith('https://cdn.example.com/pic.png', expect.any(Object));
+      expect(mockUploadCdnMedia).toHaveBeenCalledTimes(1);
+      expect(mockSendItem).toHaveBeenCalledTimes(1);
+    });
+
+    it('continues sending remaining attachments when one fails', async () => {
+      const client = createClient();
+      const messenger = client.getMessenger('wechat:p2p:user-3@im.wechat');
+
+      runtimeRedis.get.mockResolvedValueOnce('ctx-3');
+      mockUploadCdnMedia.mockRejectedValueOnce(new Error('upload failed')).mockResolvedValueOnce({
+        aesKey: 'aes-2',
+        cipherSize: 64,
+        encryptQueryParam: 'enc-2',
+      });
+
+      await messenger.createMessage({
+        attachments: [
+          { data: Buffer.from('a').toString('base64'), type: 'image' },
+          { data: Buffer.from('b').toString('base64'), type: 'image' },
+        ],
+        content: '',
+      });
+
+      // Two upload attempts, one sendItem success after the first failure.
+      expect(mockUploadCdnMedia).toHaveBeenCalledTimes(2);
+      expect(mockSendItem).toHaveBeenCalledTimes(1);
+    });
+
+    it('accepts plain string content (legacy form) and skips attachment path', async () => {
+      const client = createClient();
+      const messenger = client.getMessenger('wechat:p2p:user-4@im.wechat');
+
+      runtimeRedis.get.mockResolvedValueOnce('ctx-4');
+      await messenger.createMessage('text only');
+
+      expect(mockSendMessage).toHaveBeenCalledWith('user-4@im.wechat', 'text only', 'ctx-4');
+      expect(mockUploadCdnMedia).not.toHaveBeenCalled();
+      expect(mockSendItem).not.toHaveBeenCalled();
+    });
   });
 });

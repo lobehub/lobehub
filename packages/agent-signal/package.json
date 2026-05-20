@@ -1,0 +1,22 @@
+{
+  "name": "@lobechat/agent-signal",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared AgentSignal producer helpers and contracts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./source": {
+      "types": "./src/source/index.ts",
+      "default": "./src/source/index.ts"
+    }
+  },
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "vitest"
+  }
+}

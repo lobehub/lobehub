@@ -18,10 +18,6 @@ export interface ChatMessageState {
    */
   messageEditingIds: string[];
   /**
-   * is the message is creating or updating in the service
-   */
-  messageLoadingIds: string[];
-  /**
    * whether messages have fetched
    */
   messagesInit: boolean;
@@ -37,7 +33,6 @@ export const initialMessageState: ChatMessageState = {
   groupAgentMaps: {},
   isCreatingMessage: false,
   messageEditingIds: [],
-  messageLoadingIds: [],
   messagesInit: false,
   messagesMap: {},
 };

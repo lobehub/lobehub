@@ -49,6 +49,8 @@ import { default as nvidia } from './nvidia';
 import { default as ollama } from './ollama';
 import { default as ollamacloud } from './ollamacloud';
 import { default as openai } from './openai';
+import { default as opencodecodingplan } from './opencodeCodingPlan';
+import { default as opencodezen } from './opencodeZen';
 import { default as openrouter } from './openrouter';
 import { default as perplexity } from './perplexity';
 import { default as ppio } from './ppio';
@@ -62,6 +64,7 @@ import { default as siliconcloud } from './siliconcloud';
 import { default as spark } from './spark';
 import { default as stepfun } from './stepfun';
 import { default as straico } from './straico';
+import { default as streamlake } from './streamlake';
 import { default as taichu } from './taichu';
 import { default as tencentcloud } from './tencentcloud';
 import { default as togetherai } from './togetherai';
@@ -148,6 +151,8 @@ export const LOBE_DEFAULT_MODEL_LIST = buildDefaultModelList({
   ollama,
   ollamacloud,
   openai,
+  opencodecodingplan,
+  opencodezen,
   openrouter,
   perplexity,
   ppio,
@@ -161,6 +166,7 @@ export const LOBE_DEFAULT_MODEL_LIST = buildDefaultModelList({
   spark,
   stepfun,
   straico,
+  streamlake,
   taichu,
   tencentcloud,
   togetherai,
@@ -214,7 +220,7 @@ export { default as internlm } from './internlm';
 export { default as jina } from './jina';
 export { default as kimicodingplan } from './kimiCodingPlan';
 export { default as lmstudio } from './lmstudio';
-export { default as lobehub } from './lobehub/index';
+export { gptImage1Schema, default as lobehub } from './lobehub/index';
 export { default as longcat } from './longcat';
 export { default as minimax } from './minimax';
 export { default as minimaxcodingplan } from './minimaxCodingPlan';
@@ -227,7 +233,9 @@ export { default as novita } from './novita';
 export { default as nvidia } from './nvidia';
 export { default as ollama } from './ollama';
 export { default as ollamacloud } from './ollamacloud';
-export { gptImage1ParamsSchema, default as openai, openaiChatModels } from './openai';
+export { default as openai, openaiChatModels } from './openai';
+export { default as opencodecodingplan } from './opencodeCodingPlan';
+export { default as opencodezen } from './opencodeZen';
 export { default as openrouter } from './openrouter';
 export { default as perplexity } from './perplexity';
 export { default as ppio } from './ppio';
@@ -241,6 +249,7 @@ export { default as siliconcloud } from './siliconcloud';
 export { default as spark } from './spark';
 export { default as stepfun } from './stepfun';
 export { default as straico } from './straico';
+export { default as streamlake } from './streamlake';
 export { default as taichu } from './taichu';
 export { default as tencentcloud } from './tencentcloud';
 export { default as togetherai } from './togetherai';

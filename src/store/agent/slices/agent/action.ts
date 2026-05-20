@@ -1,3 +1,4 @@
+import { isDesktop } from '@lobechat/const';
 import { type AgentContextDocument } from '@lobechat/context-engine';
 import { isChatGroupSessionId } from '@lobechat/types';
 import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
@@ -7,7 +8,7 @@ import type { SWRResponse } from 'swr';
 import type { PartialDeep } from 'type-fest';
 
 import { MESSAGE_CANCEL_FLAT } from '@/const/message';
-import { mutate, useClientDataSWR, useClientDataSWRWithSync } from '@/libs/swr';
+import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import type { CreateAgentParams, CreateAgentResult } from '@/services/agent';
 import { agentService } from '@/services/agent';
 import {
@@ -19,14 +20,25 @@ import {
 import type { StoreSetter } from '@/store/types';
 import { getUserStoreState } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
-import type { LobeAgentChatConfig, LobeAgentConfig, RuntimeEnvConfig } from '@/types/agent';
-import type { MetaData } from '@/types/meta';
+import type {
+  AgentItem,
+  LobeAgentChatConfig,
+  LobeAgentConfig,
+  RuntimeEnvConfig,
+} from '@/types/agent';
 import { merge } from '@/utils/merge';
 
 import type { AgentStore } from '../../store';
+import { setLocalAgentWorkingDirectory } from '../../utils/localAgentWorkingDirectoryStorage';
 import type { AgentSliceState, LoadingState, SaveStatus } from './initialState';
 
 const FETCH_AGENT_CONFIG_KEY = 'FETCH_AGENT_CONFIG';
+type AgentMetaUpdate = Partial<
+  Pick<
+    AgentItem,
+    'avatar' | 'backgroundColor' | 'description' | 'marketIdentifier' | 'tags' | 'title'
+  >
+>;
 
 /**
  * Agent Slice Actions
@@ -81,7 +93,6 @@ export class AgentSliceActionImpl {
           agent_id: result.agentId,
           assistant_name: params.config?.title || 'Untitled Agent',
           assistant_tags: params.config?.tags || [],
-          session_id: result.sessionId,
           user_id: userId || 'anonymous',
         },
       });
@@ -214,10 +225,18 @@ export class AgentSliceActionImpl {
   ): Promise<void> => {
     if (!agentId) return;
 
-    await this.#get().updateAgentChatConfigById(agentId, { runtimeEnv: config });
+    if (isDesktop && 'workingDirectory' in config) {
+      setLocalAgentWorkingDirectory(agentId, config.workingDirectory);
+    }
+
+    const restConfig = { ...config };
+    delete restConfig.workingDirectory;
+    if (Object.keys(restConfig).length > 0) {
+      await this.#get().updateAgentChatConfigById(agentId, { runtimeEnv: restConfig });
+    }
   };
 
-  updateAgentMeta = async (meta: Partial<MetaData>): Promise<void> => {
+  updateAgentMeta = async (meta: AgentMetaUpdate): Promise<void> => {
     const { activeAgentId } = this.#get();
 
     if (!activeAgentId) return;
@@ -250,20 +269,46 @@ export class AgentSliceActionImpl {
     isLogin: boolean | undefined,
     agentId: string,
   ): SWRResponse<LobeAgentConfig> => {
-    return useClientDataSWR<LobeAgentConfig>(
-      // Only fetch when login status is explicitly true (not null/undefined)
+    const swrKey =
       isLogin === true && agentId && !isChatGroupSessionId(agentId)
         ? ([FETCH_AGENT_CONFIG_KEY, agentId] as const)
-        : null,
-      async ([, id]: readonly [string, string]) => {
-        const data = await agentService.getAgentConfigById(id);
+        : null;
+
+    return useClientDataSWRWithSync<LobeAgentConfig>(
+      swrKey,
+      async () => {
+        const data = await agentService.getAgentConfigById(agentId);
         return data as LobeAgentConfig;
       },
       {
-        onSuccess: (data) => {
+        onData: (data) => {
+          if (!data) return;
           this.#get().internal_dispatchAgentMap(agentId, data);
-
           this.#set({ activeAgentId: data.id }, false, 'fetchAgentConfig');
+        },
+      },
+    );
+  };
+
+  useHydrateAgentConfig = (
+    isLogin: boolean | undefined,
+    agentId: string,
+  ): SWRResponse<LobeAgentConfig> => {
+    const swrKey =
+      isLogin === true && agentId && !isChatGroupSessionId(agentId)
+        ? ([FETCH_AGENT_CONFIG_KEY, agentId] as const)
+        : null;
+
+    return useClientDataSWRWithSync<LobeAgentConfig>(
+      swrKey,
+      async () => {
+        const data = await agentService.getAgentConfigById(agentId);
+        return data as LobeAgentConfig;
+      },
+      {
+        onData: (data) => {
+          if (!data) return;
+          this.#get().internal_dispatchAgentMap(agentId, data);
         },
       },
     );
@@ -359,7 +404,7 @@ export class AgentSliceActionImpl {
 
   optimisticUpdateAgentMeta = async (
     id: string,
-    meta: Partial<MetaData>,
+    meta: AgentMetaUpdate,
     signal?: AbortSignal,
   ): Promise<void> => {
     const { internal_dispatchAgentMap, updateSaveStatus } = this.#get();

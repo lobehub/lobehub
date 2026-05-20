@@ -1,9 +1,19 @@
 import { ASYNC_TASK_TIMEOUT } from '@lobechat/business-config/server';
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
-import { AsyncTaskError, AsyncTaskErrorType, AsyncTaskStatus } from '@lobechat/types';
+import {
+  buildMappedBusinessModelFields,
+  resolveBusinessModelMapping,
+} from '@lobechat/business-model-runtime';
+import {
+  AsyncTaskError,
+  AsyncTaskErrorType,
+  AsyncTaskStatus,
+  RequestTrigger,
+} from '@lobechat/types';
 import debug from 'debug';
 import { z } from 'zod';
 
+import { getProviderContentPolicyErrorMessage } from '@/business/server/getProviderContentPolicyErrorMessage';
 import { chargeAfterGenerate } from '@/business/server/video-generation/chargeAfterGenerate';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { GenerationModel } from '@/database/models/generation';
@@ -133,6 +143,8 @@ export const videoRouter = router({
       provider,
     });
 
+    const { resolvedModelId } = await resolveBusinessModelMapping(provider, model);
+
     const abortController = new AbortController();
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
@@ -203,15 +215,20 @@ export const videoRouter = router({
             await chargeAfterGenerate({
               computePriceParams: {
                 generateAudio: (batch?.config as any)?.generateAudio,
+                resolution: (batch?.config as any)?.resolution,
               },
               latency: duration,
               metadata: {
                 asyncTaskId,
                 generationBatchId,
-                modelId: model,
                 topicId: generationTopicId,
+                ...buildMappedBusinessModelFields({
+                  provider,
+                  requestedModelId: resolvedModelId === model ? undefined : model,
+                  resolvedModelId,
+                }),
               },
-              model,
+              model: resolvedModelId,
               prechargeResult,
               provider,
               usage: undefined,
@@ -252,11 +269,21 @@ export const videoRouter = router({
         inferenceId,
       });
 
+      const providerContentPolicyMessage = await getProviderContentPolicyErrorMessage({
+        error,
+        provider,
+        trigger: RequestTrigger.Video,
+        userId: ctx.userId,
+      });
+
       await ctx.asyncTaskModel.update(asyncTaskId, {
         error: new AsyncTaskError(
-          AsyncTaskErrorType.ServerError,
-          'Background polling failed: ' +
-            (error instanceof Error ? error.message : 'Unknown error'),
+          providerContentPolicyMessage
+            ? AsyncTaskErrorType.ProviderContentModeration
+            : AsyncTaskErrorType.ServerError,
+          providerContentPolicyMessage ??
+            'Background polling failed: ' +
+              (error instanceof Error ? error.message : 'Unknown error'),
         ),
         status: AsyncTaskStatus.Error,
       });
@@ -270,10 +297,14 @@ export const videoRouter = router({
             metadata: {
               asyncTaskId,
               generationBatchId,
-              modelId: model,
               topicId: generationTopicId,
+              ...buildMappedBusinessModelFields({
+                provider,
+                requestedModelId: resolvedModelId === model ? undefined : model,
+                resolvedModelId,
+              }),
             },
-            model,
+            model: resolvedModelId,
             prechargeResult,
             provider,
             userId: ctx.userId,

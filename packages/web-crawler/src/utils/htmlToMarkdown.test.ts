@@ -50,6 +50,39 @@ describe('htmlToMarkdown', () => {
     expect(result.content.length).toBeLessThan(html.length);
   }, 20000);
 
+  it('should not crash on HTML with invalid CSS selectors (LOBE-6869)', () => {
+    // Regression: happy-dom throws TypeError on pages with CSS selectors it cannot parse.
+    // htmlToMarkdown must not propagate this — it should fall back to raw HTML conversion.
+    const html = `
+      <html><head>
+        <style>:is(.foo, :has(> .bar)) { color: red }</style>
+      </head><body>
+        <script type="application/ld+json">{"@type":"Article","name":"Test"}</script>
+        <p>Valid content here</p>
+      </body></html>`;
+
+    const result = htmlToMarkdown(html, { url: 'https://example.com', filterOptions: {} });
+
+    expect(result).toBeDefined();
+    expect(result.content).toContain('Valid content');
+  });
+
+  it('should not crash on HTML with external stylesheet links (LOBE-6869)', () => {
+    // Regression: happy-dom's HTMLLinkElement.#loadStyleSheet can crash on CSS parsing.
+    // disableCSSFileLoading should prevent this path entirely.
+    const html = `
+      <html><head>
+        <link rel="stylesheet" href="https://example.com/styles.css">
+      </head><body>
+        <p>Content with external CSS</p>
+      </body></html>`;
+
+    const result = htmlToMarkdown(html, { url: 'https://example.com', filterOptions: {} });
+
+    expect(result).toBeDefined();
+    expect(result.content).toContain('Content with external CSS');
+  });
+
   it('should not truncate HTML under 1 MB', () => {
     const html = '<html><body><p>Small content</p></body></html>';
 

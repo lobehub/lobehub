@@ -68,7 +68,9 @@
         if (resolvedTheme === 'dark' || resolvedTheme === 'light') {
           document.documentElement.setAttribute('data-theme', resolvedTheme);
         }
-        var locale = navigator.language || 'en-US';
+        // Check URL query parameter for locale (set by Electron main process from stored settings)
+        var urlParams = new URLSearchParams(window.location.search);
+        var locale = urlParams.get('lng') || navigator.language || 'en-US';
         document.documentElement.lang = locale;
         var rtl = ['ar', 'arc', 'dv', 'fa', 'ha', 'he', 'khw', 'ks', 'ku', 'ps', 'ur', 'yi'];
         document.documentElement.dir =

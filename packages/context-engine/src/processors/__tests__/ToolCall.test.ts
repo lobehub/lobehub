@@ -263,6 +263,57 @@ describe('ToolCallProcessor', () => {
         role: 'assistant',
       });
     });
+
+    // LOBE-7761: protect against history poisoning from invalid tool_call arguments
+    it('should sanitize invalid tool arguments in history to "{}"', async () => {
+      const processor = new ToolCallProcessor(defaultConfig);
+      const context = createContext([
+        {
+          content: '',
+          id: 'msg1',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'executeCode',
+              // exact shape from the LOBE-7761 NVIDIA/Qwen trace
+              arguments: '{, "description": "Create data models", "language": "python"}',
+              id: 'call_1',
+              identifier: 'code',
+              type: 'builtin',
+            },
+          ],
+        },
+      ]);
+
+      const result = await processor.process(context);
+
+      expect(result.messages[0].tool_calls[0].function.arguments).toBe('{}');
+    });
+
+    it('should pass through valid tool arguments unchanged (prompt-cache stable)', async () => {
+      const processor = new ToolCallProcessor(defaultConfig);
+      const rawArgs = '{"description":"Create data models","language":"python"}';
+      const context = createContext([
+        {
+          content: '',
+          id: 'msg1',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'executeCode',
+              arguments: rawArgs,
+              id: 'call_1',
+              identifier: 'code',
+              type: 'builtin',
+            },
+          ],
+        },
+      ]);
+
+      const result = await processor.process(context);
+
+      expect(result.messages[0].tool_calls[0].function.arguments).toBe(rawArgs);
+    });
   });
 
   describe('process - tool messages', () => {

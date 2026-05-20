@@ -10,17 +10,14 @@
     "./executionRuntime": "./src/ExecutionRuntime/index.ts"
   },
   "main": "./src/index.ts",
-  "scripts": {
-    "build:gen-tool-call": "tsx scripts/generate-tool-call.ts"
-  },
+  "scripts": {},
   "dependencies": {
     "@lobechat/memory-user-memory": "workspace:*",
     "@lobechat/prompts": "workspace:*"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*",
-    "@types/json-schema": "^7.0.15",
-    "promptfoo": "^0.120.17"
+    "@types/json-schema": "^7.0.15"
   },
   "peerDependencies": {
     "@lobehub/ui": "^5",

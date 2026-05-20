@@ -2,7 +2,7 @@ import { ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 
 import type { CrawlImpl, CrawlSuccessResult } from '../type';
 import { PageNotFoundError, toFetchError } from '../utils/errorType';
-import { htmlToMarkdown } from '../utils/htmlToMarkdown';
+import { htmlToMarkdown, MAX_HTML_SIZE } from '../utils/htmlToMarkdown';
 import { createHTTPStatusError } from '../utils/response';
 import { DEFAULT_TIMEOUT, withTimeout } from '../utils/withTimeout';
 
@@ -41,10 +41,14 @@ export const naive: CrawlImpl = async (url, { filterOptions }) => {
   try {
     res = await withTimeout(
       (signal) =>
-        ssrfSafeFetch(url, {
-          headers: mixinHeaders,
-          signal,
-        }),
+        ssrfSafeFetch(
+          url,
+          {
+            headers: mixinHeaders,
+            signal,
+          },
+          { maxContentLength: MAX_HTML_SIZE },
+        ),
       DEFAULT_TIMEOUT,
     );
   } catch (e) {

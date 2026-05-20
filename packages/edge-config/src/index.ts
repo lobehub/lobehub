@@ -46,6 +46,12 @@ export class EdgeConfig {
     debug('Feature flags retrieved: %O', featureFlags);
     return featureFlags;
   };
+
+  getBillboards = async () => {
+    const billboards = await this.getValue('billboards');
+    debug('Billboards retrieved: %O', billboards);
+    return billboards;
+  };
 }
 
 export * from './types';

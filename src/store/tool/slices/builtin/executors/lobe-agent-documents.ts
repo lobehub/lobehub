@@ -7,21 +7,58 @@ import { agentDocumentService } from '@/services/agentDocument';
 const runtime = new AgentDocumentsExecutionRuntime({
   copyDocument: ({ agentId, id, newTitle }) =>
     agentDocumentService.copyDocument({ agentId, id, newTitle }),
-  createDocument: ({ agentId, content, title }) =>
-    agentDocumentService.createDocument({ agentId, content, title }),
-  editDocument: ({ agentId, content, id }) =>
-    agentDocumentService.editDocument({ agentId, content, id }),
-  listDocuments: async ({ agentId }) => {
-    const docs = await agentDocumentService.listDocuments({ agentId });
-    return docs.map((d) => ({ filename: d.filename, id: d.id, title: d.title }));
+  createDocument: ({ agentId, content, hintIsSkill, title, toolContext, trigger }) =>
+    agentDocumentService.createDocument({
+      agentId,
+      content,
+      hintIsSkill,
+      title,
+      toolContext,
+      trigger,
+    }),
+  createTopicDocument: ({ agentId, content, hintIsSkill, title, toolContext, topicId, trigger }) =>
+    agentDocumentService.createForTopic({
+      agentId,
+      content,
+      hintIsSkill,
+      title,
+      toolContext,
+      topicId,
+      trigger,
+    }),
+  listDocuments: async ({ agentId, sourceType }) => {
+    const docs = await agentDocumentService.listDocuments({ agentId, sourceType });
+    return docs.map((d) => ({
+      documentId: d.documentId,
+      filename: d.filename,
+      id: d.id,
+      title: d.title,
+    }));
   },
-  readDocument: ({ agentId, id }) => agentDocumentService.readDocument({ agentId, id }),
-  readDocumentByFilename: ({ agentId, filename }) =>
-    agentDocumentService.readDocumentByFilename({ agentId, filename }),
+  listTopicDocuments: async ({ agentId, sourceType, topicId }) => {
+    const docs = await agentDocumentService.listDocuments({
+      agentId,
+      scope: 'currentTopic',
+      sourceType,
+      topicId,
+    });
+    return docs.map((d) => ({
+      documentId: d.documentId,
+      filename: d.filename,
+      id: d.id,
+      title: d.title,
+    }));
+  },
+  modifyNodes: ({ agentId, id, operations }) =>
+    agentDocumentService.modifyNodes({ agentId, id, operations }),
+  readDocument: ({ agentId, format, id }) =>
+    agentDocumentService.readDocument({ agentId, format: format ?? 'xml', id }),
   removeDocument: async ({ agentId, id }) =>
     (await agentDocumentService.removeDocument({ agentId, id })).deleted,
   renameDocument: ({ agentId, id, newTitle }) =>
     agentDocumentService.renameDocument({ agentId, id, newTitle }),
+  replaceDocumentContent: ({ agentId, content, id }) =>
+    agentDocumentService.replaceDocumentContent({ agentId, content, id }),
   updateLoadRule: ({ agentId, id, rule }) =>
     agentDocumentService.updateLoadRule({
       agentId,
@@ -32,8 +69,6 @@ const runtime = new AgentDocumentsExecutionRuntime({
         rule: rule.rule as DocumentLoadRule | undefined,
       },
     }),
-  upsertDocumentByFilename: ({ agentId, content, filename }) =>
-    agentDocumentService.upsertDocumentByFilename({ agentId, content, filename }),
 });
 
 export const agentDocumentsExecutor = new AgentDocumentsExecutor(runtime);

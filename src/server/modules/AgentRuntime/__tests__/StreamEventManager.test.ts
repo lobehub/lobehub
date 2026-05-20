@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { StreamEventManager } from '../StreamEventManager';
+import { getDefaultReasonDetail, StreamEventManager } from '../StreamEventManager';
 
 // Mock Redis client
 const mockRedis = {
@@ -183,6 +183,92 @@ describe('StreamEventManager', () => {
         expect.any(String),
         expect.any(String),
       );
+    });
+  });
+
+  describe('getDefaultReasonDetail', () => {
+    it('should return success message for non-error reasons', () => {
+      expect(getDefaultReasonDetail({}, 'completed')).toBe('Agent runtime completed successfully');
+      expect(getDefaultReasonDetail({}, undefined)).toBe('Agent runtime completed successfully');
+    });
+
+    it('should extract from ChatMessageError format (body.error.message)', () => {
+      const state = {
+        error: {
+          body: { error: { message: 'Rate limit exceeded' } },
+          message: 'ProviderBizError',
+          type: 'ProviderBizError',
+        },
+      };
+      expect(getDefaultReasonDetail(state, 'error')).toBe('Rate limit exceeded');
+    });
+
+    it('should extract from ChatMessageError format (body.message)', () => {
+      const state = {
+        error: {
+          body: { message: 'Service unavailable' },
+          message: 'error',
+          type: 'InternalServerError',
+        },
+      };
+      expect(getDefaultReasonDetail(state, 'error')).toBe('Service unavailable');
+    });
+
+    it('should extract from ChatCompletionErrorPayload format (error.message)', () => {
+      const state = {
+        error: {
+          error: { message: 'Budget exceeded' },
+          errorType: 'InsufficientBudgetForModel',
+          provider: 'lobehub',
+        },
+      };
+      expect(getDefaultReasonDetail(state, 'error')).toBe('Budget exceeded');
+    });
+
+    it('should extract from nested ChatCompletionErrorPayload (error.error.message)', () => {
+      const state = {
+        error: {
+          error: {
+            error: { message: '无效的令牌' },
+            message: '无效的令牌',
+            status: 401,
+          },
+          errorType: 'InvalidProviderAPIKey',
+        },
+      };
+      expect(getDefaultReasonDetail(state, 'error')).toBe('无效的令牌');
+    });
+
+    it('should skip [object Object] and fallback to type', () => {
+      const state = {
+        error: {
+          message: '[object Object]',
+          type: 'ProviderBizError',
+        },
+      };
+      expect(getDefaultReasonDetail(state, 'error')).toBe('ProviderBizError');
+    });
+
+    it('should use direct message when it is a real string', () => {
+      const state = {
+        error: { message: 'Connection timeout', type: 'NetworkError' },
+      };
+      expect(getDefaultReasonDetail(state, 'error')).toBe('Connection timeout');
+    });
+
+    it('should fallback to default message when error is empty', () => {
+      expect(getDefaultReasonDetail({}, 'error')).toBe('Agent runtime failed');
+      expect(getDefaultReasonDetail({ error: {} }, 'error')).toBe('Agent runtime failed');
+      expect(getDefaultReasonDetail(null, 'error')).toBe('Agent runtime failed');
+    });
+
+    it('should handle interrupted reason', () => {
+      const state = { error: { message: 'User cancelled' } };
+      expect(getDefaultReasonDetail(state, 'interrupted')).toBe('User cancelled');
+    });
+
+    it('should fallback for interrupted without error', () => {
+      expect(getDefaultReasonDetail({}, 'interrupted')).toBe('Agent runtime interrupted');
     });
   });
 });

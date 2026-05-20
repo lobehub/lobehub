@@ -34,7 +34,7 @@ export abstract class BaseSystemRoleProvider extends BaseProcessor {
   protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
     const content = await this.buildSystemRoleContent(context);
 
-    if (!content || content.trim() === '') {
+    if (!content || typeof content !== 'string' || content.trim() === '') {
       log('[%s] No content to inject, skipping', this.name);
       return this.markAsExecuted(context);
     }

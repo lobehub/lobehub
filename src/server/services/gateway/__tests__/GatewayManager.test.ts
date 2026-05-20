@@ -51,6 +51,7 @@ const fakeDefinition: PlatformDefinition = {
   credentials: [],
   name: 'Fake Platform',
   id: 'fakeplatform',
+  schema: [],
 } as any;
 
 const FAKE_DB = {} as any;

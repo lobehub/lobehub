@@ -1,11 +1,14 @@
 import { Text } from '@lobehub/ui';
-import dayjs from 'dayjs';
 import { memo } from 'react';
 
+import { useActivityTime } from '@/hooks/useActivityTime';
+
 export const Time = memo<{ date: string | number | Date }>(({ date }) => {
+  const { text, title } = useActivityTime(date);
+  if (!text) return null;
   return (
-    <Text fontSize={12} style={{ flex: 'none' }} type={'secondary'}>
-      {dayjs(date || dayjs().date()).fromNow()}
+    <Text fontSize={12} style={{ flex: 'none' }} title={title} type={'secondary'}>
+      {text}
     </Text>
   );
 });

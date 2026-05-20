@@ -4,23 +4,12 @@
   "private": true,
   "main": "./src/index.ts",
   "scripts": {
-    "promptfoo:init": "promptfoo init",
-    "promptfoo:view": "promptfoo view",
     "test": "vitest",
     "test:coverage": "vitest --coverage --silent='passed-only'",
-    "test:prompts": "pnpm test:prompts:translate && pnpm test:prompts:summary && pnpm test:prompts:lang && pnpm test:prompts:emoji && pnpm test:prompts:qa",
-    "test:prompts:abstract-chunk": "promptfoo eval -c promptfoo/abstract-chunk/eval.yaml",
-    "test:prompts:emoji": "promptfoo eval -c promptfoo/emoji-picker/eval.yaml",
-    "test:prompts:lang": "promptfoo eval -c promptfoo/language-detection/eval.yaml",
-    "test:prompts:qa": "promptfoo eval -c promptfoo/knowledge-qa/eval.yaml",
-    "test:prompts:summary": "promptfoo eval -c promptfoo/summary-title/eval.yaml",
-    "test:prompts:supervisor": "promptfoo eval -c promptfoo/supervisor/productive/eval.yaml",
-    "test:prompts:translate": "promptfoo eval -c promptfoo/translate/eval.yaml",
     "test:update": "vitest -u"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*",
-    "promptfoo": "^0.120.17",
     "tsx": "^4.20.6"
   }
 }

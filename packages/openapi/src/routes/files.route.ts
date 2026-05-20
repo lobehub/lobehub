@@ -35,7 +35,7 @@ const app = new Hono();
 app.get(
   '/',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('FILE_READ'), '您没有权限查看文件列表'),
+  requireAnyPermission(getAllScopePermissions('FILE_READ'), 'You do not have permission to view file list'),
   zValidator('query', FileListQuerySchema),
   async (c) => {
     const fileController = new FileController();
@@ -61,7 +61,7 @@ app.get(
 app.post(
   '/',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('FILE_UPLOAD'), '您没有权限上传文件'),
+  requireAnyPermission(getAllScopePermissions('FILE_UPLOAD'), 'You do not have permission to upload files'),
   async (c) => {
     const fileController = new FileController();
     return await fileController.uploadFile(c);
@@ -78,7 +78,7 @@ app.post(
 app.get(
   '/:id',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('FILE_READ'), '您没有权限获取文件详情'),
+  requireAnyPermission(getAllScopePermissions('FILE_READ'), 'You do not have permission to get file details'),
   zValidator('param', FileIdParamSchema),
   async (c) => {
     const fileController = new FileController();
@@ -99,7 +99,7 @@ app.get(
 app.get(
   '/:id/url',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('FILE_READ'), '您没有权限获取文件访问URL'),
+  requireAnyPermission(getAllScopePermissions('FILE_READ'), 'You do not have permission to get file access URL'),
   zValidator('param', FileIdParamSchema),
   zValidator('query', FileUrlRequestSchema),
   async (c) => {
@@ -123,7 +123,7 @@ app.get(
 app.patch(
   '/:id',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('FILE_UPDATE'), '您没有权限更新文件'),
+  requireAnyPermission(getAllScopePermissions('FILE_UPDATE'), 'You do not have permission to update a file'),
   zValidator('param', FileIdParamSchema),
   zValidator('json', UpdateFileSchema),
   async (c) => {
@@ -142,7 +142,7 @@ app.patch(
 app.delete(
   '/:id',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('FILE_DELETE'), '您没有权限删除文件'),
+  requireAnyPermission(getAllScopePermissions('FILE_DELETE'), 'You do not have permission to delete a file'),
   zValidator('param', FileIdParamSchema),
   async (c) => {
     const fileController = new FileController();
@@ -168,7 +168,7 @@ app.delete(
 app.post(
   '/:id/parses',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('FILE_UPDATE'), '您没有权限解析文件内容'),
+  requireAnyPermission(getAllScopePermissions('FILE_UPDATE'), 'You do not have permission to parse file content'),
   zValidator('param', FileIdParamSchema),
   zValidator('query', FileParseRequestSchema),
   async (c) => {
@@ -191,7 +191,7 @@ app.post(
 app.post(
   '/:id/chunks',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('FILE_UPDATE'), '您没有权限创建分块任务'),
+  requireAnyPermission(getAllScopePermissions('FILE_UPDATE'), 'You do not have permission to create chunking tasks'),
   zValidator('param', FileIdParamSchema),
   zValidator('json', FileChunkRequestSchema),
   async (c) => {
@@ -215,7 +215,7 @@ app.post(
 app.get(
   '/:id/chunks',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('FILE_READ'), '您没有权限查看文件分块状态'),
+  requireAnyPermission(getAllScopePermissions('FILE_READ'), 'You do not have permission to view file chunking status'),
   zValidator('param', FileIdParamSchema),
   async (c) => {
     const fileController = new FileController();
@@ -240,7 +240,7 @@ app.get(
 app.post(
   '/batches',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('FILE_UPLOAD'), '您没有权限批量上传文件'),
+  requireAnyPermission(getAllScopePermissions('FILE_UPLOAD'), 'You do not have permission to batch upload files'),
   async (c) => {
     const fileController = new FileController();
     return await fileController.batchUploadFiles(c);
@@ -264,7 +264,7 @@ app.post(
 app.post(
   '/queries',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('FILE_READ'), '您没有权限批量获取文件详情'),
+  requireAnyPermission(getAllScopePermissions('FILE_READ'), 'You do not have permission to batch get file details'),
   zValidator('json', BatchGetFilesRequestSchema),
   async (c) => {
     const fileController = new FileController();

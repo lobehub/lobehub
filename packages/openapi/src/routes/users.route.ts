@@ -34,7 +34,7 @@ UserRoutes.get('/me', requireAuth, async (c) => {
 UserRoutes.get(
   '/',
   requireAuth,
-  requireAnyPermission(getScopePermissions('USER_READ', ['ALL']), '您没有权限查看用户列表'),
+  requireAnyPermission(getScopePermissions('USER_READ', ['ALL']), 'You do not have permission to view user list'),
   zValidator('query', UserSearchRequestSchema),
   async (c) => {
     const userController = new UserController();
@@ -50,7 +50,7 @@ UserRoutes.get(
 UserRoutes.post(
   '/',
   requireAuth,
-  requireAnyPermission(getScopePermissions('USER_CREATE', ['ALL']), '您没有权限创建用户'),
+  requireAnyPermission(getScopePermissions('USER_CREATE', ['ALL']), 'You do not have permission to create a user'),
   zValidator('json', CreateUserRequestSchema),
   async (c) => {
     const userController = new UserController();
@@ -66,7 +66,7 @@ UserRoutes.post(
 UserRoutes.get(
   '/:id',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('USER_READ'), '您没有权限查看用户详情'),
+  requireAnyPermission(getAllScopePermissions('USER_READ'), 'You do not have permission to view user details'),
   zValidator('param', UserIdParamSchema),
   async (c) => {
     const userController = new UserController();
@@ -82,7 +82,7 @@ UserRoutes.get(
 UserRoutes.patch(
   '/:id',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('USER_UPDATE'), '您没有权限更新用户信息'),
+  requireAnyPermission(getAllScopePermissions('USER_UPDATE'), 'You do not have permission to update user information'),
   zValidator('param', UserIdParamSchema),
   zValidator('json', UpdateUserRequestSchema),
   async (c) => {
@@ -99,7 +99,7 @@ UserRoutes.patch(
 UserRoutes.delete(
   '/:id',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('USER_DELETE'), '您没有权限删除用户'),
+  requireAnyPermission(getAllScopePermissions('USER_DELETE'), 'You do not have permission to delete a user'),
   zValidator('param', UserIdParamSchema),
   async (c) => {
     const userController = new UserController();
@@ -115,7 +115,7 @@ UserRoutes.delete(
 UserRoutes.get(
   '/:id/roles',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('RBAC_USER_ROLE_READ'), '您没有权限查看用户角色'),
+  requireAnyPermission(getAllScopePermissions('RBAC_USER_ROLE_READ'), 'You do not have permission to view user roles'),
   zValidator('param', UserIdParamSchema),
   async (c) => {
     const userController = new UserController();
@@ -131,7 +131,7 @@ UserRoutes.get(
 UserRoutes.patch(
   '/:id/roles',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('RBAC_USER_ROLE_UPDATE'), '您没有权限分配用户角色'),
+  requireAnyPermission(getAllScopePermissions('RBAC_USER_ROLE_UPDATE'), 'You do not have permission to assign user roles'),
   zValidator('param', UserIdParamSchema),
   zValidator('json', UpdateUserRolesRequestSchema),
   async (c) => {
@@ -150,7 +150,7 @@ UserRoutes.delete(
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('RBAC_USER_ROLE_UPDATE'),
-    '您没有权限清空该用户的角色',
+    'You do not have permission to clear user roles',
   ),
   zValidator('param', UserIdParamSchema),
   async (c) => {

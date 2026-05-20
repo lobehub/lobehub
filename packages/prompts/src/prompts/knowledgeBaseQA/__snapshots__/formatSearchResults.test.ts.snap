@@ -1,26 +1,90 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`formatSearchResults > should annotate empty result with both errors 1`] = `
+"<knowledge_base_search_results query="test query" totalCount="0">
+<instruction>No relevant content found in the knowledge base for this query.
+Note: vector search unavailable (Invalid API key for embedding provider); only document results returned.
+Note: full-text document search unavailable (paradedb extension unavailable); only file chunk results returned.</instruction>
+</knowledge_base_search_results>"
+`;
+
+exports[`formatSearchResults > should annotate when BM25 fails but vector succeeds 1`] = `
+"<knowledge_base_search_results query="test query" totalCount="1">
+<instruction>Search results from the knowledge base. Source type: <files> (vector search, chunk-level). Use the readKnowledge tool with the returned IDs (file_* or docs_*) to fetch complete content.
+Note: full-text document search unavailable (paradedb extension unavailable); only file chunk results returned.</instruction>
+<files totalCount="1">
+<file id="file_only" name="Sole Result.pdf" relevanceScore="0.8">
+<chunk fileId="file_only" fileName="Sole Result.pdf" similarity="0.82">partial info</chunk>
+</file>
+</files>
+</knowledge_base_search_results>"
+`;
+
+exports[`formatSearchResults > should annotate when vector search fails but BM25 succeeds 1`] = `
+"<knowledge_base_search_results query="test query" totalCount="1">
+<instruction>Search results from the knowledge base. Source type: <documents> (full-text search, document-level). Use the readKnowledge tool with the returned IDs (file_* or docs_*) to fetch complete content.
+Note: vector search unavailable (Invalid API key for embedding provider); only document results returned.</instruction>
+<documents totalCount="1">
+<document id="docs_only" title="Fallback Note" relevance="1.1" knowledgeBaseId="kb_main">
+<snippet>fallback content via BM25</snippet>
+</document>
+</documents>
+</knowledge_base_search_results>"
+`;
+
+exports[`formatSearchResults > should format documents only (BM25 hits, no file chunks) 1`] = `
+"<knowledge_base_search_results query="machine learning" totalCount="1">
+<instruction>Search results from the knowledge base. Source type: <documents> (full-text search, document-level). Use the readKnowledge tool with the returned IDs (file_* or docs_*) to fetch complete content.</instruction>
+<documents totalCount="1">
+<document id="docs_abc123" title="ML Notes" relevance="1.2" knowledgeBaseId="kb_main">
+<snippet>machine learning is a subset of artificial intelligence...</snippet>
+</document>
+</documents>
+</knowledge_base_search_results>"
+`;
+
 exports[`formatSearchResults > should format file with special characters in name 1`] = `
 "<knowledge_base_search_results query="password reset" totalCount="1">
-<instruction>Here are the search results from the knowledge base. Use the readKnowledge tool with file IDs to get complete content.</instruction>
+<instruction>Search results from the knowledge base. Source type: <files> (vector search, chunk-level). Use the readKnowledge tool with the returned IDs (file_* or docs_*) to fetch complete content.</instruction>
+<files totalCount="1">
 <file id="special-123" name="FAQ: Common Questions & Answers (2024).md" relevanceScore="0.88">
 <chunk fileId="special-123" fileName="FAQ: Common Questions & Answers (2024).md" similarity="0.9">Q: How do I reset my password? A: Click on the "Forgot Password" link on the login page.</chunk>
 </file>
+</files>
 </knowledge_base_search_results>"
 `;
 
 exports[`formatSearchResults > should format long text chunks without truncation 1`] = `
 "<knowledge_base_search_results query="documentation details" totalCount="1">
-<instruction>Here are the search results from the knowledge base. Use the readKnowledge tool with file IDs to get complete content.</instruction>
+<instruction>Search results from the knowledge base. Source type: <files> (vector search, chunk-level). Use the readKnowledge tool with the returned IDs (file_* or docs_*) to fetch complete content.</instruction>
+<files totalCount="1">
 <file id="long-doc" name="Detailed Documentation.md" relevanceScore="0.91">
 <chunk fileId="long-doc" fileName="Detailed Documentation.md" similarity="0.93">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</chunk>
 </file>
+</files>
+</knowledge_base_search_results>"
+`;
+
+exports[`formatSearchResults > should format mixed file chunks and documents 1`] = `
+"<knowledge_base_search_results query="neural networks" totalCount="2">
+<instruction>Search results from the knowledge base. Two source types: <files> (vector search, chunk-level) and <documents> (full-text search, document-level). Use the readKnowledge tool with the returned IDs (file_* or docs_*) to fetch complete content.</instruction>
+<files totalCount="1">
+<file id="file_pdf1" name="AI Handbook.pdf" relevanceScore="0.91">
+<chunk fileId="file_pdf1" fileName="AI Handbook.pdf" similarity="0.94">Neural networks are computational models...</chunk>
+</file>
+</files>
+<documents totalCount="1">
+<document id="docs_inline1" title="Deep Learning Cheatsheet" relevance="1.5" knowledgeBaseId="kb_research">
+<snippet>Deep learning architectures include CNNs, RNNs, and Transformers.</snippet>
+</document>
+</documents>
 </knowledge_base_search_results>"
 `;
 
 exports[`formatSearchResults > should format multiple files with varying relevance scores 1`] = `
 "<knowledge_base_search_results query="API authentication security" totalCount="3">
-<instruction>Here are the search results from the knowledge base. Use the readKnowledge tool with file IDs to get complete content.</instruction>
+<instruction>Search results from the knowledge base. Source type: <files> (vector search, chunk-level). Use the readKnowledge tool with the returned IDs (file_* or docs_*) to fetch complete content.</instruction>
+<files totalCount="3">
 <file id="doc-001" name="API Reference.md" relevanceScore="0.95">
 <chunk fileId="doc-001" fileName="API Reference.md" similarity="0.98">The Authentication API provides endpoints for user login, logout, and token refresh. All endpoints require HTTPS and proper API keys.</chunk>
 <chunk fileId="doc-001" fileName="API Reference.md" similarity="0.92">To authenticate a user, send a POST request to /api/auth/login with username and password in the request body.</chunk>
@@ -32,51 +96,60 @@ exports[`formatSearchResults > should format multiple files with varying relevan
 <file id="doc-003" name="Troubleshooting Guide.md" relevanceScore="0.73">
 <chunk fileId="doc-003" fileName="Troubleshooting Guide.md" similarity="0.75">If you encounter authentication errors, first verify that your API key is valid and has not expired.</chunk>
 </file>
+</files>
 </knowledge_base_search_results>"
 `;
 
 exports[`formatSearchResults > should format query with special characters 1`] = `
 "<knowledge_base_search_results query="How to use fetchData<T> with async/await?" totalCount="1">
-<instruction>Here are the search results from the knowledge base. Use the readKnowledge tool with file IDs to get complete content.</instruction>
+<instruction>Search results from the knowledge base. Source type: <files> (vector search, chunk-level). Use the readKnowledge tool with the returned IDs (file_* or docs_*) to fetch complete content.</instruction>
+<files totalCount="1">
 <file id="code-sample" name="Code Examples.md" relevanceScore="0.94">
 <chunk fileId="code-sample" fileName="Code Examples.md" similarity="0.96">Use the following TypeScript code: const result = await fetchData<T>({ url, params });</chunk>
 </file>
+</files>
 </knowledge_base_search_results>"
 `;
 
 exports[`formatSearchResults > should format single file with multiple chunks 1`] = `
 "<knowledge_base_search_results query="how to install the application" totalCount="1">
-<instruction>Here are the search results from the knowledge base. Use the readKnowledge tool with file IDs to get complete content.</instruction>
+<instruction>Search results from the knowledge base. Source type: <files> (vector search, chunk-level). Use the readKnowledge tool with the returned IDs (file_* or docs_*) to fetch complete content.</instruction>
+<files totalCount="1">
 <file id="file-123" name="Getting Started Guide.md" relevanceScore="0.92">
 <chunk fileId="file-123" fileName="Getting Started Guide.md" similarity="0.95">To get started with the application, first install all dependencies using npm install or yarn install. Make sure you have Node.js version 16 or higher installed on your system.</chunk>
 <chunk fileId="file-123" fileName="Getting Started Guide.md" similarity="0.88">After installation, you can run the development server with npm run dev. The application will be available at http://localhost:3000 by default.</chunk>
 </file>
+</files>
 </knowledge_base_search_results>"
 `;
 
 exports[`formatSearchResults > should handle empty file results 1`] = `
 "<knowledge_base_search_results query="no results query" totalCount="0">
-<instruction>No relevant files found in the knowledge base for this query.</instruction>
+<instruction>No relevant content found in the knowledge base for this query.</instruction>
 </knowledge_base_search_results>"
 `;
 
 exports[`formatSearchResults > should handle file with multiple high-similarity chunks 1`] = `
 "<knowledge_base_search_results query="project setup steps" totalCount="1">
-<instruction>Here are the search results from the knowledge base. Use the readKnowledge tool with file IDs to get complete content.</instruction>
+<instruction>Search results from the knowledge base. Source type: <files> (vector search, chunk-level). Use the readKnowledge tool with the returned IDs (file_* or docs_*) to fetch complete content.</instruction>
+<files totalCount="1">
 <file id="comprehensive-guide" name="Complete Tutorial.md" relevanceScore="0.96">
 <chunk fileId="comprehensive-guide" fileName="Complete Tutorial.md" similarity="0.98">Step 1: Initialize the project with the configuration file.</chunk>
 <chunk fileId="comprehensive-guide" fileName="Complete Tutorial.md" similarity="0.97">Step 2: Configure the environment variables for your deployment.</chunk>
 <chunk fileId="comprehensive-guide" fileName="Complete Tutorial.md" similarity="0.96">Step 3: Run the migration scripts to set up the database schema.</chunk>
 <chunk fileId="comprehensive-guide" fileName="Complete Tutorial.md" similarity="0.95">Step 4: Start the development server and verify everything is working.</chunk>
 </file>
+</files>
 </knowledge_base_search_results>"
 `;
 
 exports[`formatSearchResults > should handle files with low relevance scores 1`] = `
 "<knowledge_base_search_results query="specific technical query" totalCount="1">
-<instruction>Here are the search results from the knowledge base. Use the readKnowledge tool with file IDs to get complete content.</instruction>
+<instruction>Search results from the knowledge base. Source type: <files> (vector search, chunk-level). Use the readKnowledge tool with the returned IDs (file_* or docs_*) to fetch complete content.</instruction>
+<files totalCount="1">
 <file id="low-relevance" name="Tangentially Related.md" relevanceScore="0.32">
 <chunk fileId="low-relevance" fileName="Tangentially Related.md" similarity="0.35">This document contains some loosely related information that might be helpful.</chunk>
 </file>
+</files>
 </knowledge_base_search_results>"
 `;

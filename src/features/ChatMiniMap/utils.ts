@@ -1,14 +1,15 @@
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
-const MIN_WIDTH = 12;
-const MAX_WIDTH = 24;
-const MAX_CONTENT_LENGTH = 320;
+const MIN_WIDTH = 5;
+const MAX_WIDTH = 16;
+const MAX_LENGTH = 80;
 
 export const getIndicatorWidth = (content: string | undefined): number => {
-  if (!content) return MIN_WIDTH;
+  const length = content?.length ?? 0;
 
-  const ratio = Math.min(content.length / MAX_CONTENT_LENGTH, 1);
-
+  // Smooth sqrt curve so very short messages render small and length grows
+  // naturally up to MAX_LENGTH — no piecewise jump.
+  const ratio = Math.min(Math.sqrt(length / MAX_LENGTH), 1);
   return MIN_WIDTH + (MAX_WIDTH - MIN_WIDTH) * ratio;
 };
 

@@ -38,7 +38,7 @@ vi.mock('@/store/chat', () => ({
       replaceMessages: vi.fn(),
       internal_dispatchMessage: vi.fn(),
       internal_dispatchTopic: vi.fn(),
-      internal_execAgentRuntime: vi.fn(),
+      executeClientAgent: vi.fn(),
       sendMessage: vi.fn(),
       switchTopic: vi.fn(),
       summaryTopicTitle: vi.fn(),
@@ -59,10 +59,7 @@ vi.mock('@/store/agent', () => ({
 
 vi.mock('@/store/agent/selectors', () => ({
   agentChatConfigSelectors: {
-    currentChatConfig: vi.fn(() => ({
-      enableAutoCreateTopic: false,
-      autoCreateTopicThreshold: 5,
-    })),
+    currentChatConfig: vi.fn(() => ({})),
   },
   agentSelectors: {
     currentAgentConfig: vi.fn(() => ({ model: 'gpt-4', provider: 'openai' })),

@@ -1,7 +1,12 @@
+import type { ToolExecuteData } from '@lobechat/agent-gateway-client';
 import debug from 'debug';
 import urlJoin from 'url-join';
 
-import type { StreamChunkData, StreamEvent } from './StreamEventManager';
+import {
+  getDefaultReasonDetail,
+  type StreamChunkData,
+  type StreamEvent,
+} from './StreamEventManager';
 import type { IStreamEventManager } from './types';
 
 const log = debug('lobe-server:agent-runtime:gateway-notifier');
@@ -88,23 +93,29 @@ export class GatewayStreamNotifier implements IStreamEventManager {
       reasonDetail,
     );
 
+    const effectiveReasonDetail = reasonDetail || getDefaultReasonDetail(finalState, reason);
+    const errorType = finalState?.error?.type || finalState?.error?.errorType;
+
     this.pushEvent(operationId, {
-      data: { finalState, reason, reasonDetail },
+      data: { errorType, finalState, reason, reasonDetail: effectiveReasonDetail },
       operationId,
       stepIndex,
       timestamp: Date.now(),
       type: 'agent_runtime_end',
     });
 
-    const status =
-      reason === 'error' ? 'error' : reason === 'interrupted' ? 'interrupted' : 'completed';
-    this.httpPost('/api/operations/update-status', {
-      operationId,
-      status,
-      summary: reasonDetail,
-    });
-
     return result;
+  }
+
+  /**
+   * Request the client to execute a tool via Agent Gateway → WebSocket.
+   * Unlike the other push methods this is NOT fire-and-forget: callers rely
+   * on the promise outcome to decide whether to block-await a result or
+   * fall back to the interrupt-resume path. Rejects on HTTP error / timeout.
+   */
+  async sendToolExecute(operationId: string, data: ToolExecuteData): Promise<void> {
+    log('sendToolExecute operation=%s toolCallId=%s', operationId, data.toolCallId);
+    await this.httpPostAwait('/api/operations/tool-execute', { data, operationId });
   }
 
   // ─── Read / subscribe methods: delegate directly to inner ───
@@ -138,6 +149,35 @@ export class GatewayStreamNotifier implements IStreamEventManager {
 
   private pushEvent(operationId: string, event: Record<string, unknown>) {
     this.httpPost('/api/operations/push-event', { event, operationId }).catch(() => {});
+  }
+
+  /**
+   * POST that surfaces errors back to the caller (no swallow). Used for
+   * request-response style pushes like tool_execute where the caller needs
+   * to know whether the gateway accepted the request.
+   */
+  private async httpPostAwait(path: string, body: Record<string, unknown>): Promise<void> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), POST_TIMEOUT);
+
+    try {
+      const res = await fetch(urlJoin(this.gatewayUrl, path), {
+        body: JSON.stringify(body),
+        headers: {
+          'Authorization': `Bearer ${this.serviceToken}`,
+          'Content-Type': 'application/json',
+        },
+        method: 'POST',
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        throw new Error(`Gateway ${path} returned ${res.status}: ${text}`);
+      }
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   private async httpPost(path: string, body: Record<string, unknown>): Promise<void> {

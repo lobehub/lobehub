@@ -11,7 +11,10 @@ describe('meta-schema', () => {
         width: { default: 1024, min: 512, max: 2048, step: 64 },
         height: { default: 1024, min: 512, max: 2048, step: 64 },
         steps: { default: 20, min: 1, max: 50 },
+        promptExtend: { default: false },
+        watermark: { default: false },
         seed: { default: null, min: 0 },
+        webSearch: { default: true },
         cfg: { default: 7.5, min: 1, max: 20, step: 0.5 },
         aspectRatio: { default: '1:1', enum: ['1:1', '16:9', '4:3'] },
         size: { default: '1024x1024', enum: ['512x512', '1024x1024', '1536x1536'] },
@@ -34,15 +37,21 @@ describe('meta-schema', () => {
       const schema: ModelParamsSchema = {
         prompt: {},
         width: { default: 1024, min: 512, max: 2048 },
+        promptExtend: { default: 'standard', enum: ['standard', 'fast'] },
+        watermark: {},
         seed: {},
+        webSearch: {},
       };
 
       const result = ModelParamsMetaSchema.parse(schema);
 
       expect(result.prompt.default).toBe('');
       expect(result.width?.step).toBe(1);
+      expect(result.promptExtend?.default).toBe('standard');
+      expect(result.watermark?.default).toBe(false);
       expect(result.seed?.default).toBeNull();
       expect(result.seed?.min).toBe(0);
+      expect(result.webSearch?.default).toBe(true);
     });
 
     it('should reject invalid parameter schemas', () => {
@@ -148,6 +157,9 @@ describe('meta-schema', () => {
         prompt: { default: 'test' },
         width: { default: 1024, min: 512, max: 2048 },
         seed: { default: 12345 },
+        promptExtend: { default: 'fast', enum: ['standard', 'fast'] },
+        watermark: { default: true },
+        webSearch: { default: false },
         cfg: { default: 7.5, min: 1, max: 20, step: 0.5 },
         aspectRatio: { default: '16:9', enum: ['1:1', '16:9', '4:3'] },
         imageUrls: { default: ['test.jpg'] },
@@ -159,6 +171,9 @@ describe('meta-schema', () => {
       expect(typeof result.prompt).toBe('string');
       expect(typeof result.width).toBe('number');
       expect(typeof result.seed).toBe('number');
+      expect(typeof result.promptExtend).toBe('string');
+      expect(typeof result.watermark).toBe('boolean');
+      expect(typeof result.webSearch).toBe('boolean');
       expect(typeof result.cfg).toBe('number');
       expect(typeof result.aspectRatio).toBe('string');
       expect(Array.isArray(result.imageUrls)).toBe(true);

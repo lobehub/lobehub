@@ -142,6 +142,30 @@ describe('AgentSlice Actions', () => {
       });
     });
 
+    it('should deep merge nested chatConfig fields into existing agent entry', () => {
+      const { result } = renderHook(() => useAgentStore());
+
+      act(() => {
+        result.current.internal_dispatchAgentMap('agent-1', {
+          chatConfig: { enableHistoryCount: true, historyCount: 10 },
+        });
+      });
+
+      act(() => {
+        result.current.internal_dispatchAgentMap('agent-1', {
+          chatConfig: { enableReasoning: true },
+        });
+      });
+
+      expect(result.current.agentMap['agent-1']).toEqual({
+        chatConfig: {
+          enableHistoryCount: true,
+          enableReasoning: true,
+          historyCount: 10,
+        },
+      });
+    });
+
     it('should not update state if result is equal', () => {
       const { result } = renderHook(() => useAgentStore());
 
@@ -263,6 +287,29 @@ describe('AgentSlice Actions', () => {
       expect(agentService.updateAgentMeta).toHaveBeenCalledWith(
         'agent-1',
         { title: 'New Title' },
+        expect.any(AbortSignal),
+      );
+    });
+
+    it('should preserve explicit null when clearing avatar', async () => {
+      const { result } = renderHook(() => useAgentStore());
+
+      vi.mocked(agentService.updateAgentMeta).mockResolvedValue({
+        agent: { avatar: null } as any,
+        success: true,
+      });
+
+      act(() => {
+        useAgentStore.setState({ activeAgentId: 'agent-1' });
+      });
+
+      await act(async () => {
+        await result.current.updateAgentMeta({ avatar: null });
+      });
+
+      expect(agentService.updateAgentMeta).toHaveBeenCalledWith(
+        'agent-1',
+        { avatar: null },
         expect.any(AbortSignal),
       );
     });
@@ -414,6 +461,29 @@ describe('AgentSlice Actions', () => {
 
       expect(agentService.getAgentConfigById).toHaveBeenCalledWith('agent-1');
       expect(useAgentStore.getState().activeAgentId).toBe('agent-1');
+      expect(useAgentStore.getState().agentMap['agent-1']).toBeDefined();
+    });
+  });
+
+  describe('useHydrateAgentConfig', () => {
+    it('should hydrate agent config without changing activeAgentId', async () => {
+      const mockAgentConfig = {
+        id: 'agent-1',
+        model: 'gpt-4',
+        systemRole: 'You are a helpful assistant',
+      } as LobeAgentConfig;
+
+      useAgentStore.setState({ activeAgentId: 'agent-current' });
+      vi.mocked(agentService.getAgentConfigById).mockResolvedValueOnce(mockAgentConfig as any);
+
+      const { result } = renderHook(() => useAgentStore().useHydrateAgentConfig(true, 'agent-1'), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() => expect(result.current.data).toEqual(mockAgentConfig));
+
+      expect(agentService.getAgentConfigById).toHaveBeenCalledWith('agent-1');
+      expect(useAgentStore.getState().activeAgentId).toBe('agent-current');
       expect(useAgentStore.getState().agentMap['agent-1']).toBeDefined();
     });
   });

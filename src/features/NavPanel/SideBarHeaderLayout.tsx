@@ -1,16 +1,16 @@
 'use client';
 
 import { Flexbox, Icon, Text } from '@lobehub/ui';
-import { type BreadcrumbProps } from 'antd';
+import type { BreadcrumbProps } from 'antd';
 import { Breadcrumb } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { ChevronRightIcon, HomeIcon } from 'lucide-react';
-import { type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { memo } from 'react';
 import { flushSync } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 
-import { isDesktop } from '@/const/version';
+import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { isModifierClick } from '@/utils/navigation';
 
 import BackButton from './components/BackButton';
@@ -40,7 +40,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   container: css`
     overflow: hidden;
-    margin-block-start: ${isDesktop ? '' : '8px'};
   `,
 }));
 
@@ -73,15 +72,7 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
           overflow: 'hidden',
         }}
       >
-        {showBack && (
-          <BackButton
-            to={backTo}
-            size={{
-              blockSize: 32,
-              size: 16,
-            }}
-          />
-        )}
+        {showBack && <BackButton size={DESKTOP_HEADER_ICON_SMALL_SIZE} to={backTo} />}
         {left && typeof left === 'string' ? (
           <Text ellipsis fontSize={16} weight={500}>
             {left}
@@ -125,7 +116,7 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
         className={styles.container}
         flex={'none'}
         justify={'space-between'}
-        padding={6}
+        padding={'8px 6px'}
       >
         {leftContent}
         <Flexbox horizontal align={'center'} gap={2} justify={'flex-end'}>

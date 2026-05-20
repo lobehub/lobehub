@@ -23,3 +23,11 @@ export { resolveModelExtendParams } from './modelParamsResolver';
 // Memory management
 export type { TopicMemoryResolverContext } from './memoryManager';
 export { combineUserMemoryData, resolveTopicMemories, resolveUserPersona } from './memoryManager';
+
+// Tool set composition
+export type {
+  ComposedToolSet,
+  ToolSetComposerContext,
+  ToolSetComposerInput,
+} from './toolSetComposer';
+export { composeEnabledTools } from './toolSetComposer';

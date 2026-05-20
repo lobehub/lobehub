@@ -1,0 +1,69 @@
+'use client';
+
+import {
+  createGlobLocalFilesInspector,
+  createGrepContentInspector,
+  createRunCommandInspector,
+} from '@lobechat/shared-tool-ui/inspectors';
+
+import { ClaudeCodeApiName } from '../../types';
+import { AgentInspector } from './Agent';
+import { AskUserQuestionInspector } from './AskUserQuestion';
+import { EditInspector } from './Edit';
+import { LinearMcpInspectors } from './LinearMcp';
+import { MonitorInspector } from './Monitor';
+import { ReadInspector } from './Read';
+import { ScheduleWakeupInspector } from './ScheduleWakeup';
+import { SkillInspector } from './Skill';
+import { TaskInspector } from './Task';
+import { TaskGetInspector } from './TaskGet';
+import { TaskOutputInspector } from './TaskOutput';
+import { TaskStopInspector } from './TaskStop';
+import { TodoWriteInspector } from './TodoWrite';
+import { ToolSearchInspector } from './ToolSearch';
+import { WebFetchInspector } from './WebFetch';
+import { WebSearchInspector } from './WebSearch';
+import { WriteInspector } from './Write';
+
+// CC's own tool names (Bash / Edit / Glob / Grep / Read / Write) are already
+// the intended human-facing label, so we feed them to the shared factories as
+// the "translation key" and let react-i18next's missing-key fallback echo it
+// back verbatim. Keeps this package out of the plugin locale file.
+//
+// Bash / Glob / Grep can use the shared factories directly — Glob / Grep only
+// need `pattern`. Edit / Read / Write need arg mapping (or synthesized plugin
+// state for diff stats), so they live in their own sibling files.
+export const ClaudeCodeInspectors = {
+  [ClaudeCodeApiName.Agent]: AgentInspector,
+  [ClaudeCodeApiName.AskUserQuestion]: AskUserQuestionInspector,
+  [ClaudeCodeApiName.Bash]: createRunCommandInspector(ClaudeCodeApiName.Bash),
+  [ClaudeCodeApiName.Edit]: EditInspector,
+  [ClaudeCodeApiName.Glob]: createGlobLocalFilesInspector(ClaudeCodeApiName.Glob),
+  [ClaudeCodeApiName.Grep]: createGrepContentInspector({
+    noResultsKey: 'No results',
+    translationKey: ClaudeCodeApiName.Grep,
+  }),
+  // Monitor is a long-running tracked tool — its turns drive a SignalCallbacks
+  // accordion below the AssistantGroup (LOBE-8998). The dedicated inspector
+  // uses the lucide `Monitor` (screen) icon to match the tool name.
+  [ClaudeCodeApiName.Monitor]: MonitorInspector,
+  [ClaudeCodeApiName.Read]: ReadInspector,
+  [ClaudeCodeApiName.ScheduleWakeup]: ScheduleWakeupInspector,
+  [ClaudeCodeApiName.Skill]: SkillInspector,
+  // CC 2.1.143+ task tools — TaskCreate / TaskUpdate / TaskList share the
+  // same inspector because they're driven by the adapter-synthesized
+  // `pluginState.todos` snapshot (the per-call args are deltas, not state).
+  // TaskGet is read-only with no pluginState, so it gets its own minimal chip.
+  [ClaudeCodeApiName.TaskCreate]: TaskInspector,
+  [ClaudeCodeApiName.TaskGet]: TaskGetInspector,
+  [ClaudeCodeApiName.TaskList]: TaskInspector,
+  [ClaudeCodeApiName.TaskOutput]: TaskOutputInspector,
+  [ClaudeCodeApiName.TaskStop]: TaskStopInspector,
+  [ClaudeCodeApiName.TaskUpdate]: TaskInspector,
+  [ClaudeCodeApiName.TodoWrite]: TodoWriteInspector,
+  [ClaudeCodeApiName.ToolSearch]: ToolSearchInspector,
+  [ClaudeCodeApiName.WebFetch]: WebFetchInspector,
+  [ClaudeCodeApiName.WebSearch]: WebSearchInspector,
+  [ClaudeCodeApiName.Write]: WriteInspector,
+  ...LinearMcpInspectors,
+};

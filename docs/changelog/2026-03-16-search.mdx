@@ -12,16 +12,18 @@ tags:
 
 # Search Optimization & Agent Documents 🔍
 
-In March, LobeHub significantly enhanced its search infrastructure and introduced agent document capabilities, laying the groundwork for smarter knowledge retrieval.
+This release focuses on one practical goal: making knowledge easier to find and manage. Search now returns results with better speed and relevance, and agent-level documents sit on a clearer storage foundation.
 
-## 🌟 Key Updates
+## Search and storage foundation
 
-- 🔍 BM25 search indexes: Added BM25 indexes with ICU tokenizer for optimized full-text search
-- 📄 Agent documents: Introduced the `agent_documents` table for agent-level knowledge storage
-- 🗄️ pg\_search extension: Enabled the `pg_search` PostgreSQL extension for advanced search capabilities
-- 📝 Topic descriptions: Added description column to the topics table for better topic organization
-- 🔑 API key security: Added API key hash column for enhanced security
+At the search layer, we added BM25 indexing with the ICU tokenizer and enabled PostgreSQL `pg_search`. Together, these upgrades give full-text retrieval a stronger base for both recall and ranking quality.
 
-## 💫 Experience Improvements
+For agent knowledge organization, this release introduces the new `agent_documents` table and adds a description field to topic metadata. This makes content structure and retrieval context more explicit.
 
-Fixed changelog auto-generation in release workflow, corrected stable renderer tar source path, and resolved market M2M token registration for trust client scenarios.
+On security hardening, we added API key hash storage to improve key handling safety.
+
+## Improvements and fixes
+
+- Fixed changelog auto-generation in the release workflow.
+- Corrected stable renderer tar source path.
+- Resolved market M2M token registration for trust-client scenarios.

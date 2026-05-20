@@ -1,4 +1,5 @@
 import type { ModelUsage, TracePayload } from '@lobechat/types';
+import { createTimingHelpers, getDurationMs } from '@lobechat/utils';
 import type { ClientOptions } from 'openai';
 
 import type { LobeBedrockAIParams } from '../providers/bedrock';
@@ -19,10 +20,25 @@ import type {
   TextToSpeechPayload,
 } from '../types';
 import { AgentRuntimeErrorType } from '../types/error';
-import type { AuthenticatedImageRuntime, CreateImagePayload } from '../types/image';
-import type { CreateVideoPayload, HandleCreateVideoWebhookPayload } from '../types/video';
+import type {
+  AuthenticatedImageRuntime,
+  CreateImageMethodOptions,
+  CreateImagePayload,
+} from '../types/image';
+import type {
+  CreateVideoMethodOptions,
+  CreateVideoPayload,
+  HandleCreateVideoWebhookPayload,
+} from '../types/video';
 import { AgentRuntimeError } from '../utils/createError';
 import type { LobeRuntimeAI } from './BaseAI';
+
+const { logger: timing } = createTimingHelpers('lobe-server:chat:lobehub:timing');
+
+const getLobeHubTimingMetadata = (options?: {
+  metadata?: Record<string, unknown>;
+}): Record<string, unknown> | undefined =>
+  options?.metadata?.provider === 'lobehub' ? options.metadata : undefined;
 
 export interface AgentChatOptions {
   enableTrace?: boolean;
@@ -118,6 +134,17 @@ export class ModelRuntime {
    * ```
    */
   async chat(payload: ChatStreamPayload, options?: ChatMethodOptions) {
+    const metadata = getLobeHubTimingMetadata(options);
+    const startedAt = Date.now();
+    if (metadata) {
+      timing(
+        'ModelRuntime.chat start model=%s trigger=%s traceId=%s',
+        payload.model,
+        metadata.trigger,
+        metadata.traceId,
+      );
+    }
+
     if (typeof this._runtime.chat !== 'function') {
       throw AgentRuntimeError.chat({
         error: new Error('Chat is not supported by this provider'),
@@ -127,11 +154,48 @@ export class ModelRuntime {
     }
 
     try {
+      const hooksStartedAt = Date.now();
       const finalOptions = await this.applyHooks(payload, options);
-      return await this._runtime.chat(payload, finalOptions);
+      if (metadata) {
+        timing(
+          'ModelRuntime.chat hooks done model=%s durationMs=%d traceId=%s',
+          payload.model,
+          getDurationMs(hooksStartedAt),
+          metadata.traceId,
+        );
+      }
+      const runtimeStartedAt = Date.now();
+      const response = await this._runtime.chat(payload, finalOptions);
+      if (metadata) {
+        timing(
+          'ModelRuntime.chat runtime done model=%s durationMs=%d totalMs=%d traceId=%s',
+          payload.model,
+          getDurationMs(runtimeStartedAt),
+          getDurationMs(startedAt),
+          metadata.traceId,
+        );
+      }
+      return response;
     } catch (error) {
+      if (metadata) {
+        timing(
+          'ModelRuntime.chat error model=%s durationMs=%d traceId=%s',
+          payload.model,
+          getDurationMs(startedAt),
+          metadata.traceId,
+        );
+      }
       if (this._hooks?.onChatError) {
+        const errorHookStartedAt = Date.now();
         await this._hooks.onChatError(error as ChatCompletionErrorPayload, { options, payload });
+        if (metadata) {
+          timing(
+            'ModelRuntime.chat onChatError done model=%s durationMs=%d traceId=%s',
+            payload.model,
+            getDurationMs(errorHookStartedAt),
+            metadata.traceId,
+          );
+        }
       }
       throw error;
     }
@@ -144,7 +208,37 @@ export class ModelRuntime {
     payload: ChatStreamPayload,
     options?: ChatMethodOptions,
   ): Promise<ChatMethodOptions | undefined> {
-    await this._hooks?.beforeChat?.(payload, options);
+    const metadata = getLobeHubTimingMetadata(options);
+    const beforeChatStartedAt = Date.now();
+    if (metadata) {
+      timing(
+        'ModelRuntime.beforeChat start model=%s trigger=%s traceId=%s',
+        payload.model,
+        metadata.trigger,
+        metadata.traceId,
+      );
+    }
+    try {
+      await this._hooks?.beforeChat?.(payload, options);
+    } catch (error) {
+      if (metadata) {
+        timing(
+          'ModelRuntime.beforeChat error model=%s durationMs=%d traceId=%s',
+          payload.model,
+          getDurationMs(beforeChatStartedAt),
+          metadata.traceId,
+        );
+      }
+      throw error;
+    }
+    if (metadata) {
+      timing(
+        'ModelRuntime.beforeChat done model=%s durationMs=%d traceId=%s',
+        payload.model,
+        getDurationMs(beforeChatStartedAt),
+        metadata.traceId,
+      );
+    }
 
     if (!this._hooks?.onChatFinal) return options;
 
@@ -155,10 +249,34 @@ export class ModelRuntime {
       callback: {
         ...options?.callback,
         async onFinal(data) {
+          const finalStartedAt = Date.now();
+          if (metadata) {
+            timing(
+              'ModelRuntime.onChatFinal start model=%s traceId=%s',
+              payload.model,
+              metadata.traceId,
+            );
+          }
           await existingOnFinal?.(data);
           try {
             await hookFn(data, { options, payload });
+            if (metadata) {
+              timing(
+                'ModelRuntime.onChatFinal done model=%s durationMs=%d traceId=%s',
+                payload.model,
+                getDurationMs(finalStartedAt),
+                metadata.traceId,
+              );
+            }
           } catch (e) {
+            if (metadata) {
+              timing(
+                'ModelRuntime.onChatFinal error model=%s durationMs=%d traceId=%s',
+                payload.model,
+                getDurationMs(finalStartedAt),
+                metadata.traceId,
+              );
+            }
             // Hook failures (billing, tracing) must not interfere with response completion
             console.error('[ModelRuntime] onChatFinal hook error:', e);
           }
@@ -198,12 +316,12 @@ export class ModelRuntime {
     }
   }
 
-  async createImage(payload: CreateImagePayload) {
-    return this._runtime.createImage?.(payload);
+  async createImage(payload: CreateImagePayload, options?: CreateImageMethodOptions) {
+    return this._runtime.createImage?.(payload, options);
   }
 
-  async createVideo(payload: CreateVideoPayload) {
-    return this._runtime.createVideo?.(payload);
+  async createVideo(payload: CreateVideoPayload, options?: CreateVideoMethodOptions) {
+    return this._runtime.createVideo?.(payload, options);
   }
 
   async handleCreateVideoWebhook(payload: HandleCreateVideoWebhookPayload) {
@@ -288,7 +406,6 @@ export class ModelRuntime {
         LobeBedrockAIParams &
         LobeCloudflareParams & {
           apiKey?: string;
-          apiVersion?: string;
           baseURL?: string;
           userId?: string;
         }

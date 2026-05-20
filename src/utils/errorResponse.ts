@@ -30,7 +30,8 @@ const getStatus = (errorType: ILobeAgentRuntimeErrorType | ErrorType) => {
 
     case AgentRuntimeErrorType.ExceededContextWindow:
     case ChatErrorType.SubscriptionKeyMismatch:
-    case ChatErrorType.SystemTimeNotMatchError: {
+    case ChatErrorType.SystemTimeNotMatchError:
+    case ChatErrorType.LobeHubModelDeprecated: {
       return 400;
     }
 
@@ -40,6 +41,10 @@ const getStatus = (errorType: ILobeAgentRuntimeErrorType | ErrorType) => {
 
     case AgentRuntimeErrorType.ModelNotFound: {
       return 404;
+    }
+
+    case AgentRuntimeErrorType.AccountDeactivated: {
+      return 403;
     }
 
     case AgentRuntimeErrorType.InsufficientQuota:

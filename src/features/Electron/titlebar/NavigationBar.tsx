@@ -87,6 +87,7 @@ const NavigationBar = memo(() => {
       data-width={leftPanelWidth}
       justify="end"
       style={{
+        paddingRight: 8,
         width: isLeftPanelVisible ? `${leftPanelWidth - 12}px` : '150px',
         transition: !isLeftPanelVisible ? 'width 0.2s' : 'none',
       }}

@@ -9,7 +9,10 @@
   },
   "main": "./src/index.ts",
   "dependencies": {
-    "@lobechat/agent-manager-runtime": "workspace:*"
+    "@lobechat/agent-manager-runtime": "workspace:*",
+    "@lobechat/const": "workspace:*",
+    "lucide-react": "*",
+    "react-router-dom": "*"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"

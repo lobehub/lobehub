@@ -75,7 +75,7 @@ const AgentHeader = memo(() => {
 
   // Handle avatar delete
   const handleAvatarDelete = useCallback(() => {
-    updateMeta({ avatar: undefined });
+    updateMeta({ avatar: null });
   }, [updateMeta]);
 
   // Handle background color change (immediate save)
@@ -99,6 +99,7 @@ const AgentHeader = memo(() => {
     >
       {/* Avatar Section */}
       <EmojiPicker
+        allowModelAvatar
         allowUpload
         allowDelete={!!meta.avatar}
         loading={uploading}

@@ -66,6 +66,20 @@ export const windowTemplates = {
     titleBarStyle: 'hidden',
     width: 900,
   },
+  // Dedicated single-topic popup window. Loads the popup.html SPA entry
+  // (no sidebar / portal), one window per (scope, id) pair.
+  topicPopup: {
+    allowMultipleInstances: true,
+    autoHideMenuBar: true,
+    baseIdentifier: 'topicPopup',
+    basePath: '/popup',
+    height: 720,
+    keepAlive: false,
+    minWidth: 480,
+    parentIdentifier: 'app',
+    titleBarStyle: 'hidden',
+    width: 900,
+  },
 } satisfies Record<string, WindowTemplate>;
 
 export type AppBrowsersIdentifiers = keyof typeof appBrowsers;

@@ -9,14 +9,23 @@ import { type IFeatureFlagsState } from '@/config/featureFlags';
 import { DEFAULT_FEATURE_FLAGS, mapFeatureFlagsEnvToState } from '@/config/featureFlags';
 import { createDevtools } from '@/store/middleware/createDevtools';
 import { expose } from '@/store/middleware/expose';
-import { type GlobalServerConfig } from '@/types/serverConfig';
+import { type GlobalBillboard, type GlobalServerConfig } from '@/types/serverConfig';
 import { merge } from '@/utils/merge';
 
 import { flattenActions } from '../utils/flattenActions';
 import { type ServerConfigAction } from './action';
 import { createServerConfigSlice } from './action';
+import {
+  createFeatureFlagOverrideSlice,
+  type FeatureFlagOverrideAction,
+} from './slices/featureFlagOverride/action';
 
 interface ServerConfigState {
+  /** dev-only: pending overrides keyed by mapped flag name; empty in prod */
+  _featureFlagOverrides: Partial<IFeatureFlagsState>;
+  /** dev-only: snapshot of server-provided featureFlags before any override; null until hydrated */
+  _originalFeatureFlags: IFeatureFlagsState | null;
+  billboard?: GlobalBillboard | null;
   featureFlags: IFeatureFlagsState;
   isMobile?: boolean;
   segmentVariants?: string;
@@ -25,6 +34,9 @@ interface ServerConfigState {
 }
 
 const initialState: ServerConfigState = {
+  _featureFlagOverrides: {},
+  _originalFeatureFlags: null,
+  billboard: null,
   featureFlags: mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS),
   segmentVariants: '',
   serverConfig: { aiProvider: {}, telemetry: {} },
@@ -33,9 +45,10 @@ const initialState: ServerConfigState = {
 
 //  ===============  Aggregate createStoreFn ============ //
 
-export interface ServerConfigStore extends ServerConfigState, ServerConfigAction {}
+export interface ServerConfigStore
+  extends ServerConfigState, ServerConfigAction, FeatureFlagOverrideAction {}
 
-type ServerConfigStoreAction = ServerConfigAction;
+type ServerConfigStoreAction = ServerConfigAction & FeatureFlagOverrideAction;
 
 type CreateStore = (
   initState: Partial<ServerConfigStore>,
@@ -45,12 +58,15 @@ const createStore: CreateStore =
   (runtimeState: any) =>
   (...params) => ({
     ...merge(initialState, runtimeState),
-    ...flattenActions<ServerConfigStoreAction>([createServerConfigSlice(...params)]),
+    ...flattenActions<ServerConfigStoreAction>([
+      createServerConfigSlice(...params),
+      createFeatureFlagOverrideSlice(...params),
+    ]),
   });
 
 //  ===============  Implement useStore ============ //
 
-let store: StoreApi<ServerConfigStore>;
+let store: StoreApi<ServerConfigStore> | undefined;
 
 declare global {
   interface Window {
@@ -80,6 +96,8 @@ export const createServerConfigStore = (initState?: Partial<ServerConfigStore>) 
 
   return store;
 };
+
+export const getServerConfigStoreState = () => store?.getState();
 
 export const { useStore: useServerConfigStore, Provider } =
   createContext<StoreApiWithSelector<ServerConfigStore>>();

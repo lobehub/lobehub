@@ -144,27 +144,82 @@ describe('GatewayStreamNotifier', () => {
       ]);
     });
 
-    it('calls gateway push-event and update-status endpoints', async () => {
+    it('calls gateway push-event endpoint only (no update-status)', async () => {
       await notifier.publishAgentRuntimeEnd('op-1', 2, {}, 'completed', 'All done');
 
       await new Promise((r) => setTimeout(r, 50));
 
       const urls = mockFetch.mock.calls.map((c: any[]) => c[0]);
       expect(urls).toContain(`${gatewayUrl}/api/operations/push-event`);
-      expect(urls).toContain(`${gatewayUrl}/api/operations/update-status`);
+      // Gateway handles session completion directly in pushEvent on agent_runtime_end
+      expect(urls).not.toContain(`${gatewayUrl}/api/operations/update-status`);
     });
 
-    it('maps error reason to error status', async () => {
-      await notifier.publishAgentRuntimeEnd('op-1', 0, {}, 'error', 'Something broke');
+    it('computes effectiveReasonDetail when reasonDetail is omitted', async () => {
+      const finalState = {
+        error: {
+          error: { message: 'Budget exceeded' },
+          errorType: 'InsufficientBudgetForModel',
+        },
+      };
 
+      await notifier.publishAgentRuntimeEnd('op-1', 0, finalState, 'error');
       await new Promise((r) => setTimeout(r, 50));
 
-      const statusCall = mockFetch.mock.calls.find(
-        (c: any[]) => c[0] === `${gatewayUrl}/api/operations/update-status`,
-      );
-      expect(statusCall).toBeDefined();
-      const body = JSON.parse(statusCall![1].body);
-      expect(body.status).toBe('error');
+      const pushCall = mockFetch.mock.calls.find((c: any[]) => c[0].includes('push-event'));
+      const body = JSON.parse(pushCall![1].body);
+      expect(body.event.data.reasonDetail).toBe('Budget exceeded');
+    });
+
+    it('uses provided reasonDetail over computed one', async () => {
+      const finalState = {
+        error: { message: 'Some error' },
+      };
+
+      await notifier.publishAgentRuntimeEnd('op-1', 0, finalState, 'error', 'Custom detail');
+      await new Promise((r) => setTimeout(r, 50));
+
+      const pushCall = mockFetch.mock.calls.find((c: any[]) => c[0].includes('push-event'));
+      const body = JSON.parse(pushCall![1].body);
+      expect(body.event.data.reasonDetail).toBe('Custom detail');
+    });
+
+    it('includes errorType from finalState.error.type', async () => {
+      const finalState = {
+        error: { message: 'Budget exceeded', type: 'InsufficientBudgetForModel' },
+      };
+
+      await notifier.publishAgentRuntimeEnd('op-1', 0, finalState, 'error');
+      await new Promise((r) => setTimeout(r, 50));
+
+      const pushCall = mockFetch.mock.calls.find((c: any[]) => c[0].includes('push-event'));
+      const body = JSON.parse(pushCall![1].body);
+      expect(body.event.data.errorType).toBe('InsufficientBudgetForModel');
+    });
+
+    it('includes errorType from finalState.error.errorType', async () => {
+      const finalState = {
+        error: {
+          error: { message: 'Bad key' },
+          errorType: 'InvalidProviderAPIKey',
+        },
+      };
+
+      await notifier.publishAgentRuntimeEnd('op-1', 0, finalState, 'error');
+      await new Promise((r) => setTimeout(r, 50));
+
+      const pushCall = mockFetch.mock.calls.find((c: any[]) => c[0].includes('push-event'));
+      const body = JSON.parse(pushCall![1].body);
+      expect(body.event.data.errorType).toBe('InvalidProviderAPIKey');
+    });
+
+    it('errorType is undefined when no error in finalState', async () => {
+      await notifier.publishAgentRuntimeEnd('op-1', 0, { status: 'done' }, 'completed');
+      await new Promise((r) => setTimeout(r, 50));
+
+      const pushCall = mockFetch.mock.calls.find((c: any[]) => c[0].includes('push-event'));
+      const body = JSON.parse(pushCall![1].body);
+      expect(body.event.data.errorType).toBeUndefined();
     });
   });
 
@@ -315,6 +370,59 @@ describe('GatewayStreamNotifier', () => {
       expect(url).toBe(`${gatewayUrl}/api/operations/push-event`);
       // No double slashes
       expect(url).not.toContain('//api');
+    });
+  });
+
+  describe('sendToolExecute', () => {
+    const toolExecuteData = {
+      apiName: 'readFile',
+      arguments: '{"path":"/tmp/x"}',
+      executionTimeoutMs: 30_000,
+      identifier: 'local-system',
+      toolCallId: 'call-1',
+    };
+
+    beforeEach(() => {
+      // Earlier tests in this file install hanging mockImplementations that
+      // clearAllMocks doesn't reset — restore the default behavior here.
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('') });
+    });
+
+    it('POSTs to /api/operations/tool-execute with the expected payload', async () => {
+      await notifier.sendToolExecute('op-1', toolExecuteData);
+
+      const calls = mockFetch.mock.calls.filter((c: any[]) =>
+        String(c[0]).includes('/api/operations/tool-execute'),
+      );
+      expect(calls).toHaveLength(1);
+
+      const [url, init] = calls[0];
+      expect(url).toBe(`${gatewayUrl}/api/operations/tool-execute`);
+      expect(init.method).toBe('POST');
+      expect(init.headers.Authorization).toBe(`Bearer ${serviceToken}`);
+      expect(JSON.parse(init.body)).toEqual({
+        data: toolExecuteData,
+        operationId: 'op-1',
+      });
+    });
+
+    it('rejects when the gateway returns a non-ok status', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 502,
+        text: () => Promise.resolve('bad gateway'),
+      });
+
+      await expect(notifier.sendToolExecute('op-1', toolExecuteData)).rejects.toThrow(/502/);
+    });
+
+    it('rejects when fetch throws (network / timeout)', async () => {
+      mockFetch.mockRejectedValueOnce(new Error('network down'));
+
+      await expect(notifier.sendToolExecute('op-1', toolExecuteData)).rejects.toThrow(
+        'network down',
+      );
     });
   });
 });

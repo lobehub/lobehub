@@ -71,6 +71,7 @@
   "macOS.services": "Hizmetler",
   "macOS.unhide": "Hepsini Göster",
   "tray.open": "{{appName}}'i Aç",
+  "tray.openMiniToolbar": "Quick Composer",
   "tray.quit": "Çık",
   "tray.show": "{{appName}}'i Göster",
   "view.forceReload": "Zorla Yenile",

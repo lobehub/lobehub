@@ -1,7 +1,6 @@
-import { DEFAULT_PROVIDER } from '@lobechat/business-const';
-import { DEFAULT_ONBOARDING_MODEL } from '@lobechat/const';
+import { DEFAULT_ONBOARDING_MODEL, DEFAULT_ONBOARDING_PROVIDER } from '@lobechat/business-const';
 
 export const ONBOARDING_PRODUCTION_DEFAULT_MODEL = {
   model: DEFAULT_ONBOARDING_MODEL,
-  provider: DEFAULT_PROVIDER,
+  provider: DEFAULT_ONBOARDING_PROVIDER,
 } as const;

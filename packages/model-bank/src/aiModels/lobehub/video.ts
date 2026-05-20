@@ -5,6 +5,45 @@ import {
 } from '../../standard-parameters/video';
 import { type AIVideoModelCard } from '../../types/aiModel';
 
+export const seedance20Params: VideoModelParamsSchema = {
+  aspectRatio: {
+    default: 'adaptive',
+    enum: ['adaptive', ...PRESET_VIDEO_ASPECT_RATIOS],
+  },
+  duration: { default: 5, max: 15, min: 4 },
+  endImageUrl: {
+    aspectRatio: { max: 2.5, min: 0.4 },
+    default: null,
+    height: { max: 6000, min: 300 },
+    maxFileSize: 30 * 1024 * 1024,
+    requiresImageUrl: true,
+    width: { max: 6000, min: 300 },
+  },
+  generateAudio: { default: true },
+  imageUrls: {
+    aspectRatio: { max: 2.5, min: 0.4 },
+    default: [],
+    height: { max: 6000, min: 300 },
+    maxCount: 9,
+    maxFileSize: 30 * 1024 * 1024,
+    width: { max: 6000, min: 300 },
+  },
+  prompt: { default: '' },
+  resolution: {
+    default: '720p',
+    enum: PRESET_VIDEO_RESOLUTIONS,
+  },
+  seed: { default: null },
+};
+
+export const seedance20FastParams: VideoModelParamsSchema = {
+  ...seedance20Params,
+  resolution: {
+    default: '720p',
+    enum: ['480p', '720p'],
+  },
+};
+
 export const seedance15ProParams: VideoModelParamsSchema = {
   aspectRatio: {
     default: 'adaptive',
@@ -37,6 +76,53 @@ export const seedance15ProParams: VideoModelParamsSchema = {
 };
 
 export const lobehubVideoModels: AIVideoModelCard[] = [
+  {
+    description:
+      'Seedance 2.0 by ByteDance is the most powerful video generation model, supporting multimodal reference video generation, video editing, video extension, text-to-video, and image-to-video with synchronized audio.',
+    displayName: 'Seedance 2.0',
+    enabled: true,
+    id: 'dreamina-seedance-2-0-260128',
+    organization: 'ByteDance',
+    parameters: seedance20Params,
+    pricing: {
+      approximatePricePerVideo: 0.76,
+      units: [
+        {
+          lookup: {
+            pricingParams: ['resolution'],
+            prices: { '1080p': 7.7, '480p': 7, '720p': 7 },
+          },
+          name: 'videoGeneration',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-01-28',
+    type: 'video',
+  },
+  {
+    description:
+      'Seedance 2.0 Fast by ByteDance offers the same capabilities as Seedance 2.0 with faster generation speeds at a more competitive price.',
+    displayName: 'Seedance 2.0 Fast',
+    enabled: true,
+    id: 'dreamina-seedance-2-0-fast-260128',
+    organization: 'ByteDance',
+    parameters: seedance20FastParams,
+    pricing: {
+      approximatePricePerVideo: 0.6,
+      units: [
+        {
+          name: 'videoGeneration',
+          rate: 5.6,
+          strategy: 'fixed',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-01-28',
+    type: 'video',
+  },
   {
     description:
       'Seedance 1.5 Pro by ByteDance supports text-to-video, image-to-video (first frame, first+last frame), and audio generation synchronized with visuals.',

@@ -16,6 +16,7 @@ const statusDisplayMap: Record<string, string> = {
   failed: 'Needs input',
   paused: 'Needs input',
   running: 'In progress',
+  scheduled: 'Scheduled',
 };
 
 const getDisplayStatus = (status: string): string => statusDisplayMap[status] ?? status;

@@ -30,16 +30,13 @@ internal_createMessage: async (message, context) => {
   let tempId = context?.tempMessageId;
   if (!tempId) {
     tempId = internal_createTmpMessage(message);
-    internal_toggleMessageLoading(true, tempId);
   }
 
   try {
     const id = await messageService.createMessage(message);
     await refreshMessages();
-    internal_toggleMessageLoading(false, tempId);
     return id;
   } catch (e) {
-    internal_toggleMessageLoading(false, tempId);
     internal_dispatchMessage({
       id: tempId,
       type: 'updateMessage',

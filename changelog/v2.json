@@ -1,21 +1,111 @@
 [
   {
+    "children": {},
+    "date": "2026-05-18",
+    "version": "2.2.0"
+  },
+  {
     "children": {
+      "features": [
+        "support slack mpim and fix discord dm problem.",
+        "add service model assignments settings.",
+        "inline skill auth in recommended task templates.",
+        "add user activity business hook.",
+        "add Gemini 3.1 Flash-Lite provider cards.",
+        "home daily brief with linkable welcome + paired input hint.",
+        "add signOperationJwt with 4h expiry for hetero-agent operations.",
+        "migrate Notion to LobeHub Market.",
+        "Cloud Claude Code V3 — repo picker, GitHub token, sandbox context."
+      ],
+      "fixes": [
+        "Docs image.",
+        "update Task page placeholder copy.",
+        "sidebar add agent.",
+        "replace ScrollShadow with ScrollArea to fix React #185 infinite render loop.",
+        "reject inactive OIDC access.",
+        "drop unreachable aihubmix empty-apiKey test.",
+        "consume visual content parts in server runtime.",
+        "store onboarding interests as keys.",
+        "remove the old cron job from lobehub.",
+        "refresh content baseline from DB on every ingest call.",
+        "gateway client-tool pluginState + drop redundant Exit code: 0 tail.",
+        "first inject the cloudecc runtime session should use the existingStatus.",
+        "slack connect error & slash commands.",
+        "polish task agent manager.",
+        "remove signin captcha flow.",
+        "add temporary email auth error locale.",
+        "add bot callback service.",
+        "sanitize sensitive comments and examples from production JS bundle.",
+        "multiple account link."
+      ],
       "improvements": [
-        "add agent task system database schema."
+        "use @lobehub/ui built-in HtmlPreview instead of custom component.",
+        "polish desktop header icons, sidebar density, and task menus.",
+        "standardize header action icon sizes.",
+        "add reasoning_effort support for Grok 4.3.",
+        "increase chat topic title length.",
+        "format tool execution time as Xmin Ys instead of X.Y min.",
+        "Add new DeepSeek-V4 models.",
+        "use visible divider between queued messages.",
+        "update auth captcha retry copy."
       ]
+    },
+    "date": "2026-05-13",
+    "version": "2.1.58"
+  },
+  {
+    "children": {
+      "fixes": ["hide runtime-only model aliases."],
+      "features": ["set OSS default model to DeepSeek V4 Pro."]
+    },
+    "date": "2026-05-09",
+    "version": "2.1.57"
+  },
+  {
+    "children": {},
+    "date": "2026-05-01",
+    "version": "2.1.56"
+  },
+  {
+    "children": {},
+    "date": "2026-04-29",
+    "version": "2.1.55"
+  },
+  {
+    "children": {
+      "fixes": ["clear stale topic when switching agents from a topic route."]
+    },
+    "date": "2026-04-27",
+    "version": "2.1.54"
+  },
+  {
+    "children": {},
+    "date": "2026-04-20",
+    "version": "2.1.52"
+  },
+  {
+    "children": {
+      "fixes": ["fix minify cli.", "recent delete."]
+    },
+    "date": "2026-04-16",
+    "version": "2.1.51"
+  },
+  {
+    "children": {},
+    "date": "2026-04-16",
+    "version": "2.1.50"
+  },
+  {
+    "children": {
+      "improvements": ["add agent task system database schema."]
     },
     "date": "2026-03-26",
     "version": "2.1.45"
   },
   {
     "children": {
-      "fixes": [
-        "misc UI/UX improvements and bug fixes."
-      ],
-      "improvements": [
-        "add image/video switch."
-      ]
+      "fixes": ["misc UI/UX improvements and bug fixes."],
+      "improvements": ["add image/video switch."]
     },
     "date": "2026-03-20",
     "version": "2.1.44"
@@ -47,27 +137,21 @@
   },
   {
     "children": {
-      "improvements": [
-        "add api key hash column migration."
-      ]
+      "improvements": ["add api key hash column migration."]
     },
     "date": "2026-03-09",
     "version": "2.1.39"
   },
   {
     "children": {
-      "fixes": [
-        "when use trustclient not register market m2m token."
-      ]
+      "fixes": ["when use trustclient not register market m2m token."]
     },
     "date": "2026-03-06",
     "version": "2.1.38"
   },
   {
     "children": {
-      "improvements": [
-        "Update i18n."
-      ]
+      "improvements": ["Update i18n."]
     },
     "date": "2026-02-10",
     "version": "2.1.26"
@@ -79,9 +163,7 @@
   },
   {
     "children": {
-      "fixes": [
-        "Fix multimodal content_part images rendered as base64 text."
-      ]
+      "fixes": ["Fix multimodal content_part images rendered as base64 text."]
     },
     "date": "2026-02-09",
     "version": "2.1.24"
@@ -91,18 +173,14 @@
       "fixes": [
         "Fix editor content missing when send error, use custom avatar for group chat in sidebar."
       ],
-      "improvements": [
-        "Update i18n."
-      ]
+      "improvements": ["Update i18n."]
     },
     "date": "2026-02-09",
     "version": "2.1.23"
   },
   {
     "children": {
-      "fixes": [
-        "Register Notebook tool in server runtime."
-      ]
+      "fixes": ["Register Notebook tool in server runtime."]
     },
     "date": "2026-02-08",
     "version": "2.1.22"
@@ -127,9 +205,7 @@
   },
   {
     "children": {
-      "fixes": [
-        "Fixed in community pluings tab the lobehub skills not display."
-      ]
+      "fixes": ["Fixed in community pluings tab the lobehub skills not display."]
     },
     "date": "2026-02-06",
     "version": "2.1.19"
@@ -146,27 +222,21 @@
   },
   {
     "children": {
-      "fixes": [
-        "Add the preview publish to market button preview check."
-      ]
+      "fixes": ["Add the preview publish to market button preview check."]
     },
     "date": "2026-02-04",
     "version": "2.1.16"
   },
   {
     "children": {
-      "fixes": [
-        "Fixed the agents list the show updateAt time error."
-      ]
+      "fixes": ["Fixed the agents list the show updateAt time error."]
     },
     "date": "2026-02-04",
     "version": "2.1.15"
   },
   {
     "children": {
-      "fixes": [
-        "Fix cannot uncompressed messages."
-      ]
+      "fixes": ["Fix cannot uncompressed messages."]
     },
     "date": "2026-02-04",
     "version": "2.1.14"
@@ -183,9 +253,7 @@
   },
   {
     "children": {
-      "fixes": [
-        "Hide password features when AUTH_DISABLE_EMAIL_PASSWORD is set."
-      ]
+      "fixes": ["Hide password features when AUTH_DISABLE_EMAIL_PASSWORD is set."]
     },
     "date": "2026-02-02",
     "version": "2.1.11"
@@ -197,54 +265,42 @@
   },
   {
     "children": {
-      "fixes": [
-        "Use oauth2.link for generic OIDC provider account linking."
-      ]
+      "fixes": ["Use oauth2.link for generic OIDC provider account linking."]
     },
     "date": "2026-02-02",
     "version": "2.1.9"
   },
   {
     "children": {
-      "improvements": [
-        "Improve tasks display."
-      ]
+      "improvements": ["Improve tasks display."]
     },
     "date": "2026-02-01",
     "version": "2.1.8"
   },
   {
     "children": {
-      "fixes": [
-        "Add missing description parameter docs in Notebook system prompt."
-      ]
+      "fixes": ["Add missing description parameter docs in Notebook system prompt."]
     },
     "date": "2026-02-01",
     "version": "2.1.7"
   },
   {
     "children": {
-      "improvements": [
-        "Improve local-system tool implement."
-      ]
+      "improvements": ["Improve local-system tool implement."]
     },
     "date": "2026-02-01",
     "version": "2.1.6"
   },
   {
     "children": {
-      "fixes": [
-        "Slove the group member agents cant set skills problem."
-      ]
+      "fixes": ["Slove the group member agents cant set skills problem."]
     },
     "date": "2026-01-31",
     "version": "2.1.5"
   },
   {
     "children": {
-      "improvements": [
-        "Update i18n, Update Kimi K2.5 & Qwen3 Max Thinking models."
-      ]
+      "improvements": ["Update i18n, Update Kimi K2.5 & Qwen3 Max Thinking models."]
     },
     "date": "2026-01-31",
     "version": "2.1.4"
@@ -256,63 +312,49 @@
   },
   {
     "children": {
-      "fixes": [
-        "Fix feishu sso provider."
-      ]
+      "fixes": ["Fix feishu sso provider."]
     },
     "date": "2026-01-30",
     "version": "2.1.2"
   },
   {
     "children": {
-      "fixes": [
-        "Correct desktop download URL path."
-      ]
+      "fixes": ["Correct desktop download URL path."]
     },
     "date": "2026-01-30",
     "version": "2.1.1"
   },
   {
     "children": {
-      "features": [
-        "Refactor cron job UI and use runtime enableBusinessFeatures flag."
-      ]
+      "features": ["Refactor cron job UI and use runtime enableBusinessFeatures flag."]
     },
     "date": "2026-01-30",
     "version": "2.1.0"
   },
   {
     "children": {
-      "improvements": [
-        "Fix usage table display issues."
-      ]
+      "improvements": ["Fix usage table display issues."]
     },
     "date": "2026-01-29",
     "version": "2.0.13"
   },
   {
     "children": {
-      "fixes": [
-        "Group publish to market should set local group market identifer."
-      ]
+      "fixes": ["Group publish to market should set local group market identifer."]
     },
     "date": "2026-01-29",
     "version": "2.0.12"
   },
   {
     "children": {
-      "improvements": [
-        "Fix group task render."
-      ]
+      "improvements": ["Fix group task render."]
     },
     "date": "2026-01-29",
     "version": "2.0.11"
   },
   {
     "children": {
-      "fixes": [
-        "Add ExtendParamsTypeSchema for enhanced model settings."
-      ]
+      "fixes": ["Add ExtendParamsTypeSchema for enhanced model settings."]
     },
     "date": "2026-01-29",
     "version": "2.0.10"
@@ -324,9 +366,7 @@
   },
   {
     "children": {
-      "fixes": [
-        "Fix inbox agent in mobile."
-      ]
+      "fixes": ["Fix inbox agent in mobile."]
     },
     "date": "2026-01-28",
     "version": "2.0.8"
@@ -338,27 +378,21 @@
   },
   {
     "children": {
-      "fixes": [
-        "The klavis in onboarding connect timeout fixed."
-      ]
+      "fixes": ["The klavis in onboarding connect timeout fixed."]
     },
     "date": "2026-01-27",
     "version": "2.0.6"
   },
   {
     "children": {
-      "fixes": [
-        "Update the artifact prompt."
-      ]
+      "fixes": ["Update the artifact prompt."]
     },
     "date": "2026-01-27",
     "version": "2.0.5"
   },
   {
     "children": {
-      "fixes": [
-        "Rename docker image and update docs for v2."
-      ]
+      "fixes": ["Rename docker image and update docs for v2."]
     },
     "date": "2026-01-27",
     "version": "2.0.4"
@@ -374,9 +408,7 @@
   },
   {
     "children": {
-      "fixes": [
-        "Slove the recentTopicLinkError."
-      ]
+      "fixes": ["Slove the recentTopicLinkError."]
     },
     "date": "2026-01-27",
     "version": "2.0.2"

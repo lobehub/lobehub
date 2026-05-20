@@ -3,6 +3,48 @@
   "cloud": [],
   "community": [
     {
+      "image": "https://hub-apac-1.lobeobjects.space/billboard/covers/1778838542538-MDEMAEav.png",
+      "id": "2026-05-19-chief-agent-operator",
+      "date": "2026-05-19",
+      "versionRange": ["2.1.58", "2.2.0"]
+    },
+    {
+      "image": "/blog/assets4aa1732a45832afc780600e6e329860c.webp",
+      "id": "2026-05-11-agent-tasks-ga",
+      "date": "2026-05-11",
+      "versionRange": ["2.1.57"]
+    },
+    {
+      "image": "/blog/assetsb2bf4ddf0a45ff887a993c18cb7ab983.webp",
+      "id": "2026-05-04-task-scheduler",
+      "date": "2026-05-04",
+      "versionRange": ["2.1.54", "2.1.56"]
+    },
+    {
+      "image": "/blog/assetsfa267a02f20bc5ba6f1273bcf27b7c9f.webp",
+      "id": "2026-04-27-heterogeneous-agent",
+      "date": "2026-04-27",
+      "versionRange": ["2.1.53"]
+    },
+    {
+      "image": "/blog/assetsdfda32866c4bc59af0526e52f31d1da2.webp",
+      "id": "2026-04-20-daily-brief",
+      "date": "2026-04-20",
+      "versionRange": ["2.1.50", "2.1.52"]
+    },
+    {
+      "image": "/blog/assets300abe7e259d293da6c5ed4f642a1be6.webp",
+      "id": "2026-04-13-gateway-sidebar",
+      "date": "2026-04-13",
+      "versionRange": ["2.1.48", "2.1.49"]
+    },
+    {
+      "image": "/blog/assets7ea204859aeb5aa9be5810a20ba1669a.webp",
+      "id": "2026-04-06-auto-completion",
+      "date": "2026-04-06",
+      "versionRange": ["2.1.47"]
+    },
+    {
       "id": "2026-03-30-agent-tasks",
       "date": "2026-03-30",
       "versionRange": ["2.1.45", "2.1.46"]

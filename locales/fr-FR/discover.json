@@ -624,6 +624,8 @@
   "user.logout": "Se déconnecter",
   "user.myProfile": "Mon profil",
   "user.noAgents": "Cet utilisateur n’a pas encore publié d’Agents",
+  "user.noAgents.ownerDescription": "Créez votre premier Agent et partagez‑le avec la communauté.",
+  "user.noAgents.title": "Aucun agent pour le moment",
   "user.noFavoriteAgents": "Aucun Agent enregistré pour le moment",
   "user.noFavoritePlugins": "Aucune compétence enregistrée pour le moment",
   "user.noForkedAgentGroups": "Aucun groupe d’agents forkés pour le moment",

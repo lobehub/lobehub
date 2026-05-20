@@ -186,6 +186,51 @@ describe('AgentModel', () => {
     });
   });
 
+  describe('getAgentModelConfig', () => {
+    it('returns model + provider when both are configured', async () => {
+      const agentId = 'snap-agent-1';
+      await serverDB
+        .insert(agents)
+        .values({ id: agentId, model: 'claude-sonnet-4-6', provider: 'anthropic', userId });
+
+      const result = await agentModel.getAgentModelConfig(agentId);
+
+      expect(result).toEqual({ model: 'claude-sonnet-4-6', provider: 'anthropic' });
+    });
+
+    it('resolves by slug when id does not match', async () => {
+      const agentId = 'snap-agent-by-slug';
+      const slug = 'snap-slug';
+      await serverDB
+        .insert(agents)
+        .values({ id: agentId, model: 'gpt-4o', provider: 'openai', slug, userId });
+
+      const result = await agentModel.getAgentModelConfig(slug);
+
+      expect(result).toEqual({ model: 'gpt-4o', provider: 'openai' });
+    });
+
+    it('returns null when model or provider is missing', async () => {
+      const agentId = 'snap-agent-incomplete';
+      await serverDB.insert(agents).values({ id: agentId, model: 'gpt-4o', userId });
+
+      const result = await agentModel.getAgentModelConfig(agentId);
+
+      expect(result).toBeNull();
+    });
+
+    it('does not leak across users', async () => {
+      const agentId = 'snap-agent-other-user';
+      await serverDB
+        .insert(agents)
+        .values({ id: agentId, model: 'gpt-4o', provider: 'openai', userId: userId2 });
+
+      const result = await agentModel.getAgentModelConfig(agentId);
+
+      expect(result).toBeNull();
+    });
+  });
+
   describe('getAgentConfig', () => {
     it('should find agent by ID', async () => {
       const agentId = 'test-agent-by-id';
@@ -1254,6 +1299,14 @@ describe('AgentModel', () => {
         expect(result?.slug).toBe('page-agent');
         expect(result?.virtual).toBe(true);
       });
+
+      it('should create task-agent builtin agent', async () => {
+        const result = await agentModel.getBuiltinAgent('task-agent');
+
+        expect(result).toBeDefined();
+        expect(result?.slug).toBe('task-agent');
+        expect(result?.virtual).toBe(true);
+      });
     });
   });
 
@@ -1881,6 +1934,31 @@ describe('AgentModel', () => {
     it('should return early for non-existent agent', async () => {
       const result = await agentModel.updateConfig('non-existent-id', { title: 'New' });
       expect(result).toBeUndefined();
+    });
+
+    it('should merge nested chatConfig fields without replacing the whole object', async () => {
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({
+          chatConfig: { enableHistoryCount: true, historyCount: 10 },
+          title: 'Chat Config Agent',
+          userId,
+        } as NewAgent)
+        .returning();
+
+      await agentModel.updateConfig(agent.id, {
+        chatConfig: { enableReasoning: true } as any,
+      });
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      expect(result?.chatConfig).toEqual({
+        enableHistoryCount: true,
+        enableReasoning: true,
+        historyCount: 10,
+      });
     });
 
     it('should delete params field when value is undefined', async () => {

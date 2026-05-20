@@ -140,6 +140,7 @@ export class AgentRuntime {
             arguments: tc.function.arguments,
             id: tc.id,
             identifier: tc.function.name,
+            thoughtSignature: tc.thoughtSignature,
             type: 'default' as any,
           }));
 

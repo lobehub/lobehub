@@ -15,7 +15,7 @@ interface ContextConfig {
  */
 const CONTEXT_CONFIGS: ContextConfig[] = [
   {
-    matcher: /^\/agent\/[^/]+$/,
+    matcher: /^\/agent\/[^/]+(?:\/[^/]+(?:\/page(?:\/[^/]+)?)?)?$/,
     name: 'Agent',
     type: 'agent',
   },

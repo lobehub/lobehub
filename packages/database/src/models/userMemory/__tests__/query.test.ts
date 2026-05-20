@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { LayersEnum, RelationshipEnum, UserMemoryContextObjectType } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
@@ -15,7 +16,7 @@ import {
 import type { LobeChatDatabase } from '../../../type';
 import { UserMemoryModel } from '../model';
 import type { LayerBaseMemorySignals } from '../query';
-import { scoreHybridCandidates } from '../query';
+import { buildBm25MatchCondition, scoreHybridCandidates } from '../query';
 
 const userId = 'memory-query-test-user';
 
@@ -479,5 +480,31 @@ describe('user memory query layer', () => {
 
       expect(result.identities.map((item) => item.id)).toEqual([expectedIdentity.id]);
     });
+  });
+});
+
+describe('buildBm25MatchCondition', () => {
+  it('should build a ParadeDB boolean match query with field/value parameters', () => {
+    const condition = buildBm25MatchCondition("I'm checking customers' needs AND OR NOT", [
+      { fields: ['title', 'summary'], keyColumn: userMemories.id },
+      { fields: ['description', 'role'], keyColumn: userMemoriesIdentities.id },
+    ]);
+
+    const dialect = new PgDialect();
+    const built = dialect.sqlToQuery(condition!);
+
+    expect(built.sql).toBe(
+      '("user_memories"."id" @@@ paradedb.boolean(should => ARRAY[paradedb.match($1, $2, conjunction_mode => true), paradedb.match($3, $4, conjunction_mode => true)]) or "user_memories_identities"."id" @@@ paradedb.boolean(should => ARRAY[paradedb.match($5, $6, conjunction_mode => true), paradedb.match($7, $8, conjunction_mode => true)]))',
+    );
+    expect(built.params).toStrictEqual([
+      'title',
+      "I'm checking customers' needs",
+      'summary',
+      "I'm checking customers' needs",
+      'description',
+      "I'm checking customers' needs",
+      'role',
+      "I'm checking customers' needs",
+    ]);
   });
 });

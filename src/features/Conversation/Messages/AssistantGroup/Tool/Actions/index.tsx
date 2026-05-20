@@ -14,6 +14,8 @@ interface ActionsProps {
   setShowDebug?: (show: boolean) => void;
   showCustomToolRender?: boolean;
   showDebug?: boolean;
+  /** When set, trash removes only this tool from the message instead of deleting the assistant message */
+  toolRemoval?: { messageId: string; toolCallId: string };
 }
 
 const Actions = memo<ActionsProps>(
@@ -25,9 +27,13 @@ const Actions = memo<ActionsProps>(
     setShowDebug,
     showCustomToolRender,
     showDebug,
+    toolRemoval,
   }) => {
     const { t } = useTranslation('plugin');
-    const deleteAssistantMessage = useConversationStore((s) => s.deleteAssistantMessage);
+    const [deleteAssistantMessage, removeToolFromMessage] = useConversationStore((s) => [
+      s.deleteAssistantMessage,
+      s.removeToolFromMessage,
+    ]);
 
     return (
       <>
@@ -55,7 +61,11 @@ const Actions = memo<ActionsProps>(
           size={'small'}
           title={t('inspector.delete')}
           onClick={() => {
-            deleteAssistantMessage(assistantMessageId);
+            if (toolRemoval) {
+              void removeToolFromMessage(toolRemoval.messageId, toolRemoval.toolCallId);
+            } else {
+              void deleteAssistantMessage(assistantMessageId);
+            }
           }}
         />
       </>

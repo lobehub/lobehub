@@ -2,7 +2,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createDefaultAnthropicClient } from './index';
+import { createAnthropicCompatibleRuntime, createDefaultAnthropicClient } from './index';
 
 vi.mock('@anthropic-ai/sdk', () => {
   const MockAnthropic = vi.fn();
@@ -44,5 +44,42 @@ describe('createDefaultAnthropicClient', () => {
       'User-Agent': 'lobehub/1.0.0-test',
       'X-Custom': 'value',
     });
+  });
+
+  it.each([
+    ['https://aihubmix.com/v1', 'https://aihubmix.com'],
+    ['https://aihubmix.com/v1/messages', 'https://aihubmix.com'],
+    ['https://api.example.com/anthropic/v1', 'https://api.example.com/anthropic'],
+    ['https://api.example.com/anthropic', 'https://api.example.com/anthropic'],
+  ])('should normalize Anthropic SDK-managed baseURL path %s', (baseURL, expectedBaseURL) => {
+    MockedAnthropic.mockClear();
+
+    createDefaultAnthropicClient({ apiKey: 'test-key', baseURL });
+
+    expect(MockedAnthropic).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseURL: expectedBaseURL,
+      }),
+    );
+  });
+});
+
+describe('createAnthropicCompatibleRuntime', () => {
+  it('should normalize default baseURL before creating a custom client', () => {
+    const createClient = vi.fn((options) => ({ baseURL: options.baseURL }) as unknown as Anthropic);
+    const Runtime = createAnthropicCompatibleRuntime({
+      baseURL: 'https://aihubmix.com/v1',
+      customClient: { createClient },
+      provider: 'test-provider',
+    });
+
+    const runtime = new Runtime({ apiKey: 'test-key' });
+
+    expect(createClient).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseURL: 'https://aihubmix.com',
+      }),
+    );
+    expect(runtime.baseURL).toBe('https://aihubmix.com');
   });
 });

@@ -1,15 +1,21 @@
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
-import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
+import {
+  KLAVIS_SERVER_TYPES,
+  LOBEHUB_SKILL_PROVIDERS,
+  REQUEST_AGENT_ID_HEADER,
+  REQUEST_TOPIC_ID_HEADER,
+  REQUEST_TRIGGER_HEADER,
+} from '@lobechat/const';
 import { type OfficialToolItem } from '@lobechat/context-engine';
 import { type FetchSSEOptions } from '@lobechat/fetch-sse';
 import { fetchSSE, standardizeAnimationStyle } from '@lobechat/fetch-sse';
-import { type ChatCompletionErrorPayload } from '@lobechat/model-runtime';
-import { AgentRuntimeError } from '@lobechat/model-runtime';
-import {
-  type RuntimeInitialContext,
-  type RuntimeStepContext,
-  type TracePayload,
-  type UIChatMessage,
+import type { ChatCompletionErrorPayload } from '@lobechat/model-runtime';
+import { AgentRuntimeError, responsesAPIModels } from '@lobechat/model-runtime';
+import type {
+  RuntimeInitialContext,
+  RuntimeStepContext,
+  TracePayload,
+  UIChatMessage,
 } from '@lobechat/types';
 import { ChatErrorType, TraceTagMap } from '@lobechat/types';
 import { merge } from 'es-toolkit/compat';
@@ -53,13 +59,23 @@ import {
 } from './mecha';
 import { type FetchOptions } from './types';
 
+const defaultProvider = ModelProvider.OpenAI;
+const providersWithDeploymentName = new Set<string>([
+  ModelProvider.Azure,
+  ModelProvider.AzureAI,
+  ModelProvider.KimiCodingPlan,
+  ModelProvider.Qwen,
+  ModelProvider.Spark,
+  ModelProvider.Volcengine,
+  ModelProvider.VolcengineCodingPlan,
+]);
 interface GetChatCompletionPayload extends Partial<Omit<ChatStreamPayload, 'messages'>> {
   agentId?: string;
   groupId?: string;
   messages: UIChatMessage[];
   /**
    * Pre-resolved agent config from AgentRuntime layer.
-   * Required to ensure config consistency and proper isSubTask filtering.
+   * Required to ensure config consistency and proper isSubAgent filtering.
    */
   resolvedAgentConfig: ResolvedAgentConfig;
   topicId?: string;
@@ -89,6 +105,7 @@ interface CreateAssistantMessageStream extends FetchSSEOptions {
   historySummary?: string;
   /** Initial context for page editor (captured at operation start) */
   initialContext?: RuntimeInitialContext;
+  metadata?: FetchOptions['metadata'];
   params: GetChatCompletionPayload;
   /** Step context for page editor (updated each step) */
   stepContext?: RuntimeStepContext;
@@ -129,7 +146,7 @@ class ChatService {
 
     // =================== 1. use pre-resolved agent config =================== //
     // Config is resolved in AgentRuntime layer (internal_createAgentState)
-    // which handles isSubTask filtering, disableTools, and tools generation
+    // which handles isSubAgent filtering, disableTools, and tools generation
 
     const targetAgentId = getTargetAgentId(agentId);
 
@@ -318,6 +335,7 @@ class ChatService {
     onMessageHandle,
     onErrorHandle,
     onFinish,
+    metadata,
     trace,
     historySummary,
     initialContext,
@@ -330,6 +348,7 @@ class ChatService {
       onErrorHandle,
       onFinish,
       onMessageHandle,
+      metadata,
       signal: abortController?.signal,
       stepContext,
       trace: this.mapTrace(trace, TraceTagMap.Chat),
@@ -337,24 +356,23 @@ class ChatService {
   };
 
   getChatCompletion = async (params: Partial<ChatStreamPayload>, options?: FetchOptions) => {
-    const { agentId, signal, responseAnimation, topicId } = options ?? {};
+    const { agentId, metadata, signal, responseAnimation, topicId } = options ?? {};
+    const requestTrigger = metadata?.trigger;
 
     const { provider = ModelProvider.OpenAI, ...res } = params;
 
     // =================== process model =================== //
     // ===================================================== //
     let model = res.model || DEFAULT_AGENT_CONFIG.model;
+    const deploymentName = providersWithDeploymentName.has(provider)
+      ? findDeploymentName(model, provider)
+      : undefined;
+    const shouldUseDeploymentField =
+      (provider === ModelProvider.Azure && responsesAPIModels.has(model)) ||
+      provider === ModelProvider.Spark;
 
-    // if the provider is Azure, get the deployment name as the request model
-    const providersWithDeploymentName = [
-      ModelProvider.Azure,
-      ModelProvider.Volcengine,
-      ModelProvider.AzureAI,
-      ModelProvider.Qwen,
-    ] as string[];
-
-    if (providersWithDeploymentName.includes(provider)) {
-      model = findDeploymentName(model, provider);
+    if (!shouldUseDeploymentField && deploymentName) {
+      model = deploymentName;
     }
 
     // When user explicitly disables Responses API, set apiMode to 'chatCompletion'
@@ -379,7 +397,14 @@ class ChatService {
         stream: chatConfig.enableStreaming !== false, // Default to true if not set
         ...DEFAULT_AGENT_CONFIG.params,
       },
-      { ...res, apiMode, model },
+      {
+        ...res,
+        apiMode,
+        ...(shouldUseDeploymentField &&
+          deploymentName &&
+          deploymentName !== model && { deploymentName }),
+        model,
+      },
     );
 
     // Convert null to undefined for model params to prevent sending null values to API
@@ -429,8 +454,9 @@ class ChatService {
       headers: {
         'Content-Type': 'application/json',
         ...traceHeader,
-        ...(agentId && { 'x-agent-id': agentId }),
-        ...(topicId && { 'x-topic-id': topicId }),
+        ...(agentId && { [REQUEST_AGENT_ID_HEADER]: agentId }),
+        ...(requestTrigger && { [REQUEST_TRIGGER_HEADER]: requestTrigger }),
+        ...(topicId && { [REQUEST_TOPIC_ID_HEADER]: topicId }),
       },
       provider,
     });

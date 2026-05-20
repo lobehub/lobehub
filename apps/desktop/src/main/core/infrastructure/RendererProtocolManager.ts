@@ -1,5 +1,5 @@
 import { readFile, stat } from 'node:fs/promises';
-import { basename, extname } from 'node:path';
+import path from 'node:path';
 
 import { app, protocol } from 'electron';
 import { pathExistsSync } from 'fs-extra';
@@ -234,7 +234,7 @@ export class RendererProtocolManager {
 
   private isAssetRequest(pathname: string) {
     const normalizedPathname = pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
-    const ext = extname(normalizedPathname);
+    const ext = path.extname(normalizedPathname);
 
     return (
       pathname.startsWith('/assets/') ||
@@ -246,6 +246,6 @@ export class RendererProtocolManager {
   }
 
   private is404Html(filePath: string) {
-    return basename(filePath) === '404.html';
+    return path.basename(filePath) === '404.html';
   }
 }

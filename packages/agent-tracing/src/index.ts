@@ -10,6 +10,8 @@ export {
   reconstructToolsetBaseline,
 } from './utils/reconstruct';
 export {
+  analyzeAgentSignal,
+  renderAgentSignal,
   renderMessageDetail,
   renderSnapshot,
   renderStepDetail,

@@ -1,6 +1,6 @@
 import { useDebounce } from 'ahooks';
 import { useTheme as useNextThemesTheme } from 'next-themes';
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 
@@ -36,10 +36,10 @@ export const useCommandMenu = () => {
     typeFilter,
     setTypeFilter,
     page,
-    menuContext: context,
     pathname,
     selectedAgent,
     setSelectedAgent,
+    activeAgentId: agentId,
   } = useCommandMenuContext();
 
   const navigate = useNavigate();
@@ -50,15 +50,6 @@ export const useCommandMenu = () => {
   const { openGroupWizard } = useGroupWizard();
   const { createGroupWithMembers, createGroupFromTemplate, createPage } = useCreateMenuItems();
   const { open: openCreateLibraryModal } = useCreateNewModal();
-
-  // Extract agentId from pathname when in agent context
-  const agentId = useMemo(() => {
-    if (context === 'agent') {
-      const match = pathname?.match(/^\/agent\/([^/?]+)/);
-      return match?.[1] || undefined;
-    }
-    return undefined;
-  }, [context, pathname]);
 
   // Debounce search input to reduce API calls
   const debouncedSearch = useDebounce(search, { wait: 600 });

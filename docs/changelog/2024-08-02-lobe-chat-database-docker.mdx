@@ -1,9 +1,9 @@
 ---
 title: LobeHub Database Docker Image Official Release
 description: >-
-  LobeHub v1.8.0 launches the official database Docker image, supporting cloud
-  data synchronization and user management, along with comprehensive
-  self-deployment documentation.
+  LobeHub v1.8.0 ships the official database Docker image, completing the
+  server-side deployment stack with cloud data sync, user management, and
+  comprehensive self-hosting documentation.
 tags:
   - LobeHub
   - Docker Image
@@ -14,27 +14,34 @@ tags:
 
 # LobeHub Database Docker Image: The Final Piece of the Cloud Deployment Puzzle
 
-We are excited to announce the official release of the long-awaited database Docker image for LobeHub v1.8.0! This marks a significant milestone in our server database offerings, providing users with a complete cloud deployment solution.
+With LobeHub v1.8.0, the official database Docker image is now available. This completes the server-side deployment path we have been building, so teams can run a full cloud deployment without gaps in their setup flow.
 
-## 🚀 Core Features
+The image ships with Postgres and NextAuth pre-configured. You get cloud data synchronization and flexible authentication out of the box, including support for third-party SSO providers like Auth0.
 
-- **Lightweight Deployment**: The Docker image is only 90MB, yet offers full database functionality.
-- **Optimized Performance**: Pre-configured with Server Postgres and NextAuth authentication system to ensure optimal connectivity performance.
-- **Cloud Synchronization**: Enjoy a seamless cloud data synchronization experience right after deployment.
-- **Flexible Authentication**: Supports integration with third-party SSO service providers like Auth0.
+## Lightweight but complete
 
-## 📘 Upgraded Deployment Documentation
+The Docker image weighs only 90MB, yet provides a full database environment. We pre-configured Server Postgres and the NextAuth authentication system to ensure stable connectivity from the start. This keeps deployment simple while giving you production-grade foundations.
 
-To ensure users can complete the deployment smoothly, we have optimized the structure of our deployment documentation:
+After deployment, cloud data synchronization is available immediately. Your data flows between client and server without additional configuration steps.
 
-- Clear introduction to the framework concepts
+## Self-hosting documentation rebuilt
+
+To make private deployments smoother, we reorganized the deployment documentation with clearer structure:
+
+- Framework concepts explained up front
 - Detailed deployment case studies
-- Comprehensive self-deployment operation guide
+- Step-by-step self-hosting guide
 
-You can start deploying your own LobeHub service by visiting the [official documentation](https://lobehub.com/en/docs/self-hosting/server-database).
+Visit the [official documentation](https://lobehub.com/en/docs/self-hosting/server-database) to start deploying your own LobeHub service.
 
-## 🔮 Future Outlook
+## Improvements and fixes
 
-Our knowledge base feature is also in development, so stay tuned for more exciting updates!
+- Released official database Docker image (90MB)
+- Pre-configured Server Postgres and NextAuth authentication
+- Enabled cloud data synchronization post-deployment
+- Added Auth0 and third-party SSO provider integration
+- Reorganized self-hosting documentation with case studies
 
-This update marks a significant breakthrough for LobeHub in cloud deployment solutions, making private deployment easier than ever. We appreciate the community's patience, and we will continue to strive to provide users with a better experience.
+## Credits
+
+Thanks to the community for the patience while we built this part of the stack. We will keep improving the overall deployment experience.

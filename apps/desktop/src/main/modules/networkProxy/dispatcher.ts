@@ -1,5 +1,5 @@
 import type { NetworkProxySettings } from '@lobechat/electron-client-ipc';
-import type {SocksProxies } from 'fetch-socks';
+import type { SocksProxies } from 'fetch-socks';
 import { socksDispatcher } from 'fetch-socks';
 import { Agent, getGlobalDispatcher, ProxyAgent, setGlobalDispatcher } from 'undici';
 
@@ -120,6 +120,7 @@ export class ProxyDispatcherManager {
       logger.error(`Failed to create proxy agent for ${proxyType}:`, error);
       throw new Error(
         `Failed to create proxy agent: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        { cause: error },
       );
     }
   }

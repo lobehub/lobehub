@@ -8,6 +8,7 @@ import {
   useSetCurrentDrag,
 } from '@/routes/(main)/resource/features/DndContextWrapper';
 import { documentService } from '@/services/document';
+import { useFileStore } from '@/store/file';
 import { type FileListItem } from '@/types/files';
 
 import { useFileItemClick } from '../../hooks/useFileItemClick';
@@ -251,9 +252,11 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
         }
 
         setIsDragging(true);
+        const parentKey = useFileStore.getState().queryParams?.parentId ?? '';
         setCurrentDrag({
           data: dragData,
           id,
+          parentKey,
           type: isFolder ? 'folder' : 'file',
         });
 

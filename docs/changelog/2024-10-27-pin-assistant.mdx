@@ -1,38 +1,41 @@
 ---
-title: LobeHub Introduces Persistent Assistant Sidebar Feature
+title: LobeHub Adds a Persistent Agent Sidebar
 description: >-
-  LobeHub v1.26.0 launches the persistent assistant sidebar feature, supporting
-  quick key switching for easy access to frequently used assistants,
-  significantly enhancing efficiency.
+  LobeHub v1.26.0 introduces a persistent Agent sidebar with shortcut-based
+  switching, synced pinned Agents, and a more focused chat layout.
 tags:
-  - Persistent Assistant
-  - Sidebar Feature
-  - User Experience
-  - Workflow Optimization
+  - Persistent Agent Sidebar
+  - Agent Switching
+  - Chat Layout
+  - Workflow Efficiency
 ---
 
-# Persistent Assistant Sidebar: Creating a More Convenient Conversation Experience
+# Persistent Agent Sidebar: Faster Access, Less Context Switching
 
-In version v1.26.0, we are excited to introduce a long-awaited new feature — the persistent assistant sidebar. This feature aims to enhance user access to frequently used assistants, making your reliable helpers easily accessible.
+In v1.26.0, LobeHub adds a persistent Agent sidebar to make high-frequency Agents easier to reach during active conversations. Instead of jumping between lists, you can keep your key Agents visible and switch with less friction.
 
-## Feature Highlights
+## Tighter conversation workflow
 
-- **Quick Switching**: Supports quick switching between different assistants using keyboard shortcuts, making your workflow smoother.
-- **Space Optimization**: Activating the sidebar automatically hides the conversation list, providing you with a larger conversation area.
-- **Intelligent Display**: Automatically syncs pinned assistants to the sidebar, ensuring that important assistants are always within view.
+This update focuses on reducing small interaction costs in everyday chat:
+
+- **Quick switching** — Use keyboard shortcuts to move between Agents faster
+- **More chat space** — When the sidebar is active, the conversation list hides to free up room for messages
+- **Synced pinned Agents** — Your pinned Agents automatically appear in the sidebar so priority items stay in view
 
 ![Sidebar Display Effect](/blog/assets/6ee2609d79281b6b915e317461013f31.webp)
 
 ![Conversation Interface Effect](/blog/assets/1f6c4f1c5e6211735ca4924c7807aca1.webp)
 
-## How to Use
+## How to enable
 
-Currently, this feature is in the experimental stage and is disabled by default. To experience it, you can enable it by adding the environment variable `FEATURE_FLAGS=+pin_list`.
+This capability is currently experimental and disabled by default. To try it in self-hosted setups, enable it with:
 
-We have already enabled this feature in the Cloud version, and we welcome all users to try it out and provide feedback. You can share your experiences in [GitHub Discussions](https://github.com/lobehub/lobe-chat/discussions/4515) to help us refine this feature further.
+```
+FEATURE_FLAGS=+pin_list
+```
 
-## Design Philosophy
+The Cloud version already has this enabled. If you try it, share feedback in [GitHub Discussions](https://github.com/lobehub/lobe-chat/discussions/4515) so we can keep improving the experience.
 
-The core goal of this update is to optimize work efficiency. By effectively utilizing the sidebar space, we make frequently used assistants easily accessible while hiding the conversation list to expand the conversation area, providing users with a more focused dialogue experience.
+## Why we built it
 
-We hope this new feature will significantly enhance your user experience. Welcome to upgrade to version v1.26.0 and start experiencing it!
+The goal of this release is straightforward: improve focus and reduce small interaction costs in everyday chat. By keeping frequently used Agents close at hand and reclaiming screen space for messages, the interface supports longer, more concentrated conversations.

@@ -51,9 +51,11 @@ export const params = {
       const modalities =
         (payload as any).modalities ?? (isImageModel ? ['image', 'text'] : undefined);
 
-      // Map imageResolution to image_size: '512px' → '0.5K', others pass through
+      // Map imageResolution to image_size: '512' → '0.5K', others pass through.
+      // OpenRouter's image_size field expects '0.5K' for 512px output; the rest
+      // ('1K'/'2K'/'4K') are passed through verbatim.
       const imageSizeValue = imageResolution
-        ? imageResolution === '512px'
+        ? imageResolution === '512'
           ? '0.5K'
           : imageResolution
         : undefined;
@@ -166,7 +168,12 @@ export const params = {
           if (model.description && model.description.includes('`reasoning` `enabled`')) {
             extendParams.push('enableReasoning');
           }
-          if (hasReasoning && (model.id.includes('gpt-5.2') || model.id.includes('gpt-5.4'))) {
+          if (
+            hasReasoning &&
+            (model.id.includes('gpt-5.2') ||
+              model.id.includes('gpt-5.4') ||
+              model.id.includes('gpt-5.5'))
+          ) {
             extendParams.push('gpt5_2ReasoningEffort', 'textVerbosity');
           } else if (hasReasoning && model.id.includes('gpt-5.1')) {
             extendParams.push('gpt5_1ReasoningEffort', 'textVerbosity');

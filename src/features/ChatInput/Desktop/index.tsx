@@ -2,7 +2,7 @@
 
 import { type ChatInputProps } from '@lobehub/editor/react';
 import { ChatInput, ChatInputActionBar } from '@lobehub/editor/react';
-import { Center, Flexbox, Text } from '@lobehub/ui';
+import { Center, Flexbox, Skeleton, Text } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { type ReactNode, use } from 'react';
 import { memo, useEffect } from 'react';
@@ -20,6 +20,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { type ActionToolbarProps } from '../ActionBar';
 import ActionBar from '../ActionBar';
 import InputEditor from '../InputEditor';
+import { type PlaceholderVariant } from '../InputEditor/Placeholder';
 import RuntimeConfig from '../RuntimeConfig';
 import SendArea from '../SendArea';
 import TypoBar from '../TypoBar';
@@ -61,7 +62,21 @@ interface DesktopChatInputProps extends ActionToolbarProps {
   actionBarStyle?: React.CSSProperties;
   extentHeaderContent?: ReactNode;
   inputContainerProps?: ChatInputProps;
+  /**
+   * Swap the action bar and send area for skeleton placeholders while
+   * the underlying agent / group / session config is still hydrating.
+   * The editor itself stays usable. Wins over `leftContent` / `rightContent`.
+   */
+  isConfigLoading?: boolean;
   leftContent?: ReactNode;
+  placeholder?: ReactNode;
+  placeholderVariant?: PlaceholderVariant;
+  rightContent?: ReactNode;
+  /**
+   * Custom node to render in place of the default RuntimeConfig bar.
+   * When provided, used instead of `<RuntimeConfig />` (ignores `showRuntimeConfig`).
+   */
+  runtimeConfigSlot?: ReactNode;
   sendAreaPrefix?: ReactNode;
   showFootnote?: boolean;
   showRuntimeConfig?: boolean;
@@ -71,13 +86,18 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
   ({
     showFootnote,
     showRuntimeConfig = true,
+    runtimeConfigSlot,
     inputContainerProps,
     extentHeaderContent,
     actionBarStyle,
     borderRadius,
     extraActionItems,
     dropdownPlacement,
+    isConfigLoading = false,
     leftContent,
+    placeholder,
+    placeholderVariant,
+    rightContent,
     sendAreaPrefix,
   }) => {
     const { t } = useTranslation('chat');
@@ -109,6 +129,21 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
       leftActions.flat().includes('fileUpload') || hasContextSelections || hasFiles;
     const contextContainerNode = shouldShowContextContainer && <ContextContainer />;
 
+    const loadingLeftSlot = isConfigLoading ? (
+      <Flexbox horizontal align="center" gap={6} paddingInline={4}>
+        <Skeleton.Button active shape="circle" size="small" style={{ height: 28, width: 28 }} />
+        <Skeleton.Button active shape="circle" size="small" style={{ height: 28, width: 28 }} />
+      </Flexbox>
+    ) : null;
+    const loadingRightSlot = isConfigLoading ? (
+      <Skeleton.Button
+        active
+        shape="round"
+        size="small"
+        style={{ height: 32, minWidth: 64, width: 64 }}
+      />
+    ) : null;
+
     const content = (
       <Flexbox
         className={cx(styles.container, expand && styles.fullscreen)}
@@ -127,6 +162,7 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
             <ChatInputActionBar
               style={actionBarStyle ?? { paddingRight: 8 }}
               left={
+                loadingLeftSlot ??
                 leftContent ?? (
                   <ActionBar
                     borderRadius={borderRadius}
@@ -136,14 +172,16 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
                 )
               }
               right={
-                sendAreaPrefix ? (
+                loadingRightSlot ??
+                rightContent ??
+                (sendAreaPrefix ? (
                   <Flexbox horizontal align={'center'} gap={6}>
                     {sendAreaPrefix}
                     <SendArea />
                   </Flexbox>
                 ) : (
                   <SendArea />
-                )
+                ))
               }
             />
           }
@@ -160,9 +198,9 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
           {...inputContainerProps}
           className={cx(expand && styles.inputFullscreen, inputContainerProps?.className)}
         >
-          <InputEditor />
+          <InputEditor placeholder={placeholder} placeholderVariant={placeholderVariant} />
         </ChatInput>
-        {showRuntimeConfig && <RuntimeConfig />}
+        {runtimeConfigSlot ?? (showRuntimeConfig && <RuntimeConfig />)}
         {showFootnote && !expand && (
           <Center style={{ pointerEvents: 'none', zIndex: 100 }}>
             <Text className={styles.footnote} type={'secondary'}>

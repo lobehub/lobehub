@@ -10,7 +10,7 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ContentViewer from '@/features/AgentSkillDetail/ContentViewer';
-import FileTree from '@/features/AgentSkillDetail/FileTree';
+import FileTree from '@/features/FileTree';
 import { useToolStore } from '@/store/tool';
 
 import SkillEditForm, { type SkillEditFormValues } from './SkillEditForm';

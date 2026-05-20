@@ -3,13 +3,13 @@ import { Clock3Icon, PanelRightCloseIcon, PlusIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
+import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { conversationSelectors, useConversationStore } from '@/features/Conversation';
 import NavHeader from '@/features/NavHeader';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/slices/topic/selectors';
-import { useGlobalStore } from '@/store/global';
 
+import { usePageAgentPanelControl, usePageAgentPanelOverride } from '../RightPanel/OverrideContext';
 import TopicItem from './TopicSelector/TopicItem';
 
 const CopilotToolbar = memo(() => {
@@ -27,7 +27,8 @@ const CopilotToolbar = memo(() => {
 
   const currentTopic = useChatStore(topicSelectors.currentActiveTopic);
 
-  const [toggleRightPanel] = useGlobalStore((s) => [s.toggleRightPanel]);
+  const { toggle: togglePageAgentPanel } = usePageAgentPanelControl();
+  const hasOverride = !!usePageAgentPanelOverride();
 
   const isLoadingTopics = topics === undefined;
   const hideHistory = !isLoadingTopics && topics.length === 0;
@@ -52,7 +53,7 @@ const CopilotToolbar = memo(() => {
         <>
           <ActionIcon
             icon={PlusIcon}
-            size={DESKTOP_HEADER_ICON_SIZE}
+            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
             title={t('actions.addNewTopic')}
             onClick={() => switchTopic(null, { scope: 'page' })}
           />
@@ -95,15 +96,17 @@ const CopilotToolbar = memo(() => {
                 disabled={isLoadingTopics}
                 icon={Clock3Icon}
                 loading={isLoadingTopics}
-                size={DESKTOP_HEADER_ICON_SIZE}
+                size={DESKTOP_HEADER_ICON_SMALL_SIZE}
               />
             </Popover>
           )}
-          <ActionIcon
-            icon={PanelRightCloseIcon}
-            size={DESKTOP_HEADER_ICON_SIZE}
-            onClick={() => toggleRightPanel()}
-          />
+          {!hasOverride && (
+            <ActionIcon
+              icon={PanelRightCloseIcon}
+              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+              onClick={() => togglePageAgentPanel()}
+            />
+          )}
         </>
       }
     />

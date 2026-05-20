@@ -1,5 +1,4 @@
 export * from './agent';
-export * from './agentCronJob';
 export * from './agentExecution';
 export * from './agentGroup';
 export * from './aiChat';
@@ -18,6 +17,7 @@ export * from './eval';
 export * from './export';
 export * from './fetch';
 export * from './files';
+export * from './followUpAction';
 export * from './generation';
 export * from './home';
 export * from './hotkey';

@@ -1,7 +1,7 @@
 import { Avatar, Icon } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { Bot, MessageSquareText, Users, Wrench } from 'lucide-react';
-import { createElement, useMemo } from 'react';
+import { useMemo } from 'react';
 
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
@@ -13,32 +13,12 @@ import { homeAgentListSelectors } from '@/store/home/selectors';
 import { useAgentId } from '../hooks/useAgentId';
 import { useChatInputStore } from '../store';
 import { useInstalledSkillsAndTools } from './ActionTag/useInstalledSkillsAndTools';
+import MentionItemIcon from './MentionItemIcon';
 import type { MentionCategory } from './MentionMenu/types';
 
 const MAX_AGENT_ITEMS = 20;
 const MAX_TOPIC_LABEL = 50;
 type MenuOptionWithMetadata = { key: string; metadata?: Record<string, unknown> };
-
-/** Render a skill/tool avatar as a ReactNode icon. */
-const shouldRenderIconAsImage = (str: string) =>
-  str.startsWith('http://') ||
-  str.startsWith('https://') ||
-  str.startsWith('blob:') ||
-  /^data:image\//i.test(str);
-
-const renderAvatar = (avatar: string | undefined): React.ReactNode => {
-  if (!avatar) return <Icon icon={SkillsIcon} size={16} />;
-  if (shouldRenderIconAsImage(avatar)) {
-    return createElement('img', {
-      alt: '',
-      height: 16,
-      src: avatar,
-      style: { flexShrink: 0, objectFit: 'contain' as const },
-      width: 16,
-    });
-  }
-  return createElement('span', { style: { fontSize: 16, lineHeight: 1 } }, avatar);
-};
 
 export const useMentionCategories = (): MentionCategory[] => {
   const currentAgentId = useAgentId();
@@ -149,7 +129,7 @@ export const useMentionCategories = (): MentionCategory[] => {
         id: 'skill',
         icon: <Icon icon={SkillsIcon} size={16} />,
         items: skillItems.map((item) => ({
-          icon: renderAvatar(item.icon),
+          icon: <MentionItemIcon avatar={item.icon} category={'skill'} label={item.label} />,
           key: `skill-${item.type}`,
           label: item.label,
           metadata: {
@@ -170,7 +150,7 @@ export const useMentionCategories = (): MentionCategory[] => {
         id: 'tool',
         icon: <Icon icon={Wrench} size={16} />,
         items: toolItems.map((item) => ({
-          icon: renderAvatar(item.icon),
+          icon: <MentionItemIcon avatar={item.icon} category={'tool'} label={item.label} />,
           key: `tool-${item.type}`,
           label: item.label,
           metadata: {

@@ -27,7 +27,7 @@ let importer: DataImporterRepos;
 beforeEach(async () => {
   await serverDB.delete(users);
 
-  // 创建测试数据
+  // Create test data
   await serverDB.transaction(async (tx) => {
     await tx.insert(users).values({ id: userId });
   });
@@ -323,13 +323,13 @@ describe('DataImporter', () => {
 
       await importer.importData(data);
 
-      // 验证是否为每个 session 创建了对应的 agent
+      // Verify that a corresponding agent was created for each session
       const agentCount = await serverDB.query.agents.findMany({
         where: eq(agents.userId, userId),
       });
       expect(agentCount).toHaveLength(2);
 
-      // 验证 agent 的属性是否正确设置
+      // Verify that agent attributes are correctly set
       const agent1 = await serverDB.query.agents.findFirst({
         where: eq(agents.systemRole, 'Test Agent 1'),
       });
@@ -340,12 +340,12 @@ describe('DataImporter', () => {
       });
       expect(agent2?.model).toBe('def');
 
-      // 验证 agentsToSessions 关联是否正确建立
+      // Verify that the agentsToSessions association is correctly established
       const session1 = await serverDB.query.sessions.findFirst({
         where: eq(sessions.clientId, 'session1'),
       });
       const session1Agent = await serverDB.query.agentsToSessions.findFirst({
-        where: eq(agentsToSessions.sessionId, session1?.id!),
+        where: eq(agentsToSessions.sessionId, session1!.id),
         with: { agent: true },
       });
 
@@ -355,7 +355,7 @@ describe('DataImporter', () => {
         where: eq(sessions.clientId, 'session2'),
       });
       const session2Agent = await serverDB.query.agentsToSessions.findFirst({
-        where: eq(agentsToSessions.sessionId, session2?.id!),
+        where: eq(agentsToSessions.sessionId, session2!.id),
         with: { agent: true },
       });
 
@@ -363,7 +363,7 @@ describe('DataImporter', () => {
     });
 
     it('should not create duplicate agents for existing sessions', async () => {
-      // 先导入一些 sessions
+      // First import some sessions
       await importer.importData({
         sessions: [
           {
@@ -387,7 +387,7 @@ describe('DataImporter', () => {
         version: CURRENT_CONFIG_VERSION,
       });
 
-      // 再次导入相同的 sessions
+      // Import the same sessions again
       await importer.importData({
         sessions: [
           {
@@ -411,7 +411,7 @@ describe('DataImporter', () => {
         version: CURRENT_CONFIG_VERSION,
       });
 
-      // 验证只创建了一个 agent
+      // Verify that only one agent was created
       const agentCount = await serverDB.query.agents.findMany({
         where: eq(agents.userId, userId),
       });
@@ -885,8 +885,6 @@ describe('DataImporter', () => {
                   voice: { openai: 'alloy' },
                 },
                 chatConfig: {
-                  autoCreateTopicThreshold: 2,
-                  enableAutoCreateTopic: true,
                   historyCount: 1,
                 },
                 openingQuestions: ['Question 1', 'Question 2'],

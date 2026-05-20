@@ -384,6 +384,29 @@ describe('LobeZhipuAI - custom features', () => {
       });
     });
 
+    describe('tool_stream for streaming tool calls', () => {
+      it.each([
+        ['glm-4.6', true, true],
+        ['glm-4.7', true, true],
+        ['glm-5', true, true],
+        ['glm-5.1', true, true],
+        ['glm-4.5', true, undefined],
+        ['glm-5-turbo', true, undefined],
+        ['glm-4', true, undefined],
+        ['glm-5.1', false, undefined],
+      ] as const)('model=%s stream=%s → tool_stream=%s', async (model, stream, expected) => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model,
+          stream,
+          temperature: 0.5,
+        });
+
+        const callArgs = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+        expect(callArgs.tool_stream).toBe(expected);
+      });
+    });
+
     describe('Preserve other payload properties', () => {
       it('should preserve all other properties', async () => {
         await instance.chat({

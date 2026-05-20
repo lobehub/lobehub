@@ -38,9 +38,14 @@ interface LocalFileProps {
   isDirectory?: boolean;
   name: string;
   path?: string;
+  /**
+   * When true, disable interactive actions (Open / Show in Folder).
+   * Used in share pages where local file operations are not available.
+   */
+  readonly?: boolean;
 }
 
-export const LocalFile = ({ name, path, isDirectory = false }: LocalFileProps) => {
+export const LocalFile = ({ name, path, isDirectory = false, readonly = false }: LocalFileProps) => {
   const { t } = useTranslation('components');
 
   const handleOpenFile = () => {
@@ -69,8 +74,8 @@ export const LocalFile = ({ name, path, isDirectory = false }: LocalFileProps) =
     </Flexbox>
   );
 
-  // Directory: no popover, just click to open
-  if (isDirectory) {
+  // Directory or readonly mode (e.g. share page): no popover, just display
+  if (isDirectory || readonly) {
     return fileContent;
   }
 

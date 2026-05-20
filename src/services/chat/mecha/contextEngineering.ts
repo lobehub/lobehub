@@ -1,11 +1,18 @@
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
-import { CredsIdentifier, type CredSummary, generateCredsList } from '@lobechat/builtin-tool-creds';
+import {
+  CredsIdentifier,
+  type CredSummary,
+  generateCredsList,
+  generateKlavisServicesList,
+  type KlavisServiceSummary,
+} from '@lobechat/builtin-tool-creds';
 import { GroupAgentBuilderIdentifier } from '@lobechat/builtin-tool-group-agent-builder';
-import { GTDIdentifier } from '@lobechat/builtin-tool-gtd';
+import { LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
+import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { WebOnboardingIdentifier } from '@lobechat/builtin-tool-web-onboarding';
-import { isDesktop, KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
+import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
 import type {
   AgentBuilderContext,
   AgentContextDocument,
@@ -13,10 +20,10 @@ import type {
   AgentManagementContext,
   GroupAgentBuilderContext,
   GroupOfficialToolItem,
-  GTDConfig,
   LobeToolManifest,
   MemoryContext,
   OnboardingContext,
+  PlanTodoConfig,
   ToolDiscoveryConfig,
   UserMemoryData,
 } from '@lobechat/context-engine';
@@ -48,6 +55,7 @@ import {
   lobehubSkillStoreSelectors,
   toolSelectors,
 } from '@/store/tool/selectors';
+import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
 
 import { isCanUseVideo, isCanUseVision } from '../helper';
 import { combineUserMemoryData, resolveTopicMemories, resolveUserPersona } from './memoryManager';
@@ -90,7 +98,7 @@ interface ContextEngineeringContext {
   stepContext?: RuntimeStepContext;
   systemRole?: string;
   tools?: string[];
-  /** Topic ID for GTD context injection */
+  /** Topic ID for plan/todo context injection */
   topicId?: string;
 }
 
@@ -309,12 +317,12 @@ export const contextEngineering = async ({
     userMemoryData = combineUserMemoryData(topicMemories, persona);
   }
 
-  // Resolve GTD context: plan and todos
-  // GTD tool must be enabled and topicId must be provided
-  const isGTDEnabled = tools?.includes(GTDIdentifier) ?? false;
-  let gtdConfig: GTDConfig | undefined;
+  // Resolve plan + todos context (now part of the lobe-agent tool).
+  // Lobe-agent must be enabled and topicId must be provided.
+  const isPlanTodoEnabled = tools?.includes(LobeAgentIdentifier) ?? false;
+  let planTodoConfig: PlanTodoConfig | undefined;
 
-  if (isGTDEnabled && topicId) {
+  if (isPlanTodoEnabled && topicId) {
     try {
       // Fetch plan document for the current topic
       const planResult = await notebookService.listDocuments({
@@ -339,17 +347,17 @@ export const contextEngineering = async ({
         // Get todos from plan's metadata
         const todos = planDoc.metadata?.todos;
 
-        gtdConfig = {
+        planTodoConfig = {
           enabled: true,
           plan,
           todos,
         };
 
-        log('GTD context resolved: plan=%s, todos=%o', plan.goal, todos?.items?.length ?? 0);
+        log('Plan/Todo context resolved: plan=%s, todos=%o', plan.goal, todos?.items?.length ?? 0);
       }
     } catch (error) {
-      // Silently fail - GTD context is optional
-      log('Failed to resolve GTD context:', error);
+      // Silently fail - plan/todo context is optional
+      log('Failed to resolve plan/todo context:', error);
     }
   }
 
@@ -374,6 +382,39 @@ export const contextEngineering = async ({
     } catch (error) {
       // Silently fail - creds context is optional
       log('Failed to resolve creds context:', error);
+    }
+  }
+
+  // Build Klavis services list for creds context
+  // Shows which Klavis services are connected (authorized) and which are available to connect
+  let klavisServicesList = '';
+
+  const isKlavisEnabled =
+    typeof window !== 'undefined' &&
+    window.global_serverConfigStore?.getState()?.serverConfig?.enableKlavis;
+
+  if (isCredsEnabled && isKlavisEnabled) {
+    try {
+      const toolState = getToolStoreState();
+      const allKlavisServers = klavisStoreSelectors.getServers(toolState);
+
+      const connected: KlavisServiceSummary[] = allKlavisServers
+        .filter((s) => s.status === KlavisServerStatus.CONNECTED)
+        .map((s) => ({ identifier: s.identifier, name: s.serverName }));
+
+      const connectedIds = new Set(connected.map((s) => s.identifier));
+      const available: KlavisServiceSummary[] = KLAVIS_SERVER_TYPES.filter(
+        (t) => !connectedIds.has(t.identifier),
+      ).map((t) => ({ identifier: t.identifier, name: t.label }));
+
+      klavisServicesList = generateKlavisServicesList(connected, available);
+      log(
+        'Klavis services context resolved: connected=%d, available=%d',
+        connected.length,
+        available.length,
+      );
+    } catch (error) {
+      log('Failed to resolve Klavis services context:', error);
     }
   }
 
@@ -416,13 +457,22 @@ export const contextEngineering = async ({
 
   if (shouldInjectAvailableAgents) {
     try {
-      // Over-fetch by 1 to detect overflow.
+      // Over-fetch by 2: +1 reserved for the current agent (filtered out below
+      // so the model has no exposure to its own id and cannot self-delegate)
+      // and +1 to detect overflow for the `hasMore` flag.
       const AVAILABLE_AGENTS_LIMIT = 10;
       const recentAgents = await lambdaClient.agent.queryAgents.query({
-        limit: AVAILABLE_AGENTS_LIMIT + 1,
+        limit: AVAILABLE_AGENTS_LIMIT + 2,
       });
-      const hasMoreAgents = recentAgents.length > AVAILABLE_AGENTS_LIMIT;
-      const availableAgents = recentAgents.slice(0, AVAILABLE_AGENTS_LIMIT).map((a) => ({
+
+      // Exclude current agent from `availableAgents`. The model is the current
+      // agent — its identity/persona is already established by `systemRole`, so
+      // we don't re-inject it here, and removing self from the list ensures the
+      // model never sees its own id in the agent-management context (so it
+      // cannot accidentally call itself via `callAgent`).
+      const otherAgents = agentId ? recentAgents.filter((a) => a.id !== agentId) : recentAgents;
+      const hasMoreAgents = otherAgents.length > AVAILABLE_AGENTS_LIMIT;
+      const availableAgents = otherAgents.slice(0, AVAILABLE_AGENTS_LIMIT).map((a) => ({
         description: a.description ?? undefined,
         id: a.id,
         title: a.title ?? 'Untitled',
@@ -431,6 +481,12 @@ export const contextEngineering = async ({
       agentManagementContext = {
         availableAgents,
         availableAgentsHasMore: hasMoreAgents,
+        ...(agentId && {
+          currentAgent: {
+            id: agentId,
+            title: agentSelectors.getAgentMetaById(agentId)(agentStoreState)?.title ?? undefined,
+          },
+        }),
       };
       log('availableAgents fetched: %d agents (hasMore=%s)', availableAgents.length, hasMoreAgents);
     } catch (error) {
@@ -565,40 +621,15 @@ export const contextEngineering = async ({
     },
   );
 
-  // Build onboarding context if this is the web-onboarding agent
+  // Build onboarding context if this is the web-onboarding agent.
+  // Single combined trpc call — server runs state/soul/persona DB queries in parallel.
   let onboardingContext: OnboardingContext | undefined;
   const isOnboardingAgent = tools?.includes(WebOnboardingIdentifier);
   if (isOnboardingAgent) {
     try {
       const { userService } = await import('@/services/user');
-      const { formatWebOnboardingStateMessage } =
-        await import('@lobechat/builtin-tool-web-onboarding/utils');
-      const state = await userService.getOnboardingState();
-      const phaseGuidance = formatWebOnboardingStateMessage(state);
-
-      // Fetch SOUL.md and persona documents via raw DB access to avoid placeholder text
-      let soulContent: string | null = null;
-      let personaContent: string | null = null;
-      try {
-        const soulDoc = await userService.readOnboardingDocument('soul');
-        // Only inject real content, not empty-state placeholder messages
-        if (soulDoc?.id && soulDoc.content) {
-          soulContent = soulDoc.content;
-        }
-      } catch {
-        // Ignore — document may not exist yet
-      }
-      try {
-        const personaDoc = await userService.readOnboardingDocument('persona');
-        if (personaDoc?.id && personaDoc.content) {
-          personaContent = personaDoc.content;
-        }
-      } catch {
-        // Ignore — document may not exist yet
-      }
-
-      onboardingContext = { personaContent, phaseGuidance, soulContent };
-      log('Built onboarding context, phase: %s', state.phase);
+      onboardingContext = await userService.getOnboardingAgentContext();
+      log('Built onboarding context');
     } catch (error) {
       log('Failed to build onboarding context: %O', error);
     }
@@ -622,7 +653,7 @@ export const contextEngineering = async ({
     },
 
     // File context configuration
-    fileContext: { enabled: true, includeFileUrl: !isDesktop },
+    fileContext: { enabled: true, includeFileUrl: false },
 
     // Knowledge injection
     knowledge: {
@@ -646,9 +677,24 @@ export const contextEngineering = async ({
     selectedSkills: initialContext?.selectedSkills,
     selectedTools: initialContext?.selectedTools,
 
-    // Skills configuration — expose all installed skills so the AI can discover and activate them
+    // Pass enableAgentMode through; MessagesEngine force-disables skills /
+    // agent-document injectors when this is `false` (chat mode).
+    enableAgentMode: agentChatConfigSelectors.currentChatConfig(agentStoreState).enableAgentMode,
+
+    // Skills configuration
+    // In auto mode: expose all installed skills so the AI can discover and activate them
+    // In manual mode: only expose user-selected skills (filtered by pluginIds)
     skillsConfig: {
-      enabledSkills: plugins ? resolveClientSkills(plugins).skills : undefined,
+      enabledSkills: plugins
+        ? (() => {
+            const skillSet = resolveClientSkills(plugins);
+            if (!isInAutoSkillMode) {
+              const selectedIds = new Set(plugins);
+              return skillSet.skills.filter((s) => selectedIds.has(s.identifier));
+            }
+            return skillSet.skills;
+          })()
+        : undefined,
     },
 
     // Tool Discovery configuration
@@ -656,6 +702,9 @@ export const contextEngineering = async ({
 
     // Tools configuration
     toolsConfig: {
+      disabledToolIdentifiers: tools?.includes(PageAgentIdentifier)
+        ? undefined
+        : [PageAgentIdentifier],
       manifests,
       tools,
     },
@@ -668,8 +717,28 @@ export const contextEngineering = async ({
       ...VARIABLE_GENERATORS,
       // NOTICE: required by builtin-tool-creds/src/systemRole.ts
       CREDS_LIST: () => (credsList ? generateCredsList(credsList) : ''),
+      // NOTICE: required by builtin-tool-creds/src/systemRole.ts (Klavis integrations)
+      KLAVIS_SERVICES_LIST: () => klavisServicesList,
       // NOTICE(@nekomeowww): required by builtin-tool-memory/src/systemRole.ts
       memory_effort: () => (userMemoryConfig ? (memoryContext?.effort ?? '') : ''),
+      // Current agent + topic identity — referenced by the LobeHub builtin
+      // skill (packages/builtin-skills/src/lobehub/content.ts) so the model
+      // can run `lh agent run -a {{agent_id}}` etc without first having to
+      // search for itself. Read lazily from stores so we only pay the cost
+      // when the placeholder actually appears in a rendered message.
+      agent_id: () => agentId ?? '',
+      agent_title: () =>
+        agentId ? (agentSelectors.getAgentMetaById(agentId)(agentStoreState)?.title ?? '') : '',
+      agent_description: () =>
+        agentId
+          ? (agentSelectors.getAgentMetaById(agentId)(agentStoreState)?.description ?? '')
+          : '',
+      topic_id: () => topicId ?? '',
+      topic_title: () => {
+        if (!topicId) return '';
+        const topic = topicSelectors.getTopicById(topicId)(getChatStoreState());
+        return topic?.title ?? '';
+      },
     },
 
     // Extended contexts - only pass when enabled
@@ -677,7 +746,7 @@ export const contextEngineering = async ({
     ...(isGroupAgentBuilderEnabled && { groupAgentBuilderContext }),
     ...(agentManagementContext && { agentManagementContext }),
     ...(agentGroup && { agentGroup }),
-    ...(gtdConfig && { gtd: gtdConfig }),
+    ...(planTodoConfig && { planTodo: planTodoConfig }),
     ...(topicReferences && topicReferences.length > 0 && { topicReferences }),
     ...(onboardingContext && { onboardingContext }),
   });

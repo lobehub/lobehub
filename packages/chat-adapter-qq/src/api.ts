@@ -1,4 +1,9 @@
-import type { QQAccessTokenResponse, QQSendMessageParams, QQSendMessageResponse } from './types';
+import type {
+  QQAccessTokenResponse,
+  QQGatewayUrlResponse,
+  QQSendMessageParams,
+  QQSendMessageResponse,
+} from './types';
 import { QQ_MSG_TYPE } from './types';
 
 const AUTH_URL = 'https://bots.qq.com/app/getAppAccessToken';
@@ -172,6 +177,13 @@ export class QQApiClient {
     }
 
     return this.call<QQSendMessageResponse>('POST', `/dms/${guildId}/messages`, params);
+  }
+
+  /**
+   * Get the WebSocket gateway URL for establishing a persistent connection.
+   */
+  async getGatewayUrl(): Promise<QQGatewayUrlResponse> {
+    return this.call<QQGatewayUrlResponse>('GET', '/gateway');
   }
 
   /**

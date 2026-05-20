@@ -7,6 +7,7 @@ export interface BuiltinSkillFilterContext {
 }
 
 const DESKTOP_ONLY_BUILTIN_SKILLS = new Set([AgentBrowserIdentifier]);
+const USER_HIDDEN_BUILTIN_SKILLS = new Set(['task']);
 
 const DEFAULT_CONTEXT: BuiltinSkillFilterContext = {
   isDesktop,
@@ -24,6 +25,8 @@ export const shouldEnableBuiltinSkill = (
 ): boolean => {
   const resolvedContext = resolveBuiltinSkillFilterContext(context);
 
+  if (USER_HIDDEN_BUILTIN_SKILLS.has(skillId)) return false;
+
   if (DESKTOP_ONLY_BUILTIN_SKILLS.has(skillId)) {
     if (!resolvedContext.isDesktop) return false;
     return true;
@@ -38,3 +41,5 @@ export const filterBuiltinSkills = (
 ): BuiltinSkill[] => {
   return skills.filter((skill) => shouldEnableBuiltinSkill(skill.identifier, context));
 };
+
+export { USER_HIDDEN_BUILTIN_SKILLS };

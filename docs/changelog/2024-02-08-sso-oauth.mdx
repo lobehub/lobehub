@@ -1,8 +1,9 @@
 ---
-title: LobeHub Supports Multi-User Management with Clerk and Next-Auth
+title: Authentication That Adapts to Your Stack
 description: >-
-  LobeHub offers various user authentication and management solutions, including
-  Clerk and Next-Auth, to meet the diverse needs of different users.
+  LobeHub now supports both Clerk and Next-Auth, giving teams flexibility to
+  choose the authentication approach that fits their deployment model and
+  security requirements.
 tags:
   - User Management
   - Next-Auth
@@ -11,24 +12,36 @@ tags:
   - Multi-Factor Authentication
 ---
 
-# Support for Multi-User Management with Clerk and Next-Auth
+# Authentication That Adapts to Your Stack
 
-In modern applications, user management and authentication are crucial features. To cater to the diverse needs of users, LobeHub provides two primary user authentication and management solutions: `next-auth` and `Clerk`. Whether you're looking for simple user registration and login or need more advanced multi-factor authentication and user management, LobeHub can flexibly accommodate your requirements.
+Every product needs reliable sign-in, but not every team has the same requirements. Some need to get up and running quickly with social logins. Others need enterprise-grade controls from day one. LobeHub now supports both paths by integrating with next-auth and Clerk.
 
-## Next-Auth: A Flexible and Powerful Authentication Library
+This gives teams the freedom to start simple and upgrade security when the time is right—without rethinking their entire auth architecture.
 
-LobeHub integrates `next-auth`, a flexible and powerful authentication library that supports various authentication methods, including OAuth, email login, and credential-based login. With `next-auth`, you can easily implement the following features:
+## Next-Auth: Start Fast, Stay Flexible
 
-- **User Registration and Login**: Supports multiple authentication methods to meet different user needs.
-- **Session Management**: Efficiently manage user sessions to ensure security.
-- **Social Login**: Quick login options for various social media platforms.
-- **Data Security**: Protects user data privacy and security.
+Next-Auth provides a straightforward authentication layer for teams that want to ship quickly. It handles the essentials: OAuth from major providers, email-based login, and credential-based flows, all without managing a separate user service.
 
-## Clerk: A Modern User Management Platform
+Use this when you need:
 
-For users who require more advanced user management capabilities, LobeHub also supports [Clerk](https://clerk.com), a modern user management platform. Clerk offers a richer set of features, helping you achieve enhanced security and flexibility:
+- Quick setup with social providers like GitHub or Google
+- Session management that just works
+- Full control over the sign-in UI and flow
+- Privacy-friendly auth that keeps user data in your infrastructure
 
-- **Multi-Factor Authentication (MFA)**: Provides an additional layer of security.
-- **User Profile Management**: Easily manage user information and settings.
-- **Login Activity Monitoring**: Real-time monitoring of user login activities to ensure account security.
-- **Scalability**: Supports complex user management needs.
+## Clerk: Enterprise-Ready Identity
+
+When you need more than sign-in—multi-factor authentication, user profiles, and login activity monitoring—Clerk provides those capabilities out of the box. It's a managed identity platform that scales with your product.
+
+Switch to Clerk when you need:
+
+- MFA for sensitive accounts or compliance requirements
+- Built-in user profile and account management UI
+- Real-time login activity tracking
+- Scalable identity infrastructure without operational overhead
+
+## Improvements and fixes
+
+- Added support for next-auth v5 beta with improved session handling
+- Fixed redirect loop issues when using custom sign-in pages
+- Improved error messages for failed OAuth connections

@@ -370,9 +370,9 @@ describe('MarketService', () => {
         identifier: 'twitter',
         meta: {
           avatar: '🐦',
-          description: 'LobeHub Skill: Twitter',
+          description: 'LobeHub Skill: X (Twitter)',
           tags: ['lobehub-skill', 'twitter'],
-          title: 'Twitter',
+          title: 'X (Twitter)',
         },
         type: 'builtin',
       });
@@ -393,6 +393,25 @@ describe('MarketService', () => {
       const manifests = await service.getLobehubSkillManifests();
       expect(manifests).toHaveLength(1);
       expect(manifests[0].identifier).toBe('linear');
+    });
+
+    it('should use the static Notion provider label for manifests', async () => {
+      const service = new MarketService();
+      (service as any).market.connect.listConnections = vi.fn().mockResolvedValue({
+        connections: [
+          { icon: 'notion-icon', providerId: 'notion', providerName: 'User Workspace' },
+        ],
+      });
+      (service as any).market.skills.listTools = vi.fn().mockResolvedValue({
+        tools: [{ description: 'Search workspace', inputSchema: {}, name: 'notion-search' }],
+      });
+
+      const manifests = await service.getLobehubSkillManifests();
+      expect(manifests).toHaveLength(1);
+      expect(manifests[0].meta).toMatchObject({
+        description: 'LobeHub Skill: Notion',
+        title: 'Notion',
+      });
     });
 
     it('should skip connections where listTools returns empty', async () => {

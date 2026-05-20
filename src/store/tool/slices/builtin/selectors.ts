@@ -180,6 +180,36 @@ const allMetaList = (s: ToolStoreState): LobeToolMetaWithAvailability[] => {
 };
 
 /**
+ * Get installed discoverable builtin tools and skills.
+ * Excludes only tools with `discoverable: false` (pure infrastructure / internal).
+ * Includes hidden and runtime-managed tools (web-browsing, memory, cloud-sandbox, etc.).
+ */
+const discoverableMetaList = (s: ToolStoreState): LobeToolMeta[] => {
+  const { uninstalledBuiltinTools } = s;
+
+  const skillMetas = (s.builtinSkills || [])
+    .filter((skill) => {
+      if (!isBuiltinSkillAvailableInCurrentEnv(skill.identifier)) return false;
+      if (uninstalledBuiltinTools.includes(skill.identifier)) return false;
+      return true;
+    })
+    .map(toSkillMeta);
+
+  const agentSkillMetas = agentSkillsSelectors.agentSkillMetaList(s);
+
+  const builtinMetas = s.builtinTools
+    .filter((item) => {
+      // Exclude pure infrastructure tools (never user-facing)
+      if (item.discoverable === false) return false;
+      if (uninstalledBuiltinTools.includes(item.identifier)) return false;
+      return true;
+    })
+    .map(toBuiltinMeta);
+
+  return [...skillMetas, ...agentSkillMetas, ...builtinMetas, ...getKlavisMetas(s)];
+};
+
+/**
  * Get installed builtin tools meta list (excludes uninstalled, includes hidden and platform-specific)
  * Used for agent profile tool configuration where only installed tools should be shown
  */
@@ -222,6 +252,7 @@ const isBuiltinToolInstalled = (identifier: string) => (s: ToolStoreState) =>
 
 export const builtinToolSelectors = {
   allMetaList,
+  discoverableMetaList,
   installedAllMetaList,
   installedBuiltinSkills,
   isBuiltinToolInstalled,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { FileSearchResult } from './formatSearchResults';
+import type { DocumentSearchResult, FileSearchResult } from './formatSearchResults';
 import { formatSearchResults } from './formatSearchResults';
 
 describe('formatSearchResults', () => {
@@ -186,6 +186,81 @@ describe('formatSearchResults', () => {
     ];
 
     const result = formatSearchResults(fileResults, 'project setup steps');
+    expect(result).toMatchSnapshot();
+  });
+
+  it('should format documents only (BM25 hits, no file chunks)', () => {
+    const documents: DocumentSearchResult[] = [
+      {
+        documentId: 'docs_abc123',
+        knowledgeBaseId: 'kb_main',
+        relevance: 1.2,
+        snippet: 'machine learning is a subset of artificial intelligence...',
+        title: 'ML Notes',
+      },
+    ];
+    const result = formatSearchResults([], 'machine learning', documents);
+    expect(result).toMatchSnapshot();
+  });
+
+  it('should format mixed file chunks and documents', () => {
+    const fileResults: FileSearchResult[] = [
+      {
+        fileId: 'file_pdf1',
+        fileName: 'AI Handbook.pdf',
+        relevanceScore: 0.91,
+        topChunks: [{ similarity: 0.94, text: 'Neural networks are computational models...' }],
+      },
+    ];
+    const documents: DocumentSearchResult[] = [
+      {
+        documentId: 'docs_inline1',
+        knowledgeBaseId: 'kb_research',
+        relevance: 1.5,
+        snippet: 'Deep learning architectures include CNNs, RNNs, and Transformers.',
+        title: 'Deep Learning Cheatsheet',
+      },
+    ];
+    const result = formatSearchResults(fileResults, 'neural networks', documents);
+    expect(result).toMatchSnapshot();
+  });
+
+  it('should annotate when vector search fails but BM25 succeeds', () => {
+    const documents: DocumentSearchResult[] = [
+      {
+        documentId: 'docs_only',
+        knowledgeBaseId: 'kb_main',
+        relevance: 1.1,
+        snippet: 'fallback content via BM25',
+        title: 'Fallback Note',
+      },
+    ];
+    const result = formatSearchResults([], 'test query', documents, {
+      vector: 'Invalid API key for embedding provider',
+    });
+    expect(result).toMatchSnapshot();
+  });
+
+  it('should annotate when BM25 fails but vector succeeds', () => {
+    const fileResults: FileSearchResult[] = [
+      {
+        fileId: 'file_only',
+        fileName: 'Sole Result.pdf',
+        relevanceScore: 0.8,
+        topChunks: [{ similarity: 0.82, text: 'partial info' }],
+      },
+    ];
+    const result = formatSearchResults(fileResults, 'test query', [], {
+      bm25: 'paradedb extension unavailable',
+    });
+    expect(result).toMatchSnapshot();
+  });
+
+  it('should annotate empty result with both errors', () => {
+    const result = formatSearchResults([], 'test query', [], {
+      bm25: 'paradedb extension unavailable',
+      vector: 'Invalid API key for embedding provider',
+    });
     expect(result).toMatchSnapshot();
   });
 });

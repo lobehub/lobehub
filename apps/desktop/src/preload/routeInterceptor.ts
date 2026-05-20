@@ -3,7 +3,7 @@ import { findMatchingRoute } from '~common/routes';
 import { invoke } from './invoke';
 
 const interceptRoute = async (path: string, source: 'link-click', url: string) => {
-  console.log(`[preload] Intercepted ${source} and prevented default behavior:`, path);
+  console.info(`[preload] Intercepted ${source} and prevented default behavior:`, path);
 
   // Use electron-client-ipc's dispatch method
   try {
@@ -17,7 +17,7 @@ const interceptRoute = async (path: string, source: 'link-click', url: string) =
  * Route interceptor - Responsible for capturing and intercepting client-side route navigation
  */
 export const setupRouteInterceptors = function () {
-  console.log('[preload] Setting up route interceptors');
+  console.info('[preload] Setting up route interceptors');
 
   // Intercept all a tag click events - For Next.js Link component
   document.addEventListener(
@@ -30,7 +30,7 @@ export const setupRouteInterceptors = function () {
 
           // Check if it's an external link
           if (url.origin !== window.location.origin) {
-            console.log(`[preload] Intercepted external link click:`, url.href);
+            console.info(`[preload] Intercepted external link click:`, url.href);
             // Prevent default link navigation behavior
             e.preventDefault();
             e.stopPropagation();
@@ -63,7 +63,7 @@ export const setupRouteInterceptors = function () {
           // Handle possible URL parsing errors or other issues
           // For example mailto:, tel: protocols will cause new URL() to throw error
           if (err instanceof TypeError && err.message.includes('Invalid URL')) {
-            console.log(
+            console.info(
               '[preload] Non-HTTP link clicked, allowing default browser behavior:',
               link.href,
             );
@@ -78,5 +78,5 @@ export const setupRouteInterceptors = function () {
     true,
   );
 
-  console.log('[preload] Route interceptors setup completed');
+  console.info('[preload] Route interceptors setup completed');
 };

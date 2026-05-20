@@ -35,6 +35,7 @@
   "navigation.recentView": "Недавние просмотры",
   "navigation.resources": "Ресурсы",
   "navigation.settings": "Настройки",
+  "navigation.tasks": "Задачи",
   "navigation.unpin": "Открепить",
   "notification.finishChatGeneration": "Генерация сообщения ИИ завершена",
   "proxy.auth": "Требуется аутентификация",
@@ -106,6 +107,9 @@
   "tab.closeLeftTabs": "Закрыть вкладки слева",
   "tab.closeOtherTabs": "Закрыть другие вкладки",
   "tab.closeRightTabs": "Закрыть вкладки справа",
+  "tab.newTab": "Новая вкладка",
+  "tab.running": "Агент выполняется",
+  "tab.unread": "Новое сообщение",
   "updater.checkingUpdate": "Проверка обновлений",
   "updater.checkingUpdateDesc": "Получение информации о версии...",
   "updater.downloadNewVersion": "Скачать новую версию",
@@ -133,5 +137,7 @@
   "window.close": "Закрыть окно",
   "window.maximize": "Развернуть окно",
   "window.minimize": "Свернуть окно",
-  "window.restore": "Восстановить окно"
+  "window.pinToTop": "Закрепить сверху",
+  "window.restore": "Восстановить окно",
+  "window.unpinFromTop": "Открепить от верха"
 }

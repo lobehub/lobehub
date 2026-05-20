@@ -88,6 +88,8 @@ async function createLegacySynthesisTask(
       : params.size
         ? { size: params.size.replaceAll('x', '*') }
         : { size: '1024*1024' }),
+    ...(params.promptExtend && { prompt_extend: params.promptExtend }),
+    ...(params.watermark && { watermark: params.watermark }),
   };
 
   if (endpoint === 'image2image') {
@@ -178,6 +180,8 @@ async function createHTTPAsyncGenerationTask(
       : params.size
         ? { size: params.size.replaceAll('x', '*') }
         : { size: '1024*1024' }),
+    ...(params.promptExtend && { prompt_extend: params.promptExtend }),
+    ...(params.watermark && { watermark: params.watermark }),
   };
 
   const response = await fetch(endpoint, {
@@ -266,6 +270,8 @@ async function createHTTPSyncGeneration(
       parameters: {
         n: 1,
         ...(typeof params.seed === 'number' ? { seed: params.seed } : {}),
+        ...(params.promptExtend && { prompt_extend: params.promptExtend }),
+        ...(params.watermark && { watermark: params.watermark }),
       },
     }),
     headers: {

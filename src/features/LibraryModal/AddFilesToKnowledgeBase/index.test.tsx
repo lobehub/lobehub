@@ -1,3 +1,4 @@
+import type * as LobehubUiModule from '@lobehub/ui';
 import { renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -5,12 +6,17 @@ import { useAddFilesToKnowledgeBaseModal } from './index';
 
 const mockCreateModal = vi.hoisted(() => vi.fn());
 
-vi.mock('@lobehub/ui', () => ({
-  Flexbox: () => null,
-  Icon: () => null,
-  createModal: mockCreateModal,
-  useModalContext: () => ({ close: vi.fn() }),
-}));
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof LobehubUiModule>();
+
+  return {
+    ...actual,
+    Flexbox: () => null,
+    Icon: () => null,
+    createModal: mockCreateModal,
+    useModalContext: () => ({ close: vi.fn() }),
+  };
+});
 
 describe('useAddFilesToKnowledgeBaseModal', () => {
   it('should forward onClose to createModal afterClose', () => {

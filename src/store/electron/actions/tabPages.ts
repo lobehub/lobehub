@@ -159,10 +159,16 @@ export class TabPagesActionImpl {
     const index = tabs.findIndex((t) => t.id === id);
     if (index < 0) return;
 
+    const prev = tabs[index];
+    // When the page type changes (e.g. agent -> home), the previous cached
+    // data (title/avatar) belongs to a different page and must not bleed
+    // through — otherwise the tab keeps showing the old page's title.
+    const sameType = prev.type === reference.type;
+
     const newTabs = [...tabs];
     newTabs[index] = {
       ...reference,
-      cached: cached ? { ...newTabs[index].cached, ...cached } : newTabs[index].cached,
+      cached: sameType ? (cached ? { ...prev.cached, ...cached } : prev.cached) : cached,
       lastVisited: Date.now(),
     };
 

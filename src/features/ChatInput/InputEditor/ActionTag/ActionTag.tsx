@@ -1,8 +1,8 @@
 import { CLICK_COMMAND, COMMAND_PRIORITY_LOW, type LexicalEditor } from 'lexical';
 import { memo, useCallback, useEffect, useRef } from 'react';
 
+import { ActionMention } from './ActionMention';
 import type { ActionTagNode } from './ActionTagNode';
-import { ActionTagView } from './ActionTagView';
 
 interface ActionTagProps {
   editor: LexicalEditor;
@@ -26,7 +26,7 @@ const ActionTag = memo<ActionTagProps>(({ node, editor, label }) => {
 
   return (
     <span ref={spanRef}>
-      <ActionTagView category={node.actionCategory} label={label} />
+      <ActionMention category={node.actionCategory} label={label} />
     </span>
   );
 });

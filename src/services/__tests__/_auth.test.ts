@@ -103,8 +103,6 @@ describe('getProviderAuthPayload', () => {
     const payload = getProviderAuthPayload(ModelProvider.Azure, mockAzureConfig);
     expect(payload).toEqual({
       apiKey: mockAzureConfig.apiKey,
-      azureApiVersion: mockAzureConfig.apiVersion,
-      apiVersion: mockAzureConfig.apiVersion,
       baseURL: mockAzureConfig.endpoint,
     });
   });

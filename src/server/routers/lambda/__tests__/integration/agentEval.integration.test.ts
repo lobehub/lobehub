@@ -32,13 +32,13 @@ vi.mock('@/database/core/db-adaptor', () => ({
 }));
 
 /**
- * Agent Eval Router 集成测试
+ * Agent Eval Router Integration Tests
  *
- * 测试目标：
- * 1. 验证完整的 tRPC 调用链路（Router → Model → Database）
- * 2. 验证所有 CRUD 操作
- * 3. 验证错误处理（重复标识符、外键约束等）
- * 4. 验证权限和数据隔离（用户只能操作自己的数据）
+ * Test objectives:
+ * 1. Verify the complete tRPC call chain (Router → Model → Database)
+ * 2. Verify all CRUD operations
+ * 3. Verify error handling (duplicate identifiers, FK constraints, etc.)
+ * 4. Verify permissions and data isolation (users can only operate on their own data)
  */
 describe('Agent Eval Router Integration Tests', () => {
   let serverDB: LobeChatDatabase;

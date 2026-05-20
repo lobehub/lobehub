@@ -1,9 +1,9 @@
 import { useCallback, useState } from 'react';
 
-import { type StarterMode } from '@/store/home';
-
 const QUESTION_COUNT = 40;
 const DISPLAY_COUNT = 6;
+
+export type QuestionMode = 'agent' | 'chat' | 'group' | 'write';
 
 const shuffleArray = <T>(array: T[]): T[] => {
   const shuffled = [...array];
@@ -14,19 +14,13 @@ const shuffleArray = <T>(array: T[]): T[] => {
   return shuffled;
 };
 
-const generateQuestions = (mode: StarterMode) => {
-  const modeKey = mode ?? 'chat';
-
-  if (!['agent', 'group', 'write', 'chat'].includes(modeKey)) {
-    return [];
-  }
-
+const generateQuestions = (mode: QuestionMode) => {
   const ids = Array.from({ length: QUESTION_COUNT }, (_, i) => i + 1);
   const shuffled = shuffleArray(ids);
   return shuffled.slice(0, DISPLAY_COUNT).map((id) => ({
     id,
-    promptKey: `${modeKey}.${String(id).padStart(2, '0')}.prompt`,
-    titleKey: `${modeKey}.${String(id).padStart(2, '0')}.title`,
+    promptKey: `${mode}.${String(id).padStart(2, '0')}.prompt`,
+    titleKey: `${mode}.${String(id).padStart(2, '0')}.title`,
   }));
 };
 
@@ -41,7 +35,7 @@ interface UseRandomQuestionsResult {
   refresh: () => void;
 }
 
-export const useRandomQuestions = (mode: StarterMode): UseRandomQuestionsResult => {
+export const useRandomQuestions = (mode: QuestionMode = 'chat'): UseRandomQuestionsResult => {
   const [questions, setQuestions] = useState<QuestionItem[]>(() => generateQuestions(mode));
 
   const refresh = useCallback(() => {

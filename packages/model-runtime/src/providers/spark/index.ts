@@ -6,23 +6,34 @@ import { SparkAIStream, transformSparkResponseToStream } from '../../core/stream
 import type { ChatStreamPayload } from '../../types';
 
 const getBaseURLByModel = (model: string): string => {
-  const v1Regex = /^(?:lite|generalv3|pro-128k|generalv3\.5|max-32k|4\.0Ultra)$/i;
+  switch (model) {
+    case 'spark-x2-flash': {
+      return 'https://spark-api-open.xf-yun.com/agent/v1';
+    }
 
-  // Legacy models via v1 endpoint
-  if (v1Regex.test(model)) {
-    return 'https://spark-api-open.xf-yun.com/v1';
+    case 'spark-x2': {
+      return 'https://spark-api-open.xf-yun.com/x2';
+    }
+
+    case 'spark-x1.5': {
+      return 'https://spark-api-open.xf-yun.com/v2';
+    }
+
+    default: {
+      return 'https://spark-api-open.xf-yun.com/v1';
+    }
   }
-
-  return 'https://spark-api-open.xf-yun.com/v2';
 };
 
 export const params = {
-  baseURL: 'https://spark-api-open.xf-yun.com/v2',
+  baseURL: 'https://spark-api-open.xf-yun.com/v1',
   chatCompletion: {
     handlePayload: (payload: ChatStreamPayload, options) => {
-      const { enabledSearch, thinking, tools, ...rest } = payload;
+      const { deploymentName, enabledSearch, model, thinking, tools, ...rest } = payload;
 
-      const baseURL = getBaseURLByModel(payload.model);
+      const requestModel = deploymentName ?? model;
+
+      const baseURL = getBaseURLByModel(model);
       if (options) options.baseURL = baseURL;
 
       const sparkTools = enabledSearch
@@ -43,6 +54,7 @@ export const params = {
 
       return {
         ...rest,
+        model: requestModel,
         thinking: { type: thinking?.type },
         tools: sparkTools,
       } as any;

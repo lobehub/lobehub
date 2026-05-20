@@ -164,6 +164,7 @@ const Content = memo<ContentProps>(({ open, searchKeyword }) => {
             active={activeTopicId === topic.id}
             fav={topic.favorite}
             id={topic.id}
+            status={topic.status}
             threadId={activeThreadId}
             title={topic.title}
           />

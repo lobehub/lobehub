@@ -7,14 +7,29 @@ import { type IAgentStateManager, type IStreamEventManager } from './types';
 
 const log = debug('lobe-server:agent-runtime:coordinator');
 
-const TERMINAL_STATUSES = new Set<AgentState['status']>(['done', 'error', 'interrupted']);
+/**
+ * Statuses that end the event stream for the current operationId.
+ *
+ * `done` / `error` / `interrupted` are genuinely terminal — the op cannot
+ * resume. `waiting_for_human` is *stream-terminal but state-resumable*:
+ * the paused state lives on until a resume op (carrying the user's
+ * decision) starts, but that resume runs under a **new** operationId with
+ * its own event stream. For the paused operationId no further events will
+ * arrive, so clients should stop waiting the same way they do on done.
+ */
+const STREAM_END_STATUSES = new Set<AgentState['status']>([
+  'done',
+  'error',
+  'interrupted',
+  'waiting_for_human',
+]);
 
-const hasEnteredTerminalState = (
+const hasEnteredStreamEndState = (
   previousStatus?: AgentState['status'],
   nextStatus?: AgentState['status'],
-): nextStatus is 'done' | 'error' | 'interrupted' => {
-  const wasTerminal = previousStatus ? TERMINAL_STATUSES.has(previousStatus) : false;
-  return Boolean(nextStatus && TERMINAL_STATUSES.has(nextStatus) && !wasTerminal);
+): nextStatus is 'done' | 'error' | 'interrupted' | 'waiting_for_human' => {
+  const wasStreamEnd = previousStatus ? STREAM_END_STATUSES.has(previousStatus) : false;
+  return Boolean(nextStatus && STREAM_END_STATUSES.has(nextStatus) && !wasStreamEnd);
 };
 
 export interface AgentRuntimeCoordinatorOptions {
@@ -90,7 +105,7 @@ export class AgentRuntimeCoordinator {
       await this.stateManager.saveAgentState(operationId, state);
 
       // Send a terminal event once the operation first enters a terminal state.
-      if (hasEnteredTerminalState(previousState?.status, state.status)) {
+      if (hasEnteredStreamEndState(previousState?.status, state.status)) {
         await this.streamEventManager.publishAgentRuntimeEnd(
           operationId,
           state.stepCount ?? previousState?.stepCount ?? 0,
@@ -117,7 +132,7 @@ export class AgentRuntimeCoordinator {
       await this.stateManager.saveStepResult(operationId, stepResult);
 
       // This ensures agent_runtime_end is sent after all step events.
-      if (hasEnteredTerminalState(previousState?.status, stepResult.newState.status)) {
+      if (hasEnteredStreamEndState(previousState?.status, stepResult.newState.status)) {
         await this.streamEventManager.publishAgentRuntimeEnd(
           operationId,
           stepResult.newState.stepCount ?? stepResult.stepIndex ?? previousState?.stepCount ?? 0,

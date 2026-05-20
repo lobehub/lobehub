@@ -68,10 +68,19 @@ export async function createVolcengineImage(
     delete userInput.image;
   }
 
+  // Remove promptExtend and webSearch parameters that are not supported by Volcengine API
+  delete userInput.promptExtend;
+  delete userInput.webSearch;
+
   // Build request options
   const requestOptions = {
     model,
-    watermark: false, // Default to no watermark
+    watermark: params.watermark ?? false, // Default to no watermark
+    ...(params.webSearch && { tools: [{ type: 'web_search' }] }),
+    ...(params.promptExtend &&
+      params.promptExtend !== 'off' && {
+        optimize_prompt_options: { mode: params.promptExtend },
+      }),
     ...userInput,
   };
 

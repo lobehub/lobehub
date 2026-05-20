@@ -10,6 +10,7 @@ const log = debug('context-engine:provider:BotPlatformContextInjector');
 export interface BotPlatformContext {
   platformName: string;
   supportsMarkdown: boolean;
+  warnings?: string[];
 }
 
 export interface BotPlatformContextInjectorConfig {

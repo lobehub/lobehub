@@ -98,13 +98,16 @@ export async function resolveTopicReferences(
         try {
           const allMessages = await lookupMessages(topicId);
 
-          // Filter to user/assistant only, take last N, truncate content
+          // Filter to user/assistant only, take last N, truncate content.
+          // Guard typeof: historical messages may carry non-string content
+          // (multimodal parts array, null tool turns) — calling `.trim()` on
+          // those throws `e.trim is not a function` and kills the whole engine.
           const recent = allMessages
             .filter((m) => m.role === 'user' || m.role === 'assistant')
-            .filter((m) => m.content?.trim())
+            .filter((m) => typeof m.content === 'string' && m.content.trim())
             .slice(-MAX_RECENT_MESSAGES)
             .map((m) => ({
-              content: truncate(m.content!.trim(), MAX_MESSAGE_LENGTH),
+              content: truncate((m.content as string).trim(), MAX_MESSAGE_LENGTH),
               role: m.role,
             }));
 

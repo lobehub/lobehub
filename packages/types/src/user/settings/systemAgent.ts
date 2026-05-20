@@ -5,7 +5,7 @@ export interface SystemAgentItem {
   provider: string;
 }
 
-export interface QueryRewriteSystemAgent extends Omit<SystemAgentItem, 'enabled'> {
+export interface PromptRewriteSystemAgent extends Omit<SystemAgentItem, 'enabled'> {
   enabled: boolean;
 }
 
@@ -14,7 +14,7 @@ export interface UserSystemAgentConfig {
   generationTopic: SystemAgentItem;
   historyCompress: SystemAgentItem;
   inputCompletion: SystemAgentItem;
-  queryRewrite: QueryRewriteSystemAgent;
+  promptRewrite: PromptRewriteSystemAgent;
   thread: SystemAgentItem;
   topic: SystemAgentItem;
   translation: SystemAgentItem;

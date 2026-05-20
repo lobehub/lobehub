@@ -1,7 +1,7 @@
 name: Release ModelBank
 
 permissions:
-  contents: write
+  contents: read
   id-token: write
 
 on:
@@ -41,15 +41,12 @@ jobs:
 
   publish:
     name: Publish ModelBank
-    if: ${{ github.event_name == 'workflow_dispatch' }}
     needs: build
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -63,27 +60,70 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Bump patch version
-        id: version
-        run: |
-          npm version patch --no-git-tag-version --prefix packages/model-bank
-          echo "version=$(node -p 'require(\"./packages/model-bank/package.json\").version')" >> "$GITHUB_OUTPUT"
-
       - name: Build package
         run: pnpm --filter model-bank build
 
+      - name: Prepare publish package
+        id: version
+        run: |
+          BASE_VERSION=$(node -p "require('./packages/model-bank/package.json').version.split('.').slice(0, 2).join('.')")
+          MODEL_BANK_VERSION="${BASE_VERSION}.$(date -u +%Y%m%d%H%M%S)"
+          export MODEL_BANK_VERSION
+
+          node <<'NODE'
+          const fs = require('node:fs');
+
+          const packagePath = 'packages/model-bank/package.json';
+          const packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+          const toDistExport = (sourcePath) => sourcePath.replace('./src/', './dist/').replace(/\.ts$/, '.mjs');
+
+          packageJson.version = process.env.MODEL_BANK_VERSION;
+          packageJson.type = 'module';
+          packageJson.main = './dist/index.mjs';
+          packageJson.types = './dist/index.d.mts';
+          packageJson.files = ['dist'];
+          packageJson.repository = {
+            type: 'git',
+            url: 'https://github.com/lobehub/lobehub',
+            directory: 'packages/model-bank',
+          };
+          packageJson.exports = Object.fromEntries(
+            Object.entries(packageJson.exports).map(([key, value]) => {
+              if (typeof value !== 'string') return [key, value];
+
+              const distPath = toDistExport(value);
+
+              return [
+                key,
+                {
+                  types: distPath.replace(/\.mjs$/, '.d.mts'),
+                  import: distPath,
+                  default: distPath,
+                },
+              ];
+            }),
+          );
+
+          delete packageJson.private;
+          delete packageJson.devDependencies;
+          delete packageJson.scripts;
+
+          if (packageJson.dependencies) {
+            delete packageJson.dependencies['@lobechat/business-const'];
+
+            if (Object.keys(packageJson.dependencies).length === 0) {
+              delete packageJson.dependencies;
+            }
+          }
+
+          fs.writeFileSync(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`);
+          NODE
+
+          echo "version=${MODEL_BANK_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Prepared model-bank@${MODEL_BANK_VERSION}"
+
       - name: Publish to npm
-        run: npm publish --provenance
+        run: npm publish --provenance --access public
         working-directory: packages/model-bank
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Commit version bump
-        env:
-          MODEL_BANK_VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          git config user.name "lobehubbot"
-          git config user.email "i@lobehub.com"
-          git add packages/model-bank/package.json
-          git commit -m "🔖 chore(model-bank): release v${MODEL_BANK_VERSION}"
-          git push

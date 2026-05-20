@@ -1,6 +1,6 @@
 'use client';
 
-import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
+import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import { AES_GCM_URL, BASE_PROVIDER_DOC_URL, FORM_STYLE } from '@lobechat/const';
 import { ProviderCombine } from '@lobehub/icons';
 import { type FormGroupItemType, type FormItemProps } from '@lobehub/ui';
@@ -28,10 +28,12 @@ import { FormInput, FormPassword } from '@/components/FormInput';
 import { SkeletonInput, SkeletonSwitch } from '@/components/Skeleton';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { type AiProviderDetailItem, type AiProviderSourceType } from '@/types/aiProvider';
 import { AiProviderSourceEnum } from '@/types/aiProvider';
 
 import { KeyVaultsConfigKey, LLMProviderApiTokenKey, LLMProviderBaseUrlKey } from '../../const';
+import { isResponsesApiSupportedSdkType } from '../providerSettings';
 import { type CheckErrorRender } from './Checker';
 import Checker from './Checker';
 import EnableSwitch from './EnableSwitch';
@@ -169,6 +171,9 @@ const ProviderConfig = memo<ProviderConfigProps>(
       aiProviderSelectors.isProviderConfigUpdating(id)(s),
       aiProviderSelectors.providerConfigById(id)(s),
     ]);
+    const enableBusinessFeatures = useServerConfigStore(
+      serverConfigSelectors.enableBusinessFeatures,
+    );
 
     // Watch form values in real-time to show/hide switches immediately
     // Watch nested form values for endpoints
@@ -378,10 +383,13 @@ const ProviderConfig = memo<ProviderConfigProps>(
         }
       : undefined;
 
+    const showResponsesApiSwitch =
+      !!supportResponsesApi || (isCustom && isResponsesApiSupportedSdkType(settings?.sdkType));
+
     const configItems = [
       ...apiKeyItem,
       endpointItem,
-      supportResponsesApi
+      showResponsesApiSwitch
         ? {
             children: isLoading ? <Skeleton.Button active /> : <Switch loading={configUpdating} />,
             desc: t('providerModels.config.responsesApi.desc'),
@@ -466,7 +474,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
       <Flexbox horizontal align={'center'} gap={8}>
         {extra}
         {isCustom && <UpdateProviderInfo />}
-        {canDeactivate && !(ENABLE_BUSINESS_FEATURES && id === 'lobehub') && (
+        {canDeactivate && !(enableBusinessFeatures && id === BRANDING_PROVIDER) && (
           <EnableSwitch id={id} key={id} />
         )}
       </Flexbox>

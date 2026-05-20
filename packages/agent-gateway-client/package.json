@@ -1,0 +1,18 @@
+{
+  "name": "@lobechat/agent-gateway-client",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Browser-compatible WebSocket client for the LobeHub Agent Gateway",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "test": "bunx vitest run --silent='passed-only'",
+    "test:coverage": "bunx vitest run --coverage"
+  },
+  "devDependencies": {
+    "vitest": "^3.0.0"
+  }
+}

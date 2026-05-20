@@ -138,7 +138,14 @@ export const useMenu = () => {
         ]
       : []),
     ...(!hideDocs ? helps : []),
-  ].filter(Boolean) as MenuProps['items'];
+  ]
+    .filter(Boolean)
+    // Remove consecutive dividers to prevent double divider lines
+    .filter((item, index, arr) => {
+      if (index === 0) return true;
+      const isDivider = (i: any) => i && typeof i === 'object' && i.type === 'divider';
+      return !(isDivider(item) && isDivider(arr[index - 1]));
+    }) as MenuProps['items'];
 
   const logoutItems: MenuProps['items'] = isLoginWithAuth
     ? [

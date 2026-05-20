@@ -1,6 +1,7 @@
 import type { BuiltinToolManifest } from '@lobechat/types';
 
 import {
+  activateSkillApi,
   execScriptBaseParams,
   exportFileApi,
   manifestMeta,
@@ -12,6 +13,7 @@ import { SkillsApiName, SkillsIdentifier } from './types';
 
 export const SkillsManifest: BuiltinToolManifest = {
   api: [
+    activateSkillApi,
     readReferenceApi,
     runCommandApi,
     {

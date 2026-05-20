@@ -86,6 +86,53 @@ export const injectCredsContext = (content: string, context: UserCredsContext): 
     .replaceAll('{{SETTINGS_URL}}', context.settingsUrl);
 };
 
+// ==================== Klavis Services ====================
+
+/**
+ * Summary of a Klavis service for display in the tool prompt
+ */
+export interface KlavisServiceSummary {
+  description?: string;
+  identifier: string;
+  name: string;
+}
+
+/**
+ * Generate the Klavis services list string for injection into the prompt
+ */
+export const generateKlavisServicesList = (
+  connected: KlavisServiceSummary[],
+  available: KlavisServiceSummary[],
+): string => {
+  if (connected.length === 0 && available.length === 0) {
+    return '';
+  }
+
+  const sections: string[] = [];
+
+  if (connected.length > 0) {
+    const items = connected
+      .map(
+        (s) =>
+          `  - ${s.name} (identifier: ${s.identifier}) — Authorized via Klavis OAuth. Use ${s.identifier} tools directly.`,
+      )
+      .join('\n');
+    sections.push(`**Connected Klavis Services (authorized, use tools directly):**\n${items}`);
+  }
+
+  if (available.length > 0) {
+    const items = available
+      .map(
+        (s) =>
+          `  - ${s.name} (identifier: ${s.identifier}) — Use \`connectKlavisService\` to connect.`,
+      )
+      .join('\n');
+    sections.push(`**Available Klavis Services (not yet connected):**\n${items}`);
+  }
+
+  return sections.join('\n\n');
+};
+
 /**
  * Check if a skill's required credentials are satisfied
  */

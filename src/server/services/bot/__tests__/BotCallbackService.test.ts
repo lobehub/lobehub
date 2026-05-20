@@ -18,6 +18,13 @@ const mockTriggerTyping = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 const mockRemoveReaction = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const mockCreateMessage = vi.hoisted(() => vi.fn().mockResolvedValue({ id: 'new-msg' }));
 const mockUpdateThreadName = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+// Default replaceReaction fans out to removeReaction so existing '👀' assertions
+// keep describing the effective behaviour (step swap / completion clear) end-to-end.
+const mockReplaceReaction = vi.hoisted(() =>
+  vi.fn().mockImplementation(async (messageId: string, prevEmoji: string | null) => {
+    if (prevEmoji) await mockRemoveReaction(messageId, prevEmoji);
+  }),
+);
 
 // Mock PlatformClient's getMessenger
 const mockGetMessenger = vi.hoisted(() =>
@@ -25,6 +32,7 @@ const mockGetMessenger = vi.hoisted(() =>
     createMessage: mockCreateMessage,
     editMessage: mockEditMessage,
     removeReaction: mockRemoveReaction,
+    replaceReaction: mockReplaceReaction,
     triggerTyping: mockTriggerTyping,
     updateThreadName: mockUpdateThreadName,
   })),
@@ -41,6 +49,26 @@ const mockCreateBot = vi.hoisted(() =>
     start: vi.fn(),
     stop: vi.fn(),
   })),
+);
+
+// Mocks for messenger-originated callbacks (synthetic applicationIds like
+// 'messenger-telegram'). Resolves credentials via the messenger installation
+// store + binder, bypassing `agent_bot_providers` entirely.
+const mockMessengerStoreResolveByKey = vi.hoisted(() => vi.fn());
+const mockMessengerGetInstallationStore = vi.hoisted(() =>
+  vi.fn().mockImplementation(() => ({ resolveByKey: mockMessengerStoreResolveByKey })),
+);
+const mockMessengerBinderCreateClient = vi.hoisted(() =>
+  vi.fn().mockImplementation(async () => ({
+    applicationId: 'mock-messenger-app',
+    createAdapter: () => ({}),
+    extractChatId: (id: string) => id,
+    getMessenger: mockGetMessenger,
+    parseMessageId: (id: string) => id,
+  })),
+);
+const mockMessengerCreateBinder = vi.hoisted(() =>
+  vi.fn().mockImplementation(() => ({ createClient: mockMessengerBinderCreateClient })),
 );
 
 // ==================== vi.mock ====================
@@ -74,10 +102,46 @@ vi.mock('../AgentBridgeService', () => ({
   },
 }));
 
+vi.mock('@/server/services/gateway/MessageGatewayClient', () => ({
+  getMessageGatewayClient: vi.fn().mockReturnValue({
+    isConfigured: false,
+    isEnabled: false,
+    startTyping: vi.fn().mockResolvedValue(undefined),
+    stopTyping: vi.fn().mockResolvedValue(undefined),
+  }),
+}));
+
 vi.mock('@/server/services/systemAgent', () => ({
   SystemAgentService: vi.fn().mockImplementation(() => ({
     generateTopicTitle: mockGenerateTopicTitle,
   })),
+}));
+
+vi.mock('@/server/services/messenger/installations', () => ({
+  getInstallationStore: mockMessengerGetInstallationStore,
+  messengerConnectionIdForUser: ({
+    installationKey,
+    userId,
+  }: {
+    installationKey: string;
+    userId: string;
+  }) => {
+    if (installationKey.endsWith(':singleton')) {
+      return `messenger:${installationKey.slice(0, -':singleton'.length)}:user-${userId}`;
+    }
+    return `messenger:${installationKey}:user-${userId}`;
+  },
+}));
+
+vi.mock('@/server/services/messenger/platforms', () => ({
+  messengerPlatformRegistry: {
+    createBinder: mockMessengerCreateBinder,
+    getPlatform: vi.fn().mockImplementation((platform: string) => ({
+      connectionMode: platform === 'discord' ? 'websocket' : 'webhook',
+      id: platform,
+      name: platform,
+    })),
+  },
 }));
 
 vi.mock('../platforms', async (importOriginal) => {
@@ -106,7 +170,15 @@ const FAKE_BOT_TOKEN = 'fake-bot-token-123';
 const FAKE_CREDENTIALS = JSON.stringify({ botToken: FAKE_BOT_TOKEN });
 
 function setupCredentials(credentials = FAKE_CREDENTIALS, extra?: Record<string, unknown>) {
-  mockFindByPlatformAndAppId.mockResolvedValue({ credentials, ...extra });
+  // Step rendering is opt-in (schema default: false). The legacy bot path
+  // tests in this file all exercise step rendering, so the default fixture
+  // turns it on. Tests that need to exercise the off-path can override
+  // `settings` via `extra`.
+  mockFindByPlatformAndAppId.mockResolvedValue({
+    credentials,
+    settings: { displayToolCalls: true },
+    ...extra,
+  });
   mockInitWithEnvKey.mockResolvedValue({ decrypt: mockDecrypt });
   mockDecrypt.mockResolvedValue({ plaintext: credentials });
 }
@@ -138,13 +210,43 @@ describe('BotCallbackService', () => {
     service = new BotCallbackService(FAKE_DB);
     setupCredentials();
 
+    // vi.clearAllMocks wipes the hoisted default impl; reinstall it so the
+    // replaceReaction spy keeps fanning out to removeReaction.
+    mockReplaceReaction.mockImplementation(async (messageId: string, prevEmoji: string | null) => {
+      if (prevEmoji) await mockRemoveReaction(messageId, prevEmoji);
+    });
+
     // Default: getMessenger returns the main messenger mock
     mockGetMessenger.mockImplementation(() => ({
       createMessage: mockCreateMessage,
       editMessage: mockEditMessage,
       removeReaction: mockRemoveReaction,
+      replaceReaction: mockReplaceReaction,
       triggerTyping: mockTriggerTyping,
       updateThreadName: mockUpdateThreadName,
+    }));
+
+    // Default messenger install store + binder responses for messenger-* runs.
+    mockMessengerStoreResolveByKey.mockResolvedValue({
+      applicationId: 'telegram:singleton',
+      botToken: 'fake-token',
+      installationKey: 'telegram:singleton',
+      metadata: {},
+      platform: 'telegram',
+      tenantId: '',
+    });
+    mockMessengerGetInstallationStore.mockImplementation(() => ({
+      resolveByKey: mockMessengerStoreResolveByKey,
+    }));
+    mockMessengerBinderCreateClient.mockImplementation(async () => ({
+      applicationId: 'mock-messenger-app',
+      createAdapter: () => ({}),
+      extractChatId: (id: string) => id,
+      getMessenger: mockGetMessenger,
+      parseMessageId: (id: string) => id,
+    }));
+    mockMessengerCreateBinder.mockImplementation(() => ({
+      createClient: mockMessengerBinderCreateClient,
     }));
   });
 
@@ -176,6 +278,97 @@ describe('BotCallbackService', () => {
     });
   });
 
+  // ==================== Messenger-originated runs ====================
+
+  describe('messenger-originated callbacks', () => {
+    it('should resolve telegram credentials via messenger install store, not agent_bot_providers, when messengerInstallationKey is set', async () => {
+      const body = makeTelegramBody({
+        // The applicationId is intentionally just a runtime bookkeeping
+        // handle — we never inspect its shape. The deterministic switch is
+        // `messengerInstallationKey`, set by `MessengerRouter`.
+        applicationId: 'messenger-telegram',
+        messengerInstallationKey: 'telegram:singleton',
+        shouldContinue: true,
+        stepType: 'call_llm',
+        type: 'step',
+      });
+
+      await service.handleCallback(body);
+
+      // Crucially: never hits agent_bot_providers — that lookup throws for
+      // messenger-originated runs and was the cause of LOBE-8654.
+      expect(mockFindByPlatformAndAppId).not.toHaveBeenCalled();
+      expect(mockMessengerGetInstallationStore).toHaveBeenCalledWith('telegram');
+      expect(mockMessengerStoreResolveByKey).toHaveBeenCalledWith('telegram:singleton');
+      expect(mockMessengerBinderCreateClient).toHaveBeenCalled();
+      // `displayToolCalls` defaults to off (schema default + runtime gate),
+      // so step events don't edit the progress message — only completion does.
+      // This test only asserts the credential-resolution path; the gating is
+      // implicit confirmation that no `editMessage` side-effect leaked.
+      expect(mockEditMessage).not.toHaveBeenCalled();
+    });
+
+    it('should pass through the messenger install key verbatim for slack workspaces', async () => {
+      mockMessengerStoreResolveByKey.mockResolvedValue({
+        applicationId: 'A0123',
+        botToken: 'xoxb-fake',
+        installationKey: 'slack:T0123',
+        metadata: {},
+        platform: 'slack',
+        tenantId: 'T0123',
+      });
+
+      const body = makeBody({
+        applicationId: 'messenger-slack-T0123',
+        messengerInstallationKey: 'slack:T0123',
+        platformThreadId: 'slack:C0123:thread-1',
+        shouldContinue: true,
+        stepType: 'call_llm',
+        type: 'step',
+      });
+
+      await service.handleCallback(body);
+
+      expect(mockMessengerGetInstallationStore).toHaveBeenCalledWith('slack');
+      expect(mockMessengerStoreResolveByKey).toHaveBeenCalledWith('slack:T0123');
+    });
+
+    it('should throw a clear error when messenger install is not found', async () => {
+      mockMessengerStoreResolveByKey.mockResolvedValue(null);
+
+      const body = makeTelegramBody({
+        applicationId: 'messenger-telegram',
+        messengerInstallationKey: 'telegram:singleton',
+        type: 'completion',
+      });
+
+      await expect(service.handleCallback(body)).rejects.toThrow(
+        'Messenger install not found for telegram (key=telegram:singleton)',
+      );
+    });
+
+    it('should fall back to agent_bot_providers when messengerInstallationKey is absent, even if applicationId looks messenger-like', async () => {
+      // Defensive guard: a row in agent_bot_providers happens to be named
+      // 'messenger-anything' — we should still treat it as a per-user bot
+      // because the discriminator is the explicit field, not the name shape.
+      const body = makeBody({
+        applicationId: 'messenger-looking-but-real-bot',
+        shouldContinue: true,
+        stepType: 'call_llm',
+        type: 'step',
+      });
+
+      await service.handleCallback(body);
+
+      expect(mockFindByPlatformAndAppId).toHaveBeenCalledWith(
+        FAKE_DB,
+        'discord',
+        'messenger-looking-but-real-bot',
+      );
+      expect(mockMessengerStoreResolveByKey).not.toHaveBeenCalled();
+    });
+  });
+
   // ==================== Messenger creation errors ====================
 
   describe('messenger creation failures', () => {
@@ -190,7 +383,10 @@ describe('BotCallbackService', () => {
     });
 
     it('should fall back to raw credentials when decryption fails', async () => {
-      mockFindByPlatformAndAppId.mockResolvedValue({ credentials: FAKE_CREDENTIALS });
+      mockFindByPlatformAndAppId.mockResolvedValue({
+        credentials: FAKE_CREDENTIALS,
+        settings: { displayToolCalls: true },
+      });
       mockInitWithEnvKey.mockResolvedValue({
         decrypt: vi.fn().mockRejectedValue(new Error('decrypt failed')),
       });
@@ -317,9 +513,10 @@ describe('BotCallbackService', () => {
   // ==================== Completion handling ====================
 
   describe('completion handling', () => {
-    it('should render error message when reason is error', async () => {
+    it('should render operation id when reason is error', async () => {
       const body = makeBody({
         errorMessage: 'Model quota exceeded',
+        operationId: 'op-xyz-1',
         reason: 'error',
         type: 'completion',
       });
@@ -328,11 +525,15 @@ describe('BotCallbackService', () => {
 
       expect(mockEditMessage).toHaveBeenCalledWith(
         'progress-msg-1',
-        expect.stringContaining('Model quota exceeded'),
+        expect.stringContaining('op-xyz-1'),
+      );
+      expect(mockEditMessage).toHaveBeenCalledWith(
+        'progress-msg-1',
+        expect.not.stringContaining('Model quota exceeded'),
       );
     });
 
-    it('should use default error message when errorMessage is not provided', async () => {
+    it('should render generic failure message when operationId is missing', async () => {
       const body = makeBody({
         reason: 'error',
         type: 'completion',
@@ -340,10 +541,7 @@ describe('BotCallbackService', () => {
 
       await service.handleCallback(body);
 
-      expect(mockEditMessage).toHaveBeenCalledWith(
-        'progress-msg-1',
-        expect.stringContaining('Agent execution failed'),
-      );
+      expect(mockEditMessage).toHaveBeenCalledWith('progress-msg-1', '**Agent Execution Failed**');
     });
 
     it('should render stopped message when reason is interrupted', async () => {
@@ -416,6 +614,79 @@ describe('BotCallbackService', () => {
       await expect(service.handleCallback(body)).resolves.toBeUndefined();
     });
 
+    it('should fall back to createMessage when editMessage fails on completion', async () => {
+      mockEditMessage.mockRejectedValueOnce(
+        new Error("Telegram API editMessageText failed: 400 Bad Request: can't parse entities"),
+      );
+
+      const body = makeBody({
+        lastAssistantContent: 'The actual answer the user needs.',
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await service.handleCallback(body);
+
+      expect(mockEditMessage).toHaveBeenCalledTimes(1);
+      // Reply must reach the user via createMessage fallback
+      expect(mockCreateMessage).toHaveBeenCalledWith(
+        expect.stringContaining('The actual answer the user needs.'),
+      );
+    });
+
+    it('should fall back to createMessage when error-state edit fails', async () => {
+      mockEditMessage.mockRejectedValueOnce(new Error('message to edit not found'));
+
+      const body = makeBody({
+        operationId: 'op-fallback-1',
+        reason: 'error',
+        type: 'completion',
+      });
+
+      await service.handleCallback(body);
+
+      expect(mockCreateMessage).toHaveBeenCalledWith(expect.stringContaining('op-fallback-1'));
+    });
+
+    it('should skip send when lastAssistantContent is whitespace-only', async () => {
+      const body = makeBody({
+        // Whitespace passes the original `!lastAssistantContent` check but
+        // collapses to empty downstream — Telegram would reject with
+        // "message text is empty" and silently drop the reply.
+        lastAssistantContent: '   \n\n   ',
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await service.handleCallback(body);
+
+      expect(mockEditMessage).not.toHaveBeenCalled();
+      expect(mockCreateMessage).not.toHaveBeenCalled();
+    });
+
+    it('should still send subsequent chunks when one chunk fails mid-stream', async () => {
+      // Default 1800-char limit -> long content splits into multiple chunks.
+      const longContent = 'A'.repeat(2000) + '\n\n' + 'B'.repeat(2000) + '\n\n' + 'C'.repeat(2000);
+
+      // First follow-up chunk rejects; remaining chunks should still be attempted.
+      mockCreateMessage.mockRejectedValueOnce(
+        new Error('Telegram API sendMessage failed: 429 Too Many Requests'),
+      );
+
+      const body = makeBody({
+        lastAssistantContent: longContent,
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await service.handleCallback(body);
+
+      expect(mockEditMessage).toHaveBeenCalledTimes(1);
+      // The loop must keep going past the rejected chunk — at least 2 createMessage
+      // calls are expected (one rejected, one or more after it).
+      expect(mockCreateMessage.mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
+
     it('should not throw when sending interrupted message fails', async () => {
       mockCreateMessage.mockRejectedValueOnce(new Error('Send failed'));
 
@@ -425,6 +696,171 @@ describe('BotCallbackService', () => {
       });
 
       await expect(service.handleCallback(body)).resolves.toBeUndefined();
+    });
+
+    // ==================== Attachments ====================
+
+    it('should pass attachments through to messenger when present on single-chunk reply', async () => {
+      const body = makeBody({
+        attachments: [
+          {
+            fetchUrl: 'https://cdn.example.com/foo.png',
+            mimeType: 'image/png',
+            name: 'foo.png',
+            type: 'image',
+          },
+        ],
+        lastAssistantContent: 'Here is the image you asked for.',
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await service.handleCallback(body);
+
+      expect(mockEditMessage).toHaveBeenCalledWith(
+        'progress-msg-1',
+        expect.objectContaining({
+          attachments: [
+            expect.objectContaining({
+              fetchUrl: 'https://cdn.example.com/foo.png',
+              type: 'image',
+            }),
+          ],
+          content: expect.stringContaining('Here is the image you asked for.'),
+        }),
+      );
+    });
+
+    it('should only attach to the last chunk in a multi-chunk reply', async () => {
+      const longContent = 'A'.repeat(2000) + '\n\n' + 'B'.repeat(2000);
+      const body = makeBody({
+        attachments: [{ fetchUrl: 'https://cdn.example.com/bar.png', type: 'image' }],
+        lastAssistantContent: longContent,
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await service.handleCallback(body);
+
+      // First chunk goes through editMessage as a plain string — no attachments.
+      expect(mockEditMessage).toHaveBeenCalledTimes(1);
+      const firstCallArg = mockEditMessage.mock.calls[0][1];
+      expect(typeof firstCallArg).toBe('string');
+
+      // Last chunk goes through createMessage with the attachments.
+      const lastCreateArg = mockCreateMessage.mock.calls.at(-1)?.[0];
+      expect(lastCreateArg).toMatchObject({
+        attachments: [{ fetchUrl: 'https://cdn.example.com/bar.png', type: 'image' }],
+      });
+    });
+
+    it('should fall back to createMessage with attachments when edit fails', async () => {
+      mockEditMessage.mockRejectedValueOnce(new Error('edit failed'));
+
+      const body = makeBody({
+        attachments: [{ data: 'aGVsbG8=', mimeType: 'image/png', type: 'image' }],
+        lastAssistantContent: 'reply',
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await service.handleCallback(body);
+
+      expect(mockCreateMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          attachments: [{ data: 'aGVsbG8=', mimeType: 'image/png', type: 'image' }],
+          content: expect.stringContaining('reply'),
+        }),
+      );
+    });
+
+    // Regression for Codex P1: image-only final assistant turn must still
+    // ship the attachments, instead of being silently dropped because there
+    // is no `lastAssistantContent.trim()`.
+    it('should deliver attachments even when reply text is empty', async () => {
+      const body = makeBody({
+        attachments: [{ fetchUrl: 'https://cdn.example.com/only.png', type: 'image' }],
+        lastAssistantContent: '',
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await service.handleCallback(body);
+
+      // Either edit or create — but the call MUST carry the attachments.
+      const editCalls = mockEditMessage.mock.calls;
+      const createCalls = mockCreateMessage.mock.calls;
+      const allCalls = [...editCalls.map((c) => c[1]), ...createCalls.map((c) => c[0])];
+      expect(
+        allCalls.some(
+          (arg) =>
+            arg &&
+            typeof arg === 'object' &&
+            'attachments' in arg &&
+            (arg as any).attachments?.[0]?.fetchUrl === 'https://cdn.example.com/only.png',
+        ),
+      ).toBe(true);
+    });
+
+    it('should still skip when there is neither text nor attachments', async () => {
+      const body = makeBody({
+        lastAssistantContent: '   \n  ',
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await service.handleCallback(body);
+
+      expect(mockEditMessage).not.toHaveBeenCalled();
+      expect(mockCreateMessage).not.toHaveBeenCalled();
+    });
+
+    it('should still ship attachments when reply text is whitespace-only', async () => {
+      // Whitespace text alone collapses to empty downstream and would be
+      // dropped, but the attachment-only path must still deliver the image.
+      const body = makeBody({
+        attachments: [{ fetchUrl: 'https://cdn.example.com/ws.png', type: 'image' }],
+        lastAssistantContent: '\n\n   ',
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await service.handleCallback(body);
+
+      const editCalls = mockEditMessage.mock.calls;
+      const createCalls = mockCreateMessage.mock.calls;
+      const allCalls = [...editCalls.map((c) => c[1]), ...createCalls.map((c) => c[0])];
+      expect(
+        allCalls.some(
+          (arg) =>
+            arg &&
+            typeof arg === 'object' &&
+            'attachments' in arg &&
+            (arg as any).attachments?.[0]?.fetchUrl === 'https://cdn.example.com/ws.png',
+        ),
+      ).toBe(true);
+    });
+
+    it('should not summarize topic title for attachment-only reply', async () => {
+      // Attachment-only reply has no assistant text, so the LLM summarizer
+      // has no body to work with. `summarizeTopicTitle` already guards on
+      // `!lastAssistantContent`; this regression-locks that contract.
+      mockFindById.mockResolvedValue({ title: null });
+
+      const body = makeBody({
+        attachments: [{ fetchUrl: 'https://cdn.example.com/x.png', type: 'image' }],
+        reason: 'completed',
+        topicId: 'topic-1',
+        type: 'completion',
+        userId: 'user-1',
+        userPrompt: 'Draw something',
+      });
+
+      await service.handleCallback(body);
+
+      await new Promise((r) => setTimeout(r, 50));
+      expect(mockGenerateTopicTitle).not.toHaveBeenCalled();
+      expect(mockTopicUpdate).not.toHaveBeenCalled();
     });
   });
 
@@ -816,6 +1252,7 @@ describe('BotCallbackService', () => {
         errorMessage: 'Rate limit exceeded',
         hookId: 'bot-completion',
         hookType: 'onComplete',
+        operationId: 'op-hook-1',
         reason: 'error',
         type: 'completion',
       });
@@ -824,7 +1261,11 @@ describe('BotCallbackService', () => {
 
       expect(mockEditMessage).toHaveBeenCalledWith(
         'progress-msg-1',
-        expect.stringContaining('Rate limit exceeded'),
+        expect.stringContaining('op-hook-1'),
+      );
+      expect(mockEditMessage).toHaveBeenCalledWith(
+        'progress-msg-1',
+        expect.not.stringContaining('Rate limit exceeded'),
       );
     });
   });

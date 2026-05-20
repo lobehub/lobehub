@@ -2,8 +2,13 @@ import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { type ReactNode } from 'react';
 import { memo, Suspense, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 
-import { dataSelectors, useConversationStore } from '@/features/Conversation/store';
+import {
+  dataSelectors,
+  messageStateSelectors,
+  useConversationStore,
+} from '@/features/Conversation/store';
 import dynamic from '@/libs/next/dynamic';
 
 import { type ChatItemProps } from '../../type';
@@ -59,14 +64,31 @@ const MessageContent = memo<MessageContentProps>(
     className,
     variant,
   }) => {
-    const [toggleMessageEditing, updateMessageContent] = useConversationStore((s) => [
-      s.toggleMessageEditing,
-      s.updateMessageContent,
-    ]);
+    const [toggleMessageEditing, updateMessageContent, regenerateUserMessage] =
+      useConversationStore((s) => [
+        s.toggleMessageEditing,
+        s.updateMessageContent,
+        s.regenerateUserMessage,
+      ]);
 
     const editorData = useConversationStore(
       (s) => dataSelectors.getDisplayMessageById(id)(s)?.editorData,
     );
+
+    // Short-circuit on non-editing rows so streaming token updates stay O(1) per row
+    // instead of each row running `findLast` on displayMessages (O(N²) per update).
+    // Use isInputLoading (covers sendMessage + AI runtime) rather than isAIGenerating,
+    // otherwise the initial send phase — where the persisted id has just swapped in
+    // under an optimistic tmp_* op — would flip to Send and kick off a duplicate
+    // regenerate for the same prompt.
+    const shouldSendOnConfirm = useConversationStore((s) => {
+      if (!editing) return false;
+      if (dataSelectors.getDisplayMessageById(id)(s)?.role !== 'user') return false;
+      if (s.displayMessages.findLast((m) => m.role === 'user')?.id !== id) return false;
+      return !messageStateSelectors.isInputLoading(s);
+    });
+
+    const { t } = useTranslation('common');
 
     const onEditingChange = useCallback(
       (edit: boolean) => toggleMessageEditing(id, edit),
@@ -93,14 +115,22 @@ const MessageContent = memo<MessageContentProps>(
           {editing && (
             <EditorModal
               editorData={editorData}
+              okText={shouldSendOnConfirm ? t('send') : t('save')}
               open={editing}
               value={message ? String(message) : ''}
               onCancel={() => onEditingChange(false)}
               onConfirm={async (value, newEditorData) => {
-                await updateMessageContent(id, value, {
+                onEditingChange(false);
+                // updateMessageContent does an optimistic state update synchronously before
+                // awaiting the DB round trip. Kick off regenerate in parallel so the old
+                // assistant reply is replaced by switchMessageBranch without waiting for persistence.
+                const save = updateMessageContent(id, value, {
                   editorData: newEditorData as Record<string, any> | undefined,
                 });
-                onEditingChange(false);
+                if (shouldSendOnConfirm) {
+                  await regenerateUserMessage(id);
+                }
+                await save;
               }}
             />
           )}

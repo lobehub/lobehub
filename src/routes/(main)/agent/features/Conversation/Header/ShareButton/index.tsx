@@ -7,7 +7,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { withSuspense } from '@/components/withSuspense';
-import { DESKTOP_HEADER_ICON_SIZE, MOBILE_HEADER_ICON_SIZE } from '@/const/layoutTokens';
+import { DESKTOP_HEADER_ICON_SMALL_SIZE, MOBILE_HEADER_ICON_SIZE } from '@/const/layoutTokens';
 import { useShareModal } from '@/features/ShareModal';
 import { useChatStore } from '@/store/chat';
 import { useServerConfigStore } from '@/store/serverConfig';
@@ -33,7 +33,7 @@ const ShareButton = memo<ShareButtonProps>(({ mobile, setOpen, open }) => {
   const iconButton = (
     <ActionIcon
       icon={Share2}
-      size={mobile ? MOBILE_HEADER_ICON_SIZE : DESKTOP_HEADER_ICON_SIZE}
+      size={mobile ? MOBILE_HEADER_ICON_SIZE : DESKTOP_HEADER_ICON_SMALL_SIZE}
       title={t('share')}
       tooltipProps={{
         placement: 'bottom',

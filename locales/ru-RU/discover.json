@@ -624,6 +624,8 @@
   "user.logout": "Выйти",
   "user.myProfile": "Мой профиль",
   "user.noAgents": "Этот пользователь ещё не опубликовал агентов",
+  "user.noAgents.ownerDescription": "Создайте своего первого Агента и поделитесь им с Сообществом.",
+  "user.noAgents.title": "Пока нет Агентов",
   "user.noFavoriteAgents": "Нет сохранённых агентов",
   "user.noFavoritePlugins": "Нет сохранённых навыков",
   "user.noForkedAgentGroups": "Пока нет групп агентов с форками",

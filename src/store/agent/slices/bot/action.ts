@@ -4,6 +4,7 @@ import { mutate, useClientDataSWR } from '@/libs/swr';
 import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
 import { agentBotProviderService } from '@/services/agentBotProvider';
 import { type StoreSetter } from '@/store/types';
+import type { BotRuntimeStatusSnapshot } from '@/types/botRuntimeStatus';
 
 import { type AgentStore } from '../../store';
 
@@ -56,6 +57,10 @@ export class BotSliceActionImpl {
     return agentBotProviderService.testConnection(params);
   };
 
+  lineFetchBotInfo = async (channelAccessToken: string) => {
+    return agentBotProviderService.lineFetchBotInfo(channelAccessToken);
+  };
+
   deleteAllBotProviders = async (agentId: string) => {
     const providers = await agentBotProviderService.getByAgentId(agentId);
     await Promise.all(providers.map((p) => agentBotProviderService.delete(p.id)));
@@ -65,6 +70,31 @@ export class BotSliceActionImpl {
   deleteBotProvider = async (id: string, agentId: string) => {
     await agentBotProviderService.delete(id);
     await this.internal_refreshBotProviders(agentId);
+  };
+
+  refreshBotRuntimeStatus = async (params: {
+    agentId?: string;
+    applicationId: string;
+    platform: string;
+  }): Promise<BotRuntimeStatusSnapshot> => {
+    const { agentId, ...rest } = params;
+    const snapshot = await agentBotProviderService.refreshRuntimeStatus(rest);
+    await this.internal_refreshBotProviders(agentId);
+    return snapshot;
+  };
+
+  /**
+   * Kick off a background refresh of every provider's live gateway status.
+   * Fire-and-forget: the list can render from cached statuses immediately,
+   * and we revalidate SWR once the server finishes updating Redis.
+   */
+  triggerRefreshAllBotStatuses = (agentId: string) => {
+    agentBotProviderService
+      .refreshRuntimeStatusesByAgent(agentId)
+      .then(() => this.internal_refreshBotProviders(agentId))
+      .catch(() => {
+        // Non-critical: cached statuses remain visible.
+      });
   };
 
   internal_refreshBotProviders = async (agentId?: string) => {

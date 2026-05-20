@@ -24,7 +24,7 @@ PermissionsRoutes.get(
   requireAuth,
   requireAnyPermission(
     getScopePermissions('RBAC_PERMISSION_READ', ['ALL']),
-    '您没有权限查看权限列表',
+    'You do not have permission to view permissions list',
   ),
   zValidator('query', PermissionsListQuerySchema),
   async (c) => {
@@ -43,7 +43,7 @@ PermissionsRoutes.get(
   requireAuth,
   requireAnyPermission(
     getScopePermissions('RBAC_PERMISSION_READ', ['ALL']),
-    '您没有权限查看权限详情',
+    'You do not have permission to view permission details',
   ),
   zValidator('param', PermissionIdParamSchema),
   async (c) => {
@@ -62,7 +62,7 @@ PermissionsRoutes.post(
   requireAuth,
   requireAnyPermission(
     getScopePermissions('RBAC_PERMISSION_CREATE', ['ALL']),
-    '您没有权限创建权限',
+    'You do not have permission to create a permission',
   ),
   zValidator('json', CreatePermissionRequestSchema),
   async (c) => {
@@ -81,7 +81,7 @@ PermissionsRoutes.patch(
   requireAuth,
   requireAnyPermission(
     getScopePermissions('RBAC_PERMISSION_UPDATE', ['ALL']),
-    '您没有权限更新权限',
+    'You do not have permission to update a permission',
   ),
   zValidator('param', PermissionIdParamSchema),
   zValidator('json', UpdatePermissionRequestSchema),
@@ -101,7 +101,7 @@ PermissionsRoutes.delete(
   requireAuth,
   requireAnyPermission(
     getScopePermissions('RBAC_PERMISSION_DELETE', ['ALL']),
-    '您没有权限删除权限',
+    'You do not have permission to delete a permission',
   ),
   zValidator('param', PermissionIdParamSchema),
   async (c) => {

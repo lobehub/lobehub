@@ -13,6 +13,7 @@ import {
   formatSpeed,
   formatTime,
   formatTokenNumber,
+  formatUsageValue,
 } from './format';
 
 describe('format', () => {
@@ -185,6 +186,19 @@ describe('format', () => {
       expect(formatPrice(0.99)).toBe('0.99');
       expect(formatPrice(1000000.01, 0)).toBe('1,000,000');
     });
+
+    it('should expand precision when a positive price would round to zero', () => {
+      expect(formatPrice(0.003625)).toBe('0.004');
+      expect(formatPrice(0.0001)).toBe('0.0001');
+      expect(formatPrice(0)).toBe('0.00');
+    });
+
+    it('should not throw RangeError for sub-1e-100 prices', () => {
+      // Number.prototype.toFixed accepts digits in [0, 100]; without a clamp
+      // Math.ceil(-Math.log10(price)) can exceed that and throw RangeError.
+      expect(() => formatPrice(1e-101)).not.toThrow();
+      expect(() => formatPrice(Number.MIN_VALUE)).not.toThrow();
+    });
   });
 
   describe('formatPriceByCurrency', () => {
@@ -238,6 +252,31 @@ describe('format', () => {
       expect(formatTokenNumber(1048576)).toBe('1M'); // Gemini Flash
       expect(formatTokenNumber(2000000)).toBe('2M');
       expect(formatTokenNumber(2097152)).toBe('2M'); // Gemini Pro
+    });
+  });
+
+  describe('formatUsageValue', () => {
+    it('formats token usage details with short units', () => {
+      expect(formatUsageValue(93_405)).toBe('93.4K');
+      expect(formatUsageValue(92_119)).toBe('92.1K');
+      expect(formatUsageValue(3_488)).toBe('3.5K');
+      expect(formatUsageValue(189_018)).toBe('189K');
+    });
+
+    it('formats credit usage details with the same short units', () => {
+      expect(formatUsageValue(16_127)).toBe('16.1K');
+      expect(formatUsageValue(16_179)).toBe('16.2K');
+    });
+
+    it('keeps small token counts readable without suffixes', () => {
+      expect(formatUsageValue(0)).toBe('0');
+      expect(formatUsageValue(6)).toBe('6');
+      expect(formatUsageValue(999)).toBe('999');
+    });
+
+    it('formats million-level token counts with M suffix', () => {
+      expect(formatUsageValue(1_000_000)).toBe('1M');
+      expect(formatUsageValue(1_500_000)).toBe('1.5M');
     });
   });
 

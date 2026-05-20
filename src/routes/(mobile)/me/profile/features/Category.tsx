@@ -19,7 +19,7 @@ const Category = memo(() => {
     {
       icon: UserCircle,
       key: ProfileTabs.Profile,
-      label: t('tab.profile'),
+      label: t('profile.title'),
       onClick: () => navigate('/settings/profile'),
     },
     {

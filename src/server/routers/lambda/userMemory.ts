@@ -275,7 +275,7 @@ export const userMemoryRouter = router({
       const baseUrl = webhook.baseUrl || appEnv.INTERNAL_APP_URL || appEnv.APP_URL;
 
       try {
-        await MemoryExtractionWorkflowService.triggerProcessUsers(
+        const { workflowRunId } = await MemoryExtractionWorkflowService.triggerProcessUsers(
           buildWorkflowPayloadInput(
             normalizeMemoryExtractionPayload({
               asyncTaskId: taskId,
@@ -292,6 +292,17 @@ export const userMemoryRouter = router({
           ),
           { extraHeaders: upstashWorkflowExtraHeaders },
         );
+
+        await ctx.asyncTaskModel.update(taskId, {
+          metadata: {
+            ...metadata,
+            control: {
+              upstash: {
+                workflowRunIds: workflowRunId ? [workflowRunId] : [],
+              },
+            },
+          } as UserMemoryExtractionMetadata,
+        });
       } catch (error) {
         await ctx.asyncTaskModel.update(taskId, {
           error: new AsyncTaskError(

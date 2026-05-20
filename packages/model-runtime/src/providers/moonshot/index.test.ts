@@ -19,34 +19,107 @@ vi.spyOn(console, 'error').mockImplementation(() => {});
 vi.spyOn(console, 'warn').mockImplementation(() => {});
 
 describe('LobeMoonshotAI', () => {
+  const createRuntime = ({
+    baseURL,
+    sdkType,
+  }: {
+    baseURL?: string;
+    sdkType?: string;
+  } = {}) =>
+    new LobeMoonshotAI({
+      apiKey: 'test',
+      ...(baseURL ? { baseURL } : {}),
+      ...(sdkType ? { sdkType } : {}),
+    });
+
+  const resolveRouter = async (baseURL?: string, sdkType?: string) => {
+    const runtime = createRuntime({ baseURL, sdkType });
+
+    return (runtime as any).resolveMatchedRouter('moonshot-v1-8k');
+  };
+
+  const resolveFirstRouterOption = async (baseURL: string, sdkType: string) => {
+    const runtime = createRuntime({ baseURL, sdkType });
+    const router = await (runtime as any).resolveMatchedRouter('moonshot-v1-8k');
+    const routerOptions = (runtime as any).normalizeRouterOptions(router);
+
+    return {
+      option: routerOptions[0],
+      router,
+    };
+  };
+
   describe('RouterRuntime baseURL routing', () => {
     it('should route to OpenAI format by default', async () => {
-      const runtime = new LobeMoonshotAI({ apiKey: 'test' });
-      expect(runtime).toBeInstanceOf(LobeMoonshotAI);
+      const router = await resolveRouter();
+
+      expect(router.apiType).toBe('openai');
+      expect(router.runtime).toBe(LobeMoonshotOpenAI);
     });
 
     it('should route to OpenAI format when baseURL ends with /v1', async () => {
-      const runtime = new LobeMoonshotAI({
-        apiKey: 'test',
-        baseURL: 'https://api.moonshot.cn/v1',
-      });
-      expect(runtime).toBeInstanceOf(LobeMoonshotAI);
+      const router = await resolveRouter(defaultOpenAIBaseURL);
+
+      expect(router.apiType).toBe('openai');
+      expect(router.runtime).toBe(LobeMoonshotOpenAI);
     });
 
     it('should route to Anthropic format when baseURL ends with /anthropic', async () => {
-      const runtime = new LobeMoonshotAI({
-        apiKey: 'test',
-        baseURL: 'https://api.moonshot.cn/anthropic',
-      });
-      expect(runtime).toBeInstanceOf(LobeMoonshotAI);
+      const router = await resolveRouter(anthropicBaseURL);
+
+      expect(router.apiType).toBe('anthropic');
+      expect(router.runtime).toBe(LobeMoonshotAnthropicAI);
     });
 
     it('should route to Anthropic format when baseURL ends with /anthropic/', async () => {
-      const runtime = new LobeMoonshotAI({
-        apiKey: 'test',
-        baseURL: 'https://api.moonshot.cn/anthropic/',
-      });
-      expect(runtime).toBeInstanceOf(LobeMoonshotAI);
+      const router = await resolveRouter(`${anthropicBaseURL}/`);
+
+      expect(router.apiType).toBe('anthropic');
+      expect(router.runtime).toBe(LobeMoonshotAnthropicAI);
+    });
+
+    it('should route to Anthropic format when sdkType is anthropic', async () => {
+      const router = await resolveRouter('https://aihubmix.com/v1/messages', 'anthropic');
+
+      expect(router.apiType).toBe('anthropic');
+      expect(router.runtime).toBe(LobeMoonshotAnthropicAI);
+    });
+
+    it('should normalize /v1/messages before creating an Anthropic SDK runtime', async () => {
+      const { option } = await resolveFirstRouterOption(
+        'https://aihubmix.com/v1/messages',
+        'anthropic',
+      );
+      const runtime = new LobeMoonshotAnthropicAI({ apiKey: 'test', baseURL: option.baseURL });
+
+      expect(option.baseURL).toBe('https://aihubmix.com');
+      expect(runtime).toBeInstanceOf(LobeMoonshotAnthropicAI);
+      expect((runtime as any).baseURL).toBe('https://aihubmix.com');
+    });
+
+    it('should normalize /anthropic/v1/messages before creating an Anthropic SDK runtime', async () => {
+      const { option } = await resolveFirstRouterOption(
+        'https://api.moonshot.cn/anthropic/v1/messages',
+        'anthropic',
+      );
+      const runtime = new LobeMoonshotAnthropicAI({ apiKey: 'test', baseURL: option.baseURL });
+
+      expect(option.baseURL).toBe(anthropicBaseURL);
+      expect(runtime).toBeInstanceOf(LobeMoonshotAnthropicAI);
+      expect((runtime as any).baseURL).toBe(anthropicBaseURL);
+    });
+
+    it('should let sdkType override legacy baseURL suffix routing', async () => {
+      const router = await resolveRouter(anthropicBaseURL, 'openai');
+
+      expect(router.apiType).toBe('openai');
+      expect(router.runtime).toBe(LobeMoonshotOpenAI);
+    });
+
+    it('should reject unsupported sdkType values', async () => {
+      await expect(resolveRouter(defaultOpenAIBaseURL, 'invalid')).rejects.toThrow(
+        'Unsupported Moonshot sdkType: invalid',
+      );
     });
   });
 
@@ -247,6 +320,34 @@ describe('LobeMoonshotOpenAI', () => {
         expect(payload.temperature).toBe(0.6);
         expect(payload.thinking).toEqual({ type: 'disabled' });
       });
+
+      it('should handle kimi-k2.6 model with thinking enabled by default', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k2.6',
+          temperature: 0.5,
+          top_p: 0.8,
+        });
+
+        const payload = getLastRequestPayload();
+        expect(payload.temperature).toBe(1);
+        expect(payload.top_p).toBe(0.95);
+        expect(payload.frequency_penalty).toBe(0);
+        expect(payload.presence_penalty).toBe(0);
+        expect(payload.thinking).toEqual({ type: 'enabled' });
+      });
+
+      it('should handle kimi-k2.6 model with thinking disabled', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k2.6',
+          thinking: { budget_tokens: 0, type: 'disabled' },
+        });
+
+        const payload = getLastRequestPayload();
+        expect(payload.temperature).toBe(0.6);
+        expect(payload.thinking).toEqual({ type: 'disabled' });
+      });
     });
 
     describe('kimi-k2-thinking native thinking models', () => {
@@ -422,7 +523,7 @@ describe('LobeMoonshotAnthropicAI', () => {
       });
     });
 
-    describe('kimi-k2.5 thinking support', () => {
+    describe('kimi-k2.x family thinking toggle', () => {
       it('should add thinking params for kimi-k2.5 model', async () => {
         await instance.chat({
           messages: [{ content: 'Hello', role: 'user' }],
@@ -470,7 +571,38 @@ describe('LobeMoonshotAnthropicAI', () => {
         });
       });
 
-      it('should not add thinking params for non-kimi-k2.5 models', async () => {
+      it('should add thinking params for kimi-k2.6 model', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k2.6',
+          temperature: 0.5,
+        });
+
+        const payload = getLastRequestPayload();
+
+        expect(payload.thinking).toEqual({
+          budget_tokens: 1024,
+          type: 'enabled',
+        });
+        expect(payload.temperature).toBe(1);
+        expect(payload.top_p).toBe(0.95);
+      });
+
+      it('should disable thinking for kimi-k2.6 when type is disabled', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k2.6',
+          temperature: 0.5,
+          thinking: { budget_tokens: 0, type: 'disabled' },
+        });
+
+        const payload = getLastRequestPayload();
+
+        expect(payload.thinking).toEqual({ type: 'disabled' });
+        expect(payload.temperature).toBe(0.6);
+      });
+
+      it('should not add thinking params for non-K2-toggle models', async () => {
         await instance.chat({
           messages: [{ content: 'Hello', role: 'user' }],
           model: 'moonshot-v1-8k',

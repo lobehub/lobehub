@@ -69,6 +69,24 @@ describe('builtinAgentSelectors', () => {
     });
   });
 
+  describe('taskAgentId', () => {
+    it('should return task agent id', () => {
+      const state = createState({
+        builtinAgentIdMap: { [BUILTIN_AGENT_SLUGS.taskAgent]: 'task-agent-456' },
+      });
+
+      expect(builtinAgentSelectors.taskAgentId(state)).toBe('task-agent-456');
+    });
+
+    it('should return undefined when task agent not initialized', () => {
+      const state = createState({
+        builtinAgentIdMap: {},
+      });
+
+      expect(builtinAgentSelectors.taskAgentId(state)).toBeUndefined();
+    });
+  });
+
   describe('agentBuilderId', () => {
     it('should return agent builder id', () => {
       const state = createState({

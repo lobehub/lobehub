@@ -13,12 +13,17 @@ import {
   type UpdateSessionParams,
 } from '@/types/session';
 
+/**
+ * @deprecated Session service is legacy. Use agentService for agent CRUD operations.
+ * Mobile still uses this, but should migrate to agentService.
+ */
 export class SessionService {
   hasSessions = async (): Promise<boolean> => {
     const result = await this.countSessions();
     return result === 0;
   };
 
+  /** @deprecated Use agentService.createAgent instead */
   createSession = async (
     type: LobeSessionType,
     data: Partial<LobeAgentSession>,

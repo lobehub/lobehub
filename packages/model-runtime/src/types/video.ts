@@ -12,6 +12,11 @@ export type CreateVideoPayload = {
   params: RuntimeVideoGenParams;
 };
 
+export interface CreateVideoMethodOptions {
+  /** Metadata passed to hooks (billing, tracing, etc.) */
+  metadata?: Record<string, unknown>;
+}
+
 export type CreateVideoResponse =
   | {
       inferenceId: string;

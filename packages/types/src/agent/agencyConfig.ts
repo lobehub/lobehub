@@ -1,28 +1,31 @@
 /**
- * Discord Bot configuration for an agent
+ * Heterogeneous agent provider configuration.
+ * When set, the assistant delegates execution to an external agent CLI
+ * instead of using the built-in model runtime.
  */
-export interface DiscordBotConfig {
-  applicationId: string;
-  botToken: string;
-  enabled: boolean;
-  publicKey: string;
+export interface HeterogeneousProviderConfig {
+  /** Additional CLI arguments for the agent command */
+  args?: string[];
+  /** Command to spawn the agent (e.g. 'claude') */
+  command?: string;
+  /** Custom environment variables */
+  env?: Record<string, string>;
+  /**
+   * Static context prepended to every user prompt before it reaches the agent CLI.
+   * Use this to prime the agent with workspace conventions, rules, or instructions
+   * that should apply to every conversation.
+   * Combined with any runtime-generated context (e.g. cloned repo list).
+   */
+  systemContext?: string;
+  /** Agent runtime type */
+  type: 'claude-code' | 'codex';
 }
 
 /**
- * Slack Bot configuration for an agent
- */
-export interface SlackBotConfig {
-  botToken: string;
-  enabled: boolean;
-  signingSecret: string;
-}
-
-/**
- * Agent agency configuration for external platform bot integrations.
- * Each agent can independently configure its own bot providers.
+ * Agent agency configuration.
+ * Contains settings for agent execution modes and device binding.
  */
 export interface LobeAgentAgencyConfig {
   boundDeviceId?: string;
-  discord?: DiscordBotConfig;
-  slack?: SlackBotConfig;
+  heterogeneousProvider?: HeterogeneousProviderConfig;
 }

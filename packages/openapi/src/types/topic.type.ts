@@ -12,6 +12,7 @@ export interface TopicListQuery extends IPaginationQuery {
   agentId?: string | null;
   excludeTriggers?: string[];
   groupId?: string | null;
+  includeTriggers?: string[];
   isInbox?: boolean;
 }
 
@@ -20,6 +21,7 @@ export const TopicListQuerySchema = z
     agentId: z.string().nullish(),
     excludeTriggers: z.array(z.string()).optional(),
     groupId: z.string().nullish(),
+    includeTriggers: z.array(z.string()).optional(),
     isInbox: z
       .string()
       .optional()

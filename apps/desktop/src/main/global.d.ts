@@ -1,4 +1,4 @@
-import 'vite/client';
+/// <reference types="vite/client" />
 
 /**
  * `node-mac-permissions` is a macOS-only native module.
@@ -30,5 +30,3 @@ declare module 'node-mac-permissions' {
   export function askForScreenCaptureAccess(openPreferences?: boolean): void;
   export function askForFullDiskAccess(): void;
 }
-
-export {};

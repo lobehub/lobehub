@@ -51,10 +51,6 @@ export const getProviderAuthPayload = (
     case ModelProvider.Azure: {
       return {
         apiKey: clientApiKeyManager.pick(keyVaults.apiKey),
-
-        apiVersion: keyVaults.apiVersion,
-        /** @deprecated */
-        azureApiVersion: keyVaults.apiVersion,
         baseURL: keyVaults.baseURL || keyVaults.endpoint,
       };
     }

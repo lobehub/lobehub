@@ -10,6 +10,58 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_050_000,
     description:
+      "GPT-5.5 is OpenAI's latest frontier model for complex professional work, coding, and agentic tasks.",
+    displayName: 'GPT-5.5',
+    enabled: true,
+    id: 'gpt-5.5',
+    maxOutput: 128_000,
+    pricing: {
+      units: [
+        {
+          name: 'textInput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 5, upTo: 272_000 },
+            { rate: 10, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textInput_cacheRead',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.5, upTo: 272_000 },
+            { rate: 1, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textOutput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 30, upTo: 272_000 },
+            { rate: 45, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-04-23',
+    settings: {
+      extendParams: ['gpt5_2ReasoningEffort', 'textVerbosity'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_050_000,
+    description:
       "GPT-5.4 is OpenAI's latest model for complex professional work and a drop-in replacement for GPT-5.2 and GPT-5.3 Codex.",
     displayName: 'GPT-5.4',
     enabled: true,

@@ -1,5 +1,3 @@
-import type { PythonResult } from '@lobechat/python-interpreter';
-
 export interface CodeInterpreterParams {
   code: string;
   packages: string[];
@@ -10,6 +8,17 @@ export interface CodeInterpreterFileItem {
   fileId?: string;
   filename: string;
   previewUrl?: string;
+}
+
+export interface PythonOutput {
+  data: string;
+  type: 'stdout' | 'stderr';
+}
+
+export interface PythonResult {
+  output?: PythonOutput[];
+  result?: string;
+  success: boolean;
 }
 
 export interface CodeInterpreterResponse extends PythonResult {

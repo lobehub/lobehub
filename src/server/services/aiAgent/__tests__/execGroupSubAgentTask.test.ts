@@ -88,6 +88,10 @@ vi.mock('@/server/services/klavis', () => ({
   })),
 }));
 
+vi.mock('@/server/modules/ModelRuntime', () => ({
+  initModelRuntimeFromDB: vi.fn(),
+}));
+
 describe('AiAgentService.execSubAgentTask', () => {
   let service: AiAgentService;
   const mockDb = {} as any;

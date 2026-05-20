@@ -1,7 +1,7 @@
 'use client';
 
 import { Block, Flexbox, Icon, Text } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { ChevronDownIcon } from 'lucide-react';
 import { memo } from 'react';
 
@@ -12,6 +12,17 @@ import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
 
 export const USER_DROPDOWN_ICON_ID = 'user-dropdown-icon';
+
+// The dropdown is a button surface, not selectable text. Without
+// `user-select: none` a triple-click (or click-drag through the avatar /
+// name) paints the system text-selection highlight across the whole row;
+// that bright blue is heavier than the Sidebar's active-route fill below
+// and inverts the visual hierarchy.
+const styles = createStaticStyles(({ css }) => ({
+  trigger: css`
+    user-select: none;
+  `,
+}));
 
 const User = memo<{ lite?: boolean }>(({ lite }) => {
   const [nickname, username, isSignedIn] = useUserStore((s) => [
@@ -26,6 +37,7 @@ const User = memo<{ lite?: boolean }>(({ lite }) => {
         clickable
         horizontal
         align={'center'}
+        className={styles.trigger}
         gap={8}
         paddingBlock={2}
         variant={'borderless'}

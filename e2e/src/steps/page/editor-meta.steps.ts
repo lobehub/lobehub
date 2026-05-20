@@ -29,7 +29,7 @@ async function waitForPageWorkspaceReady(world: CustomWorld): Promise<void> {
     }
 
     const readyCandidates = [
-      world.page.locator('button:has(svg.lucide-square-pen)').first(),
+      world.page.locator(':is(button, [role="button"]):has(svg.lucide-square-pen)').first(),
       world.page.locator('input[placeholder*="Search"], input[placeholder*="搜索"]').first(),
       world.page.locator('a[href^="/page/"]').first(),
     ];
@@ -50,7 +50,7 @@ async function clickNewPageButton(world: CustomWorld): Promise<void> {
   await waitForPageWorkspaceReady(world);
 
   const candidates = [
-    world.page.locator('button:has(svg.lucide-square-pen)').first(),
+    world.page.locator(':is(button, [role="button"]):has(svg.lucide-square-pen)').first(),
     world.page
       .locator('svg.lucide-square-pen')
       .first()

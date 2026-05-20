@@ -39,7 +39,8 @@ export async function createMiniMaxImage(
       model,
       n: 1,
       prompt: params.prompt,
-      //prompt_optimizer: true, // Enable automatic prompt optimization
+      aigc_watermark: params.watermark ?? false,
+      prompt_optimizer: params.promptExtend ?? false,
       ...(typeof params.seed === 'number' ? { seed: params.seed } : {}),
     };
 

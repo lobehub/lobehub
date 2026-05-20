@@ -1,14 +1,17 @@
 import type {
   CheckpointConfig,
+  NewTask,
+  TaskItem,
   WorkspaceData,
   WorkspaceDocNode,
   WorkspaceTreeNode,
 } from '@lobechat/types';
-import { and, desc, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNotNull, isNull, ne, notInArray, sql } from 'drizzle-orm';
 
 import { merge } from '@/utils/merge';
 
-import type { NewTask, NewTaskComment, TaskCommentItem, TaskItem } from '../schemas/task';
+import { documents } from '../schemas/file';
+import type { NewTaskComment, TaskCommentItem } from '../schemas/task';
 import { taskComments, taskDependencies, taskDocuments, tasks } from '../schemas/task';
 import type { LobeChatDatabase } from '../type';
 
@@ -217,13 +220,22 @@ export class TaskModel {
     limit?: number;
     offset?: number;
     parentTaskId?: string | null;
-    status?: string;
+    priorities?: number[];
+    statuses?: string[];
   }): Promise<{ tasks: TaskItem[]; total: number }> {
-    const { status, parentTaskId, assigneeAgentId, limit = 50, offset = 0 } = options || {};
+    const {
+      statuses,
+      priorities,
+      parentTaskId,
+      assigneeAgentId,
+      limit = 50,
+      offset = 0,
+    } = options || {};
 
     const conditions = [eq(tasks.createdByUserId, this.userId)];
 
-    if (status) conditions.push(eq(tasks.status, status));
+    if (statuses?.length) conditions.push(inArray(tasks.status, statuses));
+    if (priorities?.length) conditions.push(inArray(tasks.priority, priorities));
     if (assigneeAgentId) conditions.push(eq(tasks.assigneeAgentId, assigneeAgentId));
 
     if (parentTaskId === null) {
@@ -271,6 +283,30 @@ export class TaskModel {
       .orderBy(tasks.sortOrder, tasks.seq);
   }
 
+  /**
+   * Fetch all descendants of a root task using Drizzle select() (returns camelCase fields).
+   * Uses breadth-first traversal with O(depth) queries.
+   */
+  async findAllDescendants(rootTaskId: string): Promise<TaskItem[]> {
+    const all: TaskItem[] = [];
+    let parentIds = [rootTaskId];
+
+    while (parentIds.length > 0) {
+      const children = await this.db
+        .select()
+        .from(tasks)
+        .where(and(inArray(tasks.parentTaskId, parentIds), eq(tasks.createdByUserId, this.userId)))
+        .orderBy(tasks.sortOrder, tasks.seq);
+
+      if (children.length === 0) break;
+
+      all.push(...children);
+      parentIds = children.map((c) => c.id);
+    }
+
+    return all;
+  }
+
   // Recursive query to get full task tree
   async getTaskTree(rootTaskId: string): Promise<TaskItem[]> {
     const result = await this.db.execute(sql`
@@ -283,7 +319,7 @@ export class TaskModel {
       SELECT * FROM task_tree
     `);
 
-    return result.rows as TaskItem[];
+    return result.rows as unknown as TaskItem[];
   }
 
   /**
@@ -377,6 +413,22 @@ export class TaskModel {
     return this.update(id, { config });
   }
 
+  // ========== Context (runtime state) ==========
+
+  /**
+   * Deep-merge into the task's context JSONB. Used by the heartbeat scheduler
+   * to update `context.scheduler.{tickMessageId, consecutiveFailures, ...}`
+   * without disturbing other namespaces under context.
+   */
+  async updateContext(id: string, partial: Record<string, unknown>): Promise<TaskItem | null> {
+    const task = await this.findById(id);
+    if (!task) return null;
+
+    const current = (task.context as Record<string, unknown>) || {};
+    const context = merge(current, partial);
+    return this.update(id, { context });
+  }
+
   // ========== Checkpoint ==========
 
   getCheckpointConfig(task: TaskItem): CheckpointConfig {
@@ -425,6 +477,22 @@ export class TaskModel {
       .update(tasks)
       .set({ lastHeartbeatAt: new Date(), updatedAt: new Date() })
       .where(eq(tasks.id, id));
+  }
+
+  // Tasks eligible for cron-based dispatch.
+  // Excludes terminal/paused/running — `paused` requires user attention,
+  // `running` is already in flight (and `runTask` would CONFLICT anyway).
+  static async getScheduledTasks(db: LobeChatDatabase): Promise<TaskItem[]> {
+    return db
+      .select()
+      .from(tasks)
+      .where(
+        and(
+          eq(tasks.automationMode, 'schedule'),
+          isNotNull(tasks.schedulePattern),
+          notInArray(tasks.status, ['canceled', 'completed', 'failed', 'paused', 'running']),
+        ),
+      );
   }
 
   // Find stuck tasks (running but heartbeat timed out)
@@ -552,6 +620,40 @@ export class TaskModel {
       .orderBy(taskDocuments.createdAt);
   }
 
+  /**
+   * Documents pinned to a task at or after a given timestamp, joined with the
+   * `documents` table so callers receive `{ id, kind, title }` directly.
+   *
+   * Used by topic-brief synthesis to attribute artifacts to the topic that
+   * just completed: pass the topic's start time as `since`.
+   */
+  async getDocumentsPinnedSince(
+    taskId: string,
+    since: Date,
+  ): Promise<{ id: string; kind: string | null; title: string | null }[]> {
+    const rows = await this.db
+      .select({
+        fileType: documents.fileType,
+        id: documents.id,
+        title: documents.title,
+      })
+      .from(taskDocuments)
+      .innerJoin(documents, eq(taskDocuments.documentId, documents.id))
+      .where(
+        and(
+          eq(taskDocuments.taskId, taskId),
+          eq(taskDocuments.userId, this.userId),
+          gte(taskDocuments.createdAt, since),
+        ),
+      );
+
+    return rows.map((row) => ({
+      id: row.id,
+      kind: row.fileType ?? null,
+      title: row.title ?? null,
+    }));
+  }
+
   // Get all pinned docs from a task tree (recursive), returns nodeMap + tree structure
   async getTreePinnedDocuments(rootTaskId: string): Promise<WorkspaceData> {
     const result = await this.db.execute(sql`
@@ -584,6 +686,7 @@ export class TaskModel {
         fileType: row.document_file_type,
         parentId: row.document_parent_id,
         pinnedBy: row.pinned_by,
+        sourceTaskId: row.source_task_id,
         sourceTaskIdentifier: row.source_task_id !== rootTaskId ? row.source_task_identifier : null,
         title: row.document_title || 'Untitled',
         updatedAt: row.document_updated_at,
@@ -656,5 +759,14 @@ export class TaskModel {
 
       .returning();
     return result.length > 0;
+  }
+
+  async updateComment(id: string, content: string): Promise<TaskCommentItem | undefined> {
+    const [comment] = await this.db
+      .update(taskComments)
+      .set({ content, updatedAt: new Date() })
+      .where(and(eq(taskComments.id, id), eq(taskComments.userId, this.userId)))
+      .returning();
+    return comment;
   }
 }

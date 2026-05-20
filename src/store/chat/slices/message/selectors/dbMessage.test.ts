@@ -1,10 +1,10 @@
 import { type UIChatMessage } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { selectTodosFromMessages } from './dbMessage';
+import { selectCurrentTurnTodosFromMessages, selectTodosFromMessages } from './dbMessage';
 
 describe('selectTodosFromMessages', () => {
-  const createGTDToolMessage = (todos: {
+  const createLobeAgentToolMessage = (todos: {
     items: Array<{ text: string; status: 'todo' | 'processing' | 'completed' }>;
     updatedAt: string;
   }): UIChatMessage =>
@@ -13,7 +13,7 @@ describe('selectTodosFromMessages', () => {
       role: 'tool',
       content: 'Todos updated',
       plugin: {
-        identifier: 'lobe-gtd',
+        identifier: 'lobe-agent',
         apiName: 'createTodos',
         arguments: '{}',
       },
@@ -22,14 +22,14 @@ describe('selectTodosFromMessages', () => {
       },
     }) as unknown as UIChatMessage;
 
-  it('should extract todos from the latest GTD tool message', () => {
+  it('should extract todos from the latest lobe-agent tool message', () => {
     const messages: UIChatMessage[] = [
       {
         id: 'msg-1',
         role: 'user',
         content: 'Create a todo list',
       } as UIChatMessage,
-      createGTDToolMessage({
+      createLobeAgentToolMessage({
         items: [{ text: 'Buy milk', status: 'todo' }],
         updatedAt: '2024-06-01T00:00:00.000Z',
       }),
@@ -43,9 +43,9 @@ describe('selectTodosFromMessages', () => {
     expect(result?.items[0].status).toBe('todo');
   });
 
-  it('should return the most recent todos when multiple GTD messages exist', () => {
+  it('should return the most recent todos when multiple lobe-agent messages exist', () => {
     const messages: UIChatMessage[] = [
-      createGTDToolMessage({
+      createLobeAgentToolMessage({
         items: [{ text: 'Old task', status: 'todo' }],
         updatedAt: '2024-01-01T00:00:00.000Z',
       }),
@@ -54,7 +54,7 @@ describe('selectTodosFromMessages', () => {
         role: 'assistant',
         content: 'Task added',
       } as UIChatMessage,
-      createGTDToolMessage({
+      createLobeAgentToolMessage({
         items: [
           { text: 'Old task', status: 'completed' },
           { text: 'New task', status: 'todo' },
@@ -73,7 +73,7 @@ describe('selectTodosFromMessages', () => {
     expect(result?.items[1].text).toBe('New task');
   });
 
-  it('should return undefined when no GTD messages exist', () => {
+  it('should return undefined when no lobe-agent messages exist', () => {
     const messages: UIChatMessage[] = [
       {
         id: 'msg-1',
@@ -98,7 +98,7 @@ describe('selectTodosFromMessages', () => {
     expect(result).toBeUndefined();
   });
 
-  it('should ignore non-GTD tool messages', () => {
+  it('should ignore non-lobe-agent tool messages', () => {
     const messages: UIChatMessage[] = [
       {
         id: 'msg-1',
@@ -120,14 +120,14 @@ describe('selectTodosFromMessages', () => {
     expect(result).toBeUndefined();
   });
 
-  it('should handle GTD message without pluginState.todos', () => {
+  it('should handle lobe-agent message without pluginState.todos', () => {
     const messages: UIChatMessage[] = [
       {
         id: 'msg-1',
         role: 'tool',
         content: 'Something',
         plugin: {
-          identifier: 'lobe-gtd',
+          identifier: 'lobe-agent',
           apiName: 'someOtherApi',
           arguments: '{}',
         },
@@ -149,7 +149,7 @@ describe('selectTodosFromMessages', () => {
         role: 'tool',
         content: 'Todos',
         plugin: {
-          identifier: 'lobe-gtd',
+          identifier: 'lobe-agent',
           apiName: 'createTodos',
           arguments: '{}',
         },
@@ -170,6 +170,71 @@ describe('selectTodosFromMessages', () => {
     expect(new Date(result!.updatedAt).toISOString()).toBe(result!.updatedAt);
   });
 
+  it('should pick up pluginState.todos from a non-lobe-agent tool message (CC TodoWrite)', () => {
+    // Heterogeneous-agent tools (Claude Code TodoWrite, future ACP/Codex
+    // equivalents) synthesize `pluginState.todos` with identifier
+    // 'claude-code'. The selector is a shared contract on `pluginState.todos`
+    // — it must not filter by plugin.identifier.
+    const messages: UIChatMessage[] = [
+      {
+        id: 'msg-1',
+        role: 'tool',
+        content: 'Todos have been modified successfully',
+        plugin: {
+          identifier: 'claude-code',
+          apiName: 'TodoWrite',
+          arguments: '{}',
+        },
+        pluginState: {
+          todos: {
+            items: [
+              { text: 'Investigating the bug', status: 'processing' },
+              { text: 'Write a test', status: 'todo' },
+            ],
+            updatedAt: '2026-04-19T00:00:00.000Z',
+          },
+        },
+      } as unknown as UIChatMessage,
+    ];
+
+    const result = selectTodosFromMessages(messages);
+
+    expect(result).toBeDefined();
+    expect(result?.items).toHaveLength(2);
+    expect(result?.items[0].status).toBe('processing');
+    expect(result?.updatedAt).toBe('2026-04-19T00:00:00.000Z');
+  });
+
+  it('should prefer the most recent pluginState.todos across producers', () => {
+    // lobe-agent wrote first, then CC TodoWrite wrote later — the latest producer
+    // wins regardless of identifier.
+    const messages: UIChatMessage[] = [
+      createLobeAgentToolMessage({
+        items: [{ text: 'old lobe-agent task', status: 'todo' }],
+        updatedAt: '2026-04-01T00:00:00.000Z',
+      }),
+      {
+        id: 'msg-2',
+        role: 'tool',
+        content: 'Todos have been modified successfully',
+        plugin: {
+          identifier: 'claude-code',
+          apiName: 'TodoWrite',
+          arguments: '{}',
+        },
+        pluginState: {
+          todos: {
+            items: [{ text: 'cc task', status: 'processing' }],
+            updatedAt: '2026-04-19T00:00:00.000Z',
+          },
+        },
+      } as unknown as UIChatMessage,
+    ];
+
+    const result = selectTodosFromMessages(messages);
+    expect(result?.items[0].text).toBe('cc task');
+  });
+
   it('should handle legacy array format for todos', () => {
     const messages: UIChatMessage[] = [
       {
@@ -177,7 +242,7 @@ describe('selectTodosFromMessages', () => {
         role: 'tool',
         content: 'Todos',
         plugin: {
-          identifier: 'lobe-gtd',
+          identifier: 'lobe-agent',
           apiName: 'createTodos',
           arguments: '{}',
         },
@@ -197,5 +262,58 @@ describe('selectTodosFromMessages', () => {
     expect(result?.items).toHaveLength(2);
     expect(result?.items[0].text).toBe('Task 1');
     expect(result?.items[1].status).toBe('completed');
+  });
+});
+
+describe('selectCurrentTurnTodosFromMessages', () => {
+  const lobeAgentMessage = (
+    text: string,
+    status: 'todo' | 'processing' | 'completed',
+  ): UIChatMessage =>
+    ({
+      id: `tool-${text}`,
+      role: 'tool',
+      content: 'Todos updated',
+      plugin: { identifier: 'lobe-agent', apiName: 'createTodos', arguments: '{}' },
+      pluginState: {
+        todos: { items: [{ text, status }], updatedAt: '2026-04-20T00:00:00.000Z' },
+      },
+    }) as unknown as UIChatMessage;
+
+  const userMessage = (id: string, content = 'hi'): UIChatMessage =>
+    ({ id, role: 'user', content }) as UIChatMessage;
+
+  it('returns todos from the current turn only', () => {
+    const messages: UIChatMessage[] = [
+      userMessage('u1'),
+      lobeAgentMessage('turn 1 task', 'completed'),
+      userMessage('u2'),
+      lobeAgentMessage('turn 2 task', 'processing'),
+    ];
+
+    const result = selectCurrentTurnTodosFromMessages(messages);
+
+    expect(result?.items).toHaveLength(1);
+    expect(result?.items[0].text).toBe('turn 2 task');
+  });
+
+  it('returns undefined once a new user turn starts without its own todos', () => {
+    const messages: UIChatMessage[] = [
+      userMessage('u1'),
+      lobeAgentMessage('previous turn task', 'completed'),
+      userMessage('u2'),
+    ];
+
+    const result = selectCurrentTurnTodosFromMessages(messages);
+
+    expect(result).toBeUndefined();
+  });
+
+  it('falls back to full history when no user message exists', () => {
+    const messages: UIChatMessage[] = [lobeAgentMessage('greeting task', 'todo')];
+
+    const result = selectCurrentTurnTodosFromMessages(messages);
+
+    expect(result?.items[0].text).toBe('greeting task');
   });
 });

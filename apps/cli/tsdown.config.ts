@@ -9,6 +9,10 @@ export default defineConfig({
   entry: ['src/index.ts'],
   fixedExtension: false,
   format: ['esm'],
+  minify: !!process.env.MINIFY,
+  outputOptions: {
+    codeSplitting: false,
+  },
   platform: 'node',
   target: 'node18',
 });

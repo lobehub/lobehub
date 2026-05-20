@@ -5,6 +5,7 @@ import type { ChatModelCard } from '@lobechat/types';
 import debug from 'debug';
 import type { Pricing } from 'model-bank';
 
+import { shouldDropUnsupportedClaudeAssistantPrefill } from '../../const/models';
 import type {
   ChatCompletionErrorPayload,
   ChatMethodOptions,
@@ -19,6 +20,7 @@ import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
 import { desensitizeUrl } from '../../utils/desensitizeUrl';
 import { getModelPricing } from '../../utils/getModelPricing';
+import { isAccountDeactivatedError } from '../../utils/isAccountDeactivatedError';
 import { isExceededContextWindowError } from '../../utils/isExceededContextWindowError';
 import { isQuotaLimitError } from '../../utils/isQuotaLimitError';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
@@ -42,6 +44,10 @@ type ConstructorOptions<T extends Record<string, any> = any> = ClientOptions & T
 type AnthropicTools = Anthropic.Tool | Anthropic.WebSearchTool20250305;
 
 export const DEFAULT_ANTHROPIC_BASE_URL = 'https://api.anthropic.com';
+const ANTHROPIC_SDK_MESSAGES_PATH_PATTERN = /\/v1(?:\/messages)?\/?$/;
+
+const normalizeAnthropicCompatibleBaseURL = (baseURL?: string | null) =>
+  baseURL?.replace(ANTHROPIC_SDK_MESSAGES_PATH_PATTERN, '');
 
 export interface CustomClientOptions<T extends Record<string, any> = any> {
   createClient?: (options: ConstructorOptions<T>) => Anthropic;
@@ -158,8 +164,10 @@ export const buildDefaultAnthropicPayload = async (
 
   const postMessages = await buildAnthropicMessages(userMessages, { enabledContextCaching });
 
-  // Claude 4.6 models do not support assistant turn prefill
-  if (model.includes('-4-6') && postMessages.at(-1)?.role === 'assistant') {
+  if (
+    shouldDropUnsupportedClaudeAssistantPrefill(model) &&
+    postMessages.at(-1)?.role === 'assistant'
+  ) {
     postMessages.pop();
   }
 
@@ -246,13 +254,14 @@ export const createDefaultAnthropicClient = <T extends Record<string, any> = any
   options: ConstructorOptions<T>,
 ) => {
   const betaHeaders = process.env.ANTHROPIC_BETA_HEADERS;
+  const baseURL = normalizeAnthropicCompatibleBaseURL(options.baseURL);
   const defaultHeaders = {
     'User-Agent': `lobehub/${CURRENT_VERSION}`,
     ...options.defaultHeaders,
     ...(betaHeaders ? { 'anthropic-beta': betaHeaders } : {}),
   };
 
-  return new Anthropic({ ...options, defaultHeaders });
+  return new Anthropic({ ...options, ...(baseURL ? { baseURL } : {}), defaultHeaders });
 };
 
 /**
@@ -291,14 +300,25 @@ export const handleDefaultAnthropicError = <T extends Record<string, any> = any>
     }
   }
 
-  const { errorResult } = handleAnthropicError(error);
+  const { errorResult, message } = handleAnthropicError(error);
 
   const errorMsg = errorResult.message || errorResult.error?.message;
+
+  if (isAccountDeactivatedError(errorMsg)) {
+    return {
+      endpoint: desensitizedEndpoint,
+      error: errorResult,
+      errorType: AgentRuntimeErrorType.AccountDeactivated,
+      message,
+    };
+  }
+
   if (isExceededContextWindowError(errorMsg)) {
     return {
       endpoint: desensitizedEndpoint,
       error: errorResult,
       errorType: AgentRuntimeErrorType.ExceededContextWindow,
+      message,
     };
   }
 
@@ -307,6 +327,7 @@ export const handleDefaultAnthropicError = <T extends Record<string, any> = any>
       endpoint: desensitizedEndpoint,
       error: errorResult,
       errorType: AgentRuntimeErrorType.QuotaLimitReached,
+      message,
     };
   }
 
@@ -314,6 +335,7 @@ export const handleDefaultAnthropicError = <T extends Record<string, any> = any>
     endpoint: desensitizedEndpoint,
     error: errorResult,
     errorType: AgentRuntimeErrorType.ProviderBizError,
+    message,
   };
 };
 
@@ -418,13 +440,17 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
 
     constructor(options: ClientOptions & Record<string, any> = {}) {
       const apiKey = typeof options.apiKey === 'string' ? options.apiKey.trim() : options.apiKey;
-      const baseURL =
+      const inputBaseURL =
         typeof options.baseURL === 'string' ? options.baseURL.trim() : options.baseURL;
+      // Anthropic SDK appends `/v1/messages`; normalize gateway URLs that already
+      // include that SDK-managed path segment before constructing any client.
+      const baseURL = normalizeAnthropicCompatibleBaseURL(inputBaseURL);
+      const defaultBaseURL = normalizeAnthropicCompatibleBaseURL(DEFAULT_BASE_URL);
 
       const resolvedOptions = {
         ...options,
         apiKey: apiKey || DEFAULT_API_KEY,
-        baseURL: baseURL || DEFAULT_BASE_URL,
+        baseURL: baseURL || defaultBaseURL,
       };
       const {
         apiKey: finalApiKey,
@@ -448,7 +474,7 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
         this.client = new Anthropic(initOptions as ConstructorOptions<T>);
       }
 
-      this.baseURL = baseURL || this.client.baseURL;
+      this.baseURL = finalBaseURL || this.client.baseURL;
       this.id = options.id || provider;
       this.logPrefix = `lobe-model-runtime:${this.id}`;
     }
@@ -676,24 +702,26 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
         }
       }
 
-      const errorResult = (() => {
-        if (error?.error) {
-          const innerError = error.error;
-          if ('error' in innerError) {
-            return innerError.error;
-          }
-          return innerError;
-        }
-
-        return { headers: error?.headers, stack: error?.stack, status: error?.status };
-      })();
+      const { errorResult, message } = handleAnthropicError(error);
 
       const errorMsg = errorResult.message || errorResult.error?.message;
+
+      if (isAccountDeactivatedError(errorMsg)) {
+        return AgentRuntimeError.chat({
+          endpoint: desensitizedEndpoint,
+          error: errorResult,
+          errorType: AgentRuntimeErrorType.AccountDeactivated,
+          message,
+          provider: this.id,
+        });
+      }
+
       if (isExceededContextWindowError(errorMsg)) {
         return AgentRuntimeError.chat({
           endpoint: desensitizedEndpoint,
           error: errorResult,
           errorType: AgentRuntimeErrorType.ExceededContextWindow,
+          message,
           provider: this.id,
         });
       }
@@ -703,6 +731,7 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
           endpoint: desensitizedEndpoint,
           error: errorResult,
           errorType: AgentRuntimeErrorType.QuotaLimitReached,
+          message,
           provider: this.id,
         });
       }
@@ -711,6 +740,7 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
         endpoint: desensitizedEndpoint,
         error: errorResult,
         errorType: ErrorType.bizError,
+        message,
         provider: this.id,
       });
     }

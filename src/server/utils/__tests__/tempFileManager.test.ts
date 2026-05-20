@@ -10,8 +10,12 @@ vi.mock('node:fs');
 vi.mock('node:os');
 vi.mock('node:path', () => ({
   join: (...args: string[]) => args.join('/'),
+  basename: (p: string) => p.split('/').pop()!.split('\\').pop()!,
+  resolve: (...args: string[]) => args.join('/'),
   default: {
     join: (...args: string[]) => args.join('/'),
+    basename: (p: string) => p.split('/').pop()!.split('\\').pop()!,
+    resolve: (...args: string[]) => args.join('/'),
   },
 }));
 
@@ -90,5 +94,51 @@ describe('TempFileManager', () => {
     expect(processOnSpy).toHaveBeenCalledWith('uncaughtException', expect.any(Function));
     expect(processOnSpy).toHaveBeenCalledWith('SIGINT', expect.any(Function));
     expect(processOnSpy).toHaveBeenCalledWith('SIGTERM', expect.any(Function));
+  });
+});
+
+// Path traversal regression tests
+// These tests use the mocked path module (same as above) but verify that
+// basename() is called to strip traversal components before constructing the file path.
+describe('TempFileManager - path traversal prevention', () => {
+  const traversalPayloads = [
+    { input: '../../etc/passwd', expected: 'passwd' },
+    { input: '../../../tmp/evil.txt', expected: 'evil.txt' },
+    { input: '..\\..\\..\\windows\\system32\\evil.dll', expected: 'evil.dll' },
+    { input: 'foo/../../bar/evil.txt', expected: 'evil.txt' },
+    { input: '../startServer.js', expected: 'startServer.js' },
+  ];
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(tmpdir).mockReturnValue('/tmp');
+    vi.mocked(mkdtempSync).mockReturnValue('/tmp/test-xyz');
+    vi.mocked(existsSync).mockReturnValue(true);
+  });
+
+  it.each(traversalPayloads)(
+    'should sanitize path traversal filename: $input → $expected',
+    async ({ input, expected }) => {
+      const manager = new TempFileManager('test-');
+      const testData = new Uint8Array([0x41, 0x42, 0x43]);
+
+      const resultPath = await manager.writeTempFile(testData, input);
+
+      // writeFileSync should be called with the safe basename, not the traversal path
+      expect(writeFileSync).toHaveBeenCalledWith(`/tmp/test-xyz/${expected}`, testData);
+      expect(resultPath).toBe(`/tmp/test-xyz/${expected}`);
+    },
+  );
+
+  it('should not write to traversed path', async () => {
+    const manager = new TempFileManager('test-');
+    const testData = new Uint8Array([0x41, 0x42, 0x43]);
+
+    const resultPath = await manager.writeTempFile(testData, '../../evil.txt');
+
+    // Should write to /tmp/test-xyz/evil.txt, NOT /tmp/test-xyz/../../evil.txt
+    expect(resultPath).toBe('/tmp/test-xyz/evil.txt');
+    expect(resultPath).not.toContain('..');
+    expect(writeFileSync).toHaveBeenCalledWith('/tmp/test-xyz/evil.txt', testData);
   });
 });

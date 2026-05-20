@@ -6,6 +6,33 @@ import type { OnboardingContextInjectorConfig } from './OnboardingContextInjecto
 
 const log = debug('context-engine:provider:OnboardingActionHintInjector');
 
+const buildDiscoveryTurnReminder = (
+  discoveryUserMessageCount: number | undefined,
+  remainingDiscoveryExchanges: number | undefined,
+): string | null => {
+  if (discoveryUserMessageCount === undefined || remainingDiscoveryExchanges === undefined) {
+    return null;
+  }
+
+  const recommendedTarget = discoveryUserMessageCount + remainingDiscoveryExchanges;
+
+  if (remainingDiscoveryExchanges > 0) {
+    return [
+      'SYSTEM REMINDER: Current Discovery turn status:',
+      `- User discovery exchanges observed: ${discoveryUserMessageCount}.`,
+      `- Recommended target before Summary: ${recommendedTarget}.`,
+      `- Continue Discovery for about ${remainingDiscoveryExchanges} more user exchange(s). Ask one focused question about what the user does for work — their profession or main occupation — persist it to the persona, and do not explore other topics.`,
+    ].join('\n');
+  }
+
+  return [
+    'SYSTEM REMINDER: Current Discovery turn status:',
+    `- User discovery exchanges observed: ${discoveryUserMessageCount}.`,
+    '- Recommended Discovery target has been reached.',
+    "- Once the user's profession is recorded in the persona, transition to Summary instead of asking more questions.",
+  ].join('\n');
+};
+
 /**
  * Onboarding Action Hint Injector
  * Injects a standalone virtual user message AFTER the last user message with phase-specific
@@ -30,53 +57,111 @@ export class OnboardingActionHintInjector extends BaseVirtualLastUserContentProv
     return false;
   }
 
-  protected buildContent(_context: PipelineContext): string | null {
+  protected buildContent(context: PipelineContext): string | null {
     const ctx = this.config.onboardingContext;
     if (!ctx) return null;
 
     const hints: string[] = [];
     const phase = ctx.phaseGuidance;
+    // Detect prior showAgentMarketplace calls. NOTE: this provider runs in pipeline phase 4.5
+    // (virtual tail guidance) BEFORE ToolCallProcessor converts the DB-shape `tools` array
+    // into OpenAI-shape `tool_calls`. So at injection time, assistant messages still carry
+    // `tools: [{ identifier, apiName, ... }]`, not `tool_calls`. Match on apiName here, with
+    // a `tool_calls` fallback in case ordering changes.
+    const isMarketplaceShowCall = (msg: any): boolean => {
+      if (msg?.role !== 'assistant') return false;
+      if (
+        Array.isArray(msg.tools) &&
+        msg.tools.some((t: any) => t?.apiName === 'showAgentMarketplace')
+      ) {
+        return true;
+      }
+      if (Array.isArray(msg.tool_calls)) {
+        return msg.tool_calls.some(
+          (tc: any) =>
+            typeof tc?.function?.name === 'string' &&
+            tc.function.name.includes('showAgentMarketplace'),
+        );
+      }
+      return false;
+    };
+    const marketplaceAlreadyOpened = context.messages.some((msg) => isMarketplaceShowCall(msg));
 
-    // Detect empty documents and nudge tool calls
+    if (phase.includes('Discovery')) {
+      const reminder = buildDiscoveryTurnReminder(
+        ctx.discoveryUserMessageCount,
+        ctx.remainingDiscoveryExchanges,
+      );
+      if (reminder) hints.push(reminder);
+    }
+
+    // Detect empty documents and nudge tool calls (empty docs use writeDocument; non-empty use updateDocument)
     if (!ctx.soulContent) {
       hints.push(
-        'SOUL.md is empty — call updateDocument(type="soul") to write the agent identity once the user gives you a name and emoji.',
+        'SOUL.md is empty — call writeDocument(type="soul") to write the initial agent identity once the user gives you a name and emoji.',
       );
     }
     if (!ctx.personaContent) {
       hints.push(
-        'User Persona is empty — call updateDocument(type="persona") to persist what you learn about the user.',
+        'User Persona is empty — call writeDocument(type="persona") to seed the initial persona once you have learned something about the user.',
       );
     }
 
     // Phase-specific persistence reminders
     if (phase.includes('Agent Identity')) {
       hints.push(
-        'When the user settles on a name and emoji: call saveUserQuestion with agentName and agentEmoji, then call updateDocument(type="soul") to write SOUL.md.',
+        'When the user settles on a name and emoji: call saveUserQuestion with agentName and agentEmoji, then persist SOUL.md. If SOUL.md is already non-empty, call updateDocument(type="soul") with the hunk mode that matches your edit — `insertAt`/`replaceLines`/`deleteLines` when you can read the line numbers from <current_soul_document>, or `replace` for a textual tweak. If empty, use writeDocument(type="soul") for the initial write.',
       );
     } else if (phase.includes('User Identity')) {
+      if (ctx.userInfo?.displayName) {
+        const displayName = JSON.stringify(ctx.userInfo.displayName).replaceAll('<', '\\u003c');
+        hints.push(
+          `Initial account user_info suggests displayName ${displayName}. Treat it as unconfirmed: ask whether you may use that name, then call saveUserQuestion with fullName only after the user confirms it or gives a correction.`,
+        );
+      }
       hints.push(
-        'When you learn the user\'s name: call saveUserQuestion with fullName, then call updateDocument(type="persona") to start the persona document.',
+        'THIS TURN, as soon as the user tells you their name, call saveUserQuestion with fullName — do NOT wait until you also know their role. Persist the name immediately.',
+      );
+      hints.push(
+        'Seed the persona document the moment you have ANY useful fact about the user (just a name, just a role, or both). If empty, call writeDocument(type="persona") with a short initial draft containing whatever you know so far (even one line). If already non-empty, call updateDocument(type="persona") with `insertAt` at the end of the right section (use `line = totalLines + 1` to append) or `replace` for a textual tweak. Do NOT defer persistence until more facts arrive.',
       );
     } else if (phase.includes('Discovery')) {
       hints.push(
-        'Continue exploring. After sufficient discovery (5-6 exchanges), call saveUserQuestion with interests and responseLanguage. Update the persona document with updateDocument(type="persona") as you learn more.',
+        'When the user tells you their profession, record it with updateDocument(type="persona"). Preferred shape: `{ mode: "insertAt", line: <line shown in <current_user_persona>>, content: "- new fact" }`. Use writeDocument(type="persona") only if the document is still empty. Do NOT call saveUserQuestion with interests or customInterests — interest collection has been removed from onboarding. The preferred reply language is configured before onboarding starts and is already injected into your system prompt — do not ask about it or pass a responseLanguage field to saveUserQuestion.',
       );
       hints.push(
-        'EARLY EXIT: If the user signals they want to finish (e.g., "好了", "谢谢", "行", "Done", asking for summary, or any completion signal), STOP exploring immediately. Save whatever fields you have (call saveUserQuestion with interests even if partial), present a brief summary, then call finishOnboarding. Do NOT continue asking questions after a completion signal.',
+        'EARLY EXIT: A true early-exit signal is the user explicitly wanting to END onboarding (e.g., "I\'m tired", "I have to go", "let\'s chat next time", "no time right now", "let\'s stop for now", "let\'s wrap it up", "that\'s enough"; recognize equivalent phrasing in any language). Short affirmations like "ok" / "sure" / "alright" / "yes" / "got it" are NOT early-exit signals — they confirm what you just said and you should continue the current phase normally. When you see a real exit signal: stop asking questions, persist any unsaved fields best-effort (call saveUserQuestion with whatever you have), persist the persona via updateDocument (or writeDocument if it is still empty) — do NOT retry on failure — send a short warm farewell (1–2 sentences), then call `finishOnboarding`. Do NOT call `showAgentMarketplace` on early exit — that handoff is for normal completion only.',
       );
     } else if (phase.includes('Summary')) {
-      hints.push(
-        'Present a summary, then after user confirmation call finishOnboarding with a warm closing message. You MUST call finishOnboarding before the conversation ends — do not keep asking questions after the user confirms the summary.',
-      );
+      if (!marketplaceAlreadyOpened) {
+        hints.push(
+          'Present a summary, then THIS TURN call `showAgentMarketplace` exactly once with `{ requestId, categoryHints, prompt }` — pick 1–3 MarketplaceCategory slugs from what you learned in discovery. The picker is the required handoff that lets the user choose recommended assistants; do NOT skip it on normal completion. After the showAgentMarketplace tool result comes back, **STOP this turn** — no more tool calls and no closing text yet. The picker resolves directly via the tool result UI (the user will pick / skip in place); when it resolves, the runtime will start a NEW assistant turn whose tool result describes what was picked. The closing + `finishOnboarding` belong to that next turn. EXCEPTION: if the user has just signaled true early exit (e.g., "I have to go", "let\'s chat next time", "I\'m tired"; equivalents in any language) in this same turn, skip the marketplace entirely. Instead: persist any unsaved fields (best-effort), send a brief warm farewell, then call `finishOnboarding`. The marketplace handoff is mandatory for normal completion only — never on early exit.',
+        );
+      } else {
+        hints.push(
+          'You have ALREADY opened the marketplace picker this conversation, and the user has just resolved it through the picker UI — the latest tool result describes what was picked (look for `installedAgentIds` / `selectedTemplateIds`, or a `skipped`/`cancelled` status). Do NOT call `showAgentMarketplace` again, do NOT claim you just opened the list, and do NOT wait for another user message. THIS TURN: (1) briefly acknowledge the picks (or the skip/cancel) in 1–2 sentences; (2) call `updateDocument(type="persona")` with `insertAt` mode to record the picks (categories/use cases) so future sessions remember; (3) call `finishOnboarding`. If the tool result indicates skip/cancel, skip step 2 and just close + `finishOnboarding`.',
+        );
+      }
     }
 
     hints.push(
-      'You MUST call the persistence tools (saveUserQuestion, updateDocument) to save information as you collect it. Simply acknowledging in conversation is NOT enough — data must be persisted via tool calls.',
+      'PERSISTENCE RULE: Call the persistence tools (saveUserQuestion, writeDocument, updateDocument) to save information as you collect it — simply acknowledging in conversation is NOT enough. For document writes: use writeDocument only for the first write when the document is empty; for every subsequent edit use updateDocument with the appropriate hunk mode (`insertAt` / `replaceLines` / `deleteLines` for line-based edits, `replace` / `delete` for byte-exact textual edits). The injected <current_*_document> view shows each line prefixed with its 1-based number and `→` — use those numbers for line-based hunks.',
     );
     hints.push(
-      'REMINDER: If the user says "好了", "谢谢", "行", "Done", "Thanks", or gives any completion signal at ANY phase, you MUST wrap up immediately and call finishOnboarding. This overrides all other phase rules.',
+      'TURN ORDER: A message that contains a tool call does NOT yield the turn to the user — the agent loop continues after the tool result. So never put a user-facing question in the same message as a tool call. When you need to both persist something and ask the user a question, use two messages: first emit the tool call(s) with no question text (a brief acknowledgement or no text is fine), then — after the tool results return — ask your question in a separate message with NO tool call. Bundling a question with a tool call strands the question and forces a confused "waiting for your reply" filler.',
     );
+    hints.push(
+      'CONFIRMATION vs EARLY EXIT: Short replies like "ok" / "sure" / "alright" / "yes" / "got it" (and equivalents in any language) are CONFIRMATIONS, not early-exit signals. Continue the current phase normally — in Summary that means calling `showAgentMarketplace` next, NOT `finishOnboarding` directly.',
+    );
+    if (
+      phase.includes('Agent Identity') ||
+      phase.includes('User Identity') ||
+      phase.includes('Discovery')
+    ) {
+      hints.push(
+        'EARLY EXIT REMINDER: A true early-exit signal means the user explicitly wants the onboarding to END — examples: "I\'m tired", "I have to go", "let\'s chat next time", "no time right now", "let\'s stop for now", "let\'s wrap it up", "that\'s enough"; recognize equivalent phrasing in any language. When you see one (and only then), persist any unsaved fields, persist SOUL.md and the user persona via updateDocument (or writeDocument if either is still empty) — best-effort; do NOT retry on failure — send a brief warm farewell, then call `finishOnboarding`. Do NOT call `showAgentMarketplace` on early exit — that handoff is for normal completion only.',
+      );
+    }
 
     return `<next_actions>\n${hints.join('\n')}\n</next_actions>`;
   }

@@ -5,6 +5,7 @@ import { type StateCreator } from 'zustand/vanilla';
 import { createDevtools } from '../middleware/createDevtools';
 import { expose } from '../middleware/expose';
 import { flattenActions } from '../utils/flattenActions';
+import { type ResetableStore, ResetableStoreAction } from '../utils/resetableStore';
 import { initialState, type ToolStoreState } from './initialState';
 import { type AgentSkillsAction, createAgentSkillsSlice } from './slices/agentSkills';
 import { type BuiltinToolAction, createBuiltinToolSlice } from './slices/builtin';
@@ -26,7 +27,8 @@ export type ToolStore = ToolStoreState &
   PluginMCPStoreAction &
   KlavisStoreAction &
   LobehubSkillStoreAction &
-  AgentSkillsAction;
+  AgentSkillsAction &
+  ResetableStore;
 
 type ToolStoreAction = CustomPluginAction &
   PluginAction &
@@ -34,7 +36,12 @@ type ToolStoreAction = CustomPluginAction &
   PluginMCPStoreAction &
   KlavisStoreAction &
   LobehubSkillStoreAction &
-  AgentSkillsAction;
+  AgentSkillsAction &
+  ResetableStore;
+
+class ToolStoreResetAction extends ResetableStoreAction<ToolStore> {
+  protected readonly resetActionName = 'resetToolStore';
+}
 
 const createStore: StateCreator<ToolStore, [['zustand/devtools', never]]> = (
   ...parameters: Parameters<StateCreator<ToolStore, [['zustand/devtools', never]]>>
@@ -48,6 +55,7 @@ const createStore: StateCreator<ToolStore, [['zustand/devtools', never]]> = (
     createKlavisStoreSlice(...parameters),
     createLobehubSkillStoreSlice(...parameters),
     createAgentSkillsSlice(...parameters),
+    new ToolStoreResetAction(...parameters),
   ]),
 });
 

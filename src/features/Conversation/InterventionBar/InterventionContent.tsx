@@ -1,22 +1,20 @@
-import { memo, useState } from 'react';
+import { memo } from 'react';
 
 import Intervention from '../Messages/AssistantGroup/Tool/Detail/Intervention';
 import { type PendingIntervention } from '../store/slices/data/pendingInterventions';
-import { useStyles } from './style';
+import { styles } from './style';
 
 interface InterventionContentProps {
+  actionsPortalTarget: HTMLDivElement | null;
   intervention: PendingIntervention;
 }
 
-const InterventionContent = memo<InterventionContentProps>(({ intervention }) => {
-  const { styles } = useStyles();
-  const [actionsContainer, setActionsContainer] = useState<HTMLDivElement | null>(null);
-
-  return (
-    <>
+const InterventionContent = memo<InterventionContentProps>(
+  ({ intervention, actionsPortalTarget }) => {
+    return (
       <div className={styles.content}>
         <Intervention
-          actionsPortalTarget={actionsContainer}
+          actionsPortalTarget={actionsPortalTarget}
           apiName={intervention.apiName}
           assistantGroupId={intervention.assistantGroupId}
           id={intervention.toolMessageId}
@@ -25,9 +23,8 @@ const InterventionContent = memo<InterventionContentProps>(({ intervention }) =>
           toolCallId={intervention.toolCallId}
         />
       </div>
-      <div className={styles.actions} ref={setActionsContainer} />
-    </>
-  );
-});
+    );
+  },
+);
 
 export default InterventionContent;

@@ -11,6 +11,7 @@ export const BUILTIN_AGENT_SLUGS = {
   groupSupervisor: 'group-supervisor',
   inbox: 'inbox',
   pageAgent: 'page-agent',
+  taskAgent: 'task-agent',
   webOnboarding: 'web-onboarding',
 } as const;
 

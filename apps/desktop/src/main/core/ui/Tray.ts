@@ -1,15 +1,12 @@
-import { join } from 'node:path';
+import path from 'node:path';
 
 import type { MainBroadcastEventKey, MainBroadcastParams } from '@lobechat/electron-client-ipc';
 import type {
   DisplayBalloonOptions,
-  MenuItemConstructorOptions} from 'electron';
-import {
-  app,
-  Menu,
-  nativeImage,
-  Tray as ElectronTray,
+  Menu as ElectronMenu,
+  MenuItemConstructorOptions,
 } from 'electron';
+import { app, Menu, nativeImage, Tray as ElectronTray } from 'electron';
 
 import { resourcesDir } from '@/const/dir';
 import { createLogger } from '@/utils/logger';
@@ -31,6 +28,12 @@ export interface TrayOptions {
   identifier: string;
 
   /**
+   * Mark the icon as a macOS template image (black + alpha). macOS will
+   * then tint it to match the menu bar appearance automatically.
+   */
+  isTemplateImage?: boolean;
+
+  /**
    * Tray tooltip text
    */
   tooltip?: string;
@@ -43,6 +46,13 @@ export class Tray {
    * Internal Electron tray
    */
   private _tray?: ElectronTray;
+
+  /**
+   * Current context menu. We keep this in-house and pop it up manually on
+   * right-click so that macOS does not swallow the left-click (which would
+   * happen automatically if we called `_tray.setContextMenu(menu)`).
+   */
+  private _contextMenu?: ElectronMenu;
 
   /**
    * Identifier
@@ -87,15 +97,16 @@ export class Tray {
       return this._tray;
     }
 
-    const { iconPath, tooltip } = this.options;
+    const { iconPath, isTemplateImage, tooltip } = this.options;
 
     // Load tray icon
     logger.info(`Creating new tray instance: ${this.identifier}`);
-    const iconFile = join(resourcesDir, iconPath);
+    const iconFile = path.join(resourcesDir, iconPath);
     logger.debug(`[${this.identifier}] Loading icon: ${iconFile}`);
 
     try {
       const icon = nativeImage.createFromPath(iconFile);
+      if (isTemplateImage) icon.setTemplateImage(true);
       this._tray = new ElectronTray(icon);
 
       // Set tooltip
@@ -107,10 +118,20 @@ export class Tray {
       // Set default context menu
       this.setContextMenu();
 
-      // Set click event
+      // Left-click: open Quick Composer.
       this._tray.on('click', () => {
         logger.debug(`[${this.identifier}] Tray clicked`);
         this.onClick();
+      });
+
+      // Right-click: pop the stored context menu manually so left-click stays
+      // free (macOS would auto-open the menu on either button if we called
+      // `_tray.setContextMenu`).
+      this._tray.on('right-click', () => {
+        logger.debug(`[${this.identifier}] Tray right-clicked`);
+        if (this._contextMenu && this._tray) {
+          this._tray.popUpContextMenu(this._contextMenu);
+        }
       });
 
       logger.debug(`[${this.identifier}] Tray instance created successfully`);
@@ -148,40 +169,51 @@ export class Tray {
     ];
 
     const contextMenu = Menu.buildFromTemplate(defaultTemplate);
-    this._tray?.setContextMenu(contextMenu);
+    // Store the menu instead of calling `_tray.setContextMenu`. The latter
+    // makes macOS intercept left-clicks to show the menu, which conflicts
+    // with our Quick Composer trigger on click.
+    this._contextMenu = contextMenu;
     logger.debug(`[${this.identifier}] Tray context menu has been set`);
   }
 
   /**
-   * Handle tray click event
+   * Handle tray click event — opens the Quick Composer overlay.
+   * Right-click opens the context menu (handled by Electron automatically).
    */
   onClick() {
-    logger.debug(`[${this.identifier}] Handling tray click event`);
-    const mainWindow = this.app.browserManager.getMainWindow();
-
-    if (mainWindow) {
-      if (mainWindow.browserWindow.isVisible() && mainWindow.browserWindow.isFocused()) {
-        logger.debug(`[${this.identifier}] Main window is visible and focused, hiding it now`);
-        mainWindow.hide();
-      } else {
-        logger.debug(`[${this.identifier}] Showing and focusing main window`);
-        mainWindow.show();
-        mainWindow.browserWindow.focus();
-      }
+    logger.debug(`[${this.identifier}] Tray click → startSession`);
+    try {
+      void this.app.screenCaptureManager.startSession();
+    } catch (error) {
+      logger.error(`[${this.identifier}] Failed to start capture session:`, error);
     }
+  }
+
+  /**
+   * Replace the tray context menu with a pre-built Electron Menu instance.
+   * Stored in-house and popped up manually on right-click to preserve
+   * left-click for the Quick Composer trigger.
+   */
+  setMenu(menu: ElectronMenu) {
+    logger.debug(`[${this.identifier}] Attaching prebuilt context menu`);
+    this._contextMenu = menu;
   }
 
   /**
    * Update tray icon
    * @param iconPath New icon path (relative to resource directory)
+   * @param isTemplateImage Whether to mark the new icon as a macOS template image
    */
-  updateIcon(iconPath: string) {
+  updateIcon(iconPath: string, isTemplateImage?: boolean) {
     logger.debug(`[${this.identifier}] Updating icon: ${iconPath}`);
     try {
-      const iconFile = join(resourcesDir, iconPath);
+      const iconFile = path.join(resourcesDir, iconPath);
       const icon = nativeImage.createFromPath(iconFile);
+      const nextIsTemplate = isTemplateImage ?? this.options.isTemplateImage;
+      if (nextIsTemplate) icon.setTemplateImage(true);
       this._tray?.setImage(icon);
       this.options.iconPath = iconPath;
+      if (isTemplateImage !== undefined) this.options.isTemplateImage = isTemplateImage;
       logger.debug(`[${this.identifier}] Icon updated successfully`);
     } catch (error) {
       logger.error(`[${this.identifier}] Failed to update icon:`, error);

@@ -4,6 +4,7 @@ import path from 'node:path';
 import fg from 'fast-glob';
 
 import type { SearchFilesParams, SearchFilesResult } from '../types';
+import { expandTilde } from './expandTilde';
 
 export async function searchLocalFiles({
   keywords,
@@ -12,10 +13,13 @@ export async function searchLocalFiles({
   limit = 30,
 }: SearchFilesParams): Promise<SearchFilesResult[]> {
   try {
-    const cwd = directory || process.cwd();
+    const cwd = expandTilde(directory) || process.cwd();
+    // If the caller is searching for a dot-prefixed name (e.g. `.env`, `.github`),
+    // auto-enable hidden matching so the file/directory is actually reachable.
+    const wantsHidden = keywords.startsWith('.');
     const files = await fg(`**/*${keywords}*`, {
       cwd,
-      dot: false,
+      dot: wantsHidden,
       ignore: ['**/node_modules/**', '**/.git/**'],
     });
 

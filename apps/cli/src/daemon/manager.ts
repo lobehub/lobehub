@@ -160,7 +160,7 @@ export function spawnDaemon(args: string[]): number {
   // Re-run the same entry with --daemon-child (internal flag)
   const child = spawn(process.execPath, [...process.execArgv, ...args, '--daemon-child'], {
     detached: true,
-    env: { ...process.env, LOBEHUB_DAEMON: '1' },
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', LOBEHUB_DAEMON: '1' },
     stdio: ['ignore', logFd, logFd],
   });
 

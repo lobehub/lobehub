@@ -5,6 +5,7 @@ import { type StateCreator } from 'zustand/vanilla';
 import { createDevtools } from '../middleware/createDevtools';
 import { expose } from '../middleware/expose';
 import { flattenActions } from '../utils/flattenActions';
+import { type ResetableStore, ResetableStoreAction } from '../utils/resetableStore';
 import { type KnowledgeBaseStoreState } from './initialState';
 import { initialState } from './initialState';
 import { type KnowledgeBaseContentAction } from './slices/content';
@@ -21,13 +22,19 @@ export interface KnowledgeBaseStore
     KnowledgeBaseStoreState,
     KnowledgeBaseCrudAction,
     KnowledgeBaseContentAction,
-    RAGEvalAction {
+    RAGEvalAction,
+    ResetableStore {
   // empty
 }
 
 type KnowledgeBaseStoreAction = KnowledgeBaseCrudAction &
   KnowledgeBaseContentAction &
-  RAGEvalAction;
+  RAGEvalAction &
+  ResetableStore;
+
+class KnowledgeBaseStoreResetAction extends ResetableStoreAction<KnowledgeBaseStore> {
+  protected readonly resetActionName = 'resetKnowledgeBaseStore';
+}
 
 const createStore: StateCreator<KnowledgeBaseStore, [['zustand/devtools', never]]> = (
   ...parameters: Parameters<StateCreator<KnowledgeBaseStore, [['zustand/devtools', never]]>>
@@ -37,6 +44,7 @@ const createStore: StateCreator<KnowledgeBaseStore, [['zustand/devtools', never]
     createCrudSlice(...parameters),
     createContentSlice(...parameters),
     createRagEvalSlice(...parameters),
+    new KnowledgeBaseStoreResetAction(...parameters),
   ]),
 });
 

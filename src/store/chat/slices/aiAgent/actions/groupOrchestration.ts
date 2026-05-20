@@ -378,7 +378,9 @@ export class GroupOrchestrationActionImpl {
       {
         revalidateOnFocus: false,
         revalidateOnReconnect: false,
-        refreshInterval: POLLING_INTERVAL,
+        // Keep one fetch for terminal tasks so completed/failed detail panels can load messages,
+        // but stop interval polling afterward to avoid endless status requests.
+        refreshInterval: (data) => (!data || data.status === 'processing' ? POLLING_INTERVAL : 0),
         onSuccess: (data) => {
           if (data && messageId) {
             // Update taskDetail and tasks (intermediate messages)

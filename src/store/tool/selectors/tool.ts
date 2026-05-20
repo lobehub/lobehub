@@ -1,3 +1,4 @@
+import { getBuiltinRenderDisplayControl } from '@lobechat/builtin-tools/displayControls';
 import { getKlavisServerByServerIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
 import { type RenderDisplayControl, type ToolManifest } from '@lobechat/types';
 
@@ -20,6 +21,19 @@ const metaList = (s: ToolStoreState): LobeToolMeta[] => {
   const lobehubSkillList = lobehubSkillStoreSelectors.metaList(s) as LobeToolMeta[];
 
   return builtinToolSelectors.metaList(s).concat(pluginList).concat(lobehubSkillList);
+};
+
+/**
+ * All installed discoverable tools across every source (builtins, plugins, skills).
+ * Excludes only tools with `discoverable: false` (pure infrastructure / internal).
+ * Includes hidden and runtime-managed builtins (web-browsing, memory, cloud-sandbox, etc.)
+ * that `metaList` hides from the chat toolbar.
+ */
+const discoverableMetaList = (s: ToolStoreState): LobeToolMeta[] => {
+  const pluginList = pluginSelectors.installedPluginMetaList(s) as LobeToolMeta[];
+  const lobehubSkillList = lobehubSkillStoreSelectors.metaList(s) as LobeToolMeta[];
+
+  return builtinToolSelectors.discoverableMetaList(s).concat(pluginList).concat(lobehubSkillList);
 };
 
 const getMetaById =
@@ -80,12 +94,15 @@ const isToolHasUI = (id: string) => (s: ToolStoreState) => {
 const getRenderDisplayControl =
   (identifier: string, apiName: string) =>
   (s: ToolStoreState): RenderDisplayControl => {
-    // Only builtin tools support renderDisplayControl
     const builtinTool = s.builtinTools.find((t) => t.identifier === identifier);
-    if (!builtinTool) return 'collapsed';
+    const manifestControl = builtinTool?.manifest.api.find(
+      (a) => a.name === apiName,
+    )?.renderDisplayControl;
+    if (manifestControl) return manifestControl;
 
-    const api = builtinTool.manifest.api.find((a) => a.name === apiName);
-    return api?.renderDisplayControl ?? 'collapsed';
+    // Fallback for packages that don't ship a LobeChat manifest (e.g. Claude Code —
+    // its tools come from Anthropic tool_use blocks at runtime).
+    return getBuiltinRenderDisplayControl(identifier, apiName) ?? 'collapsed';
   };
 
 export interface AvailableToolForDiscovery {
@@ -168,6 +185,7 @@ const availableToolsForDiscovery = (s: ToolStoreState): AvailableToolForDiscover
 
 export const toolSelectors = {
   availableToolsForDiscovery,
+  discoverableMetaList,
   getManifestById,
   getManifestLoadingStatus,
   getMetaById,

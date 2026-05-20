@@ -6,19 +6,16 @@ import urlJoin from 'url-join';
 
 import EmptyNavItem from '@/features/NavPanel/components/EmptyNavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
-import { useFetchTopics } from '@/hooks/useFetchTopics';
+import { useFetchChatTopics } from '@/hooks/useFetchChatTopics';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
-import { useUserStore } from '@/store/user';
-import { preferenceSelectors } from '@/store/user/selectors';
-import { TopicDisplayMode } from '@/types/topic';
 
 import AllTopicsDrawer from '../AllTopicsDrawer';
+import { useAgentTopicGroupMode } from '../hooks/useAgentTopicGroupMode';
+import ByProjectMode from '../TopicListContent/ByProjectMode';
 import ByTimeMode from '../TopicListContent/ByTimeMode';
 import FlatMode from '../TopicListContent/FlatMode';
-
-const fetchParams = { excludeTriggers: ['cron', 'eval'] };
 
 const TopicList = memo(() => {
   const { t } = useTranslation('topic');
@@ -32,9 +29,9 @@ const TopicList = memo(() => {
     s.closeAllTopicsDrawer,
   ]);
 
-  const [topicDisplayMode] = useUserStore((s) => [preferenceSelectors.topicDisplayMode(s)]);
+  const { topicGroupMode } = useAgentTopicGroupMode();
 
-  useFetchTopics(fetchParams);
+  useFetchChatTopics();
 
   // Show skeleton when current session's topic data is not yet loaded
   if (isUndefinedTopics) return <SkeletonList />;
@@ -49,7 +46,13 @@ const TopicList = memo(() => {
           }}
         />
       )}
-      {topicDisplayMode === TopicDisplayMode.Flat ? <FlatMode /> : <ByTimeMode />}
+      {topicGroupMode === 'flat' ? (
+        <FlatMode />
+      ) : topicGroupMode === 'byProject' ? (
+        <ByProjectMode />
+      ) : (
+        <ByTimeMode />
+      )}
       <AllTopicsDrawer open={allTopicsDrawerOpen} onClose={closeAllTopicsDrawer} />
     </>
   );

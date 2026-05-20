@@ -5,12 +5,33 @@ const longcatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
     },
+    contextWindowTokens: 1_000_000,
+    description:
+      'The core features of LongCat-2.0-Preview are as follows: Designed for agent development scenarios, with native support for tool use, multi-step reasoning, and long-context tasks; Excels in code generation, automated workflows, and complex instruction execution; Deeply integrated with productivity tools such as Claude Code, OpenClaw, OpenCode, and Kilo Code.',
+    displayName: 'LongCat-2.0-Preview',
+    enabled: true,
+    id: 'LongCat-2.0-Preview',
+    maxOutput: 128_000,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-20',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+    },
     contextWindowTokens: 327_680,
     description:
       'The LongCat-Flash-Lite model has been officially released. It adopts an efficient Mixture-of-Experts (MoE) architecture, with 68.5 billion total parameters and approximately 3 billion activated parameters. Through the use of an N-gram embedding table, it achieves highly efficient parameter utilization, and it is deeply optimized for inference efficiency and specific application scenarios. Compared to models of a similar scale, its core features are as follows:Outstanding Inference Efficiency: By leveraging the N-gram embedding table to fundamentally alleviate the I/O bottleneck inherent in MoE architectures, combined with dedicated caching mechanisms and kernel-level optimizations, it significantly reduces inference latency and improves overall efficiency. Strong Agent and Code Performance: It demonstrates highly competitive capabilities in tool invocation and software development tasks, delivering exceptional performance relative to its model size.',
     displayName: 'LongCat-Flash-Lite',
     enabled: true,
     id: 'LongCat-Flash-Lite',
+    maxOutput: 262_144,
     pricing: {
       units: [
         { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
@@ -27,10 +48,11 @@ const longcatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 262_144,
     description:
-      'The LongCat-Flash-Thinking-2601 model has been officially released. As an upgraded reasoning model built on a Mixture-of-Experts (MoE) architecture, it features a total of 560 billion parameters. While maintaining strong competitiveness across traditional reasoning benchmarks, it systematically enhances Agent-level reasoning capabilities through large-scale multi-environment reinforcement learning. Compared to the LongCat-Flash-Thinking model, the key upgrades are as follows: Extreme Robustness in Noisy Environments: Through systematic curriculum-style training targeting noise and uncertainty in real-world settings, the model demonstrates outstanding performance in Agent tool invocation, Agent-based search, and tool-integrated reasoning, with significantly improved generalization. Powerful Agent Capabilities: By constructing a tightly coupled dependency graph encompassing more than 60 tools, and scaling training through multi-environment expansion and large-scale exploratory learning, the model markedly improves its ability to generalize to complex and out-of-distribution real-world scenarios. Advanced Deep Thinking Mode: It expands the breadth of reasoning via parallel inference and deepens analytical capability through recursive feedback-driven summarization and abstraction mechanisms, effectively addressing highly challenging problems.',
-    displayName: 'LongCat-Flash-Thinking-2601',
+      'To ensure you receive top-tier reasoning performance, the LongCat API platform has unified and upgraded calls to the LongCat-Flash-Thinking model. All existing requests using `model=LongCat-Flash-Thinking` will be automatically routed to the latest version, LongCat-Flash-Thinking-2601, with no code changes required.',
+    displayName: 'LongCat-Flash-Thinking',
     enabled: true,
-    id: 'LongCat-Flash-Thinking-2601',
+    id: 'LongCat-Flash-Thinking',
+    maxOutput: 262_144,
     pricing: {
       units: [
         { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
@@ -47,16 +69,17 @@ const longcatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 262_144,
     description:
-      'LongCat-Flash-Thinking has been officially released and open-sourced simultaneously. It is a deep reasoning model that can be used for free conversations within LongCat Chat, or accessed via API by specifying model=LongCat-Flash-Thinking.',
-    displayName: 'LongCat-Flash-Thinking',
-    id: 'LongCat-Flash-Thinking',
+      'The LongCat-Flash-Thinking-2601 model has been officially released. As an upgraded reasoning model built on a Mixture-of-Experts (MoE) architecture, it features a total of 560 billion parameters. While maintaining strong competitiveness across traditional reasoning benchmarks, it systematically enhances Agent-level reasoning capabilities through large-scale multi-environment reinforcement learning. Compared to the LongCat-Flash-Thinking model, the key upgrades are as follows: Extreme Robustness in Noisy Environments: Through systematic curriculum-style training targeting noise and uncertainty in real-world settings, the model demonstrates outstanding performance in Agent tool invocation, Agent-based search, and tool-integrated reasoning, with significantly improved generalization. Powerful Agent Capabilities: By constructing a tightly coupled dependency graph encompassing more than 60 tools, and scaling training through multi-environment expansion and large-scale exploratory learning, the model markedly improves its ability to generalize to complex and out-of-distribution real-world scenarios. Advanced Deep Thinking Mode: It expands the breadth of reasoning via parallel inference and deepens analytical capability through recursive feedback-driven summarization and abstraction mechanisms, effectively addressing highly challenging problems.',
+    displayName: 'LongCat-Flash-Thinking-2601',
+    id: 'LongCat-Flash-Thinking-2601',
+    maxOutput: 262_144,
     pricing: {
       units: [
         { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
-    releasedAt: '2025-09-22',
+    releasedAt: '2026-01-14',
     type: 'chat',
   },
   {
@@ -69,6 +92,7 @@ const longcatModels: AIChatModelCard[] = [
     displayName: 'LongCat-Flash-Chat',
     enabled: true,
     id: 'LongCat-Flash-Chat',
+    maxOutput: 262_144,
     pricing: {
       units: [
         { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },

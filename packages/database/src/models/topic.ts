@@ -1,4 +1,15 @@
-import type { ChatTopicMetadata, DBMessageItem, TopicRankItem } from '@lobechat/types';
+import type {
+  ChatTopicMetadata,
+  ChatTopicStatus,
+  DBMessageItem,
+  TopicRankItem,
+} from '@lobechat/types';
+import type { TimingSink } from '@lobechat/utils';
+import {
+  getDurationMs,
+  logTimingSink as logTiming,
+  runTimedSinkStage as runTimedStage,
+} from '@lobechat/utils';
 import type { SQL } from 'drizzle-orm';
 import { and, count, desc, eq, gt, gte, inArray, isNull, lte, ne, not, or, sql } from 'drizzle-orm';
 
@@ -8,6 +19,11 @@ import type { LobeChatDatabase } from '../type';
 import { sanitizeBm25Query } from '../utils/bm25';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
+
+type OnboardingSessionMetadataPatch = Partial<NonNullable<ChatTopicMetadata['onboardingSession']>>;
+type TopicMetadataPatch = Omit<Partial<ChatTopicMetadata>, 'onboardingSession'> & {
+  onboardingSession?: OnboardingSessionMetadataPatch;
+};
 
 export interface CreateTopicParams {
   agentId?: string | null;
@@ -29,7 +45,12 @@ interface QueryTopicParams {
   containerId?: string | null;
   current?: number;
   /**
+   * Exclude topics by status (e.g. ['completed'])
+   */
+  excludeStatuses?: string[];
+  /**
    * Exclude topics by trigger types (e.g. ['cron'])
+   * Ignored when includeTriggers is provided.
    */
   excludeTriggers?: string[];
   /**
@@ -37,12 +58,24 @@ interface QueryTopicParams {
    */
   groupId?: string | null;
   /**
+   * Include only topics whose trigger matches one of these values.
+   * Takes precedence over excludeTriggers when provided.
+   */
+  includeTriggers?: string[];
+  /**
    * Whether this is an inbox agent query.
    * When true, also includes legacy inbox topics (sessionId IS NULL AND groupId IS NULL AND agentId IS NULL)
    */
   isInbox?: boolean;
   pageSize?: number;
+  timing?: ModelTimingContext;
+  /**
+   * Include only topics matching the given trigger types (positive filter)
+   */
+  triggers?: string[];
 }
+
+export interface ModelTimingContext extends TimingSink {}
 
 export interface ListTopicsForMemoryExtractorCursor {
   createdAt: Date;
@@ -63,15 +96,42 @@ export class TopicModel {
     agentId,
     containerId,
     current = 0,
+    excludeStatuses,
     excludeTriggers,
+    includeTriggers,
     pageSize = 9999,
     groupId,
     isInbox,
+    timing,
+    triggers,
   }: QueryTopicParams = {}) => {
+    const queryStartedAt = Date.now();
+    logTiming(timing, 'db.topic.query:start', {
+      current,
+      hasAgentId: !!agentId,
+      hasContainerId: !!containerId,
+      hasGroupId: !!groupId,
+      isInbox: !!isInbox,
+      pageSize,
+    });
     const offset = current * pageSize;
-    const excludeTriggerCondition =
-      excludeTriggers && excludeTriggers.length > 0
+    const includeTriggerCondition =
+      includeTriggers && includeTriggers.length > 0
+        ? inArray(topics.trigger, includeTriggers)
+        : undefined;
+    const excludeTriggerCondition = includeTriggerCondition
+      ? undefined
+      : excludeTriggers && excludeTriggers.length > 0
         ? or(isNull(topics.trigger), not(inArray(topics.trigger, excludeTriggers)))
+        : undefined;
+    const triggerCondition =
+      triggers && triggers.length > 0 ? inArray(topics.trigger, triggers) : undefined;
+    const excludeStatusCondition =
+      excludeStatuses && excludeStatuses.length > 0
+        ? or(
+            isNull(topics.status),
+            not(inArray(topics.status, excludeStatuses as ChatTopicStatus[])),
+          )
         : undefined;
 
     // If groupId is provided, query topics by groupId directly
@@ -79,31 +139,49 @@ export class TopicModel {
       const whereCondition = and(
         eq(topics.userId, this.userId),
         eq(topics.groupId, groupId),
+        includeTriggerCondition,
         excludeTriggerCondition,
+        triggerCondition,
+        excludeStatusCondition,
       );
 
       const [items, totalResult] = await Promise.all([
-        this.db
-          .select({
-            createdAt: topics.createdAt,
-            favorite: topics.favorite,
-            historySummary: topics.historySummary,
-            id: topics.id,
-            metadata: topics.metadata,
-            title: topics.title,
-            updatedAt: topics.updatedAt,
-          })
-          .from(topics)
-          .where(whereCondition)
-          .orderBy(desc(topics.favorite), desc(topics.updatedAt))
-          .limit(pageSize)
-          .offset(offset),
-        this.db
-          .select({ count: count(topics.id) })
-          .from(topics)
-          .where(whereCondition),
+        runTimedStage(
+          timing,
+          'db.topic.query.group.items.select',
+          () =>
+            this.db
+              .select({
+                completedAt: topics.completedAt,
+                createdAt: topics.createdAt,
+                favorite: topics.favorite,
+                historySummary: topics.historySummary,
+                id: topics.id,
+                metadata: topics.metadata,
+                status: topics.status,
+                title: topics.title,
+                updatedAt: topics.updatedAt,
+              })
+              .from(topics)
+              .where(whereCondition)
+              .orderBy(desc(topics.favorite), desc(topics.updatedAt))
+              .limit(pageSize)
+              .offset(offset),
+          { current, pageSize },
+        ),
+        runTimedStage(timing, 'db.topic.query.group.count.select', () =>
+          this.db
+            .select({ count: count(topics.id) })
+            .from(topics)
+            .where(whereCondition),
+        ),
       ]);
 
+      logTiming(timing, 'db.topic.query:done', {
+        itemCount: items.length,
+        stageMs: getDurationMs(queryStartedAt),
+        total: totalResult[0].count,
+      });
       return { items, total: totalResult[0].count };
     }
 
@@ -113,11 +191,19 @@ export class TopicModel {
     // 3. For inbox: sessionId IS NULL AND groupId IS NULL AND agentId IS NULL (legacy inbox data)
     if (agentId) {
       // Get the associated sessionId for backward compatibility with legacy data
-      const agentSession = await this.db
-        .select({ sessionId: agentsToSessions.sessionId })
-        .from(agentsToSessions)
-        .where(and(eq(agentsToSessions.agentId, agentId), eq(agentsToSessions.userId, this.userId)))
-        .limit(1);
+      const agentSession = await runTimedStage(
+        timing,
+        'db.topic.query.agentSession.select',
+        () =>
+          this.db
+            .select({ sessionId: agentsToSessions.sessionId })
+            .from(agentsToSessions)
+            .where(
+              and(eq(agentsToSessions.agentId, agentId), eq(agentsToSessions.userId, this.userId)),
+            )
+            .limit(1),
+        { hasAgentId: true },
+      );
 
       const associatedSessionId = agentSession[0]?.sessionId;
 
@@ -145,28 +231,56 @@ export class TopicModel {
 
       // Fetch items and total count in parallel
       // Include sessionId and agentId for migration detection
+      const agentWhere = and(
+        eq(topics.userId, this.userId),
+        agentCondition,
+        includeTriggerCondition,
+        excludeTriggerCondition,
+        triggerCondition,
+        excludeStatusCondition,
+      );
+
       const [items, totalResult] = await Promise.all([
-        this.db
-          .select({
-            createdAt: topics.createdAt,
-            favorite: topics.favorite,
-            historySummary: topics.historySummary,
-            id: topics.id,
-            metadata: topics.metadata,
-            title: topics.title,
-            updatedAt: topics.updatedAt,
-          })
-          .from(topics)
-          .where(and(eq(topics.userId, this.userId), agentCondition, excludeTriggerCondition))
-          .orderBy(desc(topics.favorite), desc(topics.updatedAt))
-          .limit(pageSize)
-          .offset(offset),
-        this.db
-          .select({ count: count(topics.id) })
-          .from(topics)
-          .where(and(eq(topics.userId, this.userId), agentCondition, excludeTriggerCondition)),
+        runTimedStage(
+          timing,
+          'db.topic.query.agent.items.select',
+          () =>
+            this.db
+              .select({
+                completedAt: topics.completedAt,
+                createdAt: topics.createdAt,
+                favorite: topics.favorite,
+                historySummary: topics.historySummary,
+                id: topics.id,
+                metadata: topics.metadata,
+                status: topics.status,
+                title: topics.title,
+                updatedAt: topics.updatedAt,
+              })
+              .from(topics)
+              .where(agentWhere)
+              .orderBy(desc(topics.favorite), desc(topics.updatedAt))
+              .limit(pageSize)
+              .offset(offset),
+          { current, hasAssociatedSessionId: !!associatedSessionId, isInbox: !!isInbox, pageSize },
+        ),
+        runTimedStage(
+          timing,
+          'db.topic.query.agent.count.select',
+          () =>
+            this.db
+              .select({ count: count(topics.id) })
+              .from(topics)
+              .where(agentWhere),
+          { hasAssociatedSessionId: !!associatedSessionId, isInbox: !!isInbox },
+        ),
       ]);
 
+      logTiming(timing, 'db.topic.query:done', {
+        itemCount: items.length,
+        stageMs: getDurationMs(queryStartedAt),
+        total: totalResult[0].count,
+      });
       return { items, total: totalResult[0].count };
     }
 
@@ -174,38 +288,57 @@ export class TopicModel {
     const whereCondition = and(
       eq(topics.userId, this.userId),
       this.matchContainer(containerId),
+      includeTriggerCondition,
       excludeTriggerCondition,
+      triggerCondition,
+      excludeStatusCondition,
     );
 
     const [items, totalResult] = await Promise.all([
-      this.db
-        .select({
-          agentId: topics.agentId,
-          createdAt: topics.createdAt,
-          favorite: topics.favorite,
-          historySummary: topics.historySummary,
-          id: topics.id,
-          metadata: topics.metadata,
-          sessionId: topics.sessionId,
-          title: topics.title,
-          updatedAt: topics.updatedAt,
-        })
-        .from(topics)
-        .where(whereCondition)
-        // In boolean sorting, false is considered "smaller" than true.
-        // So here we use desc to ensure that topics with favorite as true are in front.
-        .orderBy(desc(topics.favorite), desc(topics.updatedAt))
-        .limit(pageSize)
-        .offset(offset),
-      this.db
-        .select({ count: count(topics.id) })
-        .from(topics)
-        .where(whereCondition),
+      runTimedStage(
+        timing,
+        'db.topic.query.container.items.select',
+        () =>
+          this.db
+            .select({
+              agentId: topics.agentId,
+              completedAt: topics.completedAt,
+              createdAt: topics.createdAt,
+              favorite: topics.favorite,
+              historySummary: topics.historySummary,
+              id: topics.id,
+              metadata: topics.metadata,
+              sessionId: topics.sessionId,
+              status: topics.status,
+              title: topics.title,
+              updatedAt: topics.updatedAt,
+            })
+            .from(topics)
+            .where(whereCondition)
+            // In boolean sorting, false is considered "smaller" than true.
+            // So here we use desc to ensure that topics with favorite as true are in front.
+            .orderBy(desc(topics.favorite), desc(topics.updatedAt))
+            .limit(pageSize)
+            .offset(offset),
+        { current, pageSize },
+      ),
+      runTimedStage(timing, 'db.topic.query.container.count.select', () =>
+        this.db
+          .select({ count: count(topics.id) })
+          .from(topics)
+          .where(whereCondition),
+      ),
     ]);
 
     // Remove internal fields before returning
 
     const cleanItems = items.map(({ agentId, sessionId, ...rest }) => rest);
+
+    logTiming(timing, 'db.topic.query:done', {
+      itemCount: cleanItems.length,
+      stageMs: getDurationMs(queryStartedAt),
+      total: totalResult[0].count,
+    });
 
     return { items: cleanItems, total: totalResult[0].count };
   };
@@ -406,30 +539,67 @@ export class TopicModel {
   create = async (
     { messages: messageIds, ...params }: CreateTopicParams,
     id: string = this.genId(),
+    timing?: ModelTimingContext,
   ): Promise<TopicItem> => {
-    return this.db.transaction(async (tx) => {
-      const insertData = {
-        ...params,
-        agentId: params.agentId || null,
-        groupId: params.groupId || null,
-        id,
-        sessionId: params.sessionId || null,
-        userId: this.userId,
-      };
+    const insertData = {
+      ...params,
+      agentId: params.agentId || null,
+      groupId: params.groupId || null,
+      id,
+      sessionId: params.sessionId || null,
+      userId: this.userId,
+    };
+    const insertMeta = {
+      hasAgentId: !!params.agentId,
+      hasGroupId: !!params.groupId,
+      hasSessionId: !!params.sessionId,
+    };
 
-      // Insert new topic
-      const [topic] = await tx.insert(topics).values(insertData).returning();
-
-      // Update associated messages' topicId
-      if (messageIds && messageIds.length > 0) {
-        await tx
-          .update(messages)
-          .set({ topicId: topic.id })
-          .where(and(eq(messages.userId, this.userId), inArray(messages.id, messageIds)));
-      }
+    if (!messageIds || messageIds.length === 0) {
+      const [topic] = await runTimedStage(
+        timing,
+        'db.topic.create.topics.insert',
+        () => this.db.insert(topics).values(insertData).returning(),
+        insertMeta,
+      );
 
       return topic;
-    });
+    }
+
+    return runTimedStage(
+      timing,
+      'db.topic.create.transaction',
+      () =>
+        this.db.transaction(async (tx) => {
+          // Insert new topic
+          const [topic] = await runTimedStage(
+            timing,
+            'db.topic.create.topics.insert',
+            () => tx.insert(topics).values(insertData).returning(),
+            insertMeta,
+          );
+
+          // Update associated messages' topicId
+          await runTimedStage(
+            timing,
+            'db.topic.create.messages.updateTopic',
+            () =>
+              tx
+                .update(messages)
+                .set({ topicId: topic.id })
+                .where(and(eq(messages.userId, this.userId), inArray(messages.id, messageIds))),
+            { messageCount: messageIds.length },
+          );
+
+          return topic;
+        }),
+      {
+        hasAgentId: !!params.agentId,
+        hasGroupId: !!params.groupId,
+        hasSessionId: !!params.sessionId,
+        messageCount: messageIds?.length ?? 0,
+      },
+    );
   };
 
   batchCreate = async (topicParams: (CreateTopicParams & { id?: string })[]) => {
@@ -651,23 +821,63 @@ export class TopicModel {
    * Update topic metadata with merge logic
    * This method merges new metadata with existing metadata instead of replacing it
    */
-  updateMetadata = async (id: string, metadata: Partial<ChatTopicMetadata>) => {
+  updateMetadata = async (id: string, metadata: TopicMetadataPatch) => {
     // Get existing topic to merge metadata
     const existing = await this.db.query.topics.findFirst({
       columns: { metadata: true },
       where: and(eq(topics.id, id), eq(topics.userId, this.userId)),
     });
 
-    const mergedMetadata: ChatTopicMetadata = {
+    const mergedOnboardingSession =
+      existing?.metadata?.onboardingSession && metadata.onboardingSession
+        ? {
+            ...existing.metadata.onboardingSession,
+            ...metadata.onboardingSession,
+          }
+        : metadata.onboardingSession;
+
+    const mergedMetadata = {
       ...existing?.metadata,
       ...metadata,
-    };
+      ...(mergedOnboardingSession && { onboardingSession: mergedOnboardingSession }),
+    } as ChatTopicMetadata;
 
     return this.db
       .update(topics)
       .set({ metadata: mergedMetadata })
       .where(and(eq(topics.id, id), eq(topics.userId, this.userId)))
       .returning();
+  };
+
+  getCronTopicsGroupedByCronJob = async (
+    agentId: string,
+  ): Promise<{ cronJobId: string; topics: TopicItem[] }[]> => {
+    const rows = await this.db
+      .select()
+      .from(topics)
+      .where(
+        and(
+          eq(topics.userId, this.userId),
+          eq(topics.agentId, agentId),
+          eq(topics.trigger, 'cron'),
+          sql`(${topics.metadata}->>'cronJobId') IS NOT NULL`,
+        ),
+      )
+      .orderBy(desc(topics.createdAt));
+
+    const grouped = new Map<string, TopicItem[]>();
+    for (const topic of rows) {
+      const cronJobId = (topic.metadata as { cronJobId?: string } | null)?.cronJobId;
+      if (!cronJobId) continue;
+      const group = grouped.get(cronJobId) ?? [];
+      group.push(topic);
+      grouped.set(cronJobId, group);
+    }
+
+    return [...grouped.entries()].map(([cronJobId, topicList]) => ({
+      cronJobId,
+      topics: topicList,
+    }));
   };
 
   // **************** Helper *************** //
@@ -754,53 +964,5 @@ export class TopicModel {
       );
 
     return result[0]?.total ?? 0;
-  };
-
-  /**
-   * Get cron topics grouped by cronJob for a specific agent
-   * Returns topics where trigger='cron' and metadata contains cronJobId
-   */
-  getCronTopicsGroupedByCronJob = async (agentId: string) => {
-    const cronTopics = await this.db
-      .select({
-        createdAt: topics.createdAt,
-        favorite: topics.favorite,
-        historySummary: topics.historySummary,
-        id: topics.id,
-        metadata: topics.metadata,
-        title: topics.title,
-        trigger: topics.trigger,
-        updatedAt: topics.updatedAt,
-      })
-      .from(topics)
-      .where(
-        and(
-          eq(topics.userId, this.userId),
-          eq(topics.agentId, agentId),
-          eq(topics.trigger, 'cron'),
-          // Check if metadata contains cronJobId (use ? operator to avoid Neon rt_fetch bug with ->>)
-          sql`${topics.metadata} ? 'cronJobId'`,
-        ),
-      )
-      .orderBy(desc(topics.updatedAt));
-
-    // Group topics by cronJobId
-    const groupedTopics = new Map<string, typeof cronTopics>();
-
-    cronTopics.forEach((topic) => {
-      const cronJobId = topic.metadata?.cronJobId;
-      if (cronJobId) {
-        if (!groupedTopics.has(cronJobId)) {
-          groupedTopics.set(cronJobId, []);
-        }
-        groupedTopics.get(cronJobId)!.push(topic);
-      }
-    });
-
-    // Convert Map to array of grouped objects
-    return Array.from(groupedTopics.entries()).map(([cronJobId, topicList]) => ({
-      cronJobId,
-      topics: topicList,
-    }));
   };
 }

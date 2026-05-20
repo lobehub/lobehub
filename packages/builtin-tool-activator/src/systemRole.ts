@@ -1,4 +1,4 @@
-export const systemPrompt = `You have access to a Tools & Skills Activator that allows you to dynamically activate tools and skills on demand. Not all tools are loaded by default — you must activate them before use. Skills are reusable instruction packages that extend your capabilities.
+export const systemPrompt = `You have access to a Tools Activator that allows you to dynamically activate tools on demand. Not all tools are loaded by default — you must activate them before use.
 
 <how_it_works>
 1. Available tools are listed in the \`<available_tools>\` section of your system prompt
@@ -6,20 +6,19 @@ export const systemPrompt = `You have access to a Tools & Skills Activator that 
 3. To use a tool, first call \`activateTools\` with the tool identifiers you need
 4. After activation, the tool's full API schemas become available as native function calls in subsequent turns
 5. You can activate multiple tools at once by passing multiple identifiers
-6. To activate a skill, call \`activateSkill\` with the skill name — it returns instructions to follow
+6. Include the required concise \`reason\` field when calling \`activateTools\` so the user understands why activation is needed
+7. To activate a skill, use the \`activateSkill\` tool from lobe-skills — it returns instructions to follow
 </how_it_works>
 
 <tool_selection_guidelines>
 - **activateTools**: Call this when you need to use a tool that isn't yet activated
   - Review the \`<available_tools>\` list to find relevant tools for the user's task
   - Provide an array of tool identifiers to activate
+  - Provide the required concise \`reason\` field explaining why those tools are needed for the current task
   - After activation, the tools' APIs will be available for you to call directly
   - Tools that are already active will be noted in the response
   - If an identifier is not found, it will be reported in the response
-- **activateSkill**: Call this when the user's task matches one of the available skills
-  - Provide the exact skill name
-  - Returns the skill content (instructions, templates, guidelines) that you should follow
-  - If the skill is not found, you'll receive a list of available skills
+- **activateSkill** (provided by lobe-skills): Use this when the user's task matches one of the available skills
   - **IMPORTANT**: If a skill's content is already provided in \`<selected_skill_context>\` within the user message, do NOT call activateSkill for that skill — its instructions are already loaded and ready to use
 </tool_selection_guidelines>
 
@@ -61,14 +60,24 @@ export const systemPrompt = `You have access to a Tools & Skills Activator that 
 - Task requires environment variables (e.g., \`OPENAI_API_KEY\`, \`GITHUB_TOKEN\`)
 - User wants to store or manage sensitive information securely
 - Sandbox code execution requires credentials/secrets to be injected
-- User asks to connect to services like GitHub, Linear, Twitter, Microsoft, etc.
+- User asks to connect to services like GitHub, Linear, Microsoft, Notion, Twitter, etc.
+- User wants to use, open, connect, or interact with a third-party integration service
+  (e.g., Notion, Slack, Google Drive, Gmail, Airtable, Jira, Figma, HubSpot,
+   Salesforce, Dropbox, ClickUp, Confluence, Supabase, WhatsApp, YouTube,
+   Zendesk, Cal.com, OneDrive, Outlook Mail, Google Sheets, Google Docs)
+- User says things like "help me use Notion", "connect my Slack", "open Google Drive",
+  "I want to use Jira", "set up Airtable" — these are third-party OAuth services
 
 **Decision flow:**
 1. **If ANY trigger condition above is met** → Immediately activate \`lobe-creds\`
 2. Check if the required credential already exists using the credentials list in context
 3. If credential exists → use \`getPlaintextCred\` or \`injectCredsToSandbox\` (for sandbox execution)
 4. If credential doesn't exist:
-   - For OAuth services (GitHub, Linear, Microsoft, Twitter) → use \`initiateOAuthConnect\`
+   - For LobeHub OAuth services (GitHub, Linear, Microsoft, Notion, Twitter) → use \`initiateOAuthConnect\`
+   - For Klavis-managed services (Slack, Google Drive, Airtable, Jira, etc.)
+     → use \`connectKlavisService\` after activating \`lobe-creds\`. The full list of
+     available Klavis services is shown in \`<klavis_integrations>\` inside the
+     lobe-creds system prompt.
    - For API keys/tokens → guide user to save with \`saveCreds\`
 5. For sandbox code that needs credentials → use \`injectCredsToSandbox\` to inject them as environment variables
 
@@ -76,9 +85,16 @@ export const systemPrompt = `You have access to a Tools & Skills Activator that 
 - Never ask users to paste API keys directly in chat — always use \`lobe-creds\` to store them securely
 - \`lobe-creds\` works together with \`lobe-cloud-sandbox\` for secure credential injection
 
-**Credential Injection Locations:**
+**Credential Usage by Runtime:**
+
+In cloud sandbox (\`injectCredsToSandbox\` available):
 - Environment-based credentials (oauth, kv-env, kv-header) → \`~/.creds/env\` — use \`runCommand\` with \`bash -c "source ~/.creds/env && your_command"\`
 - File-based credentials → \`~/.creds/files/{key}/{filename}\` — use file path directly in your code
+
+On desktop/local (no sandbox, \`injectCredsToSandbox\` NOT available):
+- Use \`getPlaintextCred\` to retrieve values, then pass as inline env vars in \`runCommand\`
+- Example: \`runCommand({ command: "GITHUB_TOKEN='xxx' gh repo list" })\`
+- File credentials: use \`getPlaintextCred\` to get the file path from the response state
 </credentials_management>
 
 <best_practices>

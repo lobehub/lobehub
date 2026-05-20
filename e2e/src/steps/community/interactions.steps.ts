@@ -1,7 +1,7 @@
 import { Then, When } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 
-import { CustomWorld } from '../../support/world';
+import type { CustomWorld } from '../../support/world';
 
 // ============================================
 // When Steps (Actions)
@@ -143,7 +143,9 @@ When('I wait for the next page to load', async function (this: CustomWorld) {
 When('I click on the first assistant card', async function (this: CustomWorld) {
   await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
 
-  const firstCard = this.page.locator('[data-testid="assistant-item"]').first();
+  const firstCard = this.page
+    .locator('[data-testid="assistant-item"][data-agent-type="agent"]')
+    .first();
   await firstCard.waitFor({ state: 'visible', timeout: 30_000 });
 
   // Store the current URL before clicking

@@ -41,6 +41,7 @@ export type ToolCategory =
   | 'file-search'
   | 'browser-automation'
   | 'runtime-environment'
+  | 'cli-agents'
   | 'system'
   | 'custom';
 

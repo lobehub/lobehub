@@ -21,6 +21,8 @@ export type AgentDocumentInjectionPosition = (typeof AGENT_DOCUMENT_INJECTION_PO
 
 export type AgentDocumentLoadFormat = 'file' | 'raw';
 
+export type AgentDocumentSourceType = 'agent' | 'agent-signal' | 'api' | 'file' | 'topic' | 'web';
+
 export interface AgentContextDocument {
   content?: string;
   description?: string;
@@ -31,7 +33,9 @@ export interface AgentContextDocument {
   policyId?: string | null;
   policyLoad?: 'always' | 'progressive';
   policyLoadFormat?: AgentDocumentLoadFormat;
+  sourceType?: AgentDocumentSourceType;
   title?: string;
+  updatedAt?: Date | string;
 }
 
 export interface AgentDocumentFilterContext {
@@ -106,20 +110,112 @@ export function formatDocument(
 }
 
 /**
- * Format a single progressive document as an index entry
+ * Format the size of a document content as a short human-readable token string.
+ * Empty content is rendered as "empty" so the LLM does not retry reading it.
  */
-function formatProgressiveEntry(doc: AgentContextDocument): string {
-  const parts: string[] = [];
-  if (doc.id) parts.push(`[${doc.id}]`);
-  parts.push(doc.filename);
-  if (doc.title && doc.title !== doc.filename) parts.push(`— "${doc.title}"`);
-  if (doc.description) parts.push(`: ${doc.description}`);
-  return `- ${parts.join(' ')}`;
+function formatSize(content: string | undefined): string {
+  const len = content?.length ?? 0;
+  if (len === 0) return 'empty';
+  if (len < 1000) return String(len);
+  if (len < 10_000) return `${(len / 1000).toFixed(1)}k`;
+  if (len < 1_000_000) return `${Math.round(len / 1000)}k`;
+  return `${(len / 1_000_000).toFixed(1)}M`;
+}
+
+/**
+ * Render a Date / ISO string as a short relative-time token like "2d ago".
+ */
+function formatRelative(at: Date | string | undefined, now: Date): string {
+  if (!at) return '—';
+  const date = typeof at === 'string' ? new Date(at) : at;
+  if (Number.isNaN(date.getTime())) return '—';
+
+  const sec = Math.max(0, Math.floor((now.getTime() - date.getTime()) / 1000));
+  if (sec < 60) return 'now';
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const day = Math.floor(hr / 24);
+  if (day < 30) return `${day}d ago`;
+  const month = Math.floor(day / 30);
+  if (month < 12) return `${month}mo ago`;
+  const year = Math.floor(day / 365);
+  return `${year}y ago`;
+}
+
+const TITLE_MAX_WIDTH = 60;
+
+function pickRowTitle(doc: AgentContextDocument): string {
+  return doc.title || doc.filename || '(untitled)';
+}
+
+function truncate(s: string, max: number): string {
+  return s.length > max ? `${s.slice(0, max - 1)}…` : s;
+}
+
+/**
+ * Render a list of progressive docs as a fixed-width table:
+ *
+ *   TITLE                ID                                    SIZE    UPDATED
+ *   daily-brief.txt      2af6eb88-8bdb-468f-887f-620baa394efa  1.4k    2d ago
+ */
+function buildIndexTable(
+  docs: AgentContextDocument[],
+  context: AgentDocumentFilterContext,
+): string {
+  const now = context.currentTime ?? new Date();
+  const rows = docs.map((d) => ({
+    id: d.id ?? '',
+    size: formatSize(d.content),
+    title: truncate(pickRowTitle(d), TITLE_MAX_WIDTH),
+    updated: formatRelative(d.updatedAt, now),
+  }));
+
+  const titleWidth = Math.max('TITLE'.length, ...rows.map((r) => r.title.length));
+  const idWidth = Math.max('ID'.length, ...rows.map((r) => r.id.length));
+  const sizeWidth = Math.max('SIZE'.length, ...rows.map((r) => r.size.length));
+
+  const sep = '  ';
+  const headerLine = [
+    'TITLE'.padEnd(titleWidth),
+    'ID'.padEnd(idWidth),
+    'SIZE'.padEnd(sizeWidth),
+    'UPDATED',
+  ].join(sep);
+
+  const dataLines = rows.map((row) =>
+    [
+      row.title.padEnd(titleWidth),
+      row.id.padEnd(idWidth),
+      row.size.padEnd(sizeWidth),
+      row.updated,
+    ].join(sep),
+  );
+
+  return [headerLine, ...dataLines].join('\n');
+}
+
+/**
+ * Sort documents by recency (most-recently-updated first); rows missing
+ * `updatedAt` sink to the end and keep stable input order between themselves.
+ */
+function sortByRecency(docs: AgentContextDocument[]): AgentContextDocument[] {
+  return [...docs]
+    .map((doc, index) => ({ doc, index }))
+    .sort((a, b) => {
+      const ta = a.doc.updatedAt ? new Date(a.doc.updatedAt).getTime() : 0;
+      const tb = b.doc.updatedAt ? new Date(b.doc.updatedAt).getTime() : 0;
+      if (tb !== ta) return tb - ta;
+      return a.index - b.index;
+    })
+    .map(({ doc }) => doc);
 }
 
 /**
  * Combine multiple documents into a single string.
- * Progressive documents are grouped into a lightweight index block;
+ * Progressive documents are grouped into an `<agent_documents_index>` block
+ * (web-crawled docs are hidden behind a count and surfaced via listDocuments);
  * full-content documents are formatted individually.
  */
 export function combineDocuments(
@@ -136,9 +232,22 @@ export function combineDocuments(
   }
 
   if (progressiveDocs.length > 0) {
-    const entries = progressiveDocs.map(formatProgressiveEntry).join('\n');
+    const userDocs = sortByRecency(progressiveDocs.filter((d) => d.sourceType !== 'web'));
+    const hiddenWebCount = progressiveDocs.length - userDocs.length;
+
+    const headerLines: string[] = [
+      `${userDocs.length} user-created doc${userDocs.length === 1 ? '' : 's'}. Use readDocument(id) for full content.`,
+    ];
+    if (hiddenWebCount > 0) {
+      headerLines.push(
+        `${hiddenWebCount} web-crawled doc${hiddenWebCount === 1 ? '' : 's'} hidden — call listDocuments(sourceType='web') to see them.`,
+      );
+    }
+
+    const tableBlock = userDocs.length > 0 ? `\n\n${buildIndexTable(userDocs, context)}` : '';
+
     parts.push(
-      `<agent_documents_index>\nThe following documents are available. Use readDocument tool to access full content.\n${entries}\n</agent_documents_index>`,
+      `<agent_documents_index>\n${headerLines.join('\n')}${tableBlock}\n</agent_documents_index>`,
     );
   }
 

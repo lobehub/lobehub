@@ -19,6 +19,27 @@ export interface AgentForkRequest {
 }
 
 /**
+ * Fork batch input item — single fork request plus the source identifier
+ * (the source identifier is part of the URL when calling upstream singly,
+ * but is carried in the body for batch payloads).
+ */
+export interface AgentForkBatchInput extends AgentForkRequest {
+  /** Source agent identifier to fork from */
+  sourceIdentifier: string;
+}
+
+/**
+ * Per-item result of a batch fork. Best-effort: one failure does not abort the rest.
+ */
+export type AgentForkBatchResult =
+  | { data: AgentForkResponse; sourceIdentifier: string; success: true }
+  | {
+      error: { code: string; message: string };
+      sourceIdentifier: string;
+      success: false;
+    };
+
+/**
  * Fork response for Agent
  */
 export interface AgentForkResponse {

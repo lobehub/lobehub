@@ -56,8 +56,11 @@ const createMockApp = () => {
       'dev.forceReload': 'Force Reload',
       'dev.devTools': 'Developer Tools',
       'dev.devPanel': 'Dev Panel',
+      'tray.openMiniToolbar': 'Quick Composer',
       'tray.open': `Open ${params?.appName || 'App'}`,
+      'tray.quickChat': 'Quick Chat',
       'tray.quit': 'Quit',
+      'tray.settings': 'Settings',
     };
     return translations[key] || key;
   });
@@ -178,6 +181,7 @@ describe('WindowsMenu', () => {
       const template = (Menu.buildFromTemplate as any).mock.calls[0][0];
       expect(template.length).toBeGreaterThan(0);
       expect(template.some((item: any) => item.label?.includes('Open'))).toBe(true);
+      expect(template.some((item: any) => item.label === 'Settings')).toBe(true);
       expect(template.some((item: any) => item.label === 'Quit')).toBe(true);
     });
   });
@@ -398,10 +402,12 @@ describe('WindowsMenu', () => {
       const windowMenu = template.find((item: any) => item.label === 'Window');
 
       const minimizeItem = windowMenu.submenu.find((item: any) => item.role === 'minimize');
-      const closeItem = windowMenu.submenu.find((item: any) => item.role === 'close');
+      const closeItem = windowMenu.submenu.find((item: any) => item.label === 'Close');
 
       expect(minimizeItem).toBeDefined();
       expect(closeItem).toBeDefined();
+      expect(closeItem.accelerator).toBe('CmdOrCtrl+W');
+      expect(typeof closeItem.click).toBe('function');
     });
 
     it('should have zoom controls in view menu', () => {

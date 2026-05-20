@@ -61,16 +61,6 @@ export class MessageRuntimeStateActionImpl {
       window.removeEventListener('beforeunload', preventLeavingFn);
     }
   };
-
-  internal_toggleMessageLoading = (loading: boolean, id: string): void => {
-    this.#set(
-      {
-        messageLoadingIds: toggleBooleanList(this.#get().messageLoadingIds, id, loading),
-      },
-      false,
-      `internal_toggleMessageLoading/${loading ? 'start' : 'end'}`,
-    );
-  };
 }
 
 export type MessageRuntimeStateAction = Pick<

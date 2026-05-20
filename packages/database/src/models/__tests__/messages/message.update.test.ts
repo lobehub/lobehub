@@ -495,6 +495,42 @@ describe('MessageModel Update Tests', () => {
     });
   });
 
+  describe('findMessagePlugin', () => {
+    it('should return the plugin row (identifier / apiName / toolCallId / ...) for a tool message', async () => {
+      await serverDB.insert(messages).values({ id: '1', role: 'tool', content: '', userId });
+      await serverDB.insert(messagePlugins).values([
+        {
+          id: '1',
+          apiName: 'runCommand',
+          arguments: '{"command":"echo"}',
+          identifier: 'lobe-local-system',
+          toolCallId: 'call_abc',
+          type: 'builtin',
+          userId,
+        },
+      ]);
+
+      const plugin = await messageModel.findMessagePlugin('1');
+
+      expect(plugin).toEqual(
+        expect.objectContaining({
+          apiName: 'runCommand',
+          arguments: '{"command":"echo"}',
+          id: '1',
+          identifier: 'lobe-local-system',
+          toolCallId: 'call_abc',
+          type: 'builtin',
+        }),
+      );
+    });
+
+    it('should return undefined when no plugin row exists for the given id', async () => {
+      const plugin = await messageModel.findMessagePlugin('non-existent-id');
+
+      expect(plugin).toBeUndefined();
+    });
+  });
+
   describe('updateToolMessage', () => {
     it('should update content only', async () => {
       await serverDB.insert(messages).values({

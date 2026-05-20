@@ -1,20 +1,13 @@
-import { type FileListItem } from '@/types/files';
-import { type RecentTopic } from '@/types/topic';
+import { type RecentItem } from '@/server/routers/lambda/recent';
 
 export interface RecentState {
-  isRecentPagesInit: boolean;
-  isRecentResourcesInit: boolean;
-  isRecentTopicsInit: boolean;
-  recentPages: any[];
-  recentResources: FileListItem[];
-  recentTopics: RecentTopic[];
+  allRecentsDrawerOpen: boolean;
+  isRecentsInit: boolean;
+  recents: RecentItem[];
 }
 
 export const initialRecentState: RecentState = {
-  isRecentPagesInit: false,
-  isRecentResourcesInit: false,
-  isRecentTopicsInit: false,
-  recentPages: [],
-  recentResources: [],
-  recentTopics: [],
+  allRecentsDrawerOpen: false,
+  isRecentsInit: false,
+  recents: [],
 };

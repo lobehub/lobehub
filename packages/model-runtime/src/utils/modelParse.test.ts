@@ -10,104 +10,109 @@ import {
 } from './modelParse';
 
 // Mock the imported LOBE_DEFAULT_MODEL_LIST
-const mockDefaultModelList: (Partial<ChatModelCard> & { id: string })[] = [
-  {
-    contextWindowTokens: 8192,
-    displayName: 'GPT-4',
-    enabled: true,
-    functionCall: true,
-    id: 'gpt-4',
-    maxOutput: 4096,
-    reasoning: false,
-    vision: true,
-  },
-  {
-    displayName: 'Claude 3 Opus',
-    enabled: true,
-    functionCall: true,
-    id: 'claude-3-opus',
-    reasoning: true,
-    vision: true,
-  },
-  {
-    displayName: 'Qwen Turbo',
-    enabled: true,
-    functionCall: true,
-    id: 'qwen-turbo',
-    reasoning: false,
-    vision: false,
-  },
-  // Added for more detailed tests:
-  {
-    displayName: 'Custom Known FC True',
-    enabled: true,
-    functionCall: true,
-    id: 'custom-model-known-fc-true', // For testing: knownModel.abilities.fc=true, no keyword match for openai fc
-    reasoning: false,
-    vision: false,
-  },
-  {
-    displayName: 'GPT-4o Known FC False',
-    enabled: true,
-    functionCall: false,
-    id: 'gpt-4o-known-fc-false', // For testing: '4o' keyword match, knownModel.abilities.fc=false
-    reasoning: true,
-    vision: true,
-  },
-  {
-    displayName: 'GPT-4o Known Vision False',
-    enabled: true,
-    functionCall: true,
-    id: 'gpt-4o-known-vision-false', // For testing: '4o' keyword match, knownModel.abilities.vision=false
-    reasoning: true,
-    vision: false,
-  },
-  {
-    displayName: 'GPT-4o Audio Known Abilities True',
-    enabled: true,
-    functionCall: true,
-    id: 'gpt-4o-audio-known-abilities-true', // For testing: '4o' keyword, 'audio' excluded, but knownModel.abilities.fc/vision=true
-    reasoning: true,
-    vision: true,
-  },
-  {
-    displayName: 'GPT-4o Audio Known Abilities False',
-    enabled: true,
-    functionCall: false,
-    id: 'gpt-4o-audio-known-abilities-false', // For testing: '4o' keyword, 'audio' excluded, and knownModel.abilities.fc/vision=false
-    reasoning: false,
-    vision: false,
-  },
-  {
-    displayName: 'Known Model DisplayName',
-    enabled: true,
-    id: 'model-known-displayname',
-  },
-  {
-    contextWindowTokens: 1000,
-    enabled: true,
-    id: 'model-known-context',
-    maxOutput: 100,
-  },
-  {
-    displayName: 'Known Disabled Model',
-    enabled: false,
-    id: 'model-known-disabled',
-  },
-  {
-    displayName: 'Known Model With Settings',
-    enabled: true,
-    id: 'model-known-settings',
-    settings: {
-      extendParams: ['enableReasoning'],
-      searchImpl: 'params',
-      searchProvider: 'builtin',
+const { mockDefaultModelList } = vi.hoisted(() => ({
+  mockDefaultModelList: [
+    {
+      contextWindowTokens: 8192,
+      displayName: 'GPT-4',
+      enabled: true,
+      functionCall: true,
+      id: 'gpt-4',
+      maxOutput: 4096,
+      reasoning: false,
+      vision: true,
     },
-  },
-];
+    {
+      displayName: 'Claude 3 Opus',
+      enabled: true,
+      functionCall: true,
+      id: 'claude-3-opus',
+      reasoning: true,
+      vision: true,
+    },
+    {
+      displayName: 'Qwen Turbo',
+      enabled: true,
+      functionCall: true,
+      id: 'qwen-turbo',
+      reasoning: false,
+      vision: false,
+    },
+    // Added for more detailed tests:
+    {
+      displayName: 'Custom Known FC True',
+      enabled: true,
+      functionCall: true,
+      id: 'custom-model-known-fc-true', // For testing: knownModel.abilities.fc=true, no keyword match for openai fc
+      reasoning: false,
+      vision: false,
+    },
+    {
+      displayName: 'GPT-4o Known FC False',
+      enabled: true,
+      functionCall: false,
+      id: 'gpt-4o-known-fc-false', // For testing: '4o' keyword match, knownModel.abilities.fc=false
+      reasoning: true,
+      vision: true,
+    },
+    {
+      displayName: 'GPT-4o Known Vision False',
+      enabled: true,
+      functionCall: true,
+      id: 'gpt-4o-known-vision-false', // For testing: '4o' keyword match, knownModel.abilities.vision=false
+      reasoning: true,
+      vision: false,
+    },
+    {
+      displayName: 'GPT-4o Audio Known Abilities True',
+      enabled: true,
+      functionCall: true,
+      id: 'gpt-4o-audio-known-abilities-true', // For testing: '4o' keyword, 'audio' excluded, but knownModel.abilities.fc/vision=true
+      reasoning: true,
+      vision: true,
+    },
+    {
+      displayName: 'GPT-4o Audio Known Abilities False',
+      enabled: true,
+      functionCall: false,
+      id: 'gpt-4o-audio-known-abilities-false', // For testing: '4o' keyword, 'audio' excluded, and knownModel.abilities.fc/vision=false
+      reasoning: false,
+      vision: false,
+    },
+    {
+      displayName: 'Known Model DisplayName',
+      enabled: true,
+      id: 'model-known-displayname',
+    },
+    {
+      contextWindowTokens: 1000,
+      enabled: true,
+      id: 'model-known-context',
+      maxOutput: 100,
+    },
+    {
+      displayName: 'Known Disabled Model',
+      enabled: false,
+      id: 'model-known-disabled',
+    },
+    {
+      displayName: 'Known Model With Settings',
+      enabled: true,
+      id: 'model-known-settings',
+      settings: {
+        extendParams: ['enableReasoning'],
+        searchImpl: 'params',
+        searchProvider: 'builtin',
+      },
+    },
+  ] as (Partial<ChatModelCard> & { id: string })[],
+}));
 
 // Mock the import
 vi.mock('model-bank', () => ({
+  AiModelTypeSchema: {
+    options: ['chat', 'embedding', 'tts', 'stt', 'image', 'video', 'text2music', 'realtime'],
+  },
   LOBE_DEFAULT_MODEL_LIST: mockDefaultModelList,
   // 新增 provider 专用清单，供 findKnownModelByProvider 使用
   google: [
@@ -248,6 +253,19 @@ describe('modelParse', () => {
       expect(Array.isArray(result)).toBe(true);
     });
 
+    it('should ignore invalid model type values and fallback to inferred types', async () => {
+      const modelList = [
+        { id: 'custom-chat-model', type: 'model' },
+        { id: 'text-embedding-3-large', type: 'model' },
+      ];
+
+      const result = await processModelList(modelList, MODEL_LIST_CONFIGS.openai);
+
+      expect(result).toHaveLength(2);
+      expect(result.find((m) => m.id === 'custom-chat-model')?.type).toBe('chat');
+      expect(result.find((m) => m.id === 'text-embedding-3-large')?.type).toBe('embedding');
+    });
+
     // New search & imageOutput focused tests for single provider path
     describe('search and imageOutput (processModelList)', () => {
       it('openai: default search keywords should make "*-search" models support search', async () => {
@@ -304,16 +322,24 @@ describe('modelParse', () => {
 
     it('xiaomimimo: should infer multimodal abilities for omni', async () => {
       const out = await processModelList(
-        [{ id: 'mimo-v2-flash' }, { id: 'mimo-v2-pro' }, { id: 'mimo-v2-omni' }],
+        [
+          { id: 'mimo-v2-flash' },
+          { id: 'mimo-v2-pro' },
+          { id: 'mimo-v2-omni' },
+          { id: 'mimo-v2.5-pro' },
+          { id: 'mimo-v2.5' },
+        ],
         MODEL_LIST_CONFIGS.xiaomimimo,
         'xiaomimimo',
       );
 
-      expect(out).toHaveLength(3);
+      expect(out).toHaveLength(5);
 
       const flash = out.find((m) => m.id === 'mimo-v2-flash')!;
       const pro = out.find((m) => m.id === 'mimo-v2-pro')!;
       const omni = out.find((m) => m.id === 'mimo-v2-omni')!;
+      const v25Pro = out.find((m) => m.id === 'mimo-v2.5-pro')!;
+      const v25 = out.find((m) => m.id === 'mimo-v2.5')!;
 
       expect(flash.functionCall).toBe(true);
       expect(flash.reasoning).toBe(true);
@@ -326,6 +352,14 @@ describe('modelParse', () => {
       expect(omni.functionCall).toBe(true);
       expect(omni.reasoning).toBe(true);
       expect(omni.vision).toBe(true);
+
+      expect(v25Pro.functionCall).toBe(true);
+      expect(v25Pro.reasoning).toBe(true);
+      expect(v25Pro.vision).toBe(false);
+
+      expect(v25.functionCall).toBe(true);
+      expect(v25.reasoning).toBe(true);
+      expect(v25.vision).toBe(true);
 
       const tts = await processModelList(
         [{ id: 'mimo-v2-tts' }],
@@ -518,6 +552,17 @@ describe('modelParse', () => {
       expect(unknown.reasoning).toBe(false);
       expect(unknown.vision).toBe(false);
     });
+
+    it('should ignore invalid remote type values in mixed provider processing', async () => {
+      const modelList = [{ id: 'newapi-custom-model', type: 'model' }];
+
+      const result = await processMultiProviderModelList(modelList, 'newapi');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('newapi-custom-model');
+      expect(result[0].type).toBe('chat');
+    });
+
     it('should correctly process a model from a non-OpenAI provider not in default list, relying on keywords', async () => {
       // This model ('claude-3-haiku-unlisted') is NOT in mockDefaultModelList.
       // It should be detected as 'anthropic'.
@@ -714,6 +759,18 @@ describe('modelParse', () => {
         expect(results[2][0].reasoning).toBe(true); // Google 'thinking'
         expect(results[3][0].reasoning).toBe(true); // Deepseek 'r1'
         expect(results[4][0].reasoning).toBe(true); // Volcengine 'thinking'
+      });
+
+      it('should detect v4 keyword for deepseek model capabilities', async () => {
+        // Cover the new 'v4' keyword added to the deepseek config so unknown
+        // model IDs like deepseek-v4-custom still get functionCall + reasoning.
+        const result = await processModelList(
+          [{ id: 'deepseek-v4-custom' }],
+          MODEL_LIST_CONFIGS.deepseek,
+        );
+
+        expect(result[0].functionCall).toBe(true);
+        expect(result[0].reasoning).toBe(true);
       });
     });
 

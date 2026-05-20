@@ -14,6 +14,7 @@ interface AgentBuilderConversationProps {
   agentId: string;
 }
 const actions: ActionKeys[] = ['model'];
+const rightActions: ActionKeys[] = [];
 
 /**
  * Agent Builder Conversation Component
@@ -32,7 +33,7 @@ const AgentBuilderConversation = memo<AgentBuilderConversationProps>(({ agentId 
         <Flexbox flex={1} style={{ overflow: 'hidden' }}>
           <ChatList welcome={<AgentBuilderWelcome />} />
         </Flexbox>
-        <ChatInput leftActions={actions} showRuntimeConfig={false} />
+        <ChatInput leftActions={actions} rightActions={rightActions} showRuntimeConfig={false} />
       </Flexbox>
     </DragUploadZone>
   );

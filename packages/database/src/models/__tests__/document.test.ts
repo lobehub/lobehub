@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { documents, files, users } from '../../schemas';
+import { documentHistories, documents, files, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { DocumentModel } from '../document';
 import { FileModel } from '../file';
@@ -24,6 +24,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await serverDB.delete(users);
   await serverDB.delete(files);
+  await serverDB.delete(documentHistories);
   await serverDB.delete(documents);
 });
 
@@ -54,6 +55,51 @@ const createTestDocument = async (model: DocumentModel, fModel: FileModel, conte
 };
 
 describe('DocumentModel', () => {
+  describe('findOrCreateFolder', () => {
+    it('should create a new folder when none exists', async () => {
+      const folder = await documentModel.findOrCreateFolder('bookmark');
+
+      expect(folder).toBeDefined();
+      expect(folder.fileType).toBe('custom/folder');
+      expect(folder.filename).toBe('bookmark');
+      expect(folder.title).toBe('bookmark');
+      expect(folder.source).toBe('');
+      expect(folder.sourceType).toBe('api');
+      expect(folder.totalCharCount).toBe(0);
+      expect(folder.content).toBe('');
+    });
+
+    it('should return existing folder on second call', async () => {
+      const first = await documentModel.findOrCreateFolder('bookmark');
+      const second = await documentModel.findOrCreateFolder('bookmark');
+
+      expect(second.id).toBe(first.id);
+    });
+
+    it('should isolate folders by user', async () => {
+      const folder1 = await documentModel.findOrCreateFolder('bookmark');
+      const folder2 = await documentModel2.findOrCreateFolder('bookmark');
+
+      expect(folder1.id).not.toBe(folder2.id);
+    });
+
+    it('should support parentId for nested folders', async () => {
+      const parent = await documentModel.findOrCreateFolder('root');
+      const child = await documentModel.findOrCreateFolder('sub', parent.id);
+
+      expect(child.parentId).toBe(parent.id);
+      expect(child.id).not.toBe(parent.id);
+    });
+
+    it('should distinguish folders with same name but different parentId', async () => {
+      const topLevel = await documentModel.findOrCreateFolder('notes');
+      const parent = await documentModel.findOrCreateFolder('root');
+      const nested = await documentModel.findOrCreateFolder('notes', parent.id);
+
+      expect(topLevel.id).not.toBe(nested.id);
+    });
+  });
+
   describe('create', () => {
     it('should create a new document', async () => {
       const { id: fileId } = await fileModel.create({
@@ -131,6 +177,29 @@ describe('DocumentModel', () => {
 
       expect(result.items).toHaveLength(2);
       expect(result.total).toBe(2);
+    });
+
+    it('should exclude agent-owned documents unless sourceTypes explicitly requests them', async () => {
+      await createTestDocument(documentModel, fileModel, 'Visible document');
+      await documentModel.create({
+        content: 'Agent document',
+        fileType: 'agent/document',
+        filename: 'agent-document',
+        source: 'agent-document://agent-1/agent-document',
+        sourceType: 'agent',
+        totalCharCount: 14,
+        totalLineCount: 1,
+      });
+
+      const defaultResult = await documentModel.query();
+
+      expect(defaultResult.items).toHaveLength(1);
+      expect(defaultResult.items[0].sourceType).not.toBe('agent');
+
+      const agentResult = await documentModel.query({ sourceTypes: ['agent'] });
+
+      expect(agentResult.items).toHaveLength(1);
+      expect(agentResult.items[0].sourceType).toBe('agent');
     });
 
     it('should only return documents for the current user', async () => {

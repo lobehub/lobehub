@@ -3,7 +3,8 @@ import { FileText } from 'lucide-react';
 import { getRouteById } from '@/config/routes';
 
 import { type PageParams, type PageReference, type ResolvedPageData } from '../types';
-import { type PluginContext, type RecentlyViewedPlugin } from './types';
+import { buildPageNewTabAction } from './newTabHelpers';
+import { type NewTabAction, type PluginContext, type RecentlyViewedPlugin } from './types';
 import { createPageReference } from './types';
 
 const PAGE_PATH_REGEX = /^\/page\/([^/?]+)$/;
@@ -15,6 +16,11 @@ export const pagePlugin: RecentlyViewedPlugin<'page'> = {
     const document = ctx.getDocument(reference.params.pageId);
     return document !== undefined;
   },
+
+  createNewTabAction(_reference: PageReference<'page'>, ctx: PluginContext): NewTabAction | null {
+    return buildPageNewTabAction(ctx);
+  },
+
   generateId(reference: PageReference<'page'>): string {
     return `page:${reference.params.pageId}`;
   },

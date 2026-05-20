@@ -14,33 +14,12 @@ import {
 import { resolveLocalDeviceId } from '../utils/device';
 import { confirm, outputJson, printTable, truncate } from '../utils/format';
 import { log, setVerbose } from '../utils/logger';
-
-/**
- * Resolve an agent identifier (agentId or slug) to a concrete agentId.
- * When a slug is provided, uses getBuiltinAgent to look up the agent.
- */
-async function resolveAgentId(
-  client: any,
-  opts: { agentId?: string; slug?: string },
-): Promise<string> {
-  if (opts.agentId) return opts.agentId;
-
-  if (opts.slug) {
-    const agent = await client.agent.getBuiltinAgent.query({ slug: opts.slug });
-    if (!agent) {
-      log.error(`Agent not found for slug: ${opts.slug}`);
-      process.exit(1);
-    }
-    return (agent as any).id || (agent as any).agentId;
-  }
-
-  log.error('Either <agentId> or --slug is required.');
-  process.exit(1);
-  return ''; // unreachable
-}
+import { resolveAgentId } from './agent/resolveAgentId';
+import { registerAgentSpaceFsCommand } from './agent/spaceFs';
 
 export function registerAgentCommand(program: Command) {
   const agent = program.command('agent').description('Manage agents');
+  registerAgentSpaceFsCommand(agent);
 
   // ── list ──────────────────────────────────────────────
 
@@ -258,6 +237,10 @@ export function registerAgentCommand(program: Command) {
       '--device <target>',
       'Target device ID, or use "local" for the current connected device',
     )
+    .option(
+      '--no-headless',
+      "Disable headless mode and wait for human approval on tool calls (default: headless — tools auto-run, matching the CLI's non-interactive nature)",
+    )
     .option('--json', 'Output full JSON event stream')
     .option('-v, --verbose', 'Show detailed tool call info')
     .option('--replay <file>', 'Replay events from a saved JSON file (offline)')
@@ -267,6 +250,7 @@ export function registerAgentCommand(program: Command) {
         agentId?: string;
         autoStart?: boolean;
         device?: string;
+        headless?: boolean;
         json?: boolean;
         prompt?: string;
         replay?: string;
@@ -334,12 +318,17 @@ export function registerAgentCommand(program: Command) {
         }
 
         // 1. Exec agent to get operationId
-        const input: Record<string, any> = { prompt: options.prompt };
+        const input: Record<string, any> = { prompt: options.prompt, trigger: 'cli' };
         if (options.agentId) input.agentId = options.agentId;
         if (deviceId) input.deviceId = deviceId;
         if (options.slug) input.slug = options.slug;
         if (options.topicId) input.appContext = { topicId: options.topicId };
         if (options.autoStart === false) input.autoStart = false;
+        // commander's --no-headless sets `headless` to false. Anything else
+        // (undefined, true) → headless mode is on and tool calls auto-execute.
+        if (options.headless !== false) {
+          input.userInterventionConfig = { approvalMode: 'headless' };
+        }
 
         const result = await client.aiAgent.execAgent.mutate(input as any);
         const r = result as any;
@@ -355,16 +344,17 @@ export function registerAgentCommand(program: Command) {
         }
 
         // 2. Connect to stream (WebSocket via Gateway, or fallback to SSE)
-        const { serverUrl, headers } = await getAgentStreamAuthInfo();
+        const { serverUrl, headers, token, tokenType } = await getAgentStreamAuthInfo();
         const agentGatewayUrl = options.sse ? undefined : resolveAgentGatewayUrl();
 
         if (agentGatewayUrl) {
-          const token = headers['Oidc-Auth'] || headers['X-API-Key'] || '';
           await streamAgentEventsViaWebSocket({
             gatewayUrl: agentGatewayUrl,
             json: options.json,
             operationId,
+            serverUrl,
             token,
+            tokenType,
             verbose: options.verbose,
           });
         } else {

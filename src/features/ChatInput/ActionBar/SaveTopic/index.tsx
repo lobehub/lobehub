@@ -1,3 +1,4 @@
+import { HotkeyEnum } from '@lobechat/const/hotkeys';
 import { ActionIcon, Flexbox, Hotkey } from '@lobehub/ui';
 import { Popconfirm } from 'antd';
 import { LucideGalleryVerticalEnd, LucideMessageSquarePlus } from 'lucide-react';
@@ -9,7 +10,6 @@ import { useActionSWR } from '@/libs/swr';
 import { useChatStore } from '@/store/chat';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
-import { HotkeyEnum } from '@/types/hotkey';
 
 const SaveTopic = memo(() => {
   const { t } = useTranslation('chat');

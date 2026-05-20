@@ -6,7 +6,7 @@ import { BellIcon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
+import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { useClientDataSWR } from '@/libs/swr';
 import { notificationService } from '@/services/notification';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
@@ -37,10 +37,10 @@ const InboxButton = memo(() => {
 
   return (
     <>
-      <Badge count={unreadCount} offset={[-4, 4]} size="small">
+      <Badge dot={unreadCount > 0} offset={[-6, 6]} size="small">
         <ActionIcon
           icon={BellIcon}
-          size={DESKTOP_HEADER_ICON_SIZE}
+          size={DESKTOP_HEADER_ICON_SMALL_SIZE}
           title={t('inbox.title')}
           onClick={handleToggle}
         />

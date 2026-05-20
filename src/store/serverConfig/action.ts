@@ -30,9 +30,13 @@ export class ServerConfigActionImpl {
       FETCH_SERVER_CONFIG_KEY,
       () => globalService.getGlobalConfig(),
       {
+        onError: () => {
+          this.#set({ serverConfigInit: true }, false, 'initServerConfigFallback');
+        },
         onSuccess: (data) => {
           this.#set(
             {
+              billboard: data.billboard ?? null,
               featureFlags: data.serverFeatureFlags,
               serverConfig: data.serverConfig,
               serverConfigInit: true,

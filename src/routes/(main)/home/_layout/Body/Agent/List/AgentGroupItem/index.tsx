@@ -19,10 +19,11 @@ import { useGroupDropdownMenu } from './useDropdownMenu';
 interface GroupItemProps {
   className?: string;
   item: SidebarAgentItem;
+  onNavigate?: () => void;
   style?: CSSProperties;
 }
 
-const GroupItem = memo<GroupItemProps>(({ item, style, className }) => {
+const GroupItem = memo<GroupItemProps>(({ item, style, className, onNavigate }) => {
   const { id, avatar, backgroundColor, title, pinned } = item;
   const { t } = useTranslation('chat');
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
@@ -102,7 +103,7 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className }) => {
   });
 
   return (
-    <Link aria-label={id} ref={setAnchor} to={groupUrl}>
+    <Link aria-label={id} ref={setAnchor} to={groupUrl} onClick={onNavigate}>
       <NavItem
         actions={<Actions dropdownMenu={dropdownMenu} />}
         className={className}

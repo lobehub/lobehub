@@ -71,6 +71,7 @@
   "macOS.services": "Dịch vụ",
   "macOS.unhide": "Hiện tất cả",
   "tray.open": "Mở {{appName}}",
+  "tray.openMiniToolbar": "Quick Composer",
   "tray.quit": "Thoát",
   "tray.show": "Hiện {{appName}}",
   "view.forceReload": "Tải lại cưỡng bức",

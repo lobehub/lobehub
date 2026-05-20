@@ -41,6 +41,36 @@ describe('createCommonSlice', () => {
     });
   });
 
+  describe('updateInterests', () => {
+    it('optimistically updates user.interests before the service call resolves', async () => {
+      act(() => {
+        useUserStore.setState({ user: { id: 'u1', interests: ['old'] } as any });
+      });
+
+      let resolveService: () => void = () => {};
+      const updateSpy = vi.spyOn(userService, 'updateInterests').mockImplementation(
+        () =>
+          new Promise<void>((r) => {
+            resolveService = r;
+          }) as any,
+      );
+
+      let pending: Promise<void> | undefined;
+      act(() => {
+        pending = useUserStore.getState().updateInterests(['new']);
+      });
+
+      expect(useUserStore.getState().user?.interests).toEqual(['new']);
+
+      await act(async () => {
+        resolveService();
+        await pending;
+      });
+
+      expect(updateSpy).toHaveBeenCalledWith(['new']);
+    });
+  });
+
   describe('useInitUserState', () => {
     const mockServerConfig = {
       defaultAgent: 'agent1',
@@ -74,6 +104,7 @@ describe('createCommonSlice', () => {
       const mockUserState: UserInitializationState = {
         userId: 'user-id',
         isOnboard: true,
+        onboarding: { finishedAt: '2024-01-01T00:00:00Z', version: 1 },
         preference: {
           telemetry: true,
         },
@@ -184,6 +215,7 @@ describe('createCommonSlice', () => {
       const mockUserState: UserInitializationState = {
         userId: 'user-id',
         isOnboard: true,
+        onboarding: { finishedAt: '2024-01-01T00:00:00Z', version: 1 },
         preference: undefined as any,
         settings: null as any,
         avatar: 'abc',
@@ -204,6 +236,29 @@ describe('createCommonSlice', () => {
         expect(result.current.settings).toEqual({
           general: { responseLanguage: expect.any(String), timezone: expect.any(String) },
         });
+      });
+    });
+
+    it('should NOT auto-fill responseLanguage while onboarding is unfinished', async () => {
+      const { result } = renderHook(() => useUserStore());
+
+      const mockUserState: UserInitializationState = {
+        userId: 'user-id',
+        isOnboard: false,
+        // No onboarding.finishedAt and no agentOnboarding.finishedAt:
+        // user is still in the shared-prefix flow.
+        preference: {} as any,
+        settings: { general: { fontSize: 14 } },
+      };
+      vi.spyOn(userService, 'getUserState').mockResolvedValueOnce(mockUserState);
+
+      renderHook(() => result.current.useInitUserState(true, mockServerConfig), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() => {
+        expect(result.current.isUserStateInit).toBeTruthy();
+        expect(result.current.settings.general?.responseLanguage).toBeUndefined();
       });
     });
 

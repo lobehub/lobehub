@@ -436,6 +436,164 @@ describe('createGoogleImage', () => {
       });
     });
 
+    // Regression: nano banana 4K selection used to be silently dropped because
+    // imageSize was gated on aspectRatio !== 'auto'. See LOBE-9115.
+    it('should pass imageSize when resolution is set even if aspectRatio is auto', async () => {
+      // Arrange
+      const realBase64ImageData =
+        'iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==';
+      const mockContentResponse = {
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  inlineData: {
+                    data: realBase64ImageData,
+                    mimeType: 'image/png',
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      };
+      vi.spyOn(mockClient.models, 'generateContent').mockResolvedValue(mockContentResponse as any);
+
+      const payload: CreateImagePayload = {
+        model: 'gemini-2.5-flash-image:image',
+        params: {
+          prompt: 'Create a beautiful sunset landscape',
+          aspectRatio: 'auto',
+          resolution: '4K',
+        },
+      };
+
+      // Act
+      await createGoogleImage(mockClient, provider, payload);
+
+      // Assert - imageConfig.imageSize must reach Google when only resolution is set
+      expect(mockClient.models.generateContent).toHaveBeenCalledWith({
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: 'Create a beautiful sunset landscape' }],
+          },
+        ],
+        model: 'gemini-2.5-flash-image',
+        config: {
+          responseModalities: ['Image'],
+          imageConfig: {
+            imageSize: '4K',
+          },
+        },
+      });
+    });
+
+    it('should pass both aspectRatio and imageSize when both are set', async () => {
+      // Arrange
+      const realBase64ImageData =
+        'iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==';
+      const mockContentResponse = {
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  inlineData: {
+                    data: realBase64ImageData,
+                    mimeType: 'image/png',
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      };
+      vi.spyOn(mockClient.models, 'generateContent').mockResolvedValue(mockContentResponse as any);
+
+      const payload: CreateImagePayload = {
+        model: 'gemini-2.5-flash-image:image',
+        params: {
+          prompt: 'Cinematic widescreen shot',
+          aspectRatio: '16:9',
+          resolution: '2K',
+        },
+      };
+
+      // Act
+      await createGoogleImage(mockClient, provider, payload);
+
+      // Assert
+      expect(mockClient.models.generateContent).toHaveBeenCalledWith({
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: 'Cinematic widescreen shot' }],
+          },
+        ],
+        model: 'gemini-2.5-flash-image',
+        config: {
+          responseModalities: ['Image'],
+          imageConfig: {
+            aspectRatio: '16:9',
+            imageSize: '2K',
+          },
+        },
+      });
+    });
+
+    it('should pass aspectRatio only when resolution is unset', async () => {
+      // Arrange
+      const realBase64ImageData =
+        'iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==';
+      const mockContentResponse = {
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  inlineData: {
+                    data: realBase64ImageData,
+                    mimeType: 'image/png',
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      };
+      vi.spyOn(mockClient.models, 'generateContent').mockResolvedValue(mockContentResponse as any);
+
+      const payload: CreateImagePayload = {
+        model: 'gemini-2.5-flash-image:image',
+        params: {
+          prompt: 'Portrait orientation',
+          aspectRatio: '9:16',
+        },
+      };
+
+      // Act
+      await createGoogleImage(mockClient, provider, payload);
+
+      // Assert
+      expect(mockClient.models.generateContent).toHaveBeenCalledWith({
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: 'Portrait orientation' }],
+          },
+        ],
+        model: 'gemini-2.5-flash-image',
+        config: {
+          responseModalities: ['Image'],
+          imageConfig: {
+            aspectRatio: '9:16',
+          },
+        },
+      });
+    });
+
     it('should support image editing with base64 imageUrl', async () => {
       // Arrange
       const inputImageBase64 =

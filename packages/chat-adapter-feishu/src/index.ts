@@ -1,4 +1,11 @@
-export { createLarkAdapter, LarkAdapter } from './adapter';
+export {
+  createLarkAdapter,
+  decodeLarkThreadId,
+  downloadMediaFromRawMessage,
+  encodeLarkThreadId,
+  extractMediaMetadata,
+  LarkAdapter,
+} from './adapter';
 export { LarkApiClient } from './api';
 export { decryptLarkEvent } from './crypto';
 export { LarkFormatConverter } from './format-converter';

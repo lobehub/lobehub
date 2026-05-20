@@ -21,6 +21,7 @@ const Doubao: ModelProviderCard = {
     sdkType: 'openai',
     showDeployName: true,
     showModelFetcher: false,
+    supportResponsesApi: true,
   },
   url: 'https://www.volcengine.com/product/ark',
 };

@@ -1,64 +1,74 @@
 'use client';
 
-import { ActionIcon, Flexbox, PopoverGroup } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { cx } from 'antd-style';
-import { ChevronDown, ChevronUp } from 'lucide-react';
-import { memo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { memo, useRef, useState } from 'react';
 
 import { MinimapIndicator } from './MinimapIndicator';
+import { MinimapPreview } from './MinimapPreview';
 import { minimapStyles } from './styles';
 import { useMinimapData } from './useMinimapData';
 import { MIN_MESSAGES_THRESHOLD } from './utils';
 
-const ChatMinimap = memo(() => {
-  const { t } = useTranslation('chat');
-  const styles = minimapStyles;
-  const [isHovered, setIsHovered] = useState(false);
+const CLOSE_DELAY_MS = 120;
 
-  const { indicators, activeIndicatorPosition, handleJump, handleStep } = useMinimapData();
+const ChatMinimap = memo(() => {
+  const styles = minimapStyles;
+  const [hovered, setHovered] = useState(false);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const { indicators, activeIndicatorPosition, handleJump } = useMinimapData();
 
   if (indicators.length <= MIN_MESSAGES_THRESHOLD) return null;
 
+  const handleEnter = () => {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+    setHovered(true);
+  };
+
+  const handleLeave = () => {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = setTimeout(() => {
+      setHovered(false);
+      closeTimerRef.current = null;
+    }, CLOSE_DELAY_MS);
+  };
+
+  const handleJumpAndClose = (virtuosoIndex: number) => {
+    handleJump(virtuosoIndex);
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    setHovered(false);
+  };
+
   return (
-    <Flexbox align={'center'} className={styles.container} justify={'center'}>
-      <Flexbox
-        className={styles.rail}
-        role={'group'}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-      >
-        <ActionIcon
-          aria-label={t('minimap.previousMessage')}
-          className={cx(styles.arrow, isHovered && styles.arrowVisible)}
-          icon={ChevronUp}
-          size={14}
-          onClick={() => handleStep('prev')}
-        />
-        <Flexbox className={styles.railContent}>
-          <PopoverGroup contentLayoutAnimation>
-            {indicators.map(({ id, width, preview, role, virtuosoIndex }, position) => (
-              <MinimapIndicator
-                activePosition={activeIndicatorPosition}
-                id={id}
-                key={id}
-                position={position}
-                preview={preview}
-                role={role}
-                virtuosoIndex={virtuosoIndex}
-                width={width}
-                onJump={handleJump}
-              />
-            ))}
-          </PopoverGroup>
+    <Flexbox className={styles.container}>
+      <Flexbox className={styles.hoverArea} onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
+        <Flexbox className={cx(styles.rail, hovered && styles.railFaded)} role={'group'}>
+          {indicators.map(({ id, width, virtuosoIndex }, position) => (
+            <MinimapIndicator
+              activePosition={activeIndicatorPosition}
+              id={id}
+              key={id}
+              position={position}
+              virtuosoIndex={virtuosoIndex}
+              width={width}
+              onJump={handleJump}
+            />
+          ))}
         </Flexbox>
-        <ActionIcon
-          aria-label={t('minimap.nextMessage')}
-          className={cx(styles.arrow, isHovered && styles.arrowVisible)}
-          icon={ChevronDown}
-          size={14}
-          onClick={() => handleStep('next')}
-        />
+        <div
+          aria-hidden={!hovered}
+          className={cx(styles.previewPanel, hovered && styles.previewPanelVisible)}
+        >
+          <MinimapPreview
+            activePosition={activeIndicatorPosition}
+            indicators={indicators}
+            onJump={handleJumpAndClose}
+          />
+        </div>
       </Flexbox>
     </Flexbox>
   );

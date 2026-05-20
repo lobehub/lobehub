@@ -2,6 +2,12 @@ import type { CredType } from '@lobechat/types';
 
 export const CredsApiName = {
   /**
+   * Connect a Klavis integration service via OAuth
+   * Initiates Klavis OAuth flow for third-party services like Gmail, Google Calendar, etc.
+   */
+  connectKlavisService: 'connectKlavisService',
+
+  /**
    * Get plaintext value of a credential
    * Use when AI needs to access credential value for API calls
    */
@@ -28,6 +34,18 @@ export const CredsApiName = {
 
 export type CredsApiNameType = (typeof CredsApiName)[keyof typeof CredsApiName];
 
+export const LOBEHUB_OAUTH_PROVIDER_IDS = [
+  'github',
+  'linear',
+  'microsoft',
+  'notion',
+  'twitter',
+] as const;
+
+export const LOBEHUB_OAUTH_PROVIDER_LIST = LOBEHUB_OAUTH_PROVIDER_IDS.join(', ');
+
+export type LobehubOAuthProviderId = (typeof LOBEHUB_OAUTH_PROVIDER_IDS)[number];
+
 // ==================== Tool Parameter Types ====================
 
 export interface GetPlaintextCredParams {
@@ -43,9 +61,9 @@ export interface GetPlaintextCredParams {
 
 export interface InitiateOAuthConnectParams {
   /**
-   * The OAuth provider ID (e.g., 'linear', 'microsoft', 'twitter')
+   * The OAuth provider ID (e.g., 'linear', 'microsoft', 'notion', 'twitter')
    */
-  provider: string;
+  provider: LobehubOAuthProviderId;
 }
 
 export interface InitiateOAuthConnectState {
@@ -136,6 +154,34 @@ export interface SaveCredsState {
    * Whether save was successful
    */
   success: boolean;
+}
+
+// ==================== Klavis Service Types ====================
+
+export interface ConnectKlavisServiceParams {
+  /**
+   * The Klavis service identifier to connect (e.g., 'gmail', 'google-calendar')
+   */
+  service: string;
+}
+
+export interface ConnectKlavisServiceState {
+  /**
+   * Whether the service is now connected
+   */
+  connected: boolean;
+  /**
+   * The service identifier
+   */
+  identifier: string;
+  /**
+   * OAuth URL (only present when authorization is needed)
+   */
+  oauthUrl?: string;
+  /**
+   * The service display name
+   */
+  serviceName: string;
 }
 
 // ==================== Context Types ====================

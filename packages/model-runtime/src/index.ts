@@ -38,6 +38,7 @@ export { LobePerplexityAI } from './providers/perplexity';
 export { LobeQwenAI } from './providers/qwen';
 export { LobeStepfunAI } from './providers/stepfun';
 export { LobeStraicoAI } from './providers/straico';
+export { LobeStreamLakeAI } from './providers/streamlake';
 export { LobeTogetherAI } from './providers/togetherai';
 export { LobeVolcengineAI } from './providers/volcengine';
 export { LobeVolcengineCodingPlanAI } from './providers/volcengineCodingPlan';

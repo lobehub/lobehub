@@ -4,7 +4,7 @@ import { type UserCredSummary } from '@lobechat/types';
 import { CopyButton, Flexbox } from '@lobehub/ui';
 import { useQuery } from '@tanstack/react-query';
 import { Alert, Descriptions, Modal, Skeleton, Typography } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { Eye, EyeOff } from 'lucide-react';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,24 +13,24 @@ import { lambdaClient } from '@/libs/trpc/client';
 
 const { Text } = Typography;
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   kvKey: css`
     min-width: 140px;
     padding-block: 8px;
     padding-inline: 12px;
-    border-radius: ${token.borderRadius}px 0 0 ${token.borderRadius}px;
+    border-radius: ${cssVar.borderRadius} 0 0 ${cssVar.borderRadius};
 
-    font-family: ${token.fontFamilyCode};
+    font-family: ${cssVar.fontFamilyCode};
     font-size: 13px;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
 
-    background: ${token.colorFillQuaternary};
+    background: ${cssVar.colorFillQuaternary};
   `,
   kvRow: css`
     display: flex;
     align-items: stretch;
-    border: 1px solid ${token.colorBorderSecondary};
-    border-radius: ${token.borderRadius}px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadius};
 
     &:not(:last-child) {
       margin-block-end: 8px;
@@ -45,15 +45,15 @@ const useStyles = createStyles(({ css, token }) => ({
 
     padding-block: 8px;
     padding-inline: 12px;
-    border-radius: 0 ${token.borderRadius}px ${token.borderRadius}px 0;
+    border-radius: 0 ${cssVar.borderRadius} ${cssVar.borderRadius} 0;
 
-    font-family: ${token.fontFamilyCode};
+    font-family: ${cssVar.fontFamilyCode};
     font-size: 13px;
 
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
   `,
   maskedValue: css`
-    color: ${token.colorTextQuaternary};
+    color: ${cssVar.colorTextQuaternary};
     letter-spacing: 2px;
   `,
   toggleBtn: css`
@@ -64,15 +64,15 @@ const useStyles = createStyles(({ css, token }) => ({
     justify-content: center;
 
     padding: 4px;
-    border-radius: ${token.borderRadiusSM}px;
+    border-radius: ${cssVar.borderRadiusSM};
 
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
 
     transition: all 0.2s;
 
     &:hover {
-      color: ${token.colorText};
-      background: ${token.colorFillSecondary};
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFillSecondary};
     }
   `,
   valuesSection: css`
@@ -96,7 +96,6 @@ interface KVRowProps {
 }
 
 const KVRow: FC<KVRowProps> = ({ keyName, value }) => {
-  const { styles, cx } = useStyles();
   const [visible, setVisible] = useState(false);
 
   return (
@@ -133,7 +132,6 @@ interface ViewCredModalProps {
 
 const ViewCredModal: FC<ViewCredModalProps> = ({ cred, open, onClose }) => {
   const { t } = useTranslation('setting');
-  const { styles } = useStyles();
 
   const { data, isLoading, error } = useQuery({
     enabled: open && !!cred,

@@ -327,9 +327,38 @@ describe('LobeCloudflareAI', () => {
             endpoint: expect.stringMatching(/https:\/\/.+/),
             error: apiError,
             errorType: bizErrorType,
+            message: 'invalid x-api-key',
             provider,
           });
         }
+      });
+
+      it('should surface upstream 400 body as ProviderBizError with message', async () => {
+        // Arrange: fetch resolves with a real 400 Response whose body carries the upstream error detail.
+        const upstreamBody = {
+          error: { message: 'model input exceeds limit', type: 'invalid_request_error' },
+        };
+        (globalThis.fetch as Mock).mockResolvedValue(
+          new Response(JSON.stringify(upstreamBody), {
+            headers: { 'Content-Type': 'application/json' },
+            status: 400,
+          }),
+        );
+
+        // Act & Assert
+        await expect(
+          instance.chat({
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: '@hf/meta-llama/meta-llama-3-8b-instruct',
+            temperature: 0,
+          }),
+        ).rejects.toEqual({
+          endpoint: expect.stringMatching(/https:\/\/.+/),
+          error: upstreamBody,
+          errorType: bizErrorType,
+          message: 'model input exceeds limit',
+          provider,
+        });
       });
 
       it('should throw InvalidProviderAPIKey if no accountID is provided', async () => {
@@ -379,6 +408,7 @@ describe('LobeCloudflareAI', () => {
           endpoint: expect.stringMatching(/https:\/\/.+/),
           error: apiError,
           errorType: bizErrorType,
+          message: 'HTTP 400',
           provider,
         });
       });
@@ -403,6 +433,7 @@ describe('LobeCloudflareAI', () => {
           endpoint: expect.not.stringContaining(accountID),
           error: apiError,
           errorType: bizErrorType,
+          message: 'HTTP 400',
           provider,
         });
       });

@@ -124,6 +124,39 @@ export class LarkApiClient {
   }
 
   // ------------------------------------------------------------------
+  // Media / Resource download
+  // ------------------------------------------------------------------
+
+  /**
+   * Download a message resource (image, file, audio, video, sticker).
+   *
+   * @see https://open.feishu.cn/document/server-docs/im-v1/message-attachment/get
+   * @param messageId - The message_id that contains the resource
+   * @param fileKey   - file_key or image_key from the message content
+   * @param type      - Resource type: 'image' | 'file'
+   */
+  async downloadResource(
+    messageId: string,
+    fileKey: string,
+    type: 'image' | 'file',
+  ): Promise<Buffer> {
+    const token = await this.getTenantAccessToken();
+    const url = `${this.baseUrl}/im/v1/messages/${messageId}/resources/${fileKey}?type=${type}`;
+
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+      method: 'GET',
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Lark downloadResource failed: ${response.status} ${text}`);
+    }
+
+    return Buffer.from(await response.arrayBuffer());
+  }
+
+  // ------------------------------------------------------------------
   // Auth
   // ------------------------------------------------------------------
 

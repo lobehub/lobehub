@@ -49,7 +49,7 @@ const SkeletonList = memo<SkeletonListProps>(({ count = 4 }) => {
   return (
     <Flexbox gap={4}>
       {Array.from({ length: count }).map((_, index) => (
-        <Flexbox className={styles.item} key={index}>
+        <Flexbox horizontal align="center" className={styles.item} gap={12} key={index}>
           <Skeleton.Avatar
             active
             shape="square"

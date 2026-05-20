@@ -22,6 +22,10 @@ describe('getAnalyticsConfig', () => {
     process.env.CLARITY_PROJECT_ID = 'clarity_id';
     process.env.ENABLE_VERCEL_ANALYTICS = '1';
     process.env.GOOGLE_ANALYTICS_MEASUREMENT_ID = 'ga_id';
+    process.env.X_ADS_PIXEL_ID = 'tw-pixel_id';
+    process.env.X_ADS_LOGIN_OR_SIGNUP_CLICKED_EVENT_ID = 'tw-pixel_id-login_or_signup_clicked';
+    process.env.X_ADS_MAIN_PAGE_VIEW_EVENT_ID = 'tw-pixel_id-main_page_view';
+    process.env.X_ADS_PURCHASE_EVENT_ID = 'tw-pixel_id-purchase_event_id';
 
     const config = getAnalyticsConfig();
 
@@ -42,6 +46,11 @@ describe('getAnalyticsConfig', () => {
       DEBUG_VERCEL_ANALYTICS: false,
       ENABLE_GOOGLE_ANALYTICS: true,
       GOOGLE_ANALYTICS_MEASUREMENT_ID: 'ga_id',
+      ENABLED_X_ADS: true,
+      X_ADS_PIXEL_ID: 'tw-pixel_id',
+      X_ADS_LOGIN_OR_SIGNUP_CLICKED_EVENT_ID: 'tw-pixel_id-login_or_signup_clicked',
+      X_ADS_MAIN_PAGE_VIEW_EVENT_ID: 'tw-pixel_id-main_page_view',
+      X_ADS_PURCHASE_EVENT_ID: 'tw-pixel_id-purchase_event_id',
     });
   });
 });

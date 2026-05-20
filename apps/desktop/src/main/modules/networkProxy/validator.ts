@@ -71,9 +71,8 @@ export class ProxyConfigValidator {
    */
   private static isValidHost(host: string): boolean {
     // Simple host validation (IP address or domain name)
-    const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
-    const domainRegex =
-      /^[\dA-Z]([\dA-Z-]*[\dA-Z])?(\.[\dA-Z]([\dA-Z-]*[\dA-Z])?)*$/i;
+    const ipRegex = /^(?:\d{1,3}\.){3}\d{1,3}$/;
+    const domainRegex = /^[\dA-Z](?:[\dA-Z-]*[\dA-Z])?(?:\.[\dA-Z](?:[\dA-Z-]*[\dA-Z])?)*$/i;
 
     return ipRegex.test(host) || domainRegex.test(host);
   }

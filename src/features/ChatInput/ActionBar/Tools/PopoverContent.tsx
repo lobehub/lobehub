@@ -6,18 +6,19 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
+import { ScrollSignalProvider } from './ScrollSignalContext';
 import SkillActivateMode from './SkillActivateMode';
 import ToolsList, { toolsListStyles } from './ToolsList';
 
 const styles = createStaticStyles(({ css }) => ({
   footer: css`
     padding: 4px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+    border-block-start: 1px solid ${cssVar.colorFill};
   `,
   header: css`
     padding-block: 8px;
     padding-inline: 8px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+    border-block-end: 1px solid ${cssVar.colorFill};
   `,
   trailingIcon: css`
     opacity: 0.5;
@@ -81,14 +82,14 @@ const PopoverContent = memo<PopoverContentProps>(({ items, onOpenStore }) => {
         />
         <SkillActivateMode />
       </Flexbox>
-      <div
+      <ScrollSignalProvider
         style={{
           height: 480,
           overflowY: 'auto',
         }}
       >
         <ToolsList items={filteredItems} />
-      </div>
+      </ScrollSignalProvider>
       <div className={styles.footer}>
         <div
           className={toolsListStyles.item}

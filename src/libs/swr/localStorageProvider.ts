@@ -273,6 +273,7 @@ const SWR_CACHEABLE_PATTERNS = [
   'fetchRecentTopics', // Recent topics
   'fetchRecentResources', // Recent resources
   'fetchRecentPages', // Recent pages
+  'fetchRecents', // Unified recents
   // Chat page data
   'SWR_USE_FETCH_TOPIC', // Topic list (cached per agentId/groupId)
   'fetchGroupDetail', // Group detail (cached per groupId)

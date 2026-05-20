@@ -2,6 +2,9 @@ import {
   type AgentEvent,
   type AgentInstruction,
   type AgentInstructionCompressContext,
+  type AgentInstructionExecSubAgent,
+  type AgentInstructionExecSubAgents,
+  type AgentRuntimeContext,
   type AgentState,
   type CallLLMPayload,
   type GeneralAgentCallLLMResultPayload,
@@ -10,10 +13,13 @@ import {
   UsageCounter,
 } from '@lobechat/agent-runtime';
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
+import { CredsIdentifier, type CredSummary, generateCredsList } from '@lobechat/builtin-tool-creds';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
+import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import {
   AGENT_DOCUMENT_INJECTION_POSITIONS,
   type AgentContextDocument,
+  type BotPlatformContext,
   buildStepSkillDelta,
   buildStepToolDelta,
   type LobeToolManifest,
@@ -28,17 +34,30 @@ import {
 import { parse } from '@lobechat/conversation-flow';
 import { consumeStreamUntilDone } from '@lobechat/model-runtime';
 import { chainCompressContext } from '@lobechat/prompts';
-import { type ChatToolPayload, type MessageToolCall, type UIChatMessage } from '@lobechat/types';
-import { serializePartsForStorage } from '@lobechat/utils';
+import {
+  type ChatToolPayload,
+  type ExecSubAgentTaskParams,
+  type MessageToolCall,
+  type UIChatMessage,
+} from '@lobechat/types';
+import { sanitizeToolCallArguments, serializePartsForStorage } from '@lobechat/utils';
 import debug from 'debug';
 
 import { type MessageModel, MessageModel as MessageModelClass } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
+import { UserModel } from '@/database/models/user';
 import { type LobeChatDatabase } from '@/database/type';
 import { serverMessagesEngine } from '@/server/modules/Mecha/ContextEngineering';
 import { type EvalContext } from '@/server/modules/Mecha/ContextEngineering/types';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
+import type { HookDispatcher } from '@/server/services/agentRuntime/hooks/HookDispatcher';
+import {
+  type DeviceAccessReason,
+  isDeviceToolIdentifier,
+  logDeviceToolAudit,
+} from '@/server/services/aiAgent/deviceToolAudit';
+import { FileService } from '@/server/services/file';
 import { MessageService } from '@/server/services/message';
 import { OnboardingService } from '@/server/services/onboarding';
 import {
@@ -46,7 +65,16 @@ import {
   type ToolExecutionService,
 } from '@/server/services/toolExecution';
 
+import { dispatchClientTool } from './dispatchClientTool';
+import { formatErrorEventData } from './formatErrorEventData';
 import { classifyLLMError, type LLMErrorKind } from './llmErrorClassification';
+import {
+  createConversationParentMissingError,
+  isParentMessageMissingError,
+  isPersistFatal,
+  markPersistFatal,
+} from './messagePersistErrors';
+import { resolveToolTimeoutMs } from './resolveToolTimeout';
 import { type IStreamEventManager } from './types';
 
 const log = debug('lobe-server:agent-runtime:streaming-executors');
@@ -88,8 +116,33 @@ const getToolFailureKind = (result: ToolExecutionResultResponse): ToolFailureKin
 const shouldRetryTool = (kind: ToolFailureKind | undefined, attempt: number, maxRetries: number) =>
   kind === 'retry' && attempt <= maxRetries;
 
+// Builds a postProcessUrl callback that resolves S3 keys in file-backed fields
+// (imageList, videoList, fileList) to absolute URLs. Must be passed to every
+// messageModel.query() call whose output is later fed to the LLM — otherwise
+// the provider layer receives raw keys like `files/user_xxx/icon.png` and
+// rejects them (see anthropic contextBuilder `Invalid image URL`).
+//
+// FileService is constructed lazily so environments without S3 config (unit
+// tests) don't fail at context-build time; failure returns undefined, which
+// leaves URLs as raw keys — same behavior as before this helper existed.
+const buildPostProcessUrl = (ctx: Pick<RuntimeExecutorContext, 'serverDB' | 'userId'>) => {
+  if (!ctx.userId || !ctx.serverDB) return undefined;
+  let fileService: FileService | undefined;
+  try {
+    fileService = new FileService(ctx.serverDB, ctx.userId);
+  } catch {
+    return undefined;
+  }
+  return (path: string | null) => fileService!.getFullFileUrl(path);
+};
+
 const shouldRetryLLM = (kind: LLMErrorKind, attempt: number, maxRetries: number) =>
   kind === 'retry' && attempt <= maxRetries;
+
+const resolveLLMMaxRetries = (provider: string) =>
+  // The branded provider already routes through its own fallback chain. Retrying
+  // again here multiplies the same failed routed request across every channel.
+  provider === BRANDING_PROVIDER ? 0 : LLM_MAX_RETRIES;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -166,57 +219,18 @@ const buildToolDiscoveryConfig = (operationToolSet: OperationToolSet, enabledToo
   return { availableTools };
 };
 
-const formatErrorEventData = (error: unknown, phase: string) => {
-  let errorMessage = 'Unknown error';
-  let errorType: string | undefined;
-
-  if (error && typeof error === 'object') {
-    const payload = error as { error?: unknown; errorType?: unknown; message?: unknown };
-
-    if (typeof payload.errorType === 'string') {
-      errorType = payload.errorType;
-    }
-
-    if (typeof payload.message === 'string' && payload.message.length > 0) {
-      errorMessage = payload.message;
-    } else if (typeof payload.error === 'string' && payload.error.length > 0) {
-      errorMessage = payload.error;
-    } else if (
-      payload.error &&
-      typeof payload.error === 'object' &&
-      'message' in payload.error &&
-      typeof payload.error.message === 'string'
-    ) {
-      errorMessage = payload.error.message;
-    } else if (error instanceof Error && error.message.length > 0) {
-      errorMessage = error.message;
-    } else if (errorType) {
-      errorMessage = errorType;
-    }
-  } else if (error instanceof Error && error.message.length > 0) {
-    errorMessage = error.message;
-    errorType = error.name;
-  } else if (typeof error === 'string' && error.length > 0) {
-    errorMessage = error;
-  }
-
-  if (!errorType && error instanceof Error && error.name) {
-    errorType = error.name;
-  }
-
-  return {
-    error: errorMessage,
-    errorType,
-    phase,
-  };
-};
-
 export interface RuntimeExecutorContext {
   agentConfig?: any;
-  botPlatformContext?: any;
+  botPlatformContext?: BotPlatformContext;
   discordContext?: any;
   evalContext?: EvalContext;
-  fileService?: any;
+  /**
+   * Callback to spawn a sub-agent task server-side.
+   * Injected by AiAgentService so exec_sub_agent / exec_sub_agents executors
+   * can dispatch callAgent-triggered tasks without a circular import.
+   */
+  execSubAgentTask?: (params: ExecSubAgentTaskParams) => Promise<unknown>;
+  hookDispatcher?: HookDispatcher;
   loadAgentState?: (operationId: string) => Promise<AgentState | null>;
   messageModel: MessageModel;
   operationId: string;
@@ -246,10 +260,22 @@ export const createRuntimeExecutors = (
     // Fallback to state's modelRuntimeConfig if not in payload
     const model = llmPayload.model || state.modelRuntimeConfig?.model;
     const provider = llmPayload.provider || state.modelRuntimeConfig?.provider;
-    // Resolve tools via ToolResolver (unified tool injection)
-    const activeDeviceId = state.metadata?.activeDeviceId;
+    // Resolve tools via ToolResolver (unified tool injection).
+    //
+    // Belt-and-suspenders: even if `aiAgent.execAgent` ever forgets to clear
+    // `state.metadata.activeDeviceId` for a non-trusted sender, swallowing
+    // it here keeps `buildStepToolDelta` from re-injecting `local-system` —
+    // the engine's enabledToolIds exclusion alone is not enough, since the
+    // delta builder treats activeDeviceId as an independent activation
+    // signal and only dedupes against already-enabled tools.
+    const devicePolicy = state.metadata?.deviceAccessPolicy as
+      | { canUseDevice: boolean; reason: DeviceAccessReason }
+      | undefined;
+    const activeDeviceId =
+      devicePolicy?.canUseDevice === false ? undefined : state.metadata?.activeDeviceId;
     const operationToolSet: OperationToolSet = state.operationToolSet ?? {
       enabledToolIds: [],
+      executorMap: state.toolExecutorMap ?? {},
       manifestMap: state.toolManifestMap ?? {},
       sourceMap: state.toolSourceMap ?? {},
       tools: state.tools ?? [],
@@ -306,6 +332,25 @@ export const createRuntimeExecutors = (
     // Get parentId from payload (parentId or parentMessageId depending on payload type)
     const parentId = llmPayload.parentId || (llmPayload as any).parentMessageId;
 
+    // Parent existence preflight (LOBE-7158 / LOBE-7154):
+    // If the parent was deleted concurrently (e.g. user deleted topic mid-run),
+    // assistant message creation below would hit a PG FK violation AFTER we've
+    // already done the LLM call and spent tokens. Check first — fail fast,
+    // save cost, and surface a typed error the frontend can act on instead of
+    // a raw SQL error.
+    if (parentId) {
+      const parentExists = await ctx.messageModel.findById(parentId);
+      if (!parentExists) {
+        const error = createConversationParentMissingError(parentId);
+        await streamManager.publishStreamEvent(operationId, {
+          data: formatErrorEventData(error, 'parent_message_preflight'),
+          stepIndex,
+          type: 'error',
+        });
+        throw error;
+      }
+    }
+
     // Get or create assistant message
     // If assistantMessageId is provided in payload, use existing message instead of creating new one
     const existingAssistantMessageId = (llmPayload as any).assistantMessageId;
@@ -331,8 +376,14 @@ export const createRuntimeExecutors = (
     }
 
     // Publish stream start event
+    const stepLabel = (instruction as any).stepLabel;
     await streamManager.publishStreamEvent(operationId, {
-      data: { assistantMessage: assistantMessageItem, model, provider },
+      data: {
+        assistantMessage: assistantMessageItem,
+        model,
+        provider,
+        ...(stepLabel && { stepLabel }),
+      },
       stepIndex,
       type: 'stream_start',
     });
@@ -365,11 +416,14 @@ export const createRuntimeExecutors = (
             async (topicId) => topicModel.findById(topicId),
             async (topicId) => {
               const topic = await topicModel.findById(topicId);
-              return messageModel.query({
-                agentId: topic?.agentId ?? undefined,
-                groupId: topic?.groupId ?? undefined,
-                topicId,
-              });
+              return messageModel.query(
+                {
+                  agentId: topic?.agentId ?? undefined,
+                  groupId: topic?.groupId ?? undefined,
+                  topicId,
+                },
+                { postProcessUrl: buildPostProcessUrl(ctx) },
+              );
             },
           );
         }
@@ -424,44 +478,151 @@ export const createRuntimeExecutors = (
           try {
             const { formatWebOnboardingStateMessage } =
               await import('@lobechat/builtin-tool-web-onboarding/utils');
+            const { UserPersonaModel } = await import('@/database/models/userMemory/persona');
             const onboardingService = new OnboardingService(ctx.serverDB, ctx.userId);
-            const onboardingState = await onboardingService.getState();
-            const phaseGuidance = formatWebOnboardingStateMessage(onboardingState);
+            const docService = new AgentDocumentsService(ctx.serverDB, ctx.userId);
+            const personaModel = new UserPersonaModel(ctx.serverDB, ctx.userId);
 
-            // Fetch SOUL.md from inbox agent's documents
-            let soulContent: string | null = null;
-            try {
-              const inboxAgentId = await onboardingService.getInboxAgentId();
-              if (inboxAgentId) {
-                const docService = new AgentDocumentsService(ctx.serverDB, ctx.userId);
-                const soulDoc = await docService.getDocumentByFilename(inboxAgentId, 'SOUL.md');
-                soulContent = soulDoc?.content ?? null;
-              }
-            } catch (error) {
-              log('Failed to fetch SOUL.md for onboarding context: %O', error);
-            }
+            const [onboardingState, soulDoc, persona, userInfo] = await Promise.all([
+              onboardingService.getState(),
+              onboardingService
+                .getInboxAgentId()
+                .then((inboxAgentId) =>
+                  inboxAgentId ? docService.getDocumentByFilename(inboxAgentId, 'SOUL.md') : null,
+                )
+                .catch((error) => {
+                  log('Failed to fetch SOUL.md for onboarding context: %O', error);
+                  return null;
+                }),
+              personaModel.getLatestPersonaDocument().catch((error) => {
+                log('Failed to fetch user persona for onboarding context: %O', error);
+                return null;
+              }),
+              onboardingService.getInitialUserInfo().catch((error) => {
+                log('Failed to fetch initial user info for onboarding context: %O', error);
+                return undefined;
+              }),
+            ]);
 
-            // Fetch user persona
-            let personaContent: string | null = null;
-            try {
-              const { UserPersonaModel } = await import('@/database/models/userMemory/persona');
-              const personaModel = new UserPersonaModel(ctx.serverDB, ctx.userId);
-              const persona = await personaModel.getLatestPersonaDocument();
-              personaContent = persona?.persona ?? null;
-            } catch (error) {
-              log('Failed to fetch user persona for onboarding context: %O', error);
-            }
-
-            onboardingContext = { personaContent, phaseGuidance, soulContent };
+            onboardingContext = {
+              discoveryUserMessageCount: onboardingState.discoveryUserMessageCount,
+              personaContent: persona?.persona ?? null,
+              phaseGuidance: formatWebOnboardingStateMessage(onboardingState),
+              remainingDiscoveryExchanges: onboardingState.remainingDiscoveryExchanges,
+              soulContent: soulDoc?.content ?? null,
+              userInfo,
+            };
             log('Built onboarding context for agent %s, phase: %s', agentId, onboardingState.phase);
           } catch (error) {
             log('Failed to build onboarding context: %O', error);
           }
         }
 
+        // Build additional placeholder variables for the lobehub builtin skill
+        // (`packages/builtin-skills/src/lobehub/content.ts`) so it can render
+        // `{{agent_id}}` / `{{agent_title}}` / `{{topic_id}}` etc. into the
+        // model's prompt without needing a separate context injector.
+        //
+        // - agent_title / agent_description: read directly from agentConfig,
+        //   which is the result of AgentModel.getAgentConfig() and already
+        //   contains the full enriched agent record (title, description, ...).
+        //   No extra query needed.
+        // - topic_title: requires a single primary-key lookup against the
+        //   topics table. Skipped when topicId is missing or the lookup fails
+        //   (best-effort, falls back to empty string so the template still
+        //   renders cleanly).
+        const lobehubSkillAgentId = state.metadata?.agentId;
+        const lobehubSkillTopicId = state.metadata?.topicId;
+        const lobehubSkillAgentMeta = state.metadata?.agentConfig as
+          | { description?: string | null; title?: string | null }
+          | undefined;
+
+        let lobehubSkillTopicTitle = '';
+        if (lobehubSkillTopicId && ctx.serverDB && ctx.userId) {
+          try {
+            const topicModelForLobehub = new TopicModel(ctx.serverDB, ctx.userId);
+            const topicRecord = await topicModelForLobehub.findById(lobehubSkillTopicId);
+            lobehubSkillTopicTitle = topicRecord?.title ?? '';
+          } catch (error) {
+            log('Failed to load topic title for lobehub skill placeholders: %O', error);
+          }
+        }
+
+        const lobehubSkillVariables: Record<string, string> = {
+          agent_id: lobehubSkillAgentId ?? '',
+          agent_title: lobehubSkillAgentMeta?.title ?? '',
+          agent_description: lobehubSkillAgentMeta?.description ?? '',
+          topic_id: lobehubSkillTopicId ?? '',
+          topic_title: lobehubSkillTopicTitle,
+        };
+
+        // ── Tool-specific template variable resolution ────────────────────
+        // The client-side contextEngineering.ts resolves these via Zustand stores
+        // and lambdaClient. In execAgent (server/bot) mode we must fetch from DB
+        // directly. Each block is gated on the relevant tool being enabled.
+
+        // {{username}} / {{language}} — used by memory and creds system roles.
+        // Single indexed DB lookup; cheap enough to run on each call_llm step.
+        let serverUsername = '';
+        let serverLanguage = '';
+        if (ctx.serverDB && ctx.userId) {
+          try {
+            const userInfo = await UserModel.getInfoForAIGeneration(ctx.serverDB, ctx.userId);
+            serverUsername = userInfo.userName;
+            serverLanguage = userInfo.responseLanguage;
+          } catch (error) {
+            log('Failed to fetch user info for {{username}}/{{language}} substitution: %O', error);
+          }
+        }
+
+        // {{sandbox_enabled}} — mirrors client-side check for lobe-cloud-sandbox.
+        const sandboxEnabled = String(resolved.enabledToolIds.includes('lobe-cloud-sandbox'));
+
+        // {{memory_effort}} — read from agentConfig chatConfig; no extra query needed.
+        const memoryEffort = String(
+          (state.metadata?.agentConfig as any)?.chatConfig?.memory?.effort ?? '',
+        );
+
+        // {{CREDS_LIST}} — used by lobe-creds system role.
+        // Mirrors client-side: lambdaClient.market.creds.list.query()
+        const isCredsEnabled = resolved.enabledToolIds.includes(CredsIdentifier);
+        let credsListStr = '';
+        if (isCredsEnabled && ctx.userId) {
+          try {
+            const { MarketService } = await import('@/server/services/market');
+            const marketService = new MarketService({ userInfo: { userId: ctx.userId } });
+            const credsResult = await marketService.market.creds.list();
+            const userCreds = (credsResult as any)?.data ?? [];
+            credsListStr = generateCredsList(
+              userCreds.map(
+                (cred: any): CredSummary => ({
+                  description: cred.description,
+                  key: cred.key,
+                  name: cred.name,
+                  type: cred.type,
+                }),
+              ),
+            );
+            log('Fetched %d creds for {{CREDS_LIST}} substitution', userCreds.length);
+          } catch (error) {
+            log('Failed to fetch creds for {{CREDS_LIST}} substitution: %O', error);
+          }
+        }
+
         const contextEngineInput = {
           agentDocuments,
-          additionalVariables: state.metadata?.deviceSystemInfo,
+          additionalVariables: {
+            ...state.metadata?.deviceSystemInfo,
+            ...lobehubSkillVariables,
+            // User identity variables
+            username: serverUsername,
+            language: serverLanguage,
+            // Creds tool variables
+            sandbox_enabled: sandboxEnabled,
+            ...(isCredsEnabled && { CREDS_LIST: credsListStr }),
+            // Memory tool variables
+            memory_effort: memoryEffort,
+          },
           userTimezone: ctx.userTimezone,
           capabilities: {
             isCanUseFC: (m: string, p: string) => {
@@ -471,16 +632,20 @@ export const createRuntimeExecutors = (
               return info?.abilities?.functionCall ?? true;
             },
             isCanUseVideo: (m: string, p: string) => {
-              const info = LOBE_DEFAULT_MODEL_LIST.find(
-                (item) => item.id === m && item.providerId === p,
-              );
+              const info =
+                LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === m && item.providerId === p) ??
+                LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === m);
               return info?.abilities?.video ?? false;
             },
             isCanUseVision: (m: string, p: string) => {
-              const info = LOBE_DEFAULT_MODEL_LIST.find(
-                (item) => item.id === m && item.providerId === p,
-              );
-              return info?.abilities?.vision ?? true;
+              // Aggregator providers (e.g. lobehub) route to upstream model cards
+              // that live under the original provider's id in the registry, so
+              // fall back to a cross-provider lookup by model id when the
+              // (model, provider) pair has no direct entry.
+              const info =
+                LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === m && item.providerId === p) ??
+                LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === m);
+              return info?.abilities?.vision ?? false;
             },
           },
           botPlatformContext: ctx.botPlatformContext,
@@ -489,6 +654,7 @@ export const createRuntimeExecutors = (
           evalContext: ctx.evalContext,
           forceFinish: state.forceFinish,
           historyCount: agentConfig.chatConfig?.historyCount ?? undefined,
+          initialContext: (state as any).initialContext?.initialContext,
           knowledge: {
             fileContents: agentConfig.files
               ?.filter((f: { enabled?: boolean | null }) => f.enabled === true)
@@ -515,10 +681,13 @@ export const createRuntimeExecutors = (
           },
           userMemory: state.metadata?.userMemory,
 
-          // Skills configuration for <available_skills> injection
+          // Skills configuration for <available_skills> injection.
+          // In chat mode the MessagesEngine force-disables this injector via
+          // its `enableAgentMode` param — no extra gate needed here.
           ...(resolvedSkills?.enabledSkills?.length && {
             skillsConfig: { enabledSkills: resolvedSkills.enabledSkills },
           }),
+          enableAgentMode: agentConfig.chatConfig?.enableAgentMode,
 
           // Topic reference summaries
           ...(topicReferences && { topicReferences }),
@@ -620,7 +789,8 @@ export const createRuntimeExecutors = (
         }
       };
 
-      const maxAttempts = LLM_MAX_RETRIES + 1;
+      const llmMaxRetries = resolveLLMMaxRetries(provider);
+      const maxAttempts = llmMaxRetries + 1;
 
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         let content = '';
@@ -630,6 +800,7 @@ export const createRuntimeExecutors = (
         const imageList: any[] = [];
         let grounding: any = null;
         let currentStepUsage: any = undefined;
+        let currentStepFinishReason: string | undefined = undefined;
         let streamError: any = undefined;
         const contentParts: ContentPart[] = [];
         const reasoningParts: ContentPart[] = [];
@@ -670,6 +841,12 @@ export const createRuntimeExecutors = (
                 // Capture usage (may or may not include cost)
                 if (data.usage) {
                   currentStepUsage = data.usage;
+                }
+                // Capture provider's terminal finishReason so soft interrupts
+                // (e.g. Gemini RECITATION / MAX_TOKENS with empty content)
+                // are visible in tracing instead of being silently swallowed.
+                if (data.finishReason) {
+                  currentStepFinishReason = data.finishReason;
                 }
               },
               onGrounding: async (groundingData) => {
@@ -722,9 +899,17 @@ export const createRuntimeExecutors = (
               },
               onToolsCalling: async ({ toolsCalling: raw }) => {
                 const resolvedCalls = new ToolNameResolver().resolve(raw, resolved.manifestMap);
-                // Add source field from resolved sourceMap for routing tool execution
+                // Attach source (origin) and executor (dispatch target) for routing.
+                // `arguments` are kept RAW here on purpose so the tool executor can
+                // still detect malformed JSON and return an `INVALID_JSON_ARGUMENTS`
+                // tool-result with the original bad string — that's the
+                // self-reflection signal the model needs to fix its own output.
+                // Sanitization happens later, only at the persist boundaries
+                // (DB write and state.messages push) to protect strict providers
+                // replaying history. See LOBE-7761.
                 const payload = resolvedCalls.map((p) => ({
                   ...p,
+                  executor: resolved.executorMap?.[p.identifier],
                   source: resolved.sourceMap[p.identifier],
                 }));
                 // log(`[${operationLogId}][toolsCalling]`, payload);
@@ -801,7 +986,13 @@ export const createRuntimeExecutors = (
 
           // Add a complete llm_stream event (including all streaming chunks)
           events.push({
-            result: { content, reasoning: thinkingContent, tool_calls, usage: currentStepUsage },
+            result: {
+              content,
+              finishReason: currentStepFinishReason,
+              reasoning: thinkingContent,
+              tool_calls,
+              usage: currentStepUsage,
+            },
             type: 'llm_result',
           });
 
@@ -810,6 +1001,7 @@ export const createRuntimeExecutors = (
             data: {
               finalContent: content,
               grounding,
+              ...(stepLabel && { stepLabel }),
               imageList: imageList.length > 0 ? imageList : undefined,
               reasoning: thinkingContent || undefined,
               toolsCalling,
@@ -850,13 +1042,24 @@ export const createRuntimeExecutors = (
               metadata.isMultimodal = true;
             }
 
+            // Sanitize tool_call `arguments` before persisting to DB so malformed
+            // JSON (e.g. Qwen emitting `{, ...}`) can't poison future context
+            // builds and 400 strict providers like NVIDIA NIM. See LOBE-7761.
+            const persistedTools =
+              toolsCalling.length > 0
+                ? toolsCalling.map((t) => ({
+                    ...t,
+                    arguments: sanitizeToolCallArguments(t.arguments),
+                  }))
+                : undefined;
+
             await ctx.messageModel.update(assistantMessageItem.id, {
               content: finalContent,
               imageList: imageList.length > 0 ? imageList : undefined,
               metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
               reasoning: finalReasoning,
               search: grounding,
-              tools: toolsCalling.length > 0 ? toolsCalling : undefined,
+              tools: persistedTools,
             });
           } catch (error) {
             console.error('[call_llm] Failed to update message:', error);
@@ -865,10 +1068,31 @@ export const createRuntimeExecutors = (
           // ===== 2. Then accumulate to AgentState =====
           const newState = structuredClone(state);
 
+          // state.messages flows into the next LLM call payload, so entries
+          // must be safe for strict-provider history replay:
+          //   - drop tool_calls with empty name (undispatchable, and strict
+          //     providers 400 on nameless entries)
+          //   - coerce malformed JSON `arguments` to valid JSON
+          const sanitizedToolCalls =
+            tool_calls.length > 0
+              ? tool_calls
+                  .filter((tc) => !!tc.function.name)
+                  .map((tc) => ({
+                    ...tc,
+                    function: {
+                      ...tc.function,
+                      arguments: sanitizeToolCallArguments(tc.function.arguments),
+                    },
+                  }))
+              : [];
+          const stateToolCalls = sanitizedToolCalls.length > 0 ? sanitizedToolCalls : undefined;
+
           newState.messages.push({
             content,
+            id: assistantMessageItem.id,
+            reasoning: finalReasoning,
             role: 'assistant',
-            tool_calls: tool_calls.length > 0 ? tool_calls : undefined,
+            tool_calls: stateToolCalls,
           });
 
           if (currentStepUsage) {
@@ -883,6 +1107,12 @@ export const createRuntimeExecutors = (
 
             newState.usage = usage;
             if (cost) newState.cost = cost;
+          }
+
+          // Propagate stepLabel from instruction to state metadata for hook consumers
+          if (stepLabel) {
+            if (!newState.metadata) newState.metadata = {};
+            newState.metadata._stepLabel = stepLabel;
           }
 
           return {
@@ -913,7 +1143,7 @@ export const createRuntimeExecutors = (
           const classified = classifyLLMError(error);
           const interrupted = await isOperationInterrupted(ctx);
 
-          if (!interrupted && shouldRetryLLM(classified.kind, attempt, LLM_MAX_RETRIES)) {
+          if (!interrupted && shouldRetryLLM(classified.kind, attempt, llmMaxRetries)) {
             const delayMs = getLLMRetryDelayMs(attempt);
 
             log(
@@ -1001,12 +1231,32 @@ export const createRuntimeExecutors = (
       };
     }
 
+    if (ctx.hookDispatcher) {
+      ctx.hookDispatcher
+        .dispatch(
+          operationId,
+          'beforeCompact',
+          {
+            messageCount: messagesToCompress.length,
+            operationId,
+            stepIndex,
+            tokenCount: currentTokenCount,
+            userId: ctx.userId,
+          },
+          state.metadata?._hooks,
+        )
+        .catch(() => {});
+    }
+
     try {
-      const dbMessages = await ctx.messageModel.query({
-        agentId: state.metadata?.agentId,
-        threadId: state.metadata?.threadId,
-        topicId,
-      });
+      const dbMessages = await ctx.messageModel.query(
+        {
+          agentId: state.metadata?.agentId,
+          threadId: state.metadata?.threadId,
+          topicId,
+        },
+        { postProcessUrl: buildPostProcessUrl(ctx) },
+      );
 
       const messageIds = dbMessages
         .filter(
@@ -1164,6 +1414,25 @@ export const createRuntimeExecutors = (
         type: 'compression_complete',
       });
 
+      if (ctx.hookDispatcher) {
+        ctx.hookDispatcher
+          .dispatch(
+            operationId,
+            'afterCompact',
+            {
+              groupId: compressionResult.messageGroupId,
+              messagesAfter: compressedMessages.length,
+              messagesBefore: messagesToCompress.length,
+              operationId,
+              stepIndex,
+              summary: summaryContent.slice(0, 500),
+              userId: ctx.userId,
+            },
+            state.metadata?._hooks,
+          )
+          .catch(() => {});
+      }
+
       return {
         events,
         newState,
@@ -1188,6 +1457,23 @@ export const createRuntimeExecutors = (
         currentTokenCount,
         error,
       );
+
+      if (ctx.hookDispatcher) {
+        ctx.hookDispatcher
+          .dispatch(
+            operationId,
+            'onCompactError',
+            {
+              error: error instanceof Error ? error.message : String(error),
+              operationId,
+              stepIndex,
+              tokenCount: currentTokenCount,
+              userId: ctx.userId,
+            },
+            state.metadata?._hooks,
+          )
+          .catch(() => {});
+      }
 
       events.push({ error, type: 'compression_error' });
 
@@ -1230,12 +1516,24 @@ export const createRuntimeExecutors = (
       type: 'tool_start',
     });
 
+    // payload is { parentMessageId, toolCalling: ChatToolPayload }
+    const chatToolPayload: ChatToolPayload = payload.toolCalling;
+
+    const toolName = `${chatToolPayload.identifier}/${chatToolPayload.apiName}`;
+    const existingToolStats = state.usage?.tools?.byTool?.find((t) => t.name === toolName);
+    const callIndex = (existingToolStats?.calls ?? 0) + 1;
+
+    let parsedArgs: Record<string, any> = {};
     try {
-      // payload is { parentMessageId, toolCalling: ChatToolPayload }
-      const chatToolPayload: ChatToolPayload = payload.toolCalling;
+      parsedArgs =
+        typeof chatToolPayload.arguments === 'string'
+          ? JSON.parse(chatToolPayload.arguments)
+          : (chatToolPayload.arguments ?? {});
+    } catch {
+      // Keep malformed tool arguments as an empty preview payload; execution still uses raw args.
+    }
 
-      const toolName = `${chatToolPayload.identifier}/${chatToolPayload.apiName}`;
-
+    try {
       // Check if this is a client-side function tool — pause instead of executing
       const toolSource =
         state.operationToolSet?.sourceMap?.[chatToolPayload.identifier] ??
@@ -1289,32 +1587,150 @@ export const createRuntimeExecutors = (
         ),
       };
 
-      // Execute tool using ToolExecutionService
-      log(`[${operationLogId}] Executing tool ${toolName} ...`);
-      const execution = await executeToolWithRetry(
-        () =>
-          toolExecutionService.executeTool(chatToolPayload, {
-            activeDeviceId: state.metadata?.activeDeviceId,
-            agentId: state.metadata?.agentId,
-            memoryToolPermission: agentConfig?.chatConfig?.memory?.toolPermission,
-            serverDB: ctx.serverDB,
-            taskId: state.metadata?.taskId,
-            toolManifestMap: effectiveManifestMap,
-            toolResultMaxLength,
-            topicId: ctx.topicId,
-            userId: ctx.userId,
-          }),
-        {
-          isInterrupted: () => isOperationInterrupted(ctx),
-          maxRetries: TOOL_MAX_RETRIES,
-          operationLogId,
-          toolName,
-        },
-      );
+      // Route to client via Agent Gateway WS when the tool is marked
+      // executor='client' and the current stream manager can reach a gateway.
+      // Falls through to the normal server path if either is unavailable.
+      const canDispatchToClient =
+        chatToolPayload.executor === 'client' &&
+        typeof streamManager.sendToolExecute === 'function';
+
+      let toolCallMocked = false;
+      const hookResult = ctx.hookDispatcher
+        ? await (async () => {
+            // 1. dispatch for observation (webhook in production, local handler logging)
+            ctx
+              .hookDispatcher!.dispatch(
+                operationId,
+                'beforeToolCall',
+                {
+                  apiName: chatToolPayload.apiName,
+                  args: parsedArgs,
+                  callIndex,
+                  identifier: chatToolPayload.identifier,
+                  operationId,
+                  stepIndex,
+                  userId: ctx.userId,
+                },
+                state.metadata?._hooks,
+              )
+              .catch(() => {});
+            // 2. dispatchBeforeToolCall for mock support (local-only)
+            return ctx.hookDispatcher!.dispatchBeforeToolCall(operationId, {
+              apiName: chatToolPayload.apiName,
+              args: parsedArgs,
+              callIndex,
+              identifier: chatToolPayload.identifier,
+              stepIndex,
+            });
+          })()
+        : null;
+
+      let execution: { result: ToolExecutionResultResponse; attempts: number };
+      if (isDeviceToolIdentifier(chatToolPayload.identifier) && !hookResult?.isMocked) {
+        // Per-call audit for device tools (local-system / remote-device).
+        // Emitted before dispatch so the record exists even if dispatch
+        // throws. We rely on the engine's enable gate to keep `canUseDevice`
+        // true here; recording the policy reason inline lets an operator
+        // distinguish first-party vs bot-owner runs without joining logs.
+        const policy = state.metadata?.deviceAccessPolicy as
+          | { canUseDevice: boolean; reason: DeviceAccessReason }
+          | undefined;
+        logDeviceToolAudit({
+          apiName: chatToolPayload.apiName,
+          botContext: state.metadata?.botContext,
+          canUseDevice: policy?.canUseDevice ?? true,
+          messageId: state.metadata?.sourceMessageId,
+          operationId,
+          reason: policy?.reason ?? 'first-party',
+          toolIdentifier: chatToolPayload.identifier,
+          topicId: ctx.topicId,
+          userId: ctx.userId,
+        });
+      }
+
+      if (hookResult?.isMocked) {
+        log(`[${operationLogId}] Tool ${toolName} mocked by beforeToolCall hook`);
+        toolCallMocked = true;
+        execution = {
+          attempts: 0,
+          result: { content: hookResult.content, executionTime: 0, success: true },
+        };
+      } else if (canDispatchToClient) {
+        log(`[${operationLogId}] Dispatching tool ${toolName} to client via Agent Gateway`);
+        const timeoutMs = resolveToolTimeoutMs({
+          apiName: chatToolPayload.apiName,
+          args: parsedArgs,
+          manifest: effectiveManifestMap[chatToolPayload.identifier],
+        });
+        const dispatchResult = await dispatchClientTool(chatToolPayload, {
+          operationId,
+          streamManager,
+          timeoutMs,
+        });
+        execution = { attempts: 1, result: dispatchResult };
+      } else {
+        // Inject source from sourceMap so BuiltinToolsExecutor can route
+        // lobehubSkill / klavis tools correctly (LLM responses don't carry source)
+        if (toolSource && !chatToolPayload.source) {
+          chatToolPayload.source = toolSource;
+        }
+
+        // Execute tool using ToolExecutionService
+        log(`[${operationLogId}] Executing tool ${toolName} ...`);
+        execution = await executeToolWithRetry(
+          () =>
+            toolExecutionService.executeTool(chatToolPayload, {
+              activeDeviceId: state.metadata?.activeDeviceId,
+              agentId: state.metadata?.agentId,
+              documentId: state.metadata?.documentId,
+              groupId: state.metadata?.groupId,
+              memoryToolPermission: agentConfig?.chatConfig?.memory?.toolPermission,
+              messageId: state.metadata?.sourceMessageId,
+              operationId,
+              scope: state.metadata?.scope,
+              serverDB: ctx.serverDB,
+              taskId: state.metadata?.taskId,
+              threadId: state.metadata?.threadId,
+              toolCallId: chatToolPayload.id,
+              toolManifestMap: effectiveManifestMap,
+              toolResultMaxLength,
+              topicId: ctx.topicId,
+              userId: ctx.userId,
+            }),
+          {
+            isInterrupted: () => isOperationInterrupted(ctx),
+            maxRetries: TOOL_MAX_RETRIES,
+            operationLogId,
+            toolName,
+          },
+        );
+      }
 
       const executionResult = execution.result;
       const executionTime = executionResult.executionTime;
       const isSuccess = executionResult.success;
+      if (ctx.hookDispatcher) {
+        ctx.hookDispatcher
+          .dispatch(
+            operationId,
+            'afterToolCall',
+            {
+              apiName: chatToolPayload.apiName,
+              args: parsedArgs,
+              callIndex,
+              content: executionResult.content,
+              executionTimeMs: executionTime,
+              identifier: chatToolPayload.identifier,
+              mocked: toolCallMocked,
+              operationId,
+              stepIndex,
+              success: isSuccess,
+              userId: ctx.userId,
+            },
+            state.metadata?._hooks,
+          )
+          .catch(() => {});
+      }
       log(
         `[${operationLogId}] Executing ${toolName} in ${executionTime}ms, result: %O`,
         executionResult,
@@ -1335,25 +1751,60 @@ export const createRuntimeExecutors = (
         type: 'tool_end',
       });
 
-      // Finally update database
+      // Finally persist to database. In resumption mode (skipCreateToolMessage),
+      // the pending tool message already exists from request_human_approve, so
+      // we update it in-place rather than inserting a new row — inserting would
+      // either duplicate the tool_call_id or violate parent_id FK (LOBE-7154).
       let toolMessageId: string | undefined;
       try {
-        const toolMessage = await ctx.messageModel.create({
-          agentId: state.metadata!.agentId!,
-          content: executionResult.content,
-          metadata: { toolExecutionTimeMs: executionTime },
-          parentId: payload.parentMessageId,
-          plugin: chatToolPayload as any,
-          pluginError: executionResult.error,
-          pluginState: executionResult.state,
-          role: 'tool',
-          threadId: state.metadata?.threadId,
-          tool_call_id: chatToolPayload.id,
-          topicId: state.metadata?.topicId,
-        });
-        toolMessageId = toolMessage.id;
+        if (payload.skipCreateToolMessage) {
+          toolMessageId = payload.parentMessageId;
+          await ctx.messageModel.updateToolMessage(toolMessageId, {
+            content: executionResult.content,
+            metadata: { toolExecutionTimeMs: executionTime },
+            pluginError: executionResult.error,
+            pluginState: executionResult.state,
+          });
+          log(
+            '[%s:%d] Updated existing tool message %s (skipCreateToolMessage)',
+            operationId,
+            stepIndex,
+            toolMessageId,
+          );
+        } else {
+          const toolMessage = await ctx.messageModel.create({
+            agentId: state.metadata!.agentId!,
+            content: executionResult.content,
+            metadata: { toolExecutionTimeMs: executionTime },
+            parentId: payload.parentMessageId,
+            plugin: chatToolPayload as any,
+            pluginError: executionResult.error,
+            pluginState: executionResult.state,
+            role: 'tool',
+            threadId: state.metadata?.threadId,
+            tool_call_id: chatToolPayload.id,
+            topicId: state.metadata?.topicId,
+          });
+          toolMessageId = toolMessage.id;
+        }
       } catch (error) {
-        console.error('[StreamingToolExecutor] Failed to create tool message: %O', error);
+        console.error('[StreamingToolExecutor] Failed to persist tool message: %O', error);
+        // Normalize BEFORE publishing so clients (which treat `error` stream
+        // events as terminal and surface `event.data.error` directly) see the
+        // typed business error, not the raw SQL / driver text.
+        const fatal = isParentMessageMissingError(error)
+          ? createConversationParentMissingError(payload.parentMessageId, error)
+          : error instanceof Error
+            ? error
+            : new Error(String(error));
+        await streamManager.publishStreamEvent(operationId, {
+          data: formatErrorEventData(fatal, 'tool_message_persist'),
+          stepIndex,
+          type: 'error',
+        });
+        // Mark so the outer catch (which normally converts tool-exec errors
+        // into event records and returns the unchanged state) re-throws.
+        throw markPersistFatal(fatal);
       }
 
       const newState = structuredClone(state);
@@ -1425,6 +1876,15 @@ export const createRuntimeExecutors = (
 
       log('[%s:%d] Tool execution completed', operationId, stepIndex);
 
+      // When the tool result carries an execSubAgent / execSubAgents state the
+      // GeneralChatAgent needs `stop: true` in the payload to detect it and
+      // emit the matching exec_sub_agent / exec_sub_agents instruction.  Without
+      // this flag the agent falls through to the normal LLM-call path and the
+      // sub-agent is never spawned.
+      const execTaskStateType = executionResult.state?.type as string | undefined;
+      const isExecTaskState =
+        execTaskStateType === 'execSubAgent' || execTaskStateType === 'execSubAgents';
+
       return {
         events,
         newState,
@@ -1435,6 +1895,7 @@ export const createRuntimeExecutors = (
             isSuccess,
             // Pass tool message ID as parentMessageId for the next LLM call
             parentMessageId: toolMessageId,
+            ...(isExecTaskState && { stop: true }),
             toolCall: chatToolPayload,
             toolCallId: chatToolPayload.id,
           },
@@ -1455,6 +1916,31 @@ export const createRuntimeExecutors = (
         },
       };
     } catch (error) {
+      // Persist-level failures (parent FK violation etc.) must propagate so
+      // the step fails — otherwise the swallow-and-continue path keeps
+      // running the agent on a broken conversation chain. See LOBE-7158.
+      if (isPersistFatal(error)) throw error;
+
+      if (ctx.hookDispatcher) {
+        ctx.hookDispatcher
+          .dispatch(
+            operationId,
+            'onToolCallError',
+            {
+              apiName: chatToolPayload.apiName,
+              args: parsedArgs,
+              callIndex,
+              error: error instanceof Error ? error.message : String(error),
+              identifier: chatToolPayload.identifier,
+              operationId,
+              stepIndex,
+              userId: ctx.userId,
+            },
+            state.metadata?._hooks,
+          )
+          .catch(() => {});
+      }
+
       // Publish tool execution error event
       await streamManager.publishStreamEvent(operationId, {
         data: formatErrorEventData(error, 'tool_execution'),
@@ -1555,6 +2041,21 @@ export const createRuntimeExecutors = (
           type: 'tool_start',
         });
 
+        const batchToolName = `${chatToolPayload.identifier}/${chatToolPayload.apiName}`;
+        const batchExistingStats = state.usage?.tools?.byTool?.find(
+          (t) => t.name === batchToolName,
+        );
+        const batchCallIndex = (batchExistingStats?.calls ?? 0) + 1;
+        let batchParsedArgs: Record<string, any> = {};
+        try {
+          batchParsedArgs =
+            typeof chatToolPayload.arguments === 'string'
+              ? JSON.parse(chatToolPayload.arguments)
+              : (chatToolPayload.arguments ?? {});
+        } catch {
+          // Keep malformed tool arguments as an empty preview payload; execution still uses raw args.
+        }
+
         try {
           log(`[${operationLogId}] Executing tool ${toolName} ...`);
           // Build effective manifest map (operation + step-level activations)
@@ -1569,30 +2070,141 @@ export const createRuntimeExecutors = (
 
           const batchAgentConfig = state.metadata?.agentConfig;
 
-          const execution = await executeToolWithRetry(
-            () =>
-              toolExecutionService.executeTool(chatToolPayload, {
-                activeDeviceId: state.metadata?.activeDeviceId,
-                agentId: state.metadata?.agentId,
-                memoryToolPermission: batchAgentConfig?.chatConfig?.memory?.toolPermission,
-                serverDB: ctx.serverDB,
-                taskId: state.metadata?.taskId,
-                toolManifestMap: batchManifestMap,
-                toolResultMaxLength: batchAgentConfig?.chatConfig?.toolResultMaxLength,
-                topicId: ctx.topicId,
-                userId: ctx.userId,
-              }),
-            {
-              isInterrupted: () => isOperationInterrupted(ctx),
-              maxRetries: TOOL_MAX_RETRIES,
-              operationLogId,
-              toolName,
-            },
-          );
+          const canDispatchToClient =
+            chatToolPayload.executor === 'client' &&
+            typeof streamManager.sendToolExecute === 'function';
+
+          let batchToolCallMocked = false;
+          const batchHookResult = ctx.hookDispatcher
+            ? await (async () => {
+                ctx
+                  .hookDispatcher!.dispatch(
+                    operationId,
+                    'beforeToolCall',
+                    {
+                      apiName: chatToolPayload.apiName,
+                      args: batchParsedArgs,
+                      callIndex: batchCallIndex,
+                      identifier: chatToolPayload.identifier,
+                      operationId,
+                      stepIndex,
+                      userId: ctx.userId,
+                    },
+                    state.metadata?._hooks,
+                  )
+                  .catch(() => {});
+                return ctx.hookDispatcher!.dispatchBeforeToolCall(operationId, {
+                  apiName: chatToolPayload.apiName,
+                  args: batchParsedArgs,
+                  callIndex: batchCallIndex,
+                  identifier: chatToolPayload.identifier,
+                  stepIndex,
+                });
+              })()
+            : null;
+
+          if (isDeviceToolIdentifier(chatToolPayload.identifier) && !batchHookResult?.isMocked) {
+            const policy = state.metadata?.deviceAccessPolicy as
+              | { canUseDevice: boolean; reason: DeviceAccessReason }
+              | undefined;
+            logDeviceToolAudit({
+              apiName: chatToolPayload.apiName,
+              botContext: state.metadata?.botContext,
+              canUseDevice: policy?.canUseDevice ?? true,
+              messageId: state.metadata?.sourceMessageId,
+              operationId,
+              reason: policy?.reason ?? 'first-party',
+              toolIdentifier: chatToolPayload.identifier,
+              topicId: ctx.topicId,
+              userId: ctx.userId,
+            });
+          }
+
+          let execution: { result: ToolExecutionResultResponse; attempts: number };
+          if (batchHookResult?.isMocked) {
+            log(`[${operationLogId}] Tool ${toolName} mocked by beforeToolCall hook`);
+            batchToolCallMocked = true;
+            execution = {
+              attempts: 0,
+              result: { content: batchHookResult.content, executionTime: 0, success: true },
+            };
+          } else if (canDispatchToClient) {
+            log(`[${operationLogId}] Dispatching tool ${toolName} to client via Agent Gateway`);
+            const timeoutMs = resolveToolTimeoutMs({
+              apiName: chatToolPayload.apiName,
+              args: batchParsedArgs,
+              manifest: batchManifestMap[chatToolPayload.identifier],
+            });
+            const dispatchResult = await dispatchClientTool(chatToolPayload, {
+              operationId,
+              streamManager,
+              timeoutMs,
+            });
+            execution = { attempts: 1, result: dispatchResult };
+          } else {
+            // Inject source from sourceMap so BuiltinToolsExecutor can route
+            // lobehubSkill / klavis tools correctly (LLM responses don't carry source)
+            const batchToolSource =
+              state.operationToolSet?.sourceMap?.[chatToolPayload.identifier] ??
+              state.toolSourceMap?.[chatToolPayload.identifier];
+            if (batchToolSource && !chatToolPayload.source) {
+              chatToolPayload.source = batchToolSource;
+            }
+
+            execution = await executeToolWithRetry(
+              () =>
+                toolExecutionService.executeTool(chatToolPayload, {
+                  activeDeviceId: state.metadata?.activeDeviceId,
+                  agentId: state.metadata?.agentId,
+                  documentId: state.metadata?.documentId,
+                  groupId: state.metadata?.groupId,
+                  memoryToolPermission: batchAgentConfig?.chatConfig?.memory?.toolPermission,
+                  messageId: state.metadata?.sourceMessageId,
+                  operationId,
+                  scope: state.metadata?.scope,
+                  serverDB: ctx.serverDB,
+                  taskId: state.metadata?.taskId,
+                  threadId: state.metadata?.threadId,
+                  toolCallId: chatToolPayload.id,
+                  toolManifestMap: batchManifestMap,
+                  toolResultMaxLength: batchAgentConfig?.chatConfig?.toolResultMaxLength,
+                  topicId: ctx.topicId,
+                  userId: ctx.userId,
+                }),
+              {
+                isInterrupted: () => isOperationInterrupted(ctx),
+                maxRetries: TOOL_MAX_RETRIES,
+                operationLogId,
+                toolName,
+              },
+            );
+          }
 
           const executionResult = execution.result;
           const executionTime = executionResult.executionTime;
           const isSuccess = executionResult.success;
+          if (ctx.hookDispatcher) {
+            ctx.hookDispatcher
+              .dispatch(
+                operationId,
+                'afterToolCall',
+                {
+                  apiName: chatToolPayload.apiName,
+                  args: batchParsedArgs,
+                  callIndex: batchCallIndex,
+                  content: executionResult.content,
+                  executionTimeMs: executionTime,
+                  identifier: chatToolPayload.identifier,
+                  mocked: batchToolCallMocked,
+                  operationId,
+                  stepIndex,
+                  success: isSuccess,
+                  userId: ctx.userId,
+                },
+                state.metadata?._hooks,
+              )
+              .catch(() => {});
+          }
           log(
             `[${operationLogId}] Executed ${toolName} in ${executionTime}ms, success: ${isSuccess}`,
           );
@@ -1634,6 +2246,23 @@ export const createRuntimeExecutors = (
               `[${operationLogId}] Failed to create tool message for ${toolName}:`,
               error,
             );
+            // Normalize BEFORE publishing — clients treat `error` stream
+            // events as terminal and surface `event.data.error` directly, so
+            // a raw SQL error here would leak driver text to the user before
+            // the ConversationParentMissing throw is consumed. See LOBE-7158.
+            const fatal = isParentMessageMissingError(error)
+              ? createConversationParentMissingError(parentMessageId, error)
+              : error instanceof Error
+                ? error
+                : new Error(String(error));
+            await streamManager.publishStreamEvent(operationId, {
+              data: formatErrorEventData(fatal, 'tool_message_persist'),
+              stepIndex,
+              type: 'error',
+            });
+            // Marker so the outer catch (which normally just records
+            // per-tool exec errors) knows to propagate this one.
+            throw markPersistFatal(fatal);
           }
 
           // Collect tool result
@@ -1656,6 +2285,33 @@ export const createRuntimeExecutors = (
             toolName,
           };
         } catch (error) {
+          // Persist-level failures (e.g. parent FK violations) must propagate
+          // so the whole batch short-circuits. Without this the fallback to
+          // the already-deleted parent triggers another FK on the next step.
+          if (isPersistFatal(error)) {
+            throw error;
+          }
+
+          if (ctx.hookDispatcher) {
+            ctx.hookDispatcher
+              .dispatch(
+                operationId,
+                'onToolCallError',
+                {
+                  apiName: chatToolPayload.apiName,
+                  args: batchParsedArgs,
+                  callIndex: batchCallIndex,
+                  error: error instanceof Error ? error.message : String(error),
+                  identifier: chatToolPayload.identifier,
+                  operationId,
+                  stepIndex,
+                  userId: ctx.userId,
+                },
+                state.metadata?._hooks,
+              )
+              .catch(() => {});
+          }
+
           console.error(`[${operationLogId}] Tool execution failed for ${toolName}:`, error);
 
           // Publish error event
@@ -1727,11 +2383,17 @@ export const createRuntimeExecutors = (
     // Query latest messages from database
     // Must pass agentId to ensure correct query scope, otherwise when topicId is undefined,
     // the query will use isNull(topicId) condition which won't find messages with actual topicId
-    const latestMessages = await ctx.messageModel.query({
-      agentId: state.metadata?.agentId,
-      threadId: state.metadata?.threadId,
-      topicId: state.metadata?.topicId,
-    });
+    //
+    // postProcessUrl resolves S3 keys in imageList/videoList/fileList to absolute URLs;
+    // without it the next LLM call sees raw keys and providers reject them.
+    const latestMessages = await ctx.messageModel.query(
+      {
+        agentId: state.metadata?.agentId,
+        threadId: state.metadata?.threadId,
+        topicId: state.metadata?.topicId,
+      },
+      { postProcessUrl: buildPostProcessUrl(ctx) },
+    );
 
     // Use conversation-flow parse to resolve branching into linear flat list
     // parse() handles assistantGroup, compare, supervisor, etc. virtual message types
@@ -1800,6 +2462,210 @@ export const createRuntimeExecutors = (
   },
 
   /**
+   * Server-side exec_sub_agent executor
+   *
+   * Mirrors the client-side exec_sub_agent executor in createAgentExecutors.ts
+   * but runs entirely server-side (no polling required).  Flow:
+   *   1. Create a task message (role: 'task') as a placeholder visible in the UI.
+   *   2. Fire execSubAgentTask via the injected callback so the sub-agent runs as
+   *      an independent QStash operation.
+   *   3. Return a sub_agent_result context so GeneralChatAgent calls the LLM once
+   *      more and the parent agent can acknowledge the delegation.
+   */
+  exec_sub_agent: async (instruction, state) => {
+    const { payload } = instruction as AgentInstructionExecSubAgent;
+    const { parentMessageId, task } = payload;
+    const events: AgentEvent[] = [];
+    const { operationId } = ctx;
+    const taskLogId = `${operationId}:exec_sub_agent`;
+
+    const topicId = ctx.topicId ?? state.metadata?.topicId;
+    const agentId = state.metadata?.agentId;
+    // targetAgentId is a cloud extension injected by agentManagement.callAgent
+    const targetAgentId = (task as any).targetAgentId ?? agentId;
+
+    let taskMessageId: string | undefined;
+    try {
+      const taskMessage = await ctx.messageModel.create({
+        agentId: agentId!,
+        content: '',
+        metadata: {
+          instruction: task.instruction,
+          taskTitle: task.description,
+          ...(targetAgentId && targetAgentId !== agentId && { targetAgentId }),
+        },
+        parentId: parentMessageId,
+        role: 'task',
+        threadId: state.metadata?.threadId ?? undefined,
+        topicId: topicId!,
+      });
+      taskMessageId = taskMessage.id;
+      log('[%s] Created task message: %s', taskLogId, taskMessageId);
+    } catch (error) {
+      log('[%s] Failed to create task message: %O', taskLogId, error);
+    }
+
+    const effectiveTaskMessageId = taskMessageId ?? parentMessageId;
+
+    let dispatched = false;
+    if (ctx.execSubAgentTask && topicId && agentId) {
+      try {
+        await ctx.execSubAgentTask({
+          agentId: targetAgentId,
+          groupId: state.metadata?.groupId ?? undefined,
+          instruction: task.instruction,
+          parentMessageId: effectiveTaskMessageId,
+          parentOperationId: operationId,
+          timeout: task.timeout,
+          title: task.description,
+          topicId,
+        });
+        dispatched = true;
+        log('[%s] Spawned sub-agent task for agent %s', taskLogId, targetAgentId);
+      } catch (error) {
+        log('[%s] Failed to spawn sub-agent task: %O', taskLogId, error);
+        if (taskMessageId) {
+          try {
+            await ctx.messageModel.update(taskMessageId, {
+              content: `Task failed to start: ${(error as Error).message}`,
+            });
+          } catch {
+            // best-effort
+          }
+        }
+      }
+    } else {
+      log('[%s] execSubAgentTask not available, skipping sub-agent dispatch', taskLogId);
+    }
+
+    return {
+      events,
+      newState: state,
+      nextContext: {
+        payload: {
+          parentMessageId: effectiveTaskMessageId,
+          result: {
+            success: dispatched,
+            taskMessageId: effectiveTaskMessageId,
+            threadId: '',
+          },
+        },
+        phase: 'sub_agent_result',
+        session: {
+          messageCount: state.messages.length,
+          sessionId: operationId,
+          status: 'running',
+          stepCount: state.stepCount + 1,
+        },
+      } as unknown as AgentRuntimeContext,
+    };
+  },
+
+  /**
+   * Server-side exec_sub_agents executor
+   *
+   * Same as exec_sub_agent but for a batch.  Each sub-agent is fired
+   * independently via execSubAgentTask and a task message is created for each.
+   */
+  exec_sub_agents: async (instruction, state) => {
+    const { payload } = instruction as AgentInstructionExecSubAgents;
+    const { parentMessageId, tasks } = payload;
+    const events: AgentEvent[] = [];
+    const { operationId } = ctx;
+    const taskLogId = `${operationId}:exec_sub_agents`;
+
+    const topicId = ctx.topicId ?? state.metadata?.topicId;
+    const agentId = state.metadata?.agentId;
+
+    log('[%s] Starting batch of %d tasks', taskLogId, tasks.length);
+
+    let lastTaskMessageId: string | undefined;
+    const taskResults: Array<{ success: boolean; taskMessageId: string; threadId: string }> = [];
+
+    for (const task of tasks) {
+      const targetAgentId = (task as any).targetAgentId ?? agentId;
+      let taskMessageId: string | undefined;
+
+      try {
+        const taskMessage = await ctx.messageModel.create({
+          agentId: agentId!,
+          content: '',
+          metadata: {
+            instruction: task.instruction,
+            taskTitle: task.description,
+            ...(targetAgentId && targetAgentId !== agentId && { targetAgentId }),
+          },
+          parentId: parentMessageId,
+          role: 'task',
+          threadId: state.metadata?.threadId ?? undefined,
+          topicId: topicId!,
+        });
+        taskMessageId = taskMessage.id;
+        lastTaskMessageId = taskMessageId;
+      } catch (error) {
+        log('[%s] Failed to create task message for "%s": %O', taskLogId, task.description, error);
+      }
+
+      let taskDispatched = false;
+      if (ctx.execSubAgentTask && topicId && agentId) {
+        try {
+          await ctx.execSubAgentTask({
+            agentId: targetAgentId,
+            groupId: state.metadata?.groupId ?? undefined,
+            instruction: task.instruction,
+            parentMessageId: taskMessageId ?? parentMessageId,
+            parentOperationId: operationId,
+            timeout: task.timeout,
+            title: task.description,
+            topicId,
+          });
+          taskDispatched = true;
+          log(
+            '[%s] Spawned sub-agent task "%s" for agent %s',
+            taskLogId,
+            task.description,
+            targetAgentId,
+          );
+        } catch (error) {
+          log('[%s] Failed to spawn task "%s": %O', taskLogId, task.description, error);
+          if (taskMessageId) {
+            try {
+              await ctx.messageModel.update(taskMessageId, {
+                content: `Task failed to start: ${(error as Error).message}`,
+              });
+            } catch {
+              // best-effort
+            }
+          }
+        }
+      }
+      taskResults.push({
+        success: taskDispatched,
+        taskMessageId: taskMessageId ?? parentMessageId,
+        threadId: '',
+      });
+    }
+
+    return {
+      events,
+      newState: state,
+      nextContext: {
+        payload: {
+          parentMessageId: lastTaskMessageId ?? parentMessageId,
+          results: taskResults,
+        },
+        phase: 'sub_agents_batch_result',
+        session: {
+          messageCount: state.messages.length,
+          sessionId: operationId,
+          status: 'running',
+          stepCount: state.stepCount + 1,
+        },
+      } as unknown as AgentRuntimeContext,
+    };
+  },
+
+  /**
    * Complete runtime execution
    */
   finish: async (instruction, state) => {
@@ -1807,6 +2673,16 @@ export const createRuntimeExecutors = (
     const { operationId, stepIndex, streamManager } = ctx;
 
     log('[%s:%d] Finishing execution: (%s)', operationId, stepIndex, reason);
+
+    // Clear runningOperation from topic metadata so reconnect doesn't trigger after completion
+    if (ctx.topicId && ctx.userId) {
+      try {
+        const topicModel = new TopicModel(ctx.serverDB, ctx.userId);
+        await topicModel.updateMetadata(ctx.topicId, { runningOperation: null });
+      } catch (e) {
+        log('[%s] Failed to clear runningOperation metadata: %O', operationId, e);
+      }
+    }
 
     // Publish execution complete event
     await streamManager.publishStreamEvent(operationId, {
@@ -1838,9 +2714,18 @@ export const createRuntimeExecutors = (
 
   /**
    * Human approval
+   *
+   * Mirrors the client executor (`createAgentExecutors.ts:1072-1177`):
+   * - Creates one `role='tool'` message per pending tool call with
+   *   `pluginIntervention: { status: 'pending' }` so approval UI has a target.
+   * - When `skipCreateToolMessage` is true (resumption via `/run` after a
+   *   previous op already persisted them), skip creation.
+   * - Publishes the `toolCallId -> toolMessageId` mapping alongside the
+   *   `tools_calling` stream chunk so the client can hydrate its local
+   *   message map without waiting for `agent_runtime_end`.
    */
   request_human_approve: async (instruction, state) => {
-    const { pendingToolsCalling } = instruction as Extract<
+    const { pendingToolsCalling, skipCreateToolMessage } = instruction as Extract<
       AgentInstruction,
       { type: 'request_human_approve' }
     >;
@@ -1859,17 +2744,146 @@ export const createRuntimeExecutors = (
       type: 'step_start',
     });
 
+    if (ctx.hookDispatcher) {
+      ctx.hookDispatcher
+        .dispatch(
+          operationId,
+          'beforeHumanIntervention',
+          {
+            operationId,
+            pendingTools: pendingToolsCalling.map((t: any) => ({
+              apiName: t.apiName,
+              identifier: t.identifier,
+            })),
+            stepIndex,
+            userId: ctx.userId,
+          },
+          state.metadata?._hooks,
+        )
+        .catch(() => {});
+    }
+
     const newState = structuredClone(state);
     newState.lastModified = new Date().toISOString();
     newState.status = 'waiting_for_human';
     newState.pendingToolsCalling = pendingToolsCalling;
 
-    // Notify frontend to display approval UI through streaming system
+    // Map of toolCallId -> toolMessageId, populated either by creating fresh
+    // pending tool messages or (in resumption mode) by looking up existing ones.
+    const toolMessageIds: Record<string, string> = {};
+
+    if (skipCreateToolMessage) {
+      // Resumption mode: tool messages already exist in DB. Look them up by
+      // tool_call_id so we can still ship the mapping to the client.
+      log('[%s:%d] Resuming with existing tool messages', operationId, stepIndex);
+      try {
+        const dbMessages = await ctx.messageModel.query({
+          agentId: state.metadata?.agentId,
+          threadId: state.metadata?.threadId,
+          topicId: state.metadata?.topicId,
+        });
+        for (const toolPayload of pendingToolsCalling) {
+          const existing = dbMessages.find(
+            (m: any) => m.role === 'tool' && m.tool_call_id === toolPayload.id,
+          );
+          if (existing) {
+            toolMessageIds[toolPayload.id] = existing.id;
+          }
+        }
+      } catch (error) {
+        console.error(
+          '[%s:%d] Failed to look up existing tool messages: %O',
+          operationId,
+          stepIndex,
+          error,
+        );
+      }
+    } else {
+      // Find parent assistant message. Prefer state.messages (already in
+      // memory from call_llm); fall back to DB query if the runtime has been
+      // rehydrated without recent messages.
+      let parentAssistantId: string | undefined = (state.messages ?? [])
+        .slice()
+        .reverse()
+        .find((m: any) => m.role === 'assistant' && m.id)?.id;
+
+      if (!parentAssistantId) {
+        try {
+          const dbMessages = await ctx.messageModel.query({
+            agentId: state.metadata?.agentId,
+            threadId: state.metadata?.threadId,
+            topicId: state.metadata?.topicId,
+          });
+          parentAssistantId = dbMessages
+            .slice()
+            .reverse()
+            .find((m: any) => m.role === 'assistant')?.id;
+        } catch (error) {
+          console.error(
+            '[%s:%d] Failed to query DB for parent assistant: %O',
+            operationId,
+            stepIndex,
+            error,
+          );
+        }
+      }
+
+      if (!parentAssistantId) {
+        throw new Error(
+          `[request_human_approve] No assistant message found as parent for pending tool messages (op=${operationId})`,
+        );
+      }
+
+      for (const toolPayload of pendingToolsCalling) {
+        const toolName = `${toolPayload.identifier}/${toolPayload.apiName}`;
+        try {
+          const toolMessage = await ctx.messageModel.create({
+            agentId: state.metadata!.agentId!,
+            content: '',
+            parentId: parentAssistantId,
+            plugin: toolPayload as any,
+            pluginIntervention: { status: 'pending' },
+            role: 'tool',
+            threadId: state.metadata?.threadId,
+            tool_call_id: toolPayload.id,
+            topicId: state.metadata?.topicId,
+          });
+
+          toolMessageIds[toolPayload.id] = toolMessage.id;
+
+          // Intentionally DO NOT push the empty placeholder into
+          // newState.messages. When the approval resumes, the `call_tool`
+          // executor (skip-create branch) appends the resolved tool message
+          // to state.messages itself. Pushing a placeholder here produced
+          // two entries for the same tool_call_id — see LOBE-7151 review P2.
+
+          log(
+            '[%s:%d] Created pending tool message %s for %s',
+            operationId,
+            stepIndex,
+            toolMessage.id,
+            toolName,
+          );
+        } catch (error) {
+          console.error(
+            '[%s:%d] Failed to create pending tool message for %s: %O',
+            operationId,
+            stepIndex,
+            toolName,
+            error,
+          );
+          throw error;
+        }
+      }
+    }
+
+    // Notify frontend to display approval UI through streaming system.
+    // `toolMessageIds` is a new optional field; legacy consumers ignore it.
     await streamManager.publishStreamChunk(operationId, stepIndex, {
-      // Use operationId as messageId
       chunkType: 'tools_calling',
+      toolMessageIds,
       toolsCalling: pendingToolsCalling as any,
-    });
+    } as any);
 
     const events: AgentEvent[] = [
       {
@@ -1957,6 +2971,19 @@ export const createRuntimeExecutors = (
           toolName,
           error,
         );
+        // Normalize BEFORE publishing so clients surface the typed business
+        // error instead of the raw driver text (see LOBE-7158 review).
+        const fatal = isParentMessageMissingError(error)
+          ? createConversationParentMissingError(parentMessageId, error)
+          : error instanceof Error
+            ? error
+            : new Error(String(error));
+        await streamManager.publishStreamEvent(operationId, {
+          data: formatErrorEventData(fatal, 'tool_message_persist'),
+          stepIndex,
+          type: 'error',
+        });
+        throw fatal;
       }
     }
 

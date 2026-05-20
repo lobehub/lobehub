@@ -14,7 +14,7 @@ export const convertGoogleAIUsage = (
   pricing?: Pricing,
 ): ModelUsage => {
   const inputCacheMissTokens =
-    usage.promptTokenCount && usage.cachedContentTokenCount
+    typeof usage.promptTokenCount === 'number' && typeof usage.cachedContentTokenCount === 'number'
       ? usage.promptTokenCount - usage.cachedContentTokenCount
       : undefined;
 
@@ -38,11 +38,16 @@ export const convertGoogleAIUsage = (
 
   const normalizedUsage = {
     inputAudioTokens: getTokenCount(usage.promptTokensDetails, MediaModality.AUDIO),
+    inputCachedAudioTokens: getTokenCount(usage.cacheTokensDetails, MediaModality.AUDIO),
+    inputCachedImageTokens: getTokenCount(usage.cacheTokensDetails, MediaModality.IMAGE),
+    inputCachedTextTokens: getTokenCount(usage.cacheTokensDetails, MediaModality.TEXT),
     inputCacheMissTokens,
     inputCachedTokens: usage.cachedContentTokenCount,
+    inputCachedVideoTokens: getTokenCount(usage.cacheTokensDetails, MediaModality.VIDEO),
     inputImageTokens: getTokenCount(usage.promptTokensDetails, MediaModality.IMAGE),
     inputTextTokens: getTokenCount(usage.promptTokensDetails, MediaModality.TEXT),
     inputToolTokens: toolUseTokens,
+    inputVideoTokens: getTokenCount(usage.promptTokensDetails, MediaModality.VIDEO),
     outputImageTokens,
     outputReasoningTokens: reasoningTokens,
     outputTextTokens,

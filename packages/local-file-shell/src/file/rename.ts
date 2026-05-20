@@ -2,14 +2,17 @@ import { rename } from 'node:fs/promises';
 import path from 'node:path';
 
 import type { RenameFileParams, RenameFileResult } from '../types';
+import { expandTilde } from './expandTilde';
 
 export async function renameLocalFile({
-  path: currentPath,
+  path: rawPath,
   newName,
 }: RenameFileParams): Promise<RenameFileResult> {
-  if (!currentPath || !newName) {
+  if (!rawPath || !newName) {
     return { error: 'Both path and newName are required.', newPath: '', success: false };
   }
+
+  const currentPath = expandTilde(rawPath) ?? rawPath;
 
   // Prevent path traversal or invalid characters
   if (

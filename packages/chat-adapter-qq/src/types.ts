@@ -57,6 +57,7 @@ export interface QQWebhookPayload {
 }
 
 export interface QQWebhookEventData {
+  attachments?: QQAttachment[];
   author?: QQAuthor;
   channel_id?: string;
   content?: string;
@@ -121,3 +122,64 @@ export const QQ_OP_CODES = {
   HTTP_CALLBACK_ACK: 12,
   VERIFY: 13,
 } as const;
+
+// ---- WebSocket Gateway OP Codes ----
+
+export const QQ_WS_OP_CODES = {
+  DISPATCH: 0,
+  HEARTBEAT: 1,
+  IDENTIFY: 2,
+  RESUME: 6,
+  RECONNECT: 7,
+  INVALID_SESSION: 9,
+  HELLO: 10,
+  HEARTBEAT_ACK: 11,
+} as const;
+
+// ---- WebSocket Gateway Intents ----
+
+export const QQ_INTENTS = {
+  AUDIO_ACTION: 1 << 29,
+  DIRECT_MESSAGE: 1 << 12,
+  FORUMS_EVENT: 1 << 28,
+  GROUP_AND_C2C_EVENT: 1 << 25,
+  GUILD_MEMBERS: 1 << 1,
+  GUILD_MESSAGE_REACTIONS: 1 << 10,
+  GUILD_MESSAGES: 1 << 9,
+  GUILDS: 1 << 0,
+  INTERACTION: 1 << 26,
+  MESSAGE_AUDIT: 1 << 27,
+  PUBLIC_GUILD_MESSAGES: 1 << 30,
+} as const;
+
+// ---- WebSocket Gateway Types ----
+
+export interface QQGatewayPayload {
+  d: any;
+  id?: string;
+  op: number;
+  s?: number;
+  t?: string;
+}
+
+export interface QQGatewayHelloData {
+  heartbeat_interval: number;
+}
+
+export interface QQGatewayReadyData {
+  session_id: string;
+  shard: [number, number];
+  user: { bot: boolean; id: string; username: string };
+  version: number;
+}
+
+export interface QQGatewayUrlResponse {
+  session_start_limit?: {
+    max_concurrency: number;
+    remaining: number;
+    reset_after: number;
+    total: number;
+  };
+  shards?: number;
+  url: string;
+}

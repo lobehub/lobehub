@@ -34,7 +34,7 @@ export interface GeneralAgentCallToolResultPayload {
   executionTime: number;
   isSuccess: boolean;
   parentMessageId: string;
-  /** Whether tool requested to stop execution (e.g., group management speak/delegate, GTD async tasks) */
+  /** Whether tool requested to stop execution (e.g., group management speak/delegate, lobe-agent async sub-agents) */
   stop?: boolean;
   toolCall: ChatToolPayload;
   toolCallId: string;
@@ -81,6 +81,8 @@ export interface GeneralAgentConfig {
     enabled?: boolean;
     /** Model's max context window token count (default: 128k) */
     maxWindowToken?: number;
+    /** Threshold ratio for triggering compression (default: 0.5) */
+    thresholdRatio?: number;
   };
   /**
    * Dynamic intervention audits registry (per-tool)

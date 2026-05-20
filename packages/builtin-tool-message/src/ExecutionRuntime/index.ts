@@ -105,6 +105,7 @@ export type {
   SearchMessagesState,
   SendDirectMessageParams,
   SendDirectMessageState,
+  SendMessageAttachment,
   SendMessageParams,
   SendMessageState,
   ToggleBotParams,
@@ -153,6 +154,7 @@ export interface BotProviderQuery {
     applicationId: string;
     credentials: Record<string, string>;
     platform: string;
+    settings?: Record<string, unknown>;
   }) => Promise<{ id: string; platform: string }>;
   deleteBot: (botId: string) => Promise<void>;
   getBotDetail: (botId: string) => Promise<GetBotDetailState | null>;

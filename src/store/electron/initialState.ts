@@ -26,6 +26,7 @@ export const defaultProxySettings: NetworkProxySettings = {
 
 export interface ElectronState extends NavigationHistoryState, RecentPagesState, TabPagesState {
   appState: ElectronAppState;
+  appTrayVisible: boolean;
   dataSyncConfig: DataSyncConfig;
   desktopHotkeys: Record<string, string>;
   gatewayConnectionStatus: GatewayConnectionStatus;
@@ -45,6 +46,7 @@ export const initialState: ElectronState = {
   ...recentPagesInitialState,
   ...tabPagesInitialState,
   appState: {},
+  appTrayVisible: true,
   dataSyncConfig: { storageMode: 'cloud' },
   desktopHotkeys: {},
   gatewayConnectionStatus: 'disconnected',

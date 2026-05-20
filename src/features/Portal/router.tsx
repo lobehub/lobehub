@@ -12,6 +12,7 @@ import { Document } from './Document';
 import { FilePreview } from './FilePreview';
 import { GroupThread } from './GroupThread';
 import { HomeBody, HomeTitle } from './Home';
+import { LocalFile } from './LocalFile';
 import { MessageDetail } from './MessageDetail';
 import { Notebook } from './Notebook';
 import { Plugins } from './Plugins';
@@ -28,6 +29,7 @@ const VIEW_COMPONENTS: Record<PortalViewType, PortalImpl> = {
   [PortalViewType.Document]: Document,
   [PortalViewType.Notebook]: Notebook,
   [PortalViewType.FilePreview]: FilePreview,
+  [PortalViewType.LocalFile]: LocalFile,
   [PortalViewType.MessageDetail]: MessageDetail,
   [PortalViewType.ToolUI]: Plugins,
   [PortalViewType.Thread]: Thread,

@@ -6,13 +6,16 @@ import { getTrpcClient } from '../../api/client';
 export function registerVideoCommand(parent: Command) {
   parent
     .command('video <prompt>')
-    .description('Generate a video from text')
+    .description('Generate a video from text or image(s)')
     .requiredOption('-m, --model <model>', 'Model ID')
     .requiredOption('-p, --provider <provider>', 'Provider name')
     .option('--aspect-ratio <ratio>', 'Aspect ratio (e.g. 16:9)')
     .option('--duration <sec>', 'Duration in seconds')
     .option('--resolution <res>', 'Resolution (e.g. 720p, 1080p)')
     .option('--seed <n>', 'Random seed')
+    .option('--image <url>', 'First-frame image URL (image-to-video)')
+    .option('--images <urls...>', 'Multiple reference image URLs')
+    .option('--end-image <url>', 'Last-frame image URL')
     .option('--json', 'Output raw JSON')
     .action(
       async (
@@ -20,6 +23,9 @@ export function registerVideoCommand(parent: Command) {
         options: {
           aspectRatio?: string;
           duration?: string;
+          endImage?: string;
+          image?: string;
+          images?: string[];
           json?: boolean;
           model: string;
           provider: string;
@@ -35,6 +41,9 @@ export function registerVideoCommand(parent: Command) {
         if (options.duration) params.duration = Number.parseInt(options.duration, 10);
         if (options.resolution) params.resolution = options.resolution;
         if (options.seed) params.seed = Number.parseInt(options.seed, 10);
+        if (options.image) params.imageUrl = options.image;
+        if (options.images && options.images.length > 0) params.imageUrls = options.images;
+        if (options.endImage) params.endImageUrl = options.endImage;
 
         const result = await client.video.createVideo.mutate({
           generationTopicId: topicId as string,

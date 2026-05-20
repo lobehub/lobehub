@@ -35,6 +35,7 @@
   "navigation.recentView": "Vistas recientes",
   "navigation.resources": "Recursos",
   "navigation.settings": "Configuración",
+  "navigation.tasks": "Tareas",
   "navigation.unpin": "Desfijar",
   "notification.finishChatGeneration": "Generación de mensaje por IA completada",
   "proxy.auth": "Autenticación requerida",
@@ -106,6 +107,9 @@
   "tab.closeLeftTabs": "Cerrar pestañas a la izquierda",
   "tab.closeOtherTabs": "Cerrar otras pestañas",
   "tab.closeRightTabs": "Cerrar pestañas a la derecha",
+  "tab.newTab": "Nueva pestaña",
+  "tab.running": "El agente se está ejecutando",
+  "tab.unread": "Nuevo mensaje",
   "updater.checkingUpdate": "Buscando actualizaciones",
   "updater.checkingUpdateDesc": "Obteniendo información de la versión...",
   "updater.downloadNewVersion": "Descargar nueva versión",
@@ -133,5 +137,7 @@
   "window.close": "Cerrar ventana",
   "window.maximize": "Maximizar ventana",
   "window.minimize": "Minimizar ventana",
-  "window.restore": "Restaurar ventana"
+  "window.pinToTop": "Fijar arriba",
+  "window.restore": "Restaurar ventana",
+  "window.unpinFromTop": "Quitar de arriba"
 }

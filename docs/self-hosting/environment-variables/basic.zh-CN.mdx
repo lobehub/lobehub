@@ -49,18 +49,18 @@ LobeHub 在部署时提供了一些额外的配置项，你可以使用环境变
 
 `DEFAULT_AGENT_CONFIG` 用于配置 LobeHub 默认助理的默认配置。它支持多种数据类型和结构，包括键值对、嵌套字段、数组值等。下表详细说明了 `DEFAULT_AGENT_CONFIG` 环境变量的配置项、示例以及相应解释：
 
-| 配置项类型 | 示例                                                                                                                      | 解释                                                    |
-| ----- | ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| 基本键值对 | `model=gpt-4`                                                                                                           | 设置模型为 `gpt-4`。                                        |
-| 嵌套字段  | `tts.sttLocale=en-US`                                                                                                   | 设置文本到语音服务的语言区域为 `en-US`。                              |
-| 数组    | `plugins=search-engine,lobe-image-designer`                                                                             | 启用 `search-engine` 和 `lobe-image-designer` 插件。        |
-| 中文逗号  | `plugins=search-engine，lobe-image-designer`                                                                             | 同上，演示支持中文逗号分隔。                                        |
-| 多个配置项 | `model=glm-4;provider=zhipu`                                                                                            | 设置模型为 `glm-4` 且模型服务商为 `zhipu`。                        |
-| 数字值   | `params.max_tokens=300`, `chatConfig.historyCount=5`                                                                    | 设置最大令牌数为 `300`，设置历史消息条数为 5。                           |
-| 布尔值   | `chatConfig.enableAutoCreateTopic=true`,`chatConfig.enableCompressThreshold=true`, `chatConfig.enableHistoryCount=true` | 启用自动创建主题，历史长度压缩阈值，历史记录条数。                             |
-| 特殊字符  | `inputTemplate="Hello; I am a bot;"`                                                                                    | 设置输入模板为 `Hello; I am a bot;`。                         |
-| 错误处理  | `model=gpt-4;maxToken`                                                                                                  | 忽略无效条目 `maxToken`，仅解析出 `model=gpt-4`。                 |
-| 值覆盖   | `model=gpt-4;model=gpt-4-1106-preview`                                                                                  | 如果键重复，使用最后一次出现的值，此处 `model` 的值为 `gpt-4-1106-preview`。 |
+| 配置项类型 | 示例                                                                                                                | 解释                                                    |
+| ----- | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| 基本键值对 | `model=gpt-4`                                                                                                     | 设置模型为 `gpt-4`。                                        |
+| 嵌套字段  | `tts.sttLocale=en-US`                                                                                             | 设置文本到语音服务的语言区域为 `en-US`。                              |
+| 数组    | `plugins=search-engine,lobe-image-designer`                                                                       | 启用 `search-engine` 和 `lobe-image-designer` 插件。        |
+| 中文逗号  | `plugins=search-engine，lobe-image-designer`                                                                       | 同上，演示支持中文逗号分隔。                                        |
+| 多个配置项 | `model=glm-4;provider=zhipu`                                                                                      | 设置模型为 `glm-4` 且模型服务商为 `zhipu`。                        |
+| 数字值   | `params.max_tokens=300`, `chatConfig.historyCount=5`                                                              | 设置最大令牌数为 `300`，设置历史消息条数为 5。                           |
+| 布尔值   | `chatConfig.enableHistoryCount=true`,`chatConfig.enableCompressThreshold=true`, `chatConfig.enableStreaming=true` | 启用历史消息数量限制，历史长度压缩阈值，流式输出。                             |
+| 特殊字符  | `inputTemplate="Hello; I am a bot;"`                                                                              | 设置输入模板为 `Hello; I am a bot;`。                         |
+| 错误处理  | `model=gpt-4;maxToken`                                                                                            | 忽略无效条目 `maxToken`，仅解析出 `model=gpt-4`。                 |
+| 值覆盖   | `model=gpt-4;model=gpt-4-1106-preview`                                                                            | 如果键重复，使用最后一次出现的值，此处 `model` 的值为 `gpt-4-1106-preview`。 |
 
 相关阅读：
 
@@ -88,14 +88,13 @@ LobeHub 在部署时提供了一些额外的配置项，你可以使用环境变
 
 可配置的系统助手及其作用：
 
-| 系统助手    | 键名                | 作用描述                        |
-| ------- | ----------------- | --------------------------- |
-| 主题生成    | `topic`           | 根据聊天内容自动生成主题名称和摘要           |
-| 翻译      | `translation`     | 文本翻译使用的助手                   |
-| 元数据生成   | `agentMeta`       | 为助手生成描述性信息和元数据              |
-| 历史记录压缩  | `historyCompress` | 压缩和整理长对话的历史记录，优化上下文管理       |
-| 知识库查询重写 | `queryRewrite`    | 将后续问题改写为包含上下文的独立问题，提升对话的连贯性 |
-| 分支对话    | `thread`          | 自定生成分支对话的标题                 |
+| 系统助手   | 键名                | 作用描述                  |
+| ------ | ----------------- | --------------------- |
+| 主题生成   | `topic`           | 根据聊天内容自动生成主题名称和摘要     |
+| 翻译     | `translation`     | 文本翻译使用的助手             |
+| 元数据生成  | `agentMeta`       | 为助手生成描述性信息和元数据        |
+| 历史记录压缩 | `historyCompress` | 压缩和整理长对话的历史记录，优化上下文管理 |
+| 分支对话   | `thread`          | 自定生成分支对话的标题           |
 
 ### `FEATURE_FLAGS`
 
@@ -191,6 +190,31 @@ SSRF_ALLOW_IP_ADDRESS_LIST=192.168.1.100,10.0.0.50
 - 描述：静态资源的路径访问前缀，你可以设置为 CDN 访问的 URL，具体可参考： [assetPrefix](https://nextjs.org/docs/app/api-reference/config/next-config-js/assetPrefix)
 - 默认值：-
 - 示例：`https://cdn.example.com`
+
+## 视觉理解
+
+### `VISUAL_UNDERSTANDING_PROVIDER`
+
+- 类型：可选
+- 描述：兜底视觉理解模型的服务商 ID。与 `VISUAL_UNDERSTANDING_MODEL` 一起配置后，不具备原生图片或视频理解能力的模型可以通过内置视觉理解工具分析上传的视觉媒体。
+- 默认值：-
+- 示例：`openai`、`google` 或 `ollama`
+
+### `VISUAL_UNDERSTANDING_MODEL`
+
+- 类型：可选
+- 描述：内置视觉理解工具使用的模型 ID。该模型应支持你希望分析的视觉媒体类型。仅当 `VISUAL_UNDERSTANDING_PROVIDER` 与 `VISUAL_UNDERSTANDING_MODEL` 同时配置时，此功能才会启用。
+- 默认值：-
+- 示例：`gpt-4o`、`gemini-2.5-flash` 或你的本地视觉模型 ID
+
+配置示例：
+
+```bash
+VISUAL_UNDERSTANDING_PROVIDER=google
+VISUAL_UNDERSTANDING_MODEL=gemini-2.5-flash
+```
+
+启用后，当当前模型没有原生视觉能力但支持工具调用时，用户仍可上传图片或视频，并由兜底视觉理解模型进行分析。文件上传本身仍需要部署中正常配置文件存储能力。
 
 ## AI 图像
 

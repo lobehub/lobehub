@@ -23,7 +23,14 @@ const sessionProcedure = authedProcedure.use(serverDatabase).use(async (opts) =>
   });
 });
 
+/**
+ * @deprecated Session router is legacy. Use agent router for agent CRUD operations.
+ * Session-based agent creation (createSession, batchCreateSessions) should migrate
+ * to agent.createAgent which uses agentModel.create directly.
+ * Session query/update methods are still used by mobile but should be migrated.
+ */
 export const sessionRouter = router({
+  /** @deprecated Use agent.createAgent instead */
   batchCreateSessions: sessionProcedure
     .input(
       z.array(
@@ -72,6 +79,7 @@ export const sessionRouter = router({
       return ctx.sessionModel.count(input);
     }),
 
+  /** @deprecated Use agent.createAgent instead */
   createSession: sessionProcedure
     .input(
       z.object({
@@ -130,7 +138,7 @@ export const sessionRouter = router({
     .input(
       z.object({
         current: z.number().optional(),
-        pageSize: z.number().optional(),
+        pageSize: z.number().max(100).optional(),
       }),
     )
     .query(async ({ input, ctx }) => {
@@ -139,7 +147,7 @@ export const sessionRouter = router({
       return ctx.sessionModel.query({ current, pageSize });
     }),
 
-  rankSessions: sessionProcedure.input(z.number().optional()).query(async ({ ctx, input }) => {
+  rankSessions: sessionProcedure.input(z.number().max(50).optional()).query(async ({ ctx, input }) => {
     return ctx.sessionModel.rank(input);
   }),
 

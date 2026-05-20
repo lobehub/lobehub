@@ -54,6 +54,10 @@ export class CommonActionImpl {
   };
 
   updateInterests = async (interests: string[]): Promise<void> => {
+    const previousUser = this.#get().user;
+    if (previousUser) {
+      this.#set({ user: { ...previousUser, interests } }, false, n('updateInterests/optimistic'));
+    }
     await userService.updateInterests(interests);
     await this.#get().refreshUserState();
   };
@@ -162,7 +166,16 @@ export class CommonActionImpl {
             }
 
             // Keep reply language aligned with the browser locale until the user makes a choice.
-            if (!currentGeneralSettings?.responseLanguage && typeof navigator !== 'undefined') {
+            // Only auto-fill once onboarding has finished — otherwise it pre-empts the language
+            // step in the shared-prefix onboarding (commonStepsCompleted derives from this field
+            // being set, and an auto-fill would skip past the user's explicit choice).
+            const hasFinishedOnboarding =
+              !!data.onboarding?.finishedAt || !!data.agentOnboarding?.finishedAt;
+            if (
+              hasFinishedOnboarding &&
+              !currentGeneralSettings?.responseLanguage &&
+              typeof navigator !== 'undefined'
+            ) {
               autoDetectedGeneralConfig.responseLanguage =
                 userGeneralSettingsSelectors.currentResponseLanguage(this.#get());
             }

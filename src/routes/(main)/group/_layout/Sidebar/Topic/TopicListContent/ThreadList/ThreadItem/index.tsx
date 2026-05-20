@@ -1,6 +1,6 @@
 import { Icon } from '@lobehub/ui';
-import { TreeDownRightIcon } from '@lobehub/ui/icons';
 import { cssVar } from 'antd-style';
+import { CornerDownRight } from 'lucide-react';
 import { memo, useCallback } from 'react';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
@@ -14,10 +14,13 @@ import { useThreadItemDropdownMenu } from './useDropdownMenu';
 export interface ThreadItemProps {
   id: string;
   index: number;
+  isSubagent?: boolean;
   title: string;
 }
 
-const ThreadItem = memo<ThreadItemProps>(({ title, id }) => {
+const SUBAGENT_PADDING_INLINE_START = 32;
+
+const ThreadItem = memo<ThreadItemProps>(({ title, id, isSubagent }) => {
   const [editing, activeThreadId] = useChatStore((s) => [
     s.threadRenamingId === id,
     s.activeThreadId,
@@ -51,7 +54,8 @@ const ThreadItem = memo<ThreadItemProps>(({ title, id }) => {
         active={active && !isInAgentSubRoute}
         contextMenuItems={dropdownMenu}
         disabled={editing}
-        icon={<Icon color={cssVar.colorTextDescription} icon={TreeDownRightIcon} size={'small'} />}
+        icon={<Icon color={cssVar.colorTextDescription} icon={CornerDownRight} size={'small'} />}
+        style={isSubagent ? { paddingInlineStart: SUBAGENT_PADDING_INLINE_START } : undefined}
         title={title}
         onClick={handleClick}
       />

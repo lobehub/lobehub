@@ -5,6 +5,7 @@ import dynamic from '@/libs/next/dynamic';
 import Desktop from './Desktop';
 import Google from './Google';
 import Vercel from './Vercel';
+import X from './X';
 
 const Plausible = dynamic(() => import('./Plausible'));
 const Umami = dynamic(() => import('./Umami'));
@@ -19,6 +20,16 @@ const Analytics = () => {
       )}
       {analyticsEnv.ENABLE_GOOGLE_ANALYTICS && (
         <Google gaId={analyticsEnv.GOOGLE_ANALYTICS_MEASUREMENT_ID} />
+      )}
+      {analyticsEnv.ENABLED_X_ADS && (
+        <X
+          pixelId={analyticsEnv.X_ADS_PIXEL_ID}
+          purchaseEventId={analyticsEnv.X_ADS_PURCHASE_EVENT_ID}
+          eventIds={{
+            login_or_signup_clicked: analyticsEnv.X_ADS_LOGIN_OR_SIGNUP_CLICKED_EVENT_ID,
+            main_page_view: analyticsEnv.X_ADS_MAIN_PAGE_VIEW_EVENT_ID,
+          }}
+        />
       )}
       {analyticsEnv.ENABLED_PLAUSIBLE_ANALYTICS && (
         <Plausible

@@ -16,12 +16,11 @@ export const useMinimapData = () => {
 
   const indicators = useMemo<MinimapIndicator[]>(() => {
     return messages.reduce<MinimapIndicator[]>((acc, message, virtuosoIndex) => {
-      if (message.role !== 'user' && message.role !== 'assistant') return acc;
+      if (message.role !== 'user') return acc;
 
       acc.push({
         id: message.id,
         preview: getPreviewText(message.content),
-        role: message.role,
         virtuosoIndex,
         width: getIndicatorWidth(message.content),
       });
@@ -44,8 +43,18 @@ export const useMinimapData = () => {
     log('> activeIndex', activeIndex);
     log('> indicatorIndexMap', indicatorIndexMap);
 
-    return indicatorIndexMap.get(activeIndex) ?? null;
-  }, [activeIndex, indicatorIndexMap]);
+    const exact = indicatorIndexMap.get(activeIndex);
+    if (exact !== undefined) return exact;
+
+    // Viewport sits on a non-user message (typically an assistant reply).
+    // Highlight the most recent user message that started this turn.
+    let matched: number | null = null;
+    for (const [position, indicator] of indicators.entries()) {
+      if (indicator.virtuosoIndex <= activeIndex) matched = position;
+      else break;
+    }
+    return matched;
+  }, [activeIndex, indicatorIndexMap, indicators]);
 
   const handleJump = useCallback(
     (virtIndex: number) => {
@@ -54,59 +63,9 @@ export const useMinimapData = () => {
     [scrollMethods],
   );
 
-  const handleStep = useCallback(
-    (direction: 'prev' | 'next') => {
-      if (!scrollMethods || indicators.length === 0) return;
-
-      let targetPosition: number;
-
-      if (activeIndicatorPosition !== null) {
-        log('activeIndicatorPosition', activeIndicatorPosition);
-        // We're on an indicator, move to prev/next
-        const delta = direction === 'prev' ? -1 : 1;
-        targetPosition = Math.min(
-          Math.max(activeIndicatorPosition + delta, 0),
-          Math.max(indicators.length - 1, 0),
-        );
-      } else if (activeIndex !== null) {
-        // We're not on an indicator, find the nearest one in the direction
-        if (direction === 'prev') {
-          let matched = -1;
-          for (let pos = indicators.length - 1; pos >= 0; pos -= 1) {
-            if (indicators[pos].virtuosoIndex < activeIndex) {
-              matched = pos;
-              break;
-            }
-          }
-          targetPosition = matched === -1 ? 0 : matched;
-        } else {
-          let matched = indicators.length - 1;
-          for (const [pos, indicator] of indicators.entries()) {
-            if (indicator.virtuosoIndex > activeIndex) {
-              matched = pos;
-              break;
-            }
-          }
-          targetPosition = matched;
-        }
-      } else {
-        // No active index, go to first/last
-        targetPosition = direction === 'prev' ? 0 : indicators.length - 1;
-      }
-
-      const targetIndicator = indicators[targetPosition];
-
-      if (!targetIndicator) return;
-
-      scrollMethods.scrollToIndex(targetIndicator.virtuosoIndex, { align: 'start', smooth: true });
-    },
-    [activeIndex, activeIndicatorPosition, indicators, scrollMethods],
-  );
-
   return {
     activeIndicatorPosition,
     handleJump,
-    handleStep,
     indicators,
   };
 };

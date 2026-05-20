@@ -35,6 +35,7 @@
   "navigation.recentView": "最近の閲覧",
   "navigation.resources": "リソース",
   "navigation.settings": "設定",
+  "navigation.tasks": "タスク",
   "navigation.unpin": "ピン留めを解除",
   "notification.finishChatGeneration": "AI メッセージの生成が完了しました",
   "proxy.auth": "認証が必要",
@@ -106,6 +107,9 @@
   "tab.closeLeftTabs": "左側のタブを閉じる",
   "tab.closeOtherTabs": "他のタブを閉じる",
   "tab.closeRightTabs": "右側のタブを閉じる",
+  "tab.newTab": "新しいタブ",
+  "tab.running": "エージェントが実行中です",
+  "tab.unread": "新しいメッセージ",
   "updater.checkingUpdate": "更新を確認中",
   "updater.checkingUpdateDesc": "バージョン情報を取得しています...",
   "updater.downloadNewVersion": "新しいバージョンをダウンロード",
@@ -133,5 +137,7 @@
   "window.close": "ウィンドウを閉じる",
   "window.maximize": "ウィンドウを最大化",
   "window.minimize": "ウィンドウを最小化",
-  "window.restore": "ウィンドウを復元"
+  "window.pinToTop": "上部に固定",
+  "window.restore": "ウィンドウを復元",
+  "window.unpinFromTop": "固定を解除"
 }

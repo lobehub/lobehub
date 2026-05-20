@@ -1,4 +1,8 @@
-import type { MainBroadcastEventKey, MainBroadcastParams } from '@lobechat/electron-client-ipc';
+import type {
+  MainBroadcastEventKey,
+  MainBroadcastParams,
+  TopicPopupInfo,
+} from '@lobechat/electron-client-ipc';
 import type { WebContents } from 'electron';
 
 import { isLinux } from '@/const/env';
@@ -10,6 +14,9 @@ import { appBrowsers, BrowsersIdentifiers, windowTemplates } from '../../appBrow
 import type { App } from '../App';
 import type { BrowserWindowOpts } from './Browser';
 import Browser from './Browser';
+
+const TOPIC_POPUP_TEMPLATE_ID: WindowTemplateIdentifiers = 'topicPopup';
+const TOPIC_POPUP_PATH_RE = /^\/popup\/(agent|group)\/([^/?#]+)\/([^/?#]+)/;
 
 // Create logger
 const logger = createLogger('core:BrowserManager');
@@ -32,8 +39,15 @@ export class BrowserManager {
 
   showMainWindow() {
     logger.debug('Showing main window');
-    const window = this.getMainWindow();
-    window.show();
+    const browser = this.getMainWindow();
+    const window = browser.browserWindow;
+
+    if (window.isMinimized()) {
+      window.restore();
+    }
+
+    browser.show();
+    window.focus();
   }
 
   broadcastToAllWindows = <T extends MainBroadcastEventKey>(
@@ -145,10 +159,77 @@ export class BrowserManager {
 
     const browser = this.retrieveOrInitialize(browserOpts);
 
+    if (templateId === TOPIC_POPUP_TEMPLATE_ID) {
+      // Notify main-window SPAs so they can redirect to the popup instead of
+      // rendering the same conversation in two places. Re-emit on close to
+      // release the "topic is in popup" guard.
+      this.emitTopicPopupsChanged();
+      browser.browserWindow.once('closed', () => {
+        this.emitTopicPopupsChanged();
+      });
+    }
+
     return {
       browser,
       identifier: windowId,
     };
+  }
+
+  /**
+   * List currently-open topic popup windows (alive only). Used by the main
+   * SPA to decide whether to render the conversation or a redirect-to-popup
+   * guard.
+   */
+  listTopicPopups(): TopicPopupInfo[] {
+    const popups: TopicPopupInfo[] = [];
+    this.browsers.forEach((browser, identifier) => {
+      if (!identifier.startsWith(`${TOPIC_POPUP_TEMPLATE_ID}_`)) return;
+      const webContents = browser.webContents;
+      if (!webContents || webContents.isDestroyed()) return;
+      const match = browser.options.path.match(TOPIC_POPUP_PATH_RE);
+      if (!match) return;
+      const scope = match[1] as 'agent' | 'group';
+      const id = match[2];
+      const topicId = match[3];
+      popups.push({
+        identifier,
+        scope,
+        topicId,
+        ...(scope === 'agent' ? { agentId: id } : { groupId: id }),
+      });
+    });
+    return popups;
+  }
+
+  focusTopicPopup(identifier: string): boolean {
+    const browser = this.browsers.get(identifier);
+    if (!browser) return false;
+    const win = browser.browserWindow;
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+    return true;
+  }
+
+  /**
+   * Open (or focus) the single-instance Quick Chat popup.
+   *
+   * The window is backed by the `topicPopup` template and the route
+   * `/popup/agent/inbox`, so it mounts a fresh Inbox conversation with no
+   * active topic. The first message creates a topic via the normal agent
+   * flow. The `uniqueId` is fixed — repeated invocations focus the existing
+   * window rather than spawning additional ones.
+   */
+  openQuickChatPopup() {
+    const uniqueId = 'topicPopup_quick_inbox';
+    const result = this.createMultiInstanceWindow('topicPopup', '/popup/agent/inbox', uniqueId);
+    result.browser.show();
+    result.browser.browserWindow.focus();
+    return result;
+  }
+
+  private emitTopicPopupsChanged(): void {
+    this.broadcastToAllWindows('topicPopupsChanged', { popups: this.listTopicPopups() });
   }
 
   /**
@@ -176,6 +257,26 @@ export class BrowserManager {
   }
 
   /**
+   * Consume a route captured before an update restart. The captured route is
+   * cleared before any navigation decision so a subsequent normal launch never
+   * restores a stale route.
+   */
+  private consumePendingRestoreRoute(): string {
+    const pendingRestoreRoute = this.app.storeManager.get('pendingRestoreRoute', '');
+    if (pendingRestoreRoute) this.app.storeManager.set('pendingRestoreRoute', '');
+    return pendingRestoreRoute;
+  }
+
+  private resolveMainWindowInitialPath(
+    isOnboardingCompleted: boolean,
+    pendingRestoreRoute: string,
+  ): string {
+    if (!isOnboardingCompleted) return '/desktop-onboarding';
+    if (pendingRestoreRoute) return pendingRestoreRoute;
+    return '/';
+  }
+
+  /**
    * Initialize all browsers when app starts up
    */
   async initializeBrowsers() {
@@ -190,7 +291,11 @@ export class BrowserManager {
 
       // Dynamically determine initial path for main window
       if (browser.identifier === BrowsersIdentifiers.app) {
-        const initialPath = isOnboardingCompleted ? '/' : '/desktop-onboarding';
+        const pendingRestoreRoute = this.consumePendingRestoreRoute();
+        const initialPath = this.resolveMainWindowInitialPath(
+          isOnboardingCompleted,
+          pendingRestoreRoute,
+        );
         browser = {
           ...browser,
           keepAlive: isLinux ? false : browser.keepAlive,
@@ -276,6 +381,16 @@ export class BrowserManager {
   setWindowMinimumSize(identifier: string, size: { height?: number; width?: number }) {
     const browser = this.browsers.get(identifier);
     browser?.setWindowMinimumSize(size);
+  }
+
+  setWindowAlwaysOnTop(identifier: string, flag: boolean) {
+    const browser = this.browsers.get(identifier);
+    browser?.browserWindow.setAlwaysOnTop(flag);
+  }
+
+  isWindowAlwaysOnTop(identifier: string) {
+    const browser = this.browsers.get(identifier);
+    return browser?.browserWindow.isAlwaysOnTop() ?? false;
   }
 
   getIdentifierByWebContents(webContents: WebContents): string | null {

@@ -3,34 +3,79 @@ import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import ModeSwitch from './ModeSwitch';
+
+const mockConfig = vi.hoisted(() => ({
+  agentOnboardingEnabled: true,
+  AGENT_ONBOARDING_ENABLED: true,
+  desktop: false,
+  serverConfigInit: true,
+}));
+
+vi.mock('@lobechat/business-const', () => ({
+  get AGENT_ONBOARDING_ENABLED() {
+    return mockConfig.AGENT_ONBOARDING_ENABLED;
+  },
+}));
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) =>
-      ({
-        'agent.modeSwitch.agent': 'Conversational',
-        'agent.modeSwitch.classic': 'Classic',
-        'agent.modeSwitch.label': 'Choose your onboarding mode',
-      })[key] || key,
+      (
+        ({
+          'agent.modeSwitch.agent': 'Conversational',
+          'agent.modeSwitch.classic': 'Classic',
+          'agent.modeSwitch.label': 'Choose your onboarding mode',
+        }) as Record<string, string>
+      )[key] || key,
   }),
 }));
 
-const renderModeSwitch = async ({
-  actions,
-  enabled,
-  entry = '/onboarding/agent',
-  showLabel,
-}: {
+interface RenderModeSwitchOptions {
   actions?: ReactNode;
+  AGENT_ONBOARDING_ENABLED?: boolean;
+  desktop?: boolean;
   enabled: boolean;
   entry?: string;
+  serverConfigInit?: boolean;
   showLabel?: boolean;
-}) => {
-  vi.resetModules();
-  vi.doMock('@/routes/onboarding/config', () => ({
-    AGENT_ONBOARDING_ENABLED: enabled,
-  }));
+}
 
-  const { default: ModeSwitch } = await import('./ModeSwitch');
+vi.mock('@lobechat/const', () => ({
+  get isDesktop() {
+    return mockConfig.desktop;
+  },
+}));
+
+vi.mock('@/store/serverConfig', () => ({
+  useServerConfigStore: <T,>(
+    selector: (state: {
+      featureFlags: {
+        enableAgentOnboarding: boolean;
+      };
+      serverConfigInit: boolean;
+    }) => T,
+  ) => {
+    return selector({
+      featureFlags: { enableAgentOnboarding: mockConfig.agentOnboardingEnabled },
+      serverConfigInit: mockConfig.serverConfigInit,
+    });
+  },
+}));
+
+const renderModeSwitch = ({
+  actions,
+  AGENT_ONBOARDING_ENABLED = true,
+  desktop = false,
+  enabled,
+  entry = '/onboarding/agent',
+  serverConfigInit = true,
+  showLabel,
+}: RenderModeSwitchOptions) => {
+  mockConfig.agentOnboardingEnabled = enabled;
+  mockConfig.AGENT_ONBOARDING_ENABLED = AGENT_ONBOARDING_ENABLED;
+  mockConfig.desktop = desktop;
+  mockConfig.serverConfigInit = serverConfigInit;
 
   render(
     <MemoryRouter initialEntries={[entry]}>
@@ -41,33 +86,70 @@ const renderModeSwitch = async ({
 
 afterEach(() => {
   cleanup();
-  vi.doUnmock('@/routes/onboarding/config');
+  mockConfig.agentOnboardingEnabled = true;
+  mockConfig.AGENT_ONBOARDING_ENABLED = true;
+  mockConfig.desktop = false;
+  mockConfig.serverConfigInit = true;
 });
 
+// Each test does vi.resetModules() + dynamic import of the component, which
+// re-parses antd + @lobehub/ui fresh. On cold CI runs this can blow past the
+// default 5s timeout even though the test is doing nothing slow itself.
+const TEST_TIMEOUT_MS = 15_000;
+
 describe('ModeSwitch', () => {
-  it('renders both onboarding variants when agent onboarding is enabled', async () => {
-    await renderModeSwitch({ enabled: true, showLabel: true });
+  it(
+    'renders both onboarding variants when agent onboarding is enabled',
+    () => {
+      renderModeSwitch({ enabled: true, showLabel: true });
 
-    expect(screen.getByText('Choose your onboarding mode')).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: 'Conversational' })).toBeChecked();
-    expect(screen.getByRole('radio', { name: 'Classic' })).not.toBeChecked();
-  });
+      expect(screen.getByText('Choose your onboarding mode')).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: 'Conversational' })).toBeChecked();
+      expect(screen.getByRole('radio', { name: 'Classic' })).not.toBeChecked();
+    },
+    TEST_TIMEOUT_MS,
+  );
 
-  it('hides the onboarding switch entirely when agent onboarding is disabled', async () => {
-    await renderModeSwitch({ enabled: false });
+  it(
+    'hides the onboarding switch entirely when agent onboarding is disabled',
+    () => {
+      renderModeSwitch({ enabled: false });
+
+      expect(screen.queryByRole('radio', { name: 'Conversational' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('radio', { name: 'Classic' })).not.toBeInTheDocument();
+      expect(screen.queryByText('Choose your onboarding mode')).not.toBeInTheDocument();
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it('hides the onboarding switch until server config is initialized', () => {
+    renderModeSwitch({ enabled: true, serverConfigInit: false });
 
     expect(screen.queryByRole('radio', { name: 'Conversational' })).not.toBeInTheDocument();
     expect(screen.queryByRole('radio', { name: 'Classic' })).not.toBeInTheDocument();
-    expect(screen.queryByText('Choose your onboarding mode')).not.toBeInTheDocument();
   });
 
-  it('keeps action buttons visible when agent onboarding is disabled', async () => {
-    await renderModeSwitch({
+  it('keeps action buttons visible when agent onboarding is disabled', () => {
+    renderModeSwitch({
       actions: <button type="button">Restart</button>,
       enabled: false,
     });
 
     expect(screen.getByRole('button', { name: 'Restart' })).toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: 'Conversational' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: 'Classic' })).not.toBeInTheDocument();
+  });
+
+  it('does not render the switch on desktop builds', () => {
+    renderModeSwitch({ desktop: true, enabled: true });
+
+    expect(screen.queryByRole('radio', { name: 'Conversational' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: 'Classic' })).not.toBeInTheDocument();
+  });
+
+  it('hides the switch when AGENT_ONBOARDING_ENABLED master switch is off', () => {
+    renderModeSwitch({ AGENT_ONBOARDING_ENABLED: false, enabled: true });
+
     expect(screen.queryByRole('radio', { name: 'Conversational' })).not.toBeInTheDocument();
     expect(screen.queryByRole('radio', { name: 'Classic' })).not.toBeInTheDocument();
   });

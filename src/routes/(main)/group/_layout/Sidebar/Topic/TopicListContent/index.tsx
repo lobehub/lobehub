@@ -6,14 +6,13 @@ import urlJoin from 'url-join';
 
 import EmptyNavItem from '@/features/NavPanel/components/EmptyNavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
-import { useFetchTopics } from '@/hooks/useFetchTopics';
+import { useFetchChatTopics } from '@/hooks/useFetchChatTopics';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';
-import { TopicDisplayMode } from '@/types/topic';
 
 import ByTimeMode from './ByTimeMode';
 import FlatMode from './FlatMode';
@@ -28,9 +27,9 @@ const TopicListContent = memo(() => {
     topicSelectors.isInSearchMode(s),
   ]);
   const activeGroupId = useAgentGroupStore((s) => s.activeGroupId);
-  const [topicDisplayMode] = useUserStore((s) => [preferenceSelectors.topicDisplayMode(s)]);
+  const topicGroupMode = useUserStore(preferenceSelectors.topicGroupMode);
 
-  useFetchTopics();
+  useFetchChatTopics();
 
   if (isInSearchMode) return <SearchResult />;
 
@@ -47,7 +46,7 @@ const TopicListContent = memo(() => {
           }}
         />
       )}
-      {topicDisplayMode === TopicDisplayMode.Flat ? <FlatMode /> : <ByTimeMode />}
+      {topicGroupMode === 'flat' ? <FlatMode /> : <ByTimeMode />}
     </>
   );
 });

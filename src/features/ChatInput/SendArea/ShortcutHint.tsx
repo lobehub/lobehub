@@ -1,11 +1,11 @@
-import { combineKeys,Flexbox, Hotkey, Text } from '@lobehub/ui';
+import { KeyEnum } from '@lobechat/const/hotkeys';
+import { combineKeys, Flexbox, Hotkey, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';
-import { KeyEnum } from '@/types/hotkey';
 
 const ShortcutHint = memo(() => {
   const { t } = useTranslation('chat');

@@ -4,12 +4,16 @@ export async function register() {
     await import('./libs/debug-file-logger');
   }
 
-  // Auto-start GatewayManager for non-Vercel environments so that
-  // persistent bots (e.g. Discord gateway, WeChat long-polling) reconnect after server restart.
+  // Auto-start GatewayManager on server start for non-Vercel environments (Docker, local).
+  // Persistent bots need reconnection after restart.
+  // On Vercel, the cron job at /api/agent/gateway handles this reliably instead.
+  // In local dev, opt-in via ENABLE_BOT_IN_DEV to avoid clobbering a shared bot binding.
+  const isDev = process.env.NODE_ENV !== 'production';
   if (
     process.env.NEXT_RUNTIME === 'nodejs' &&
+    process.env.DATABASE_URL &&
     !process.env.VERCEL_ENV &&
-    process.env.DATABASE_URL
+    (!isDev || process.env.ENABLE_BOT_IN_DEV === '1')
   ) {
     const { GatewayService } = await import('./server/services/gateway');
     const service = new GatewayService();
@@ -17,6 +21,12 @@ export async function register() {
       console.error('[Instrumentation] Failed to auto-start GatewayManager:', err);
     });
   }
+
+  // Note: messenger system bot connections (Discord/Telegram) are managed
+  // entirely from dc-center's System Bots admin — save / enable / forceReconnect
+  // mutations call MessageGateway directly. The main app's only role here is
+  // to receive forwarded events at `/api/agent/messenger/webhooks/<platform>`,
+  // which doesn't require any startup work.
 
   if (process.env.NODE_ENV !== 'production' && !process.env.ENABLE_TELEMETRY_IN_DEV) {
     return;

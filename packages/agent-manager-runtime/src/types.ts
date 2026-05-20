@@ -12,6 +12,8 @@ export interface IAgentService {
     agentId?: string;
     sessionId?: string;
   }>;
+  duplicateAgent: (agentId: string, newTitle?: string) => Promise<{ agentId: string } | null>;
+  getAgentConfigById: (agentId: string) => Promise<LobeAgentConfig | null>;
   queryAgents: (params: { keyword?: string; limit?: number }) => Promise<
     Array<{
       avatar?: string | null;

@@ -1,5 +1,5 @@
 import { stat } from 'node:fs/promises';
-import * as path from 'node:path';
+import path from 'node:path';
 
 import type { GlobFilesParams, GlobFilesResult } from '@lobechat/electron-client-ipc';
 

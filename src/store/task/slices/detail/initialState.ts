@@ -2,6 +2,7 @@ import type { TaskDetailData } from '@lobechat/types';
 
 export interface TaskDetailSliceState {
   activeTaskId?: string;
+  activeTopicDrawerTopicId?: string;
   isCreatingTask: boolean;
   isDeletingTask: boolean;
   taskDetailMap: Record<string, TaskDetailData>;

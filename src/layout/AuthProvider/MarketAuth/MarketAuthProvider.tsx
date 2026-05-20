@@ -179,7 +179,7 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
         baseUrl,
         clientId: isDesktop ? 'lobehub-desktop' : 'lobechat-com',
         redirectUri,
-        scope: 'openid profile email',
+        scope: 'openid profile email offline_access',
       };
       setOidcClient(new MarketOIDC(oidcConfig));
     }
@@ -343,11 +343,12 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
       const userInfo = await fetchUserInfo(tokenResponse.accessToken);
 
       // Create session object
-      const expiresAt = Date.now() + tokenResponse.expiresIn * 1000;
+      const expiresIn = tokenResponse.expiresIn ?? 3600;
+      const expiresAt = Date.now() + expiresIn * 1000;
       const newSession: MarketAuthSession = {
         accessToken: tokenResponse.accessToken,
         expiresAt,
-        expiresIn: tokenResponse.expiresIn,
+        expiresIn,
         scope: tokenResponse.scope,
         tokenType: tokenResponse.tokenType as 'Bearer',
         userInfo: userInfo || undefined,
@@ -704,12 +705,22 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
   useEffect(() => {
     const unsubscribe = marketAuthEvents.on('market-unauthorized', async (event) => {
       console.info('[MarketAuth] Received unauthorized event for path:', event.path);
-      // Attempt to recover (refresh token or re-authenticate)
+      // Desktop: do not open community auth / profile modals from background API 401s.
+      // Only attempt a silent token refresh; Lobe cloud re-auth is handled separately (AuthRequiredModal).
+      if (isDesktop) {
+        const refreshed = await refreshToken();
+        if (!refreshed) {
+          console.info(
+            '[MarketAuth] Desktop: market 401 — refresh failed, skipping community sign-in UI',
+          );
+        }
+        return;
+      }
       await handleUnauthorized();
     });
 
     return unsubscribe;
-  }, [handleUnauthorized]);
+  }, [handleUnauthorized, isDesktop, refreshToken]);
 
   const contextValue: MarketAuthContextType = {
     checkAndShowClaimableResources,

@@ -1,4 +1,5 @@
 import type { SearchMemoryParams, SearchMemoryTimeIntent } from '@lobechat/types';
+import { searchMemorySchema } from '@lobechat/types';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -39,6 +40,22 @@ const resolveRelativeDayAnchor = (anchor: RelativeDayIntent['anchor'], now: Date
   const timeRange = resolveTimeIntent(anchor, now);
 
   return timeRange?.start ?? timeRange?.end;
+};
+
+const hasDateString = (value: unknown): boolean => {
+  if (!value || typeof value !== 'object') return false;
+  if (Array.isArray(value)) return value.some(hasDateString);
+
+  const record = value as Record<string, unknown>;
+
+  return (
+    typeof record.date === 'string' ||
+    typeof record.end === 'string' ||
+    typeof record.start === 'string' ||
+    hasDateString(record.anchor) ||
+    hasDateString(record.timeIntent) ||
+    hasDateString(record.timeRange)
+  );
 };
 
 export const resolveTimeIntent = (
@@ -149,15 +166,28 @@ export const resolveTimeIntent = (
   }
 };
 
+/**
+ * Normalizes search memory params.
+ *
+ * Before:
+ * - `{ timeRange: { start: "2026-01-01T00:00:00.000Z" } }`
+ * - `{ timeIntent: { selector: "lastWeek" } }`
+ *
+ * After:
+ * - `{ timeRange: { start: new Date("2026-01-01T00:00:00.000Z") } }`
+ * - `{ timeIntent: undefined, timeRange: { start: Date, end: Date, field: "createdAt" } }`
+ */
 export const normalizeSearchMemoryParams = (
   params: SearchMemoryParams,
   now = new Date(),
 ): SearchMemoryParams => {
-  if (params.timeRange || !params.timeIntent) return params;
+  const parsedParams = hasDateString(params) ? searchMemorySchema.parse(params) : params;
+
+  if (parsedParams.timeRange || !parsedParams.timeIntent) return parsedParams;
 
   return {
-    ...params,
+    ...parsedParams,
     timeIntent: undefined,
-    timeRange: resolveTimeIntent(params.timeIntent, now),
+    timeRange: resolveTimeIntent(parsedParams.timeIntent, now),
   };
 };

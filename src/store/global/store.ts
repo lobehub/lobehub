@@ -10,8 +10,7 @@ import { type GlobalGeneralAction } from './actions/general';
 import { generalActionSlice } from './actions/general';
 import { type GlobalWorkspacePaneAction } from './actions/workspacePane';
 import { globalWorkspaceSlice } from './actions/workspacePane';
-import { type GlobalState } from './initialState';
-import { initialState } from './initialState';
+import { createNavigationRef, type GlobalState, initialState } from './initialState';
 
 //  ===============  Aggregate createStoreFn ============ //
 
@@ -25,6 +24,8 @@ const createStore: StateCreator<GlobalStore, [['zustand/devtools', never]]> = (
   ...parameters: Parameters<StateCreator<GlobalStore, [['zustand/devtools', never]]>>
 ) => ({
   ...initialState,
+  // Own ref instance so nested `.current` writes never mutate exported `initialState.navigationRef`
+  navigationRef: createNavigationRef(),
   ...flattenActions<GlobalStoreAction>([
     globalWorkspaceSlice(...parameters),
     generalActionSlice(...parameters),

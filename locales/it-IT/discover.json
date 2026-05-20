@@ -624,6 +624,8 @@
   "user.logout": "Esci",
   "user.myProfile": "Il Mio Profilo",
   "user.noAgents": "Questo utente non ha ancora pubblicato Agenti",
+  "user.noAgents.ownerDescription": "Crea il tuo primo Agente e condividilo con la Comunità.",
+  "user.noAgents.title": "Ancora nessun Agente",
   "user.noFavoriteAgents": "Nessun Agente salvato",
   "user.noFavoritePlugins": "Nessuna Abilità salvata",
   "user.noForkedAgentGroups": "Nessun gruppo di agenti forkati",

@@ -1,4 +1,4 @@
-import { hasTemperatureTopPConflict } from '../const/models';
+import { hasTemperatureTopPConflict, shouldOmitSamplingParams } from '../const/models';
 
 /**
  * Chat completion parameter configuration
@@ -263,6 +263,16 @@ export const resolveModelSamplingParameters = (
 ): { temperature?: number; top_p?: number } => {
   const temperature = config.temperature ?? undefined;
   const top_p = config.top_p ?? undefined;
+
+  // Some models (e.g. Claude Opus 4.7) reject any non-default temperature / top_p
+  // and return a 400 error. Omit both parameters entirely — callers spread the
+  // returned object, so setting the key to undefined lets JSON.stringify drop it.
+  if (model && shouldOmitSamplingParams(model)) {
+    const result: { temperature?: number; top_p?: number } = {};
+    if (temperature !== undefined) result.temperature = undefined;
+    if (top_p !== undefined) result.top_p = undefined;
+    return result;
+  }
 
   const resolved = resolveParameters(
     { temperature, top_p },

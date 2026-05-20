@@ -1,6 +1,8 @@
 ---
-title: LobeHub Supports Ollama for Local Large Language Model (LLM) Calls
-description: LobeHub v0.127.0 supports using Ollama to call local large language models.
+title: Run Local Models Alongside Cloud AIs
+description: >-
+  LobeHub v0.127.0 adds Ollama support, letting you run local large language
+  models with the same interface you use for cloud providers.
 tags:
   - Ollama AI
   - LobeHub
@@ -9,20 +11,35 @@ tags:
   - GPT-4
 ---
 
-# Support for Ollama Calls to Local Large Language Models 🦙
+# Run Local Models Alongside Cloud AIs
 
-With the release of LobeHub v0.127.0, we're excited to introduce a fantastic new feature—Ollama AI support! 🤯 Thanks to the robust infrastructure provided by [Ollama AI](https://ollama.ai/) and the [efforts of the community](https://github.com/lobehub/lobe-chat/pull/1265), you can now interact with local LLMs (Large Language Models) within LobeHub! 🤩
+Cloud models are powerful, but sometimes you need data to stay local. Maybe it's a sensitive project. Maybe you want to experiment without API costs. Maybe you just like the idea of owning the entire stack. LobeHub v0.127.0 now supports Ollama, giving you the same chat experience whether your model lives in the cloud or on your machine.
 
-We are thrilled to unveil this revolutionary feature to all LobeHub users at this special moment. The integration of Ollama AI not only represents a significant leap in our technology but also reaffirms our commitment to continuously seek more efficient and intelligent ways of communication with our users.
+No separate interface to learn. No workflow fragmentation. Just point LobeHub at your local Ollama instance and start chatting.
 
-## 💡 How to Start a Conversation with Local LLMs?
+## Connect Your Local Models in One Line
 
-If you're facing challenges with private deployments, we strongly recommend trying out the LobeHub Cloud service. We offer comprehensive model support to help you easily embark on your AI conversation journey.
-
-Experience the newly upgraded LobeHub v1.6 and feel the powerful conversational capabilities brought by GPT-4!
+Getting started is straightforward. If you already have Ollama running, connect LobeHub with a single Docker command:
 
 ```bash
 docker run -d -p 3210:3210 -e OLLAMA_PROXY_URL=http://host.docker.internal:11434/v1 lobehub/lobe-chat
 ```
 
-Yes, it's that simple! 🤩 You don't need to go through complicated configurations or worry about intricate installation processes. We've prepared everything for you; just one command is all it takes to start deep conversations with local AI.
+That's it. LobeHub detects your local models and makes them available in the same model switcher you use for GPT-4, Claude, and others. Mix cloud and local models in the same workspace depending on what each conversation needs.
+
+## When to Use Local Models
+
+- **Privacy-first work**: Keep sensitive conversations on your machine
+- **Cost control**: No per-token charges for experimentation
+- **Offline access**: Continue working without internet connectivity
+- **Model testing**: Evaluate open-source models before production deployment
+
+## Improvements and fixes
+
+- Added automatic model discovery from Ollama endpoints
+- Fixed streaming response handling for local model compatibility
+- Improved error handling when Ollama service is unreachable
+
+## Credits
+
+Huge thanks to [the community contributor](https://github.com/lobehub/lobe-chat/pull/1265) who made Ollama integration possible, and to the Ollama team for building accessible local AI infrastructure.

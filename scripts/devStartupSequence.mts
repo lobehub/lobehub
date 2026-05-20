@@ -1,8 +1,32 @@
 import { type ChildProcess, spawn } from 'node:child_process';
 import dotenv from 'dotenv';
+import dotenvExpand from 'dotenv-expand';
 import net from 'node:net';
 
-dotenv.config();
+const env = process.env.NODE_ENV || 'development';
+
+const shellEnv = Object.entries(process.env).reduce<Record<string, string>>(
+  (acc, [key, value]) => {
+    if (typeof value === 'string') acc[key] = value;
+    return acc;
+  },
+  {},
+);
+const dotenvEnv: Record<string, string> = {};
+const dotenvResult = dotenv.config({
+  override: true,
+  path: ['.env', `.env.${env}`, `.env.${env}.local`],
+  processEnv: dotenvEnv,
+});
+
+if (dotenvResult.parsed) {
+  const expanded = dotenvExpand.expand({
+    parsed: dotenvResult.parsed,
+    processEnv: { ...dotenvEnv, ...shellEnv },
+  });
+
+  Object.assign(process.env, expanded.parsed, shellEnv);
+}
 
 const NEXT_HOST = 'localhost';
 
@@ -67,8 +91,10 @@ const waitForNextReady = async () => {
 };
 
 const prewarmNextRootCompile = async () => {
+  const startedAt = Date.now();
   const response = await fetch(NEXT_ROOT_URL, { signal: AbortSignal.timeout(120_000) });
-  console.log(`✅ Next prewarm request finished (${response.status}) ${NEXT_ROOT_URL}`);
+  const elapsed = ((Date.now() - startedAt) / 1000).toFixed(2);
+  console.log(`✅ Next prewarm request finished (${response.status}) in ${elapsed}s ${NEXT_ROOT_URL}`);
 };
 
 const runNextBackgroundTasks = () => {

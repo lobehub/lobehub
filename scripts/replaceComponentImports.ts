@@ -2,22 +2,22 @@ import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 interface ReplaceConfig {
-  /** 要替换的组件列表 */
+  /** List of components to replace */
   components: string[];
-  /** 是否为 dry-run 模式（仅预览，不实际修改） */
+  /** Whether to run in dry-run mode (preview only, no actual modifications) */
   dryRun?: boolean;
-  /** 文件扩展名白名单 */
+  /** File extension whitelist */
   fileExtensions?: string[];
-  /** 原始包名 */
+  /** Source package name */
   fromPackage: string;
-  /** 要扫描的目录 */
+  /** Directory to scan */
   targetDir: string;
-  /** 目标包名 */
+  /** Target package name */
   toPackage: string;
 }
 
 /**
- * 递归获取目录下所有文件
+ * Recursively get all files in a directory
  */
 function getAllFiles(dir: string, extensions: string[]): string[] {
   const files: string[] = [];
@@ -30,7 +30,7 @@ function getAllFiles(dir: string, extensions: string[]): string[] {
       const stat = statSync(fullPath);
 
       if (stat.isDirectory()) {
-        // 跳过 node_modules 等目录
+        // Skip directories like node_modules
         if (!['node_modules', '.git', 'dist', 'build', '.next'].includes(item)) {
           walk(fullPath);
         }
@@ -48,10 +48,10 @@ function getAllFiles(dir: string, extensions: string[]): string[] {
 }
 
 /**
- * 解析 import 语句，提取导入的组件
+ * Parse import statements and extract imported components
  */
 function parseImportStatement(line: string, packageName: string) {
-  // 匹配 import { ... } from 'package'
+  // Match import { ... } from 'package'
   const importRegex = new RegExp(
     `import\\s+{([^}]+)}\\s+from\\s+['"]${packageName.replaceAll(/[$()*+.?[\\\]^{|}]/g, '\\$&')}['"]`,
   );
@@ -64,7 +64,7 @@ function parseImportStatement(line: string, packageName: string) {
     .split(',')
     .map((item) => {
       const trimmed = item.trim();
-      // 处理 as 别名: ComponentName as AliasName
+      // Handle as aliases: ComponentName as AliasName
       const asMatch = trimmed.match(/^(\w+)(?:\s+as\s+(\w+))?/);
       return asMatch
         ? {
@@ -84,7 +84,7 @@ function parseImportStatement(line: string, packageName: string) {
 }
 
 /**
- * 替换文件中的 import 语句
+ * Replace import statements in a file
  */
 function replaceImportsInFile(filePath: string, config: ReplaceConfig): boolean {
   const content = readFileSync(filePath, 'utf8');
@@ -100,28 +100,28 @@ function replaceImportsInFile(filePath: string, config: ReplaceConfig): boolean 
       continue;
     }
 
-    // 找出需要替换的组件和保留的组件
+    // Find components to replace and components to keep
     const toReplace = parsed.components.filter((comp) => config.components.includes(comp.name));
     const toKeep = parsed.components.filter((comp) => !config.components.includes(comp.name));
 
     if (toReplace.length === 0) {
-      // 没有需要替换的组件
+      // No components to replace
       newLines.push(line);
       continue;
     }
 
     modified = true;
 
-    // 生成新的 import 语句
+    // Generate new import statement
     const { indentation } = parsed;
 
-    // 如果有保留的组件，保留原来的 import
+    // If there are components to keep, preserve the original import
     if (toKeep.length > 0) {
       const keepImports = toKeep.map((c) => c.raw).join(', ');
       newLines.push(`${indentation}import { ${keepImports} } from '${config.fromPackage}';`);
     }
 
-    // 添加新的 import
+    // Add new import
     const replaceImports = toReplace.map((c) => c.raw).join(', ');
     newLines.push(`${indentation}import { ${replaceImports} } from '${config.toPackage}';`);
   }
@@ -138,7 +138,7 @@ function replaceImportsInFile(filePath: string, config: ReplaceConfig): boolean 
 }
 
 /**
- * 执行替换
+ * Execute replacement
  */
 function executeReplace(config: ReplaceConfig) {
   const extensions = config.fileExtensions || ['.ts', '.tsx', '.js', '.jsx'];
@@ -175,10 +175,10 @@ function executeReplace(config: ReplaceConfig) {
   }
 }
 
-// ============ 主函数 ============
+// ============ Main function ============
 
 /**
- * 从命令行参数解析配置
+ * Parse configuration from command line arguments
  */
 function parseArgs(): ReplaceConfig | null {
   const args = process.argv.slice(2);
@@ -244,7 +244,7 @@ function parseArgs(): ReplaceConfig | null {
   };
 }
 
-// 执行脚本
+// Execute script
 const config = parseArgs();
 if (config) {
   executeReplace(config);

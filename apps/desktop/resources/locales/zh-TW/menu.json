@@ -71,6 +71,7 @@
   "macOS.services": "服務",
   "macOS.unhide": "全部顯示",
   "tray.open": "打開 {{appName}}",
+  "tray.openMiniToolbar": "Quick Composer",
   "tray.quit": "退出",
   "tray.show": "顯示 {{appName}}",
   "view.forceReload": "強制重新載入",

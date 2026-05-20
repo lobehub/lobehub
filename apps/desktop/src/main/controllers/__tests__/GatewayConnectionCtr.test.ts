@@ -433,18 +433,23 @@ describe('GatewayConnectionCtr', () => {
     }
 
     it.each([
-      ['readLocalFile', 'readFile', mockLocalFileCtr],
-      ['listLocalFiles', 'listLocalFiles', mockLocalFileCtr],
-      ['moveLocalFiles', 'handleMoveFiles', mockLocalFileCtr],
-      ['renameLocalFile', 'handleRenameFile', mockLocalFileCtr],
-      ['searchLocalFiles', 'handleLocalFilesSearch', mockLocalFileCtr],
-      ['writeLocalFile', 'handleWriteFile', mockLocalFileCtr],
-      ['editLocalFile', 'handleEditFile', mockLocalFileCtr],
-      ['globLocalFiles', 'handleGlobFiles', mockLocalFileCtr],
+      ['readFile', 'readFile', mockLocalFileCtr],
+      ['listFiles', 'listLocalFiles', mockLocalFileCtr],
+      ['moveFiles', 'handleMoveFiles', mockLocalFileCtr],
+      ['searchFiles', 'handleLocalFilesSearch', mockLocalFileCtr],
+      ['writeFile', 'handleWriteFile', mockLocalFileCtr],
+      ['editFile', 'handleEditFile', mockLocalFileCtr],
+      ['globFiles', 'handleGlobFiles', mockLocalFileCtr],
       ['grepContent', 'handleGrepContent', mockLocalFileCtr],
       ['runCommand', 'handleRunCommand', mockShellCommandCtr],
       ['getCommandOutput', 'handleGetCommandOutput', mockShellCommandCtr],
       ['killCommand', 'handleKillCommand', mockShellCommandCtr],
+      // Legacy aliases — older Gateway versions may still send the long form.
+      // `renameLocalFile` is kept even though the new surface drops rename.
+      ['readLocalFile', 'readFile', mockLocalFileCtr],
+      ['listLocalFiles', 'listLocalFiles', mockLocalFileCtr],
+      ['writeLocalFile', 'handleWriteFile', mockLocalFileCtr],
+      ['renameLocalFile', 'handleRenameFile', mockLocalFileCtr],
     ] as const)('should route %s to %s', async (apiName, methodName, controller) => {
       const client = await connectAndOpen();
       const args = { test: 'arg' };
@@ -470,7 +475,7 @@ describe('GatewayConnectionCtr', () => {
       });
       const client = await connectAndOpen();
 
-      client.simulateToolCallRequest('readLocalFile', { path: '/a.txt' }, 'req-42');
+      client.simulateToolCallRequest('readFile', { path: '/a.txt' }, 'req-42');
       await vi.advanceTimersByTimeAsync(0);
 
       expect(client.sendToolCallResponse).toHaveBeenCalledWith({
@@ -497,7 +502,7 @@ describe('GatewayConnectionCtr', () => {
       vi.mocked(mockLocalFileCtr.readFile).mockRejectedValueOnce(new Error('File not found'));
       const client = await connectAndOpen();
 
-      client.simulateToolCallRequest('readLocalFile', { path: '/missing' }, 'req-err');
+      client.simulateToolCallRequest('readFile', { path: '/missing' }, 'req-err');
       await vi.advanceTimersByTimeAsync(0);
 
       expect(client.sendToolCallResponse).toHaveBeenCalledWith({

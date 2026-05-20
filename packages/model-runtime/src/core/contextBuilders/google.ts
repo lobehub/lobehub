@@ -4,7 +4,6 @@ import type {
   Part,
   Tool as GoogleFunctionCallTool,
 } from '@google/genai';
-import { Type as SchemaType } from '@google/genai';
 import { imageUrlToBase64 } from '@lobechat/utils';
 
 import type { ChatCompletionTool, OpenAIChatMessage, UserMessageContentPart } from '../../types';
@@ -123,13 +122,49 @@ export const buildGoogleMessage = async (
   // Handle assistant messages with tool_calls
   if (!!message.tool_calls) {
     return {
-      parts: message.tool_calls.map<Part>((tool) => ({
-        functionCall: {
-          args: safeParseJSON(tool.function.arguments)!,
-          name: tool.function.name,
-        },
-        thoughtSignature: tool.thoughtSignature,
-      })),
+      parts: message.tool_calls.map<Part>((tool) => {
+        const parsed = safeParseJSON(tool.function.arguments);
+        // Gemini's functionCall.args requires a plain object, same constraint
+        // as Anthropic's tool_use.input. See anthropic.ts for the full
+        // recovery rationale.
+        let args: Record<string, unknown> = {};
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          args = parsed as Record<string, unknown>;
+        } else if (
+          Array.isArray(parsed) &&
+          parsed.length > 0 &&
+          parsed[0] &&
+          typeof parsed[0] === 'object' &&
+          !Array.isArray(parsed[0])
+        ) {
+          args = parsed[0] as Record<string, unknown>;
+          console.warn(
+            '[google] functionCall.args recovered from array — parsed arguments was wrapped in []',
+            {
+              argumentsLength: tool.function.arguments?.length,
+              arrayLength: parsed.length,
+              name: tool.function.name,
+            },
+          );
+        } else if (parsed !== undefined) {
+          console.warn(
+            '[google] functionCall.args fallback to {} — parsed arguments is not a plain object',
+            {
+              argumentsLength: tool.function.arguments?.length,
+              name: tool.function.name,
+              parsedType: Array.isArray(parsed)
+                ? 'array'
+                : parsed === null
+                  ? 'null'
+                  : typeof parsed,
+            },
+          );
+        }
+        return {
+          functionCall: { args, name: tool.function.name },
+          thoughtSignature: tool.thoughtSignature,
+        };
+      }),
       role: 'model',
     };
   }
@@ -213,33 +248,16 @@ export const buildGoogleMessages = async (messages: OpenAIChatMessage[]): Promis
     }
   }
 
-  // Check if the last message is a tool message
-  const lastMessage = messages.at(-1);
-  const shouldAddMagicSignature = lastMessage?.role === 'tool';
-
-  if (shouldAddMagicSignature) {
-    // Find the last user message index in filtered contents
-    let lastUserIndex = -1;
-    for (let i = filteredContents.length - 1; i >= 0; i--) {
-      if (filteredContents[i].role === 'user') {
-        // Skip if it's a functionResponse (tool result)
-        const hasFunctionResponse = filteredContents[i].parts?.some((p) => p.functionResponse);
-        if (!hasFunctionResponse) {
-          lastUserIndex = i;
-          break;
-        }
-      }
-    }
-
-    // Add magic signature to all function calls after last user message that don't have thoughtSignature
-    for (let i = lastUserIndex + 1; i < filteredContents.length; i++) {
-      const content = filteredContents[i];
-      if (content.role === 'model' && content.parts) {
-        for (const part of content.parts) {
-          if (part.functionCall && !part.thoughtSignature) {
-            // Only add magic signature if thoughtSignature doesn't exist
-            part.thoughtSignature = GEMINI_MAGIC_THOUGHT_SIGNATURE;
-          }
+  // Add magic signature to all function calls that don't have thoughtSignature.
+  // This handles cross-provider scenarios (e.g., OpenAI → Gemini switch) where
+  // historical tool_calls lack thoughtSignature, as well as multi-turn Gemini
+  // conversations where earlier turns may have lost their signatures.
+  // @see https://linear.app/lobehub/issue/LOBE-8662
+  for (const content of filteredContents) {
+    if (content.role === 'model' && content.parts) {
+      for (const part of content.parts) {
+        if (part.functionCall && !part.thoughtSignature) {
+          part.thoughtSignature = GEMINI_MAGIC_THOUGHT_SIGNATURE;
         }
       }
     }
@@ -249,137 +267,109 @@ export const buildGoogleMessages = async (messages: OpenAIChatMessage[]): Promis
 };
 
 /**
- * JSON Schema keywords that cause Google GenAI / Vertex AI SDK validation errors.
- * Other unsupported keywords are silently ignored by the API, so only strip these.
+ * Recursively sanitize a JSON Schema to comply with Gemini proto constraints:
+ * - `enum` is only allowed on STRING type fields
+ * - `required` is only allowed on OBJECT type fields
+ *
+ * This handles the OpenAI→Gemini schema bridge where the upstream
+ * schema may place `enum` on non-STRING types (e.g. number, boolean)
+ * or `required` on non-OBJECT types.
+ *
+ * @see https://linear.app/lobehub/issue/LOBE-8661
  */
-const UNSUPPORTED_SCHEMA_KEYS = new Set(['examples', 'default', 'additionalProperties', '$ref']);
-
-/**
- * Resolve all `$ref` pointers in a JSON Schema tree by inlining definitions.
- * Only handles internal `#/definitions/…` references (the kind produced by our manifests).
- * Recursive references are guarded by a depth limit to avoid infinite loops.
- */
-const resolveRefs = (
-  node: Record<string, any>,
-  definitions: Record<string, any>,
-  depth = 0,
-): Record<string, any> => {
-  if (!node || typeof node !== 'object' || depth > 10) return node;
-
-  if (Array.isArray(node)) {
-    return node.map((item) => resolveRefs(item, definitions, depth));
-  }
-
-  // Unwrap single-element allOf (common pattern: allOf: [{ $ref: '...' }])
-  if (Array.isArray(node.allOf) && node.allOf.length === 1) {
-    const { allOf, ...rest } = node;
-    return resolveRefs({ ...rest, ...allOf[0] }, definitions, depth);
-  }
-
-  // If this node IS a $ref, replace it with the referenced definition
-  // Preserve sibling fields (e.g. description) that sit next to $ref
-  if (typeof node.$ref === 'string') {
-    const { $ref: ref, ...siblings } = node;
-    const match = ref.match(/^#\/definitions\/(.+)$/);
-    if (match && definitions[match[1]]) {
-      return resolveRefs({ ...definitions[match[1]], ...siblings }, definitions, depth + 1);
-    }
-    // Unknown $ref — return without it so Google doesn't choke
-    return siblings;
-  }
-
-  const result: Record<string, any> = {};
-  for (const [key, value] of Object.entries(node)) {
-    // Drop definitions key after resolving — Google doesn't understand it
-    if (key === 'definitions') continue;
-
-    if (value && typeof value === 'object') {
-      result[key] = resolveRefs(value, definitions, depth);
-    } else {
-      result[key] = value;
-    }
-  }
-  return result;
-};
-
-/**
- * Sanitize JSON Schema for Google GenAI compatibility
- * Google's API doesn't support certain JSON Schema keywords like 'const'
- * This function recursively processes the schema and converts unsupported keywords
- */
-const sanitizeSchemaForGoogle = (
-  schema: Record<string, any>,
-  rootDefinitions?: Record<string, any>,
-): Record<string, any> => {
+export const sanitizeGeminiSchema = (schema: any): any => {
   if (!schema || typeof schema !== 'object') return schema;
 
-  // Handle arrays
-  if (Array.isArray(schema)) {
-    return schema.map((item) => sanitizeSchemaForGoogle(item, rootDefinitions));
+  const sanitized = { ...schema };
+
+  // Determine if the schema type is (or includes) STRING / OBJECT.
+  // Handles both `type: 'string'` and nullable `type: ['string', 'null']`.
+  const isStringType = (t: unknown): boolean =>
+    typeof t === 'string' ? t === 'string' : Array.isArray(t) && t.includes('string');
+  const isObjectType = (t: unknown): boolean =>
+    typeof t === 'string' ? t === 'object' : Array.isArray(t) && t.includes('object');
+
+  // Strip enum from non-STRING types and empty enums
+  // Gemini proto: "enum: only allowed for STRING type"
+  if (
+    sanitized.enum !== undefined &&
+    (!isStringType(sanitized.type) || !Array.isArray(sanitized.enum) || sanitized.enum.length === 0)
+  ) {
+    console.warn(
+      '[google] sanitizeGeminiSchema stripped enum — not allowed for non-STRING type or empty',
+      { type: sanitized.type, enumLength: sanitized.enum?.length },
+    );
+    delete sanitized.enum;
   }
 
-  const result: Record<string, any> = {};
+  // Strip required from non-OBJECT types and empty required arrays
+  // Gemini proto: "required: only allowed for OBJECT type"
+  if (
+    sanitized.required !== undefined &&
+    (!isObjectType(sanitized.type) ||
+      !Array.isArray(sanitized.required) ||
+      sanitized.required.length === 0)
+  ) {
+    console.warn(
+      '[google] sanitizeGeminiSchema stripped required — not allowed for non-OBJECT type or empty',
+      { type: sanitized.type, requiredLength: sanitized.required?.length },
+    );
+    delete sanitized.required;
+  }
 
-  for (const [key, value] of Object.entries(schema)) {
-    // Strip unsupported JSON Schema keywords (e.g. examples, default, $schema)
-    if (UNSUPPORTED_SCHEMA_KEYS.has(key)) continue;
-
-    // Drop definitions — already resolved by resolveRefs
-    if (key === 'definitions') continue;
-
-    // Convert 'const' to 'enum' with single value (Google doesn't support 'const')
-    if (key === 'const') {
-      result['enum'] = [value];
-      continue;
+  // Recursively sanitize properties
+  if (sanitized.properties && typeof sanitized.properties === 'object') {
+    for (const key of Object.keys(sanitized.properties)) {
+      sanitized.properties[key] = sanitizeGeminiSchema(sanitized.properties[key]);
     }
+  }
 
-    // Filter null values from enum arrays (Google doesn't support null in enum)
-    if (key === 'enum' && Array.isArray(value)) {
-      const filteredEnum = value.filter((item) => item !== null);
-      // Only set enum if there are remaining values after filtering
-      if (filteredEnum.length > 0) {
-        result[key] = filteredEnum;
+  // Recursively sanitize items (for array types)
+  if (sanitized.items) {
+    sanitized.items = sanitizeGeminiSchema(sanitized.items);
+  }
+
+  // Recursively sanitize anyOf/oneOf/allOf combinators
+  for (const key of ['anyOf', 'oneOf', 'allOf']) {
+    if (Array.isArray(sanitized[key])) {
+      sanitized[key] = sanitized[key].map(sanitizeGeminiSchema);
+    }
+  }
+
+  // Recursively sanitize definitions/$defs — when a tool schema stores
+  // non-compliant constraints inside a referenced sub-schema the walker
+  // must reach into the definitions map as well.
+  for (const key of ['definitions', '$defs']) {
+    if (sanitized[key] && typeof sanitized[key] === 'object') {
+      for (const defKey of Object.keys(sanitized[key])) {
+        sanitized[key][defKey] = sanitizeGeminiSchema(sanitized[key][defKey]);
       }
-      continue;
-    }
-
-    // Recursively process nested objects
-    if (value && typeof value === 'object') {
-      result[key] = sanitizeSchemaForGoogle(value, rootDefinitions);
-    } else {
-      result[key] = value;
     }
   }
 
-  return result;
+  return sanitized;
 };
 
 /**
- * Convert ChatCompletionTool to Google FunctionDeclaration
+ * Convert ChatCompletionTool to Google FunctionDeclaration.
+ * Uses `parametersJsonSchema` to pass standard JSON Schema directly,
+ * avoiding Google's restrictive Schema subset (no $ref, nullable, const, etc.).
  */
 export const buildGoogleTool = (tool: ChatCompletionTool): FunctionDeclaration => {
   const functionDeclaration = tool.function;
   const parameters = functionDeclaration.parameters;
-  // refs: https://github.com/lobehub/lobe-chat/pull/5002
-  const rawProperties =
-    parameters?.properties && Object.keys(parameters.properties).length > 0
-      ? parameters.properties
-      : { dummy: { type: 'string' } }; // dummy property to avoid empty object
 
-  // Resolve $ref references first, then sanitize for Google compatibility
-  const definitions = (parameters as any)?.definitions ?? {};
-  const resolved = resolveRefs(rawProperties, definitions);
-  const properties = sanitizeSchemaForGoogle(resolved, definitions);
+  // refs: https://github.com/lobehub/lobe-chat/pull/5002
+  const hasProperties = parameters?.properties && Object.keys(parameters.properties).length > 0;
+
+  const jsonSchema = hasProperties
+    ? sanitizeGeminiSchema(parameters)
+    : { type: 'object', properties: { dummy: { type: 'string' } } };
 
   return {
     description: functionDeclaration.description,
     name: functionDeclaration.name,
-    parameters: {
-      description: parameters?.description,
-      properties,
-      required: parameters?.required,
-      type: SchemaType.OBJECT,
-    },
+    parametersJsonSchema: jsonSchema,
   };
 };
 

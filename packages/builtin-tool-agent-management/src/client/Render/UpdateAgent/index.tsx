@@ -31,8 +31,23 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
+const safeParse = (val: unknown): Record<string, any> | undefined => {
+  if (!val) return undefined;
+  if (typeof val === 'object') return val as Record<string, any>;
+  if (typeof val === 'string') {
+    try {
+      const parsed = JSON.parse(val);
+      return typeof parsed === 'object' ? parsed : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+};
+
 export const UpdateAgentRender = memo<BuiltinRenderProps<UpdateAgentParams>>(({ args }) => {
-  const { config, meta } = args || {};
+  const config = safeParse(args?.config);
+  const meta = safeParse(args?.meta);
 
   const hasConfig = config && Object.keys(config).length > 0;
   const hasMeta = meta && Object.keys(meta).length > 0;

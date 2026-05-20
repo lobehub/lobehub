@@ -16,10 +16,9 @@ const leftActions: ActionKeys[] = [
   'tools',
   '---',
   ['typo', 'params', 'clear'],
-  'mainToken',
 ];
 
-const rightActions: ActionKeys[] = [];
+const rightActions: ActionKeys[] = ['contextWindow'];
 
 /**
  * MainChatInput

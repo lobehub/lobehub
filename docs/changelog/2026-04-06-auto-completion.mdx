@@ -1,0 +1,28 @@
+---
+title: AI Auto-Completion & Real-Time Gateway
+description: >-
+  Added AI-powered input auto-completion, WebSocket-based real-time messaging
+  gateway, expanded bot platform support, and improved context injection.
+tags:
+  - Auto-Completion
+  - WebSocket Gateway
+  - Bot Platform
+  - Context Engine
+---
+
+# AI Auto-Completion & Real-Time Gateway
+
+This release focuses on removing small points of friction in writing and real-time collaboration.
+
+The editor now supports AI auto-completion while you type, so drafting messages is faster and requires less context switching. On the delivery side, the new WebSocket-based Agent Gateway streams responses with lower latency, making live conversations feel more immediate.
+
+Cross-platform bot connectivity is also broader. Feishu/Lark, Slack, and QQ now support WebSocket connection mode for more reliable message delivery. Context invocation is also simpler: skills and tools can be triggered with `@` mentions and direct context injection, replacing the older slash-command-heavy flow.
+
+To keep navigation cleaner over time, the Skill Store now has a dedicated Skills tab, and topics are automatically created every four hours to keep conversations organized.
+
+## Experience Improvements
+
+- Agent documents now load progressively, showing content as it becomes available instead of blocking the full page
+- Fixed the image generation button incorrectly defaulting to a wrong model
+- Improved paste performance by preventing the chat input from freezing on large clipboard content
+- Strengthened security by sanitizing HTML artifacts and removing an auth bypass vector

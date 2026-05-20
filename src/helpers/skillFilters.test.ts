@@ -12,6 +12,11 @@ describe('skillFilters', () => {
     expect(shouldEnableBuiltinSkill('lobe-agent-browser', { isDesktop: false })).toBe(false);
   });
 
+  it('should disable task builtin skill globally', () => {
+    expect(shouldEnableBuiltinSkill('task', { isDesktop: false })).toBe(false);
+    expect(shouldEnableBuiltinSkill('task', { isDesktop: true })).toBe(false);
+  });
+
   it('should enable agent-browser on desktop (non-Windows) environment', () => {
     expect(shouldEnableBuiltinSkill('lobe-agent-browser', { isDesktop: true })).toBe(true);
   });
@@ -47,6 +52,13 @@ describe('skillFilters', () => {
         description: 'artifacts',
         identifier: 'lobe-artifacts',
         name: 'Artifacts',
+        source: 'builtin' as const,
+      },
+      {
+        content: 'task',
+        description: 'task',
+        identifier: 'task',
+        name: 'Task',
         source: 'builtin' as const,
       },
     ];

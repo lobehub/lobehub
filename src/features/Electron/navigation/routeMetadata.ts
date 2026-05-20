@@ -31,6 +31,7 @@ const memoryIcon = getRouteById('memory')?.icon;
 const imageIcon = getRouteById('image')?.icon;
 const pageIcon = getRouteById('page')?.icon;
 const settingsIcon = getRouteById('settings')?.icon;
+const tasksIcon = getRouteById('tasks')?.icon;
 
 /**
  * Route patterns ordered by specificity (most specific first)
@@ -50,8 +51,14 @@ const routePatterns: RoutePattern[] = [
 
   // Agent/Chat routes - use dynamic title for specific chat names
   {
+    icon: pageIcon,
+    test: (p) => /^\/agent\/[^/]+\/tpc_[^/]+\/page$/.test(p),
+    titleKey: 'navigation.page',
+    useDynamicTitle: true,
+  },
+  {
     icon: MessageSquare,
-    test: (p) => p.startsWith('/agent/'),
+    test: (p) => p.startsWith('/agent/') && !/^\/agent\/[^/]+\/task\//.test(p),
     titleKey: 'navigation.chat',
     useDynamicTitle: true,
   },
@@ -111,6 +118,14 @@ const routePatterns: RoutePattern[] = [
     icon: resourceIcon,
     test: (p) => p.startsWith('/resource'),
     titleKey: 'navigation.resources',
+  },
+
+  // Tasks routes (cross-agent global view + singular task detail)
+  {
+    icon: tasksIcon,
+    test: (p) =>
+      p.startsWith('/tasks') || p.startsWith('/task/') || /^\/agent\/[^/]+\/task\//.test(p),
+    titleKey: 'navigation.tasks',
   },
 
   // Memory routes

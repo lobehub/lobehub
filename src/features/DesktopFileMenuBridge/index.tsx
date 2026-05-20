@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { useCreateMenuItems } from '@/routes/(main)/home/_layout/hooks/useCreateMenuItems';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
+import { useChatStore } from '@/store/chat';
 
 /**
  * Bridge component for handling File menu actions from Electron main process
@@ -20,11 +21,16 @@ const DesktopFileMenuBridge = () => {
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
 
   // Handle create new topic from File menu
-  // If currently in an agent page, create a new topic for the current agent
-  // Otherwise, navigate to inbox agent
+  // If currently in an agent page, clear the active topic via the store —
+  // navigating to the same path won't clear `activeTopicId` because
+  // ChatHydration's URL→store updater skips `undefined` values.
+  // If not in an agent page, navigate to inbox agent.
   const handleCreateNewTopic = useCallback(() => {
-    const targetAgentId = activeAgentId || inboxAgentId;
-    navigate(SESSION_CHAT_URL(targetAgentId, false));
+    if (activeAgentId) {
+      useChatStore.getState().switchTopic(null);
+      return;
+    }
+    navigate(SESSION_CHAT_URL(inboxAgentId, false));
   }, [activeAgentId, inboxAgentId, navigate]);
 
   // Handle create new agent from File menu

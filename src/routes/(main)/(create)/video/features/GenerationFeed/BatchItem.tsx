@@ -214,7 +214,10 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(({ b
     );
   };
 
-  const hasReferenceFrames = batch.config?.imageUrl || batch.config?.endImageUrl;
+  const hasReferenceFrames =
+    batch.config?.imageUrl ||
+    (batch.config?.imageUrls && batch.config.imageUrls.length > 0) ||
+    batch.config?.endImageUrl;
 
   return (
     <Block className={styles.container} gap={8} variant={'borderless'}>
@@ -223,6 +226,7 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(({ b
           <VideoReferenceFrames
             endImageUrl={batch.config?.endImageUrl}
             imageUrl={batch.config?.imageUrl}
+            imageUrls={batch.config?.imageUrls}
           />
         )}
         <Markdown variant={'chat'}>{batch.prompt}</Markdown>

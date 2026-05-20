@@ -108,6 +108,7 @@ describe('EditorCanvas', () => {
           editor={mockEditor}
           placeholder="Custom placeholder"
           sourceType="notebook"
+          topicId="topic-123"
           unsavedChangesGuard={{ enabled: true, message: 'unsaved', title: 'Unsaved' }}
           onContentChange={onContentChange}
           onInit={onInit}
@@ -125,6 +126,7 @@ describe('EditorCanvas', () => {
         onInit,
         placeholder: 'Custom placeholder',
         sourceType: 'notebook',
+        topicId: 'topic-123',
         unsavedChangesGuard: { enabled: true, message: 'unsaved', title: 'Unsaved' },
       });
     });

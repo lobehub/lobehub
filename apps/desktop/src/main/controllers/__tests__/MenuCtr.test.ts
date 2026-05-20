@@ -14,7 +14,7 @@ vi.mock('electron', () => ({
   },
 }));
 
-// 模拟 App 及其依赖项
+// Mock App and its dependencies
 const mockRefreshMenus = vi.fn();
 const mockShowContextMenu = vi.fn();
 const mockRebuildAppMenu = vi.fn();
@@ -37,7 +37,7 @@ describe('MenuController', () => {
 
   describe('refreshAppMenu', () => {
     it('should call menuManager.refreshMenus', () => {
-      // 模拟返回值
+      // Mock return value
       mockRefreshMenus.mockReturnValueOnce(true);
 
       const result = menuController.refreshAppMenu();

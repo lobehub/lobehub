@@ -24,7 +24,10 @@ const Content = memo<ContentProps>(({ searchKeyword }) => {
   const isSearching = trimmedKeyword.length > 0;
 
   // Search agents using homeStore
-  const [useSearchAgents] = useHomeStore((s) => [s.useSearchAgents]);
+  const [closeAllAgentsDrawer, useSearchAgents] = useHomeStore((s) => [
+    s.closeAllAgentsDrawer,
+    s.useSearchAgents,
+  ]);
   const { data: searchResults, isLoading: isSearchLoading } = useSearchAgents(
     isSearching ? trimmedKeyword : undefined,
   );
@@ -36,6 +39,9 @@ const Content = memo<ContentProps>(({ searchKeyword }) => {
   const displayItems = isSearching ? searchResults || [] : allUngroupedAgents;
 
   const count = displayItems.length;
+
+  // Close on navigation because the Home layout stays mounted offscreen across route changes.
+  const handleNavigate = closeAllAgentsDrawer;
 
   // Show loading skeleton when searching
   if (isSearching && (isSearchLoading || !searchResults)) {
@@ -58,7 +64,11 @@ const Content = memo<ContentProps>(({ searchKeyword }) => {
     >
       {displayItems.map((item) => (
         <Flexbox key={item.id} paddingBlock={1} paddingInline={4}>
-          {item.type === 'group' ? <GroupItem item={item} /> : <AgentItem item={item} />}
+          {item.type === 'group' ? (
+            <GroupItem item={item} onNavigate={handleNavigate} />
+          ) : (
+            <AgentItem item={item} onNavigate={handleNavigate} />
+          )}
         </Flexbox>
       ))}
     </VList>

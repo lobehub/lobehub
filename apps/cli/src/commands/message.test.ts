@@ -79,6 +79,57 @@ describe('message command', () => {
       );
       expect(mockTrpcClient.message.listAll.query).not.toHaveBeenCalled();
     });
+
+    it('should keep first page on the backend default offset for filtered queries', async () => {
+      mockTrpcClient.message.getMessages.query.mockResolvedValue([]);
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'message',
+        'list',
+        '--topic-id',
+        't1',
+        '-L',
+        '200',
+      ]);
+
+      expect(mockTrpcClient.message.getMessages.query).toHaveBeenCalledWith(
+        expect.objectContaining({ pageSize: 200, topicId: 't1' }),
+      );
+    });
+
+    it('should convert page 2 to current 1 for filtered queries', async () => {
+      mockTrpcClient.message.getMessages.query.mockResolvedValue([]);
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'message',
+        'list',
+        '--topic-id',
+        't1',
+        '--page',
+        '2',
+      ]);
+
+      expect(mockTrpcClient.message.getMessages.query).toHaveBeenCalledWith(
+        expect.objectContaining({ current: 1, topicId: 't1' }),
+      );
+    });
+
+    it('should support the short page flag for filtered queries', async () => {
+      mockTrpcClient.message.getMessages.query.mockResolvedValue([]);
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'message', 'list', '--topic-id', 't1', '-P', '2']);
+
+      expect(mockTrpcClient.message.getMessages.query).toHaveBeenCalledWith(
+        expect.objectContaining({ current: 1, topicId: 't1' }),
+      );
+    });
   });
 
   describe('search', () => {

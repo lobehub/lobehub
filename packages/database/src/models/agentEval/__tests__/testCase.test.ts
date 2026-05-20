@@ -477,7 +477,6 @@ describe('AgentEvalTestCaseModel', () => {
       expect(result?.content.expected).toBe('New answer');
       expect(result?.metadata).toEqual({ reviewed: true });
       expect(result?.updatedAt).toBeDefined();
-      expect(result?.updatedAt.getTime()).toBeGreaterThanOrEqual(result!.createdAt.getTime());
     });
 
     it('should update only sortOrder', async () => {

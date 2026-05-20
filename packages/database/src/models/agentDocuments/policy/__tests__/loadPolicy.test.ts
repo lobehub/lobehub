@@ -62,6 +62,35 @@ describe('agentDocuments load policy checks', () => {
     ).toBe(true);
   });
 
+  it('returns true for unknown load rule (normalizeLoadRule default branch)', () => {
+    expect(
+      matchesLoadRules(
+        { loadRules: { rule: 'unknown-rule' as any } },
+        { currentUserMessage: 'hello' },
+      ),
+    ).toBe(true);
+  });
+
+  it('returns true for explicitly set always rule', () => {
+    expect(
+      matchesLoadRules({ loadRules: { rule: 'always' } }, { currentUserMessage: 'anything' }),
+    ).toBe(true);
+  });
+
+  it('rejects by-time-range with NaN dates', () => {
+    expect(
+      matchesLoadRules(
+        {
+          loadRules: {
+            rule: 'by-time-range',
+            timeRange: { from: 'not-a-date', to: 'also-not-a-date' },
+          },
+        },
+        { currentTime: new Date() },
+      ),
+    ).toBe(false);
+  });
+
   it('composes load-rule check through shouldInjectDocument', () => {
     const doc = {
       loadRules: { keywords: ['release'], rule: 'by-keywords' as const },

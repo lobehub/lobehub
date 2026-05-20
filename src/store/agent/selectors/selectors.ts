@@ -3,8 +3,10 @@ import {
   DEFAULT_AGENT_CONFIG,
   DEFAULT_AVATAR,
   DEFAULT_BACKGROUND_COLOR,
+  DEFAULT_INBOX_AVATAR,
   DEFAULT_MODEL,
   DEFAUTT_AGENT_TTS_CONFIG,
+  isDesktop,
 } from '@lobechat/const';
 import {
   type AgentMode,
@@ -18,9 +20,11 @@ import { KnowledgeType } from '@lobechat/types';
 import { VoiceList } from '@lobehub/tts';
 
 import { DEFAULT_OPENING_QUESTIONS } from '@/features/AgentSetting/store/selectors';
+import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
 import { filterToolIds } from '@/helpers/toolFilters';
 
 import { type AgentStoreState } from '../initialState';
+import { getLocalAgentWorkingDirectory } from '../utils/localAgentWorkingDirectoryStorage';
 import { builtinAgentSelectors } from './builtinAgentSelectors';
 
 // ==========   Meta   ============== //
@@ -30,7 +34,14 @@ const currentAgentData = (s: AgentStoreState) =>
 
 const currentAgentTitle = (s: AgentStoreState) => currentAgentData(s)?.title;
 
-const currentAgentAvatar = (s: AgentStoreState) => currentAgentData(s)?.avatar || DEFAULT_AVATAR;
+const getDefaultAvatarByAgentId = (s: AgentStoreState, agentId?: string) => {
+  const inboxAgentId = builtinAgentSelectors.inboxAgentId(s);
+
+  return agentId && inboxAgentId === agentId ? DEFAULT_INBOX_AVATAR : DEFAULT_AVATAR;
+};
+
+const currentAgentAvatar = (s: AgentStoreState) =>
+  currentAgentData(s)?.avatar || getDefaultAvatarByAgentId(s, s.activeAgentId);
 
 const currentAgentDescription = (s: AgentStoreState) => currentAgentData(s)?.description;
 
@@ -46,7 +57,7 @@ const currentAgentTags = (s: AgentStoreState) => currentAgentData(s)?.tags || []
 const currentAgentMeta = (s: AgentStoreState): MetaData => {
   const data = currentAgentData(s);
   return {
-    avatar: data?.avatar || DEFAULT_AVATAR,
+    avatar: data?.avatar || getDefaultAvatarByAgentId(s, s.activeAgentId),
     backgroundColor: data?.backgroundColor || DEFAULT_BACKGROUND_COLOR,
     description: data?.description || undefined,
     marketIdentifier: data?.marketIdentifier || undefined,
@@ -66,7 +77,7 @@ const getAgentMetaById =
     if (!data) return {};
 
     return {
-      avatar: data.avatar || DEFAULT_AVATAR,
+      avatar: data.avatar || getDefaultAvatarByAgentId(s, agentId),
       backgroundColor: data.backgroundColor || DEFAULT_BACKGROUND_COLOR,
       description: data.description || undefined,
       marketIdentifier: data.marketIdentifier || undefined,
@@ -228,18 +239,13 @@ const openingMessage = (s: AgentStoreState) => currentAgentConfig(s)?.openingMes
 // ==========   Agent Mode Config   ============== //
 
 /**
- * Get current agent's mode
- * Now reads from chatConfig.agentMode and chatConfig.enableAgentMode
+ * Get current agent's mode.
+ * Agent mode is the default — only an explicit `chatConfig.enableAgentMode === false`
+ * collapses the agent to chat mode.
  */
 const currentAgentMode = (s: AgentStoreState): AgentMode | undefined => {
-  const config = currentAgentConfig(s);
-
-  // Fallback: convert enableAgentMode to mode
-  if (config?.enableAgentMode) {
-    return 'auto';
-  }
-
-  return undefined;
+  const chatConfig = currentAgentConfig(s)?.chatConfig;
+  return chatConfig?.enableAgentMode === false ? undefined : 'auto';
 };
 
 /**
@@ -258,14 +264,36 @@ const currentAgentRuntimeEnvConfig = (s: AgentStoreState): RuntimeEnvConfig | un
  * Get current agent's working directory
  */
 const currentAgentWorkingDirectory = (s: AgentStoreState): string | undefined =>
-  currentAgentRuntimeEnvConfig(s)?.workingDirectory;
+  (() => {
+    if (!isDesktop) return;
+
+    const activeAgentId = s.activeAgentId;
+    if (!activeAgentId) return globalAgentContextManager.getContext().homePath;
+
+    return (
+      getLocalAgentWorkingDirectory(activeAgentId) ??
+      globalAgentContextManager.getContext().homePath
+    );
+  })();
 
 const isCurrentAgentExternal = (s: AgentStoreState): boolean => !currentAgentData(s)?.virtual;
+
+/**
+ * Whether current agent is driven by an external heterogeneous runtime
+ * (e.g. Claude Code). These agents skip LobeHub's message-channel / model
+ * pickers because their toolchain is owned by the external runtime.
+ */
+const isCurrentAgentHeterogeneous = (s: AgentStoreState): boolean =>
+  !!currentAgentConfig(s)?.agencyConfig?.heterogeneousProvider;
+
+const currentAgentHeterogeneousProviderType = (s: AgentStoreState) =>
+  currentAgentConfig(s)?.agencyConfig?.heterogeneousProvider?.type;
 
 const getAgentDocumentsById = (agentId: string) => (s: AgentStoreState) =>
   s.agentDocumentsMap[agentId];
 
 export const agentSelectors = {
+  currentAgentHeterogeneousProviderType,
   currentAgentAvatar,
   currentAgentBackgroundColor,
   currentAgentConfig,
@@ -300,6 +328,7 @@ export const agentSelectors = {
   isAgentConfigLoading,
   isAgentModeEnabled,
   isCurrentAgentExternal,
+  isCurrentAgentHeterogeneous,
   openingMessage,
   openingQuestions,
 };

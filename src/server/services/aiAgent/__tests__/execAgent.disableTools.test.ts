@@ -1,3 +1,4 @@
+import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiAgentService } from '../index';
@@ -106,15 +107,23 @@ vi.mock('@/server/services/toolExecution/deviceProxy', () => ({
   },
 }));
 
-vi.mock('model-bank', () => ({
-  LOBE_DEFAULT_MODEL_LIST: [
-    {
-      abilities: { functionCall: true },
-      id: 'gpt-4',
-      providerId: 'openai',
-    },
-  ],
+vi.mock('@/server/modules/ModelRuntime', () => ({
+  initModelRuntimeFromDB: vi.fn(),
 }));
+
+vi.mock('model-bank', async (importOriginal) => {
+  const actual = await importOriginal<typeof ModelBankModule>();
+  return {
+    ...actual,
+    LOBE_DEFAULT_MODEL_LIST: [
+      {
+        abilities: { functionCall: true },
+        id: 'gpt-4',
+        providerId: 'openai',
+      },
+    ],
+  };
+});
 
 describe('AiAgentService.execAgent - disableTools', () => {
   let service: AiAgentService;

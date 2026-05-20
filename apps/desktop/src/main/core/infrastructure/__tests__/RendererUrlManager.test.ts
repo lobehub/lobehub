@@ -92,6 +92,18 @@ describe('RendererUrlManager', () => {
       expect(manager.buildRendererUrl('/settings')).toBe('http://localhost:5173/settings');
     });
 
+    it('should normalize trailing slashes from ELECTRON_RENDERER_URL', async () => {
+      mockIsDev = true;
+      process.env['ELECTRON_RENDERER_URL'] = 'http://localhost:5173/';
+
+      const { RendererUrlManager } = await import('../RendererUrlManager');
+      const manager = new RendererUrlManager();
+      manager.configureRendererLoader();
+
+      expect(manager.buildRendererUrl('/')).toBe('http://localhost:5173/');
+      expect(manager.buildRendererUrl('/overlay')).toBe('http://localhost:5173/overlay');
+    });
+
     it('should fall back to protocol handler when ELECTRON_RENDERER_URL is not set', async () => {
       mockIsDev = true;
 

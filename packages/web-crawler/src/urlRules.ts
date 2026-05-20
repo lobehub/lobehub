@@ -1,11 +1,6 @@
 import type { CrawlUrlRule } from './type';
 
 export const crawUrlRules: CrawlUrlRule[] = [
-  // Sogou WeChat links, use search1api
-  {
-    impls: ['search1api'],
-    urlPattern: 'https://weixin.sogou.com/link(.*)',
-  },
   // Sogou links, use search1api
   {
     impls: ['search1api'],
@@ -20,11 +15,6 @@ export const crawUrlRules: CrawlUrlRule[] = [
   {
     impls: ['search1api'],
     urlPattern: 'https://www.reddit.com/r/(.*)/comments/(.*)',
-  },
-  // WeChat official accounts have crawler protection, use search1api first, jina as fallback (currently jina crawling may be blocked)
-  {
-    impls: ['search1api', 'jina'],
-    urlPattern: 'https://mp.weixin.qq.com(.*)',
   },
   // GitHub source code parsing
   {
@@ -52,15 +42,6 @@ export const crawUrlRules: CrawlUrlRule[] = [
   {
     impls: ['jina'],
     urlPattern: 'https://arxiv.org/pdf/(.*)',
-  },
-  // Zhihu has crawler protection, use jina
-  {
-    impls: ['jina'],
-    urlPattern: 'https://zhuanlan.zhihu.com(.*)',
-  },
-  {
-    impls: ['jina'],
-    urlPattern: 'https://zhihu.com(.*)',
   },
   {
     // Convert Medium articles to Scribe.rip

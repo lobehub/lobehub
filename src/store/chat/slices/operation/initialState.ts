@@ -43,15 +43,18 @@ export interface ChatOperationState {
   queuedMessages: Record<string, QueuedMessage[]>;
 
   /**
-   * Agent IDs with unread completed generation
+   * Per-agent unread completed topics.
+   * key: agentId, value: Set of topicId (use DEFAULT_TOPIC_UNREAD_KEY for the default/empty topic)
+   * Agent-level unread count is derived from `set.size`.
    */
-  unreadCompletedAgentIds: Set<string>;
-
-  /**
-   * Topic IDs with unread completed generation
-   */
-  unreadCompletedTopicIds: Set<string>;
+  unreadCompletedTopicsByAgent: Record<string, Set<string>>;
 }
+
+/**
+ * Sentinel topicId used inside `unreadCompletedTopicsByAgent` Sets to represent
+ * the agent's default (no-topic) conversation, so agent-level counts include it.
+ */
+export const DEFAULT_TOPIC_UNREAD_KEY = '';
 
 export const initialOperationState: ChatOperationState = {
   messageOperationMap: {},
@@ -60,6 +63,5 @@ export const initialOperationState: ChatOperationState = {
   operationsByMessage: {},
   operationsByType: {} as Record<OperationType, string[]>,
   queuedMessages: {},
-  unreadCompletedAgentIds: new Set(),
-  unreadCompletedTopicIds: new Set(),
+  unreadCompletedTopicsByAgent: {},
 };

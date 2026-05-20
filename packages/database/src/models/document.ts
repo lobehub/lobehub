@@ -1,7 +1,7 @@
-import { and, count, desc, eq, inArray } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, isNull, notInArray } from 'drizzle-orm';
 
 import type { DocumentItem, NewDocument } from '../schemas';
-import { documents } from '../schemas';
+import { DOCUMENT_FOLDER_TYPE, documents } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 
 export interface QueryDocumentParams {
@@ -19,6 +19,31 @@ export class DocumentModel {
     this.userId = userId;
     this.db = db;
   }
+
+  findOrCreateFolder = async (name: string, parentId?: string): Promise<DocumentItem> => {
+    const existing = await this.db.query.documents.findFirst({
+      where: and(
+        eq(documents.userId, this.userId),
+        eq(documents.fileType, DOCUMENT_FOLDER_TYPE),
+        eq(documents.filename, name),
+        parentId ? eq(documents.parentId, parentId) : isNull(documents.parentId),
+      ),
+    });
+
+    if (existing) return existing;
+
+    return this.create({
+      content: '',
+      fileType: DOCUMENT_FOLDER_TYPE,
+      filename: name,
+      parentId,
+      source: '',
+      sourceType: 'api',
+      title: name,
+      totalCharCount: 0,
+      totalLineCount: 0,
+    });
+  };
 
   create = async (params: Omit<NewDocument, 'userId'>): Promise<DocumentItem> => {
     const result = (await this.db
@@ -56,7 +81,14 @@ export class DocumentModel {
     }
 
     if (sourceTypes?.length) {
-      conditions.push(inArray(documents.sourceType, sourceTypes as ('file' | 'web' | 'api')[]));
+      conditions.push(
+        inArray(
+          documents.sourceType,
+          sourceTypes as ('file' | 'web' | 'api' | 'topic' | 'agent' | 'agent-signal')[],
+        ),
+      );
+    } else {
+      conditions.push(notInArray(documents.sourceType, ['agent', 'agent-signal']));
     }
 
     const whereCondition = and(...conditions);

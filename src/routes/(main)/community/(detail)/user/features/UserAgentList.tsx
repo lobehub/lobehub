@@ -68,7 +68,13 @@ const UserAgentList = memo<UserAgentListProps>(({ rows = 4, pageSize = 8 }) => {
     setCurrentPage(1);
   }, [statusFilter, searchQuery]);
 
-  if (agents.length === 0 && forkedAgents.length === 0) return <AssistantEmpty />;
+  if (agents.length === 0 && forkedAgents.length === 0)
+    return (
+      <AssistantEmpty
+        description={isOwner ? t('user.noAgents.ownerDescription') : t('user.noAgents')}
+        title={t('user.noAgents.title')}
+      />
+    );
 
   const showPagination = filteredAgents.length > pageSize;
 

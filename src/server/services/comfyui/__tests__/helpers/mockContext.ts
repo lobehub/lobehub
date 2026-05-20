@@ -8,7 +8,6 @@ import { type WorkflowContext } from '@/server/services/comfyui/core/workflowBui
 
 /**
  * Create a mock WorkflowContext for testing
- * 创建测试用的模拟 WorkflowContext
  */
 export function createMockContext(): WorkflowContext {
   return {
@@ -55,9 +54,9 @@ export function createMockContext(): WorkflowContext {
       validateConnection: vi.fn().mockResolvedValue(undefined),
     },
     modelResolverService: {
-      // 新的服务层方法
+      // New service layer methods
       getOptimalComponent: vi.fn().mockImplementation((type: string, modelFamily: string) => {
-        // 根据不同的组件类型和模型家族返回相应的默认值
+        // Return corresponding defaults based on component type and model family
         if (type === 't5') {
           return Promise.resolve(TEST_COMPONENTS.FLUX.T5);
         }
@@ -76,7 +75,7 @@ export function createMockContext(): WorkflowContext {
         return Promise.resolve(null);
       }),
 
-      // 保留旧方法以兼容
+      // Keep legacy methods for compatibility
       selectComponents: vi.fn().mockResolvedValue({
         clip: [TEST_COMPONENTS.FLUX.T5, TEST_COMPONENTS.FLUX.CLIP_L],
         t5: TEST_COMPONENTS.FLUX.T5,
@@ -93,6 +92,5 @@ export function createMockContext(): WorkflowContext {
 
 /**
  * Default mock context instance
- * 默认的模拟上下文实例
  */
 export const mockContext = createMockContext();

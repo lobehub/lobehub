@@ -1,3 +1,4 @@
+import type { BriefArtifacts, BriefMetadata } from '@lobechat/types';
 import {
   foreignKey,
   index,
@@ -58,8 +59,11 @@ export const tasks = pgTable(
     priority: integer('priority').default(0), // 'no' | 'urgent' | 'high' | 'normal' | 'low'
     sortOrder: integer('sort_order').default(0), // manual sort within parent, lower = higher
 
+    // Automation mode (mutually exclusive with each other; null = no automation)
+    automationMode: text('automation_mode').$type<'heartbeat' | 'schedule'>(),
+
     // Heartbeat
-    heartbeatInterval: integer('heartbeat_interval').default(300), // seconds
+    heartbeatInterval: integer('heartbeat_interval'), // seconds, null = no heartbeat configured
     heartbeatTimeout: integer('heartbeat_timeout'), // seconds, null = disabled (default off)
     lastHeartbeatAt: timestamptz('last_heartbeat_at'),
 
@@ -97,12 +101,10 @@ export const tasks = pgTable(
     index('tasks_parent_task_id_idx').on(t.parentTaskId),
     index('tasks_status_idx').on(t.status),
     index('tasks_priority_idx').on(t.priority),
+    index('tasks_automation_mode_idx').on(t.automationMode),
     index('tasks_heartbeat_idx').on(t.status, t.lastHeartbeatAt),
   ],
 );
-
-export type NewTask = typeof tasks.$inferInsert;
-export type TaskItem = typeof tasks.$inferSelect;
 
 // ── Task Dependencies ────────────────────────────────────
 
@@ -240,7 +242,7 @@ export const briefs = pgTable(
     priority: text('priority').default('info'), // 'urgent' | 'normal' | 'info'
     title: text('title').notNull(),
     summary: text('summary').notNull(),
-    artifacts: jsonb('artifacts'), // document ids
+    artifacts: jsonb('artifacts').$type<BriefArtifacts>(), // programmatically collected at synthesis
     actions: jsonb('actions'), // BriefAction[]
 
     // Resolution
@@ -248,6 +250,9 @@ export const briefs = pgTable(
     resolvedComment: text('resolved_comment'),
     readAt: timestamptz('read_at'),
     resolvedAt: timestamptz('resolved_at'),
+
+    trigger: varchar255('trigger'), // field for which module triggered the brief, e.g. task, agent, signal, etc.
+    metadata: jsonb('metadata').$type<BriefMetadata>(), // freeform field for business and states.
 
     createdAt: createdAt(),
   },
@@ -259,6 +264,7 @@ export const briefs = pgTable(
     index('briefs_type_idx').on(t.type),
     index('briefs_priority_idx').on(t.priority),
     index('briefs_unresolved_idx').on(t.userId, t.resolvedAt),
+    index('briefs_trigger_idx').on(t.trigger),
   ],
 );
 

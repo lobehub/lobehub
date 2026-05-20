@@ -1,6 +1,7 @@
 import { Button, Icon, Tag, Typography } from '@lobehub/ui';
+import { GithubIcon } from '@lobehub/ui/icons';
 import { Divider } from 'antd';
-import { Github, Settings, Share2 } from 'lucide-react';
+import { Settings, Share2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -41,7 +42,7 @@ const Inner = memo(() => {
       <p>{t('createGuide.func2.desc')}</p>
       <br />
       <Button
-        icon={Github}
+        icon={GithubIcon}
         type={'primary'}
         onClick={() => window.open(AGENTS_INDEX_GITHUB, '__blank')}
       >

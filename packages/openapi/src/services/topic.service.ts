@@ -1,4 +1,4 @@
-import { and, count, desc, eq, ilike, isNull, notInArray } from 'drizzle-orm';
+import { and, count, desc, eq, ilike, inArray, isNull, notInArray } from 'drizzle-orm';
 
 import { agentsToSessions, messages, topics, users } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
@@ -65,8 +65,10 @@ export class TopicService extends BaseService {
         conditions.push(isNull(topics.agentId));
       }
 
-      // Exclude topics with specified trigger sources
-      if (request.excludeTriggers && request.excludeTriggers.length > 0) {
+      // includeTriggers takes precedence over excludeTriggers when both are provided
+      if (request.includeTriggers && request.includeTriggers.length > 0) {
+        conditions.push(inArray(topics.trigger, request.includeTriggers));
+      } else if (request.excludeTriggers && request.excludeTriggers.length > 0) {
         conditions.push(notInArray(topics.trigger, request.excludeTriggers));
       }
 

@@ -1,6 +1,7 @@
 import { type PageReference, type PageType, type ResolvedPageData } from '../types';
 import {
   type BaseRecentlyViewedPlugin,
+  type NewTabAction,
   type PluginContext,
   type RecentlyViewedPlugin,
 } from './types';
@@ -223,6 +224,16 @@ class PluginRegistry {
   onActivate(reference: PageReference): void {
     const plugin = this.plugins.get(reference.type);
     plugin?.onActivate?.(reference);
+  }
+
+  /**
+   * Build a "new tab" action for the given reference via its plugin.
+   * Returns null when the plugin does not implement the extension or
+   * declines to produce an action for the current context.
+   */
+  getNewTabAction(reference: PageReference, ctx: PluginContext): NewTabAction | null {
+    const plugin = this.plugins.get(reference.type);
+    return plugin?.createNewTabAction?.(reference, ctx) ?? null;
   }
 
   /**

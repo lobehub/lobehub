@@ -26,6 +26,12 @@ export const getAnalyticsConfig = () => {
       ENABLE_GOOGLE_ANALYTICS: z.boolean(),
       GOOGLE_ANALYTICS_MEASUREMENT_ID: z.string().optional(),
 
+      ENABLED_X_ADS: z.boolean(),
+      X_ADS_PIXEL_ID: z.string().optional(),
+      X_ADS_LOGIN_OR_SIGNUP_CLICKED_EVENT_ID: z.string().optional(),
+      X_ADS_MAIN_PAGE_VIEW_EVENT_ID: z.string().optional(),
+      X_ADS_PURCHASE_EVENT_ID: z.string().optional(),
+
       REACT_SCAN_MONITOR_API_KEY: z.string().optional(),
     },
     runtimeEnv: {
@@ -56,6 +62,13 @@ export const getAnalyticsConfig = () => {
       // Google Analytics
       ENABLE_GOOGLE_ANALYTICS: !!process.env.GOOGLE_ANALYTICS_MEASUREMENT_ID,
       GOOGLE_ANALYTICS_MEASUREMENT_ID: process.env.GOOGLE_ANALYTICS_MEASUREMENT_ID,
+
+      // X Ads
+      ENABLED_X_ADS: !!process.env.X_ADS_PIXEL_ID,
+      X_ADS_PIXEL_ID: process.env.X_ADS_PIXEL_ID,
+      X_ADS_LOGIN_OR_SIGNUP_CLICKED_EVENT_ID: process.env.X_ADS_LOGIN_OR_SIGNUP_CLICKED_EVENT_ID,
+      X_ADS_MAIN_PAGE_VIEW_EVENT_ID: process.env.X_ADS_MAIN_PAGE_VIEW_EVENT_ID,
+      X_ADS_PURCHASE_EVENT_ID: process.env.X_ADS_PURCHASE_EVENT_ID,
 
       // React Scan Monitor
       // https://dashboard.react-scan.com

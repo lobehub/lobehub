@@ -26,59 +26,23 @@ export interface NewAPIPricing {
   supported_endpoint_types?: string[];
 }
 
-/**
- * Detect if running in browser environment
- */
-const isBrowser = () => typeof window !== 'undefined' && typeof document !== 'undefined';
-
-/**
- * Parse a pricing API HTTP response into a `NewAPIPricing[] | null`.
- * Shared between browser and server branches to avoid duplicated logic.
- */
-const parsePricingResponse = async (res: Response): Promise<NewAPIPricing[] | null> => {
-  if (!res.ok) {
-    return null;
-  }
-
-  try {
-    const body = await res.json();
-    return body?.success && body?.data ? (body.data as NewAPIPricing[]) : null;
-  } catch {
-    return null;
-  }
-};
-
-/**
- * Fetch pricing information with CORS bypass for client-side requests
- * In browser environment, use /webapi/proxy to avoid CORS errors
- */
 const fetchPricing = async (
   pricingUrl: string,
   apiKey: string,
 ): Promise<NewAPIPricing[] | null> => {
   try {
-    if (isBrowser()) {
-      // In browser environment, use the proxy endpoint to avoid CORS
-      // The proxy endpoint expects the URL as the request body
-      const proxyResponse = await fetch('/webapi/proxy', {
-        body: pricingUrl,
-        method: 'POST',
-      });
+    const res = await fetch(pricingUrl, {
+      headers: {
+        Accept: 'application/json; charset=utf-8',
+        Authorization: `Bearer ${apiKey}`,
+      },
+    });
 
-      return await parsePricingResponse(proxyResponse);
-    } else {
-      // In server environment, fetch directly with proper encoding headers
-      const pricingResponse = await fetch(pricingUrl, {
-        headers: {
-          Accept: 'application/json; charset=utf-8',
-          Authorization: `Bearer ${apiKey}`,
-        },
-      });
+    if (!res.ok) return null;
 
-      return await parsePricingResponse(pricingResponse);
-    }
-  } catch (error) {
-    console.debug('Failed to fetch NewAPI pricing info:', error);
+    const body = await res.json();
+    return body?.success && body?.data ? (body.data as NewAPIPricing[]) : null;
+  } catch {
     return null;
   }
 };

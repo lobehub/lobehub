@@ -1,23 +1,15 @@
 import { type ChatStoreState } from '../../../initialState';
 import { operationSelectors } from '../../operation/selectors';
-import { mainDisplayChatIDs } from './chat';
 import { getDbMessageByToolCallId } from './dbMessage';
 import { getDisplayMessageById } from './displayMessage';
 
 const isMessageEditing = (id: string) => (s: ChatStoreState) => s.messageEditingIds.includes(id);
 
 /**
- * Check if a message is in loading state
- * Priority: operation system (for AI flows) > legacy messageLoadingIds (for CRUD operations)
+ * Check if a message is in loading state via the operation system
  */
-const isMessageLoading = (id: string) => (s: ChatStoreState) => {
-  // First check operation system (sendMessage, etc.)
-  const hasOperation = operationSelectors.isMessageProcessing(id)(s);
-  if (hasOperation) return true;
-
-  // Fallback to legacy loading state (for non-operation CRUD)
-  return s.messageLoadingIds.includes(id);
-};
+const isMessageLoading = (id: string) => (s: ChatStoreState) =>
+  operationSelectors.isMessageProcessing(id)(s);
 
 // Use operation system for AI-related loading states
 const isMessageRegenerating = (id: string) => (s: ChatStoreState) =>
@@ -70,23 +62,8 @@ const isToolApiNameShining =
 
 const isCreatingMessage = (s: ChatStoreState) => s.isCreatingMessage;
 
-const isHasMessageLoading = (s: ChatStoreState) =>
-  s.messageLoadingIds.some((id) => mainDisplayChatIDs(s).includes(id));
-
-/**
- * this function is used to determine whether the send button should be disabled
- */
-const isSendButtonDisabledByMessage = (s: ChatStoreState) =>
-  // 1. when there is message loading
-  isHasMessageLoading(s) ||
-  // 2. when is creating the topic
-  s.creatingTopic ||
-  // 3. when is creating the message
-  isCreatingMessage(s);
-
 export const messageStateSelectors = {
   isCreatingMessage,
-  isHasMessageLoading,
   isInToolsCalling,
   isMessageCollapsed,
   isMessageContinuing,
@@ -97,7 +74,6 @@ export const messageStateSelectors = {
   isMessageLoading,
   isMessageRegenerating,
   isPluginApiInvoking,
-  isSendButtonDisabledByMessage,
   isToolApiNameShining,
   isToolCallStreaming,
 };

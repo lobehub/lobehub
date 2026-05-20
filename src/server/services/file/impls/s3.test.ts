@@ -4,10 +4,21 @@ import { FileModel } from '@/database/models/file';
 
 import { S3StaticFileImpl } from './s3';
 
+const redisMocks = vi.hoisted(() => ({
+  getRedisConfig: vi.fn(() => ({ enabled: false, prefix: 'lobechat', tls: false, url: '' })),
+  initializeRedis: vi.fn(),
+  isRedisEnabled: vi.fn(() => false),
+  redis: {
+    get: vi.fn(),
+    set: vi.fn(),
+  },
+}));
+
 const config = {
   S3_ENABLE_PATH_STYLE: false,
   S3_PUBLIC_DOMAIN: 'https://example.com',
   S3_BUCKET: 'my-bucket',
+  S3_PREVIEW_URL_EXPIRE_IN: 7200,
   S3_SET_ACL: true,
 };
 
@@ -16,6 +27,15 @@ vi.mock('@/envs/file', () => ({
   get fileEnv() {
     return config;
   },
+}));
+
+vi.mock('@/envs/redis', () => ({
+  getRedisConfig: redisMocks.getRedisConfig,
+}));
+
+vi.mock('@/libs/redis', () => ({
+  initializeRedis: redisMocks.initializeRedis,
+  isRedisEnabled: redisMocks.isRedisEnabled,
 }));
 
 // 模拟 S3 类
@@ -42,6 +62,20 @@ describe('S3StaticFileImpl', () => {
   let fileService: S3StaticFileImpl;
 
   beforeEach(() => {
+    vi.clearAllMocks();
+    config.S3_ENABLE_PATH_STYLE = false;
+    config.S3_PUBLIC_DOMAIN = 'https://example.com';
+    config.S3_SET_ACL = true;
+    redisMocks.getRedisConfig.mockReturnValue({
+      enabled: false,
+      prefix: 'lobechat',
+      tls: false,
+      url: '',
+    });
+    redisMocks.isRedisEnabled.mockReturnValue(false);
+    redisMocks.initializeRedis.mockResolvedValue(redisMocks.redis as any);
+    redisMocks.redis.get.mockResolvedValue(null);
+    redisMocks.redis.set.mockResolvedValue('OK');
     fileService = new S3StaticFileImpl(mockDb);
   });
 
@@ -56,6 +90,61 @@ describe('S3StaticFileImpl', () => {
       const url = 'path/to/file.jpg';
       expect(await fileService.getFullFileUrl(url)).toBe('https://presigned.example.com/test.jpg');
       config.S3_SET_ACL = true;
+    });
+
+    it('should reuse cached presigned preview URL for repeated private preview requests', async () => {
+      config.S3_SET_ACL = false;
+      const url = 'path/to/cached-file.jpg';
+      const createPreSignedUrlForPreview = fileService['s3'].createPreSignedUrlForPreview;
+
+      await expect(fileService.getFullFileUrl(url)).resolves.toBe(
+        'https://presigned.example.com/test.jpg',
+      );
+      await expect(fileService.getFullFileUrl(url)).resolves.toBe(
+        'https://presigned.example.com/test.jpg',
+      );
+
+      expect(createPreSignedUrlForPreview).toHaveBeenCalledTimes(1);
+      config.S3_SET_ACL = true;
+    });
+
+    it('should reuse Redis cached presigned preview URL across function instances', async () => {
+      config.S3_SET_ACL = false;
+      redisMocks.getRedisConfig.mockReturnValue({
+        enabled: true,
+        prefix: 'lobechat',
+        tls: false,
+        url: 'redis://localhost:6379',
+      });
+      redisMocks.isRedisEnabled.mockReturnValue(true);
+      redisMocks.redis.get.mockResolvedValue('https://redis.example.com/cached.jpg');
+
+      const result = await fileService.getFullFileUrl('path/to/redis-cached-file.jpg');
+
+      expect(result).toBe('https://redis.example.com/cached.jpg');
+      expect(fileService['s3'].createPreSignedUrlForPreview).not.toHaveBeenCalled();
+    });
+
+    it('should write generated presigned preview URL to Redis when available', async () => {
+      config.S3_SET_ACL = false;
+      redisMocks.getRedisConfig.mockReturnValue({
+        enabled: true,
+        prefix: 'lobechat',
+        tls: false,
+        url: 'redis://localhost:6379',
+      });
+      redisMocks.isRedisEnabled.mockReturnValue(true);
+      redisMocks.redis.get.mockResolvedValue(null);
+
+      await expect(fileService.getFullFileUrl('path/to/redis-write-file.jpg')).resolves.toBe(
+        'https://presigned.example.com/test.jpg',
+      );
+
+      expect(redisMocks.redis.set).toHaveBeenCalledWith(
+        'file:presigned-preview:7200:path/to/redis-write-file.jpg',
+        'https://presigned.example.com/test.jpg',
+        { ex: 3600 },
+      );
     });
 
     it('should return correct URL when S3_ENABLE_PATH_STYLE is false', async () => {

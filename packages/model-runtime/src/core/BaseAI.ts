@@ -4,8 +4,10 @@ import type OpenAI from 'openai';
 import type {
   ChatMethodOptions,
   ChatStreamPayload,
+  CreateImageMethodOptions,
   CreateImagePayload,
   CreateImageResponse,
+  CreateVideoMethodOptions,
   CreateVideoPayload,
   CreateVideoResponse,
   Embeddings,
@@ -24,9 +26,15 @@ import type {
 export interface LobeRuntimeAI {
   baseURL?: string;
   chat?: (payload: ChatStreamPayload, options?: ChatMethodOptions) => Promise<Response>;
-  createImage?: (payload: CreateImagePayload) => Promise<CreateImageResponse>;
+  createImage?: (
+    payload: CreateImagePayload,
+    options?: CreateImageMethodOptions,
+  ) => Promise<CreateImageResponse>;
 
-  createVideo?: (payload: CreateVideoPayload) => Promise<CreateVideoResponse>;
+  createVideo?: (
+    payload: CreateVideoPayload,
+    options?: CreateVideoMethodOptions,
+  ) => Promise<CreateVideoResponse>;
 
   embeddings?: (payload: EmbeddingsPayload, options?: EmbeddingsOptions) => Promise<Embeddings[]>;
 

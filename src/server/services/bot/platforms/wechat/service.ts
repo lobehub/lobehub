@@ -40,6 +40,8 @@ import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis'
 import type { MessageRuntimeService } from '@/server/services/toolExecution/serverRuntimes/message/adapters/types';
 import { PlatformUnsupportedError } from '@/server/services/toolExecution/serverRuntimes/message/PlatformUnsupportedError';
 
+import { sendWechatAttachments } from './sendAttachments';
+
 /**
  * WeChat iLink Bot message adapter.
  *
@@ -84,7 +86,12 @@ export class WechatMessageService implements MessageRuntimeService {
 
   sendMessage = async (params: SendMessageParams): Promise<SendMessageState> => {
     const contextToken = await this.resolveContextToken(params.channelId);
-    await this.api.sendMessage(params.channelId, params.content, contextToken);
+    if (params.content) {
+      await this.api.sendMessage(params.channelId, params.content, contextToken);
+    }
+    if (params.attachments?.length) {
+      await sendWechatAttachments(this.api, params.channelId, params.attachments, contextToken);
+    }
     return {
       channelId: params.channelId,
       platform: 'wechat',

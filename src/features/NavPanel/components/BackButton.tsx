@@ -4,7 +4,7 @@ import { ChevronLeftIcon } from 'lucide-react';
 import { memo } from 'react';
 import { Link } from 'react-router-dom';
 
-import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
+import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 
 export const BACK_BUTTON_ID = 'lobe-back-button';
 
@@ -15,7 +15,7 @@ const BackButton = memo<ActionIconProps & { to?: string }>(({ to = '/', onClick,
       <ActionIcon
         icon={ChevronLeftIcon}
         id={BACK_BUTTON_ID}
-        size={DESKTOP_HEADER_ICON_SIZE}
+        size={DESKTOP_HEADER_ICON_SMALL_SIZE}
         {...rest}
       />
     </Link>

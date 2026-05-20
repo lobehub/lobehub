@@ -4,7 +4,7 @@ import { AgentRuntimeErrorType } from '../types/error';
 
 export const handleOpenAIError = (
   error: any,
-): { RuntimeError?: 'AgentRuntimeError'; errorResult: any } => {
+): { RuntimeError?: 'AgentRuntimeError'; errorResult: any; message?: string } => {
   let errorResult: any;
 
   // Check if the error is an OpenAI APIError
@@ -25,6 +25,7 @@ export const handleOpenAIError = (
 
     return {
       errorResult,
+      message: error.message,
     };
   } else {
     const err = error as Error;
@@ -34,6 +35,7 @@ export const handleOpenAIError = (
     return {
       RuntimeError: AgentRuntimeErrorType.AgentRuntimeError,
       errorResult,
+      message: err.message,
     };
   }
 };

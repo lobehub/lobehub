@@ -27,7 +27,10 @@ export class PluginInternalsActionImpl {
     void get;
   }
 
-  internal_transformToolCalls = (toolCalls: MessageToolCall[]): ChatToolPayload[] => {
+  internal_transformToolCalls = (
+    toolCalls: MessageToolCall[],
+    offeredToolNames?: string[],
+  ): ChatToolPayload[] => {
     const toolNameResolver = new ToolNameResolver();
 
     // Build manifests map from tool store
@@ -35,15 +38,14 @@ export class PluginInternalsActionImpl {
     const manifests: Record<string, ToolManifest> = {};
 
     // Track source for each identifier
-    const sourceMap: Record<string, 'builtin' | 'plugin' | 'mcp' | 'klavis' | 'lobehubSkill'> = {};
+    const sourceMap: Record<string, 'builtin' | 'mcp' | 'klavis' | 'lobehubSkill'> = {};
 
-    // Get all installed plugins
+    // Get all installed plugins (all treated as MCP now)
     const installedPlugins = pluginSelectors.installedPlugins(toolStoreState);
     for (const plugin of installedPlugins) {
       if (plugin.manifest) {
         manifests[plugin.identifier] = plugin.manifest as ToolManifest;
-        // Check if this plugin has MCP params
-        sourceMap[plugin.identifier] = plugin.customParams?.mcp ? 'mcp' : 'plugin';
+        sourceMap[plugin.identifier] = 'mcp';
       }
     }
 
@@ -74,7 +76,7 @@ export class PluginInternalsActionImpl {
     }
 
     // Resolve tool calls and add source field
-    const resolved = toolNameResolver.resolve(toolCalls, manifests);
+    const resolved = toolNameResolver.resolve(toolCalls, manifests, offeredToolNames);
 
     return resolved.map((payload) => {
       // Parse and repair arguments if needed

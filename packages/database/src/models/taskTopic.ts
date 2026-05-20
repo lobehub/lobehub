@@ -1,9 +1,12 @@
-import type { TaskTopicHandoff } from '@lobechat/types';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import type { BriefDecision, TaskTopicHandoff } from '@lobechat/types';
+import { and, count, desc, eq, gte, sql } from 'drizzle-orm';
 
 import type { TaskTopicItem } from '../schemas/task';
 import { tasks, taskTopics } from '../schemas/task';
+import { topics } from '../schemas/topic';
 import type { LobeChatDatabase } from '../type';
+
+const TERMINAL_TOPIC_STATUSES = new Set(['canceled', 'completed', 'failed', 'timeout']);
 
 export class TaskTopicModel {
   private readonly userId: string;
@@ -12,6 +15,21 @@ export class TaskTopicModel {
   constructor(db: LobeChatDatabase, userId: string) {
     this.db = db;
     this.userId = userId;
+  }
+
+  /**
+   * Mirror a terminal taskTopic transition onto the underlying topic record:
+   * stamp `topics.completedAt` so duration can be computed at read time, and
+   * promote `topics.status` to 'completed' on a clean finish.
+   */
+  private async markTopicEnded(topicId: string, status: string): Promise<void> {
+    const setClause: { completedAt: Date; status?: 'completed' } = { completedAt: new Date() };
+    if (status === 'completed') setClause.status = 'completed';
+
+    await this.db
+      .update(topics)
+      .set(setClause)
+      .where(and(eq(topics.id, topicId), eq(topics.userId, this.userId)));
   }
 
   async add(
@@ -42,6 +60,33 @@ export class TaskTopicModel {
           eq(taskTopics.userId, this.userId),
         ),
       );
+
+    if (TERMINAL_TOPIC_STATUSES.has(status)) {
+      await this.markTopicEnded(topicId, status);
+    }
+  }
+
+  /**
+   * Atomically cancel a topic only if it is still in `running` status.
+   * Returns true if a row was actually updated.
+   */
+  async cancelIfRunning(taskId: string, topicId: string): Promise<boolean> {
+    const result = await this.db
+      .update(taskTopics)
+      .set({ status: 'canceled' })
+      .where(
+        and(
+          eq(taskTopics.taskId, taskId),
+          eq(taskTopics.topicId, topicId),
+          eq(taskTopics.status, 'running'),
+          eq(taskTopics.userId, this.userId),
+        ),
+      )
+      .returning();
+
+    const updated = result.length > 0;
+    if (updated) await this.markTopicEnded(topicId, 'canceled');
+    return updated;
   }
 
   async updateOperationId(taskId: string, topicId: string, operationId?: string): Promise<void> {
@@ -61,6 +106,31 @@ export class TaskTopicModel {
     await this.db
       .update(taskTopics)
       .set({ handoff })
+      .where(
+        and(
+          eq(taskTopics.taskId, taskId),
+          eq(taskTopics.topicId, topicId),
+          eq(taskTopics.userId, this.userId),
+        ),
+      );
+  }
+
+  /**
+   * Patch the `briefDecision` field inside the handoff JSONB without
+   * disturbing other handoff keys (`title` / `summary` / `keyFindings` /
+   * `nextAction`). Uses `jsonb_set` so the operation is order-independent
+   * with respect to `updateHandoff` — either can run first.
+   */
+  async updateBriefDecision(
+    taskId: string,
+    topicId: string,
+    decision: BriefDecision,
+  ): Promise<void> {
+    await this.db
+      .update(taskTopics)
+      .set({
+        handoff: sql`jsonb_set(COALESCE(${taskTopics.handoff}, '{}'::jsonb), '{briefDecision}', ${JSON.stringify(decision)}::jsonb)`,
+      })
       .where(
         and(
           eq(taskTopics.taskId, taskId),
@@ -109,7 +179,15 @@ export class TaskTopicModel {
           eq(taskTopics.userId, this.userId),
         ),
       )
-      .returning();
+      .returning({ topicId: taskTopics.topicId });
+
+    await Promise.all(
+      result
+        .map((r) => r.topicId)
+        .filter((id): id is string => !!id)
+        .map((id) => this.markTopicEnded(id, 'timeout')),
+    );
+
     return result.length;
   }
 
@@ -122,6 +200,17 @@ export class TaskTopicModel {
     return result[0] || null;
   }
 
+  async countByTask(taskId: string, options?: { since?: Date }): Promise<number> {
+    const conditions = [eq(taskTopics.taskId, taskId), eq(taskTopics.userId, this.userId)];
+    if (options?.since) conditions.push(gte(taskTopics.createdAt, options.since));
+
+    const rows = await this.db
+      .select({ value: count() })
+      .from(taskTopics)
+      .where(and(...conditions));
+    return rows[0]?.value ?? 0;
+  }
+
   async findByTaskId(taskId: string): Promise<TaskTopicItem[]> {
     return this.db
       .select()
@@ -131,7 +220,6 @@ export class TaskTopicModel {
   }
 
   async findWithDetails(taskId: string) {
-    const { topics } = await import('../schemas/topic');
     return this.db
       .select({
         createdAt: topics.createdAt,
@@ -155,16 +243,21 @@ export class TaskTopicModel {
       .orderBy(desc(taskTopics.seq));
   }
 
-  async findWithHandoff(taskId: string, limit = 4) {
+  async findWithHandoff(taskId: string, limit: number) {
     return this.db
       .select({
+        completedAt: topics.completedAt,
         createdAt: taskTopics.createdAt,
         handoff: taskTopics.handoff,
+        metadata: topics.metadata,
+        operationId: taskTopics.operationId,
         seq: taskTopics.seq,
         status: taskTopics.status,
+        title: topics.title,
         topicId: taskTopics.topicId,
       })
       .from(taskTopics)
+      .leftJoin(topics, eq(taskTopics.topicId, topics.id))
       .where(and(eq(taskTopics.taskId, taskId), eq(taskTopics.userId, this.userId)))
       .orderBy(desc(taskTopics.seq))
       .limit(limit);

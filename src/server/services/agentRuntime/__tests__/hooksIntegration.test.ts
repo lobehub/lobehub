@@ -69,7 +69,7 @@ describe('Hooks integration — afterStep event carries step presentation data',
     const coordinator = (service as any).coordinator;
 
     // Simulate a running operation with afterStep hooks in metadata
-    coordinator.loadAgentState.mockResolvedValue({
+    vi.spyOn(coordinator, 'loadAgentState').mockResolvedValue({
       createdAt: new Date().toISOString(),
       lastModified: new Date().toISOString(),
       messages: [{ content: 'Hello', role: 'user' }],
@@ -127,7 +127,7 @@ describe('Hooks integration — afterStep event carries step presentation data',
     const dispatchSpy = vi
       .spyOn(hookDispatcher, 'dispatch')
       .mockImplementation(async (_opId, type, event) => {
-        if (type === 'afterStep') capturedEvents.push(event);
+        if (type === 'afterStep') capturedEvents.push(event as AgentHookEvent);
       });
 
     await service.executeStep({
@@ -170,7 +170,7 @@ describe('Hooks integration — afterStep event carries step presentation data',
     const service = createService();
     const coordinator = (service as any).coordinator;
 
-    coordinator.loadAgentState.mockResolvedValue({
+    vi.spyOn(coordinator, 'loadAgentState').mockResolvedValue({
       createdAt: new Date().toISOString(),
       lastModified: new Date().toISOString(),
       messages: [],
@@ -220,7 +220,7 @@ describe('Hooks integration — afterStep event carries step presentation data',
     const dispatchSpy = vi
       .spyOn(hookDispatcher, 'dispatch')
       .mockImplementation(async (_opId, type, event) => {
-        if (type === 'afterStep') capturedEvents.push(event);
+        if (type === 'afterStep') capturedEvents.push(event as AgentHookEvent);
       });
 
     await service.executeStep({
@@ -258,7 +258,7 @@ describe('Hooks integration — onComplete event for early-terminal states', () 
     const service = createService();
     const coordinator = (service as any).coordinator;
 
-    coordinator.loadAgentState.mockResolvedValue({
+    vi.spyOn(coordinator, 'loadAgentState').mockResolvedValue({
       createdAt: new Date().toISOString(),
       lastModified: new Date().toISOString(),
       messages: [
@@ -275,7 +275,7 @@ describe('Hooks integration — onComplete event for early-terminal states', () 
     const dispatchSpy = vi
       .spyOn(hookDispatcher, 'dispatch')
       .mockImplementation(async (_opId, type, event) => {
-        if (type === 'onComplete') capturedEvents.push(event);
+        if (type === 'onComplete') capturedEvents.push(event as AgentHookEvent);
       });
 
     await service.executeStep({
@@ -303,7 +303,7 @@ describe('Hooks integration — afterStep event is compatible with renderStepPro
     const service = createService();
     const coordinator = (service as any).coordinator;
 
-    coordinator.loadAgentState.mockResolvedValue({
+    vi.spyOn(coordinator, 'loadAgentState').mockResolvedValue({
       createdAt: new Date().toISOString(),
       lastModified: new Date().toISOString(),
       messages: [],
@@ -342,7 +342,7 @@ describe('Hooks integration — afterStep event is compatible with renderStepPro
     const dispatchSpy = vi
       .spyOn(hookDispatcher, 'dispatch')
       .mockImplementation(async (_opId, type, event) => {
-        if (type === 'afterStep') capturedEvents.push(event);
+        if (type === 'afterStep') capturedEvents.push(event as AgentHookEvent);
       });
 
     await service.executeStep({

@@ -1,7 +1,5 @@
 'use client';
 
-import { AutoComplete, Markdown } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
 import { ModelProvider } from 'model-bank';
 import { AzureProviderCard } from 'model-bank/modelProviders';
 import { useTranslation } from 'react-i18next';
@@ -13,18 +11,6 @@ import { aiModelSelectors, aiProviderSelectors, useAiInfraStore } from '@/store/
 import { KeyVaultsConfigKey, LLMProviderApiTokenKey, LLMProviderBaseUrlKey } from '../../const';
 import { type ProviderItem } from '../../type';
 import ProviderDetail from '../default';
-
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  markdown: css`
-    p {
-      color: ${cssVar.colorTextDescription} !important;
-    }
-  `,
-  tip: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextDescription};
-  `,
-}));
 
 const providerKey = ModelProvider.Azure;
 
@@ -66,29 +52,6 @@ const useProviderCard = (): ProviderItem => {
         desc: t('azure.endpoint.desc'),
         label: t('azure.endpoint.title'),
         name: [KeyVaultsConfigKey, LLMProviderBaseUrlKey],
-      },
-      {
-        children: isLoading ? (
-          <SkeletonInput />
-        ) : (
-          <AutoComplete
-            placeholder={'20XX-XX-XX'}
-            options={[
-              '2024-10-21',
-              '2024-06-01',
-              '2025-01-01-preview',
-              '2024-09-01-preview',
-              '2024-10-01-preview',
-            ].map((i) => ({ label: i, value: i }))}
-          />
-        ),
-        desc: (
-          <Markdown className={styles.markdown} fontSize={12} variant={'chat'}>
-            {t('azure.azureApiVersion.desc')}
-          </Markdown>
-        ),
-        label: t('azure.azureApiVersion.title'),
-        name: [KeyVaultsConfigKey, 'apiVersion'],
       },
     ],
     checkModel,

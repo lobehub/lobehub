@@ -41,6 +41,47 @@ export interface ChatFileItem {
   url: string;
 }
 
+/**
+ * A subagent execution embedded inline in the parent assistant block.
+ *
+ * Used for Claude Code's `Task` tool (and equivalent subagent-spawning tools):
+ * the LLM emits a Task tool_use, the executor creates a Thread to run the
+ * subagent, and the rendered block shows a folded header + (on expand) the
+ * Thread's child messages — instead of producing a separate `role: 'task'`
+ * ChatItem bubble.
+ *
+ * Derived view, not persisted: the MessageTransformer reconstructs
+ * `block.tasks[]` by joining Threads (`threads.sourceMessageId = msg.id`,
+ * matched by `metadata.sourceToolCallId === tool_use.id`) onto the parent
+ * message's tool_use entries.
+ */
+export interface TaskBlock {
+  /** Execution duration in milliseconds (`Thread.metadata.duration`) */
+  duration?: number;
+  /** Error details when subagent failed (`Thread.metadata.error`) */
+  error?: any;
+  /** Equals the parent tool_use id that spawned this subagent */
+  id: string;
+  /** Thread execution status */
+  status?: ThreadStatus;
+  /** Subagent type, e.g. CC's `subagent_type` input (Explore, Plan, ...) */
+  subagentType?: string;
+  threadId: string;
+  /**
+   * Short summary rendered in the folded header — sourced from `Thread.title`
+   * (for CC Task spawns, the executor persists the tool_use's `description`
+   * input there at create time, so there is no separate `description` field
+   * on this block).
+   */
+  title?: string;
+  /** Total cost in dollars */
+  totalCost?: number;
+  /** Total tokens consumed */
+  totalTokens?: number;
+  /** Total tool calls made by the subagent */
+  totalToolCalls?: number;
+}
+
 export interface AssistantContentBlock {
   content: string;
   error?: ChatMessageError | null;
@@ -50,6 +91,13 @@ export interface AssistantContentBlock {
   metadata?: Record<string, any>;
   performance?: ModelPerformance;
   reasoning?: ModelReasoning;
+  /**
+   * Subagent executions embedded inline. Disambiguated from regular tools
+   * because each task carries a Thread reference and renders as a folded
+   * panel (showing the Thread's child messages on expand) instead of a
+   * standalone tool result.
+   */
+  tasks?: TaskBlock[];
   tools?: ChatToolPayloadWithResult[];
   usage?: ModelUsage;
 }
@@ -58,6 +106,34 @@ interface UIMessageBranch {
   activeBranchIndex: number;
   /** Total number of branches */
   count: number;
+}
+
+/**
+ * Snapshot of a single toolless assistant callback inside a
+ * {@link UISignalCallbacksBlock}. The snapshot is denormalized at
+ * FlatListBuilder time so the renderer doesn't have to round-trip
+ * through the messages map.
+ */
+export interface UISignalCallback {
+  content: string;
+  id: string;
+  model?: string | null;
+  provider?: string | null;
+  /** Nth push from the same source (1-based, matches metadata.signal.sequence). */
+  sequence?: number;
+}
+
+/**
+ * Group of callback turns attached to one source tool, denormalized
+ * onto a virtual `assistantGroup` message by FlatListBuilder. One
+ * block per source tool — multiple callback-firing tools in the same
+ * group produce multiple blocks.
+ */
+export interface UISignalCallbacksBlock {
+  callbacks: UISignalCallback[];
+  sourceToolCallId: string;
+  sourceToolMessageId: string;
+  sourceToolName: string;
 }
 
 /**
@@ -177,9 +253,33 @@ export interface UIChatMessage {
   search?: GroundingSearch | null;
   sessionId?: string;
   /**
+   * External-signal callback blocks (LOBE-8998). Set on virtual
+   * assistantGroup messages built by FlatListBuilder when the chain
+   * contains toolless assistants triggered by repeated tool_results
+   * (Monitor stdout push pattern). Rendered as `<SignalCallbacks>`
+   * blocks inside the AssistantGroup, separate from the main chain.
+   *
+   * Each entry corresponds to one source tool; multiple source tools
+   * in the same group produce multiple entries.
+   */
+  signalCallbacks?: UISignalCallbacksBlock[];
+  /**
    * target member ID for DM messages in group chat
    */
   targetId?: string | null;
+  /**
+   * Post-task summary blocks (LOBE-8998). Set on virtual assistantGroup
+   * messages by FlatListBuilder when the chain contains toolless
+   * assistants tagged with `signal.type === 'task-completion'` — the
+   * final-summary turn the LLM emits after CC delivers
+   * `system task_notification` for a long-running tool (Monitor, etc.).
+   *
+   * Rendered after `<SignalCallbacks>` so the natural narrative inside
+   * the same AssistantGroup reads: initial reply → callback accordion →
+   * summary. Multiple entries are possible (rare) if several tools
+   * completed within one LLM run.
+   */
+  taskCompletions?: AssistantContentBlock[];
   /**
    * Task execution details for role='task' messages
    * Retrieved from the associated Thread via sourceMessageId

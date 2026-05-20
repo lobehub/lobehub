@@ -19,9 +19,27 @@ const TOOL_CATEGORIES = {
     descKey: 'settingSystemTools.category.runtimeEnvironment.desc',
     titleKey: 'settingSystemTools.category.runtimeEnvironment',
     tools: [
+      { descKey: 'settingSystemTools.tools.lobehub.desc', name: 'lobehub' },
       { descKey: 'settingSystemTools.tools.node.desc', name: 'node' },
       { descKey: 'settingSystemTools.tools.python.desc', name: 'python' },
       { descKey: 'settingSystemTools.tools.npm.desc', name: 'npm' },
+      { descKey: 'settingSystemTools.tools.bun.desc', name: 'bun' },
+      { descKey: 'settingSystemTools.tools.bunx.desc', name: 'bunx' },
+      { descKey: 'settingSystemTools.tools.pnpm.desc', name: 'pnpm' },
+      { descKey: 'settingSystemTools.tools.uv.desc', name: 'uv' },
+    ],
+  },
+
+  'cli-agents': {
+    descKey: 'settingSystemTools.category.cliAgents.desc',
+    titleKey: 'settingSystemTools.category.cliAgents',
+    tools: [
+      { descKey: 'settingSystemTools.tools.claude.desc', name: 'claude' },
+      { descKey: 'settingSystemTools.tools.codex.desc', name: 'codex' },
+      { descKey: 'settingSystemTools.tools.gemini.desc', name: 'gemini' },
+      { descKey: 'settingSystemTools.tools.qwen.desc', name: 'qwen' },
+      { descKey: 'settingSystemTools.tools.kimi.desc', name: 'kimi' },
+      { descKey: 'settingSystemTools.tools.aider.desc', name: 'aider' },
     ],
   },
 
@@ -171,7 +189,6 @@ const ToolDetectorSection = memo(() => {
           justify="flex-end"
           style={{ marginBlockStart: 8 }}
         >
-          <Text type="secondary">{t('settingSystemTools.autoSelectDesc')}</Text>
           <Button
             icon={<Icon icon={RefreshCw} spin={detecting} />}
             loading={detecting}

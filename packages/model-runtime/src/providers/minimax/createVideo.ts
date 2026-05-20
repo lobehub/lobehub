@@ -143,7 +143,8 @@ export async function createMiniMaxVideo(
   const body: Record<string, unknown> = {
     model,
     prompt,
-    aigc_watermark: false, // Disable watermark for better user experience
+    aigc_watermark: params.watermark ?? false,
+    prompt_optimizer: params.promptExtend ?? false,
     ...(typeof duration === 'number' ? { duration } : {}),
     ...(typeof resolution === 'string' ? { resolution } : {}),
   };
@@ -165,6 +166,8 @@ export async function createMiniMaxVideo(
   if (endImageUrl) {
     body.last_frame_image = endImageUrl;
   }
+
+  log('Creating video with MiniMax API - model: %s, params: %O', model, params);
 
   const response = await fetch(`${baseURL}/video_generation`, {
     body: JSON.stringify(body),

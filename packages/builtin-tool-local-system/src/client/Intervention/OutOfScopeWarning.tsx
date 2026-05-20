@@ -22,7 +22,6 @@ interface OutOfScopeWarningProps {
 const OutOfScopeWarning = memo<OutOfScopeWarningProps>(({ paths }) => {
   const { t } = useTranslation('tool');
 
-  // Get working directory from topic or agent store
   const topicWorkingDir = useChatStore(topicSelectors.currentTopicWorkingDirectory);
   const agentWorkingDir = useAgentStore(agentSelectors.currentAgentWorkingDirectory);
   const workingDirectory = topicWorkingDir || agentWorkingDir;

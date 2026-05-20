@@ -334,6 +334,7 @@ import { schema } from './schema';
 export const myPlatform: PlatformDefinition = {
   id: '<platform>',
   name: 'Platform Name',
+  connectionMode: 'webhook', // 'webhook' | 'websocket' | 'polling'
   description: 'Connect a Platform bot',
   documentation: {
     portalUrl: 'https://developers.example.com',

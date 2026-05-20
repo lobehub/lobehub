@@ -63,7 +63,7 @@ describe('messagesReducer', () => {
       const payload: MessageDispatch = { type: 'unimplementedType' };
 
       expect(() => messagesReducer(initialState, payload)).toThrowError(
-        '未实现的 dispatch type，请检查 reducer',
+        'Unimplemented dispatch type, check reducer',
       );
     });
   });

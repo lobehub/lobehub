@@ -56,6 +56,37 @@ describe('ThreadModel', () => {
       expect(result.title).toBe('Test Thread');
       expect(result.type).toBe(ThreadType.Continuation);
     });
+
+    it('should honor caller-provided id', async () => {
+      const customId = 'thd_custom_abc';
+      const result = await threadModel.create({
+        id: customId,
+        topicId,
+        type: ThreadType.Standalone,
+      });
+
+      expect(result.id).toBe(customId);
+    });
+
+    it('should return undefined when caller-provided id collides (onConflictDoNothing)', async () => {
+      const customId = 'thd_collide_xyz';
+      const first = await threadModel.create({
+        id: customId,
+        topicId,
+        type: ThreadType.Standalone,
+      });
+      expect(first.id).toBe(customId);
+
+      // The router layer translates this undefined into TRPCError(CONFLICT)
+      // so callers using client-provided ids see an explicit error instead
+      // of writing follow-up rows against a missing thread.
+      const second = await threadModel.create({
+        id: customId,
+        topicId,
+        type: ThreadType.Standalone,
+      });
+      expect(second).toBeUndefined();
+    });
   });
 
   describe('query', () => {

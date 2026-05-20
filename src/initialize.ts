@@ -20,8 +20,10 @@ dayjs.extend(isYesterday);
 // Global fallback: catch async chunk-load failures that escape Error Boundaries
 if (typeof window !== 'undefined') {
   window.addEventListener('vite:preloadError', (event) => {
-    event.preventDefault();
-    notifyChunkError();
+    if (isChunkLoadError((event as any).payload)) {
+      event.preventDefault();
+      notifyChunkError();
+    }
   });
 
   window.addEventListener('unhandledrejection', (event) => {

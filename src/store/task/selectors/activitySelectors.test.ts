@@ -50,12 +50,12 @@ const createState = (overrides: Partial<TaskStoreState> = {}): TaskStoreState =>
 
 describe('taskActivitySelectors', () => {
   describe('activeTaskActivities', () => {
-    it('should return activities sorted by time (newest first)', () => {
+    it('should return activities sorted by time (oldest first)', () => {
       const result = taskActivitySelectors.activeTaskActivities(createState());
-      expect(result[0].id).toBe('a4'); // 12:00
-      expect(result[1].id).toBe('a2'); // 11:00
-      expect(result[2].id).toBe('a1'); // 10:00
-      expect(result[3].id).toBe('a3'); // 09:00
+      expect(result[0].id).toBe('a3'); // 09:00
+      expect(result[1].id).toBe('a1'); // 10:00
+      expect(result[2].id).toBe('a2'); // 11:00
+      expect(result[3].id).toBe('a4'); // 12:00
     });
 
     it('should return empty array when no active task', () => {

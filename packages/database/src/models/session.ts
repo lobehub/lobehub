@@ -212,6 +212,10 @@ export class SessionModel {
 
   // **************** Create *************** //
 
+  /**
+   * @deprecated Use AgentModel.create for creating agents directly.
+   * This method creates both a session and an agent, which is the legacy pattern.
+   */
   create = async ({
     id = idGenerator('sessions'),
     type = 'agent',

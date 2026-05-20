@@ -133,12 +133,14 @@ export const useAuthRequiredModal = () => {
  */
 const AuthRequiredModal = memo(() => {
   const { open } = useAuthRequiredModal();
-  const dataSyncConfig = useElectronStore((s) => s.dataSyncConfig);
 
   useWatchBroadcast('authorizationRequired', () => {
-    if (useElectronStore.getState().isConnectionDrawerOpen) return;
-    // Only show modal if onboarding is completed (remote server is configured)
-    if (!dataSyncConfig?.active) return;
+    const state = useElectronStore.getState();
+    if (state.isConnectionDrawerOpen) return;
+    // Wait until remote sync config has loaded once (avoid a flash before SWR resolves).
+    // Do not gate on `dataSyncConfig.active`: after sign-out `active` is false but 401 + X-Auth-Required
+    // still means the user must re-authenticate; gating on active would suppress the modal forever.
+    if (!state.isInitRemoteServerConfig) return;
 
     open();
   });

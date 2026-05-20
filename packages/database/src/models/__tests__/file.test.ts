@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import {
+  asyncTasks,
   chunks,
+  documents,
   embeddings,
   fileChunks,
   files,
@@ -196,6 +198,91 @@ describe('FileModel', () => {
       expect(file).toBeUndefined();
       expect(globalFile).toBeDefined();
     });
+
+    it('should delete mirror documents (sourceType=file) tied to the file', async () => {
+      const { id: fileId } = await fileModel.create({
+        name: 'mirror.pdf',
+        url: 'https://example.com/mirror.pdf',
+        size: 100,
+        fileType: 'application/pdf',
+      });
+
+      await serverDB.insert(documents).values({
+        userId,
+        fileId,
+        sourceType: 'file',
+        source: 'mirror.pdf',
+        fileType: 'application/pdf',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+
+      await fileModel.delete(fileId);
+
+      const remainingDocs = await serverDB.query.documents.findMany({
+        where: eq(documents.userId, userId),
+      });
+      expect(remainingDocs).toHaveLength(0);
+    });
+
+    it('should NOT delete non-mirror documents, only null out their fileId', async () => {
+      const { id: fileId } = await fileModel.create({
+        name: 'shared.pdf',
+        url: 'https://example.com/shared.pdf',
+        size: 100,
+        fileType: 'application/pdf',
+      });
+
+      const inserted = await serverDB
+        .insert(documents)
+        .values({
+          userId,
+          fileId,
+          // not a mirror — created from a topic, just happens to reference this file
+          sourceType: 'topic',
+          source: 'topic-source',
+          fileType: 'application/pdf',
+          totalCharCount: 0,
+          totalLineCount: 0,
+        })
+        .returning();
+      const docId = inserted[0]!.id;
+
+      await fileModel.delete(fileId);
+
+      const doc = await serverDB.query.documents.findFirst({
+        where: eq(documents.id, docId),
+      });
+      expect(doc).toBeDefined();
+      expect(doc?.fileId).toBeNull();
+    });
+
+    it('should delete asyncTasks attached to the file', async () => {
+      const [chunkTask] = await serverDB
+        .insert(asyncTasks)
+        .values({ userId, type: 'chunk', status: 'success' })
+        .returning();
+      const [embeddingTask] = await serverDB
+        .insert(asyncTasks)
+        .values({ userId, type: 'embedding', status: 'success' })
+        .returning();
+
+      const { id: fileId } = await fileModel.create({
+        name: 'tasked.pdf',
+        url: 'https://example.com/tasked.pdf',
+        size: 100,
+        fileType: 'application/pdf',
+        chunkTaskId: chunkTask!.id,
+        embeddingTaskId: embeddingTask!.id,
+      });
+
+      await fileModel.delete(fileId);
+
+      const remainingTasks = await serverDB.query.asyncTasks.findMany({
+        where: inArray(asyncTasks.id, [chunkTask!.id, embeddingTask!.id]),
+      });
+      expect(remainingTasks).toHaveLength(0);
+    });
   });
 
   describe('deleteMany', () => {
@@ -234,7 +321,7 @@ describe('FileModel', () => {
       });
       expect(globalFilesResult).toHaveLength(2);
 
-      await fileModel.deleteMany([file1.id, file2.id]);
+      const deletedFiles = await fileModel.deleteMany([file1.id, file2.id]);
 
       const remainingFiles = await serverDB.query.files.findMany({
         where: eq(files.userId, userId),
@@ -248,6 +335,7 @@ describe('FileModel', () => {
 
       expect(remainingFiles).toHaveLength(0);
       expect(globalFilesResult2).toHaveLength(0);
+      expect(deletedFiles.map((file) => file.id).sort()).toEqual([file1.id, file2.id].sort());
     });
     it('should delete multiple files but not remove global files if DISABLE_REMOVE_GLOBAL_FILE=true', async () => {
       await fileModel.createGlobalFile({
@@ -286,7 +374,7 @@ describe('FileModel', () => {
 
       expect(globalFilesResult).toHaveLength(2);
 
-      await fileModel.deleteMany([file1.id, file2.id], false);
+      const deletedFiles = await fileModel.deleteMany([file1.id, file2.id], false);
 
       const remainingFiles = await serverDB.query.files.findMany({
         where: eq(files.userId, userId),
@@ -297,6 +385,117 @@ describe('FileModel', () => {
 
       expect(remainingFiles).toHaveLength(0);
       expect(globalFilesResult2).toHaveLength(2);
+      expect(deletedFiles).toEqual([]);
+    });
+
+    it('should return only files whose backing global file is no longer referenced', async () => {
+      await fileModel.createGlobalFile({
+        hashId: 'shared-hash',
+        url: 'https://example.com/shared.txt',
+        size: 100,
+        fileType: 'text/plain',
+        creator: userId,
+      });
+      await fileModel.createGlobalFile({
+        hashId: 'exclusive-hash',
+        url: 'https://example.com/exclusive.txt',
+        size: 100,
+        fileType: 'text/plain',
+        creator: userId,
+      });
+
+      const sharedFileA = await fileModel.create({
+        name: 'shared-a.txt',
+        url: 'https://example.com/shared.txt',
+        size: 100,
+        fileHash: 'shared-hash',
+        fileType: 'text/plain',
+      });
+      await fileModel.create({
+        name: 'shared-b.txt',
+        url: 'https://example.com/shared.txt',
+        size: 100,
+        fileHash: 'shared-hash',
+        fileType: 'text/plain',
+      });
+      const exclusiveFile = await fileModel.create({
+        name: 'exclusive.txt',
+        url: 'https://example.com/exclusive.txt',
+        size: 100,
+        fileHash: 'exclusive-hash',
+        fileType: 'text/plain',
+      });
+
+      const deletedFiles = await fileModel.deleteMany([sharedFileA.id, exclusiveFile.id]);
+
+      expect(deletedFiles.map((file) => file.id)).toEqual([exclusiveFile.id]);
+
+      const sharedGlobalFile = await serverDB.query.globalFiles.findFirst({
+        where: eq(globalFiles.hashId, 'shared-hash'),
+      });
+      const exclusiveGlobalFile = await serverDB.query.globalFiles.findFirst({
+        where: eq(globalFiles.hashId, 'exclusive-hash'),
+      });
+      expect(sharedGlobalFile).toBeDefined();
+      expect(exclusiveGlobalFile).toBeUndefined();
+    });
+
+    it('should delete mirror documents and asyncTasks for all files in batch', async () => {
+      const [chunkTask1] = await serverDB
+        .insert(asyncTasks)
+        .values({ userId, type: 'chunk', status: 'success' })
+        .returning();
+      const [chunkTask2] = await serverDB
+        .insert(asyncTasks)
+        .values({ userId, type: 'chunk', status: 'success' })
+        .returning();
+
+      const file1 = await fileModel.create({
+        name: 'a.pdf',
+        url: 'https://example.com/a.pdf',
+        size: 100,
+        fileType: 'application/pdf',
+        chunkTaskId: chunkTask1!.id,
+      });
+      const file2 = await fileModel.create({
+        name: 'b.pdf',
+        url: 'https://example.com/b.pdf',
+        size: 100,
+        fileType: 'application/pdf',
+        chunkTaskId: chunkTask2!.id,
+      });
+
+      await serverDB.insert(documents).values([
+        {
+          userId,
+          fileId: file1.id,
+          sourceType: 'file',
+          source: 'a.pdf',
+          fileType: 'application/pdf',
+          totalCharCount: 0,
+          totalLineCount: 0,
+        },
+        {
+          userId,
+          fileId: file2.id,
+          sourceType: 'file',
+          source: 'b.pdf',
+          fileType: 'application/pdf',
+          totalCharCount: 0,
+          totalLineCount: 0,
+        },
+      ]);
+
+      await fileModel.deleteMany([file1.id, file2.id]);
+
+      const remainingDocs = await serverDB.query.documents.findMany({
+        where: eq(documents.userId, userId),
+      });
+      const remainingTasks = await serverDB.query.asyncTasks.findMany({
+        where: inArray(asyncTasks.id, [chunkTask1!.id, chunkTask2!.id]),
+      });
+      expect(remainingDocs).toHaveLength(0);
+      expect(remainingTasks).toHaveLength(0);
     });
   });
 
@@ -631,7 +830,7 @@ describe('FileModel', () => {
 
   describe('findByNames', () => {
     it('should find files by names', async () => {
-      // 准备测试数据
+      // Prepare test data
       const fileList = [
         {
           name: 'test1.txt',
@@ -658,7 +857,7 @@ describe('FileModel', () => {
 
       await serverDB.insert(files).values(fileList);
 
-      // 测试查找文件
+      // Test finding files
       const result = await fileModel.findByNames(['test1', 'test2']);
       expect(result).toHaveLength(2);
       expect(result.map((f) => f.name)).toContain('test1.txt');
@@ -671,7 +870,7 @@ describe('FileModel', () => {
     });
 
     it('should only find files belonging to current user', async () => {
-      // 准备测试数据
+      // Prepare test data
       await serverDB.insert(files).values([
         {
           name: 'test1.txt',
@@ -685,7 +884,7 @@ describe('FileModel', () => {
           url: 'https://example.com/test2.txt',
           size: 200,
           fileType: 'text/plain',
-          userId: 'user2', // 不同用户的文件
+          userId: 'user2', // file from a different user
         },
       ]);
 
@@ -697,7 +896,7 @@ describe('FileModel', () => {
 
   describe('deleteGlobalFile', () => {
     it('should delete global file by hashId', async () => {
-      // 准备测试数据
+      // Prepare test data
       const globalFile = {
         hashId: 'test-hash',
         fileType: 'text/plain',
@@ -709,10 +908,10 @@ describe('FileModel', () => {
 
       await serverDB.insert(globalFiles).values(globalFile);
 
-      // 执行删除操作
+      // Execute delete operation
       await fileModel.deleteGlobalFile('test-hash');
 
-      // 验证文件已被删除
+      // Verify file has been deleted
       const result = await serverDB.query.globalFiles.findFirst({
         where: eq(globalFiles.hashId, 'test-hash'),
       });
@@ -720,12 +919,12 @@ describe('FileModel', () => {
     });
 
     it('should not throw error when deleting non-existent global file', async () => {
-      // 删除不存在的文件不应抛出错误
+      // Deleting a non-existent file should not throw an error
       await expect(fileModel.deleteGlobalFile('non-existent-hash')).resolves.not.toThrow();
     });
 
     it('should only delete specified global file', async () => {
-      // 准备测试数据
+      // Prepare test data
       const globalFiles1 = {
         hashId: 'hash1',
         fileType: 'text/plain',
@@ -743,10 +942,10 @@ describe('FileModel', () => {
 
       await serverDB.insert(globalFiles).values([globalFiles1, globalFiles2]);
 
-      // 删除一个文件
+      // Delete one file
       await fileModel.deleteGlobalFile('hash1');
 
-      // 验证只有指定文件被删除
+      // Verify only the specified file was deleted
       const remainingFiles = await serverDB.query.globalFiles.findMany();
       expect(remainingFiles).toHaveLength(1);
       expect(remainingFiles[0].hashId).toBe('hash2');
@@ -764,22 +963,22 @@ describe('FileModel', () => {
           fileHash: 'test-hash-txn',
         };
 
-        // 在事务中创建文件
+        // Create file in transaction
         const result = await serverDB.transaction(async (trx) => {
           const { id } = await fileModel.create(params, true, trx);
 
-          // 在事务内验证文件已创建
+          // Verify file was created inside the transaction
           const file = await trx.query.files.findFirst({ where: eq(files.id, id) });
           expect(file).toMatchObject({ ...params, userId });
 
           return { id };
         });
 
-        // 事务提交后，验证文件仍然存在
+        // After transaction commit, verify file still exists
         const file = await serverDB.query.files.findFirst({ where: eq(files.id, result.id) });
         expect(file).toMatchObject({ ...params, userId });
 
-        // 验证全局文件也被创建
+        // Verify global file was also created
         const globalFile = await serverDB.query.globalFiles.findFirst({
           where: eq(globalFiles.hashId, params.fileHash),
         });
@@ -797,22 +996,22 @@ describe('FileModel', () => {
 
         let createdFileId: string | undefined;
 
-        // 故意让事务失败
+        // Intentionally fail the transaction
         await expect(
           serverDB.transaction(async (trx) => {
             const { id } = await fileModel.create(params, true, trx);
             createdFileId = id;
 
-            // 在事务内验证文件已创建
+            // Verify file was created inside the transaction
             const file = await trx.query.files.findFirst({ where: eq(files.id, id) });
             expect(file).toMatchObject({ ...params, userId });
 
-            // 抛出错误导致事务回滚
+            // Throw an error to cause transaction rollback
             throw new Error('Intentional rollback');
           }),
         ).rejects.toThrow('Intentional rollback');
 
-        // 验证文件创建被回滚
+        // Verify file creation was rolled back
         if (createdFileId) {
           const file = await serverDB.query.files.findFirst({
             where: eq(files.id, createdFileId),
@@ -820,7 +1019,7 @@ describe('FileModel', () => {
           expect(file).toBeUndefined();
         }
 
-        // 验证全局文件创建也被回滚
+        // Verify global file creation was also rolled back
         const globalFile = await serverDB.query.globalFiles.findFirst({
           where: eq(globalFiles.hashId, params.fileHash),
         });
@@ -839,7 +1038,7 @@ describe('FileModel', () => {
         const result = await serverDB.transaction(async (trx) => {
           const { id } = await fileModel.create(params, false, trx);
 
-          // 验证知识库文件关联已创建
+          // Verify knowledge base file association was created
           const kbFile = await trx.query.knowledgeBaseFiles.findFirst({
             where: eq(knowledgeBaseFiles.fileId, id),
           });
@@ -848,7 +1047,7 @@ describe('FileModel', () => {
           return { id };
         });
 
-        // 事务提交后验证
+        // Verify after transaction commit
         const kbFile = await serverDB.query.knowledgeBaseFiles.findFirst({
           where: eq(knowledgeBaseFiles.fileId, result.id),
         });
@@ -862,7 +1061,7 @@ describe('FileModel', () => {
 
     describe('delete with transaction', () => {
       it('should delete file within provided transaction', async () => {
-        // 先创建文件和全局文件
+        // First create the file and global file
         await fileModel.createGlobalFile({
           hashId: 'delete-txn-hash',
           url: 'https://example.com/delete-txn.txt',
@@ -879,20 +1078,20 @@ describe('FileModel', () => {
           fileHash: 'delete-txn-hash',
         });
 
-        // 在事务中删除文件
+        // Delete file in transaction
         await serverDB.transaction(async (trx) => {
           await fileModel.delete(id, true, trx);
 
-          // 在事务内验证文件已删除
+          // Verify file was deleted inside the transaction
           const file = await trx.query.files.findFirst({ where: eq(files.id, id) });
           expect(file).toBeUndefined();
         });
 
-        // 事务提交后验证文件仍然被删除
+        // After transaction commit, verify file is still deleted
         const file = await serverDB.query.files.findFirst({ where: eq(files.id, id) });
         expect(file).toBeUndefined();
 
-        // 验证全局文件也被删除（因为没有其他引用）
+        // Verify global file was also deleted (no other references)
         const globalFile = await serverDB.query.globalFiles.findFirst({
           where: eq(globalFiles.hashId, 'delete-txn-hash'),
         });
@@ -900,7 +1099,7 @@ describe('FileModel', () => {
       });
 
       it('should rollback file deletion when transaction fails', async () => {
-        // 先创建文件和全局文件
+        // First create the file and global file
         await fileModel.createGlobalFile({
           hashId: 'rollback-delete-hash',
           url: 'https://example.com/rollback-delete.txt',
@@ -917,26 +1116,26 @@ describe('FileModel', () => {
           fileHash: 'rollback-delete-hash',
         });
 
-        // 故意让事务失败
+        // Intentionally fail the transaction
         await expect(
           serverDB.transaction(async (trx) => {
             await fileModel.delete(id, true, trx);
 
-            // 在事务内验证文件已删除
+            // Verify file was deleted inside the transaction
             const file = await trx.query.files.findFirst({ where: eq(files.id, id) });
             expect(file).toBeUndefined();
 
-            // 抛出错误导致事务回滚
+            // Throw an error to cause transaction rollback
             throw new Error('Intentional rollback for delete');
           }),
         ).rejects.toThrow('Intentional rollback for delete');
 
-        // 验证文件删除被回滚，文件仍然存在
+        // Verify file deletion was rolled back, file still exists
         const file = await serverDB.query.files.findFirst({ where: eq(files.id, id) });
         expect(file).toBeDefined();
         expect(file?.name).toBe('rollback-delete-file.txt');
 
-        // 验证全局文件也被回滚，仍然存在
+        // Verify global file was also rolled back, still exists
         const globalFile = await serverDB.query.globalFiles.findFirst({
           where: eq(globalFiles.hashId, 'rollback-delete-hash'),
         });
@@ -944,7 +1143,7 @@ describe('FileModel', () => {
       });
 
       it('should delete file but preserve global file when removeGlobalFile=false in transaction', async () => {
-        // 先创建文件和全局文件
+        // First create the file and global file
         await fileModel.createGlobalFile({
           hashId: 'preserve-global-hash',
           url: 'https://example.com/preserve-global.txt',
@@ -961,16 +1160,16 @@ describe('FileModel', () => {
           fileHash: 'preserve-global-hash',
         });
 
-        // 在事务中删除文件，但不删除全局文件
+        // Delete file in transaction, but keep global file
         await serverDB.transaction(async (trx) => {
           await fileModel.delete(id, false, trx);
         });
 
-        // 验证文件被删除
+        // Verify file was deleted
         const file = await serverDB.query.files.findFirst({ where: eq(files.id, id) });
         expect(file).toBeUndefined();
 
-        // 验证全局文件被保留
+        // Verify global file was retained
         const globalFile = await serverDB.query.globalFiles.findFirst({
           where: eq(globalFiles.hashId, 'preserve-global-hash'),
         });
@@ -980,7 +1179,7 @@ describe('FileModel', () => {
 
     describe('mixed operations in transaction', () => {
       it('should support create and delete operations in same transaction', async () => {
-        // 先创建一个要删除的文件
+        // First create a file to be deleted
         await fileModel.createGlobalFile({
           hashId: 'mixed-delete-hash',
           url: 'https://example.com/mixed-delete.txt',
@@ -997,12 +1196,12 @@ describe('FileModel', () => {
           fileHash: 'mixed-delete-hash',
         });
 
-        // 在同一个事务中删除旧文件并创建新文件
+        // Delete old file and create new file in the same transaction
         const result = await serverDB.transaction(async (trx) => {
-          // 删除旧文件
+          // Delete old file
           await fileModel.delete(deleteFileId, true, trx);
 
-          // 创建新文件
+          // Create new file
           const { id: newFileId } = await fileModel.create(
             {
               name: 'mixed-create-file.txt',
@@ -1018,20 +1217,20 @@ describe('FileModel', () => {
           return { newFileId };
         });
 
-        // 验证旧文件被删除
+        // Verify old file was deleted
         const deletedFile = await serverDB.query.files.findFirst({
           where: eq(files.id, deleteFileId),
         });
         expect(deletedFile).toBeUndefined();
 
-        // 验证新文件被创建
+        // Verify new file was created
         const newFile = await serverDB.query.files.findFirst({
           where: eq(files.id, result.newFileId),
         });
         expect(newFile).toBeDefined();
         expect(newFile?.name).toBe('mixed-create-file.txt');
 
-        // 验证新的全局文件被创建
+        // Verify new global file was created
         const newGlobalFile = await serverDB.query.globalFiles.findFirst({
           where: eq(globalFiles.hashId, 'mixed-create-hash'),
         });
@@ -1152,7 +1351,7 @@ describe('FileModel', () => {
     });
 
     it('should delete file even when chunks deletion fails', async () => {
-      // 创建测试文件
+      // Create test file
       const testFile = {
         name: 'error-test-file.txt',
         url: 'https://example.com/error-test-file.txt',
@@ -1163,52 +1362,52 @@ describe('FileModel', () => {
 
       const { id: fileId } = await fileModel.create(testFile, true);
 
-      // 创建一些测试数据来模拟chunks关联
+      // Create some test data to simulate chunk associations
       const chunkId1 = '550e8400-e29b-41d4-a716-446655440001';
       const chunkId2 = '550e8400-e29b-41d4-a716-446655440002';
 
-      // 插入chunks
+      // Insert chunks
       await serverDB.insert(chunks).values([
         { id: chunkId1, text: 'chunk 1', userId, type: 'text' },
         { id: chunkId2, text: 'chunk 2', userId, type: 'text' },
       ]);
 
-      // 插入fileChunks关联
+      // Insert fileChunks associations
       await serverDB.insert(fileChunks).values([
         { fileId, chunkId: chunkId1, userId },
         { fileId, chunkId: chunkId2, userId },
       ]);
 
-      // 插入embeddings (1024维向量)
+      // Insert embeddings (1024-dimensional vectors)
       const testEmbedding = Array.from({ length: 1024 }).fill(0.1) as number[];
       await serverDB
         .insert(embeddings)
         .values([{ chunkId: chunkId1, embeddings: testEmbedding, model: 'test-model', userId }]);
 
-      // 跳过 documentChunks 测试，因为需要先创建 documents 记录
+      // Skip documentChunks test, requires creating documents records first
 
-      // 删除文件，应该会清理所有相关数据
+      // Delete file, should clean up all related data
       const result = await fileModel.delete(fileId, true);
 
-      // 验证文件被删除
+      // Verify file was deleted
       const deletedFile = await serverDB.query.files.findFirst({
         where: eq(files.id, fileId),
       });
       expect(deletedFile).toBeUndefined();
 
-      // 验证chunks被删除
+      // Verify chunks were deleted
       const remainingChunks = await serverDB.query.chunks.findMany({
         where: inArray(chunks.id, [chunkId1, chunkId2]),
       });
       expect(remainingChunks).toHaveLength(0);
 
-      // 验证embeddings被删除
+      // Verify embeddings were deleted
       const remainingEmbeddings = await serverDB.query.embeddings.findMany({
         where: inArray(embeddings.chunkId, [chunkId1, chunkId2]),
       });
       expect(remainingEmbeddings).toHaveLength(0);
 
-      // 验证fileChunks被删除
+      // Verify fileChunks were deleted
       const remainingFileChunks = await serverDB.query.fileChunks.findMany({
         where: eq(fileChunks.fileId, fileId),
       });
@@ -1218,7 +1417,7 @@ describe('FileModel', () => {
     });
 
     it('should successfully delete file with all related chunks and embeddings', async () => {
-      // 简化测试：只验证正常的完整删除流程（移除知识库保护后）
+      // Simplified test: only verify the normal full deletion flow (after removing knowledge base protection)
       const testFile = {
         name: 'complete-deletion-test.txt',
         url: 'https://example.com/complete-deletion-test.txt',
@@ -1231,42 +1430,42 @@ describe('FileModel', () => {
 
       const chunkId = '550e8400-e29b-41d4-a716-446655440003';
 
-      // 插入chunk
+      // Insert chunk
       await serverDB
         .insert(chunks)
         .values([{ id: chunkId, text: 'complete test chunk', userId, type: 'text' }]);
 
-      // 插入fileChunks关联
+      // Insert fileChunks associations
       await serverDB.insert(fileChunks).values([{ fileId, chunkId, userId }]);
 
-      // 插入embeddings
+      // Insert embeddings
       const testEmbedding = Array.from({ length: 1024 }).fill(0.1) as number[];
       await serverDB
         .insert(embeddings)
         .values([{ chunkId, embeddings: testEmbedding, model: 'test-model', userId }]);
 
-      // 删除文件
+      // Delete file
       await fileModel.delete(fileId, true);
 
-      // 验证文件被删除
+      // Verify file was deleted
       const deletedFile = await serverDB.query.files.findFirst({
         where: eq(files.id, fileId),
       });
       expect(deletedFile).toBeUndefined();
 
-      // 验证chunks被删除
+      // Verify chunks were deleted
       const remainingChunks = await serverDB.query.chunks.findMany({
         where: eq(chunks.id, chunkId),
       });
       expect(remainingChunks).toHaveLength(0);
 
-      // 验证embeddings被删除
+      // Verify embeddings were deleted
       const remainingEmbeddings = await serverDB.query.embeddings.findMany({
         where: eq(embeddings.chunkId, chunkId),
       });
       expect(remainingEmbeddings).toHaveLength(0);
 
-      // 验证fileChunks被删除
+      // Verify fileChunks were deleted
       const remainingFileChunks = await serverDB.query.fileChunks.findMany({
         where: eq(fileChunks.fileId, fileId),
       });
@@ -1274,7 +1473,7 @@ describe('FileModel', () => {
     });
 
     it('should delete files that are in knowledge bases (removed protection)', async () => {
-      // 测试修复后的逻辑：知识库中的文件也应该被删除
+      // Test the fixed logic: files in knowledge bases should also be deleted
       const testFile = {
         name: 'knowledge-base-file.txt',
         url: 'https://example.com/knowledge-base-file.txt',
@@ -1288,47 +1487,47 @@ describe('FileModel', () => {
 
       const chunkId = '550e8400-e29b-41d4-a716-446655440007';
 
-      // 插入chunk和关联数据
+      // Insert chunk and association data
       await serverDB
         .insert(chunks)
         .values([{ id: chunkId, text: 'knowledge base chunk', userId, type: 'text' }]);
 
       await serverDB.insert(fileChunks).values([{ fileId, chunkId, userId }]);
 
-      // 插入embeddings (1024维向量)
+      // Insert embeddings (1024-dimensional vectors)
       const testEmbedding = Array.from({ length: 1024 }).fill(0.1) as number[];
       await serverDB
         .insert(embeddings)
         .values([{ chunkId, embeddings: testEmbedding, model: 'test-model', userId }]);
 
-      // 验证文件确实在知识库中
+      // Verify file is indeed in the knowledge base
       const kbFile = await serverDB.query.knowledgeBaseFiles.findFirst({
         where: eq(knowledgeBaseFiles.fileId, fileId),
       });
       expect(kbFile).toBeDefined();
 
-      // 删除文件
+      // Delete file
       await fileModel.delete(fileId, true);
 
-      // 验证知识库中的文件也被完全删除
+      // Verify files in knowledge base were also completely deleted
       const deletedFile = await serverDB.query.files.findFirst({
         where: eq(files.id, fileId),
       });
       expect(deletedFile).toBeUndefined();
 
-      // 验证chunks被删除（这是修复的核心：之前知识库文件的chunks不会被删除）
+      // Verify chunks were deleted (this is the core of the fix: previously chunks of knowledge base files would not be deleted)
       const remainingChunks = await serverDB.query.chunks.findMany({
         where: eq(chunks.id, chunkId),
       });
       expect(remainingChunks).toHaveLength(0);
 
-      // 验证embeddings被删除
+      // Verify embeddings were deleted
       const remainingEmbeddings = await serverDB.query.embeddings.findMany({
         where: eq(embeddings.chunkId, chunkId),
       });
       expect(remainingEmbeddings).toHaveLength(0);
 
-      // 验证fileChunks被删除
+      // Verify fileChunks were deleted
       const remainingFileChunks = await serverDB.query.fileChunks.findMany({
         where: eq(fileChunks.fileId, fileId),
       });

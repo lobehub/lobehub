@@ -1,10 +1,10 @@
 import { LOBE_CHAT_CLOUD } from '@lobechat/business-const';
 import { LibraryBig } from 'lucide-react';
-import { memo, Suspense, useState } from 'react';
+import { memo, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import TipGuide from '@/components/TipGuide';
-import { AttachKnowledgeModal } from '@/features/LibraryModal';
+import { openAttachKnowledgeModal } from '@/features/LibraryModal';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';
@@ -21,10 +21,8 @@ const Knowledge = memo(() => {
     preferenceSelectors.showUploadFileInKnowledgeBaseTip(s),
     s.updateGuideState,
   ]);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [updating, setUpdating] = useState(false);
 
-  const items = useControls({ setModalOpen, setUpdating });
+  const { items } = useControls({ openAttachKnowledgeModal });
 
   if (!enableKnowledgeBase) return null;
   if (!enableKnowledge)
@@ -40,7 +38,6 @@ const Knowledge = memo(() => {
   const content = (
     <Action
       icon={LibraryBig}
-      loading={updating}
       showTooltip={false}
       title={t('knowledgeBase.title')}
       dropdown={{
@@ -68,7 +65,6 @@ const Knowledge = memo(() => {
       ) : (
         content
       )}
-      <AttachKnowledgeModal open={modalOpen} setOpen={setModalOpen} />
     </Suspense>
   );
 });

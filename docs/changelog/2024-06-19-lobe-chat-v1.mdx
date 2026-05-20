@@ -1,9 +1,9 @@
 ---
-title: 'LobeHub 1.0: New Architecture and New Possibilities'
+title: 'LobeHub 1.0: A New Foundation for Persistent, Multi-User Workspaces'
 description: >-
-  LobeHub 1.0 brings a brand-new architecture and features for server-side
-  databases and user authentication management, opening up new possibilities. On
-  this basis, LobeHub Cloud has entered beta testing.
+  LobeHub 1.0 introduces server-side database support and comprehensive user
+  management, enabling knowledge bases, cross-device sync, and team
+  collaboration. LobeHub Cloud enters beta with these capabilities built-in.
 tags:
   - LobeHub
   - Version 1.0
@@ -12,18 +12,51 @@ tags:
   - Cloud Beta Testing
 ---
 
-# LobeHub 1.0: New Architecture and New Possibilities
+# LobeHub 1.0: A New Foundation for Persistent, Multi-User Workspaces
 
-Since announcing our move towards version 1.0 in March, we’ve been busy upgrading every aspect of our platform. After two months of intensive development, we are excited to announce the official release of LobeHub 1.0! Let’s take a look at our new features.
+Since March, we've been rebuilding LobeHub from the ground up. Two months later, 1.0 is here. This isn't just an incremental update—it's a new architecture that enables the capabilities users have been asking for most.
 
-## Server-Side Database Support
+The 0.x era was defined by browser storage. Fast, simple, but limited. You couldn't sync across devices, build knowledge bases, or share agents with a team. Every session started fresh. LobeHub 1.0 changes that foundation.
 
-The most significant feature of LobeHub 1.0 is the support for server-side databases. In the 0.x era, the lack of persistent storage on the server side made it challenging, if not impossible, to implement many features that users urgently needed, such as knowledge bases, cross-device synchronization, and private assistant markets.
+## Server-Side Database: Data That Persists and Travels
 
-## User Authentication Management
+The centerpiece of 1.0 is server-side database support. With persistent storage, conversations and agents live beyond a single browser session. Switch from laptop to desktop without losing context. Build up institutional knowledge over time instead of starting from zero.
 
-In the 0.x era, the most requested feature to be paired with server-side databases was user authentication management. Previously, we had integrated next-auth and Clerk as our authentication solutions. In response to demands for multi-user management, we have restructured the settings interface into a user panel, consolidating relevant user information within the new user interface.
+This unlocks capabilities that were impossible in 0.x:
 
-## LobeHub Cloud Beta Testing
+- **Knowledge bases**: Store documents and reference them across conversations
+- **Cross-device sync**: Pick up exactly where you left off on any device
+- **Private agent marketplaces**: Share specialized agents within your team
+- **Conversation history**: Search and revisit past discussions
 
-LobeHub Cloud is our commercial version based on the open-source LobeHub, and all the features from version 1.0 are now live in LobeHub Cloud, which has entered beta testing. If you’re interested, you can join our waitlist here. During the beta testing period, a limited number of access slots will be released daily for testing opportunities.
+## User Management: From Single-Player to Multi-Player
+
+Alongside the database, 1.0 introduces proper user authentication and management. We've integrated both next-auth and Clerk as authentication providers, giving you flexibility based on your security needs.
+
+The settings area has been restructured into a dedicated user panel that brings identity, preferences, and access control into one place. This is essential infrastructure for teams. Multiple users can now share a LobeHub instance with proper access boundaries and account management.
+
+Use the new panel to:
+
+- Manage account settings and API keys in one place
+- Configure authentication providers (next-auth or Clerk)
+- Control workspace access for team members
+- Switch between personal and team contexts
+
+## LobeHub Cloud: Managed 1.0, Ready to Use
+
+LobeHub Cloud is our hosted offering built on the 1.0 architecture. All the capabilities above—server-side persistence, user management, knowledge bases—are available now without any setup.
+
+We've opened a beta waitlist with limited daily access. If you want to skip self-hosting and start using LobeHub 1.0 immediately, [join the waitlist here](https://lobehub.com).
+
+## Improvements and fixes
+
+- Migrated core storage layer from localStorage to PostgreSQL
+- Added database migration system for seamless upgrades
+- Implemented session management with secure token handling
+- Refactored settings UI into dedicated user panel
+- Added support for multiple authentication providers
+- Improved initial load performance with server-side rendering
+
+## Credits
+
+Huge thanks to everyone who contributed to the 1.0 architecture overhaul. This release represents foundational work by the entire LobeHub team that will support the platform for years to come.

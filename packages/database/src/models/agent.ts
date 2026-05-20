@@ -1,5 +1,5 @@
 import { getAgentPersistConfig } from '@lobechat/builtin-agents';
-import { INBOX_SESSION_ID } from '@lobechat/const';
+import { DEFAULT_INBOX_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
 import { and, desc, eq, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
@@ -35,6 +35,39 @@ export class AgentModel {
     if (!agent) return null;
 
     return this.enrichAgentWithKnowledge(agent);
+  };
+
+  existsById = async (id: string): Promise<boolean> => {
+    const rows = await this.db
+      .select({ id: agents.id })
+      .from(agents)
+      .where(and(eq(agents.id, id), eq(agents.userId, this.userId)))
+      .limit(1);
+
+    return rows.length > 0;
+  };
+
+  /**
+   * Lightweight lookup of an agent's currently-configured model + provider,
+   * used to snapshot the model into a task config so later changes to the
+   * agent's default model don't silently affect already-created tasks.
+   * Returns null when the agent has no model/provider set, or the agent
+   * cannot be found for this user.
+   */
+  getAgentModelConfig = async (
+    idOrSlug: string,
+  ): Promise<{ model: string; provider: string } | null> => {
+    const rows = await this.db
+      .select({ model: agents.model, provider: agents.provider })
+      .from(agents)
+      .where(
+        and(eq(agents.userId, this.userId), or(eq(agents.id, idOrSlug), eq(agents.slug, idOrSlug))),
+      )
+      .limit(1);
+
+    const row = rows[0];
+    if (!row || !row.model || !row.provider) return null;
+    return { model: row.model, provider: row.provider };
   };
 
   /**
@@ -75,19 +108,27 @@ export class AgentModel {
 
   /**
    * Get minimal agent info (avatar, title, backgroundColor) by IDs.
+   * For inbox agent (slug='inbox'), falls back to LobeAI defaults when avatar/title are missing.
    */
   getAgentAvatarsByIds = async (ids: string[]) => {
     if (ids.length === 0) return [];
 
-    return this.db
+    const rows = await this.db
       .select({
         avatar: agents.avatar,
         backgroundColor: agents.backgroundColor,
         id: agents.id,
+        slug: agents.slug,
         title: agents.title,
       })
       .from(agents)
       .where(and(eq(agents.userId, this.userId), inArray(agents.id, ids)));
+
+    return rows.map(({ slug, ...row }) => ({
+      ...row,
+      avatar: row.avatar || (slug === INBOX_SESSION_ID ? DEFAULT_INBOX_AVATAR : null),
+      title: row.title || (slug === INBOX_SESSION_ID ? 'Lobe AI' : null),
+    }));
   };
 
   /**
@@ -575,7 +616,12 @@ export class AgentModel {
     const persistConfig = getAgentPersistConfig(slug);
     if (!persistConfig) return null;
 
-    // 4. Create the builtin agent with persist config
+    // 4. Create the builtin agent with persist config.
+    // Idempotent under concurrent callers: two parallel requests for the same
+    // (userId, slug) both see no existing row and race to insert. Without
+    // `onConflictDoNothing`, the loser hits the `agents_slug_user_id_unique`
+    // constraint; with it, the loser's `.returning()` is empty and we re-read
+    // the row that won.
     const result = await this.db
       .insert(agents)
       .values({
@@ -585,8 +631,15 @@ export class AgentModel {
         userId: this.userId,
         virtual: true,
       })
+      .onConflictDoNothing({ target: [agents.slug, agents.userId] })
       .returning();
 
-    return result[0];
+    if (result[0]) return result[0];
+
+    return (
+      (await this.db.query.agents.findFirst({
+        where: and(eq(agents.slug, slug), eq(agents.userId, this.userId)),
+      })) ?? null
+    );
   };
 }

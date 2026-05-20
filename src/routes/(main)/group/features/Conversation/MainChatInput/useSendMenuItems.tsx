@@ -1,5 +1,6 @@
 'use client';
 
+import { HotkeyEnum, KeyEnum } from '@lobechat/const/hotkeys';
 import { type MenuProps } from '@lobehub/ui';
 import { Flexbox, Hotkey, Icon } from '@lobehub/ui';
 import { BotMessageSquare, LucideCheck, MessageSquarePlus } from 'lucide-react';
@@ -9,7 +10,6 @@ import { Trans, useTranslation } from 'react-i18next';
 import { useConversationStore, useConversationStoreApi } from '@/features/Conversation';
 import { useUserStore } from '@/store/user';
 import { preferenceSelectors, settingsSelectors } from '@/store/user/selectors';
-import { HotkeyEnum, KeyEnum } from '@/types/hotkey';
 
 /**
  * useSendMenuItems hook for ConversationStore

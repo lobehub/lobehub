@@ -1,5 +1,5 @@
 import type { DBMessageItem } from '@lobechat/types';
-import { eq } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { uuid } from '@/utils/uuid';
@@ -16,6 +16,7 @@ import {
   messages,
   messagesFiles,
   sessions,
+  topics,
   users,
 } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
@@ -246,6 +247,124 @@ describe('MessageModel Create Tests', () => {
       // The stored data should not contain null bytes
       expect(JSON.stringify(pluginResult[0].state)).not.toContain('\u0000');
       expect(pluginResult[0].arguments).not.toContain('\u0000');
+    });
+
+    it('should create user and assistant messages with one topic touch', async () => {
+      await serverDB.insert(topics).values({
+        id: 'topic-pair',
+        sessionId: '1',
+        title: 'Topic pair',
+        userId,
+      });
+
+      const timingEvents: string[] = [];
+      const result = await messageModel.createUserAndAssistantMessages(
+        {
+          assistantMessage: {
+            content: '',
+            model: 'gpt-4o',
+            provider: 'openai',
+            role: 'assistant',
+            sessionId: '1',
+            topicId: 'topic-pair',
+          },
+          userMessage: {
+            content: 'hello',
+            files: ['f1'],
+            role: 'user',
+            sessionId: '1',
+            topicId: 'topic-pair',
+          },
+        },
+        {
+          timing: {
+            log: (event) => timingEvents.push(event),
+          },
+        },
+      );
+
+      expect(result.userMessage.id).toBeDefined();
+      expect(result.assistantMessage.id).toBeDefined();
+      expect(result.assistantMessage.parentId).toBe(result.userMessage.id);
+      expect(result.userMessage.createdAt.getTime()).toBeLessThan(
+        result.assistantMessage.createdAt.getTime(),
+      );
+
+      const dbMessages = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.userId, userId))
+        .orderBy(asc(messages.createdAt));
+
+      expect(dbMessages.map((message) => message.id)).toEqual([
+        result.userMessage.id,
+        result.assistantMessage.id,
+      ]);
+
+      const messageFiles = await serverDB
+        .select()
+        .from(messagesFiles)
+        .where(eq(messagesFiles.messageId, result.userMessage.id));
+
+      expect(messageFiles).toHaveLength(1);
+      expect(
+        timingEvents.filter(
+          (event) => event === 'db.message.createUserAndAssistant.messages.insert:start',
+        ),
+      ).toHaveLength(1);
+      expect(
+        timingEvents.filter(
+          (event) => event === 'db.message.createUserAndAssistant.topic.touchUpdatedAt:start',
+        ),
+      ).toHaveLength(1);
+    });
+
+    it('should skip topic touch when creating a pair for an already-created topic', async () => {
+      await serverDB.insert(topics).values({
+        id: 'topic-pair-no-touch',
+        sessionId: '1',
+        title: 'Topic pair no touch',
+        userId,
+      });
+
+      const timingEvents: string[] = [];
+      const result = await messageModel.createUserAndAssistantMessages(
+        {
+          assistantMessage: {
+            content: '',
+            model: 'gpt-4o',
+            provider: 'openai',
+            role: 'assistant',
+            sessionId: '1',
+            topicId: 'topic-pair-no-touch',
+          },
+          userMessage: {
+            content: 'hello',
+            role: 'user',
+            sessionId: '1',
+            topicId: 'topic-pair-no-touch',
+          },
+        },
+        {
+          timing: {
+            log: (event) => timingEvents.push(event),
+          },
+          touchTopicUpdatedAt: false,
+        },
+      );
+
+      expect(result.userMessage.id).toBeDefined();
+      expect(result.assistantMessage.parentId).toBe(result.userMessage.id);
+      expect(
+        timingEvents.filter(
+          (event) => event === 'db.message.createUserAndAssistant.messages.insert:start',
+        ),
+      ).toHaveLength(1);
+      expect(
+        timingEvents.filter(
+          (event) => event === 'db.message.createUserAndAssistant.topic.touchUpdatedAt:start',
+        ),
+      ).toHaveLength(0);
     });
 
     describe('create with advanced parameters', () => {

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { useChatStore } from '@/store/chat';
 import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { useOperationState } from './useOperationState';
 
@@ -269,6 +270,31 @@ describe('useOperationState', () => {
   });
 
   describe('isInputLoading', () => {
+    it('should detect loading for a page-scoped floating chat panel context', () => {
+      const context = {
+        agentId: 'test-agent-id',
+        scope: 'page',
+        threadId: null,
+        topicId: 'test-topic-id',
+      } as const;
+
+      const { result } = renderHook(() => useOperationState(context));
+
+      expect(result.current.isInputLoading).toBe(false);
+      expect(result.current.isAIGenerating).toBe(false);
+
+      act(() => {
+        useChatStore.getState().startOperation({
+          context,
+          type: 'execAgentRuntime',
+        });
+      });
+
+      expect(useChatStore.getState().operationsByContext[messageMapKey(context)]).toHaveLength(1);
+      expect(result.current.isInputLoading).toBe(true);
+      expect(result.current.isAIGenerating).toBe(true);
+    });
+
     it('should clear loading after cancelling an operation in a null-topic context', () => {
       const context = {
         agentId: 'test-agent-id',

@@ -1,4 +1,9 @@
-import type { DocumentLoadFormat, DocumentLoadPosition, DocumentLoadRules } from './types';
+import type {
+  DocumentLoadFormat,
+  DocumentLoadPosition,
+  DocumentLoadRules,
+  PolicyLoad,
+} from './types';
 
 /**
  * Document Template Definition
@@ -17,6 +22,8 @@ export interface DocumentTemplate {
   loadRules?: DocumentLoadRules;
   /** Additional metadata for the template */
   metadata?: Record<string, any>;
+  /** Controls whether this document is fully injected or progressively disclosed */
+  policyLoad?: PolicyLoad;
   /** Default render format when the document is injected into context */
   policyLoadFormat?: DocumentLoadFormat;
   /** Human-readable title for the template */
@@ -62,10 +69,11 @@ export class DocumentTemplateManager {
     options?: {
       description?: string;
       filename?: string;
-      policyLoadFormat?: DocumentLoadFormat;
       loadPosition?: DocumentLoadPosition;
       loadRules?: DocumentLoadRules;
       metadata?: Record<string, any>;
+      policyLoad?: PolicyLoad;
+      policyLoadFormat?: DocumentLoadFormat;
     },
   ): DocumentTemplate {
     return {
@@ -73,10 +81,11 @@ export class DocumentTemplateManager {
       content,
       description: options?.description || `Template for ${title}`,
       filename: options?.filename || this.generateFilename(title),
-      policyLoadFormat: options?.policyLoadFormat,
       loadPosition: options?.loadPosition,
       loadRules: options?.loadRules,
       metadata: options?.metadata,
+      policyLoad: options?.policyLoad,
+      policyLoadFormat: options?.policyLoadFormat,
     };
   }
 
@@ -132,10 +141,11 @@ export class DocumentTemplateManager {
     options?: {
       description?: string;
       filename?: string;
-      policyLoadFormat?: DocumentLoadFormat;
       loadPosition?: DocumentLoadPosition;
       loadRules?: DocumentLoadRules;
       metadata?: Record<string, any>;
+      policyLoad?: PolicyLoad;
+      policyLoadFormat?: DocumentLoadFormat;
     },
   ): DocumentTemplate {
     const template = this.createBasic(title, content, options);

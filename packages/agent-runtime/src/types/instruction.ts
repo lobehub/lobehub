@@ -35,8 +35,8 @@ export interface AgentRuntimeContext {
     | 'llm_result'
     | 'tool_result'
     | 'tools_batch_result'
-    | 'task_result'
-    | 'tasks_batch_result'
+    | 'sub_agent_result'
+    | 'sub_agents_batch_result'
     | 'human_response'
     | 'human_approved_tool'
     | 'human_abort'
@@ -53,7 +53,7 @@ export interface AgentRuntimeContext {
 
   /**
    * Step context computed at the beginning of each step
-   * Contains dynamic state like GTD todos that changes between steps
+   * Contains dynamic state like lobe-agent todos that changes between steps
    * Computed by AgentRuntime and passed to Context Engine and Tool Executors
    */
   stepContext?: RuntimeStepContext;
@@ -112,6 +112,8 @@ export interface Agent {
   tools?: ToolRegistry;
 }
 
+// ── Payloads ──────────────────────────────────────────────
+
 export interface CallLLMPayload {
   isFirstMessage?: boolean;
   messages: any[];
@@ -145,20 +147,113 @@ export interface HumanAbortPayload {
   toolsCalling?: ChatToolPayload[];
 }
 
-export interface AgentInstructionCallLlm {
+/**
+ * Sub-agent definition for exec_sub_agents instruction
+ */
+export interface SubAgentTask {
+  /** Brief description of what this sub-agent does (shown in UI) */
+  description: string;
+  /** Whether to inherit context messages from parent conversation */
+  inheritMessages?: boolean;
+  /** Detailed instruction/prompt for the sub-agent execution */
+  instruction: string;
+  /**
+   * Whether to execute the sub-agent on the client side (desktop only).
+   * When true and running on desktop, the sub-agent runs locally with
+   * access to local tools (file system, shell commands, etc.).
+   *
+   * IMPORTANT: This MUST be set to true when the sub-agent requires:
+   * - Reading/writing local files via `local-system` tool
+   * - Executing shell commands
+   * - Any other desktop-only local tool operations
+   *
+   * If not specified or false, the sub-agent runs on the server (default behavior).
+   * On non-desktop platforms (web), this flag is ignored and sub-agents always
+   * run on the server.
+   */
+  runInClient?: boolean;
+  /** Timeout in milliseconds (optional, default 30 minutes) */
+  timeout?: number;
+}
+
+/**
+ * Payload for sub_agent_result phase (single sub-agent)
+ */
+export interface SubAgentResultPayload {
+  /** Parent message ID */
+  parentMessageId: string;
+  /** Result from executed sub-agent */
+  result: {
+    /** Error message if sub-agent failed */
+    error?: string;
+    /** Sub-agent result content */
+    result?: string;
+    /** Whether the sub-agent completed successfully */
+    success: boolean;
+    /** Sub-agent message ID */
+    taskMessageId: string;
+    /** Thread ID where the sub-agent was executed */
+    threadId: string;
+  };
+}
+
+/**
+ * Payload for sub_agents_batch_result phase (multiple sub-agents)
+ */
+export interface SubAgentsBatchResultPayload {
+  /** Parent message ID */
+  parentMessageId: string;
+  /** Results from executed sub-agents */
+  results: Array<{
+    /** Error message if sub-agent failed */
+    error?: string;
+    /** Sub-agent result content */
+    result?: string;
+    /** Whether the sub-agent completed successfully */
+    success: boolean;
+    /** Sub-agent message ID */
+    taskMessageId: string;
+    /** Thread ID where the sub-agent was executed */
+    threadId: string;
+  }>;
+}
+
+// ── Instructions ──────────────────────────────────────────
+
+/**
+ * Common fields shared across all instruction types.
+ * Agents can set `stepLabel` to label the current step for display in streaming events and hooks.
+ */
+export interface AgentInstructionBase {
+  /** Human-readable label for this step (e.g. graph node name). Propagated to stream events and hooks. */
+  stepLabel?: string;
+}
+
+// ─ LLM ───────────────────────────────────────────────────
+
+export interface AgentInstructionCallLlm extends AgentInstructionBase {
   payload: any;
   type: 'call_llm';
 }
 
-export interface AgentInstructionCallTool {
+// ─ Tool ──────────────────────────────────────────────────
+
+export interface AgentInstructionCallTool extends AgentInstructionBase {
   payload: {
     parentMessageId: string;
+    /**
+     * When true, the runtime is resuming execution for a previously pending
+     * tool call (e.g. after human approval). The executor must NOT insert a
+     * new tool message; instead it updates the existing one referenced by
+     * `parentMessageId` with the tool result.
+     */
+    skipCreateToolMessage?: boolean;
     toolCalling: ChatToolPayload;
   };
   type: 'call_tool';
 }
 
-export interface AgentInstructionCallToolsBatch {
+export interface AgentInstructionCallToolsBatch extends AgentInstructionBase {
   payload: {
     parentMessageId: string;
     toolsCalling: ChatToolPayload[];
@@ -166,36 +261,7 @@ export interface AgentInstructionCallToolsBatch {
   type: 'call_tools_batch';
 }
 
-export interface AgentInstructionRequestHumanPrompt {
-  metadata?: Record<string, unknown>;
-  prompt: string;
-  reason?: string;
-  type: 'request_human_prompt';
-}
-
-export interface AgentInstructionRequestHumanSelect {
-  metadata?: Record<string, unknown>;
-  multi?: boolean;
-  options: Array<{ label: string; value: string }>;
-  prompt?: string;
-  reason?: string;
-  type: 'request_human_select';
-}
-
-export interface AgentInstructionRequestHumanApprove {
-  pendingToolsCalling: ChatToolPayload[];
-  reason?: string;
-  skipCreateToolMessage?: boolean;
-  type: 'request_human_approve';
-}
-
-export interface AgentInstructionFinish {
-  reason: FinishReason;
-  reasonDetail?: string;
-  type: 'finish';
-}
-
-export interface AgentInstructionResolveAbortedTools {
+export interface AgentInstructionResolveAbortedTools extends AgentInstructionBase {
   payload: {
     /** Parent message ID (assistant message) */
     parentMessageId: string;
@@ -207,11 +273,76 @@ export interface AgentInstructionResolveAbortedTools {
   type: 'resolve_aborted_tools';
 }
 
-/**
- * Instruction to execute context compression
- * When triggered, compresses ALL messages into a single MessageGroup summary
- */
-export interface AgentInstructionCompressContext {
+// ─ Sub-Agent ─────────────────────────────────────────────
+
+export interface AgentInstructionExecSubAgent extends AgentInstructionBase {
+  payload: {
+    /** Parent message ID (tool message that dispatched the sub-agent) */
+    parentMessageId: string;
+    /** Sub-agent to execute */
+    task: SubAgentTask;
+  };
+  type: 'exec_sub_agent';
+}
+
+export interface AgentInstructionExecSubAgents extends AgentInstructionBase {
+  payload: {
+    /** Parent message ID (tool message that dispatched the sub-agents) */
+    parentMessageId: string;
+    /** Array of sub-agents to execute */
+    tasks: SubAgentTask[];
+  };
+  type: 'exec_sub_agents';
+}
+
+export interface AgentInstructionExecClientSubAgent extends AgentInstructionBase {
+  payload: {
+    /** Parent message ID (tool message that dispatched the sub-agent) */
+    parentMessageId: string;
+    /** Sub-agent to execute */
+    task: SubAgentTask;
+  };
+  type: 'exec_client_sub_agent';
+}
+
+export interface AgentInstructionExecClientSubAgents extends AgentInstructionBase {
+  payload: {
+    /** Parent message ID (tool message that dispatched the sub-agents) */
+    parentMessageId: string;
+    /** Array of sub-agents to execute */
+    tasks: SubAgentTask[];
+  };
+  type: 'exec_client_sub_agents';
+}
+
+// ─ Human Interaction ─────────────────────────────────────
+
+export interface AgentInstructionRequestHumanPrompt extends AgentInstructionBase {
+  metadata?: Record<string, unknown>;
+  prompt: string;
+  reason?: string;
+  type: 'request_human_prompt';
+}
+
+export interface AgentInstructionRequestHumanSelect extends AgentInstructionBase {
+  metadata?: Record<string, unknown>;
+  multi?: boolean;
+  options: Array<{ label: string; value: string }>;
+  prompt?: string;
+  reason?: string;
+  type: 'request_human_select';
+}
+
+export interface AgentInstructionRequestHumanApprove extends AgentInstructionBase {
+  pendingToolsCalling: ChatToolPayload[];
+  reason?: string;
+  skipCreateToolMessage?: boolean;
+  type: 'request_human_approve';
+}
+
+// ─ Control ───────────────────────────────────────────────
+
+export interface AgentInstructionCompressContext extends AgentInstructionBase {
   payload: {
     /** Current token count before compression */
     currentTokenCount: number;
@@ -223,145 +354,34 @@ export interface AgentInstructionCompressContext {
   type: 'compress_context';
 }
 
-/**
- * Task definition for exec_tasks instruction
- */
-export interface ExecTaskItem {
-  /** Brief description of what this task does (shown in UI) */
-  description: string;
-  /** Whether to inherit context messages from parent conversation */
-  inheritMessages?: boolean;
-  /** Detailed instruction/prompt for the task execution */
-  instruction: string;
-  /**
-   * Whether to execute the task on the client side (desktop only).
-   * When true and running on desktop, the task will be executed locally
-   * with access to local tools (file system, shell commands, etc.).
-   *
-   * IMPORTANT: This MUST be set to true when the task requires:
-   * - Reading/writing local files via `local-system` tool
-   * - Executing shell commands
-   * - Any other desktop-only local tool operations
-   *
-   * If not specified or false, the task runs on the server (default behavior).
-   * On non-desktop platforms (web), this flag is ignored and tasks always run on server.
-   */
-  runInClient?: boolean;
-  /** Timeout in milliseconds (optional, default 30 minutes) */
-  timeout?: number;
+export interface AgentInstructionFinish extends AgentInstructionBase {
+  reason: FinishReason;
+  reasonDetail?: string;
+  type: 'finish';
 }
 
-/**
- * Instruction to execute a single async task (server-side)
- */
-export interface AgentInstructionExecTask {
-  payload: {
-    /** Parent message ID (tool message that triggered the task) */
-    parentMessageId: string;
-    /** Task to execute */
-    task: ExecTaskItem;
-  };
-  type: 'exec_task';
-}
-
-/**
- * Instruction to execute multiple async tasks in parallel (server-side)
- */
-export interface AgentInstructionExecTasks {
-  payload: {
-    /** Parent message ID (tool message that triggered the tasks) */
-    parentMessageId: string;
-    /** Array of tasks to execute */
-    tasks: ExecTaskItem[];
-  };
-  type: 'exec_tasks';
-}
-
-/**
- * Instruction to execute a single async task on the client (desktop only)
- * Used when task requires local tools like file system or shell commands
- */
-export interface AgentInstructionExecClientTask {
-  payload: {
-    /** Parent message ID (tool message that triggered the task) */
-    parentMessageId: string;
-    /** Task to execute */
-    task: ExecTaskItem;
-  };
-  type: 'exec_client_task';
-}
-
-/**
- * Instruction to execute multiple async tasks on the client in parallel (desktop only)
- * Used when tasks require local tools like file system or shell commands
- */
-export interface AgentInstructionExecClientTasks {
-  payload: {
-    /** Parent message ID (tool message that triggered the tasks) */
-    parentMessageId: string;
-    /** Array of tasks to execute */
-    tasks: ExecTaskItem[];
-  };
-  type: 'exec_client_tasks';
-}
-
-/**
- * Payload for task_result phase (single task)
- */
-export interface TaskResultPayload {
-  /** Parent message ID */
-  parentMessageId: string;
-  /** Result from executed task */
-  result: {
-    /** Error message if task failed */
-    error?: string;
-    /** Task result content */
-    result?: string;
-    /** Whether the task completed successfully */
-    success: boolean;
-    /** Task message ID */
-    taskMessageId: string;
-    /** Thread ID where the task was executed */
-    threadId: string;
-  };
-}
-
-/**
- * Payload for tasks_batch_result phase (multiple tasks)
- */
-export interface TasksBatchResultPayload {
-  /** Parent message ID */
-  parentMessageId: string;
-  /** Results from executed tasks */
-  results: Array<{
-    /** Error message if task failed */
-    error?: string;
-    /** Task result content */
-    result?: string;
-    /** Whether the task completed successfully */
-    success: boolean;
-    /** Task message ID */
-    taskMessageId: string;
-    /** Thread ID where the task was executed */
-    threadId: string;
-  }>;
-}
+// ── Union Type ────────────────────────────────────────────
 
 /**
  * A serializable instruction object that the "Agent" (Brain) returns
  * to the "AgentRuntime" (Engine) to execute.
  */
 export type AgentInstruction =
+  // LLM
   | AgentInstructionCallLlm
+  // Tool
   | AgentInstructionCallTool
   | AgentInstructionCallToolsBatch
-  | AgentInstructionExecTask
-  | AgentInstructionExecTasks
-  | AgentInstructionExecClientTask
-  | AgentInstructionExecClientTasks
+  | AgentInstructionResolveAbortedTools
+  // Sub-Agent
+  | AgentInstructionExecSubAgent
+  | AgentInstructionExecSubAgents
+  | AgentInstructionExecClientSubAgent
+  | AgentInstructionExecClientSubAgents
+  // Human Interaction
   | AgentInstructionRequestHumanPrompt
   | AgentInstructionRequestHumanSelect
   | AgentInstructionRequestHumanApprove
-  | AgentInstructionResolveAbortedTools
+  // Control
   | AgentInstructionCompressContext
   | AgentInstructionFinish;

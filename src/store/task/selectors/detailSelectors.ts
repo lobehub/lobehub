@@ -41,6 +41,19 @@ const activeTaskParent = (s: TaskStoreState) => activeTaskDetail(s)?.parent;
 const activeTaskPeriodicInterval = (s: TaskStoreState) =>
   activeTaskDetail(s)?.heartbeat?.interval ?? 0;
 
+// Automation mode: 'heartbeat' | 'schedule' | null (null = no automation)
+const activeTaskAutomationMode = (s: TaskStoreState) => activeTaskDetail(s)?.automationMode ?? null;
+
+// Schedule (cron) mode fields. pattern/timezone are columns; maxExecutions lives in config.schedule.
+const activeTaskSchedulePattern = (s: TaskStoreState) =>
+  activeTaskDetail(s)?.schedule?.pattern ?? null;
+
+const activeTaskScheduleTimezone = (s: TaskStoreState) =>
+  activeTaskDetail(s)?.schedule?.timezone ?? null;
+
+const activeTaskScheduleMaxExecutions = (s: TaskStoreState) =>
+  activeTaskDetail(s)?.schedule?.maxExecutions ?? null;
+
 const activeTaskCheckpoint = (s: TaskStoreState) => activeTaskDetail(s)?.checkpoint;
 
 const activeTaskReview = (s: TaskStoreState) => activeTaskDetail(s)?.review;
@@ -54,7 +67,9 @@ const activeTaskTopicCount = (s: TaskStoreState) => activeTaskDetail(s)?.topicCo
 const canRunActiveTask = (s: TaskStoreState): boolean => {
   const detail = activeTaskDetail(s);
   if (!detail) return false;
-  return ['backlog', 'failed', 'paused'].includes(detail.status) && !!detail.agentId;
+  // 'scheduled' is intentionally excluded — automation owns the next run; the
+  // user can only cancel, not force an immediate run.
+  return ['backlog', 'failed', 'paused', 'completed'].includes(detail.status);
 };
 
 const canPauseActiveTask = (s: TaskStoreState): boolean =>
@@ -63,13 +78,16 @@ const canPauseActiveTask = (s: TaskStoreState): boolean =>
 const canCancelActiveTask = (s: TaskStoreState): boolean => {
   const detail = activeTaskDetail(s);
   if (!detail) return false;
-  return ['backlog', 'paused', 'running'].includes(detail.status);
+  return ['backlog', 'paused', 'running', 'scheduled'].includes(detail.status);
 };
 
 const taskSaveStatus = (s: TaskStoreState) => s.taskSaveStatus;
 
+const activeTopicDrawerTopicId = (s: TaskStoreState) => s.activeTopicDrawerTopicId;
+
 export const taskDetailSelectors = {
   activeTaskAgentId,
+  activeTaskAutomationMode,
   activeTaskCheckpoint,
   activeTaskModel,
   activeTaskDependencies,
@@ -84,10 +102,14 @@ export const taskDetailSelectors = {
   activeTaskPriority,
   activeTaskProvider,
   activeTaskReview,
+  activeTaskScheduleMaxExecutions,
+  activeTaskSchedulePattern,
+  activeTaskScheduleTimezone,
   activeTaskStatus,
   activeTaskSubtasks,
   activeTaskTopicCount,
   activeTaskWorkspace,
+  activeTopicDrawerTopicId,
   canCancelActiveTask,
   canPauseActiveTask,
   canRunActiveTask,

@@ -111,6 +111,17 @@ export interface AuditSafePathsResult {
   allSafe: boolean;
 }
 
+export interface LocalFilePreviewUrlParams {
+  path: string;
+  workingDirectory: string;
+}
+
+export interface LocalFilePreviewUrlResult {
+  error?: string;
+  success: boolean;
+  url?: string;
+}
+
 export interface LocalReadFileResult {
   /**
    * Character count of the content within the specified `loc` range.
@@ -170,6 +181,26 @@ export interface LocalSearchFilesParams {
   sortDirection?: 'asc' | 'desc';
 }
 
+export interface ProjectFileIndexEntry {
+  isDirectory: boolean;
+  name: string;
+  path: string;
+  relativePath: string;
+}
+
+export interface ProjectFileIndexParams {
+  /** Working directory used to resolve the project root. Defaults to Electron process cwd. */
+  scope?: string;
+}
+
+export interface ProjectFileIndexResult {
+  entries: ProjectFileIndexEntry[];
+  indexedAt: string;
+  root: string;
+  source: 'git' | 'glob';
+  totalCount: number;
+}
+
 export interface OpenLocalFileParams {
   path: string;
 }
@@ -184,6 +215,8 @@ export interface RunCommandParams {
   command: string;
   cwd?: string;
   description?: string;
+  /** Merged into the child process environment (after `process.env`). */
+  env?: Record<string, string>;
   run_in_background?: boolean;
   timeout?: number;
 }
@@ -232,9 +265,10 @@ export interface GrepContentParams {
   'head_limit'?: number;
   'multiline'?: boolean;
   'output_mode'?: 'content' | 'files_with_matches' | 'count';
+  /** Legacy alias for `scope`. Takes precedence when set; prefer `scope` (the manifest-documented name) for new callers. */
   'path'?: string;
   'pattern': string;
-  /** Working directory scope. When `path` is not specified, used as the default search location. */
+  /** Working directory scope. Limits the search to this directory. Defaults to `process.cwd()`. */
   'scope'?: string;
   /** Preferred search tool: 'rg' | 'ag' | 'grep' */
   'tool'?: 'rg' | 'ag' | 'grep';
@@ -375,4 +409,34 @@ export interface ResolveSkillResourcePathResult {
   error?: string;
   fullPath?: string;
   success: boolean;
+}
+
+export interface ProjectSkillItem {
+  description?: string;
+  /** Total number of regular files under `skillDir` (recursive, including `SKILL.md`). */
+  fileCount: number;
+  /**
+   * Relative paths (within `skillDir`) of all regular files under the skill,
+   * sorted lexicographically and capped to a safe maximum. Includes `SKILL.md`.
+   */
+  files: string[];
+  name: string;
+  /** Absolute path to the SKILL.md file. */
+  path: string;
+  /** Directory containing the SKILL.md (e.g. `<root>/.agents/skills/spa-routes`). */
+  skillDir: string;
+  /** Source directory the skill was discovered in. */
+  source: '.agents/skills' | '.claude/skills';
+}
+
+export interface ListProjectSkillsParams {
+  /** Working directory used to resolve the project root. */
+  scope: string;
+}
+
+export interface ListProjectSkillsResult {
+  root: string;
+  skills: ProjectSkillItem[];
+  /** Source directory actually scanned (after fallback resolution). */
+  source: ProjectSkillItem['source'] | null;
 }

@@ -1,9 +1,6 @@
 export default {
   'addUserMessage.desc': 'Add the current input as a user message without triggering generation',
   'addUserMessage.title': 'Add a User Message',
-  'clearCurrentMessages.desc':
-    'Clear the messages and uploaded files from the current conversation',
-  'clearCurrentMessages.title': 'Clear Conversation Messages',
   'commandPalette.desc': 'Open the global command palette for quick access to features',
   'commandPalette.title': 'Command Palette',
   'deleteAndRegenerateMessage.desc': 'Delete the last message and regenerate',
@@ -12,6 +9,10 @@ export default {
   'deleteLastMessage.title': 'Delete Last Message',
   'desktop.openSettings.desc': 'Open the application settings page',
   'desktop.openSettings.title': 'Application Settings',
+  'desktop.quickChat.desc': 'Open the Quick Chat popup with a global shortcut',
+  'desktop.quickChat.title': 'Quick Chat',
+  'desktop.quickComposer.desc': 'Open Quick Composer with a global shortcut',
+  'desktop.quickComposer.title': 'Quick Composer',
   'desktop.showApp.desc': 'Toggle the main window visibility with a global shortcut',
   'desktop.showApp.title': 'Show/Hide Main Window',
   'editMessage.desc': 'Enter edit mode by holding Alt and double-clicking the message',

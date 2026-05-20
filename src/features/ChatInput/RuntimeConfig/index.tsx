@@ -1,16 +1,18 @@
 import { isDesktop } from '@lobechat/const';
 import { type RuntimeEnvMode } from '@lobechat/types';
+import { Github } from '@lobehub/icons';
 import { Flexbox, Icon, Popover, Skeleton, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
   ChevronDownIcon,
   CloudIcon,
   FolderIcon,
+  GitBranchIcon,
   LaptopIcon,
   MonitorOffIcon,
   SquircleDashed,
 } from 'lucide-react';
-import { memo, useCallback, useState } from 'react';
+import { memo, type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentStore } from '@/store/agent';
@@ -18,9 +20,15 @@ import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selec
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 
+import ContextWindow from '../ActionBar/Token';
 import { useAgentId } from '../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../hooks/useUpdateAgentConfig';
+import { useChatInputStore } from '../store';
 import ApprovalMode from './ApprovalMode';
+import CloudRepoSwitcher from './CloudRepoSwitcher';
+import GitStatus from './GitStatus';
+import ModeSelector from './ModeSelector';
+import { useRepoType } from './useRepoType';
 import WorkingDirectory from './WorkingDirectory';
 
 const MODE_ICONS: Record<RuntimeEnvMode, typeof LaptopIcon> = {
@@ -99,18 +107,31 @@ const RuntimeConfig = memo(() => {
   const { updateAgentChatConfig } = useUpdateAgentConfig();
   const [dirPopoverOpen, setDirPopoverOpen] = useState(false);
   const [modePopoverOpen, setModePopoverOpen] = useState(false);
+  const showContextWindow = useChatInputStore((s) =>
+    s.rightActions.flat().includes('contextWindow'),
+  );
 
-  const [isLoading, runtimeMode] = useAgentStore((s) => [
+  const [isLoading, runtimeMode, isHeterogeneous, enableAgentMode] = useAgentStore((s) => [
     agentByIdSelectors.isAgentConfigLoadingById(agentId)(s),
     chatConfigByIdSelectors.getRuntimeModeById(agentId)(s),
+    agentId ? agentByIdSelectors.isAgentHeterogeneousById(agentId)(s) : false,
+    agentByIdSelectors.getAgentEnableModeById(agentId)(s),
   ]);
 
-  // Get working directory
   const topicWorkingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
   const agentWorkingDirectory = useAgentStore((s) =>
     agentId ? agentByIdSelectors.getAgentWorkingDirectoryById(agentId)(s) : undefined,
   );
   const effectiveWorkingDirectory = topicWorkingDirectory || agentWorkingDirectory;
+
+  const repoType = useRepoType(effectiveWorkingDirectory);
+
+  const dirIconNode = useMemo((): ReactNode => {
+    if (!effectiveWorkingDirectory) return <Icon icon={SquircleDashed} size={14} />;
+    if (repoType === 'github') return <Github size={14} />;
+    if (repoType === 'git') return <Icon icon={GitBranchIcon} size={14} />;
+    return <Icon icon={FolderIcon} size={14} />;
+  }, [effectiveWorkingDirectory, repoType]);
 
   const switchMode = useCallback(
     async (mode: RuntimeEnvMode) => {
@@ -208,34 +229,51 @@ const RuntimeConfig = memo(() => {
 
   const dirButton = (
     <div className={styles.button}>
-      <Icon icon={effectiveWorkingDirectory ? FolderIcon : SquircleDashed} size={14} />
+      {dirIconNode}
       <span>{displayName}</span>
       <Icon icon={ChevronDownIcon} size={12} />
     </div>
   );
 
   const rightContent = () => {
+    // Web + heterogeneous agent always shows the cloud repo switcher,
+    // regardless of the stored runtimeMode (which may be 'local' from desktop).
+    if (!isDesktop && isHeterogeneous && agentId) {
+      return <CloudRepoSwitcher agentId={agentId} />;
+    }
+
+    // Desktop local mode: show working directory picker
     if (runtimeMode === 'local') {
       return (
-        <Popover
-          content={<WorkingDirectory agentId={agentId} onClose={() => setDirPopoverOpen(false)} />}
-          open={dirPopoverOpen}
-          placement="bottomRight"
-          trigger="click"
-          onOpenChange={setDirPopoverOpen}
-        >
-          <div>
-            {dirPopoverOpen ? (
-              dirButton
-            ) : (
-              <Tooltip
-                title={effectiveWorkingDirectory || tPlugin('localSystem.workingDirectory.notSet')}
-              >
-                {dirButton}
-              </Tooltip>
-            )}
-          </div>
-        </Popover>
+        <>
+          <Popover
+            open={dirPopoverOpen}
+            placement="bottomLeft"
+            styles={{ content: { padding: 4 } }}
+            trigger="click"
+            content={
+              <WorkingDirectory agentId={agentId} onClose={() => setDirPopoverOpen(false)} />
+            }
+            onOpenChange={setDirPopoverOpen}
+          >
+            <div>
+              {dirPopoverOpen ? (
+                dirButton
+              ) : (
+                <Tooltip
+                  title={
+                    effectiveWorkingDirectory || tPlugin('localSystem.workingDirectory.notSet')
+                  }
+                >
+                  {dirButton}
+                </Tooltip>
+              )}
+            </div>
+          </Popover>
+          {effectiveWorkingDirectory && repoType && (
+            <GitStatus isGithub={repoType === 'github'} path={effectiveWorkingDirectory} />
+          )}
+        </>
       );
     }
 
@@ -244,29 +282,36 @@ const RuntimeConfig = memo(() => {
 
   return (
     <Flexbox horizontal align={'center'} className={styles.bar} justify={'space-between'}>
-      {/* Left: Runtime env + working directory */}
+      {/* Left: Chat mode switcher + (agent-only) runtime env + working directory */}
       <Flexbox horizontal align={'center'} gap={4}>
-        <Popover
-          content={modeContent}
-          open={modePopoverOpen}
-          placement="top"
-          styles={{ content: { padding: 4 } }}
-          trigger="click"
-          onOpenChange={setModePopoverOpen}
-        >
-          <div>
-            {modePopoverOpen ? (
-              modeButton
-            ) : (
-              <Tooltip title={t('runtimeEnv.selectMode')}>{modeButton}</Tooltip>
-            )}
-          </div>
-        </Popover>
-        {rightContent()}
+        <ModeSelector />
+        {enableAgentMode && (
+          <>
+            <Popover
+              content={modeContent}
+              open={modePopoverOpen}
+              placement="top"
+              styles={{ content: { padding: 4 } }}
+              trigger="click"
+              onOpenChange={setModePopoverOpen}
+            >
+              <div>
+                {modePopoverOpen ? (
+                  modeButton
+                ) : (
+                  <Tooltip title={t('runtimeEnv.selectMode')}>{modeButton}</Tooltip>
+                )}
+              </div>
+            </Popover>
+            {rightContent()}
+          </>
+        )}
       </Flexbox>
 
-      {/* Right: Permission control */}
-      <ApprovalMode />
+      <Flexbox horizontal align={'center'} gap={4}>
+        {enableAgentMode && <ApprovalMode />}
+        {showContextWindow && <ContextWindow />}
+      </Flexbox>
     </Flexbox>
   );
 });

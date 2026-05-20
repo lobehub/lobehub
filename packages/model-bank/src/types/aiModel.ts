@@ -147,6 +147,7 @@ export type PricingUnitName =
   | 'imageOutput'
 
   // Video-based pricing units
+  | 'videoInput'
   | 'videoGeneration';
 
 export type PricingUnitType =
@@ -166,6 +167,10 @@ export interface PricingUnitBase {
 }
 
 export interface FixedPricingUnit extends PricingUnitBase {
+  /**
+   * Original display price before discounts. Billing and cost calculation use `rate`.
+   */
+  originalRate?: number;
   rate: number;
   strategy: 'fixed';
 }
@@ -224,7 +229,14 @@ export interface AIBaseModelCard {
   organization?: string;
 
   releasedAt?: string;
+  /**
+   * Whether the model should be shown in user-facing model lists.
+   * Runtime-only aliases can set this to false while staying enabled and resolvable.
+   */
+  visible?: boolean;
 }
+
+export const isAiModelVisible = (model: { visible?: boolean }) => model.visible !== false;
 
 export interface AiModelConfig {
   /**
@@ -248,13 +260,17 @@ export type ExtendParamsType =
   | 'enableAdaptiveThinking'
   | 'disableContextCaching'
   | 'effort'
+  | 'deepseekV4ReasoningEffort'
   | 'reasoningEffort'
   | 'gpt5ReasoningEffort'
   | 'gpt5_1ReasoningEffort'
   | 'gpt5_2ReasoningEffort'
   | 'gpt5_2ProReasoningEffort'
   | 'grok4_20ReasoningEffort'
+  | 'grok4_3ReasoningEffort'
+  | 'hy3ReasoningEffort'
   | 'codexMaxReasoningEffort'
+  | 'opus47Effort'
   | 'textVerbosity'
   | 'thinking'
   | 'thinkingBudget'
@@ -269,7 +285,15 @@ export type ExtendParamsType =
   | 'imageResolution2'
   | 'urlContext';
 
+export type DisabledParamType = 'temperature' | 'top_p' | 'frequency_penalty' | 'presence_penalty';
+
 export interface AiModelSettings {
+  /**
+   * Chat params that should be hidden from the agent config UI and stripped from
+   * outbound requests. Use this for models whose API rejects specific sampling
+   * params (e.g. Claude Opus 4.7 returns 400 on any non-default temperature / top_p).
+   */
+  disabledParams?: DisabledParamType[];
   extendParams?: ExtendParamsType[];
   /**
    * How the model layer implements search
@@ -286,13 +310,17 @@ export const ExtendParamsTypeSchema = z.enum([
   'enableAdaptiveThinking',
   'disableContextCaching',
   'effort',
+  'deepseekV4ReasoningEffort',
   'reasoningEffort',
   'gpt5ReasoningEffort',
   'gpt5_1ReasoningEffort',
   'gpt5_2ReasoningEffort',
   'gpt5_2ProReasoningEffort',
   'grok4_20ReasoningEffort',
+  'grok4_3ReasoningEffort',
+  'hy3ReasoningEffort',
   'codexMaxReasoningEffort',
+  'opus47Effort',
   'textVerbosity',
   'thinking',
   'thinkingBudget',
@@ -310,7 +338,15 @@ export const ExtendParamsTypeSchema = z.enum([
 
 export const ModelSearchImplementTypeSchema = z.enum(['tool', 'params', 'internal']);
 
+export const DisabledParamTypeSchema = z.enum([
+  'temperature',
+  'top_p',
+  'frequency_penalty',
+  'presence_penalty',
+]);
+
 export const AiModelSettingsSchema = z.object({
+  disabledParams: z.array(DisabledParamTypeSchema).optional(),
   extendParams: z.array(ExtendParamsTypeSchema).optional(),
   searchImpl: ModelSearchImplementTypeSchema.optional(),
   searchProvider: z.string().optional(),
@@ -391,6 +427,7 @@ export interface AiFullModelCard extends AIBaseModelCard {
   maxDimension?: number;
   parameters?: ModelParamsSchema;
   pricing?: Pricing;
+  settings?: AiModelSettings;
   type: AiModelType;
 }
 
@@ -432,6 +469,7 @@ export interface AiProviderModelListItem {
   settings?: AiModelSettings;
   source?: AiModelSourceType;
   type: AiModelType;
+  visible?: boolean;
 }
 
 // Update
@@ -506,4 +544,5 @@ export interface EnabledAiModel {
   settings?: AiModelSettings;
   sort?: number;
   type: AiModelType;
+  visible?: boolean;
 }

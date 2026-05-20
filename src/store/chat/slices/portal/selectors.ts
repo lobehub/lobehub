@@ -33,6 +33,7 @@ const showArtifactUI = (s: ChatStoreState) => currentViewType(s) === PortalViewT
 const showDocument = (s: ChatStoreState) => currentViewType(s) === PortalViewType.Document;
 const showNotebook = (s: ChatStoreState) => currentViewType(s) === PortalViewType.Notebook;
 const showFilePreview = (s: ChatStoreState) => currentViewType(s) === PortalViewType.FilePreview;
+const showLocalFile = (s: ChatStoreState) => currentViewType(s) === PortalViewType.LocalFile;
 const showMessageDetail = (s: ChatStoreState) =>
   currentViewType(s) === PortalViewType.MessageDetail;
 const showPluginUI = (s: ChatStoreState) => currentViewType(s) === PortalViewType.ToolUI;
@@ -65,6 +66,14 @@ const artifactCodeLanguage = (s: ChatStoreState) => currentArtifact(s)?.language
 
 // Escape special regex characters in a string
 const escapeRegExp = (str: string) => str.replaceAll(/[$()*+.?[\\\]^{|}]/g, '\\$&');
+const CODE_FENCE_START_REGEX = /^\s*```[^\n]*(?:\n|$)/;
+const CODE_FENCE_END_REGEX = /\n```\s*$/;
+
+const unwrapArtifactCodeBlock = (content: string) => {
+  if (!CODE_FENCE_START_REGEX.test(content)) return content;
+
+  return content.replace(CODE_FENCE_START_REGEX, '').replace(CODE_FENCE_END_REGEX, '');
+};
 
 const artifactMessageContent = (id: string) => (s: ChatStoreState) => {
   const message = dbMessageSelectors.getDbMessageById(id)(s);
@@ -83,8 +92,7 @@ const artifactCode = (id: string, identifier?: string) => (s: ChatStoreState) =>
   const result = messageContent.match(regex);
   let content = result?.groups?.content || '';
 
-  // Remove markdown code block if content is wrapped
-  content = content.replace(/^\s*```[^\n]*\n([\S\s]*?)\n```\s*$/, '$1');
+  content = unwrapArtifactCodeBlock(content);
 
   return content;
 };
@@ -117,6 +125,23 @@ const currentFile = (s: ChatStoreState): PortalFile | undefined => {
 
 const previewFileId = (s: ChatStoreState) => currentFile(s)?.fileId;
 const chunkText = (s: ChatStoreState) => currentFile(s)?.chunkText;
+
+// Local File selectors
+const activeLocalFilePath = (s: ChatStoreState): string | undefined => s.activeLocalFilePath;
+
+const openLocalFiles = (s: ChatStoreState): Array<{ filePath: string; workingDirectory: string }> =>
+  s.openLocalFiles;
+
+const currentLocalFile = (
+  s: ChatStoreState,
+): { filePath: string; workingDirectory: string } | undefined => {
+  const active = s.activeLocalFilePath;
+  if (!active) return undefined;
+  return s.openLocalFiles.find((f) => f.filePath === active);
+};
+
+const localFilePath = (s: ChatStoreState) => currentLocalFile(s)?.filePath;
+const localFileWorkingDirectory = (s: ChatStoreState) => currentLocalFile(s)?.workingDirectory;
 
 // Message Detail selectors
 const messageDetailId = (s: ChatStoreState): string | undefined => {
@@ -153,6 +178,7 @@ export const chatPortalSelectors = {
   showDocument,
   showNotebook,
   showFilePreview,
+  showLocalFile,
   showMessageDetail,
   showPluginUI,
 
@@ -174,6 +200,13 @@ export const chatPortalSelectors = {
   currentFile,
   previewFileId,
   chunkText,
+
+  // Local file data
+  activeLocalFilePath,
+  currentLocalFile,
+  localFilePath,
+  localFileWorkingDirectory,
+  openLocalFiles,
 
   // Message detail data
   messageDetailId,

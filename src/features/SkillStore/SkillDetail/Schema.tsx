@@ -7,7 +7,7 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ContentViewer from '@/features/AgentSkillDetail/ContentViewer';
-import FileTree from '@/features/AgentSkillDetail/FileTree';
+import FileTree from '@/features/FileTree';
 import { DetailProvider } from '@/features/MCPPluginDetail/DetailProvider';
 import Tools from '@/features/MCPPluginDetail/Schema/Tools';
 import { ModeType } from '@/features/MCPPluginDetail/Schema/types';

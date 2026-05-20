@@ -53,8 +53,11 @@ export class ActionTagPlugin {
     const mdService = this.kernel.requireService(IMarkdownShortCutService);
 
     // Writer: ActionTagNode → markdown
-    // Skills → <skill name="..." label="..." />, Tools → <tool name="..." label="..." />
-    // Commands fall back to <action type="..." category="command" label="..." />
+    // Skills       → <skill name="..." label="..." />
+    // Tools        → <tool name="..." label="..." />
+    // ProjectSkill → bare label text (e.g. `/local-testing`) so the downstream
+    //                CLI agent recognizes its own slash-style skill invocation
+    // Commands     → <action type="..." category="command" label="..." />
     mdService?.registerMarkdownWriter(ActionTagNode.getType(), (ctx: any, node: any) => {
       if ($isActionTagNode(node)) {
         const cat = node.actionCategory;
@@ -62,6 +65,10 @@ export class ActionTagPlugin {
           ctx.appendLine(`<skill name="${node.actionType}" label="${node.actionLabel}" />`);
         } else if (cat === 'tool') {
           ctx.appendLine(`<tool name="${node.actionType}" label="${node.actionLabel}" />`);
+        } else if (cat === 'projectSkill') {
+          // Chip / menu render the bare skill name; the slash is added here so
+          // the downstream CLI sees `/skill-name` as a slash invocation.
+          ctx.appendLine(`/${node.actionType}`);
         } else {
           ctx.appendLine(
             `<action type="${node.actionType}" category="${cat}" label="${node.actionLabel}" />`,
@@ -83,6 +90,12 @@ export class ActionTagPlugin {
         if (cat === 'tool') {
           return ctx.createXmlNode('tool', { label: node.actionLabel, name: node.actionType });
         }
+        if (cat === 'projectSkill') {
+          return ctx.createXmlNode('projectSkill', {
+            label: node.actionLabel,
+            name: node.actionType,
+          });
+        }
         return ctx.createXmlNode('action', {
           category: cat,
           label: node.actionLabel,
@@ -92,7 +105,7 @@ export class ActionTagPlugin {
       return false;
     });
 
-    // Read <skill>, <tool>, and legacy <action> tags
+    // Read <skill>, <tool>, <projectSkill>, and legacy <action> tags
     const readSkill = (xmlElement: any): SerializedActionTagNode => ({
       actionCategory: 'skill',
       actionLabel: xmlElement.getAttribute('label') || '',
@@ -102,6 +115,13 @@ export class ActionTagPlugin {
     });
     const readTool = (xmlElement: any): SerializedActionTagNode => ({
       actionCategory: 'tool',
+      actionLabel: xmlElement.getAttribute('label') || '',
+      actionType: (xmlElement.getAttribute('name') || '') as ActionTagType,
+      type: ActionTagNode.getType(),
+      version: 1,
+    });
+    const readProjectSkill = (xmlElement: any): SerializedActionTagNode => ({
+      actionCategory: 'projectSkill',
       actionLabel: xmlElement.getAttribute('label') || '',
       actionType: (xmlElement.getAttribute('name') || '') as ActionTagType,
       type: ActionTagNode.getType(),
@@ -117,6 +137,7 @@ export class ActionTagPlugin {
 
     xmlService?.registerXMLReader('skill', readSkill);
     xmlService?.registerXMLReader('tool', readTool);
+    xmlService?.registerXMLReader('projectSkill', readProjectSkill);
     xmlService?.registerXMLReader('action', readLegacyAction);
   }
 

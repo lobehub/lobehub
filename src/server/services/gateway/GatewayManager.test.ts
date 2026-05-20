@@ -60,6 +60,7 @@ const createFakeDefinition = (
     credentials: [],
     name: id,
     id,
+    schema: [],
   }) as any;
 
 describe('GatewayManager', () => {

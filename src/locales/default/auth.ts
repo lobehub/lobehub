@@ -62,6 +62,12 @@ export default {
   'betterAuth.resetPassword.success':
     'Password reset successful, please sign in with your new password',
   'betterAuth.resetPassword.title': 'Reset Password',
+  'betterAuth.captcha.continue': 'Continue',
+  'betterAuth.captcha.description':
+    'Complete the security verification below. We will continue your sign up or sign in automatically.',
+  'betterAuth.captcha.pendingDescription':
+    'Verification did not complete. Please try the challenge again.',
+  'betterAuth.captcha.title': 'Security verification required',
   'betterAuth.signin.backToEmail': 'Back to change email',
   'betterAuth.signin.continueWithApple': 'Continue with Apple',
   'betterAuth.signin.continueWithAuth0': 'Sign in with Auth0',
@@ -174,7 +180,6 @@ export default {
   'profile.changePassword': 'Reset password',
   'profile.email': 'Email Address',
   'profile.emailChangeSuccess': 'Verification email sent. Please check your new email inbox.',
-  'profile.emailInputHint': 'Enter your new email address',
   'profile.emailInvalid': 'Please enter a valid email address',
   'profile.emailPlaceholder': 'new-email@example.com',
   'profile.fullName': 'Fullname',
@@ -236,7 +241,7 @@ export default {
   'stats.updatedAt': 'Updated at',
   'stats.welcome': '{{username}}, this is your <span>{{days}}</span> day with {{appName}}',
   'stats.words': 'Total Words',
-  'tab.apikey': 'API Key Management',
+  'tab.apikey': 'API Key',
   'tab.profile': 'My Account',
   'tab.security': 'Security',
   'tab.stats': 'Statistics',

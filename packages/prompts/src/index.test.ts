@@ -24,7 +24,6 @@ describe('Main Index Export', () => {
       'chainAnswerWithContext',
       'chainLangDetect',
       'chainPickEmoji',
-      'chainRewriteQuery',
       'chainSummaryAgentName',
       'chainSummaryDescription',
       'chainSummaryGenerationTitle',

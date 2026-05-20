@@ -15,6 +15,19 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
             description: 'Document content in markdown or plain text.',
             type: 'string',
           },
+          hintIsSkill: {
+            default: false,
+            description:
+              'Set true only when the document captures reusable procedural knowledge or durable agent behavior.',
+            type: 'boolean',
+          },
+          scope: {
+            default: 'agent',
+            description:
+              'Where to create the document. Use currentTopic to associate it with the current topic; defaults to agent-scoped documents.',
+            enum: ['agent', 'currentTopic'],
+            type: 'string',
+          },
           title: {
             description: 'Document title.',
             type: 'string',
@@ -26,10 +39,17 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Read an existing agent document by ID (similar intent to cat/read operation). Use this before edits or deletes when needed.',
+        'Read an existing agent document by ID. Prefer XML format before node-level edits because XML includes stable node IDs.',
       name: AgentDocumentsApiName.readDocument,
       parameters: {
         properties: {
+          format: {
+            default: 'xml',
+            description:
+              'The format to return. Use "xml" for node-level edits, "markdown" for plain text, or "both". Defaults to "xml".',
+            enum: ['xml', 'markdown', 'both'],
+            type: 'string',
+          },
           id: {
             description: 'Target document ID.',
             type: 'string',
@@ -41,12 +61,12 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Edit an existing agent document content by ID. Use this for content changes, not title rename.',
-      name: AgentDocumentsApiName.editDocument,
+        'Replace the entire content of an existing agent document by ID. Use this only when overwriting most or all of the document. Prefer modifyNodes for targeted edits.',
+      name: AgentDocumentsApiName.replaceDocumentContent,
       parameters: {
         properties: {
           content: {
-            description: 'Updated full document content.',
+            description: 'New full document content.',
             type: 'string',
           },
           id: {
@@ -55,6 +75,69 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
           },
         },
         required: ['id', 'content'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Perform LiteXML node operations (insert, modify, remove) on an agent document by ID. Use this for content edits after reading the document in XML format.',
+      name: AgentDocumentsApiName.modifyNodes,
+      parameters: {
+        properties: {
+          id: {
+            description: 'Target document ID.',
+            type: 'string',
+          },
+          operations: {
+            description:
+              'Array of node operations. For insert, provide beforeId or afterId plus LiteXML without an id. For modify, provide LiteXML with existing node IDs. For remove, provide the node id.',
+            items: {
+              oneOf: [
+                {
+                  properties: {
+                    action: { const: 'insert', type: 'string' },
+                    beforeId: { description: 'ID of the node to insert before.', type: 'string' },
+                    litexml: { description: 'LiteXML node to insert.', type: 'string' },
+                  },
+                  required: ['action', 'beforeId', 'litexml'],
+                  type: 'object',
+                },
+                {
+                  properties: {
+                    action: { const: 'insert', type: 'string' },
+                    afterId: { description: 'ID of the node to insert after.', type: 'string' },
+                    litexml: { description: 'LiteXML node to insert.', type: 'string' },
+                  },
+                  required: ['action', 'afterId', 'litexml'],
+                  type: 'object',
+                },
+                {
+                  properties: {
+                    action: { const: 'modify', type: 'string' },
+                    litexml: {
+                      description:
+                        'LiteXML string or array of strings with existing node IDs to update.',
+                      oneOf: [{ type: 'string' }, { items: { type: 'string' }, type: 'array' }],
+                    },
+                  },
+                  required: ['action', 'litexml'],
+                  type: 'object',
+                },
+                {
+                  properties: {
+                    action: { const: 'remove', type: 'string' },
+                    id: { description: 'ID of the node to remove.', type: 'string' },
+                  },
+                  required: ['action', 'id'],
+                  type: 'object',
+                },
+              ],
+            },
+            minItems: 1,
+            type: 'array',
+          },
+        },
+        required: ['id', 'operations'],
         type: 'object',
       },
     },
@@ -111,45 +194,26 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'List all agent documents. Returns document id, filename, and title for each document.',
+        'List agent documents. Use this to discover documents that are not auto-injected (e.g. web-crawled pages) or to resolve a title to a document ID.',
       name: AgentDocumentsApiName.listDocuments,
       parameters: {
-        properties: {},
+        properties: {
+          scope: {
+            default: 'agent',
+            description:
+              'Which document set to list. Defaults to "agent" (all agent-scoped documents). Use "currentTopic" to filter to documents associated with the current topic.',
+            enum: ['agent', 'currentTopic'],
+            type: 'string',
+          },
+          sourceType: {
+            default: 'all',
+            description:
+              'Filter by document source. "file" = user-created or uploaded; "web" = crawled from external URLs; "all" returns both. Web-crawled documents are hidden from the default agent_documents_index — pass sourceType="web" here to see them.',
+            enum: ['all', 'file', 'web'],
+            type: 'string',
+          },
+        },
         required: [],
-        type: 'object',
-      },
-    },
-    {
-      description:
-        'Read an existing agent document by its filename (similar intent to cat by filename). Use when you know the filename but not the id.',
-      name: AgentDocumentsApiName.readDocumentByFilename,
-      parameters: {
-        properties: {
-          filename: {
-            description: 'Target document filename.',
-            type: 'string',
-          },
-        },
-        required: ['filename'],
-        type: 'object',
-      },
-    },
-    {
-      description:
-        'Create or update an agent document by filename. If a document with the given filename exists, its content is updated; otherwise a new document is created.',
-      name: AgentDocumentsApiName.upsertDocumentByFilename,
-      parameters: {
-        properties: {
-          content: {
-            description: 'Document content in markdown or plain text.',
-            type: 'string',
-          },
-          filename: {
-            description: 'Target document filename.',
-            type: 'string',
-          },
-        },
-        required: ['filename', 'content'],
         type: 'object',
       },
     },

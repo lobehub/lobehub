@@ -1,12 +1,18 @@
+import { isDesktop } from '@lobechat/const';
 import { t } from 'i18next';
 
 import {
   type ChatTopic,
   type ChatTopicSummary,
   type GroupedTopic,
-  TopicDisplayMode,
+  type TopicGroupMode,
+  type TopicSortBy,
 } from '@/types/topic';
-import { groupTopicsByTime, groupTopicsByUpdatedTime } from '@/utils/client/topic';
+import {
+  groupTopicsByProject,
+  groupTopicsByTime,
+  groupTopicsByUpdatedTime,
+} from '@/utils/client/topic';
 
 import { type ChatStoreState } from '../../initialState';
 import { topicMapKey } from '../../utils/topicMapKey';
@@ -70,13 +76,22 @@ const currentActiveTopicSummary = (s: ChatStoreState): ChatTopicSummary | undefi
   };
 };
 
+const currentTopicMetadata = (s: ChatStoreState) => currentActiveTopic(s)?.metadata;
+
 /**
- * Get current active topic's working directory
- * Returns undefined if no topic is active or no working directory is set
+ * Get current active topic's working directory.
+ * On desktop: local filesystem path.
+ * On web (cloud): primary GitHub repo URL (repos[0]), or workingDirectory if set directly.
  */
 const currentTopicWorkingDirectory = (s: ChatStoreState): string | undefined => {
   const activeTopic = currentActiveTopic(s);
-  return activeTopic?.metadata?.workingDirectory;
+  if (!activeTopic) return;
+
+  if (isDesktop) return activeTopic.metadata?.workingDirectory;
+
+  // Web: return primary repo from repos list, or workingDirectory if set directly
+  const meta = activeTopic.metadata;
+  return meta?.repos?.[0] ?? meta?.workingDirectory;
 };
 
 const isCreatingTopic = (s: ChatStoreState) => s.creatingTopic;
@@ -84,26 +99,43 @@ const isUndefinedTopics = (s: ChatStoreState) => !currentTopics(s);
 const isInSearchMode = (s: ChatStoreState) => s.inSearchingMode;
 const isSearchingTopic = (s: ChatStoreState) => s.isSearchingTopic;
 
+const sortTopics = (topics: ChatTopic[], sortBy: TopicSortBy): ChatTopic[] => {
+  const field = sortBy === 'createdAt' ? 'createdAt' : 'updatedAt';
+  return [...topics].sort((a, b) => b[field] - a[field]);
+};
+
 // Limit topics for sidebar display based on user's page size preference
 const displayTopicsForSidebar =
-  (pageSize: number) =>
+  (pageSize: number, sortBy: TopicSortBy = 'updatedAt') =>
   (s: ChatStoreState): ChatTopic[] | undefined => {
     const topics = currentTopicsWithoutCron(s);
     if (!topics) return undefined;
 
-    // Return only the first page worth of topics for sidebar
-    return topics.slice(0, pageSize);
+    // Favorites first, then sorted by the chosen timestamp, then page-sliced
+    const favTopics = topics.filter((t) => t.favorite);
+    const rest = topics.filter((t) => !t.favorite);
+    return [...sortTopics(favTopics, sortBy), ...sortTopics(rest, sortBy)].slice(0, pageSize);
   };
 
-const getGroupFn = (displayMode: TopicDisplayMode) =>
-  displayMode === TopicDisplayMode.ByUpdatedTime ? groupTopicsByUpdatedTime : groupTopicsByTime;
+const getGroupFn = (groupMode: TopicGroupMode, sortBy: TopicSortBy) => {
+  if (groupMode === 'byProject') {
+    const field: 'createdAt' | 'updatedAt' = sortBy === 'createdAt' ? 'createdAt' : 'updatedAt';
+    return (topics: ChatTopic[]) =>
+      groupTopicsByProject(topics, field).map((group) =>
+        group.id === 'no-project'
+          ? { ...group, title: t('groupTitle.byProject.noProject', { ns: 'topic' }) }
+          : group,
+      );
+  }
+  return sortBy === 'updatedAt' ? groupTopicsByUpdatedTime : groupTopicsByTime;
+};
 
 /**
  * Build grouped topics from a topic list, splitting favorites into a separate group
  */
 const buildGroupedTopics = (
   topics: ChatTopic[],
-  groupFn: typeof groupTopicsByTime,
+  groupFn: (topics: ChatTopic[]) => GroupedTopic[],
 ): GroupedTopic[] => {
   const favTopics = topics.filter((topic) => topic.favorite);
   const unfavTopics = topics.filter((topic) => !topic.favorite);
@@ -129,11 +161,11 @@ const groupedTopicsSelector =
   };
 
 const groupedTopicsForSidebar =
-  (pageSize: number, displayMode: TopicDisplayMode = TopicDisplayMode.ByCreatedTime) =>
+  (pageSize: number, sortBy: TopicSortBy = 'updatedAt', groupMode: TopicGroupMode = 'byTime') =>
   (s: ChatStoreState): GroupedTopic[] => {
-    const limitedTopics = displayTopicsForSidebar(pageSize)(s);
+    const limitedTopics = displayTopicsForSidebar(pageSize, sortBy)(s);
     if (!limitedTopics) return [];
-    return buildGroupedTopics(limitedTopics, getGroupFn(displayMode));
+    return buildGroupedTopics(limitedTopics, getGroupFn(groupMode, sortBy));
   };
 
 const hasMoreTopics = (s: ChatStoreState): boolean => currentTopicData(s)?.hasMore ?? false;
@@ -150,6 +182,7 @@ export const topicSelectors = {
   currentTopicCount,
   currentTopicData,
   currentTopicLength,
+  currentTopicMetadata,
   currentTopicWorkingDirectory,
   currentTopics,
   currentTopicsWithoutCron,

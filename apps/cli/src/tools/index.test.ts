@@ -27,27 +27,38 @@ describe('executeToolCall', () => {
     fs.rmSync(tmpDir, { force: true, recursive: true });
   });
 
-  it('should dispatch readLocalFile', async () => {
+  it('should dispatch readFile', async () => {
     const filePath = path.join(tmpDir, 'test.txt');
     await writeFile(filePath, 'hello world');
 
-    const result = await executeToolCall('readLocalFile', JSON.stringify({ path: filePath }));
+    const result = await executeToolCall('readFile', JSON.stringify({ path: filePath }));
 
     expect(result.success).toBe(true);
     const parsed = JSON.parse(result.content);
     expect(parsed.content).toContain('hello world');
   });
 
-  it('should dispatch writeLocalFile', async () => {
+  it('should dispatch writeFile', async () => {
     const filePath = path.join(tmpDir, 'new.txt');
 
     const result = await executeToolCall(
-      'writeLocalFile',
+      'writeFile',
       JSON.stringify({ content: 'written', path: filePath }),
     );
 
     expect(result.success).toBe(true);
     expect(fs.readFileSync(filePath, 'utf8')).toBe('written');
+  });
+
+  it('should dispatch legacy alias readLocalFile', async () => {
+    const filePath = path.join(tmpDir, 'legacy.txt');
+    await writeFile(filePath, 'legacy hello');
+
+    const result = await executeToolCall('readLocalFile', JSON.stringify({ path: filePath }));
+
+    expect(result.success).toBe(true);
+    const parsed = JSON.parse(result.content);
+    expect(parsed.content).toContain('legacy hello');
   });
 
   it('should dispatch runCommand', async () => {
@@ -61,21 +72,21 @@ describe('executeToolCall', () => {
     expect(parsed.stdout).toContain('dispatched');
   });
 
-  it('should dispatch listLocalFiles', async () => {
+  it('should dispatch listFiles', async () => {
     await writeFile(path.join(tmpDir, 'a.txt'), 'a');
 
-    const result = await executeToolCall('listLocalFiles', JSON.stringify({ path: tmpDir }));
+    const result = await executeToolCall('listFiles', JSON.stringify({ path: tmpDir }));
 
     expect(result.success).toBe(true);
     const parsed = JSON.parse(result.content);
     expect(parsed.totalCount).toBeGreaterThan(0);
   });
 
-  it('should dispatch globLocalFiles', async () => {
+  it('should dispatch globFiles', async () => {
     await writeFile(path.join(tmpDir, 'test.ts'), 'code');
 
     const result = await executeToolCall(
-      'globLocalFiles',
+      'globFiles',
       JSON.stringify({ cwd: tmpDir, pattern: '*.ts' }),
     );
 
@@ -84,12 +95,12 @@ describe('executeToolCall', () => {
     expect(parsed.files).toContain('test.ts');
   });
 
-  it('should dispatch editLocalFile', async () => {
+  it('should dispatch editFile', async () => {
     const filePath = path.join(tmpDir, 'edit.txt');
     await writeFile(filePath, 'old content');
 
     const result = await executeToolCall(
-      'editLocalFile',
+      'editFile',
       JSON.stringify({
         file_path: filePath,
         new_string: 'new content',
@@ -116,7 +127,7 @@ describe('executeToolCall', () => {
     const filePath = path.join(tmpDir, 'str.txt');
     await writeFile(filePath, 'content');
 
-    const result = await executeToolCall('readLocalFile', JSON.stringify({ path: filePath }));
+    const result = await executeToolCall('readFile', JSON.stringify({ path: filePath }));
 
     expect(result.success).toBe(true);
     // Result should be valid JSON
@@ -124,7 +135,7 @@ describe('executeToolCall', () => {
   });
 
   it('should return error for invalid JSON arguments', async () => {
-    const result = await executeToolCall('readLocalFile', 'not-json');
+    const result = await executeToolCall('readFile', 'not-json');
 
     expect(result.success).toBe(false);
     expect(result.error).toBeDefined();
@@ -141,11 +152,11 @@ describe('executeToolCall', () => {
     expect(result.success).toBe(true);
   });
 
-  it('should dispatch searchLocalFiles', async () => {
+  it('should dispatch searchFiles', async () => {
     await writeFile(path.join(tmpDir, 'search_target.txt'), 'found');
 
     const result = await executeToolCall(
-      'searchLocalFiles',
+      'searchFiles',
       JSON.stringify({ directory: tmpDir, keywords: 'search_target' }),
     );
 

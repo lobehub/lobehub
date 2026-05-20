@@ -1,6 +1,6 @@
 ---
 title: "MCP 市场与搜索服务商扩展 \U0001F50D"
-description: 新增多个搜索服务商支持，并集成 Amazon Cognito 与 Google SSO 认证，持续优化用户体验与开发者生态
+description: MCP 市场正式上线，支持一键安装插件；同时扩展搜索服务商覆盖，新增 Amazon Cognito 和 Google SSO 认证，让团队接入更便捷。
 tags:
   - MCP 市场
   - Best MCP
@@ -9,20 +9,31 @@ tags:
 
 # MCP 市场与搜索服务商扩展 🔍
 
-LobeHub 在六月至七月推出 MCP 插件市场，新增多个搜索服务商支持，并集成 Amazon Cognito 与 Google SSO 认证，持续优化用户体验与开发者生态。
+六月到七月，LobeHub 重点做了两件事：让工具更易发现，让搜索更灵活。全新的 MCP 市场为桌面端带来一键安装插件能力；扩展的搜索服务商和认证选项则为团队提供了更多工作方式的选择。
 
-## 🌟 重大更新
+## MCP 市场：更快发现和安装工具
 
-- 🛒 MCP 市场上线：桌面端支持 MCP 插件一键安装，提供丰富的插件生态与便捷的安装体验
-- 🔍 搜索服务商扩展：新增 Brave、Google PSE、Kagi 等内置搜索服务商，支持 Vertex AI Google Search Grounding
-- 🔐 认证系统增强：集成 Amazon Cognito 与 Google SSO 作为认证提供商，支持页面访问保护
-- 🤖 v0 (Vercel) 支持：新增 Vercel v0 服务商支持
-- 📊 数据分析框架：实现数据分析事件追踪框架，优化用户行为分析
+以往安装 MCP 插件需要手动配置。现在 MCP 市场直接在桌面端提供一键安装。浏览可用工具、了解功能，无需离开界面即可添加到工作区。
 
-## 💫 体验优化
+这让插件生态更易触达，特别适合希望扩展 Agent 能力但又不想折腾配置文件或命令行的团队。
 
-- 界面改进：优化移动端模型选择布局、改进文本溢出处理、修复加载动画切换问题
-- 推理配置：优化 Gemini thinkingBudget 配置、正确处理 reasoning\_effort 参数
-- 搜索优化：支持 Browserless blockAds 与 stealth 参数、修复 Firefox Mermaid 显示错误
-- 桌面端增强：改进多显示器窗口打开体验、修复主题问题、优化分块加载
-- 响应动画：改进响应动画合并逻辑、支持过渡动画开关
+## 更多搜索与认证选择
+
+搜索覆盖新增 Brave、Google PSE、Kagi 等内置选项，同时支持 Vertex AI Google Search Grounding 以满足检索增强生成场景。你可以按准确度、速度和隐私需求选择合适的服务商。
+
+认证方面新增 Amazon Cognito 和 Google SSO 支持。已使用这些系统的团队无需额外凭证即可接入 LobeHub。同时提供页面访问保护，可按登录状态控制内容可见范围。
+
+## 运行时改进
+
+本周期还新增 v0 (Vercel) 服务商支持，以及事件追踪分析框架，便于洞察使用模式。
+
+## 体验优化与修复
+
+- 优化移动端模型选择器布局与文本溢出处理
+- 改进加载动画切换效果
+- 优化 Gemini thinkingBudget 配置与 reasoning\_effort 参数处理
+- 新增 Browserless blockAds 与 stealth 参数，搜索结果更干净
+- 修复 Firefox 中 Mermaid 渲染问题
+- 改进桌面端多显示器窗口打开体验
+- 修复主题相关边界情况并优化分块加载
+- 新增响应渲染过渡动画开关

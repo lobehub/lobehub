@@ -1,16 +1,16 @@
 import os from 'node:os';
 
-import { dev, linux, macOS, windows } from 'electron-is';
+import * as electronIs from 'electron-is';
 
 import { getDesktopEnv } from '@/env';
 
-export const isDev = dev();
+export const isDev = electronIs.dev();
 
 export const OFFICIAL_CLOUD_SERVER = getDesktopEnv().OFFICIAL_CLOUD_SERVER;
 
-export const isMac = macOS();
-export const isWindows = windows();
-export const isLinux = linux();
+export const isMac = electronIs.macOS();
+export const isWindows = electronIs.windows();
+export const isLinux = electronIs.linux();
 
 function getIsMacTahoe(): boolean {
   if (!isMac) return false;

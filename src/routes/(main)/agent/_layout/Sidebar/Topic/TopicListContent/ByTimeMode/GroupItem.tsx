@@ -3,20 +3,13 @@ import dayjs from 'dayjs';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type GroupedTopic } from '@/types/topic';
-
 import TopicItem from '../../List/Item';
+import { type GroupItemComponentProps } from '../GroupedAccordion';
 
 const preformat = (id: string) =>
   id.startsWith('20') ? (id.includes('-') ? dayjs(id).format('MMMM') : id) : undefined;
 
-interface GroupItemProps {
-  activeThreadId?: string;
-  activeTopicId?: string;
-  group: GroupedTopic;
-}
-
-const GroupItem = memo<GroupItemProps>(({ group, activeTopicId, activeThreadId }) => {
+const GroupItem = memo<GroupItemComponentProps>(({ group, activeTopicId, activeThreadId }) => {
   const { t } = useTranslation('topic');
   const { id, title, children } = group;
 
@@ -43,6 +36,7 @@ const GroupItem = memo<GroupItemProps>(({ group, activeTopicId, activeThreadId }
             id={topic.id}
             key={topic.id}
             metadata={topic.metadata}
+            status={topic.status}
             threadId={activeThreadId}
             title={topic.title}
           />

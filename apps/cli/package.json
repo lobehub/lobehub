@@ -1,6 +1,6 @@
 {
   "name": "@lobehub/cli",
-  "version": "0.0.3",
+  "version": "0.0.15",
   "type": "module",
   "bin": {
     "lh": "./dist/index.js",
@@ -27,19 +27,20 @@
     "test:coverage": "bunx vitest run --config vitest.config.mts --coverage",
     "type-check": "tsc --noEmit"
   },
-  "dependencies": {
-    "ignore": "^7.0.5"
-  },
   "devDependencies": {
+    "@lobechat/agent-gateway-client": "workspace:*",
     "@lobechat/device-gateway-client": "workspace:*",
+    "@lobechat/heterogeneous-agents": "workspace:*",
     "@lobechat/local-file-shell": "workspace:*",
     "@trpc/client": "^11.8.1",
     "@types/node": "^22.13.5",
     "@types/ws": "^8.18.1",
     "commander": "^13.1.0",
+    "dayjs": "^1.11.19",
     "debug": "^4.4.0",
     "diff": "^8.0.3",
     "fast-glob": "^3.3.3",
+    "ignore": "^7.0.5",
     "picocolors": "^1.1.1",
     "superjson": "^2.2.6",
     "tsdown": "^0.21.4",

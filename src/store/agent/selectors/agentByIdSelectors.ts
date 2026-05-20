@@ -1,9 +1,17 @@
 import { DEFAULT_PROVIDER } from '@lobechat/business-const';
-import { DEFAULT_MODEL, DEFAUTT_AGENT_TTS_CONFIG } from '@lobechat/const';
+import { DEFAULT_MODEL, DEFAUTT_AGENT_TTS_CONFIG, isDesktop } from '@lobechat/const';
 import { type AgentBuilderContext } from '@lobechat/context-engine';
-import { type AgentMode, type LobeAgentTTSConfig, type RuntimeEnvConfig } from '@lobechat/types';
+import {
+  type AgentMode,
+  type LobeAgentAgencyConfig,
+  type LobeAgentTTSConfig,
+  type RuntimeEnvConfig,
+} from '@lobechat/types';
+
+import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
 
 import { type AgentStoreState } from '../initialState';
+import { getLocalAgentWorkingDirectory } from '../utils/localAgentWorkingDirectoryStorage';
 import { agentSelectors } from './selectors';
 
 /**
@@ -46,31 +54,26 @@ const isAgentConfigLoadingById = (agentId: string) => (s: AgentStoreState) =>
   !agentId || !s.agentMap[agentId];
 
 /**
- * Get agent mode by agentId
- * Now reads from chatConfig.agentMode and chatConfig.enableAgentMode
+ * Get agent mode by agentId.
+ * Agent mode is the default — only an explicit `chatConfig.enableAgentMode === false`
+ * collapses the agent to chat mode.
  */
 const getAgentModeById =
   (agentId: string) =>
   (s: AgentStoreState): AgentMode | undefined => {
-    const config = agentSelectors.getAgentConfigById(agentId)(s);
-
-    // Fallback: convert enableAgentMode to mode
-    if (config?.enableAgentMode) {
-      return 'auto';
-    }
-
-    return undefined;
+    const chatConfig = agentSelectors.getAgentConfigById(agentId)(s)?.chatConfig;
+    return chatConfig?.enableAgentMode === false ? undefined : 'auto';
   };
 
 /**
- * Check if agent mode is enabled by agentId
- * Supports backward compatibility with deprecated enableAgentMode field
+ * Check if agent mode is enabled by agentId.
+ * Defaults to true; only explicit `chatConfig.enableAgentMode === false` returns false.
  */
 const getAgentEnableModeById =
   (agentId: string) =>
   (s: AgentStoreState): boolean => {
-    const mode = getAgentModeById(agentId)(s);
-    return mode !== undefined;
+    const chatConfig = agentSelectors.getAgentConfigById(agentId)(s)?.chatConfig;
+    return chatConfig?.enableAgentMode !== false;
   };
 
 /**
@@ -87,8 +90,12 @@ const getAgentRuntimeEnvConfigById =
  */
 const getAgentWorkingDirectoryById =
   (agentId: string) =>
-  (s: AgentStoreState): string | undefined =>
-    getAgentRuntimeEnvConfigById(agentId)(s)?.workingDirectory;
+  (_s: AgentStoreState): string | undefined => {
+    if (!isDesktop) return;
+
+    const ctx = globalAgentContextManager.getContext();
+    return getLocalAgentWorkingDirectory(agentId) ?? ctx.desktopPath ?? ctx.homePath;
+  };
 
 /**
  * Get agent builder context by agentId
@@ -116,12 +123,30 @@ const getAgentBuilderContextById =
   };
 
 /**
+ * Get agencyConfig by agentId
+ */
+const getAgencyConfigById =
+  (agentId: string) =>
+  (s: AgentStoreState): LobeAgentAgencyConfig | undefined =>
+    agentSelectors.getAgentConfigById(agentId)(s)?.agencyConfig;
+
+/**
+ * Whether the agent is driven by an external heterogeneous runtime
+ * (e.g. Claude Code) — by agentId.
+ */
+const isAgentHeterogeneousById =
+  (agentId: string) =>
+  (s: AgentStoreState): boolean =>
+    !!getAgencyConfigById(agentId)(s)?.heterogeneousProvider;
+
+/**
  * Get full agent data by agentId
  * Returns the complete agent object including metadata fields like updatedAt
  */
 const getAgentById = (agentId: string) => (s: AgentStoreState) => s.agentMap[agentId];
 
 export const agentByIdSelectors = {
+  getAgencyConfigById,
   getAgentBuilderContextById,
   getAgentById,
   getAgentConfigById: agentSelectors.getAgentConfigById,
@@ -137,4 +162,5 @@ export const agentByIdSelectors = {
   getAgentTTSById,
   getAgentWorkingDirectoryById,
   isAgentConfigLoadingById,
+  isAgentHeterogeneousById,
 };

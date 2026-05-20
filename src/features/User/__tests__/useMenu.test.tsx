@@ -77,4 +77,25 @@ describe('useMenu', () => {
       expect(logoutItems.some((item) => item?.key === 'logout')).toBe(false);
     });
   });
+
+  it('should not have consecutive dividers in mainItems', () => {
+    act(() => {
+      useUserStore.setState({ isSignedIn: true });
+    });
+
+    const { result } = renderHook(() => useMenu(), { wrapper });
+
+    act(() => {
+      const { mainItems } = result.current;
+      if (!mainItems) return;
+
+      for (let i = 1; i < mainItems.length; i++) {
+        const prev = mainItems[i - 1];
+        const curr = mainItems[i];
+        const isDivider = (item: any) =>
+          item && typeof item === 'object' && item.type === 'divider';
+        expect(isDivider(prev) && isDivider(curr)).toBe(false);
+      }
+    });
+  });
 });

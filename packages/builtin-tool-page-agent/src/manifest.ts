@@ -4,6 +4,7 @@ import { systemPrompt } from './systemRole';
 import { DocumentApiName, PageAgentIdentifier } from './types';
 
 export const PageAgentManifest: BuiltinToolManifest = {
+  executors: ['client'],
   api: [
     // ============ Initialize ============
     {

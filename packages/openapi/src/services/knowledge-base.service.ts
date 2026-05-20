@@ -4,6 +4,7 @@ import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import type { KnowledgeBaseItem } from '@/database/schemas';
 import { knowledgeBases } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { FileService as CoreFileService } from '@/server/services/file';
 
 import { BaseService } from '../common/base.service';
 import { processPaginationConditions } from '../helpers/pagination';
@@ -237,8 +238,18 @@ export class KnowledgeBaseService extends BaseService {
         throw this.createNotFoundError('Knowledge base not found or access denied');
       }
 
-      // Delete knowledge base
-      await this.knowledgeBaseModel.delete(id);
+      const result = await this.knowledgeBaseModel.deleteWithFiles(id);
+
+      if (result.deletedFiles.length > 0) {
+        const fileService = new CoreFileService(this.db, this.userId);
+        const urls = result.deletedFiles
+          .map((f: { url: string | null }) => f.url)
+          .filter(Boolean) as string[];
+
+        if (urls.length > 0) {
+          await fileService.deleteFiles(urls);
+        }
+      }
 
       this.log('info', 'Knowledge base deleted successfully', { id });
 

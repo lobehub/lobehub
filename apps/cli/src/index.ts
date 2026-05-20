@@ -1,3 +1,3 @@
 import { createProgram } from './program';
 
-createProgram().parse();
+createProgram().parse(process.argv, { from: 'node' });

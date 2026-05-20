@@ -624,6 +624,8 @@
   "user.logout": "تسجيل الخروج",
   "user.myProfile": "ملفي الشخصي",
   "user.noAgents": "لم ينشر هذا المستخدم أي وكلاء بعد",
+  "user.noAgents.ownerDescription": "أنشئ وكيلك الأول وشاركه مع المجتمع.",
+  "user.noAgents.title": "لا يوجد وكلاء بعد",
   "user.noFavoriteAgents": "لا يوجد وكلاء محفوظون بعد",
   "user.noFavoritePlugins": "لا توجد مهارات محفوظة بعد",
   "user.noForkedAgentGroups": "لا توجد مجموعات وكلاء منسوخة بعد",

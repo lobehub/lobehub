@@ -1,12 +1,13 @@
 'use client';
 
-import { type IEditor } from '@lobehub/editor';
-import { type EditorState as LobehubEditorState } from '@lobehub/editor/react';
+import type { IEditor } from '@lobehub/editor';
+import type { EditorState as LobehubEditorState } from '@lobehub/editor/react';
 
 /**
  * Document source type - determines which service to use for persistence
  */
 export type DocumentSourceType = 'notebook' | 'page';
+export type DocumentContentFormat = 'markdown' | 'skillMarkdown';
 
 /**
  * Editor content state for a single document
@@ -23,9 +24,14 @@ export interface EditorContentState {
    */
   content: string;
   /**
+   * Content format used by the editor persistence pipeline.
+   */
+  contentFormat?: DocumentContentFormat;
+  /**
    * Editor JSON data (BlockNote format)
    */
   editorData: any;
+
   /**
    * Whether there are unsaved changes
    */
@@ -46,6 +52,11 @@ export interface EditorContentState {
    * Current save status
    */
   saveStatus: 'idle' | 'saving' | 'saved';
+  /**
+   * YAML frontmatter for SKILL.md documents. It is kept outside the rich Markdown editor because
+   * the editor parses the closing `---` as a Setext heading underline and renders metadata as a giant heading.
+   */
+  skillFrontmatter?: string;
   /**
    * Document source type - determines which service to call for persistence
    */
@@ -76,6 +87,10 @@ export interface EditorState {
    * Editor state from useEditorState hook
    */
   editorState: LobehubEditorState | undefined;
+  /**
+   * Last notebook document opened from each topic.
+   */
+  lastActiveTopicDocumentIdByTopicId: Record<string, string>;
 }
 
 /**
@@ -87,6 +102,7 @@ export const createInitialEditorContentState = (
 ): EditorContentState => ({
   content: '',
   editorData: null,
+
   isDirty: false,
   lastSavedContent: '',
   lastSavedEditorData: null,
@@ -101,4 +117,5 @@ export const initialEditorState: EditorState = {
   documents: {},
   editor: undefined,
   editorState: undefined,
+  lastActiveTopicDocumentIdByTopicId: {},
 };

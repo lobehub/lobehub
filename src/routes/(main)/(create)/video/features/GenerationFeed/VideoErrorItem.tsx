@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import { ActionButtons } from '@/routes/(main)/(create)/image/features/GenerationFeed/GenerationItem/ActionButtons';
 import { styles } from '@/routes/(main)/(create)/image/features/GenerationFeed/GenerationItem/styles';
+import { AsyncTaskErrorType } from '@/types/asyncTask';
 import type { Generation } from '@/types/generation';
 
 interface VideoErrorItemProps {
@@ -54,6 +55,9 @@ const VideoErrorItem = memo<VideoErrorItemProps>(
       return errorBody || error.name || 'Unknown error';
     }, [generation.task.error, tError]);
 
+    const isProviderContentModerationError =
+      generation.task.error?.name === AsyncTaskErrorType.ProviderContentModeration;
+
     return (
       <Block
         align={'center'}
@@ -72,9 +76,11 @@ const VideoErrorItem = memo<VideoErrorItemProps>(
         <Center gap={8}>
           <Icon color={cssVar.colorTextDescription} icon={VideoOffIcon} size={24} />
           <Text strong type={'secondary'}>
-            {t('generation.status.failed')}
+            {isProviderContentModerationError
+              ? tError('response.ProviderContentModeration')
+              : t('generation.status.failed')}
           </Text>
-          {generation.task.error && (
+          {generation.task.error && !isProviderContentModerationError && (
             <Text
               code
               ellipsis={{ rows: 2 }}

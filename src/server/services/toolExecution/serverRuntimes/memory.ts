@@ -5,7 +5,6 @@ import {
 } from '@lobechat/builtin-tool-memory/executionRuntime';
 import { BRANDING_PROVIDER, ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import {
-  DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
   DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM,
   MEMORY_SEARCH_TOP_K_LIMITS,
 } from '@lobechat/const';
@@ -32,7 +31,7 @@ import type {
   SearchMemoryResult,
   UpdateIdentityMemoryResult,
 } from '@lobechat/types';
-import { LayersEnum, RequestTrigger } from '@lobechat/types';
+import { LayersEnum } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import type { z } from 'zod';
 
@@ -43,9 +42,20 @@ import {
 } from '@/database/models/userMemory';
 import { userSettings } from '@/database/schemas';
 import { getServerDefaultFilesConfig } from '@/server/globalConfig';
-import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import {
+  initModelRuntimeFromDB,
+  initModelRuntimeWithUserPayload,
+} from '@/server/modules/ModelRuntime';
+import {
+  emitToolOutcomeSafely,
+  resolveToolOutcomeScope,
+} from '@/server/services/agentSignal/procedure';
+import { redisPolicyStateStore } from '@/server/services/agentSignal/store/adapters/redis/policyStateStore';
+import type { UserMemoryEmbeddingRuntime } from '@/server/services/memory/userMemory/embedding';
+import { embedUserMemoryTexts } from '@/server/services/memory/userMemory/embedding';
 import { normalizeSearchMemoryParams } from '@/server/services/memory/userMemory/searchParams';
 
+import type { ToolExecutionMemoryEmbeddingRuntime } from '../types';
 import type { ServerRuntimeRegistration } from './types';
 
 type MemoryEffort = 'high' | 'low' | 'medium';
@@ -90,61 +100,134 @@ const getEmbeddingRuntime = async (serverDB: LobeChatDatabase, userId: string) =
   return { agentRuntime, embeddingModel };
 };
 
-const createEmbedder = (agentRuntime: any, embeddingModel: string, userId: string) => {
+const createEmbedder = (
+  agentRuntime: UserMemoryEmbeddingRuntime,
+  embeddingModel: string,
+  userId: string,
+) => {
   return async (value?: string | null): Promise<number[] | undefined> => {
     if (!value || value.trim().length === 0) return undefined;
 
-    const embeddings = await agentRuntime.embeddings(
-      {
-        dimensions: DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
-        input: value,
-        model: embeddingModel,
-      },
-      { metadata: { trigger: RequestTrigger.Memory }, user: userId },
-    );
+    const [embedding] = await embedUserMemoryTexts({
+      input: [value],
+      model: embeddingModel,
+      runtime: agentRuntime,
+      source: 'toolRuntime:userMemory.tool',
+      userId,
+    });
 
-    return embeddings?.[0];
+    return embedding;
   };
 };
 
 class MemoryServerRuntimeService implements MemoryRuntimeService {
+  private agentId?: string;
+  private emitOutcome?: typeof emitToolOutcomeSafely;
+  private messageId?: string;
   private memoryModel: UserMemoryModel;
+  private operationId?: string;
   private serverDB: LobeChatDatabase;
-  private userId: string;
+  private taskId?: string;
+  private toolCallId?: string;
+  private topicId?: string;
   private memoryEffort: MemoryEffort;
+  private memoryEmbeddingRuntime?: ToolExecutionMemoryEmbeddingRuntime;
+  private userId: string;
 
   constructor(options: {
+    agentId?: string;
+    emitOutcome?: typeof emitToolOutcomeSafely;
+    messageId?: string;
     memoryEffort: MemoryEffort;
+    memoryEmbeddingRuntime?: ToolExecutionMemoryEmbeddingRuntime;
     memoryModel: UserMemoryModel;
+    operationId?: string;
     serverDB: LobeChatDatabase;
+    taskId?: string;
+    toolCallId?: string;
+    topicId?: string;
     userId: string;
   }) {
+    this.agentId = options.agentId;
+    this.emitOutcome = options.emitOutcome;
+    this.messageId = options.messageId;
     this.memoryModel = options.memoryModel;
+    this.operationId = options.operationId;
     this.serverDB = options.serverDB;
-    this.userId = options.userId;
+    this.taskId = options.taskId;
+    this.toolCallId = options.toolCallId;
+    this.topicId = options.topicId;
     this.memoryEffort = options.memoryEffort;
+    this.memoryEmbeddingRuntime = options.memoryEmbeddingRuntime;
+    this.userId = options.userId;
   }
+
+  private emitUserMemoryOutcome = async (input: {
+    apiName: string;
+    errorReason?: string;
+    objectId?: string;
+    relation?: string;
+    status: 'failed' | 'succeeded';
+    summary: string;
+    toolAction: string;
+  }) => {
+    const { scope, scopeKey } = resolveToolOutcomeScope({
+      agentId: this.agentId,
+      taskId: this.taskId,
+      topicId: this.topicId,
+      userId: this.userId,
+    });
+
+    await this.emitOutcome?.({
+      apiName: input.apiName,
+      context: { agentId: this.agentId, userId: this.userId },
+      domainKey: 'memory:user-preference',
+      errorReason: input.errorReason,
+      identifier: MemoryIdentifier,
+      intentClass: 'explicit_persistence',
+      messageId: this.messageId,
+      operationId: this.operationId,
+      policyStateStore: redisPolicyStateStore,
+      relatedObjects: input.objectId
+        ? [{ objectId: input.objectId, objectType: 'memory', relation: input.relation }]
+        : undefined,
+      scope,
+      scopeKey,
+      status: input.status,
+      summary: input.summary,
+      ttlSeconds: 7 * 24 * 60 * 60,
+      toolAction: input.toolAction,
+      toolCallId: this.toolCallId,
+    });
+  };
 
   searchMemory = async (params: SearchMemoryParams): Promise<SearchMemoryResult> => {
     const normalizedParams = normalizeSearchMemoryParams(params);
-    const { provider, model: embeddingModel } =
+    const defaultEmbeddingConfig =
       getServerDefaultFilesConfig().embeddingModel || DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM;
-
-    const modelRuntime = await initModelRuntimeFromDB(this.serverDB, this.userId, provider);
+    const embeddingModel = this.memoryEmbeddingRuntime?.model ?? defaultEmbeddingConfig.model;
+    const modelRuntime = this.memoryEmbeddingRuntime
+      ? initModelRuntimeWithUserPayload(
+          this.memoryEmbeddingRuntime.provider,
+          this.memoryEmbeddingRuntime.payload,
+          { userId: this.userId },
+        )
+      : await initModelRuntimeFromDB(this.serverDB, this.userId, defaultEmbeddingConfig.provider);
     const normalizedQueries = [
       ...new Set((normalizedParams.queries ?? []).map((query) => query.trim()).filter(Boolean)),
     ];
 
     const queryEmbeddings =
       normalizedQueries.length > 0
-        ? await modelRuntime.embeddings(
-            {
-              dimensions: DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
+        ? (
+            await embedUserMemoryTexts({
               input: normalizedQueries,
               model: embeddingModel,
-            },
-            { metadata: { trigger: RequestTrigger.Memory }, user: this.userId },
-          )
+              runtime: modelRuntime,
+              source: 'toolRuntime:userMemory.search',
+              userId: this.userId,
+            })
+          ).filter((embedding): embedding is number[] => Boolean(embedding))
         : [];
 
     const effectiveEffort = normalizeMemoryEffort(normalizedParams.effort ?? this.memoryEffort);
@@ -213,6 +296,15 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
         title: input.title,
       });
 
+      await this.emitUserMemoryOutcome({
+        apiName: 'addContextMemory',
+        objectId: memory.id,
+        relation: 'created',
+        status: 'succeeded',
+        summary: 'Memory tool saved contextual memory.',
+        toolAction: 'create',
+      });
+
       return {
         contextId: context.id,
         memoryId: memory.id,
@@ -220,6 +312,14 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
         success: true,
       };
     } catch (error) {
+      await this.emitUserMemoryOutcome({
+        apiName: 'addContextMemory',
+        errorReason: (error as Error).message,
+        status: 'failed',
+        summary: 'Memory tool failed to save contextual memory.',
+        toolAction: 'create',
+      });
+
       return {
         message: `Failed to save memory: ${(error as Error).message}`,
         success: false,
@@ -274,6 +374,15 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
         title: input.title,
       });
 
+      await this.emitUserMemoryOutcome({
+        apiName: 'addActivityMemory',
+        objectId: memory.id,
+        relation: 'created',
+        status: 'succeeded',
+        summary: 'Memory tool saved activity memory.',
+        toolAction: 'create',
+      });
+
       return {
         activityId: activity.id,
         memoryId: memory.id,
@@ -281,6 +390,14 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
         success: true,
       };
     } catch (error) {
+      await this.emitUserMemoryOutcome({
+        apiName: 'addActivityMemory',
+        errorReason: (error as Error).message,
+        status: 'failed',
+        summary: 'Memory tool failed to save activity memory.',
+        toolAction: 'create',
+      });
+
       return {
         message: `Failed to save memory: ${(error as Error).message}`,
         success: false,
@@ -329,6 +446,15 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
         title: input.title,
       });
 
+      await this.emitUserMemoryOutcome({
+        apiName: 'addExperienceMemory',
+        objectId: memory.id,
+        relation: 'created',
+        status: 'succeeded',
+        summary: 'Memory tool saved experience memory.',
+        toolAction: 'create',
+      });
+
       return {
         experienceId: experience.id,
         memoryId: memory.id,
@@ -336,6 +462,14 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
         success: true,
       };
     } catch (error) {
+      await this.emitUserMemoryOutcome({
+        apiName: 'addExperienceMemory',
+        errorReason: (error as Error).message,
+        status: 'failed',
+        summary: 'Memory tool failed to save experience memory.',
+        toolAction: 'create',
+      });
+
       return {
         message: `Failed to save memory: ${(error as Error).message}`,
         success: false,
@@ -396,6 +530,15 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
         },
       });
 
+      await this.emitUserMemoryOutcome({
+        apiName: 'addIdentityMemory',
+        objectId: userMemoryId,
+        relation: 'created',
+        status: 'succeeded',
+        summary: 'Memory tool saved identity memory.',
+        toolAction: 'create',
+      });
+
       return {
         identityId,
         memoryId: userMemoryId,
@@ -403,6 +546,14 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
         success: true,
       };
     } catch (error) {
+      await this.emitUserMemoryOutcome({
+        apiName: 'addIdentityMemory',
+        errorReason: (error as Error).message,
+        status: 'failed',
+        summary: 'Memory tool failed to save identity memory.',
+        toolAction: 'create',
+      });
+
       return {
         message: `Failed to save identity memory: ${(error as Error).message}`,
         success: false,
@@ -455,6 +606,15 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
         title: input.title,
       });
 
+      await this.emitUserMemoryOutcome({
+        apiName: 'addPreferenceMemory',
+        objectId: memory.id,
+        relation: 'created',
+        status: 'succeeded',
+        summary: 'Memory tool saved a user preference.',
+        toolAction: 'create',
+      });
+
       return {
         memoryId: memory.id,
         message: 'Memory saved successfully',
@@ -462,6 +622,14 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
         success: true,
       };
     } catch (error) {
+      await this.emitUserMemoryOutcome({
+        apiName: 'addPreferenceMemory',
+        errorReason: (error as Error).message,
+        status: 'failed',
+        summary: 'Memory tool failed to save a user preference.',
+        toolAction: 'create',
+      });
+
       return {
         message: `Failed to save memory: ${(error as Error).message}`,
         success: false,
@@ -562,11 +730,29 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
       });
 
       if (!updated) {
+        await this.emitUserMemoryOutcome({
+          apiName: 'updateIdentityMemory',
+          objectId: input.id,
+          relation: 'missing',
+          status: 'failed',
+          summary: 'Memory tool could not find identity memory to update.',
+          toolAction: 'update',
+        });
+
         return {
           message: 'Identity memory not found',
           success: false,
         };
       }
+
+      await this.emitUserMemoryOutcome({
+        apiName: 'updateIdentityMemory',
+        objectId: input.id,
+        relation: 'updated',
+        status: 'succeeded',
+        summary: 'Memory tool updated identity memory.',
+        toolAction: 'update',
+      });
 
       return {
         identityId: input.id,
@@ -574,6 +760,16 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
         success: true,
       };
     } catch (error) {
+      await this.emitUserMemoryOutcome({
+        apiName: 'updateIdentityMemory',
+        errorReason: (error as Error).message,
+        objectId: input.id,
+        relation: 'updated',
+        status: 'failed',
+        summary: 'Memory tool failed to update identity memory.',
+        toolAction: 'update',
+      });
+
       return {
         message: `Failed to update identity memory: ${(error as Error).message}`,
         success: false,
@@ -588,11 +784,29 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
       const removed = await this.memoryModel.removeIdentityEntry(input.id);
 
       if (!removed) {
+        await this.emitUserMemoryOutcome({
+          apiName: 'removeIdentityMemory',
+          objectId: input.id,
+          relation: 'missing',
+          status: 'failed',
+          summary: 'Memory tool could not find identity memory to remove.',
+          toolAction: 'remove',
+        });
+
         return {
           message: 'Identity memory not found',
           success: false,
         };
       }
+
+      await this.emitUserMemoryOutcome({
+        apiName: 'removeIdentityMemory',
+        objectId: input.id,
+        relation: 'removed',
+        status: 'succeeded',
+        summary: 'Memory tool removed identity memory.',
+        toolAction: 'remove',
+      });
 
       return {
         identityId: input.id,
@@ -601,6 +815,16 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
         success: true,
       };
     } catch (error) {
+      await this.emitUserMemoryOutcome({
+        apiName: 'removeIdentityMemory',
+        errorReason: (error as Error).message,
+        objectId: input.id,
+        relation: 'removed',
+        status: 'failed',
+        summary: 'Memory tool failed to remove identity memory.',
+        toolAction: 'remove',
+      });
+
       return {
         message: `Failed to remove identity memory: ${(error as Error).message}`,
         success: false,
@@ -637,9 +861,17 @@ export const memoryRuntime: ServerRuntimeRegistration = {
     const memoryModel = new UserMemoryModel(context.serverDB, context.userId);
 
     const service = new MemoryServerRuntimeService({
+      agentId: context.agentId,
+      emitOutcome: emitToolOutcomeSafely,
+      messageId: context.messageId,
       memoryEffort,
+      memoryEmbeddingRuntime: context.memoryEmbeddingRuntime,
       memoryModel,
+      operationId: context.operationId,
       serverDB: context.serverDB,
+      taskId: context.taskId,
+      toolCallId: context.toolCallId,
+      topicId: context.topicId,
       userId: context.userId,
     });
 

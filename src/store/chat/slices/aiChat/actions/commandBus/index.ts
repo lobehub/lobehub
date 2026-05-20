@@ -6,12 +6,16 @@ import { parseCommandsFromEditorData } from './parseCommands';
 import type { CommandHandlerContext, CommandRegistry, CommandSendOverrides } from './types';
 
 export { injectReferTopicNode } from './editorDataHelpers';
+export type { SingleAgentMentionDirectRoute } from './parseCommands';
 export {
   hasNonActionContent,
+  mergeLocalFileReferences,
   parseCommandsFromEditorData,
+  parseLocalFileReferencesFromEditorData,
   parseMentionedAgentsFromEditorData,
   parseSelectedSkillsFromEditorData,
   parseSelectedToolsFromEditorData,
+  parseSingleAgentMentionDirectRoute,
 } from './parseCommands';
 export type { CommandSendOverrides } from './types';
 

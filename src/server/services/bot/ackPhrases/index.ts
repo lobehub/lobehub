@@ -1,5 +1,28 @@
+import type { BotReplyLocale } from '../platforms';
 import type { ContextType, TimeSegment } from './vibeMatrix';
 import { VIBE_CORPUS } from './vibeMatrix';
+
+/**
+ * Per-locale fallback ack phrases for languages without a curated vibe corpus.
+ * Sampled flatly (no time / context awareness) — when the audience justifies
+ * the effort we can lift these into a proper corpus per locale, but a small
+ * set of natural-sounding generic acks already beats English on Chinese
+ * platforms. Keep entries short and conversational.
+ */
+const LOCALE_FALLBACK_ACK_PHRASES: Partial<Record<BotReplyLocale, string[]>> = {
+  'zh-CN': [
+    '收到，处理中…',
+    '好的，马上来。',
+    '稍等片刻。',
+    '正在看，请稍候。',
+    '已收到，开始处理。',
+    '让我想想。',
+    '马上。',
+    '好嘞。',
+    '在了，等我一会儿。',
+    '处理中…',
+  ],
+};
 
 // Simple sample implementation to avoid dependency issues
 function sample<T>(arr: T[]): T | undefined {
@@ -127,6 +150,13 @@ export interface AckOptions {
    */
   date?: Date;
   /**
+   * Locale used to pick which corpus to sample from. The English corpus
+   * (`VIBE_CORPUS`) is curated by time-of-day and intent; other locales
+   * sample from a small flat fallback list under `LOCALE_FALLBACK_ACK_PHRASES`.
+   * Omit to keep current behavior (English).
+   */
+  lng?: BotReplyLocale;
+  /**
    * The user's timezone (e.g. 'Asia/Shanghai', 'America/New_York')
    * If not provided, defaults to server time
    */
@@ -134,6 +164,11 @@ export interface AckOptions {
 }
 
 export function getExtremeAck(content: string = '', options: AckOptions = {}): string {
+  const fallbackList = options.lng && LOCALE_FALLBACK_ACK_PHRASES[options.lng];
+  if (fallbackList) {
+    return sample(fallbackList) ?? fallbackList[0];
+  }
+
   const now = options.date || new Date();
 
   // Calculate the hour in the user's local time

@@ -1,10 +1,10 @@
-import {
-  type GenerateContentConfig,
-  type HttpOptions,
-  type ThinkingConfig,
-  type Tool as GoogleFunctionCallTool,
-} from '@google/genai';
 import { GoogleGenAI } from '@google/genai';
+import type {
+  GenerateContentConfig,
+  HttpOptions,
+  ThinkingConfig,
+  Tool as GoogleFunctionCallTool,
+} from '@google/genai';
 import debug from 'debug';
 
 import { type LobeRuntimeAI } from '../../core/BaseAI';
@@ -55,6 +55,19 @@ const isGemini3OrAbove = (model?: string): boolean => {
   const match = /gemini-(\d+)/.exec(model);
   if (!match) return false;
   return Number.parseInt(match[1], 10) >= 3;
+};
+
+const normalizeThinkingConfig = (config?: ThinkingConfig): ThinkingConfig | undefined => {
+  if (!config) return undefined;
+
+  const { includeThoughts, thinkingBudget, thinkingLevel } = config;
+
+  // Avoid sending `thinkingConfig: {}` (all fields undefined) which can lead upstream
+  // to treat thinking as disabled and produce no thought parts.
+  if (includeThoughts === undefined && thinkingBudget === undefined && thinkingLevel === undefined)
+    return undefined;
+
+  return config;
 };
 
 const modelsDisableInstuction = new Set([
@@ -217,7 +230,7 @@ export class LobeGoogleAI implements LobeRuntimeAI {
         thinkingConfig:
           modelsDisableInstuction.has(model) || model.toLowerCase().includes('learnlm')
             ? undefined
-            : thinkingConfig,
+            : normalizeThinkingConfig(thinkingConfig),
         // https://ai.google.dev/gemini-api/docs/tool-combination
         // Vertex AI does not support includeServerSideToolInvocations
         toolConfig:

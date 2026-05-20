@@ -1,13 +1,15 @@
 'use client';
 
-import { type Dispatch, type ReactNode, type SetStateAction } from 'react';
+import type { Dispatch, ReactNode, SetStateAction } from 'react';
 import { createContext, use, useCallback, useMemo, useState } from 'react';
 
-import { type MenuContext, type PageType, type SelectedAgent } from './types';
+import type { MenuContext, PageType, SelectedAgent } from './types';
 import { detectContext } from './utils/context';
-import { type ValidSearchType } from './utils/queryParser';
+import type { ValidSearchType } from './utils/queryParser';
+import { parseSearchQuery } from './utils/queryParser';
 
 interface CommandMenuContextValue {
+  activeAgentId: string | undefined;
   menuContext: MenuContext;
   mounted: boolean;
   onClose: () => void;
@@ -43,11 +45,26 @@ export const CommandMenuProvider = ({ children, onClose, pathname }: CommandMenu
 
   // Memoize derived values
   const menuContext = useMemo(() => detectContext(pathname ?? '/'), [pathname]);
+  const activeAgentId = useMemo(() => {
+    if (menuContext !== 'agent') return undefined;
+    const match = pathname?.match(/^\/agent\/([^/?]+)/);
+    return match?.[1] || undefined;
+  }, [menuContext, pathname]);
   const page = pages.at(-1);
   const viewMode: MenuViewMode = search.trim().length > 0 ? 'search' : 'default';
 
   // Memoize setters to maintain stable references
-  const setSearch = useCallback((value: string) => setSearchState(value), []);
+  const setSearch = useCallback((value: string) => {
+    const parsedQuery = parseSearchQuery(value);
+
+    if (parsedQuery.typeFilter) {
+      setTypeFilterState(parsedQuery.typeFilter);
+      setSearchState(parsedQuery.cleanQuery);
+      return;
+    }
+
+    setSearchState(value);
+  }, []);
   const setTypeFilter = useCallback(
     (value: ValidSearchType | undefined) => setTypeFilterState(value),
     [],
@@ -63,6 +80,7 @@ export const CommandMenuProvider = ({ children, onClose, pathname }: CommandMenu
   // Memoize the context value to prevent unnecessary re-renders
   const contextValue = useMemo<CommandMenuContextValue>(
     () => ({
+      activeAgentId,
       menuContext,
       mounted: true, // Always true after initial render since provider only mounts on client
       onClose,
@@ -80,6 +98,7 @@ export const CommandMenuProvider = ({ children, onClose, pathname }: CommandMenu
       viewMode,
     }),
     [
+      activeAgentId,
       menuContext,
       onClose,
       page,

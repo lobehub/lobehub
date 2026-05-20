@@ -10,9 +10,15 @@ export interface DiscordChannelInfo {
   type?: number;
 }
 
+export interface DiscordThreadInfo {
+  id: string;
+  name?: string;
+}
+
 export interface FormatDiscordContextOptions {
   channel?: DiscordChannelInfo;
   guild?: DiscordGuildInfo;
+  thread?: DiscordThreadInfo;
 }
 
 /**
@@ -31,7 +37,11 @@ export interface FormatDiscordContextOptions {
  * // </discord_context>
  * ```
  */
-export const formatDiscordContext = ({ guild, channel }: FormatDiscordContextOptions): string => {
+export const formatDiscordContext = ({
+  guild,
+  channel,
+  thread,
+}: FormatDiscordContextOptions): string => {
   const parts: string[] = [];
 
   if (guild) {
@@ -46,6 +56,12 @@ export const formatDiscordContext = ({ guild, channel }: FormatDiscordContextOpt
     if (channel.type !== undefined) attrs.push(`type="${channel.type}"`);
     if (channel.topic) attrs.push(`topic="${channel.topic}"`);
     parts.push(`  <channel ${attrs.join(' ')} />`);
+  }
+
+  if (thread) {
+    const attrs = [`id="${thread.id}"`];
+    if (thread.name) attrs.push(`name="${thread.name}"`);
+    parts.push(`  <thread ${attrs.join(' ')} />`);
   }
 
   return `<discord_context>\n${parts.join('\n')}\n</discord_context>`;
