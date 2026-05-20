@@ -86,7 +86,7 @@ export const gptImage1Schema = {
 // Until the schema/UI supports free-form W×H input, we expose the official
 // "Popular sizes" list from https://developers.openai.com/docs/guides/image-generation.
 export const gptImage2Schema = {
-  imageUrls: { default: [], maxCount: 1, maxFileSize: 5 * 1024 * 1024 },
+  imageUrls: { default: [], maxCount: 10, maxFileSize: 5 * 1024 * 1024 },
   prompt: { default: '' },
   size: {
     default: 'auto',
