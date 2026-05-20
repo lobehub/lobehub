@@ -5,11 +5,9 @@ import { sunoClient } from '@/business/server/audio-generation/suno';
 import { AudioGenerationModel } from '@/database/models/audioGeneration';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { audioPollingService } from '@/server/services/audio/polling';
 
 const audioProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
-
   return opts.next({
     ctx: {
       audioGenerationModel: new AudioGenerationModel(ctx.serverDB, ctx.userId),
@@ -17,61 +15,59 @@ const audioProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   });
 });
 
-// Validation schemas
-const musicStyleEnum = z.enum([
-  'pop',
-  'rock',
-  'jazz',
-  'lo-fi',
-  'classical',
-  'ambient',
-  'hip-hop',
-]);
-
 const generateAudioInput = z.object({
-  prompt: z.string().min(1, 'Prompt is required').max(1000, 'Prompt is too long'),
-  musicStyle: musicStyleEnum,
-  duration: z.number().min(15, 'Duration minimum is 15 seconds').max(120, 'Duration maximum is 120 seconds'),
+  prompt: z.string().min(1).max(2000),
+  /** Custom mode: user provides their own lyrics + style */
+  customMode: z.boolean().default(false),
+  /** Music style tags (custom mode, e.g. "pop rock energetic") */
+  style: z.string().max(200).optional(),
+  /** Song title (custom mode only) */
+  title: z.string().max(100).optional(),
+  /** Generate instrumental (no vocals) */
+  makeInstrumental: z.boolean().default(false),
+  /** Optional callback URL for async completion */
+  callbackUrl: z.string().url().optional(),
 });
 
 const getAudioStatusInput = z.object({
-  taskId: z.string().min(1, 'Task ID is required'),
+  taskId: z.string().min(1),
 });
 
 const getAudioDetailsInput = z.object({
-  audioId: z.string().uuid('Invalid audio ID'),
+  audioId: z.string().uuid(),
 });
 
 const deleteAudioInput = z.object({
-  audioId: z.string().uuid('Invalid audio ID'),
+  audioId: z.string().uuid(),
 });
 
 const listAudioHistoryInput = z.object({
-  page: z.number().int().min(1, 'Page must be at least 1').default(1),
-  pageSize: z.number().int().min(1, 'Page size must be at least 1').max(50, 'Page size maximum is 50').default(10),
+  page: z.number().int().min(1).default(1),
+  pageSize: z.number().int().min(1).max(50).default(10),
 });
 
 export const audioRouter = router({
   /**
-   * Generate audio from prompt
+   * Generate music from a text description or custom lyrics
+   * Uses V5.5 model by default — model selection is not exposed to users
    */
   generateAudio: audioProcedure
     .input(generateAudioInput)
     .mutation(async ({ ctx, input }) => {
       try {
-        // Call Suno API to generate music
         const taskId = await sunoClient.generateMusic({
           prompt: input.prompt,
-          style: input.musicStyle,
-          duration: input.duration,
-          model: 'v5.5',
+          customMode: input.customMode,
+          style: input.style,
+          title: input.title,
+          make_instrumental: input.makeInstrumental,
+          callBackUrl: input.callbackUrl,
         });
 
-        // Save to database
         const audioGeneration = await ctx.audioGenerationModel.create({
           prompt: input.prompt,
-          musicStyle: input.musicStyle,
-          duration: input.duration,
+          musicStyle: input.style || 'auto',
+          duration: 0,
           modelVersion: 'v5.5',
           taskId,
           status: 'pending',
@@ -80,94 +76,98 @@ export const audioRouter = router({
         return {
           audioId: audioGeneration.id,
           taskId,
-          status: 'pending',
+          status: 'pending' as const,
           createdAt: audioGeneration.createdAt,
         };
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to generate audio';
+        if (error instanceof TRPCError) throw error;
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message,
+          message: error instanceof Error ? error.message : 'Failed to generate audio',
         });
       }
     }),
 
   /**
-   * Get audio generation status
+   * Poll the current status of an audio generation task
    */
   getAudioStatus: audioProcedure
     .input(getAudioStatusInput)
     .query(async ({ ctx, input }) => {
-      try {
-        // Find audio record by task ID
-        const audioRecord = await ctx.audioGenerationModel.findByTaskId(input.taskId);
+      const audioRecord = await ctx.audioGenerationModel.findByTaskId(input.taskId);
 
-        if (!audioRecord) {
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Audio generation not found',
-          });
-        }
+      if (!audioRecord) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Audio task not found' });
+      }
 
-        // If already completed or failed, return cached data
-        if (audioRecord.status === 'completed' || audioRecord.status === 'failed') {
-          return {
-            taskId: input.taskId,
-            audioId: audioRecord.id,
-            status: audioRecord.status,
-            audioUrl: audioRecord.audioUrl,
-            progress: audioRecord.status === 'completed' ? 100 : 0,
-            metadata: audioRecord.audioMetadata,
-            error: audioRecord.error,
-          };
-        }
-
-        // Poll current status from Suno API
-        const task = await audioPollingService.pollTaskStatus(input.taskId);
-
-        // Update database with latest status
-        if (task.status !== audioRecord.status) {
-          await ctx.audioGenerationModel.update(audioRecord.id, {
-            status: task.status,
-            audioUrl: task.audio_url,
-            audioMetadata: {
-              title: task.title,
-              duration: task.duration,
-              imageLargeUrl: task.image_large_url,
-              imageUrl: task.image_url,
-              lyricUrl: task.lyric_url,
-            },
-            error: task.error,
-          });
-        }
-
+      // Return cached result for terminal states
+      if (audioRecord.status === 'completed' || audioRecord.status === 'failed') {
         return {
           taskId: input.taskId,
           audioId: audioRecord.id,
-          status: task.status,
-          audioUrl: task.audio_url,
-          progress: task.status === 'completed' ? 100 : (task.status === 'processing' ? 50 : 25),
-          metadata: {
-            title: task.title,
-            duration: task.duration,
-            imageLargeUrl: task.image_large_url,
-            imageUrl: task.image_url,
-            lyricUrl: task.lyric_url,
-          },
-          error: task.error,
+          status: audioRecord.status,
+          audioUrl: audioRecord.audioUrl,
+          progress: audioRecord.status === 'completed' ? 100 : 0,
+          metadata: audioRecord.audioMetadata,
+          clips: (audioRecord.audioMetadata as any)?.clips ?? [],
+          error: audioRecord.error,
+          createdAt: audioRecord.createdAt,
         };
-      } catch (error) {
-        if (error instanceof TRPCError) throw error;
-        const message = error instanceof Error ? error.message : 'Failed to get audio status';
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message,
+      }
+
+      // Poll from API
+      const task = await sunoClient.getTaskStatus(input.taskId);
+
+      // Derive the first available audio URL from clips
+      const firstClip = task.clips?.find((c) => c.audio_url || c.stream_audio_url);
+      const audioUrl = firstClip?.audio_url || firstClip?.stream_audio_url || task.audio_url;
+
+      // Update DB when status changes or we get a URL
+      if (task.status !== audioRecord.status || (audioUrl && !audioRecord.audioUrl)) {
+        await ctx.audioGenerationModel.update(audioRecord.id, {
+          status: task.status,
+          audioUrl: audioUrl ?? undefined,
+          audioMetadata: {
+            title: task.title || firstClip?.title,
+            duration: task.duration || firstClip?.duration,
+            imageLargeUrl: task.image_large_url || firstClip?.image_large_url,
+            imageUrl: task.image_url || firstClip?.image_url,
+            // Store clips for multi-track support
+            ...(task.clips ? { clips: task.clips } : {}),
+          } as any,
+          error: task.error,
         });
       }
+
+      const progress =
+        task.status === 'completed'
+          ? 100
+          : task.status === 'processing'
+            ? 55
+            : task.status === 'pending'
+              ? 20
+              : 0;
+
+      return {
+        taskId: input.taskId,
+        audioId: audioRecord.id,
+        status: task.status,
+        audioUrl: audioUrl ?? null,
+        progress,
+        metadata: {
+          title: task.title || firstClip?.title,
+          duration: task.duration || firstClip?.duration,
+          imageLargeUrl: task.image_large_url || firstClip?.image_large_url,
+          imageUrl: task.image_url || firstClip?.image_url,
+        },
+        clips: task.clips ?? [],
+        error: task.error,
+        createdAt: audioRecord.createdAt,
+      };
     }),
 
   /**
-   * Get audio generation details
+   * Get full details of an audio generation record
    */
   getAudioDetails: audioProcedure
     .input(getAudioDetailsInput)
@@ -175,10 +175,7 @@ export const audioRouter = router({
       const audioRecord = await ctx.audioGenerationModel.findById(input.audioId);
 
       if (!audioRecord) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Audio generation not found',
-        });
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Audio generation not found' });
       }
 
       return {
@@ -196,60 +193,42 @@ export const audioRouter = router({
       };
     }),
 
-  /**
-   * Delete audio generation
-   */
-  deleteAudio: audioProcedure
-    .input(deleteAudioInput)
-    .mutation(async ({ ctx, input }) => {
-      const audioRecord = await ctx.audioGenerationModel.findById(input.audioId);
+  /** Delete an audio generation record */
+  deleteAudio: audioProcedure.input(deleteAudioInput).mutation(async ({ ctx, input }) => {
+    const audioRecord = await ctx.audioGenerationModel.findById(input.audioId);
+    if (!audioRecord) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Audio generation not found' });
+    }
+    await ctx.audioGenerationModel.delete(input.audioId);
+    return { success: true };
+  }),
 
-      if (!audioRecord) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Audio generation not found',
-        });
-      }
+  /** Paginated list of user's audio generation history */
+  listAudioHistory: audioProcedure.input(listAudioHistoryInput).query(async ({ ctx, input }) => {
+    const offset = (input.page - 1) * input.pageSize;
+    const { data, total } = await ctx.audioGenerationModel.listByUser(input.pageSize, offset);
 
-      await ctx.audioGenerationModel.delete(input.audioId);
-
-      return { success: true };
-    }),
-
-  /**
-   * List user's audio generation history
-   */
-  listAudioHistory: audioProcedure
-    .input(listAudioHistoryInput)
-    .query(async ({ ctx, input }) => {
-      const offset = (input.page - 1) * input.pageSize;
-
-      const { data, total } = await ctx.audioGenerationModel.listByUser(
-        input.pageSize,
-        offset,
-      );
-
-      return {
-        items: data.map((audio) => ({
-          id: audio.id,
-          taskId: audio.taskId,
-          prompt: audio.prompt,
-          musicStyle: audio.musicStyle,
-          duration: audio.duration,
-          status: audio.status,
-          audioUrl: audio.audioUrl,
-          metadata: audio.audioMetadata,
-          createdAt: audio.createdAt,
-          updatedAt: audio.updatedAt,
-        })),
-        pagination: {
-          page: input.page,
-          pageSize: input.pageSize,
-          total,
-          totalPages: Math.ceil(total / input.pageSize),
-        },
-      };
-    }),
+    return {
+      items: data.map((audio) => ({
+        id: audio.id,
+        taskId: audio.taskId,
+        prompt: audio.prompt,
+        musicStyle: audio.musicStyle,
+        duration: audio.duration,
+        status: audio.status,
+        audioUrl: audio.audioUrl,
+        metadata: audio.audioMetadata,
+        createdAt: audio.createdAt,
+        updatedAt: audio.updatedAt,
+      })),
+      pagination: {
+        page: input.page,
+        pageSize: input.pageSize,
+        total,
+        totalPages: Math.ceil(total / input.pageSize),
+      },
+    };
+  }),
 });
 
 export type AudioRouter = typeof audioRouter;

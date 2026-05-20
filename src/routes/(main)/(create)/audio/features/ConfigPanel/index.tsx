@@ -1,75 +1,117 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Divider, Input, Select, Slider } from 'antd';
-import { memo, useCallback } from 'react';
+import { Flexbox, Text } from '@lobehub/ui';
+import { Switch } from 'antd';
+import { createStaticStyles } from 'antd-style';
+import { InfoIcon, MicOffIcon, Music2Icon } from 'lucide-react';
+import { memo } from 'react';
 
 import { useAudioStore } from '@/store/audio';
+import { audioGenerationConfigSelectors } from '@/store/audio/slices/generationConfig/selectors';
 
-const MUSIC_STYLES = [
-  { value: 'ambient', label: 'Ambient' },
-  { value: 'pop', label: 'Pop' },
-  { value: 'rock', label: 'Rock' },
-  { value: 'jazz', label: 'Jazz' },
-  { value: 'lo-fi', label: 'Lo-Fi' },
-  { value: 'classical', label: 'Classical' },
-  { value: 'hip-hop', label: 'Hip-Hop' },
-];
+const useStyles = createStaticStyles(({ css, token }) => ({
+  section: css`
+    padding: 16px;
+    border-radius: 12px;
+    background: ${token.colorFillTertiary};
+    margin-bottom: 12px;
+  `,
+  label: css`
+    font-size: 12px;
+    font-weight: 600;
+    color: ${token.colorTextSecondary};
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 8px;
+  `,
+  hint: css`
+    font-size: 12px;
+    color: ${token.colorTextTertiary};
+    margin-top: 4px;
+    line-height: 1.5;
+  `,
+}));
 
 const ConfigPanel = memo(() => {
-  const musicStyle = useAudioStore((s) => s.musicStyle);
-  const duration = useAudioStore((s) => s.duration);
-  const setMusicStyle = useAudioStore((s) => s.setMusicStyle);
-  const setDuration = useAudioStore((s) => s.setDuration);
+  const { styles } = useStyles();
 
-  const handleStyleChange = useCallback(
-    (value: string) => {
-      setMusicStyle(value);
-    },
-    [setMusicStyle],
-  );
+  const customMode = useAudioStore(audioGenerationConfigSelectors.customMode);
+  const makeInstrumental = useAudioStore(audioGenerationConfigSelectors.makeInstrumental);
 
-  const handleDurationChange = useCallback(
-    (value: number | [number] | [number, number] | null) => {
-      if (typeof value === 'number') {
-        setDuration(value);
-      }
-    },
-    [setDuration],
-  );
+  const setCustomMode = useAudioStore((s) => s.setCustomMode);
+  const setMakeInstrumental = useAudioStore((s) => s.setMakeInstrumental);
 
   return (
-    <Flexbox gap="md" padding="md">
-      <div>
-        <label>Model Version</label>
-        <Input disabled value="v5.5" />
+    <Flexbox gap={0} padding={16} style={{ overflowY: 'auto', height: '100%' }}>
+      {/* Mode section */}
+      <div className={styles.section}>
+        <div className={styles.label}>Generation Mode</div>
+        <Flexbox align="center" horizontal justify="space-between">
+          <Flexbox gap={6} horizontal align="center">
+            <Music2Icon size={14} />
+            <Text weight={500}>{customMode ? 'Custom' : 'Description'}</Text>
+          </Flexbox>
+          <Switch checked={customMode} onChange={setCustomMode} size="small" />
+        </Flexbox>
+        <div className={styles.hint}>
+          {customMode
+            ? 'You provide lyrics and style — full creative control'
+            : 'Describe what you want — AI handles everything'}
+        </div>
       </div>
 
-      <Divider />
-
-      <div>
-        <label>Music Style</label>
-        <Select
-          options={MUSIC_STYLES}
-          style={{ width: '100%' }}
-          value={musicStyle}
-          onChange={handleStyleChange}
-        />
+      {/* Vocals section */}
+      <div className={styles.section}>
+        <div className={styles.label}>Vocals</div>
+        <Flexbox align="center" horizontal justify="space-between">
+          <Flexbox gap={6} horizontal align="center">
+            <MicOffIcon size={14} />
+            <Text weight={500}>Instrumental</Text>
+          </Flexbox>
+          <Switch checked={makeInstrumental} onChange={setMakeInstrumental} size="small" />
+        </Flexbox>
+        <div className={styles.hint}>
+          {makeInstrumental ? 'No vocals — music only' : 'AI will add vocals if appropriate'}
+        </div>
       </div>
 
-      <div>
-        <label>Duration (seconds)</label>
-        <Flexbox align="center" gap="sm">
-          <Slider
-            max={120}
-            min={15}
-            style={{ flex: 1 }}
-            value={duration}
-            onChange={handleDurationChange}
-          />
-          <span>{duration}s</span>
+      {/* Info section */}
+      <div className={styles.section}>
+        <Flexbox gap={6} horizontal align="flex-start">
+          <InfoIcon size={14} style={{ marginTop: 2, flexShrink: 0 }} />
+          <div className={styles.hint}>
+            Generation typically takes 20–60 seconds. You can listen while it&apos;s still
+            processing after the first 15 seconds.
+          </div>
         </Flexbox>
       </div>
+
+      {/* Tips */}
+      {!customMode && (
+        <div className={styles.section}>
+          <div className={styles.label}>Prompt Tips</div>
+          <div className={styles.hint}>
+            <strong>Genre:</strong> lo-fi, jazz, pop, orchestral…
+            <br />
+            <strong>Mood:</strong> calm, energetic, melancholic, uplifting…
+            <br />
+            <strong>Instruments:</strong> piano, guitar, synths, strings…
+            <br />
+            <strong>Purpose:</strong> studying, workout, relaxing, gaming…
+          </div>
+        </div>
+      )}
+
+      {customMode && (
+        <div className={styles.section}>
+          <div className={styles.label}>Style Tips</div>
+          <div className={styles.hint}>
+            Enter comma-separated genre/mood tags in the style field.
+            <br />
+            <em>Example: "jazz, bossa nova, smooth, saxophone"</em>
+          </div>
+        </div>
+      )}
     </Flexbox>
   );
 });

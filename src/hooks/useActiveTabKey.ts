@@ -7,7 +7,16 @@ import { ProfileTabs, SettingsTabs, SidebarTabKey } from '@/store/global/initial
  */
 export const useActiveTabKey = () => {
   const pathname = usePathname();
-  return (pathname.split('/').find(Boolean)! as SidebarTabKey) || SidebarTabKey.Home;
+  const first = pathname.split('/').find(Boolean)!;
+  // Map /create/* sub-routes to the correct generation type tab
+  if (first === 'create') {
+    const second = pathname.split('/')[2];
+    if (second === 'image') return SidebarTabKey.Image;
+    if (second === 'video') return SidebarTabKey.Video;
+    if (second === 'audio') return SidebarTabKey.Audio;
+    return SidebarTabKey.Create;
+  }
+  return (first as SidebarTabKey) || SidebarTabKey.Home;
 };
 
 /**

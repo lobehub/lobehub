@@ -74,8 +74,20 @@ export const useNavLayout = (): NavLayout => {
         {
           icon: getRouteById('image')!.icon,
           key: SidebarTabKey.Image,
-          title: t('tab.generation'),
-          url: '/image',
+          title: t('tab.image'),
+          url: '/create/image',
+        },
+        {
+          icon: getRouteById('video')!.icon,
+          key: SidebarTabKey.Video,
+          title: t('tab.video'),
+          url: '/create/video',
+        },
+        {
+          icon: getRouteById('audio')!.icon,
+          key: SidebarTabKey.Audio,
+          title: t('tab.audio'),
+          url: '/create/audio',
         },
         {
           hidden: !showMarket,
