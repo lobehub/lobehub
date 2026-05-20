@@ -44,10 +44,24 @@ type ConstructorOptions<T extends Record<string, any> = any> = ClientOptions & T
 type AnthropicTools = Anthropic.Tool | Anthropic.WebSearchTool20250305;
 
 export const DEFAULT_ANTHROPIC_BASE_URL = 'https://api.anthropic.com';
+const ANTHROPIC_CLIENT_TIMEOUT_ENV = 'ANTHROPIC_CLIENT_TIMEOUT';
+/**
+ * Keep Anthropic SDK's timeout explicit so non-streaming structured output
+ * calls with large max_tokens do not hit the SDK's long-request guard before
+ * the request is sent. The default stays below Vercel Hobby's 300s function
+ * duration limit while provider/router options can still override it.
+ */
+export const DEFAULT_ANTHROPIC_TIMEOUT = 295_000;
 const ANTHROPIC_SDK_MESSAGES_PATH_PATTERN = /\/v1(?:\/messages)?\/?$/;
 
 const normalizeAnthropicCompatibleBaseURL = (baseURL?: string | null) =>
   baseURL?.replace(ANTHROPIC_SDK_MESSAGES_PATH_PATTERN, '');
+
+const resolveDefaultAnthropicTimeout = () => {
+  const timeout = Number(process.env[ANTHROPIC_CLIENT_TIMEOUT_ENV]);
+
+  return Number.isInteger(timeout) && timeout > 0 ? timeout : DEFAULT_ANTHROPIC_TIMEOUT;
+};
 
 export interface CustomClientOptions<T extends Record<string, any> = any> {
   createClient?: (options: ConstructorOptions<T>) => Anthropic;
@@ -261,7 +275,12 @@ export const createDefaultAnthropicClient = <T extends Record<string, any> = any
     ...(betaHeaders ? { 'anthropic-beta': betaHeaders } : {}),
   };
 
-  return new Anthropic({ ...options, ...(baseURL ? { baseURL } : {}), defaultHeaders });
+  return new Anthropic({
+    ...options,
+    ...(baseURL ? { baseURL } : {}),
+    defaultHeaders,
+    timeout: options.timeout ?? resolveDefaultAnthropicTimeout(),
+  });
 };
 
 /**
@@ -466,6 +485,8 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
         baseURL: finalBaseURL,
         ...constructorOptions,
         ...rest,
+        timeout:
+          rest.timeout ?? constructorOptions?.timeout ?? resolveDefaultAnthropicTimeout(),
       };
 
       if (customClient?.createClient) {

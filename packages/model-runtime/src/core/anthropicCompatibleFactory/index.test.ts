@@ -1,8 +1,12 @@
 // @vitest-environment node
 import Anthropic from '@anthropic-ai/sdk';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createAnthropicCompatibleRuntime, createDefaultAnthropicClient } from './index';
+import {
+  createAnthropicCompatibleRuntime,
+  createDefaultAnthropicClient,
+  DEFAULT_ANTHROPIC_TIMEOUT,
+} from './index';
 
 vi.mock('@anthropic-ai/sdk', () => {
   const MockAnthropic = vi.fn();
@@ -14,6 +18,15 @@ vi.mock('@lobechat/const', () => ({
 }));
 
 const MockedAnthropic = vi.mocked(Anthropic);
+const originalAnthropicClientTimeout = process.env.ANTHROPIC_CLIENT_TIMEOUT;
+
+afterEach(() => {
+  if (originalAnthropicClientTimeout === undefined) {
+    delete process.env.ANTHROPIC_CLIENT_TIMEOUT;
+  } else {
+    process.env.ANTHROPIC_CLIENT_TIMEOUT = originalAnthropicClientTimeout;
+  }
+});
 
 describe('createDefaultAnthropicClient', () => {
   it('should include User-Agent header with current version', () => {
@@ -44,6 +57,67 @@ describe('createDefaultAnthropicClient', () => {
       'User-Agent': 'lobehub/1.0.0-test',
       'X-Custom': 'value',
     });
+  });
+
+  it('should set the default Anthropic timeout explicitly', () => {
+    MockedAnthropic.mockClear();
+    delete process.env.ANTHROPIC_CLIENT_TIMEOUT;
+
+    createDefaultAnthropicClient({ apiKey: 'test-key' });
+
+    expect(MockedAnthropic).toHaveBeenCalledWith(
+      expect.objectContaining({
+        timeout: DEFAULT_ANTHROPIC_TIMEOUT,
+      }),
+    );
+  });
+
+  it('should use ANTHROPIC_CLIENT_TIMEOUT as the default timeout when configured', () => {
+    MockedAnthropic.mockClear();
+    process.env.ANTHROPIC_CLIENT_TIMEOUT = '780000';
+
+    createDefaultAnthropicClient({ apiKey: 'test-key' });
+
+    expect(MockedAnthropic).toHaveBeenCalledWith(
+      expect.objectContaining({
+        timeout: 780_000,
+      }),
+    );
+
+    delete process.env.ANTHROPIC_CLIENT_TIMEOUT;
+  });
+
+  it('should ignore invalid ANTHROPIC_CLIENT_TIMEOUT values', () => {
+    MockedAnthropic.mockClear();
+    process.env.ANTHROPIC_CLIENT_TIMEOUT = 'invalid';
+
+    createDefaultAnthropicClient({ apiKey: 'test-key' });
+
+    expect(MockedAnthropic).toHaveBeenCalledWith(
+      expect.objectContaining({
+        timeout: DEFAULT_ANTHROPIC_TIMEOUT,
+      }),
+    );
+
+    delete process.env.ANTHROPIC_CLIENT_TIMEOUT;
+  });
+
+  it('should preserve caller-provided timeout', () => {
+    MockedAnthropic.mockClear();
+    process.env.ANTHROPIC_CLIENT_TIMEOUT = '780000';
+
+    createDefaultAnthropicClient({
+      apiKey: 'test-key',
+      timeout: 3_600_000,
+    });
+
+    expect(MockedAnthropic).toHaveBeenCalledWith(
+      expect.objectContaining({
+        timeout: 3_600_000,
+      }),
+    );
+
+    delete process.env.ANTHROPIC_CLIENT_TIMEOUT;
   });
 
   it.each([
@@ -78,6 +152,7 @@ describe('createAnthropicCompatibleRuntime', () => {
     expect(createClient).toHaveBeenCalledWith(
       expect.objectContaining({
         baseURL: 'https://aihubmix.com',
+        timeout: DEFAULT_ANTHROPIC_TIMEOUT,
       }),
     );
     expect(runtime.baseURL).toBe('https://aihubmix.com');
