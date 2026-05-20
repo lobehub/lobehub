@@ -8,18 +8,16 @@ import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
-import { fetchAgentTemplates, getTemplatesByCategoryPriority } from '../../../data/agent-templates';
 import {
-  type AgentTemplate,
-  type MarketplaceCategory,
-  type ShowAgentMarketplaceArgs,
-} from '../../../types';
+  fetchAgentTemplates,
+  getAgentTemplatesSWRKey,
+  getTemplatesByCategoryPriority,
+} from '../../../data/agent-templates';
+import type { AgentTemplate, MarketplaceCategory, ShowAgentMarketplaceArgs } from '../../../types';
 import { CATEGORY_LABEL_I18N_KEYS } from './constants';
 import PickAgentsSkeleton from './Skeleton';
 import { styles } from './style';
 
-const getTemplatesSWRKey = (locale?: string) =>
-  `builtin-tool-web-onboarding/agent-marketplace/onboarding-templates/${locale ?? 'default'}`;
 const EMPTY_TEMPLATES: AgentTemplate[] = [];
 
 const PickAgentsIntervention = memo<BuiltinInterventionProps<ShowAgentMarketplaceArgs>>(
@@ -37,7 +35,7 @@ const PickAgentsIntervention = memo<BuiltinInterventionProps<ShowAgentMarketplac
       data: allTemplates = EMPTY_TEMPLATES,
       isLoading,
       error,
-    } = useSWR(getTemplatesSWRKey(swrLocale), () => fetchAgentTemplates(), {
+    } = useSWR(getAgentTemplatesSWRKey(swrLocale), () => fetchAgentTemplates(), {
       dedupingInterval: 60_000,
       revalidateOnFocus: false,
       shouldRetryOnError: false,

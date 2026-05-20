@@ -15,6 +15,7 @@ import { useNavigate } from 'react-router-dom';
 import Loading from '@/components/Loading/BrandTextLoading';
 import { ONBOARDING_PRODUCTION_DEFAULT_MODEL } from '@/const/onboarding';
 import ModeSwitch from '@/features/Onboarding/components/ModeSwitch';
+import { useOnboardingAgentTemplates } from '@/hooks/useOnboardingAgentTemplates';
 import { useClientDataSWR, useOnlyFetchOnceSWR } from '@/libs/swr';
 import OnboardingContainer from '@/routes/onboarding/_layout';
 import { fetchOnboardingAgentTemplates } from '@/services/agentMarketplace';
@@ -116,6 +117,8 @@ const AgentOnboardingPage = memo(() => {
 
   const viewingHistoricalTopic =
     !!activeTopicId && !!effectiveTopicId && effectiveTopicId !== activeTopicId;
+
+  useOnboardingAgentTemplates(!onboardingFinished && !viewingHistoricalTopic);
 
   const onboardingChatKey = useMemo(
     () => messageMapKey({ agentId: onboardingAgentId || '', topicId: effectiveTopicId }),

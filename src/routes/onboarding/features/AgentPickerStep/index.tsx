@@ -1,19 +1,18 @@
 'use client';
 
-import {
-  type AgentTemplate,
-  getTemplatesByCategoryPriority,
-  type MarketplaceCategory,
+import type {
+  AgentTemplate,
+  MarketplaceCategory,
 } from '@lobechat/builtin-tool-web-onboarding/agentMarketplace';
+import { getTemplatesByCategoryPriority } from '@lobechat/builtin-tool-web-onboarding/agentMarketplace';
 import { Button, Flexbox, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { Undo2Icon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import useSWR from 'swr';
 
-import { fetchOnboardingAgentTemplates } from '@/services/agentMarketplace';
+import { useOnboardingAgentTemplates } from '@/hooks/useOnboardingAgentTemplates';
 import { installMarketplaceAgents } from '@/services/installMarketplaceAgents';
 import {
   trackOnboardingMarketplacePicked,
@@ -36,7 +35,7 @@ interface AgentPickerStepProps {
 const EMPTY_TEMPLATES: AgentTemplate[] = [];
 
 const AgentPickerStep = memo<AgentPickerStepProps>(({ onBack }) => {
-  const { t, i18n } = useTranslation('onboarding');
+  const { t } = useTranslation('onboarding');
   const { t: tTool } = useTranslation('tool');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -47,17 +46,8 @@ const AgentPickerStep = memo<AgentPickerStepProps>(({ onBack }) => {
 
   const categoryHints = useMemo(() => interestsToCategoryHints(interests), [interests]);
   const [requestId] = useState(() => Math.random().toString(36).slice(2));
-  const swrLocale = i18n.resolvedLanguage || i18n.language;
 
-  const {
-    data: allTemplates = EMPTY_TEMPLATES,
-    error,
-    isLoading,
-  } = useSWR(
-    ['onboarding-agent-picker-templates', swrLocale],
-    () => fetchOnboardingAgentTemplates(),
-    { dedupingInterval: 60_000, revalidateOnFocus: false, shouldRetryOnError: false },
-  );
+  const { data: allTemplates = EMPTY_TEMPLATES, error, isLoading } = useOnboardingAgentTemplates();
 
   const orderedTemplates = useMemo(
     () => getTemplatesByCategoryPriority(allTemplates, categoryHints),

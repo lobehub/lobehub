@@ -2,6 +2,7 @@ export {
   type AgentTemplateFetcher,
   fetchAgentTemplates,
   type FetchAgentTemplatesOptions,
+  getAgentTemplatesSWRKey,
   getTemplatesByCategories,
   getTemplatesByCategoryPriority,
   normalizeAgentTemplate,

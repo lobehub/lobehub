@@ -8,6 +8,7 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import Loading from '@/components/Loading/BrandTextLoading';
 import ModeSwitch from '@/features/Onboarding/components/ModeSwitch';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { useOnboardingAgentTemplates } from '@/hooks/useOnboardingAgentTemplates';
 import OnboardingContainer from '@/routes/onboarding/_layout';
 import AgentPickerStep from '@/routes/onboarding/features/AgentPickerStep';
 import FullNameStep from '@/routes/onboarding/features/FullNameStep';
@@ -40,6 +41,8 @@ const ClassicOnboardingPage = memo(() => {
   const enableKlavis = useServerConfigStore(serverConfigSelectors.enableKlavis);
   const serverConfigInit = useServerConfigStore((s) => s.serverConfigInit);
   const shouldSkipProSettingsStep = serverConfigInit && !enableKlavis;
+
+  useOnboardingAgentTemplates(isUserStateInit && commonStepsCompleted);
 
   // FullNameStep is the branch's first step, so its back button leaves the
   // branch and re-enters the shared prefix's ResponseLanguageStep (step 2).

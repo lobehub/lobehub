@@ -7,6 +7,7 @@ import { memo, useCallback, useEffect, useRef } from 'react';
 import { Navigate, useSearchParams } from 'react-router-dom';
 
 import Loading from '@/components/Loading/BrandTextLoading';
+import { useOnboardingAgentTemplates } from '@/hooks/useOnboardingAgentTemplates';
 import OnboardingContainer from '@/routes/onboarding/_layout';
 import { deriveOnboardingBranchPath } from '@/routes/onboarding/branch';
 import ResponseLanguageStep from '@/routes/onboarding/features/ResponseLanguageStep';
@@ -41,6 +42,8 @@ const CommonOnboardingPage = memo(() => {
   const [searchParams, setSearchParams] = useSearchParams();
   const step: 1 | 2 = searchParams.get('step') === '2' ? 2 : 1;
   const hasStepParam = searchParams.has('step');
+
+  useOnboardingAgentTemplates(isUserStateInit && (!commonStepsCompleted || hasStepParam));
 
   // One-time legacy migration: when the user lands on the shared prefix, if
   // their persisted `currentStep` was authored under the old 5-step schema,

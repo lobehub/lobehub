@@ -28,6 +28,10 @@ vi.mock('@/features/Onboarding/components/ModeSwitch', () => ({
   default: () => <div>ModeSwitch</div>,
 }));
 
+vi.mock('@/hooks/useOnboardingAgentTemplates', () => ({
+  useOnboardingAgentTemplates: vi.fn(),
+}));
+
 vi.mock('@/routes/onboarding/_layout', () => ({
   default: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
