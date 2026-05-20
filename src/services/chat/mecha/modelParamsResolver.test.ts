@@ -639,6 +639,39 @@ describe('thinking configuration', () => {
     });
   });
 
+  describe('thinkingLevel param', () => {
+    beforeEach(() => {
+      vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(
+        () => true,
+      );
+      vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+        'thinkingLevel',
+      ]);
+    });
+
+    it('should set thinkingLevel from thinkingLevel config key', () => {
+      const result = resolveModelExtendParams({
+        chatConfig: {
+          thinkingLevel: 'low',
+        } as any,
+        model: 'gemini-3.5-flash',
+        provider: 'google',
+      });
+
+      expect(result.thinkingLevel).toBe('low');
+    });
+
+    it('should use the model default thinkingLevel when thinkingLevel is not configured', () => {
+      const result = resolveModelExtendParams({
+        chatConfig: {} as any,
+        model: 'gemini-3.5-flash',
+        provider: 'google',
+      });
+
+      expect(result.thinkingLevel).toBe('medium');
+    });
+  });
+
   describe('thinkingLevel4 param', () => {
     beforeEach(() => {
       vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(

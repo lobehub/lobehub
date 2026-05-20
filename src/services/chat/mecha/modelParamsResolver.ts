@@ -32,13 +32,28 @@ export interface ModelExtendParams {
   verbosity?: string;
 }
 
+type ThinkingLevelExtendParam =
+  | 'thinkingLevel'
+  | 'thinkingLevel2'
+  | 'thinkingLevel3'
+  | 'thinkingLevel4'
+  | 'thinkingLevel5';
+
 const DEFAULT_THINKING_LEVEL_BY_EXTEND_PARAM = {
   thinkingLevel: 'high',
   thinkingLevel2: 'high',
   thinkingLevel3: 'high',
   thinkingLevel4: 'minimal',
   thinkingLevel5: 'minimal',
-} as const satisfies Partial<Record<ExtendParamsType, string>>;
+} as const satisfies Partial<Record<ThinkingLevelExtendParam & ExtendParamsType, string>>;
+
+const MODEL_THINKING_LEVEL_DEFAULTS: Partial<
+  Record<string, Partial<Record<ThinkingLevelExtendParam, string>>>
+> = {
+  'gemini-3.5-flash': {
+    thinkingLevel: 'medium',
+  },
+} as const;
 
 const THINKING_LEVEL_PARAM_TO_CONFIG_KEY = {
   thinkingLevel: 'thinkingLevel',
@@ -46,7 +61,7 @@ const THINKING_LEVEL_PARAM_TO_CONFIG_KEY = {
   thinkingLevel3: 'thinkingLevel3',
   thinkingLevel4: 'thinkingLevel4',
   thinkingLevel5: 'thinkingLevel5',
-} as const satisfies Partial<Record<ExtendParamsType, keyof LobeAgentChatConfig>>;
+} as const satisfies Record<ThinkingLevelExtendParam & ExtendParamsType, keyof LobeAgentChatConfig>;
 
 /**
  * Preserves legacy `thinking` preferences for users created before `enableReasoning`.
@@ -60,6 +75,19 @@ const resolveEnableReasoningValue = (chatConfig: LobeAgentChatConfig): boolean |
   if (chatConfig.thinking === 'disabled') return false;
 
   return undefined;
+};
+
+const resolveThinkingLevelDefault = (
+  model: string,
+  extendParam: ThinkingLevelExtendParam,
+): string | undefined => {
+  const modelDefaults = MODEL_THINKING_LEVEL_DEFAULTS[model] as
+    | Partial<Record<ThinkingLevelExtendParam, string>>
+    | undefined;
+
+  if (modelDefaults?.[extendParam]) return modelDefaults[extendParam];
+
+  return DEFAULT_THINKING_LEVEL_BY_EXTEND_PARAM[extendParam];
 };
 
 /**
@@ -252,8 +280,10 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
   }
 
   if (!extendParams.thinkingLevel && supportedThinkingLevelParams.length > 0) {
-    extendParams.thinkingLevel =
-      DEFAULT_THINKING_LEVEL_BY_EXTEND_PARAM[supportedThinkingLevelParams[0]];
+    extendParams.thinkingLevel = resolveThinkingLevelDefault(
+      model,
+      supportedThinkingLevelParams[0],
+    );
   }
 
   // URL context

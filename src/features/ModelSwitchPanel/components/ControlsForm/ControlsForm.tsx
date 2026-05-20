@@ -61,6 +61,12 @@ const resolveEnableReasoningInitialValue = (config: LobeAgentChatConfig) => {
   return undefined;
 };
 
+const resolveThinkingLevelDefaultValue = (model?: string) => {
+  if (model === 'gemini-3.5-flash') return 'medium';
+
+  return 'high';
+};
+
 const ControlsForm = memo<ControlsFormProps>(
   ({ model: modelProp, onUpdatingChange, provider: providerProp }) => {
     const { t } = useTranslation('chat');
@@ -99,6 +105,7 @@ const ControlsForm = memo<ControlsFormProps>(
     const screens = Grid.useBreakpoint();
     const isNarrow = !screens.sm;
     const gpt52ReasoningEffortDefaultValue = model === 'gpt-5.5' ? 'medium' : 'none';
+    const thinkingLevelDefaultValue = resolveThinkingLevelDefaultValue(model);
 
     const descWide = { display: 'inline-block', width: 300 } as const;
     const descNarrow = {
@@ -372,7 +379,7 @@ const ControlsForm = memo<ControlsFormProps>(
         },
       },
       {
-        children: <ThinkingLevelSlider />,
+        children: <ThinkingLevelSlider defaultValue={thinkingLevelDefaultValue} />,
         label: t('extendParams.thinkingLevel.title'),
         layout: 'vertical',
         minWidth: undefined,
