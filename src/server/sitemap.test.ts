@@ -50,6 +50,19 @@ describe('Sitemap', () => {
   });
 
   describe('getModelPageCount', () => {
+    it('should clear the timeout after model identifiers resolve', async () => {
+      vi.useFakeTimers();
+
+      const isolatedSitemap = new Sitemap({ modelPageCountTimeoutMs: 15 * 60 * 1000 });
+      const isolatedSitemapWithService = isolatedSitemap as unknown as SitemapWithDiscoverService;
+      vi.spyOn(isolatedSitemapWithService.discoverService, 'getModelIdentifiers').mockResolvedValue(
+        [{ identifier: 'test-model', lastModified: LAST_MODIFIED }],
+      );
+
+      await expect(isolatedSitemap.getModelPageCount()).resolves.toBe(1);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
     it('should not block sitemap generation when model identifiers never resolve', async () => {
       vi.useFakeTimers();
       vi.spyOn(console, 'error').mockImplementation(() => {});

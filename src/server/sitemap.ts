@@ -55,13 +55,22 @@ export class Sitemap {
       options.modelPageCountTimeoutMs ?? DEFAULT_MODEL_PAGE_COUNT_TIMEOUT_MS;
   }
 
-  private _withModelPageCountTimeout = async <T>(promise: Promise<T>) =>
-    Promise.race([
-      promise,
-      sleep(this.modelPageCountTimeoutMs).then(() => {
-        throw new Error('Timed out while getting model identifiers for sitemap');
-      }),
-    ]);
+  private _withModelPageCountTimeout = async <T>(promise: Promise<T>) => {
+    const timeoutController = new AbortController();
+
+    try {
+      return await Promise.race([
+        promise,
+        sleep(this.modelPageCountTimeoutMs, undefined, { signal: timeoutController.signal }).then(
+          () => {
+            throw new Error('Timed out while getting model identifiers for sitemap');
+          },
+        ),
+      ]);
+    } finally {
+      timeoutController.abort();
+    }
+  };
 
   // Get total number of plugin pages
   async getPluginPageCount(): Promise<number> {
