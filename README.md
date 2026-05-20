@@ -28,8 +28,6 @@ You stay in charge — without staying online.
 [![][github-issues-shield]][github-issues-link]
 [![][github-license-shield]][github-license-link]<br>
 
-<a href="https://www.producthunt.com/products/lobehub?embed=true&amp;utm_source=badge-top-post-badge&amp;utm_medium=badge&amp;utm_campaign=badge-lobehub-2" target="_blank" rel="noopener noreferrer"><img alt="LobeHub - Your Chief Agent Operator for multi-agent work | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/top-post-badge.svg?post_id=1147569&amp;theme=light&amp;period=daily&amp;t=1779247564355"></a>
-
 **Share LobeHub Repository**
 
 [![][share-x-shield]][share-x-link]
@@ -42,7 +40,7 @@ You stay in charge — without staying online.
 
 <sup>Your Chief Agent Operator</sup>
 
-[![][github-trending-shield]][github-trending-url]
+<a href="https://www.producthunt.com/products/lobehub?embed=true&amp;utm_source=badge-top-post-badge&amp;utm_medium=badge&amp;utm_campaign=badge-lobehub-2" target="_blank" rel="noopener noreferrer"><img alt="LobeHub - Your Chief Agent Operator for multi-agent work | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/top-post-badge.svg?post_id=1147569&amp;theme=light&amp;period=daily&amp;t=1779247564355"></a> <a href="https://trendshift.io/repositories/19224" target="_blank"><img src="https://trendshift.io/api/badge/repositories/19224" alt="lobehub%2Flobehub | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 
 [![](https://vercel.com/oss/program-badge.svg)](https://vercel.com/oss)
 
@@ -509,8 +507,6 @@ This project is [LobeHub Community License](./LICENSE) licensed.
 [github-releasedate-shield]: https://img.shields.io/github/release-date/lobehub/lobehub?labelColor=black&style=flat-square
 [github-stars-link]: https://github.com/lobehub/lobehub/stargazers
 [github-stars-shield]: https://img.shields.io/github/stars/lobehub/lobehub?color=ffcb47&labelColor=black&style=flat-square
-[github-trending-shield]: https://trendshift.io/api/badge/repositories/2256
-[github-trending-url]: https://trendshift.io/repositories/2256
 [image-banner]: https://github.com/user-attachments/assets/5f78ae58-ed4f-4d38-8037-96109fbba58c
 [image-star]: https://github.com/user-attachments/assets/3216e25b-186f-4a54-9cb4-2f124aec0471
 [issues-link]: https://img.shields.io/github/issues/lobehub/lobehub.svg?style=flat
