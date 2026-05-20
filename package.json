@@ -89,7 +89,7 @@
     "lint:style": "stylelint \"{src,tests}/**/*.{js,jsx,ts,tsx}\" --fix",
     "lint:ts": "eslint src/ tests/ --concurrency=auto",
     "lint:unused": "knip --include files,exports,types,enumMembers,duplicates",
-    "prepare": "git config core.hooksPath .githooks",
+    "prepare": "if [ -e .git ]; then git config core.hooksPath .githooks; fi",
     "prettier": "prettier -c --write \"**/**\"",
     "pull": "git pull",
     "qstash": "pnpx @upstash/qstash-cli@latest dev",
