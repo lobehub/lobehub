@@ -37,6 +37,7 @@ import { default as kimicodingplan } from './kimiCodingPlan';
 import { default as lmstudio } from './lmstudio';
 import { default as lobehub } from './lobehub/index';
 import { default as longcat } from './longcat';
+import { default as manifest } from './manifest';
 import { default as minimax } from './minimax';
 import { default as minimaxcodingplan } from './minimaxCodingPlan';
 import { default as mistral } from './mistral';
@@ -139,6 +140,7 @@ export const LOBE_DEFAULT_MODEL_LIST = buildDefaultModelList({
   lmstudio,
   longcat,
   ...(ENABLE_BUSINESS_FEATURES ? { lobehub } : {}),
+  manifest,
   minimax,
   minimaxcodingplan,
   mistral,
@@ -222,6 +224,7 @@ export { default as kimicodingplan } from './kimiCodingPlan';
 export { default as lmstudio } from './lmstudio';
 export { gptImage1Schema, default as lobehub } from './lobehub/index';
 export { default as longcat } from './longcat';
+export { default as manifest } from './manifest';
 export { default as minimax } from './minimax';
 export { default as minimaxcodingplan } from './minimaxCodingPlan';
 export { default as mistral } from './mistral';

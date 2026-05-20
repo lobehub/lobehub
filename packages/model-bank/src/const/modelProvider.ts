@@ -34,6 +34,7 @@ export enum ModelProvider {
   KimiCodingPlan = 'kimicodingplan',
   LMStudio = 'lmstudio',
   LobeHub = 'lobehub',
+  Manifest = 'manifest',
   LongCat = 'longcat',
   Minimax = 'minimax',
   MinimaxCodingPlan = 'minimaxcodingplan',

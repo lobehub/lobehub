@@ -37,6 +37,7 @@ import JinaProvider from './jina';
 import KimiCodingPlanProvider from './kimiCodingPlan';
 import LMStudioProvider from './lmstudio';
 import LobeHubProvider from './lobehub';
+import ManifestProvider from './manifest';
 import LongCatProvider from './longcat';
 import MinimaxProvider from './minimax';
 import MinimaxCodingPlanProvider from './minimaxCodingPlan';
@@ -157,6 +158,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   AzureAIProvider,
   AiHubMixProvider,
   OpenRouterProvider,
+  ManifestProvider,
   FalProvider,
   OllamaProvider,
   OllamaCloudProvider,
@@ -271,6 +273,7 @@ export { default as KimiCodingPlanProviderCard } from './kimiCodingPlan';
 export { default as LMStudioProviderCard } from './lmstudio';
 export { default as LobeHubProviderCard } from './lobehub';
 export { default as LongCatProviderCard } from './longcat';
+export { default as ManifestProviderCard } from './manifest';
 export { default as MinimaxProviderCard } from './minimax';
 export { default as MinimaxCodingPlanProviderCard } from './minimaxCodingPlan';
 export { default as MistralProviderCard } from './mistral';

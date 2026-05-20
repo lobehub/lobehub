@@ -850,4 +850,26 @@ NewAPI is a multi-provider model aggregation service that supports automatic mod
 - Default: `-`
 - Example: `-all,+straico-model-1,+straico-model-2=straico-special`
 
+## Manifest
+
+### `MANIFEST_API_KEY`
+
+- Type: Required
+- Description: This is the API key from your [Manifest](https://manifest.build) account. Manifest is an open-source LLM router that cuts inference costs through smart routing across 16+ providers. API keys start with `mnfst_`
+- Default: -
+- Example: `mnfst_xxxxxx...xxxxxx`
+
+### `MANIFEST_PROXY_URL`
+
+- Type: Optional
+- Description: The base URL for the Manifest API. By default this points to Manifest Cloud
+- Default: `https://app.manifest.build/v1`
+- Example: `https://app.manifest.build/v1`
+
+<Callout type={'info'}>
+  Manifest is open-source and can be self-hosted. If you run your own Manifest instance, set this to
+  your local deployment URL, for example `http://localhost:2099/v1`. Self-hosted Manifest can also
+  route to local models for fully private inference.
+</Callout>
+
 [model-list]: /docs/self-hosting/advanced/model-list

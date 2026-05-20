@@ -851,4 +851,25 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 - 默认值：`-`
 - 示例：`-all,+straico-model-1,+straico-model-2=straico-special`
 
+## Manifest
+
+### `MANIFEST_API_KEY`
+
+- 类型：必选
+- 描述：这是你在 [Manifest](https://manifest.build) 中申请的 API 密钥。Manifest 是一个开源 LLM 路由器，通过智能路由在 16+ 个供应商之间降低推理成本。API 密钥以 `mnfst_` 开头
+- 默认值：-
+- 示例：`mnfst_xxxxxx...xxxxxx`
+
+### `MANIFEST_PROXY_URL`
+
+- 类型：可选
+- 描述：Manifest API 的基础 URL，默认指向 Manifest Cloud
+- 默认值：`https://app.manifest.build/v1`
+- 示例：`https://app.manifest.build/v1`
+
+<Callout type={'info'}>
+  Manifest 是开源的，支持自托管部署。如果你运行自己的 Manifest 实例，请将此设置为你的本地部署
+  URL，例如 `http://localhost:2099/v1`。自托管 Manifest 还可以路由到本地模型，实现完全私有的推理。
+</Callout>
+
 [model-list]: /zh/docs/self-hosting/advanced/model-list
