@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { matchRouteMeta } from '@/features/Electron/titlebar/TabBar/resolveRouteMeta';
+import { normalizeTabUrl } from '@/features/Electron/titlebar/TabBar/url';
 import { desktopRoutes } from '@/spa/router/desktopRouter.config';
 import { useElectronStore } from '@/store/electron';
 
@@ -18,6 +19,7 @@ export const useNavigationHistory = () => {
   const historyCurrentIndex = useElectronStore((s) => s.historyCurrentIndex);
   const historyEntries = useElectronStore((s) => s.historyEntries);
   const currentRouteMeta = useElectronStore((s) => s.currentRouteMeta);
+  const currentRouteMetaUrl = useElectronStore((s) => s.currentRouteMetaUrl);
   const pushHistory = useElectronStore((s) => s.pushHistory);
   const replaceHistory = useElectronStore((s) => s.replaceHistory);
   const setIsNavigatingHistory = useElectronStore((s) => s.setIsNavigatingHistory);
@@ -91,15 +93,16 @@ export const useNavigationHistory = () => {
 
   useEffect(() => {
     const dynamicTitle = currentRouteMeta?.title;
-    if (!dynamicTitle) return;
+    if (!dynamicTitle || !currentRouteMetaUrl) return;
 
     const currentEntry = getCurrentEntry();
     if (!currentEntry) return;
+    if (normalizeTabUrl(currentEntry.url) !== normalizeTabUrl(currentRouteMetaUrl)) return;
     if (currentEntry.title === dynamicTitle) return;
 
     replaceHistory({ ...currentEntry, title: dynamicTitle });
     addRecentPage(currentEntry.url, currentRouteMeta ?? undefined);
-  }, [currentRouteMeta, getCurrentEntry, replaceHistory, addRecentPage]);
+  }, [currentRouteMeta, currentRouteMetaUrl, getCurrentEntry, replaceHistory, addRecentPage]);
 
   useWatchBroadcast('historyGoBack', () => {
     goBack();

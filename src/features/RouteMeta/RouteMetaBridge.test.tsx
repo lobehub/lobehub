@@ -57,6 +57,10 @@ vi.mock('react-router-dom', async () => {
 
   return {
     useMatches: () => React.useSyncExternalStore(mocks.subscribe, mocks.getSnapshot),
+    useLocation: () => {
+      const matches = React.useSyncExternalStore(mocks.subscribe, mocks.getSnapshot);
+      return { pathname: matches.at(-1)?.pathname ?? '/', search: '' };
+    },
   };
 });
 
@@ -90,11 +94,14 @@ describe('RouteMetaBridge', () => {
 
     await waitFor(() => {
       expect(document.title).toBe(`Chat A · ${BRANDING_NAME}`);
-      expect(mocks.setCurrentRouteMeta).toHaveBeenLastCalledWith({
-        avatar: undefined,
-        backgroundColor: undefined,
-        title: 'Chat A',
-      });
+      expect(mocks.setCurrentRouteMeta).toHaveBeenLastCalledWith(
+        {
+          avatar: undefined,
+          backgroundColor: undefined,
+          title: 'Chat A',
+        },
+        '/agent/agent-a',
+      );
     });
 
     act(() => {

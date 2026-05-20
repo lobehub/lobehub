@@ -22,6 +22,10 @@ export interface NavigationHistoryState {
    */
   currentRouteMeta: DynamicRouteMeta | null;
   /**
+   * URL that produced currentRouteMeta.
+   */
+  currentRouteMetaUrl: string | null;
+  /**
    * Current position in history (-1 means empty)
    */
   historyCurrentIndex: number;
@@ -42,6 +46,7 @@ export interface NavigationHistoryState {
 
 export const navigationHistoryInitialState: NavigationHistoryState = {
   currentRouteMeta: null,
+  currentRouteMetaUrl: null,
   historyCurrentIndex: -1,
   historyEntries: [],
   isNavigatingHistory: false,
@@ -198,8 +203,8 @@ export class NavigationHistoryActionImpl {
     );
   };
 
-  setCurrentRouteMeta = (meta: DynamicRouteMeta | null): void => {
-    this.#set({ currentRouteMeta: meta }, false, 'setCurrentRouteMeta');
+  setCurrentRouteMeta = (meta: DynamicRouteMeta | null, url: string | null = null): void => {
+    this.#set({ currentRouteMeta: meta, currentRouteMetaUrl: url }, false, 'setCurrentRouteMeta');
   };
 
   setIsNavigatingHistory = (value: boolean): void => {

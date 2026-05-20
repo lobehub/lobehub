@@ -10,6 +10,7 @@ import { useElectronStore } from '@/store/electron';
 
 import { FALLBACK_ICON, matchRouteMeta, pickMeaningful } from '../resolveRouteMeta';
 import { type TabItem } from '../types';
+import { normalizeTabUrl } from '../url';
 
 export interface ResolvedTab {
   isActive: boolean;
@@ -30,10 +31,11 @@ export const resolveTab = (
   isActive: boolean,
   t: Translate,
   liveDynamic?: DynamicRouteMeta | null,
+  liveDynamicTabId?: string | null,
 ): ResolvedTab => {
   const staticMeta = matchRouteMeta(routes, tab.url).static;
 
-  const live = isActive ? liveDynamic : undefined;
+  const live = isActive && liveDynamicTabId === tab.id ? liveDynamic : undefined;
 
   const title =
     pickMeaningful(live?.title) ??
@@ -63,15 +65,24 @@ export const useResolvedTabs = (): UseResolvedTabsResult => {
   const tabRefs = useElectronStore((s) => s.tabs);
   const activeTabId = useElectronStore((s) => s.activeTabId);
   const currentRouteMeta = useElectronStore((s) => s.currentRouteMeta);
+  const currentRouteMetaUrl = useElectronStore((s) => s.currentRouteMetaUrl);
 
   const translate = t as unknown as Translate;
+  const currentRouteMetaTabId = currentRouteMetaUrl ? normalizeTabUrl(currentRouteMetaUrl) : null;
 
   const tabs = useMemo(
     () =>
       tabRefs.map((tab) =>
-        resolveTab(desktopRoutes, tab, tab.id === activeTabId, translate, currentRouteMeta),
+        resolveTab(
+          desktopRoutes,
+          tab,
+          tab.id === activeTabId,
+          translate,
+          currentRouteMeta,
+          currentRouteMetaTabId,
+        ),
       ),
-    [tabRefs, activeTabId, currentRouteMeta, translate],
+    [tabRefs, activeTabId, currentRouteMeta, currentRouteMetaTabId, translate],
   );
 
   return { activeTabId, tabs };

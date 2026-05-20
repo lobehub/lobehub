@@ -45,8 +45,21 @@ describe('resolveTab', () => {
       true,
       t,
       { title: 'Live Title' },
+      '/agent/abc',
     );
     expect(resolved.meta.title).toBe('Live Title');
+  });
+
+  it('active tab: ignores live dynamic meta resolved for another tab', () => {
+    const resolved = resolveTab(
+      fixtureRoutes,
+      tab('/agent/abc', { title: 'Cached Title' }),
+      true,
+      t,
+      { title: 'Other Live Title' },
+      '/agent/def',
+    );
+    expect(resolved.meta.title).toBe('Cached Title');
   });
 
   it('inactive tab: live dynamic meta is ignored', () => {
@@ -56,6 +69,7 @@ describe('resolveTab', () => {
       false,
       t,
       { title: 'Live Title' },
+      '/agent/abc',
     );
     expect(resolved.meta.title).toBe('Cached Title');
   });
@@ -67,6 +81,7 @@ describe('resolveTab', () => {
       true,
       t,
       { title: '' },
+      '/agent/abc',
     );
     expect(resolved.meta.title).toBe('Cached Title');
   });

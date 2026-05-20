@@ -14,6 +14,7 @@ export const useTabNavigation = () => {
   const updateTabCache = useElectronStore((s) => s.updateTabCache);
   const loadTabs = useElectronStore((s) => s.loadTabs);
   const currentRouteMeta = useElectronStore((s) => s.currentRouteMeta);
+  const currentRouteMetaUrl = useElectronStore((s) => s.currentRouteMetaUrl);
 
   const prevLocationRef = useRef<string | null>(null);
   const loadedRef = useRef(false);
@@ -44,11 +45,12 @@ export const useTabNavigation = () => {
   }, [location.pathname, location.search, activateTab, updateTab]);
 
   useEffect(() => {
-    if (!currentRouteMeta) return;
+    if (!currentRouteMeta || !currentRouteMetaUrl) return;
 
     const { activeTabId } = useElectronStore.getState();
     if (!activeTabId) return;
+    if (activeTabId !== normalizeTabUrl(currentRouteMetaUrl)) return;
 
     updateTabCache(activeTabId, currentRouteMeta);
-  }, [currentRouteMeta, updateTabCache]);
+  }, [currentRouteMeta, currentRouteMetaUrl, updateTabCache]);
 };
