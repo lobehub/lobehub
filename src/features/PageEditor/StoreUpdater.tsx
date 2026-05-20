@@ -3,9 +3,7 @@
 import { memo, useEffect } from 'react';
 import { createStoreUpdater } from 'zustand-utils';
 
-import { hasMeaningfulEditorContent } from '@/libs/editor/hasMeaningfulEditorContent';
 import { documentHistoryQueueService } from '@/services/documentHistoryQueue';
-import { useDocumentStore } from '@/store/document';
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
 
 import { type PublicState } from './store';
@@ -78,30 +76,17 @@ const StoreUpdater = memo<StoreUpdaterProps>(
 
       pageAgentRuntime.setCurrentDocId(pageId);
       pageAgentRuntime.setTitleHandlers(storeApi.getState().setTitle, titleGetter);
-      pageAgentRuntime.setBeforeMutateHandler(() => {
-        const editor = storeApi.getState().editor;
-        const editorData = editor?.getDocument('json');
-
-        if (!hasMeaningfulEditorContent(editorData)) {
-          return;
-        }
-
-        documentHistoryQueueService.enqueueEditorSnapshot({
-          documentId: pageId,
-          editor,
-        });
-      });
-      pageAgentRuntime.setAfterMutateHandler(async () => {
-        if (!pageId) return;
-
-        await useDocumentStore.getState().commitEditorMutation(pageId, { saveSource: 'llm_call' });
-      });
+      // Page-agent tools now execute server-side (manifest: executors:['server']);
+      // the server writes documents.editorData/content and the renderer-side
+      // PageAgentExecutor.onAfterCall reconciles the live editor + store.
+      // The history snapshot is therefore taken on the server via
+      // DocumentService.updateDocument (saveSource: 'llm_call'), so the
+      // pre-mutate enqueue here is no longer wired. The runtime singleton
+      // still owns the editor binding (for isReady/applyServerSnapshot).
 
       return () => {
         pageAgentRuntime.setCurrentDocId(undefined);
-        pageAgentRuntime.setAfterMutateHandler(null);
         pageAgentRuntime.setTitleHandlers(null, null);
-        pageAgentRuntime.setBeforeMutateHandler(null);
         void documentHistoryQueueService.flush();
       };
     }, [pageId, storeApi]);

@@ -6,7 +6,7 @@ import type {
   ModifyNodesArgs,
   ReplaceTextArgs,
 } from '@lobechat/editor-runtime';
-import type { BuiltinToolResult } from '@lobechat/types';
+import type { BuiltinToolResult, ToolAfterCallContext } from '@lobechat/types';
 import { BaseExecutor } from '@lobechat/types';
 import debug from 'debug';
 
@@ -16,8 +16,8 @@ import type {
   InitDocumentState,
   ModifyNodesState,
   ReplaceTextState,
-} from '../types';
-import { PageAgentIdentifier } from '../types';
+} from '../../types';
+import { PageAgentIdentifier } from '../../types';
 
 const log = debug('lobe-page-agent:executor');
 
@@ -124,6 +124,65 @@ class PageAgentExecutor extends BaseExecutor<typeof PageAgentApiName> {
       return baseInvoke(apiName, params, ctx);
     };
   }
+
+  /**
+   * Apply server-side execution result to the renderer.
+   *
+   * The page-agent tool now runs on the server (manifest `executors: ['server']`),
+   * but the renderer still owns the live Lexical instance and the in-memory
+   * document store. When the agent stream delivers `tool_end`, the gateway
+   * event handler routes here so we can:
+   *   1. Push the new `editorData`/`title` into the mounted editor via
+   *      `EditorRuntime.applyServerSnapshot` (which skips the auto-save loop).
+   *   2. Mark `useDocumentStore` clean and update `lastSaved*` so the renderer
+   *      does not re-save what the server just wrote.
+   *
+   * If the editor for this `documentId` is not currently mounted (e.g. user
+   * navigated away), we skip — next open will hydrate from the row directly.
+   */
+  onAfterCall = async ({ result }: ToolAfterCallContext): Promise<void> => {
+    if (!result.success) return;
+
+    const state = result.state as
+      | {
+          documentContent?: unknown;
+          documentEditorData?: unknown;
+          documentId?: unknown;
+          documentTitle?: unknown;
+        }
+      | undefined
+      | null;
+    if (!state || typeof state !== 'object') return;
+
+    const documentId = typeof state.documentId === 'string' ? state.documentId : undefined;
+    if (!documentId) return;
+
+    const content = typeof state.documentContent === 'string' ? state.documentContent : undefined;
+    const title = typeof state.documentTitle === 'string' ? state.documentTitle : undefined;
+    const editorData =
+      state.documentEditorData && typeof state.documentEditorData === 'object'
+        ? (state.documentEditorData as Record<string, unknown>)
+        : undefined;
+
+    // Only push into the live editor when this runtime is bound to the same
+    // document the server just wrote. Otherwise the snapshot would overwrite
+    // a different page's editor — store-level sync still runs below.
+    if (this.runtime.isReady() && this.runtime.getCurrentDocId() === documentId) {
+      this.runtime.applyServerSnapshot({ content, editorData, title });
+    }
+
+    // Always reconcile the document store: even if the editor isn't mounted,
+    // the row was written and any cached projection should match.
+    // Dynamic import keeps the renderer-only store graph (zustand + tRPC
+    // client) out of this package's static import tree so server-side
+    // unit tests of `executor/server.ts` don't have to load it.
+    try {
+      const { getDocumentStoreState } = await import('@/store/document');
+      getDocumentStoreState().applyServerSnapshot(documentId, { content, editorData, title });
+    } catch (error) {
+      log('[PageAgentExecutor] applyServerSnapshot store sync failed', error);
+    }
+  };
 
   // ==================== Initialize ====================
 

@@ -178,6 +178,55 @@ export class EditorRuntime {
   }
 
   /**
+   * Apply a snapshot produced by the server-side PageAgent execution runtime
+   * onto the currently mounted editor. Skips persistence side-effects: the
+   * server already wrote the row, so calling `afterMutateHandler` here would
+   * loop the save path back through `commitEditorMutation`.
+   *
+   * `editorData` is the Lexical `SerializedEditorState` (or `null`/`undefined`
+   * when the server only changed metadata such as the title).
+   */
+  applyServerSnapshot(snapshot: {
+    content?: string;
+    editorData?: Record<string, unknown> | null;
+    title?: string;
+  }): boolean {
+    let applied = false;
+
+    if (this.editor && snapshot.editorData) {
+      try {
+        this.editor.setDocument('json', JSON.stringify(snapshot.editorData), { keepId: true });
+        applied = true;
+      } catch (error) {
+        log('[EditorRuntime] applyServerSnapshot:editorData failed', error);
+      }
+    } else if (this.editor && typeof snapshot.content === 'string') {
+      try {
+        this.editor.setDocument('markdown', snapshot.content, { keepId: true });
+        applied = true;
+      } catch (error) {
+        log('[EditorRuntime] applyServerSnapshot:markdown failed', error);
+      }
+    }
+
+    if (typeof snapshot.title === 'string' && this.titleSetter) {
+      try {
+        this.titleSetter(snapshot.title);
+        applied = true;
+      } catch (error) {
+        log('[EditorRuntime] applyServerSnapshot:title failed', error);
+      }
+    }
+
+    log('[EditorRuntime] applyServerSnapshot', {
+      applied,
+      hasEditorData: !!snapshot.editorData,
+      hasTitle: typeof snapshot.title === 'string',
+    });
+    return applied;
+  }
+
+  /**
    * Get the current editor instance
    */
   private getEditor(): IEditor {
