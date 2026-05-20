@@ -28,6 +28,7 @@ import {
 } from '../types';
 import { formatUsageStats } from '../utils';
 import { FeishuWSConnection } from './gateway';
+import { sendFeishuAttachments } from './sendAttachments';
 
 const log = debug('bot-platform:feishu:client');
 
@@ -63,10 +64,16 @@ function createMessenger(
   const chatId = extractChatId(platformThreadId);
   return {
     addReaction: (messageId, emoji) => api.addReaction(messageId, emoji).then(() => {}),
-    // Attachments are silently dropped for now — Lark/Feishu outbound media
-    // is its own follow-up; reply text still ships.
-    createMessage: (content) =>
-      api.sendMessage(chatId, messengerContentText(content)).then(() => {}),
+    createMessage: async (content) => {
+      const text = messengerContentText(content);
+      const attachments = typeof content === 'string' ? undefined : content.attachments;
+      if (text.trim()) {
+        await api.sendMessage(chatId, text);
+      }
+      if (attachments?.length) {
+        await sendFeishuAttachments(api, chatId, attachments);
+      }
+    },
     editMessage: (messageId, content) =>
       api.editMessage(messageId, messengerContentText(content)).then(() => {}),
     // Feishu / Lark currently expose no authenticated removeReaction endpoint.

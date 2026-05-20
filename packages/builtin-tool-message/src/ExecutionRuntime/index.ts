@@ -28,12 +28,15 @@ import type {
   ListBotsState,
   ListChannelsParams,
   ListChannelsState,
+  ListOutboundChannelsParams,
+  ListOutboundChannelsState,
   ListPinsParams,
   ListPinsState,
   ListPlatformsParams,
   ListPlatformsState,
   ListThreadsParams,
   ListThreadsState,
+  OutboundChannelInfo,
   PinMessageParams,
   PinMessageState,
   PlatformInfo,
@@ -86,12 +89,15 @@ export type {
   ListBotsState,
   ListChannelsParams,
   ListChannelsState,
+  ListOutboundChannelsParams,
+  ListOutboundChannelsState,
   ListPinsParams,
   ListPinsState,
   ListPlatformsParams,
   ListPlatformsState,
   ListThreadsParams,
   ListThreadsState,
+  OutboundChannelInfo,
   PinMessageParams,
   PinMessageState,
   PlatformInfo,
@@ -159,6 +165,18 @@ export interface BotProviderQuery {
   deleteBot: (botId: string) => Promise<void>;
   getBotDetail: (botId: string) => Promise<GetBotDetailState | null>;
   listBots: () => Promise<ConfiguredBotInfo[]>;
+  /**
+   * Canonical outbound-channel discovery — merges per-agent bots and
+   * System Bot messenger installs the current user has connected. Entries
+   * are expected to be pre-sorted by the routing strategy (per-agent bot
+   * first, then system bot fallback) so the first entry per platform is
+   * the recommended pick.
+   *
+   * Optional on the interface so callers can compose a minimal
+   * BotProviderQuery — when absent, the executor returns a helpful
+   * "feature not wired up" message instead of throwing.
+   */
+  listOutboundChannels?: () => Promise<OutboundChannelInfo[]>;
   listPlatforms: () => Promise<PlatformInfo[]>;
   toggleBot: (botId: string, enabled: boolean) => Promise<void>;
   updateBot: (
@@ -583,6 +601,69 @@ export class MessageExecutionRuntime {
     } catch (e) {
       return {
         content: `listBots error: ${(e as Error).message}`,
+        success: false,
+      };
+    }
+  }
+
+  async listOutboundChannels(
+    _params: ListOutboundChannelsParams,
+  ): Promise<BuiltinServerRuntimeOutput> {
+    if (!this.botProvider?.listOutboundChannels) {
+      return {
+        content: 'Outbound channel discovery is not available in this context.',
+        success: false,
+      };
+    }
+    try {
+      const channels = await this.botProvider.listOutboundChannels();
+      if (channels.length === 0) {
+        return {
+          content:
+            'No outbound channels available. Either install the LobeHub System Bot via Settings → Messenger, or provision a dedicated per-agent bot with `createBot`.',
+          state: { channels } satisfies ListOutboundChannelsState,
+          success: true,
+        };
+      }
+
+      // Group by platform so the LLM sees the routing pick per platform.
+      // We rely on the upstream sort (per-agent first, then system bot) —
+      // the first entry of each group is the recommended pick.
+      const byPlatform = new Map<string, OutboundChannelInfo[]>();
+      for (const channel of channels) {
+        if (!byPlatform.has(channel.platform)) byPlatform.set(channel.platform, []);
+        byPlatform.get(channel.platform)!.push(channel);
+      }
+
+      const describe = (channel: OutboundChannelInfo): string => {
+        if (channel.source === 'agent_bot') {
+          const parts = [`botId=${channel.botId}`];
+          if (channel.runtimeStatus) parts.push(`status=${channel.runtimeStatus}`);
+          return `per-agent bot (${parts.join(', ')})`;
+        }
+        const parts = [`messengerInstallationId=${channel.messengerInstallationId}`];
+        if (channel.tenantName) parts.push(`tenant=${channel.tenantName}`);
+        else if (channel.tenantId) parts.push(`tenantId=${channel.tenantId}`);
+        return `system bot install (${parts.join(', ')})`;
+      };
+
+      const lines: string[] = [];
+      for (const [platform, entries] of byPlatform) {
+        const [primary, ...rest] = entries;
+        lines.push(`${platform} — RECOMMENDED: ${describe(primary)}`);
+        for (const entry of rest) {
+          lines.push(`  - fallback: ${describe(entry)}`);
+        }
+      }
+
+      return {
+        content: `${channels.length} outbound channel(s) across ${byPlatform.size} platform(s):\n${lines.join('\n')}\n\nRouting rule: per-agent bot wins; system bot install is the fallback. Pass the matching id on send APIs as \`botId\` (agent_bot) or \`messengerInstallationId\` (system_messenger).`,
+        state: { channels } satisfies ListOutboundChannelsState,
+        success: true,
+      };
+    } catch (e) {
+      return {
+        content: `listOutboundChannels error: ${(e as Error).message}`,
         success: false,
       };
     }

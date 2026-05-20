@@ -124,6 +124,75 @@ export class LarkApiClient {
   }
 
   // ------------------------------------------------------------------
+  // Outbound media + non-text messages
+  // ------------------------------------------------------------------
+
+  /**
+   * Upload an image to Lark/Feishu's message-scoped image store. Returns the
+   * `image_key` you'd pass through `sendMessageWithMsgType(chatId, 'image',
+   * JSON.stringify({ image_key }))` to actually deliver it.
+   *
+   * See: https://open.feishu.cn/document/server-docs/im-v1/image/create
+   */
+  async uploadImage(buffer: Buffer, name?: string): Promise<{ image_key: string }> {
+    const form = new FormData();
+    form.append('image_type', 'message');
+    form.append(
+      'image',
+      new Blob([new Uint8Array(buffer)], { type: 'application/octet-stream' }),
+      name ?? 'image',
+    );
+    const data = await this.callMultipart('/im/v1/images', form);
+    return { image_key: data.data.image_key };
+  }
+
+  /**
+   * Upload a file (or audio / video / generic stream) to Lark/Feishu's
+   * message-scoped file store. `fileType` controls how the receiver
+   * previews the file. Returns the `file_key` you'd pass through
+   * `sendMessageWithMsgType(chatId, 'file', JSON.stringify({ file_key }))`
+   * (or `'audio' | 'media'` depending on the source).
+   *
+   * See: https://open.feishu.cn/document/server-docs/im-v1/file/create
+   */
+  async uploadFile(
+    buffer: Buffer,
+    name: string,
+    fileType: 'opus' | 'mp4' | 'pdf' | 'doc' | 'xls' | 'ppt' | 'stream',
+  ): Promise<{ file_key: string }> {
+    const form = new FormData();
+    form.append('file_type', fileType);
+    form.append('file_name', name);
+    form.append(
+      'file',
+      new Blob([new Uint8Array(buffer)], { type: 'application/octet-stream' }),
+      name,
+    );
+    const data = await this.callMultipart('/im/v1/files', form);
+    return { file_key: data.data.file_key };
+  }
+
+  /**
+   * Send a non-text Lark/Feishu message. `content` must already be the
+   * platform-specific JSON-stringified payload (e.g. `{"image_key":"..."}`
+   * for `msg_type='image'`).
+   *
+   * See: https://open.feishu.cn/document/server-docs/im-v1/message/create
+   */
+  async sendMessageWithMsgType(
+    chatId: string,
+    msgType: 'image' | 'file' | 'audio' | 'media',
+    content: string,
+  ): Promise<{ messageId: string; raw: any }> {
+    const data = await this.call('POST', '/im/v1/messages?receive_id_type=chat_id', {
+      content,
+      msg_type: msgType,
+      receive_id: chatId,
+    });
+    return { messageId: data.data.message_id, raw: data.data };
+  }
+
+  // ------------------------------------------------------------------
   // Media / Resource download
   // ------------------------------------------------------------------
 
@@ -226,6 +295,33 @@ export class LarkApiClient {
       throw new Error(`Lark API ${method} ${path} failed: ${data.code} ${data.msg}`);
     }
 
+    return data;
+  }
+
+  /**
+   * `multipart/form-data` POST variant for endpoints that accept file
+   * uploads (`/im/v1/images`, `/im/v1/files`). Auth header is still required;
+   * the multipart boundary header is set automatically by undici when `body`
+   * is a `FormData` instance.
+   */
+  private async callMultipart(path: string, form: FormData): Promise<any> {
+    const token = await this.getTenantAccessToken();
+    const url = `${this.baseUrl}${path}`;
+    const response = await fetch(url, {
+      body: form,
+      headers: { Authorization: `Bearer ${token}` },
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Lark API multipart POST ${path} failed: ${response.status} ${text}`);
+    }
+
+    const data: any = await response.json();
+    if (data.code !== 0) {
+      throw new Error(`Lark API multipart POST ${path} failed: ${data.code} ${data.msg}`);
+    }
     return data;
   }
 }

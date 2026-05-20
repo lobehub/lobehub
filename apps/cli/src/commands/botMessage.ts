@@ -46,6 +46,28 @@ const inferAttachmentType = (mimeType?: string): AttachmentInput['type'] => {
 };
 
 /**
+ * Resolve a list of `--attachment` flag values into `AttachmentInput[]`. Each
+ * entry is either a URL or a local file path. Returns `undefined` when no
+ * flags were passed so callers can omit the field on the wire entirely (the
+ * TRPC schema treats absent vs empty differently). Bails the process on
+ * load failures — a silently-dropped attachment would be worse than a
+ * loud error here.
+ */
+const resolveAttachmentFlags = async (flags: string[]): Promise<AttachmentInput[] | undefined> => {
+  if (flags.length === 0) return undefined;
+  const out: AttachmentInput[] = [];
+  for (const raw of flags) {
+    try {
+      out.push(await parseAttachmentArg(raw));
+    } catch (error) {
+      log.error(`Failed to load attachment "${raw}": ${(error as Error).message}`);
+      process.exit(1);
+    }
+  }
+  return out;
+};
+
+/**
  * Parse a single `--attachment <value>` argument. Accepted forms:
  *   - `https://…` / `http://…`           → fetchUrl, type inferred from extension
  *   - any other string                    → treated as a local file path;
@@ -72,6 +94,26 @@ const parseAttachmentArg = async (raw: string): Promise<AttachmentInput> => {
   };
 };
 
+/**
+ * Resolve the `<botIdOrAtKey>` positional argument into a `{ botId? |
+ * messengerInstallationId? }` shape that matches the TRPC send procedures'
+ * `exactly-one-of` constraint.
+ *
+ * Convention: a value prefixed with `@` is treated as a System Bot
+ * messenger installation id (e.g. `@inst_abc123`); anything else is a
+ * per-agent bot id. The `@` was chosen because `agent_bot_providers`.id is
+ * always a UUID — no UUID starts with `@`, so the prefix unambiguously
+ * disambiguates without breaking the existing UUID-only call sites.
+ */
+const resolveSendTargetArg = (
+  value: string,
+): { botId?: string; messengerInstallationId?: string } => {
+  if (value.startsWith('@')) {
+    return { messengerInstallationId: value.slice(1) };
+  }
+  return { botId: value };
+};
+
 export function registerBotMessageCommands(bot: Command) {
   const message = bot
     .command('message')
@@ -80,8 +122,11 @@ export function registerBotMessageCommands(bot: Command) {
   // ── send ────────────────────────────────────────────────
 
   message
-    .command('send <botId>')
-    .description('Send a message to a channel')
+    .command('send <botIdOrAtKey>')
+    .description(
+      'Send a message to a channel. Pass a per-agent bot id, or "@<messenger-install-id>" ' +
+        'to send through a System Bot messenger installation (see `lh bot messenger list`).',
+    )
     .requiredOption('--target <channelId>', 'Target channel / conversation ID')
     .requiredOption('--message <text>', 'Message content')
     .option(
@@ -95,7 +140,7 @@ export function registerBotMessageCommands(bot: Command) {
     .option('--json', 'Output JSON')
     .action(
       async (
-        botId: string,
+        botIdOrAtKey: string,
         options: {
           attachment: string[];
           json?: boolean;
@@ -104,23 +149,13 @@ export function registerBotMessageCommands(bot: Command) {
           target: string;
         },
       ) => {
-        let attachments: AttachmentInput[] | undefined;
-        if (options.attachment.length > 0) {
-          attachments = [];
-          for (const raw of options.attachment) {
-            try {
-              attachments.push(await parseAttachmentArg(raw));
-            } catch (error) {
-              log.error(`Failed to load attachment "${raw}": ${(error as Error).message}`);
-              process.exit(1);
-            }
-          }
-        }
+        const attachments = await resolveAttachmentFlags(options.attachment);
+        const target = resolveSendTargetArg(botIdOrAtKey);
 
         const client = await getTrpcClient();
         const result = await client.botMessage.sendMessage.mutate({
+          ...target,
           attachments,
-          botId,
           channelId: options.target,
           content: options.message,
           replyTo: options.replyTo,
@@ -135,6 +170,132 @@ export function registerBotMessageCommands(bot: Command) {
         const suffix = attachments?.length ? ` with ${attachments.length} attachment(s)` : '';
         console.log(
           `${pc.green('✓')} Message sent${r.messageId ? ` (${pc.dim(r.messageId)})` : ''}${suffix}`,
+        );
+      },
+    );
+
+  // ── outbound channels (per-agent bots + system bot installs) ───────────
+
+  const channels = bot
+    .command('channels')
+    .description('Unified outbound channel discovery (per-agent bots + System Bot installs)');
+
+  channels
+    .command('list')
+    .description(
+      'List every outbound channel the current user can send through — both ' +
+        'per-agent bots (`createBot`) and System Bot messenger installs ' +
+        '(Settings → Messenger). For each platform the first entry is the ' +
+        'recommended pick (per-agent bot wins; system bot is the fallback). ' +
+        'Copy the SEND ARG column verbatim into `lh bot message send/dm/thread reply`.',
+    )
+    .option(
+      '--platform <name>',
+      'Filter to one platform (discord | slack | telegram | feishu | lark | qq | wechat). ' +
+        'Applied client-side after fetch; matches `platform` field case-insensitively.',
+    )
+    .option('--json', 'Output JSON')
+    .action(async (options: { json?: boolean; platform?: string }) => {
+      const client = await getTrpcClient();
+      const all = await client.botMessage.listOutboundChannels.query();
+      // Filter is applied locally because the server-side list is small
+      // (a handful of rows per user) and we want the LLM-tool path to keep
+      // sharing the same no-arg interface — keeps the server contract lean.
+      const result = options.platform
+        ? all.filter((c: any) => c.platform?.toLowerCase() === options.platform!.toLowerCase())
+        : all;
+
+      if (options.json) {
+        outputJson(result);
+        return;
+      }
+
+      if (result.length === 0) {
+        if (options.platform) {
+          console.log(`No outbound channels available for platform '${options.platform}'.`);
+          console.log(
+            `\nEither install the LobeHub System Bot for ${options.platform} via ` +
+              `${pc.dim('Settings → Messenger')}, or provision a per-agent bot.`,
+          );
+          return;
+        }
+        console.log('No outbound channels available.');
+        console.log(
+          `\nEither install the LobeHub System Bot via ${pc.dim('Settings → Messenger')}, ` +
+            `or provision a per-agent bot for an agent.`,
+        );
+        return;
+      }
+
+      // SEND ARG renders the exact string to paste into send/dm/thread reply:
+      // per-agent bots keep their raw uuid; system bot installs use the `@<id>`
+      // prefix that `resolveSendTargetArg` already understands.
+      const rows = result.map((c: any) => {
+        const isAgent = c.source === 'agent_bot';
+        const sendArg = isAgent ? c.botId : `@${c.messengerInstallationId}`;
+        const owner = isAgent
+          ? c.agentId
+            ? `agent ${c.agentId}`
+            : 'agent (unknown)'
+          : c.tenantName || c.tenantId || '(global)';
+        return [
+          c.platform || '',
+          isAgent ? 'per-agent bot' : 'system bot',
+          sendArg,
+          owner,
+          c.recommended ? pc.green('★') : '',
+        ];
+      });
+      printTable(rows, ['PLATFORM', 'TYPE', 'SEND ARG', 'OWNER', 'PICK']);
+      console.log(
+        `\n${pc.green('★')} marks the recommended pick per platform. ` +
+          `Paste SEND ARG into ${pc.dim('lh bot message send <SEND_ARG> --target … --message …')}.`,
+      );
+    });
+
+  // ── dm (direct message) ─────────────────────────────────
+
+  message
+    .command('dm <botIdOrAtKey>')
+    .description(
+      'Send a direct message to a platform user. Pass a per-agent bot id, or ' +
+        '"@<messenger-install-id>" for a System Bot install.',
+    )
+    .requiredOption('--user-id <id>', 'Target user ID on the platform')
+    .requiredOption('--message <text>', 'Message content')
+    .option(
+      '--attachment <pathOrUrl>',
+      'Attach a file by local path or remote URL (repeatable). ' +
+        'Local paths are base64-encoded; http(s) URLs are passed as fetchUrl.',
+      collectOptions,
+      [],
+    )
+    .option('--json', 'Output JSON')
+    .action(
+      async (
+        botIdOrAtKey: string,
+        options: { attachment: string[]; json?: boolean; message: string; userId: string },
+      ) => {
+        const attachments = await resolveAttachmentFlags(options.attachment);
+        const target = resolveSendTargetArg(botIdOrAtKey);
+
+        const client = await getTrpcClient();
+        const result = await client.botMessage.sendDirectMessage.mutate({
+          ...target,
+          attachments,
+          content: options.message,
+          userId: options.userId,
+        });
+
+        if (options.json) {
+          outputJson(result);
+          return;
+        }
+
+        const r = result as any;
+        const suffix = attachments?.length ? ` with ${attachments.length} attachment(s)` : '';
+        console.log(
+          `${pc.green('✓')} DM sent${r.messageId ? ` (${pc.dim(r.messageId)})` : ''}${suffix}`,
         );
       },
     );
@@ -544,21 +705,43 @@ export function registerBotMessageCommands(bot: Command) {
     });
 
   thread
-    .command('reply <botId>')
-    .description('Reply to a thread')
+    .command('reply <botIdOrAtKey>')
+    .description(
+      'Reply to a thread. Pass a per-agent bot id, or "@<messenger-install-id>" ' +
+        'for a System Bot install.',
+    )
     .requiredOption('--thread-id <id>', 'Thread ID')
     .requiredOption('--message <text>', 'Reply content')
-    .action(async (botId: string, options: { message: string; threadId: string }) => {
-      const client = await getTrpcClient();
-      const result = await client.botMessage.replyToThread.mutate({
-        botId,
-        content: options.message,
-        threadId: options.threadId,
-      });
+    .option(
+      '--attachment <pathOrUrl>',
+      'Attach a file by local path or remote URL (repeatable). ' +
+        'Local paths are base64-encoded; http(s) URLs are passed as fetchUrl.',
+      collectOptions,
+      [],
+    )
+    .action(
+      async (
+        botIdOrAtKey: string,
+        options: { attachment: string[]; message: string; threadId: string },
+      ) => {
+        const attachments = await resolveAttachmentFlags(options.attachment);
+        const target = resolveSendTargetArg(botIdOrAtKey);
 
-      const r = result as any;
-      console.log(`${pc.green('✓')} Reply sent${r.messageId ? ` (${pc.dim(r.messageId)})` : ''}`);
-    });
+        const client = await getTrpcClient();
+        const result = await client.botMessage.replyToThread.mutate({
+          ...target,
+          attachments,
+          content: options.message,
+          threadId: options.threadId,
+        });
+
+        const r = result as any;
+        const suffix = attachments?.length ? ` with ${attachments.length} attachment(s)` : '';
+        console.log(
+          `${pc.green('✓')} Reply sent${r.messageId ? ` (${pc.dim(r.messageId)})` : ''}${suffix}`,
+        );
+      },
+    );
 
   // ── channel (subcommand group) ──────────────────────────
 

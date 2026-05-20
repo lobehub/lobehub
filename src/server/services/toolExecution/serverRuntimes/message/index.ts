@@ -6,6 +6,7 @@ import { QQApiClient } from '@lobechat/chat-adapter-qq';
 import { WechatApiClient } from '@lobechat/chat-adapter-wechat';
 
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
+import { MessengerInstallationModel } from '@/database/models/messengerInstallation';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import {
   assertBotAccessSettings,
@@ -157,6 +158,71 @@ export const messageRuntime: ServerRuntimeRegistration = {
           platform: p.platform,
           runtimeStatus: statuses[i].status,
         }));
+      },
+      listOutboundChannels: async () => {
+        if (!context.userId) {
+          throw new Error('userId is required to list outbound channels');
+        }
+        if (!context.serverDB) {
+          throw new Error('serverDB is required to list outbound channels');
+        }
+
+        // 1. Per-agent bots — scoped to current agent. Mirrors `listBots`
+        //    except we surface them as outbound-channel entries here. Skip
+        //    disabled rows since they can't actually deliver.
+        const perAgentBots = context.agentId
+          ? await providerModel.findByAgentId(context.agentId)
+          : [];
+        const perAgentStatuses = await Promise.all(
+          perAgentBots.map((p) => getBotRuntimeStatus(p.platform, p.applicationId)),
+        );
+        const agentChannels = perAgentBots
+          .filter((p) => p.enabled)
+          .map((p, i) => ({
+            applicationId: p.applicationId,
+            botId: p.id,
+            platform: p.platform,
+            // `recommended` gets stamped after platform grouping below —
+            // first entry per platform wins, regardless of source.
+            recommended: false,
+            runtimeStatus: perAgentStatuses[i]?.status,
+            source: 'agent_bot' as const,
+          }));
+
+        // 2. System Bot messenger installs — scoped to current user.
+        const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey().catch(() => undefined);
+        const installRows = await MessengerInstallationModel.listByInstallerUserId(
+          context.serverDB,
+          context.userId,
+          gateKeeper,
+        );
+        const systemChannels = installRows
+          .filter((row) => !row.revokedAt)
+          .map((row) => ({
+            applicationId: row.applicationId,
+            installedAt:
+              row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
+            messengerInstallationId: row.id,
+            platform: row.platform,
+            recommended: false,
+            source: 'system_messenger' as const,
+            tenantId: row.tenantId,
+            tenantName:
+              ((row.metadata as Record<string, unknown> | null)?.tenantName as string) ?? undefined,
+          }));
+
+        // 3. Concat agent-first then system, and stamp `recommended: true`
+        //    on the first entry per platform. The order encodes the routing
+        //    rule (per-agent bot wins; system bot is the fallback).
+        const merged = [...agentChannels, ...systemChannels];
+        const seenPlatforms = new Set<string>();
+        for (const channel of merged) {
+          if (!seenPlatforms.has(channel.platform)) {
+            channel.recommended = true;
+            seenPlatforms.add(channel.platform);
+          }
+        }
+        return merged;
       },
       listPlatforms: async () => {
         return platformRegistry.listSerializedPlatforms().map((p) => {

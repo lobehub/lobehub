@@ -43,6 +43,66 @@ class MessageExecutor extends BaseExecutor<typeof MessageApiName> {
     }
   };
 
+  listOutboundChannels = async (
+    _params: any,
+    _ctx: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    try {
+      const channels = (await lambdaClient.botMessage.listOutboundChannels.query()) as any[];
+
+      if (channels.length === 0) {
+        return {
+          content:
+            'No outbound channels available. Either install the LobeHub System Bot via Settings → Messenger, or provision a dedicated per-agent bot with `createBot`.',
+          state: { channels },
+          success: true,
+        };
+      }
+
+      // Group by platform — the upstream sort already puts per-agent bots
+      // first, so the first entry of each group is the recommended pick.
+      const byPlatform = new Map<string, any[]>();
+      for (const channel of channels) {
+        if (!byPlatform.has(channel.platform)) byPlatform.set(channel.platform, []);
+        byPlatform.get(channel.platform)!.push(channel);
+      }
+
+      const describe = (channel: any): string => {
+        if (channel.source === 'agent_bot') {
+          const parts = [`botId=${channel.botId}`];
+          if (channel.runtimeStatus) parts.push(`status=${channel.runtimeStatus}`);
+          return `per-agent bot (${parts.join(', ')})`;
+        }
+        const parts = [`messengerInstallationId=${channel.messengerInstallationId}`];
+        if (channel.tenantName) parts.push(`tenant=${channel.tenantName}`);
+        else if (channel.tenantId) parts.push(`tenantId=${channel.tenantId}`);
+        return `system bot install (${parts.join(', ')})`;
+      };
+
+      const lines: string[] = [];
+      for (const [platform, entries] of byPlatform) {
+        const [primary, ...rest] = entries;
+        lines.push(`${platform} — RECOMMENDED: ${describe(primary)}`);
+        for (const entry of rest) {
+          lines.push(`  - fallback: ${describe(entry)}`);
+        }
+      }
+
+      return {
+        content: `${channels.length} outbound channel(s) across ${byPlatform.size} platform(s):\n${lines.join(
+          '\n',
+        )}\n\nRouting rule: per-agent bot wins; system bot install is the fallback. Pass the matching id on send APIs as \`botId\` (agent_bot) or \`messengerInstallationId\` (system_messenger).`,
+        state: { channels },
+        success: true,
+      };
+    } catch (e) {
+      return {
+        content: `listOutboundChannels error: ${(e as Error).message}`,
+        success: false,
+      };
+    }
+  };
+
   listBots = async (_params: any, ctx: BuiltinToolContext): Promise<BuiltinToolResult> => {
     try {
       const agentId = ctx.agentId;

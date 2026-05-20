@@ -23,6 +23,7 @@ import { formatUsageStats } from '../utils';
 import { SLACK_API_BASE, SlackApi } from './api';
 import { SlackSocketModeConnection } from './gateway';
 import { markdownToSlackMrkdwn } from './markdownToMrkdwn';
+import { sendSlackAttachments } from './sendAttachments';
 
 const log = debug('bot-platform:slack:bot');
 
@@ -51,14 +52,30 @@ function createMessenger(config: BotProviderConfig, platformThreadId: string): P
 
   return {
     addReaction: (messageId, emoji) => slack.addReaction(channelId, messageId, emoji),
-    // Attachments are silently dropped for now — Slack outbound media is
-    // its own follow-up; reply text still ships.
-    createMessage: (content) => {
+    createMessage: async (content) => {
       const text = messengerContentText(content);
-      return threadTs
-        ? slack.postMessageInThread(channelId, threadTs, text).then(() => {})
-        : slack.postMessage(channelId, text).then(() => {});
+      const attachments = typeof content === 'string' ? undefined : content.attachments;
+      if (attachments?.length) {
+        const delivered = await sendSlackAttachments(slack, {
+          attachments,
+          channelId,
+          initialComment: text,
+          threadTs,
+        });
+        if (delivered > 0) return;
+        // All attachments failed → fall through to text-only so the reply
+        // still reaches the user.
+      }
+      if (!text.trim()) return;
+      if (threadTs) {
+        await slack.postMessageInThread(channelId, threadTs, text);
+      } else {
+        await slack.postMessage(channelId, text);
+      }
     },
+    // editMessage keeps the text-only contract. Slack v2 file attachments
+    // can't be added to an existing message in-place — new chunks with
+    // attachments flow through createMessage instead.
     editMessage: (messageId, content) =>
       slack.updateMessage(channelId, messageId, messengerContentText(content)),
     removeReaction: (messageId, emoji) => slack.removeReaction(channelId, messageId, emoji),

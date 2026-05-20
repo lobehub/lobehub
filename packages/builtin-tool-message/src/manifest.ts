@@ -6,6 +6,60 @@ import { MessageApiName, MessageToolIdentifier } from './types';
 const platformEnum = ['discord', 'telegram', 'slack', 'feishu', 'lark', 'qq', 'wechat'];
 
 /**
+ * Shared schema fragment for the outbound `attachments` array on message-
+ * sending tools (`sendMessage`, `sendDirectMessage`, `replyToThread`). Mirrors
+ * the `SendMessageAttachment` TypeScript type and the TRPC zod schema.
+ *
+ * Either `data` (base64-encoded bytes) or `fetchUrl` (public URL the
+ * platform server can GET) must be provided. `fetchUrl` is preferred when
+ * the bytes already live somewhere reachable — base64 inflates the request
+ * payload ~33% and many platforms (LINE, QQ guild) can ONLY consume URLs.
+ *
+ * Platform support varies — see each platform's `sendAttachments` helper
+ * for the actual delivery shape:
+ * - WeChat / Discord / Telegram / Slack / Feishu / Lark: full support
+ * - LINE: image + HTTPS URL only; other types degrade to a text-link line
+ * - QQ: group / c2c only; guild / dms / data-only degrade to text-link
+ */
+const attachmentsSchema = {
+  description:
+    'Optional outbound media attachments (images / files / video / audio). Each item must provide either `fetchUrl` (preferred — a public URL the platform server fetches) or `data` (base64-encoded bytes). When you have a stable public URL for the file, ALWAYS use `fetchUrl` — base64 bloats the payload and a few platforms (LINE, QQ guild) only accept URLs.',
+  items: {
+    additionalProperties: false,
+    properties: {
+      data: {
+        description:
+          'Base64-encoded bytes. Use only when no public URL exists; prefer `fetchUrl`. Some platforms (LINE, QQ guild) cannot consume this and will fall back to a text-link mention of the attachment.',
+        type: 'string',
+      },
+      fetchUrl: {
+        description:
+          'Public HTTPS URL the platform server can GET to retrieve the bytes. Preferred over `data`.',
+        type: 'string',
+      },
+      mimeType: {
+        description: 'MIME type (e.g. "image/png", "application/pdf"). Optional but helpful.',
+        type: 'string',
+      },
+      name: {
+        description:
+          'Filename shown to the recipient (e.g. "report.pdf"). Optional; some platforms infer from URL.',
+        type: 'string',
+      },
+      type: {
+        description:
+          'Media category. Drives which platform-specific endpoint is used (e.g. image → Telegram sendPhoto, file → Telegram sendDocument).',
+        enum: ['image', 'file', 'video', 'audio'],
+        type: 'string',
+      },
+    },
+    required: ['type'],
+    type: 'object',
+  },
+  type: 'array',
+};
+
+/**
  * Schema for the bot's `settings` JSON column. Both `createBot` and
  * `updateBot` accept a partial object — only the keys you pass are written
  * (everything else preserved). Use this as the single source of truth for
@@ -106,13 +160,24 @@ export const MessageManifest: BuiltinToolManifest = {
     // ==================== Direct Messaging ====================
     {
       description:
-        'Send a direct/private message to a user by their platform user ID. Creates a DM channel automatically. Use this when the user asks to "DM me" or "send me a private message".',
+        'Send a direct/private message to a user by their platform user ID. Creates a DM channel automatically. Use this when the user asks to "DM me" or "send me a private message". Supports optional outbound media `attachments` (images / files / video / audio). Discover the right `botId` / `messengerInstallationId` via `listOutboundChannels` — pick the entry where `recommended: true` for the target platform.',
       name: MessageApiName.sendDirectMessage,
       parameters: {
         additionalProperties: false,
         properties: {
+          attachments: attachmentsSchema,
+          botId: {
+            description:
+              'Per-agent bot id — set when the chosen `listOutboundChannels` entry has `source: "agent_bot"`. Provide exactly one of `botId` or `messengerInstallationId`.',
+            type: 'string',
+          },
           content: {
             description: 'Message content',
+            type: 'string',
+          },
+          messengerInstallationId: {
+            description:
+              'System Bot messenger installation id — set when the chosen `listOutboundChannels` entry has `source: "system_messenger"`. Provide exactly one of `botId` or `messengerInstallationId`.',
             type: 'string',
           },
           platform: {
@@ -132,11 +197,18 @@ export const MessageManifest: BuiltinToolManifest = {
 
     // ==================== Core Message Operations ====================
     {
-      description: 'Send a message to a specific channel or conversation on the target platform.',
+      description:
+        'Send a message to a specific channel or conversation on the target platform. Supports optional outbound media `attachments` (images / files / video / audio) — use this when you need to deliver a generated image, document, or other binary alongside your reply. Discover the right `botId` / `messengerInstallationId` via `listOutboundChannels` — pick the entry where `recommended: true` for the target platform.',
       name: MessageApiName.sendMessage,
       parameters: {
         additionalProperties: false,
         properties: {
+          attachments: attachmentsSchema,
+          botId: {
+            description:
+              'Per-agent bot id — set when the chosen `listOutboundChannels` entry has `source: "agent_bot"`. Provide exactly one of `botId` or `messengerInstallationId`.',
+            type: 'string',
+          },
           channelId: {
             description: 'Channel / conversation / room ID to send the message to',
             type: 'string',
@@ -147,9 +219,15 @@ export const MessageManifest: BuiltinToolManifest = {
             type: 'string',
           },
           embeds: {
-            description: 'Optional array of embed/attachment objects (platform-specific structure)',
+            description:
+              'Optional array of platform-specific embed objects (Discord embeds, Slack blocks, etc.). For generic file/image delivery use `attachments` instead.',
             items: { type: 'object' },
             type: 'array',
+          },
+          messengerInstallationId: {
+            description:
+              'System Bot messenger installation id — set when the chosen `listOutboundChannels` entry has `source: "system_messenger"`. Provide exactly one of `botId` or `messengerInstallationId`.',
+            type: 'string',
           },
           platform: {
             description: 'Target messaging platform',
@@ -550,13 +628,25 @@ export const MessageManifest: BuiltinToolManifest = {
       },
     },
     {
-      description: 'Send a reply to a thread.',
+      description:
+        'Send a reply to a thread. Supports optional outbound media `attachments` (images / files / video / audio). Discover the right `botId` / `messengerInstallationId` via `listOutboundChannels` — pick the entry where `recommended: true` for the target platform.',
       name: MessageApiName.replyToThread,
       parameters: {
         additionalProperties: false,
         properties: {
+          attachments: attachmentsSchema,
+          botId: {
+            description:
+              'Per-agent bot id — set when the chosen `listOutboundChannels` entry has `source: "agent_bot"`. Provide exactly one of `botId` or `messengerInstallationId`.',
+            type: 'string',
+          },
           content: {
             description: 'Reply message content',
+            type: 'string',
+          },
+          messengerInstallationId: {
+            description:
+              'System Bot messenger installation id — set when the chosen `listOutboundChannels` entry has `source: "system_messenger"`. Provide exactly one of `botId` or `messengerInstallationId`.',
             type: 'string',
           },
           platform: {
@@ -629,8 +719,18 @@ export const MessageManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'List all configured bot integrations for the current agent. Use this first to discover which platforms are connected and get bot IDs.',
+        "List all per-agent bot integrations configured for the current agent. **For routing send calls, prefer `listOutboundChannels`** — it merges per-agent bots with the user's System Bot messenger installs and marks the recommended pick per platform. Use `listBots` for management flows (createBot / updateBot / toggleBot / deleteBot / getBotDetail).",
       name: MessageApiName.listBots,
+      parameters: {
+        additionalProperties: false,
+        properties: {},
+        type: 'object',
+      },
+    },
+    {
+      description:
+        '**Canonical discovery API for sending.** Returns every outbound channel the agent can deliver through, merging per-agent bots and System Bot messenger installs in a single list. For each platform, the first entry is the recommended pick (`recommended: true`) — per-agent bots win; System Bot installs are the fallback. Each entry tells you exactly which send-API field to use: `source: "agent_bot"` → pass `botId`; `source: "system_messenger"` → pass `messengerInstallationId`. If the user wants a non-default channel, ask which to pick. If the list is empty for the target platform, guide the user to install the LobeHub System Bot via Settings → Messenger, or to provision a per-agent bot with `createBot`.',
+      name: MessageApiName.listOutboundChannels,
       parameters: {
         additionalProperties: false,
         properties: {},
