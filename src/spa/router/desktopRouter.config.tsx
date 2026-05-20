@@ -20,6 +20,7 @@ import { pageRouteMeta } from '@/features/Pages/routeMeta';
 import { agentRouteMeta } from '@/routes/(main)/agent/features/routeMeta';
 import { agentTopicPageRouteMeta } from '@/routes/(main)/agent/features/topicPageRouteMeta';
 import { groupRouteMeta } from '@/routes/(main)/group/features/routeMeta';
+import { settingsRouteMeta } from '@/routes/(main)/settings/features/routeMeta';
 import { routeMeta } from '@/spa/router/routeMeta';
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
 
@@ -108,6 +109,7 @@ export const desktopRoutes: RouteObject[] = [
                   () => import('@/routes/(main)/agent/task/[taskId]'),
                   'Desktop > Chat > Task Detail',
                 ),
+                handle: { meta: taskRouteMeta },
                 path: 'task/:taskId',
               },
             ],
@@ -438,9 +440,7 @@ export const desktopRoutes: RouteObject[] = [
               () => import('@/routes/(main)/settings'),
               'Desktop > Settings > Tab',
             ),
-            handle: {
-              meta: routeMeta({ icon: Settings, titleKey: 'navigation.settings' }),
-            },
+            handle: { meta: settingsRouteMeta },
             path: ':tab',
           },
           // Tabs that need a sub-segment (e.g. /settings/messenger/discord) reuse
@@ -450,9 +450,7 @@ export const desktopRoutes: RouteObject[] = [
               () => import('@/routes/(main)/settings'),
               'Desktop > Settings > Tab > Sub',
             ),
-            handle: {
-              meta: routeMeta({ icon: Settings, titleKey: 'navigation.settings' }),
-            },
+            handle: { meta: settingsRouteMeta },
             path: ':tab/:sub',
           },
         ],

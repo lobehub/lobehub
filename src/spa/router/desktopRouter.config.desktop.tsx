@@ -90,6 +90,7 @@ import ResourceLibraryLayout from '@/routes/(main)/resource/library/_layout';
 import ResourceLibrarySlugPage from '@/routes/(main)/resource/library/[slug]';
 import SettingsTabPage from '@/routes/(main)/settings';
 import SettingsLayout from '@/routes/(main)/settings/_layout';
+import { settingsRouteMeta } from '@/routes/(main)/settings/features/routeMeta';
 import { ProviderDetailPage, ProviderLayout } from '@/routes/(main)/settings/provider';
 import TaskDetailRoute from '@/routes/(main)/task/[taskId]';
 import AllTasksPage from '@/routes/(main)/tasks';
@@ -160,6 +161,7 @@ export const desktopRoutes: RouteObject[] = [
               },
               {
                 element: <AgentTaskDetailRoute />,
+                handle: { meta: taskRouteMeta },
                 path: 'task/:taskId',
               },
             ],
@@ -390,18 +392,14 @@ export const desktopRoutes: RouteObject[] = [
           // Other settings tabs
           {
             element: <SettingsTabPage />,
-            handle: {
-              meta: routeMeta({ icon: Settings, titleKey: 'navigation.settings' }),
-            },
+            handle: { meta: settingsRouteMeta },
             path: ':tab',
           },
           // Tabs that need a sub-segment (e.g. /settings/messenger/discord) reuse
           // the same tab page; nested feature components read `:sub` via useParams.
           {
             element: <SettingsTabPage />,
-            handle: {
-              meta: routeMeta({ icon: Settings, titleKey: 'navigation.settings' }),
-            },
+            handle: { meta: settingsRouteMeta },
             path: ':tab/:sub',
           },
         ],
