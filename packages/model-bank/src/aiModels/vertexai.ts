@@ -8,6 +8,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
       search: true,
+      structuredOutput: true,
       video: true,
       vision: true,
     },
@@ -22,6 +23,9 @@ const vertexaiChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput_cacheRead', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'videoInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
         {
           lookup: { prices: { '1h': 1 }, pricingParams: ['ttl'] },
