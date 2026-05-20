@@ -413,6 +413,34 @@ export const desktopRoutes: RouteObject[] = [
             ),
             path: 'users',
           },
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/admin/feature-flags'),
+              'Desktop > Admin > Feature Flags',
+            ),
+            path: 'feature-flags',
+          },
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/admin/audit-log'),
+              'Desktop > Admin > Audit Log',
+            ),
+            path: 'audit-log',
+          },
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/admin/api-keys'),
+              'Desktop > Admin > API Keys',
+            ),
+            path: 'api-keys',
+          },
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/admin/content'),
+              'Desktop > Admin > Content',
+            ),
+            path: 'content',
+          },
         ],
         element: dynamicLayout(
           () => import('@/routes/(main)/admin/_layout'),

@@ -5,6 +5,7 @@ import {
   Image,
   LibraryBigIcon,
   ListTodoIcon,
+  Music2,
   Settings,
   ShapesIcon,
   Video,
@@ -53,8 +54,18 @@ export const NAVIGATION_ROUTES: NavigationRoute[] = [
     id: 'video',
     keywords: ['video', 'generate', 'seedance', 'kling'],
     keywordsKey: 'cmdk.keywords.video',
-    path: '/video',
-    pathPrefix: '/video',
+    path: '/create/video',
+    pathPrefix: '/create/video',
+  },
+  {
+    cmdkKey: 'cmdk.audio',
+    electronKey: 'navigation.audio',
+    icon: Music2,
+    id: 'audio',
+    keywords: ['audio', 'music', 'song', 'generate', 'sound'],
+    keywordsKey: 'cmdk.keywords.audio',
+    path: '/create/audio',
+    pathPrefix: '/create/audio',
   },
   {
     cmdkKey: 'cmdk.painting',
@@ -63,8 +74,8 @@ export const NAVIGATION_ROUTES: NavigationRoute[] = [
     id: 'image',
     keywords: ['painting', 'art', 'generate', 'draw'],
     keywordsKey: 'cmdk.keywords.painting',
-    path: '/image',
-    pathPrefix: '/image',
+    path: '/create/image',
+    pathPrefix: '/create/image',
   },
   {
     cmdkKey: 'cmdk.resource',
@@ -130,5 +141,5 @@ export const getRouteById = (id: string): NavigationRoute | undefined =>
  */
 export const getNavigableRoutes = (): NavigationRoute[] =>
   NAVIGATION_ROUTES.filter((r) =>
-    ['community', 'video', 'image', 'resource', 'page', 'memory'].includes(r.id),
+    ['community', 'video', 'image', 'audio', 'resource', 'page', 'memory'].includes(r.id),
   );

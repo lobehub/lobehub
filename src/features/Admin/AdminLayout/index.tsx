@@ -1,15 +1,119 @@
 'use client';
 
 import { Flexbox, Icon } from '@lobehub/ui';
-import { BarChart3Icon, LayoutDashboardIcon, ShieldIcon, UsersIcon } from 'lucide-react';
-import { type CSSProperties, type FC, type ReactNode } from 'react';
+import {
+  BarChart3Icon,
+  FileTextIcon,
+  FlagIcon,
+  KeyRoundIcon,
+  LayoutDashboardIcon,
+  ScrollTextIcon,
+  ShieldIcon,
+  UsersIcon,
+} from 'lucide-react';
+import { createStaticStyles } from 'antd-style';
+import { type FC, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-const NAV_ITEMS = [
-  { icon: LayoutDashboardIcon, label: 'Overview', path: '/admin' },
-  { icon: UsersIcon, label: 'Users', path: '/admin/users' },
-  { icon: BarChart3Icon, label: 'Stats', path: '/admin/stats' },
-  { icon: ShieldIcon, label: 'Content', path: '/admin/content' },
+const useStyles = createStaticStyles(({ css, token }) => ({
+  container: css`
+    height: 100%;
+    display: flex;
+    background: ${token.colorBgLayout};
+  `,
+  sidebar: css`
+    width: 220px;
+    min-width: 220px;
+    height: 100%;
+    border-right: 1px solid ${token.colorBorderSecondary};
+    background: ${token.colorBgContainer};
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  `,
+  header: css`
+    padding: 20px 16px 12px;
+    border-bottom: 1px solid ${token.colorBorderSecondary};
+  `,
+  headerTitle: css`
+    font-size: 11px;
+    font-weight: 700;
+    color: ${token.colorTextQuaternary};
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  `,
+  menuItem: css`
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 16px;
+    border-radius: 8px;
+    margin: 2px 8px;
+    cursor: pointer;
+    font-size: 14px;
+    color: ${token.colorTextSecondary};
+    transition: all 0.15s ease;
+    user-select: none;
+    &:hover {
+      background: ${token.colorFillSecondary};
+      color: ${token.colorText};
+    }
+  `,
+  activeMenuItem: css`
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 16px;
+    border-radius: 8px;
+    margin: 2px 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    color: ${token.colorPrimary};
+    background: ${token.colorPrimaryBg};
+    transition: all 0.15s ease;
+    user-select: none;
+  `,
+  sectionLabel: css`
+    padding: 16px 16px 4px;
+    font-size: 11px;
+    font-weight: 700;
+    color: ${token.colorTextQuaternary};
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  `,
+  content: css`
+    flex: 1;
+    height: 100%;
+    overflow-y: auto;
+    padding: 24px;
+    background: ${token.colorBgLayout};
+  `,
+}));
+
+const NAV_SECTIONS = [
+  {
+    label: 'Overview',
+    items: [
+      { icon: LayoutDashboardIcon, label: 'Dashboard', path: '/admin' },
+      { icon: BarChart3Icon, label: 'Statistics', path: '/admin/stats' },
+    ],
+  },
+  {
+    label: 'User Management',
+    items: [
+      { icon: UsersIcon, label: 'Users', path: '/admin/users' },
+      { icon: FlagIcon, label: 'Feature Flags', path: '/admin/feature-flags' },
+    ],
+  },
+  {
+    label: 'System',
+    items: [
+      { icon: KeyRoundIcon, label: 'API Keys', path: '/admin/api-keys' },
+      { icon: ScrollTextIcon, label: 'Audit Log', path: '/admin/audit-log' },
+      { icon: FileTextIcon, label: 'Content', path: '/admin/content' },
+    ],
+  },
 ];
 
 interface AdminLayoutProps {
@@ -17,84 +121,37 @@ interface AdminLayoutProps {
 }
 
 const AdminLayout: FC<AdminLayoutProps> = ({ children }) => {
+  const { styles } = useStyles();
   const navigate = useNavigate();
   const { pathname } = useLocation();
 
-  const containerStyle: CSSProperties = {
-    height: '100%',
-    display: 'flex',
-    backgroundColor: 'var(--lobe-color-bg-container, #fff)',
-  };
-
-  const sidebarStyle: CSSProperties = {
-    width: 220,
-    minWidth: 220,
-    height: '100%',
-    borderRight: '1px solid var(--lobe-color-border-secondary, #e5e5e5)',
-    backgroundColor: 'var(--lobe-color-bg-container, #fff)',
-    overflowY: 'auto',
-  };
-
-  const headerStyle: CSSProperties = {
-    padding: '20px 16px 12px',
-    borderBottom: '1px solid var(--lobe-color-border-secondary, #e5e5e5)',
-  };
-
-  const headerTitleStyle: CSSProperties = {
-    fontSize: 13,
-    fontWeight: 600,
-    color: 'var(--lobe-color-text-tertiary, #999)',
-    letterSpacing: '0.06em',
-    textTransform: 'uppercase',
-  };
-
-  const menuItemStyle: CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-    padding: '9px 16px',
-    borderRadius: 8,
-    margin: '2px 8px',
-    cursor: 'pointer',
-    fontSize: 14,
-    color: 'var(--lobe-color-text-secondary, #666)',
-    transition: 'all 0.15s ease',
-  };
-
-  const activeMenuItemStyle: CSSProperties = {
-    ...menuItemStyle,
-    color: 'var(--lobe-color-primary, #1890ff)',
-    backgroundColor: 'var(--lobe-color-primary-bg, #e6f7ff)',
-    fontWeight: 600,
-  };
-
-  const contentStyle: CSSProperties = {
-    flex: 1,
-    height: '100%',
-    overflowY: 'auto',
-    padding: 24,
-    backgroundColor: 'var(--lobe-color-bg-layout, #fafafa)',
-  };
-
   return (
-    <Flexbox horizontal style={containerStyle}>
-      <div style={sidebarStyle}>
-        <div style={headerStyle}>
-          <span style={headerTitleStyle}>Admin Panel</span>
+    <div className={styles.container}>
+      <div className={styles.sidebar}>
+        <div className={styles.header}>
+          <Flexbox align="center" gap={8} horizontal>
+            <Icon icon={ShieldIcon} size={16} />
+            <span className={styles.headerTitle}>Admin Console</span>
+          </Flexbox>
         </div>
-        {NAV_ITEMS.map(({ icon, label, path }) => (
-          <div
-            key={path}
-            style={pathname === path ? activeMenuItemStyle : menuItemStyle}
-            onClick={() => navigate(path)}
-          >
-            <Icon icon={icon} size={16} />
-            {label}
+        {NAV_SECTIONS.map(({ label, items }) => (
+          <div key={label}>
+            <div className={styles.sectionLabel}>{label}</div>
+            {items.map(({ icon, label: itemLabel, path }) => (
+              <div
+                key={path}
+                className={pathname === path ? styles.activeMenuItem : styles.menuItem}
+                onClick={() => navigate(path)}
+              >
+                <Icon icon={icon} size={15} />
+                {itemLabel}
+              </div>
+            ))}
           </div>
         ))}
       </div>
-      <div style={contentStyle}>{children}</div>
-    </Flexbox>
+      <div className={styles.content}>{children}</div>
+    </div>
   );
 };
 

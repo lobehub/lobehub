@@ -24,9 +24,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-/**
- * Generate a market identifier (8-character lowercase alphanumeric string)
- */
 const generateMarketIdentifier = () => {
   const alphabet = '0123456789abcdefghijklmnopqrstuvwxyz';
   const generate = customAlphabet(alphabet, 8);
@@ -54,7 +51,6 @@ const ForkAndChat = memo<{ mobile?: boolean }>(({ mobile }) => {
   };
 
   const handleForkAndChat = async () => {
-    // Check if user is authenticated
     if (!isAuthenticated) {
       try {
         await signIn();
@@ -63,73 +59,80 @@ const ForkAndChat = memo<{ mobile?: boolean }>(({ mobile }) => {
       }
     }
 
+    setIsLoading(true);
+
     try {
-      setIsLoading(true);
+      // Step 1: Check if user already forked this agent
+      if (identifier) {
+        const existingAgentId = await agentService
+          .getAgentByForkedFromIdentifier(identifier)
+          .catch(() => null);
 
-      // Step 1: Check if user has already forked this agent
-      const existingAgentId = await agentService.getAgentByForkedFromIdentifier(identifier!);
-
-      if (existingAgentId) {
-        // User has already forked this agent, navigate to existing fork
-        message.info(t('fork.alreadyForked'));
-        navigate(SESSION_CHAT_URL(existingAgentId, mobile));
-        return;
+        if (existingAgentId) {
+          message.info(t('fork.alreadyForked'));
+          navigate(SESSION_CHAT_URL(existingAgentId, mobile));
+          return;
+        }
       }
 
-      // Generate a unique identifier for the forked agent
-      const newIdentifier = generateMarketIdentifier();
-
-      // Step 2: Fork the agent via Market API (single-item batch)
-      const [forkOutcome] = await marketApiService.forkAgent([
-        {
-          identifier: newIdentifier,
-          name: title,
-          sourceIdentifier: identifier!,
-          status: 'published',
-          visibility: 'public',
-        },
-      ]);
-
-      if (!forkOutcome.success) {
-        throw new Error(forkOutcome.error?.message || 'Forking failed');
-      }
-
-      const forkResult = forkOutcome.data;
-
-      // Step 3: Create agent config with forked data
       if (!config) throw new Error('Agent config is missing');
 
+      const newIdentifier = generateMarketIdentifier();
+
+      // Step 2: Attempt market API fork (non-fatal if it fails)
+      let marketIdentifier = newIdentifier;
+      try {
+        if (identifier) {
+          const [forkOutcome] = await marketApiService.forkAgent([
+            {
+              identifier: newIdentifier,
+              name: title,
+              sourceIdentifier: identifier,
+              status: 'published',
+              visibility: 'public',
+            },
+          ]);
+          if (forkOutcome.success && forkOutcome.data?.agent?.identifier) {
+            marketIdentifier = forkOutcome.data.agent.identifier;
+          }
+        }
+      } catch {
+        // Market fork failed — continue with local-only agent creation
+      }
+
+      // Step 3: Create local agent with forked config
       const agentData = {
         config: {
           ...config,
           editorData,
           ...meta,
-          marketIdentifier: forkResult.agent.identifier,
+          marketIdentifier,
           params: {
             ...config.params,
-            forkedFromIdentifier: identifier, // Store the source agent identifier
+            forkedFromIdentifier: identifier,
           },
-          title: forkResult.agent.name,
+          title: title || config.title,
         },
       };
 
-      // Step 4: Add to local agent list
       const result = await createAgent(agentData);
       await refreshAgentList();
 
-      // Step 5: Report fork event (using 'add' event type)
-      discoverService.reportAgentEvent({
-        event: 'add',
-        identifier: forkResult.agent.identifier,
-        source: location.pathname,
-      });
+      // Step 4: Report event (non-fatal)
+      if (identifier) {
+        discoverService
+          .reportAgentEvent({
+            event: 'add',
+            identifier: marketIdentifier,
+            source: location.pathname,
+          })
+          .catch(() => null);
+      }
 
       message.success(t('fork.success'));
-
-      // Step 6: Navigate to chat
       navigate(SESSION_CHAT_URL(result!.agentId, mobile));
     } catch (error: any) {
-      console.error('Fork failed:', error);
+      console.error('[ForkAndChat] Fork failed:', error);
       message.error(t('fork.failed'));
     } finally {
       setIsLoading(false);

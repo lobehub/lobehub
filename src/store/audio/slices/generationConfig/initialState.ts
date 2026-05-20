@@ -1,28 +1,23 @@
 export interface AudioGenerationConfigState {
-  /**
-   * Music style: pop|rock|jazz|lo-fi|classical|ambient|hip-hop
-   */
-  musicStyle: string;
-
-  /**
-   * Duration in seconds (15-120)
-   */
-  duration: number;
-
-  /**
-   * Model version (default: v5.5)
-   */
-  modelVersion: string;
-
-  /**
-   * Marks whether the configuration has been initialized
-   */
+  /** Whether custom mode is active (user provides lyrics + style vs AI-generated) */
+  customMode: boolean;
+  /** Song description (non-custom) or song lyrics (custom mode) */
+  prompt: string;
+  /** Song title — only used in custom mode */
+  songTitle: string;
+  /** Music style tags — only used in custom mode, e.g. "pop rock energetic" */
+  stylePrompt: string;
+  /** Whether to generate instrumental (no vocals) */
+  makeInstrumental: boolean;
+  /** Marks whether the configuration has been initialized */
   isInit: boolean;
 }
 
 export const initialGenerationConfigState: AudioGenerationConfigState = {
-  musicStyle: 'ambient',
-  duration: 30,
-  modelVersion: 'v5.5',
+  customMode: false,
+  prompt: '',
+  songTitle: '',
+  stylePrompt: '',
+  makeInstrumental: false,
   isInit: false,
 };
