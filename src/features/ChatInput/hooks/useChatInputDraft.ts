@@ -34,6 +34,8 @@ export const useChatInputDraft = () => {
       const { draftKey } = storeApi.getState();
       if (!draftKey) return;
 
+      if (!editor.isEmpty) return;
+
       const draft = getDraft(draftKey);
       if (draft) editor.setDocument('json', draft);
     },
