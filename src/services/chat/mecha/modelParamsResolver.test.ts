@@ -670,6 +670,28 @@ describe('thinking configuration', () => {
 
       expect(result.thinkingLevel).toBe('medium');
     });
+
+    it('should reuse thinkingLevel for Gemini 3.1 Flash-Lite models', () => {
+      const result = resolveModelExtendParams({
+        chatConfig: {
+          thinkingLevel: 'medium',
+        } as any,
+        model: 'gemini-3.1-flash-lite-preview',
+        provider: 'google',
+      });
+
+      expect(result.thinkingLevel).toBe('medium');
+    });
+
+    it('should use the Flash-Lite default thinkingLevel when not configured', () => {
+      const result = resolveModelExtendParams({
+        chatConfig: {} as any,
+        model: 'gemini-3.1-flash-lite-preview',
+        provider: 'google',
+      });
+
+      expect(result.thinkingLevel).toBe('minimal');
+    });
   });
 
   describe('thinkingLevel4 param', () => {
@@ -698,39 +720,6 @@ describe('thinking configuration', () => {
       const result = resolveModelExtendParams({
         chatConfig: {} as any,
         model: 'gemini-3.1-flash-image-preview',
-        provider: 'google',
-      });
-
-      expect(result.thinkingLevel).toBe('minimal');
-    });
-  });
-
-  describe('thinkingLevel5 param', () => {
-    beforeEach(() => {
-      vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(
-        () => true,
-      );
-      vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
-        'thinkingLevel5',
-      ]);
-    });
-
-    it('should set thinkingLevel from thinkingLevel5 config key', () => {
-      const result = resolveModelExtendParams({
-        chatConfig: {
-          thinkingLevel5: 'medium',
-        } as any,
-        model: 'gemini-3.1-flash-lite-preview',
-        provider: 'google',
-      });
-
-      expect(result.thinkingLevel).toBe('medium');
-    });
-
-    it('should use the default thinkingLevel when thinkingLevel5 is not configured', () => {
-      const result = resolveModelExtendParams({
-        chatConfig: {} as any,
-        model: 'gemini-3.1-flash-lite-preview',
         provider: 'google',
       });
 

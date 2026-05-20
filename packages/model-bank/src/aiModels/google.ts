@@ -53,7 +53,7 @@ const googleChatModels: AIChatModelCard[] = [
       ],
     },
     settings: {
-      extendParams: ['thinkingBudget', 'urlContext'],
+      extendParams: ['thinkingLevel3', 'urlContext'],
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -80,7 +80,7 @@ const googleChatModels: AIChatModelCard[] = [
       ],
     },
     settings: {
-      extendParams: ['thinkingBudget', 'urlContext'],
+      extendParams: ['thinkingLevel', 'urlContext'],
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -95,7 +95,7 @@ const googleChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_048_576 + 65_536,
-    description: 'Points to gemini-2.5-flash-lite-preview-09-2025',
+    description: 'Points to gemini-3.1-flash-lite',
     displayName: 'Gemini Flash-Lite Latest',
     id: 'gemini-flash-lite-latest',
     maxOutput: 65_536,
@@ -107,7 +107,7 @@ const googleChatModels: AIChatModelCard[] = [
       ],
     },
     settings: {
-      extendParams: ['thinkingBudget', 'urlContext'],
+      extendParams: ['thinkingLevel', 'urlContext'],
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -298,7 +298,7 @@ const googleChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-05-07',
     settings: {
-      extendParams: ['thinkingLevel5', 'urlContext'],
+      extendParams: ['thinkingLevel', 'urlContext'],
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -331,7 +331,7 @@ const googleChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-03-04',
     settings: {
-      extendParams: ['thinkingLevel5', 'urlContext'],
+      extendParams: ['thinkingLevel', 'urlContext'],
       searchImpl: 'params',
       searchProvider: 'google',
     },

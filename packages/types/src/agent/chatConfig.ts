@@ -151,7 +151,6 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
   thinkingLevel2?: 'low' | 'high';
   thinkingLevel3?: 'low' | 'medium' | 'high';
   thinkingLevel4?: 'minimal' | 'high';
-  thinkingLevel5?: 'minimal' | 'low' | 'medium' | 'high';
   /**
    * Maximum length for tool execution result content (in characters)
    * This prevents context overflow when sending tool results back to LLM
@@ -249,7 +248,6 @@ export const AgentChatConfigSchema = z
     thinkingLevel2: z.enum(['low', 'high']).optional(),
     thinkingLevel3: z.enum(['low', 'medium', 'high']).optional(),
     thinkingLevel4: z.enum(['minimal', 'high']).optional(),
-    thinkingLevel5: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
     toolResultMaxLength: z.number().default(25000),
     topicGroupMode: z.enum(['byTime', 'byProject', 'flat']).optional(),
     urlContext: z.boolean().optional(),
