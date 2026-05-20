@@ -8,6 +8,7 @@ import { Trans, useTranslation } from 'react-i18next';
 
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
 import { useUpdateAgentConfig } from '@/features/ChatInput/hooks/useUpdateAgentConfig';
+import { resolveDefaultThinkingLevelForModel } from '@/services/chat/mecha/modelParamsResolver';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
@@ -60,15 +61,6 @@ const resolveEnableReasoningInitialValue = (config: LobeAgentChatConfig) => {
   return undefined;
 };
 
-const resolveThinkingLevelDefaultValue = (model?: string) => {
-  if (model === 'gemini-3.5-flash') return 'medium';
-  if (model === 'gemini-3.1-flash-lite' || model === 'gemini-3.1-flash-lite-preview') {
-    return 'minimal';
-  }
-
-  return 'high';
-};
-
 const ControlsForm = memo<ControlsFormProps>(
   ({ model: modelProp, onUpdatingChange, provider: providerProp }) => {
     const { t } = useTranslation('chat');
@@ -107,7 +99,7 @@ const ControlsForm = memo<ControlsFormProps>(
     const screens = Grid.useBreakpoint();
     const isNarrow = !screens.sm;
     const gpt52ReasoningEffortDefaultValue = model === 'gpt-5.5' ? 'medium' : 'none';
-    const thinkingLevelDefaultValue = resolveThinkingLevelDefaultValue(model);
+    const thinkingLevelDefaultValue = resolveDefaultThinkingLevelForModel(model);
 
     const descWide = { display: 'inline-block', width: 300 } as const;
     const descNarrow = {
