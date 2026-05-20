@@ -62,6 +62,13 @@ export const TEXT_READABLE_FILE_TYPES = [
   'groovy',
   'gradle',
 
+  // LaTeX & Academic
+  'tex',
+  'sty',
+  'cls',
+  'bib',
+  'bbl',
+
   // Other
   'log',
   'sql',
