@@ -14,6 +14,7 @@ import { ProductLogo } from '@/components/Branding';
 import LangButton from '@/features/User/UserPanel/LangButton';
 import ThemeButton from '@/features/User/UserPanel/ThemeButton';
 import { useIsDark } from '@/hooks/useIsDark';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 
@@ -21,6 +22,7 @@ import { styles } from './style';
 
 const OnBoardingContainer: FC<PropsWithChildren> = ({ children }) => {
   const isDarkMode = useIsDark();
+  const isMobile = useIsMobile();
   const theme = useTheme();
   const { t } = useTranslation('onboarding');
   const { pathname } = useLocation();
@@ -53,18 +55,29 @@ const OnBoardingContainer: FC<PropsWithChildren> = ({ children }) => {
   );
 
   return (
-    <Flexbox className={styles.outerContainer} height={'100%'} padding={8} width={'100%'}>
+    <Flexbox
+      className={styles.outerContainer}
+      height={'100%'}
+      padding={isMobile ? 0 : 8}
+      width={'100%'}
+    >
       <Flexbox
-        className={cx(isDarkMode ? styles.innerContainerDark : styles.innerContainerLight)}
         height={'100%'}
         width={'100%'}
+        className={cx(
+          isMobile
+            ? styles.innerContainerMobile
+            : isDarkMode
+              ? styles.innerContainerDark
+              : styles.innerContainerLight,
+        )}
       >
         <Flexbox
           horizontal
           align={'center'}
           gap={8}
           justify={'space-between'}
-          padding={16}
+          padding={isMobile ? 12 : 16}
           width={'100%'}
         >
           <ProductLogo color={theme.colorText} size={28} type={'text'} />
@@ -80,8 +93,8 @@ const OnBoardingContainer: FC<PropsWithChildren> = ({ children }) => {
           {children}
         </Center>
         {showModeSwitchAndSkipFooter && (
-          <Center paddingBlock={'0 8px'} paddingInline={16}>
-            <Text fontSize={12} type={'secondary'}>
+          <Center paddingBlock={isMobile ? '0 12px' : '0 8px'} paddingInline={16}>
+            <Text fontSize={12} style={{ textAlign: 'center' }} type={'secondary'}>
               <Trans
                 ns={'onboarding'}
                 components={{
@@ -92,9 +105,7 @@ const OnBoardingContainer: FC<PropsWithChildren> = ({ children }) => {
                     />
                   ),
                   modeText: <Text as={'span'} />,
-                  skipLink: (
-                    <Text as={'span'} style={{ cursor: 'pointer' }} onClick={handleSkip} />
-                  ),
+                  skipLink: <Text as={'span'} style={{ cursor: 'pointer' }} onClick={handleSkip} />,
                   skipText: <Text as={'span'} style={{ cursor: 'pointer' }} />,
                 }}
                 i18nKey={

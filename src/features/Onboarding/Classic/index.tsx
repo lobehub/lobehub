@@ -14,6 +14,7 @@ import InterestsStep from '@/routes/onboarding/features/InterestsStep';
 import ProSettingsStep from '@/routes/onboarding/features/ProSettingsStep';
 import { useUserStore } from '@/store/user';
 import { onboardingSelectors } from '@/store/user/selectors';
+import { isDev } from '@/utils/env';
 
 const ClassicOnboardingPage = memo(() => {
   const navigate = useNavigate();
@@ -65,7 +66,7 @@ const ClassicOnboardingPage = memo(() => {
   return (
     <OnboardingContainer>
       <Flexbox gap={24} style={{ maxWidth: contentMaxWidth, width: '100%' }}>
-        <ModeSwitch />
+        {isDev && <ModeSwitch />}
         {renderStep()}
       </Flexbox>
     </OnboardingContainer>

@@ -14,7 +14,7 @@ import { useServerConfigStore } from '@/store/serverConfig';
 
 const COLLAPSED_STORAGE_KEY = 'LOBE_ONBOARDING_MODE_SWITCH_COLLAPSED';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
+const styles = createStaticStyles(({ css, cssVar, responsive }) => ({
   anchor: css`
     position: fixed;
     z-index: 10;
@@ -25,6 +25,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     flex-direction: column;
     gap: 8px;
     align-items: flex-end;
+
+    ${responsive.mobile} {
+      inset-block-end: calc(env(safe-area-inset-bottom, 0px) + 96px);
+      inset-inline-end: 12px;
+    }
   `,
   anchorWithLabel: css`
     align-items: stretch;

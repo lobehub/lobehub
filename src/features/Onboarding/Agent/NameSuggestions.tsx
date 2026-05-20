@@ -1,5 +1,5 @@
 import { ActionIcon, Block, Flexbox, FluentEmoji, Text } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { RefreshCw } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,6 +14,37 @@ import {
 
 const SUGGESTIONS_PER_GROUP = 3;
 
+const styles = createStaticStyles(({ css }) => ({
+  chip: css`
+    cursor: pointer;
+
+    flex-shrink: 0;
+
+    padding-block: 6px;
+    padding-inline: 10px;
+    border: 1px solid ${cssVar.colorBorder};
+    border-radius: 999px;
+
+    background: ${cssVar.colorBgContainer};
+
+    transition: background 0.15s;
+
+    &:hover {
+      background: ${cssVar.colorBgTextHover};
+    }
+  `,
+
+  chipRow: css`
+    scrollbar-width: none;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  `,
+}));
+
 const sampleSuggestions = (count: number, excludeIds: string[] = []): NameSuggestionItem[] => {
   const remaining = nameSuggestionPool.filter((item) => !excludeIds.includes(item.id));
   const target = Math.min(count, remaining.length);
@@ -25,7 +56,11 @@ const sampleSuggestions = (count: number, excludeIds: string[] = []): NameSugges
   return picked;
 };
 
-const NameSuggestions = memo(() => {
+interface NameSuggestionsProps {
+  variant?: 'cards' | 'chips';
+}
+
+const NameSuggestions = memo<NameSuggestionsProps>(({ variant = 'cards' }) => {
   const { t, i18n } = useTranslation('onboarding');
   const updateInputMessage = useConversationStore((s) => s.updateInputMessage);
   const editor = useConversationStore((s) => s.editor);
@@ -53,6 +88,50 @@ const NameSuggestions = memo(() => {
     },
     [t, updateInputMessage, editor],
   );
+
+  if (variant === 'chips') {
+    return (
+      <Flexbox gap={6} paddingInline={24}>
+        <Flexbox horizontal align={'center'} gap={4} justify={'space-between'}>
+          <Text fontSize={12} type={'secondary'}>
+            {t('agent.welcome.suggestion.title')}
+          </Text>
+          <Flexbox
+            horizontal
+            align={'center'}
+            gap={2}
+            style={{ cursor: 'pointer' }}
+            onClick={handleRefresh}
+          >
+            <ActionIcon icon={RefreshCw} size={'small'} />
+            <Text fontSize={11} type={'secondary'}>
+              {t('agent.welcome.suggestion.switch')}
+            </Text>
+          </Flexbox>
+        </Flexbox>
+        <Flexbox horizontal className={styles.chipRow} gap={6}>
+          {items.map((item) => {
+            const { name, prompt } = resolveNameSuggestion(item, i18n.language);
+            return (
+              <Flexbox
+                horizontal
+                align={'center'}
+                className={styles.chip}
+                gap={6}
+                key={item.id}
+                onClick={() => handleSelect(prompt, item.emoji)}
+              >
+                <FluentEmoji emoji={item.emoji} size={16} type={'anim'} />
+                <Text fontSize={13} weight={500}>
+                  {name}
+                </Text>
+              </Flexbox>
+            );
+          })}
+        </Flexbox>
+      </Flexbox>
+    );
+  }
 
   return (
     <Flexbox gap={12}>

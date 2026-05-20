@@ -5,6 +5,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentMeta } from '@/features/Conversation/hooks/useAgentMeta';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import LobeMessage from '@/routes/onboarding/components/LobeMessage';
 
 import FeedbackPanel from './FeedbackPanel';
@@ -21,25 +22,37 @@ interface CompletionPanelProps {
 const CompletionPanel = memo<CompletionPanelProps>(
   ({ feedbackSubmitted, finishTargetUrl, showFeedback, topicId }) => {
     const { t } = useTranslation('onboarding');
+    const isMobile = useIsMobile();
     const agentMeta = useAgentMeta();
     return (
-      <Center height={'100%'} width={'100%'}>
-        <Flexbox align={'center'} className={staticStyle.completionEnter} gap={14} width={'100%'}>
-          <Flexbox align={'center'} gap={14} style={{ maxWidth: 600, width: '100%' }}>
+      <Center height={'100%'} paddingInline={isMobile ? 16 : 0} width={'100%'}>
+        <Flexbox
+          align={'center'}
+          className={staticStyle.completionEnter}
+          gap={isMobile ? 12 : 14}
+          width={'100%'}
+        >
+          <Flexbox
+            align={'center'}
+            gap={isMobile ? 12 : 14}
+            style={{ maxWidth: 600, width: '100%' }}
+          >
             <LobeMessage
+              align={'center'}
               avatar={agentMeta.avatar}
-              avatarSize={72}
-              fontSize={32}
-              gap={16}
+              avatarSize={isMobile ? 56 : 72}
+              fontSize={isMobile ? 24 : 32}
+              gap={isMobile ? 12 : 16}
               sentences={[
                 t('agent.completion.sentence.readyWithName', { name: agentMeta.title }),
                 t('agent.completion.sentence.readyWhenYouAre'),
               ]}
             />
-            <Text fontSize={16} type={'secondary'}>
+            <Text fontSize={isMobile ? 14 : 16} type={'secondary'}>
               {t('agent.completionSubtitle')}
             </Text>
             <Button
+              block={isMobile}
               size={'large'}
               style={{ marginTop: 8 }}
               type={'primary'}
