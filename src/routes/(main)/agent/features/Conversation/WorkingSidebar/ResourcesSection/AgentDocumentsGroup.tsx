@@ -13,12 +13,6 @@ import { useMatch, useNavigate } from 'react-router-dom';
 
 import { DocumentExplorerTree } from '@/features/AgentDocumentsExplorer';
 import SkillsList, { type SkillListItem } from '@/features/AgentDocumentsExplorer/SkillsList';
-import {
-  isFolderItem,
-  isManagedSkillItem,
-  isSkillBundleItem,
-  isSkillIndexItem,
-} from '@/features/AgentDocumentsExplorer/types';
 import { useClientDataSWR } from '@/libs/swr';
 import { agentDocumentService, agentDocumentSWRKeys } from '@/services/agentDocument';
 import { useAgentStore } from '@/store/agent';
@@ -229,27 +223,29 @@ const buildSkillBundleViews = (data: AgentDocumentListItem[]): SkillBundleView[]
     childrenByParent.set(doc.parentId, list);
   }
 
-  return data.filter(isSkillBundleItem).map((bundle) => {
-    const files: string[] = [];
-    const pathToDocumentId = new Map<string, string>();
+  return data
+    .filter((doc) => doc.isSkillBundle)
+    .map((bundle) => {
+      const files: string[] = [];
+      const pathToDocumentId = new Map<string, string>();
 
-    const walk = (parentDocId: string, prefix: string) => {
-      const children = childrenByParent.get(parentDocId) ?? [];
-      for (const child of children) {
-        const name = child.filename || child.title || 'untitled';
-        const relPath = prefix ? `${prefix}/${name}` : name;
-        if (isFolderItem(child)) {
-          walk(child.documentId, relPath);
-        } else {
-          files.push(relPath);
-          pathToDocumentId.set(relPath, child.documentId);
+      const walk = (parentDocId: string, prefix: string) => {
+        const children = childrenByParent.get(parentDocId) ?? [];
+        for (const child of children) {
+          const name = child.filename || child.title || 'untitled';
+          const relPath = prefix ? `${prefix}/${name}` : name;
+          if (child.isFolder) {
+            walk(child.documentId, relPath);
+          } else {
+            files.push(relPath);
+            pathToDocumentId.set(relPath, child.documentId);
+          }
         }
-      }
-    };
-    walk(bundle.documentId, '');
+      };
+      walk(bundle.documentId, '');
 
-    return { bundle, files, pathToDocumentId };
-  });
+      return { bundle, files, pathToDocumentId };
+    });
 };
 
 interface AgentDocumentsGroupProps {
@@ -273,12 +269,9 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ style }) => {
     agentDocumentService.getDocuments({ agentId: agentId! }),
   );
 
-  const webData = useMemo(() => data.filter((doc) => doc.sourceType === 'web'), [data]);
+  const webData = useMemo(() => data.filter((doc) => doc.category === 'web'), [data]);
 
-  const documentsData = useMemo(
-    () => data.filter((doc) => doc.sourceType !== 'web' && !isManagedSkillItem(doc)),
-    [data],
-  );
+  const documentsData = useMemo(() => data.filter((doc) => doc.category === 'document'), [data]);
 
   const skillBundleViews = useMemo(() => buildSkillBundleViews(data), [data]);
 
@@ -340,7 +333,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ style }) => {
           // Open the SKILL.md (skills/index child) when present; fall back to
           // the bundle itself (orphan bundles surface for recovery).
           const view = skillBundleViews.find((v) => v.bundle.documentId === item.id);
-          const indexChild = data.find((doc) => doc.parentId === item.id && isSkillIndexItem(doc));
+          const indexChild = data.find((doc) => doc.parentId === item.id && doc.isSkillIndex);
           openDocumentByRoute(indexChild?.documentId ?? view?.bundle.documentId ?? item.id);
         }}
       />

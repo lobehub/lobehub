@@ -18,12 +18,7 @@ import { useChatStore } from '@/store/chat';
 import DocumentExplorerToolbar from './DocumentExplorerToolbar';
 import { useDocumentTreeOps } from './hooks/useDocumentTreeOps';
 import type { AgentDocumentItem } from './types';
-import {
-  isFolderItem,
-  isManagedSkillItem,
-  isOrphanSkillBundleItem,
-  isSkillIndexItem,
-} from './types';
+import { isOrphanSkillBundleItem } from './types';
 import { canDropDocument } from './utils/canDrop';
 
 const PAGE_ROUTE_PATTERN = '/agent/:aid/:topicId/page/:docId?';
@@ -74,7 +69,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
     topicId: pageMatch?.params.topicId,
   });
 
-  const documents = useMemo(() => data.filter((doc) => doc.sourceType !== 'web'), [data]);
+  const documents = useMemo(() => data.filter((doc) => doc.category !== 'web'), [data]);
 
   // AgentDocument.parentId references the parent's documentId (FK to documents.id),
   // but ExplorerTree's flat layout expects parentId to point at another node's
@@ -98,8 +93,8 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
       documents.map((doc) => ({
         data: doc,
         id: doc.id,
-        isFolder: isFolderItem(doc),
-        name: isSkillIndexItem(doc) ? SKILL_INDEX_FILENAME : doc.title || doc.filename || '',
+        isFolder: doc.isFolder,
+        name: doc.isSkillIndex ? SKILL_INDEX_FILENAME : doc.title || doc.filename || '',
         parentId: resolveParentRowId(doc.parentId),
       })),
     [documents, resolveParentRowId],
@@ -175,14 +170,12 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
   );
 
   const canDrag = useCallback(
-    (node: ExplorerTreeNode<AgentDocumentItem>) =>
-      !!node.data && node.data.sourceType !== 'web' && !isManagedSkillItem(node.data),
+    (node: ExplorerTreeNode<AgentDocumentItem>) => !!node.data && node.data.category === 'document',
     [],
   );
 
   const canRename = useCallback(
-    (node: ExplorerTreeNode<AgentDocumentItem>) =>
-      !!node.data && node.data.sourceType !== 'web' && !isManagedSkillItem(node.data),
+    (node: ExplorerTreeNode<AgentDocumentItem>) => !!node.data && node.data.category === 'document',
     [],
   );
 
@@ -193,7 +186,8 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
 
   const getContextMenuItems = useCallback(
     (node: ExplorerTreeNode<AgentDocumentItem>): MenuProps['items'] => {
-      if (node.data && isManagedSkillItem(node.data) && !isRecoverableSkillBundle(node.data)) {
+      const isSkill = node.data?.category === 'skill';
+      if (isSkill && !isRecoverableSkillBundle(node.data!)) {
         return [];
       }
 
@@ -202,7 +196,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
 
       const items: NonNullable<MenuProps['items']> = [];
 
-      if (isFolder && (!node.data || !isManagedSkillItem(node.data))) {
+      if (isFolder && !isSkill) {
         items.push(
           {
             key: 'new-folder',
@@ -218,7 +212,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
         );
       }
 
-      if (!node.data || !isManagedSkillItem(node.data)) {
+      if (!isSkill) {
         items.push({
           key: 'rename',
           label: t('workingPanel.resources.tree.rename'),
