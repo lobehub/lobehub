@@ -1,6 +1,6 @@
 import { ActionIcon, Center, Empty, Flexbox, Text } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { App, Spin } from 'antd';
+import { App } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -11,6 +11,7 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMatch, useNavigate } from 'react-router-dom';
 
+import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { DocumentExplorerTree } from '@/features/AgentDocumentsExplorer';
 import SkillsList, { type SkillListItem } from '@/features/AgentDocumentsExplorer/SkillsList';
 import {
@@ -307,7 +308,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ style }) => {
   if (isLoading) {
     return (
       <Center flex={1} paddingBlock={24}>
-        <Spin />
+        <NeuralNetworkLoading size={32} />
       </Center>
     );
   }

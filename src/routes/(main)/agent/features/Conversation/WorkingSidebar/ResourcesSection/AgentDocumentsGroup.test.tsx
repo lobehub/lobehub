@@ -43,7 +43,10 @@ vi.mock('antd', () => ({
       modal: { confirm: modalConfirm },
     }),
   },
-  Spin: () => <div data-testid="spin" />,
+}));
+
+vi.mock('@/components/NeuralNetworkLoading', () => ({
+  default: () => <div data-testid="neural-network-loading" />,
 }));
 
 vi.mock('@/libs/swr', () => ({
@@ -389,6 +392,6 @@ describe('AgentDocumentsGroup', () => {
     });
 
     render(<AgentDocumentsGroup />);
-    expect(screen.getByTestId('spin')).toBeInTheDocument();
+    expect(screen.getByTestId('neural-network-loading')).toBeInTheDocument();
   });
 });

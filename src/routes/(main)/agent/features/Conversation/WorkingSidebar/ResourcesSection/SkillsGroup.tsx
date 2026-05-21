@@ -2,12 +2,12 @@ import { isDesktop } from '@lobechat/const';
 import { type ListProjectSkillsResult, type ProjectSkillItem } from '@lobechat/electron-client-ipc';
 import { Center, Empty, Flexbox, Text } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { Spin } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import path from 'pathe';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import SkillsList, { type SkillListItem } from '@/features/AgentDocumentsExplorer/SkillsList';
 import { useClientDataSWR } from '@/libs/swr';
 import { localFileService } from '@/services/electron/localFileService';
@@ -78,7 +78,7 @@ const SkillsGroup = memo<SkillsGroupProps>(({ workingDirectory }) => {
       </Flexbox>
       {isLoading ? (
         <Center paddingBlock={12}>
-          <Spin size={'small'} />
+          <NeuralNetworkLoading size={24} />
         </Center>
       ) : error || !data || data.skills.length === 0 ? (
         <Center gap={8} paddingBlock={16}>
