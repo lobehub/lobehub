@@ -9,7 +9,7 @@ interface UseOnboardingFollowUpParams {
   enabled: boolean;
   isGreeting: boolean;
   modelConfig: FollowUpModelConfig;
-  onboardingAgentId: string;
+  onboardingAgentId: string | undefined;
 }
 
 interface OnboardingFollowUpHandlers {
@@ -26,6 +26,7 @@ export const useOnboardingFollowUp = ({
   const triggerExtract = useCallback(
     async (topicId: string, phase: OnboardingPhase | undefined) => {
       if (!enabled) return;
+      if (!onboardingAgentId) return;
       if (!phase) return;
       if (phase === 'summary') return;
       if (isGreeting) return;
@@ -43,6 +44,7 @@ export const useOnboardingFollowUp = ({
   const onBeforeSendMessage = useCallback(
     async (topicId: string) => {
       if (!enabled) return;
+      if (!onboardingAgentId) return;
       const conversationKey = messageMapKey({ agentId: onboardingAgentId, topicId });
       useFollowUpActionStore.getState().clear(conversationKey);
     },

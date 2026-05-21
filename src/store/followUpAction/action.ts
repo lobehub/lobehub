@@ -6,6 +6,8 @@ import { type StoreSetter } from '@/store/types';
 import { type FollowUpActionSlot } from './initialState';
 import { type FollowUpActionStore } from './store';
 
+// LLM `generateObject` for chip extraction routinely takes 8-12s end-to-end.
+// Anything below ~20s aborts before the model can respond.
 const TIMEOUT_MS = 20_000;
 
 const IDLE_SLOT: FollowUpActionSlot = { chips: [], status: 'idle' };
@@ -41,8 +43,8 @@ const removeSlot = (set: Setter, conversationKey: string, action: string): void 
   set(
     (state) => {
       if (!state.slots[conversationKey]) return state;
-      const { [conversationKey]: _omitted, ...rest } = state.slots;
-      void _omitted;
+
+      const { [conversationKey]: _, ...rest } = state.slots;
       return { slots: rest };
     },
     false,
@@ -97,6 +99,9 @@ export class FollowUpActionImpl {
     );
     clearTimeout(timeoutId);
 
+    // Identity guard: a same-key follow-up turn (next assistant settle) would
+    // otherwise let an in-flight prior result overwrite the new turn's chips
+    // when the network abort race is lost.
     if (this.#get().slots[conversationKey]?.abortController !== controller) return;
 
     if (!result || !result.messageId || result.chips.length === 0) {

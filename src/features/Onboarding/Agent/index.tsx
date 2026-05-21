@@ -142,7 +142,7 @@ const AgentOnboardingPage = memo(() => {
     enabled: !onboardingFinished && !viewingHistoricalTopic,
     isGreeting,
     modelConfig: onboardingFollowUpModelConfig,
-    onboardingAgentId: onboardingAgentId || '',
+    onboardingAgentId,
   });
   const { onBeforeSendMessage, triggerExtract } = onboardingFollowUp;
 
