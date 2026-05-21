@@ -43,10 +43,15 @@ vi.mock('@/store/chat', () => ({
   },
 }));
 
-const seedOperations = (
-  messageId: string,
-  ops: Array<{ endTime?: number; status: string; type: string }>,
-) => {
+interface SeedOp {
+  cancelReason?: string;
+  endTime?: number;
+  parentOperationId?: string;
+  status: string;
+  type: string;
+}
+
+const seedOperations = (messageId: string, ops: SeedOp[]) => {
   mockChatState.operations = {};
   mockChatState.operationsByMessage = {};
   const ids: string[] = [];
@@ -54,9 +59,15 @@ const seedOperations = (
     const id = `op-${messageId}-${index}`;
     ids.push(id);
     mockChatState.operations[id] = {
-      ...op,
       id,
-      metadata: { endTime: op.endTime ?? index + 1, startTime: 0 },
+      parentOperationId: op.parentOperationId,
+      status: op.status,
+      type: op.type,
+      metadata: {
+        cancelReason: op.cancelReason,
+        endTime: op.endTime ?? index + 1,
+        startTime: 0,
+      },
     };
   });
   mockChatState.operationsByMessage[messageId] = ids;
@@ -128,6 +139,71 @@ describe('AssistantTurnSettledWatcher', () => {
   it('fires with reason "stopped" when latest terminal op is cancelled, even on regenerate', async () => {
     const hook = vi.fn();
     seedOperations('assistant-1', [{ status: 'cancelled', type: 'regenerate' }]);
+
+    const { rerender } = render(<AssistantTurnSettledWatcher />);
+    armAndSettle(rerender, hook);
+
+    await waitFor(() => {
+      expect(hook).toHaveBeenCalledWith('assistant-1', { reason: 'stopped' });
+    });
+  });
+
+  it('derives "regenerated" when parent regenerate completes after child callLLM also completes (parent/child ordering)', async () => {
+    const hook = vi.fn();
+    seedOperations('assistant-1', [
+      { endTime: 1000, status: 'completed', type: 'regenerate' },
+      {
+        endTime: 1500,
+        parentOperationId: 'op-assistant-1-0',
+        status: 'completed',
+        type: 'callLLM',
+      },
+    ]);
+
+    const { rerender } = render(<AssistantTurnSettledWatcher />);
+    armAndSettle(rerender, hook);
+
+    await waitFor(() => {
+      expect(hook).toHaveBeenCalledWith('assistant-1', { reason: 'regenerated' });
+    });
+  });
+
+  it('derives "continued" when parent continue completes after child callLLM also completes', async () => {
+    const hook = vi.fn();
+    seedOperations('assistant-1', [
+      { endTime: 1000, status: 'completed', type: 'continue' },
+      {
+        endTime: 1500,
+        parentOperationId: 'op-assistant-1-0',
+        status: 'completed',
+        type: 'callLLM',
+      },
+    ]);
+
+    const { rerender } = render(<AssistantTurnSettledWatcher />);
+    armAndSettle(rerender, hook);
+
+    await waitFor(() => {
+      expect(hook).toHaveBeenCalledWith('assistant-1', { reason: 'continued' });
+    });
+  });
+
+  it('derives "stopped" when parent regenerate is cancelled with cancelled child callLLM finishing later', async () => {
+    const hook = vi.fn();
+    seedOperations('assistant-1', [
+      {
+        cancelReason: 'User cancelled',
+        endTime: 1000,
+        status: 'cancelled',
+        type: 'regenerate',
+      },
+      {
+        endTime: 1500,
+        parentOperationId: 'op-assistant-1-0',
+        status: 'cancelled',
+        type: 'callLLM',
+      },
+    ]);
 
     const { rerender } = render(<AssistantTurnSettledWatcher />);
     armAndSettle(rerender, hook);

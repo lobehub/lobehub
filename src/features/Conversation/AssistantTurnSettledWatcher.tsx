@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef } from 'react';
 
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
-import { type Operation } from '@/store/chat/slices/operation/types';
+import { type Operation, type OperationType } from '@/store/chat/slices/operation/types';
 
 import {
   contextSelectors,
@@ -21,6 +21,9 @@ const assistantLikeRoles = new Set(['assistant', 'assistantGroup', 'supervisor']
 
 type SettlementReason = 'completed' | 'stopped' | 'regenerated' | 'continued';
 
+// Restrict reason derivation to turn-level intents so child sub-ops (callLLM, executeToolCall, …) cannot shadow the parent type at settlement
+const TURN_LEVEL_TYPES = new Set<OperationType>(['sendMessage', 'regenerate', 'continue']);
+
 const deriveReason = (op: Operation): SettlementReason => {
   // cancelled wins over type: a stopped regenerate is still 'stopped'
   if (op.status === 'cancelled') return 'stopped';
@@ -32,6 +35,7 @@ const deriveReason = (op: Operation): SettlementReason => {
 const resolveReason = (messageId: string): SettlementReason => {
   const operations = operationSelectors.getOperationsByMessage(messageId)(useChatStore.getState());
   const terminal = operations
+    .filter((op) => TURN_LEVEL_TYPES.has(op.type))
     .filter(
       (op) => op.status === 'completed' || op.status === 'cancelled' || op.status === 'failed',
     )
