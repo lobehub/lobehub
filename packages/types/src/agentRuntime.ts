@@ -13,6 +13,7 @@ export enum RequestTrigger {
   Onboarding = 'onboarding',
   Openapi = 'openapi',
   SemanticSearch = 'semantic_search',
+  SignupEmailLLMReview = 'signup_email_llm_review',
   Topic = 'topic',
   Video = 'video',
   VisualAnalysis = 'visual_analysis',
