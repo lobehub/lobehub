@@ -3,6 +3,7 @@ import type { LobeChatDatabase } from '@lobechat/database';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
 import { AgentDocumentVfsService } from '@/server/services/agentDocumentVfs';
 import {
+  ARCHIVE_BYPASS_IDENTIFIERS,
   DEFAULT_TOOL_RESULT_MAX_LENGTH,
   truncateToolResult,
 } from '@/server/utils/truncateToolResult';
@@ -19,6 +20,7 @@ export interface ToolResultArchiveOutcome {
 interface ArchiveToolResultParams {
   agentId?: string | null;
   content: string;
+  identifier?: string;
   limit?: number;
   serverDB?: LobeChatDatabase;
   toolCallId?: string;
@@ -26,7 +28,8 @@ interface ArchiveToolResultParams {
   userId?: string;
 }
 
-const buildArchivePath = (toolCallId: string) => `${TOOL_RESULTS_DIR}/${toolCallId}.md`;
+const buildArchivePath = (topicId: string, toolCallId: string) =>
+  `${TOOL_RESULTS_DIR}/${topicId}_${toolCallId}.md`;
 
 const getErrorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error || 'Unknown archive error');
@@ -34,12 +37,17 @@ const getErrorMessage = (error: unknown) =>
 export const archiveToolResultIfNeeded = async ({
   agentId,
   content,
+  identifier,
   limit,
   serverDB,
   toolCallId,
   topicId,
   userId,
 }: ArchiveToolResultParams): Promise<ToolResultArchiveOutcome> => {
+  if (identifier && ARCHIVE_BYPASS_IDENTIFIERS.has(identifier)) {
+    return { archived: false, content };
+  }
+
   const maxLength = limit ?? DEFAULT_TOOL_RESULT_MAX_LENGTH;
 
   if (!content || content.length <= maxLength) {
@@ -52,7 +60,7 @@ export const archiveToolResultIfNeeded = async ({
     return { archived: false, content: truncatedContent };
   }
 
-  const archivePath = buildArchivePath(toolCallId);
+  const archivePath = buildArchivePath(topicId, toolCallId);
 
   try {
     const vfsService = new AgentDocumentVfsService(serverDB, userId);
@@ -70,10 +78,13 @@ export const archiveToolResultIfNeeded = async ({
       }
     }
 
+    const agentDocumentIdHint =
+      stats.id ?? '(call lobe-agent-documents.listDocuments with scope=currentTopic to look up)';
+
     return {
       archivePath,
       archived: true,
-      content: `${truncatedContent}\nFull content archived at: ${archivePath}\nUse the document/file reading tool to inspect specific sections if needed.`,
+      content: `${truncatedContent}\nFull content archived to the agent-document VFS.\nPath: ${archivePath}\nAgent Document ID: ${agentDocumentIdHint}\nTo inspect specific sections, call the lobe-agent-documents tool with apiName=readDocument and id=<Agent Document ID above>. Do NOT activate cloud-sandbox or local-system file tools — this archive exists only inside the agent document tree.`,
     };
   } catch (error) {
     const message = getErrorMessage(error);

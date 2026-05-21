@@ -9,7 +9,7 @@ archiving the complete tool result into the topic document virtual file tree.
 When a tool result is too large, the agent receives a truncated preview plus a stable document path:
 
 ```text
-./.tool-results/<tool-call-id>.md
+./.tool-results/<topic-id>_<tool-call-id>.md
 ```
 
 The agent can then inspect the complete result through existing document or VFS reading tools.
@@ -66,7 +66,7 @@ flowchart TD
   C -->|No| D[Use original executionResult]
   C -->|Yes| E[Archive full content]
   E --> F[Write Topic Document]
-  F --> G[Path: ./.tool-results/tool-call-id.md]
+  F --> G[Path: ./.tool-results/topic-id_tool-call-id.md]
   G --> H[Replace content with preview + path]
   H --> I[Publish tool_end]
   H --> J[Persist tool message]
@@ -107,14 +107,19 @@ interface ToolResultArchiveOutcome {
 The archive path is fixed:
 
 ```text
-./.tool-results/<tool-call-id>.md
+./.tool-results/<topic-id>_<tool-call-id>.md
 ```
+
+The filename is prefixed with `topicId` because the underlying VFS resolves ordinary documents per
+`agentId` only; without a topic-scoped filename, the same `toolCallId` reused across topics would
+overwrite an earlier archive and silently corrupt history. The flat layout (rather than a nested
+`<topic>/<id>.md` directory) avoids extra mkdir churn and edge cases in the VFS's resolve path.
 
 The implementation should ensure `./.tool-results` exists before writing the file.
 
-If the same `tool-call-id` is processed again, the archive should be overwritten or updated in place.
-This keeps retries and resumptions deterministic: one tool call ID maps to one latest full-result
-document.
+If the same `tool-call-id` is processed again within the same topic, the archive should be
+overwritten or updated in place. This keeps retries and resumptions deterministic: within a topic,
+one tool call ID maps to one latest full-result document.
 
 ## Model-Facing Content
 
@@ -132,7 +137,7 @@ Example:
 
 [Content truncated: 123,456 characters omitted to prevent context overflow. Original length:
 148,456 characters]
-Full content archived at: ./.tool-results/call_abc123.md
+Full content archived at: ./.tool-results/topic_abc_call_abc123.md
 Use the document/file reading tool to inspect specific sections if needed.
 ```
 
@@ -194,7 +199,7 @@ archive path, document content, and topic association.
 
 All implementation-relevant decisions are fixed for the first iteration:
 
-- Archive path is `./.tool-results/<tool-call-id>.md`.
+- Archive path is `./.tool-results/<topic-id>_<tool-call-id>.md`.
 - `readLocalFile` is not changed.
 - Archival is best-effort and non-blocking for tool success.
 - Final result mutation occurs before stream, persistence, and next LLM state.

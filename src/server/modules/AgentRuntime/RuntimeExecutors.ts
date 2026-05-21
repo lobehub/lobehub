@@ -121,6 +121,7 @@ const archiveRuntimeToolResult = async (
   result: ToolExecutionResultResponse,
   {
     agentId,
+    identifier,
     limit,
     serverDB,
     toolCallId,
@@ -128,6 +129,7 @@ const archiveRuntimeToolResult = async (
     userId,
   }: {
     agentId?: string | null;
+    identifier?: string;
     limit?: number;
     serverDB: LobeChatDatabase;
     toolCallId?: string;
@@ -138,6 +140,7 @@ const archiveRuntimeToolResult = async (
   const archive = await archiveToolResultIfNeeded({
     agentId,
     content: result.content,
+    identifier,
     limit,
     serverDB,
     toolCallId,
@@ -1750,6 +1753,7 @@ export const createRuntimeExecutors = (
 
       const executionResult = await archiveRuntimeToolResult(execution.result, {
         agentId: state.metadata?.agentId,
+        identifier: chatToolPayload.identifier,
         limit: toolResultMaxLength,
         serverDB: ctx.serverDB,
         toolCallId: chatToolPayload.id,
@@ -2232,6 +2236,7 @@ export const createRuntimeExecutors = (
 
           const executionResult = await archiveRuntimeToolResult(execution.result, {
             agentId: state.metadata?.agentId,
+            identifier: chatToolPayload.identifier,
             limit: batchAgentConfig?.chatConfig?.toolResultMaxLength,
             serverDB: ctx.serverDB,
             toolCallId: chatToolPayload.id,

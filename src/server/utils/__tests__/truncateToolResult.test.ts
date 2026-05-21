@@ -14,6 +14,17 @@ const endsWithHighSurrogate = (value: string) => {
 };
 
 describe('truncateToolResult', () => {
+  it('returns content unchanged when within the limit', () => {
+    expect(truncateToolResult('hello', 100)).toBe('hello');
+  });
+
+  it('truncates and appends a notice when over the limit', () => {
+    const result = truncateToolResult('0123456789', 5);
+
+    expect(result.startsWith('01234')).toBe(true);
+    expect(result).toContain('Content truncated');
+  });
+
   it('should not split an emoji surrogate pair at the truncation boundary', () => {
     const content = `prefix ${'a'.repeat(10)}${validEmoji} suffix`;
     const limit = 'prefix '.length + 10 + 1;
@@ -23,7 +34,7 @@ describe('truncateToolResult', () => {
     expect(result).toContain('[Content truncated:');
     expect(truncatedPortion).toBe(`prefix ${'a'.repeat(10)}`);
     expect(endsWithHighSurrogate(truncatedPortion)).toBe(false);
-    expect(JSON.stringify({ content: result })).not.toContain('\\ud83d');
+    expect(JSON.stringify(result)).not.toContain('\\ud83d"');
   });
 
   it('should keep a full emoji when the complete surrogate pair fits', () => {

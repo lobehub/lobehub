@@ -10,6 +10,12 @@
 export const DEFAULT_TOOL_RESULT_MAX_LENGTH = 25_000;
 
 /**
+ * Tool identifiers whose results must never be truncated or archived,
+ * because they are themselves the read surface for archived content.
+ */
+export const ARCHIVE_BYPASS_IDENTIFIERS = new Set<string>(['lobe-agent-documents']);
+
+/**
  * Truncate tool result content if it exceeds the maximum length
  * Adds a truncation notice to inform the LLM that content was cut off
  *
@@ -25,8 +31,9 @@ export function truncateToolResult(content: string, maxLength?: number): string 
   }
 
   // Avoid splitting a UTF-16 surrogate pair: if the cutoff lands right after a
-  // high surrogate, step back one code unit. Otherwise JSON.stringify emits a
-  // lone `\uD83D`-style escape, which DeepSeek rejects at the JSON parser layer.
+  // high surrogate (e.g. half of an emoji), step back one code unit. Otherwise
+  // JSON.stringify emits a lone `\uD83D`-style escape, which some upstream
+  // providers (DeepSeek, Anthropic) reject as "unexpected end of hex escape".
   let cutoff = limit;
   const lastCharCode = content.charCodeAt(cutoff - 1);
   if (lastCharCode >= 0xd8_00 && lastCharCode <= 0xdb_ff) {
