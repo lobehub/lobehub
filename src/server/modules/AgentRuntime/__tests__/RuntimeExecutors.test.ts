@@ -2922,6 +2922,7 @@ describe('RuntimeExecutors', () => {
       expect(mockToolExecutionService.executeTool).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({
+          skipResultTruncation: true,
           toolResultMaxLength: 5000,
         }),
       );
