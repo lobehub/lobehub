@@ -150,7 +150,7 @@ export class FileUploadService extends BaseService {
 
       const MAX_BATCH_FILES = 20;
       if (request.files.length > MAX_BATCH_FILES) {
-        throw this.createValidationError(`批量上传文件数量不能超过 ${MAX_BATCH_FILES} 个`);
+        throw this.createValidationError(`Batch upload cannot exceed ${MAX_BATCH_FILES} files`);
       }
 
       const results: BatchFileUploadResponse = {
