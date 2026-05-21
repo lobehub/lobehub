@@ -41,14 +41,41 @@ export const createDefaultLogger: LoggerFactory = (namespace) => {
 };
 
 let currentFactory: LoggerFactory = createDefaultLogger;
+const cache = new Map<string, Logger>();
 
 /**
- * Replace the package-wide logger factory. Desktop calls this once at startup
- * to route logs through electron-log + namespaced debug. CLI and sandbox can
- * leave it unset and rely on the `debug` default.
+ * Replace the package-wide logger factory. Call this once at host startup
+ * (e.g. desktop bootstrap) to route logs through electron-log + namespaced
+ * debug. CLI and sandbox can leave it unset and rely on the `debug` default.
+ *
+ * Safe to call after `createLogger(namespace)` has already been invoked at
+ * module load — the returned logger is a lazy proxy that re-resolves the
+ * current factory on every method call.
  */
 export const setLoggerFactory = (factory: LoggerFactory): void => {
   currentFactory = factory;
+  // Invalidate cached concrete loggers so subsequent calls see the new factory.
+  cache.clear();
 };
 
-export const createLogger: LoggerFactory = (namespace) => currentFactory(namespace);
+const resolveLogger = (namespace: string): Logger => {
+  const cached = cache.get(namespace);
+  if (cached) return cached;
+  const logger = currentFactory(namespace);
+  cache.set(namespace, logger);
+  return logger;
+};
+
+/**
+ * Return a {@link Logger} bound to `namespace`. The returned object is a thin
+ * proxy that dispatches each call through the **current** factory, so calling
+ * {@link setLoggerFactory} after module-level `createLogger(...)` invocations
+ * still takes effect.
+ */
+export const createLogger: LoggerFactory = (namespace) => ({
+  debug: (message, ...args) => resolveLogger(namespace).debug(message, ...args),
+  error: (message, ...args) => resolveLogger(namespace).error(message, ...args),
+  info: (message, ...args) => resolveLogger(namespace).info(message, ...args),
+  verbose: (message, ...args) => resolveLogger(namespace).verbose?.(message, ...args),
+  warn: (message, ...args) => resolveLogger(namespace).warn(message, ...args),
+});
