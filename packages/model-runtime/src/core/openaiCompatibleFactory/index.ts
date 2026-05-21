@@ -80,6 +80,7 @@ export const CHAT_MODELS_BLOCK_LIST = [
 
 type ConstructorOptions<T extends Record<string, any> = any> = ClientOptions & T;
 type OpenAIExtraParams = { prompt_cache_key?: string; safety_identifier?: string };
+type GenerateObjectReasoningParams = Pick<GenerateObjectPayload, 'reasoning_effort' | 'thinking'>;
 type ResponseCreateParamsWithPromptCacheKey = (
   | OpenAI.Responses.ResponseCreateParamsStreaming
   | OpenAI.Responses.ResponseCreateParams
@@ -89,6 +90,16 @@ export type CreateImageOptions = Omit<ClientOptions, 'apiKey'> & {
   apiKey: string;
   provider: string;
 };
+
+const getGenerateObjectReasoningParams = ({
+  reasoning_effort,
+  thinking,
+}: GenerateObjectReasoningParams) => ({
+  ...(thinking?.type === 'enabled' || thinking?.type === 'disabled'
+    ? { thinking: { type: thinking.type } }
+    : {}),
+  ...(reasoning_effort && thinking?.type !== 'disabled' ? { reasoning_effort } : {}),
+});
 
 export type CreateVideoOptions = Omit<ClientOptions, 'apiKey'> & {
   apiKey: string;
@@ -807,6 +818,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
           const res = await this.client.chat.completions.create(
             {
+              ...getGenerateObjectReasoningParams(payload),
               messages,
               model,
               ...this.resolvePromptCacheKeyParams(model, options?.user),
@@ -892,6 +904,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         log('calling chat.completions.create for structured output');
         const res = await this.client.chat.completions.create(
           {
+            ...getGenerateObjectReasoningParams(payload),
             messages,
             model,
             response_format: { json_schema: processedSchema, type: 'json_schema' },
@@ -1358,6 +1371,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
       const res = await this.client.chat.completions.create(
         {
+          ...getGenerateObjectReasoningParams(payload),
           messages: msgs,
           model,
           ...this.resolvePromptCacheKeyParams(model, options?.user),

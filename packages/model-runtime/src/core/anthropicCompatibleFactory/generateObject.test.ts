@@ -248,6 +248,43 @@ describe('Anthropic generateObject', () => {
       expect(result).toEqual({ data: 'test' });
     });
 
+    it('should forward configured request params when provided', async () => {
+      const mockClient = {
+        messages: {
+          create: vi.fn().mockResolvedValue({
+            content: [
+              {
+                input: { data: 'test' },
+                name: 'data_extractor',
+                type: 'tool_use',
+              },
+            ],
+            usage: { input_tokens: 10, output_tokens: 5 },
+          }),
+        },
+      };
+
+      const payload = {
+        messages: [{ content: 'Generate data', role: 'user' as const }],
+        model: 'deepseek-v4-pro',
+        schema: {
+          name: 'data_extractor',
+          schema: { properties: { data: { type: 'string' } }, type: 'object' as const },
+        },
+      };
+
+      await createAnthropicGenerateObject(mockClient as any, payload, undefined, undefined, {
+        requestParams: { thinking: { type: 'disabled' } },
+      });
+
+      expect(mockClient.messages.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          thinking: { type: 'disabled' },
+        }),
+        expect.any(Object),
+      );
+    });
+
     it('should return undefined when no tool use found in response', async () => {
       const mockClient = {
         messages: {
