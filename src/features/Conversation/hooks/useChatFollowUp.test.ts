@@ -153,8 +153,6 @@ describe('useChatFollowUp', () => {
         conversationKey: CONVERSATION_KEY,
         topicId: TOPIC_ID,
       });
-      // calls on undefined no-ops via optional chaining — sanity check that
-      // store methods are NOT invoked
       await result.current.onBeforeSendMessage?.({} as any);
       await result.current.onAssistantTurnSettled?.('m', { reason: 'completed' });
       expect(clear).not.toHaveBeenCalled();
