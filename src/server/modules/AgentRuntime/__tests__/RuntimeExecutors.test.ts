@@ -1072,6 +1072,46 @@ describe('RuntimeExecutors', () => {
         );
       });
 
+      it('should keep current turn when agent historyCount is 0', async () => {
+        const ctxWithConfig: RuntimeExecutorContext = {
+          ...ctx,
+          agentConfig: {
+            chatConfig: { enableHistoryCount: true, historyCount: 0 },
+            plugins: [],
+          },
+        };
+        const executors = createRuntimeExecutors(ctxWithConfig);
+        const state = createMockState();
+
+        const instruction = {
+          payload: {
+            messages: [
+              { content: 'History message', id: 'history-1', role: 'user' },
+              { content: 'History response', id: 'history-2', role: 'assistant' },
+              { content: 'Current message', id: 'current-1', role: 'user' },
+            ],
+            model: 'gpt-4',
+            provider: 'openai',
+          },
+          type: 'call_llm' as const,
+        };
+
+        await executors.call_llm!(instruction, state);
+
+        expect(engineSpy).toHaveBeenCalledWith(expect.objectContaining({ historyCount: 1 }));
+
+        const chatMessages = mockChat.mock.calls[0][0].messages;
+        expect(chatMessages).toContainEqual(
+          expect.objectContaining({ content: 'Current message', role: 'user' }),
+        );
+        expect(chatMessages).not.toContainEqual(
+          expect.objectContaining({ content: 'History message', role: 'user' }),
+        );
+        expect(chatMessages).not.toContainEqual(
+          expect.objectContaining({ content: 'History response', role: 'assistant' }),
+        );
+      });
+
       it('should not call serverMessagesEngine when agentConfig is not set', async () => {
         const executors = createRuntimeExecutors(ctx); // ctx without agentConfig
         const state = createMockState();

@@ -144,6 +144,16 @@ const resolveLLMMaxRetries = (provider: string) =>
   // again here multiplies the same failed routed request across every channel.
   provider === BRANDING_PROVIDER ? 0 : LLM_MAX_RETRIES;
 
+const resolveRuntimeHistoryCount = (historyCount?: number) => {
+  if (historyCount === undefined) return undefined;
+
+  // Agent config stores historical message count, excluding the current turn.
+  // Runtime executors already pass the current user/tool turn in `llmPayload.messages`;
+  // without this +1, `historyCount: 0` truncates the current message too and sends
+  // `messages: []` to providers.
+  return historyCount + 1;
+};
+
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const getLLMRetryDelayMs = (attempt: number) =>
@@ -652,7 +662,7 @@ export const createRuntimeExecutors = (
           enableHistoryCount: agentConfig.chatConfig?.enableHistoryCount ?? undefined,
           evalContext: ctx.evalContext,
           forceFinish: state.forceFinish,
-          historyCount: agentConfig.chatConfig?.historyCount ?? undefined,
+          historyCount: resolveRuntimeHistoryCount(agentConfig.chatConfig?.historyCount),
           initialContext: (state as any).initialContext?.initialContext,
           knowledge: {
             fileContents: agentConfig.files
