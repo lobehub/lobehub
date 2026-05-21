@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { AutoSaveHint } from '@/features/EditorCanvas';
 import NavHeader from '@/features/NavHeader';
+import ShareButton from '@/features/PageShare/ShareButton';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 
 import { usePageAgentPanelControl } from '../RightPanel/OverrideContext';
@@ -50,6 +51,7 @@ const Header = memo(() => {
       }
       right={
         <>
+          {documentId && <ShareButton documentId={documentId} />}
           {/* Three-dot menu */}
           <DropdownMenu
             iconSpaceMode="group"

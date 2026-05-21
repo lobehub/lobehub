@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { FREE_DOCUMENT_HISTORY_WINDOW_DAYS } from '@/const/documentHistory';
 import { ChunkModel } from '@/database/models/chunk';
 import { DocumentModel } from '@/database/models/document';
+import { DocumentShareModel } from '@/database/models/documentShare';
 import { FileModel } from '@/database/models/file';
 import { MessageModel } from '@/database/models/message';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
@@ -31,6 +32,7 @@ const documentProcedure = authedProcedure.use(serverDatabase).use(async (opts) =
       chunkModel: new ChunkModel(ctx.serverDB, ctx.userId),
       documentModel: new DocumentModel(ctx.serverDB, ctx.userId),
       documentService: new DocumentService(ctx.serverDB, ctx.userId),
+      documentShareModel: new DocumentShareModel(ctx.serverDB, ctx.userId),
       fileModel: new FileModel(ctx.serverDB, ctx.userId),
       messageModel: new MessageModel(ctx.serverDB, ctx.userId),
     },
@@ -250,5 +252,30 @@ export const documentRouter = router({
       });
 
       return result;
+    }),
+
+  getShareSettings: documentProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      return ctx.documentShareModel.getByDocumentId(input.id);
+    }),
+
+  updateShareSettings: documentProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        permission: z.enum(['read']).default('read'),
+        visibility: z.enum(['private', 'link']),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const existing = await ctx.documentShareModel.getByDocumentId(input.id);
+      if (!existing) {
+        return ctx.documentShareModel.create(input.id, {
+          permission: input.permission,
+          visibility: input.visibility,
+        });
+      }
+      return ctx.documentShareModel.updateVisibility(input.id, input.visibility);
     }),
 });

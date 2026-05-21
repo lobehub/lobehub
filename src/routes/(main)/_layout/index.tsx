@@ -7,7 +7,7 @@ import { cx } from 'antd-style';
 import { type FC } from 'react';
 import { lazy, Suspense } from 'react';
 import { HotkeysProvider } from 'react-hotkeys-hook';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation, useParams } from 'react-router-dom';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import { isDesktop } from '@/const/version';
@@ -23,14 +23,17 @@ import TabCacheBridges from '@/features/Electron/titlebar/TabBar/TabCacheBridges
 import TitleBar from '@/features/Electron/titlebar/TitleBar';
 import HotkeyHelperPanel from '@/features/HotkeyHelperPanel';
 import NavPanel from '@/features/NavPanel';
+import PublishedShell from '@/features/PageShare/PublishedShell';
 import { RouteMetaBridge } from '@/features/RouteMeta';
 import { useFeedbackModal } from '@/hooks/useFeedbackModal';
 import { usePlatform } from '@/hooks/usePlatform';
+import { useSharedPageProbe } from '@/hooks/useSharedPageProbe';
 import { MarketAuthProvider } from '@/layout/AuthProvider/MarketAuth';
 import CmdkLazy from '@/layout/GlobalProvider/CmdkLazy';
 import dynamic from '@/libs/next/dynamic';
 import { DndContextWrapper } from '@/routes/(main)/resource/features/DndContextWrapper';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
+import { getIdFromIdentifier } from '@/utils/identifier';
 
 import DesktopHome from '../home';
 import DesktopHomeLayout from '../home/_layout';
@@ -43,6 +46,9 @@ const FeedbackModal = lazy(() => import('@/components/FeedbackModal'));
 
 const CloudBanner = dynamic(() => import('@/features/AlertBanner/CloudBanner'));
 
+const isPageRoute = (pathname: string) =>
+  pathname.startsWith('/page/') && pathname.length > '/page/'.length;
+
 const Layout: FC = () => {
   const { isPWA } = usePlatform();
   const { showCloudPromotion } = useServerConfigStore(featureFlagsSelectors);
@@ -51,6 +57,27 @@ const Layout: FC = () => {
     isOpen: isFeedbackModalOpen,
     close: closeFeedbackModal,
   } = useFeedbackModal();
+
+  const location = useLocation();
+  const params = useParams<{ id?: string }>();
+  const onPageRoute = isPageRoute(location.pathname);
+  const pageId = onPageRoute && params.id ? getIdFromIdentifier(params.id, 'docs') : undefined;
+  const { data: probe, error: probeError } = useSharedPageProbe(pageId);
+
+  const probeLoading = !!pageId && !probe && !probeError;
+  const isGuestPageRoute = !!pageId && (!!probeError || (probe ? !probe.isOwner : false));
+
+  if (probeLoading) {
+    return <Loading debugId="page-share-probe" />;
+  }
+
+  if (isGuestPageRoute) {
+    return (
+      <PublishedShell data={probe} error={probeError}>
+        <Outlet context={{ error: probeError, probe }} />
+      </PublishedShell>
+    );
+  }
 
   return (
     <HotkeysProvider initiallyActiveScopes={[HotkeyScopeEnum.Global]}>
@@ -89,7 +116,7 @@ const Layout: FC = () => {
                 <DesktopHome />
               </DesktopHomeLayout>
               <Suspense fallback={<Loading debugId="DesktopMainLayout > Outlet" />}>
-                <Outlet />
+                <Outlet context={{ probe }} />
               </Suspense>
             </MarketAuthProvider>
           </DesktopLayoutContainer>
