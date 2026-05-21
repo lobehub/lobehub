@@ -1,9 +1,10 @@
+import {
+  AGENT_SKILL_TEMPLATE_ID,
+  DOCUMENT_FOLDER_TYPE,
+  SKILL_BUNDLE_FILE_TYPE,
+  SKILL_INDEX_FILE_TYPE,
+} from '../../schemas/file';
 import type { AgentDocument, AgentDocumentCategory, AgentDocumentDerivedFields } from './types';
-
-const FOLDER_FILE_TYPE = 'custom/folder';
-const SKILL_BUNDLE_FILE_TYPE = 'skills/bundle';
-const SKILL_INDEX_FILE_TYPE = 'skills/index';
-const AGENT_SKILL_TEMPLATE_ID = 'agent-skill';
 
 type DeriveInput = Pick<AgentDocument, 'fileType' | 'sourceType' | 'templateId'>;
 
@@ -21,7 +22,7 @@ export const deriveAgentDocumentFields = (doc: DeriveInput): AgentDocumentDerive
   const isSkillIndex = doc.fileType === SKILL_INDEX_FILE_TYPE;
   return {
     category: deriveCategory(doc),
-    isFolder: doc.fileType === FOLDER_FILE_TYPE || isSkillBundle,
+    isFolder: doc.fileType === DOCUMENT_FOLDER_TYPE || isSkillBundle,
     isSkillBundle,
     isSkillIndex,
   };
