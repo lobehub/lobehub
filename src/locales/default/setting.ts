@@ -953,6 +953,10 @@ When I am ___, I need ___
     'Once filled out, the system agent will use the custom prompt when generating content',
   'systemAgent.customPrompt.placeholder': 'Please enter custom prompt',
   'systemAgent.customPrompt.title': 'Custom Prompt',
+  'systemAgent.followUpAction.label': 'Model',
+  'systemAgent.followUpAction.modelDesc':
+    'Model used to extract follow-up chip suggestions after an assistant reply.',
+  'systemAgent.followUpAction.title': 'Follow-up Suggestions',
   'systemAgent.generationTopic.label': 'Model',
   'systemAgent.generationTopic.modelDesc': 'Model used to name AI image topics',
   'systemAgent.generationTopic.title': 'AI Image Topic Naming',
