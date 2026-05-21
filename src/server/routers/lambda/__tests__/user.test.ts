@@ -285,8 +285,8 @@ describe('userRouter', () => {
       expect(UserModel).toHaveBeenCalledWith(serverDB, mockUserId);
     });
 
-    it('should reject system agent model without provider', async () => {
-      const updateSetting = vi.fn();
+    it('should allow legacy system agent model-only fields', async () => {
+      const updateSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
 
       vi.mocked(UserModel).mockImplementation(
         () =>
@@ -295,15 +295,21 @@ describe('userRouter', () => {
           }) as any,
       );
 
-      await expect(
-        userRouter.createCaller({ ...mockCtx }).updateSettings({
+      await userRouter.createCaller({ ...mockCtx }).updateSettings({
+        systemAgent: {
+          queryRewrite: { model: 'ag/gemini-3.1-pro-high' },
+          topic: { model: 'ag/gemini-3.1-pro-high' },
+        },
+      });
+
+      expect(updateSetting).toHaveBeenCalledWith(
+        expect.objectContaining({
           systemAgent: {
-            customTask: { model: 'ag/gemini-3.1-pro-high' },
+            queryRewrite: { model: 'ag/gemini-3.1-pro-high' },
+            topic: { model: 'ag/gemini-3.1-pro-high' },
           },
         }),
-      ).rejects.toThrow(/System agent model and provider must be provided together/);
-
-      expect(updateSetting).not.toHaveBeenCalled();
+      );
     });
 
     it('should allow legacy scalar system agent fields', async () => {

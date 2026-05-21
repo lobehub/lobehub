@@ -10,7 +10,6 @@ import type { UserMemorySettings } from './memory';
 import type { UserModelProviderConfig } from './modelProvider';
 import type { NotificationSettings } from './notification';
 import type { UserSystemAgentConfig } from './systemAgent';
-import { UserSystemAgentConfigUpdateSchema } from './systemAgent';
 import type { UserToolConfig } from './tool';
 import type { UserTTSConfig } from './tts';
 
@@ -63,7 +62,7 @@ export const UserSettingsSchema = z
     market: z.any().optional(),
     memory: z.any().optional(),
     notification: z.any().optional(),
-    systemAgent: UserSystemAgentConfigUpdateSchema.optional(),
+    systemAgent: z.any().optional(),
     tool: z.any().optional(),
     tts: z.any().optional(),
   })
