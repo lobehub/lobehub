@@ -665,6 +665,24 @@ describe('OnboardingService', () => {
       expect(mockMessageModel.hasTopicMessages).toHaveBeenCalledWith('topic-1');
     });
 
+    it('does not expose stale activeTopicId when the topic no longer exists', async () => {
+      persistedUserState.agentOnboarding = {
+        activeTopicId: 'missing-topic',
+        version: CURRENT_ONBOARDING_VERSION,
+      };
+
+      const service = new OnboardingService(mockDb, userId);
+      const result = await service.getBootstrapState();
+
+      expect(result.topicId).toBeNull();
+      expect(result.context.topicId).toBeUndefined();
+      expect(result.hasMessages).toBe(false);
+      expect(mockTopicModel.findById).toHaveBeenCalledWith('missing-topic');
+      expect(mockMessageModel.hasTopicMessages).not.toHaveBeenCalled();
+      expect(mockTopicModel.create).not.toHaveBeenCalled();
+      expect(mockUserModel.updateUser).not.toHaveBeenCalled();
+    });
+
     it('does not write the discovery baseline (read-only semantics)', async () => {
       persistedUserState.agentOnboarding = {
         activeTopicId: 'topic-1',

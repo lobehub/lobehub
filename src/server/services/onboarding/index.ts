@@ -514,10 +514,11 @@ export class OnboardingService {
     const userState = await this.getUserState();
     const state = this.ensureState(userState.agentOnboarding);
     const missingStructuredFields = await this.getMissingStructuredFields();
-    const topicId = state.activeTopicId ?? null;
+    const activeTopicId = state.activeTopicId;
+    const topic = activeTopicId ? await this.topicModel.findById(activeTopicId) : undefined;
+    const topicId = activeTopicId && topic ? activeTopicId : null;
 
     const hasMessages = topicId ? await this.messageModel.hasTopicMessages(topicId) : false;
-    const topic = topicId ? await this.topicModel.findById(topicId) : undefined;
 
     let context: UserAgentOnboardingContext;
     if (state.finishedAt) {
