@@ -40,7 +40,7 @@ export async function grepContent({
 
     child.on('close', (code) => {
       if (code !== 0 && code !== 1) {
-        resolve({ hint, matches: [], success: false });
+        resolve({ engine: 'rg', hint, matches: [], success: false, total_matches: 0 });
         return;
       }
 
@@ -57,14 +57,20 @@ export async function grepContent({
           })
           .filter(Boolean);
 
-        resolve({ hint, matches, success: true });
+        resolve({
+          engine: 'rg',
+          hint,
+          matches,
+          success: true,
+          total_matches: matches.length,
+        });
       } catch {
-        resolve({ hint, matches: [], success: true });
+        resolve({ engine: 'rg', hint, matches: [], success: true, total_matches: 0 });
       }
     });
 
     child.on('error', () => {
-      resolve({ hint, matches: [], success: false });
+      resolve({ engine: 'rg', hint, matches: [], success: false, total_matches: 0 });
     });
   });
 }

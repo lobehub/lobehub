@@ -22,14 +22,27 @@ export async function globLocalFiles({
       ignore: ['**/node_modules/**', '**/.git/**'],
     });
 
+    const base: GlobFilesResult = {
+      engine: 'fast-glob',
+      files,
+      success: true,
+      total_files: files.length,
+    };
+
     if (wantsHidden) {
       return {
-        files,
+        ...base,
         hint: `Auto-enabled hidden-file matching because pattern contains a dot-prefixed segment.`,
       };
     }
-    return { files };
+    return base;
   } catch (error) {
-    return { error: (error as Error).message, files: [] };
+    return {
+      engine: 'fast-glob',
+      error: (error as Error).message,
+      files: [],
+      success: false,
+      total_files: 0,
+    };
   }
 }

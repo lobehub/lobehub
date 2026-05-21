@@ -4,9 +4,6 @@
   "private": true,
   "main": "src/index.ts",
   "types": "src/index.ts",
-  "dependencies": {
-    "@lobechat/local-file-shell": "workspace:*"
-  },
   "devDependencies": {
     "electron": "^39.8.1"
   },

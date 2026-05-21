@@ -131,8 +131,8 @@ export interface GlobFilesResult {
   files: string[];
   /** Diagnostic note returned when the engine had to adjust behavior, e.g. auto-enabling hidden-file matching. */
   hint?: string;
-  success?: boolean;
-  total_files?: number;
+  success: boolean;
+  total_files: number;
 }
 
 export interface FileResult {
@@ -254,5 +254,5 @@ export interface GrepContentResult {
    */
   matches: any[];
   success: boolean;
-  total_matches?: number;
+  total_matches: number;
 }

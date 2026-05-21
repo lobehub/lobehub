@@ -254,14 +254,54 @@ export interface KillCommandResult {
   success: boolean;
 }
 
-// Grep + Glob types — single source of truth lives in `@lobechat/local-file-shell`
-// so the IPC handler, the desktop service, and the CLI share the same shape.
-export type {
-  GlobFilesParams,
-  GlobFilesResult,
-  GrepContentParams,
-  GrepContentResult,
-} from '@lobechat/local-file-shell';
+// Grep types — declared locally to keep this package leaf-only (no reverse
+// dependency on `@lobechat/local-file-shell`). The shape mirrors the
+// definition in `local-file-shell/types`; the two must stay in sync, but
+// they're structurally compatible by design.
+export interface GrepContentParams {
+  '-A'?: number;
+  '-B'?: number;
+  '-C'?: number;
+  '-i'?: boolean;
+  '-n'?: boolean;
+  'glob'?: string;
+  'head_limit'?: number;
+  'multiline'?: boolean;
+  'output_mode'?: 'content' | 'count' | 'files_with_matches';
+  /** Legacy alias for `scope`. Takes precedence when set; prefer `scope` (the manifest-documented name) for new callers. */
+  'path'?: string;
+  'pattern': string;
+  /** Working directory scope. Limits the search to this directory. Defaults to `process.cwd()`. */
+  'scope'?: string;
+  /** Preferred search tool: 'rg' | 'ag' | 'grep' */
+  'tool'?: 'ag' | 'grep' | 'rg';
+  'type'?: string;
+}
+
+export interface GrepContentResult {
+  /** Search engine used: 'rg' | 'ag' | 'grep' | 'nodejs' */
+  engine?: string;
+  error?: string;
+  matches: string[];
+  success: boolean;
+  total_matches: number;
+}
+
+// Glob types — same rationale as Grep above.
+export interface GlobFilesParams {
+  pattern: string;
+  /** Working directory scope. When `pattern` is relative, it is joined with this scope. Defaults to the current working directory. */
+  scope?: string;
+}
+
+export interface GlobFilesResult {
+  /** Search engine used: 'fd' | 'find' | 'fast-glob' */
+  engine?: string;
+  error?: string;
+  files: string[];
+  success: boolean;
+  total_files: number;
+}
 
 // Edit types
 export interface EditLocalFileParams {
