@@ -33,7 +33,11 @@ import { resolveSelectedSkillsWithContent } from '@/services/chat/mecha/skillPre
 import { resolveSelectedToolsWithContent } from '@/services/chat/mecha/toolPreload';
 import { messageService } from '@/services/message';
 import { getAgentStoreState, useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
+import {
+  agentByIdSelectors,
+  agentSelectors,
+  chatConfigByIdSelectors,
+} from '@/store/agent/selectors';
 import { agentGroupByIdSelectors, getChatGroupStoreState } from '@/store/agentGroup';
 import { selectRuntimeType } from '@/store/chat/slices/aiChat/actions/agentDispatcher';
 import { resolveHeteroResume } from '@/store/chat/slices/aiChat/actions/heteroResume';
@@ -294,11 +298,13 @@ export class ConversationLifecycleActionImpl {
     };
 
     const fileIdList = files?.map((f) => f.id);
+    const isLocalSystemEnabled =
+      chatConfigByIdSelectors.isLocalSystemEnabledById(agentId)(getAgentStoreState());
     const canMaterializeLocalFiles =
       isDesktop &&
       localFileReferences.length > 0 &&
       !metadata?.localSystemToolSnapshots?.length &&
-      (!!heterogeneousProvider || !!agentConfig?.plugins?.includes('lobe-local-system'));
+      (!!heterogeneousProvider || isLocalSystemEnabled);
     const localSystemToolSnapshots = canMaterializeLocalFiles
       ? await materializeLocalSystemToolSnapshots(localFileReferences)
       : [];

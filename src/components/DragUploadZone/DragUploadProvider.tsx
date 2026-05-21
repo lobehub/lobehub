@@ -3,7 +3,15 @@
 import { type ReactNode } from 'react';
 import { createContext, memo, use, useCallback, useEffect, useRef, useState } from 'react';
 
+import { detectDragContentKind, type DragContentKind } from './useLocalDragUpload';
+
 interface DragUploadContextValue {
+  /**
+   * Best-effort classification of the currently dragged content. Updated on
+   * dragenter via DataTransferItem inspection. May be 'none' when nothing is
+   * being dragged, or when item kinds cannot be read for security reasons.
+   */
+  dragContentKind: DragContentKind;
   /**
    * Whether files are being dragged anywhere on the page
    */
@@ -11,6 +19,7 @@ interface DragUploadContextValue {
 }
 
 const DragUploadContext = createContext<DragUploadContextValue>({
+  dragContentKind: 'none',
   isDraggingGlobally: false,
 });
 
@@ -30,6 +39,7 @@ interface DragUploadProviderProps {
  */
 export const DragUploadProvider = memo<DragUploadProviderProps>(({ children }) => {
   const [isDraggingGlobally, setIsDraggingGlobally] = useState(false);
+  const [dragContentKind, setDragContentKind] = useState<DragContentKind>('none');
   const dragCounter = useRef(0);
 
   const handleDragEnter = useCallback((e: DragEvent) => {
@@ -40,6 +50,7 @@ export const DragUploadProvider = memo<DragUploadProviderProps>(({ children }) =
 
     if (dragCounter.current === 1) {
       setIsDraggingGlobally(true);
+      setDragContentKind(detectDragContentKind(e.dataTransfer.items));
     }
   }, []);
 
@@ -56,6 +67,7 @@ export const DragUploadProvider = memo<DragUploadProviderProps>(({ children }) =
 
     if (dragCounter.current === 0) {
       setIsDraggingGlobally(false);
+      setDragContentKind('none');
     }
   }, []);
 
@@ -64,6 +76,7 @@ export const DragUploadProvider = memo<DragUploadProviderProps>(({ children }) =
     e.preventDefault();
     dragCounter.current = 0;
     setIsDraggingGlobally(false);
+    setDragContentKind('none');
   }, []);
 
   useEffect(() => {
@@ -80,7 +93,11 @@ export const DragUploadProvider = memo<DragUploadProviderProps>(({ children }) =
     };
   }, [handleDragEnter, handleDragOver, handleDragLeave, handleDrop]);
 
-  return <DragUploadContext value={{ isDraggingGlobally }}>{children}</DragUploadContext>;
+  return (
+    <DragUploadContext value={{ dragContentKind, isDraggingGlobally }}>
+      {children}
+    </DragUploadContext>
+  );
 });
 
 DragUploadProvider.displayName = 'DragUploadProvider';
