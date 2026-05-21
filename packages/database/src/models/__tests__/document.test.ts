@@ -454,6 +454,68 @@ describe('DocumentModel', () => {
     });
   });
 
+  describe('findBySource', () => {
+    // Crawl dedupe (LOBE-9384) leans on this finder — same URL + sourceType
+    // must always return the existing row so repeated crawls update in place
+    // instead of stacking new rows.
+    it('finds a document by (source, sourceType)', async () => {
+      const url = 'https://example.com/pull/1';
+      const { id } = await documentModel.create({
+        content: 'pr body',
+        fileType: 'article',
+        filename: 'pr',
+        source: url,
+        sourceType: 'web',
+        title: 'PR title',
+        totalCharCount: 7,
+        totalLineCount: 1,
+      });
+
+      const found = await documentModel.findBySource(url, 'web');
+      expect(found?.id).toBe(id);
+    });
+
+    it('is scoped to the current user', async () => {
+      const url = 'https://example.com/shared-url';
+      await documentModel.create({
+        content: 'mine',
+        fileType: 'article',
+        filename: 'mine',
+        source: url,
+        sourceType: 'web',
+        totalCharCount: 4,
+        totalLineCount: 1,
+      });
+
+      const otherUserFound = await documentModel2.findBySource(url, 'web');
+      expect(otherUserFound).toBeUndefined();
+    });
+
+    it('distinguishes by sourceType so an api-source URL is not returned as a web crawl', async () => {
+      const url = 'https://example.com/cross-type';
+      const { id: apiId } = await documentModel.create({
+        content: 'api',
+        fileType: 'article',
+        filename: 'api',
+        source: url,
+        sourceType: 'api',
+        totalCharCount: 3,
+        totalLineCount: 1,
+      });
+
+      const webHit = await documentModel.findBySource(url, 'web');
+      expect(webHit).toBeUndefined();
+
+      const apiHit = await documentModel.findBySource(url, 'api');
+      expect(apiHit?.id).toBe(apiId);
+    });
+
+    it('returns undefined when no matching document exists', async () => {
+      const found = await documentModel.findBySource('https://example.com/missing', 'web');
+      expect(found).toBeUndefined();
+    });
+  });
+
   describe('findByFileId', () => {
     it('should find document by fileId', async () => {
       const { documentId, file } = await createTestDocument(

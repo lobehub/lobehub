@@ -157,6 +157,26 @@ export class DocumentModel {
     });
   };
 
+  /**
+   * Look up the user's existing document for a given `(source, sourceType)` pair.
+   *
+   * Crawl-style ingestion flows (`sourceType: 'web'`) use this to dedupe by URL
+   * so repeated crawls of the same page update the existing row instead of
+   * appending a fresh one — see LOBE-9384.
+   */
+  findBySource = async (
+    source: string,
+    sourceType: NonNullable<NewDocument['sourceType']>,
+  ): Promise<DocumentItem | undefined> => {
+    return this.db.query.documents.findFirst({
+      where: and(
+        eq(documents.userId, this.userId),
+        eq(documents.source, source),
+        eq(documents.sourceType, sourceType),
+      ),
+    });
+  };
+
   update = async (id: string, value: Partial<DocumentItem>) => {
     return this.db
       .update(documents)
