@@ -247,7 +247,7 @@ describe('LobeDeepSeekAnthropicAI', () => {
     it('should keep named tool choice when thinking is disabled', async () => {
       await instance.generateObject({
         ...generateObjectPayload,
-        thinking: { budget_tokens: 0, type: 'disabled' },
+        thinking: { type: 'disabled' },
       } as any);
 
       const payload = getLastRequestPayload();
@@ -272,7 +272,7 @@ describe('LobeDeepSeekAnthropicAI', () => {
       await instance.generateObject({
         ...generateObjectPayload,
         reasoning_effort: 'high',
-        thinking: { budget_tokens: 0, type: 'disabled' },
+        thinking: { type: 'disabled' },
       });
 
       const payload = getLastRequestPayload();
@@ -647,7 +647,7 @@ describe('LobeDeepSeekAI - custom features', () => {
         const payload = {
           messages: [{ role: 'assistant', content: 'hi' }],
           model: 'deepseek-v4-flash',
-          thinking: { budget_tokens: 0, type: 'disabled' },
+          thinking: { type: 'disabled' },
         };
 
         const result = openAIParams.chatCompletion!.handlePayload!(payload as any);
@@ -663,7 +663,7 @@ describe('LobeDeepSeekAI - custom features', () => {
           messages: [{ role: 'user', content: 'hi' }],
           model: 'deepseek-v4-flash',
           reasoning_effort: 'high',
-          thinking: { budget_tokens: 0, type: 'disabled' },
+          thinking: { type: 'disabled' },
         };
 
         const result = openAIParams.chatCompletion!.handlePayload!(payload as any);
@@ -793,7 +793,7 @@ describe('LobeDeepSeekAI - custom features', () => {
       const payload = {
         messages: [{ role: 'user', content: 'Hello' }],
         model: 'deepseek-v4-pro',
-        thinking: { budget_tokens: 0, type: 'disabled' as const },
+        thinking: { type: 'disabled' as const },
       };
 
       const result = openAIParams.chatCompletion!.handlePayload!(payload as any);

@@ -148,7 +148,7 @@ export interface ChatStreamPayload {
    * use for Claude and Gemini
    */
   thinking?: {
-    budget_tokens: number;
+    budget_tokens?: number;
     type?: 'enabled' | 'disabled' | 'adaptive';
   };
   thinkingBudget?: number;
