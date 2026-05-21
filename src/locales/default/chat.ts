@@ -956,8 +956,8 @@ export default {
   'workingPanel.resources.empty':
     'No documents yet. Documents associated with this agent will show up here.',
   'workingPanel.resources.error': 'Failed to load resources',
-  'workingPanel.resources.filter.all': 'All',
   'workingPanel.resources.filter.documents': 'Documents',
+  'workingPanel.resources.filter.skills': 'Skills',
   'workingPanel.resources.filter.web': 'Web',
   'workingPanel.resources.loading': 'Loading resources...',
   'workingPanel.resources.previewError': 'Failed to load preview',
