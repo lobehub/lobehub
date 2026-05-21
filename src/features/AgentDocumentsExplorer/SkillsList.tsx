@@ -163,7 +163,7 @@ const TreeRow = memo<TreeRowProps>(({ depth, expanded, node, onOpenFile, onToggl
             />
           </span>
           <Icon className={styles.childItemIcon} icon={FolderIcon} size={12} />
-          <Text ellipsis style={{ flex: 1, fontSize: 12, minWidth: 0 }}>
+          <Text ellipsis style={{ color: 'inherit', flex: 1, fontSize: 12, minWidth: 0 }}>
             {node.name}
           </Text>
         </Flexbox>
@@ -194,7 +194,7 @@ const TreeRow = memo<TreeRowProps>(({ depth, expanded, node, onOpenFile, onToggl
     >
       <span className={styles.treeChevronSlot} />
       <Icon className={styles.childItemIcon} icon={FileIcon} size={12} />
-      <Text ellipsis style={{ flex: 1, fontSize: 12, minWidth: 0 }}>
+      <Text ellipsis style={{ color: 'inherit', flex: 1, fontSize: 12, minWidth: 0 }}>
         {node.name}
       </Text>
     </Flexbox>
@@ -251,7 +251,7 @@ const SkillRow = memo<SkillRowProps>(({ expanded, item, onOpenFile, onOpenSkill,
             />
           </Flexbox>
           <Icon className={styles.itemIcon} icon={SkillsIcon} size={14} />
-          <Text ellipsis style={{ flex: 1, minWidth: 0 }} onClick={onOpenSkill}>
+          <Text ellipsis style={{ color: 'inherit', flex: 1, minWidth: 0 }} onClick={onOpenSkill}>
             {item.name}
           </Text>
           <span className={styles.itemCount}>{item.fileCount}</span>
