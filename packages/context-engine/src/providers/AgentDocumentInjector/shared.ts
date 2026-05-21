@@ -226,8 +226,15 @@ export function combineDocuments(
   docs: AgentContextDocument[],
   context: AgentDocumentFilterContext,
 ): string {
+  // Missing `policyLoad` defaults to progressive (matches the DB default and
+  // `AgentDocumentModel.createWithTx`'s fallback). A doc must be explicitly
+  // marked `'always'` to land in the inline bucket; everything else that
+  // survived `getDocumentsForPositions` (which already drops `'disabled'`)
+  // is routed through the progressive index. Doing the default here means
+  // hand-rolled `AgentContextDocument` callers can't silently lose their
+  // content by forgetting the field.
   const fullDocs = docs.filter((d) => d.policyLoad === 'always');
-  const progressiveDocs = docs.filter((d) => d.policyLoad === 'progressive');
+  const progressiveDocs = docs.filter((d) => (d.policyLoad ?? 'progressive') === 'progressive');
 
   const parts: string[] = [];
 

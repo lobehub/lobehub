@@ -386,6 +386,38 @@ describe('AgentDocumentInjector', () => {
       expect(injected).not.toContain('Disabled Skill');
       expect(injected).not.toContain('<agent_documents_index>');
     });
+
+    // Regression: combineDocuments switched to a strict `=== 'always'` inline
+    // whitelist. `policyLoad` is optional on AgentContextDocument, and some
+    // callers pass docs without it — those must default to progressive (shown
+    // in the index, not silently dropped from BOTH buckets).
+    it('routes documents with missing policyLoad into the progressive index', async () => {
+      const provider = new AgentDocumentContextInjector({
+        currentTime: new Date('2026-04-29T00:00:00.000Z'),
+        documents: [
+          {
+            content: 'Body of a doc that forgot to set policyLoad',
+            filename: 'setup.md',
+            id: 'no-policy-1',
+            loadPosition: 'before-first-user',
+            loadRules: { rule: 'always' },
+            sourceType: 'agent',
+            title: 'Setup',
+            updatedAt: new Date('2026-04-27T00:00:00.000Z'),
+          },
+        ],
+      });
+
+      const context = createContext([{ content: 'Hello', id: 'user-1', role: 'user' }]);
+      const result = await provider.process(context);
+
+      const injected = result.messages[0].content;
+      // Surfaced via the index (title + id), not inlined as full content.
+      expect(injected).toContain('<agent_documents_index>');
+      expect(injected).toContain('Setup');
+      expect(injected).toContain('no-policy-1');
+      expect(injected).not.toContain('Body of a doc that forgot to set policyLoad');
+    });
   });
 
   describe('AgentDocumentBeforeSystemInjector (before-system)', () => {
