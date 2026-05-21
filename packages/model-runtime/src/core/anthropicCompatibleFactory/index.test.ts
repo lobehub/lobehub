@@ -222,12 +222,37 @@ describe('createAnthropicCompatibleRuntime', () => {
         message0ContentSerializedLength: 8002,
         message0ContentType: 'string',
         model: 'deepseek-v4-pro',
-        snippetEnd: 7400,
-        snippetStart: 6900,
+        reportedColumn: 7160,
+        reportedLine: 1,
+        request: {
+          maxTokens: 1024,
+          metadataUserId: 'user_target',
+          model: 'deepseek-v4-pro',
+          stream: true,
+        },
+        snippetEnd: 7409,
+        snippetStart: 6909,
         traceId: 'trace-1',
         trigger: 'bot',
         userId: 'user_target',
       });
+      expect(summary.messageSummaries[0]).toMatchObject({
+        containsColumn: true,
+        content: {
+          kind: 'string',
+          serializedLength: 8002,
+          textLength: 8000,
+        },
+        index: 0,
+        role: 'user',
+      });
+      expect(summary.payloadKeys).toEqual([
+        'max_tokens',
+        'messages',
+        'model',
+        'stream',
+        'metadata',
+      ]);
       expect(summary.payloadLength).toBeGreaterThan(7400);
       expect(summary.snippet).toHaveLength(500);
     } finally {
