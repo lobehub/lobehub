@@ -3,7 +3,15 @@ import { ARTIFACT_THINKING_TAG_REGEX } from '@lobechat/const';
 const ARTIFACT_TAG_REGEX_GLOBAL =
   /<lobeArtifact\b[^>]*>(?<content>[\S\s]*?)(?:<\/lobeArtifact>|$)/g;
 
-const AGENTS_TAG_REGEX_GLOBAL = /<lobeAgents\b[^>]*(?:\/>|>([\S\s]*?)(?:<\/lobeAgents>|$))/g;
+// Match only the `lobeAgents` tag itself (self-closing `/>` or a bare opening
+// `>`), never the content that follows it. The card is built purely from the
+// tag's attributes (the rehype plugin renders it with no children), so there is
+// nothing to capture inside. A previous `>([\S\s]*?)(?:<\/lobeAgents>|$)` form
+// fell back to `$` when a model omitted the self-closing slash and emitted
+// `<lobeAgents ...>`; with no `</lobeAgents>` to anchor on, it swallowed the
+// rest of the message and stripped its newlines, collapsing all trailing
+// block-level Markdown (headings, tables, `---`) into one paragraph.
+const AGENTS_TAG_REGEX_GLOBAL = /<lobeAgents\b[^>]*>/g;
 
 /**
  * Replace all line breaks in the matched `lobeArtifact` tag with an empty string
@@ -65,10 +73,9 @@ export const processWithArtifact = (input: string = '') => {
     output = output.replace(regex, '<lobeArtifact>');
   }
 
-  // Strip newlines inside lobeAgents tags (self-closing or wrapping)
-  output = output.replaceAll(AGENTS_TAG_REGEX_GLOBAL, (match) =>
-    match.replaceAll(/\r?\n|\r/g, ''),
-  );
+  // Strip newlines inside the lobeAgents tag so attributes spread across lines
+  // stay a single contiguous raw HTML node for the rehype agents plugin.
+  output = output.replaceAll(AGENTS_TAG_REGEX_GLOBAL, (match) => match.replaceAll(/\r?\n|\r/g, ''));
 
   return output;
 };
