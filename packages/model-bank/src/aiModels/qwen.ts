@@ -2046,13 +2046,44 @@ const qwenChatModels: AIChatModelCard[] = [
       search: true,
     },
     config: {
-      deploymentName: 'qwen3.6-max-preview', // Supports context caching
+      deploymentName: 'qwen3.7-max',
+    },
+    contextWindowTokens: 1_000_000,
+    description:
+      'Qwen3.7 Max is the flagship omnipotent model of the AI agent era, offering comprehensive capabilities across text, image, and video understanding. It provides superior reasoning, function calling, and agent task execution performance.',
+    displayName: 'Qwen3.7 Max',
+    enabled: true,
+    id: 'qwen3.7-max',
+    maxOutput: 65_536,
+    organization: 'Qwen',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 12 * 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 36, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-05-20',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken', 'preserveThinking'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+    },
+    config: {
+      deploymentName: 'qwen3.6-max-preview',
     },
     contextWindowTokens: 262_144,
     description:
       'The largest closed-source model in the Qwen3.6 series. It delivers stronger world knowledge, instruction following, and agentic coding performance for complex tasks. It is text-only, supports thinking mode by default, explicit caching, and function calling.',
     displayName: 'Qwen3.6 Max Preview',
-    enabled: true,
     id: 'qwen3.6-max-preview',
     maxOutput: 65_536,
     organization: 'Qwen',
