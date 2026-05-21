@@ -22,6 +22,7 @@ export class FollowUpActionService {
 
   async extract({
     topicId,
+    threadId,
     hint,
     modelConfig,
   }: FollowUpExtractInput): Promise<FollowUpExtractResult> {
@@ -30,10 +31,13 @@ export class FollowUpActionService {
     const row = await this.db.query.messages.findFirst({
       columns: { content: true, id: true },
       orderBy: (m, { desc }) => desc(m.createdAt),
-      where: (m, { and, eq, isNotNull, ne }) =>
+      where: (m, { and, eq, isNotNull, isNull, ne }) =>
         and(
           eq(m.userId, this.userId),
           eq(m.topicId, topicId),
+          // Discriminate thread vs main topic: an absent threadId must NOT
+          // surface a thread reply that lives under the same topicId.
+          threadId ? eq(m.threadId, threadId) : isNull(m.threadId),
           eq(m.role, 'assistant'),
           isNotNull(m.content),
           ne(m.content, ''),
