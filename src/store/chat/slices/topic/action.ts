@@ -310,17 +310,47 @@ export class ChatTopicActionImpl {
   };
 
   /**
-   * Persist the topic's status. Optimistically updates the in-memory map so the
-   * sidebar reflects the change immediately; persistence runs fire-and-forget so
-   * a transient network blip never tears down the agent run that owns the write.
+   * Persist the topic's status. Optimistically patches the in-memory map so
+   * the sidebar reflects the change immediately; persistence runs
+   * fire-and-forget so a transient network blip never tears down the agent
+   * run that owns the write.
+   *
+   * Pass `agentId`/`groupId` when the call originates from an agent run
+   * rather than the active UI — without them, the lookup falls back to the
+   * currently active agent, and a status write arriving after the user has
+   * switched agents lands in the wrong bucket. The DB write is unconditional
+   * so even if no bucket is loaded for this topic, the next refetch picks
+   * up the persisted status.
    */
-  updateTopicStatus = async (id: string, status: ChatTopicStatus): Promise<void> => {
-    const topic = topicSelectors.getTopicById(id)(this.#get());
-    if (!topic || topic.status === status) return;
+  updateTopicStatus = async (params: {
+    agentId?: string;
+    groupId?: string;
+    status: ChatTopicStatus;
+    topicId: string;
+  }): Promise<void> => {
+    const { topicId, status, agentId, groupId } = params;
+    const state = this.#get();
+    const key = topicMapKey({
+      agentId: agentId ?? state.activeAgentId,
+      groupId: groupId ?? state.activeGroupId,
+    });
+    const topic = state.topicDataMap[key]?.items?.find((t) => t.id === topicId);
 
-    this.#get().internal_dispatchTopic({ type: 'updateTopic', id, value: { status } });
+    // Already at the target status — both the in-memory and DB writes are no-ops.
+    if (topic?.status === status) return;
 
-    await topicService.updateTopic(id, { status }).catch((err) => {
+    // Scope on the payload routes the write to the owning bucket inside
+    // `internal_dispatchTopic`. A no-op if the bucket isn't loaded; the DB
+    // write below still ensures the status sticks across the next refetch.
+    state.internal_dispatchTopic({
+      type: 'updateTopic',
+      id: topicId,
+      value: { status },
+      agentId,
+      groupId,
+    });
+
+    await topicService.updateTopic(topicId, { status }).catch((err) => {
       console.error('[updateTopicStatus] persist failed:', err);
     });
   };
@@ -728,9 +758,19 @@ export class ChatTopicActionImpl {
     return topicId;
   };
 
+  /**
+   * Apply a topic reducer to a bucket in `topicDataMap`. Scope on the payload
+   * (`agentId`/`groupId`) wins; otherwise falls back to the currently active
+   * agent/group bucket. Pass scope on the payload when the write originates
+   * outside the active UI context — e.g. an agent run finishing after the
+   * user switched agents (see `updateTopicStatus`).
+   */
   internal_dispatchTopic = (payload: ChatTopicDispatch, action?: any): void => {
     const { activeAgentId, activeGroupId } = this.#get();
-    const key = topicMapKey({ agentId: activeAgentId, groupId: activeGroupId });
+    const key = topicMapKey({
+      agentId: payload.agentId ?? activeAgentId,
+      groupId: payload.groupId ?? activeGroupId,
+    });
     const currentData = this.#get().topicDataMap[key];
     const nextItems = topicReducer(currentData?.items, payload);
 
