@@ -530,6 +530,7 @@
   "localSystem.workingDirectory.checkoutAction": "切换分支",
   "localSystem.workingDirectory.checkoutFailed": "切换分支失败",
   "localSystem.workingDirectory.chooseDifferentFolder": "选择其他文件夹",
+  "localSystem.workingDirectory.clear": "清除目录",
   "localSystem.workingDirectory.createBranchAction": "检出新分支…",
   "localSystem.workingDirectory.current": "当前工作目录",
   "localSystem.workingDirectory.detachedHead": "游离 HEAD，当前提交 {{sha}}",

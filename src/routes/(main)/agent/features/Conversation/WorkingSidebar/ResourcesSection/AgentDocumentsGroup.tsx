@@ -1,4 +1,4 @@
-import { ActionIcon, Center, Empty, Flexbox, Text } from '@lobehub/ui';
+import { Accordion, AccordionItem, ActionIcon, Center, Empty, Flexbox, Text } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { App } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
@@ -17,8 +17,13 @@ import SkillsList, { type SkillListItem } from '@/features/AgentDocumentsExplore
 import { useClientDataSWR } from '@/libs/swr';
 import { agentDocumentService, agentDocumentSWRKeys } from '@/services/agentDocument';
 import { useAgentStore } from '@/store/agent';
+import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
+
+import ProjectLevelSkills from './ProjectLevelSkills';
+
+const AGENT_SKILLS_ITEM_KEY = 'agent-skills';
 
 const PAGE_ROUTE_PATTERN = '/agent/:aid/:topicId/page/:docId?';
 
@@ -80,6 +85,19 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       color: ${cssVar.colorText};
       background: ${cssVar.colorFillTertiary};
     }
+  `,
+  sectionCount: css`
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  sectionEmpty: css`
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  sectionLabel: css`
+    font-size: 12px;
+    font-weight: 500;
   `,
   title: css`
     font-weight: 500;
@@ -251,15 +269,22 @@ const buildSkillBundleViews = (data: AgentDocumentListItem[]): SkillBundleView[]
 
 interface AgentDocumentsGroupProps {
   style?: CSSProperties;
+  workingDirectory?: string;
 }
 
-const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ style }) => {
+const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ style, workingDirectory }) => {
   const { t } = useTranslation('chat');
   const agentId = useAgentStore((s) => s.activeAgentId);
+  const isLocalEnabled = useAgentStore((s) =>
+    agentId ? chatConfigByIdSelectors.isLocalSystemEnabledById(agentId)(s) : false,
+  );
   const openDocument = useChatStore((s) => s.openDocument);
   const navigate = useNavigate();
   const pageMatch = useMatch(PAGE_ROUTE_PATTERN);
   const [filter, setFilter] = useState<ResourceFilter>('skills');
+  const [agentSkillsExpanded, setAgentSkillsExpanded] = useState(true);
+
+  const showProjectSkills = isLocalEnabled && !!workingDirectory;
 
   const {
     data = [],
@@ -314,15 +339,12 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ style }) => {
     );
   }
 
-  const renderSkills = () => {
-    if (skillItems.length === 0) {
-      return (
-        <Center flex={1} gap={8} paddingBlock={24}>
-          <Empty description={t('workingPanel.skills.empty')} icon={SkillsIcon} />
-        </Center>
-      );
-    }
-    return (
+  const renderAgentSkillsList = () =>
+    skillItems.length === 0 ? (
+      <Center paddingBlock={8}>
+        <Text className={styles.sectionEmpty}>{t('workingPanel.skills.emptyAgent')}</Text>
+      </Center>
+    ) : (
       <SkillsList
         items={skillItems}
         onOpenFile={(item, relativePath) => {
@@ -338,6 +360,54 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ style }) => {
           openDocumentByRoute(indexChild?.documentId ?? view?.bundle.documentId ?? item.id);
         }}
       />
+    );
+
+  const renderAgentSkillsSection = () => (
+    <Accordion
+      expandedKeys={agentSkillsExpanded ? [AGENT_SKILLS_ITEM_KEY] : []}
+      gap={4}
+      onExpandedChange={(keys) => setAgentSkillsExpanded(keys.length > 0)}
+    >
+      <AccordionItem
+        itemKey={AGENT_SKILLS_ITEM_KEY}
+        paddingBlock={2}
+        paddingInline={4}
+        title={
+          <Flexbox horizontal align={'center'} gap={6}>
+            <Text className={styles.sectionLabel} type={'secondary'}>
+              {t('workingPanel.skills.section.agent')}
+            </Text>
+            {skillItems.length > 0 && (
+              <span className={styles.sectionCount}>{skillItems.length}</span>
+            )}
+          </Flexbox>
+        }
+      >
+        {renderAgentSkillsList()}
+      </AccordionItem>
+    </Accordion>
+  );
+
+  const renderSkills = () => {
+    // No project section (not local mode / no working dir): show the agent
+    // skills flat, without the redundant "Agent skills" group header.
+    if (!showProjectSkills) {
+      if (skillItems.length === 0) {
+        return (
+          <Center flex={1} gap={8} paddingBlock={24}>
+            <Empty description={t('workingPanel.skills.empty')} icon={SkillsIcon} />
+          </Center>
+        );
+      }
+      return renderAgentSkillsList();
+    }
+
+    // Both sections coexist — label each so the source is clear.
+    return (
+      <Flexbox gap={16}>
+        {renderAgentSkillsSection()}
+        <ProjectLevelSkills workingDirectory={workingDirectory!} />
+      </Flexbox>
     );
   };
 
