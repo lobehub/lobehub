@@ -24,8 +24,17 @@ export function truncateToolResult(content: string, maxLength?: number): string 
     return content;
   }
 
-  const truncated = content.slice(0, limit);
-  const remainingChars = content.length - limit;
+  // Avoid splitting a UTF-16 surrogate pair: if the cutoff lands right after a
+  // high surrogate, step back one code unit. Otherwise JSON.stringify emits a
+  // lone `\uD83D`-style escape, which DeepSeek rejects at the JSON parser layer.
+  let cutoff = limit;
+  const lastCharCode = content.charCodeAt(cutoff - 1);
+  if (lastCharCode >= 0xd8_00 && lastCharCode <= 0xdb_ff) {
+    cutoff -= 1;
+  }
+
+  const truncated = content.slice(0, cutoff);
+  const remainingChars = content.length - cutoff;
 
   // Add truncation notice
   const notice = `\n\n[Content truncated: ${remainingChars.toLocaleString()} characters omitted to prevent context overflow. Original length: ${content.length.toLocaleString()} characters]`;
