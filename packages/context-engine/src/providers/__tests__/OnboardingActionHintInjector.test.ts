@@ -23,6 +23,43 @@ const buildProvider = (phaseGuidance: string, context?: Partial<OnboardingContex
   });
 
 describe('OnboardingActionHintInjector', () => {
+  it('injects next actions when onboarding is active with finished=false', async () => {
+    const provider = buildProvider('Phase: User Identity. Learn the user name.', {
+      finished: false,
+    });
+
+    const result = await provider.process(
+      createContext([
+        { content: 'sys', role: 'system' },
+        { content: 'My name is Arvin', role: 'user' },
+      ]),
+    );
+
+    const last = result.messages.at(-1);
+    expect(result.messages).toHaveLength(3);
+    expect(last?.role).toBe('user');
+    expect(last?.content).toContain('<next_actions>');
+    expect(last?.content).toContain('saveUserQuestion with fullName');
+  });
+
+  it('skips next actions when onboarding is finished', async () => {
+    const provider = buildProvider('Onboarding is complete.', {
+      finished: true,
+    });
+
+    const result = await provider.process(
+      createContext([
+        { content: 'sys', role: 'system' },
+        { content: 'Unrelated follow-up', role: 'user' },
+      ]),
+    );
+
+    expect(result.messages).toHaveLength(2);
+    expect(result.messages.some((message) => message.content?.includes('<next_actions>'))).toBe(
+      false,
+    );
+  });
+
   describe('discovery turn reminder', () => {
     const phaseGuidance = 'Phase: Discovery. Explore the user world.';
 

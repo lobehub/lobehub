@@ -8,6 +8,8 @@ const log = debug('context-engine:provider:OnboardingContextInjector');
 export interface OnboardingContext {
   /** User messages observed after discovery began */
   discoveryUserMessageCount?: number;
+  /** Whether onboarding has already completed */
+  finished?: boolean;
   /** User persona document content (markdown) */
   personaContent?: string | null;
   /** Formatted phase guidance from getOnboardingState */
@@ -50,7 +52,13 @@ export class OnboardingContextInjector extends BaseFirstUserContentProvider {
   }
 
   protected buildContent(context: PipelineContext): string | null {
-    if (!this.config.enabled || !this.config.onboardingContext?.phaseGuidance) {
+    const { onboardingContext } = this.config;
+
+    if (
+      !this.config.enabled ||
+      onboardingContext?.finished === true ||
+      !onboardingContext?.phaseGuidance
+    ) {
       log('Disabled or no phaseGuidance configured, skipping injection');
       return null;
     }
@@ -65,7 +73,6 @@ export class OnboardingContextInjector extends BaseFirstUserContentProvider {
       return null;
     }
 
-    const { onboardingContext } = this.config;
     const parts: string[] = [onboardingContext.phaseGuidance];
 
     if (onboardingContext.soulContent) {
