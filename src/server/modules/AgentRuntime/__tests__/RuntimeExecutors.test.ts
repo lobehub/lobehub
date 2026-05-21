@@ -90,12 +90,18 @@ describe('RuntimeExecutors', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(initModelRuntimeFromDB).mockReset();
+    mockCreateCompressionGroup.mockReset();
+    mockFinalizeCompression.mockReset();
     mockCreateCompressionGroup.mockResolvedValue({
       messageGroupId: 'group-123',
       messagesToSummarize: [],
       success: true,
     });
     mockFinalizeCompression.mockResolvedValue({ success: true });
+    vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+      chat: vi.fn().mockResolvedValue(new Response('done')),
+    } as any);
 
     mockMessageModel = {
       create: vi.fn().mockResolvedValue({ id: 'msg-123' }),

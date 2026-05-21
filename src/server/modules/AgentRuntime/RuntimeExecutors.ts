@@ -551,7 +551,7 @@ export const createRuntimeExecutors = (
               : undefined;
         const preserveThinkingRequested = preserveThinkingConfigured === true;
 
-        const modelCard = LOBE_DEFAULT_MODEL_LIST.find(
+        const modelCard = builtinModels.find(
           (item) =>
             item.providerId === provider &&
             (item.id === model || item.config?.deploymentName === model),
