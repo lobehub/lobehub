@@ -272,7 +272,7 @@ describe('LobeDeepSeekAnthropicAI', () => {
       await instance.generateObject({
         ...generateObjectPayload,
         reasoning_effort: 'high',
-        thinking: { type: 'disabled' },
+        thinking: { budget_tokens: 0, type: 'disabled' },
       });
 
       const payload = getLastRequestPayload();
