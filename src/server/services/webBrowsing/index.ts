@@ -1,8 +1,8 @@
 import type { LobeChatDatabase } from '@lobechat/database';
-import { topicDocuments } from '@lobechat/database/schemas';
 import { Md5 } from 'ts-md5';
 
 import { DocumentModel } from '@/database/models/document';
+import { TopicDocumentModel } from '@/database/models/topicDocument';
 import { createMarkdownEditorSnapshot } from '@/server/services/agentDocuments/headlessEditor';
 import { DocumentService } from '@/server/services/document';
 
@@ -47,12 +47,14 @@ export class WebBrowsingDocumentService {
   private readonly db: LobeChatDatabase;
   private readonly userId: string;
   private readonly documentModel: DocumentModel;
+  private readonly topicDocumentModel: TopicDocumentModel;
   private documentServiceInstance?: DocumentService;
 
   constructor(db: LobeChatDatabase, userId: string) {
     this.db = db;
     this.userId = userId;
     this.documentModel = new DocumentModel(db, userId);
+    this.topicDocumentModel = new TopicDocumentModel(db, userId);
   }
 
   private get documentService() {
@@ -109,22 +111,14 @@ export class WebBrowsingDocumentService {
       status = 'created';
     }
 
-    // Topic binding is idempotent across all three statuses: the user may
-    // open the same URL in a new topic on a later crawl, and the binding
-    // should appear there even if the underlying document didn't change.
+    // Topic binding fires across all three statuses: the user may open the
+    // same URL in a new topic on a later crawl, and the binding should
+    // appear there even if the underlying document didn't change.
+    // `topicDocumentModel.associate` is idempotent on (documentId, topicId).
     if (topicId) {
-      await this.ensureTopicAssociation(documentId, topicId);
+      await this.topicDocumentModel.associate({ documentId, topicId });
     }
 
     return { id: documentId, status };
-  };
-
-  private ensureTopicAssociation = async (documentId: string, topicId: string): Promise<void> => {
-    // `topic_documents` PK is (documentId, topicId); skip the row when the
-    // pair is already bound rather than blowing up on a duplicate insert.
-    await this.db
-      .insert(topicDocuments)
-      .values({ documentId, topicId, userId: this.userId })
-      .onConflictDoNothing();
   };
 }

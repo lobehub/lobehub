@@ -10,19 +10,17 @@ const mocks = vi.hoisted(() => ({
   documentService: {
     updateDocument: vi.fn(),
   },
-  onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
+  topicDocumentModel: {
+    associate: vi.fn(),
+  },
 }));
-
-const buildDbMock = () => ({
-  insert: vi.fn(() => ({
-    values: vi.fn(() => ({
-      onConflictDoNothing: mocks.onConflictDoNothing,
-    })),
-  })),
-});
 
 vi.mock('@/database/models/document', () => ({
   DocumentModel: vi.fn(() => mocks.documentModel),
+}));
+
+vi.mock('@/database/models/topicDocument', () => ({
+  TopicDocumentModel: vi.fn(() => mocks.topicDocumentModel),
 }));
 
 vi.mock('@/server/services/document', () => ({
@@ -38,17 +36,18 @@ vi.mock('@/server/services/agentDocuments/headlessEditor', () => ({
 
 describe('WebBrowsingDocumentService.upsertCrawledDocument (LOBE-9384)', () => {
   let service: WebBrowsingDocumentService;
-  let db: ReturnType<typeof buildDbMock>;
 
   beforeEach(() => {
     mocks.documentModel.create.mockReset();
     mocks.documentModel.findBySource.mockReset();
     mocks.documentService.updateDocument.mockReset();
-    mocks.onConflictDoNothing.mockClear();
-    mocks.onConflictDoNothing.mockResolvedValue(undefined);
+    mocks.topicDocumentModel.associate.mockReset();
+    mocks.topicDocumentModel.associate.mockResolvedValue({
+      documentId: 'doc',
+      topicId: 'topic',
+    });
 
-    db = buildDbMock();
-    service = new WebBrowsingDocumentService(db as never, 'user-1');
+    service = new WebBrowsingDocumentService({} as never, 'user-1');
   });
 
   it('creates a new document the first time a URL is crawled', async () => {
@@ -182,8 +181,10 @@ describe('WebBrowsingDocumentService.upsertCrawledDocument (LOBE-9384)', () => {
       url: 'https://example.com/a',
     });
 
-    expect(db.insert).toHaveBeenCalledTimes(1);
-    expect(mocks.onConflictDoNothing).toHaveBeenCalledTimes(1);
+    expect(mocks.topicDocumentModel.associate).toHaveBeenCalledWith({
+      documentId: 'doc-1',
+      topicId: 'topic-1',
+    });
   });
 
   it('skips topic binding when topicId is omitted (server agent runtime path)', async () => {
@@ -196,7 +197,7 @@ describe('WebBrowsingDocumentService.upsertCrawledDocument (LOBE-9384)', () => {
       url: 'https://example.com/a',
     });
 
-    expect(db.insert).not.toHaveBeenCalled();
+    expect(mocks.topicDocumentModel.associate).not.toHaveBeenCalled();
   });
 
   it('binds the topic even on unchanged short-circuit so cross-topic re-crawls still appear', async () => {
@@ -213,7 +214,10 @@ describe('WebBrowsingDocumentService.upsertCrawledDocument (LOBE-9384)', () => {
     });
 
     expect(result).toEqual({ id: 'doc-existing', status: 'unchanged' });
-    expect(mocks.onConflictDoNothing).toHaveBeenCalledTimes(1);
+    expect(mocks.topicDocumentModel.associate).toHaveBeenCalledWith({
+      documentId: 'doc-existing',
+      topicId: 'topic-other',
+    });
   });
 
   it('hashes existing.content treating null/undefined as empty string', async () => {
