@@ -8,7 +8,7 @@ import { RequestTrigger } from '@lobechat/types';
 import { Button, ErrorBoundary, Flexbox } from '@lobehub/ui';
 import { Drawer } from 'antd';
 import { History } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
@@ -19,7 +19,6 @@ import { useOnboardingAgentTemplates } from '@/hooks/useOnboardingAgentTemplates
 import { useClientDataSWR, useOnlyFetchOnceSWR } from '@/libs/swr';
 import OnboardingContainer from '@/routes/onboarding/_layout';
 import { fetchOnboardingAgentTemplates } from '@/services/agentMarketplace';
-import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
 import { userService } from '@/services/user';
 import { useAgentStore } from '@/store/agent';
@@ -89,7 +88,7 @@ const AgentOnboardingPage = memo(() => {
 
   const { data, error, isLoading, mutate } = useOnlyFetchOnceSWR(
     'agent-onboarding-bootstrap',
-    () => userService.getOrCreateOnboardingState(),
+    () => userService.getOnboardingBootstrapState(),
     {
       onSuccess: async () => {
         await refreshUserState();
@@ -106,7 +105,11 @@ const AgentOnboardingPage = memo(() => {
       }),
     [agentOnboarding, data],
   );
-  const activeTopicId = currentContext.topicId || data?.topicId;
+  // bootstrap topicId is now `string | null` for fresh users — coerce null to
+  // undefined so the rest of the code's optional-chaining behavior is preserved.
+  const bootstrapTopicId = data?.topicId ?? undefined;
+  const activeTopicId = currentContext.topicId || bootstrapTopicId;
+  const hasMessages = !!data?.hasMessages;
   const historyTopics = historyData?.items || [];
   const effectiveTopicId = selectedTopicId || activeTopicId;
   const onboardingFinished = !!agentOnboarding?.finishedAt;
@@ -145,42 +148,77 @@ const AgentOnboardingPage = memo(() => {
   });
   const { onBeforeSendMessage, triggerExtract } = onboardingFollowUp;
 
-  const composedOnBeforeSendMessage = useCallback(
-    async (params: SendMessageParams) => {
-      params.metadata = { ...params.metadata, trigger: RequestTrigger.Onboarding };
+  // Re-entry latch for the fresh-state first-send orchestration. The combination
+  // of advisory lock + this ref ensures rapid double-submit cannot create two
+  // user messages: the second invocation awaits the same in-flight promise
+  // instead of dispatching its own sendMessage. See spec Revision 3.
+  const firstSendInFlightRef = useRef<Promise<void> | null>(null);
 
-      const welcomeContent = t('agent.welcome');
+  const composedOnBeforeSendMessage = useCallback(
+    async (params: SendMessageParams): Promise<boolean> => {
+      params.metadata = { ...params.metadata, trigger: RequestTrigger.Onboarding };
       await onBeforeSendMessage();
 
-      if (!onboardingAgentId || !effectiveTopicId) return;
+      if (!onboardingAgentId) {
+        // ChatInput is gated by `isInputReady`; this branch should be unreachable.
+        return false;
+      }
 
-      const currentMessages = useChatStore.getState().dbMessagesMap[onboardingChatKey];
-      if (currentMessages && currentMessages.length > 0) return;
+      // Returning / edge: topic exists — let the normal sendMessage path proceed.
+      if (effectiveTopicId) return true;
 
-      const result = await messageService.createMessage({
-        agentId: onboardingAgentId,
-        content: welcomeContent,
-        role: 'assistant',
-        topicId: effectiveTopicId,
-      });
+      // Fresh: orchestrate first-send ourselves and block the wrapping path.
+      if (firstSendInFlightRef.current) {
+        await firstSendInFlightRef.current;
+        return false;
+      }
 
-      // Sync the local cache so any subsequent reads see the welcome.
-      useChatStore.setState((state) => ({
-        dbMessagesMap: {
-          ...state.dbMessagesMap,
-          [onboardingChatKey]: result.messages,
-        },
-      }));
+      const orchestration = (async () => {
+        try {
+          const welcomeContent = t('agent.welcome');
+          const { topicId: serverTopicId, messages } = await userService.sendOnboardingFirstMessage(
+            {
+              agentId: onboardingAgentId,
+              welcomeContent,
+            },
+          );
 
-      // Force the in-flight sendMessage to use the welcome as LLM history,
-      // since its `displayMessages` snapshot was captured before this hook ran.
-      params.messages = result.messages;
+          const key = messageMapKey({ agentId: onboardingAgentId, topicId: serverTopicId });
+          useChatStore.setState((state) => ({
+            dbMessagesMap: { ...state.dbMessagesMap, [key]: messages },
+          }));
+
+          // Update the page's own topic pointer + the SWR cache so subsequent
+          // renders route through the returning / edge branch.
+          setSelectedTopicId(serverTopicId);
+          await mutate(
+            (prev) => (prev ? { ...prev, hasMessages: true, topicId: serverTopicId } : prev),
+            { revalidate: false },
+          );
+
+          // Dispatch the real send directly into useChatStore.sendMessage with an
+          // EXPLICIT context, bypassing the conversation-store wrapper whose
+          // context still points at the (now-stale) undefined topicId. This avoids
+          // accidentally entering sendMessageInServer's new-topic creation branch.
+          await useChatStore.getState().sendMessage({
+            ...params,
+            context: { agentId: onboardingAgentId, topicId: serverTopicId },
+            messages,
+          });
+        } finally {
+          firstSendInFlightRef.current = null;
+        }
+      })();
+
+      firstSendInFlightRef.current = orchestration;
+      await orchestration;
+      return false;
     },
-    [effectiveTopicId, onBeforeSendMessage, onboardingAgentId, onboardingChatKey, t],
+    [effectiveTopicId, mutate, onBeforeSendMessage, onboardingAgentId, t],
   );
 
   const syncOnboardingContext = useCallback(async () => {
-    const nextContext = await userService.getOrCreateOnboardingState();
+    const nextContext = await userService.getOnboardingBootstrapState();
     await mutate(nextContext, { revalidate: false });
     if (isDev && onboardingAgentId) await mutateHistoryTopics();
 
@@ -233,9 +271,17 @@ const AgentOnboardingPage = memo(() => {
     );
   }
 
-  if (isLoading || !activeTopicId || !onboardingAgentId || !effectiveTopicId) {
+  // The builtin agent's slug must resolve before the page renders anything
+  // useful. This is a short, in-process hydration (the builtin agent table is
+  // usually warm); during this brief window we still show the brand loader.
+  // Once `onboardingAgentId` is present, render the static Welcome shell
+  // immediately — the bootstrap query keeps loading the rest in the background
+  // while ChatInput is gated via `isInputReady`.
+  if (!onboardingAgentId) {
     return <Loading debugId="AgentOnboarding" />;
   }
+
+  const isInputReady = !isLoading;
 
   const handleReset = async () => {
     setIsResetting(true);
@@ -243,7 +289,7 @@ const AgentOnboardingPage = memo(() => {
     try {
       await resetAgentOnboarding();
       const nextContext = await syncOnboardingContext();
-      setSelectedTopicId(nextContext.topicId);
+      setSelectedTopicId(nextContext.topicId ?? undefined);
     } finally {
       setIsResetting(false);
     }
@@ -264,6 +310,8 @@ const AgentOnboardingPage = memo(() => {
               discoveryUserMessageCount={data?.context?.discoveryUserMessageCount}
               feedbackSubmitted={!!data?.feedbackSubmitted}
               finishTargetUrl={finishTargetUrl}
+              hasMessages={hasMessages}
+              isInputReady={isInputReady}
               onboardingFinished={onboardingFinished}
               phase={data?.context?.phase}
               readOnly={viewingHistoricalTopic}

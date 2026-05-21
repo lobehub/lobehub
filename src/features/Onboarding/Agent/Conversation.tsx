@@ -34,6 +34,16 @@ interface AgentOnboardingConversationProps {
   discoveryUserMessageCount?: number;
   feedbackSubmitted?: boolean;
   finishTargetUrl?: string;
+  // When true, server reports the active topic already has at least one message.
+  // The welcome shell is suppressed and ChatList renders its built-in skeleton
+  // while messages fetch, avoiding the misleading "fresh Welcome flash" on
+  // returning users.
+  hasMessages?: boolean;
+  // While false, the underlying backend (bootstrap state or builtin agent
+  // config) is still hydrating: ChatInput shows its skeleton-style placeholder
+  // for the action/send area so the user cannot submit until the orchestration
+  // is ready to handle the first send.
+  isInputReady?: boolean;
   onAfterWrapUp?: () => Promise<unknown> | void;
   onAssistantTurnSettled?: (messageId: string) => Promise<unknown> | void;
   onboardingFinished?: boolean;
@@ -56,6 +66,8 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
     discoveryUserMessageCount,
     feedbackSubmitted,
     finishTargetUrl,
+    hasMessages,
+    isInputReady = true,
     onAfterWrapUp,
     onAssistantTurnSettled,
     onboardingFinished,
@@ -84,10 +96,15 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
     );
 
     // The welcome ("AI opens") is rendered client-side from i18n until the
-    // user sends their first message — at which point the welcome and the
-    // user's reply are persisted together. Greeting state is therefore the
-    // pre-conversation period when no messages have been recorded yet.
-    const isGreetingState = useMemo(() => displayMessages.length === 0, [displayMessages]);
+    // user sends their first message. Greeting state is the pre-conversation
+    // period: when bootstrap reports no messages yet AND local store has not
+    // yet hydrated any. Using `hasMessages` as the authoritative signal
+    // (instead of only `displayMessages.length === 0`) prevents the brief
+    // window during messages-fetch for returning users from flashing Welcome.
+    const isGreetingState = useMemo(
+      () => !hasMessages && displayMessages.length === 0,
+      [hasMessages, displayMessages],
+    );
 
     const latestAssistantMessageId = useMemo(() => {
       const latest = displayMessages.at(-1);
@@ -226,6 +243,7 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
               disableQueue
               allowExpand={false}
               feature={chatInputFeature}
+              isConfigLoading={!isInputReady}
               leftActions={chatInputLeftActions}
               rightActions={chatInputRightActions}
               showRuntimeConfig={false}

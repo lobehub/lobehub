@@ -56,21 +56,12 @@ export default {
   'agent.wrapUp.confirm.ok': 'Finish now',
   'agent.wrapUp.confirm.title': 'Finish onboarding now?',
   'agent.welcome': 'Start by choosing my name and avatar. You can change them any time.',
-  'agent.welcome.guide.growTogether.desc':
-    "With each chat, I'll understand you better and become a stronger teammate over time.",
-  'agent.welcome.guide.growTogether.title': 'Grow with You',
-  'agent.welcome.guide.knowYou.desc':
-    "What's on your plate these days? A little context helps me support you better.",
-  'agent.welcome.guide.knowYou.title': 'Get to Know You',
-  'agent.welcome.guide.name.desc': 'Give me a name so this feels more personal from the start.',
-  'agent.welcome.guide.name.title': 'Name Me',
   'agent.welcome.suggestion.avatarHint': 'Use {{emoji}} as the avatar.',
   'agent.welcome.suggestion.switch': 'Try another set',
   'agent.welcome.suggestion.title': 'Need a starting point? Pick one and we can refine it later.',
   'agent.welcome.sentence.1': "...hm? I just woke up — my mind's a blank.",
   'agent.welcome.sentence.2': 'What kind of partner should I become?',
-  'agent.welcome.footer':
-    'Configure your Lobe AI Agent. It learns from every interaction, and the longer it runs, the better it gets to know you.',
+  'agent.input.preparing': 'Getting ready…',
   'agent.greeting.prompt': 'Give me a name, a vibe, and an emoji',
   'agent.greeting.nameLabel': 'Name',
   'agent.greeting.namePlaceholder': 'e.g. Lumi, Atlas, Neko...',

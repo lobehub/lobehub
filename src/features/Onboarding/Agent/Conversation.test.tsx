@@ -107,6 +107,26 @@ describe('AgentOnboardingConversation', () => {
     expect(screen.queryByText('finish')).not.toBeInTheDocument();
   });
 
+  it('suppresses the welcome flash while a returning user’s messages are still fetching', () => {
+    // Returning user: bootstrap says hasMessages=true but ChatList has not yet
+    // hydrated displayMessages — the welcome MUST stay hidden so we do not show
+    // a misleading "fresh" greeting before the transcript loads.
+    mockState.displayMessages = [];
+
+    render(<AgentOnboardingConversation hasMessages />);
+
+    expect(screen.queryByTestId('chat-welcome')).not.toBeInTheDocument();
+    expect(screen.queryByText('Welcome')).not.toBeInTheDocument();
+  });
+
+  it('forwards isInputReady=false to ChatInput as isConfigLoading', () => {
+    mockState.displayMessages = [];
+
+    render(<AgentOnboardingConversation isInputReady={false} />);
+
+    expect(chatInputSpy).toHaveBeenCalledWith(expect.objectContaining({ isConfigLoading: true }));
+  });
+
   it('disables expand and runtime config in chat input', () => {
     mockState.displayMessages = [{ id: 'assistant-1', role: 'assistant' }];
 
