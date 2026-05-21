@@ -45,6 +45,11 @@ type AnthropicTools = Anthropic.Tool | Anthropic.WebSearchTool20250305;
 
 export const DEFAULT_ANTHROPIC_BASE_URL = 'https://api.anthropic.com';
 const ANTHROPIC_CLIENT_TIMEOUT_ENV = 'ANTHROPIC_CLIENT_TIMEOUT';
+const DEEPSEEK_ANTHROPIC_PAYLOAD_LOG_COLUMN = 7160;
+const DEEPSEEK_ANTHROPIC_PAYLOAD_LOG_MODEL = 'deepseek-v4-pro';
+const DEEPSEEK_ANTHROPIC_PAYLOAD_LOG_SNIPPET_END = 7400;
+const DEEPSEEK_ANTHROPIC_PAYLOAD_LOG_SNIPPET_START = 6900;
+const DEEPSEEK_ANTHROPIC_PAYLOAD_LOG_USER_ID_ENV = 'DEEPSEEK_ANTHROPIC_PAYLOAD_LOG_USER_ID';
 /**
  * Keep Anthropic SDK's timeout explicit so non-streaming structured output
  * calls with large max_tokens do not hit the SDK's long-request guard before
@@ -56,6 +61,124 @@ const ANTHROPIC_SDK_MESSAGES_PATH_PATTERN = /\/v1(?:\/messages)?\/?$/;
 
 const normalizeAnthropicCompatibleBaseURL = (baseURL?: string | null) =>
   baseURL?.replace(ANTHROPIC_SDK_MESSAGES_PATH_PATTERN, '');
+
+const isOfficialDeepSeekAnthropicBaseURL = (baseURL: string) => {
+  try {
+    const url = new URL(baseURL);
+    return url.hostname === 'api.deepseek.com' && url.pathname.replace(/\/$/, '') === '/anthropic';
+  } catch {
+    return baseURL.includes('api.deepseek.com/anthropic');
+  }
+};
+
+const getValueKind = (value: unknown) => {
+  if (Array.isArray(value)) return 'array';
+  if (value === null) return 'null';
+  return typeof value;
+};
+
+const getMetadataString = (metadata: Record<string, unknown> | undefined, key: string) => {
+  const value = metadata?.[key];
+  return typeof value === 'string' ? value : undefined;
+};
+
+const getErrorRecord = (error: unknown) =>
+  typeof error === 'object' && error !== null ? (error as Record<PropertyKey, unknown>) : undefined;
+
+const getErrorMessage = (error: unknown) => {
+  if (error instanceof Error) return error.message;
+
+  const message = getErrorRecord(error)?.message;
+  return typeof message === 'string' ? message : String(error);
+};
+
+const getErrorStatus = (error: unknown) => {
+  const status = getErrorRecord(error)?.status;
+  return typeof status === 'number' || typeof status === 'string' ? status : undefined;
+};
+
+const isDeepSeekAnthropicPayloadParseError = (error: unknown) => {
+  const message = getErrorMessage(error);
+
+  return (
+    message.includes('Failed to parse the request body as JSON') ||
+    message.includes('unexpected end of hex escape')
+  );
+};
+
+const shouldLogDeepSeekAnthropicPayloadForUser = (requestUserId: string | undefined) => {
+  const targetUserId = process.env[DEEPSEEK_ANTHROPIC_PAYLOAD_LOG_USER_ID_ENV]?.trim();
+
+  return !!targetUserId && requestUserId === targetUserId;
+};
+
+const logDeepSeekAnthropicPayloadParseError = ({
+  baseURL,
+  error,
+  metadata,
+  payload,
+  provider,
+  requestPayload,
+  requestUserId,
+}: {
+  baseURL: string;
+  error: unknown;
+  metadata: Record<string, unknown> | undefined;
+  payload: ChatStreamPayload;
+  provider: string;
+  requestPayload: Anthropic.MessageCreateParams;
+  requestUserId: string | undefined;
+}) => {
+  if (
+    provider !== 'deepseek' ||
+    payload.model !== DEEPSEEK_ANTHROPIC_PAYLOAD_LOG_MODEL ||
+    !shouldLogDeepSeekAnthropicPayloadForUser(requestUserId) ||
+    getMetadataString(metadata, 'trigger') !== 'bot' ||
+    !isOfficialDeepSeekAnthropicBaseURL(baseURL) ||
+    !isDeepSeekAnthropicPayloadParseError(error)
+  ) {
+    return;
+  }
+
+  const serializedPayload = JSON.stringify(requestPayload);
+  const firstMessageContent = requestPayload.messages.at(0)?.content;
+  const serializedFirstMessageContent = JSON.stringify(firstMessageContent ?? '');
+  const columnChar = serializedPayload.charAt(DEEPSEEK_ANTHROPIC_PAYLOAD_LOG_COLUMN - 1);
+
+  // Temporary diagnostic for DeepSeek's Anthropic endpoint JSON parser failure.
+  // eslint-disable-next-line no-console
+  console.log(
+    '[deepseekAnthropicPayloadParseError]',
+    JSON.stringify({
+      baseURL: desensitizeUrl(baseURL),
+      column: DEEPSEEK_ANTHROPIC_PAYLOAD_LOG_COLUMN,
+      columnChar: columnChar || undefined,
+      columnCharCode: columnChar ? columnChar.codePointAt(0) : undefined,
+      errorMessage: getErrorMessage(error),
+      errorStatus: getErrorStatus(error),
+      message0ContentBlocks: Array.isArray(firstMessageContent)
+        ? firstMessageContent.length
+        : undefined,
+      message0ContentSerializedLength: serializedFirstMessageContent.length,
+      message0ContentType: getValueKind(firstMessageContent),
+      messagesCount: requestPayload.messages.length,
+      model: payload.model,
+      payloadLength: serializedPayload.length,
+      snippet: serializedPayload.slice(
+        DEEPSEEK_ANTHROPIC_PAYLOAD_LOG_SNIPPET_START,
+        DEEPSEEK_ANTHROPIC_PAYLOAD_LOG_SNIPPET_END,
+      ),
+      snippetEnd: DEEPSEEK_ANTHROPIC_PAYLOAD_LOG_SNIPPET_END,
+      snippetStart: DEEPSEEK_ANTHROPIC_PAYLOAD_LOG_SNIPPET_START,
+      systemSerializedLength: JSON.stringify(requestPayload.system ?? '').length,
+      thinking: requestPayload.thinking,
+      toolsCount: requestPayload.tools?.length ?? 0,
+      traceId: getMetadataString(metadata, 'traceId'),
+      trigger: getMetadataString(metadata, 'trigger'),
+      userId: requestUserId,
+    }),
+  );
+};
 
 const resolveDefaultAnthropicTimeout = () => {
   const timeout = Number(process.env[ANTHROPIC_CLIENT_TIMEOUT_ENV]);
@@ -485,8 +608,7 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
         baseURL: finalBaseURL,
         ...constructorOptions,
         ...rest,
-        timeout:
-          rest.timeout ?? constructorOptions?.timeout ?? resolveDefaultAnthropicTimeout(),
+        timeout: rest.timeout ?? constructorOptions?.timeout ?? resolveDefaultAnthropicTimeout(),
       };
 
       if (customClient?.createClient) {
@@ -501,6 +623,14 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
     }
 
     async chat(payload: ChatStreamPayload, options?: ChatMethodOptions) {
+      let deepSeekAnthropicPayloadParseErrorContext:
+        | {
+            metadata: Record<string, unknown> | undefined;
+            requestPayload: Anthropic.MessageCreateParams;
+            requestUserId: string | undefined;
+          }
+        | undefined;
+
       try {
         if (!chatCompletion?.handlePayload) {
           throw new Error('Anthropic-compatible runtime requires chatCompletion.handlePayload');
@@ -514,6 +644,15 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
         const postPayload = await chatCompletion.handlePayload(payload, this._options);
         const shouldStream = postPayload.stream ?? payload.stream ?? true;
         const finalPayload = { ...postPayload, stream: shouldStream };
+        const requestPayload = {
+          ...finalPayload,
+          metadata: options?.user ? { user_id: options.user } : undefined,
+        };
+        deepSeekAnthropicPayloadParseErrorContext = {
+          metadata: options?.metadata,
+          requestPayload,
+          requestUserId: options?.user,
+        };
 
         if (debugParams?.chatCompletion?.()) {
           // eslint-disable-next-line no-console
@@ -522,16 +661,10 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
           console.log(JSON.stringify(finalPayload), '\n');
         }
 
-        const response = await this.client.messages.create(
-          {
-            ...finalPayload,
-            metadata: options?.user ? { user_id: options.user } : undefined,
-          },
-          {
-            headers: options?.requestHeaders,
-            signal: options?.signal,
-          },
-        );
+        const response = await this.client.messages.create(requestPayload, {
+          headers: options?.requestHeaders,
+          signal: options?.signal,
+        });
 
         const pricing = await getModelPricing(payload.model, this.id);
         const pricingOptions = await chatCompletion?.getPricingOptions?.(payload, postPayload);
@@ -655,6 +788,18 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
           },
         );
       } catch (error) {
+        if (deepSeekAnthropicPayloadParseErrorContext) {
+          logDeepSeekAnthropicPayloadParseError({
+            baseURL: this.baseURL,
+            error,
+            metadata: deepSeekAnthropicPayloadParseErrorContext.metadata,
+            payload,
+            provider,
+            requestPayload: deepSeekAnthropicPayloadParseErrorContext.requestPayload,
+            requestUserId: deepSeekAnthropicPayloadParseErrorContext.requestUserId,
+          });
+        }
+
         throw this.handleError(error);
       }
     }
