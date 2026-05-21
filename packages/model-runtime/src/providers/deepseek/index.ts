@@ -28,6 +28,9 @@ const DEEPSEEK_ANTHROPIC_BASE_URL_PATTERN = /\/anthropic\/?$/;
 const DEEPSEEK_ANTHROPIC_MESSAGES_PATH_PATTERN = /\/v1\/messages\/?$/;
 
 type DeepSeekSDKType = 'anthropic' | 'openai';
+type GenerateObjectHandlePayload = NonNullable<
+  NonNullable<OpenAICompatibleFactoryOptions['generateObject']>['handlePayload']
+>;
 
 const isDeepSeekV4Model = (model: string) => model.startsWith('deepseek-v4');
 const isEmptyContent = (content: unknown) =>
@@ -237,6 +240,23 @@ const createDeepSeekAnthropicGenerateObject = async (
   });
 };
 
+const buildDeepSeekGenerateObjectPayload: GenerateObjectHandlePayload = (
+  payload,
+  requestPayload,
+) => {
+  const { thinking } = payload;
+  const thinkingExplicitlyDisabled = thinking?.type === 'disabled';
+  const payloadWithoutReasoningEffort = { ...requestPayload };
+  delete (payloadWithoutReasoningEffort as { reasoning_effort?: unknown }).reasoning_effort;
+
+  return {
+    ...(thinkingExplicitlyDisabled ? payloadWithoutReasoningEffort : requestPayload),
+    ...(thinking?.type === 'enabled' || thinkingExplicitlyDisabled
+      ? { thinking: { type: thinking.type } }
+      : {}),
+  };
+};
+
 const fetchDeepSeekModels = async ({
   client,
 }: {
@@ -288,6 +308,7 @@ export const openAIParams = {
   // Deepseek don't support json format well
   // use Tools calling to simulate
   generateObject: {
+    handlePayload: buildDeepSeekGenerateObjectPayload,
     useToolsCalling: true,
   },
   models: fetchDeepSeekModels,

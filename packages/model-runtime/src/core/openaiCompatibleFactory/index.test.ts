@@ -3116,7 +3116,7 @@ describe('LobeOpenAICompatibleFactory', () => {
         ]);
       });
 
-      it('should forward disabled thinking without reasoning_effort', async () => {
+      it('should not forward internal thinking to generic OpenAI-compatible generateObject requests', async () => {
         const mockResponse = {
           choices: [
             {
@@ -3160,9 +3160,9 @@ describe('LobeOpenAICompatibleFactory', () => {
         expect(requestPayload).toEqual(
           expect.objectContaining({
             model: 'deepseek-v4-pro',
-            thinking: { type: 'disabled' },
           }),
         );
+        expect(requestPayload).not.toHaveProperty('thinking');
         expect(requestPayload).not.toHaveProperty('reasoning_effort');
       });
 
