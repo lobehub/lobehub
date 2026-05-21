@@ -10,7 +10,7 @@ import { withUsageCost } from '../usageConverters/utils/withUsageCost';
 const log = debug('lobe-model-runtime:anthropic:generate-object');
 
 export interface AnthropicGenerateObjectConfig {
-  requestParams?: Pick<Anthropic.MessageCreateParams, 'thinking'>;
+  requestParams?: Pick<Anthropic.MessageCreateParams, 'output_config' | 'thinking'>;
   schemaToolChoice?: 'any' | 'tool';
 }
 

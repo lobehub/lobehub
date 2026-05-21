@@ -9,6 +9,7 @@ import {
   createAnthropicCompatibleParams,
   createAnthropicCompatibleRuntime,
 } from '../../core/anthropicCompatibleFactory';
+import type { AnthropicGenerateObjectConfig } from '../../core/anthropicCompatibleFactory/generateObject';
 import { createAnthropicGenerateObject } from '../../core/anthropicCompatibleFactory/generateObject';
 import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
@@ -233,9 +234,21 @@ const createDeepSeekAnthropicGenerateObject = async (
   // `{ type: "any" }`. If thinking is already disabled, keep the stricter
   // named tool choice; otherwise use `any` without changing the thinking mode.
   const thinkingDisabled = isGenerateObjectThinkingDisabled(payload);
+  const requestParams: AnthropicGenerateObjectConfig['requestParams'] = {
+    ...(!thinkingDisabled && payload.reasoning_effort
+      ? {
+          output_config: {
+            effort: payload.reasoning_effort as NonNullable<
+              Anthropic.MessageCreateParams['output_config']
+            >['effort'],
+          },
+        }
+      : {}),
+    ...(thinkingDisabled ? { thinking: { type: 'disabled' } } : {}),
+  };
 
   return createAnthropicGenerateObject(client, payload, options, pricing, {
-    ...(thinkingDisabled ? { requestParams: { thinking: { type: 'disabled' } } } : {}),
+    requestParams,
     schemaToolChoice: thinkingDisabled ? 'tool' : 'any',
   });
 };

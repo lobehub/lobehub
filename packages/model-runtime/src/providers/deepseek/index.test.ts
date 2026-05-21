@@ -255,6 +255,31 @@ describe('LobeDeepSeekAnthropicAI', () => {
       expect(payload.thinking).toEqual({ type: 'disabled' });
       expect(payload.tool_choice).toEqual({ name: 'task_topic_handoff', type: 'tool' });
     });
+
+    it('should map reasoning_effort to output_config.effort', async () => {
+      await instance.generateObject({
+        ...generateObjectPayload,
+        reasoning_effort: 'high',
+      });
+
+      const payload = getLastRequestPayload();
+
+      expect(payload.output_config).toEqual({ effort: 'high' });
+      expect(payload.tool_choice).toEqual({ type: 'any' });
+    });
+
+    it('should omit output_config when thinking is disabled', async () => {
+      await instance.generateObject({
+        ...generateObjectPayload,
+        reasoning_effort: 'high',
+        thinking: { type: 'disabled' },
+      });
+
+      const payload = getLastRequestPayload();
+
+      expect(payload.output_config).toBeUndefined();
+      expect(payload.thinking).toEqual({ type: 'disabled' });
+    });
   });
 
   describe('handlePayload', () => {
