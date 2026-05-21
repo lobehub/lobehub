@@ -11,27 +11,22 @@ import { messageStateSelectors } from '../store';
 import { styles } from './style';
 
 interface FollowUpChipsProps {
+  conversationKey: string;
   messageId: string;
-  topicId: string;
 }
 
-const FollowUpChips = memo<FollowUpChipsProps>(({ messageId, topicId }) => {
-  // For assistantGroup, the server resolves the latest answer message id which
-  // lives inside `children`, not as the top-level group id. Collect children ids
-  // as a stable primitive so the followUpAction selector can match either.
+const FollowUpChips = memo<FollowUpChipsProps>(({ conversationKey, messageId }) => {
   const childIdsKey = useConversationStore((s) => {
     const m = s.displayMessages.find((x) => x.id === messageId);
     return m?.children?.map((c) => c.id).join('|') ?? '';
   });
   const selector = useMemo(
-    () => followUpActionSelectors.chipsFor({ childIdsKey, messageId, topicId }),
-    [childIdsKey, messageId, topicId],
+    () => followUpActionSelectors.chipsFor({ childIdsKey, conversationKey, messageId }),
+    [childIdsKey, conversationKey, messageId],
   );
   const chips = useFollowUpActionStore(selector);
   const updateInputMessage = useConversationStore((s) => s.updateInputMessage);
   const editor = useConversationStore((s) => s.editor);
-  // Hide chips while the bound group/message is still being generated — chips
-  // are only valid for a fully settled assistant turn.
   const isGenerating = useConversationStore(
     messageStateSelectors.isAssistantGroupItemGenerating(messageId),
   );

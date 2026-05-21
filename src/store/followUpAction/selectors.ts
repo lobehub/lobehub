@@ -1,6 +1,10 @@
 import type { FollowUpChip } from '@lobechat/types';
 
-import { type FollowUpActionState } from './initialState';
+import {
+  type FollowUpActionSlot,
+  type FollowUpActionState,
+  type FollowUpActionStatus,
+} from './initialState';
 
 const EMPTY_CHIPS: readonly FollowUpChip[] = [];
 
@@ -12,32 +16,38 @@ interface ChipsForArgs {
    * any child id as a valid match in addition to the top-level id.
    */
   childIdsKey?: string;
+  conversationKey: string | undefined;
   messageId: string | undefined;
-  topicId: string | undefined;
 }
 
 /**
  * Chips render only when ALL hold:
- * - status === 'ready'
- * - the stored topicId matches
- * - the stored messageId matches the bound message id OR one of its child block ids
- *
- * Topic-only matching would let stale chips from a previous turn render under
- * a newly streaming assistant message in the same topic, so messageId membership
- * is required.
+ * - the slot for `conversationKey` exists and is `ready`
+ * - the slot's `messageId` matches the bound id OR one of its child block ids
  */
 const chipsFor =
-  ({ childIdsKey, messageId, topicId }: ChipsForArgs) =>
+  ({ childIdsKey, conversationKey, messageId }: ChipsForArgs) =>
   (s: FollowUpActionState): readonly FollowUpChip[] => {
-    if (s.status !== 'ready') return EMPTY_CHIPS;
-    if (!messageId || !topicId) return EMPTY_CHIPS;
-    if (s.topicId !== topicId) return EMPTY_CHIPS;
-    if (!s.messageId) return EMPTY_CHIPS;
-    if (s.messageId === messageId) return s.chips;
-    if (childIdsKey && childIdsKey.split('|').includes(s.messageId)) return s.chips;
+    if (!conversationKey || !messageId) return EMPTY_CHIPS;
+    const slot = s.slots[conversationKey];
+    if (!slot || slot.status !== 'ready' || !slot.messageId) return EMPTY_CHIPS;
+    if (slot.messageId === messageId) return slot.chips;
+    if (childIdsKey && childIdsKey.split('|').includes(slot.messageId)) return slot.chips;
     return EMPTY_CHIPS;
   };
 
+const slotStatus =
+  (conversationKey: string | undefined) =>
+  (s: FollowUpActionState): FollowUpActionStatus =>
+    (conversationKey && s.slots[conversationKey]?.status) || 'idle';
+
+const slotFor =
+  (conversationKey: string | undefined) =>
+  (s: FollowUpActionState): FollowUpActionSlot | undefined =>
+    conversationKey ? s.slots[conversationKey] : undefined;
+
 export const followUpActionSelectors = {
   chipsFor,
+  slotFor,
+  slotStatus,
 };

@@ -142,6 +142,7 @@ const AgentOnboardingPage = memo(() => {
     enabled: !onboardingFinished && !viewingHistoricalTopic,
     isGreeting,
     modelConfig: onboardingFollowUpModelConfig,
+    onboardingAgentId: onboardingAgentId || '',
   });
   const { onBeforeSendMessage, triggerExtract } = onboardingFollowUp;
 
@@ -150,7 +151,7 @@ const AgentOnboardingPage = memo(() => {
       params.metadata = { ...params.metadata, trigger: RequestTrigger.Onboarding };
 
       const welcomeContent = t('agent.welcome');
-      await onBeforeSendMessage();
+      if (effectiveTopicId) await onBeforeSendMessage(effectiveTopicId);
 
       if (!onboardingAgentId || !effectiveTopicId) return;
 

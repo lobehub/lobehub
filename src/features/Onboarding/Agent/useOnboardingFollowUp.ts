@@ -1,6 +1,7 @@
 import type { FollowUpModelConfig } from '@lobechat/types';
 import { useCallback } from 'react';
 
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useFollowUpActionStore } from '@/store/followUpAction';
 import type { OnboardingPhase } from '@/types/user';
 
@@ -8,10 +9,11 @@ interface UseOnboardingFollowUpParams {
   enabled: boolean;
   isGreeting: boolean;
   modelConfig: FollowUpModelConfig;
+  onboardingAgentId: string;
 }
 
 interface OnboardingFollowUpHandlers {
-  onBeforeSendMessage: () => Promise<void>;
+  onBeforeSendMessage: (topicId: string) => Promise<void>;
   triggerExtract: (topicId: string, phase: OnboardingPhase | undefined) => Promise<void>;
 }
 
@@ -19,6 +21,7 @@ export const useOnboardingFollowUp = ({
   enabled,
   isGreeting,
   modelConfig,
+  onboardingAgentId,
 }: UseOnboardingFollowUpParams): OnboardingFollowUpHandlers => {
   const triggerExtract = useCallback(
     async (topicId: string, phase: OnboardingPhase | undefined) => {
@@ -27,18 +30,24 @@ export const useOnboardingFollowUp = ({
       if (phase === 'summary') return;
       if (isGreeting) return;
 
-      await useFollowUpActionStore.getState().fetchFor(topicId, {
+      const conversationKey = messageMapKey({ agentId: onboardingAgentId, topicId });
+      await useFollowUpActionStore.getState().fetchFor(conversationKey, {
         hint: { kind: 'onboarding', phase },
         modelConfig,
+        topicId,
       });
     },
-    [enabled, isGreeting, modelConfig],
+    [enabled, isGreeting, modelConfig, onboardingAgentId],
   );
 
-  const onBeforeSendMessage = useCallback(async () => {
-    if (!enabled) return;
-    useFollowUpActionStore.getState().clear();
-  }, [enabled]);
+  const onBeforeSendMessage = useCallback(
+    async (topicId: string) => {
+      if (!enabled) return;
+      const conversationKey = messageMapKey({ agentId: onboardingAgentId, topicId });
+      useFollowUpActionStore.getState().clear(conversationKey);
+    },
+    [enabled, onboardingAgentId],
+  );
 
   return { onBeforeSendMessage, triggerExtract };
 };
