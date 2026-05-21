@@ -9,6 +9,11 @@ import { withUsageCost } from '../usageConverters/utils/withUsageCost';
 
 const log = debug('lobe-model-runtime:anthropic:generate-object');
 
+export interface AnthropicGenerateObjectConfig {
+  requestParams?: Pick<Anthropic.MessageCreateParams, 'thinking'>;
+  schemaToolChoice?: 'any' | 'tool';
+}
+
 /**
  * Generate structured output using Anthropic Claude API with Function Calling
  */
@@ -17,6 +22,7 @@ export const createAnthropicGenerateObject = async (
   payload: GenerateObjectPayload,
   options?: GenerateObjectOptions,
   pricing?: Pricing,
+  config?: AnthropicGenerateObjectConfig,
 ) => {
   const { schema, messages, model, tools } = payload;
 
@@ -45,6 +51,7 @@ export const createAnthropicGenerateObject = async (
 
   let finalTools;
   let tool_choice: Anthropic.ToolChoiceAny | Anthropic.ToolChoiceTool;
+  let schemaToolName: string | undefined;
   if (tools) {
     finalTools = buildAnthropicTools(tools);
     tool_choice = { type: 'any' };
@@ -59,7 +66,9 @@ export const createAnthropicGenerateObject = async (
     log('converted tool: %O', tool);
 
     finalTools = [tool];
-    tool_choice = { name: tool.name, type: 'tool' };
+    schemaToolName = tool.name;
+    tool_choice =
+      config?.schemaToolChoice === 'any' ? { type: 'any' } : { name: tool.name, type: 'tool' };
   } else {
     throw new Error('tools or schema is required');
   }
@@ -73,6 +82,7 @@ export const createAnthropicGenerateObject = async (
         messages: anthropicMessages,
         model,
         system: systemPrompts,
+        ...config?.requestParams,
         tool_choice,
         tools: finalTools,
       },
@@ -88,13 +98,13 @@ export const createAnthropicGenerateObject = async (
     }
 
     // Extract the tool use result
-    if (tool_choice.type === 'tool') {
+    if (schemaToolName) {
       const toolUseBlock = response.content.find(
-        (block) => block.type === 'tool_use' && block.name === tool_choice.name,
+        (block) => block.type === 'tool_use' && block.name === schemaToolName,
       );
 
       if (!toolUseBlock || toolUseBlock.type !== 'tool_use') {
-        log('no tool use found in response (expected tool: %s)', tool_choice.name);
+        log('no tool use found in response (expected tool: %s)', schemaToolName);
         return undefined;
       }
 

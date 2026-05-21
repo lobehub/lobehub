@@ -83,6 +83,54 @@ describe('Anthropic generateObject', () => {
       expect(result).toEqual({ age: 30, name: 'John' });
     });
 
+    it('should allow schema structured output to require any tool', async () => {
+      const mockClient = {
+        messages: {
+          create: vi.fn().mockResolvedValue({
+            content: [
+              {
+                input: { summary: 'Task completed', title: 'Done' },
+                name: 'task_topic_handoff',
+                type: 'tool_use',
+              },
+            ],
+          }),
+        },
+      };
+
+      const payload = {
+        messages: [{ content: 'Generate a task handoff', role: 'user' as const }],
+        model: 'claude-3-5-sonnet-20241022',
+        schema: {
+          name: 'task_topic_handoff',
+          schema: {
+            properties: { summary: { type: 'string' }, title: { type: 'string' } },
+            required: ['title', 'summary'],
+            type: 'object' as const,
+          },
+        },
+      };
+
+      const result = await createAnthropicGenerateObject(
+        mockClient as any,
+        payload,
+        undefined,
+        undefined,
+        { schemaToolChoice: 'any' },
+      );
+
+      expect(mockClient.messages.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tool_choice: {
+            type: 'any',
+          },
+        }),
+        expect.objectContaining({}),
+      );
+
+      expect(result).toEqual({ summary: 'Task completed', title: 'Done' });
+    });
+
     it('should ignore whitespace-only system prompts', async () => {
       const mockClient = {
         messages: {

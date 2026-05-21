@@ -1,5 +1,6 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import type { ChatModelCard } from '@lobechat/types';
+import type { Pricing } from 'model-bank';
 import { deepseek as deepseekChatModels, ModelProvider } from 'model-bank';
 import type OpenAI from 'openai';
 
@@ -8,11 +9,12 @@ import {
   createAnthropicCompatibleParams,
   createAnthropicCompatibleRuntime,
 } from '../../core/anthropicCompatibleFactory';
+import { createAnthropicGenerateObject } from '../../core/anthropicCompatibleFactory/generateObject';
 import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime';
 import { createRouterRuntime } from '../../core/RouterRuntime';
-import type { ChatStreamPayload } from '../../types';
+import type { ChatStreamPayload, GenerateObjectOptions, GenerateObjectPayload } from '../../types';
 import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProperty';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
 
@@ -213,6 +215,28 @@ const buildDeepSeekOpenAIPayload = (
   } as OpenAI.ChatCompletionCreateParamsStreaming;
 };
 
+const isGenerateObjectThinkingDisabled = (payload: GenerateObjectPayload) =>
+  (payload as GenerateObjectPayload & { thinking?: ChatStreamPayload['thinking'] }).thinking
+    ?.type === 'disabled';
+
+const createDeepSeekAnthropicGenerateObject = async (
+  client: Anthropic,
+  payload: GenerateObjectPayload,
+  options?: GenerateObjectOptions,
+  pricing?: Pricing,
+) => {
+  // DeepSeek V4 thinking mode rejects Anthropic's named schema tool choice,
+  // e.g. `{ type: "tool", name: "task_topic_handoff" }`, but accepts
+  // `{ type: "any" }`. If thinking is already disabled, keep the stricter
+  // named tool choice; otherwise use `any` without changing the thinking mode.
+  const thinkingDisabled = isGenerateObjectThinkingDisabled(payload);
+
+  return createAnthropicGenerateObject(client, payload, options, pricing, {
+    ...(thinkingDisabled ? { requestParams: { thinking: { type: 'disabled' } } } : {}),
+    schemaToolChoice: thinkingDisabled ? 'tool' : 'any',
+  });
+};
+
 const fetchDeepSeekModels = async ({
   client,
 }: {
@@ -243,6 +267,7 @@ export const anthropicParams = createAnthropicCompatibleParams({
   debug: {
     chatCompletion: () => process.env.DEBUG_DEEPSEEK_CHAT_COMPLETION === '1',
   },
+  generateObject: createDeepSeekAnthropicGenerateObject,
   provider: ModelProvider.DeepSeek,
 });
 

@@ -11,6 +11,20 @@ import {
   params,
 } from './index';
 
+const loadModelsMock = vi.hoisted(() =>
+  vi.fn().mockResolvedValue([
+    {
+      id: 'deepseek-v4-pro',
+      maxOutput: 393_216,
+      providerId: 'deepseek',
+    },
+  ]),
+);
+
+vi.mock('@lobechat/business-model-bank/model-config', () => ({
+  loadModels: loadModelsMock,
+}));
+
 const defaultOpenAIBaseURL = 'https://api.deepseek.com/v1';
 const anthropicBaseURL = 'https://api.deepseek.com/anthropic';
 
@@ -175,6 +189,71 @@ describe('LobeDeepSeekAnthropicAI', () => {
 
       expect(runtime).toBeInstanceOf(LobeDeepSeekAnthropicAI);
       expect((runtime as any).baseURL).toEqual(anthropicBaseURL);
+    });
+  });
+
+  describe('generateObject', () => {
+    const generateObjectPayload = {
+      messages: [{ content: 'Generate a handoff', role: 'user' as const }],
+      model: 'deepseek-v4-pro',
+      schema: {
+        name: 'task_topic_handoff',
+        schema: {
+          additionalProperties: false,
+          properties: { summary: { type: 'string' }, title: { type: 'string' } },
+          required: ['title', 'summary'],
+          type: 'object' as const,
+        },
+      },
+    };
+
+    beforeEach(() => {
+      ((instance as any).client.messages.create as Mock).mockResolvedValue({
+        content: [
+          {
+            id: 'call_1',
+            input: { summary: 'Task completed', title: 'Done' },
+            name: 'task_topic_handoff',
+            type: 'tool_use',
+          },
+        ],
+        usage: {
+          input_tokens: 3,
+          output_tokens: 4,
+        },
+      });
+    });
+
+    it('should use any tool choice by default to keep DeepSeek thinking mode enabled', async () => {
+      const result = await instance.generateObject(generateObjectPayload);
+
+      const payload = getLastRequestPayload();
+
+      expect(payload.thinking).toBeUndefined();
+      expect(payload.tool_choice).toEqual({ type: 'any' });
+      expect(payload.tools).toEqual([
+        expect.objectContaining({
+          input_schema: expect.objectContaining({
+            additionalProperties: false,
+            required: ['title', 'summary'],
+            type: 'object',
+          }),
+          name: 'task_topic_handoff',
+        }),
+      ]);
+      expect(result).toEqual({ summary: 'Task completed', title: 'Done' });
+    });
+
+    it('should keep named tool choice when thinking is disabled', async () => {
+      await instance.generateObject({
+        ...generateObjectPayload,
+        thinking: { type: 'disabled' },
+      } as any);
+
+      const payload = getLastRequestPayload();
+
+      expect(payload.thinking).toEqual({ type: 'disabled' });
+      expect(payload.tool_choice).toEqual({ name: 'task_topic_handoff', type: 'tool' });
     });
   });
 
