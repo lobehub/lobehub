@@ -64,12 +64,7 @@ const Layout: FC = () => {
   const pageId = onPageRoute && params.id ? getIdFromIdentifier(params.id, 'docs') : undefined;
   const { data: probe, error: probeError } = useSharedPageProbe(pageId);
 
-  const probeLoading = !!pageId && !probe && !probeError;
   const isGuestPageRoute = !!pageId && (!!probeError || (probe ? !probe.isOwner : false));
-
-  if (probeLoading) {
-    return <Loading debugId="page-share-probe" />;
-  }
 
   if (isGuestPageRoute) {
     return (
