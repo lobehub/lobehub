@@ -159,6 +159,45 @@ describe('LobeDeepSeekAnthropicAI handlePayload', () => {
     );
   });
 
+  it('should remove lone surrogates from converted Anthropic tool_use input', async () => {
+    await instance.chat({
+      messages: [
+        { content: 'Search weather', role: 'user' },
+        {
+          content: '',
+          role: 'assistant',
+          tool_calls: [
+            {
+              function: {
+                arguments: `{"city":"${loneHighSurrogate} ${validEmoji}","nested":{"value":"${loneLowSurrogate}"}}`,
+                name: 'get_weather',
+              },
+              id: 'call_1',
+              type: 'function',
+            },
+          ],
+        } as any,
+        {
+          content: '{"temp":20}',
+          role: 'tool',
+          tool_call_id: 'call_1',
+        } as any,
+      ],
+      model: 'deepseek-v4-flash',
+    });
+
+    const payload = getLastRequestPayload();
+    const serialized = expectNoLoneSurrogateEscapes(payload);
+    const assistantMessage = payload.messages.find((message: any) => message.role === 'assistant');
+    const toolUseBlock = assistantMessage?.content.find((block: any) => block.type === 'tool_use');
+
+    expect(serialized).toContain(validEmoji);
+    expect(toolUseBlock?.input).toEqual({
+      city: ` ${validEmoji}`,
+      nested: { value: '' },
+    });
+  });
+
   it('should remove lone surrogates from Anthropic chat payload strings', async () => {
     await instance.chat({
       messages: [

@@ -23,6 +23,19 @@ describe('sanitizeDeepSeekJsonPayload', () => {
             },
           ],
         },
+        {
+          content: [
+            {
+              input: {
+                nested: { values: [`Nested ${loneLowSurrogate} ${validEmoji}`] },
+                query: `Tool ${loneHighSurrogate} ${validEmoji}`,
+              },
+              name: 'search',
+              type: 'tool_use',
+            },
+          ],
+          role: 'assistant',
+        },
       ],
       metadata: {
         note: loneHighSurrogate,

@@ -61,6 +61,20 @@ const setIfChanged = (
   };
 };
 
+const sanitizeToolUseInput = (value: unknown): unknown => {
+  if (typeof value === 'string') return sanitizeDeepSeekJsonString(value);
+  if (Array.isArray(value)) return value.map((item) => sanitizeToolUseInput(item));
+  if (!isPlainRecord(value)) return value;
+
+  let sanitized = value;
+
+  for (const [key, item] of Object.entries(value)) {
+    sanitized = setIfChanged(sanitized, value, key, sanitizeToolUseInput(item));
+  }
+
+  return sanitized;
+};
+
 const sanitizeContentSurface = (value: unknown): unknown => {
   if (typeof value === 'string') return sanitizeDeepSeekJsonString(value);
   if (Array.isArray(value)) return value.map((item) => sanitizeContentSurface(item));
@@ -83,6 +97,10 @@ const sanitizeContentSurface = (value: unknown): unknown => {
 
   if ('content' in value) {
     sanitized = setIfChanged(sanitized, value, 'content', sanitizeContentSurface(value.content));
+  }
+
+  if (value.type === 'tool_use' && 'input' in value) {
+    sanitized = setIfChanged(sanitized, value, 'input', sanitizeToolUseInput(value.input));
   }
 
   return sanitized;
