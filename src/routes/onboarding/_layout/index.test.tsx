@@ -56,12 +56,12 @@ vi.mock('react-i18next', () => ({
     const modeText = values?.mode ?? '';
 
     if (i18nKey === 'agent.layout.switchMessageClassic') {
-      return `Not feeling it today? You can switch to ${modeText}.`;
+      return `Prefer a different setup method? Switch to ${modeText}.`;
     }
 
     const skipText = values?.skip ?? '';
 
-    return `Not feeling it today? You can switch to ${modeText} or ${skipText}.`;
+    return `Prefer a different setup method? Switch to ${modeText} or ${skipText}.`;
   },
   useTranslation: () => ({
     t: (key: string) => key,
@@ -123,7 +123,7 @@ describe('OnBoardingContainer', () => {
     renderAt('/onboarding/classic');
     expect(hasSkipFooter()).toBe(false);
     expect(
-      screen.getByText((content) => content.includes('switch to')),
+      screen.getByText((content) => content.includes('Switch to')),
     ).toBeInTheDocument();
   });
 

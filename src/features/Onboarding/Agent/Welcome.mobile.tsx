@@ -27,7 +27,6 @@ const WelcomeMobile = memo(() => {
           sentences={[
             t('agent.welcome.sentence.1'),
             t('agent.welcome.sentence.2'),
-            t('agent.welcome.sentence.3'),
           ]}
         />
         <Markdown fontSize={13} variant={'chat'}>
