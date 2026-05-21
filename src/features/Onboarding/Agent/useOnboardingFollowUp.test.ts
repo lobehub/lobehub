@@ -31,68 +31,149 @@ describe('useOnboardingFollowUp', () => {
     vi.restoreAllMocks();
   });
 
-  it('triggerExtract skips when disabled', async () => {
+  it('returns no hooks when disabled', async () => {
     const { result } = renderHook(() =>
       useOnboardingFollowUp({
         enabled: false,
         isGreeting: false,
         modelConfig: MODEL_CONFIG,
         onboardingAgentId: AGENT_ID,
+        phase: 'discovery',
+        topicId: TOPIC_ID,
       }),
     );
-    await result.current.triggerExtract(TOPIC_ID, 'discovery');
-    expect(fetchFor).not.toHaveBeenCalled();
+    expect(result.current.onAssistantTurnSettled).toBeUndefined();
+    expect(result.current.onBeforeSendMessage).toBeUndefined();
   });
 
-  it('triggerExtract skips when phase is undefined', async () => {
+  it('returns no hooks when onboardingAgentId is missing', async () => {
+    const { result } = renderHook(() =>
+      useOnboardingFollowUp({
+        enabled: true,
+        isGreeting: false,
+        modelConfig: MODEL_CONFIG,
+        onboardingAgentId: undefined,
+        phase: 'discovery',
+        topicId: TOPIC_ID,
+      }),
+    );
+    expect(result.current.onAssistantTurnSettled).toBeUndefined();
+    expect(result.current.onBeforeSendMessage).toBeUndefined();
+  });
+
+  it('returns no hooks when topicId is missing', async () => {
     const { result } = renderHook(() =>
       useOnboardingFollowUp({
         enabled: true,
         isGreeting: false,
         modelConfig: MODEL_CONFIG,
         onboardingAgentId: AGENT_ID,
+        phase: 'discovery',
+        topicId: undefined,
       }),
     );
-    await result.current.triggerExtract(TOPIC_ID, undefined);
-    expect(fetchFor).not.toHaveBeenCalled();
+    expect(result.current.onAssistantTurnSettled).toBeUndefined();
+    expect(result.current.onBeforeSendMessage).toBeUndefined();
   });
 
-  it('triggerExtract skips when phase is summary', async () => {
+  it('onAssistantTurnSettled skips when phase is undefined', async () => {
     const { result } = renderHook(() =>
       useOnboardingFollowUp({
         enabled: true,
         isGreeting: false,
         modelConfig: MODEL_CONFIG,
         onboardingAgentId: AGENT_ID,
+        phase: undefined,
+        topicId: TOPIC_ID,
       }),
     );
-    await result.current.triggerExtract(TOPIC_ID, 'summary');
+    await result.current.onAssistantTurnSettled?.('msg-1', { reason: 'completed' });
     expect(fetchFor).not.toHaveBeenCalled();
   });
 
-  it('triggerExtract skips when isGreeting is true', async () => {
+  it('onAssistantTurnSettled skips when phase is summary', async () => {
+    const { result } = renderHook(() =>
+      useOnboardingFollowUp({
+        enabled: true,
+        isGreeting: false,
+        modelConfig: MODEL_CONFIG,
+        onboardingAgentId: AGENT_ID,
+        phase: 'summary',
+        topicId: TOPIC_ID,
+      }),
+    );
+    await result.current.onAssistantTurnSettled?.('msg-1', { reason: 'completed' });
+    expect(fetchFor).not.toHaveBeenCalled();
+  });
+
+  it('onAssistantTurnSettled skips when isGreeting is true', async () => {
     const { result } = renderHook(() =>
       useOnboardingFollowUp({
         enabled: true,
         isGreeting: true,
         modelConfig: MODEL_CONFIG,
         onboardingAgentId: AGENT_ID,
+        phase: 'agent_identity',
+        topicId: TOPIC_ID,
       }),
     );
-    await result.current.triggerExtract(TOPIC_ID, 'agent_identity');
+    await result.current.onAssistantTurnSettled?.('msg-1', { reason: 'completed' });
     expect(fetchFor).not.toHaveBeenCalled();
   });
 
-  it('triggerExtract fires fetchFor with onboarding hint on a normal turn', async () => {
+  it('onAssistantTurnSettled skips when reason is stopped', async () => {
     const { result } = renderHook(() =>
       useOnboardingFollowUp({
         enabled: true,
         isGreeting: false,
         modelConfig: MODEL_CONFIG,
         onboardingAgentId: AGENT_ID,
+        phase: 'discovery',
+        topicId: TOPIC_ID,
       }),
     );
-    await result.current.triggerExtract(TOPIC_ID, 'discovery');
+    await result.current.onAssistantTurnSettled?.('msg-1', { reason: 'stopped' });
+    expect(fetchFor).not.toHaveBeenCalled();
+  });
+
+  it('onAssistantTurnSettled fires fetchFor with onboarding hint on a normal turn', async () => {
+    const { result } = renderHook(() =>
+      useOnboardingFollowUp({
+        enabled: true,
+        isGreeting: false,
+        modelConfig: MODEL_CONFIG,
+        onboardingAgentId: AGENT_ID,
+        phase: 'discovery',
+        topicId: TOPIC_ID,
+      }),
+    );
+    await result.current.onAssistantTurnSettled?.('msg-1', { reason: 'completed' });
+    expect(fetchFor).toHaveBeenCalledWith(CONVERSATION_KEY, {
+      hint: {
+        kind: 'onboarding',
+        phase: 'discovery',
+      },
+      modelConfig: MODEL_CONFIG,
+      topicId: TOPIC_ID,
+    });
+  });
+
+  it('onAssistantTurnSettled uses the phase snapshot captured at memoize time', async () => {
+    const { result, rerender } = renderHook(
+      (props: { phase: 'discovery' | 'agent_identity' }) =>
+        useOnboardingFollowUp({
+          enabled: true,
+          isGreeting: false,
+          modelConfig: MODEL_CONFIG,
+          onboardingAgentId: AGENT_ID,
+          phase: props.phase,
+          topicId: TOPIC_ID,
+        }),
+      { initialProps: { phase: 'discovery' } },
+    );
+    const fired = result.current.onAssistantTurnSettled;
+    rerender({ phase: 'agent_identity' });
+    await fired?.('msg-1', { reason: 'completed' });
     expect(fetchFor).toHaveBeenCalledWith(CONVERSATION_KEY, {
       hint: {
         kind: 'onboarding',
@@ -110,22 +191,26 @@ describe('useOnboardingFollowUp', () => {
         isGreeting: false,
         modelConfig: MODEL_CONFIG,
         onboardingAgentId: AGENT_ID,
+        phase: 'discovery',
+        topicId: TOPIC_ID,
       }),
     );
-    await result.current.onBeforeSendMessage(TOPIC_ID);
+    await result.current.onBeforeSendMessage?.({} as any);
     expect(clear).toHaveBeenCalledWith(CONVERSATION_KEY);
   });
 
-  it('onBeforeSendMessage does nothing when disabled', async () => {
+  it('onBeforeSendMessage is absent when disabled', async () => {
     const { result } = renderHook(() =>
       useOnboardingFollowUp({
         enabled: false,
         isGreeting: false,
         modelConfig: MODEL_CONFIG,
         onboardingAgentId: AGENT_ID,
+        phase: 'discovery',
+        topicId: TOPIC_ID,
       }),
     );
-    await result.current.onBeforeSendMessage(TOPIC_ID);
+    expect(result.current.onBeforeSendMessage).toBeUndefined();
     expect(clear).not.toHaveBeenCalled();
   });
 });

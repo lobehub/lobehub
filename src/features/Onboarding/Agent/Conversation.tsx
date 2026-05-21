@@ -16,7 +16,7 @@ import {
   MessageItem,
   useConversationStore,
 } from '@/features/Conversation';
-import { dataSelectors, messageStateSelectors } from '@/features/Conversation/store';
+import { dataSelectors } from '@/features/Conversation/store';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import type { OnboardingPhase } from '@/types/user';
@@ -28,14 +28,11 @@ import Welcome from './Welcome';
 import WelcomeMobile from './Welcome.mobile';
 import WrapUpHint from './WrapUpHint';
 
-const assistantLikeRoles = new Set(['assistant', 'assistantGroup', 'supervisor']);
-
 interface AgentOnboardingConversationProps {
   discoveryUserMessageCount?: number;
   feedbackSubmitted?: boolean;
   finishTargetUrl?: string;
   onAfterWrapUp?: () => Promise<unknown> | void;
-  onAssistantTurnSettled?: (messageId: string) => Promise<unknown> | void;
   onboardingFinished?: boolean;
   phase?: OnboardingPhase;
   readOnly?: boolean;
@@ -57,7 +54,6 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
     feedbackSubmitted,
     finishTargetUrl,
     onAfterWrapUp,
-    onAssistantTurnSettled,
     onboardingFinished,
     phase,
     readOnly,
@@ -66,9 +62,6 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
   }) => {
     const isMobile = useIsMobile();
     const displayMessages = useConversationStore(conversationSelectors.displayMessages);
-    const pendingInterventionCount = useConversationStore(
-      (s) => dataSelectors.pendingInterventions(s).length,
-    );
     // The agent-marketplace intervention renders as an absolute overlay anchored
     // to the chat input area, which would otherwise occlude the last message.
     // Reserve matching scroll headroom inside ChatList so the latest message can
@@ -89,23 +82,8 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
     // pre-conversation period when no messages have been recorded yet.
     const isGreetingState = useMemo(() => displayMessages.length === 0, [displayMessages]);
 
-    const latestAssistantMessageId = useMemo(() => {
-      const latest = displayMessages.at(-1);
-      if (!latest || !assistantLikeRoles.has(latest.role)) return undefined;
-
-      return latest.id;
-    }, [displayMessages]);
-
-    const isLatestAssistantGenerating = useConversationStore((s) =>
-      latestAssistantMessageId
-        ? messageStateSelectors.isAssistantGroupItemGenerating(latestAssistantMessageId)(s)
-        : false,
-    );
-
     const [showGreeting, setShowGreeting] = useState(isGreetingState);
     const prevGreetingRef = useRef(isGreetingState);
-    const armedSettledMessageIdRef = useRef<string>(undefined);
-    const firedSettledMessageIdRef = useRef<string>(undefined);
 
     useEffect(() => {
       if (prevGreetingRef.current && !isGreetingState) {
@@ -123,32 +101,6 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
       }
       prevGreetingRef.current = isGreetingState;
     }, [isGreetingState]);
-
-    useEffect(() => {
-      if (!onAssistantTurnSettled || !latestAssistantMessageId) return;
-
-      if (pendingInterventionCount > 0) {
-        armedSettledMessageIdRef.current = undefined;
-        return;
-      }
-
-      if (isLatestAssistantGenerating) {
-        armedSettledMessageIdRef.current = latestAssistantMessageId;
-        return;
-      }
-
-      if (armedSettledMessageIdRef.current !== latestAssistantMessageId) return;
-      if (firedSettledMessageIdRef.current === latestAssistantMessageId) return;
-
-      firedSettledMessageIdRef.current = latestAssistantMessageId;
-      armedSettledMessageIdRef.current = undefined;
-      void onAssistantTurnSettled(latestAssistantMessageId);
-    }, [
-      isLatestAssistantGenerating,
-      latestAssistantMessageId,
-      onAssistantTurnSettled,
-      pendingInterventionCount,
-    ]);
 
     const shouldShowGreetingWelcome = showGreeting && !onboardingFinished;
 

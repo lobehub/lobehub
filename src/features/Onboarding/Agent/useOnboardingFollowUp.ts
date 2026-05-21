@@ -1,6 +1,7 @@
 import type { FollowUpModelConfig } from '@lobechat/types';
-import { useCallback } from 'react';
+import { useMemo } from 'react';
 
+import { type ConversationHooks } from '@/features/Conversation/types';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useFollowUpActionStore } from '@/store/followUpAction';
 import type { OnboardingPhase } from '@/types/user';
@@ -10,11 +11,8 @@ interface UseOnboardingFollowUpParams {
   isGreeting: boolean;
   modelConfig: FollowUpModelConfig;
   onboardingAgentId: string | undefined;
-}
-
-interface OnboardingFollowUpHandlers {
-  onBeforeSendMessage: (topicId: string) => Promise<void>;
-  triggerExtract: (topicId: string, phase: OnboardingPhase | undefined) => Promise<void>;
+  phase: OnboardingPhase | undefined;
+  topicId: string | undefined;
 }
 
 export const useOnboardingFollowUp = ({
@@ -22,34 +20,38 @@ export const useOnboardingFollowUp = ({
   isGreeting,
   modelConfig,
   onboardingAgentId,
-}: UseOnboardingFollowUpParams): OnboardingFollowUpHandlers => {
-  const triggerExtract = useCallback(
-    async (topicId: string, phase: OnboardingPhase | undefined) => {
-      if (!enabled) return;
-      if (!onboardingAgentId) return;
-      if (!phase) return;
-      if (phase === 'summary') return;
-      if (isGreeting) return;
+  phase,
+  topicId,
+}: UseOnboardingFollowUpParams): ConversationHooks => {
+  return useMemo<ConversationHooks>(() => {
+    if (!enabled || !onboardingAgentId || !topicId) return {};
 
-      const conversationKey = messageMapKey({ agentId: onboardingAgentId, topicId });
-      await useFollowUpActionStore.getState().fetchFor(conversationKey, {
-        hint: { kind: 'onboarding', phase },
-        modelConfig,
-        topicId,
-      });
-    },
-    [enabled, isGreeting, modelConfig, onboardingAgentId],
-  );
+    const conversationKey = messageMapKey({ agentId: onboardingAgentId, topicId });
+    const phaseSnapshot = phase;
 
-  const onBeforeSendMessage = useCallback(
-    async (topicId: string) => {
-      if (!enabled) return;
-      if (!onboardingAgentId) return;
-      const conversationKey = messageMapKey({ agentId: onboardingAgentId, topicId });
-      useFollowUpActionStore.getState().clear(conversationKey);
-    },
-    [enabled, onboardingAgentId],
-  );
-
-  return { onBeforeSendMessage, triggerExtract };
+    return {
+      onAssistantTurnSettled: async (_messageId, { reason }) => {
+        if (reason === 'stopped') return;
+        if (isGreeting) return;
+        if (!phaseSnapshot) return;
+        if (phaseSnapshot === 'summary') return;
+        await useFollowUpActionStore.getState().fetchFor(conversationKey, {
+          hint: { kind: 'onboarding', phase: phaseSnapshot },
+          modelConfig,
+          topicId,
+        });
+      },
+      onBeforeSendMessage: async () => {
+        useFollowUpActionStore.getState().clear(conversationKey);
+      },
+    };
+  }, [
+    enabled,
+    isGreeting,
+    modelConfig.model,
+    modelConfig.provider,
+    onboardingAgentId,
+    phase,
+    topicId,
+  ]);
 };
