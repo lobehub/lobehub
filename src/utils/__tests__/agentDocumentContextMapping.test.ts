@@ -143,6 +143,37 @@ describe('toAgentContextDocuments', () => {
     expect(result.map((d) => d.id)).toEqual(['a', 'b', 'c']);
     expect(result.map((d) => d.sourceType)).toEqual(['web', 'agent', 'file']);
   });
+
+  // Regression: LOBE-9386 — folder VFS nodes (plain folders + skill bundles)
+  // carry empty content but inherit loadRules/loadPosition, so they used to
+  // leak into the injection candidate pool as empty slots. They must never
+  // become context documents.
+  it('drops folder rows (plain folders and skill bundles) from context', () => {
+    const rows = [
+      buildDoc({ id: 'doc', isFolder: false }),
+      buildDoc({ id: 'folder', isFolder: true, fileType: 'custom/folder' }),
+      buildDoc({ id: 'bundle', isFolder: true, isSkillBundle: true, fileType: 'skills/bundle' }),
+    ];
+
+    const result = toAgentContextDocuments(rows);
+
+    expect(result.map((d) => d.id)).toEqual(['doc']);
+  });
+
+  it('keeps non-folder skill rows such as the SKILL.md index', () => {
+    const rows = [
+      buildDoc({
+        id: 'skill-index',
+        isFolder: false,
+        isSkillIndex: true,
+        fileType: 'skills/index',
+      }),
+    ];
+
+    const result = toAgentContextDocuments(rows);
+
+    expect(result.map((d) => d.id)).toEqual(['skill-index']);
+  });
 });
 
 describe('normalizeAgentDocumentPosition', () => {

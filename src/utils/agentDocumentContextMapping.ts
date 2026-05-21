@@ -48,5 +48,17 @@ export const toAgentContextDocument = (doc: AgentDocumentWithRules): AgentContex
   updatedAt: doc.updatedAt ?? undefined,
 });
 
+/**
+ * Map a list of agent document rows into context-engine documents, dropping
+ * folder-like rows (plain folders and skill bundles).
+ *
+ * Folders are structural VFS nodes with no readable body — they carry an
+ * empty `content` but inherit `loadRules`/`loadPosition`, so without this
+ * filter they slip into the injection candidate pool and either bloat the
+ * progressive index with empty "slots" or emit empty `<agent_document>`
+ * blocks (LOBE-9386). `AgentContextDocument` deliberately has no `fileType`
+ * field, so the folder check has to happen here, at the DB→context boundary,
+ * where the derived `isFolder` flag is still available.
+ */
 export const toAgentContextDocuments = (docs: AgentDocumentWithRules[]): AgentContextDocument[] =>
-  docs.map((doc) => toAgentContextDocument(doc));
+  docs.filter((doc) => !doc.isFolder).map((doc) => toAgentContextDocument(doc));
