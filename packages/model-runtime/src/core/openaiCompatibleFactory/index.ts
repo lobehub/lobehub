@@ -101,6 +101,9 @@ const getGenerateObjectReasoningParams = ({
   reasoning_effort,
   thinking,
 }: GenerateObjectReasoningParams) => ({
+  // `thinking` is a Lobe runtime abstraction, not a generic OpenAI-compatible API field.
+  // Use it here only to suppress `reasoning_effort`; providers that support thinking
+  // must translate it via `generateObject.handlePayload`.
   ...(reasoning_effort && thinking?.type !== 'disabled' ? { reasoning_effort } : {}),
 });
 
