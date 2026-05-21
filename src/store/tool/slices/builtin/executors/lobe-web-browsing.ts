@@ -32,6 +32,7 @@ const createDocumentService = (ctx: BuiltinToolContext): WebBrowsingDocumentServ
       content,
       description: description || `Crawled from ${url}`,
       title,
+      topicId: ctx.topicId ?? undefined,
       url,
     }),
 });

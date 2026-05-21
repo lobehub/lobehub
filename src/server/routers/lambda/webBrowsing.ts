@@ -25,6 +25,7 @@ export const webBrowsingRouter = router({
         content: z.string(),
         description: z.string().optional(),
         title: z.string(),
+        topicId: z.string().optional(),
         url: z.string().url(),
       }),
     )

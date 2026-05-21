@@ -10,7 +10,16 @@ const mocks = vi.hoisted(() => ({
   documentService: {
     updateDocument: vi.fn(),
   },
+  onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
 }));
+
+const buildDbMock = () => ({
+  insert: vi.fn(() => ({
+    values: vi.fn(() => ({
+      onConflictDoNothing: mocks.onConflictDoNothing,
+    })),
+  })),
+});
 
 vi.mock('@/database/models/document', () => ({
   DocumentModel: vi.fn(() => mocks.documentModel),
@@ -29,13 +38,17 @@ vi.mock('@/server/services/agentDocuments/headlessEditor', () => ({
 
 describe('WebBrowsingDocumentService.upsertCrawledDocument (LOBE-9384)', () => {
   let service: WebBrowsingDocumentService;
+  let db: ReturnType<typeof buildDbMock>;
 
   beforeEach(() => {
     mocks.documentModel.create.mockReset();
     mocks.documentModel.findBySource.mockReset();
     mocks.documentService.updateDocument.mockReset();
+    mocks.onConflictDoNothing.mockClear();
+    mocks.onConflictDoNothing.mockResolvedValue(undefined);
 
-    service = new WebBrowsingDocumentService({} as never, 'user-1');
+    db = buildDbMock();
+    service = new WebBrowsingDocumentService(db as never, 'user-1');
   });
 
   it('creates a new document the first time a URL is crawled', async () => {
@@ -153,6 +166,54 @@ describe('WebBrowsingDocumentService.upsertCrawledDocument (LOBE-9384)', () => {
         sourceType: 'web',
       }),
     );
+  });
+
+  // Topic binding restores parity with the old `notebook.createDocument`
+  // client path so crawled docs still show up under the active topic in
+  // the notebook UI.
+  it('binds the document to a topic when topicId is provided', async () => {
+    mocks.documentModel.findBySource.mockResolvedValueOnce(undefined);
+    mocks.documentModel.create.mockResolvedValueOnce({ id: 'doc-1' });
+
+    await service.upsertCrawledDocument({
+      content: 'body',
+      title: 'Crawled',
+      topicId: 'topic-1',
+      url: 'https://example.com/a',
+    });
+
+    expect(db.insert).toHaveBeenCalledTimes(1);
+    expect(mocks.onConflictDoNothing).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips topic binding when topicId is omitted (server agent runtime path)', async () => {
+    mocks.documentModel.findBySource.mockResolvedValueOnce(undefined);
+    mocks.documentModel.create.mockResolvedValueOnce({ id: 'doc-1' });
+
+    await service.upsertCrawledDocument({
+      content: 'body',
+      title: 'Crawled',
+      url: 'https://example.com/a',
+    });
+
+    expect(db.insert).not.toHaveBeenCalled();
+  });
+
+  it('binds the topic even on unchanged short-circuit so cross-topic re-crawls still appear', async () => {
+    mocks.documentModel.findBySource.mockResolvedValueOnce({
+      content: 'same body',
+      id: 'doc-existing',
+    } as any);
+
+    const result = await service.upsertCrawledDocument({
+      content: 'same body',
+      title: 'Same',
+      topicId: 'topic-other',
+      url: 'https://example.com/a',
+    });
+
+    expect(result).toEqual({ id: 'doc-existing', status: 'unchanged' });
+    expect(mocks.onConflictDoNothing).toHaveBeenCalledTimes(1);
   });
 
   it('hashes existing.content treating null/undefined as empty string', async () => {

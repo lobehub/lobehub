@@ -1,4 +1,5 @@
 import type { LobeChatDatabase } from '@lobechat/database';
+import { topicDocuments } from '@lobechat/database/schemas';
 import { Md5 } from 'ts-md5';
 
 import { DocumentModel } from '@/database/models/document';
@@ -9,6 +10,12 @@ export interface UpsertCrawledDocumentParams {
   content: string;
   description?: string;
   title: string;
+  /**
+   * When provided, the resulting document is also (idempotently) linked to
+   * the topic so the notebook UI can list it. Server agent runtimes leave
+   * this unset — they bind to the agent instead via `associateDocument`.
+   */
+  topicId?: string;
   url: string;
 }
 
@@ -56,45 +63,68 @@ export class WebBrowsingDocumentService {
   upsertCrawledDocument = async (
     params: UpsertCrawledDocumentParams,
   ): Promise<UpsertCrawledDocumentResult> => {
-    const { content, description, title, url } = params;
+    const { content, description, title, topicId, url } = params;
 
     const existing = await this.documentModel.findBySource(url, 'web');
 
-    if (existing) {
-      // Byte-identical content → skip the write entirely. Both `documents`
-      // and `document_histories` would only churn `updated_at`, which is
-      // not worth the cost (and pollutes the history list with no-op rows).
-      if (hashContent(existing.content ?? '') === hashContent(content)) {
-        return { id: existing.id, status: 'unchanged' };
-      }
+    let documentId: string;
+    let status: UpsertCrawledDocumentResult['status'];
 
+    if (existing) {
+      if (hashContent(existing.content ?? '') === hashContent(content)) {
+        // Byte-identical content → skip the write entirely. Both `documents`
+        // and `document_histories` would only churn `updated_at`, which is
+        // not worth the cost (and pollutes the history list with no-op rows).
+        documentId = existing.id;
+        status = 'unchanged';
+      } else {
+        const snapshot = await createMarkdownEditorSnapshot(content);
+        // `DocumentService.updateDocument` runs inside a transaction and
+        // writes a `document_histories` row when `editorData` differs from
+        // the row's current snapshot, so each refresh becomes a revision.
+        await this.documentService.updateDocument(existing.id, {
+          content: snapshot.content,
+          editorData: snapshot.editorData,
+          saveSource: 'llm_call',
+          title,
+        });
+        documentId = existing.id;
+        status = 'updated';
+      }
+    } else {
       const snapshot = await createMarkdownEditorSnapshot(content);
-      // `DocumentService.updateDocument` runs inside a transaction and writes
-      // a `document_histories` row when `editorData` differs from the row's
-      // current snapshot, so each refresh becomes a real revision.
-      await this.documentService.updateDocument(existing.id, {
+      const created = await this.documentModel.create({
         content: snapshot.content,
+        description,
         editorData: snapshot.editorData,
-        saveSource: 'llm_call',
+        fileType: 'article',
+        filename: title,
+        source: url,
+        sourceType: 'web',
         title,
+        totalCharCount: snapshot.content.length,
+        totalLineCount: snapshot.content.split('\n').length,
       });
-      return { id: existing.id, status: 'updated' };
+      documentId = created.id;
+      status = 'created';
     }
 
-    const snapshot = await createMarkdownEditorSnapshot(content);
-    const created = await this.documentModel.create({
-      content: snapshot.content,
-      description,
-      editorData: snapshot.editorData,
-      fileType: 'article',
-      filename: title,
-      source: url,
-      sourceType: 'web',
-      title,
-      totalCharCount: snapshot.content.length,
-      totalLineCount: snapshot.content.split('\n').length,
-    });
+    // Topic binding is idempotent across all three statuses: the user may
+    // open the same URL in a new topic on a later crawl, and the binding
+    // should appear there even if the underlying document didn't change.
+    if (topicId) {
+      await this.ensureTopicAssociation(documentId, topicId);
+    }
 
-    return { id: created.id, status: 'created' };
+    return { id: documentId, status };
+  };
+
+  private ensureTopicAssociation = async (documentId: string, topicId: string): Promise<void> => {
+    // `topic_documents` PK is (documentId, topicId); skip the row when the
+    // pair is already bound rather than blowing up on a duplicate insert.
+    await this.db
+      .insert(topicDocuments)
+      .values({ documentId, topicId, userId: this.userId })
+      .onConflictDoNothing();
   };
 }

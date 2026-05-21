@@ -4,6 +4,7 @@ interface UpsertCrawledDocumentParams {
   content: string;
   description?: string;
   title: string;
+  topicId?: string;
   url: string;
 }
 
