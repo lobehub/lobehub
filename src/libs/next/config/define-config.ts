@@ -2,7 +2,12 @@ import { codeInspectorPlugin } from 'code-inspector-plugin';
 import { type NextConfig } from 'next';
 import { type Header, type Redirect } from 'next/dist/lib/load-custom-routes';
 
-const OPTIONAL_SERVER_NATIVE_DEPENDENCIES = ['bufferutil', 'utf-8-validate', 'zlib-sync'] as const;
+const OPTIONAL_SERVER_NATIVE_DEPENDENCIES = [
+  'bufferutil',
+  'utf-8-validate',
+  'zlib-sync',
+  'zipfile',
+] as const;
 
 interface CustomNextConfig {
   experimental?: NextConfig['experimental'];
@@ -366,6 +371,7 @@ export function defineConfig(config: CustomNextConfig) {
       'pdfjs-dist',
       'ajv',
       'oidc-provider',
+      'zipfile',
     ],
 
     transpilePackages: ['mermaid', 'better-auth-harmony'],
