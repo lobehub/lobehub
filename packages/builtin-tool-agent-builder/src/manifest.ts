@@ -87,7 +87,7 @@ export const AgentBuilderManifest: BuiltinToolManifest = {
             properties: {
               chatConfig: {
                 description:
-                  'Chat configuration settings (historyCount, enableHistoryCount, enableAutoCreateTopic, autoCreateTopicThreshold, enableCompressHistory, enableStreaming, enableReasoning)',
+                  'Chat configuration settings (historyCount, enableHistoryCount, enableCompressHistory, enableStreaming, enableReasoning)',
                 type: 'object',
               },
               model: {

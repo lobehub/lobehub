@@ -361,6 +361,51 @@ describe('UpdaterManager', () => {
     });
   });
 
+  describe('captureRestoreRoute', () => {
+    const callCapture = () => (updaterManager as any).captureRestoreRoute();
+
+    it('stores the derived route from the main window URL', () => {
+      (mockApp.browserManager.getMainWindow as any).mockReturnValue({
+        webContents: { getURL: () => 'app://renderer/agent/abc' },
+      });
+
+      callCapture();
+
+      expect(mockApp.storeManager.set).toHaveBeenCalledWith('pendingRestoreRoute', '/agent/abc');
+    });
+
+    it('stores nothing when the URL is not a restorable route', () => {
+      (mockApp.browserManager.getMainWindow as any).mockReturnValue({
+        webContents: { getURL: () => 'app://renderer/' },
+      });
+
+      callCapture();
+
+      expect(mockApp.storeManager.set).not.toHaveBeenCalled();
+    });
+
+    it('stores nothing when there is no webContents', () => {
+      (mockApp.browserManager.getMainWindow as any).mockReturnValue({ webContents: null });
+
+      callCapture();
+
+      expect(mockApp.storeManager.set).not.toHaveBeenCalled();
+    });
+
+    it('does not throw when reading the URL fails', () => {
+      (mockApp.browserManager.getMainWindow as any).mockReturnValue({
+        webContents: {
+          getURL: () => {
+            throw new Error('boom');
+          },
+        },
+      });
+
+      expect(() => callCapture()).not.toThrow();
+      expect(mockApp.storeManager.set).not.toHaveBeenCalled();
+    });
+  });
+
   describe('installLater', () => {
     it('should set autoInstallOnAppQuit to true', () => {
       updaterManager.installLater();

@@ -172,6 +172,8 @@ const sidebarItems = (s: GlobalState): string[] => {
 const showSystemRole = (s: GlobalState) => s.status.showSystemRole;
 const mobileShowTopic = (s: GlobalState) => s.status.mobileShowTopic;
 const mobileShowPortal = (s: GlobalState) => s.status.mobileShowPortal;
+const showAgentBuilderPanel = (s: GlobalState) =>
+  !s.status.zenMode && s.status.showAgentBuilderPanel;
 const showRightPanel = (s: GlobalState) => !s.status.zenMode && s.status.showRightPanel;
 const showLeftPanel = (s: GlobalState) => !s.status.zenMode && s.status.showLeftPanel;
 const showPageAgentPanel = (s: GlobalState) => !s.status.zenMode && s.status.showPageAgentPanel;
@@ -279,6 +281,7 @@ export const systemStatusSelectors = {
   sidebarExpandedKeys,
   sidebarItems,
   sessionGroupKeys,
+  showAgentBuilderPanel,
   showChatHeader,
   showFilePanel,
   showImagePanel,

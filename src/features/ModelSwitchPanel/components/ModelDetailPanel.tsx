@@ -1,7 +1,8 @@
+import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import { getCachedTextInputUnitRate } from '@lobechat/utils';
 import { Accordion, AccordionItem, Flexbox, Icon, Tag, Tooltip } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { type LucideIcon } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import {
   ArrowDownToDot,
   ArrowUpFromDot,
@@ -14,15 +15,15 @@ import {
   VideoIcon,
   WrenchIcon,
 } from 'lucide-react';
-import {
-  type FixedPricingUnit,
-  type ModelPriceCurrency,
-  type Pricing,
-  type PricingUnit,
-  type PricingUnitName,
-  type TieredPricingUnit,
+import type {
+  FixedPricingUnit,
+  ModelPriceCurrency,
+  Pricing,
+  PricingUnit,
+  PricingUnitName,
+  TieredPricingUnit,
 } from 'model-bank';
-import { type FC } from 'react';
+import type { FC } from 'react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -31,7 +32,7 @@ import { useGlobalStore } from '@/store/global';
 import type { ModelDetailPanelExpandedKey } from '@/store/global/initialState';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import type { EnabledProviderWithModels } from '@/types/aiProvider';
-import { formatTokenNumber } from '@/utils/format';
+import { formatNumber, formatShortenNumber, formatTokenNumber } from '@/utils/format';
 import {
   formatPriceByCurrency,
   getOriginalUnitRateByName,
@@ -75,10 +76,37 @@ interface FormattedUnitPrice {
   original?: string;
 }
 
-const formatPricingRate = (rate: number | undefined, currency?: ModelPriceCurrency) =>
-  typeof rate === 'number' ? formatPriceByCurrency(rate, currency) : '0';
+const BRANDING_CREDIT_UNIT = 1_000_000;
+const MILLION_SCALE_UNITS = new Set<PricingUnit['unit']>(['millionCharacters', 'millionTokens']);
 
-const getFormattedUnitPrice = (pricing: Pricing, unitName: PricingUnitName): FormattedUnitPrice => {
+interface FormatPricingRateOptions {
+  isCreditPricing?: boolean;
+  unit?: PricingUnit['unit'];
+}
+
+const formatBrandingCreditRate = (rate: number, unit?: PricingUnit['unit']) => {
+  if (unit && MILLION_SCALE_UNITS.has(unit)) return `${formatNumber(rate)}M`;
+
+  return String(formatShortenNumber(Math.round(rate * BRANDING_CREDIT_UNIT)));
+};
+
+const formatPricingRate = (
+  rate: number | undefined,
+  currency?: ModelPriceCurrency,
+  options: FormatPricingRateOptions = {},
+) => {
+  if (typeof rate !== 'number') return '0';
+
+  return options.isCreditPricing
+    ? formatBrandingCreditRate(rate, options.unit)
+    : formatPriceByCurrency(rate, currency);
+};
+
+const getFormattedUnitPrice = (
+  pricing: Pricing,
+  unitName: PricingUnitName,
+  isCreditPricing: boolean,
+): FormattedUnitPrice => {
   const currency = pricing.currency as ModelPriceCurrency | undefined;
   const currentRate =
     unitName === 'textInput'
@@ -89,17 +117,25 @@ const getFormattedUnitPrice = (pricing: Pricing, unitName: PricingUnitName): For
   const originalRate = getOriginalUnitRateByName(pricing, unitName);
 
   return {
-    current: formatPricingRate(currentRate, currency),
+    current: formatPricingRate(currentRate, currency, {
+      isCreditPricing,
+      unit: 'millionTokens',
+    }),
     original:
-      typeof originalRate === 'number' ? formatPriceByCurrency(originalRate, currency) : undefined,
+      typeof originalRate === 'number'
+        ? formatPricingRate(originalRate, currency, {
+            isCreditPricing,
+            unit: 'millionTokens',
+          })
+        : undefined,
   };
 };
 
-const getPrice = (pricing: Pricing) => {
+const getPrice = (pricing: Pricing, isCreditPricing: boolean) => {
   return {
-    cachedInput: getFormattedUnitPrice(pricing, 'textInput_cacheRead'),
-    input: getFormattedUnitPrice(pricing, 'textInput'),
-    output: getFormattedUnitPrice(pricing, 'textOutput'),
+    cachedInput: getFormattedUnitPrice(pricing, 'textInput_cacheRead', isCreditPricing),
+    input: getFormattedUnitPrice(pricing, 'textInput', isCreditPricing),
+    output: getFormattedUnitPrice(pricing, 'textOutput', isCreditPricing),
   };
 };
 
@@ -186,14 +222,23 @@ const PriceValue: FC<PriceValueProps> = ({ price, prefix = '', suffix = '' }) =>
   </span>
 );
 
-const formatUnitRate = (unit: PricingUnit, currency?: ModelPriceCurrency): FormattedUnitPrice => {
+const formatUnitRate = (
+  unit: PricingUnit,
+  currency?: ModelPriceCurrency,
+  isCreditPricing?: boolean,
+): FormattedUnitPrice => {
+  const formatRate = (rate: number) =>
+    formatPricingRate(rate, currency, { isCreditPricing, unit: unit.unit });
+  const formatRange = (low: string, high: string) =>
+    isCreditPricing ? `${low} ~ ${high}` : `${low} ~ $${high}`;
+
   if (unit.strategy === 'fixed') {
     const fixedUnit = unit as FixedPricingUnit;
     return {
-      current: formatPriceByCurrency(fixedUnit.rate, currency),
+      current: formatRate(fixedUnit.rate),
       original:
         typeof fixedUnit.originalRate === 'number' && fixedUnit.originalRate > fixedUnit.rate
-          ? formatPriceByCurrency(fixedUnit.originalRate, currency)
+          ? formatRate(fixedUnit.originalRate)
           : undefined,
     };
   }
@@ -201,25 +246,25 @@ const formatUnitRate = (unit: PricingUnit, currency?: ModelPriceCurrency): Forma
   if (unit.strategy === 'tiered') {
     const tiers = (unit as TieredPricingUnit).tiers;
     if (tiers.length === 1) {
-      const price = formatPriceByCurrency(tiers[0].rate, currency);
+      const price = formatRate(tiers[0].rate);
       return { current: price };
     }
-    const low = formatPriceByCurrency(tiers[0].rate, currency);
-    const high = formatPriceByCurrency(tiers.at(-1)!.rate, currency);
-    return { current: `${low} ~ $${high}` };
+    const low = formatRate(tiers[0].rate);
+    const high = formatRate(tiers.at(-1)!.rate);
+    return { current: formatRange(low, high) };
   }
 
   // lookup strategy
   if (unit.strategy === 'lookup') {
     const prices = Object.values(unit.lookup.prices);
     if (prices.length === 1) {
-      const price = formatPriceByCurrency(prices[0], currency);
+      const price = formatRate(prices[0]);
       return { current: price };
     }
     const sorted = [...prices].sort((a, b) => a - b);
-    const low = formatPriceByCurrency(sorted[0], currency);
-    const high = formatPriceByCurrency(sorted.at(-1)!, currency);
-    return { current: `${low} ~ $${high}` };
+    const low = formatRate(sorted[0]);
+    const high = formatRate(sorted.at(-1)!);
+    return { current: formatRange(low, high) };
   }
 
   return { current: '-' };
@@ -285,8 +330,9 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
     const updateExpandedKeys = useGlobalStore((s) => s.updateModelDetailPanelExpandedKeys);
 
     const pricing = model?.pricing;
+    const isCreditPricing = provider === BRANDING_PROVIDER;
     const hasPricing = !!pricing;
-    const formatPrice = pricing ? getPrice(pricing) : null;
+    const formatPrice = pricing ? getPrice(pricing, isCreditPricing) : null;
     const pricingGroups = useMemo(
       () => (pricing ? groupPricingUnits(pricing.units) : []),
       [pricing],
@@ -296,21 +342,57 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
       if (!pricing || !pricingMode) return null;
       const currency = pricing.currency as ModelPriceCurrency | undefined;
       if (pricingMode === 'image' && typeof pricing.approximatePricePerImage === 'number') {
-        const amount = formatPriceByCurrency(pricing.approximatePricePerImage, currency);
-        return t('ModelSwitchPanel.detail.pricing.perImage', {
-          amount,
-          defaultValue: '~ ${{amount}} / image',
-        });
+        const amount = isCreditPricing
+          ? formatBrandingCreditRate(pricing.approximatePricePerImage, 'image')
+          : formatPriceByCurrency(pricing.approximatePricePerImage, currency);
+        return t(
+          isCreditPricing
+            ? 'ModelSwitchPanel.detail.pricing.credits.perImage'
+            : 'ModelSwitchPanel.detail.pricing.perImage',
+          {
+            amount,
+            defaultValue: isCreditPricing
+              ? '~ {{amount}} credits / image'
+              : '~ ${{amount}} / image',
+          },
+        );
       }
       if (pricingMode === 'video' && typeof pricing.approximatePricePerVideo === 'number') {
-        const amount = formatPriceByCurrency(pricing.approximatePricePerVideo, currency);
-        return t('ModelSwitchPanel.detail.pricing.perVideo', {
-          amount,
-          defaultValue: '~ ${{amount}} / video',
-        });
+        const amount = isCreditPricing
+          ? formatBrandingCreditRate(pricing.approximatePricePerVideo)
+          : formatPriceByCurrency(pricing.approximatePricePerVideo, currency);
+        return t(
+          isCreditPricing
+            ? 'ModelSwitchPanel.detail.pricing.credits.perVideo'
+            : 'ModelSwitchPanel.detail.pricing.perVideo',
+          {
+            amount,
+            defaultValue: isCreditPricing
+              ? '~ {{amount}} credits / video'
+              : '~ ${{amount}} / video',
+          },
+        );
       }
       return null;
-    }, [pricing, pricingMode, t]);
+    }, [isCreditPricing, pricing, pricingMode, t]);
+
+    const getCreditsUnitLabel = (unit: PricingUnit['unit']) =>
+      t(`ModelSwitchPanel.detail.pricing.credits.${unit}` as any, {
+        defaultValue: `credits${UNIT_LABEL_MAP[unit] || ''}`,
+      });
+
+    const getPricingTooltip = (key: 'cachedInput' | 'input' | 'output', amount: string): string => {
+      if (isCreditPricing) {
+        return t(`ModelSwitchPanel.detail.pricing.credits.${key}` as any, { amount });
+      }
+
+      const fallbackKey =
+        key === 'cachedInput'
+          ? 'ModelSwitchPanel.detail.pricing.cachedInput'
+          : `ModelSwitchPanel.detail.pricing.${key}`;
+
+      return t(fallbackKey as any, { amount });
+    };
 
     if (!model) return null;
 
@@ -440,9 +522,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
                     <Flexbox horizontal align={'center'} className={styles.actionText} gap={8}>
                       {getCachedTextInputUnitRate(model.pricing!) && (
                         <Tooltip
-                          title={t('ModelSwitchPanel.detail.pricing.cachedInput', {
-                            amount: formatPrice!.cachedInput.current,
-                          })}
+                          title={getPricingTooltip('cachedInput', formatPrice!.cachedInput.current)}
                         >
                           <Flexbox horizontal align={'center'} gap={2}>
                             <Icon icon={CircleFadingArrowUp} size={'small'} />
@@ -450,21 +530,13 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
                           </Flexbox>
                         </Tooltip>
                       )}
-                      <Tooltip
-                        title={t('ModelSwitchPanel.detail.pricing.input', {
-                          amount: formatPrice!.input.current,
-                        })}
-                      >
+                      <Tooltip title={getPricingTooltip('input', formatPrice!.input.current)}>
                         <Flexbox horizontal align={'center'} gap={2}>
                           <Icon icon={ArrowUpFromDot} size={'small'} />
                           <PriceValue price={formatPrice!.input} />
                         </Flexbox>
                       </Tooltip>
-                      <Tooltip
-                        title={t('ModelSwitchPanel.detail.pricing.output', {
-                          amount: formatPrice!.output.current,
-                        })}
-                      >
+                      <Tooltip title={getPricingTooltip('output', formatPrice!.output.current)}>
                         <Flexbox horizontal align={'center'} gap={2}>
                           <Icon icon={ArrowDownToDot} size={'small'} />
                           <PriceValue price={formatPrice!.output} />
@@ -518,12 +590,17 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
                             </span>
                           </Flexbox>
                           <PriceValue
-                            prefix="$"
-                            suffix={UNIT_LABEL_MAP[unit.unit] || ''}
+                            prefix={isCreditPricing ? '' : '$'}
                             price={formatUnitRate(
                               unit,
                               model.pricing?.currency as ModelPriceCurrency,
+                              isCreditPricing,
                             )}
+                            suffix={
+                              isCreditPricing
+                                ? ` ${getCreditsUnitLabel(unit.unit)}`
+                                : UNIT_LABEL_MAP[unit.unit] || ''
+                            }
                           />
                         </Flexbox>
                       ))}

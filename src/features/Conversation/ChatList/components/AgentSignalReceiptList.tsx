@@ -1,5 +1,6 @@
 'use client';
 
+import { LayersEnum } from '@lobechat/types';
 import { Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import type { LucideIcon } from 'lucide-react';
@@ -14,6 +15,13 @@ import { useChatStore } from '@/store/chat';
 import type { AgentSignalReceiptView } from '../hooks/useAgentSignalReceipts';
 
 const PAGE_ROUTE_PATTERN = /^\/agent\/([^/]+)\/([^/]+)\/page(?:\/[^/?#]+)?/;
+const MEMORY_ROUTE_BY_LAYER = {
+  [LayersEnum.Activity]: { idParam: 'activityId', path: '/memory/activities' },
+  [LayersEnum.Context]: { idParam: 'contextId', path: '/memory/contexts' },
+  [LayersEnum.Experience]: { idParam: 'experienceId', path: '/memory/experiences' },
+  [LayersEnum.Identity]: { idParam: 'identityId', path: '/memory/identities' },
+  [LayersEnum.Preference]: { idParam: 'preferenceId', path: '/memory/preferences' },
+} satisfies Record<LayersEnum, { idParam: string; path: string }>;
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   agentSignalDescription: css`
@@ -58,6 +66,17 @@ interface AgentSignalReceiptItemProps {
   receipt: AgentSignalReceiptView;
 }
 
+const getMemoryRoute = (target?: AgentSignalReceiptView['target']) => {
+  if (target?.type !== 'memory') return;
+
+  if (!target.memoryLayer) return '/memory';
+
+  const route = MEMORY_ROUTE_BY_LAYER[target.memoryLayer];
+  if (!route) return '/memory';
+
+  return target.id ? `${route.path}?${route.idParam}=${encodeURIComponent(target.id)}` : route.path;
+};
+
 const AgentSignalReceiptItem = memo<AgentSignalReceiptItemProps>(({ receipt }) => {
   const { t } = useTranslation(['chat', 'common']);
   const navigate = useStableNavigate();
@@ -84,10 +103,11 @@ const AgentSignalReceiptItem = memo<AgentSignalReceiptItemProps>(({ receipt }) =
   );
   const target = receipt.target;
   const documentId = target?.type === 'skill' ? (target.documentId ?? target.id) : undefined;
-  const canOpen = target?.type === 'memory' || Boolean(documentId);
+  const memoryRoute = getMemoryRoute(target);
+  const canOpen = Boolean(memoryRoute) || Boolean(documentId);
   const handleOpen = useCallback(() => {
-    if (target?.type === 'memory') {
-      navigate('/memory');
+    if (memoryRoute) {
+      navigate(memoryRoute);
       return;
     }
 
@@ -103,7 +123,7 @@ const AgentSignalReceiptItem = memo<AgentSignalReceiptItemProps>(({ receipt }) =
     }
 
     openDocument(documentId);
-  }, [documentId, navigate, openDocument, target]);
+  }, [documentId, memoryRoute, navigate, openDocument, target]);
 
   return (
     <PortalResourceCard
@@ -112,7 +132,6 @@ const AgentSignalReceiptItem = memo<AgentSignalReceiptItemProps>(({ receipt }) =
       openLabel={canOpen ? t('common:cmdk.toOpen', 'Open') : undefined}
       title={title}
       tooltip={tooltip}
-      // TODO: Replace memory fallback with category/id-aware routes when Agent Signal receipts expose them.
       onOpen={canOpen ? handleOpen : undefined}
     />
   );

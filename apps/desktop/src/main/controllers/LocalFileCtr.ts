@@ -1,5 +1,5 @@
 import { constants } from 'node:fs';
-import { access, mkdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
+import { access, mkdir, readdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import {
@@ -12,6 +12,8 @@ import {
   type GrepContentParams,
   type GrepContentResult,
   type ListLocalFileParams,
+  type ListProjectSkillsParams,
+  type ListProjectSkillsResult,
   type LocalFilePreviewUrlParams,
   type LocalFilePreviewUrlResult,
   type LocalMoveFilesResultItem,
@@ -118,6 +120,62 @@ const collectProjectDirectories = (files: string[], root: string): ProjectFileIn
   }
 
   return [...directories].map((directory) => createProjectFileEntry(root, directory, true));
+};
+
+const SKILL_FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---/;
+
+// Cap recursion to guard against pathological directory trees.
+const MAX_SKILL_FILE_COUNT = 1000;
+
+const listSkillFilesRecursive = async (dir: string): Promise<string[]> => {
+  const results: string[] = [];
+  const stack: string[] = [dir];
+
+  while (stack.length > 0 && results.length < MAX_SKILL_FILE_COUNT) {
+    const current = stack.pop()!;
+    let entries;
+    try {
+      entries = await readdir(current, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (entry.name.startsWith('.')) continue;
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(full);
+      } else if (entry.isFile()) {
+        results.push(toPosixRelativePath(path.relative(dir, full)));
+        if (results.length >= MAX_SKILL_FILE_COUNT) break;
+      }
+    }
+  }
+  return results.sort();
+};
+
+// Parse a minimal YAML frontmatter block for SKILL.md files.
+// Only handles `key: value` lines; multi-line block scalars fall back to the first line.
+const parseSkillFrontmatter = (raw: string): Record<string, string> => {
+  const match = raw.match(SKILL_FRONTMATTER_RE);
+  if (!match) return {};
+
+  const fields: Record<string, string> = {};
+  for (const line of match[1].split(/\r?\n/)) {
+    const colonIdx = line.indexOf(':');
+    if (colonIdx === -1) continue;
+    const key = line.slice(0, colonIdx).trim();
+    if (!key || key.startsWith('#')) continue;
+    let value = line.slice(colonIdx + 1).trim();
+    if (value.startsWith('|') || value.startsWith('>')) continue;
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    fields[key] = value;
+  }
+  return fields;
 };
 
 const createDetectedProjectFileEntry = async (
@@ -594,6 +652,61 @@ export default class LocalFileCtr extends ControllerModule {
       source: 'glob',
       totalCount: entries.length,
     };
+  }
+
+  /**
+   * Scan agent skill directories under the project root and return parsed
+   * frontmatter for each SKILL.md. Used by the hetero agent's working sidebar
+   * to surface skills available in the current project.
+   */
+  @IpcMethod()
+  async listProjectSkills(params: ListProjectSkillsParams): Promise<ListProjectSkillsResult> {
+    const root = params.scope;
+    const sources = ['.agents/skills', '.claude/skills'] as const;
+
+    for (const source of sources) {
+      const dir = path.join(root, source);
+      try {
+        const entries = await readdir(dir, { withFileTypes: true });
+        const skills = (
+          await Promise.all(
+            entries
+              .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
+              .map(async (entry) => {
+                const skillDir = path.join(dir, entry.name);
+                const skillFile = path.join(skillDir, 'SKILL.md');
+                try {
+                  const raw = await readFile(skillFile, 'utf8');
+                  const fields = parseSkillFrontmatter(raw);
+                  const files = await listSkillFilesRecursive(skillDir);
+                  return {
+                    description: fields.description || undefined,
+                    fileCount: files.length,
+                    files,
+                    name: fields.name || entry.name,
+                    path: skillFile,
+                    skillDir,
+                    source,
+                  };
+                } catch {
+                  return null;
+                }
+              }),
+          )
+        )
+          .filter((skill): skill is NonNullable<typeof skill> => skill !== null)
+          .sort((a, b) => a.name.localeCompare(b.name));
+
+        if (skills.length > 0) {
+          await this.approveProjectRootForPreview(root);
+          return { root, skills, source };
+        }
+      } catch {
+        // Directory does not exist or is not readable; try the next candidate.
+      }
+    }
+
+    return { root, skills: [], source: null };
   }
 
   /**

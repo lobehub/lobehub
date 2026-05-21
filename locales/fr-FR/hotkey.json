@@ -1,8 +1,6 @@
 {
   "addUserMessage.desc": "Ajouter l'entrée actuelle comme message utilisateur sans déclencher la génération",
   "addUserMessage.title": "Ajouter un message utilisateur",
-  "clearCurrentMessages.desc": "Effacer les messages et les fichiers téléchargés de la conversation en cours",
-  "clearCurrentMessages.title": "Effacer les messages de la conversation",
   "commandPalette.desc": "Ouvrir la palette de commandes globale pour un accès rapide aux fonctionnalités",
   "commandPalette.title": "Palette de commandes",
   "deleteAndRegenerateMessage.desc": "Supprimer le dernier message et le régénérer",

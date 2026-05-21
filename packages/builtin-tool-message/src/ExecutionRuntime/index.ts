@@ -22,18 +22,29 @@ import type {
   GetChannelInfoState,
   GetMemberInfoParams,
   GetMemberInfoState,
+  GetMessengerDetailParams,
+  GetMessengerDetailState,
   GetReactionsParams,
   GetReactionsState,
   ListBotsParams,
   ListBotsState,
   ListChannelsParams,
   ListChannelsState,
+  ListMessengerLinksParams,
+  ListMessengerLinksState,
+  ListMessengerPlatformsParams,
+  ListMessengerPlatformsState,
+  ListMessengersParams,
+  ListMessengersState,
   ListPinsParams,
   ListPinsState,
   ListPlatformsParams,
   ListPlatformsState,
   ListThreadsParams,
   ListThreadsState,
+  MessengerInfo,
+  MessengerLinkInfo,
+  MessengerPlatformInfo,
   PinMessageParams,
   PinMessageState,
   PlatformInfo,
@@ -49,8 +60,14 @@ import type {
   SendDirectMessageState,
   SendMessageParams,
   SendMessageState,
+  SetMessengerActiveAgentParams,
+  SetMessengerActiveAgentState,
   ToggleBotParams,
   ToggleBotState,
+  UninstallMessengerParams,
+  UninstallMessengerState,
+  UnlinkMessengerParams,
+  UnlinkMessengerState,
   UnpinMessageParams,
   UnpinMessageState,
   UpdateBotParams,
@@ -80,18 +97,29 @@ export type {
   GetChannelInfoState,
   GetMemberInfoParams,
   GetMemberInfoState,
+  GetMessengerDetailParams,
+  GetMessengerDetailState,
   GetReactionsParams,
   GetReactionsState,
   ListBotsParams,
   ListBotsState,
   ListChannelsParams,
   ListChannelsState,
+  ListMessengerLinksParams,
+  ListMessengerLinksState,
+  ListMessengerPlatformsParams,
+  ListMessengerPlatformsState,
+  ListMessengersParams,
+  ListMessengersState,
   ListPinsParams,
   ListPinsState,
   ListPlatformsParams,
   ListPlatformsState,
   ListThreadsParams,
   ListThreadsState,
+  MessengerInfo,
+  MessengerLinkInfo,
+  MessengerPlatformInfo,
   PinMessageParams,
   PinMessageState,
   PlatformInfo,
@@ -105,10 +133,17 @@ export type {
   SearchMessagesState,
   SendDirectMessageParams,
   SendDirectMessageState,
+  SendMessageAttachment,
   SendMessageParams,
   SendMessageState,
+  SetMessengerActiveAgentParams,
+  SetMessengerActiveAgentState,
   ToggleBotParams,
   ToggleBotState,
+  UninstallMessengerParams,
+  UninstallMessengerState,
+  UnlinkMessengerParams,
+  UnlinkMessengerState,
   UnpinMessageParams,
   UnpinMessageState,
   UpdateBotParams,
@@ -157,9 +192,26 @@ export interface BotProviderQuery {
   }) => Promise<{ id: string; platform: string }>;
   deleteBot: (botId: string) => Promise<void>;
   getBotDetail: (botId: string) => Promise<GetBotDetailState | null>;
+  // ─── System Bot messenger management ─────────────────────────────────
+  // All optional so callers can compose a minimal BotProviderQuery. When
+  // absent, the executor returns a "feature not wired up" message.
+  /** Single install detail, or null when not found. */
+  getMessengerDetail?: (installationId: string) => Promise<GetMessengerDetailState | null>;
   listBots: () => Promise<ConfiguredBotInfo[]>;
+  /** User's account links across platforms. */
+  listMessengerLinks?: () => Promise<MessengerLinkInfo[]>;
+  /** Platforms available for OAuth install. */
+  listMessengerPlatforms?: () => Promise<MessengerPlatformInfo[]>;
+  /** User's workspace-scoped System Bot installs. */
+  listMessengers?: () => Promise<MessengerInfo[]>;
   listPlatforms: () => Promise<PlatformInfo[]>;
+  /** Change which agent receives inbound IM on a link. */
+  setMessengerActiveAgent?: (params: SetMessengerActiveAgentParams) => Promise<void>;
   toggleBot: (botId: string, enabled: boolean) => Promise<void>;
+  /** Revoke a workspace install (affects every user in that workspace). */
+  uninstallMessenger?: (installationId: string) => Promise<void>;
+  /** Remove the current user's account link only. */
+  unlinkMessenger?: (params: UnlinkMessengerParams) => Promise<void>;
   updateBot: (
     botId: string,
     params: { credentials?: Record<string, string>; settings?: Record<string, unknown> },
@@ -686,6 +738,206 @@ export class MessageExecutionRuntime {
       };
     } catch (e) {
       return { content: `connectBot error: ${(e as Error).message}`, success: false };
+    }
+  }
+
+  // ==================== System Bot Messenger Management ====================
+
+  async listMessengers(_params: ListMessengersParams): Promise<BuiltinServerRuntimeOutput> {
+    if (!this.botProvider?.listMessengers) {
+      return {
+        content: 'System Bot messenger discovery is not available in this context.',
+        success: false,
+      };
+    }
+    try {
+      const installations = await this.botProvider.listMessengers();
+      if (installations.length === 0) {
+        return {
+          content:
+            'No System Bot installations connected. Tell the user to install via Settings → Messenger; `listMessengerPlatforms` shows what platforms are available.',
+          state: { installations } satisfies ListMessengersState,
+          success: true,
+        };
+      }
+      const lines = installations.map((i) => {
+        const parts = [`installationId: ${i.id}`, `platform: ${i.platform}`];
+        if (i.tenantName) parts.push(`tenant: ${i.tenantName}`);
+        else if (i.tenantId) parts.push(`tenantId: ${i.tenantId}`);
+        if (i.installedAt) {
+          const at = i.installedAt instanceof Date ? i.installedAt.toISOString() : i.installedAt;
+          parts.push(`installedAt: ${at}`);
+        }
+        return `- ${parts.join(', ')}`;
+      });
+      return {
+        content: `${installations.length} System Bot installation(s):\n${lines.join('\n')}`,
+        state: { installations } satisfies ListMessengersState,
+        success: true,
+      };
+    } catch (e) {
+      return { content: `listMessengers error: ${(e as Error).message}`, success: false };
+    }
+  }
+
+  async getMessengerDetail(params: GetMessengerDetailParams): Promise<BuiltinServerRuntimeOutput> {
+    if (!this.botProvider?.getMessengerDetail) {
+      return { content: 'getMessengerDetail is not available.', success: false };
+    }
+    try {
+      const install = await this.botProvider.getMessengerDetail(params.installationId);
+      if (!install) {
+        return {
+          content: `Messenger installation not found: ${params.installationId}`,
+          success: false,
+        };
+      }
+      const lines = [
+        `installationId: ${install.id}`,
+        `platform: ${install.platform}`,
+        `tenantId: ${install.tenantId || '(global)'}`,
+      ];
+      if (install.tenantName) lines.push(`tenant: ${install.tenantName}`);
+      if (install.applicationId) lines.push(`applicationId: ${install.applicationId}`);
+      if (install.scope) lines.push(`scope: ${install.scope}`);
+      if (install.installedAt) {
+        const at =
+          install.installedAt instanceof Date
+            ? install.installedAt.toISOString()
+            : install.installedAt;
+        lines.push(`installedAt: ${at}`);
+      }
+      lines.push(`revoked: ${install.revokedAt ? 'yes' : 'no'}`);
+      return {
+        content: lines.join('\n'),
+        state: install satisfies GetMessengerDetailState,
+        success: true,
+      };
+    } catch (e) {
+      return { content: `getMessengerDetail error: ${(e as Error).message}`, success: false };
+    }
+  }
+
+  async uninstallMessenger(params: UninstallMessengerParams): Promise<BuiltinServerRuntimeOutput> {
+    if (!this.botProvider?.uninstallMessenger) {
+      return { content: 'uninstallMessenger is not available.', success: false };
+    }
+    try {
+      await this.botProvider.uninstallMessenger(params.installationId);
+      return {
+        content: `Workspace install ${params.installationId} revoked. The bot is now disconnected for everyone in that workspace.`,
+        state: { success: true } satisfies UninstallMessengerState,
+        success: true,
+      };
+    } catch (e) {
+      return { content: `uninstallMessenger error: ${(e as Error).message}`, success: false };
+    }
+  }
+
+  async listMessengerPlatforms(
+    _params: ListMessengerPlatformsParams,
+  ): Promise<BuiltinServerRuntimeOutput> {
+    if (!this.botProvider?.listMessengerPlatforms) {
+      return { content: 'listMessengerPlatforms is not available.', success: false };
+    }
+    try {
+      const platforms = await this.botProvider.listMessengerPlatforms();
+      if (platforms.length === 0) {
+        return {
+          content:
+            'No System Bot platforms are configured on this deployment. Ask the operator to enable at least one platform under Messenger configuration.',
+          state: { platforms } satisfies ListMessengerPlatformsState,
+          success: true,
+        };
+      }
+      const lines = platforms.map((p) => {
+        const parts = [p.id];
+        if (p.name && p.name !== p.id) parts.push(`(${p.name})`);
+        if (p.appId) parts.push(`appId: ${p.appId}`);
+        if (p.botUsername) parts.push(`botUsername: ${p.botUsername}`);
+        return `- ${parts.join(' ')}`;
+      });
+      return {
+        content: `${platforms.length} platform(s) available for System Bot install:\n${lines.join('\n')}\n\nInstalls are initiated via Settings → Messenger (OAuth requires a browser).`,
+        state: { platforms } satisfies ListMessengerPlatformsState,
+        success: true,
+      };
+    } catch (e) {
+      return {
+        content: `listMessengerPlatforms error: ${(e as Error).message}`,
+        success: false,
+      };
+    }
+  }
+
+  async listMessengerLinks(_params: ListMessengerLinksParams): Promise<BuiltinServerRuntimeOutput> {
+    if (!this.botProvider?.listMessengerLinks) {
+      return { content: 'listMessengerLinks is not available.', success: false };
+    }
+    try {
+      const links = await this.botProvider.listMessengerLinks();
+      if (links.length === 0) {
+        return {
+          content:
+            'No System Bot account links. The user has not completed verify-im on any platform yet.',
+          state: { links } satisfies ListMessengerLinksState,
+          success: true,
+        };
+      }
+      const lines = links.map((l) => {
+        const parts = [`platform: ${l.platform}`];
+        if (l.tenantId) parts.push(`tenantId: ${l.tenantId}`);
+        parts.push(`activeAgentId: ${l.activeAgentId ?? '(none)'}`);
+        if (l.platformUsername) parts.push(`platformUser: ${l.platformUsername}`);
+        return `- ${parts.join(', ')}`;
+      });
+      return {
+        content: `${links.length} System Bot link(s):\n${lines.join('\n')}`,
+        state: { links } satisfies ListMessengerLinksState,
+        success: true,
+      };
+    } catch (e) {
+      return { content: `listMessengerLinks error: ${(e as Error).message}`, success: false };
+    }
+  }
+
+  async setMessengerActiveAgent(
+    params: SetMessengerActiveAgentParams,
+  ): Promise<BuiltinServerRuntimeOutput> {
+    if (!this.botProvider?.setMessengerActiveAgent) {
+      return { content: 'setMessengerActiveAgent is not available.', success: false };
+    }
+    try {
+      await this.botProvider.setMessengerActiveAgent(params);
+      const target = params.agentId === null ? 'cleared' : `set to agent ${params.agentId}`;
+      const scope = params.tenantId ? ` (tenant ${params.tenantId})` : '';
+      return {
+        content: `Active agent for ${params.platform}${scope} ${target}.`,
+        state: { success: true } satisfies SetMessengerActiveAgentState,
+        success: true,
+      };
+    } catch (e) {
+      return {
+        content: `setMessengerActiveAgent error: ${(e as Error).message}`,
+        success: false,
+      };
+    }
+  }
+
+  async unlinkMessenger(params: UnlinkMessengerParams): Promise<BuiltinServerRuntimeOutput> {
+    if (!this.botProvider?.unlinkMessenger) {
+      return { content: 'unlinkMessenger is not available.', success: false };
+    }
+    try {
+      await this.botProvider.unlinkMessenger(params);
+      const scope = params.tenantId ? ` (tenant ${params.tenantId})` : '';
+      return {
+        content: `Unlinked your account from ${params.platform}${scope}. The workspace install is unaffected.`,
+        state: { success: true } satisfies UnlinkMessengerState,
+        success: true,
+      };
+    } catch (e) {
+      return { content: `unlinkMessenger error: ${(e as Error).message}`, success: false };
     }
   }
 }

@@ -1,3 +1,4 @@
+// cspell:ignore tokenx
 import { estimateTokenCount } from 'tokenx';
 
 import type {
@@ -7,6 +8,8 @@ import type {
   TokenSourceType,
   ToolDefinitionTokenBreakdown,
 } from './types';
+
+export * from './attachmentTokenBuckets';
 
 export const DEFAULT_DRIFT_MULTIPLIER = 1.25;
 

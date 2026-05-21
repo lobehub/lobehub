@@ -4,6 +4,7 @@ import type { CSSProperties } from 'react';
 import { memo, useMemo } from 'react';
 
 import { ActionTagNode } from '@/features/ChatInput/InputEditor/ActionTag/ActionTagNode';
+import { mentionFilledClassName } from '@/features/ChatInput/InputEditor/mentionStyle';
 import { ReferTopicNode } from '@/features/ChatInput/InputEditor/ReferTopic/ReferTopicNode';
 
 interface RichTextMessageProps {
@@ -23,7 +24,15 @@ const RichTextMessage = memo<RichTextMessageProps>(({ editorState }) => {
 
   if (!value) return null;
 
-  return <LexicalRenderer extraNodes={EXTRA_NODES} style={style} value={value} variant="chat" />;
+  return (
+    <LexicalRenderer
+      className={mentionFilledClassName}
+      extraNodes={EXTRA_NODES}
+      style={style}
+      value={value}
+      variant="chat"
+    />
+  );
 });
 
 RichTextMessage.displayName = 'RichTextMessage';

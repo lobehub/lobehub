@@ -11,6 +11,13 @@ const mockProviderConfigs = {
   anthropic: { enabled: false },
 };
 
+vi.mock('@lobechat/business-model-bank/model-config', async () => {
+  const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
+  return {
+    loadModels: vi.fn().mockResolvedValue(LOBE_DEFAULT_MODEL_LIST),
+  };
+});
+
 let serverDB: LobeChatDatabase;
 let repo: AiInfraRepos;
 

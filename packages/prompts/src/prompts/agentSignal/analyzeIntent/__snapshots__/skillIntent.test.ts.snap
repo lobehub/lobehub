@@ -1,0 +1,14 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`agent signal skill intent prompt > renders classifier messages 1`] = `
+[
+  {
+    "content": "Classify skill intent for Agent Signal using semantic meaning and structured evidence. Return direct_decision for explicit skill actions, agent documents or tool outcomes marked hintIsSkill=true, or implicit strong future-use procedural learning. When the evidence points to exactly one existing managed skill, classify the action as refine; when it points only to a hinted document or draft without an existing managed skill target, classify the action as create or promote/register. Return accumulate for generic praise or weak approval. Return non_skill for global user preference that does not belong to skill management. Do not author skills.",
+    "role": "system",
+  },
+  {
+    "content": "{"message":"For future PR reviews, reuse this checklist.","serializedContext":"topic=PR review; checklist: inspect locale keys","topicLabel":"PR review"}",
+    "role": "user",
+  },
+]
+`;

@@ -1,10 +1,11 @@
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
+import { loadModels } from '@lobechat/business-model-bank/model-config';
 import { resolveBusinessModelMapping } from '@lobechat/business-model-runtime';
 import { ChatErrorType } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
-import { isLobeHubModelAvailable } from 'model-bank/lobehub';
+import { isProviderModelAvailable } from 'model-bank';
 import { z } from 'zod';
 
 import { chargeBeforeGenerate } from '@/business/server/image-generation/chargeBeforeGenerate';
@@ -69,7 +70,10 @@ export const imageRouter = router({
     // Reject lobehub model ids that are no longer in the model bank so callers get a
     // clear error instead of an opaque downstream failure when the underlying channel
     // can't serve the requested id.
-    if (provider === BRANDING_PROVIDER && !isLobeHubModelAvailable(resolvedModelId, 'image')) {
+    if (
+      provider === BRANDING_PROVIDER &&
+      !isProviderModelAvailable(await loadModels(), BRANDING_PROVIDER, resolvedModelId, 'image')
+    ) {
       throw new TRPCError({
         cause: { data: { modelType: 'image', requestedModel: model } },
         code: 'BAD_REQUEST',

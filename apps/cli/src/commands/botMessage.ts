@@ -1,3 +1,6 @@
+import { readFile } from 'node:fs/promises';
+import { basename, extname } from 'node:path';
+
 import { DEFAULT_BOT_HISTORY_LIMIT } from '@lobechat/const';
 import type { Command } from 'commander';
 import pc from 'picocolors';
@@ -5,6 +8,111 @@ import pc from 'picocolors';
 import { getTrpcClient } from '../api/client';
 import { confirm, outputJson, printTable, truncate } from '../utils/format';
 import { log } from '../utils/logger';
+
+type AttachmentInput = {
+  data?: string;
+  fetchUrl?: string;
+  mimeType?: string;
+  name?: string;
+  type: 'image' | 'file' | 'video' | 'audio';
+};
+
+const MIME_EXT_MAP: Record<string, string> = {
+  '.bmp': 'image/bmp',
+  '.gif': 'image/gif',
+  '.jpeg': 'image/jpeg',
+  '.jpg': 'image/jpeg',
+  '.m4a': 'audio/mp4',
+  '.mp3': 'audio/mpeg',
+  '.mp4': 'video/mp4',
+  '.ogg': 'audio/ogg',
+  '.pdf': 'application/pdf',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.txt': 'text/plain',
+  '.wav': 'audio/wav',
+  '.webm': 'video/webm',
+  '.webp': 'image/webp',
+};
+
+const inferMime = (path: string): string | undefined => MIME_EXT_MAP[extname(path).toLowerCase()];
+
+const inferAttachmentType = (mimeType?: string): AttachmentInput['type'] => {
+  if (!mimeType) return 'file';
+  if (mimeType.startsWith('image/')) return 'image';
+  if (mimeType.startsWith('video/')) return 'video';
+  if (mimeType.startsWith('audio/')) return 'audio';
+  return 'file';
+};
+
+/**
+ * Resolve a list of `--attachment` flag values into `AttachmentInput[]`. Each
+ * entry is either a URL or a local file path. Returns `undefined` when no
+ * flags were passed so callers can omit the field on the wire entirely (the
+ * TRPC schema treats absent vs empty differently). Bails the process on
+ * load failures — a silently-dropped attachment would be worse than a
+ * loud error here.
+ */
+const resolveAttachmentFlags = async (flags: string[]): Promise<AttachmentInput[] | undefined> => {
+  if (flags.length === 0) return undefined;
+  const out: AttachmentInput[] = [];
+  for (const raw of flags) {
+    try {
+      out.push(await parseAttachmentArg(raw));
+    } catch (error) {
+      log.error(`Failed to load attachment "${raw}": ${(error as Error).message}`);
+      process.exit(1);
+    }
+  }
+  return out;
+};
+
+/**
+ * Parse a single `--attachment <value>` argument. Accepted forms:
+ *   - `https://…` / `http://…`           → fetchUrl, type inferred from extension
+ *   - any other string                    → treated as a local file path;
+ *                                           bytes are read + base64-encoded
+ */
+const parseAttachmentArg = async (raw: string): Promise<AttachmentInput> => {
+  if (/^https?:\/\//.test(raw)) {
+    const pathname = new URL(raw).pathname;
+    const mimeType = inferMime(pathname);
+    return {
+      fetchUrl: raw,
+      mimeType,
+      name: basename(pathname) || undefined,
+      type: inferAttachmentType(mimeType),
+    };
+  }
+  const bytes = await readFile(raw);
+  const mimeType = inferMime(raw);
+  return {
+    data: bytes.toString('base64'),
+    mimeType,
+    name: basename(raw),
+    type: inferAttachmentType(mimeType),
+  };
+};
+
+/**
+ * Resolve the `<botIdOrAtKey>` positional argument into a `{ botId? |
+ * messengerInstallationId? }` shape that matches the TRPC send procedures'
+ * `exactly-one-of` constraint.
+ *
+ * Convention: a value prefixed with `@` is treated as a System Bot
+ * messenger installation id (e.g. `@inst_abc123`); anything else is a
+ * per-agent bot id. The `@` was chosen because `agent_bot_providers`.id is
+ * always a UUID — no UUID starts with `@`, so the prefix unambiguously
+ * disambiguates without breaking the existing UUID-only call sites.
+ */
+const resolveSendTargetArg = (
+  value: string,
+): { botId?: string; messengerInstallationId?: string } => {
+  if (value.startsWith('@')) {
+    return { messengerInstallationId: value.slice(1) };
+  }
+  return { botId: value };
+};
 
 export function registerBotMessageCommands(bot: Command) {
   const message = bot
@@ -14,20 +122,40 @@ export function registerBotMessageCommands(bot: Command) {
   // ── send ────────────────────────────────────────────────
 
   message
-    .command('send <botId>')
-    .description('Send a message to a channel')
+    .command('send <botIdOrAtKey>')
+    .description(
+      'Send a message to a channel. Pass a per-agent bot id, or "@<messenger-install-id>" ' +
+        'to send through a System Bot messenger installation (see `lh bot messengers list`).',
+    )
     .requiredOption('--target <channelId>', 'Target channel / conversation ID')
     .requiredOption('--message <text>', 'Message content')
+    .option(
+      '--attachment <pathOrUrl>',
+      'Attach a file by local path or remote URL (repeatable). ' +
+        'Local paths are base64-encoded; http(s) URLs are passed as fetchUrl.',
+      collectOptions,
+      [],
+    )
     .option('--reply-to <messageId>', 'Reply to a specific message')
     .option('--json', 'Output JSON')
     .action(
       async (
-        botId: string,
-        options: { json?: boolean; message: string; replyTo?: string; target: string },
+        botIdOrAtKey: string,
+        options: {
+          attachment: string[];
+          json?: boolean;
+          message: string;
+          replyTo?: string;
+          target: string;
+        },
       ) => {
+        const attachments = await resolveAttachmentFlags(options.attachment);
+        const target = resolveSendTargetArg(botIdOrAtKey);
+
         const client = await getTrpcClient();
         const result = await client.botMessage.sendMessage.mutate({
-          botId,
+          ...target,
+          attachments,
           channelId: options.target,
           content: options.message,
           replyTo: options.replyTo,
@@ -39,8 +167,56 @@ export function registerBotMessageCommands(bot: Command) {
         }
 
         const r = result as any;
+        const suffix = attachments?.length ? ` with ${attachments.length} attachment(s)` : '';
         console.log(
-          `${pc.green('✓')} Message sent${r.messageId ? ` (${pc.dim(r.messageId)})` : ''}`,
+          `${pc.green('✓')} Message sent${r.messageId ? ` (${pc.dim(r.messageId)})` : ''}${suffix}`,
+        );
+      },
+    );
+
+  // ── dm (direct message) ─────────────────────────────────
+
+  message
+    .command('dm <botIdOrAtKey>')
+    .description(
+      'Send a direct message to a platform user. Pass a per-agent bot id, or ' +
+        '"@<messenger-install-id>" for a System Bot install.',
+    )
+    .requiredOption('--user-id <id>', 'Target user ID on the platform')
+    .requiredOption('--message <text>', 'Message content')
+    .option(
+      '--attachment <pathOrUrl>',
+      'Attach a file by local path or remote URL (repeatable). ' +
+        'Local paths are base64-encoded; http(s) URLs are passed as fetchUrl.',
+      collectOptions,
+      [],
+    )
+    .option('--json', 'Output JSON')
+    .action(
+      async (
+        botIdOrAtKey: string,
+        options: { attachment: string[]; json?: boolean; message: string; userId: string },
+      ) => {
+        const attachments = await resolveAttachmentFlags(options.attachment);
+        const target = resolveSendTargetArg(botIdOrAtKey);
+
+        const client = await getTrpcClient();
+        const result = await client.botMessage.sendDirectMessage.mutate({
+          ...target,
+          attachments,
+          content: options.message,
+          userId: options.userId,
+        });
+
+        if (options.json) {
+          outputJson(result);
+          return;
+        }
+
+        const r = result as any;
+        const suffix = attachments?.length ? ` with ${attachments.length} attachment(s)` : '';
+        console.log(
+          `${pc.green('✓')} DM sent${r.messageId ? ` (${pc.dim(r.messageId)})` : ''}${suffix}`,
         );
       },
     );
@@ -450,21 +626,43 @@ export function registerBotMessageCommands(bot: Command) {
     });
 
   thread
-    .command('reply <botId>')
-    .description('Reply to a thread')
+    .command('reply <botIdOrAtKey>')
+    .description(
+      'Reply to a thread. Pass a per-agent bot id, or "@<messenger-install-id>" ' +
+        'for a System Bot install.',
+    )
     .requiredOption('--thread-id <id>', 'Thread ID')
     .requiredOption('--message <text>', 'Reply content')
-    .action(async (botId: string, options: { message: string; threadId: string }) => {
-      const client = await getTrpcClient();
-      const result = await client.botMessage.replyToThread.mutate({
-        botId,
-        content: options.message,
-        threadId: options.threadId,
-      });
+    .option(
+      '--attachment <pathOrUrl>',
+      'Attach a file by local path or remote URL (repeatable). ' +
+        'Local paths are base64-encoded; http(s) URLs are passed as fetchUrl.',
+      collectOptions,
+      [],
+    )
+    .action(
+      async (
+        botIdOrAtKey: string,
+        options: { attachment: string[]; message: string; threadId: string },
+      ) => {
+        const attachments = await resolveAttachmentFlags(options.attachment);
+        const target = resolveSendTargetArg(botIdOrAtKey);
 
-      const r = result as any;
-      console.log(`${pc.green('✓')} Reply sent${r.messageId ? ` (${pc.dim(r.messageId)})` : ''}`);
-    });
+        const client = await getTrpcClient();
+        const result = await client.botMessage.replyToThread.mutate({
+          ...target,
+          attachments,
+          content: options.message,
+          threadId: options.threadId,
+        });
+
+        const r = result as any;
+        const suffix = attachments?.length ? ` with ${attachments.length} attachment(s)` : '';
+        console.log(
+          `${pc.green('✓')} Reply sent${r.messageId ? ` (${pc.dim(r.messageId)})` : ''}${suffix}`,
+        );
+      },
+    );
 
   // ── channel (subcommand group) ──────────────────────────
 

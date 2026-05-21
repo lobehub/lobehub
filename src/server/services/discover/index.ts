@@ -75,6 +75,11 @@ import { MarketService } from '@/server/services/market';
 
 const log = debug('lobe-server:discover');
 
+const loadBuiltinModels = async () => {
+  const { loadModels } = await import('@/business/client/model-bank/loadModels');
+  return loadModels();
+};
+
 export interface DiscoverServiceOptions {
   /** Access token from OIDC flow (legacy) */
   accessToken?: string;
@@ -1292,15 +1297,15 @@ export class DiscoverService {
 
   private _getProviderList = async (): Promise<DiscoverProviderItem[]> => {
     log('_getProviderList: fetching provider list');
-    const [{ LOBE_DEFAULT_MODEL_LIST }, { DEFAULT_MODEL_PROVIDER_LIST }] = await Promise.all([
-      import('model-bank'),
+    const [builtinModels, { DEFAULT_MODEL_PROVIDER_LIST }] = await Promise.all([
+      loadBuiltinModels(),
       import('model-bank/modelProviders'),
     ]);
     const result = DEFAULT_MODEL_PROVIDER_LIST.map((item) => {
       const models = uniq(
-        LOBE_DEFAULT_MODEL_LIST.filter((m) => m.providerId === item.id && isAiModelVisible(m)).map(
-          (m) => m.id,
-        ),
+        builtinModels
+          .filter((m) => m.providerId === item.id && isAiModelVisible(m))
+          .map((m) => m.id),
       );
       const provider = {
         ...item,
@@ -1321,7 +1326,7 @@ export class DiscoverService {
   }): Promise<DiscoverProviderDetail | undefined> => {
     log('getProviderDetail: params=%O', params);
     const { identifier, locale, withReadme } = params;
-    const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
+    const builtinModels = await loadBuiltinModels();
     const all = await this._getProviderList();
     const provider = all.find((item) => item.identifier === identifier);
     if (!provider) {
@@ -1367,7 +1372,7 @@ export class DiscoverService {
     const result = {
       ...provider,
       models: uniqBy(
-        LOBE_DEFAULT_MODEL_LIST.filter((m) => m.providerId === provider.id && isAiModelVisible(m)),
+        builtinModels.filter((m) => m.providerId === provider.id && isAiModelVisible(m)),
         (item) => item.id,
       ),
       readme,
@@ -1457,8 +1462,8 @@ export class DiscoverService {
 
   private _getRawModelList = async (): Promise<DiscoverModelItem[]> => {
     log('_getRawModelList: fetching raw model list');
-    const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
-    const visibleModels = LOBE_DEFAULT_MODEL_LIST.filter(isAiModelVisible);
+    const builtinModels = await loadBuiltinModels();
+    const visibleModels = builtinModels.filter(isAiModelVisible);
     const result = visibleModels.map((item) => {
       const identifier = (item.id.split('/').at(-1) || item.id).toLowerCase();
       const providers = uniq(
@@ -1553,8 +1558,8 @@ export class DiscoverService {
   getModelCategories = async (params: CategoryListQuery = {}): Promise<CategoryItem[]> => {
     log('getModelCategories: params=%O', params);
     const { q } = params;
-    const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
-    let list = LOBE_DEFAULT_MODEL_LIST.filter(isAiModelVisible);
+    const builtinModels = await loadBuiltinModels();
+    let list = builtinModels.filter(isAiModelVisible);
     if (q) {
       const originalCount = list.length;
       list = list.filter((item) => {
@@ -1587,8 +1592,8 @@ export class DiscoverService {
     identifier: string;
   }): Promise<DiscoverModelDetail | undefined> => {
     log('getModelDetail: params=%O', params);
-    const [{ LOBE_DEFAULT_MODEL_LIST }, { DEFAULT_MODEL_PROVIDER_LIST }] = await Promise.all([
-      import('model-bank'),
+    const [builtinModels, { DEFAULT_MODEL_PROVIDER_LIST }] = await Promise.all([
+      loadBuiltinModels(),
       import('model-bank/modelProviders'),
     ]);
     const { identifier } = params;
@@ -1621,7 +1626,7 @@ export class DiscoverService {
       ...model,
       providers: providers.map((item) => ({
         ...item,
-        model: LOBE_DEFAULT_MODEL_LIST.find((m) => {
+        model: builtinModels.find((m) => {
           if (!isAiModelVisible(m)) return false;
           if (m.providerId !== item.id) return false;
           return (

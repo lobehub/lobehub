@@ -1,4 +1,5 @@
-import { useRef } from 'react';
+import type { UIChatMessage } from '@lobechat/types';
+import { useMemo, useRef } from 'react';
 import useSWR from 'swr';
 
 import { agentSignalService } from '@/services/agentSignal';
@@ -18,6 +19,7 @@ export type AgentSignalReceiptView = Awaited<
 
 export const useAgentSignalReceipts = (input: {
   agentId?: string | null;
+  displayMessages: UIChatMessage[];
   enabled?: boolean;
   pollingSignal?: string | null;
   topicId?: string | null;
@@ -99,26 +101,94 @@ export const useAgentSignalReceipts = (input: {
 
   const receipts = data?.receipts ?? [];
 
-  const receiptsByAnchor = new Map<string, AgentSignalReceiptView[]>();
-  const unanchoredReceipts: AgentSignalReceiptView[] = [];
-
-  for (const receipt of receipts) {
-    if (!receipt.anchorMessageId) {
-      unanchoredReceipts.push(receipt);
-      continue;
-    }
-
-    receiptsByAnchor.set(receipt.anchorMessageId, [
-      ...(receiptsByAnchor.get(receipt.anchorMessageId) ?? []),
-      receipt,
-    ]);
-  }
+  const receiptsByAnchor = useMemo(
+    () =>
+      groupAgentSignalReceiptsByEffectiveAnchor({
+        displayMessages: input.displayMessages,
+        receipts,
+      }),
+    [input.displayMessages, receipts],
+  );
 
   return {
     isLoading,
     receiptsByAnchor,
-    unanchoredReceipts,
   };
+};
+
+interface GroupAgentSignalReceiptsByEffectiveAnchorInput {
+  displayMessages: UIChatMessage[];
+  receipts: AgentSignalReceiptView[];
+}
+
+const resolveAssistantReplyFromTrigger = (
+  triggerMessageId: string | undefined,
+  displayMessages: UIChatMessage[],
+) => {
+  if (!triggerMessageId) return undefined;
+
+  return displayMessages.find(
+    (message) =>
+      (message.role === 'assistant' || message.role === 'assistantGroup') &&
+      message.parentId === triggerMessageId,
+  )?.id;
+};
+
+const resolveDisplayedAnchorMessageId = (
+  anchorMessageId: string,
+  displayMessages: UIChatMessage[],
+) => {
+  if (displayMessages.some((message) => message.id === anchorMessageId)) return anchorMessageId;
+
+  return displayMessages.find(
+    (message) =>
+      message.role === 'assistantGroup' &&
+      message.children?.some((block) => block.id === anchorMessageId),
+  )?.id;
+};
+
+const resolveEffectiveAnchorMessageId = (
+  receipt: AgentSignalReceiptView,
+  displayMessages: UIChatMessage[],
+) => {
+  if (receipt.anchorMessageId) {
+    return resolveDisplayedAnchorMessageId(receipt.anchorMessageId, displayMessages);
+  }
+  if (!receipt.triggerMessageId) return undefined;
+
+  const assistantReplyId = resolveAssistantReplyFromTrigger(
+    receipt.triggerMessageId,
+    displayMessages,
+  );
+  if (assistantReplyId) return assistantReplyId;
+
+  // WORKAROUND:
+  // Start-triggered Agent Signal receipts can arrive before the assistant row is available, so
+  // falling back to the trigger keeps them visible and prevents latest-message drift.
+  //
+  // TODO:
+  // Remove or simplify this fallback when all user-triggered paths provide anchorMessageId or
+  // stable assistant child resolution.
+  return receipt.triggerMessageId;
+};
+
+const groupAgentSignalReceiptsByEffectiveAnchor = ({
+  displayMessages,
+  receipts,
+}: GroupAgentSignalReceiptsByEffectiveAnchorInput) => {
+  const receiptsByAnchor = new Map<string, AgentSignalReceiptView[]>();
+
+  for (const receipt of receipts) {
+    const anchorMessageId = resolveEffectiveAnchorMessageId(receipt, displayMessages);
+    if (!anchorMessageId) continue;
+
+    receiptsByAnchor.set(anchorMessageId, [
+      ...(receiptsByAnchor.get(anchorMessageId) ?? []),
+      receipt,
+    ]);
+  }
+
+  return receiptsByAnchor;
 };
 
 const mergeReceiptRefresh = (

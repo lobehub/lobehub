@@ -3,7 +3,7 @@
 import { ActionIcon, Flexbox, Popover, Tooltip } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { ArrowLeft, ArrowRight, Clock } from 'lucide-react';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useGlobalStore } from '@/store/global';
@@ -14,7 +14,6 @@ import { isMacOS } from '@/utils/platform';
 
 import { useNavigationHistory } from '../navigation/useNavigationHistory';
 import RecentlyViewed from './RecentlyViewed';
-import { loadAllRecentlyViewedPlugins } from './RecentlyViewed/plugins';
 
 const isMac = isMacOS();
 
@@ -37,17 +36,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const useLoadAllRecentlyViewedPlugins = () => {
-  const registerRef = useRef(false);
-
-  if (!registerRef.current) {
-    loadAllRecentlyViewedPlugins();
-    registerRef.current = true;
-  }
-};
 const NavigationBar = memo(() => {
-  useLoadAllRecentlyViewedPlugins();
-
   const { t } = useTranslation('electron');
   const { canGoBack, canGoForward, goBack, goForward } = useNavigationHistory();
   const [historyOpen, setHistoryOpen] = useState(false);

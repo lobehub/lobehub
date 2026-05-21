@@ -46,6 +46,7 @@ describe('emitClientAgentSignalSourceEvent', () => {
         parentMessageType: 'user',
         threadId: 'thread-1',
         topicId: 'topic-1',
+        triggerMessageId: 'msg-1',
       },
       sourceId: 'op-1:client:start',
       sourceType: 'client.runtime.start',
@@ -60,6 +61,7 @@ describe('emitClientAgentSignalSourceEvent', () => {
         parentMessageType: 'user',
         threadId: 'thread-1',
         topicId: 'topic-1',
+        triggerMessageId: 'msg-1',
       },
       sourceId: 'op-1:client:start',
       sourceType: 'client.runtime.start',
@@ -80,11 +82,13 @@ describe('emitClientAgentSignalSourceEvent', () => {
     await emitClientAgentSignalSourceEvent({
       payload: {
         agentId: 'agent-1',
+        anchorMessageId: 'asst-1',
         assistantMessageId: 'asst-1',
         operationId: 'op-1',
         status: 'completed',
         threadId: 'thread-1',
         topicId: 'topic-1',
+        triggerMessageId: 'msg-1',
       },
       sourceId: 'op-1:client:complete',
       sourceType: 'client.runtime.complete',
@@ -94,11 +98,13 @@ describe('emitClientAgentSignalSourceEvent', () => {
     expect(agentSignalService.emitClientGatewaySourceEvent).toHaveBeenCalledWith({
       payload: {
         agentId: 'agent-1',
+        anchorMessageId: 'asst-1',
         assistantMessageId: 'asst-1',
         operationId: 'op-1',
         status: 'completed',
         threadId: 'thread-1',
         topicId: 'topic-1',
+        triggerMessageId: 'msg-1',
       },
       sourceId: 'op-1:client:complete',
       sourceType: 'client.runtime.complete',

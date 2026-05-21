@@ -27,10 +27,11 @@ import TaskSubtasks from './TaskSubtasks';
 import TopicChatDrawer from './TopicChatDrawer';
 
 interface TaskDetailPageProps {
+  showTaskAgentPanelToggle?: boolean;
   taskId: string;
 }
 
-const TaskDetailPage = memo<TaskDetailPageProps>(({ taskId }) => {
+const TaskDetailPage = memo<TaskDetailPageProps>(({ taskId, showTaskAgentPanelToggle = true }) => {
   const setActiveTaskId = useTaskStore((s) => s.setActiveTaskId);
   const useFetchTaskDetail = useTaskStore((s) => s.useFetchTaskDetail);
   const isLoading = useTaskStore(taskDetailSelectors.isTaskDetailLoading);
@@ -58,11 +59,13 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ taskId }) => {
           </>
         }
         right={
-          <ToggleRightPanelButton
-            hideWhenExpanded
-            expand={showTaskAgentPanel}
-            onToggle={() => toggleTaskAgentPanel()}
-          />
+          showTaskAgentPanelToggle ? (
+            <ToggleRightPanelButton
+              hideWhenExpanded
+              expand={showTaskAgentPanel}
+              onToggle={() => toggleTaskAgentPanel()}
+            />
+          ) : undefined
         }
         styles={{
           left: {

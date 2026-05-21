@@ -1,8 +1,10 @@
 {
   "actionTag.category.command": "Comando",
+  "actionTag.category.projectSkill": "Habilidad del proyecto",
   "actionTag.category.skill": "Habilidad",
   "actionTag.category.tool": "Herramienta",
   "actionTag.tooltip.command": "Ejecuta un comando de barra en el cliente antes de enviar.",
+  "actionTag.tooltip.projectSkill": "Enviado como una invocación de barra diagonal para que la CLI del agente ejecute la habilidad del proyecto correspondiente.",
   "actionTag.tooltip.skill": "Carga un paquete de habilidades reutilizable para esta solicitud.",
   "actionTag.tooltip.tool": "Marca una herramienta que el usuario seleccionó explícitamente para esta solicitud.",
   "actions.expand.off": "Colapsar",

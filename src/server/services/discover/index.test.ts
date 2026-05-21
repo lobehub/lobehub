@@ -74,6 +74,13 @@ vi.mock('model-bank', async (importOriginal) => {
   };
 });
 
+vi.mock('@/business/client/model-bank/loadModels', async () => {
+  const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
+  return {
+    loadModels: vi.fn().mockResolvedValue(LOBE_DEFAULT_MODEL_LIST),
+  };
+});
+
 vi.mock('@/config/modelProviders', async (importOriginal) => {
   const actual = await importOriginal();
   return {

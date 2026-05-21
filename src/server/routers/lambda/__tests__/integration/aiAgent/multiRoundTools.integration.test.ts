@@ -215,7 +215,7 @@ beforeEach(async () => {
   const [agentWithTools] = await serverDB
     .insert(agents)
     .values({
-      chatConfig: { autoCreateTopicThreshold: 2, searchMode: 'auto' },
+      chatConfig: { searchMode: 'auto' },
       model: 'gpt-5-pro',
       plugins: [],
       provider: 'openai',

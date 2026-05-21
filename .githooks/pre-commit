@@ -1,0 +1,13 @@
+#!/usr/bin/env sh
+set -e
+
+[ "${HUSKY-}" = "0" ] && exit 0
+
+export PATH="node_modules/.bin:$PATH"
+
+BRANCH=$(git branch --show-current)
+if [ "$BRANCH" = "dev" ] || [ "$BRANCH" = "main" ]; then
+  npm run type-check
+fi
+
+lint-staged

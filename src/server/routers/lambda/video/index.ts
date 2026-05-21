@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
+import { loadModels } from '@lobechat/business-model-bank/model-config';
 import {
   buildMappedBusinessModelFields,
   resolveBusinessModelMapping,
@@ -9,7 +10,7 @@ import { ChatErrorType, RequestTrigger } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
-import { isLobeHubModelAvailable } from 'model-bank/lobehub';
+import { isProviderModelAvailable } from 'model-bank';
 import { after } from 'next/server';
 import { z } from 'zod';
 
@@ -79,7 +80,10 @@ export const videoRouter = router({
     // Reject lobehub model ids that are no longer in the model bank so callers get a
     // clear error instead of an opaque downstream failure when the resolved channel
     // model is no longer in the model bank.
-    if (provider === BRANDING_PROVIDER && !isLobeHubModelAvailable(resolvedModelId, 'video')) {
+    if (
+      provider === BRANDING_PROVIDER &&
+      !isProviderModelAvailable(await loadModels(), BRANDING_PROVIDER, resolvedModelId, 'video')
+    ) {
       throw new TRPCError({
         cause: { data: { modelType: 'video', requestedModel: model } },
         code: 'BAD_REQUEST',

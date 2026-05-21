@@ -36,6 +36,7 @@ describe('createPreferenceSlice', () => {
       const { result } = renderHook(() => useGlobalStore());
 
       act(() => {
+        useGlobalStore.setState({ isStatusInit: true });
         useGlobalStore.getState().updateSystemStatus({ showRightPanel: false });
         result.current.toggleRightPanel();
       });
@@ -57,6 +58,44 @@ describe('createPreferenceSlice', () => {
       });
 
       expect(result.current.status.showRightPanel).toBe(false);
+    });
+  });
+
+  describe('toggleAgentBuilderPanel', () => {
+    it('should toggle agent builder panel without changing chat right panel', () => {
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        useGlobalStore.setState({
+          isStatusInit: true,
+          status: {
+            ...initialState.status,
+            showAgentBuilderPanel: false,
+            showRightPanel: false,
+          },
+        });
+        result.current.toggleAgentBuilderPanel();
+      });
+
+      expect(result.current.status.showAgentBuilderPanel).toBe(true);
+      expect(result.current.status.showRightPanel).toBe(false);
+    });
+
+    it('should set agent builder panel to specified value', () => {
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        useGlobalStore.setState({ isStatusInit: true });
+        result.current.toggleAgentBuilderPanel(true);
+      });
+
+      expect(result.current.status.showAgentBuilderPanel).toBe(true);
+
+      act(() => {
+        result.current.toggleAgentBuilderPanel(false);
+      });
+
+      expect(result.current.status.showAgentBuilderPanel).toBe(false);
     });
   });
 

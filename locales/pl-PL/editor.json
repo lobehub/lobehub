@@ -1,8 +1,10 @@
 {
   "actionTag.category.command": "Polecenie",
+  "actionTag.category.projectSkill": "Umiejętność projektowa",
   "actionTag.category.skill": "Umiejętność",
   "actionTag.category.tool": "Narzędzie",
   "actionTag.tooltip.command": "Uruchamia polecenie slash po stronie klienta przed wysłaniem.",
+  "actionTag.tooltip.projectSkill": "Wysłane jako wywołanie ukośnika, aby CLI agenta uruchomiło pasującą umiejętność projektową.",
   "actionTag.tooltip.skill": "Wczytuje pakiet umiejętności wielokrotnego użytku dla tego żądania.",
   "actionTag.tooltip.tool": "Oznacza narzędzie, które użytkownik jawnie wybrał dla tego żądania.",
   "actions.expand.off": "Zwiń",

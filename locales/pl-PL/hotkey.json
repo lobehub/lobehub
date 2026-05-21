@@ -1,8 +1,6 @@
 {
   "addUserMessage.desc": "Dodaj bieżący wpis jako wiadomość użytkownika bez uruchamiania generowania",
   "addUserMessage.title": "Dodaj wiadomość użytkownika",
-  "clearCurrentMessages.desc": "Wyczyść wiadomości i przesłane pliki z bieżącej rozmowy",
-  "clearCurrentMessages.title": "Wyczyść wiadomości rozmowy",
   "commandPalette.desc": "Otwórz globalną paletę poleceń, aby szybko uzyskać dostęp do funkcji",
   "commandPalette.title": "Paleta poleceń",
   "deleteAndRegenerateMessage.desc": "Usuń ostatnią wiadomość i wygeneruj ponownie",

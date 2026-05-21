@@ -248,39 +248,106 @@ export const buildGoogleMessages = async (messages: OpenAIChatMessage[]): Promis
     }
   }
 
-  // Check if the last message is a tool message
-  const lastMessage = messages.at(-1);
-  const shouldAddMagicSignature = lastMessage?.role === 'tool';
-
-  if (shouldAddMagicSignature) {
-    // Find the last user message index in filtered contents
-    let lastUserIndex = -1;
-    for (let i = filteredContents.length - 1; i >= 0; i--) {
-      if (filteredContents[i].role === 'user') {
-        // Skip if it's a functionResponse (tool result)
-        const hasFunctionResponse = filteredContents[i].parts?.some((p) => p.functionResponse);
-        if (!hasFunctionResponse) {
-          lastUserIndex = i;
-          break;
-        }
-      }
-    }
-
-    // Add magic signature to all function calls after last user message that don't have thoughtSignature
-    for (let i = lastUserIndex + 1; i < filteredContents.length; i++) {
-      const content = filteredContents[i];
-      if (content.role === 'model' && content.parts) {
-        for (const part of content.parts) {
-          if (part.functionCall && !part.thoughtSignature) {
-            // Only add magic signature if thoughtSignature doesn't exist
-            part.thoughtSignature = GEMINI_MAGIC_THOUGHT_SIGNATURE;
-          }
+  // Add magic signature to all function calls that don't have thoughtSignature.
+  // This handles cross-provider scenarios (e.g., OpenAI → Gemini switch) where
+  // historical tool_calls lack thoughtSignature, as well as multi-turn Gemini
+  // conversations where earlier turns may have lost their signatures.
+  // @see https://linear.app/lobehub/issue/LOBE-8662
+  for (const content of filteredContents) {
+    if (content.role === 'model' && content.parts) {
+      for (const part of content.parts) {
+        if (part.functionCall && !part.thoughtSignature) {
+          part.thoughtSignature = GEMINI_MAGIC_THOUGHT_SIGNATURE;
         }
       }
     }
   }
 
   return filteredContents;
+};
+
+/**
+ * Recursively sanitize a JSON Schema to comply with Gemini proto constraints:
+ * - `enum` is only allowed on STRING type fields
+ * - `required` is only allowed on OBJECT type fields
+ *
+ * This handles the OpenAI→Gemini schema bridge where the upstream
+ * schema may place `enum` on non-STRING types (e.g. number, boolean)
+ * or `required` on non-OBJECT types.
+ *
+ * @see https://linear.app/lobehub/issue/LOBE-8661
+ */
+export const sanitizeGeminiSchema = (schema: any): any => {
+  if (!schema || typeof schema !== 'object') return schema;
+
+  const sanitized = { ...schema };
+
+  // Determine if the schema type is (or includes) STRING / OBJECT.
+  // Handles both `type: 'string'` and nullable `type: ['string', 'null']`.
+  const isStringType = (t: unknown): boolean =>
+    typeof t === 'string' ? t === 'string' : Array.isArray(t) && t.includes('string');
+  const isObjectType = (t: unknown): boolean =>
+    typeof t === 'string' ? t === 'object' : Array.isArray(t) && t.includes('object');
+
+  // Strip enum from non-STRING types and empty enums
+  // Gemini proto: "enum: only allowed for STRING type"
+  if (
+    sanitized.enum !== undefined &&
+    (!isStringType(sanitized.type) || !Array.isArray(sanitized.enum) || sanitized.enum.length === 0)
+  ) {
+    console.warn(
+      '[google] sanitizeGeminiSchema stripped enum — not allowed for non-STRING type or empty',
+      { type: sanitized.type, enumLength: sanitized.enum?.length },
+    );
+    delete sanitized.enum;
+  }
+
+  // Strip required from non-OBJECT types and empty required arrays
+  // Gemini proto: "required: only allowed for OBJECT type"
+  if (
+    sanitized.required !== undefined &&
+    (!isObjectType(sanitized.type) ||
+      !Array.isArray(sanitized.required) ||
+      sanitized.required.length === 0)
+  ) {
+    console.warn(
+      '[google] sanitizeGeminiSchema stripped required — not allowed for non-OBJECT type or empty',
+      { type: sanitized.type, requiredLength: sanitized.required?.length },
+    );
+    delete sanitized.required;
+  }
+
+  // Recursively sanitize properties
+  if (sanitized.properties && typeof sanitized.properties === 'object') {
+    for (const key of Object.keys(sanitized.properties)) {
+      sanitized.properties[key] = sanitizeGeminiSchema(sanitized.properties[key]);
+    }
+  }
+
+  // Recursively sanitize items (for array types)
+  if (sanitized.items) {
+    sanitized.items = sanitizeGeminiSchema(sanitized.items);
+  }
+
+  // Recursively sanitize anyOf/oneOf/allOf combinators
+  for (const key of ['anyOf', 'oneOf', 'allOf']) {
+    if (Array.isArray(sanitized[key])) {
+      sanitized[key] = sanitized[key].map(sanitizeGeminiSchema);
+    }
+  }
+
+  // Recursively sanitize definitions/$defs — when a tool schema stores
+  // non-compliant constraints inside a referenced sub-schema the walker
+  // must reach into the definitions map as well.
+  for (const key of ['definitions', '$defs']) {
+    if (sanitized[key] && typeof sanitized[key] === 'object') {
+      for (const defKey of Object.keys(sanitized[key])) {
+        sanitized[key][defKey] = sanitizeGeminiSchema(sanitized[key][defKey]);
+      }
+    }
+  }
+
+  return sanitized;
 };
 
 /**
@@ -296,7 +363,7 @@ export const buildGoogleTool = (tool: ChatCompletionTool): FunctionDeclaration =
   const hasProperties = parameters?.properties && Object.keys(parameters.properties).length > 0;
 
   const jsonSchema = hasProperties
-    ? parameters
+    ? sanitizeGeminiSchema(parameters)
     : { type: 'object', properties: { dummy: { type: 'string' } } };
 
   return {

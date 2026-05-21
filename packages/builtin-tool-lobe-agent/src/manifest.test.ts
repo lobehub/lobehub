@@ -25,6 +25,16 @@ describe('LobeAgentManifest', () => {
     expect(apiDescription).toContain('answer the user directly with the result');
   });
 
+  it('should instruct agents to prefer native multimodal access before visual analysis', () => {
+    expect(LobeAgentManifest.systemRole).toContain('`analyzeVisualMedia` is only a fallback');
+    expect(LobeAgentManifest.systemRole).toContain(
+      'media is already visible in the current multimodal context',
+    );
+    expect(LobeAgentManifest.systemRole).toContain(
+      'active model lacks the needed image/video capability',
+    );
+  });
+
   it('should keep visual analysis parameters compatible with strict tool schema validators', () => {
     const parameters = LobeAgentManifest.api[0].parameters;
 

@@ -53,7 +53,10 @@ const CreateAgentButton = memo<CreateAgentButtonProps>(({ groupId, className }) 
   } = useCreateMenuItems();
 
   const isCustomGroup = Boolean(groupId) && groupId !== SessionDefaultGroup.Default;
-  const menuOptions = isCustomGroup ? { groupId } : undefined;
+  const menuOptions = useMemo(
+    () => (isCustomGroup ? { groupId } : undefined),
+    [groupId, isCustomGroup],
+  );
 
   const dropdownItems = useMemo(() => {
     const heteroItems = createHeterogeneousAgentMenuItems(menuOptions);
@@ -84,8 +87,9 @@ const CreateAgentButton = memo<CreateAgentButtonProps>(({ groupId, className }) 
       align={'center'}
       className={cx(styles.container, className)}
       gap={8}
-      height={32}
+      height={36}
       paddingInline={4}
+      style={{ height: 36 }}
       variant={'borderless'}
       onClick={handleClick}
     >

@@ -1,8 +1,10 @@
 {
   "actionTag.category.command": "Komut",
+  "actionTag.category.projectSkill": "Proje becerisi",
   "actionTag.category.skill": "Beceri",
   "actionTag.category.tool": "Araç",
   "actionTag.tooltip.command": "Göndermeden önce istemci tarafında bir slash komutu çalıştırır.",
+  "actionTag.tooltip.projectSkill": "Ajanın CLI'sinin eşleşen proje becerisini çalıştırması için bir eğik çizgi çağrısı olarak gönderilir.",
   "actionTag.tooltip.skill": "Bu istek için yeniden kullanılabilir bir beceri paketini yükler.",
   "actionTag.tooltip.tool": "Kullanıcının bu istek için açıkça seçtiği bir aracı işaretler.",
   "actions.expand.off": "Daralt",

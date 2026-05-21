@@ -20,8 +20,13 @@ import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis'
 import { AiAgentService } from '@/server/services/aiAgent';
 import { AgentBridgeService } from '@/server/services/bot/AgentBridgeService';
 import { buildBotContext } from '@/server/services/bot/buildBotContext';
+import { submitBotFeedback } from '@/server/services/bot/feedbackSubmit';
 import type { PlatformClient } from '@/server/services/bot/platforms';
-import { renderInlineError } from '@/server/services/bot/replyTemplate';
+import {
+  renderCommandReply,
+  renderFeedbackSubmitted,
+  renderInlineError,
+} from '@/server/services/bot/replyTemplate';
 
 import { getInstallationStore } from './installations';
 import type { InstallationCredentials } from './installations/types';
@@ -93,6 +98,19 @@ interface MessengerCommand {
   description: string;
   handler: (ctx: MessengerCommandContext) => Promise<void>;
   name: string;
+  /**
+   * Native slash-command argument schema for platforms that require
+   * arguments to be declared up-front (Discord, Slack). Without this,
+   * Discord registers the command as zero-arg — clicking it from the
+   * slash menu fires the handler with no value field shown to the user.
+   * Mirrors `BotCommand.options` in `BotMessageRouter` so command authors
+   * use the same shape across both routers.
+   */
+  options?: Array<{
+    description: string;
+    name: string;
+    required?: boolean;
+  }>;
 }
 
 const HELP_TEXT = [
@@ -101,6 +119,7 @@ const HELP_TEXT = [
   '• /agents — list your agents and switch the active one',
   '• /new — start a new conversation',
   '• /stop — stop the current execution',
+  '• /feedback <message> — send feedback to the LobeHub team (no AI reply)',
 ].join('\n');
 
 /**
@@ -323,7 +342,17 @@ export class MessengerRouter {
     if (client.registerBotCommands) {
       client
         .registerBotCommands(
-          this.commands.map((cmd) => ({ command: cmd.name, description: cmd.description })),
+          this.commands.map((cmd) => ({
+            command: cmd.name,
+            description: cmd.description,
+            // Forward the option schema so Discord/Slack surface required
+            // arguments (e.g. `/feedback message:`) in the slash picker.
+            // Without this, the command registers as zero-arg and the
+            // user can fire it without providing the required text — the
+            // handler then sees empty `args` and falls back to the usage
+            // hint. Mirrors `BotMessageRouter.createAndRegisterBot`.
+            options: cmd.options,
+          })),
         )
         .catch((error) =>
           log('registerBotCommands failed for %s: %O', creds.installationKey, error),
@@ -814,6 +843,45 @@ export class MessengerRouter {
         name: 'stop',
       },
       {
+        description: 'Send feedback directly to the LobeHub team (no AI reply)',
+        // Declaring the argument so Discord/Slack surface a `/feedback <message>`
+        // prompt; without it the slash picker registers the command as zero-arg
+        // and the user can't enter feedback text from the picker UI.
+        options: [
+          {
+            description: 'Your feedback message',
+            name: 'message',
+            required: true,
+          },
+        ],
+        handler: async (ctx) => {
+          // Feedback is tied to a LobeHub account so the team can follow up;
+          // an unbound user has no email/identity to attach. Mirror the
+          // `/new` / `/stop` "you need to /start" guard for consistency.
+          if (!ctx.link) {
+            await ctx.reply('You need to /start to bind your account first.');
+            return;
+          }
+          const body = ctx.args.trim();
+          if (!body) {
+            await ctx.reply(renderCommandReply('cmdFeedbackUsage'));
+            return;
+          }
+          const result = await submitBotFeedback(ctx.serverDB, {
+            body,
+            platform: ctx.platform,
+            threadId: ctx.thread?.id ?? ctx.chatId,
+            userId: ctx.link.userId,
+          });
+          if (!result.success) {
+            await ctx.reply(renderCommandReply('cmdFeedbackError'));
+            return;
+          }
+          await ctx.reply(renderFeedbackSubmitted(result.issueUrl));
+        },
+        name: 'feedback',
+      },
+      {
         description: 'Show usage',
         handler: async (ctx) => {
           await ctx.reply(HELP_TEXT);
@@ -1107,7 +1175,7 @@ export class MessengerRouter {
     }
 
     const text = [
-      ":wave: Hi, I'm *LobeHub* — your AI agent in Slack.",
+      ":wave: Hi, I'm *LobeHub* — your AI agent on Slack.",
       '',
       '• Mention me with `@LobeHub <your question>` to chat in this channel.',
       '• First time? Send me a *direct message* to link your LobeHub account.',

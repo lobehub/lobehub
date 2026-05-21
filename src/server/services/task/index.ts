@@ -487,11 +487,15 @@ export class TaskService {
     );
 
     // Resolve parent
-    let parent: { identifier: string; name: string | null } | null = null;
+    let parent: { agentId: string | null; identifier: string; name: string | null } | null = null;
     if (task.parentTaskId) {
       const parentTask = await this.taskModel.findById(task.parentTaskId);
       if (parentTask) {
-        parent = { identifier: parentTask.identifier, name: parentTask.name };
+        parent = {
+          agentId: parentTask.assigneeAgentId,
+          identifier: parentTask.identifier,
+          name: parentTask.name,
+        };
       }
     }
 

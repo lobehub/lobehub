@@ -13,7 +13,9 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import Loading from '@/components/Loading/BrandTextLoading';
+import { ONBOARDING_PRODUCTION_DEFAULT_MODEL } from '@/const/onboarding';
 import ModeSwitch from '@/features/Onboarding/components/ModeSwitch';
+import { useOnboardingAgentTemplates } from '@/hooks/useOnboardingAgentTemplates';
 import { useClientDataSWR, useOnlyFetchOnceSWR } from '@/libs/swr';
 import OnboardingContainer from '@/routes/onboarding/_layout';
 import { fetchOnboardingAgentTemplates } from '@/services/agentMarketplace';
@@ -21,7 +23,7 @@ import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
 import { userService } from '@/services/user';
 import { useAgentStore } from '@/store/agent';
-import { builtinAgentSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useUserStore } from '@/store/user';
@@ -54,6 +56,9 @@ const AgentOnboardingPage = memo(() => {
   const refreshBuiltinAgent = useAgentStore((s) => s.refreshBuiltinAgent);
   const onboardingAgentId = useAgentStore(
     builtinAgentSelectors.getBuiltinAgentId(BUILTIN_AGENT_SLUGS.webOnboarding),
+  );
+  const onboardingAgentConfig = useAgentStore((s) =>
+    onboardingAgentId ? agentByIdSelectors.getAgentConfigById(onboardingAgentId)(s) : undefined,
   );
   const inboxAgentId = useAgentStore(
     builtinAgentSelectors.getBuiltinAgentId(BUILTIN_AGENT_SLUGS.inbox),
@@ -113,6 +118,8 @@ const AgentOnboardingPage = memo(() => {
   const viewingHistoricalTopic =
     !!activeTopicId && !!effectiveTopicId && effectiveTopicId !== activeTopicId;
 
+  useOnboardingAgentTemplates(!onboardingFinished && !viewingHistoricalTopic);
+
   const onboardingChatKey = useMemo(
     () => messageMapKey({ agentId: onboardingAgentId || '', topicId: effectiveTopicId }),
     [onboardingAgentId, effectiveTopicId],
@@ -123,10 +130,18 @@ const AgentOnboardingPage = memo(() => {
     () => !messagesForOnboarding || messagesForOnboarding.length === 0,
     [messagesForOnboarding],
   );
+  const onboardingFollowUpModelConfig = useMemo(
+    () => ({
+      model: onboardingAgentConfig?.model ?? ONBOARDING_PRODUCTION_DEFAULT_MODEL.model,
+      provider: onboardingAgentConfig?.provider ?? ONBOARDING_PRODUCTION_DEFAULT_MODEL.provider,
+    }),
+    [onboardingAgentConfig?.model, onboardingAgentConfig?.provider],
+  );
 
   const onboardingFollowUp = useOnboardingFollowUp({
     enabled: !onboardingFinished && !viewingHistoricalTopic,
     isGreeting,
+    modelConfig: onboardingFollowUpModelConfig,
   });
   const { onBeforeSendMessage, triggerExtract } = onboardingFollowUp;
 

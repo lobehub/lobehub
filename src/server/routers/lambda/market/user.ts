@@ -70,6 +70,19 @@ export const userRouter = router({
       } catch (error) {
         if (error instanceof TRPCError) throw error;
 
+        // 404 is expected when a user hasn't set up a market username yet — not an internal error
+        if (
+          error instanceof Error &&
+          'status' in error &&
+          (error as Error & { status: unknown }).status === 404
+        ) {
+          throw new TRPCError({
+            cause: error,
+            code: 'NOT_FOUND',
+            message: `User not found: ${input.username}`,
+          });
+        }
+
         log('Error getting user profile: %O', error);
         throw new TRPCError({
           cause: error,

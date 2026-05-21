@@ -1,8 +1,6 @@
 {
   "addUserMessage.desc": "Add the current input as a user message without triggering generation",
   "addUserMessage.title": "Add a User Message",
-  "clearCurrentMessages.desc": "Clear the messages and uploaded files from the current conversation",
-  "clearCurrentMessages.title": "Clear Conversation Messages",
   "commandPalette.desc": "Open the global command palette for quick access to features",
   "commandPalette.title": "Command Palette",
   "deleteAndRegenerateMessage.desc": "Delete the last message and regenerate",

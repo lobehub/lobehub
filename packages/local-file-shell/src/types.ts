@@ -124,6 +124,8 @@ export interface GlobFilesParams {
 export interface GlobFilesResult {
   error?: string;
   files: string[];
+  /** Diagnostic note returned when the engine had to adjust behavior, e.g. auto-enabling hidden-file matching. */
+  hint?: string;
 }
 
 export interface SearchFilesParams {
@@ -173,6 +175,8 @@ export interface GrepContentParams {
 
 export interface GrepContentResult {
   error?: string;
+  /** Diagnostic note returned when the engine had to adjust behavior, e.g. auto-enabling hidden-file matching. */
+  hint?: string;
   matches: any[];
   success: boolean;
 }

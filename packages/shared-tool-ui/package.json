@@ -7,6 +7,7 @@
     "./components": "./src/components/index.ts",
     "./renders": "./src/Render/index.ts",
     "./inspectors": "./src/Inspector/index.ts",
+    "./inspectors/linear-labels": "./src/Inspector/Linear/labels.ts",
     "./styles": "./src/styles.ts"
   },
   "dependencies": {

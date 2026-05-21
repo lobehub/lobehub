@@ -21,7 +21,7 @@ export default {
   'messenger.error.platformNotConfigured':
     "This messenger platform isn't available right now. Please try again later.",
   'messenger.linkCta': 'Connect',
-  'messenger.linkModal.continueIn': 'Continue setup in {{platform}}',
+  'messenger.linkModal.continueIn': 'Continue setup on {{platform}}',
   'messenger.linkModal.instructions':
     'Open the bot, send /start, then tap "Link Account" to connect your LobeHub account.',
   'messenger.linkModal.notConfigured':
@@ -29,12 +29,12 @@ export default {
   'messenger.linkModal.openCta': 'Open in {{platform}}',
   'messenger.linkModal.scanHint': 'Or scan with your phone to open {{platform}}.',
   'messenger.noPlatformsConfigured': 'No platforms are available yet. Check back soon.',
-  'messenger.slack.connectModal.continueButton': 'Continue in Slack',
+  'messenger.slack.connectModal.continueButton': 'Continue on Slack',
   'messenger.slack.connectModal.description':
     'You will be redirected to Slack to authorize the LobeHub workspace install.',
   'messenger.slack.connectModal.notConfigured':
     "Slack isn't available right now. Please try again later.",
-  'messenger.slack.connectModal.title': 'Continue setup in Slack',
+  'messenger.slack.connectModal.title': 'Continue setup on Slack',
   'messenger.slack.connections.disconnectConfirm':
     'Disconnect the LobeHub bot from this Slack workspace? Existing user links will pause until you re-install.',
   'messenger.slack.connections.disconnectFailed': 'Failed to disconnect.',
@@ -42,7 +42,7 @@ export default {
   'messenger.slack.connections.disconnectTitle': 'Disconnect workspace',
   'messenger.slack.installBlocked.dismiss': 'Got it',
   'messenger.slack.installBlocked.suggestion':
-    "DM @LobeHub in Slack to link your personal account — you don't need to install again. Or ask the original installer to disconnect this workspace first if you want to take over ownership.",
+    "DM @LobeHub on Slack to link your personal account — you don't need to install again. Or ask the original installer to disconnect this workspace first if you want to take over ownership.",
   'messenger.slack.installBlocked.title': 'Workspace already connected',
   'messenger.slack.installBlocked.withName':
     '"{{workspace}}" is already connected to LobeHub by another user.',
@@ -76,7 +76,7 @@ export default {
   'messenger.discord.connections.disconnectTitle': 'Remove server',
   'messenger.discord.installBlocked.dismiss': 'Got it',
   'messenger.discord.installBlocked.suggestion':
-    "DM the LobeHub bot in Discord to link your personal account — you don't need to add the bot again. Or ask the original installer to remove this server in LobeHub Settings → Messenger before re-adding it.",
+    "DM the LobeHub bot on Discord to link your personal account — you don't need to add the bot again. Or ask the original installer to remove this server in LobeHub Settings → Messenger before re-adding it.",
   'messenger.discord.installBlocked.title': 'Server already connected',
   'messenger.discord.installBlocked.withName':
     '"{{workspace}}" is already connected to LobeHub by another user.',
@@ -100,14 +100,14 @@ export default {
   'messenger.discord.installResult.success': 'Discord server connected.',
   'messenger.discord.userPending.cta': 'Open in Discord',
   'messenger.discord.userPending.hint':
-    'Open the bot in Discord and send any message to finish linking your account.',
+    'Open the bot on Discord and send any message to finish linking your account.',
   'messenger.discord.userPending.name': 'Not linked yet',
   'messenger.list.discord.description':
-    'Chat with your LobeHub agents from any Discord server via DM with the LobeHub bot.',
+    'Chat with your LobeHub agents on Discord by DMing the LobeHub bot from any server.',
   'messenger.list.slack.description':
-    'Chat with your LobeHub agents from any Slack workspace via DM or @LobeHub.',
+    'Chat with your LobeHub agents on Slack by DMing or mentioning @LobeHub in any workspace.',
   'messenger.list.telegram.description':
-    'Chat with your LobeHub agents in Telegram and pick which one answers from anywhere.',
+    'Chat with your LobeHub agents on Telegram, and choose which agent replies.',
   'messenger.setActiveFailed': 'Failed to set as active.',
   'messenger.setActiveSuccess': 'Active agent updated.',
   'messenger.subtitle':

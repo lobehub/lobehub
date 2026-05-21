@@ -23,6 +23,7 @@ import TaskTriggerTag from '../features/TaskTriggerTag';
 import { useTaskContextMenuActions } from '../features/useTaskItemContextMenu';
 import AccordionArrowIcon from '../shared/AccordionArrowIcon';
 import { styles } from '../shared/style';
+import { taskDetailPath } from '../shared/taskDetailPath';
 import RunSubtasksPreview from './RunSubtasksPreview';
 
 type TaskStatus = 'backlog' | 'canceled' | 'completed' | 'failed' | 'paused' | 'running';
@@ -139,13 +140,6 @@ const TaskSubtasks = memo(() => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [isPlanning, setIsPlanning] = useState(false);
 
-  const handleNavigate = useCallback(
-    (identifier: string) => {
-      navigate(`/task/${identifier}`);
-    },
-    [navigate],
-  );
-
   const subtaskMap = useMemo(() => {
     const map = new Map<string, TaskDetailSubtask>();
     const walk = (items: TaskDetailSubtask[]) => {
@@ -157,6 +151,14 @@ const TaskSubtasks = memo(() => {
     walk(subtasks);
     return map;
   }, [subtasks]);
+
+  const handleNavigate = useCallback(
+    (identifier: string) => {
+      const subtask = subtaskMap.get(identifier);
+      navigate(taskDetailPath(identifier, subtask?.assignee?.id ?? undefined));
+    },
+    [navigate, subtaskMap],
+  );
 
   const treeData = useMemo(() => {
     if (subtasks.length === 0) return [];

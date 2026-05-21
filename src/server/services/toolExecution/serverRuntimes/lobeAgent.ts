@@ -16,7 +16,6 @@ import type { ChatStreamPayload } from '@lobechat/model-runtime';
 import { consumeStreamUntilDone } from '@lobechat/model-runtime';
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
-import { LOBE_DEFAULT_MODEL_LIST } from 'model-bank';
 
 import { MessageModel } from '@/database/models/message';
 import { toolsEnv } from '@/envs/tools';
@@ -48,10 +47,13 @@ const buildError = (content: string, code: string): BuiltinServerRuntimeOutput =
   success: false,
 });
 
-const getModelAbilities = (model: string, provider: string) => {
+const getModelAbilities = async (model: string, provider: string) => {
+  const { loadModels } = await import('@/business/client/model-bank/loadModels');
+  const builtinModels = await loadModels();
+
   return (
-    LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === model && item.providerId === provider) ??
-    LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === model)
+    builtinModels.find((item) => item.id === model && item.providerId === provider) ??
+    builtinModels.find((item) => item.id === model)
   )?.abilities;
 };
 
@@ -230,7 +232,7 @@ class LobeAgentExecutionRuntime {
       return buildError('No visual files selected.', 'NO_VISUAL_FILES_SELECTED');
     }
 
-    const abilities = getModelAbilities(model, provider);
+    const abilities = await getModelAbilities(model, provider);
     const hasImages = selectedItems.some((item) => item.type === 'image');
     const hasVideos = selectedItems.some((item) => item.type === 'video');
 

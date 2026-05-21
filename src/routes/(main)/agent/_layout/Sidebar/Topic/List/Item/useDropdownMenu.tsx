@@ -23,7 +23,6 @@ import { useNavigate } from 'react-router-dom';
 import { openRenameModal } from '@/components/RenameModal';
 import { SESSION_CHAT_TOPIC_URL } from '@/const/url';
 import { isDesktop } from '@/const/version';
-import { pluginRegistry } from '@/features/Electron/titlebar/RecentlyViewed/plugins';
 import { openShareModal } from '@/features/ShareModal';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { useAgentStore } from '@/store/agent';
@@ -143,11 +142,8 @@ export const useTopicItemDropdownMenu = ({
               onClick: () => {
                 if (!activeAgentId) return;
                 const url = SESSION_CHAT_TOPIC_URL(activeAgentId, id);
-                const reference = pluginRegistry.parseUrl(url, '');
-                if (reference) {
-                  addTab(reference);
-                  navigate(url);
-                }
+                addTab(url);
+                navigate(url);
               },
             },
             {

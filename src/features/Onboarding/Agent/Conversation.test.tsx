@@ -122,7 +122,7 @@ describe('AgentOnboardingConversation', () => {
     );
   });
 
-  it('disables / @ triggers, follow-up placeholder, and message queueing', () => {
+  it('disables input completion, / @ triggers, follow-up placeholder, and message queueing', () => {
     mockState.displayMessages = [{ id: 'assistant-1', role: 'assistant' }];
 
     render(<AgentOnboardingConversation />);
@@ -130,9 +130,12 @@ describe('AgentOnboardingConversation', () => {
     expect(chatInputSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         disableFollowUpVariant: true,
-        disableMention: true,
         disableQueue: true,
-        disableSlash: true,
+        feature: expect.objectContaining({
+          inputCompletion: false,
+          mention: false,
+          slash: false,
+        }),
       }),
     );
   });

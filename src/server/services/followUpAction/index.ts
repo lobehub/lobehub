@@ -1,8 +1,7 @@
-import { DEFAULT_SYSTEM_AGENT_CONFIG } from '@lobechat/const';
 import type { FollowUpChip, FollowUpExtractInput, FollowUpExtractResult } from '@lobechat/types';
 import debug from 'debug';
 
-import { type LobeChatDatabase } from '@/database/type';
+import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
 import { buildSuggestionPrompt } from './prompts';
@@ -21,7 +20,11 @@ export class FollowUpActionService {
     this.userId = userId;
   }
 
-  async extract({ topicId, hint }: FollowUpExtractInput): Promise<FollowUpExtractResult> {
+  async extract({
+    topicId,
+    hint,
+    modelConfig,
+  }: FollowUpExtractInput): Promise<FollowUpExtractResult> {
     // Resolve the latest assistant message that actually has user-facing text.
     // Tool-call-only messages have empty content and must be skipped.
     const row = await this.db.query.messages.findFirst({
@@ -43,7 +46,7 @@ export class FollowUpActionService {
     if (!text) return EMPTY_RESULT(row.id);
 
     const { system, user } = buildSuggestionPrompt({ assistantText: text, hint });
-    const { model, provider } = this.getModelConfig();
+    const { model, provider } = modelConfig;
 
     let raw: unknown;
     try {
@@ -78,18 +81,5 @@ export class FollowUpActionService {
       .slice(0, 4);
 
     return { chips, messageId: row.id };
-  }
-
-  private getModelConfig(): { model: string; provider: string } {
-    const overrideModel = process.env.FOLLOW_UP_ACTION_MODEL;
-    const overrideProvider = process.env.FOLLOW_UP_ACTION_PROVIDER;
-    if (overrideModel && overrideProvider) {
-      return { model: overrideModel, provider: overrideProvider };
-    }
-    const fallback = DEFAULT_SYSTEM_AGENT_CONFIG.topic;
-    return {
-      model: overrideModel ?? fallback.model,
-      provider: overrideProvider ?? fallback.provider,
-    };
   }
 }

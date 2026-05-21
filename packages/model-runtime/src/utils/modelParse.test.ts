@@ -1,5 +1,5 @@
 import type { ChatModelCard } from '@lobechat/types';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   detectModelProvider,
@@ -10,7 +10,8 @@ import {
 } from './modelParse';
 
 // Mock the imported LOBE_DEFAULT_MODEL_LIST
-const { mockDefaultModelList } = vi.hoisted(() => ({
+const { loadModelsMock, mockDefaultModelList } = vi.hoisted(() => ({
+  loadModelsMock: vi.fn(),
   mockDefaultModelList: [
     {
       contextWindowTokens: 8192,
@@ -114,6 +115,8 @@ vi.mock('model-bank', () => ({
     options: ['chat', 'embedding', 'tts', 'stt', 'image', 'video', 'text2music', 'realtime'],
   },
   LOBE_DEFAULT_MODEL_LIST: mockDefaultModelList,
+  loadModels: vi.fn().mockResolvedValue(mockDefaultModelList),
+  ModelProvider: { LobeHub: 'lobehub' },
   // 新增 provider 专用清单，供 findKnownModelByProvider 使用
   google: [
     {
@@ -124,9 +127,17 @@ vi.mock('model-bank', () => ({
   ],
 }));
 
+vi.mock('@lobechat/business-model-bank/model-config', () => ({
+  loadModels: loadModelsMock,
+}));
+
 describe('modelParse', () => {
+  beforeEach(() => {
+    loadModelsMock.mockResolvedValue(mockDefaultModelList);
+  });
+
   afterEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('detectModelProvider', () => {
@@ -551,6 +562,41 @@ describe('modelParse', () => {
       expect(unknown.functionCall).toBe(false);
       expect(unknown.reasoning).toBe(false);
       expect(unknown.vision).toBe(false);
+    });
+
+    it('should use business model metadata when parsing mixed provider models', async () => {
+      loadModelsMock.mockResolvedValueOnce([
+        ...mockDefaultModelList,
+        {
+          abilities: {
+            functionCall: true,
+            reasoning: true,
+            vision: true,
+          },
+          contextWindowTokens: 131_072,
+          displayName: 'Business Only Model',
+          enabled: true,
+          id: 'business-only-model',
+          maxOutput: 8192,
+          source: 'builtin',
+          type: 'chat',
+        },
+      ]);
+
+      const result = await processMultiProviderModelList([{ id: 'business-only-model' }]);
+
+      expect(loadModelsMock).toHaveBeenCalledTimes(1);
+      expect(result).toEqual([
+        expect.objectContaining({
+          contextWindowTokens: 131_072,
+          displayName: 'Business Only Model',
+          functionCall: true,
+          id: 'business-only-model',
+          maxOutput: 8192,
+          reasoning: true,
+          vision: true,
+        }),
+      ]);
     });
 
     it('should ignore invalid remote type values in mixed provider processing', async () => {

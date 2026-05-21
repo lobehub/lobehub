@@ -1,5 +1,6 @@
-import { type CreateMessageParams, type SendMessageServerResponse } from '@lobechat/types';
+import type { CreateMessageParams, SendMessageServerResponse } from '@lobechat/types';
 import { AiSendMessageServerSchema, RequestTrigger, StructureOutputSchema } from '@lobechat/types';
+import { createTimingHelpers, createTimingRequestId } from '@lobechat/utils';
 import debug from 'debug';
 
 import { LOADING_FLAT } from '@/const/message';
@@ -15,6 +16,9 @@ import { AiChatService } from '@/server/services/aiChat';
 import { FileService } from '@/server/services/file';
 
 const log = debug('lobe-lambda-router:ai-chat');
+const { createPrefixedTimingContext, logTiming, runTimedStage } = createTimingHelpers(
+  'lobe-server:chat:lobehub:timing',
+);
 
 const aiChatProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -59,6 +63,17 @@ export const aiChatRouter = router({
   sendMessageInServer: aiChatProcedure
     .input(AiSendMessageServerSchema)
     .mutation(async ({ input, ctx }) => {
+      const timingContext =
+        input.newAssistantMessage.provider === 'lobehub'
+          ? { requestId: createTimingRequestId(), startedAt: Date.now() }
+          : undefined;
+      logTiming(timingContext, 'lambda.aiChat.sendMessageInServer:start', {
+        hasNewThread: !!input.newThread,
+        hasNewTopic: !!input.newTopic,
+        hasSessionId: !!input.sessionId,
+        hasTopicId: !!input.topicId,
+        preloadCount: input.preloadMessages?.length ?? 0,
+      });
       log('sendMessageInServer called for agentId: %s', input.agentId);
       log(
         'topicId: %s, newTopic: %O, newThread: %O',
@@ -68,7 +83,12 @@ export const aiChatRouter = router({
       );
       let sessionId = input.sessionId;
       if (!sessionId) {
-        const context = await resolveContext(input, ctx.serverDB, ctx.userId);
+        const context = await runTimedStage(
+          timingContext,
+          'lambda.aiChat.resolveContext',
+          () => resolveContext(input, ctx.serverDB, ctx.userId),
+          { hasAgentId: !!input.agentId },
+        );
         if (!!context.sessionId) sessionId = context.sessionId;
       }
 
@@ -77,27 +97,54 @@ export const aiChatRouter = router({
       let createdThreadId: string | undefined;
 
       let isCreateNewTopic = false;
+      let agentTouchUpdatedAtTask: Promise<void> | undefined;
 
       // create topic if there should be a new topic
       if (input.newTopic) {
         log('creating new topic with title: %s', input.newTopic.title);
-        const topicItem = await ctx.topicModel.create({
-          agentId: input.agentId,
-          groupId: input.groupId,
-          messages: input.newTopic.topicMessageIds,
-          metadata: input.newTopic.metadata,
-          sessionId,
-          title: input.newTopic.title,
-          trigger: input.newTopic.trigger,
-        });
+        const topicItem = await runTimedStage(
+          timingContext,
+          'lambda.aiChat.topic.create',
+          () => {
+            const payload = {
+              agentId: input.agentId,
+              groupId: input.groupId,
+              messages: input.newTopic!.topicMessageIds,
+              metadata: input.newTopic!.metadata,
+              sessionId,
+              title: input.newTopic!.title,
+              trigger: input.newTopic!.trigger,
+            };
+            const modelTiming = createPrefixedTimingContext(
+              timingContext,
+              'lambda.aiChat.topic.create',
+            );
+            return modelTiming
+              ? ctx.topicModel.create(payload, undefined, modelTiming)
+              : ctx.topicModel.create(payload);
+          },
+          {
+            messageCount: input.newTopic.topicMessageIds?.length ?? 0,
+            trigger: input.newTopic.trigger,
+          },
+        );
         topicId = topicItem.id;
         isCreateNewTopic = true;
         log('new topic created with id: %s', topicId);
 
         // update agent's updatedAt to reflect new activity
         if (input.agentId) {
-          await ctx.agentModel.touchUpdatedAt(input.agentId);
-          log('agent updatedAt touched for agentId: %s', input.agentId);
+          agentTouchUpdatedAtTask = runTimedStage(
+            timingContext,
+            'lambda.aiChat.agent.touchUpdatedAt',
+            async () => {
+              await ctx.agentModel.touchUpdatedAt(input.agentId!);
+            },
+            { hasAgentId: true },
+          ).catch((error) => {
+            console.error('[aiChat] Failed to touch agent updatedAt:', error);
+          });
+          log('agent updatedAt touch scheduled for agentId: %s', input.agentId);
         }
       }
 
@@ -108,13 +155,19 @@ export const aiChatRouter = router({
           input.newThread.sourceMessageId,
           input.newThread.type,
         );
-        const threadItem = await ctx.threadModel.create({
-          parentThreadId: input.newThread.parentThreadId,
-          sourceMessageId: input.newThread.sourceMessageId,
-          title: input.newThread.title,
-          topicId,
-          type: input.newThread.type,
-        });
+        const threadItem = await runTimedStage(
+          timingContext,
+          'lambda.aiChat.thread.create',
+          () =>
+            ctx.threadModel.create({
+              parentThreadId: input.newThread!.parentThreadId,
+              sourceMessageId: input.newThread!.sourceMessageId,
+              title: input.newThread!.title,
+              topicId,
+              type: input.newThread!.type,
+            }),
+          { threadType: input.newThread.type },
+        );
         if (threadItem) {
           threadId = threadItem.id;
           createdThreadId = threadItem.id;
@@ -127,24 +180,40 @@ export const aiChatRouter = router({
       if (input.preloadMessages?.length) {
         log('creating %d preload messages before user message', input.preloadMessages.length);
 
-        for (const preloadMessage of input.preloadMessages) {
-          const preloadItem = await ctx.messageModel.create({
-            agentId: input.agentId,
-            content: preloadMessage.content,
-            groupId: input.groupId,
-            metadata: preloadMessage.metadata,
-            parentId,
-            plugin: preloadMessage.plugin as CreateMessageParams['plugin'],
-            role: preloadMessage.role,
-            sessionId,
-            threadId,
-            tool_call_id: preloadMessage.tool_call_id,
-            tools: preloadMessage.tools as CreateMessageParams['tools'],
-            topicId,
-          });
+        parentId = await runTimedStage(
+          timingContext,
+          'lambda.aiChat.preloadMessages.create',
+          async () => {
+            let latestParentId = parentId;
+            for (const preloadMessage of input.preloadMessages!) {
+              const payload = {
+                agentId: input.agentId,
+                content: preloadMessage.content,
+                groupId: input.groupId,
+                metadata: preloadMessage.metadata,
+                parentId: latestParentId,
+                plugin: preloadMessage.plugin as CreateMessageParams['plugin'],
+                role: preloadMessage.role,
+                sessionId,
+                threadId,
+                tool_call_id: preloadMessage.tool_call_id,
+                tools: preloadMessage.tools as CreateMessageParams['tools'],
+                topicId,
+              };
+              const modelTiming = createPrefixedTimingContext(
+                timingContext,
+                'lambda.aiChat.preloadMessages.create',
+              );
+              const preloadItem = await (modelTiming
+                ? ctx.messageModel.create(payload, undefined, modelTiming)
+                : ctx.messageModel.create(payload));
 
-          parentId = preloadItem.id;
-        }
+              latestParentId = preloadItem.id;
+            }
+            return latestParentId;
+          },
+          { count: input.preloadMessages.length },
+        );
       }
 
       // create user message
@@ -161,58 +230,95 @@ export const aiChatRouter = router({
             }
           : undefined;
 
-      const userMessageItem = await ctx.messageModel.create({
-        agentId: input.agentId,
-        content: input.newUserMessage.content,
-        editorData: input.newUserMessage.editorData,
-        files: input.newUserMessage.files,
-        groupId: input.groupId,
-        metadata: userMessageMetadata,
-        parentId,
-        role: 'user',
-        sessionId,
-        threadId,
-        topicId,
-      });
+      const createMessagePairPromise = runTimedStage(
+        timingContext,
+        'lambda.aiChat.messages.createUserAndAssistant',
+        () => {
+          const userMessage = {
+            agentId: input.agentId,
+            content: input.newUserMessage.content,
+            editorData: input.newUserMessage.editorData,
+            files: input.newUserMessage.files,
+            groupId: input.groupId,
+            metadata: userMessageMetadata,
+            parentId,
+            role: 'user',
+            sessionId,
+            threadId,
+            topicId,
+          } satisfies CreateMessageParams;
+          const assistantMessage = {
+            agentId: input.agentId,
+            content: LOADING_FLAT,
+            groupId: input.groupId,
+            metadata: input.newAssistantMessage.metadata,
+            model: input.newAssistantMessage.model,
+            provider: input.newAssistantMessage.provider,
+            role: 'assistant',
+            sessionId,
+            threadId,
+            topicId,
+          } satisfies CreateMessageParams;
+          const modelTiming = createPrefixedTimingContext(
+            timingContext,
+            'lambda.aiChat.messages.createUserAndAssistant',
+          );
+          return ctx.messageModel.createUserAndAssistantMessages(
+            { assistantMessage, userMessage },
+            {
+              ...(modelTiming ? { timing: modelTiming } : {}),
+              touchTopicUpdatedAt: !isCreateNewTopic,
+            },
+          );
+        },
+        {
+          contentLength: input.newUserMessage.content.length,
+          fileCount: input.newUserMessage.files?.length ?? 0,
+          model: input.newAssistantMessage.model,
+          provider: input.newAssistantMessage.provider,
+        },
+      );
+      const { assistantMessage: assistantMessageItem, userMessage: userMessageItem } =
+        agentTouchUpdatedAtTask
+          ? (await Promise.all([createMessagePairPromise, agentTouchUpdatedAtTask]))[0]
+          : await createMessagePairPromise;
 
       const messageId = userMessageItem.id;
       log('user message created with id: %s', messageId);
 
-      // create assistant message
-      log(
-        'creating assistant message with model: %s, provider: %s, metadata: %O',
-        input.newAssistantMessage.model,
-        input.newAssistantMessage.provider,
-        input.newAssistantMessage.metadata,
-      );
-      const assistantMessageItem = await ctx.messageModel.create({
-        agentId: input.agentId,
-        content: LOADING_FLAT,
-        groupId: input.groupId,
-        metadata: input.newAssistantMessage.metadata,
-        model: input.newAssistantMessage.model,
-        parentId: messageId,
-        provider: input.newAssistantMessage.provider,
-        role: 'assistant',
-        sessionId,
-        threadId,
-        topicId,
-      });
       log('assistant message created with id: %s', assistantMessageItem.id);
 
       // retrieve latest messages and topic with
       log('retrieving messages and topics');
-      const { messages, topics } = await ctx.aiChatService.getMessagesAndTopics({
-        agentId: input.agentId,
-        groupId: input.groupId,
-        includeTopic: isCreateNewTopic,
-        sessionId,
-        threadId,
-        topicFilter: input.topicFilter,
-        topicId,
-      });
+      const { messages, topics } = await runTimedStage(
+        timingContext,
+        'lambda.aiChat.messagesAndTopics.query',
+        () =>
+          ctx.aiChatService.getMessagesAndTopics({
+            agentId: input.agentId,
+            groupId: input.groupId,
+            includeTopic: isCreateNewTopic,
+            sessionId,
+            threadId,
+            topicFilter: input.topicFilter,
+            topicId,
+            topicPageSize: input.topicPageSize,
+            ...(timingContext
+              ? {
+                  timingRequestId: timingContext.requestId,
+                  timingStartedAt: timingContext.startedAt,
+                }
+              : {}),
+          }),
+        { includeTopic: isCreateNewTopic },
+      );
 
       log('retrieved %d messages, %d topics', messages.length, topics?.items?.length ?? 0);
+      logTiming(timingContext, 'lambda.aiChat.sendMessageInServer:done', {
+        isCreateNewTopic,
+        messageCount: messages.length,
+        topicCount: topics?.items?.length ?? 0,
+      });
 
       return {
         assistantMessageId: assistantMessageItem.id,

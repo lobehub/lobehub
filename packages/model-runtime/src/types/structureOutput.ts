@@ -1,6 +1,6 @@
 import type { ModelUsage } from '@lobechat/types';
 
-import type { ChatCompletionTool } from './chat';
+import type { ChatCompletionTool, ChatStreamPayload } from './chat';
 
 interface GenerateObjectMessage {
   content: string;
@@ -23,8 +23,10 @@ export interface GenerateObjectSchema {
 export interface GenerateObjectPayload {
   messages: GenerateObjectMessage[];
   model: string;
+  reasoning_effort?: ChatStreamPayload['reasoning_effort'];
   responseApi?: boolean;
   schema?: GenerateObjectSchema;
+  thinking?: ChatStreamPayload['thinking'];
   tools?: ChatCompletionTool[];
 }
 

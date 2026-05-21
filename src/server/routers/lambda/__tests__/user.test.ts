@@ -284,5 +284,59 @@ describe('userRouter', () => {
 
       expect(UserModel).toHaveBeenCalledWith(serverDB, mockUserId);
     });
+
+    it('should allow legacy system agent model-only fields', async () => {
+      const updateSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
+
+      vi.mocked(UserModel).mockImplementation(
+        () =>
+          ({
+            updateSetting,
+          }) as any,
+      );
+
+      await userRouter.createCaller({ ...mockCtx }).updateSettings({
+        systemAgent: {
+          queryRewrite: { model: 'ag/gemini-3.1-pro-high' },
+          topic: { model: 'ag/gemini-3.1-pro-high' },
+        },
+      });
+
+      expect(updateSetting).toHaveBeenCalledWith(
+        expect.objectContaining({
+          systemAgent: {
+            queryRewrite: { model: 'ag/gemini-3.1-pro-high' },
+            topic: { model: 'ag/gemini-3.1-pro-high' },
+          },
+        }),
+      );
+    });
+
+    it('should allow legacy scalar system agent fields', async () => {
+      const updateSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
+
+      vi.mocked(UserModel).mockImplementation(
+        () =>
+          ({
+            updateSetting,
+          }) as any,
+      );
+
+      await userRouter.createCaller({ ...mockCtx }).updateSettings({
+        systemAgent: {
+          enableAutoReply: true,
+          replyMessage: 'Custom auto reply',
+        },
+      });
+
+      expect(updateSetting).toHaveBeenCalledWith(
+        expect.objectContaining({
+          systemAgent: {
+            enableAutoReply: true,
+            replyMessage: 'Custom auto reply',
+          },
+        }),
+      );
+    });
   });
 });

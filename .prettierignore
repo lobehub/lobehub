@@ -8,7 +8,7 @@
 .history
 .temp
 .env.local
-.husky
+.githooks
 .npmrc
 .gitkeep
 venv

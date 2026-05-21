@@ -12,7 +12,6 @@ export default defineConfig({
     'src/modelProviders/lobehub.ts',
     'src/types/index.ts',
     'src/aiModels/*.ts',
-    'src/aiModels/lobehub/index.ts',
   ],
   fixedExtension: false,
   format: ['esm'],

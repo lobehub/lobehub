@@ -518,7 +518,12 @@ describe('ClaudeCodeAdapter', () => {
       });
       const result = events.find((e) => e.type === 'tool_result');
       return result!.data.pluginState as
-        | { todos: { items: Array<{ status: string; text: string }>; updatedAt: string } }
+        | {
+            todos: {
+              items: Array<{ id?: string; status: string; text: string }>;
+              updatedAt: string;
+            };
+          }
         | undefined;
     };
 
@@ -672,6 +677,409 @@ describe('ClaudeCodeAdapter', () => {
       });
       const second = events.find((e) => e.type === 'tool_result')!.data.pluginState;
       expect(second.todos.items).toEqual([{ status: 'completed', text: 'b' }]);
+    });
+  });
+
+  describe('Task tools pluginState synthesis (CC 2.1.143+)', () => {
+    // Helper: drive a TaskCreate (assistant tool_use → user tool_result).
+    // Returns the synthesized pluginState (or undefined) from the tool_result event.
+    const driveTaskCreate = (
+      adapter: ClaudeCodeAdapter,
+      input: { activeForm?: string; description?: string; subject: string },
+      toolId: string,
+      resultContent: string,
+      msgId: string,
+      opts?: { isError?: boolean },
+    ) => {
+      adapter.adapt({
+        message: {
+          id: msgId,
+          content: [{ id: toolId, input, name: 'TaskCreate', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+      const events = adapter.adapt({
+        message: {
+          content: [
+            {
+              content: resultContent,
+              is_error: opts?.isError,
+              tool_use_id: toolId,
+              type: 'tool_result',
+            },
+          ],
+          role: 'user',
+        },
+        type: 'user',
+      });
+      return events.find((e) => e.type === 'tool_result')!.data.pluginState as
+        | {
+            todos: {
+              items: Array<{ id?: string; status: string; text: string }>;
+              updatedAt: string;
+            };
+          }
+        | undefined;
+    };
+
+    const driveTaskUpdate = (
+      adapter: ClaudeCodeAdapter,
+      input: {
+        activeForm?: string;
+        description?: string;
+        status?: 'pending' | 'in_progress' | 'completed' | 'deleted';
+        subject?: string;
+        taskId: string;
+      },
+      toolId: string,
+      resultContent: string,
+      msgId: string,
+      opts?: { isError?: boolean },
+    ) => {
+      adapter.adapt({
+        message: {
+          id: msgId,
+          content: [{ id: toolId, input, name: 'TaskUpdate', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+      const events = adapter.adapt({
+        message: {
+          content: [
+            {
+              content: resultContent,
+              is_error: opts?.isError,
+              tool_use_id: toolId,
+              type: 'tool_result',
+            },
+          ],
+          role: 'user',
+        },
+        type: 'user',
+      });
+      return events.find((e) => e.type === 'tool_result')!.data.pluginState as
+        | {
+            todos: {
+              items: Array<{ id?: string; status: string; text: string }>;
+              updatedAt: string;
+            };
+          }
+        | undefined;
+    };
+
+    const driveTaskList = (
+      adapter: ClaudeCodeAdapter,
+      toolId: string,
+      resultContent: string,
+      msgId: string,
+    ) => {
+      adapter.adapt({
+        message: {
+          id: msgId,
+          content: [{ id: toolId, input: {}, name: 'TaskList', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+      const events = adapter.adapt({
+        message: {
+          content: [{ content: resultContent, tool_use_id: toolId, type: 'tool_result' }],
+          role: 'user',
+        },
+        type: 'user',
+      });
+      return events.find((e) => e.type === 'tool_result')!.data.pluginState as
+        | {
+            todos: {
+              items: Array<{ id?: string; status: string; text: string }>;
+              updatedAt: string;
+            };
+          }
+        | undefined;
+    };
+
+    it('accumulates TaskCreate calls into pluginState ordered by CC-assigned id', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      const after1 = driveTaskCreate(
+        adapter,
+        { activeForm: 'Reading hosts', description: 'Read /etc/hosts', subject: 'Read hosts' },
+        'tu_create_1',
+        'Task #1 created successfully: Read hosts',
+        'msg_1',
+      );
+      expect(after1!.todos.items).toEqual([{ id: '1', status: 'todo', text: 'Read hosts' }]);
+
+      const after2 = driveTaskCreate(
+        adapter,
+        { activeForm: 'Counting lines', description: 'Count lines', subject: 'Count lines' },
+        'tu_create_2',
+        'Task #2 created successfully: Count lines',
+        'msg_2',
+      );
+      expect(after2!.todos.items).toEqual([
+        { id: '1', status: 'todo', text: 'Read hosts' },
+        { id: '2', status: 'todo', text: 'Count lines' },
+      ]);
+    });
+
+    it('uses activeForm for in_progress items and subject for the rest', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      driveTaskCreate(
+        adapter,
+        { activeForm: 'Reading hosts', description: 'Read /etc/hosts', subject: 'Read hosts' },
+        'tu_create_1',
+        'Task #1 created successfully: Read hosts',
+        'msg_1',
+      );
+
+      const afterUpdate = driveTaskUpdate(
+        adapter,
+        { status: 'in_progress', taskId: '1' },
+        'tu_update_1',
+        'Updated task #1 status',
+        'msg_2',
+      );
+      expect(afterUpdate!.todos.items).toEqual([
+        { id: '1', status: 'processing', text: 'Reading hosts' },
+      ]);
+
+      const afterDone = driveTaskUpdate(
+        adapter,
+        { status: 'completed', taskId: '1' },
+        'tu_update_2',
+        'Updated task #1 status',
+        'msg_3',
+      );
+      expect(afterDone!.todos.items).toEqual([
+        { id: '1', status: 'completed', text: 'Read hosts' },
+      ]);
+    });
+
+    it('falls back to subject for in_progress when activeForm was never set', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      driveTaskCreate(
+        adapter,
+        { description: 'Read /etc/hosts', subject: 'Read hosts' },
+        'tu_create_1',
+        'Task #1 created successfully: Read hosts',
+        'msg_1',
+      );
+
+      const state = driveTaskUpdate(
+        adapter,
+        { status: 'in_progress', taskId: '1' },
+        'tu_update_1',
+        'Updated task #1 status',
+        'msg_2',
+      );
+      expect(state!.todos.items).toEqual([{ id: '1', status: 'processing', text: 'Read hosts' }]);
+    });
+
+    it('TaskUpdate with status: deleted removes the entry', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      driveTaskCreate(
+        adapter,
+        { description: 'A', subject: 'A' },
+        'tu_create_1',
+        'Task #1 created successfully: A',
+        'msg_1',
+      );
+      driveTaskCreate(
+        adapter,
+        { description: 'B', subject: 'B' },
+        'tu_create_2',
+        'Task #2 created successfully: B',
+        'msg_2',
+      );
+
+      const state = driveTaskUpdate(
+        adapter,
+        { status: 'deleted', taskId: '1' },
+        'tu_update_del',
+        'Updated task #1',
+        'msg_3',
+      );
+      expect(state!.todos.items).toEqual([{ id: '2', status: 'todo', text: 'B' }]);
+    });
+
+    it('does NOT mutate accumulator when TaskCreate tool_result is is_error', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      driveTaskCreate(
+        adapter,
+        { description: 'A', subject: 'A' },
+        'tu_create_1',
+        'Task #1 created successfully: A',
+        'msg_1',
+      );
+
+      const errorState = driveTaskCreate(
+        adapter,
+        { description: 'B', subject: 'B' },
+        'tu_create_2',
+        'Invalid subject',
+        'msg_2',
+        { isError: true },
+      );
+      // Error path returns no pluginState — UI keeps the prior snapshot.
+      expect(errorState).toBeUndefined();
+
+      // A later successful create must not inherit the failed create's
+      // cached input — the cache should have been drained.
+      const next = driveTaskCreate(
+        adapter,
+        { description: 'C', subject: 'C' },
+        'tu_create_3',
+        'Task #3 created successfully: C',
+        'msg_3',
+      );
+      // Only entries: #1 (A, todo) and #3 (C, todo). #2 must NOT appear.
+      expect(next!.todos.items).toEqual([
+        { id: '1', status: 'todo', text: 'A' },
+        { id: '3', status: 'todo', text: 'C' },
+      ]);
+    });
+
+    it('TaskUpdate to a never-seen id seeds a placeholder so resume sessions still render', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      // Resume gap: no prior TaskCreate observed. The update should still
+      // produce an entry, falling back to a synthetic subject until a
+      // TaskList reconcile fills it in.
+      const state = driveTaskUpdate(
+        adapter,
+        { status: 'in_progress', subject: 'Recovered subject', taskId: '7' },
+        'tu_update_orphan',
+        'Updated task #7 status',
+        'msg_1',
+      );
+      expect(state!.todos.items).toEqual([
+        { id: '7', status: 'processing', text: 'Recovered subject' },
+      ]);
+    });
+
+    it('TaskList rebuilds entries from plain-text output when the accumulator is empty', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      const state = driveTaskList(
+        adapter,
+        'tu_list_1',
+        '#1 [in_progress] Read hosts\n#2 [pending] Count lines\n#3 [completed] Report',
+        'msg_1',
+      );
+      expect(state!.todos.items).toEqual([
+        { id: '1', status: 'processing', text: 'Read hosts' },
+        { id: '2', status: 'todo', text: 'Count lines' },
+        { id: '3', status: 'completed', text: 'Report' },
+      ]);
+    });
+
+    it('TaskList preserves activeForm from earlier TaskCreate when reconciling', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      driveTaskCreate(
+        adapter,
+        { activeForm: 'Reading hosts', description: 'Read', subject: 'Read hosts' },
+        'tu_create_1',
+        'Task #1 created successfully: Read hosts',
+        'msg_1',
+      );
+      // TaskList output flips status to in_progress; activeForm should
+      // survive the reconcile (TaskList itself doesn't carry it).
+      const state = driveTaskList(adapter, 'tu_list_1', '#1 [in_progress] Read hosts', 'msg_2');
+      expect(state!.todos.items).toEqual([
+        { id: '1', status: 'processing', text: 'Reading hosts' },
+      ]);
+    });
+
+    it('does not synthesize Task pluginState for subagent tool_results', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      // Subagent assistant carrying a TaskCreate (parent_tool_use_id set).
+      adapter.adapt({
+        message: {
+          id: 'msg_sub_1',
+          content: [
+            {
+              id: 'tu_sub_create',
+              input: { description: 'Sub task', subject: 'Sub task' },
+              name: 'TaskCreate',
+              type: 'tool_use',
+            },
+          ],
+        },
+        parent_tool_use_id: 'tu_main_agent',
+        type: 'assistant',
+      });
+      const events = adapter.adapt({
+        message: {
+          content: [
+            {
+              content: 'Task #99 created successfully: Sub task',
+              tool_use_id: 'tu_sub_create',
+              type: 'tool_result',
+            },
+          ],
+          role: 'user',
+        },
+        parent_tool_use_id: 'tu_main_agent',
+        type: 'user',
+      });
+      const result = events.find((e) => e.type === 'tool_result');
+      // Subagent task tools are out-of-scope for the main todo plan UI.
+      expect(result!.data.pluginState).toBeUndefined();
+    });
+
+    it('mixed TodoWrite + Task* flows are independent (TodoWrite path still wins on its own call)', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      // First, a TaskCreate snapshot.
+      driveTaskCreate(
+        adapter,
+        { description: 'A', subject: 'A' },
+        'tu_create_1',
+        'Task #1 created successfully: A',
+        'msg_1',
+      );
+
+      // Then a TodoWrite from a legacy / resumed session — should produce
+      // its own pluginState from its own input, NOT the Task accumulator.
+      adapter.adapt({
+        message: {
+          id: 'msg_2',
+          content: [
+            {
+              id: 'tu_todo',
+              input: { todos: [{ activeForm: 'Doing X', content: 'X', status: 'completed' }] },
+              name: 'TodoWrite',
+              type: 'tool_use',
+            },
+          ],
+        },
+        type: 'assistant',
+      });
+      const todoEvents = adapter.adapt({
+        message: {
+          content: [{ content: 'ok', tool_use_id: 'tu_todo', type: 'tool_result' }],
+          role: 'user',
+        },
+        type: 'user',
+      });
+      const todoState = todoEvents.find((e) => e.type === 'tool_result')!.data.pluginState;
+      expect(todoState.todos.items).toEqual([{ status: 'completed', text: 'X' }]);
     });
   });
 

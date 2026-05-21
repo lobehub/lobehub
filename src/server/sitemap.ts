@@ -36,6 +36,11 @@ export const LAST_MODIFIED = new Date().toISOString();
 
 // Number of items per page
 const ITEMS_PER_PAGE = 100;
+const DEFAULT_MODEL_PAGE_COUNT_TIMEOUT_MS = 15 * 60 * 1000;
+
+interface SitemapOptions {
+  modelPageCountTimeoutMs?: number;
+}
 
 type SitemapIdentifiersKey = 'assistant' | 'model' | 'plugin' | 'provider';
 
@@ -55,11 +60,12 @@ function clearCachedIdentifiers() {
 function getCachedIdentifiers(
   key: SitemapIdentifiersKey,
   loader: () => Promise<IdentifiersResponse>,
+  timeoutMs = SITEMAP_IDENTIFIER_TIMEOUT_MS,
 ) {
   const cached = sitemapIdentifiersCache[key];
   if (cached) return cached;
 
-  const promise = withSitemapIdentifierTimeout(key, loader()).catch((error) => {
+  const promise = withSitemapIdentifierTimeout(key, loader(), timeoutMs).catch((error) => {
     delete sitemapIdentifiersCache[key];
     console.error(`[SitemapIdentifierFetchError] failed to fetch ${key} sitemap identifiers`);
     console.error(error);
@@ -73,16 +79,17 @@ function getCachedIdentifiers(
 async function withSitemapIdentifierTimeout(
   key: SitemapIdentifiersKey,
   promise: Promise<IdentifiersResponse>,
+  timeoutMs: number,
 ): Promise<IdentifiersResponse> {
   let timeout: ReturnType<typeof setTimeout> | undefined;
   const timeoutPromise = new Promise<never>((_, reject) => {
     timeout = setTimeout(() => {
       reject(
         new Error(
-          `Timed out fetching ${key} sitemap identifiers after ${SITEMAP_IDENTIFIER_TIMEOUT_MS}ms`,
+          `Timed out fetching ${key} sitemap identifiers after ${timeoutMs}ms`,
         ),
       );
-    }, SITEMAP_IDENTIFIER_TIMEOUT_MS);
+    }, timeoutMs);
   });
 
   try {
@@ -93,9 +100,16 @@ async function withSitemapIdentifierTimeout(
 }
 
 export class Sitemap {
+  private modelPageCountTimeoutMs: number;
+
   sitemapIndexs = [{ id: SitemapType.Pages }, { id: SitemapType.Providers }];
 
   private discoverService = discoverService;
+
+  constructor(options: SitemapOptions = {}) {
+    this.modelPageCountTimeoutMs =
+      options.modelPageCountTimeoutMs ?? DEFAULT_MODEL_PAGE_COUNT_TIMEOUT_MS;
+  }
 
   // Get total number of plugin pages
   async getPluginPageCount(): Promise<number> {
@@ -115,8 +129,10 @@ export class Sitemap {
 
   // Get total number of model pages
   async getModelPageCount(): Promise<number> {
-    const list = await getCachedIdentifiers('model', () =>
-      this.discoverService.getModelIdentifiers(),
+    const list = await getCachedIdentifiers(
+      'model',
+      () => this.discoverService.getModelIdentifiers(),
+      this.modelPageCountTimeoutMs,
     );
     return Math.ceil(list.length / ITEMS_PER_PAGE);
   }

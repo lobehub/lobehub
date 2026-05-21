@@ -1,8 +1,6 @@
 {
   "addUserMessage.desc": "افزودن ورودی فعلی به‌عنوان پیام کاربر بدون شروع تولید پاسخ",
   "addUserMessage.title": "افزودن پیام کاربر",
-  "clearCurrentMessages.desc": "پاک‌سازی پیام‌ها و فایل‌های بارگذاری‌شده از گفت‌وگوی فعلی",
-  "clearCurrentMessages.title": "پاک‌سازی پیام‌های گفت‌وگو",
   "commandPalette.desc": "باز کردن پنل فرمان جهانی برای دسترسی سریع به قابلیت‌ها",
   "commandPalette.title": "پنل فرمان",
   "deleteAndRegenerateMessage.desc": "حذف آخرین پیام و تولید مجدد آن",

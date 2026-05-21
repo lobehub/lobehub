@@ -179,6 +179,85 @@ export class QQApiClient {
     return this.call<QQSendMessageResponse>('POST', `/dms/${guildId}/messages`, params);
   }
 
+  // ==================== Rich media (openplatform) ====================
+
+  /**
+   * Upload outbound rich media for a group chat. QQ's openplatform path
+   * accepts either a public URL (the server fetches it) or inline bytes;
+   * we use URL-only because hosting base64 inline requires a staging
+   * bucket that this codebase doesn't have yet. Returns a `file_info`
+   * token that must be passed to `sendGroupMedia` to actually deliver
+   * the file in chat.
+   *
+   * @see https://bot.q.qq.com/wiki/develop/api-v2/server-inter/message/send-receive/rich-media.html
+   */
+  async uploadGroupRichMedia(
+    groupOpenId: string,
+    fileType: 1 | 2 | 3 | 4,
+    url: string,
+  ): Promise<{ file_info: string; ttl?: number }> {
+    return this.call<{ file_info: string; ttl?: number }>(
+      'POST',
+      `/v2/groups/${groupOpenId}/files`,
+      { file_type: fileType, srv_send_msg: false, url },
+    );
+  }
+
+  /**
+   * C2C (direct message to a user) counterpart of `uploadGroupRichMedia`.
+   * Same body shape, different route.
+   */
+  async uploadC2CRichMedia(
+    openId: string,
+    fileType: 1 | 2 | 3 | 4,
+    url: string,
+  ): Promise<{ file_info: string; ttl?: number }> {
+    return this.call<{ file_info: string; ttl?: number }>('POST', `/v2/users/${openId}/files`, {
+      file_type: fileType,
+      srv_send_msg: false,
+      url,
+    });
+  }
+
+  /**
+   * Send a rich-media message to a group. QQ requires the file to have been
+   * uploaded first (see `uploadGroupRichMedia`); media + text content are
+   * mutually exclusive on the same message (`msg_type` is either 7 (MEDIA)
+   * or 0 (TEXT), not both), so callers send the text leg separately.
+   */
+  async sendGroupMedia(
+    groupOpenId: string,
+    fileInfo: string,
+    options?: { eventId?: string; msgId?: string; msgSeq?: number },
+  ): Promise<QQSendMessageResponse> {
+    const params: QQSendMessageParams = {
+      content: ' ',
+      media: { file_info: fileInfo },
+      msg_type: QQ_MSG_TYPE.MEDIA,
+    };
+    if (options?.msgId) params.msg_id = options.msgId;
+    if (options?.eventId) params.event_id = options.eventId;
+    if (options?.msgSeq !== undefined) params.msg_seq = options.msgSeq;
+    return this.call<QQSendMessageResponse>('POST', `/v2/groups/${groupOpenId}/messages`, params);
+  }
+
+  /** C2C counterpart of `sendGroupMedia`. */
+  async sendC2CMedia(
+    openId: string,
+    fileInfo: string,
+    options?: { eventId?: string; msgId?: string; msgSeq?: number },
+  ): Promise<QQSendMessageResponse> {
+    const params: QQSendMessageParams = {
+      content: ' ',
+      media: { file_info: fileInfo },
+      msg_type: QQ_MSG_TYPE.MEDIA,
+    };
+    if (options?.msgId) params.msg_id = options.msgId;
+    if (options?.eventId) params.event_id = options.eventId;
+    if (options?.msgSeq !== undefined) params.msg_seq = options.msgSeq;
+    return this.call<QQSendMessageResponse>('POST', `/v2/users/${openId}/messages`, params);
+  }
+
   /**
    * Get the WebSocket gateway URL for establishing a persistent connection.
    */

@@ -9,7 +9,6 @@ import { resolveModelExtendParams } from './modelParamsResolver';
 describe('resolveModelExtendParams', () => {
   const mockAiInfraStoreState = { someState: true };
   const createChatConfig = (config: Partial<LobeAgentChatConfig> = {}): LobeAgentChatConfig => ({
-    autoCreateTopicThreshold: 2,
     ...config,
   });
 
@@ -571,6 +570,50 @@ describe('thinking configuration', () => {
 
       expect(result.thinkingLevel).toBe('high');
     });
+
+    it('should set thinkingLevel from thinkingLevel config key for gemini-3.5-flash', () => {
+      const result = resolveModelExtendParams({
+        chatConfig: {
+          thinkingLevel: 'low',
+        } as any,
+        model: 'gemini-3.5-flash',
+        provider: 'google',
+      });
+
+      expect(result.thinkingLevel).toBe('low');
+    });
+
+    it('should use the model default thinkingLevel for gemini-3.5-flash when not configured', () => {
+      const result = resolveModelExtendParams({
+        chatConfig: {} as any,
+        model: 'gemini-3.5-flash',
+        provider: 'google',
+      });
+
+      expect(result.thinkingLevel).toBe('medium');
+    });
+
+    it('should reuse thinkingLevel for Gemini 3.1 Flash-Lite models', () => {
+      const result = resolveModelExtendParams({
+        chatConfig: {
+          thinkingLevel: 'medium',
+        } as any,
+        model: 'gemini-3.1-flash-lite-preview',
+        provider: 'google',
+      });
+
+      expect(result.thinkingLevel).toBe('medium');
+    });
+
+    it('should use the Flash-Lite default thinkingLevel when not configured', () => {
+      const result = resolveModelExtendParams({
+        chatConfig: {} as any,
+        model: 'gemini-3.1-flash-lite-preview',
+        provider: 'google',
+      });
+
+      expect(result.thinkingLevel).toBe('minimal');
+    });
   });
 
   describe('thinkingLevel2 param', () => {
@@ -665,39 +708,6 @@ describe('thinking configuration', () => {
       const result = resolveModelExtendParams({
         chatConfig: {} as any,
         model: 'gemini-3.1-flash-image-preview',
-        provider: 'google',
-      });
-
-      expect(result.thinkingLevel).toBe('minimal');
-    });
-  });
-
-  describe('thinkingLevel5 param', () => {
-    beforeEach(() => {
-      vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(
-        () => true,
-      );
-      vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
-        'thinkingLevel5',
-      ]);
-    });
-
-    it('should set thinkingLevel from thinkingLevel5 config key', () => {
-      const result = resolveModelExtendParams({
-        chatConfig: {
-          thinkingLevel5: 'medium',
-        } as any,
-        model: 'gemini-3.1-flash-lite-preview',
-        provider: 'google',
-      });
-
-      expect(result.thinkingLevel).toBe('medium');
-    });
-
-    it('should use the default thinkingLevel when thinkingLevel5 is not configured', () => {
-      const result = resolveModelExtendParams({
-        chatConfig: {} as any,
-        model: 'gemini-3.1-flash-lite-preview',
         provider: 'google',
       });
 

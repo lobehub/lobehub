@@ -63,6 +63,24 @@ describe('OnboardingActionHintInjector', () => {
     });
   });
 
+  describe('turn order reminder', () => {
+    it('always warns against bundling a question into a tool-call message', async () => {
+      const provider = buildProvider('Phase: User Identity. Learn who the user is.');
+      const result = await provider.process(
+        createContext([
+          { content: 'sys', role: 'system' },
+          { content: 'hi', role: 'user' },
+        ]),
+      );
+
+      const last = result.messages.at(-1);
+      expect(last?.content).toContain('TURN ORDER');
+      expect(last?.content).toContain(
+        'never put a user-facing question in the same message as a tool call',
+      );
+    });
+  });
+
   describe('marketplace detection (Summary phase)', () => {
     const phaseGuidance = 'Phase: Summary. Wrap-up.';
 

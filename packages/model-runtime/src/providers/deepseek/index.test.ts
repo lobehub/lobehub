@@ -11,6 +11,20 @@ import {
   params,
 } from './index';
 
+const loadModelsMock = vi.hoisted(() =>
+  vi.fn().mockResolvedValue([
+    {
+      id: 'deepseek-v4-pro',
+      maxOutput: 393_216,
+      providerId: 'deepseek',
+    },
+  ]),
+);
+
+vi.mock('@lobechat/business-model-bank/model-config', () => ({
+  loadModels: loadModelsMock,
+}));
+
 const defaultOpenAIBaseURL = 'https://api.deepseek.com/v1';
 const anthropicBaseURL = 'https://api.deepseek.com/anthropic';
 
@@ -102,6 +116,15 @@ describe('LobeDeepSeekAI', () => {
       expect((runtime as any).baseURL).toBe('https://aihubmix.com');
     });
 
+    it('should let Anthropic-compatible runtime normalize /v1 baseURL', async () => {
+      const { option } = await resolveFirstRouterOption('https://aihubmix.com/v1', 'anthropic');
+      const runtime = new LobeDeepSeekAnthropicAI({ apiKey: 'test', baseURL: option.baseURL });
+
+      expect(option.baseURL).toBe('https://aihubmix.com/v1');
+      expect(runtime).toBeInstanceOf(LobeDeepSeekAnthropicAI);
+      expect((runtime as any).baseURL).toBe('https://aihubmix.com');
+    });
+
     it('should normalize /anthropic/v1/messages before creating an Anthropic SDK runtime', async () => {
       const { option } = await resolveFirstRouterOption(
         'https://api.deepseek.com/anthropic/v1/messages',
@@ -166,6 +189,96 @@ describe('LobeDeepSeekAnthropicAI', () => {
 
       expect(runtime).toBeInstanceOf(LobeDeepSeekAnthropicAI);
       expect((runtime as any).baseURL).toEqual(anthropicBaseURL);
+    });
+  });
+
+  describe('generateObject', () => {
+    const generateObjectPayload = {
+      messages: [{ content: 'Generate a handoff', role: 'user' as const }],
+      model: 'deepseek-v4-pro',
+      schema: {
+        name: 'task_topic_handoff',
+        schema: {
+          additionalProperties: false,
+          properties: { summary: { type: 'string' }, title: { type: 'string' } },
+          required: ['title', 'summary'],
+          type: 'object' as const,
+        },
+      },
+    };
+
+    beforeEach(() => {
+      ((instance as any).client.messages.create as Mock).mockResolvedValue({
+        content: [
+          {
+            id: 'call_1',
+            input: { summary: 'Task completed', title: 'Done' },
+            name: 'task_topic_handoff',
+            type: 'tool_use',
+          },
+        ],
+        usage: {
+          input_tokens: 3,
+          output_tokens: 4,
+        },
+      });
+    });
+
+    it('should use any tool choice by default to keep DeepSeek thinking mode enabled', async () => {
+      const result = await instance.generateObject(generateObjectPayload);
+
+      const payload = getLastRequestPayload();
+
+      expect(payload.thinking).toBeUndefined();
+      expect(payload.tool_choice).toEqual({ type: 'any' });
+      expect(payload.tools).toEqual([
+        expect.objectContaining({
+          input_schema: expect.objectContaining({
+            additionalProperties: false,
+            required: ['title', 'summary'],
+            type: 'object',
+          }),
+          name: 'task_topic_handoff',
+        }),
+      ]);
+      expect(result).toEqual({ summary: 'Task completed', title: 'Done' });
+    });
+
+    it('should keep named tool choice when thinking is disabled', async () => {
+      await instance.generateObject({
+        ...generateObjectPayload,
+        thinking: { type: 'disabled' },
+      } as any);
+
+      const payload = getLastRequestPayload();
+
+      expect(payload.thinking).toEqual({ type: 'disabled' });
+      expect(payload.tool_choice).toEqual({ name: 'task_topic_handoff', type: 'tool' });
+    });
+
+    it('should map reasoning_effort to output_config.effort', async () => {
+      await instance.generateObject({
+        ...generateObjectPayload,
+        reasoning_effort: 'high',
+      });
+
+      const payload = getLastRequestPayload();
+
+      expect(payload.output_config).toEqual({ effort: 'high' });
+      expect(payload.tool_choice).toEqual({ type: 'any' });
+    });
+
+    it('should omit output_config when thinking is disabled', async () => {
+      await instance.generateObject({
+        ...generateObjectPayload,
+        reasoning_effort: 'high',
+        thinking: { type: 'disabled' },
+      });
+
+      const payload = getLastRequestPayload();
+
+      expect(payload.output_config).toBeUndefined();
+      expect(payload.thinking).toEqual({ type: 'disabled' });
     });
   });
 
@@ -708,6 +821,48 @@ describe('LobeDeepSeekAI - custom features', () => {
     it('should use tools calling for generateObject', () => {
       expect(openAIParams.generateObject).toBeDefined();
       expect(openAIParams.generateObject?.useToolsCalling).toBe(true);
+    });
+
+    it('should forward disabled thinking for generateObject DeepSeek requests', () => {
+      const requestPayload = {
+        messages: [{ role: 'user' as const, content: 'Hello' }],
+        model: 'deepseek-v4-pro',
+        reasoning_effort: 'high' as const,
+      };
+
+      const result = openAIParams.generateObject!.handlePayload!(
+        {
+          messages: [{ role: 'user', content: 'Hello' }],
+          model: 'deepseek-v4-pro',
+          thinking: { budget_tokens: 0, type: 'disabled' },
+        },
+        requestPayload,
+        {},
+      );
+
+      expect(result).toEqual(expect.objectContaining({ thinking: { type: 'disabled' } }));
+      expect(result).not.toHaveProperty('reasoning_effort');
+    });
+
+    it('should preserve reasoning_effort when generateObject thinking is enabled', () => {
+      const requestPayload = {
+        messages: [{ role: 'user' as const, content: 'Hello' }],
+        model: 'deepseek-v4-pro',
+        reasoning_effort: 'high' as const,
+      };
+
+      const result = openAIParams.generateObject!.handlePayload!(
+        {
+          messages: [{ role: 'user', content: 'Hello' }],
+          model: 'deepseek-v4-pro',
+          thinking: { budget_tokens: 1024, type: 'enabled' },
+        },
+        requestPayload,
+        {},
+      );
+
+      expect(result.reasoning_effort).toBe('high');
+      expect(result).toEqual(expect.objectContaining({ thinking: { type: 'enabled' } }));
     });
   });
 

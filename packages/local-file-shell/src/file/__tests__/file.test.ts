@@ -515,6 +515,38 @@ describe('file operations', () => {
 
       expect(result.files).toEqual(['src.ts']);
     });
+
+    it('should auto-enable hidden matching when pattern contains a dot-prefixed segment', async () => {
+      await mkdir(path.join(tmpDir, '.github', 'workflows'), { recursive: true });
+      await writeFile(path.join(tmpDir, '.github', 'workflows', 'ci.yml'), 'name: ci');
+      await writeFile(path.join(tmpDir, '.github', 'workflows', 'release.yaml'), 'name: release');
+
+      const result = await globLocalFiles({
+        cwd: tmpDir,
+        pattern: '.github/workflows/*.{yml,yaml}',
+      });
+
+      expect(result.files).toHaveLength(2);
+      expect(result.files).toContain('.github/workflows/ci.yml');
+      expect(result.files).toContain('.github/workflows/release.yaml');
+      expect(result.hint).toContain('hidden');
+    });
+
+    it('should not return a hint when pattern has no dot-prefixed segment', async () => {
+      await writeFile(path.join(tmpDir, 'a.ts'), 'a');
+
+      const result = await globLocalFiles({ cwd: tmpDir, pattern: '*.ts' });
+
+      expect(result.hint).toBeUndefined();
+    });
+
+    it('should treat ./ and ../ as relative path indicators, not hidden segments', async () => {
+      await writeFile(path.join(tmpDir, 'a.ts'), 'a');
+
+      const result = await globLocalFiles({ cwd: tmpDir, pattern: './*.ts' });
+
+      expect(result.hint).toBeUndefined();
+    });
   });
 
   // ─── grepContent ───
@@ -534,6 +566,29 @@ describe('file operations', () => {
 
       const result = await grepContent({ cwd: tmpDir, pattern: 'xyz_not_found' });
       expect(result.matches).toEqual([]);
+    });
+
+    it('should return a hidden-matching hint when filePattern contains a dot-prefixed segment', async () => {
+      // The hint is set regardless of whether rg is installed on the host —
+      // it signals to the agent why we're auto-enabling --hidden so a zero
+      // match doesn't look like a silent failure.
+      const result = await grepContent({
+        cwd: tmpDir,
+        filePattern: '.github/workflows/*.yml',
+        pattern: 'jobs',
+      });
+
+      expect(result.hint).toContain('hidden');
+    });
+
+    it('should not return a hint for a normal filePattern', async () => {
+      const result = await grepContent({
+        cwd: tmpDir,
+        filePattern: '*.ts',
+        pattern: 'jobs',
+      });
+
+      expect(result.hint).toBeUndefined();
     });
   });
 
@@ -572,6 +627,18 @@ describe('file operations', () => {
       });
 
       expect(result).toEqual([]);
+    });
+
+    it('should find dot-prefixed files when keywords starts with a dot', async () => {
+      await writeFile(path.join(tmpDir, '.env'), 'A=1');
+      await writeFile(path.join(tmpDir, '.envrc'), 'export A=1');
+      await writeFile(path.join(tmpDir, 'env.txt'), 'unrelated');
+
+      const result = await searchLocalFiles({ directory: tmpDir, keywords: '.env' });
+
+      const names = result.map((r) => r.name);
+      expect(names).toContain('.env');
+      expect(names).toContain('.envrc');
     });
   });
 });

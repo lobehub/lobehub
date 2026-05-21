@@ -92,58 +92,6 @@ const SubmenuScrollStyle = createGlobalStyle`
   [data-submenu] > [role='menu'] [role='group']:has([data-skill-activation-group]) > [role='presentation'] {
     padding-block: 0;
   }
-
-  [data-submenu] > [role='menu']:has([role='menuitem']:has([data-fixed-menu-footer])) {
-    padding-block-end: 0 !important;
-  }
-
-  [data-submenu] > [role='menu'] [role='menuitem']:has([data-fixed-menu-footer]) {
-    position: sticky;
-    z-index: 2;
-    inset-block-end: 0;
-
-    min-height: 0;
-    padding-block: 8px 12px !important;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 0;
-
-    background: ${cssVar.colorBgElevated};
-  }
-
-  [data-submenu] > [role='menu'] [role='menuitem']:has([data-fixed-menu-footer]) > * {
-    display: flex;
-    align-items: center;
-
-    width: 100%;
-    min-height: 36px;
-    padding-block: 4px;
-    border-radius: ${cssVar.borderRadiusSM};
-  }
-
-  [data-submenu] > [role='menu'] [role='menuitem']:has([data-skill-stats]) {
-    cursor: default;
-    padding-block: 0 !important;
-  }
-
-  [data-submenu] > [role='menu'] [role='group']:has([data-skill-menu-search]) > *:has([data-skill-menu-search]) {
-    padding-block: 6px 4px !important;
-    padding-inline: 8px !important;
-  }
-
-  [data-submenu] > [role='menu'] [role='menuitem']:has([data-fixed-menu-footer]):hover,
-  [data-submenu] > [role='menu'] [role='menuitem']:has([data-fixed-menu-footer])[data-highlighted] {
-    background: ${cssVar.colorBgElevated};
-  }
-
-  [data-submenu] > [role='menu'] [role='menuitem']:has([data-fixed-menu-footer]):hover > *,
-  [data-submenu] > [role='menu'] [role='menuitem']:has([data-fixed-menu-footer])[data-highlighted] > * {
-    background: ${cssVar.colorFillTertiary};
-  }
-
-  [data-submenu] > [role='menu'] [role='menuitem']:has([data-skill-stats]):hover > *,
-  [data-submenu] > [role='menu'] [role='menuitem']:has([data-skill-stats])[data-highlighted] > * {
-    background: transparent;
-  }
 `;
 
 export type ActionDropdownMenuItem = MenuItemType;

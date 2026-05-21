@@ -54,6 +54,7 @@ Rules:
 - "skill" can fan out with "memory" when the feedback contains both a personal preference and a reusable workflow/template insight.
 - Route to "skill", not "prompt", when the feedback asks to create, update, refine, merge, consolidate, deduplicate, or reorganize an existing reusable checklist, skill, template, workflow, playbook, or writing pattern.
 - Route to "skill" for explicit requests to create or preserve a reusable operational artifact, even when the message is phrased as an imperative instead of a complaint.
+- Route to "skill" when recent structured evidence includes an agent document or tool outcome marked hintIsSkill=true. Do not route that evidence to "memory" unless the feedback separately states a global user preference.
 - Route to "skill" for future-scoped reuse of a concrete procedure, review checklist, troubleshooting sequence, migration-review order, deploy/rollback checklist, or repeatable working method.
 - Treat "use this next time", "follow the previous order", "do it like that for this class of task", "reuse this procedure later", and similar phrasing as "skill" when recent context contains procedural steps.
 - Do not route to "memory" merely because the feedback contains future-oriented language such as "future", "next time", "going forward", or "later". If the durable directive mainly preserves a repeatable procedure, checklist, or workflow, route to "skill" instead.

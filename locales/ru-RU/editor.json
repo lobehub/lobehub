@@ -1,8 +1,10 @@
 {
   "actionTag.category.command": "Команда",
+  "actionTag.category.projectSkill": "Навык проекта",
   "actionTag.category.skill": "Навык",
   "actionTag.category.tool": "Инструмент",
   "actionTag.tooltip.command": "Выполняет клиентскую slash-команду перед отправкой.",
+  "actionTag.tooltip.projectSkill": "Отправляется как вызов через слэш, чтобы CLI агента запускал соответствующий навык проекта.",
   "actionTag.tooltip.skill": "Загружает для этого запроса переиспользуемый пакет навыков.",
   "actionTag.tooltip.tool": "Помечает инструмент, который пользователь явно выбрал для этого запроса.",
   "actions.expand.off": "Свернуть",
