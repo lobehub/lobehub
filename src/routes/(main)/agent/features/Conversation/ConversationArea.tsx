@@ -9,11 +9,12 @@ import { useTranslation } from 'react-i18next';
 import AgentHome from '@/features/AgentHome';
 import ChatMiniMap from '@/features/ChatMiniMap';
 import { ChatList, ConversationProvider } from '@/features/Conversation';
+import { useChatFollowUp } from '@/features/Conversation/hooks/useChatFollowUp';
 import ZenModeToast from '@/features/ZenModeToast';
 import { useGatewayReconnect } from '@/hooks/useGatewayReconnect';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { threadSelectors, topicSelectors } from '@/store/chat/selectors';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
@@ -71,11 +72,20 @@ const Conversation = memo(() => {
   );
   useGatewayReconnect(context.topicId, runningOperation);
 
+  const agentChatConfig = useAgentStore(agentChatConfigSelectors.currentChatConfig);
+  const chatFollowUpHooks = useChatFollowUp({
+    agentChatConfig,
+    conversationKey: chatKey,
+    threadId: context.threadId ?? undefined,
+    topicId: context.topicId ?? undefined,
+  });
+
   return (
     <ConversationProvider
       actionsBar={actionsBarConfig}
       context={context}
       hasInitMessages={!!messages}
+      hooks={chatFollowUpHooks}
       messages={messages}
       operationState={operationState}
       onMessagesChange={(messages, ctx) => {

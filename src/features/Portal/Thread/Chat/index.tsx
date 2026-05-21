@@ -13,7 +13,11 @@ import {
   useConversationStore,
 } from '@/features/Conversation';
 import SkeletonList from '@/features/Conversation/components/SkeletonList';
+import { useChatFollowUp } from '@/features/Conversation/hooks/useChatFollowUp';
+import { mergeConversationHooks } from '@/features/Conversation/utils/mergeConversationHooks';
 import { useOperationState } from '@/hooks/useOperationState';
+import { useAgentStore } from '@/store/agent';
+import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { portalThreadSelectors, threadSelectors } from '@/store/chat/selectors';
 import { type MessageMapKeyInput } from '@/store/chat/utils/messageMapKey';
@@ -187,30 +191,44 @@ const ThreadChat = memo(() => {
   // Get operation state for reactive updates
   const operationState = useOperationState(context);
 
+  const agentChatConfig = useAgentStore(
+    chatConfigByIdSelectors.getChatConfigById(activeAgentId || ''),
+  );
+  const chatFollowUpHooks = useChatFollowUp({
+    agentChatConfig,
+    conversationKey: chatKey,
+    threadId: portalThreadId ?? undefined,
+    topicId: activeTopicId ?? undefined,
+  });
+
   // Hooks to handle post-message-creation tasks for new thread
   const hooks: ConversationHooks = useMemo(
-    () => ({
-      onAfterMessageCreate: async ({ createdThreadId }) => {
-        if (!createdThreadId) return;
+    () =>
+      mergeConversationHooks(
+        {
+          onAfterMessageCreate: async ({ createdThreadId }) => {
+            if (!createdThreadId) return;
 
-        const state = useChatStore.getState();
+            const state = useChatStore.getState();
 
-        // Refresh threads list
-        await state.refreshThreads();
-        // Refresh messages to include new thread messages
-        await state.refreshMessages();
-        // Open the newly created thread in portal
-        state.openThreadInPortal(createdThreadId, threadStartMessageId);
+            // Refresh threads list
+            await state.refreshThreads();
+            // Refresh messages to include new thread messages
+            await state.refreshMessages();
+            // Open the newly created thread in portal
+            state.openThreadInPortal(createdThreadId, threadStartMessageId);
 
-        // Summarize thread title for new thread
-        const portalThread = threadSelectors.currentPortalThread(useChatStore.getState());
-        if (portalThread) {
-          const chats = threadSelectors.portalAIChats(useChatStore.getState());
-          await useChatStore.getState().summaryThreadTitle(portalThread.id, chats);
-        }
-      },
-    }),
-    [threadStartMessageId],
+            // Summarize thread title for new thread
+            const portalThread = threadSelectors.currentPortalThread(useChatStore.getState());
+            if (portalThread) {
+              const chats = threadSelectors.portalAIChats(useChatStore.getState());
+              await useChatStore.getState().summaryThreadTitle(portalThread.id, chats);
+            }
+          },
+        },
+        chatFollowUpHooks,
+      ),
+    [chatFollowUpHooks, threadStartMessageId],
   );
 
   return (
