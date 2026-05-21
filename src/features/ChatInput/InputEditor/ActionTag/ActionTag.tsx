@@ -25,7 +25,7 @@ const ActionTag = memo<ActionTagProps>(({ node, editor, label }) => {
   }, [editor, onClick]);
 
   return (
-    <span ref={spanRef}>
+    <span ref={spanRef} style={{ verticalAlign: -3 }}>
       <ActionMention category={node.actionCategory} label={label} />
     </span>
   );
