@@ -10,6 +10,7 @@ import { agents, agentsToSessions, aiModels } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { initModelRuntimeWithUserPayload } from '@/server/modules/ModelRuntime';
+import { resolveSystemAgentModelConfig } from '@/server/services/systemAgent/modelConfig';
 
 import { BaseService } from '../common/base.service';
 import type { ServiceResult } from '../types';
@@ -94,10 +95,10 @@ export class ChatService extends BaseService {
       const systemAgent = userSettings?.systemAgent as Partial<UserSystemAgentConfig> | undefined;
       const translationConfig = systemAgent?.translation;
 
-      return {
-        model: translationConfig?.model || defaults.model,
-        provider: translationConfig?.provider || defaults.provider,
-      };
+      return resolveSystemAgentModelConfig({
+        taskConfig: translationConfig,
+        taskKey: 'translation',
+      });
     } catch (error) {
       this.log('warn', '读取系统翻译模型配置失败，使用默认配置', {
         error: this.extractErrorMessage(error),

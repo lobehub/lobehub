@@ -1,18 +1,18 @@
 import isEqual from 'fast-deep-equal';
-import { type PartialDeep } from 'type-fest';
+import type { PartialDeep } from 'type-fest';
 
 import { MESSAGE_CANCEL_FLAT } from '@/const/message';
 import { shareService } from '@/services/share';
 import { userService } from '@/services/user';
-import { type StoreSetter } from '@/store/types';
-import { type UserStore } from '@/store/user';
-import { type LobeAgentSettings } from '@/types/session';
-import {
-  type SystemAgentItem,
-  type UserGeneralConfig,
-  type UserKeyVaults,
-  type UserSettings,
-  type UserSystemAgentConfigKey,
+import type { StoreSetter } from '@/store/types';
+import type { UserStore } from '@/store/user';
+import type { LobeAgentSettings } from '@/types/session';
+import type {
+  SystemAgentItem,
+  UserGeneralConfig,
+  UserKeyVaults,
+  UserSettings,
+  UserSystemAgentConfigKey,
 } from '@/types/user/settings';
 import { difference } from '@/utils/difference';
 import { merge } from '@/utils/merge';
@@ -20,6 +20,9 @@ import { merge } from '@/utils/merge';
 import { settingsSelectors } from './selectors/settings';
 
 type Setter = StoreSetter<UserStore>;
+
+type SystemAgentDiff = Partial<Record<string, unknown>>;
+
 export const createSettingsSlice = (set: Setter, get: () => UserStore, _api?: unknown) =>
   new UserSettingsActionImpl(set, get, _api);
 
@@ -133,6 +136,53 @@ export class UserSettingsActionImpl {
           provider: nextDefaultAgentConfig.provider,
         },
       };
+    }
+
+    const changedSystemAgent = changedFields.systemAgent as SystemAgentDiff | undefined;
+    const nextSystemAgent = nextSettings.systemAgent;
+    const previousSystemAgent = prevSetting.systemAgent;
+    const defaultSystemAgent = defaultSettings.systemAgent;
+
+    if (changedSystemAgent && nextSystemAgent) {
+      const mutableDiffs = diffs as PartialDeep<UserSettings> & { systemAgent?: SystemAgentDiff };
+
+      for (const key of Object.keys(changedSystemAgent)) {
+        const changedSystemAgentItem = changedSystemAgent[key];
+        if (
+          !changedSystemAgentItem ||
+          typeof changedSystemAgentItem !== 'object' ||
+          Array.isArray(changedSystemAgentItem) ||
+          (!('model' in changedSystemAgentItem) && !('provider' in changedSystemAgentItem))
+        )
+          continue;
+
+        const taskKey = key as UserSystemAgentConfigKey;
+        const nextSystemAgentItem = nextSystemAgent[taskKey];
+        const defaultSystemAgentItem = defaultSystemAgent?.[taskKey];
+        const systemAgentModelProviderDiffersFromDefault =
+          nextSystemAgentItem?.model !== defaultSystemAgentItem?.model ||
+          nextSystemAgentItem?.provider !== defaultSystemAgentItem?.provider;
+
+        if (
+          (!systemAgentModelProviderDiffersFromDefault &&
+            (!previousSystemAgent || !Object.hasOwn(previousSystemAgent, taskKey))) ||
+          !nextSystemAgentItem?.model ||
+          !nextSystemAgentItem.provider
+        )
+          continue;
+
+        const systemAgentDiff = mutableDiffs.systemAgent || {};
+        const systemAgentItemDiff = systemAgentDiff[taskKey] || {};
+
+        mutableDiffs.systemAgent = {
+          ...systemAgentDiff,
+          [taskKey]: {
+            ...systemAgentItemDiff,
+            model: nextSystemAgentItem.model,
+            provider: nextSystemAgentItem.provider,
+          },
+        };
+      }
     }
 
     this.#set({ settings: diffs }, false, 'optimistic_updateSettings');

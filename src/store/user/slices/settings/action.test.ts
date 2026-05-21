@@ -1,12 +1,12 @@
 import { DEFAULT_SETTINGS } from '@lobechat/config';
 import { act, renderHook } from '@testing-library/react';
-import { type PartialDeep } from 'type-fest';
+import type { PartialDeep } from 'type-fest';
 import { describe, expect, it, vi } from 'vitest';
 
 import { userService } from '@/services/user';
 import { useUserStore } from '@/store/user';
-import { type LobeAgentSettings } from '@/types/session';
-import { type UserSettings } from '@/types/user/settings';
+import type { LobeAgentSettings } from '@/types/session';
+import type { UserSettings } from '@/types/user/settings';
 import { merge } from '@/utils/merge';
 
 vi.mock('zustand/traditional');
@@ -107,6 +107,24 @@ describe('SettingsAction', () => {
         expect.any(AbortSignal),
       );
     });
+
+    it('should keep legacy scalar system agent fields unchanged', async () => {
+      const { result } = renderHook(() => useUserStore());
+      const settingsWithLegacySystemAgent = {
+        systemAgent: {
+          enableAutoReply: true,
+        },
+      } as PartialDeep<UserSettings>;
+
+      await act(async () => {
+        await result.current.setSettings(settingsWithLegacySystemAgent);
+      });
+
+      expect(userService.updateUserSettings).toHaveBeenLastCalledWith(
+        settingsWithLegacySystemAgent,
+        expect.any(AbortSignal),
+      );
+    });
   });
 
   describe('updateDefaultAgent', () => {
@@ -174,6 +192,28 @@ describe('SettingsAction', () => {
       // Assert that updateUserSettings was called with the correct settings
       expect(userService.updateUserSettings).toHaveBeenCalledWith(
         systemAgentSettings,
+        expect.any(AbortSignal),
+      );
+    });
+
+    it('should persist system agent model and provider together when provider matches default', async () => {
+      const { result } = renderHook(() => useUserStore());
+      const model = 'ag/gemini-3.1-pro-high';
+      const provider = DEFAULT_SETTINGS.systemAgent.translation.provider;
+
+      await act(async () => {
+        await result.current.updateSystemAgent('translation', { model, provider });
+      });
+
+      expect(userService.updateUserSettings).toHaveBeenLastCalledWith(
+        {
+          systemAgent: {
+            translation: {
+              model,
+              provider,
+            },
+          },
+        },
         expect.any(AbortSignal),
       );
     });
