@@ -1,4 +1,5 @@
-import { Accordion, AccordionItem, ActionIcon, Center, Empty, Flexbox, Text } from '@lobehub/ui';
+import { buildAgentSkillIdentifier } from '@lobechat/const';
+import { ActionIcon, Center, Empty, Flexbox, Text } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { App } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
@@ -13,7 +14,8 @@ import { useMatch, useNavigate } from 'react-router-dom';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { DocumentExplorerTree } from '@/features/AgentDocumentsExplorer';
-import SkillsList, { type SkillListItem } from '@/features/AgentDocumentsExplorer/SkillsList';
+import { startSkillDrag } from '@/features/ChatInput/InputEditor/ActionTag/skillDragData';
+import { type SkillListItem, SkillSection, SkillsList } from '@/features/SkillsList';
 import { useClientDataSWR } from '@/libs/swr';
 import { agentDocumentService, agentDocumentSWRKeys } from '@/services/agentDocument';
 import { useAgentStore } from '@/store/agent';
@@ -22,8 +24,6 @@ import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
 import ProjectLevelSkills from './ProjectLevelSkills';
-
-const AGENT_SKILLS_ITEM_KEY = 'agent-skills';
 
 const PAGE_ROUTE_PATTERN = '/agent/:aid/:topicId/page/:docId?';
 
@@ -85,19 +85,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       color: ${cssVar.colorText};
       background: ${cssVar.colorFillTertiary};
     }
-  `,
-  sectionCount: css`
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  sectionEmpty: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  sectionLabel: css`
-    font-size: 12px;
-    font-weight: 500;
   `,
   title: css`
     font-weight: 500;
@@ -282,7 +269,6 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ style, workingDire
   const navigate = useNavigate();
   const pageMatch = useMatch(PAGE_ROUTE_PATTERN);
   const [filter, setFilter] = useState<ResourceFilter>('skills');
-  const [agentSkillsExpanded, setAgentSkillsExpanded] = useState(true);
 
   const showProjectSkills = isLocalEnabled && !!workingDirectory;
 
@@ -339,53 +325,36 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ style, workingDire
     );
   }
 
-  const renderAgentSkillsList = () =>
-    skillItems.length === 0 ? (
-      <Center paddingBlock={8}>
-        <Text className={styles.sectionEmpty}>{t('workingPanel.skills.emptyAgent')}</Text>
-      </Center>
-    ) : (
-      <SkillsList
-        items={skillItems}
-        onOpenFile={(item, relativePath) => {
-          const view = skillBundleViews.find((v) => v.bundle.documentId === item.id);
-          const docId = view?.pathToDocumentId.get(relativePath);
-          if (docId) openDocumentByRoute(docId);
-        }}
-        onOpenSkill={(item) => {
-          // Open the SKILL.md (skills/index child) when present; fall back to
-          // the bundle itself (orphan bundles surface for recovery).
-          const view = skillBundleViews.find((v) => v.bundle.documentId === item.id);
-          const indexChild = data.find((doc) => doc.parentId === item.id && doc.isSkillIndex);
-          openDocumentByRoute(indexChild?.documentId ?? view?.bundle.documentId ?? item.id);
-        }}
-      />
-    );
-
-  const renderAgentSkillsSection = () => (
-    <Accordion
-      expandedKeys={agentSkillsExpanded ? [AGENT_SKILLS_ITEM_KEY] : []}
-      gap={4}
-      onExpandedChange={(keys) => setAgentSkillsExpanded(keys.length > 0)}
-    >
-      <AccordionItem
-        itemKey={AGENT_SKILLS_ITEM_KEY}
-        paddingBlock={2}
-        paddingInline={4}
-        title={
-          <Flexbox horizontal align={'center'} gap={6}>
-            <Text className={styles.sectionLabel} type={'secondary'}>
-              {t('workingPanel.skills.section.agent')}
-            </Text>
-            {skillItems.length > 0 && (
-              <span className={styles.sectionCount}>{skillItems.length}</span>
-            )}
-          </Flexbox>
-        }
-      >
-        {renderAgentSkillsList()}
-      </AccordionItem>
-    </Accordion>
+  const renderAgentSkillsList = () => (
+    <SkillsList
+      items={skillItems}
+      onOpenFile={(item, relativePath) => {
+        const view = skillBundleViews.find((v) => v.bundle.documentId === item.id);
+        const docId = view?.pathToDocumentId.get(relativePath);
+        if (docId) openDocumentByRoute(docId);
+      }}
+      onOpenSkill={(item) => {
+        // Open the SKILL.md (skills/index child) when present; fall back to
+        // the bundle itself (orphan bundles surface for recovery).
+        const view = skillBundleViews.find((v) => v.bundle.documentId === item.id);
+        const indexChild = data.find((doc) => doc.parentId === item.id && doc.isSkillIndex);
+        openDocumentByRoute(indexChild?.documentId ?? view?.bundle.documentId ?? item.id);
+      }}
+      onSkillDragStart={(item, event) => {
+        // The runtime resolves these via the `agent-skills:<filename>`
+        // identifier (built from the shared const helper so the prefix stays
+        // in lockstep with the server-side resolver). Display label keeps
+        // the human-readable title.
+        const view = skillBundleViews.find((v) => v.bundle.documentId === item.id);
+        const filename = view?.bundle.filename;
+        if (!filename) return;
+        startSkillDrag(event, {
+          category: 'agentSkill',
+          label: item.name,
+          type: buildAgentSkillIdentifier(filename),
+        });
+      }}
+    />
   );
 
   const renderSkills = () => {
@@ -405,7 +374,16 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ style, workingDire
     // Both sections coexist — label each so the source is clear.
     return (
       <Flexbox gap={16}>
-        {renderAgentSkillsSection()}
+        <SkillSection
+          emptyText={t('workingPanel.skills.emptyAgent')}
+          isEmpty={skillItems.length === 0}
+          sectionHeader={{
+            count: skillItems.length,
+            title: t('workingPanel.skills.section.agent'),
+          }}
+        >
+          {renderAgentSkillsList()}
+        </SkillSection>
         <ProjectLevelSkills workingDirectory={workingDirectory!} />
       </Flexbox>
     );

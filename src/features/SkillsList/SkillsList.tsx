@@ -2,6 +2,7 @@ import { Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { createStaticStyles } from 'antd-style';
 import { ChevronRightIcon, FileIcon, FolderIcon } from 'lucide-react';
+import type React from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 
 export interface SkillListItem {
@@ -16,6 +17,12 @@ interface SkillsListProps {
   items: SkillListItem[];
   onOpenFile?: (item: SkillListItem, relativePath: string) => void;
   onOpenSkill?: (item: SkillListItem) => void;
+  /**
+   * When provided, each skill row becomes draggable and this fires on dragstart.
+   * The handler is expected to write the drag payload onto `event.dataTransfer`
+   * (see `writeSkillDragData`), letting the chat input resolve it on drop.
+   */
+  onSkillDragStart?: (item: SkillListItem, event: React.DragEvent) => void;
 }
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -206,76 +213,86 @@ TreeRow.displayName = 'SkillsListTreeRow';
 interface SkillRowProps {
   expanded: boolean;
   item: SkillListItem;
+  onDragStart?: (event: React.DragEvent) => void;
   onOpenFile?: (relativePath: string) => void;
   onOpenSkill?: () => void;
   onToggle: () => void;
 }
 
-const SkillRow = memo<SkillRowProps>(({ expanded, item, onOpenFile, onOpenSkill, onToggle }) => {
-  const tree = useMemo(() => buildSkillTree(item.files), [item.files]);
-  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(() => new Set());
+const SkillRow = memo<SkillRowProps>(
+  ({ expanded, item, onDragStart, onOpenFile, onOpenSkill, onToggle }) => {
+    const tree = useMemo(() => buildSkillTree(item.files), [item.files]);
+    const [expandedFolders, setExpandedFolders] = useState<Set<string>>(() => new Set());
 
-  const toggleFolder = useCallback((folderPath: string) => {
-    setExpandedFolders((prev) => {
-      const next = new Set(prev);
-      if (next.has(folderPath)) next.delete(folderPath);
-      else next.add(folderPath);
-      return next;
-    });
-  }, []);
+    const toggleFolder = useCallback((folderPath: string) => {
+      setExpandedFolders((prev) => {
+        const next = new Set(prev);
+        if (next.has(folderPath)) next.delete(folderPath);
+        else next.add(folderPath);
+        return next;
+      });
+    }, []);
 
-  return (
-    <>
-      <Tooltip
-        placement={'left'}
-        title={
-          item.description ? (
-            <span className={styles.description}>{item.description}</span>
-          ) : undefined
-        }
-      >
-        <Flexbox horizontal align={'center'} className={styles.item} gap={6}>
+    return (
+      <>
+        <Tooltip
+          placement={'left'}
+          title={
+            item.description ? (
+              <span className={styles.description}>{item.description}</span>
+            ) : undefined
+          }
+        >
           <Flexbox
+            horizontal
             align={'center'}
-            justify={'center'}
-            style={{ cursor: 'pointer', flexShrink: 0, height: 20, width: 20 }}
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggle();
-            }}
+            className={styles.item}
+            draggable={!!onDragStart}
+            gap={6}
+            onDragStart={onDragStart}
           >
-            <Icon
-              className={`${styles.chevron} ${expanded ? styles.chevronExpanded : ''}`}
-              icon={ChevronRightIcon}
-              size={14}
-            />
+            <Flexbox
+              align={'center'}
+              justify={'center'}
+              style={{ cursor: 'pointer', flexShrink: 0, height: 20, width: 20 }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggle();
+              }}
+            >
+              <Icon
+                className={`${styles.chevron} ${expanded ? styles.chevronExpanded : ''}`}
+                icon={ChevronRightIcon}
+                size={14}
+              />
+            </Flexbox>
+            <Icon className={styles.itemIcon} icon={SkillsIcon} size={14} />
+            <Text ellipsis style={{ color: 'inherit', flex: 1, minWidth: 0 }} onClick={onOpenSkill}>
+              {item.name}
+            </Text>
+            <span className={styles.itemCount}>{item.fileCount}</span>
           </Flexbox>
-          <Icon className={styles.itemIcon} icon={SkillsIcon} size={14} />
-          <Text ellipsis style={{ color: 'inherit', flex: 1, minWidth: 0 }} onClick={onOpenSkill}>
-            {item.name}
-          </Text>
-          <span className={styles.itemCount}>{item.fileCount}</span>
-        </Flexbox>
-      </Tooltip>
-      {expanded &&
-        onOpenFile &&
-        tree.map((node) => (
-          <TreeRow
-            depth={0}
-            expanded={expandedFolders}
-            key={node.path}
-            node={node}
-            onOpenFile={onOpenFile}
-            onToggleFolder={toggleFolder}
-          />
-        ))}
-    </>
-  );
-});
+        </Tooltip>
+        {expanded &&
+          onOpenFile &&
+          tree.map((node) => (
+            <TreeRow
+              depth={0}
+              expanded={expandedFolders}
+              key={node.path}
+              node={node}
+              onOpenFile={onOpenFile}
+              onToggleFolder={toggleFolder}
+            />
+          ))}
+      </>
+    );
+  },
+);
 
 SkillRow.displayName = 'SkillsListSkillRow';
 
-const SkillsList = memo<SkillsListProps>(({ items, onOpenFile, onOpenSkill }) => {
+const SkillsList = memo<SkillsListProps>(({ items, onOpenFile, onOpenSkill, onSkillDragStart }) => {
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
 
   const toggle = useCallback((id: string) => {
@@ -294,6 +311,7 @@ const SkillsList = memo<SkillsListProps>(({ items, onOpenFile, onOpenSkill }) =>
           expanded={expanded.has(item.id)}
           item={item}
           key={item.id}
+          onDragStart={onSkillDragStart ? (event) => onSkillDragStart(item, event) : undefined}
           onOpenFile={onOpenFile ? (relativePath) => onOpenFile(item, relativePath) : undefined}
           onOpenSkill={onOpenSkill ? () => onOpenSkill(item) : undefined}
           onToggle={() => toggle(item.id)}

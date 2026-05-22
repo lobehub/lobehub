@@ -1,3 +1,4 @@
+export { agentDocumentSkillsSelectors } from '../slices/agentDocumentSkills/selectors';
 export { agentSkillsSelectors } from '../slices/agentSkills/selectors';
 export {
   builtinToolSelectors,

@@ -231,6 +231,11 @@ export default {
   'memberSelection.selectedAgents': 'Selected ({{count}})',
   'memberSelection.setInitialMembers': 'Select Group members',
   'members': 'Members',
+  'mention.category.agents': 'Agents',
+  'mention.category.members': 'Members',
+  'mention.category.skills': 'Skills',
+  'mention.category.tools': 'Tools',
+  'mention.category.topics': 'Topics',
   'mention.title': 'Mention Members',
   'messageAction.collapse': 'Collapse Message',
   'messageAction.continueGeneration': 'Continue Generating',
@@ -311,6 +316,13 @@ export default {
   'cliAuthGuide.errorDetails': 'Error details',
   'cliAuthGuide.runCommand': 'Run this in Terminal',
   'cliAuthGuide.title': 'Sign in to {{name}}',
+  'cliOverloadedGuide.actions.retry': 'Retry',
+  'cliOverloadedGuide.desc':
+    "{{name}}'s upstream model service is temporarily overloaded. This usually clears in a moment.",
+  'cliOverloadedGuide.errorDetails': 'Error details',
+  'cliOverloadedGuide.retryHint':
+    'Wait a few seconds and retry. If it keeps failing, the provider may be having a wider incident.',
+  'cliOverloadedGuide.title': '{{name}} is temporarily overloaded',
   'cliRateLimitGuide.actions.openSystemTools': 'Open System Tools',
   'cliRateLimitGuide.actions.retry': 'Retry',
   'cliRateLimitGuide.afterReset':

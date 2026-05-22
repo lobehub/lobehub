@@ -5,6 +5,7 @@ import OpenAI from 'openai';
 
 import { responsesAPIModels } from '../../const/models';
 import { buildDefaultAnthropicPayload } from '../../core/anthropicCompatibleFactory';
+import { assertToolLimits } from '../../utils/validateToolLimits';
 import { type LobeRuntimeAI } from '../../core/BaseAI';
 import {
   convertOpenAIMessages,
@@ -166,6 +167,15 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
   }
 
   async chat(payload: ChatStreamPayload, options?: ChatMethodOptions) {
+    // Pre-flight: abort before dispatching if tools exceed the Copilot 128-tool limit
+    if (payload.tools && payload.tools.length > 0) {
+      assertToolLimits({
+        model: payload.model,
+        provider: ModelProvider.GithubCopilot,
+        tools: payload.tools,
+      });
+    }
+
     return this.executeWithRetry(async () => {
       const inputStartAt = Date.now();
 

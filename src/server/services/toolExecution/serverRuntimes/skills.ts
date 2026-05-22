@@ -5,7 +5,7 @@ import {
   type SkillRuntimeService,
   SkillsExecutionRuntime,
 } from '@lobechat/builtin-tool-skills/executionRuntime';
-import type { SkillItem, SkillListItem, SkillResourceContent } from '@lobechat/types';
+import type { BuiltinSkill, SkillItem, SkillListItem, SkillResourceContent } from '@lobechat/types';
 import type { CodeInterpreterToolName } from '@lobehub/market-sdk';
 import debug from 'debug';
 import { sha256 } from 'js-sha256';
@@ -15,6 +15,7 @@ import { FileModel } from '@/database/models/file';
 import { UserModel } from '@/database/models/user';
 import { filterBuiltinSkills } from '@/helpers/skillFilters';
 import { FileS3 } from '@/server/modules/S3';
+import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { FileService } from '@/server/services/file';
 import { MarketService } from '@/server/services/market';
 import { SkillResourceService } from '@/server/services/skill/resource';
@@ -342,8 +343,34 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       userId: context.userId,
     });
 
+    // Surface this agent's skill-bundle documents as `BuiltinSkill`-shaped
+    // entries so `activateSkill('agent-skills:<filename>')` resolves on the
+    // existing no-DB-lookup path — no `SkillRuntimeService` extension needed.
+    // `AgentDocumentsService.getAgentSkills` is the single source of truth for
+    // the identifier prefix and the bundle → index-child content resolution
+    // (also used by `aiAgent/index.ts` when building `<available_skills>`).
+    // `source: 'builtin'` is the type-system carrier shape required by
+    // `BuiltinSkill`; the runtime never reads `source`.
+    const agentSkillBuiltins: BuiltinSkill[] = context.agentId
+      ? await new AgentDocumentsService(context.serverDB, context.userId)
+          .getAgentSkills(context.agentId)
+          .then((skills) =>
+            skills.map((skill) => ({
+              content: skill.content,
+              description: skill.description,
+              identifier: skill.identifier,
+              name: skill.name,
+              source: 'builtin' as const,
+            })),
+          )
+          .catch((error) => {
+            log('failed to load agent skills for agent %s: %O', context.agentId, error);
+            return [];
+          })
+      : [];
+
     return new SkillsExecutionRuntime({
-      builtinSkills: filterBuiltinSkills(builtinSkills),
+      builtinSkills: [...filterBuiltinSkills(builtinSkills), ...agentSkillBuiltins],
       service,
     });
   },
