@@ -427,6 +427,35 @@ describe('streamAgentEventsViaWebSocket', () => {
     ).rejects.toThrow('Gateway auth failed');
   });
 
+  it('should reject when websocket onerror fires', async () => {
+    const promise = streamAgentEventsViaWebSocket({
+      gatewayUrl: 'https://gw.test.com',
+      operationId: 'op-1',
+      token: 'test-token',
+    });
+
+    await flush();
+    capturedWs!.onerror?.({ message: 'socket exploded', type: 'error' });
+
+    await expect(promise).rejects.toThrow('Agent gateway WebSocket failed: [object Object]');
+  });
+
+  it('should reject when websocket closes before completion', async () => {
+    const promise = streamAgentEventsViaWebSocket({
+      gatewayUrl: 'https://gw.test.com',
+      operationId: 'op-1',
+      token: 'test-token',
+    });
+
+    await flush();
+    capturedWs!.readyState = MockWebSocket.CLOSED;
+    capturedWs!.onclose?.({ code: 1011, reason: 'gateway shutdown', type: 'close' });
+
+    await expect(promise).rejects.toThrow(
+      'Agent gateway WebSocket closed before completion: [object Object]',
+    );
+  });
+
   it('should resolve on session_complete', async () => {
     const promise = streamAgentEventsViaWebSocket({
       gatewayUrl: 'https://gw.test.com',
