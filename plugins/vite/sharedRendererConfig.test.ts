@@ -47,5 +47,10 @@ describe('sharedManualChunks', () => {
         '/repo/node_modules/.pnpm/lucide-react/node_modules/lucide-react/dist/index.js',
       ),
     ).toBe('vendor-icons');
+    expect(
+      __testing.sharedManualChunks(
+        '/repo/node_modules/.pnpm/zustand@5/node_modules/zustand/esm/index.mjs',
+      ),
+    ).toBe('vendor-data-runtime');
   });
 });

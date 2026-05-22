@@ -114,6 +114,16 @@ function sharedManualChunks(id: string): string | undefined {
     return 'vendor-ui-runtime';
   }
 
+  if (
+    isNodePackage(id, 'dayjs') ||
+    isNodePackage(id, 'i18next') ||
+    isNodePackage(id, 'react-i18next') ||
+    isNodePackage(id, 'swr') ||
+    isNodePackage(id, 'zustand')
+  ) {
+    return 'vendor-data-runtime';
+  }
+
   // Lucide icons
   if (id.includes('lucide-react')) return 'vendor-icons';
 }
