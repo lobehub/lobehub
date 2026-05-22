@@ -107,6 +107,23 @@ const getGenerateObjectReasoningParams = ({
   ...(reasoning_effort && thinking?.type !== 'disabled' ? { reasoning_effort } : {}),
 });
 
+const supportsResponsesReasoningEffortNone = (model: string): boolean =>
+  /(?:^|\/)gpt-5\.[1-9]\d*(?:-(?!pro(?:-|$))|$)/.test(model);
+
+const getGenerateObjectResponsesReasoningParams = ({
+  model,
+  reasoning_effort,
+  thinking,
+}: GenerateObjectReasoningParams & { model: string }) => {
+  if (thinking?.type === 'disabled') {
+    return supportsResponsesReasoningEffortNone(model) ? { reasoning: { effort: 'none' } } : {};
+  }
+
+  return reasoning_effort && reasoning_effort !== 'max'
+    ? { reasoning: { effort: reasoning_effort } }
+    : {};
+};
+
 export type CreateVideoOptions = Omit<ClientOptions, 'apiKey'> & {
   apiKey: string;
   provider: string;
@@ -899,6 +916,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             {
               input: messages,
               model,
+              ...getGenerateObjectResponsesReasoningParams(payload),
               ...this.resolvePromptCacheKeyParams(model, options?.user),
               text: { format: { strict: true, type: 'json_schema', ...processedSchema } },
               // Responses API replaced `user` with `safety_identifier`; some endpoints reject `user`
