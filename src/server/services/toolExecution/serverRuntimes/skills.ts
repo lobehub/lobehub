@@ -378,13 +378,47 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       : [];
 
     // Project skills live on the device filesystem. Read them through the
-    // device gateway by reusing the local-system `readFile` tool — no special
-    // file-read primitive, just the existing capability over deviceProxy.
+    // device gateway by reusing the local-system tools — no special
+    // file-read primitive, just the existing capabilities over deviceProxy.
+    //   - `readFile`  loads SKILL.md and validated reference files.
+    //   - `globFiles` enumerates the skill directory so `readReference` can
+    //     reject paths the model guessed (e.g. `.env`) instead of trusting
+    //     the raw string. The discovery payload no longer carries the file
+    //     tree (see commit 8e8f3aed14), so we enumerate live at read time.
     const { activeDeviceId, projectSkills } = context;
     let deviceFileAccess: DeviceFileAccess | undefined;
     if (activeDeviceId && context.userId) {
       const userId = context.userId;
       deviceFileAccess = {
+        listFiles: async (dir: string) => {
+          const result = await deviceProxy.executeToolCall(
+            { deviceId: activeDeviceId, userId },
+            {
+              apiName: LocalSystemApiName.globFiles,
+              // `**/*` matches every regular file recursively under `dir`.
+              // The device-side enumerator already skips hidden files; the
+              // runtime re-checks segments as defense in depth.
+              arguments: JSON.stringify({ pattern: '**/*', scope: dir }),
+              identifier: LocalSystemIdentifier,
+            },
+          );
+          if (!result.success) {
+            throw new Error(result.error || result.content || `globFiles failed: ${dir}`);
+          }
+          let payload: { files?: unknown };
+          try {
+            payload = JSON.parse(result.content) as { files?: unknown };
+          } catch {
+            throw new Error(`globFiles returned a non-JSON payload for ${dir}`);
+          }
+          if (!Array.isArray(payload.files)) return [];
+          // Files come back as paths relative to `scope` (POSIX). Strip any
+          // absolute path the engine may have emitted so the runtime can
+          // compare against normalized user-supplied relative paths.
+          return payload.files
+            .filter((f): f is string => typeof f === 'string')
+            .map((f) => (f.startsWith(dir) ? f.slice(dir.length).replace(/^[/\\]+/, '') : f));
+        },
         readFile: async (filePath: string) => {
           const result = await deviceProxy.executeToolCall(
             { deviceId: activeDeviceId, userId },

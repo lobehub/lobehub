@@ -191,8 +191,9 @@ describe('SkillsExecutionRuntime', () => {
 
     it('activateSkill reads SKILL.md and appends a directory hint for lazy discovery', async () => {
       const readFile = vi.fn().mockResolvedValue('# Deploy\nRun the deploy steps.');
+      const listFiles = vi.fn().mockResolvedValue([]);
       const runtime = new SkillsExecutionRuntime({
-        deviceFileAccess: { readFile },
+        deviceFileAccess: { listFiles, readFile },
         projectSkills: [projectSkill],
         service: createMockService(),
       });
@@ -211,11 +212,12 @@ describe('SkillsExecutionRuntime', () => {
 
     it('activateSkill takes precedence over a same-named DB skill', async () => {
       const readFile = vi.fn().mockResolvedValue('project content');
+      const listFiles = vi.fn().mockResolvedValue([]);
       const findByName = vi
         .fn()
         .mockResolvedValue({ content: 'db content', id: 'x', name: 'deploy' });
       const runtime = new SkillsExecutionRuntime({
-        deviceFileAccess: { readFile },
+        deviceFileAccess: { listFiles, readFile },
         projectSkills: [projectSkill],
         service: createMockService({ findByName }),
       });
@@ -240,17 +242,105 @@ describe('SkillsExecutionRuntime', () => {
 
     it('readReference resolves a project file relative to the SKILL.md directory', async () => {
       const readFile = vi.fn().mockResolvedValue('print("run")');
+      const listFiles = vi.fn().mockResolvedValue(['SKILL.md', 'scripts/run.py']);
       const runtime = new SkillsExecutionRuntime({
-        deviceFileAccess: { readFile },
+        deviceFileAccess: { listFiles, readFile },
         projectSkills: [projectSkill],
         service: createMockService(),
       });
 
       const result = await runtime.readReference({ id: 'deploy', path: 'scripts/run.py' });
 
+      expect(listFiles).toHaveBeenCalledWith('/repo/.agents/skills/deploy');
       expect(readFile).toHaveBeenCalledWith('/repo/.agents/skills/deploy/scripts/run.py');
       expect(result.success).toBe(true);
       expect(result.content).toBe('print("run")');
+    });
+
+    it('readReference rejects paths not in the declared skill file list', async () => {
+      const readFile = vi.fn();
+      const listFiles = vi.fn().mockResolvedValue(['SKILL.md', 'scripts/run.py']);
+      const runtime = new SkillsExecutionRuntime({
+        deviceFileAccess: { listFiles, readFile },
+        projectSkills: [projectSkill],
+        service: createMockService(),
+      });
+
+      const result = await runtime.readReference({ id: 'deploy', path: 'secrets.json' });
+
+      expect(listFiles).toHaveBeenCalledWith('/repo/.agents/skills/deploy');
+      expect(readFile).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('Resource not found in project skill');
+    });
+
+    it('readReference rejects hidden segments before consulting the device', async () => {
+      const readFile = vi.fn();
+      const listFiles = vi.fn();
+      const runtime = new SkillsExecutionRuntime({
+        deviceFileAccess: { listFiles, readFile },
+        projectSkills: [projectSkill],
+        service: createMockService(),
+      });
+
+      const result = await runtime.readReference({ id: 'deploy', path: '.env' });
+
+      expect(listFiles).not.toHaveBeenCalled();
+      expect(readFile).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('not a permitted skill resource');
+    });
+  });
+
+  describe('activation precedence', () => {
+    it('DB skill wins over a same-named builtin (matches injection dedupe)', async () => {
+      const findByName = vi.fn().mockResolvedValue({
+        content: 'user-authored content',
+        description: 'user skill',
+        id: 'user-1',
+        name: 'overlap',
+      });
+      const runtime = new SkillsExecutionRuntime({
+        builtinSkills: [
+          {
+            content: 'builtin content',
+            description: 'builtin skill',
+            identifier: 'overlap',
+            name: 'overlap',
+            source: 'builtin',
+          },
+        ],
+        service: createMockService({ findByName }),
+      });
+
+      const result = await runtime.activateSkill({ name: 'overlap' });
+
+      expect(findByName).toHaveBeenCalledWith('overlap');
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('user-authored content');
+      expect(result.state).toMatchObject({ name: 'overlap', source: 'user' });
+    });
+
+    it('falls through to builtin when no DB skill exists', async () => {
+      const findByName = vi.fn().mockResolvedValue(undefined);
+      const runtime = new SkillsExecutionRuntime({
+        builtinSkills: [
+          {
+            content: 'builtin only',
+            description: 'builtin skill',
+            identifier: 'artifacts',
+            name: 'artifacts',
+            source: 'builtin',
+          },
+        ],
+        service: createMockService({ findByName }),
+      });
+
+      const result = await runtime.activateSkill({ name: 'artifacts' });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('builtin only');
+      expect(result.state).toMatchObject({ name: 'artifacts', source: 'builtin' });
     });
   });
 });
