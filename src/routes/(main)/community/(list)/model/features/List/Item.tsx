@@ -51,7 +51,16 @@ const styles = createStaticStyles(({ css, cssVar }) => {
 });
 
 const ModelItem = memo<DiscoverModelItem>(
-  ({ identifier, displayName, contextWindowTokens, releasedAt, type, abilities, providers }) => {
+  ({
+    description,
+    identifier,
+    displayName,
+    contextWindowTokens,
+    releasedAt,
+    type,
+    abilities,
+    providers,
+  }) => {
     const { t } = useTranslation(['models', 'discover']);
     const navigate = useNavigate();
     const link = urlJoin('/community/model', identifier);
@@ -129,7 +138,7 @@ const ModelItem = memo<DiscoverModelItem>(
               rows: 3,
             }}
           >
-            {t(`${identifier}.description`)}
+            {t(`${identifier}.description`, { defaultValue: description })}
           </Text>
         </Flexbox>
         <Flexbox
