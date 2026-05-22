@@ -208,6 +208,7 @@ describe('AiAgentService.execAgent - device tool pipeline (LOBE-5636)', () => {
       expect(mockCreateServerAgentToolsEngine).toHaveBeenCalledTimes(1);
       const params = mockCreateServerAgentToolsEngine.mock.calls[0][1];
       expect(params.deviceContext).toEqual({
+        autoActivated: true,
         boundDeviceId: undefined,
         deviceOnline: true,
         gatewayConfigured: true,
