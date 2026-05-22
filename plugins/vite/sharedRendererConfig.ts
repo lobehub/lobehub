@@ -1,6 +1,8 @@
 import react from '@vitejs/plugin-react';
 import { codeInspectorPlugin } from 'code-inspector-plugin';
 
+import type { ModulePreloadOptions } from 'vite';
+
 import { viteEmotionSpeedy } from './emotionSpeedy';
 import { viteMarkdownImport } from './markdownImport';
 import { viteNodeModuleStub } from './nodeModuleStub';
@@ -106,6 +108,17 @@ const sharedChunkFileNames = (chunkInfo: { name: string }) => {
   if (name.startsWith('vendor-')) return 'vendor/[name]-[hash].js';
   return 'assets/[name]-[hash].js';
 };
+
+const isI18nChunkFileName = (fileName: string) => {
+  const normalized = fileName.split('?')[0].replaceAll('\\', '/');
+  const basename = normalized.split('/').at(-1) ?? normalized;
+
+  return normalized.startsWith('i18n/') || basename.startsWith('i18n-');
+};
+
+export const sharedModulePreload = {
+  resolveDependencies: (_filename, deps) => deps.filter((dep) => !isI18nChunkFileName(dep)),
+} satisfies ModulePreloadOptions;
 
 export const sharedRollupOutput = {
   chunkFileNames: sharedChunkFileNames,

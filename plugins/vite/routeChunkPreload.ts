@@ -1,6 +1,7 @@
 import type { Plugin, ResolvedConfig } from 'vite';
 
 interface RouteChunkPreloadRoute {
+  includeDynamicImports?: boolean;
   id: string;
   includeStaticImports?: boolean;
   modules: string[];
@@ -20,6 +21,7 @@ interface IdleWarmupManifest {
 
 interface OutputChunkLike {
   code: string;
+  dynamicImports: string[];
   facadeModuleId: null | string;
   fileName: string;
   imports: string[];
@@ -45,16 +47,22 @@ const defaultRoutePreloadGroups = [
 const defaultIdleRoutePreloadGroups = [
   {
     id: 'desktop-agent-profile',
+    includeDynamicImports: true,
+    includeStaticImports: true,
     modules: ['src/routes/(main)/agent/profile'],
     patterns: ['^/agent/[^/]+/profile(/|$)'],
   },
   {
     id: 'desktop-agent-channel',
+    includeDynamicImports: true,
+    includeStaticImports: true,
     modules: ['src/routes/(main)/agent/channel'],
     patterns: ['^/agent/[^/]+/channel(/|$)'],
   },
   {
     id: 'desktop-agent-page',
+    includeDynamicImports: true,
+    includeStaticImports: true,
     modules: [
       'src/routes/(main)/agent/page',
       'src/routes/(main)/agent/[topicId]/page',
@@ -64,6 +72,8 @@ const defaultIdleRoutePreloadGroups = [
   },
   {
     id: 'desktop-community',
+    includeDynamicImports: true,
+    includeStaticImports: true,
     modules: [
       'src/routes/(main)/community/_layout',
       'src/routes/(main)/community/(list)/_layout',
@@ -74,6 +84,8 @@ const defaultIdleRoutePreloadGroups = [
   },
   {
     id: 'desktop-resource',
+    includeDynamicImports: true,
+    includeStaticImports: true,
     modules: [
       'src/routes/(main)/resource/_layout',
       'src/routes/(main)/resource/(home)/_layout',
@@ -86,16 +98,22 @@ const defaultIdleRoutePreloadGroups = [
   },
   {
     id: 'desktop-settings',
+    includeDynamicImports: true,
+    includeStaticImports: true,
     modules: ['src/routes/(main)/settings/_layout', 'src/routes/(main)/settings'],
     patterns: ['^/settings(/|$)'],
   },
   {
     id: 'desktop-settings-provider',
+    includeDynamicImports: true,
+    includeStaticImports: true,
     modules: ['src/routes/(main)/settings/provider'],
     patterns: ['^/settings/provider(/|$)'],
   },
   {
     id: 'desktop-tasks',
+    includeDynamicImports: true,
+    includeStaticImports: true,
     modules: [
       'src/routes/(main)/(task-workspace)/_layout',
       'src/routes/(main)/tasks',
@@ -106,6 +124,8 @@ const defaultIdleRoutePreloadGroups = [
   },
   {
     id: 'desktop-page',
+    includeDynamicImports: true,
+    includeStaticImports: true,
     modules: ['src/routes/(main)/page/_layout', 'src/routes/(main)/page', 'src/routes/(main)/page/[id]'],
     patterns: ['^/page(/|$)'],
   },
@@ -114,6 +134,13 @@ const defaultIdleRoutePreloadGroups = [
 const allJsWarmupManifestFileName = 'assets/js-warmup-manifest.json';
 
 const normalizePath = (value: string) => value.split('?')[0].replaceAll('\\', '/');
+
+const isI18nChunkFileName = (fileName: string) => {
+  const normalized = normalizePath(fileName);
+  const basename = normalized.split('/').at(-1) ?? normalized;
+
+  return normalized.startsWith('i18n/') || basename.startsWith('i18n-');
+};
 
 const stripModuleSuffix = (value: string) =>
   value
@@ -143,19 +170,25 @@ function chunkContainsModule(chunk: OutputChunkLike, moduleId: string, root: str
   return chunkModuleIds.some((id) => normalizeComparableModuleId(id!, root) === expected);
 }
 
-function collectStaticChunkImports(
+function collectChunkDependencies(
   chunk: OutputChunkLike,
   chunksByFileName: Map<string, OutputChunkLike>,
   collected: Set<string>,
+  options: { includeDynamicImports?: boolean; includeStaticImports?: boolean },
 ) {
   if (collected.has(chunk.fileName)) return;
 
   collected.add(chunk.fileName);
 
-  for (const importedFileName of chunk.imports) {
+  const imports = [
+    ...(options.includeStaticImports ? chunk.imports : []),
+    ...(options.includeDynamicImports ? chunk.dynamicImports : []),
+  ];
+
+  for (const importedFileName of imports) {
     const importedChunk = chunksByFileName.get(importedFileName);
     if (!importedChunk) continue;
-    collectStaticChunkImports(importedChunk, chunksByFileName, collected);
+    collectChunkDependencies(importedChunk, chunksByFileName, collected, options);
   }
 }
 
@@ -175,8 +208,11 @@ function createRoutePreloadManifest(
         const matchingChunks = chunks.filter((chunk) => chunkContainsModule(chunk, moduleId, root));
 
         for (const chunk of matchingChunks) {
-          if (route.includeStaticImports) {
-            collectStaticChunkImports(chunk, chunksByFileName, preload);
+          if (route.includeStaticImports || route.includeDynamicImports) {
+            collectChunkDependencies(chunk, chunksByFileName, preload, {
+              includeDynamicImports: route.includeDynamicImports,
+              includeStaticImports: route.includeStaticImports,
+            });
           } else {
             preload.add(chunk.fileName);
           }
@@ -186,7 +222,7 @@ function createRoutePreloadManifest(
       return {
         id: route.id,
         patterns: [...route.patterns],
-        preload: [...preload].filter((fileName) => fileName.endsWith('.js')),
+        preload: [...preload].filter((fileName) => fileName.endsWith('.js') && !isI18nChunkFileName(fileName)),
       };
     })
     .filter((entry) => entry.preload.length > 0);
@@ -203,7 +239,7 @@ function createAllJsWarmupManifest(bundle: OutputBundleLike) {
   return Object.values(bundle)
     .filter(isOutputChunk)
     .map((chunk) => chunk.fileName)
-    .filter((fileName) => fileName.endsWith('.js'))
+    .filter((fileName) => fileName.endsWith('.js') && !isI18nChunkFileName(fileName))
     .sort();
 }
 
@@ -262,7 +298,7 @@ function createIdleWarmupScript(manifest: IdleWarmupManifest, base: string) {
     '        const warmQueue=(items)=>{let i=0,a=0;const pump=()=>visible(()=>{while(a<2&&i<items.length){a++;warm(items[i++]).finally(()=>{a--;idle(pump);});}});idle(pump);};',
     '        const toHref=(f)=>new URL(f,m.base&&m.base!=="./"?location.origin+m.base:location.href).href;',
     '        const warmAll=()=>{if(!m.allJsManifest)return;fetch(m.allJsManifest,{cache:"force-cache",credentials:"same-origin"}).then((r)=>r.ok?r.json():[]).then((files)=>warmQueue(files.map(toHref))).catch(()=>{});};',
-    '        const start=()=>setTimeout(()=>idle(()=>run(m.idleRoutePreload,addModulepreload,3,()=>setTimeout(()=>idle(warmAll),1e4))),8e3);',
+    '        const start=()=>setTimeout(()=>idle(()=>run(m.idleRoutePreload,addModulepreload,4,()=>setTimeout(()=>idle(warmAll),1.2e4))),2e3);',
     '        document.readyState==="complete"?start():window.addEventListener("load",start,{once:true});',
     '      })();',
     '    </script>',

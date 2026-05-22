@@ -8,6 +8,7 @@ import type { PluginOption, ViteDevServer } from 'vite';
 import { loadEnv } from 'vite';
 
 import {
+  sharedModulePreload,
   sharedOptimizeDeps,
   sharedRendererDefine,
   sharedRendererPlugins,
@@ -198,6 +199,7 @@ export default defineConfig({
   renderer: {
     root: ROOT_DIR,
     build: {
+      modulePreload: sharedModulePreload,
       outDir: path.resolve(__dirname, 'dist/renderer'),
       rolldownOptions: {
         input: {

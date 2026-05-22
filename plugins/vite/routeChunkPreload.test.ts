@@ -4,6 +4,7 @@ import { __testing, routeChunkPreload } from './routeChunkPreload';
 
 interface TestOutputChunk {
   code: string;
+  dynamicImports: string[];
   facadeModuleId: null | string;
   fileName: string;
   imports: string[];
@@ -16,6 +17,7 @@ type TestOutputBundle = Record<string, TestOutputChunk | { type: 'asset' }>;
 function createChunk(overrides: Partial<TestOutputChunk>): TestOutputChunk {
   return {
     code: '',
+    dynamicImports: [],
     facadeModuleId: null,
     fileName: 'assets/chunk.js',
     imports: [],
@@ -94,6 +96,42 @@ describe('routeChunkPreload', () => {
     expect(manifest[0]?.preload).toEqual(['assets/agent-CJm8x.js', 'vendor/vendor-icons-Bd7x.js']);
   });
 
+  it('can include dynamic imports for route warmup groups', () => {
+    const bundle = {
+      'assets/settings-CJm8x.js': createChunk({
+        dynamicImports: ['assets/settings-provider-D8p.js'],
+        facadeModuleId: '/repo/src/routes/(main)/settings/index.tsx',
+        fileName: 'assets/settings-CJm8x.js',
+        imports: ['vendor/vendor-icons-Bd7x.js'],
+        moduleIds: ['/repo/src/routes/(main)/settings/index.tsx'],
+      }),
+      'assets/settings-provider-D8p.js': createChunk({
+        fileName: 'assets/settings-provider-D8p.js',
+        moduleIds: ['/repo/src/routes/(main)/settings/provider/index.tsx'],
+      }),
+      'vendor/vendor-icons-Bd7x.js': createChunk({
+        fileName: 'vendor/vendor-icons-Bd7x.js',
+        moduleIds: ['/repo/node_modules/lucide-react/dist/esm/icons/settings.js'],
+      }),
+    } satisfies TestOutputBundle;
+
+    const manifest = __testing.createRoutePreloadManifest(bundle, '/repo', [
+      {
+        id: 'custom-settings',
+        includeDynamicImports: true,
+        includeStaticImports: true,
+        modules: ['src/routes/(main)/settings'],
+        patterns: ['^/settings(/|$)'],
+      },
+    ]);
+
+    expect(manifest[0]?.preload).toEqual([
+      'assets/settings-CJm8x.js',
+      'vendor/vendor-icons-Bd7x.js',
+      'assets/settings-provider-D8p.js',
+    ]);
+  });
+
   it('keeps low-probability routes out of the default preload manifest', () => {
     const bundle = {
       'assets/settings-CJm8x.js': createChunk({
@@ -111,8 +149,14 @@ describe('routeChunkPreload', () => {
       'assets/agent-CJm8x.js': createChunk({
         fileName: 'assets/agent-CJm8x.js',
       }),
+      'assets/i18n-en-US-DjOrYbGM.js': createChunk({
+        fileName: 'assets/i18n-en-US-DjOrYbGM.js',
+      }),
       'assets/style-D8p.css': createChunk({
         fileName: 'assets/style-D8p.css',
+      }),
+      'i18n/i18n-default-BV0oTRYH.js': createChunk({
+        fileName: 'i18n/i18n-default-BV0oTRYH.js',
       }),
       'vendor/vendor-icons-Bd7x.js': createChunk({
         fileName: 'vendor/vendor-icons-Bd7x.js',

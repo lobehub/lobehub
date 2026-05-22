@@ -9,6 +9,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 import { viteEnvRestartKeys } from './plugins/vite/envRestartKeys';
 import {
   createSharedRolldownOutput,
+  sharedModulePreload,
   sharedOptimizeDeps,
   sharedRendererDefine,
   sharedRendererPlugins,
@@ -100,6 +101,7 @@ const openExternalBrowser = async (
 export default defineConfig({
   base: isDev ? '/' : process.env.VITE_CDN_BASE || '/_spa/',
   build: {
+    modulePreload: sharedModulePreload,
     outDir: isMobile ? 'dist/mobile' : 'dist/desktop',
     reportCompressedSize: false,
     rolldownOptions: {
