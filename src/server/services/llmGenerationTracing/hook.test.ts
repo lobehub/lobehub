@@ -14,7 +14,7 @@ vi.mock('./index', () => ({
 // falls back to its microtask path which is straightforward to test.
 vi.mock('next/server', () => ({}));
 
-const { createLLMGenerationTracingHook, mergeModelRuntimeHooks } = await import('./hook');
+const { createLLMGenerationTracingHook } = await import('./hook');
 
 const flushMicrotasks = async () => {
   await new Promise((resolve) => setImmediate(resolve));
@@ -146,37 +146,5 @@ describe('createLLMGenerationTracingHook', () => {
       promptVersion: 'v0',
       scenario: 'unknown',
     });
-  });
-});
-
-describe('mergeModelRuntimeHooks', () => {
-  it('returns undefined when both hooks are empty', () => {
-    expect(mergeModelRuntimeHooks(undefined, undefined)).toBeUndefined();
-  });
-
-  it('returns the only present hook untouched', () => {
-    const fn = vi.fn();
-    const merged = mergeModelRuntimeHooks({ beforeChat: fn }, undefined);
-    expect(merged?.beforeChat).toBe(fn);
-  });
-
-  it('chains hooks of the same name in business-first order', async () => {
-    const order: string[] = [];
-    const a = {
-      onGenerateObjectComplete: vi.fn(async () => {
-        order.push('business');
-      }),
-    };
-    const b = {
-      onGenerateObjectComplete: vi.fn(async () => {
-        order.push('tracing');
-      }),
-    };
-
-    const merged = mergeModelRuntimeHooks(a as any, b as any);
-    await merged?.onGenerateObjectComplete?.({ latencyMs: 0, success: true }, {} as any);
-    expect(order).toEqual(['business', 'tracing']);
-    expect(a.onGenerateObjectComplete).toHaveBeenCalledTimes(1);
-    expect(b.onGenerateObjectComplete).toHaveBeenCalledTimes(1);
   });
 });

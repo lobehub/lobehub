@@ -1,5 +1,9 @@
 import { type GoogleGenAIOptions } from '@google/genai';
-import { ModelRuntime, type ModelRuntimeHooks } from '@lobechat/model-runtime';
+import {
+  mergeModelRuntimeHooks,
+  ModelRuntime,
+  type ModelRuntimeHooks,
+} from '@lobechat/model-runtime';
 import { LobeVertexAI } from '@lobechat/model-runtime/vertexai';
 import {
   type AWSBedrockKeyVault,
@@ -18,10 +22,7 @@ import { getBusinessModelRuntimeHooks } from '@/business/server/model-runtime';
 import { AiProviderModel } from '@/database/models/aiProvider';
 import { type LobeChatDatabase } from '@/database/type';
 import { getLLMConfig } from '@/envs/llm';
-import {
-  createLLMGenerationTracingHook,
-  mergeModelRuntimeHooks,
-} from '@/server/services/llmGenerationTracing/hook';
+import { createLLMGenerationTracingHook } from '@/server/services/llmGenerationTracing/hook';
 
 import { KeyVaultsGateKeeper } from '../KeyVaultsEncrypt';
 import apiKeyManager from './apiKeyManager';

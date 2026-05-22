@@ -155,36 +155,3 @@ export const createLLMGenerationTracingHook = (
     },
   };
 };
-
-/**
- * Merge two `ModelRuntimeHooks` instances, chaining handlers of the same key so
- * both fire (business first, then tracing). Returns `undefined` only when both
- * inputs are empty.
- */
-export const mergeModelRuntimeHooks = (
-  a?: ModelRuntimeHooks,
-  b?: ModelRuntimeHooks,
-): ModelRuntimeHooks | undefined => {
-  if (!a && !b) return undefined;
-  if (!a) return b;
-  if (!b) return a;
-
-  const merged: ModelRuntimeHooks = { ...a };
-
-  for (const key of Object.keys(b) as (keyof ModelRuntimeHooks)[]) {
-    const existing = merged[key];
-    const next = b[key];
-    if (!existing) {
-      (merged[key] as unknown) = next;
-      continue;
-    }
-    (merged[key] as unknown) = async (...args: unknown[]) => {
-      // Run business hook first, then tracing — tracing failures must never
-      // shadow the business-side decision (billing throws are load-bearing).
-      await (existing as (...args: unknown[]) => Promise<unknown>)(...args);
-      await (next as (...args: unknown[]) => Promise<unknown>)(...args);
-    };
-  }
-
-  return merged;
-};
