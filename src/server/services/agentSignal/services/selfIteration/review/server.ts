@@ -1,6 +1,7 @@
 import { DEFAULT_MINI_SYSTEM_AGENT_ITEM } from '@lobechat/const';
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import { tracer } from '@lobechat/observability-otel/modules/agent-signal';
+import { pickTrimmedString, toRecord } from '@lobechat/utils';
 
 import { AgentSignalNightlyReviewModel } from '@/database/models/agentSignal/nightlyReview';
 import { AgentSignalReviewContextModel } from '@/database/models/agentSignal/reviewContext';
@@ -251,24 +252,24 @@ const createRefineProposalAction = (
   target: { skillDocumentId: input.skillDocumentId },
 });
 
-const getRecord = (value: unknown): Record<string, unknown> =>
-  value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-
-const getString = (value: unknown) =>
-  typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+const toRecordOrEmpty = (value: unknown): Record<string, unknown> =>
+  (toRecord(value) as Record<string, unknown> | undefined) ?? {};
 
 const getStringArray = (value: unknown) =>
-  Array.isArray(value) ? value.flatMap((item) => (getString(item) ? [getString(item)!] : [])) : [];
+  Array.isArray(value)
+    ? value.flatMap((item) => {
+        const text = pickTrimmedString(item);
+        return text ? [text] : [];
+      })
+    : [];
 
 const getBriefMetadataWithProposal = (
   brief: BriefItem,
   proposal: SelfReviewProposalMetadata,
 ): BriefItem['metadata'] => {
-  const metadata = getRecord(brief.metadata);
-  const agentSignal = getRecord(metadata.agentSignal);
-  const nightlySelfReview = getRecord(agentSignal.nightlySelfReview);
+  const metadata = toRecordOrEmpty(brief.metadata);
+  const agentSignal = toRecordOrEmpty(metadata.agentSignal);
+  const nightlySelfReview = toRecordOrEmpty(agentSignal.nightlySelfReview);
 
   return {
     ...metadata,
@@ -309,15 +310,17 @@ const collectPlanEvidenceRefs = (plan: ReturnType<typeof projectRun>['projection
 };
 
 const getProposalActionSnapshotInput = (action: Record<string, unknown>) => {
-  const operation = getRecord(action.operation);
-  const operationInput = getRecord(operation.input);
-  const target = getRecord(action.target);
+  const operation = toRecordOrEmpty(action.operation);
+  const operationInput = toRecordOrEmpty(operation.input);
+  const target = toRecordOrEmpty(action.target);
 
   return {
     ...operationInput,
-    name: getString(operationInput.name) ?? getString(target.skillName),
-    skillDocumentId: getString(operationInput.skillDocumentId) ?? getString(target.skillDocumentId),
-    title: getString(operationInput.title) ?? getString(target.skillName),
+    name: pickTrimmedString(operationInput.name) ?? pickTrimmedString(target.skillName),
+    skillDocumentId:
+      pickTrimmedString(operationInput.skillDocumentId) ??
+      pickTrimmedString(target.skillDocumentId),
+    title: pickTrimmedString(operationInput.title) ?? pickTrimmedString(target.skillName),
   };
 };
 
@@ -338,13 +341,13 @@ const withCompleteProposalSnapshots = async ({
 
   const actions = await Promise.all(
     input.actions.map(async (rawAction) => {
-      const action = getRecord(rawAction);
+      const action = toRecordOrEmpty(rawAction);
       const actionType = action.actionType;
 
       if (actionType === 'consolidate_skill') {
-        const operation = getRecord(action.operation);
-        const operationInput = getRecord(operation.input);
-        const canonicalSkillDocumentId = getString(operationInput.canonicalSkillDocumentId);
+        const operation = toRecordOrEmpty(action.operation);
+        const operationInput = toRecordOrEmpty(operation.input);
+        const canonicalSkillDocumentId = pickTrimmedString(operationInput.canonicalSkillDocumentId);
         const sourceSkillIds = getStringArray(operationInput.sourceSkillIds);
         const sourceSnapshots = await Promise.all(
           sourceSkillIds.map((skillDocumentId) =>
