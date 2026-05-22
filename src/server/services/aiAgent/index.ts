@@ -81,6 +81,8 @@ import { KlavisService } from '@/server/services/klavis';
 import { MarketService } from '@/server/services/market';
 import { deviceProxy } from '@/server/services/toolExecution/deviceProxy';
 
+import type { ConversationHistoryEntry } from '@/server/services/heterogeneousAgent/cloudHeteroContext';
+
 import { resolveDeviceAccessPolicy } from './deviceAccessPolicy';
 import { buildAllowedBuiltinTools, isDeviceToolIdentifier } from './deviceToolRegistry';
 import { ingestAttachment } from './ingestAttachment';
@@ -738,9 +740,7 @@ export class AiAgentService {
       // or context overflow caused the CLI to start a fresh session).
       // Only fetch when there IS a stored session id — for first-turn runs CC has
       // no prior history to inject.
-      let conversationHistory:
-        | import('@/server/services/heterogeneousAgent/cloudHeteroContext').ConversationHistoryEntry[]
-        | undefined;
+      let conversationHistory: ConversationHistoryEntry[] | undefined;
       if (resumeSessionId) {
         try {
           const recentMsgs = await this.messageModel.query({ topicId, pageSize: 200 });
