@@ -262,7 +262,7 @@ export const userRouter = router({
   }),
 
   sendOnboardingFirstMessage: userProcedure
-    .input(z.object({ agentId: z.string().min(1), welcomeContent: z.string() }))
+    .input(z.object({ agentId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       const onboardingService = new OnboardingService(ctx.serverDB, ctx.userId);
 

@@ -38,15 +38,18 @@ vi.mock('@/features/Conversation', () => ({
     return <div data-testid="chat-input" />;
   },
   ChatList: ({
+    headerSlot,
     itemContent,
     showWelcome,
     welcome,
   }: {
+    headerSlot?: ReactNode;
     itemContent?: (index: number, id: string) => ReactNode;
     showWelcome?: boolean;
     welcome?: ReactNode;
   }) => (
     <div data-testid="chat-list">
+      {headerSlot ? <div data-testid="chat-header">{headerSlot}</div> : null}
       {showWelcome ? <div data-testid="chat-welcome">{welcome}</div> : null}
       {mockState.displayMessages.map((message, index) => (
         <div key={message.id}>{itemContent?.(index, message.id)}</div>
@@ -76,7 +79,11 @@ vi.mock('@/features/Conversation/hooks/useAgentMeta', () => ({
 }));
 
 vi.mock('./Welcome', () => ({
-  default: () => <div data-testid="welcome-content">Welcome</div>,
+  default: () => <div data-testid="welcome-screen">Welcome screen</div>,
+}));
+
+vi.mock('./WelcomeMessage', () => ({
+  default: () => <div data-testid="welcome-message">Welcome message</div>,
 }));
 
 describe('AgentOnboardingConversation', () => {
@@ -103,7 +110,8 @@ describe('AgentOnboardingConversation', () => {
     render(<AgentOnboardingConversation />);
 
     expect(screen.getByTestId('chat-welcome')).toBeInTheDocument();
-    expect(screen.getByText('Welcome')).toBeInTheDocument();
+    expect(screen.getByText('Welcome screen')).toBeInTheDocument();
+    expect(screen.queryByTestId('chat-header')).not.toBeInTheDocument();
     expect(screen.queryByText('finish')).not.toBeInTheDocument();
   });
 
@@ -116,7 +124,34 @@ describe('AgentOnboardingConversation', () => {
     render(<AgentOnboardingConversation hasMessages />);
 
     expect(screen.queryByTestId('chat-welcome')).not.toBeInTheDocument();
-    expect(screen.queryByText('Welcome')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('chat-header')).not.toBeInTheDocument();
+    expect(screen.queryByText('Welcome screen')).not.toBeInTheDocument();
+    expect(screen.queryByText('Welcome message')).not.toBeInTheDocument();
+  });
+
+  it('keeps the synthetic welcome as the first list item after real messages exist', () => {
+    mockState.displayMessages = [
+      { id: 'user-1', role: 'user' },
+      { id: 'assistant-1', role: 'assistant' },
+    ];
+
+    render(<AgentOnboardingConversation hasMessages />);
+
+    const listItems = screen.getByTestId('chat-list').children;
+    expect(listItems[0]).toHaveAttribute('data-testid', 'chat-header');
+    expect(screen.getByTestId('message-item-user-1')).toBeInTheDocument();
+    expect(screen.getByTestId('message-item-assistant-1')).toBeInTheDocument();
+  });
+
+  it('does not duplicate welcome when a legacy persisted assistant opener exists', () => {
+    mockState.displayMessages = [
+      { id: 'assistant-welcome', role: 'assistant' },
+      { id: 'user-1', role: 'user' },
+    ];
+
+    render(<AgentOnboardingConversation hasMessages />);
+
+    expect(screen.queryByTestId('chat-header')).not.toBeInTheDocument();
   });
 
   it('forwards isInputReady=false to ChatInput as isConfigLoading', () => {

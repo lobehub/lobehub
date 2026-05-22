@@ -255,6 +255,22 @@ describe('OnboardingService', () => {
     expect(persistedUserState.settings.general.responseLanguage).toBeUndefined();
   });
 
+  it('does not save agent identity when the proposed agentName matches the user identity', async () => {
+    const service = new OnboardingService(mockDb, userId);
+    const result = await service.saveUserQuestion({
+      agentEmoji: '😀',
+      agentName: 'anbex',
+      fullName: 'anbex',
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.savedFields).toEqual(['fullName']);
+    expect(result.ignoredFields).toEqual(['agentName', 'agentEmoji']);
+    expect(result.content).toContain('Skipped agent identity because agentName matches the user identity');
+    expect(persistedUserState.fullName).toBe('anbex');
+    expect(mockAgentModel.update).not.toHaveBeenCalled();
+  });
+
   it('rejects saveUserQuestion when no supported fields are provided', async () => {
     const service = new OnboardingService(mockDb, userId);
     const result = await service.saveUserQuestion({});
@@ -711,46 +727,35 @@ describe('OnboardingService', () => {
   });
 
   describe('sendOnboardingFirstMessage', () => {
-    it('creates topic + welcome on first call (happy path)', async () => {
+    it('creates topic without persisting the UI-only welcome on first call', async () => {
       const service = new OnboardingService(mockDb, userId);
-      mockMessageModel.query.mockResolvedValueOnce([
-        { content: 'welcome', id: 'message-1', role: 'assistant' },
-      ]);
+      mockMessageModel.query.mockResolvedValueOnce([]);
 
       const result = await service.sendOnboardingFirstMessage({
         agentId: 'builtin-agent-1',
-        welcomeContent: 'welcome',
       });
 
       expect(mockTopicModel.create).toHaveBeenCalledTimes(1);
-      expect(mockMessageModel.findFirstAssistantInTopic).toHaveBeenCalledWith('topic-1');
-      expect(mockMessageModel.create).toHaveBeenCalledWith(
-        expect.objectContaining({ content: 'welcome', role: 'assistant', topicId: 'topic-1' }),
-      );
+      expect(mockMessageModel.findFirstAssistantInTopic).not.toHaveBeenCalled();
+      expect(mockMessageModel.create).not.toHaveBeenCalled();
       expect(persistedUserState.agentOnboarding.activeTopicId).toBe('topic-1');
       expect(result.topicId).toBe('topic-1');
-      expect(result.messages).toHaveLength(1);
+      expect(result.messages).toHaveLength(0);
     });
 
-    it('is idempotent — does not double-insert welcome when one already exists', async () => {
+    it('is idempotent when an active topic already exists', async () => {
       persistedUserState.agentOnboarding = {
         activeTopicId: 'topic-1',
         version: CURRENT_ONBOARDING_VERSION,
       };
       persistedTopics['topic-1'] = { agentId: 'builtin-agent-1', id: 'topic-1', metadata: {} };
-      mockMessageModel.findFirstAssistantInTopic.mockResolvedValueOnce({
-        content: 'welcome-old',
-        id: 'welcome-old',
-        role: 'assistant',
-      });
       mockMessageModel.query.mockResolvedValueOnce([
-        { content: 'welcome-old', id: 'welcome-old', role: 'assistant' },
+        { content: 'hello', id: 'message-1', role: 'user' },
       ]);
 
       const service = new OnboardingService(mockDb, userId);
       const result = await service.sendOnboardingFirstMessage({
         agentId: 'builtin-agent-1',
-        welcomeContent: 'welcome-new',
       });
 
       expect(mockTopicModel.create).not.toHaveBeenCalled();
@@ -771,7 +776,6 @@ describe('OnboardingService', () => {
       const service = new OnboardingService(mockDb, userId);
       await service.sendOnboardingFirstMessage({
         agentId: 'builtin-agent-1',
-        welcomeContent: 'welcome',
       });
 
       expect(executeSpy).toHaveBeenCalledTimes(1);

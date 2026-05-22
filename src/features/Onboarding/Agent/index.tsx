@@ -175,11 +175,9 @@ const AgentOnboardingPage = memo(() => {
 
       const orchestration = (async () => {
         try {
-          const welcomeContent = t('agent.welcome');
           const { topicId: serverTopicId, messages } = await userService.sendOnboardingFirstMessage(
             {
               agentId: onboardingAgentId,
-              welcomeContent,
             },
           );
 
@@ -214,7 +212,7 @@ const AgentOnboardingPage = memo(() => {
       await orchestration;
       return false;
     },
-    [effectiveTopicId, mutate, onBeforeSendMessage, onboardingAgentId, t],
+    [effectiveTopicId, mutate, onBeforeSendMessage, onboardingAgentId],
   );
 
   const syncOnboardingContext = useCallback(async () => {
