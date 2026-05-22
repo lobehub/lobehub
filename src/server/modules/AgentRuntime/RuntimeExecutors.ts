@@ -7,6 +7,7 @@ import {
   type AgentRuntimeContext,
   type AgentState,
   type CallLLMPayload,
+  formatFormalObservationLog,
   type GeneralAgentCallLLMResultPayload,
   type GeneralAgentCompressionResultPayload,
   type InstructionExecutor,
@@ -80,6 +81,24 @@ import { type IStreamEventManager } from './types';
 
 const log = debug('lobe-server:agent-runtime:streaming-executors');
 const timing = debug('lobe-server:agent-runtime:timing');
+const debugLog = debug('lobe-server:agent-runtime:tool-call-stability');
+const logToolCallPc = (
+  operationId: string,
+  stepIndex: number,
+  pc: string,
+  getObs: () => Record<string, unknown>,
+) => {
+  if (!debugLog.enabled) return;
+
+  try {
+    debugLog('%s', formatFormalObservationLog(operationId, stepIndex, pc, getObs()));
+  } catch (error) {
+    debugLog(
+      '%s',
+      formatFormalObservationLog(operationId, stepIndex, pc, { error: String(error) }),
+    );
+  }
+};
 
 // Tool pricing configuration (USD per call)
 const TOOL_PRICING: Record<string, number> = {
@@ -1822,6 +1841,14 @@ export const createRuntimeExecutors = (
             topicId: state.metadata?.topicId,
           });
           toolMessageId = toolMessage.id;
+        }
+
+        if (canDispatchToClient) {
+          logToolCallPc(operationId, stepIndex, 'ct.client_tool_success', () => ({
+            dispatched: true,
+            persisted: true,
+            streamManagerCanSendToolExecute: typeof streamManager.sendToolExecute === 'function',
+          }));
         }
       } catch (error) {
         console.error('[StreamingToolExecutor] Failed to persist tool message: %O', error);

@@ -63,6 +63,7 @@ export interface AuthExpiredMessage {
 }
 
 export interface ToolCallRequestMessage {
+  operationId?: string;
   requestId: string;
   toolCall: {
     apiName: string;

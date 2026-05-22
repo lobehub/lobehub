@@ -17,7 +17,11 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
     for (const api of LocalSystemManifest.api) {
       proxy[api.name] = async (args: any) => {
         return deviceProxy.executeToolCall(
-          { deviceId: context.activeDeviceId!, userId: context.userId! },
+          {
+            deviceId: context.activeDeviceId!,
+            operationId: context.operationId,
+            userId: context.userId!,
+          },
           {
             apiName: api.name,
             arguments: JSON.stringify(args),

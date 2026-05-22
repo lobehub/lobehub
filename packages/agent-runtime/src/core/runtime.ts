@@ -1,4 +1,5 @@
 import type { ChatToolPayload } from '@lobechat/types';
+import debug from 'debug';
 import pMap from 'p-map';
 
 import type {
@@ -17,6 +18,26 @@ import type {
   ToolsCalling,
   Usage,
 } from '../types';
+import { formatFormalObservationLog } from '../utils';
+
+const debugLog = debug('lobe-server:agent-runtime:tool-call-stability');
+const logToolCallPc = (
+  operationId: string,
+  stepIndex: number,
+  pc: string,
+  getObs: () => Record<string, unknown>,
+) => {
+  if (!debugLog.enabled) return;
+
+  try {
+    debugLog('%s', formatFormalObservationLog(operationId, stepIndex, pc, getObs()));
+  } catch (error) {
+    debugLog(
+      '%s',
+      formatFormalObservationLog(operationId, stepIndex, pc, { error: String(error) }),
+    );
+  }
+};
 
 /**
  * Simplified Agent Runtime - The "Engine" that executes instructions from an "Agent" (Brain).
@@ -129,6 +150,56 @@ export class AgentRuntime {
       // Normalize to array
       const instructions = Array.isArray(rawInstructions) ? rawInstructions : [rawInstructions];
 
+      logToolCallPc(state.operationId, state.stepCount, 'rt.progress', () => {
+        return {
+          humanInstructionFree: instructions.every(
+            (instruction) =>
+              instruction?.type === 'call_llm' ||
+              instruction?.type === 'call_tool' ||
+              instruction?.type === 'finish' ||
+              instruction?.type === 'call_tools_batch',
+          ),
+          instructionCount: instructions.length,
+          isArray: Array.isArray(rawInstructions),
+          nextKind: instructions[0]?.type ?? null,
+          stateStatus: state.status,
+        };
+      });
+
+      if (!Array.isArray(rawInstructions)) {
+        logToolCallPc(state.operationId, state.stepCount, 'rt.phase', () => {
+          const runtimeContextPayload = runtimeContext.payload as
+            | {
+                hasToolCalls?: boolean;
+                stop?: boolean;
+                toolCalls?: unknown[];
+              }
+            | undefined;
+          const runtimeContextToolCalls = Array.isArray(runtimeContextPayload?.toolCalls)
+            ? runtimeContextPayload.toolCalls
+            : [];
+
+          return {
+            contextHasQueuedMessages: Boolean(runtimeContext.stepContext?.hasQueuedMessages),
+            contextLlmResultHasToolCalls: Boolean(
+              runtimeContext.phase === 'llm_result' &&
+              (runtimeContextPayload?.hasToolCalls ?? runtimeContextToolCalls.length > 0),
+            ),
+            contextLlmResultToolCallsCount:
+              runtimeContext.phase === 'llm_result' ? runtimeContextToolCalls.length : 0,
+            contextNotHumanApprovedTool: runtimeContext.phase !== 'human_approved_tool',
+            contextPendingToolsCallingCount: state.pendingToolsCalling?.length ?? 0,
+            contextPhase: runtimeContext.phase,
+            contextToolResultStopRequested: Boolean(
+              (runtimeContext.phase === 'tool_result' ||
+                runtimeContext.phase === 'tools_batch_result') &&
+              runtimeContextPayload?.stop,
+            ),
+            nextKind: instructions[0]?.type ?? null,
+          };
+        });
+      }
+
       // Convert old format to new format
       const normalizedInstructions = instructions.map((instruction) => {
         if (
@@ -183,6 +254,39 @@ export class AgentRuntime {
           }
           // Pass runtimeContext to executor so it can access stepContext
           result = await executor(instruction, currentState, runtimeContext);
+        }
+
+        if (instruction.type === 'call_tool') {
+          const callToolInstruction = instruction as AgentInstructionCallTool;
+          const toolResultPayload =
+            result.nextContext?.phase === 'tool_result'
+              ? (result.nextContext.payload as
+                  | {
+                      data?: { error?: unknown };
+                      isSuccess?: boolean;
+                      parentMessageId?: string;
+                    }
+                  | undefined)
+              : undefined;
+
+          if (toolResultPayload) {
+            logToolCallPc(state.operationId, state.stepCount, 'rt.call_tool_success', () => {
+              return {
+                executor: callToolInstruction.payload.toolCalling.executor ?? null,
+                resultError: toolResultPayload.data?.error ?? null,
+                resultSuccess: toolResultPayload.isSuccess ?? null,
+                toolMessageId: toolResultPayload.parentMessageId ?? null,
+                toolSource:
+                  currentState.operationToolSet?.sourceMap?.[
+                    callToolInstruction.payload.toolCalling.identifier
+                  ] ??
+                  currentState.toolSourceMap?.[
+                    callToolInstruction.payload.toolCalling.identifier
+                  ] ??
+                  null,
+              };
+            });
+          }
         }
 
         // Accumulate events

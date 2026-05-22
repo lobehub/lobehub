@@ -90,11 +90,15 @@ vi.mock('@/server/modules/AgentRuntime', async (importOriginal) => {
   };
 });
 
-vi.mock('@lobechat/agent-runtime', () => ({
-  AgentRuntime: vi.fn().mockImplementation((_agent, _options) => ({
-    step: vi.fn(),
-  })),
-}));
+vi.mock('@lobechat/agent-runtime', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    AgentRuntime: vi.fn().mockImplementation((_agent, _options) => ({
+      step: vi.fn(),
+    })),
+  };
+});
 
 vi.mock('@/server/services/queue', () => ({
   QueueService: vi.fn().mockImplementation(() => ({

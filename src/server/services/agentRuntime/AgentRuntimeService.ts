@@ -4,7 +4,12 @@ import type {
   AgentState,
   GeneralAgentConfig,
 } from '@lobechat/agent-runtime';
-import { AgentRuntime, findInMessages, GeneralChatAgent } from '@lobechat/agent-runtime';
+import {
+  AgentRuntime,
+  findInMessages,
+  formatFormalObservationLog,
+  GeneralChatAgent,
+} from '@lobechat/agent-runtime';
 import type { ISnapshotStore } from '@lobechat/agent-tracing';
 import { dynamicInterventionAudits } from '@lobechat/builtin-tools/dynamicInterventionAudits';
 import { getModelPropertyWithFallback } from '@lobechat/model-runtime';
@@ -59,6 +64,24 @@ if (process.env.VERCEL) {
 }
 
 const log = debug('lobe-server:agent-runtime-service');
+const debugLog = debug('lobe-server:agent-runtime:tool-call-stability');
+const logToolCallPc = (
+  operationId: string,
+  stepIndex: number,
+  pc: string,
+  getObs: () => Record<string, unknown>,
+) => {
+  if (!debugLog.enabled) return;
+
+  try {
+    debugLog('%s', formatFormalObservationLog(operationId, stepIndex, pc, getObs()));
+  } catch (error) {
+    debugLog(
+      '%s',
+      formatFormalObservationLog(operationId, stepIndex, pc, { error: String(error) }),
+    );
+  }
+};
 
 /**
  * Formats an error into ChatMessageError structure
@@ -493,6 +516,9 @@ export class AgentRuntimeService {
     // ===== Distributed lock: prevent duplicate execution from QStash retries =====
     const claimed = await this.coordinator.tryClaimStep(operationId, stepIndex, 35);
     if (!claimed) {
+      logToolCallPc(operationId, stepIndex, 'es.require_step_claim', () => ({
+        stepClaimed: false,
+      }));
       log(
         '[%s][%d] Step lock conflict — another instance is executing this step, returning locked',
         operationId,
@@ -526,6 +552,9 @@ export class AgentRuntimeService {
       const agentState = await this.coordinator.loadAgentState(operationId);
 
       if (!agentState) {
+        logToolCallPc(operationId, stepIndex, 'es.require_agent_state', () => ({
+          agentStatePresent: false,
+        }));
         throw new Error(`Agent state not found for operation ${operationId}`);
       }
 
@@ -536,6 +565,9 @@ export class AgentRuntimeService {
 
       // Layer 2 defense: catch extremely delayed retries that arrive after lock TTL expired
       if (agentState.stepCount > stepIndex) {
+        logToolCallPc(operationId, stepIndex, 'es.require_step_fresh', () => ({
+          stateStepCount: agentState.stepCount,
+        }));
         log(
           '[%s][%d] Step already completed (stepCount=%d), skipping',
           operationId,
@@ -557,6 +589,9 @@ export class AgentRuntimeService {
         agentState.status === 'done' ||
         agentState.status === 'error'
       ) {
+        logToolCallPc(operationId, stepIndex, 'es.require_runnable_state', () => ({
+          stateStatus: agentState.status,
+        }));
         log(
           '[%s][%d] Skipping step — operation already in terminal state: %s',
           operationId,
@@ -663,6 +698,88 @@ export class AgentRuntimeService {
           );
         }
       }
+
+      logToolCallPc(operationId, stepIndex, 'es.reach_runtime_call_tool', () => {
+        const currentContextPayload = currentContext?.payload as
+          | { hasToolCalls?: boolean; toolCalls?: unknown[] }
+          | undefined;
+
+        return {
+          inputContextNotHumanApprovedTool: currentContext?.phase !== 'human_approved_tool',
+          inputContextLlmResultHasToolCalls: Boolean(
+            currentContext?.phase === 'llm_result' &&
+            (currentContextPayload?.hasToolCalls ??
+              (Array.isArray(currentContextPayload?.toolCalls) &&
+                currentContextPayload.toolCalls.length > 0)),
+          ),
+          inputContextLlmResultToolCallsCount:
+            currentContext?.phase === 'llm_result' &&
+            Array.isArray(currentContextPayload?.toolCalls)
+              ? currentContextPayload.toolCalls.length
+              : 0,
+          inputContextPhase: currentContext?.phase ?? null,
+          stateStatus: currentState.status,
+          stateStepCount: currentState.stepCount,
+          stateToolSource:
+            currentState.operationToolSet?.sourceMap?.[
+              (currentContextPayload?.toolCalls as Array<{ identifier?: string }> | undefined)?.[0]
+                ?.identifier ?? ''
+            ] ??
+            currentState.toolSourceMap?.[
+              (currentContextPayload?.toolCalls as Array<{ identifier?: string }> | undefined)?.[0]
+                ?.identifier ?? ''
+            ] ??
+            null,
+        };
+      });
+
+      logToolCallPc(operationId, stepIndex, 'es.input_matches_step_result_input', () => {
+        const currentContextPayload = currentContext?.payload as
+          | {
+              isSuccess?: boolean;
+              parentMessageId?: string;
+              toolCall?: { identifier?: string };
+              toolCallId?: string;
+              toolCalls?: unknown[];
+            }
+          | undefined;
+        const currentContextToolIdentifier =
+          currentContextPayload?.toolCall?.identifier ??
+          (currentContextPayload?.toolCalls as Array<{ identifier?: string }> | undefined)?.[0]
+            ?.identifier ??
+          '';
+
+        return {
+          inputContextPhase: currentContext?.phase ?? null,
+          inputContextPresent: Boolean(currentContext),
+          inputContextSessionStatus: currentContext?.session?.status ?? null,
+          inputContextSessionStepCount: currentContext?.session?.stepCount ?? null,
+          inputContextToolResultParentMessageId:
+            currentContext?.phase === 'tool_result'
+              ? (currentContextPayload?.parentMessageId ?? null)
+              : null,
+          inputContextToolResultSuccess:
+            currentContext?.phase === 'tool_result'
+              ? (currentContextPayload?.isSuccess ?? null)
+              : null,
+          inputContextToolResultToolCallId:
+            currentContext?.phase === 'tool_result'
+              ? (currentContextPayload?.toolCallId ?? null)
+              : null,
+          inputStateCostLimitPolicy: currentState.costLimit?.onExceeded ?? null,
+          inputStateHasCostLimit: Boolean(currentState.costLimit),
+          inputStateFallbackToolSource:
+            currentState.toolSourceMap?.[currentContextToolIdentifier] ?? null,
+          inputStateOperationToolSource:
+            currentState.operationToolSet?.sourceMap?.[currentContextToolIdentifier] ?? null,
+          inputStateStatus: currentState.status,
+          inputStateStepCount: currentState.stepCount,
+          inputStateTotalCostExceeded: Boolean(
+            currentState.costLimit &&
+            currentState.cost?.total >= currentState.costLimit.maxTotalCost,
+          ),
+        };
+      });
 
       // Execute step
       const startAt = Date.now();
@@ -859,6 +976,60 @@ export class AgentRuntimeService {
 
         log('[%s][%d] Scheduled next step %d', operationId, stepIndex, nextStepIndex);
       }
+
+      logToolCallPc(operationId, stepIndex, 'es.step_result', () => ({
+        nextContextPhase: stepResult.nextContext?.phase ?? null,
+        nextContextPresent: Boolean(stepResult.nextContext),
+        nextStepScheduled,
+        resultStateStatus: stepResult.newState.status,
+        resultStateStepCount: stepResult.newState.stepCount,
+        shouldContinue,
+      }));
+
+      logToolCallPc(operationId, stepIndex, 'es.input_matches_step_result_result', () => {
+        const nextContextPayload = stepResult.nextContext?.payload as
+          | {
+              isSuccess?: boolean;
+              parentMessageId?: string;
+              toolCall?: { identifier?: string };
+              toolCallId?: string;
+            }
+          | undefined;
+
+        return {
+          resultContextPhase: stepResult.nextContext?.phase ?? null,
+          resultContextPresent: Boolean(stepResult.nextContext),
+          resultContextSessionStatus: stepResult.nextContext?.session?.status ?? null,
+          resultContextSessionStepCount: stepResult.nextContext?.session?.stepCount ?? null,
+          resultContextToolResultParentMessageId:
+            stepResult.nextContext?.phase === 'tool_result'
+              ? (nextContextPayload?.parentMessageId ?? null)
+              : null,
+          resultContextToolResultSuccess:
+            stepResult.nextContext?.phase === 'tool_result'
+              ? (nextContextPayload?.isSuccess ?? null)
+              : null,
+          resultContextToolResultToolCallId:
+            stepResult.nextContext?.phase === 'tool_result'
+              ? (nextContextPayload?.toolCallId ?? null)
+              : null,
+          resultStateCostLimitPolicy: stepResult.newState.costLimit?.onExceeded ?? null,
+          resultStateHasCostLimit: Boolean(stepResult.newState.costLimit),
+          resultStateFallbackToolSource:
+            stepResult.newState.toolSourceMap?.[nextContextPayload?.toolCall?.identifier ?? ''] ??
+            null,
+          resultStateOperationToolSource:
+            stepResult.newState.operationToolSet?.sourceMap?.[
+              nextContextPayload?.toolCall?.identifier ?? ''
+            ] ?? null,
+          resultStateStatus: stepResult.newState.status,
+          resultStateStepCount: stepResult.newState.stepCount,
+          resultStateTotalCostExceeded: Boolean(
+            stepResult.newState.costLimit &&
+            stepResult.newState.cost?.total >= stepResult.newState.costLimit.maxTotalCost,
+          ),
+        };
+      });
 
       // Check if operation is complete
       if (!shouldContinue) {
