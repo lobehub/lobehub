@@ -1,5 +1,6 @@
 // @vitest-environment node
 import type { GoogleGenAI } from '@google/genai';
+import { MediaModality } from '@google/genai';
 import * as imageToBase64Module from '@lobechat/utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -10,13 +11,20 @@ const provider = 'google';
 const bizErrorType = 'ProviderBizError';
 const noImageErrorType = 'ProviderNoImageGenerated';
 const invalidErrorType = 'InvalidProviderAPIKey';
+const getModelPricingMock = vi.hoisted(() => vi.fn());
 
 // Mock the console.error to avoid polluting test output
 vi.spyOn(console, 'error').mockImplementation(() => {});
 
+vi.mock('../../utils/getModelPricing', () => ({
+  getModelPricing: getModelPricingMock,
+}));
+
 let mockClient: GoogleGenAI;
 
 beforeEach(() => {
+  getModelPricingMock.mockReset();
+  getModelPricingMock.mockResolvedValue(undefined);
   mockClient = {
     models: {
       generateImages: vi.fn(),
@@ -380,11 +388,77 @@ describe('createGoogleImage', () => {
         ],
         model: 'gemini-2.5-flash-image',
         config: {
-          responseModalities: ['Image'],
+          responseModalities: ['TEXT', 'IMAGE'],
         },
       });
       expect(result).toEqual({
         imageUrl: `data:image/png;base64,${realBase64ImageData}`,
+      });
+    });
+
+    it('should include text output tokens in successful image usage cost', async () => {
+      // Arrange
+      getModelPricingMock.mockResolvedValueOnce({
+        units: [
+          { name: 'imageOutput', rate: 120, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textOutput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
+        ],
+      });
+      const realBase64ImageData =
+        'iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==';
+      const mockContentResponse = {
+        candidates: [
+          {
+            content: {
+              parts: [
+                { text: 'Here is the generated image.' },
+                {
+                  inlineData: {
+                    data: realBase64ImageData,
+                    mimeType: 'image/png',
+                  },
+                },
+              ],
+            },
+          },
+        ],
+        usageMetadata: {
+          candidatesTokenCount: 1500,
+          candidatesTokensDetails: [
+            { modality: MediaModality.TEXT, tokenCount: 20 },
+            { modality: MediaModality.IMAGE, tokenCount: 1480 },
+          ],
+          promptTokenCount: 100,
+          promptTokensDetails: [{ modality: MediaModality.TEXT, tokenCount: 100 }],
+          totalTokenCount: 1600,
+        },
+      };
+      vi.spyOn(mockClient.models, 'generateContent').mockResolvedValue(mockContentResponse as any);
+
+      const payload: CreateImagePayload = {
+        model: 'gemini-3-pro-image-preview:image',
+        params: {
+          prompt: 'Create a beautiful sunset landscape',
+        },
+      };
+
+      // Act
+      const result = await createGoogleImage(mockClient, provider, payload);
+
+      // Assert
+      expect(getModelPricingMock).toHaveBeenCalledWith(
+        'gemini-3-pro-image-preview:image',
+        provider,
+      );
+      expect(result.modelUsage).toMatchObject({
+        cost: 0.178_04,
+        inputTextTokens: 100,
+        outputImageTokens: 1480,
+        outputTextTokens: 20,
+        totalInputTokens: 100,
+        totalOutputTokens: 1500,
+        totalTokens: 1600,
       });
     });
 
@@ -431,7 +505,7 @@ describe('createGoogleImage', () => {
         ],
         model: 'gemini-2.5-flash-image',
         config: {
-          responseModalities: ['Image'],
+          responseModalities: ['TEXT', 'IMAGE'],
         },
       });
     });
@@ -482,7 +556,7 @@ describe('createGoogleImage', () => {
         ],
         model: 'gemini-2.5-flash-image',
         config: {
-          responseModalities: ['Image'],
+          responseModalities: ['TEXT', 'IMAGE'],
           imageConfig: {
             imageSize: '4K',
           },
@@ -534,7 +608,7 @@ describe('createGoogleImage', () => {
         ],
         model: 'gemini-2.5-flash-image',
         config: {
-          responseModalities: ['Image'],
+          responseModalities: ['TEXT', 'IMAGE'],
           imageConfig: {
             aspectRatio: '16:9',
             imageSize: '2K',
@@ -586,7 +660,7 @@ describe('createGoogleImage', () => {
         ],
         model: 'gemini-2.5-flash-image',
         config: {
-          responseModalities: ['Image'],
+          responseModalities: ['TEXT', 'IMAGE'],
           imageConfig: {
             aspectRatio: '9:16',
           },
@@ -648,7 +722,7 @@ describe('createGoogleImage', () => {
         ],
         model: 'gemini-2.5-flash-image',
         config: {
-          responseModalities: ['Image'],
+          responseModalities: ['TEXT', 'IMAGE'],
         },
       });
       expect(result).toEqual({
@@ -719,7 +793,7 @@ describe('createGoogleImage', () => {
         ],
         model: 'gemini-2.5-flash-image',
         config: {
-          responseModalities: ['Image'],
+          responseModalities: ['TEXT', 'IMAGE'],
         },
       });
       expect(result).toEqual({
@@ -771,7 +845,7 @@ describe('createGoogleImage', () => {
         ],
         model: 'gemini-2.5-flash-image',
         config: {
-          responseModalities: ['Image'],
+          responseModalities: ['TEXT', 'IMAGE'],
         },
       });
       expect(result).toEqual({
@@ -813,6 +887,106 @@ describe('createGoogleImage', () => {
             provider,
           }),
         );
+      });
+
+      it('should preserve Google no-image diagnostic context without serializing text parts', async () => {
+        // Arrange
+        const mockContentResponse = {
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    text: 'I can describe the image, but no image was returned.',
+                  },
+                ],
+              },
+              finishReason: 'NO_IMAGE',
+              finishMessage: 'The model did not produce an image.',
+              safetyRatings: [
+                {
+                  blocked: false,
+                  category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
+                  probability: 'NEGLIGIBLE',
+                },
+              ],
+            },
+          ],
+          modelVersion: 'gemini-3-pro-image-preview',
+          responseId: 'response-1',
+        };
+        vi.spyOn(mockClient.models, 'generateContent').mockResolvedValue(
+          mockContentResponse as any,
+        );
+
+        const payload: CreateImagePayload = {
+          model: 'gemini-3-pro-image-preview:image',
+          params: {
+            prompt: 'Generate an image',
+          },
+        };
+
+        // Act
+        let error: any;
+        try {
+          await createGoogleImage(mockClient, provider, payload);
+        } catch (e) {
+          error = e;
+        }
+
+        // Assert
+        expect(error).toMatchObject({
+          errorType: noImageErrorType,
+          provider,
+        });
+        expect(error.providerResponse).toMatchObject({
+          candidates: [
+            {
+              finishMessage: 'The model did not produce an image.',
+              finishReason: 'NO_IMAGE',
+            },
+          ],
+          responseId: 'response-1',
+        });
+        expect(JSON.stringify(error)).not.toContain('I can describe the image');
+      });
+
+      it('should preserve Google image safety finish reasons without provider policy classification', async () => {
+        // Arrange
+        const mockContentResponse = {
+          candidates: [
+            {
+              content: {},
+              finishReason: 'IMAGE_SAFETY',
+              finishMessage: 'The generated image was blocked.',
+            },
+          ],
+          responseId: 'safety-response',
+        };
+        vi.spyOn(mockClient.models, 'generateContent').mockResolvedValue(
+          mockContentResponse as any,
+        );
+
+        const payload: CreateImagePayload = {
+          model: 'gemini-3-pro-image-preview:image',
+          params: {
+            prompt: 'Generate an image',
+          },
+        };
+
+        // Act & Assert
+        await expect(createGoogleImage(mockClient, provider, payload)).rejects.toMatchObject({
+          errorType: noImageErrorType,
+          provider,
+          providerResponse: {
+            candidates: [
+              {
+                finishReason: 'IMAGE_SAFETY',
+              },
+            ],
+            responseId: 'safety-response',
+          },
+        });
       });
 
       it('should throw error when response is malformed', async () => {
