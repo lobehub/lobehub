@@ -185,6 +185,12 @@ const CLI_AUTH_REQUIRED_PATTERNS = [
 
 const CLI_RATE_LIMIT_PATTERNS = [/you'?ve hit your limit/i, /rate limit/i] as const;
 
+const CLI_OVERLOADED_PATTERNS = [
+  /overloaded_error/i,
+  /\boverloaded\b/i,
+  /api error:\s*529\b/i,
+] as const;
+
 const getCliResultMessage = (result: unknown): string | undefined => {
   if (typeof result === 'string') return result;
   if (
@@ -236,6 +242,27 @@ const toRateLimitInfo = (value: unknown): HeterogeneousRateLimitInfo | undefined
     rateLimitType: typeof raw.rateLimitType === 'string' ? raw.rateLimitType : undefined,
     resetsAt: typeof raw.resetsAt === 'number' ? raw.resetsAt : undefined,
     status: typeof raw.status === 'string' ? raw.status : undefined,
+  };
+};
+
+const getOverloadedTerminalError = (
+  result: unknown,
+  apiErrorStatus?: unknown,
+): HeterogeneousTerminalErrorData | undefined => {
+  const rawMessage = getCliResultMessage(result);
+  const looksOverloaded =
+    apiErrorStatus === 529 ||
+    (!!rawMessage && CLI_OVERLOADED_PATTERNS.some((pattern) => pattern.test(rawMessage)));
+
+  if (!looksOverloaded || !rawMessage) return;
+
+  return {
+    agentType: 'claude-code',
+    clearEchoedContent: true,
+    code: 'overloaded',
+    error: rawMessage,
+    message: rawMessage,
+    stderr: rawMessage,
   };
 };
 
@@ -1160,6 +1187,7 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       ? this.makeEvent(
           'error',
           rateLimitError ||
+            getOverloadedTerminalError(raw.result, raw.api_error_status) ||
             getAuthRequiredTerminalError(raw.result) || {
               error: resultMessage,
               message: resultMessage,

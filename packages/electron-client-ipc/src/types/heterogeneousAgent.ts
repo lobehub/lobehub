@@ -17,6 +17,7 @@ export const CODEX_CLI_INSTALL_COMMANDS = [
 export const HeterogeneousAgentSessionErrorCode = {
   AuthRequired: 'auth_required',
   CliNotFound: 'cli_not_found',
+  Overloaded: 'overloaded',
   RateLimit: 'rate_limit',
   ResumeCwdMismatch: 'resume_cwd_mismatch',
   ResumeThreadNotFound: 'resume_thread_not_found',

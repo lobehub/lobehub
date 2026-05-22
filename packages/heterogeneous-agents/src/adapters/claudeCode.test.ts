@@ -54,6 +54,48 @@ describe('ClaudeCodeAdapter', () => {
       );
     });
 
+    it('classifies overloaded failures from api_error_status 529 result events', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const rawError =
+        'API Error: 529 {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}';
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        api_error_status: 529,
+        is_error: true,
+        result: rawError,
+        type: 'result',
+      });
+
+      expect(events.map((e) => e.type)).toEqual(['stream_end', 'error']);
+      expect(events[1].data).toMatchObject({
+        agentType: 'claude-code',
+        clearEchoedContent: true,
+        code: 'overloaded',
+        message: rawError,
+        stderr: rawError,
+      });
+    });
+
+    it('classifies overloaded failures from result text alone', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const rawError = 'Overloaded';
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        is_error: true,
+        result: rawError,
+        type: 'result',
+      });
+
+      expect(events.map((e) => e.type)).toEqual(['stream_end', 'error']);
+      expect(events[1].data).toMatchObject({
+        agentType: 'claude-code',
+        code: 'overloaded',
+        message: rawError,
+      });
+    });
+
     it('classifies rate-limit failures from paired rate_limit_event + result events', () => {
       const adapter = new ClaudeCodeAdapter();
       const rawError = "You've hit your limit · resets 9am (Asia/Shanghai)";

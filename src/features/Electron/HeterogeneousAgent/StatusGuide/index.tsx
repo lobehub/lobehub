@@ -6,6 +6,7 @@ import { memo } from 'react';
 import { resolveHeterogeneousAgentGuideConfig } from './config';
 import AuthRequiredState from './states/AuthRequiredState';
 import CliInstallState from './states/CliInstallState';
+import OverloadedState from './states/OverloadedState';
 import RateLimitState from './states/RateLimitState';
 import type { HeterogeneousAgentStatusGuideProps } from './types';
 
@@ -30,6 +31,10 @@ const HeterogeneousAgentStatusGuide = memo<HeterogeneousAgentStatusGuideProps>(
 
       case HeterogeneousAgentSessionErrorCode.RateLimit: {
         return <RateLimitState {...stateProps} />;
+      }
+
+      case HeterogeneousAgentSessionErrorCode.Overloaded: {
+        return <OverloadedState {...stateProps} />;
       }
 
       default: {
