@@ -21,6 +21,7 @@ describe('agent-runtime attribute builders', () => {
       agentName: 'researcher',
       conversationId: 'topic_abc',
       operationId: 'op_xyz',
+      provider: 'openai',
       requestModel: 'gpt-5',
       stepIndex: 0,
     });
@@ -29,6 +30,7 @@ describe('agent-runtime attribute builders', () => {
       'gen_ai.operation.name': 'invoke_agent',
       'gen_ai.agent.id': 'agent_123',
       'gen_ai.agent.name': 'researcher',
+      'gen_ai.provider.name': 'openai',
       'gen_ai.request.model': 'gpt-5',
       'gen_ai.conversation.id': 'topic_abc',
       'lobehub.agent.operation.id': 'op_xyz',
@@ -70,7 +72,7 @@ describe('agent-runtime attribute builders', () => {
     expect(attrs).not.toHaveProperty('gen_ai.request.max_tokens');
   });
 
-  it('builds chat response attributes including TTFT and cache tokens', () => {
+  it('builds chat response attributes including TTFT seconds and cache tokens', () => {
     const attrs = buildChatResponseAttributes({
       cacheReadInputTokens: 30,
       finishReasons: ['stop'],
@@ -86,7 +88,7 @@ describe('agent-runtime attribute builders', () => {
       'gen_ai.response.id': 'chatcmpl-123',
       'gen_ai.response.model': 'gpt-5-2026-01-01',
       'gen_ai.response.finish_reasons': ['stop'],
-      'gen_ai.response.time_to_first_chunk': 480,
+      'gen_ai.response.time_to_first_chunk': 0.48,
       'gen_ai.usage.input_tokens': 120,
       'gen_ai.usage.output_tokens': 80,
       'gen_ai.usage.cache_read.input_tokens': 30,
@@ -100,14 +102,16 @@ describe('agent-runtime attribute builders', () => {
       stepIndex: 1,
       toolCallId: 'call_42',
       toolName: 'web_search',
-      toolType: 'builtin',
+      toolSource: 'builtin',
+      toolType: 'function',
     });
 
     expect(attrs).toMatchObject({
       'gen_ai.operation.name': 'execute_tool',
       'gen_ai.tool.name': 'web_search',
-      'gen_ai.tool.type': 'builtin',
+      'gen_ai.tool.type': 'function',
       'gen_ai.tool.call.id': 'call_42',
+      'lobehub.tool.source': 'builtin',
       'lobehub.agent.operation.id': 'op_xyz',
       'lobehub.agent.step.index': 1,
     });
@@ -157,7 +161,7 @@ describe('agent-runtime attribute builders', () => {
 
   it('formats span names per gen_ai convention', () => {
     expect(invokeAgentSpanName('researcher')).toBe('invoke_agent researcher');
-    expect(invokeAgentSpanName()).toBe('invoke_agent agent');
+    expect(invokeAgentSpanName()).toBe('invoke_agent');
     expect(chatSpanName('gpt-5')).toBe('chat gpt-5');
     expect(executeToolSpanName('web_search')).toBe('execute_tool web_search');
     expect(CONTEXT_ENGINEERING_SPAN_NAME).toBe('context_engineering');

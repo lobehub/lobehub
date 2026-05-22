@@ -110,18 +110,7 @@ const LLM_MAX_RETRIES = 5;
 const LLM_RETRY_BASE_DELAY_MS = 1000;
 const LLM_RETRY_MAX_DELAY_MS = 30_000;
 
-/**
- * Map LobeHub's internal `ToolSource` enum onto the OTel-recommended
- * `gen_ai.tool.type` values. `klavis` is an MCP provider, `lobehubSkill` is a
- * builtin plugin — folding them keeps the attribute cardinality low while
- * preserving the spec's `builtin` / `mcp` / `client` taxonomy.
- */
-const mapToolSourceToSpanType = (source: string | undefined): ToolType => {
-  if (source === 'client') return 'client';
-  if (source === 'mcp' || source === 'klavis') return 'mcp';
-  if (source === 'plugin') return 'plugin';
-  return 'builtin';
-};
+const GEN_AI_FUNCTION_TOOL_TYPE: ToolType = 'function';
 
 type ToolFailureKind = 'replan' | 'retry' | 'stop';
 
@@ -1735,14 +1724,14 @@ export const createRuntimeExecutors = (
     const toolSource =
       state.operationToolSet?.sourceMap?.[chatToolPayload.identifier] ??
       state.toolSourceMap?.[chatToolPayload.identifier];
-    const toolSpanType: ToolType = mapToolSourceToSpanType(toolSource);
     const executeToolSpan = agentRuntimeTracer.startSpan(executeToolSpanName(toolName), {
       attributes: buildExecuteToolAttributes({
         operationId,
         stepIndex,
         toolCallId: chatToolPayload.id,
         toolName,
-        toolType: toolSpanType,
+        toolSource,
+        toolType: GEN_AI_FUNCTION_TOOL_TYPE,
       }),
     });
 
@@ -2304,14 +2293,14 @@ export const createRuntimeExecutors = (
         const batchToolSourceForSpan =
           state.operationToolSet?.sourceMap?.[chatToolPayload.identifier] ??
           state.toolSourceMap?.[chatToolPayload.identifier];
-        const batchToolSpanType: ToolType = mapToolSourceToSpanType(batchToolSourceForSpan);
         const batchExecuteToolSpan = agentRuntimeTracer.startSpan(executeToolSpanName(toolName), {
           attributes: buildExecuteToolAttributes({
             operationId,
             stepIndex,
             toolCallId: chatToolPayload.id,
             toolName,
-            toolType: batchToolSpanType,
+            toolSource: batchToolSourceForSpan,
+            toolType: GEN_AI_FUNCTION_TOOL_TYPE,
           }),
         });
 

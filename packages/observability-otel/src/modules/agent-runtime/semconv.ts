@@ -5,15 +5,27 @@
  * Aligned with OTel GenAI Semantic Conventions v1.41:
  * https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/
  *
- * Only attribute names that don't already live in
- * `@opentelemetry/semantic-conventions` (or our local copy in `gen-ai/semconv.ts`)
- * are declared here, to keep the source of truth narrow.
+ * Attribute names that already live in our generated `gen-ai/semconv.ts` copy
+ * are re-exported here instead of being re-declared, keeping that generated
+ * file as the source of truth.
  */
 
-// ---- gen_ai.* (OTel spec, not yet exported by upstream semconv package) ----
+// ---- gen_ai.* (generated OTel semconv copy) ----
 
-/** Operation name — fixed value per span kind (`chat`, `invoke_agent`, `execute_tool`). */
-export const ATTR_GEN_AI_OPERATION_NAME = 'gen_ai.operation.name' as const;
+export {
+  ATTR_GEN_AI_OPERATION_NAME,
+  ATTR_GEN_AI_REQUEST_MAX_TOKENS,
+  ATTR_GEN_AI_REQUEST_MODEL,
+  ATTR_GEN_AI_REQUEST_TEMPERATURE,
+  ATTR_GEN_AI_REQUEST_TOP_P,
+  ATTR_GEN_AI_RESPONSE_FINISH_REASONS,
+  ATTR_GEN_AI_RESPONSE_ID,
+  ATTR_GEN_AI_RESPONSE_MODEL,
+  ATTR_GEN_AI_USAGE_INPUT_TOKENS,
+  ATTR_GEN_AI_USAGE_OUTPUT_TOKENS,
+} from '../../gen-ai/semconv';
+
+// ---- gen_ai.* (OTel spec, not yet in the generated local copy) ----
 
 /** Provider name — `openai`, `anthropic`, `lobehub`, etc. */
 export const ATTR_GEN_AI_PROVIDER_NAME = 'gen_ai.provider.name' as const;
@@ -24,7 +36,7 @@ export const ATTR_GEN_AI_CONVERSATION_ID = 'gen_ai.conversation.id' as const;
 /** Whether the request was issued in streaming mode. */
 export const ATTR_GEN_AI_REQUEST_STREAM = 'gen_ai.request.stream' as const;
 
-/** Time (ms) to first chunk for streaming responses (TTFT). */
+/** Time to first chunk for streaming responses (TTFT), recorded in seconds. */
 export const ATTR_GEN_AI_RESPONSE_TIME_TO_FIRST_CHUNK =
   'gen_ai.response.time_to_first_chunk' as const;
 
@@ -70,6 +82,9 @@ export const ATTR_LOBEHUB_TOOL_SUCCESS = 'lobehub.tool.success' as const;
 
 /** Attempts taken to execute a tool (1 for first-try success). */
 export const ATTR_LOBEHUB_TOOL_ATTEMPTS = 'lobehub.tool.attempts' as const;
+
+/** Internal LobeHub tool source (`builtin` / `client` / `mcp` / `klavis` / `lobehubSkill`). */
+export const ATTR_LOBEHUB_TOOL_SOURCE = 'lobehub.tool.source' as const;
 
 /** Context engineering metadata. */
 export const ATTR_LOBEHUB_CONTEXT_MESSAGE_COUNT = 'lobehub.context.message_count' as const;

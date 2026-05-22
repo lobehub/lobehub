@@ -1,17 +1,6 @@
 import type { Attributes } from '@opentelemetry/api';
 
 import {
-  ATTR_GEN_AI_REQUEST_MAX_TOKENS,
-  ATTR_GEN_AI_REQUEST_MODEL,
-  ATTR_GEN_AI_REQUEST_TEMPERATURE,
-  ATTR_GEN_AI_REQUEST_TOP_P,
-  ATTR_GEN_AI_RESPONSE_FINISH_REASONS,
-  ATTR_GEN_AI_RESPONSE_ID,
-  ATTR_GEN_AI_RESPONSE_MODEL,
-  ATTR_GEN_AI_USAGE_INPUT_TOKENS,
-  ATTR_GEN_AI_USAGE_OUTPUT_TOKENS,
-} from '../../gen-ai/semconv';
-import {
   ATTR_GEN_AI_AGENT_DESCRIPTION,
   ATTR_GEN_AI_AGENT_ID,
   ATTR_GEN_AI_AGENT_NAME,
@@ -20,7 +9,14 @@ import {
   ATTR_GEN_AI_DATA_SOURCE_ID,
   ATTR_GEN_AI_OPERATION_NAME,
   ATTR_GEN_AI_PROVIDER_NAME,
+  ATTR_GEN_AI_REQUEST_MAX_TOKENS,
+  ATTR_GEN_AI_REQUEST_MODEL,
   ATTR_GEN_AI_REQUEST_STREAM,
+  ATTR_GEN_AI_REQUEST_TEMPERATURE,
+  ATTR_GEN_AI_REQUEST_TOP_P,
+  ATTR_GEN_AI_RESPONSE_FINISH_REASONS,
+  ATTR_GEN_AI_RESPONSE_ID,
+  ATTR_GEN_AI_RESPONSE_MODEL,
   ATTR_GEN_AI_RESPONSE_TIME_TO_FIRST_CHUNK,
   ATTR_GEN_AI_TOOL_CALL_ARGUMENTS,
   ATTR_GEN_AI_TOOL_CALL_ID,
@@ -29,6 +25,8 @@ import {
   ATTR_GEN_AI_TOOL_NAME,
   ATTR_GEN_AI_TOOL_TYPE,
   ATTR_GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS,
+  ATTR_GEN_AI_USAGE_INPUT_TOKENS,
+  ATTR_GEN_AI_USAGE_OUTPUT_TOKENS,
   ATTR_GEN_AI_USAGE_REASONING_OUTPUT_TOKENS,
   ATTR_LOBEHUB_AGENT_COMPLETION_REASON,
   ATTR_LOBEHUB_AGENT_OPERATION_ID,
@@ -45,6 +43,7 @@ import {
   ATTR_LOBEHUB_CONTEXT_TOOL_COUNT,
   ATTR_LOBEHUB_CONTEXT_WINDOW_RATIO,
   ATTR_LOBEHUB_TOOL_ATTEMPTS,
+  ATTR_LOBEHUB_TOOL_SOURCE,
   ATTR_LOBEHUB_TOOL_SUCCESS,
   GEN_AI_OPERATION_CHAT,
   GEN_AI_OPERATION_EXECUTE_TOOL,
@@ -76,6 +75,7 @@ export interface InvokeAgentAttributes {
   conversationId?: string;
   dataSourceId?: string;
   operationId: string;
+  provider?: string;
   requestModel?: string;
   stepIndex?: number;
 }
@@ -87,6 +87,7 @@ export const buildInvokeAgentAttributes = (input: InvokeAgentAttributes): Attrib
     [ATTR_GEN_AI_AGENT_NAME]: input.agentName,
     [ATTR_GEN_AI_AGENT_DESCRIPTION]: input.agentDescription,
     [ATTR_GEN_AI_AGENT_VERSION]: input.agentVersion,
+    [ATTR_GEN_AI_PROVIDER_NAME]: input.provider,
     [ATTR_GEN_AI_REQUEST_MODEL]: input.requestModel,
     [ATTR_GEN_AI_CONVERSATION_ID]: input.conversationId,
     [ATTR_GEN_AI_DATA_SOURCE_ID]: input.dataSourceId,
@@ -110,7 +111,7 @@ export const buildInvokeAgentResultAttributes = (input: InvokeAgentResultAttribu
   });
 
 export const invokeAgentSpanName = (agentName?: string) =>
-  `${GEN_AI_OPERATION_INVOKE_AGENT} ${agentName ?? 'agent'}`;
+  agentName ? `${GEN_AI_OPERATION_INVOKE_AGENT} ${agentName}` : GEN_AI_OPERATION_INVOKE_AGENT;
 
 // ---- chat span ----
 
@@ -156,7 +157,8 @@ export const buildChatResponseAttributes = (input: ChatResponseAttributes): Attr
     [ATTR_GEN_AI_RESPONSE_ID]: input.responseId,
     [ATTR_GEN_AI_RESPONSE_MODEL]: input.responseModel,
     [ATTR_GEN_AI_RESPONSE_FINISH_REASONS]: input.finishReasons,
-    [ATTR_GEN_AI_RESPONSE_TIME_TO_FIRST_CHUNK]: input.timeToFirstChunkMs,
+    [ATTR_GEN_AI_RESPONSE_TIME_TO_FIRST_CHUNK]:
+      input.timeToFirstChunkMs === undefined ? undefined : input.timeToFirstChunkMs / 1000,
     [ATTR_GEN_AI_USAGE_INPUT_TOKENS]: input.inputTokens,
     [ATTR_GEN_AI_USAGE_OUTPUT_TOKENS]: input.outputTokens,
     [ATTR_GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS]: input.cacheReadInputTokens,
@@ -168,10 +170,8 @@ export const chatSpanName = (model: string) => `${GEN_AI_OPERATION_CHAT} ${model
 // ---- execute_tool span ----
 
 /**
- * `gen_ai.tool.type` value. Spec recommends `builtin` / `mcp` / `plugin` /
- * `client`. Kept as a `string` to allow callers to pass through provider-specific
- * sources (`klavis`, `lobehubSkill`, ...) when no clean mapping exists, since
- * the OTel spec leaves the enum open.
+ * `gen_ai.tool.type` value. Spec examples include `function`, `extension`,
+ * and `datastore`; kept as a string because the OTel enum is open.
  */
 export type ToolType = string;
 
@@ -182,6 +182,7 @@ export interface ExecuteToolAttributes {
   stepIndex?: number;
   toolCallId?: string;
   toolName: string;
+  toolSource?: string;
   toolType?: ToolType;
 }
 
@@ -193,6 +194,7 @@ export const buildExecuteToolAttributes = (input: ExecuteToolAttributes): Attrib
     [ATTR_GEN_AI_TOOL_CALL_ID]: input.toolCallId,
     [ATTR_GEN_AI_TOOL_DESCRIPTION]: input.description,
     [ATTR_GEN_AI_TOOL_CALL_ARGUMENTS]: input.argumentsJson,
+    [ATTR_LOBEHUB_TOOL_SOURCE]: input.toolSource,
     [ATTR_LOBEHUB_AGENT_OPERATION_ID]: input.operationId,
     [ATTR_LOBEHUB_AGENT_STEP_INDEX]: input.stepIndex,
   });

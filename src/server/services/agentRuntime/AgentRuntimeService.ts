@@ -610,6 +610,9 @@ export class AgentRuntimeService {
           | undefined;
         const stateModel =
           agentState.modelRuntimeConfig?.model ?? agentState.metadata?.modelRuntimeConfig?.model;
+        const stateProvider =
+          agentState.modelRuntimeConfig?.provider ??
+          agentState.metadata?.modelRuntimeConfig?.provider;
         invokeAgentSpan.updateName(invokeAgentSpanName(stateAgentConfig?.title ?? undefined));
         invokeAgentSpan.setAttributes(
           buildInvokeAgentAttributes({
@@ -618,6 +621,7 @@ export class AgentRuntimeService {
             agentName: stateAgentConfig?.title ?? undefined,
             conversationId: agentState.metadata?.topicId,
             operationId,
+            provider: stateProvider,
             requestModel: stateModel,
             stepIndex,
           }),
