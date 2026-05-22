@@ -116,7 +116,10 @@ const allJsWarmupManifestFileName = 'assets/js-warmup-manifest.json';
 const normalizePath = (value: string) => value.split('?')[0].replaceAll('\\', '/');
 
 const stripModuleSuffix = (value: string) =>
-  value.replace(/\.(mjs|js|jsx|ts|tsx)$/, '').replace(/\/index$/, '');
+  value
+    .replace(/\.(mjs|js|jsx|ts|tsx)$/, '')
+    .replace(/\.(desktop|mobile|vite|web)$/, '')
+    .replace(/\/index$/, '');
 
 function normalizeComparableModuleId(id: string, root = '') {
   let normalized = normalizePath(id);

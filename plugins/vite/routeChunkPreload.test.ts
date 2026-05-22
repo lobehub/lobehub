@@ -29,10 +29,10 @@ describe('routeChunkPreload', () => {
   it('creates route preload entries from emitted route chunk filenames', () => {
     const bundle = {
       'assets/agent-CJm8x.js': createChunk({
-        facadeModuleId: '/repo/src/routes/(main)/agent/index.tsx',
+        facadeModuleId: '/repo/src/routes/(main)/agent/index.desktop.tsx',
         fileName: 'assets/agent-CJm8x.js',
         imports: ['vendor/vendor-icons-Bd7x.js'],
-        moduleIds: ['/repo/src/routes/(main)/agent/index.tsx'],
+        moduleIds: ['/repo/src/routes/(main)/agent/index.desktop.tsx'],
       }),
       'vendor/vendor-icons-Bd7x.js': createChunk({
         facadeModuleId: null,
@@ -45,6 +45,26 @@ describe('routeChunkPreload', () => {
     const agentEntry = manifest.find((entry) => entry.id === 'desktop-chat-launch');
 
     expect(agentEntry?.preload).toEqual(['assets/agent-CJm8x.js']);
+  });
+
+  it('matches non-index platform-specific route module variants', () => {
+    const bundle = {
+      'assets/settings-provider-CJm8x.js': createChunk({
+        facadeModuleId: '/repo/src/routes/(main)/settings/provider.desktop.tsx',
+        fileName: 'assets/settings-provider-CJm8x.js',
+        moduleIds: ['/repo/src/routes/(main)/settings/provider.desktop.tsx'],
+      }),
+    } satisfies TestOutputBundle;
+
+    const manifest = __testing.createRoutePreloadManifest(bundle, '/repo', [
+      {
+        id: 'custom-settings-provider',
+        modules: ['src/routes/(main)/settings/provider'],
+        patterns: ['^/settings/provider(/|$)'],
+      },
+    ]);
+
+    expect(manifest[0]?.preload).toEqual(['assets/settings-provider-CJm8x.js']);
   });
 
   it('can include static imports for explicitly configured groups', () => {
