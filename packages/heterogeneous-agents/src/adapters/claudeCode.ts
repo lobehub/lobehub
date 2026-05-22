@@ -15,8 +15,9 @@
  *   {type: 'result', is_error, result, ...}
  *   {type: 'rate_limit_event', ...}
  *
- * With `--include-partial-messages` (enabled by default in this adapter), CC
- * also emits token-level deltas wrapped as:
+ * When the spawn site passes `--include-partial-messages` (desktop driver
+ * does, CLI / sandbox runs do not), CC also emits token-level deltas wrapped
+ * as:
  *
  *   {type: 'stream_event', event: {type: 'message_start', message: {id, model, ...}}}
  *   {type: 'stream_event', event: {type: 'content_block_delta', index, delta: {type: 'text_delta', text}}}
@@ -35,7 +36,6 @@
  */
 
 import type {
-  AgentCLIPreset,
   AgentEventAdapter,
   ExternalSignalContext,
   HeterogeneousAgentEvent,
@@ -185,6 +185,12 @@ const CLI_AUTH_REQUIRED_PATTERNS = [
 
 const CLI_RATE_LIMIT_PATTERNS = [/you'?ve hit your limit/i, /rate limit/i] as const;
 
+const CLI_OVERLOADED_PATTERNS = [
+  /overloaded_error/i,
+  /\boverloaded\b/i,
+  /api error:\s*529\b/i,
+] as const;
+
 const getCliResultMessage = (result: unknown): string | undefined => {
   if (typeof result === 'string') return result;
   if (
@@ -236,6 +242,27 @@ const toRateLimitInfo = (value: unknown): HeterogeneousRateLimitInfo | undefined
     rateLimitType: typeof raw.rateLimitType === 'string' ? raw.rateLimitType : undefined,
     resetsAt: typeof raw.resetsAt === 'number' ? raw.resetsAt : undefined,
     status: typeof raw.status === 'string' ? raw.status : undefined,
+  };
+};
+
+const getOverloadedTerminalError = (
+  result: unknown,
+  apiErrorStatus?: unknown,
+): HeterogeneousTerminalErrorData | undefined => {
+  const rawMessage = getCliResultMessage(result);
+  const looksOverloaded =
+    apiErrorStatus === 529 ||
+    (!!rawMessage && CLI_OVERLOADED_PATTERNS.some((pattern) => pattern.test(rawMessage)));
+
+  if (!looksOverloaded || !rawMessage) return;
+
+  return {
+    agentType: 'claude-code',
+    clearEchoedContent: true,
+    code: 'overloaded',
+    error: rawMessage,
+    message: rawMessage,
+    stderr: rawMessage,
   };
 };
 
@@ -359,24 +386,6 @@ const toUsageData = (
     totalOutputTokens,
     totalTokens: totalInputTokens + totalOutputTokens,
   };
-};
-
-// ─── CLI Preset ───
-
-export const claudeCodePreset: AgentCLIPreset = {
-  baseArgs: [
-    '-p',
-    '--input-format',
-    'stream-json',
-    '--output-format',
-    'stream-json',
-    '--verbose',
-    '--include-partial-messages',
-    '--permission-mode',
-    'acceptEdits',
-  ],
-  promptMode: 'stdin',
-  resumeArgs: (sessionId) => ['--resume', sessionId],
 };
 
 // ─── Adapter ───
@@ -641,10 +650,10 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
 
     // Track the latest model — emitted alongside authoritative usage on the
     // matching `message_delta`. We deliberately do NOT emit turn_metadata
-    // here: under `--include-partial-messages` (our default), every
-    // content-block `assistant` event echoes a STALE usage snapshot from
-    // `message_start` (e.g. `output_tokens: 8`); the per-turn total only
-    // arrives on `stream_event: message_delta`.
+    // here: under `--include-partial-messages`, every content-block
+    // `assistant` event echoes a STALE usage snapshot from `message_start`
+    // (e.g. `output_tokens: 8`); the per-turn total only arrives on
+    // `stream_event: message_delta`.
     if (raw.message?.model) this.currentStreamEventModel = raw.message.model;
 
     // Each content array here is usually ONE block (thinking OR tool_use OR text)
@@ -1160,6 +1169,7 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       ? this.makeEvent(
           'error',
           rateLimitError ||
+            getOverloadedTerminalError(raw.result, raw.api_error_status) ||
             getAuthRequiredTerminalError(raw.result) || {
               error: resultMessage,
               message: resultMessage,

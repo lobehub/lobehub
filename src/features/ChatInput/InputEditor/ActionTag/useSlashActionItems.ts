@@ -2,10 +2,11 @@ import { isDesktop } from '@lobechat/const';
 import { type ListProjectSkillsResult, type ProjectSkillItem } from '@lobechat/electron-client-ipc';
 import type { IEditor, SlashOptions } from '@lobehub/editor';
 import { SkillsIcon } from '@lobehub/ui/icons';
+import isEqual from 'fast-deep-equal';
 import Fuse from 'fuse.js';
 import { $getSelection, $isRangeSelection } from 'lexical';
 import { ArchiveIcon, MessageSquarePlusIcon } from 'lucide-react';
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useClientDataSWR } from '@/libs/swr';
@@ -14,11 +15,15 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
+import { useToolStore } from '@/store/tool';
+import { agentDocumentSkillsSelectors } from '@/store/tool/selectors';
+import type { AgentDocumentSkillItem } from '@/store/tool/slices/agentDocumentSkills/initialState';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useChatInputStore } from '../../store';
 import { INSERT_ACTION_TAG_COMMAND, type InsertActionTagPayload } from './command';
 import { type ActionTagData, BUILTIN_COMMANDS } from './types';
+import { useInstalledSkillsAndTools } from './useInstalledSkillsAndTools';
 
 type SlashItem = NonNullable<SlashOptions['items'] extends (infer U)[] ? U : never>;
 
@@ -40,25 +45,40 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
   const editorInstance = useChatInputStore((s) => s.editor);
   const activeTopicId = useChatStore((s) => s.activeTopicId);
 
-  // Resolve hetero-agent working directory so we can surface its project skills.
-  // Topic-level override takes precedence over the agent's configured cwd.
+  // Resolve the active working directory so we can surface filesystem project
+  // skills. Topic-level override takes precedence over the agent's configured
+  // cwd. Both homogeneous and heterogeneous runtimes accept project skills now
+  // (see commit dd4a4e7595), so we no longer gate on the hetero provider.
   const agentId = useAgentId();
-  const isHetero = useAgentStore((s) =>
-    agentId ? !!agentByIdSelectors.getAgencyConfigById(agentId)(s)?.heterogeneousProvider : false,
-  );
   const agentWorkingDirectory = useAgentStore((s) =>
     agentId ? agentByIdSelectors.getAgentWorkingDirectoryById(agentId)(s) : undefined,
   );
   const topicWorkingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
   const workingDirectory = topicWorkingDirectory || agentWorkingDirectory;
 
-  const skillsEnabled = isDesktop && isHetero && !!workingDirectory;
+  const projectSkillsEnabled = isDesktop && !!workingDirectory;
   const { data: projectSkillsData } = useClientDataSWR<ListProjectSkillsResult>(
-    skillsEnabled ? ['project-skills', workingDirectory] : null,
+    projectSkillsEnabled ? ['project-skills', workingDirectory] : null,
     () => localFileService.listProjectSkills({ scope: workingDirectory! }),
     { revalidateOnFocus: false, shouldRetryOnError: false },
   );
   const projectSkills = projectSkillsData?.skills;
+
+  // Agent-document skill bundles (the "Agent skills" group in the working
+  // sidebar). Share the SWR key with the sidebar fetch so we don't double-fetch.
+  useToolStore((s) => s.useFetchAgentDocumentSkills)(agentId);
+  const agentDocumentSkills = useToolStore(
+    agentDocumentSkillsSelectors.getAgentDocumentSkills,
+    isEqual,
+  );
+
+  // Installed skills shared with the @ mention menu (builtin / lobehub / market / user agent skills).
+  // Tools intentionally stay out of slash — they remain @-mention only.
+  const installedSkillsAndTools = useInstalledSkillsAndTools();
+  const installedSkills = useMemo(
+    () => installedSkillsAndTools.filter((item) => item.category === 'skill'),
+    [installedSkillsAndTools],
+  );
 
   return useCallback(
     async (
@@ -102,35 +122,104 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
         },
       });
 
-      // All action tags are line-start only for now
+      const makeSkillItem = (skill: ActionTagData): SlashMenuOption => ({
+        icon: SkillsIcon,
+        key: `skill-${skill.type}`,
+        label: skill.label,
+        metadata: { category: 'skill', type: skill.type },
+        onSelect: (editor: IEditor) => {
+          const payload: InsertActionTagPayload = {
+            category: 'skill',
+            label: skill.label,
+            type: skill.type,
+          };
+          editor.dispatchCommand(INSERT_ACTION_TAG_COMMAND, payload);
+        },
+      });
+
+      const makeAgentSkillItem = (skill: AgentDocumentSkillItem): SlashMenuOption => {
+        const label = skill.title || skill.name;
+        return {
+          icon: SkillsIcon,
+          // Identifier already carries the `agent-skills:` prefix, which keeps it
+          // unique against project / builtin skills.
+          key: `agent-skill-${skill.identifier}`,
+          label,
+          metadata: {
+            category: 'agentSkill',
+            description: skill.description,
+            type: skill.identifier,
+          },
+          onSelect: (editor: IEditor) => {
+            const payload: InsertActionTagPayload = {
+              category: 'agentSkill',
+              label,
+              type: skill.identifier,
+            };
+            editor.dispatchCommand(INSERT_ACTION_TAG_COMMAND, payload);
+          },
+        };
+      };
+
+      // Trigger position:
+      //   - line-start  → commands + installed skills + project skills
+      //   - mid-line w/ preceding whitespace → installed skills + project skills only (no commands)
+      //   - otherwise (e.g. inside http://, a/b) → menu suppressed
       let isAtLineStart = search === null;
+      let isMidLineAfterWhitespace = false;
       if (!isAtLineStart && editorInstance) {
         const lexicalEditor = editorInstance.getLexicalEditor();
         if (lexicalEditor) {
           lexicalEditor.getEditorState().read(() => {
             const selection = $getSelection();
-            if ($isRangeSelection(selection)) {
-              const node = selection.anchor.getNode();
-              const topElement = node.getTopLevelElement();
-              if (topElement) {
-                const paragraphText = topElement.getTextContent();
-                const triggerAndSearch = '/' + (search?.matchingString || '');
-                isAtLineStart = paragraphText === triggerAndSearch;
-              }
+            if (!$isRangeSelection(selection)) return;
+            const node = selection.anchor.getNode();
+            const topElement = node.getTopLevelElement();
+            if (!topElement) return;
+
+            const paragraphText = topElement.getTextContent();
+            const triggerAndSearch = '/' + (search?.matchingString || '');
+
+            if (paragraphText === triggerAndSearch) {
+              isAtLineStart = true;
+              return;
+            }
+
+            const triggerIndex = paragraphText.lastIndexOf(triggerAndSearch);
+            if (triggerIndex === 0) {
+              isAtLineStart = true;
+            } else if (triggerIndex > 0 && /\s/.test(paragraphText[triggerIndex - 1])) {
+              isMidLineAfterWhitespace = true;
             }
           });
         }
       }
 
-      if (!isAtLineStart) return [];
+      if (!isAtLineStart && !isMidLineAfterWhitespace) return [];
 
-      // Built-in commands (filter newTopic when no active topic)
-      for (const action of BUILTIN_COMMANDS) {
-        if (action.type === 'newTopic' && !activeTopicId) continue;
-        allItems.push(makeCommandItem(action) as SlashItem);
+      // Built-in commands — line-start only
+      if (isAtLineStart) {
+        for (const action of BUILTIN_COMMANDS) {
+          if (action.type === 'newTopic' && !activeTopicId) continue;
+          allItems.push(makeCommandItem(action) as SlashItem);
+        }
       }
 
-      // Hetero-agent project skills (file-system based, resolved by the CLI agent itself)
+      // Installed skills — shown in both positions
+      for (const skill of installedSkills) {
+        allItems.push(makeSkillItem(skill) as SlashItem);
+      }
+
+      // Agent-document skill bundles (per-agent, resolved server-side via the
+      // `agent-skills:<filename>` identifier prefix).
+      for (const skill of agentDocumentSkills) {
+        allItems.push(makeAgentSkillItem(skill) as SlashItem);
+      }
+
+      // Filesystem project skills (`.agents/skills/` / `.claude/skills/` under
+      // the working directory). Both homogeneous and heterogeneous runtimes
+      // resolve them — the homogeneous runtime treats them as additional
+      // `<available_skills>` entries.
       if (projectSkills && projectSkills.length > 0) {
         for (const skill of projectSkills) {
           allItems.push(makeProjectSkillItem(skill) as SlashItem);
@@ -145,6 +234,6 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
 
       return allItems;
     },
-    [t, editorInstance, activeTopicId, projectSkills],
+    [t, editorInstance, activeTopicId, projectSkills, installedSkills, agentDocumentSkills],
   );
 };

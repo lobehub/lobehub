@@ -1,9 +1,12 @@
+import type { execSync as ExecSyncType } from 'node:child_process';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
 import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 
 import GatewayConnectionCtr from '../GatewayConnectionCtr';
+import HeterogeneousAgentCtr from '../HeterogeneousAgentCtr';
 import LocalFileCtr from '../LocalFileCtr';
 import RemoteServerConfigCtr from '../RemoteServerConfigCtr';
 import ShellCommandCtr from '../ShellCommandCtr';
@@ -31,6 +34,7 @@ const { ipcMainHandleMock, MockGatewayClient } = vi.hoisted(() => {
     });
 
     sendToolCallResponse = vi.fn();
+    sendAgentRunAck = vi.fn();
 
     constructor(options: any) {
       super();
@@ -69,6 +73,22 @@ const { ipcMainHandleMock, MockGatewayClient } = vi.hoisted(() => {
 
     simulateError(message: string) {
       this.emit('error', new Error(message));
+    }
+
+    simulateAgentRunRequest(
+      agentType: string,
+      operationId = 'op-1',
+      prompt = 'hello',
+      jwt = 'mock-jwt',
+    ) {
+      this.emit('agent_run_request', {
+        agentType,
+        jwt,
+        operationId,
+        prompt,
+        topicId: 'topic-1',
+        type: 'agent_run_request',
+      });
     }
 
     simulateReconnecting(delay: number) {
@@ -123,6 +143,15 @@ vi.mock('node:crypto', () => ({
   randomUUID: vi.fn(() => 'mock-device-uuid'),
 }));
 
+const execSyncMock = vi.hoisted(() => vi.fn());
+const execFileSyncMock = vi.hoisted(() => vi.fn());
+const spawnMock = vi.hoisted(() => vi.fn());
+
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<{ execSync: typeof ExecSyncType }>();
+  return { ...actual, execFileSync: execFileSyncMock, execSync: execSyncMock, spawn: spawnMock };
+});
+
 vi.mock('node:os', () => ({
   default: { hostname: vi.fn(() => 'mock-hostname') },
 }));
@@ -130,6 +159,13 @@ vi.mock('node:os', () => ({
 vi.mock('@lobechat/device-gateway-client', () => ({
   GatewayClient: MockGatewayClient,
 }));
+
+vi.mock('execa', () => ({
+  execa: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
+}));
+
+vi.mock('fast-glob', () => ({ default: vi.fn().mockResolvedValue([]) }));
+vi.mock('fflate', () => ({ unzipSync: vi.fn() }));
 
 // ─── Mock Controllers ───
 
@@ -162,6 +198,11 @@ const mockShellCommandCtr = {
   handleRunCommand: vi.fn().mockResolvedValue({ success: true, stdout: '' }),
 } as unknown as ShellCommandCtr;
 
+const mockHeterogeneousAgentCtr = {
+  sendPrompt: vi.fn().mockResolvedValue(undefined),
+  startSession: vi.fn().mockResolvedValue({ sessionId: 'mock-session-id' }),
+} as unknown as HeterogeneousAgentCtr;
+
 const mockRemoteServerConfigCtr = {
   getAccessToken: vi.fn().mockResolvedValue('mock-access-token'),
   isRemoteServerConfigured: vi.fn().mockResolvedValue(true),
@@ -178,6 +219,7 @@ const mockApp = {
     if (Cls === RemoteServerConfigCtr) return mockRemoteServerConfigCtr;
     if (Cls === LocalFileCtr) return mockLocalFileCtr;
     if (Cls === ShellCommandCtr) return mockShellCommandCtr;
+    if (Cls === HeterogeneousAgentCtr) return mockHeterogeneousAgentCtr;
     return null;
   }),
   getService: vi.fn((Cls) => {
@@ -573,6 +615,327 @@ describe('GatewayConnectionCtr', () => {
 
       expect(mockBroadcast).toHaveBeenCalledWith('gatewayConnectionStatusChanged', {
         status: 'disconnected',
+      });
+    });
+  });
+
+  // ─── Agent Run Routing ───
+
+  describe('agent run routing', () => {
+    async function connectAndOpen() {
+      ctr.afterAppReady();
+      await vi.advanceTimersByTimeAsync(0);
+      const client = MockGatewayClient.lastInstance!;
+      client.simulateConnected();
+      return client;
+    }
+
+    beforeEach(() => {
+      vi.mocked(mockHeterogeneousAgentCtr.startSession).mockClear();
+      vi.mocked(mockHeterogeneousAgentCtr.sendPrompt).mockClear();
+    });
+
+    it.each([
+      ['openclaw', 'openclaw'],
+      ['hermes', 'hermes'],
+      ['codex', 'codex'],
+      ['claude-code', 'claude'],
+    ] as const)('uses command "%s" for agentType "%s"', async (agentType, expectedCommand) => {
+      const client = await connectAndOpen();
+      client.simulateAgentRunRequest(agentType);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockHeterogeneousAgentCtr.startSession).toHaveBeenCalledWith(
+        expect.objectContaining({ agentType, command: expectedCommand }),
+      );
+    });
+
+    it('sends accepted ack and fires sendPrompt', async () => {
+      const client = await connectAndOpen();
+      client.simulateAgentRunRequest('openclaw', 'op-xyz');
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(client.sendAgentRunAck).toHaveBeenCalledWith({
+        operationId: 'op-xyz',
+        status: 'accepted',
+      });
+      expect(mockHeterogeneousAgentCtr.sendPrompt).toHaveBeenCalledWith(
+        expect.objectContaining({ operationId: 'op-xyz', sessionId: 'mock-session-id' }),
+      );
+    });
+
+    it('sends rejected ack when startSession throws', async () => {
+      vi.mocked(mockHeterogeneousAgentCtr.startSession).mockRejectedValueOnce(
+        new Error('binary not found'),
+      );
+
+      const client = await connectAndOpen();
+      client.simulateAgentRunRequest('openclaw', 'op-fail');
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(client.sendAgentRunAck).toHaveBeenCalledWith({
+        operationId: 'op-fail',
+        reason: 'binary not found',
+        status: 'rejected',
+      });
+    });
+  });
+
+  // ─── runHeteroTask ───
+
+  describe('runHeteroTask', () => {
+    /** Creates a minimal mock child process returned by spawn(). */
+    function makeMockChild(pid = 9999) {
+      const listeners: Record<string, Array<(...a: any[]) => void>> = {};
+      return {
+        on: vi.fn((event: string, cb: (...a: any[]) => void) => {
+          listeners[event] = listeners[event] ?? [];
+          listeners[event].push(cb);
+        }),
+        pid,
+        unref: vi.fn(),
+        _emit: (event: string, ...args: any[]) => listeners[event]?.forEach((cb) => cb(...args)),
+      };
+    }
+
+    async function connectAndOpen() {
+      ctr.afterAppReady();
+      await vi.advanceTimersByTimeAsync(0);
+      const client = MockGatewayClient.lastInstance!;
+      client.simulateConnected();
+      return client;
+    }
+
+    beforeEach(() => {
+      execFileSyncMock.mockReturnValue('/usr/local/bin/lh\n');
+      spawnMock.mockReset();
+    });
+
+    it('always injects buildNotifyProtocol into the prompt', async () => {
+      const child = makeMockChild();
+      spawnMock.mockReturnValue(child);
+
+      const client = await connectAndOpen();
+      client.simulateToolCallRequest(
+        'runHeteroTask',
+        {
+          agentType: 'openclaw',
+          operationId: 'op-1',
+          prompt: 'hello',
+          taskId: 'task-1',
+          topicId: 'topic-1',
+        },
+        'req-run',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(spawnMock).toHaveBeenCalledTimes(1);
+      const [, spawnArgs] = spawnMock.mock.calls[0] as [string, string[]];
+      const messageArg = spawnArgs[spawnArgs.indexOf('--message') + 1];
+      expect(messageArg).toContain('hello');
+      expect(messageArg).toContain('lh notify');
+    });
+
+    it('kills an existing concurrent openclaw process for the same topicId before spawning', async () => {
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+      // First task
+      const child1 = makeMockChild(1111);
+      spawnMock.mockReturnValueOnce(child1);
+      const client = await connectAndOpen();
+      client.simulateToolCallRequest(
+        'runHeteroTask',
+        {
+          agentType: 'openclaw',
+          operationId: 'op-1',
+          prompt: 'msg1',
+          taskId: 'task-1',
+          topicId: 'topic-same',
+        },
+        'req-1',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Second task for same topicId — should kill task-1's pid first
+      const child2 = makeMockChild(2222);
+      spawnMock.mockReturnValueOnce(child2);
+      client.simulateToolCallRequest(
+        'runHeteroTask',
+        {
+          agentType: 'openclaw',
+          operationId: 'op-2',
+          prompt: 'msg2',
+          taskId: 'task-2',
+          topicId: 'topic-same',
+        },
+        'req-2',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(killSpy).toHaveBeenCalledWith(1111, 'SIGTERM');
+      expect(spawnMock).toHaveBeenCalledTimes(2);
+
+      killSpy.mockRestore();
+    });
+
+    it('does not kill processes for a different topicId', async () => {
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+      const child1 = makeMockChild(3333);
+      spawnMock.mockReturnValueOnce(child1);
+      const client = await connectAndOpen();
+      client.simulateToolCallRequest(
+        'runHeteroTask',
+        {
+          agentType: 'openclaw',
+          operationId: 'op-1',
+          prompt: 'a',
+          taskId: 'task-a',
+          topicId: 'topic-A',
+        },
+        'req-a',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      const child2 = makeMockChild(4444);
+      spawnMock.mockReturnValueOnce(child2);
+      client.simulateToolCallRequest(
+        'runHeteroTask',
+        {
+          agentType: 'openclaw',
+          operationId: 'op-2',
+          prompt: 'b',
+          taskId: 'task-b',
+          topicId: 'topic-B',
+        },
+        'req-b',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(killSpy).not.toHaveBeenCalled();
+
+      killSpy.mockRestore();
+    });
+  });
+
+  // ─── Platform Capability Probing ───
+
+  describe('platform capability probing', () => {
+    async function connectAndOpen() {
+      ctr.afterAppReady();
+      await vi.advanceTimersByTimeAsync(0);
+      const client = MockGatewayClient.lastInstance!;
+      client.simulateConnected();
+      return client;
+    }
+
+    beforeEach(() => {
+      execSyncMock.mockReset();
+    });
+
+    it('returns available:true with version when binary is installed', async () => {
+      execSyncMock.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('which ') || cmd.startsWith('where '))
+          return '/usr/local/bin/openclaw\n';
+        if (cmd.includes('--version')) return 'openclaw 1.2.3\n';
+        return '';
+      });
+
+      const client = await connectAndOpen();
+      client.simulateToolCallRequest(
+        'checkPlatformCapability',
+        { platform: 'openclaw' },
+        'req-cap',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(client.sendToolCallResponse).toHaveBeenCalledWith({
+        requestId: 'req-cap',
+        result: {
+          content: JSON.stringify({ available: true, version: 'openclaw 1.2.3' }),
+          success: true,
+        },
+      });
+    });
+
+    it('returns available:true without version when --version command fails', async () => {
+      execSyncMock.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('which ') || cmd.startsWith('where '))
+          return '/usr/local/bin/openclaw\n';
+        throw new Error('version command failed');
+      });
+
+      const client = await connectAndOpen();
+      client.simulateToolCallRequest(
+        'checkPlatformCapability',
+        { platform: 'openclaw' },
+        'req-cap-nover',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(client.sendToolCallResponse).toHaveBeenCalledWith({
+        requestId: 'req-cap-nover',
+        result: {
+          content: JSON.stringify({ available: true }),
+          success: true,
+        },
+      });
+    });
+
+    it('returns available:false when binary is not installed', async () => {
+      execSyncMock.mockImplementation(() => {
+        throw new Error('command not found');
+      });
+
+      const client = await connectAndOpen();
+      client.simulateToolCallRequest(
+        'checkPlatformCapability',
+        { platform: 'openclaw' },
+        'req-missing',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(client.sendToolCallResponse).toHaveBeenCalledWith({
+        requestId: 'req-missing',
+        result: {
+          content: JSON.stringify({
+            available: false,
+            reason: 'openclaw is not installed on this device',
+          }),
+          success: true,
+        },
+      });
+    });
+
+    it('returns available:false for unknown platform', async () => {
+      const client = await connectAndOpen();
+      client.simulateToolCallRequest(
+        'checkPlatformCapability',
+        { platform: 'unknownBot' },
+        'req-unknown-plat',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(client.sendToolCallResponse).toHaveBeenCalledWith({
+        requestId: 'req-unknown-plat',
+        result: {
+          content: JSON.stringify({ available: false, reason: 'Unknown platform: unknownBot' }),
+          success: true,
+        },
+      });
+    });
+
+    it('getAgentProfile returns empty object', async () => {
+      const client = await connectAndOpen();
+      client.simulateToolCallRequest('getAgentProfile', { platform: 'openclaw' }, 'req-profile');
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(client.sendToolCallResponse).toHaveBeenCalledWith({
+        requestId: 'req-profile',
+        result: {
+          content: JSON.stringify({}),
+          success: true,
+        },
       });
     });
   });

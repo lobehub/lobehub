@@ -4,7 +4,7 @@ import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 import urlJoin from 'url-join';
 
-import { OFFICIAL_URL } from '@/const/url';
+import { AGENTS_OFFICIAL_URL } from '@/const/url';
 
 import ShareButton from '../../../../features/ShareButton';
 import { useDetailContext } from '../../DetailProvider';
@@ -21,7 +21,7 @@ const ActionButton = memo<{ mobile?: boolean }>(({ mobile }) => {
           desc: description,
           hashtags: tags,
           title,
-          url: urlJoin(OFFICIAL_URL, '/community/agent', identifier as string),
+          url: urlJoin(AGENTS_OFFICIAL_URL, identifier as string),
         }}
       />
     </Flexbox>

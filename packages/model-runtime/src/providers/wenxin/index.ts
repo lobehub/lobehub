@@ -31,7 +31,7 @@ export const params = {
           ...(thinking.budget_tokens !== undefined &&
             thinking.budget_tokens !== 0 && {
               thinking_budget: Math.min(Math.max(thinking.budget_tokens, 100), 16_384),
-          }),
+            }),
         }),
       } as any;
     },

@@ -413,7 +413,13 @@ export const createGatewayEventHandler = (
           // Persist a paused marker so the sidebar reflects "waiting on user" across reload.
           // Resume back to 'running' is free: approve / reject both spawn a new op via the
           // executor entries, which already write 'running'.
-          if (context.topicId) void get().updateTopicStatus?.(context.topicId, 'paused');
+          if (context.topicId)
+            void get().updateTopicStatus?.({
+              agentId: context.agentId,
+              groupId: context.groupId,
+              status: 'paused',
+              topicId: context.topicId,
+            });
         }
 
         break;
@@ -493,6 +499,15 @@ export const createGatewayEventHandler = (
             get().markUnreadCompleted(completedOp.context.agentId, completedOp.context.topicId);
           }
 
+          await fetchAndReplaceMessages(get, context).catch(console.error);
+        });
+        break;
+      }
+
+      case 'notify_update': {
+        // Remote hetero agent (openclaw / hermes) wrote a message to DB via
+        // `lh notify`. DB is the source of truth — just refresh the message list.
+        enqueue(async () => {
           await fetchAndReplaceMessages(get, context).catch(console.error);
         });
         break;

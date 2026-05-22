@@ -17,6 +17,40 @@ import { TrpcIngestSink } from '../utils/TrpcIngestSink';
 
 const SUPPORTED_AGENT_TYPES = new Set(['claude-code', 'codex']);
 
+/**
+ * Patterns that indicate a `--resume <sessionId>` run should be retried
+ * without `--resume`.  Two classes of failure:
+ *
+ *   1. Session file missing (sandbox recycled): the container is ephemeral
+ *      (~1 h idle TTL), so a new sandbox has an empty `~/.claude/projects/`
+ *      and the stored session id is stale.
+ *
+ *   2. Context overflow (long conversation): the resumed session carries all
+ *      accumulated history; when the combined token count exceeds the model's
+ *      context window the API rejects the request immediately after CC
+ *      initialises.  Starting fresh (no `--resume`) drops the old history and
+ *      lets CC respond to the new prompt alone.
+ *
+ * Checked against:
+ *   - `error` stream events emitted by the CC adapter from CC's result event
+ *   - Accumulated stderr output (fallback when CC exits without a result event)
+ */
+const RESUME_RETRY_PATTERNS = [
+  // Session file missing — sandbox was recycled
+  /no conversation found/i,
+  /session.*not found/i,
+  /conversation.*not found/i,
+  /resume.*not found/i,
+  // Context overflow — API rejected the resumed session's accumulated history
+  /prompt.*too long/i,
+  /context.*too long/i,
+  /context window.*exceed/i,
+  /maximum.*context.*length/i,
+] as const;
+
+const looksLikeNeedsRetryWithoutResume = (text: string): boolean =>
+  RESUME_RETRY_PATTERNS.some((p) => p.test(text));
+
 interface ExecOptions {
   command?: string;
   cwd?: string;
@@ -218,95 +252,197 @@ const exec = async (options: ExecOptions): Promise<void> => {
   }
   const ingester = new BatchIngester(sink);
 
-  // `spawnAgent` is async and can reject DURING image normalization — fetch
-  // failures, missing local --image paths, decode errors. Surface those as a
-  // clean error + exit code instead of an unhandled promise rejection / stack
-  // trace, mirroring the validation try/catch above.
-  let handle: Awaited<ReturnType<typeof spawnAgent>>;
-  try {
-    handle = await spawnAgent({
+  /**
+   * Spawn one agent process and stream all its events into `ingester`.
+   *
+   * When `interceptResumeErrors` is true, any `error`-type event whose
+   * message matches `RESUME_RETRY_PATTERNS` is withheld from the
+   * ingester and signals a retry instead.  This keeps the server's
+   * operation state clean: no terminal error event is pushed, so the
+   * retry's events land on the same operationId without confusing the
+   * renderer.
+   *
+   * Returns:
+   *   code / signal — child exit info
+   *   sessionId     — CC session id from `system.init` (undefined on resume failure)
+   *   ingestError   — true when a batch could not be flushed after retries
+   *   resumeNotFound — true when a resume-not-found error was intercepted
+   *   stderrContent  — accumulated stderr (only when interceptResumeErrors=true)
+   */
+  const runOneAgent = async (
+    spawnOpts: Parameters<typeof spawnAgent>[0],
+    interceptResumeErrors: boolean,
+  ): Promise<{
+    code: number | null;
+    ingestError: boolean;
+    resumeNotFound: boolean;
+    sessionId: string | undefined;
+    signal: NodeJS.Signals | null;
+    stderrContent: string;
+  }> => {
+    // `spawnAgent` is async and can reject DURING image normalization — fetch
+    // failures, missing local --image paths, decode errors.
+    let handle: Awaited<ReturnType<typeof spawnAgent>>;
+    try {
+      handle = await spawnAgent(spawnOpts);
+    } catch (err) {
+      log.error('Failed to start agent:', err instanceof Error ? err.message : String(err));
+      process.exit(1);
+    }
+
+    // Always collect stderr — used for resume-error detection AND for
+    // surfacing a meaningful error message to the server when CC fails
+    // without emitting a structured error event.  Cap at 8 KB so the
+    // collector doesn't grow unboundedly on a chatty run.
+    // Always pipe to process.stderr too so users see auth prompts / warnings.
+    const STDERR_CAP = 8 * 1024;
+    let stderrContent = '';
+    handle.stderr.on('data', (chunk: Buffer) => {
+      if (stderrContent.length < STDERR_CAP) {
+        stderrContent += chunk.toString();
+      }
+    });
+    handle.stderr.pipe(process.stderr);
+
+    // Ctrl-C → SIGINT to the child's process group.
+    // Repeated Ctrl-C escalates to SIGKILL.
+    let interrupted = false;
+    const onSigint = async () => {
+      if (interrupted) {
+        handle.kill('SIGKILL');
+        return;
+      }
+      interrupted = true;
+      handle.kill('SIGINT');
+      if (serverIngest) {
+        try {
+          await ingester.drain();
+          await sink.finish({ result: 'cancelled' });
+        } catch {
+          // best-effort; process is exiting anyway
+        }
+      }
+    };
+    const onSigterm = async () => {
+      handle.kill('SIGTERM');
+      if (serverIngest) {
+        try {
+          await ingester.drain();
+          await sink.finish({ result: 'cancelled' });
+        } catch {
+          // best-effort
+        }
+      }
+    };
+    process.on('SIGINT', onSigint);
+    process.on('SIGTERM', onSigterm);
+
+    // Stream events. Each event is optionally written as JSONL and pushed
+    // into the ingester.  When intercepting resume errors, a matching
+    // `error` event is withheld from the ingester and flags a retry instead.
+    let resumeNotFound = false;
+    let ingestError = false;
+    try {
+      for await (const event of handle.events) {
+        if (interceptResumeErrors && event.type === 'error') {
+          const data = event.data as Record<string, unknown> | undefined;
+          const msg = String(data?.message ?? data?.error ?? '');
+          if (looksLikeNeedsRetryWithoutResume(msg)) {
+            resumeNotFound = true;
+            // Emit to JSONL for observability but do NOT push to ingester —
+            // we are about to retry; the server must not see a terminal error.
+            if (emitJsonl) process.stdout.write(`${JSON.stringify(event)}\n`);
+            continue;
+          }
+        }
+        if (emitJsonl) process.stdout.write(`${JSON.stringify(event)}\n`);
+        ingester.push(event);
+      }
+    } catch (err) {
+      log.error(
+        'Stream error from agent process:',
+        err instanceof Error ? err.message : String(err),
+      );
+      if (serverIngest) {
+        try {
+          await ingester.drain();
+          await sink.finish({
+            error: { message: String(err), type: 'stream_error' },
+            result: 'error',
+          });
+        } catch {
+          // best-effort
+        }
+      }
+      process.exit(1);
+    } finally {
+      process.off('SIGINT', onSigint);
+      process.off('SIGTERM', onSigterm);
+    }
+
+    const { code, signal } = await handle.exit;
+
+    // Fallback stderr detection: CC may exit non-zero without emitting a
+    // result event (e.g. it writes to stderr and quits immediately).
+    if (
+      interceptResumeErrors &&
+      !resumeNotFound &&
+      code !== 0 &&
+      looksLikeNeedsRetryWithoutResume(stderrContent)
+    ) {
+      resumeNotFound = true;
+    }
+
+    return { code, ingestError, resumeNotFound, sessionId: handle.sessionId, signal, stderrContent };
+  };
+
+  // ─── First run (with --resume if provided) ───────────────────────────────
+
+  const interceptResume = !!options.resume;
+  const first = await runOneAgent(
+    {
       agentType: options.type,
       command: options.command,
       cwd: options.cwd || process.cwd(),
       operationId,
       prompt: resolved.prompt,
       resumeSessionId: options.resume,
-    });
-  } catch (err) {
-    log.error('Failed to start agent:', err instanceof Error ? err.message : String(err));
-    process.exit(1);
+    },
+    interceptResume,
+  );
+
+  // ─── Auto-retry without --resume when the session cannot be used ─────────
+  //
+  // Two classes of failure detected via `RESUME_RETRY_PATTERNS`:
+  //   A. Sandbox recycled: container is ephemeral (~1 h idle TTL); new sandbox
+  //      has no CC session files so `--resume <staleId>` is rejected with a
+  //      "no conversation found" error.
+  //   B. Context overflow: the resumed session carries accumulated history that
+  //      pushes the combined token count past the model limit; the API rejects
+  //      the call with a "prompt is too long" error.
+  //
+  // In both cases we transparently restart CC without `--resume` so it starts a
+  // fresh session.  The server's `heteroSessionId` is updated with the new id,
+  // breaking the stale-session loop.
+  let result = first;
+  if (first.resumeNotFound) {
+    log.info('Resume failed (session not found or context overflow) — retrying without --resume');
+    result = await runOneAgent(
+      {
+        agentType: options.type,
+        command: options.command,
+        cwd: options.cwd || process.cwd(),
+        operationId,
+        prompt: resolved.prompt,
+        // No resumeSessionId — start fresh
+      },
+      false, // no need to intercept resume errors on a fresh run
+    );
   }
 
-  // Forward the child's stderr to ours so users see CLI errors / warnings
-  // (auth prompts, missing-binary errors, etc.) in the terminal.
-  handle.stderr.pipe(process.stderr);
+  // ─── Drain + finish ───────────────────────────────────────────────────────
 
-  // Ctrl-C → SIGINT to the child's process group so the spawned CLI gets a
-  // chance to clean up. Repeated Ctrl-C escalates to SIGKILL via the
-  // standard "double-tap" pattern most CLIs implement themselves.
-  // In server-ingest mode, drain the ingester and call heteroFinish before
-  // exiting so the server knows the operation was cancelled.
-  let interrupted = false;
-  const onSigint = async () => {
-    if (interrupted) {
-      handle.kill('SIGKILL');
-      return;
-    }
-    interrupted = true;
-    handle.kill('SIGINT');
-    if (serverIngest) {
-      try {
-        await ingester.drain();
-        await sink.finish({ result: 'cancelled' });
-      } catch {
-        // best-effort; process is exiting anyway
-      }
-    }
-  };
-  process.on('SIGINT', onSigint);
-  process.on('SIGTERM', async () => {
-    handle.kill('SIGTERM');
-    if (serverIngest) {
-      try {
-        await ingester.drain();
-        await sink.finish({ result: 'cancelled' });
-      } catch {
-        // best-effort
-      }
-    }
-  });
-
-  // Stream events. Each event is optionally written as JSONL and always
-  // pushed into the ingester (which batches and sends to the server).
-  let ingestError = false;
-  try {
-    for await (const event of handle.events) {
-      if (emitJsonl) {
-        process.stdout.write(`${JSON.stringify(event)}\n`);
-      }
-      ingester.push(event);
-    }
-  } catch (err) {
-    log.error('Stream error from agent process:', err instanceof Error ? err.message : String(err));
-    if (serverIngest) {
-      try {
-        await ingester.drain();
-        await sink.finish({
-          result: 'error',
-          error: { message: String(err), type: 'stream_error' },
-        });
-      } catch {
-        // best-effort
-      }
-    }
-    process.exit(1);
-  } finally {
-    process.off('SIGINT', onSigint);
-  }
-
-  // Pass the child's exit code through. In server-ingest mode, drain the
-  // ingester and call heteroFinish before exiting.
-  const { code, signal } = await handle.exit;
+  const { code, signal, sessionId } = result;
 
   if (serverIngest) {
     try {
@@ -316,21 +452,33 @@ const exec = async (options: ExecOptions): Promise<void> => {
         'Failed to flush events to server:',
         err instanceof Error ? err.message : String(err),
       );
-      ingestError = true;
+      result = { ...result, ingestError: true };
     }
 
-    const exitedClean = !ingestError && (code === 0 || signal === 'SIGTERM');
+    const exitedClean = !result.ingestError && (code === 0 || signal === 'SIGTERM');
+
+    // When the run failed, pass stderr as the error detail so the server can
+    // surface a useful message instead of the generic "Agent execution failed"
+    // fallback.  Trim to the last 1 KB — the tail is most informative and
+    // keeps the tRPC payload small.
+    const stderrTail = result.stderrContent.trim();
+    const finishError =
+      !exitedClean && stderrTail
+        ? { message: stderrTail.slice(-1024), type: 'AgentRuntimeError' }
+        : undefined;
+
     try {
       await sink.finish({
+        error: finishError,
         result: exitedClean ? 'success' : 'error',
-        sessionId: handle.sessionId,
+        sessionId,
       });
     } catch (err) {
       log.error('Failed to send heteroFinish:', err instanceof Error ? err.message : String(err));
     }
   }
 
-  if (code !== null) process.exit(ingestError ? 1 : code);
+  if (code !== null) process.exit(result.ingestError ? 1 : code);
   if (signal === 'SIGINT') process.exit(130);
   if (signal === 'SIGTERM') process.exit(143);
   if (signal === 'SIGKILL') process.exit(137);

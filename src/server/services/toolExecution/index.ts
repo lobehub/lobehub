@@ -95,7 +95,9 @@ export class ToolExecutionService {
 
       // Truncate result content to prevent context overflow
       // Use agent-specific config if provided, otherwise use default
-      const truncatedContent = truncateToolResult(data.content, context.toolResultMaxLength);
+      const truncatedContent = context.skipResultTruncation
+        ? data.content
+        : truncateToolResult(data.content, context.toolResultMaxLength);
 
       // Log if content was truncated
       if (truncatedContent !== data.content) {
@@ -132,7 +134,7 @@ export class ToolExecutionService {
       const errorMessage = (error as Error).message;
 
       return {
-        content: truncateToolResult(errorMessage),
+        content: context.skipResultTruncation ? errorMessage : truncateToolResult(errorMessage),
         error: normalizeExecutionError(error, errorMessage),
         executionTime,
         success: false,

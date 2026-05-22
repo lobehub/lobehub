@@ -201,7 +201,6 @@ export const IMAGE_MODEL_KEYWORDS = [
 export const EMBEDDING_MODEL_KEYWORDS = ['embedding', 'embed', 'bge', 'm3e'] as const;
 
 const AI_MODEL_TYPE_SET = new Set<AiModelType>(AiModelTypeSchema.options);
-const BUSINESS_MODEL_CONFIG_MODULE = '@lobechat/business-model-bank/model-config';
 
 interface BusinessModelConfigModule {
   loadModels: () => Promise<LobeDefaultAiModelListItem[]>;
@@ -464,9 +463,8 @@ const getProviderLocalConfig = async (
   if (!provider) return null;
 
   if (provider === ModelProvider.LobeHub) {
-    const { loadModels } = (await import(
-      /* @vite-ignore */ BUSINESS_MODEL_CONFIG_MODULE
-    )) as BusinessModelConfigModule;
+    const { loadModels } =
+      (await import('@lobechat/business-model-bank/model-config')) as BusinessModelConfigModule;
     const models = await loadModels();
     return models.filter((model) => model.providerId === ModelProvider.LobeHub);
   }

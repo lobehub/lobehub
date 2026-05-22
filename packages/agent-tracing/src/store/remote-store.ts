@@ -96,6 +96,24 @@ export class RemoteSnapshotStore {
     }
   }
 
+  /**
+   * Find cached snapshots whose operation ID starts with the given prefix.
+   * Lets callers resolve a partial id like `op_<timestamp>` to the full
+   * `op_<timestamp>_agt_..._tpc_..._<suffix>` recorded in `_remote/`.
+   */
+  async findCachedByPrefix(prefix: string): Promise<string[]> {
+    try {
+      const entries = await fs.readdir(this.cacheDir);
+      const suffix = '.json';
+      return entries
+        .filter((f) => f.endsWith(suffix) && f.startsWith(prefix))
+        .map((f) => f.slice(0, -suffix.length))
+        .sort();
+    } catch {
+      return [];
+    }
+  }
+
   async fetch(url: string, operationId: string): Promise<ExecutionSnapshot> {
     // Check cache first
     const cached = await this.getCached(operationId);

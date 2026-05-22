@@ -18,17 +18,22 @@ export class TopicDocumentModel {
   }
 
   /**
-   * Associate a document with a topic
+   * Associate a document with a topic.
+   *
+   * Idempotent: the primary key is `(documentId, topicId)`, so re-binding the
+   * same pair is a no-op via `ON CONFLICT DO NOTHING` instead of a
+   * unique-violation. Callers can safely retry or call this on every save
+   * without checking existence first.
    */
   associate = async (
     params: Omit<NewTopicDocument, 'userId'>,
   ): Promise<{ documentId: string; topicId: string }> => {
-    const [result] = await this.db
+    await this.db
       .insert(topicDocuments)
       .values({ ...params, userId: this.userId })
-      .returning();
+      .onConflictDoNothing();
 
-    return { documentId: result.documentId, topicId: result.topicId };
+    return { documentId: params.documentId, topicId: params.topicId };
   };
 
   /**

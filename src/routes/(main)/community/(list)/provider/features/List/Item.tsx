@@ -105,7 +105,7 @@ const ProviderItem = memo<DiscoverProviderItem>(
                 rows: 3,
               }}
             >
-              {t(`${identifier}.description`, { ns: 'providers' })}
+              {t(`${identifier}.description`, { defaultValue: description, ns: 'providers' })}
             </Text>
           )}
         </Flexbox>

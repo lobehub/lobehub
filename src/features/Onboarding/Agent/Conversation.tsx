@@ -26,6 +26,7 @@ import CompletionPanel from './CompletionPanel';
 import NameSuggestions from './NameSuggestions';
 import Welcome from './Welcome';
 import WelcomeMobile from './Welcome.mobile';
+import WelcomeMessage from './WelcomeMessage';
 import WrapUpHint from './WrapUpHint';
 
 const assistantLikeRoles = new Set(['assistant', 'assistantGroup', 'supervisor']);
@@ -34,6 +35,16 @@ interface AgentOnboardingConversationProps {
   discoveryUserMessageCount?: number;
   feedbackSubmitted?: boolean;
   finishTargetUrl?: string;
+  // When true, server reports the active topic already has at least one message.
+  // The welcome shell is suppressed and ChatList renders its built-in skeleton
+  // while messages fetch, avoiding the misleading "fresh Welcome flash" on
+  // returning users.
+  hasMessages?: boolean;
+  // While false, the underlying backend (bootstrap state or builtin agent
+  // config) is still hydrating: ChatInput shows its skeleton-style placeholder
+  // for the action/send area so the user cannot submit until the orchestration
+  // is ready to handle the first send.
+  isInputReady?: boolean;
   onAfterWrapUp?: () => Promise<unknown> | void;
   onAssistantTurnSettled?: (messageId: string) => Promise<unknown> | void;
   onboardingFinished?: boolean;
@@ -56,6 +67,8 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
     discoveryUserMessageCount,
     feedbackSubmitted,
     finishTargetUrl,
+    hasMessages,
+    isInputReady = true,
     onAfterWrapUp,
     onAssistantTurnSettled,
     onboardingFinished,
@@ -83,11 +96,14 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
         ),
     );
 
-    // The welcome ("AI opens") is rendered client-side from i18n until the
-    // user sends their first message — at which point the welcome and the
-    // user's reply are persisted together. Greeting state is therefore the
-    // pre-conversation period when no messages have been recorded yet.
-    const isGreetingState = useMemo(() => displayMessages.length === 0, [displayMessages]);
+    // The welcome is UI-only. It must not be persisted or inserted into LLM
+    // history; otherwise the setup copy can compete with the user's first
+    // actual naming instruction. `hasMessages` prevents the brief messages-fetch
+    // window for returning users from flashing Welcome.
+    const isGreetingState = useMemo(
+      () => !hasMessages && displayMessages.length === 0,
+      [hasMessages, displayMessages],
+    );
 
     const latestAssistantMessageId = useMemo(() => {
       const latest = displayMessages.at(-1);
@@ -150,7 +166,18 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
       pendingInterventionCount,
     ]);
 
+    const hasPersistedAssistantOpener = displayMessages.at(0)?.role === 'assistant';
+    const shouldShowSyntheticWelcome =
+      !onboardingFinished &&
+      !hasPersistedAssistantOpener &&
+      displayMessages.length > 0;
     const shouldShowGreetingWelcome = showGreeting && !onboardingFinished;
+    const shouldShowGreetingActions = showGreeting && !onboardingFinished;
+
+    const syntheticWelcome = useMemo(() => {
+      if (!shouldShowSyntheticWelcome) return undefined;
+      return <WelcomeMessage />;
+    }, [shouldShowSyntheticWelcome]);
 
     const greetingWelcome = useMemo(() => {
       if (!shouldShowGreetingWelcome) return undefined;
@@ -181,8 +208,6 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
         />
       );
 
-    const listWelcome = greetingWelcome;
-
     const itemContent = (index: number, id: string) => {
       const isLatestItem = displayMessages.length === index + 1;
 
@@ -201,9 +226,10 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
         <Flexbox flex={1} style={{ overflow: 'hidden' }}>
           <ChatList
             footerSlot={agentMarketplaceSpacer}
+            headerSlot={syntheticWelcome}
             itemContent={itemContent}
             showWelcome={shouldShowGreetingWelcome}
-            welcome={listWelcome}
+            welcome={greetingWelcome}
           />
         </Flexbox>
         {!readOnly && !onboardingFinished && (
@@ -213,7 +239,7 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
               phase={phase}
               onAfterFinish={onAfterWrapUp}
             />
-            {shouldShowGreetingWelcome &&
+            {shouldShowGreetingActions &&
               (isMobile ? (
                 <NameSuggestions variant={'chips'} />
               ) : (
@@ -226,6 +252,7 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
               disableQueue
               allowExpand={false}
               feature={chatInputFeature}
+              isConfigLoading={!isInputReady}
               leftActions={chatInputLeftActions}
               rightActions={chatInputRightActions}
               showRuntimeConfig={false}

@@ -17,7 +17,6 @@ import { CredsIdentifier, type CredSummary, generateCredsList } from '@lobechat/
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import {
-  AGENT_DOCUMENT_INJECTION_POSITIONS,
   type AgentContextDocument,
   type BotPlatformContext,
   buildStepSkillDelta,
@@ -64,6 +63,8 @@ import {
   type ToolExecutionResultResponse,
   type ToolExecutionService,
 } from '@/server/services/toolExecution';
+import { archiveToolResultIfNeeded } from '@/server/services/toolExecution/archiveToolResult';
+import { toAgentContextDocuments } from '@/utils/agentDocumentContextMapping';
 
 import { dispatchClientTool } from './dispatchClientTool';
 import { formatErrorEventData } from './formatErrorEventData';
@@ -79,19 +80,6 @@ import { type IStreamEventManager } from './types';
 
 const log = debug('lobe-server:agent-runtime:streaming-executors');
 const timing = debug('lobe-server:agent-runtime:timing');
-
-const VALID_DOCUMENT_POSITIONS = new Set<AgentContextDocument['loadPosition']>(
-  AGENT_DOCUMENT_INJECTION_POSITIONS,
-);
-
-const normalizeDocumentPosition = (
-  position: string | null | undefined,
-): AgentContextDocument['loadPosition'] | undefined => {
-  if (!position) return undefined;
-  return VALID_DOCUMENT_POSITIONS.has(position as AgentContextDocument['loadPosition'])
-    ? (position as AgentContextDocument['loadPosition'])
-    : undefined;
-};
 
 // Tool pricing configuration (USD per call)
 const TOOL_PRICING: Record<string, number> = {
@@ -115,6 +103,40 @@ const getToolFailureKind = (result: ToolExecutionResultResponse): ToolFailureKin
 
 const shouldRetryTool = (kind: ToolFailureKind | undefined, attempt: number, maxRetries: number) =>
   kind === 'retry' && attempt <= maxRetries;
+
+const archiveRuntimeToolResult = async (
+  result: ToolExecutionResultResponse,
+  {
+    agentId,
+    identifier,
+    limit,
+    serverDB,
+    toolCallId,
+    topicId,
+    userId,
+  }: {
+    agentId?: string | null;
+    identifier?: string;
+    limit?: number;
+    serverDB: LobeChatDatabase;
+    toolCallId?: string;
+    topicId?: string | null;
+    userId?: string;
+  },
+): Promise<ToolExecutionResultResponse> => {
+  const archive = await archiveToolResultIfNeeded({
+    agentId,
+    content: result.content,
+    identifier,
+    limit,
+    serverDB,
+    toolCallId,
+    topicId,
+    userId,
+  });
+
+  return archive.content === result.content ? result : { ...result, content: archive.content };
+};
 
 // Builds a postProcessUrl callback that resolves S3 keys in file-backed fields
 // (imageList, videoList, fileList) to absolute URLs. Must be passed to every
@@ -143,6 +165,16 @@ const resolveLLMMaxRetries = (provider: string) =>
   // The branded provider already routes through its own fallback chain. Retrying
   // again here multiplies the same failed routed request across every channel.
   provider === BRANDING_PROVIDER ? 0 : LLM_MAX_RETRIES;
+
+const resolveRuntimeHistoryCount = (historyCount?: number) => {
+  if (historyCount === undefined) return undefined;
+
+  // Agent config stores historical message count, excluding the current turn.
+  // Runtime executors already pass the current user/tool turn in `llmPayload.messages`;
+  // without this +1, `historyCount: 0` truncates the current message too and sends
+  // `messages: []` to providers.
+  return historyCount + 1;
+};
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -437,20 +469,7 @@ export const createRuntimeExecutors = (
             const agentDocService = new AgentDocumentsService(ctx.serverDB, ctx.userId);
             const docs = await agentDocService.getAgentDocuments(agentId);
             if (docs.length > 0) {
-              agentDocuments = docs.map((doc) => ({
-                content: doc.content,
-                description: doc.description ?? undefined,
-                filename: doc.filename,
-                id: doc.id,
-                loadPosition: normalizeDocumentPosition(
-                  doc.policy?.context?.position || doc.policyLoadPosition,
-                ),
-                loadRules: doc.loadRules,
-                policyId: doc.templateId,
-                policyLoad: doc.policyLoad as 'always' | 'progressive',
-                policyLoadFormat: doc.policy?.context?.policyLoadFormat || doc.policyLoadFormat,
-                title: doc.title,
-              }));
+              agentDocuments = toAgentContextDocuments(docs);
               log('Resolved %d agent documents for agent %s', agentDocuments.length, agentId);
             }
           } catch (error) {
@@ -652,7 +671,7 @@ export const createRuntimeExecutors = (
           enableHistoryCount: agentConfig.chatConfig?.enableHistoryCount ?? undefined,
           evalContext: ctx.evalContext,
           forceFinish: state.forceFinish,
-          historyCount: agentConfig.chatConfig?.historyCount ?? undefined,
+          historyCount: resolveRuntimeHistoryCount(agentConfig.chatConfig?.historyCount),
           initialContext: (state as any).initialContext?.initialContext,
           knowledge: {
             fileContents: agentConfig.files
@@ -1686,8 +1705,18 @@ export const createRuntimeExecutors = (
               memoryToolPermission: agentConfig?.chatConfig?.memory?.toolPermission,
               messageId: state.metadata?.sourceMessageId,
               operationId,
+              projectSkills: (state.metadata?.operationSkillSet?.skills ?? [])
+                .filter(
+                  (skill: { location?: string; source?: string }) =>
+                    skill.source === 'project' && !!skill.location,
+                )
+                .map((skill: { location: string; name: string }) => ({
+                  location: skill.location,
+                  name: skill.name,
+                })),
               scope: state.metadata?.scope,
               serverDB: ctx.serverDB,
+              skipResultTruncation: true,
               taskId: state.metadata?.taskId,
               threadId: state.metadata?.threadId,
               toolCallId: chatToolPayload.id,
@@ -1705,7 +1734,15 @@ export const createRuntimeExecutors = (
         );
       }
 
-      const executionResult = execution.result;
+      const executionResult = await archiveRuntimeToolResult(execution.result, {
+        agentId: state.metadata?.agentId,
+        identifier: chatToolPayload.identifier,
+        limit: toolResultMaxLength,
+        serverDB: ctx.serverDB,
+        toolCallId: chatToolPayload.id,
+        topicId: ctx.topicId ?? state.metadata?.topicId,
+        userId: ctx.userId,
+      });
       const executionTime = executionResult.executionTime;
       const isSuccess = executionResult.success;
       if (ctx.hookDispatcher) {
@@ -2162,6 +2199,7 @@ export const createRuntimeExecutors = (
                   operationId,
                   scope: state.metadata?.scope,
                   serverDB: ctx.serverDB,
+                  skipResultTruncation: true,
                   taskId: state.metadata?.taskId,
                   threadId: state.metadata?.threadId,
                   toolCallId: chatToolPayload.id,
@@ -2179,7 +2217,15 @@ export const createRuntimeExecutors = (
             );
           }
 
-          const executionResult = execution.result;
+          const executionResult = await archiveRuntimeToolResult(execution.result, {
+            agentId: state.metadata?.agentId,
+            identifier: chatToolPayload.identifier,
+            limit: batchAgentConfig?.chatConfig?.toolResultMaxLength,
+            serverDB: ctx.serverDB,
+            toolCallId: chatToolPayload.id,
+            topicId: ctx.topicId ?? state.metadata?.topicId,
+            userId: ctx.userId,
+          });
           const executionTime = executionResult.executionTime;
           const isSuccess = executionResult.success;
           if (ctx.hookDispatcher) {

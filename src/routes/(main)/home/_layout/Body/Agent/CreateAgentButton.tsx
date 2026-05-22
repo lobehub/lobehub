@@ -48,6 +48,7 @@ const CreateAgentButton = memo<CreateAgentButtonProps>(({ groupId, className }) 
     createAgentMenuItem,
     createGroupChatMenuItem,
     createHeterogeneousAgentMenuItems,
+    createPlatformAgentMenuItem,
     isMutatingAgent,
     openCreateModal,
   } = useCreateMenuItems();
@@ -60,15 +61,18 @@ const CreateAgentButton = memo<CreateAgentButtonProps>(({ groupId, className }) 
 
   const dropdownItems = useMemo(() => {
     const heteroItems = createHeterogeneousAgentMenuItems(menuOptions);
+    const platformItem = createPlatformAgentMenuItem(menuOptions);
     return [
       createAgentMenuItem(menuOptions),
       createGroupChatMenuItem(menuOptions),
       ...(heteroItems.length > 0 ? [{ type: 'divider' as const }, ...heteroItems] : []),
+      ...(platformItem ? [{ type: 'divider' as const }, platformItem] : []),
     ];
   }, [
     createAgentMenuItem,
     createGroupChatMenuItem,
     createHeterogeneousAgentMenuItems,
+    createPlatformAgentMenuItem,
     menuOptions,
   ]);
 

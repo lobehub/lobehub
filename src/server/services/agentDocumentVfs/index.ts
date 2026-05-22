@@ -22,6 +22,7 @@ import type { SkillMountNode } from './mounts/skills/types';
 import type {
   AgentDocumentListOptions,
   AgentDocumentNode,
+  AgentDocumentReadOptions,
   AgentDocumentReadResult,
   AgentDocumentStats,
   AgentDocumentTrashEntry,
@@ -202,7 +203,11 @@ export class AgentDocumentVfsService {
    * Returns:
    * - File content payload
    */
-  async read(path: string, ctx: AgentDocumentVfsContext): Promise<AgentDocumentReadResult> {
+  async read(
+    path: string,
+    ctx: AgentDocumentVfsContext,
+    options: AgentDocumentReadOptions = {},
+  ): Promise<AgentDocumentReadResult> {
     const normalizedPath = normalizeAgentDocumentPath(path);
 
     if (isSkillPath(normalizedPath)) {
@@ -217,7 +222,7 @@ export class AgentDocumentVfsService {
       }
 
       return {
-        content: node.content ?? '',
+        ...sliceReadContent(node.content ?? '', options.loc),
         contentType: node.contentType,
         path: node.path,
       };
@@ -234,7 +239,7 @@ export class AgentDocumentVfsService {
     }
 
     return {
-      content: node.content,
+      ...sliceReadContent(node.content, options.loc),
       contentType: 'text/markdown',
       path: normalizedPath,
     };
@@ -1196,6 +1201,28 @@ const assertNotSelfReferentialCopy = (
       'BAD_REQUEST',
     );
   }
+};
+
+const sliceReadContent = (
+  content: string,
+  loc?: [number, number],
+): Omit<AgentDocumentReadResult, 'contentType' | 'path'> => {
+  const lines = content.split('\n');
+  const totalLineCount = lines.length;
+  const totalCharCount = content.length;
+  const actualLoc: [number, number] = loc ?? [0, totalLineCount];
+  const [startLine, endLine] = actualLoc;
+  const selectedLines = lines.slice(startLine, endLine);
+  const selectedContent = selectedLines.join('\n');
+
+  return {
+    charCount: selectedContent.length,
+    content: selectedContent,
+    lineCount: selectedLines.length,
+    loc: actualLoc,
+    totalCharCount,
+    totalLineCount,
+  };
 };
 
 const inferMountedSkillIdentity = (path: string) => {

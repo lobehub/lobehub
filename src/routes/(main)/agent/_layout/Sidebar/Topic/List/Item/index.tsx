@@ -232,7 +232,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
         title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
         icon={(() => {
           if (isWaitingForHuman) {
-            return <Icon icon={Hand} size={'small'} style={{ color: cssVar.colorWarning }} />;
+            return <Icon icon={Hand} size={'small'} style={{ color: cssVar.colorInfo }} />;
           }
           if (isLoading || isRunning) {
             return (

@@ -2,13 +2,13 @@
 
 import { Center, Flexbox, Icon } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { FileImage, FileText, FileUpIcon } from 'lucide-react';
+import { FileImage, FileText, FileUpIcon, FolderIcon } from 'lucide-react';
 import { type CSSProperties, type ReactNode } from 'react';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useDragUploadContext } from './DragUploadProvider';
-import { useLocalDragUpload } from './useLocalDragUpload';
+import { type DroppedFolder, useLocalDragUpload } from './useLocalDragUpload';
 
 const BLOCK_SIZE = 48;
 const ICON_SIZE = { size: 28, strokeWidth: 1.5 };
@@ -83,6 +83,16 @@ export interface DragUploadZoneProps {
    */
   enabledFiles?: boolean;
   /**
+   * Whether dropping a folder should route to onLocalFolders (as @mention) instead
+   * of being flattened and uploaded. Requires Electron (uses webUtils to resolve
+   * folder paths). Files in a mixed drop continue to flow through onUploadFiles.
+   */
+  enableLocalFolderMention?: boolean;
+  /**
+   * Callback when top-level folders are dropped and enableLocalFolderMention is on.
+   */
+  onLocalFolders?: (folders: DroppedFolder[]) => void | Promise<void>;
+  /**
    * Callback when files are dropped
    */
   onUploadFiles: (files: File[]) => void | Promise<void>;
@@ -102,6 +112,8 @@ const DragUploadZone = memo<DragUploadZoneProps>(
     className,
     disabled = false,
     enabledFiles = true,
+    enableLocalFolderMention = false,
+    onLocalFolders,
     overlayMinHeight = 160,
     onUploadFiles,
     style,
@@ -109,16 +121,42 @@ const DragUploadZone = memo<DragUploadZoneProps>(
     const { t } = useTranslation('components');
 
     // Global drag state - shows overlay when dragging anywhere on page
-    const { isDraggingGlobally } = useDragUploadContext();
+    const { isDraggingGlobally, dragContentKind } = useDragUploadContext();
 
     // Local drop handler - only handles drop events
     const { getContainerProps } = useLocalDragUpload({
       disabled,
+      enableLocalFolderMention,
+      onLocalFolders,
       onUploadFiles,
     });
 
     // Show overlay when files are being dragged anywhere on the page
     const showOverlay = isDraggingGlobally && !disabled;
+
+    // When local folder mention is on AND dragged content includes a folder,
+    // surface a folder-aware hint instead of the default upload hint.
+    const overlayCopy = useMemo(() => {
+      if (enableLocalFolderMention && dragContentKind === 'folders') {
+        return {
+          desc: t('DragUpload.dragFolderDesc'),
+          showFolderIcon: true,
+          title: t('DragUpload.dragFolderTitle'),
+        };
+      }
+      if (enableLocalFolderMention && dragContentKind === 'mixed') {
+        return {
+          desc: t('DragUpload.dragMixedDesc'),
+          showFolderIcon: true,
+          title: t('DragUpload.dragMixedTitle'),
+        };
+      }
+      return {
+        desc: t(enabledFiles ? 'DragUpload.dragFileDesc' : 'DragUpload.dragDesc'),
+        showFolderIcon: false,
+        title: t(enabledFiles ? 'DragUpload.dragFileTitle' : 'DragUpload.dragTitle'),
+      };
+    }, [dragContentKind, enableLocalFolderMention, enabledFiles, t]);
 
     return (
       <div className={cx(styles.container, className)} style={style} {...getContainerProps()}>
@@ -137,7 +175,10 @@ const DragUploadZone = memo<DragUploadZoneProps>(
                       transform: 'rotateZ(-20deg) translateX(8px)',
                     }}
                   >
-                    <Icon icon={FileImage} size={ICON_SIZE} />
+                    <Icon
+                      icon={overlayCopy.showFolderIcon ? FolderIcon : FileImage}
+                      size={ICON_SIZE}
+                    />
                   </Center>
                   <Center
                     className={styles.icon}
@@ -148,7 +189,10 @@ const DragUploadZone = memo<DragUploadZoneProps>(
                       zIndex: 1,
                     }}
                   >
-                    <Icon icon={FileUpIcon} size={ICON_SIZE} />
+                    <Icon
+                      icon={overlayCopy.showFolderIcon ? FolderIcon : FileUpIcon}
+                      size={ICON_SIZE}
+                    />
                   </Center>
                   <Center
                     className={styles.icon}
@@ -159,16 +203,15 @@ const DragUploadZone = memo<DragUploadZoneProps>(
                       transform: 'rotateZ(20deg) translateX(-8px)',
                     }}
                   >
-                    <Icon icon={FileText} size={ICON_SIZE} />
+                    <Icon
+                      icon={overlayCopy.showFolderIcon ? FolderIcon : FileText}
+                      size={ICON_SIZE}
+                    />
                   </Center>
                 </Flexbox>
                 <Flexbox align={'center'} gap={4} style={{ textAlign: 'center' }}>
-                  <Flexbox className={styles.title}>
-                    {t(enabledFiles ? 'DragUpload.dragFileTitle' : 'DragUpload.dragTitle')}
-                  </Flexbox>
-                  <Flexbox className={styles.desc}>
-                    {t(enabledFiles ? 'DragUpload.dragFileDesc' : 'DragUpload.dragDesc')}
-                  </Flexbox>
+                  <Flexbox className={styles.title}>{overlayCopy.title}</Flexbox>
+                  <Flexbox className={styles.desc}>{overlayCopy.desc}</Flexbox>
                 </Flexbox>
               </Center>
             </div>
@@ -181,6 +224,7 @@ const DragUploadZone = memo<DragUploadZoneProps>(
 
 DragUploadZone.displayName = 'DragUploadZone';
 
+export type { DroppedFolder } from './useLocalDragUpload';
 export { usePasteFile } from './usePasteFile';
 export { useUploadFiles } from './useUploadFiles';
 export default DragUploadZone;

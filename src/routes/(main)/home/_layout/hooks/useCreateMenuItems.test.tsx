@@ -124,6 +124,17 @@ vi.mock('@/store/page', () => ({
     }),
 }));
 
+vi.mock('@/store/user', () => ({
+  useUserStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({ preference: { lab: {} } }),
+}));
+
+vi.mock('@/store/user/selectors', () => ({
+  labPreferSelectors: {
+    enablePlatformAgent: () => false,
+  },
+}));
+
 const isActionItem = (
   item: unknown,
 ): item is {

@@ -1,19 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { AgentDocumentItem } from './types';
-import {
-  AGENT_SKILL_TEMPLATE_ID,
-  FOLDER_FILE_TYPE,
-  hasSkillIndexChild,
-  isFolderItem,
-  isManagedSkillItem,
-  isOrphanSkillBundleItem,
-  isProtectedManagedSkillItem,
-  isSkillBundleItem,
-  isSkillIndexItem,
-  SKILL_BUNDLE_FILE_TYPE,
-  SKILL_INDEX_FILE_TYPE,
-} from './types';
+import { hasSkillIndexChild, isOrphanSkillBundleItem, isProtectedManagedSkillItem } from './types';
 
 const createDocument = (overrides: Partial<AgentDocumentItem>): AgentDocumentItem =>
   ({
@@ -21,6 +9,7 @@ const createDocument = (overrides: Partial<AgentDocumentItem>): AgentDocumentIte
     accessSelf: 0,
     accessShared: 0,
     agentId: 'agent-1',
+    category: 'document',
     content: '',
     createdAt: new Date('2026-05-09T00:00:00Z'),
     deletedAt: null,
@@ -33,6 +22,9 @@ const createDocument = (overrides: Partial<AgentDocumentItem>): AgentDocumentIte
     filename: 'document.md',
     fileType: 'custom/document',
     id: 'agent-doc-1',
+    isFolder: false,
+    isSkillBundle: false,
+    isSkillIndex: false,
     loadRules: {},
     metadata: null,
     parentId: null,
@@ -50,50 +42,36 @@ const createDocument = (overrides: Partial<AgentDocumentItem>): AgentDocumentIte
     ...overrides,
   }) as AgentDocumentItem;
 
-describe('AgentDocumentsExplorer types', () => {
-  it('treats managed skill bundles as folders', () => {
-    const bundle = createDocument({
-      fileType: SKILL_BUNDLE_FILE_TYPE,
-      templateId: AGENT_SKILL_TEMPLATE_ID,
-    });
-    const index = createDocument({
-      fileType: SKILL_INDEX_FILE_TYPE,
-      templateId: AGENT_SKILL_TEMPLATE_ID,
-    });
-    const folder = createDocument({ fileType: FOLDER_FILE_TYPE });
+const bundle = createDocument({
+  category: 'skill',
+  documentId: 'bundle-doc',
+  isFolder: true,
+  isSkillBundle: true,
+  templateId: 'agent-skill',
+});
 
-    expect(isSkillBundleItem(bundle)).toBe(true);
-    expect(isFolderItem(bundle)).toBe(true);
-    expect(isSkillIndexItem(index)).toBe(true);
-    expect(isFolderItem(index)).toBe(false);
-    expect(isFolderItem(folder)).toBe(true);
-  });
+const index = createDocument({
+  category: 'skill',
+  documentId: 'index-doc',
+  isSkillIndex: true,
+  parentId: 'bundle-doc',
+  templateId: 'agent-skill',
+});
 
-  it('detects managed skill items by template id or file type', () => {
-    expect(isManagedSkillItem(createDocument({ templateId: AGENT_SKILL_TEMPLATE_ID }))).toBe(true);
-    expect(isManagedSkillItem(createDocument({ fileType: SKILL_INDEX_FILE_TYPE }))).toBe(true);
-    expect(isManagedSkillItem(createDocument({ fileType: 'custom/document' }))).toBe(false);
-  });
-
-  it('treats skill bundles without SKILL.md as recoverable orphan bundles', () => {
-    const bundle = createDocument({
-      documentId: 'bundle-doc',
-      fileType: SKILL_BUNDLE_FILE_TYPE,
-      templateId: AGENT_SKILL_TEMPLATE_ID,
-    });
-    const index = createDocument({
-      documentId: 'index-doc',
-      fileType: SKILL_INDEX_FILE_TYPE,
-      parentId: 'bundle-doc',
-      templateId: AGENT_SKILL_TEMPLATE_ID,
-    });
-
+describe('AgentDocumentsExplorer skill relationship helpers', () => {
+  it('detects whether a skill bundle has a SKILL.md child', () => {
     expect(hasSkillIndexChild([bundle, index], bundle)).toBe(true);
-    expect(isOrphanSkillBundleItem(bundle, [bundle, index])).toBe(false);
-    expect(isProtectedManagedSkillItem(bundle, [bundle, index])).toBe(true);
-
     expect(hasSkillIndexChild([bundle], bundle)).toBe(false);
+  });
+
+  it('marks a skill bundle missing SKILL.md as orphan', () => {
+    expect(isOrphanSkillBundleItem(bundle, [bundle, index])).toBe(false);
     expect(isOrphanSkillBundleItem(bundle, [bundle])).toBe(true);
+  });
+
+  it('protects managed skill items from rename/delete unless orphaned', () => {
+    expect(isProtectedManagedSkillItem(bundle, [bundle, index])).toBe(true);
     expect(isProtectedManagedSkillItem(bundle, [bundle])).toBe(false);
+    expect(isProtectedManagedSkillItem(createDocument({}), [])).toBe(false);
   });
 });

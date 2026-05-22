@@ -2,6 +2,7 @@ import type { CreateMessageParams, SendMessageServerResponse } from '@lobechat/t
 import { AiSendMessageServerSchema, RequestTrigger, StructureOutputSchema } from '@lobechat/types';
 import { createTimingHelpers, createTimingRequestId } from '@lobechat/utils';
 import debug from 'debug';
+import { z } from 'zod';
 
 import { LOADING_FLAT } from '@/const/message';
 import { AgentModel } from '@/database/models/agent';
@@ -14,6 +15,7 @@ import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { resolveContext } from '@/server/routers/lambda/_helpers/resolveContext';
 import { AiChatService } from '@/server/services/aiChat';
 import { FileService } from '@/server/services/file';
+import { archiveToolResultIfNeeded } from '@/server/services/toolExecution/archiveToolResult';
 
 const log = debug('lobe-lambda-router:ai-chat');
 const { createPrefixedTimingContext, logTiming, runTimedStage } = createTimingHelpers(
@@ -329,5 +331,24 @@ export const aiChatRouter = router({
         topics,
         userMessageId: messageId,
       } as SendMessageServerResponse;
+    }),
+
+  archiveToolResult: aiChatProcedure
+    .input(
+      z.object({
+        agentId: z.string().nullish(),
+        content: z.string(),
+        identifier: z.string().optional(),
+        limit: z.number().optional(),
+        toolCallId: z.string(),
+        topicId: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      return archiveToolResultIfNeeded({
+        ...input,
+        serverDB: ctx.serverDB,
+        userId: ctx.userId,
+      });
     }),
 });

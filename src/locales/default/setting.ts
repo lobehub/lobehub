@@ -241,6 +241,22 @@ export default {
   // Heterogeneous agent — Desktop tab
   'heterogeneousStatus.desktop.tabLabel': 'Desktop',
 
+  // Remote platform agent profile config panel (openclaw / hermes)
+  'platformAgentConfig.title': 'Platform Configuration',
+  'platformAgentConfig.platform.label': 'Platform',
+  'platformAgentConfig.device.label': 'Bound Device',
+  'platformAgentConfig.device.none': 'None',
+  'platformAgentConfig.device.online': 'Online',
+  'platformAgentConfig.device.offline': 'Offline',
+  'platformAgentConfig.availability.label': 'Availability',
+  'platformAgentConfig.availability.checking': 'Checking...',
+  'platformAgentConfig.availability.available': 'Available',
+  'platformAgentConfig.availability.notInstalled': 'Not installed',
+  'platformAgentConfig.availability.noDevice': 'No device bound',
+  'platformAgentConfig.changeDevice': 'Change Device',
+  'platformAgentConfig.redetect': 'Re-detect',
+  'platformAgentConfig.selectDevice': 'Select a device',
+
   'checking': 'Checking...',
 
   // Credentials Management
