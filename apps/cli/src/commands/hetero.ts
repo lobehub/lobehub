@@ -17,6 +17,27 @@ import { TrpcIngestSink } from '../utils/TrpcIngestSink';
 
 const SUPPORTED_AGENT_TYPES = new Set(['claude-code', 'codex']);
 
+/**
+ * Patterns that indicate a `--resume <sessionId>` flag was rejected because
+ * the session file no longer exists in the agent's project directory.  This
+ * happens in cloud sandboxes when the container is recycled between turns:
+ * the new sandbox has an empty `~/.claude/projects/` so the previous session
+ * id stored in `topic.metadata.heteroSessionId` is stale.
+ *
+ * Checked against:
+ *   - `error` stream events emitted by the CC adapter from CC's result event
+ *   - Accumulated stderr output (fallback when CC exits without a result event)
+ */
+const RESUME_NOT_FOUND_PATTERNS = [
+  /no conversation found/i,
+  /session.*not found/i,
+  /conversation.*not found/i,
+  /resume.*not found/i,
+] as const;
+
+const looksLikeResumeNotFound = (text: string): boolean =>
+  RESUME_NOT_FOUND_PATTERNS.some((p) => p.test(text));
+
 interface ExecOptions {
   command?: string;
   cwd?: string;
@@ -218,95 +239,186 @@ const exec = async (options: ExecOptions): Promise<void> => {
   }
   const ingester = new BatchIngester(sink);
 
-  // `spawnAgent` is async and can reject DURING image normalization — fetch
-  // failures, missing local --image paths, decode errors. Surface those as a
-  // clean error + exit code instead of an unhandled promise rejection / stack
-  // trace, mirroring the validation try/catch above.
-  let handle: Awaited<ReturnType<typeof spawnAgent>>;
-  try {
-    handle = await spawnAgent({
+  /**
+   * Spawn one agent process and stream all its events into `ingester`.
+   *
+   * When `interceptResumeErrors` is true, any `error`-type event whose
+   * message matches `RESUME_NOT_FOUND_PATTERNS` is withheld from the
+   * ingester and signals a retry instead.  This keeps the server's
+   * operation state clean: no terminal error event is pushed, so the
+   * retry's events land on the same operationId without confusing the
+   * renderer.
+   *
+   * Returns:
+   *   code / signal — child exit info
+   *   sessionId     — CC session id from `system.init` (undefined on resume failure)
+   *   ingestError   — true when a batch could not be flushed after retries
+   *   resumeNotFound — true when a resume-not-found error was intercepted
+   *   stderrContent  — accumulated stderr (only when interceptResumeErrors=true)
+   */
+  const runOneAgent = async (
+    spawnOpts: Parameters<typeof spawnAgent>[0],
+    interceptResumeErrors: boolean,
+  ): Promise<{
+    code: number | null;
+    ingestError: boolean;
+    resumeNotFound: boolean;
+    sessionId: string | undefined;
+    signal: NodeJS.Signals | null;
+    stderrContent: string;
+  }> => {
+    // `spawnAgent` is async and can reject DURING image normalization — fetch
+    // failures, missing local --image paths, decode errors.
+    let handle: Awaited<ReturnType<typeof spawnAgent>>;
+    try {
+      handle = await spawnAgent(spawnOpts);
+    } catch (err) {
+      log.error('Failed to start agent:', err instanceof Error ? err.message : String(err));
+      process.exit(1);
+    }
+
+    // Collect stderr for resume-error detection (only when needed).
+    // Always pipe to our stderr so users see auth prompts / warnings.
+    let stderrContent = '';
+    if (interceptResumeErrors) {
+      handle.stderr.on('data', (chunk: Buffer) => {
+        stderrContent += chunk.toString();
+      });
+    }
+    handle.stderr.pipe(process.stderr);
+
+    // Ctrl-C → SIGINT to the child's process group.
+    // Repeated Ctrl-C escalates to SIGKILL.
+    let interrupted = false;
+    const onSigint = async () => {
+      if (interrupted) {
+        handle.kill('SIGKILL');
+        return;
+      }
+      interrupted = true;
+      handle.kill('SIGINT');
+      if (serverIngest) {
+        try {
+          await ingester.drain();
+          await sink.finish({ result: 'cancelled' });
+        } catch {
+          // best-effort; process is exiting anyway
+        }
+      }
+    };
+    process.on('SIGINT', onSigint);
+    process.on('SIGTERM', async () => {
+      handle.kill('SIGTERM');
+      if (serverIngest) {
+        try {
+          await ingester.drain();
+          await sink.finish({ result: 'cancelled' });
+        } catch {
+          // best-effort
+        }
+      }
+    });
+
+    // Stream events. Each event is optionally written as JSONL and pushed
+    // into the ingester.  When intercepting resume errors, a matching
+    // `error` event is withheld from the ingester and flags a retry instead.
+    let resumeNotFound = false;
+    let ingestError = false;
+    try {
+      for await (const event of handle.events) {
+        if (interceptResumeErrors && event.type === 'error') {
+          const data = event.data as Record<string, unknown> | undefined;
+          const msg = String(data?.message ?? data?.error ?? '');
+          if (looksLikeResumeNotFound(msg)) {
+            resumeNotFound = true;
+            // Emit to JSONL for observability but do NOT push to ingester —
+            // we are about to retry; the server must not see a terminal error.
+            if (emitJsonl) process.stdout.write(`${JSON.stringify(event)}\n`);
+            continue;
+          }
+        }
+        if (emitJsonl) process.stdout.write(`${JSON.stringify(event)}\n`);
+        ingester.push(event);
+      }
+    } catch (err) {
+      log.error(
+        'Stream error from agent process:',
+        err instanceof Error ? err.message : String(err),
+      );
+      if (serverIngest) {
+        try {
+          await ingester.drain();
+          await sink.finish({
+            error: { message: String(err), type: 'stream_error' },
+            result: 'error',
+          });
+        } catch {
+          // best-effort
+        }
+      }
+      process.exit(1);
+    } finally {
+      process.off('SIGINT', onSigint);
+    }
+
+    const { code, signal } = await handle.exit;
+
+    // Fallback stderr detection: CC may exit non-zero without emitting a
+    // result event (e.g. it writes to stderr and quits immediately).
+    if (
+      interceptResumeErrors &&
+      !resumeNotFound &&
+      code !== 0 &&
+      looksLikeResumeNotFound(stderrContent)
+    ) {
+      resumeNotFound = true;
+    }
+
+    return { code, ingestError, resumeNotFound, sessionId: handle.sessionId, signal, stderrContent };
+  };
+
+  // ─── First run (with --resume if provided) ───────────────────────────────
+
+  const interceptResume = !!options.resume;
+  const first = await runOneAgent(
+    {
       agentType: options.type,
       command: options.command,
       cwd: options.cwd || process.cwd(),
       operationId,
       prompt: resolved.prompt,
       resumeSessionId: options.resume,
-    });
-  } catch (err) {
-    log.error('Failed to start agent:', err instanceof Error ? err.message : String(err));
-    process.exit(1);
+    },
+    interceptResume,
+  );
+
+  // ─── Auto-retry without --resume when the sandbox lost the session ───────
+  //
+  // Cloud sandboxes are ephemeral (~1 h idle TTL).  When a new container is
+  // spawned for the next turn, the previous CC session files under
+  // `~/.claude/projects/<cwd>/` are gone, so `--resume <staleId>` fails.
+  // Rather than surfacing an error to the user, transparently restart CC
+  // without `--resume`.  The server's `heteroSessionId` is then updated with
+  // the fresh session id produced by the retry, breaking the stale-loop.
+  let result = first;
+  if (first.resumeNotFound) {
+    log.info('Resume session not found — retrying without --resume');
+    result = await runOneAgent(
+      {
+        agentType: options.type,
+        command: options.command,
+        cwd: options.cwd || process.cwd(),
+        operationId,
+        prompt: resolved.prompt,
+        // No resumeSessionId — start fresh
+      },
+      false, // no need to intercept resume errors on a fresh run
+    );
   }
 
-  // Forward the child's stderr to ours so users see CLI errors / warnings
-  // (auth prompts, missing-binary errors, etc.) in the terminal.
-  handle.stderr.pipe(process.stderr);
+  // ─── Drain + finish ───────────────────────────────────────────────────────
 
-  // Ctrl-C → SIGINT to the child's process group so the spawned CLI gets a
-  // chance to clean up. Repeated Ctrl-C escalates to SIGKILL via the
-  // standard "double-tap" pattern most CLIs implement themselves.
-  // In server-ingest mode, drain the ingester and call heteroFinish before
-  // exiting so the server knows the operation was cancelled.
-  let interrupted = false;
-  const onSigint = async () => {
-    if (interrupted) {
-      handle.kill('SIGKILL');
-      return;
-    }
-    interrupted = true;
-    handle.kill('SIGINT');
-    if (serverIngest) {
-      try {
-        await ingester.drain();
-        await sink.finish({ result: 'cancelled' });
-      } catch {
-        // best-effort; process is exiting anyway
-      }
-    }
-  };
-  process.on('SIGINT', onSigint);
-  process.on('SIGTERM', async () => {
-    handle.kill('SIGTERM');
-    if (serverIngest) {
-      try {
-        await ingester.drain();
-        await sink.finish({ result: 'cancelled' });
-      } catch {
-        // best-effort
-      }
-    }
-  });
-
-  // Stream events. Each event is optionally written as JSONL and always
-  // pushed into the ingester (which batches and sends to the server).
-  let ingestError = false;
-  try {
-    for await (const event of handle.events) {
-      if (emitJsonl) {
-        process.stdout.write(`${JSON.stringify(event)}\n`);
-      }
-      ingester.push(event);
-    }
-  } catch (err) {
-    log.error('Stream error from agent process:', err instanceof Error ? err.message : String(err));
-    if (serverIngest) {
-      try {
-        await ingester.drain();
-        await sink.finish({
-          result: 'error',
-          error: { message: String(err), type: 'stream_error' },
-        });
-      } catch {
-        // best-effort
-      }
-    }
-    process.exit(1);
-  } finally {
-    process.off('SIGINT', onSigint);
-  }
-
-  // Pass the child's exit code through. In server-ingest mode, drain the
-  // ingester and call heteroFinish before exiting.
-  const { code, signal } = await handle.exit;
+  const { code, signal, sessionId, ingestError } = result;
 
   if (serverIngest) {
     try {
@@ -316,21 +428,21 @@ const exec = async (options: ExecOptions): Promise<void> => {
         'Failed to flush events to server:',
         err instanceof Error ? err.message : String(err),
       );
-      ingestError = true;
+      result = { ...result, ingestError: true };
     }
 
-    const exitedClean = !ingestError && (code === 0 || signal === 'SIGTERM');
+    const exitedClean = !result.ingestError && (code === 0 || signal === 'SIGTERM');
     try {
       await sink.finish({
         result: exitedClean ? 'success' : 'error',
-        sessionId: handle.sessionId,
+        sessionId,
       });
     } catch (err) {
       log.error('Failed to send heteroFinish:', err instanceof Error ? err.message : String(err));
     }
   }
 
-  if (code !== null) process.exit(ingestError ? 1 : code);
+  if (code !== null) process.exit(result.ingestError ? 1 : code);
   if (signal === 'SIGINT') process.exit(130);
   if (signal === 'SIGTERM') process.exit(143);
   if (signal === 'SIGKILL') process.exit(137);

@@ -73,7 +73,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       });
     });
 
-    it('skips the metadata write when no sessionId is provided', async () => {
+    it('skips the metadata write when no sessionId is provided on success', async () => {
       const updateMetadata = vi.fn(async () => undefined);
       const findById = vi.fn(async () => ({
         agentId: null,
@@ -123,6 +123,60 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       });
 
       expect(updateMetadata).not.toHaveBeenCalled();
+    });
+
+    it('clears stale heteroSessionId when result=error and no sessionId (sandbox recycled)', async () => {
+      const updateMetadata = vi.fn(async () => undefined);
+      const findById = vi.fn(async () => ({
+        agentId: null,
+        id: 'topic-stale',
+        metadata: {
+          heteroSessionId: 'cc-dead-session',
+          runningOperation: { assistantMessageId: 'asst-s', operationId: 'op-stale' },
+        },
+      }));
+
+      const handler = new HeterogeneousPersistenceHandler({
+        messageModel: {
+          findById: vi.fn(async () => null),
+          listMessagePluginsByTopic: vi.fn(async () => []),
+          update: vi.fn(async () => ({ success: true })),
+        } as any,
+        threadModel: {} as any,
+        topicModel: { findById, updateMetadata } as any,
+      });
+
+      await handler.ingest({
+        events: [
+          {
+            data: { chunkType: 'text', content: '' },
+            operationId: 'op-stale',
+            stepIndex: 0,
+            timestamp: 1,
+            type: 'stream_chunk',
+          },
+        ],
+        operationId: 'op-stale',
+        topicId: 'topic-stale',
+      });
+
+      const service = new HeterogeneousAgentService({} as any, 'user-1', {
+        persistenceHandler: handler,
+        streamEventManager: createSilentStreamManager(),
+      });
+
+      // Simulate: sandbox was recycled, CC exited before emitting system.init
+      // so `sessionId` is undefined.
+      await service.heteroFinish({
+        agentType: 'claude-code',
+        operationId: 'op-stale',
+        result: 'error',
+        // no sessionId — CC never initialized (resume failed)
+        topicId: 'topic-stale',
+      });
+
+      // Must clear the stale session id so the next turn starts fresh
+      expect(updateMetadata).toHaveBeenCalledWith('topic-stale', { heteroSessionId: undefined });
     });
 
     it('persists sessionId even when result=error (so the next run can still resume context)', async () => {
