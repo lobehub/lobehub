@@ -332,12 +332,29 @@ function collectExistingHtmlAssets(html: string, base: string) {
   const sourcePattern = /<(?:link|script)\b[^>]+(?:href|src)="([^"]+)"/g;
 
   for (const match of html.matchAll(sourcePattern)) {
-    const href = match[1].split('?')[0];
-    const basePrefix = base === '' || base === './' ? '' : base.endsWith('/') ? base : `${base}/`;
-    existing.add(basePrefix && href.startsWith(basePrefix) ? href.slice(basePrefix.length) : href.replace(/^\//, ''));
+    existing.add(normalizeHtmlAssetHref(match[1], base));
   }
 
   return existing;
+}
+
+function normalizeHtmlAssetHref(href: string, base: string) {
+  const cleanHref = href.split('?')[0];
+  const basePrefix = base === '' || base === './' ? '' : base.endsWith('/') ? base : `${base}/`;
+
+  return basePrefix && cleanHref.startsWith(basePrefix) ? cleanHref.slice(basePrefix.length) : cleanHref.replace(/^\//, '');
+}
+
+function removeSmallModulepreloadsFromHtml(
+  html: string,
+  base: string,
+  shouldKeepFile: (fileName: string) => boolean,
+) {
+  return html.replace(/^[ \t]*<link\s+rel="modulepreload"[^>]*href="([^"]+)"[^>]*>\n?/gm, (match, href: string) => {
+    const fileName = normalizeHtmlAssetHref(href, base);
+
+    return shouldKeepFile(fileName) ? match : '';
+  });
 }
 
 function injectRouteModulepreloadsIntoHtml(
@@ -446,8 +463,13 @@ export function routeChunkPreload(options: RouteChunkPreloadOptions = {}): Plugi
             .filter(isOutputChunk)
             .map((chunk) => [chunk.fileName, Buffer.byteLength(chunk.code)]),
         );
-        const htmlWithInitialPreloads = injectRouteModulepreloadsIntoHtml(
+        const htmlWithoutSmallPreloads = removeSmallModulepreloadsFromHtml(
           html,
+          config.base,
+          (fileName) => (chunkSizeByFileName.get(fileName) ?? minInitialRoutePreloadSize) >= minInitialRoutePreloadSize,
+        );
+        const htmlWithInitialPreloads = injectRouteModulepreloadsIntoHtml(
+          htmlWithoutSmallPreloads,
           manifest,
           config.base,
           deploymentId,
@@ -496,4 +518,5 @@ export const __testing = {
   defaultRoutePreloadGroups,
   injectIdleWarmupScriptIntoHtml,
   injectRouteModulepreloadsIntoHtml,
+  removeSmallModulepreloadsFromHtml,
 };

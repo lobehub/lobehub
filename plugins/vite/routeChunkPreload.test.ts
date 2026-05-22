@@ -250,6 +250,26 @@ describe('routeChunkPreload', () => {
     expect(result.match(/assets\/index-D8p\.js/g)).toHaveLength(1);
   });
 
+  it('removes small existing modulepreload links from html', () => {
+    const html = [
+      '<html>',
+      '  <head>',
+      '    <link rel="modulepreload" crossorigin href="/_spa/assets/small-D8p.js?dpl=dpl_test">',
+      '    <link rel="modulepreload" crossorigin href="/_spa/assets/large-D8p.js?dpl=dpl_test">',
+      '  </head>',
+      '</html>',
+    ].join('\n');
+
+    const result = __testing.removeSmallModulepreloadsFromHtml(
+      html,
+      '/_spa/',
+      (fileName) => fileName === 'assets/large-D8p.js',
+    );
+
+    expect(result).not.toContain('/_spa/assets/small-D8p.js');
+    expect(result).toContain('/_spa/assets/large-D8p.js?dpl=dpl_test');
+  });
+
   it('appends the deployment query to emitted preload assets', () => {
     expect(__testing.createAssetHref('assets/page-B9kLm.js', '/_spa/', 'dpl_test')).toBe(
       '/_spa/assets/page-B9kLm.js?dpl=dpl_test',
