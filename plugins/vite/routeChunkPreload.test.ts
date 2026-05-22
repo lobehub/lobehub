@@ -31,6 +31,7 @@ describe('routeChunkPreload', () => {
   it('creates route preload entries from emitted route chunk filenames', () => {
     const bundle = {
       'assets/agent-CJm8x.js': createChunk({
+        dynamicImports: ['assets/MainChatInput-BwuHC6qv.js', 'assets/typescript-D20RI-Hp.js'],
         facadeModuleId: '/repo/src/routes/(main)/agent/index.desktop.tsx',
         fileName: 'assets/agent-CJm8x.js',
         imports: ['vendor/vendor-icons-Bd7x.js'],
@@ -41,12 +42,24 @@ describe('routeChunkPreload', () => {
         fileName: 'vendor/vendor-icons-Bd7x.js',
         moduleIds: ['/repo/node_modules/lucide-react/dist/esm/icons/settings.js'],
       }),
+      'assets/MainChatInput-BwuHC6qv.js': createChunk({
+        fileName: 'assets/MainChatInput-BwuHC6qv.js',
+        moduleIds: ['/repo/src/routes/(main)/agent/features/Conversation/MainChatInput/index.tsx'],
+      }),
+      'assets/typescript-D20RI-Hp.js': createChunk({
+        fileName: 'assets/typescript-D20RI-Hp.js',
+        moduleIds: ['/repo/node_modules/@shikijs/langs/dist/typescript.mjs'],
+      }),
     } satisfies TestOutputBundle;
 
     const manifest = __testing.createRoutePreloadManifest(bundle, '/repo');
     const agentEntry = manifest.find((entry) => entry.id === 'desktop-chat-launch');
 
-    expect(agentEntry?.preload).toEqual(['assets/agent-CJm8x.js']);
+    expect(agentEntry?.preload).toEqual([
+      'assets/agent-CJm8x.js',
+      'vendor/vendor-icons-Bd7x.js',
+      'assets/MainChatInput-BwuHC6qv.js',
+    ]);
   });
 
   it('matches non-index platform-specific route module variants', () => {

@@ -34,6 +34,8 @@ type OutputBundleLike = Record<string, OutputChunkLike | { type: string }>;
 const defaultRoutePreloadGroups = [
   {
     id: 'desktop-chat-launch',
+    includeDynamicImports: true,
+    includeStaticImports: true,
     modules: [
       'src/routes/(main)/_layout',
       'src/routes/(main)/agent/_layout',
