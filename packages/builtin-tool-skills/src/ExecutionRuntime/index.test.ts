@@ -182,4 +182,75 @@ describe('SkillsExecutionRuntime', () => {
       });
     });
   });
+
+  describe('project skills', () => {
+    const projectSkill = {
+      files: ['SKILL.md', 'scripts/run.py'],
+      location: '/repo/.agents/skills/deploy/SKILL.md',
+      name: 'deploy',
+    };
+
+    it('activateSkill reads SKILL.md via deviceFileAccess and appends the resource tree', async () => {
+      const readFile = vi.fn().mockResolvedValue('# Deploy\nRun the deploy steps.');
+      const runtime = new SkillsExecutionRuntime({
+        deviceFileAccess: { readFile },
+        projectSkills: [projectSkill],
+        service: createMockService(),
+      });
+
+      const result = await runtime.activateSkill({ name: 'deploy' });
+
+      expect(readFile).toHaveBeenCalledWith('/repo/.agents/skills/deploy/SKILL.md');
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('Run the deploy steps.');
+      // Resource tree lists references but not SKILL.md itself.
+      expect(result.content).toContain('scripts/run.py');
+      expect(result.content).not.toMatch(/- SKILL\.md/);
+      expect(result.state).toMatchObject({ name: 'deploy', source: 'project' });
+    });
+
+    it('activateSkill takes precedence over a same-named DB skill', async () => {
+      const readFile = vi.fn().mockResolvedValue('project content');
+      const findByName = vi
+        .fn()
+        .mockResolvedValue({ content: 'db content', id: 'x', name: 'deploy' });
+      const runtime = new SkillsExecutionRuntime({
+        deviceFileAccess: { readFile },
+        projectSkills: [projectSkill],
+        service: createMockService({ findByName }),
+      });
+
+      const result = await runtime.activateSkill({ name: 'deploy' });
+
+      expect(result.content).toContain('project content');
+      expect(findByName).not.toHaveBeenCalled();
+    });
+
+    it('activateSkill fails clearly when no device file access is available', async () => {
+      const runtime = new SkillsExecutionRuntime({
+        projectSkills: [projectSkill],
+        service: createMockService(),
+      });
+
+      const result = await runtime.activateSkill({ name: 'deploy' });
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('no device file access');
+    });
+
+    it('readReference resolves a project file relative to the SKILL.md directory', async () => {
+      const readFile = vi.fn().mockResolvedValue('print("run")');
+      const runtime = new SkillsExecutionRuntime({
+        deviceFileAccess: { readFile },
+        projectSkills: [projectSkill],
+        service: createMockService(),
+      });
+
+      const result = await runtime.readReference({ id: 'deploy', path: 'scripts/run.py' });
+
+      expect(readFile).toHaveBeenCalledWith('/repo/.agents/skills/deploy/scripts/run.py');
+      expect(result.success).toBe(true);
+      expect(result.content).toBe('print("run")');
+    });
+  });
 });

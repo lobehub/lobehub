@@ -52,18 +52,73 @@ export interface SkillRuntimeService {
   runCommand?: (options: RunCommandOptions) => Promise<CommandResult>;
 }
 
+/**
+ * A project-level skill discovered on the device filesystem
+ * (`.agents/skills` / `.claude/skills`). The runtime only needs the name to
+ * match an `activateSkill`/`readReference` call and the absolute SKILL.md path
+ * to read its content.
+ */
+export interface ProjectSkillRuntimeItem {
+  /** Relative paths of files under the skill directory (the directory tree). */
+  files?: string[];
+  /** Absolute path to the skill's SKILL.md on the device. */
+  location: string;
+  name: string;
+}
+
+/**
+ * Device filesystem access used to load project skills. The server wires this
+ * to the `local-system` tool over the device gateway, so the runtime stays
+ * transport-agnostic — it just needs to read a file from the device.
+ */
+export interface DeviceFileAccess {
+  /** Read a text file's content from the device. */
+  readFile: (path: string) => Promise<string>;
+}
+
 export interface SkillsExecutionRuntimeOptions {
   builtinSkills?: BuiltinSkill[];
+  /** Reads project skill files from the device (local-system over the gateway). */
+  deviceFileAccess?: DeviceFileAccess;
+  /** Project skills discovered on the device filesystem. */
+  projectSkills?: ProjectSkillRuntimeItem[];
   service: SkillRuntimeService;
 }
 
+/** Cross-platform dirname for absolute paths (POSIX or Windows separators). */
+const getDirname = (filePath: string): string => {
+  const idx = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
+  return idx === -1 ? '' : filePath.slice(0, idx);
+};
+
+/** Join a directory with a relative path, preserving the directory's separator. */
+const joinPath = (dir: string, rel: string): string => {
+  const sep = dir.includes('\\') && !dir.includes('/') ? '\\' : '/';
+  const trimmed = dir.endsWith(sep) ? dir.slice(0, -sep.length) : dir;
+  return `${trimmed}${sep}${rel}`;
+};
+
+/** Plain-text resource listing for project skills (no size/hash metadata). */
+const buildProjectResourcesPrompt = (skillName: string, files: string[]): string => {
+  const list = files.map((file) => `- ${file}`).join('\n');
+  return `## Available Resources
+
+Use \`readReference\` with skillName="${skillName}" and one of these relative paths to read a file:
+
+${list}`;
+};
+
 export class SkillsExecutionRuntime {
   private builtinSkills: BuiltinSkill[];
+  private projectSkills: ProjectSkillRuntimeItem[];
+  private deviceFileAccess?: DeviceFileAccess;
   private service: SkillRuntimeService;
 
   constructor(options: SkillsExecutionRuntimeOptions) {
     this.service = options.service;
     this.builtinSkills = options.builtinSkills || [];
+    this.projectSkills = options.projectSkills || [];
+    this.deviceFileAccess = options.deviceFileAccess;
   }
 
   async execScript(args: ExecScriptParams): Promise<BuiltinServerRuntimeOutput> {
@@ -177,6 +232,25 @@ export class SkillsExecutionRuntime {
     }
 
     try {
+      // Project skills resolve references relative to the SKILL.md directory,
+      // read through the device file access (local-system over the gateway).
+      const projectSkill = this.projectSkills.find((s) => s.name === id);
+      if (projectSkill) {
+        if (!this.deviceFileAccess) {
+          return {
+            content: `Project skill "${id}" cannot be read: no device file access available.`,
+            success: false,
+          };
+        }
+        const fullPath = joinPath(getDirname(projectSkill.location), path);
+        const content = await this.deviceFileAccess.readFile(fullPath);
+        return {
+          content,
+          state: { encoding: 'utf8', fileType: 'text/plain', fullPath, path },
+          success: true,
+        };
+      }
+
       // Check builtin skills first
       const builtinSkill = this.builtinSkills.find((s) => s.name === id);
       if (builtinSkill?.resources) {
@@ -230,6 +304,44 @@ export class SkillsExecutionRuntime {
 
   async activateSkill(args: ActivateSkillParams): Promise<BuiltinServerRuntimeOutput> {
     const { name } = args;
+
+    // Project skills (filesystem SKILL.md) take precedence over db/builtin.
+    const projectSkill = this.projectSkills.find((s) => s.name === name);
+    if (projectSkill) {
+      if (!this.deviceFileAccess) {
+        return {
+          content: `Project skill "${name}" cannot be loaded: no device file access available.`,
+          success: false,
+        };
+      }
+
+      try {
+        let content = await this.deviceFileAccess.readFile(projectSkill.location);
+
+        // Surface the skill's directory tree (carried in the op params) so the
+        // model can readReference its files.
+        const references = (projectSkill.files ?? []).filter((file) => file !== 'SKILL.md');
+        if (references.length > 0) {
+          content += '\n\n' + buildProjectResourcesPrompt(name, references);
+        }
+
+        return {
+          content,
+          state: {
+            hasResources: false,
+            location: projectSkill.location,
+            name,
+            source: 'project',
+          },
+          success: true,
+        };
+      } catch (e) {
+        return {
+          content: `Failed to load project skill "${name}": ${(e as Error).message}`,
+          success: false,
+        };
+      }
+    }
 
     // Check builtin skills first — no DB query needed
     const builtinSkill = this.builtinSkills.find((s) => s.name === name);

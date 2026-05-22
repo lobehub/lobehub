@@ -1,6 +1,8 @@
 import { builtinSkills } from '@lobechat/builtin-skills';
+import { LocalSystemApiName, LocalSystemIdentifier } from '@lobechat/builtin-tool-local-system';
 import { type CommandResult, SkillsIdentifier } from '@lobechat/builtin-tool-skills';
 import {
+  type DeviceFileAccess,
   type ExportFileResult,
   type SkillRuntimeService,
   SkillsExecutionRuntime,
@@ -21,6 +23,7 @@ import { MarketService } from '@/server/services/market';
 import { SkillResourceService } from '@/server/services/skill/resource';
 import { preprocessLhCommand } from '@/server/services/toolExecution/preprocessLhCommand';
 
+import { deviceProxy } from '../deviceProxy';
 import { type ServerRuntimeRegistration } from './types';
 
 const log = debug('lobe-server:skills-runtime');
@@ -369,8 +372,36 @@ export const skillsRuntime: ServerRuntimeRegistration = {
           })
       : [];
 
+    // Project skills live on the device filesystem. Read them through the
+    // device gateway by reusing the local-system `readFile` tool — no special
+    // file-read primitive, just the existing capability over deviceProxy.
+    const { activeDeviceId, projectSkills } = context;
+    let deviceFileAccess: DeviceFileAccess | undefined;
+    if (activeDeviceId && context.userId) {
+      const userId = context.userId;
+      deviceFileAccess = {
+        readFile: async (filePath: string) => {
+          const result = await deviceProxy.executeToolCall(
+            { deviceId: activeDeviceId, userId },
+            {
+              apiName: LocalSystemApiName.readFile,
+              // Read the whole file; SKILL.md and references are small.
+              arguments: JSON.stringify({ loc: [0, 5000], path: filePath }),
+              identifier: LocalSystemIdentifier,
+            },
+          );
+          if (!result.success) {
+            throw new Error(result.error || result.content || `readFile failed: ${filePath}`);
+          }
+          return result.content;
+        },
+      };
+    }
+
     return new SkillsExecutionRuntime({
       builtinSkills: [...filterBuiltinSkills(builtinSkills), ...agentSkillBuiltins],
+      deviceFileAccess,
+      projectSkills,
       service,
     });
   },
