@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import type { HTMLAttributes, ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -45,7 +45,18 @@ vi.mock('@lobehub/ui', () => ({
 }));
 
 vi.mock('@/components/ModelSelect', () => ({
-  ModelItemRender: ({ displayName }: { displayName: string }) => <div>{displayName}</div>,
+  ModelItemRender: ({
+    displayName,
+    proBadgeLabel,
+  }: {
+    displayName: string;
+    proBadgeLabel?: string;
+  }) => (
+    <div>
+      {displayName}
+      {proBadgeLabel && <span data-testid="model-pro-badge">{proBadgeLabel}</span>}
+    </div>
+  ),
   ProviderItemRender: ({ name }: { name: string }) => <div>{name}</div>,
 }));
 
@@ -83,5 +94,45 @@ describe('MultipleProvidersModelItem', () => {
 
     expect(screen.getByTestId('model-detail-panel')).toHaveTextContent('lobehub/gpt-5.4');
     expect(screen.getByText('ModelSwitchPanel.useModelFrom')).toBeInTheDocument();
+  });
+
+  it('uses the restricted handler when the default provider is restricted', () => {
+    const onClose = vi.fn();
+    const onModelChange = vi.fn();
+    const onRestrictedModelClick = vi.fn();
+
+    render(
+      <MultipleProvidersModelItem
+        activeKey="anthropic/claude-opus-4-7"
+        newLabel="new"
+        proLabel="pro"
+        showInfoTag={false}
+        data={{
+          displayName: 'Claude Opus 4.7',
+          model: {
+            abilities: {},
+            displayName: 'Claude Opus 4.7',
+            id: 'claude-opus-4-7',
+          } as any,
+          providers: [
+            { id: 'lobehub', name: 'LobeHub' },
+            { id: 'anthropic', name: 'Anthropic' },
+          ],
+        }}
+        isModelRestricted={(modelId, providerId) =>
+          modelId === 'claude-opus-4-7' && providerId === 'lobehub'
+        }
+        onClose={onClose}
+        onModelChange={onModelChange}
+        onRestrictedModelClick={onRestrictedModelClick}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('Claude Opus 4.7'));
+
+    expect(onRestrictedModelClick).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onModelChange).not.toHaveBeenCalled();
+    expect(screen.getByTestId('model-pro-badge')).toHaveTextContent('pro');
   });
 });
