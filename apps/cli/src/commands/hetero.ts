@@ -319,8 +319,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
         }
       }
     };
-    process.on('SIGINT', onSigint);
-    process.on('SIGTERM', async () => {
+    const onSigterm = async () => {
       handle.kill('SIGTERM');
       if (serverIngest) {
         try {
@@ -330,7 +329,9 @@ const exec = async (options: ExecOptions): Promise<void> => {
           // best-effort
         }
       }
-    });
+    };
+    process.on('SIGINT', onSigint);
+    process.on('SIGTERM', onSigterm);
 
     // Stream events. Each event is optionally written as JSONL and pushed
     // into the ingester.  When intercepting resume errors, a matching
@@ -372,6 +373,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
       process.exit(1);
     } finally {
       process.off('SIGINT', onSigint);
+      process.off('SIGTERM', onSigterm);
     }
 
     const { code, signal } = await handle.exit;
@@ -436,7 +438,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
 
   // ─── Drain + finish ───────────────────────────────────────────────────────
 
-  const { code, signal, sessionId, ingestError } = result;
+  const { code, signal, sessionId } = result;
 
   if (serverIngest) {
     try {
