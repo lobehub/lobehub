@@ -110,11 +110,17 @@ const getGenerateObjectReasoningParams = ({
 const supportsResponsesReasoningEffortNone = (model: string): boolean =>
   /(?:^|\/)gpt-5\.[1-9]\d*(?:-(?!pro(?:-|$))|$)/.test(model);
 
+const isGPT5ProResponsesModel = (model: string): boolean => /(?:^|\/)gpt-5-pro(?:-|$)/.test(model);
+
 const getGenerateObjectResponsesReasoningParams = ({
   model,
   reasoning_effort,
   thinking,
 }: GenerateObjectReasoningParams & { model: string }) => {
+  if (isGPT5ProResponsesModel(model)) {
+    return reasoning_effort && reasoning_effort !== 'max' ? { reasoning: { effort: 'high' } } : {};
+  }
+
   if (thinking?.type === 'disabled') {
     return supportsResponsesReasoningEffortNone(model) ? { reasoning: { effort: 'none' } } : {};
   }
