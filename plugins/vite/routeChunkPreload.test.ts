@@ -99,7 +99,12 @@ describe('routeChunkPreload', () => {
   it('can include dynamic imports for route warmup groups', () => {
     const bundle = {
       'assets/settings-CJm8x.js': createChunk({
-        dynamicImports: ['assets/settings-provider-D8p.js'],
+        dynamicImports: [
+          'assets/settings-provider-D8p.js',
+          'assets/typescript-D20RI-Hp.js',
+          'assets/pierre-dark-BVeDunhK.js',
+          'assets/mermaid.core-FQG0m7QG.js',
+        ],
         facadeModuleId: '/repo/src/routes/(main)/settings/index.tsx',
         fileName: 'assets/settings-CJm8x.js',
         imports: ['vendor/vendor-icons-Bd7x.js'],
@@ -108,6 +113,24 @@ describe('routeChunkPreload', () => {
       'assets/settings-provider-D8p.js': createChunk({
         fileName: 'assets/settings-provider-D8p.js',
         moduleIds: ['/repo/src/routes/(main)/settings/provider/index.tsx'],
+      }),
+      'assets/typescript-D20RI-Hp.js': createChunk({
+        fileName: 'assets/typescript-D20RI-Hp.js',
+        moduleIds: ['/repo/node_modules/@shikijs/langs/dist/typescript.mjs'],
+      }),
+      'assets/pierre-dark-BVeDunhK.js': createChunk({
+        fileName: 'assets/pierre-dark-BVeDunhK.js',
+      }),
+      'assets/mermaid.core-FQG0m7QG.js': createChunk({
+        imports: ['assets/cytoscape.esm-B2pAKChx.js'],
+        fileName: 'assets/mermaid.core-FQG0m7QG.js',
+      }),
+      'assets/cytoscape.esm-B2pAKChx.js': createChunk({
+        fileName: 'assets/cytoscape.esm-B2pAKChx.js',
+      }),
+      'assets/graphlib-s-2OPgNI.js': createChunk({
+        fileName: 'assets/graphlib-s-2OPgNI.js',
+        moduleIds: ['/repo/node_modules/graphlib/index.js'],
       }),
       'vendor/vendor-icons-Bd7x.js': createChunk({
         fileName: 'vendor/vendor-icons-Bd7x.js',
@@ -157,6 +180,28 @@ describe('routeChunkPreload', () => {
       }),
       'i18n/i18n-default-BV0oTRYH.js': createChunk({
         fileName: 'i18n/i18n-default-BV0oTRYH.js',
+      }),
+      'assets/javascript-C1Q1DjBS.js': createChunk({
+        fileName: 'assets/javascript-C1Q1DjBS.js',
+        moduleIds: ['/repo/node_modules/@shikijs/langs/dist/javascript.mjs'],
+      }),
+      'assets/github-dark-Bo88FFvI.js': createChunk({
+        fileName: 'assets/github-dark-Bo88FFvI.js',
+        moduleIds: ['/repo/node_modules/@shikijs/themes/dist/github-dark.mjs'],
+      }),
+      'assets/wasm-CGWTL0IK.js': createChunk({
+        fileName: 'assets/wasm-CGWTL0IK.js',
+        moduleIds: ['/repo/node_modules/oniguruma-to-es/dist/wasm.mjs'],
+      }),
+      'assets/pierre-light-Dmd9-PaL.js': createChunk({
+        fileName: 'assets/pierre-light-Dmd9-PaL.js',
+      }),
+      'assets/mermaid-parser.core-BLfQKdsC.js': createChunk({
+        fileName: 'assets/mermaid-parser.core-BLfQKdsC.js',
+      }),
+      'assets/rough.esm-BgK9YCbF.js': createChunk({
+        fileName: 'assets/rough.esm-BgK9YCbF.js',
+        moduleIds: ['/repo/node_modules/roughjs/bin/rough.js'],
       }),
       'vendor/vendor-icons-Bd7x.js': createChunk({
         fileName: 'vendor/vendor-icons-Bd7x.js',

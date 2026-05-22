@@ -142,6 +142,47 @@ const isI18nChunkFileName = (fileName: string) => {
   return normalized.startsWith('i18n/') || basename.startsWith('i18n-');
 };
 
+const syntaxHighlightModulePatterns = [
+  '/node_modules/@shikijs/',
+  '/node_modules/shiki/',
+  '/node_modules/oniguruma-to-es/',
+  '/node_modules/vscode-oniguruma/',
+  '/node_modules/vscode-textmate/',
+];
+
+const deferredRendererModulePatterns = [
+  ...syntaxHighlightModulePatterns,
+  '/node_modules/@mermaid-js/',
+  '/node_modules/cytoscape/',
+  '/node_modules/dagre/',
+  '/node_modules/graphlib/',
+  '/node_modules/mermaid/',
+  '/node_modules/roughjs/',
+];
+
+const deferredRendererFileNamePatterns = [
+  /(^|\/)(?:github-dark|catppuccin|pierre-dark|pierre-light)-[^/]+\.js$/i,
+  /(^|\/)(?:javascript|typescript|tsx|jsx|wasm)-[^/]+\.js$/i,
+  /(^|\/)mermaid(?:\.|-)[^/]+\.js$/i,
+  /(^|\/)(?:cytoscape|dagre|graphlib|rough)(?:\.|-)[^/]+\.js$/i,
+];
+
+function isDeferredRendererChunk(chunk: OutputChunkLike) {
+  if (deferredRendererFileNamePatterns.some((pattern) => pattern.test(chunk.fileName))) return true;
+
+  const moduleIds = [chunk.facadeModuleId, ...chunk.moduleIds].filter(Boolean);
+
+  return moduleIds.some((id) => {
+    const normalized = normalizePath(id!);
+
+    return deferredRendererModulePatterns.some((pattern) => normalized.includes(pattern));
+  });
+}
+
+function isPrewarmExcludedChunk(chunk: OutputChunkLike) {
+  return isI18nChunkFileName(chunk.fileName) || isDeferredRendererChunk(chunk);
+}
+
 const stripModuleSuffix = (value: string) =>
   value
     .replace(/\.(mjs|js|jsx|ts|tsx)$/, '')
@@ -177,6 +218,7 @@ function collectChunkDependencies(
   options: { includeDynamicImports?: boolean; includeStaticImports?: boolean },
 ) {
   if (collected.has(chunk.fileName)) return;
+  if (isPrewarmExcludedChunk(chunk)) return;
 
   collected.add(chunk.fileName);
 
@@ -222,7 +264,11 @@ function createRoutePreloadManifest(
       return {
         id: route.id,
         patterns: [...route.patterns],
-        preload: [...preload].filter((fileName) => fileName.endsWith('.js') && !isI18nChunkFileName(fileName)),
+        preload: [...preload].filter((fileName) => {
+          const chunk = chunksByFileName.get(fileName);
+
+          return fileName.endsWith('.js') && (!chunk || !isPrewarmExcludedChunk(chunk));
+        }),
       };
     })
     .filter((entry) => entry.preload.length > 0);
@@ -238,8 +284,8 @@ function createAssetHref(fileName: string, base: string) {
 function createAllJsWarmupManifest(bundle: OutputBundleLike) {
   return Object.values(bundle)
     .filter(isOutputChunk)
+    .filter((chunk) => chunk.fileName.endsWith('.js') && !isPrewarmExcludedChunk(chunk))
     .map((chunk) => chunk.fileName)
-    .filter((fileName) => fileName.endsWith('.js') && !isI18nChunkFileName(fileName))
     .sort();
 }
 
