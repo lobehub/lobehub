@@ -8,7 +8,7 @@ import type { ClientOptions } from 'openai';
 import OpenAI from 'openai';
 import type { Stream } from 'openai/streaming';
 
-import { responsesAPIModels } from '../../const/models';
+import { isGPT5ProResponsesModel, responsesAPIModels } from '../../const/models';
 import type {
   ChatCompletionErrorPayload,
   ChatCompletionTool,
@@ -109,8 +109,6 @@ const getGenerateObjectReasoningParams = ({
 
 const supportsResponsesReasoningEffortNone = (model: string): boolean =>
   /(?:^|\/)gpt-5\.[1-9]\d*(?:-(?!pro(?:-|$))|$)/.test(model);
-
-const isGPT5ProResponsesModel = (model: string): boolean => /(?:^|\/)gpt-5-pro(?:-|$)/.test(model);
 
 const getGenerateObjectResponsesReasoningParams = ({
   model,

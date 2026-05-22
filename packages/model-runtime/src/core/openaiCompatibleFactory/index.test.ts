@@ -2065,7 +2065,7 @@ describe('LobeOpenAICompatibleFactory', () => {
       );
     });
 
-    it('should normalize GPT-5 Pro Responses generateObject reasoning effort to high', async () => {
+    it('should normalize GPT-5 Pro-family Responses generateObject reasoning effort to high', async () => {
       const mockResponse = {
         output_text: '{"name": "John", "age": 30}',
       };
@@ -2074,7 +2074,7 @@ describe('LobeOpenAICompatibleFactory', () => {
 
       const payload = {
         messages: [{ content: 'Generate a person object', role: 'user' as const }],
-        model: 'gpt-5-pro',
+        model: 'gpt-5.4-pro',
         reasoning_effort: 'medium' as const,
         schema: {
           name: 'person_extractor',
@@ -2089,7 +2089,7 @@ describe('LobeOpenAICompatibleFactory', () => {
 
       expect(instance['client'].responses.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          model: 'gpt-5-pro',
+          model: 'gpt-5.4-pro',
           reasoning: { effort: 'high' },
         }),
         expect.anything(),
