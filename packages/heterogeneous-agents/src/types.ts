@@ -326,16 +326,3 @@ export interface AgentProcessConfig {
   /** Environment variables */
   env?: Record<string, string>;
 }
-
-/**
- * Registry of built-in CLI flag presets per agent type.
- * The Electron controller uses this to construct the full spawn args.
- */
-export interface AgentCLIPreset {
-  /** Base CLI arguments (e.g., ['-p', '--output-format', 'stream-json', '--verbose']) */
-  baseArgs: string[];
-  /** How to pass the prompt (e.g., 'positional' = last arg, 'stdin' = pipe to stdin) */
-  promptMode: 'positional' | 'stdin';
-  /** How to resume a session (e.g., ['--resume', '{sessionId}']) */
-  resumeArgs?: (sessionId: string) => string[];
-}

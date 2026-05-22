@@ -44,6 +44,11 @@ export interface ChatListProps {
    */
   footerSlot?: ReactNode;
   /**
+   * Optional content rendered as the first item inside the virtualized list.
+   * It scrolls with messages and does not participate in conversation state.
+   */
+  headerSlot?: ReactNode;
+  /**
    * Custom item renderer. If not provided, uses default ChatItem.
    */
   itemContent?: (index: number, id: string) => ReactNode;
@@ -66,6 +71,7 @@ const ChatList = memo<ChatListProps>(
     defaultWorkflowExpandLevel,
     disableActionsBar,
     footerSlot,
+    headerSlot,
     welcome,
     itemContent,
     showWelcome,
@@ -155,6 +161,7 @@ const ChatList = memo<ChatListProps>(
         <VirtualizedList
           dataSource={displayMessageIds}
           footerSlot={footerSlot}
+          headerSlot={headerSlot}
           itemContent={itemContent ?? defaultItemContent}
         />
       </MessageActionProvider>

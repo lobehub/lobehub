@@ -110,7 +110,22 @@ export class OnboardingActionHintInjector extends BaseVirtualLastUserContentProv
     // Phase-specific persistence reminders
     if (phase.includes('Agent Identity')) {
       hints.push(
-        'When the user settles on a name and emoji: call saveUserQuestion with agentName and agentEmoji, then persist SOUL.md. If SOUL.md is already non-empty, call updateDocument(type="soul") with the hunk mode that matches your edit — `insertAt`/`replaceLines`/`deleteLines` when you can read the line numbers from <current_soul_document>, or `replace` for a textual tweak. If empty, use writeDocument(type="soul") for the initial write.',
+        'When the user says "call you X", "your name is X", "叫你 X", "你叫 X", or equivalent phrasing, X is agentName. When the user says "use Y as the avatar", "头像用 Y", or equivalent phrasing, Y is agentEmoji. Save those assistant identity fields before discussing the user profile.',
+      );
+      if (ctx.userInfo?.displayName || ctx.userInfo?.fullName || ctx.userInfo?.username) {
+        const userInfoHints = [
+          ctx.userInfo.displayName,
+          ctx.userInfo.fullName,
+          ctx.userInfo.username,
+        ]
+          .filter(Boolean)
+          .map((value) => JSON.stringify(value).replaceAll('<', '\\u003c'));
+        hints.push(
+          `User account identity hints (${userInfoHints.join(', ')}) describe the user, not the assistant. Do NOT copy them into agentName unless the user explicitly asks to name the assistant that value.`,
+        );
+      }
+      hints.push(
+        'When the user settles on a name and emoji: call saveUserQuestion with agentName and agentEmoji only, then persist SOUL.md. Do NOT include fullName in the same saveUserQuestion call unless the user explicitly says that value is their own name. If SOUL.md is already non-empty, call updateDocument(type="soul") with the hunk mode that matches your edit — `insertAt`/`replaceLines`/`deleteLines` when you can read the line numbers from <current_soul_document>, or `replace` for a textual tweak. If empty, use writeDocument(type="soul") for the initial write.',
       );
     } else if (phase.includes('User Identity')) {
       if (ctx.userInfo?.displayName) {

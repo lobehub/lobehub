@@ -43,17 +43,18 @@ import {
 import {
   editLocalFile,
   expandTilde,
+  type FileResult,
   listLocalFiles,
   moveLocalFiles,
   readLocalFile,
   renameLocalFile,
+  type SearchOptions,
   writeLocalFile,
 } from '@lobechat/local-file-shell';
 import { dialog, shell } from 'electron';
 import { execa } from 'execa';
 import { unzipSync } from 'fflate';
 
-import { type FileResult, type SearchOptions } from '@/modules/fileSearch';
 import ContentSearchService from '@/services/contentSearchSrv';
 import FileSearchService from '@/services/fileSearchSrv';
 import { createLogger } from '@/utils/logger';

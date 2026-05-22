@@ -35,10 +35,13 @@ export default {
   'modifier.acceptAll': 'Keep All',
   'modifier.reject': 'Revert',
   'modifier.rejectAll': 'Revert All',
+  'actionTag.category.agentSkill': 'Agent skill',
   'actionTag.category.command': 'Command',
   'actionTag.category.projectSkill': 'Project skill',
   'actionTag.category.skill': 'Skill',
   'actionTag.category.tool': 'Tool',
+  'actionTag.tooltip.agentSkill':
+    "Loads a skill bundle from this agent's documents for the request.",
   'actionTag.tooltip.command': 'Runs a client-side slash command before sending.',
   'actionTag.tooltip.projectSkill':
     "Sent as a slash invocation so the agent's CLI runs the matching project skill.",

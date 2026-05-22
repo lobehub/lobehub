@@ -380,6 +380,17 @@ export class HeterogeneousPersistenceHandler {
       await this.flushFinalState(state, params.error, params.result);
       if (params.sessionId) {
         await this.persistSessionId(state.topicId, params.sessionId);
+      } else if (params.result === 'error') {
+        // No new session id was produced and the run failed. The most common
+        // cause in cloud sandboxes is `--resume <staleId>` failing because the
+        // container was recycled and session files are gone. Clear any persisted
+        // `heteroSessionId` so the next turn starts a fresh CC session instead
+        // of looping on the same stale id.
+        //
+        // When CC ran (system.init was emitted) but produced an error result,
+        // `params.sessionId` is set — so this branch is NOT reached and the
+        // valid session id is kept for resume on the next turn.
+        await this.clearSessionId(state.topicId);
       }
     } finally {
       operationStates.delete(params.operationId);
@@ -397,6 +408,21 @@ export class HeterogeneousPersistenceHandler {
       log('persisted sessionId topic=%s sessionId=%s', topicId, sessionId);
     } catch (err) {
       log('persistSessionId failed topic=%s err=%O', topicId, err);
+    }
+  }
+
+  /**
+   * Remove a stale `heteroSessionId` from topic metadata. Called when a run
+   * fails without producing a new session id (e.g. `--resume` rejected because
+   * the sandbox was recycled). Prevents the next turn from inheriting a session
+   * id that will never succeed.
+   */
+  private async clearSessionId(topicId: string): Promise<void> {
+    try {
+      await this.deps.topicModel.updateMetadata(topicId, { heteroSessionId: undefined });
+      log('cleared stale sessionId topic=%s', topicId);
+    } catch (err) {
+      log('clearSessionId failed topic=%s err=%O', topicId, err);
     }
   }
 

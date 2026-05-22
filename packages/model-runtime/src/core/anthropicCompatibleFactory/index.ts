@@ -485,8 +485,7 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
         baseURL: finalBaseURL,
         ...constructorOptions,
         ...rest,
-        timeout:
-          rest.timeout ?? constructorOptions?.timeout ?? resolveDefaultAnthropicTimeout(),
+        timeout: rest.timeout ?? constructorOptions?.timeout ?? resolveDefaultAnthropicTimeout(),
       };
 
       if (customClient?.createClient) {

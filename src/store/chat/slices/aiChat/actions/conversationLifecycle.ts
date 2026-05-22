@@ -41,6 +41,7 @@ import {
 import { agentGroupByIdSelectors, getChatGroupStoreState } from '@/store/agentGroup';
 import { selectRuntimeType } from '@/store/chat/slices/aiChat/actions/agentDispatcher';
 import { resolveHeteroResume } from '@/store/chat/slices/aiChat/actions/heteroResume';
+import { dispatchNonHeteroSubAgent } from '@/store/chat/slices/aiChat/actions/nonHeteroSubAgentDispatcher';
 import { type ChatStore } from '@/store/chat/store';
 import {
   mergeAgentRuntimeInitialContexts,
@@ -1184,34 +1185,24 @@ export class ConversationLifecycleActionImpl {
         : currentMessages;
 
       // Sub-agent dispatch inherits the parent's runtime selection — a
-      // hetero/gateway parent must keep its sub-agents on the same path so
-      // events route through the same wire. See LOBE-8519.
+      // gateway/hetero parent must keep its sub-agents on the same path.
+      // Runtime routing is fully delegated to dispatchNonHeteroSubAgent (LOBE-8927).
       const parentAgentConfig = context.agentId
         ? agentSelectors.getAgentConfigById(context.agentId)(getAgentStoreState())
         : undefined;
-      const runtimeType = selectRuntimeType({
-        heterogeneousProvider: parentAgentConfig?.agencyConfig?.heterogeneousProvider,
-        isGatewayMode: this.#get().isGatewayModeEnabled(),
-      });
 
-      // TODO(LOBE-8519 follow-up): only client sub-agent dispatch is
-      // implemented today. Gateway / hetero direct mentions fall through to
-      // client and will need their own runner once Step 2 lands.
-      if (runtimeType !== 'client') {
-        console.warn(
-          `[directMentionRoute] runtime=${runtimeType} not yet supported for sub-agent dispatch; ` +
-            'falling through to client mode',
-        );
-      }
-
-      await this.#get().executeClientAgent({
-        context: { ...context, scope: 'sub_agent', subAgentId: targetAgentId },
-        inPortalThread,
-        messages: messagesWithInstruction,
-        parentMessageId: toolMessage.id,
-        parentMessageType: 'tool',
-        parentOperationId: operationId,
-      });
+      await dispatchNonHeteroSubAgent(
+        { kind: 'mention', targetAgentId, instruction, parentMessageId: toolMessage.id },
+        {
+          conversationContext: context,
+          heterogeneousProvider: parentAgentConfig?.agencyConfig?.heterogeneousProvider,
+          inPortalThread,
+          isGatewayMode: this.#get().isGatewayModeEnabled(),
+          messages: messagesWithInstruction,
+          parentOperationId: operationId,
+        },
+        this.#get(),
+      );
 
       this.#get().completeOperation(operationId);
     } catch (error) {

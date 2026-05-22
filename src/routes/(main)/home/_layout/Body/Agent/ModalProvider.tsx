@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { ChatGroupWizard } from '@/components/ChatGroupWizard';
 import { MemberSelectionModal } from '@/components/MemberSelectionModal';
+import CreatePlatformAgentModal from '@/features/CreatePlatformAgent';
 import EditingPopover from '@/features/EditingPopover';
 import { CreateAgentModal } from '@/routes/(main)/home/_layout/hooks/useCreateModal';
 import { useAgentStore } from '@/store/agent';
@@ -24,11 +25,13 @@ interface AgentModalContextValue {
   closeAllModals: () => void;
   closeConfigGroupModal: () => void;
   closeCreateGroupModal: () => void;
+  closeCreatePlatformAgentModal: () => void;
   closeGroupWizardModal: () => void;
   closeMemberSelectionModal: () => void;
   openConfigGroupModal: () => void;
   openCreateGroupModal: (sessionId: string) => void;
   openCreateModal: (type: 'agent' | 'group', options?: OpenCreateModalOptions) => void;
+  openCreatePlatformAgentModal: (options?: OpenCreateModalOptions) => void;
   openGroupWizardModal: (callbacks: GroupWizardCallbacks) => void;
   openMemberSelectionModal: (callbacks: MemberSelectionCallbacks) => void;
   setGroupWizardLoading: (loading: boolean) => void;
@@ -135,6 +138,12 @@ export const AgentModalProvider = memo<AgentModalProviderProps>(({ children }) =
   const [createModalType, setCreateModalType] = useState<'agent' | 'group'>('agent');
   const [createModalGroupId, setCreateModalGroupId] = useState<string | undefined>(undefined);
 
+  // CreatePlatformAgentModal state
+  const [createPlatformAgentOpen, setCreatePlatformAgentOpen] = useState(false);
+  const [createPlatformAgentGroupId, setCreatePlatformAgentGroupId] = useState<string | undefined>(
+    undefined,
+  );
+
   const contextValue = useMemo<AgentModalContextValue>(
     () => ({
       closeAllModals: () => {
@@ -143,9 +152,11 @@ export const AgentModalProvider = memo<AgentModalProviderProps>(({ children }) =
         setGroupWizardOpen(false);
         setMemberSelectionOpen(false);
         setCreateModalOpen(false);
+        setCreatePlatformAgentOpen(false);
       },
       closeConfigGroupModal: () => setConfigGroupModalOpen(false),
       closeCreateGroupModal: () => setCreateGroupModalOpen(false),
+      closeCreatePlatformAgentModal: () => setCreatePlatformAgentOpen(false),
       closeGroupWizardModal: () => setGroupWizardOpen(false),
       closeMemberSelectionModal: () => setMemberSelectionOpen(false),
       openConfigGroupModal: () => setConfigGroupModalOpen(true),
@@ -157,6 +168,10 @@ export const AgentModalProvider = memo<AgentModalProviderProps>(({ children }) =
         setCreateModalType(type);
         setCreateModalGroupId(options?.groupId);
         setCreateModalOpen(true);
+      },
+      openCreatePlatformAgentModal: (options?: OpenCreateModalOptions) => {
+        setCreatePlatformAgentGroupId(options?.groupId);
+        setCreatePlatformAgentOpen(true);
       },
       openGroupWizardModal: (callbacks: GroupWizardCallbacks) => {
         setGroupWizardCallbacks(callbacks);
@@ -178,6 +193,11 @@ export const AgentModalProvider = memo<AgentModalProviderProps>(({ children }) =
         open={createModalOpen}
         type={createModalType}
         onClose={() => setCreateModalOpen(false)}
+      />
+      <CreatePlatformAgentModal
+        groupId={createPlatformAgentGroupId}
+        open={createPlatformAgentOpen}
+        onClose={() => setCreatePlatformAgentOpen(false)}
       />
       {children}
 

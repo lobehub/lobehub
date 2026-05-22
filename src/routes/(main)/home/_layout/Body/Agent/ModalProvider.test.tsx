@@ -24,6 +24,10 @@ vi.mock('@/components/MemberSelectionModal', () => ({
   MemberSelectionModal: () => null,
 }));
 
+vi.mock('@/features/CreatePlatformAgent', () => ({
+  default: () => null,
+}));
+
 vi.mock('@/features/EditingPopover', () => ({
   default: () => null,
 }));

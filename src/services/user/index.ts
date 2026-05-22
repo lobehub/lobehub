@@ -53,7 +53,7 @@ export class UserService {
     return lambdaClient.user.getOnboardingBootstrapState.query();
   };
 
-  sendOnboardingFirstMessage = async (input: { agentId: string; welcomeContent: string }) => {
+  sendOnboardingFirstMessage = async (input: { agentId: string }) => {
     return lambdaClient.user.sendOnboardingFirstMessage.mutate(input);
   };
 

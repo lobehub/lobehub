@@ -1,6 +1,7 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
+import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import { Flexbox } from '@lobehub/ui';
 import { Divider, Tabs } from 'antd';
 import isEqual from 'fast-deep-equal';
@@ -17,6 +18,7 @@ import AgentHeader from './AgentHeader';
 import AgentTool from './AgentTool';
 import CloudHeterogeneousConfig from './CloudHeterogeneousConfig';
 import HeterogeneousAgentStatusCard from './HeterogeneousAgentStatusCard';
+import RemoteAgentConfigCard from './RemoteAgentConfigCard';
 
 const ProfileEditor = memo(() => {
   const { t } = useTranslation('setting');
@@ -43,6 +45,15 @@ const ProfileEditor = memo(() => {
     });
   };
 
+  const updateBoundDeviceId = async (boundDeviceId: string) => {
+    await updateConfig({ agencyConfig: { ...config.agencyConfig, boundDeviceId } });
+  };
+
+  const isRemoteHetero =
+    isHeterogeneous &&
+    !!heterogeneousProvider &&
+    isRemoteHeterogeneousType(heterogeneousProvider.type);
+
   return (
     <>
       <Flexbox
@@ -53,8 +64,16 @@ const ProfileEditor = memo(() => {
       >
         {/* Header: Avatar + Name + Description */}
         <AgentHeader />
-        {isHeterogeneous && heterogeneousProvider ? (
-          // Heterogeneous integration mode: tabs for cloud (web) and desktop environments
+        {isRemoteHetero && heterogeneousProvider ? (
+          // Remote platform agents (openclaw / hermes): show device config panel
+          <Flexbox paddingBlock={'8px 0'}>
+            <RemoteAgentConfigCard
+              provider={heterogeneousProvider}
+              onBoundDeviceChange={updateBoundDeviceId}
+            />
+          </Flexbox>
+        ) : isHeterogeneous && heterogeneousProvider ? (
+          // Local CLI agents (claude-code, codex): tabs for cloud (web) and desktop environments
           <Tabs
             defaultActiveKey={isDesktop ? 'desktop' : 'cloud'}
             size="small"

@@ -1705,6 +1705,15 @@ export const createRuntimeExecutors = (
               memoryToolPermission: agentConfig?.chatConfig?.memory?.toolPermission,
               messageId: state.metadata?.sourceMessageId,
               operationId,
+              projectSkills: (state.metadata?.operationSkillSet?.skills ?? [])
+                .filter(
+                  (skill: { location?: string; source?: string }) =>
+                    skill.source === 'project' && !!skill.location,
+                )
+                .map((skill: { location: string; name: string }) => ({
+                  location: skill.location,
+                  name: skill.name,
+                })),
               scope: state.metadata?.scope,
               serverDB: ctx.serverDB,
               skipResultTruncation: true,

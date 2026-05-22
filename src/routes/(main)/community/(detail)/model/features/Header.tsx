@@ -30,7 +30,7 @@ const styles = createStaticStyles(({ css, cssVar }) => {
 });
 
 const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
-  const { identifier, releasedAt, displayName, type, abilities, contextWindowTokens } =
+  const { description, identifier, releasedAt, displayName, type, abilities, contextWindowTokens } =
     useDetailContext();
   const { mobile = isMobile } = useResponsive();
   const { t } = useTranslation('models');
@@ -97,7 +97,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
           color: cssVar.colorTextSecondary,
         }}
       >
-        {t(`${identifier}.description`)}
+        {t(`${identifier}.description`, { defaultValue: description })}
       </div>
     </Flexbox>
   );

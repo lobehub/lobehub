@@ -20,6 +20,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { type ActionToolbarProps } from '../ActionBar';
 import ActionBar from '../ActionBar';
 import InputEditor from '../InputEditor';
+import { useSkillDrop } from '../InputEditor/ActionTag/useSkillDrop';
 import { type PlaceholderVariant } from '../InputEditor/Placeholder';
 import RuntimeConfig from '../RuntimeConfig';
 import SendArea from '../SendArea';
@@ -119,6 +120,7 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
     const chatKey = useChatStore(chatSelectors.currentChatKey);
 
     const setExpand = useChatInputStore((s) => s.setExpand);
+    const skillDrop = useSkillDrop();
 
     useEffect(() => {
       if (editor) editor.focus();
@@ -149,6 +151,8 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
         className={cx(styles.container, expand && styles.fullscreen)}
         gap={8}
         paddingBlock={expand ? 0 : showFootnote ? '0 12px' : '0 8px'}
+        onDragOver={skillDrop.onDragOver}
+        onDrop={skillDrop.onDrop}
       >
         <ChatInput
           data-testid="chat-input"

@@ -90,6 +90,9 @@ const normalizeStringArray = (value: unknown) =>
         .filter(Boolean)
     : undefined;
 
+const normalizeComparableName = (value: unknown) =>
+  typeof value === 'string' ? value.trim().toLocaleLowerCase() : undefined;
+
 const parseToolArguments = (value?: string) => {
   if (!value) return undefined;
 
@@ -584,13 +587,13 @@ export class OnboardingService {
     };
   };
 
-  // Atomically create the onboarding topic (if absent) and persist the welcome
-  // assistant opener message. Idempotent under concurrent invocation:
+  // Atomically create the onboarding topic (if absent). Idempotent under
+  // concurrent invocation:
   //  - pg_advisory_xact_lock serializes per (userId, agentId)
-  //  - existing assistant message in the topic short-circuits the welcome insert
-  // The user message and assistant response are created by the existing
-  // sendMessage pipeline on the client immediately after this resolves.
-  sendOnboardingFirstMessage = async (input: { agentId: string; welcomeContent: string }) => {
+  //  - existing activeTopicId short-circuits topic creation
+  // The UI welcome stays client-only; the user message and assistant response
+  // are created by the existing sendMessage pipeline after this resolves.
+  sendOnboardingFirstMessage = async (input: { agentId: string }) => {
     const { topicId } = await this.db.transaction(async (trx) => {
       // Serialize concurrent first-send per (userId, agentId). hashtext returns int4;
       // pg_advisory_xact_lock takes bigint, so we cast.
@@ -600,7 +603,6 @@ export class OnboardingService {
 
       const trxDb = trx as unknown as LobeChatDatabase;
       const trxTopicModel = new TopicModel(trxDb, this.userId);
-      const trxMessageModel = new MessageModel(trxDb, this.userId);
       const trxUserModel = new UserModel(trxDb, this.userId);
 
       const userState = await trxUserModel.getUserState(KeyVaultsGateKeeper.getUserKeyVaults);
@@ -618,16 +620,6 @@ export class OnboardingService {
           trigger: 'chat',
         });
         nextTopicId = topic.id;
-      }
-
-      const existingAssistant = await trxMessageModel.findFirstAssistantInTopic(nextTopicId);
-      if (!existingAssistant) {
-        await trxMessageModel.create({
-          agentId: input.agentId,
-          content: input.welcomeContent,
-          role: 'assistant',
-          topicId: nextTopicId,
-        });
       }
 
       if (state.activeTopicId !== nextTopicId) {
@@ -785,8 +777,19 @@ export class OnboardingService {
       typeof parsed.agentEmoji === 'string' && parsed.agentEmoji.trim()
         ? parsed.agentEmoji.trim()
         : undefined;
+    const userIdentityNames = new Set(
+      [fullName, userState.fullName, userState.username]
+        .map((name) => normalizeComparableName(name))
+        .filter((name): name is string => Boolean(name)),
+    );
+    const agentNameMatchesUserIdentity =
+      Boolean(agentName) && userIdentityNames.has(normalizeComparableName(agentName) ?? '');
+    const shouldIgnoreAgentIdentity = Boolean(agentNameMatchesUserIdentity);
 
-    if (agentName || agentEmoji) {
+    if (shouldIgnoreAgentIdentity) {
+      if (agentName) ignoredFields.push('agentName');
+      if (agentEmoji) ignoredFields.push('agentEmoji');
+    } else if (agentName || agentEmoji) {
       try {
         const inboxAgentId = await this.getInboxAgentId();
         const agentPatch: { avatar?: string; title?: string } = {};
@@ -811,6 +814,15 @@ export class OnboardingService {
       }
     }
 
+    if (savedFields.length === 0 && unchangedFields.length === 0 && shouldIgnoreAgentIdentity) {
+      return {
+        content:
+          'Skipped agent identity because agentName matches the user identity. Ask the user to clarify the assistant name/avatar before saving agentName or agentEmoji.',
+        ignoredFields,
+        success: false,
+      };
+    }
+
     if (savedFields.length === 0 && unchangedFields.length === 0) {
       return {
         content:
@@ -825,6 +837,11 @@ export class OnboardingService {
     if (savedFields.length > 0) {
       contentParts.push(
         `Saved ${formatNaturalList(savedFields.map((field) => STRUCTURED_FIELD_LABELS[field]))}.`,
+      );
+    }
+    if (shouldIgnoreAgentIdentity) {
+      contentParts.push(
+        'Skipped agent identity because agentName matches the user identity. Ask the user to clarify the assistant name/avatar before saving agentName or agentEmoji.',
       );
     }
 

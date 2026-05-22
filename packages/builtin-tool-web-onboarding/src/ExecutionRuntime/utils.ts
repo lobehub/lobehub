@@ -29,7 +29,7 @@ const formatNaturalList = (items: string[]) => {
 
 const PHASE_GUIDANCE: Record<string, string> = {
   agent_identity:
-    'Phase: Agent Identity. The agent has no name or personality yet. Introduce yourself as freshly awakened, discover your name, creature type, personality, and communication style through conversation. Update SOUL.md once the user settles on who you are.',
+    'Phase: Agent Identity. The agent has no name or personality yet. Discover the assistant name/avatar first. Phrases such as "call you X", "your name is X", "叫你 X", or "你叫 X" refer to agentName; phrases such as "use Y as the avatar" or "头像用 Y" refer to agentEmoji. Do NOT copy user_info displayName/fullName/username into agentName, and do NOT save fullName in the same call as agentName/agentEmoji unless the user explicitly says that value is their own name. Update SOUL.md once the user settles on who the assistant is.',
   discovery:
     'Phase: Discovery. User identity is established. Ask one focused question — what the user does for work (their profession, role, or main occupation) — and record it in the persona document. Do NOT explore pain points, tools, goals, or interests, and do NOT call saveUserQuestion with interests. Once you have their profession, move to summary.',
   summary:
@@ -139,8 +139,7 @@ export const createWebOnboardingToolResult = <T extends WebOnboardingToolActionR
     isError,
     success: result.success,
   };
-  const content =
-    result.content || (errorMessage ? errorMessage : 'Web onboarding tool call completed.');
+  const content = result.content || errorMessage || 'Web onboarding tool call completed.';
 
   return {
     content,

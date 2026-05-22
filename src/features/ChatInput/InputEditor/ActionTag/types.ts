@@ -7,8 +7,11 @@
  * 4. ProjectSkill — Hetero-agent project skill (e.g. `.agents/skills/<name>/SKILL.md`),
  *                   inserted via slash menu, serialized as literal `/skill-name` so the
  *                   underlying CLI agent resolves and runs the skill itself.
+ * 5. AgentSkill   — Agent-document skill bundle from `agentDocumentService`; the runtime
+ *                   resolves the chip's identifier (`agent-document:<filename>`) against
+ *                   the agent's document store at preload time.
  */
-export type ActionTagCategory = 'command' | 'skill' | 'tool' | 'projectSkill';
+export type ActionTagCategory = 'command' | 'skill' | 'tool' | 'projectSkill' | 'agentSkill';
 
 // Built-in commands: client-side intercepted, never sent to AI
 export type CommandType = 'compact' | 'newTopic';

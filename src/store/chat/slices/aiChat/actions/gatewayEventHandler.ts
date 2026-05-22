@@ -504,6 +504,15 @@ export const createGatewayEventHandler = (
         break;
       }
 
+      case 'notify_update': {
+        // Remote hetero agent (openclaw / hermes) wrote a message to DB via
+        // `lh notify`. DB is the source of truth — just refresh the message list.
+        enqueue(async () => {
+          await fetchAndReplaceMessages(get, context).catch(console.error);
+        });
+        break;
+      }
+
       case 'error': {
         enqueue(async () => {
           const messageError = toChatMessageError(event.data);

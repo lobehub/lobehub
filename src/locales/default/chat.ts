@@ -231,6 +231,11 @@ export default {
   'memberSelection.selectedAgents': 'Selected ({{count}})',
   'memberSelection.setInitialMembers': 'Select Group members',
   'members': 'Members',
+  'mention.category.agents': 'Agents',
+  'mention.category.members': 'Members',
+  'mention.category.skills': 'Skills',
+  'mention.category.tools': 'Tools',
+  'mention.category.topics': 'Topics',
   'mention.title': 'Mention Members',
   'messageAction.collapse': 'Collapse Message',
   'messageAction.continueGeneration': 'Continue Generating',
@@ -311,6 +316,13 @@ export default {
   'cliAuthGuide.errorDetails': 'Error details',
   'cliAuthGuide.runCommand': 'Run this in Terminal',
   'cliAuthGuide.title': 'Sign in to {{name}}',
+  'cliOverloadedGuide.actions.retry': 'Retry',
+  'cliOverloadedGuide.desc':
+    "{{name}}'s upstream model service is temporarily overloaded. This usually clears in a moment.",
+  'cliOverloadedGuide.errorDetails': 'Error details',
+  'cliOverloadedGuide.retryHint':
+    'Wait a few seconds and retry. If it keeps failing, the provider may be having a wider incident.',
+  'cliOverloadedGuide.title': '{{name}} is temporarily overloaded',
   'cliRateLimitGuide.actions.openSystemTools': 'Open System Tools',
   'cliRateLimitGuide.actions.retry': 'Retry',
   'cliRateLimitGuide.afterReset':
@@ -343,7 +355,57 @@ export default {
   'newAgent': 'Create Agent',
   'newClaudeCodeAgent': 'Add Claude Code',
   'newCodexAgent': 'Add Codex',
+  'newPlatformAgent': 'Add Platform Agent',
   'newGroupChat': 'Create Group',
+
+  // Platform agent: per-platform descriptions shown in step 0 of the creation modal
+  'platformAgent.create.desc.openclaw': 'Connect to OpenClaw running on one of your devices',
+  'platformAgent.create.desc.hermes': 'Connect to Hermes running on one of your devices',
+
+  // Platform agent: shared device status label (used in Select option labels)
+  'platformAgent.device.online': 'Online',
+
+  // Platform agent creation modal (openclaw / hermes)
+  'platformAgent.create.title': 'Add Platform Agent',
+  'platformAgent.create.step1': 'Select Platform',
+  'platformAgent.create.step2': 'Select Device',
+  'platformAgent.create.step3': 'Configure Agent',
+  'platformAgent.create.next': 'Next',
+  'platformAgent.create.back': 'Back',
+  'platformAgent.create.create': 'Create Agent',
+  'platformAgent.create.creating': 'Creating...',
+  'platformAgent.create.namePlaceholder': 'e.g. My OpenClaw Agent',
+  'platformAgent.create.descriptionPlaceholder': 'Brief description (optional)',
+  'platformAgent.create.fetchingProfile': 'Fetching profile...',
+  'platformAgent.create.noDevices': 'No devices connected',
+  'platformAgent.create.noDevicesDesktopHint':
+    'Install the Desktop App — it connects automatically after login',
+  'platformAgent.create.downloadDesktop': 'Download Desktop App',
+  'platformAgent.create.noDevicesCliHint': 'Or connect any machine via CLI, then click Refresh:',
+  'platformAgent.create.noDevicesCmd': 'lh connect',
+  'platformAgent.create.refresh': 'Refresh',
+  'platformAgent.create.selectDevice': 'Select a device',
+  'platformAgent.create.checking': 'Checking availability...',
+  'platformAgent.create.available': 'Available',
+  'platformAgent.create.notInstalled': '{{name}} not installed on this device',
+  'platformAgent.create.checkFailed': 'Check failed',
+  'platformAgent.create.versionTooLow': 'lh version is too low',
+  'platformAgent.create.versionTooLowHint': 'Update lh to the latest version:',
+  'platformAgent.create.upgradeCmd': 'npm install -g @lobehub/cli',
+  'platformAgent.create.comingSoon': 'Coming Soon',
+
+  // Platform agent device guard banner
+  'platformAgent.deviceGuard.deviceOffline.title': 'Device not connected',
+  'platformAgent.deviceGuard.deviceOffline.desc':
+    'The bound device is not connected. Run `lh connect` on that machine then refresh.',
+  'platformAgent.deviceGuard.platformUnavailable.title': '{{name}} not available',
+  'platformAgent.deviceGuard.platformUnavailable.desc':
+    '{{name}} is not installed on the connected device.',
+  'platformAgent.deviceGuard.noDevice.title': 'No device bound',
+  'platformAgent.deviceGuard.noDevice.desc':
+    'This agent has no bound device. Edit the agent profile to configure one.',
+  'platformAgent.deviceGuard.refresh': 'Refresh',
+  'platformAgent.deviceGuard.configure': 'Configure',
   'newPage': 'Create Page',
   'noAgentsYet': 'This group has no members yet. Click the + button to invite agents.',
   'noAvailableAgents': 'No members available to invite',
@@ -957,8 +1019,7 @@ export default {
   'workingPanel.resources.deleteError': 'Failed to delete document',
   'workingPanel.resources.deleteSuccess': 'Document deleted',
   'workingPanel.resources.deleteTitle': 'Delete document?',
-  'workingPanel.resources.empty':
-    'No documents yet. Documents associated with this agent will show up here.',
+  'workingPanel.resources.empty': 'No webpages. Webpages crawled in this agent will show up here.',
   'workingPanel.resources.error': 'Failed to load resources',
   'workingPanel.resources.filter.documents': 'Documents',
   'workingPanel.resources.filter.skills': 'Skills',
@@ -989,10 +1050,10 @@ export default {
   'workingPanel.localFile.preview.raw': 'Raw',
   'workingPanel.localFile.preview.render': 'Preview',
   'workingPanel.localFile.truncated': 'File preview truncated to {{limit}} characters',
-  'workingPanel.skills.empty': 'No skills found in this project',
-  'workingPanel.skills.emptyAgent': 'No skills attached to this agent',
+  'workingPanel.skills.empty': 'No skills available',
   'workingPanel.skills.section.agent': 'Agent skills',
   'workingPanel.skills.section.project': 'Project skills',
+  'workingPanel.skills.section.user': 'User skills',
   'workingPanel.skills.title': 'Skills',
   'workingPanel.files.count_one': '{{count}} file',
   'workingPanel.files.count_other': '{{count}} files',

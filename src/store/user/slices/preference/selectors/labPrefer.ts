@@ -8,4 +8,5 @@ export const labPreferSelectors = {
   enableGatewayMode: (s: UserState): boolean => s.preference.lab?.enableGatewayMode ?? false,
   enableInputMarkdown: (s: UserState): boolean =>
     s.preference.lab?.enableInputMarkdown ?? DEFAULT_PREFERENCE.lab!.enableInputMarkdown!,
+  enablePlatformAgent: (s: UserState): boolean => s.preference.lab?.enablePlatformAgent ?? false,
 };
