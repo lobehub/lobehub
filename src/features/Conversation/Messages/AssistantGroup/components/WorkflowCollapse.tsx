@@ -373,16 +373,16 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
                   alignItems: 'center',
                   background: cssVar.colorBgContainer,
                   borderRadius: '50%',
-                  bottom: -3,
+                  bottom: 0,
                   display: 'flex',
-                  height: 12,
+                  height: 10,
                   justifyContent: 'center',
                   position: 'absolute',
-                  right: -3,
-                  width: 12,
+                  right: 0,
+                  width: 10,
                 }}
               >
-                <Icon color={cssVar.colorWarning} icon={AlertTriangle} size={10} />
+                <Icon color={cssVar.colorWarning} icon={AlertTriangle} size={8} />
               </div>
             </div>
           );
