@@ -1,8 +1,10 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const isEnabled = vi.fn(() => true);
-const record = vi.fn(async () => ({ tracingId: 'trace-1' }));
+const isEnabled = vi.fn<() => boolean>(() => true);
+const record = vi.fn<(params: Record<string, unknown>) => Promise<{ tracingId: string }>>(
+  async () => ({ tracingId: 'trace-1' }),
+);
 
 vi.mock('./index', () => ({
   getLLMGenerationTracingService: () => ({ isEnabled, record }),
@@ -80,7 +82,7 @@ describe('createLLMGenerationTracingHook', () => {
       trigger: 'agent_signal',
       userId: 'user-1',
     });
-    expect(call.payload.systemPrompt).toBe('be helpful');
+    expect((call.payload as { systemPrompt?: string }).systemPrompt).toBe('be helpful');
     expect(call.promptHash).toHaveLength(6);
   });
 

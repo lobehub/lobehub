@@ -1,4 +1,5 @@
 // @vitest-environment node
+import type { ITracingStore, TracingPayload } from '@lobechat/llm-generation-tracing';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -16,8 +17,12 @@ vi.mock('@/database/server', () => ({ getServerDB: async () => serverDB }));
 
 const userId = 'llm-gen-trace-svc-user';
 
-const stubStore = {
-  save: vi.fn(async () => ({ key: 'memo://saved' })),
+const stubStore: ITracingStore & {
+  save: ReturnType<typeof vi.fn<(record: TracingPayload) => Promise<{ key: string }>>>;
+} = {
+  save: vi.fn<(record: TracingPayload) => Promise<{ key: string }>>(async () => ({
+    key: 'memo://saved',
+  })),
 };
 
 beforeEach(async () => {
