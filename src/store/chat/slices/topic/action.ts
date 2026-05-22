@@ -444,24 +444,55 @@ export class ChatTopicActionImpl {
           if (!hasValidContainer) return;
 
           const { items: topics, total: totalCount } = result;
-          const hasMore = topics.length >= pageSize;
 
           const currentData = this.#get().topicDataMap[containerKey];
 
+          const isRefreshingExpandedList =
+            !!currentData &&
+            currentData.currentPage > 0 &&
+            currentData.pageSize === pageSize &&
+            Boolean(currentData.isInbox) === Boolean(isInbox) &&
+            isEqual(currentData.excludeStatuses, effectiveExcludeStatuses) &&
+            isEqual(currentData.excludeTriggers, effectiveExcludeTriggers);
+
+          const nextItems = isRefreshingExpandedList
+            ? (() => {
+                const visibleCount = Math.min(currentData.items.length, totalCount);
+                const topicIds = new Set(topics.map((item) => item.id));
+
+                return [
+                  ...topics,
+                  ...currentData.items.filter((topic) => !topicIds.has(topic.id)),
+                ].slice(0, visibleCount);
+              })()
+            : topics;
+
+          const hasMore = totalCount > nextItems.length;
+
           // no need to update map if the current key's data exists and is the same
-          if (currentData && isEqual(topics, currentData.items)) return;
+          if (
+            currentData &&
+            isEqual(nextItems, currentData.items) &&
+            currentData.total === totalCount &&
+            isEqual(currentData.excludeStatuses, effectiveExcludeStatuses) &&
+            isEqual(currentData.excludeTriggers, effectiveExcludeTriggers)
+          ) {
+            return;
+          }
 
           this.#set(
             {
               topicDataMap: {
                 ...this.#get().topicDataMap,
                 [containerKey]: {
-                  currentPage: 0,
+                  currentPage: isRefreshingExpandedList ? currentData.currentPage : 0,
                   excludeStatuses: effectiveExcludeStatuses,
                   excludeTriggers: effectiveExcludeTriggers,
                   hasMore,
+                  isInbox: Boolean(isInbox),
                   isExpandingPageSize: false,
-                  items: topics,
+                  isLoadingMore: false,
+                  items: nextItems,
                   pageSize,
                   total: totalCount,
                 },
@@ -510,7 +541,8 @@ export class ChatTopicActionImpl {
       });
 
       const currentTopics = currentData?.items || [];
-      const hasMore = result.items.length >= pageSize;
+      const nextItems = [...currentTopics, ...result.items];
+      const hasMore = result.total > nextItems.length;
 
       this.#set(
         {
@@ -521,8 +553,9 @@ export class ChatTopicActionImpl {
               excludeStatuses,
               excludeTriggers,
               hasMore,
+              isInbox: currentData?.isInbox,
               isLoadingMore: false,
-              items: [...currentTopics, ...result.items],
+              items: nextItems,
               pageSize,
               total: result.total,
             },
@@ -678,6 +711,7 @@ export class ChatTopicActionImpl {
 
     // remove topic
     await topicService.removeTopic(id);
+    this.#get().internal_dispatchTopic({ type: 'deleteTopic', id }, 'removeTopic');
     purgeUnreadTopics([id]);
     await refreshTopic();
 
@@ -777,6 +811,14 @@ export class ChatTopicActionImpl {
     // no need to update if is the same
     if (isEqual(nextItems, currentData?.items)) return;
 
+    const currentTotal = currentData?.total ?? currentData?.items?.length ?? 0;
+    const total =
+      payload.type === 'addTopic'
+        ? currentTotal + 1
+        : payload.type === 'deleteTopic'
+          ? Math.max(nextItems.length, currentTotal - 1)
+          : currentTotal;
+
     this.#set(
       {
         topicDataMap: {
@@ -784,9 +826,10 @@ export class ChatTopicActionImpl {
           [key]: {
             ...currentData,
             currentPage: currentData?.currentPage ?? 0,
-            hasMore: currentData?.hasMore ?? false,
+            hasMore: total > nextItems.length,
+            isInbox: currentData?.isInbox,
             items: nextItems,
-            total: currentData?.total ?? nextItems.length,
+            total,
           },
         },
       },
@@ -818,14 +861,10 @@ export class ChatTopicActionImpl {
           ...this.#get().topicDataMap,
           [key]: {
             currentPage,
-            // Carry filter fields forward so subsequent reads (e.g. the
-            // sendMessageInServer `topicFilter` helper) keep seeing the
-            // filter the SWR fetch was using; otherwise the next request
-            // forgets to exclude completed/cron topics until SWR
-            // revalidates.
             excludeStatuses: currentData?.excludeStatuses,
             excludeTriggers: currentData?.excludeTriggers,
-            hasMore: items.length >= pageSize,
+            hasMore: total > nextItems.length,
+            isInbox: currentData?.isInbox,
             isExpandingPageSize: false,
             isLoadingMore: false,
             items: nextItems,
