@@ -1211,11 +1211,11 @@ describe('ClaudeCodeAdapter', () => {
   });
 
   describe('usage and model extraction', () => {
-    // Under `--include-partial-messages` (our preset default), CC emits a
-    // stale `message_start.usage` snapshot (e.g. `output_tokens: 8`) that it
-    // echoes verbatim on every content-block `assistant` event. The
-    // authoritative per-turn total only arrives later as `message_delta`.
-    // So turn_metadata emission is wired to `message_delta`, not `assistant`.
+    // Under `--include-partial-messages`, CC emits a stale
+    // `message_start.usage` snapshot (e.g. `output_tokens: 8`) that it echoes
+    // verbatim on every content-block `assistant` event. The authoritative
+    // per-turn total only arrives later as `message_delta`. So turn_metadata
+    // emission is wired to `message_delta`, not `assistant`.
     it('does NOT emit turn_metadata on assistant events (usage there is stale)', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
