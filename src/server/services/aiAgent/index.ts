@@ -2041,9 +2041,10 @@ export class AiAgentService {
 
       // Project skills are filesystem SKILL.md discovered on the device. They
       // are only meaningful when a device is active (readFile resolves against
-      // it). The runtime carries `location` (absolute SKILL.md path) and the
-      // directory tree so `activateSkill` / `readReference` can load files
-      // through the local-system tool over the device gateway.
+      // it). Only `location` (absolute SKILL.md path) flows through — the
+      // skill's directory tree is enumerated lazily at activation time via
+      // `local-system.listFiles` over the device gateway, keeping the op-param
+      // payload small.
       const projectMetas =
         activeDeviceId && params.projectSkills?.length
           ? params.projectSkills.map((s) => ({

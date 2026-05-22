@@ -1,3 +1,4 @@
+import { AGENT_SKILLS_IDENTIFIER_PREFIX } from '@lobechat/const';
 import { formatCommandResult, resourcesTreePrompt } from '@lobechat/prompts';
 import type {
   BuiltinServerRuntimeOutput,
@@ -357,6 +358,12 @@ export class SkillsExecutionRuntime {
         content += '\n\n' + resourcesTreePrompt(builtinSkill.name, builtinSkill.resources);
       }
 
+      // Agent-document skill bundles flow through the builtin path with the
+      // `agent-skills:` prefix on their identifier. Tag the result so the
+      // inspector can pick the right label ("Activate Agent Skill") and prefer
+      // the friendly `title` over the raw `agent-skills:<filename>` name.
+      const isAgentSkill = builtinSkill.identifier.startsWith(AGENT_SKILLS_IDENTIFIER_PREFIX);
+
       return {
         content,
         state: {
@@ -364,6 +371,8 @@ export class SkillsExecutionRuntime {
           hasResources,
           identifier: builtinSkill.identifier,
           name: builtinSkill.name,
+          source: isAgentSkill ? 'agent' : 'builtin',
+          ...(builtinSkill.title && { title: builtinSkill.title }),
         },
         success: true,
       };
@@ -399,6 +408,7 @@ export class SkillsExecutionRuntime {
         hasResources,
         id: skill.id,
         name: skill.name,
+        source: 'user',
       },
       success: true,
     };

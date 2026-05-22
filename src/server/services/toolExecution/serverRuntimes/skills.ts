@@ -355,7 +355,9 @@ export const skillsRuntime: ServerRuntimeRegistration = {
     // the identifier prefix and the bundle → index-child content resolution
     // (also used by `aiAgent/index.ts` when building `<available_skills>`).
     // `source: 'builtin'` is the type-system carrier shape required by
-    // `BuiltinSkill`; the runtime never reads `source`.
+    // `BuiltinSkill`; the runtime re-tags `source: 'agent'` in the activateSkill
+    // result based on the identifier prefix so the inspector can show
+    // "Activate Agent Skill" + the friendly `title`.
     const agentSkillBuiltins: BuiltinSkill[] = context.agentId
       ? await new AgentDocumentsService(context.serverDB, context.userId)
           .getAgentSkills(context.agentId)
@@ -366,6 +368,7 @@ export const skillsRuntime: ServerRuntimeRegistration = {
               identifier: skill.identifier,
               name: skill.name,
               source: 'builtin' as const,
+              ...(skill.title && { title: skill.title }),
             })),
           )
           .catch((error) => {

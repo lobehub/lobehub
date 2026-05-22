@@ -53,6 +53,14 @@ export interface BuiltinSkill {
    */
   resources?: Record<string, SkillResourceMeta>;
   source: 'builtin';
+  /**
+   * Optional friendly title for UI display. When unset, the inspector and
+   * render layers fall back to `name` (which carries the raw identifier).
+   * Agent-document skill bundles (`agent-skills:<filename>`) set this so the
+   * activateSkill result shows e.g. "LOBE Annotation Cleanup" instead of
+   * the raw `agent-skills:lobe-annotation-cleanup`.
+   */
+  title?: string;
 }
 
 // ===== Skill Source =====

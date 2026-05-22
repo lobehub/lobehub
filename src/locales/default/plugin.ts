@@ -267,6 +267,8 @@ export default {
   'builtins.lobe-skills.apiName.readReference': 'Read Reference',
   'builtins.lobe-skills.apiName.runCommand': 'Run Command',
   'builtins.lobe-skills.apiName.activateSkill': 'Activate Skill',
+  'builtins.lobe-skills.apiName.activateAgentSkill': 'Activate Agent Skill',
+  'builtins.lobe-skills.apiName.activateProjectSkill': 'Activate Project Skill',
   'builtins.lobe-skills.apiName.searchSkill': 'Search Skills',
   'builtins.lobe-skills.title': 'Skills',
   'builtins.lobe-task.apiName.createTask': 'Create task',

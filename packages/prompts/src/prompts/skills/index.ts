@@ -1,6 +1,6 @@
 export { buildResourcesTreeText, resourcesTreePrompt } from './resourcesTree';
 
-export type SkillSource = 'builtin' | 'db' | 'project';
+export type SkillSource = 'builtin' | 'project' | 'user';
 
 export interface SkillItem {
   description: string;
