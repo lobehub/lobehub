@@ -14,6 +14,7 @@ import { useMatch, useNavigate } from 'react-router-dom';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { DocumentExplorerTree } from '@/features/AgentDocumentsExplorer';
 import SkillsList, { type SkillListItem } from '@/features/AgentDocumentsExplorer/SkillsList';
+import { startSkillDrag } from '@/features/ChatInput/InputEditor/ActionTag/skillDragData';
 import { useClientDataSWR } from '@/libs/swr';
 import { agentDocumentService, agentDocumentSWRKeys } from '@/services/agentDocument';
 import { useAgentStore } from '@/store/agent';
@@ -358,6 +359,19 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ style, workingDire
           const view = skillBundleViews.find((v) => v.bundle.documentId === item.id);
           const indexChild = data.find((doc) => doc.parentId === item.id && doc.isSkillIndex);
           openDocumentByRoute(indexChild?.documentId ?? view?.bundle.documentId ?? item.id);
+        }}
+        onSkillDragStart={(item, event) => {
+          // The runtime resolves these via the `agent-document:<filename>`
+          // identifier (prefix prevents collisions with builtin/DB skill
+          // names). The display label keeps the human-readable title.
+          const view = skillBundleViews.find((v) => v.bundle.documentId === item.id);
+          const filename = view?.bundle.filename;
+          if (!filename) return;
+          startSkillDrag(event, {
+            category: 'skill',
+            label: item.name,
+            type: `agent-document:${filename}`,
+          });
         }}
       />
     );

@@ -1892,8 +1892,9 @@ export class AiAgentService {
     );
 
     // 18. Build OperationSkillSet via SkillEngine
-    // Combines builtin skills + user DB skills, filters by platform via enableChecker,
-    // and pairs with agent's enabled plugin IDs for downstream SkillResolver consumption.
+    // Combines builtin skills + user DB skills + agent-document skill bundles,
+    // filters by platform via enableChecker, and pairs with agent's enabled
+    // plugin IDs for downstream SkillResolver consumption.
     let operationSkillSet;
     try {
       const builtinMetas = builtinSkills.map((s) => ({
@@ -1910,9 +1911,27 @@ export class AiAgentService {
         name: s.name,
       }));
 
+      // Agent-document skill bundles surfaced as runtime skills. The identifier
+      // is prefixed (`agent-document:<filename>`) so it cannot collide with a
+      // user/market skill name; the runtime activator (skills serverRuntime)
+      // resolves the prefix by reading SKILL.md content from the agent_document
+      // store. Name == identifier so the prompt's `<skill name="...">` line and
+      // the model's `activateSkill(name)` call carry the same prefixed value.
+      const agentDocs = await this.agentDocumentsService.getAgentDocuments(resolvedAgentId);
+      const agentDocMetas = agentDocs
+        .filter((doc) => doc.isSkillBundle)
+        .map((doc) => {
+          const identifier = `agent-document:${doc.filename}`;
+          return {
+            description: doc.description ?? '',
+            identifier,
+            name: identifier,
+          };
+        });
+
       const skillEngine = new SkillEngine({
         enableChecker: (skill) => shouldEnableBuiltinSkill(skill.identifier),
-        skills: [...builtinMetas, ...dbMetas],
+        skills: [...builtinMetas, ...dbMetas, ...agentDocMetas],
       });
       operationSkillSet = skillEngine.generate(agentPlugins ?? []);
     } catch (error) {
