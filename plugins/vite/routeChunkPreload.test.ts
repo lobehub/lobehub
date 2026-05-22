@@ -331,15 +331,15 @@ describe('routeChunkPreload', () => {
     const bundle = {
       'assets/agent-CJm8x.js': createChunk({
         code: 'x'.repeat(2048),
-        dynamicImports: ['assets/tiny-D8p.js'],
+        dynamicImports: ['assets/HeaderSlot-D8p.js'],
         facadeModuleId: '/repo/src/routes/(main)/agent/index.tsx',
         fileName: 'assets/agent-CJm8x.js',
         moduleIds: ['/repo/src/routes/(main)/agent/index.tsx'],
       }),
-      'assets/tiny-D8p.js': createChunk({
+      'assets/HeaderSlot-D8p.js': createChunk({
         code: 'x'.repeat(128),
-        fileName: 'assets/tiny-D8p.js',
-        moduleIds: ['/repo/src/routes/(main)/agent/Tiny.tsx'],
+        fileName: 'assets/HeaderSlot-D8p.js',
+        moduleIds: ['/repo/src/routes/(main)/agent/HeaderSlot.tsx'],
       }),
     } satisfies TestOutputBundle;
     const transformIndexHtml = plugin.transformIndexHtml as {
@@ -352,19 +352,75 @@ describe('routeChunkPreload', () => {
     });
 
     expect(result).toContain('<link rel="modulepreload" crossorigin href="/_spa/assets/agent-CJm8x.js');
-    expect(result).not.toContain('<link rel="modulepreload" crossorigin href="/_spa/assets/tiny-D8p.js');
-    expect(result).toContain('"/_spa/assets/tiny-D8p.js');
+    expect(result).not.toContain('<link rel="modulepreload" crossorigin href="/_spa/assets/HeaderSlot-D8p.js');
+    expect(result).toContain('"idleRouteFetch":[]');
+    expect(result).toContain('"idleRoutePreload":["/_spa/assets/agent-CJm8x.js","/_spa/assets/HeaderSlot-D8p.js"');
+    expect(result).toContain('"/_spa/assets/HeaderSlot-D8p.js');
+  });
+
+  it('does not warm tiny low-priority idle route chunks', () => {
+    const plugin = routeChunkPreload({
+      groups: [],
+      idleGroups: [
+        {
+          id: 'custom-settings',
+          includeDynamicImports: true,
+          modules: ['src/routes/(main)/settings'],
+          patterns: ['^/settings(/|$)'],
+        },
+      ],
+    });
+    const configResolved = plugin.configResolved as (config: { base: string; root: string }) => void;
+    const bundle = {
+      'assets/settings-CJm8x.js': createChunk({
+        code: 'x'.repeat(2048),
+        dynamicImports: ['assets/tiny-D8p.js'],
+        facadeModuleId: '/repo/src/routes/(main)/settings/index.tsx',
+        fileName: 'assets/settings-CJm8x.js',
+        moduleIds: ['/repo/src/routes/(main)/settings/index.tsx'],
+      }),
+      'assets/tiny-D8p.js': createChunk({
+        code: 'x'.repeat(128),
+        fileName: 'assets/tiny-D8p.js',
+        moduleIds: ['/repo/src/routes/(main)/settings/Tiny.tsx'],
+      }),
+    } satisfies TestOutputBundle;
+    const transformIndexHtml = plugin.transformIndexHtml as {
+      handler: (html: string, ctx: { bundle: TestOutputBundle }) => string;
+    };
+
+    configResolved({ base: '/_spa/', root: '/repo' });
+    const result = transformIndexHtml.handler('<html><head></head><body></body></html>', {
+      bundle,
+    });
+
+    expect(result).toContain('"idleRouteFetch":[]');
+    expect(result).toContain('"idleRoutePreload":["/_spa/assets/settings-CJm8x.js"');
+    expect(result).not.toContain('/_spa/assets/tiny-D8p.js');
   });
 
   it('can omit the all-JS warmup manifest while keeping idle route warmup', () => {
     const result = __testing.injectIdleWarmupScriptIntoHtml(
       '<html><body></body></html>',
-      { idleRoutePreload: ['assets/settings-D8p.js'] },
+      { idleRouteFetch: [], idleRoutePreload: ['assets/settings-D8p.js'] },
       '/_spa/',
       'dpl_test',
     );
 
     expect(result).toContain('/_spa/assets/settings-D8p.js?dpl=dpl_test');
     expect(result).not.toContain('js-warmup-manifest.json');
+  });
+
+  it('can warm tiny route chunks through fetch without modulepreload links', () => {
+    const result = __testing.injectIdleWarmupScriptIntoHtml(
+      '<html><body></body></html>',
+      { idleRouteFetch: ['assets/tiny-D8p.js'], idleRoutePreload: [] },
+      '/_spa/',
+      'dpl_test',
+    );
+
+    expect(result).toContain('"idleRouteFetch":["/_spa/assets/tiny-D8p.js?dpl=dpl_test"]');
+    expect(result).toContain('"idleRoutePreload":[]');
+    expect(result).toContain('warmQueue(m.idleRouteFetch||[])');
   });
 });

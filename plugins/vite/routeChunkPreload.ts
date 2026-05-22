@@ -16,6 +16,7 @@ interface RuntimeRoutePreloadEntry {
 
 interface IdleWarmupManifest {
   allJsManifestFileName?: string;
+  idleRouteFetch: string[];
   idleRoutePreload: string[];
 }
 
@@ -32,6 +33,33 @@ interface OutputChunkLike {
 type OutputBundleLike = Record<string, OutputChunkLike | { type: string }>;
 
 const minInitialRoutePreloadSize = 2048;
+
+const criticalRouteSmallChunkFileNamePatterns = [
+  /^EmptyNavItem-/,
+  /^HeaderSlot-/,
+  /^Item-/,
+  /^MainChatInput-/,
+  /^Notification-/,
+  /^PortalPanel-/,
+  /^RenameModal-/,
+  /^TokenTag-/,
+  /^agent-/,
+  /^router-/,
+  /^useAgentContext-/,
+  /^useAppOrigin-/,
+  /^useFetchChatTopics-/,
+  /^useFetchThreads-/,
+  /^useQueryParam-/,
+  /^useTokenCount-/,
+  /^useTopicPopupsRegistry-/,
+  /^withSuspense-/,
+];
+
+const isCriticalRouteSmallChunkFileName = (fileName: string) => {
+  const basename = normalizePath(fileName).split('/').at(-1) ?? fileName;
+
+  return criticalRouteSmallChunkFileNamePatterns.some((pattern) => pattern.test(basename));
+};
 
 const defaultRoutePreloadGroups = [
   {
@@ -345,6 +373,7 @@ function createIdleWarmupScript(manifest: IdleWarmupManifest, base: string, depl
       ? createAssetHref(manifest.allJsManifestFileName, base, deploymentId)
       : undefined,
     base,
+    idleRouteFetch: manifest.idleRouteFetch.map((fileName) => createAssetHref(fileName, base, deploymentId)),
     idleRoutePreload: manifest.idleRoutePreload.map((fileName) => createAssetHref(fileName, base, deploymentId)),
   };
 
@@ -363,7 +392,7 @@ function createIdleWarmupScript(manifest: IdleWarmupManifest, base: string, depl
     '        const warmQueue=(items)=>{let i=0,a=0;const pump=()=>visible(()=>{while(a<2&&i<items.length){a++;warm(items[i++]).finally(()=>{a--;idle(pump);});}});idle(pump);};',
     '        const toHref=(f)=>new URL(f,m.base&&m.base!=="./"?location.origin+m.base:location.href).href;',
     '        const warmAll=()=>{if(!m.allJsManifest)return;fetch(m.allJsManifest,{cache:"force-cache",credentials:"same-origin"}).then((r)=>r.ok?r.json():[]).then((files)=>warmQueue(files.map(toHref))).catch(()=>{});};',
-    '        const start=()=>setTimeout(()=>idle(()=>run(m.idleRoutePreload,addModulepreload,4,()=>setTimeout(()=>idle(warmAll),1.2e4))),2e3);',
+    '        const start=()=>setTimeout(()=>idle(()=>run(m.idleRoutePreload,addModulepreload,4,()=>{warmQueue(m.idleRouteFetch||[]);setTimeout(()=>idle(warmAll),1.2e4);})),2e3);',
     '        document.readyState==="complete"?start():window.addEventListener("load",start,{once:true});',
     '      })();',
     '    </script>',
@@ -371,7 +400,8 @@ function createIdleWarmupScript(manifest: IdleWarmupManifest, base: string, depl
 }
 
 function injectIdleWarmupScriptIntoHtml(html: string, manifest: IdleWarmupManifest, base: string, deploymentId?: string) {
-  if (manifest.idleRoutePreload.length === 0 && !manifest.allJsManifestFileName) return html;
+  if (manifest.idleRoutePreload.length === 0 && manifest.idleRouteFetch.length === 0 && !manifest.allJsManifestFileName)
+    return html;
 
   return html.replace('</body>', `${createIdleWarmupScript(manifest, base, deploymentId)}\n  </body>`);
 }
@@ -428,8 +458,23 @@ export function routeChunkPreload(options: RouteChunkPreloadOptions = {}): Plugi
           htmlWithInitialPreloads,
           {
             allJsManifestFileName: allJsWarmup ? allJsWarmupManifestFileName : undefined,
+            idleRouteFetch: [],
             idleRoutePreload: [
-              ...new Set([...manifest.flatMap((entry) => entry.preload), ...idleManifest.flatMap((entry) => entry.preload)]),
+              ...new Set([
+                ...manifest
+                  .flatMap((entry) => entry.preload)
+                  .filter((fileName) => {
+                    const size = chunkSizeByFileName.get(fileName) ?? minInitialRoutePreloadSize;
+
+                    return size >= minInitialRoutePreloadSize || isCriticalRouteSmallChunkFileName(fileName);
+                  }),
+                ...idleManifest
+                  .flatMap((entry) => entry.preload)
+                  .filter(
+                    (fileName) =>
+                      (chunkSizeByFileName.get(fileName) ?? minInitialRoutePreloadSize) >= minInitialRoutePreloadSize,
+                  ),
+              ]),
             ],
           },
           config.base,
