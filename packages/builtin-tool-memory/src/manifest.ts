@@ -241,6 +241,11 @@ export const MemoryManifest: BuiltinToolManifest = {
             description: 'Concise overview of this specific memory',
             type: 'string',
           },
+          sourceIds: {
+            description: 'Stable source message ids that support this memory. Use [] when unavailable.',
+            items: { type: 'string' },
+            type: ['array', 'null'],
+          },
           tags: {
             description: 'User defined tags that summarize the context facets',
             items: { type: 'string' },
@@ -391,6 +396,11 @@ export const MemoryManifest: BuiltinToolManifest = {
           summary: {
             description: 'Concise overview of this activity.',
             type: 'string',
+          },
+          sourceIds: {
+            description: 'Stable source message ids that support this memory. Use [] when unavailable.',
+            items: { type: 'string' },
+            type: ['array', 'null'],
           },
           tags: {
             description: 'Model generated tags summarizing key facets of the activity.',
@@ -550,6 +560,11 @@ export const MemoryManifest: BuiltinToolManifest = {
             description: 'Concise overview of this specific memory',
             type: 'string',
           },
+          sourceIds: {
+            description: 'Stable source message ids that support this memory. Use [] when unavailable.',
+            items: { type: 'string' },
+            type: ['array', 'null'],
+          },
           tags: {
             description: 'Model generated tags that summarize the experience facets',
             items: { type: 'string' },
@@ -693,6 +708,12 @@ export const MemoryManifest: BuiltinToolManifest = {
                 type: 'string',
               },
               scoreConfidence: { type: 'number' },
+              sourceIds: {
+                description:
+                  'Stable source message ids that support this memory. Use [] when unavailable.',
+                items: { type: 'string' },
+                type: ['array', 'null'],
+              },
               sourceEvidence: { type: ['string', 'null'] },
               type: {
                 enum: IDENTITY_TYPES,
@@ -747,6 +768,11 @@ export const MemoryManifest: BuiltinToolManifest = {
           summary: {
             description: 'Concise overview of this specific memory',
             type: 'string',
+          },
+          sourceIds: {
+            description: 'Stable source message ids that support this memory. Use [] when unavailable.',
+            items: { type: 'string' },
+            type: ['array', 'null'],
           },
           tags: {
             description: 'Model generated tags that summarize the preference facets',
@@ -928,6 +954,12 @@ export const MemoryManifest: BuiltinToolManifest = {
                     type: ['string', 'null'],
                   },
                   scoreConfidence: { type: ['number', 'null'] },
+                  sourceIds: {
+                    description:
+                      'Stable source message ids that support this memory. Use [] when unavailable.',
+                    items: { type: 'string' },
+                    type: ['array', 'null'],
+                  },
                   sourceEvidence: { type: ['string', 'null'] },
                   type: {
                     description: `Possible values: ${IDENTITY_TYPES.join(' | ')}`,

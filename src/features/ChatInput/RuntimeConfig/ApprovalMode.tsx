@@ -31,6 +31,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     line-height: 1.4;
     color: ${cssVar.colorText};
   `,
+  trigger: css`
+    overflow: hidden;
+    border-radius: ${cssVar.borderRadius};
+  `,
 }));
 
 const ModeItemLabel = memo<{ desc: string; icon: LucideIcon; title: string }>(
@@ -128,10 +132,10 @@ const ModeSelector = memo(() => {
     <DropdownMenu
       items={menuItems}
       open={dropdownOpen}
-      placement="bottomLeft"
+      placement="bottomRight"
       onOpenChange={setDropdownOpen}
     >
-      <div>
+      <div className={styles.trigger}>
         {dropdownOpen ? (
           button
         ) : (

@@ -341,4 +341,160 @@ describe('hetero exec command', () => {
     expect(exitSpy).toHaveBeenCalledWith(2);
     expect(mockSpawnAgent).not.toHaveBeenCalled();
   });
+
+  describe('--resume auto-retry on session-not-found', () => {
+    it('retries without --resume when the error stream event indicates the session is gone', async () => {
+      // First spawn: exits non-zero, emits a resume-not-found error event
+      const resumeNotFoundEvent = {
+        data: { error: 'No conversation found with session ID cc-stale', message: 'No conversation found with session ID cc-stale' },
+        operationId: 'op-r1',
+        stepIndex: 0,
+        timestamp: 1,
+        type: 'error',
+      };
+      mockSpawnAgent
+        .mockReturnValueOnce(
+          createFakeHandle({ events: [resumeNotFoundEvent], exitCode: 1 }),
+        )
+        // Second spawn: succeeds
+        .mockReturnValueOnce(createFakeHandle({ exitCode: 0 }));
+
+      await runCmd([
+        'hetero', 'exec',
+        '--type', 'claude-code',
+        '--prompt', 'do the thing',
+        '--resume', 'cc-stale',
+        '--operation-id', 'op-r1',
+      ]);
+
+      // Two spawns: first with --resume, retry without
+      expect(mockSpawnAgent).toHaveBeenCalledTimes(2);
+      expect(mockSpawnAgent.mock.calls[0][0]).toMatchObject({ resumeSessionId: 'cc-stale' });
+      expect(mockSpawnAgent.mock.calls[1][0]).not.toHaveProperty('resumeSessionId');
+      expect(mockSpawnAgent.mock.calls[1][0].resumeSessionId).toBeUndefined();
+
+      // Final exit code comes from the retry (0 → success)
+      expect(exitSpy).toHaveBeenCalledWith(0);
+    });
+
+    it('retries without --resume when stderr contains a session-not-found message', async () => {
+      // First spawn: exits non-zero with no events, but stderr has the pattern
+      mockSpawnAgent
+        .mockReturnValueOnce(
+          createFakeHandle({
+            exitCode: 1,
+            stderrChunks: ['Error: No conversation found with session ID xyz\n'],
+          }),
+        )
+        .mockReturnValueOnce(createFakeHandle({ exitCode: 0 }));
+
+      await runCmd([
+        'hetero', 'exec',
+        '--type', 'claude-code',
+        '--prompt', 'continue',
+        '--resume', 'xyz',
+        '--operation-id', 'op-r2',
+      ]);
+
+      expect(mockSpawnAgent).toHaveBeenCalledTimes(2);
+      expect(mockSpawnAgent.mock.calls[1][0].resumeSessionId).toBeUndefined();
+      expect(exitSpy).toHaveBeenCalledWith(0);
+    });
+
+    it('retries without --resume when the error indicates context overflow', async () => {
+      const contextOverflowEvent = {
+        data: { error: 'prompt is too long: 215168 tokens > 200000 maximum', message: 'prompt is too long: 215168 tokens > 200000 maximum' },
+        operationId: 'op-ctx',
+        stepIndex: 0,
+        timestamp: 1,
+        type: 'error',
+      };
+      mockSpawnAgent
+        .mockReturnValueOnce(createFakeHandle({ events: [contextOverflowEvent], exitCode: 1 }))
+        .mockReturnValueOnce(createFakeHandle({ exitCode: 0 }));
+
+      await runCmd([
+        'hetero', 'exec',
+        '--type', 'claude-code',
+        '--prompt', 'next question',
+        '--resume', 'cc-longctx',
+        '--operation-id', 'op-ctx',
+      ]);
+
+      expect(mockSpawnAgent).toHaveBeenCalledTimes(2);
+      expect(mockSpawnAgent.mock.calls[0][0]).toMatchObject({ resumeSessionId: 'cc-longctx' });
+      expect(mockSpawnAgent.mock.calls[1][0].resumeSessionId).toBeUndefined();
+      expect(exitSpy).toHaveBeenCalledWith(0);
+    });
+
+    it('does NOT retry on a non-resume error exit', async () => {
+      // Exit code 1 but no resume-related error message
+      mockSpawnAgent.mockReturnValueOnce(
+        createFakeHandle({ exitCode: 1, stderrChunks: ['rate limit exceeded\n'] }),
+      );
+
+      await runCmd([
+        'hetero', 'exec',
+        '--type', 'claude-code',
+        '--prompt', 'hi',
+        '--resume', 'cc-valid',
+      ]);
+
+      expect(mockSpawnAgent).toHaveBeenCalledTimes(1);
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('does NOT retry when --resume is not provided', async () => {
+      const errorEvent = {
+        data: { error: 'No conversation found', message: 'No conversation found' },
+        operationId: 'op-nr',
+        stepIndex: 0,
+        timestamp: 1,
+        type: 'error',
+      };
+      mockSpawnAgent.mockReturnValueOnce(createFakeHandle({ events: [errorEvent], exitCode: 1 }));
+
+      await runCmd([
+        'hetero', 'exec',
+        '--type', 'claude-code',
+        '--prompt', 'fresh run',
+        '--operation-id', 'op-nr',
+      ]);
+
+      // No --resume → no interception → no retry
+      expect(mockSpawnAgent).toHaveBeenCalledTimes(1);
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('does NOT suppress the resume-error event from JSONL output', async () => {
+      const resumeNotFoundEvent = {
+        data: { error: 'No conversation found with session ID old', message: 'No conversation found with session ID old' },
+        operationId: 'op-jsonl',
+        stepIndex: 0,
+        timestamp: 1,
+        type: 'error',
+      };
+      mockSpawnAgent
+        .mockReturnValueOnce(createFakeHandle({ events: [resumeNotFoundEvent], exitCode: 1 }))
+        .mockReturnValueOnce(createFakeHandle({ exitCode: 0 }));
+
+      await runCmd([
+        'hetero', 'exec',
+        '--type', 'claude-code',
+        '--prompt', 'do thing',
+        '--resume', 'old',
+        '--render', 'jsonl',
+      ]);
+
+      // The error event is still emitted to JSONL (for observability) even
+      // though it was withheld from the ingester.
+      const lines = stdoutSpy.mock.calls
+        .map((c) => c[0])
+        .filter((s): s is string => typeof s === 'string');
+      const errorLine = lines.find((l) => {
+        try { return JSON.parse(l).type === 'error'; } catch { return false; }
+      });
+      expect(errorLine).toBeDefined();
+    });
+  });
 });

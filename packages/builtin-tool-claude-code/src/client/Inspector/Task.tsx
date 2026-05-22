@@ -176,18 +176,20 @@ export const TaskInspector = memo<BuiltinInspectorProps<TaskInspectorArgs, TaskP
     // pluginState snapshot; the trailing `completed/total` chip makes the
     // accumulation visible across rows (the ring alone stays empty while
     // every new task is still `todo`, so total wouldn't otherwise show).
+    // Verb flips to past tense once the call finishes — the chip persists
+    // in chat history and "Creating task" frozen on a settled row reads as
+    // if it's still running (see ui.md principle 4).
     if (apiName === ClaudeCodeApiName.TaskCreate) {
       const subject = ((args || partialArgs) as TaskCreateArgs | undefined)?.subject;
-      const text = subject
-        ? `${t('builtins.lobe-claude-code.task.createLabel')}${subject}`
-        : t('builtins.lobe-claude-code.task.createLabel');
+      const inFlight = isArgumentsStreaming || isLoading;
+      const label = t(
+        inFlight
+          ? 'builtins.lobe-claude-code.task.create.loading'
+          : 'builtins.lobe-claude-code.task.create.completed',
+      );
+      const text = subject ? `${label}${subject}` : label;
       return (
-        <div
-          className={cx(
-            inspectorTextStyles.root,
-            (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-          )}
-        >
+        <div className={cx(inspectorTextStyles.root, inFlight && shinyTextStyles.shinyText)}>
           <ProgressRing stats={stats} />
           {stats.total > 0 && (
             <span className={styles.countChip}>
@@ -253,22 +255,26 @@ export const TaskInspector = memo<BuiltinInspectorProps<TaskInspectorArgs, TaskP
     // TodoWriteInspector's `isArgumentsStreaming && stats.total === 0` branch.
     if (stats.total === 0) {
       const resolvedArgs = (args || partialArgs) as TaskInspectorArgs | undefined;
+      const inFlight = isArgumentsStreaming || isLoading;
       const fallback = (() => {
         if (apiName === ClaudeCodeApiName.TaskUpdate) {
           const taskId = (resolvedArgs as TaskUpdateArgs | undefined)?.taskId;
-          return taskId
-            ? t('builtins.lobe-claude-code.task.updateLabel', { taskId })
-            : t('builtins.lobe-claude-code.todoWrite.todos');
+          if (!taskId) return t('builtins.lobe-claude-code.todoWrite.todos');
+          return t(
+            inFlight
+              ? 'builtins.lobe-claude-code.task.update.loading'
+              : 'builtins.lobe-claude-code.task.update.completed',
+            { taskId },
+          );
         }
-        return t('builtins.lobe-claude-code.task.listLabel');
+        return t(
+          inFlight
+            ? 'builtins.lobe-claude-code.task.list.loading'
+            : 'builtins.lobe-claude-code.task.list.completed',
+        );
       })();
       return (
-        <div
-          className={cx(
-            inspectorTextStyles.root,
-            (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-          )}
-        >
+        <div className={cx(inspectorTextStyles.root, inFlight && shinyTextStyles.shinyText)}>
           {fallback}
         </div>
       );

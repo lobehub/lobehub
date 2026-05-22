@@ -76,6 +76,12 @@ const toolLoadRuleSchema = z.object({
 });
 
 const readFormatSchema = z.enum(['xml', 'markdown', 'both']).optional();
+const readLocSchema = z
+  .tuple([z.number().int().min(0), z.number().int().min(0)])
+  .refine(([startLine, endLine]) => endLine >= startLine, {
+    message: 'loc end line must be greater than or equal to start line',
+  })
+  .optional();
 const writeCreateModeSchema = z.enum(['always-new', 'if-missing', 'must-exist']).optional();
 const recursiveSchema = z.boolean().optional();
 const mountedSkillNamespaceSchema = z.literal('agent');
@@ -426,16 +432,23 @@ export const agentDocumentRouter = router({
     .input(
       z.object({
         agentId: z.string(),
+        loc: readLocSchema,
         path: z.string(),
         topicId: z.string().optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
       try {
-        return await ctx.agentDocumentVfsService.read(input.path, {
-          agentId: input.agentId,
-          topicId: input.topicId,
-        });
+        return await ctx.agentDocumentVfsService.read(
+          input.path,
+          {
+            agentId: input.agentId,
+            topicId: input.topicId,
+          },
+          {
+            loc: input.loc,
+          },
+        );
       } catch (error) {
         handleAgentDocumentVfsError(error);
       }

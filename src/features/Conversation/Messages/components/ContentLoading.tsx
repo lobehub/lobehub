@@ -62,6 +62,8 @@ const ContentLoading = memo<ContentLoadingProps>(({ id }) => {
 
   const showElapsedTime = elapsedSeconds >= ELAPSED_TIME_THRESHOLD / 1000;
 
+  if (!runningOp) return null;
+
   if (operationType && NO_NEED_SHOW_DOT_OP_TYPES.has(operationType)) return null;
 
   if (operationType === 'contextCompression') {

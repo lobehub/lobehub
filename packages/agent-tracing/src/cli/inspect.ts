@@ -151,6 +151,28 @@ export function registerInspectCommand(program: Command) {
               snapshot = await remoteStore.fetch(url, traceId);
             }
           }
+        } else if (traceId && traceId.startsWith('op_')) {
+          // Partial op id (e.g. `op_<timestamp>`): first check the local
+          // FileSnapshotStore (which also covers `_partial/` in-progress
+          // snapshots via substring match), then fall back to a prefix scan
+          // of the `_remote/` cache so users don't have to paste the full
+          // `op_<ts>_agt_..._tpc_..._<suffix>` string.
+          const fileStore = new FileSnapshotStore();
+          snapshot = await fileStore.get(traceId);
+          if (!snapshot) {
+            const remoteStore = new RemoteSnapshotStore();
+            const matches = await remoteStore.findCachedByPrefix(traceId);
+            if (matches.length === 1) {
+              const fullId = matches[0];
+              snapshot = await remoteStore.getCached(fullId);
+              console.error(`✓ Resolved "${traceId}" → ${fullId}`);
+            } else if (matches.length > 1) {
+              console.error(`Ambiguous id prefix "${traceId}" — multiple cached snapshots match:`);
+              for (const m of matches) console.error(`  ${m}`);
+              console.error('Re-run with the full operation id.');
+              process.exit(1);
+            }
+          }
         } else {
           const store = new FileSnapshotStore();
           snapshot = traceId ? await store.get(traceId) : await store.getLatest();

@@ -28,7 +28,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   container: css`
     margin-block-start: 4px;
-    margin-inline: 16px;
+    margin-inline: 8px 12px;
     padding-block: 8px 10px;
     padding-inline: 12px;
     border: 1px solid ${cssVar.colorBorderSecondary};

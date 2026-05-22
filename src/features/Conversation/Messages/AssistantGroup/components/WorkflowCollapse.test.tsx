@@ -387,7 +387,7 @@ describe('WorkflowCollapse', () => {
     expect(icon).toHaveAttribute('data-icon', 'Check');
   });
 
-  it('shows yellow warning when some tools fail after completion', () => {
+  it('shows check with a warning badge when some tools fail after completion', () => {
     mockIsGenerating = false;
     const blocks: AssistantContentBlock[] = [
       {
@@ -415,8 +415,10 @@ describe('WorkflowCollapse', () => {
     ];
 
     render(<WorkflowCollapse assistantMessageId="msg-1" blocks={blocks} />);
-    const icon = screen.getByTestId('icon');
-    expect(icon).toHaveAttribute('data-icon', 'TriangleAlert');
+    const icons = screen.getAllByTestId('icon');
+    const iconNames = icons.map((node) => node.getAttribute('data-icon'));
+    expect(iconNames).toContain('Check');
+    expect(iconNames).toContain('TriangleAlert');
   });
 
   it('shows red x when all tools fail after completion', () => {

@@ -10,6 +10,12 @@
 export const DEFAULT_TOOL_RESULT_MAX_LENGTH = 25_000;
 
 /**
+ * Tool identifiers whose results must never be truncated or archived,
+ * because they are themselves the read surface for archived content.
+ */
+export const ARCHIVE_BYPASS_IDENTIFIERS = new Set<string>(['lobe-agent-documents']);
+
+/**
  * Truncate tool result content if it exceeds the maximum length
  * Adds a truncation notice to inform the LLM that content was cut off
  *
@@ -24,8 +30,18 @@ export function truncateToolResult(content: string, maxLength?: number): string 
     return content;
   }
 
-  const truncated = content.slice(0, limit);
-  const remainingChars = content.length - limit;
+  // Avoid splitting a UTF-16 surrogate pair: if the cutoff lands right after a
+  // high surrogate (e.g. half of an emoji), step back one code unit. Otherwise
+  // JSON.stringify emits a lone `\uD83D`-style escape, which some upstream
+  // providers (DeepSeek, Anthropic) reject as "unexpected end of hex escape".
+  let cutoff = limit;
+  const lastCharCode = content.charCodeAt(cutoff - 1);
+  if (lastCharCode >= 0xd8_00 && lastCharCode <= 0xdb_ff) {
+    cutoff -= 1;
+  }
+
+  const truncated = content.slice(0, cutoff);
+  const remainingChars = content.length - cutoff;
 
   // Add truncation notice
   const notice = `\n\n[Content truncated: ${remainingChars.toLocaleString()} characters omitted to prevent context overflow. Original length: ${content.length.toLocaleString()} characters]`;

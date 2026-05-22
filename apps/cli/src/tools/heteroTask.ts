@@ -1,7 +1,9 @@
 import { execFileSync, spawn } from 'node:child_process';
 
+import type { RemoteHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
+
 import { getTrpcClient } from '../api/client';
-import { getTask, removeTask, saveTask } from '../daemon/taskRegistry';
+import { getTask, listTasks, removeTask, saveTask } from '../daemon/taskRegistry';
 import { log } from '../utils/logger';
 
 const DEFAULT_HERMES_PORT = 3456;
@@ -15,27 +17,9 @@ function resolveLhPath(): string {
   }
 }
 
-/**
- * Check whether an openclaw session already exists for the given topicId.
- * The session key format is `agent:<agentId>:explicit:<sessionId>`.
- * Returns false on any error so that callers default to injecting the full protocol.
- */
-function openclawSessionExists(agentId: string, topicId: string): boolean {
-  try {
-    const raw = execFileSync('openclaw', ['sessions', '--agent', agentId, '--json'], {
-      encoding: 'utf8',
-    });
-    const data = JSON.parse(raw) as { sessions?: Array<{ key: string }> };
-    const expectedKey = `agent:${agentId}:explicit:${topicId}`;
-    return data.sessions?.some((s) => s.key === expectedKey) ?? false;
-  } catch {
-    return false;
-  }
-}
-
 export interface RunHeteroTaskParams {
   agentId?: string;
-  agentType: 'hermes' | 'openclaw';
+  agentType: RemoteHeterogeneousAgentType;
   cwd?: string;
   operationId: string;
   prompt: string;
@@ -48,7 +32,7 @@ export interface CancelHeteroTaskParams {
   taskId: string;
 }
 
-function getHermesPort(): number {
+export function getHermesPort(): number {
   const env = process.env.HERMES_GATEWAY_PORT;
   if (env) {
     const parsed = Number.parseInt(env, 10);
@@ -102,6 +86,28 @@ async function sendAutoNotify(
 }
 
 /**
+ * Signal remote hetero task completion to the server so it can publish
+ * `agent_runtime_end` to the gateway WS and close the frontend subscription.
+ * Called on clean process exit (code=0, no signal) — error exits go through
+ * `sendAutoNotify` which writes an error message AND triggers completion via
+ * the `done` flag.
+ */
+async function sendDoneSignal(topicId: string, agentId?: string): Promise<void> {
+  try {
+    const client = await getTrpcClient();
+    await client.agentNotify.notify.mutate({
+      agentId,
+      content: '',
+      done: true,
+      role: 'assistant',
+      topicId,
+    });
+  } catch (err) {
+    log.error('Failed to send done signal:', err instanceof Error ? err.message : String(err));
+  }
+}
+
+/**
  * Build the notify protocol injected into the first message of a new hetero-agent session.
  * Tells the agent how to push updates back to the LobeHub user via `lh notify`.
  */
@@ -139,17 +145,30 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
   const lhPath = resolveLhPath();
 
   if (agentType === 'openclaw') {
-    // openclaw agent --local runs the agent in-process and stays alive until
-    // the agent finishes — giving us a real long-lived PID we can kill to cancel.
+    // openclaw agent --local is one-shot: each invocation processes one message and exits.
+    // The --session-id links turns into the same conversation history on disk.
     // Requires the `openclaw` binary to be on PATH with Node >=22.19.
     const openclawAgent = process.env.OPENCLAW_AGENT_ID ?? 'main';
 
-    // Only inject the protocol on the first turn of this session. On subsequent
-    // turns openclaw already has the instructions in its conversation history.
-    const isNewSession = !openclawSessionExists(openclawAgent, topicId);
-    const enrichedPrompt = isNewSession
-      ? `${prompt}\n\n${buildNotifyProtocol(lhPath, topicId)}`
-      : prompt;
+    // Always inject the notify protocol so openclaw knows how to report results
+    // back to the LobeHub UI — even if the previous turn failed and the session
+    // history was not cleanly committed.
+    const enrichedPrompt = `${prompt}\n\n${buildNotifyProtocol(lhPath, topicId)}`;
+
+    // Kill any existing openclaw process for this topicId before spawning a new one.
+    // openclaw serialises session writes; a concurrent process holding the session
+    // lock will cause the new one to exit with code 1.
+    for (const existing of listTasks()) {
+      if (existing.topicId === topicId && existing.agentType === 'openclaw') {
+        try {
+          process.kill(existing.pid, 'SIGTERM');
+        } catch {
+          // Already exited — nothing to do.
+        }
+        removeTask(existing.taskId);
+      }
+    }
+
     const child = spawn(
       'openclaw',
       [
@@ -187,15 +206,24 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
     });
     log.info(`OpenClaw task started: taskId=${taskId} pid=${pid} agent=${openclawAgent}`);
 
-    // Auto-notify on abnormal exit (signal or non-zero code); normal completion
-    // is reported by openclaw itself via `lh notify` (injected into the prompt).
+    // On exit: notify the server so it can close the frontend gateway WS subscription.
+    // - Abnormal exit (signal or non-zero code): write an error message bubble.
+    // - Clean exit (code=0, no signal): openclaw already sent its final message via
+    //   `lh notify`; just send a done signal to publish `agent_runtime_end`.
     child.on('close', (code, signal) => {
       removeTask(taskId);
       if (code !== 0 || signal !== null) {
         const text = signal
           ? `Task cancelled (signal: ${signal})`
           : `Task failed (exit code: ${code})`;
-        void sendAutoNotify(topicId, taskId, text, agentId);
+        // Send error message first, THEN signal done (sequential).
+        // Fire-and-forget both, but ensure done is always sent even if notify fails.
+        void sendAutoNotify(topicId, taskId, text, agentId).finally(() =>
+          sendDoneSignal(topicId, agentId),
+        );
+      } else {
+        // Clean exit — openclaw already sent its final message; just signal done.
+        void sendDoneSignal(topicId, agentId);
       }
     });
 

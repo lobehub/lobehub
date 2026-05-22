@@ -1,3 +1,4 @@
+import { AGENT_SKILLS_IDENTIFIER_PREFIX } from '@lobechat/const';
 import {
   type getKernelFromEditor,
   ILitexmlService,
@@ -54,21 +55,27 @@ export class ActionTagPlugin {
 
     // Writer: ActionTagNode → markdown
     // Skills       → <skill name="..." label="..." />
+    // AgentSkill   → <skill name="agent-skills:<filename>" label="..." />
+    //                Wire format collapses to <skill>; the `agent-skills:`
+    //                prefix in the identifier is what the runtime keys off to
+    //                route the activation through agentDocumentsService.
+    // ProjectSkill → <skill name="<skill-name>" label="..." />
+    //                Same wire format as a registered skill — the project
+    //                skill is in the runtime's `<available_skills>` registry
+    //                (added on the server when a device is active), so the
+    //                model resolves it through `activateSkill` like any
+    //                other. Keeps the rendered prompt uniform across skill
+    //                sources, which the LiteXML round-trip preserves via the
+    //                category-aware `<projectSkill>` save format.
     // Tools        → <tool name="..." label="..." />
-    // ProjectSkill → bare label text (e.g. `/local-testing`) so the downstream
-    //                CLI agent recognizes its own slash-style skill invocation
     // Commands     → <action type="..." category="command" label="..." />
     mdService?.registerMarkdownWriter(ActionTagNode.getType(), (ctx: any, node: any) => {
       if ($isActionTagNode(node)) {
         const cat = node.actionCategory;
-        if (cat === 'skill') {
+        if (cat === 'skill' || cat === 'agentSkill' || cat === 'projectSkill') {
           ctx.appendLine(`<skill name="${node.actionType}" label="${node.actionLabel}" />`);
         } else if (cat === 'tool') {
           ctx.appendLine(`<tool name="${node.actionType}" label="${node.actionLabel}" />`);
-        } else if (cat === 'projectSkill') {
-          // Chip / menu render the bare skill name; the slash is added here so
-          // the downstream CLI sees `/skill-name` as a slash invocation.
-          ctx.appendLine(`/${node.actionType}`);
         } else {
           ctx.appendLine(
             `<action type="${node.actionType}" category="${cat}" label="${node.actionLabel}" />`,
@@ -84,7 +91,7 @@ export class ActionTagPlugin {
     xmlService?.registerXMLWriter(ActionTagNode.getType(), (node: any, ctx: any) => {
       if ($isActionTagNode(node)) {
         const cat = node.actionCategory;
-        if (cat === 'skill') {
+        if (cat === 'skill' || cat === 'agentSkill') {
           return ctx.createXmlNode('skill', { label: node.actionLabel, name: node.actionType });
         }
         if (cat === 'tool') {
@@ -105,14 +112,20 @@ export class ActionTagPlugin {
       return false;
     });
 
-    // Read <skill>, <tool>, <projectSkill>, and legacy <action> tags
-    const readSkill = (xmlElement: any): SerializedActionTagNode => ({
-      actionCategory: 'skill',
-      actionLabel: xmlElement.getAttribute('label') || '',
-      actionType: (xmlElement.getAttribute('name') || '') as ActionTagType,
-      type: ActionTagNode.getType(),
-      version: 1,
-    });
+    // Read <skill>, <tool>, <projectSkill>, and legacy <action> tags.
+    // Agent-document skills share the <skill> wire format; we recover the
+    // 'agentSkill' UI category from the identifier prefix so reload preserves
+    // the chip's color / icon / tooltip.
+    const readSkill = (xmlElement: any): SerializedActionTagNode => {
+      const name = xmlElement.getAttribute('name') || '';
+      return {
+        actionCategory: name.startsWith(AGENT_SKILLS_IDENTIFIER_PREFIX) ? 'agentSkill' : 'skill',
+        actionLabel: xmlElement.getAttribute('label') || '',
+        actionType: name as ActionTagType,
+        type: ActionTagNode.getType(),
+        version: 1,
+      };
+    };
     const readTool = (xmlElement: any): SerializedActionTagNode => ({
       actionCategory: 'tool',
       actionLabel: xmlElement.getAttribute('label') || '',

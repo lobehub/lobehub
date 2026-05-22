@@ -91,6 +91,22 @@ describe('TopicDocumentModel', () => {
       const docs = await topicDocumentModel.findByTopicId(topicId);
       expect(docs).toHaveLength(2);
     });
+
+    // The PK is (documentId, topicId), so re-associating the same pair must
+    // be a silent no-op — callers (e.g. re-crawl flows) rely on this to keep
+    // associate calls fire-and-forget.
+    it('should be idempotent — re-associating the same pair does not throw or duplicate', async () => {
+      const doc = await createTestDocument(documentModel, 'Idempotent doc');
+
+      await topicDocumentModel.associate({ documentId: doc.id, topicId });
+      await expect(topicDocumentModel.associate({ documentId: doc.id, topicId })).resolves.toEqual({
+        documentId: doc.id,
+        topicId,
+      });
+
+      const docs = await topicDocumentModel.findByTopicId(topicId);
+      expect(docs.filter((d) => d.id === doc.id)).toHaveLength(1);
+    });
   });
 
   describe('disassociate', () => {

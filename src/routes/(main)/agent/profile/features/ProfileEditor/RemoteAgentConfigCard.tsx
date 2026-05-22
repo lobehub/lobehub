@@ -1,0 +1,337 @@
+'use client';
+
+import {
+  HETEROGENEOUS_TYPE_LABELS,
+  type RemoteHeterogeneousAgentType,
+} from '@lobechat/heterogeneous-agents';
+import type { HeterogeneousProviderConfig } from '@lobechat/types';
+import { ActionIcon, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import { Button, Modal, Select, Tag } from 'antd';
+import { createStyles } from 'antd-style';
+import { BotIcon, CheckCircle2, MonitorSmartphone, RefreshCw, XCircle } from 'lucide-react';
+import { memo, useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { lambdaClient, lambdaQuery } from '@/libs/trpc/client';
+import { useAgentStore } from '@/store/agent';
+
+const useStyles = createStyles(({ css, token }) => ({
+  card: css`
+    padding-block: 16px 4px;
+    padding-inline: 16px;
+    border: 1px solid ${token.colorBorderSecondary};
+    border-radius: ${token.borderRadiusLG}px;
+
+    background: ${token.colorBgContainer};
+  `,
+  cardHeader: css`
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+
+    padding-block-end: 12px;
+  `,
+  title: css`
+    font-size: 14px;
+    font-weight: 500;
+  `,
+  detailList: css`
+    border-block-start: 1px solid ${token.colorBorderSecondary};
+  `,
+  detailRow: css`
+    display: flex;
+    gap: 16px;
+    align-items: center;
+
+    min-height: 44px;
+    padding-block: 6px;
+
+    & + & {
+      border-block-start: 1px solid ${token.colorBorderSecondary};
+    }
+  `,
+  detailLabel: css`
+    flex-shrink: 0;
+
+    width: 96px;
+
+    font-size: 12px;
+    color: ${token.colorTextTertiary};
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  `,
+  detailContent: css`
+    display: flex;
+    flex: 1;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+
+    min-width: 0;
+  `,
+  deviceItem: css`
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  `,
+}));
+
+interface RemoteAgentConfigCardProps {
+  onBoundDeviceChange?: (deviceId: string) => Promise<void> | void;
+  provider: HeterogeneousProviderConfig;
+}
+
+const RemoteAgentConfigCard = memo<RemoteAgentConfigCardProps>(
+  ({ provider, onBoundDeviceChange }) => {
+    const { t } = useTranslation('setting');
+    const { styles } = useStyles();
+
+    const agentId = useAgentStore((s) => s.activeAgentId);
+    const boundDeviceId = useAgentStore((s) =>
+      agentId ? s.agentMap[agentId]?.agencyConfig?.boundDeviceId : undefined,
+    );
+
+    const [changeDeviceOpen, setChangeDeviceOpen] = useState(false);
+    const [selectedDeviceId, setSelectedDeviceId] = useState<string | undefined>(undefined);
+    const [capabilityResult, setCapabilityResult] = useState<
+      { available: boolean; reason?: string; version?: string } | undefined
+    >(undefined);
+    const [checkingCapability, setCheckingCapability] = useState(false);
+    const [saving, setSaving] = useState(false);
+
+    const platformName = HETEROGENEOUS_TYPE_LABELS[provider.type] ?? provider.type;
+
+    const { data: devices, isLoading: loadingDevices } = lambdaQuery.device.listDevices.useQuery(
+      undefined,
+      { staleTime: 30_000 },
+    );
+
+    const boundDevice = devices?.find((d) => d.deviceId === boundDeviceId);
+
+    const checkCapability = useCallback(
+      async (deviceId: string) => {
+        setCheckingCapability(true);
+        setCapabilityResult(undefined);
+        try {
+          const result = await lambdaClient.device.checkCapability.query({
+            deviceId,
+            platform: provider.type as RemoteHeterogeneousAgentType,
+          });
+          setCapabilityResult(result);
+        } catch {
+          setCapabilityResult({ available: false, reason: 'Check failed' });
+        } finally {
+          setCheckingCapability(false);
+        }
+      },
+      [provider.type],
+    );
+
+    // Check capability on mount when bound device is online
+    useEffect(() => {
+      if (boundDeviceId && boundDevice?.online) {
+        void checkCapability(boundDeviceId);
+      }
+    }, [boundDeviceId, boundDevice?.online, checkCapability]);
+
+    const handleOpenChangeDevice = useCallback(() => {
+      setSelectedDeviceId(boundDeviceId);
+      setCapabilityResult(undefined);
+      setChangeDeviceOpen(true);
+    }, [boundDeviceId]);
+
+    const handleDeviceSelect = useCallback(
+      (dId: string) => {
+        setSelectedDeviceId(dId);
+        void checkCapability(dId);
+      },
+      [checkCapability],
+    );
+
+    const handleSaveDevice = useCallback(async () => {
+      if (!selectedDeviceId) return;
+      setSaving(true);
+      try {
+        await onBoundDeviceChange?.(selectedDeviceId);
+        setChangeDeviceOpen(false);
+      } finally {
+        setSaving(false);
+      }
+    }, [selectedDeviceId, onBoundDeviceChange]);
+
+    const renderAvailability = () => {
+      if (!boundDeviceId) {
+        return (
+          <Tag style={{ marginInlineEnd: 0 }}>{t('platformAgentConfig.availability.noDevice')}</Tag>
+        );
+      }
+      if (!boundDevice?.online) {
+        return (
+          <Tag color="warning" style={{ marginInlineEnd: 0 }}>
+            {t('platformAgentConfig.device.offline')}
+          </Tag>
+        );
+      }
+      if (checkingCapability) {
+        return (
+          <Tag style={{ marginInlineEnd: 0 }}>{t('platformAgentConfig.availability.checking')}</Tag>
+        );
+      }
+      if (!capabilityResult) return null;
+      if (capabilityResult.available) {
+        return (
+          <Flexbox horizontal align="center" gap={4}>
+            <Icon color="var(--ant-color-success)" icon={CheckCircle2} size={14} />
+            <Tag color="success" style={{ marginInlineEnd: 0 }}>
+              {capabilityResult.version ?? t('platformAgentConfig.availability.available')}
+            </Tag>
+          </Flexbox>
+        );
+      }
+      return (
+        <Flexbox horizontal align="center" gap={4}>
+          <Icon color="var(--ant-color-error)" icon={XCircle} size={14} />
+          <Tag color="error" style={{ marginInlineEnd: 0 }}>
+            {t('platformAgentConfig.availability.notInstalled')}
+          </Tag>
+        </Flexbox>
+      );
+    };
+
+    const onlineDevices = (devices ?? []).filter((d) => d.online);
+    const capabilityOk = capabilityResult?.available === true;
+    const capabilityBad = capabilityResult?.available === false;
+
+    return (
+      <>
+        <Flexbox className={styles.card} gap={0}>
+          <div className={styles.cardHeader}>
+            <Flexbox horizontal align="center" gap={8}>
+              <Icon icon={MonitorSmartphone} size={16} />
+              <Text strong className={styles.title}>
+                {t('platformAgentConfig.title')}
+              </Text>
+            </Flexbox>
+            <Tooltip title={t('platformAgentConfig.redetect')}>
+              <ActionIcon
+                aria-label={t('platformAgentConfig.redetect')}
+                disabled={!boundDeviceId || checkingCapability}
+                icon={RefreshCw}
+                loading={checkingCapability}
+                size="small"
+                onClick={() => boundDeviceId && void checkCapability(boundDeviceId)}
+              />
+            </Tooltip>
+          </div>
+          <div className={styles.detailList}>
+            <div className={styles.detailRow}>
+              <Text className={styles.detailLabel}>{t('platformAgentConfig.platform.label')}</Text>
+              <div className={styles.detailContent}>
+                <Tag style={{ marginInlineEnd: 0 }}>{platformName}</Tag>
+              </div>
+            </div>
+            <div className={styles.detailRow}>
+              <Text className={styles.detailLabel}>{t('platformAgentConfig.device.label')}</Text>
+              <div className={styles.detailContent}>
+                {boundDevice ? (
+                  <Flexbox horizontal align="center" gap={6}>
+                    <Text ellipsis style={{ fontSize: 14 }}>
+                      {boundDevice.hostname}
+                    </Text>
+                    <Tag
+                      color={boundDevice.online ? 'success' : 'default'}
+                      style={{ marginInlineEnd: 0 }}
+                    >
+                      {boundDevice.online
+                        ? t('platformAgentConfig.device.online')
+                        : t('platformAgentConfig.device.offline')}
+                    </Tag>
+                  </Flexbox>
+                ) : (
+                  <Tag style={{ marginInlineEnd: 0 }}>{t('platformAgentConfig.device.none')}</Tag>
+                )}
+              </div>
+            </div>
+            <div className={styles.detailRow}>
+              <Text className={styles.detailLabel}>
+                {t('platformAgentConfig.availability.label')}
+              </Text>
+              <div className={styles.detailContent}>{renderAvailability()}</div>
+            </div>
+            <div className={styles.detailRow}>
+              <div className={styles.detailLabel} />
+              <div className={styles.detailContent}>
+                <Button size="small" onClick={handleOpenChangeDevice}>
+                  {t('platformAgentConfig.changeDevice')}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </Flexbox>
+
+        {/* Change Device Modal */}
+        <Modal
+          destroyOnClose
+          okText={t('platformAgentConfig.changeDevice')}
+          open={changeDeviceOpen}
+          title={t('platformAgentConfig.changeDevice')}
+          width={400}
+          okButtonProps={{
+            disabled: !selectedDeviceId || checkingCapability || capabilityBad,
+            loading: saving,
+          }}
+          onCancel={() => setChangeDeviceOpen(false)}
+          onOk={() => void handleSaveDevice()}
+        >
+          <Flexbox gap={12} paddingBlock={'12px 4px'}>
+            <Select
+              loading={loadingDevices}
+              placeholder={t('platformAgentConfig.selectDevice')}
+              style={{ width: '100%' }}
+              value={selectedDeviceId}
+              options={onlineDevices.map((d) => ({
+                label: (
+                  <div className={styles.deviceItem}>
+                    <Icon icon={BotIcon} size={14} />
+                    <span>{d.hostname}</span>
+                    <Tag color="success" style={{ marginInlineEnd: 0 }}>
+                      {t('platformAgentConfig.device.online')}
+                    </Tag>
+                  </div>
+                ),
+                value: d.deviceId,
+              }))}
+              onChange={handleDeviceSelect}
+            />
+            {checkingCapability && (
+              <Tag style={{ marginInlineEnd: 0 }}>
+                {t('platformAgentConfig.availability.checking')}
+              </Tag>
+            )}
+            {capabilityOk && (
+              <Flexbox horizontal align="center" gap={4}>
+                <Icon color="var(--ant-color-success)" icon={CheckCircle2} size={14} />
+                <Tag color="success" style={{ marginInlineEnd: 0 }}>
+                  {capabilityResult?.version ?? t('platformAgentConfig.availability.available')}
+                </Tag>
+              </Flexbox>
+            )}
+            {capabilityBad && (
+              <Flexbox horizontal align="center" gap={4}>
+                <Icon color="var(--ant-color-error)" icon={XCircle} size={14} />
+                <Tag color="error" style={{ marginInlineEnd: 0 }}>
+                  {t('platformAgentConfig.availability.notInstalled')}
+                </Tag>
+              </Flexbox>
+            )}
+          </Flexbox>
+        </Modal>
+      </>
+    );
+  },
+);
+
+RemoteAgentConfigCard.displayName = 'RemoteAgentConfigCard';
+
+export default RemoteAgentConfigCard;

@@ -54,6 +54,48 @@ describe('ClaudeCodeAdapter', () => {
       );
     });
 
+    it('classifies overloaded failures from api_error_status 529 result events', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const rawError =
+        'API Error: 529 {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}';
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        api_error_status: 529,
+        is_error: true,
+        result: rawError,
+        type: 'result',
+      });
+
+      expect(events.map((e) => e.type)).toEqual(['stream_end', 'error']);
+      expect(events[1].data).toMatchObject({
+        agentType: 'claude-code',
+        clearEchoedContent: true,
+        code: 'overloaded',
+        message: rawError,
+        stderr: rawError,
+      });
+    });
+
+    it('classifies overloaded failures from result text alone', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const rawError = 'Overloaded';
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        is_error: true,
+        result: rawError,
+        type: 'result',
+      });
+
+      expect(events.map((e) => e.type)).toEqual(['stream_end', 'error']);
+      expect(events[1].data).toMatchObject({
+        agentType: 'claude-code',
+        code: 'overloaded',
+        message: rawError,
+      });
+    });
+
     it('classifies rate-limit failures from paired rate_limit_event + result events', () => {
       const adapter = new ClaudeCodeAdapter();
       const rawError = "You've hit your limit · resets 9am (Asia/Shanghai)";
@@ -1169,11 +1211,11 @@ describe('ClaudeCodeAdapter', () => {
   });
 
   describe('usage and model extraction', () => {
-    // Under `--include-partial-messages` (our preset default), CC emits a
-    // stale `message_start.usage` snapshot (e.g. `output_tokens: 8`) that it
-    // echoes verbatim on every content-block `assistant` event. The
-    // authoritative per-turn total only arrives later as `message_delta`.
-    // So turn_metadata emission is wired to `message_delta`, not `assistant`.
+    // Under `--include-partial-messages`, CC emits a stale
+    // `message_start.usage` snapshot (e.g. `output_tokens: 8`) that it echoes
+    // verbatim on every content-block `assistant` event. The authoritative
+    // per-turn total only arrives later as `message_delta`. So turn_metadata
+    // emission is wired to `message_delta`, not `assistant`.
     it('does NOT emit turn_metadata on assistant events (usage there is stale)', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });

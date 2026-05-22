@@ -1,6 +1,6 @@
 import { ModelProvider } from 'model-bank';
 
-import { responsesAPIModels } from '../../const/models';
+import { isGPT5ProResponsesModel, responsesAPIModels } from '../../const/models';
 import { pruneReasoningPayload } from '../../core/contextBuilders/openai';
 import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
@@ -96,7 +96,7 @@ export const params = {
         const reasoning = payload.reasoning
           ? { ...payload.reasoning, summary: 'auto' }
           : { summary: 'auto' };
-        if (model.startsWith('gpt-5-pro')) {
+        if (isGPT5ProResponsesModel(model)) {
           reasoning.effort = 'high';
         }
         return pruneReasoningPayload({

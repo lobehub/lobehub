@@ -1409,6 +1409,33 @@ export class MessageModel {
     return result[0].count;
   };
 
+  hasTopicMessages = async (topicId: string): Promise<boolean> => {
+    const rows = await this.db
+      .select({ id: messages.id })
+      .from(messages)
+      .where(and(eq(messages.userId, this.userId), eq(messages.topicId, topicId)))
+      .limit(1);
+
+    return rows.length > 0;
+  };
+
+  findFirstAssistantInTopic = async (topicId: string): Promise<DBMessageItem | undefined> => {
+    const rows = (await this.db
+      .select()
+      .from(messages)
+      .where(
+        and(
+          eq(messages.userId, this.userId),
+          eq(messages.topicId, topicId),
+          eq(messages.role, 'assistant'),
+        ),
+      )
+      .orderBy(asc(messages.createdAt))
+      .limit(1)) as DBMessageItem[];
+
+    return rows[0];
+  };
+
   countWords = async (params?: {
     endDate?: string;
     range?: [string, string];
