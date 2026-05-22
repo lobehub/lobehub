@@ -6,13 +6,15 @@ import GithubRunCommandRender from './RunCommandRender';
 export const GithubIdentifier = 'github';
 
 export const GithubApiName = {
-  runCommand: 'run_command',
+  runCommand: 'runCommand',
 } as const;
 
 export const GithubInspectors: Record<string, BuiltinInspector> = {
-  [GithubApiName.runCommand]: GithubRunCommandInspector as BuiltinInspector,
+  runCommand: GithubRunCommandInspector as BuiltinInspector,
+  run_command: GithubRunCommandInspector as BuiltinInspector,
 };
 
 export const GithubRenders: Record<string, BuiltinRender> = {
-  [GithubApiName.runCommand]: GithubRunCommandRender as BuiltinRender,
+  runCommand: GithubRunCommandRender as BuiltinRender,
+  run_command: GithubRunCommandRender as BuiltinRender,
 };
