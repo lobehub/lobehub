@@ -48,6 +48,7 @@ user-invocable: false
 - Replace magic numbers/strings with well-named constants
 - Defer formatting to tooling
 - Prefer **named exports** over `export default` — keeps refactor renames and IDE auto-import in sync, and avoids the `default` re-naming drift you get with `import Foo from './foo'`. Reserve `export default` for files where the framework requires it (Next.js page/route/layout, React.lazy targets, config files like `vitest.config.ts`)
+- Before adding local helpers for common guards/parsing/normalization (record checks, string extraction, empty-string handling, timing helpers, JSON-safe utilities, etc.), search `packages/utils` first. If the helper already exists or clearly belongs there, import it from `@lobechat/utils` (or the relevant `@lobechat/utils/*` subpath) instead of duplicating tiny helpers across feature files.
 
 ## UI and Theming
 
