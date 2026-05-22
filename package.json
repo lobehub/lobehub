@@ -159,6 +159,7 @@
   "overrides": {
     "@types/react": "19.2.13",
     "antd": "6.3.5",
+    "baseline-browser-mapping": "2.10.31",
     "better-auth": "1.4.6",
     "better-call": "1.1.8",
     "drizzle-orm": "^0.45.1",
@@ -556,6 +557,7 @@
       "@react-pdf/image": "3.0.4",
       "@types/react": "19.2.13",
       "antd": "6.3.5",
+      "baseline-browser-mapping": "2.10.31",
       "better-auth": "1.4.6",
       "better-call": "1.1.8",
       "drizzle-orm": "^0.45.1",
