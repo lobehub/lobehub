@@ -1,14 +1,8 @@
-import { type AIChatModelCard, LOBE_DEFAULT_MODEL_LIST } from 'model-bank';
+import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 
 import type { ChatCompletionTool } from '../types/chat';
 import { AgentRuntimeErrorType } from '../types/error';
 import { AgentRuntimeError } from './createError';
-
-// ---------------------------------------------------------------------------
-// Custom error class — modelled after ContextExceededPreFlightError so the
-// existing error-handling pipeline (openaiCompatibleFactory / RouterRuntime)
-// can catch and surface it as a structured chat error.
-// ---------------------------------------------------------------------------
 
 export const TOOL_LIMIT_ERROR_TYPE = 'ToolLimitExceeded' as const;
 
@@ -34,21 +28,14 @@ export class ToolLimitExceededError extends Error {
 
     const parts: string[] = [];
     if (maxToolCount !== undefined && toolCount > maxToolCount) {
-      parts.push(
-        `工具数量 (${toolCount}) 超过模型 ${provider}/${model} 的上限 (${maxToolCount})。`,
-      );
+      parts.push(`工具数量 (${toolCount}) 超过 provider ${provider} 的上限 (${maxToolCount})。`);
     }
-    if (
-      maxToolPayloadBytes !== undefined &&
-      toolPayloadBytes > maxToolPayloadBytes
-    ) {
+    if (maxToolPayloadBytes !== undefined && toolPayloadBytes > maxToolPayloadBytes) {
       const kb = Math.round(toolPayloadBytes / 1024);
       const maxKb = Math.round(maxToolPayloadBytes / 1024);
-      parts.push(
-        `工具 payload 大小 (${kb} KB) 超过模型 ${provider}/${model} 的上限 (${maxKb} KB)。`,
-      );
+      parts.push(`工具 payload 大小 (${kb} KB) 超过 provider ${provider} 的上限 (${maxKb} KB)。`);
     }
-    parts.push('请减少 MCP server 数量，或切换到无此限制的模型。');
+    parts.push('请减少 MCP server 数量，或切换到无此限制的 provider。');
 
     super(parts.join(' '));
     this.name = 'ToolLimitExceededError';
@@ -61,36 +48,28 @@ export class ToolLimitExceededError extends Error {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Resolve the model card that matches `modelId` and `providerId` from the
- * built-in model registry. Returns `undefined` when no entry is found (e.g.
- * for custom / remote models).
- */
-function resolveModelCard(
-  modelId: string,
-  providerId: string,
-): AIChatModelCard | undefined {
-  return LOBE_DEFAULT_MODEL_LIST.find(
-    (m) => m.id === modelId && m.providerId === providerId,
-  ) as AIChatModelCard | undefined;
+interface ProviderToolLimits {
+  maxToolCount?: number;
+  maxToolPayloadBytes?: number;
 }
 
 /**
- * Compute the approximate byte length of the serialised tools array.
- * We use `JSON.stringify` because that's what most HTTP adapters do when
- * posting to upstream providers.
+ * Resolve provider-level tool limits from the built-in provider registry.
+ * Returns `undefined` when the provider isn't registered (custom providers).
  */
+function resolveProviderLimits(providerId: string): ProviderToolLimits | undefined {
+  const provider = DEFAULT_MODEL_PROVIDER_LIST.find((p) => p.id === providerId);
+  if (!provider?.settings) return undefined;
+
+  const { maxToolCount, maxToolPayloadBytes } = provider.settings;
+  if (maxToolCount === undefined && maxToolPayloadBytes === undefined) return undefined;
+
+  return { maxToolCount, maxToolPayloadBytes };
+}
+
 function measureToolPayloadBytes(tools: ChatCompletionTool[]): number {
   return new TextEncoder().encode(JSON.stringify(tools)).length;
 }
-
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
 
 export interface ValidateToolLimitsParams {
   model: string;
@@ -99,35 +78,26 @@ export interface ValidateToolLimitsParams {
 }
 
 /**
- * Validate that the given tools array does not exceed provider / model limits
- * declared in the model registry (`maxToolCount`, `maxToolPayloadBytes`).
+ * Validate that the given tools array does not exceed provider-level limits
+ * declared in the provider registry (`settings.maxToolCount`,
+ * `settings.maxToolPayloadBytes`).
  *
- * - When limits are violated a `ToolLimitExceededError` is thrown.
- * - When the model is not found in the built-in registry the check is
- *   silently skipped (we don't want to block custom / remote models).
- * - When the model card carries neither `maxToolCount` nor
- *   `maxToolPayloadBytes` the check is also skipped.
+ * - Throws `ToolLimitExceededError` when limits are violated.
+ * - Skips the check silently when the provider has no declared limits
+ *   or isn't registered in the built-in list.
  */
-export function validateToolLimits({
-  model,
-  provider,
-  tools,
-}: ValidateToolLimitsParams): void {
+export function validateToolLimits({ model, provider, tools }: ValidateToolLimitsParams): void {
   if (!tools || tools.length === 0) return;
 
-  const modelCard = resolveModelCard(model, provider);
-  if (!modelCard) return;
+  const limits = resolveProviderLimits(provider);
+  if (!limits) return;
 
-  const { maxToolCount, maxToolPayloadBytes } = modelCard;
-  if (maxToolCount === undefined && maxToolPayloadBytes === undefined) return;
+  const { maxToolCount, maxToolPayloadBytes } = limits;
 
-  const toolPayloadBytes = maxToolPayloadBytes !== undefined
-    ? measureToolPayloadBytes(tools)
-    : 0;
+  const toolPayloadBytes = maxToolPayloadBytes !== undefined ? measureToolPayloadBytes(tools) : 0;
 
   const countExceeded = maxToolCount !== undefined && tools.length > maxToolCount;
-  const sizeExceeded =
-    maxToolPayloadBytes !== undefined && toolPayloadBytes > maxToolPayloadBytes;
+  const sizeExceeded = maxToolPayloadBytes !== undefined && toolPayloadBytes > maxToolPayloadBytes;
 
   if (!countExceeded && !sizeExceeded) return;
 
@@ -142,17 +112,14 @@ export function validateToolLimits({
 }
 
 /**
- * Convenience wrapper that throws an `AgentRuntimeError` so the caller
- * doesn't need to import the error class directly.
+ * Convenience wrapper that re-throws as an `AgentRuntimeError` so the runtime
+ * error handler can surface a structured llm_error event to the caller.
  */
 export function assertToolLimits(params: ValidateToolLimitsParams): void {
   try {
     validateToolLimits(params);
   } catch (error) {
     if (error instanceof ToolLimitExceededError) {
-      // AgentRuntimeError.chat() composes a ChatCompletionErrorPayload; throwing
-      // it lets the runtime's error handler (createErrorResult) surface a
-      // structured llm_error event to the caller.
       throw AgentRuntimeError.chat({
         endpoint: undefined,
         error: {
