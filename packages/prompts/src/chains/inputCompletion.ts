@@ -1,5 +1,13 @@
 import type { ChatStreamPayload, OpenAIChatMessage } from '@lobechat/types';
 
+/**
+ * Bump when editing the autocomplete system prompt below. Plumbed through
+ * `metadata.promptVersion` at the chat-input call site so future per-call
+ * tracing (mirroring `llm_generation_tracing`) can group runs by prompt
+ * iteration. The 6-char prompt hash on the row catches forgotten bumps.
+ */
+export const INPUT_COMPLETION_PROMPT_VERSION = 'v1.0';
+
 export const chainInputCompletion = (
   beforeCursor: string,
   afterCursor: string,

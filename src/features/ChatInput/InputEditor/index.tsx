@@ -1,7 +1,11 @@
 import { isDesktop } from '@lobechat/const';
 import { HotkeyEnum, KeyEnum } from '@lobechat/const/hotkeys';
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
-import { chainInputCompletion, escapeXmlAttr } from '@lobechat/prompts';
+import {
+  chainInputCompletion,
+  escapeXmlAttr,
+  INPUT_COMPLETION_PROMPT_VERSION,
+} from '@lobechat/prompts';
 import { isCommandPressed, merge } from '@lobechat/utils';
 import type { IEditor } from '@lobehub/editor';
 import { INSERT_MENTION_COMMAND, ReactAutoCompletePlugin, ReactMathPlugin } from '@lobehub/editor';
@@ -227,6 +231,10 @@ const InputEditor = memo<{
       try {
         await chatService.fetchPresetTaskResult({
           abortController,
+          metadata: {
+            promptVersion: INPUT_COMPLETION_PROMPT_VERSION,
+            scenario: 'input_completion',
+          },
           onMessageHandle: (chunk) => {
             if (chunk.type === 'text') {
               result += chunk.text;
