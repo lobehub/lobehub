@@ -76,11 +76,11 @@ export class FileTracingStore implements ITracingStore {
   }
 
   private bucketDir(record: TracingPayload): string {
-    return path.join(
-      this.root,
-      safeSegment(record.scenario),
-      `${safeSegment(record.prompt_version)}-${safeSegment(record.prompt_hash)}`,
-    );
+    // Compose the relative segment as a single string so Turbopack / Webpack
+    // static analyzers don't try to enumerate path.join's multi-arg pattern
+    // (which fans out into a glob match against the project).
+    const sub = `${safeSegment(record.scenario)}/${safeSegment(record.prompt_version)}-${safeSegment(record.prompt_hash)}`;
+    return path.join(this.root, sub);
   }
 
   private async updateLatestSymlink(filePath: string): Promise<void> {
