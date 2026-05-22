@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   cleanObject,
   isNonEmptyString,
+  isObjectLike,
   isPlainRecord,
   isRecord,
   isTrimmedNonEmptyString,
@@ -33,6 +34,15 @@ describe('record guards', () => {
 
   const nullPrototypeObject = Object.create(null) as Record<string, unknown>;
   nullPrototypeObject.value = true;
+
+  it('should detect non-null objects including arrays as object-like values', () => {
+    expect(isObjectLike({ value: true })).toBe(true);
+    expect(isObjectLike([1, 2, 3])).toBe(true);
+    expect(isObjectLike(nullPrototypeObject)).toBe(true);
+    expect(isObjectLike(new Example())).toBe(true);
+    expect(isObjectLike(null)).toBe(false);
+    expect(isObjectLike('value')).toBe(false);
+  });
 
   it('should detect non-null non-array objects as records', () => {
     expect(isRecord({ value: true })).toBe(true);
