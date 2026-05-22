@@ -100,8 +100,9 @@ export const useCategory = (): CategoryGroup[] => {
       : [];
 
     const agent: CategoryItem[] = [
-      (!enableBusinessFeatures || isDevMode) &&
-        makeItem({ icon: Brain, key: SettingsTabs.Provider, label: t('setting:tab.provider') }),
+      // Keep Provider settings visible because new users get non-LobeHub providers by default,
+      // and some desktop users install the app specifically to use their own API keys.
+      makeItem({ icon: Brain, key: SettingsTabs.Provider, label: t('setting:tab.provider') }),
       makeItem({
         icon: Sparkles,
         key: SettingsTabs.ServiceModel,

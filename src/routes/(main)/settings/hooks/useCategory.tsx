@@ -134,7 +134,9 @@ export const useCategory = () => {
 
     // Agent group
     const agentItems: CategoryItem[] = [
-      (!enableBusinessFeatures || isDevMode) && {
+      // Keep Provider settings visible because new users get non-LobeHub providers by default,
+      // and some desktop users install the app specifically to use their own API keys.
+      {
         icon: Brain,
         key: SettingsTabs.Provider,
         label: t('tab.provider'),

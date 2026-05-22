@@ -75,7 +75,7 @@ const Page = memo(() => {
       },
     ],
     extra: loading && <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />,
-    title: t('tab.advanced'),
+    title: t('tab.advanced.toolsAndDiagnostics.title'),
   };
 
   const channelOptions = [
@@ -93,7 +93,7 @@ const Page = memo(() => {
         label: t('tab.advanced.updateChannel.title'),
       },
     ],
-    title: t('tab.advanced.updateChannel.title'),
+    title: t('tab.advanced.appUpdates.title'),
   };
 
   const labItems: FormItemProps[] = [
