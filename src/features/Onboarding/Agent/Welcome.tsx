@@ -1,4 +1,5 @@
-import { Flexbox } from '@lobehub/ui';
+import { Flexbox, Markdown } from '@lobehub/ui';
+import { Divider } from 'antd';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -26,6 +27,10 @@ const Welcome = memo(() => {
           gap={16}
           sentences={[t('agent.welcome.sentence.1'), t('agent.welcome.sentence.2')]}
         />
+        <Divider dashed style={{ margin: 0 }} />
+        <Markdown fontSize={16} variant={'chat'}>
+          {t('agent.welcome')}
+        </Markdown>
       </Flexbox>
     </>
   );
