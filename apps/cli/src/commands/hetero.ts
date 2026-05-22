@@ -290,14 +290,18 @@ const exec = async (options: ExecOptions): Promise<void> => {
       process.exit(1);
     }
 
-    // Collect stderr for resume-error detection (only when needed).
-    // Always pipe to our stderr so users see auth prompts / warnings.
+    // Always collect stderr — used for resume-error detection AND for
+    // surfacing a meaningful error message to the server when CC fails
+    // without emitting a structured error event.  Cap at 8 KB so the
+    // collector doesn't grow unboundedly on a chatty run.
+    // Always pipe to process.stderr too so users see auth prompts / warnings.
+    const STDERR_CAP = 8 * 1024;
     let stderrContent = '';
-    if (interceptResumeErrors) {
-      handle.stderr.on('data', (chunk: Buffer) => {
+    handle.stderr.on('data', (chunk: Buffer) => {
+      if (stderrContent.length < STDERR_CAP) {
         stderrContent += chunk.toString();
-      });
-    }
+      }
+    });
     handle.stderr.pipe(process.stderr);
 
     // Ctrl-C → SIGINT to the child's process group.
@@ -452,8 +456,20 @@ const exec = async (options: ExecOptions): Promise<void> => {
     }
 
     const exitedClean = !result.ingestError && (code === 0 || signal === 'SIGTERM');
+
+    // When the run failed, pass stderr as the error detail so the server can
+    // surface a useful message instead of the generic "Agent execution failed"
+    // fallback.  Trim to the last 1 KB — the tail is most informative and
+    // keeps the tRPC payload small.
+    const stderrTail = result.stderrContent.trim();
+    const finishError =
+      !exitedClean && stderrTail
+        ? { message: stderrTail.slice(-1024), type: 'AgentRuntimeError' }
+        : undefined;
+
     try {
       await sink.finish({
+        error: finishError,
         result: exitedClean ? 'success' : 'error',
         sessionId,
       });
