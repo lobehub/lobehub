@@ -52,5 +52,13 @@ describe('sharedManualChunks', () => {
         '/repo/node_modules/.pnpm/zustand@5/node_modules/zustand/esm/index.mjs',
       ),
     ).toBe('vendor-data-runtime');
+    expect(
+      __testing.sharedManualChunks('/repo/packages/model-runtime/src/providers/openai/index.ts'),
+    ).toBe('vendor-ai-runtime');
+    expect(
+      __testing.sharedManualChunks(
+        '/repo/node_modules/.pnpm/openai@4/node_modules/openai/index.mjs',
+      ),
+    ).toBe('vendor-ai-runtime');
   });
 });

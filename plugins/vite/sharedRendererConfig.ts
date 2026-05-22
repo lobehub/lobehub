@@ -76,6 +76,9 @@ function sharedManualChunks(id: string): string | undefined {
     return `i18n-${locale}`;
   }
 
+  if (id.includes('/packages/model-runtime/') || isNodePackage(id, 'openai'))
+    return 'vendor-ai-runtime';
+
   // model-bank (monorepo package — split before node_modules guard)
   if (id.includes('model-bank')) return 'providerConfig';
 
