@@ -1,5 +1,4 @@
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null;
+import { isRecord } from '@lobechat/utils';
 
 export const hasMeaningfulEditorContent = (editorData: unknown): boolean => {
   if (!isRecord(editorData)) return false;

@@ -1,3 +1,4 @@
+import { isRecord, pickString } from '@lobechat/utils';
 import { parse } from 'yaml';
 
 const SKILL_INDEX_FILENAME = 'SKILL.md';
@@ -96,9 +97,6 @@ const stringifyMetadataValue = (value: unknown): string => {
   return JSON.stringify(value);
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  !!value && typeof value === 'object' && !Array.isArray(value);
-
 const isValidSkillName = (name: string): boolean =>
   !!name &&
   name.length <= MAX_SKILL_NAME_LENGTH &&
@@ -113,7 +111,7 @@ const readFrontmatterStringField = (
   field: keyof SkillMarkdownFrontmatterFields,
 ): string | undefined => {
   const value = data[field];
-  return typeof value === 'string' ? value.trim() : undefined;
+  return pickString(value)?.trim();
 };
 
 export const parseSkillMarkdownFrontmatterFields = (

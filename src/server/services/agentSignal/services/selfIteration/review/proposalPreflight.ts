@@ -1,3 +1,5 @@
+import { isRecord, isTrimmedNonEmptyString, pickTrimmedString } from '@lobechat/utils';
+
 import type {
   SelfReviewProposalAction,
   SelfReviewProposalBaseSnapshot,
@@ -77,45 +79,36 @@ export const createSelfReviewProposalPreflightService = (
   },
 });
 
-const hasRequiredString = (value: unknown): value is string =>
-  typeof value === 'string' && value.trim().length > 0;
-
 const getOperationInputString = (action: SelfReviewProposalAction, key: string) => {
   const input = action.operation?.input;
 
-  if (!input || typeof input !== 'object' || !(key in input)) return;
+  if (!isRecord(input) || !(key in input)) return;
 
-  const record = input as unknown as Record<string, unknown>;
-  const value = record[key];
-
-  return hasRequiredString(value) ? value.trim() : undefined;
+  return pickTrimmedString(input[key]);
 };
 
 const getOperationInputStringArray = (action: SelfReviewProposalAction, key: string) => {
   const input = action.operation?.input;
-  if (!input || typeof input !== 'object' || !(key in input)) return [];
+  if (!isRecord(input) || !(key in input)) return [];
 
-  const record = input as unknown as Record<string, unknown>;
-  const value = record[key];
+  const value = input[key];
 
   return Array.isArray(value)
-    ? value.flatMap((item) => (hasRequiredString(item) ? [item.trim()] : []))
+    ? value.flatMap((item) => {
+        const text = pickTrimmedString(item);
+        return text ? [text] : [];
+      })
     : [];
 };
 
 const getOperationInputSnapshots = (action: SelfReviewProposalAction, key: string) => {
   const input = action.operation?.input;
-  if (!input || typeof input !== 'object' || !(key in input)) return [];
+  if (!isRecord(input) || !(key in input)) return [];
 
-  const record = input as unknown as Record<string, unknown>;
-  const value = record[key];
+  const value = input[key];
 
   return Array.isArray(value)
-    ? value.flatMap((item) =>
-        item && typeof item === 'object' && !Array.isArray(item)
-          ? [item as SelfReviewProposalBaseSnapshot]
-          : [],
-      )
+    ? value.flatMap((item) => (isRecord(item) ? [item as SelfReviewProposalBaseSnapshot] : []))
     : [];
 };
 
@@ -127,9 +120,9 @@ const isCompleteRefineSnapshot = (
   documentId: string;
 } =>
   snapshot.targetType === 'skill' &&
-  hasRequiredString(snapshot.agentDocumentId) &&
-  hasRequiredString(snapshot.contentHash) &&
-  hasRequiredString(snapshot.documentId) &&
+  isTrimmedNonEmptyString(snapshot.agentDocumentId) &&
+  isTrimmedNonEmptyString(snapshot.contentHash) &&
+  isTrimmedNonEmptyString(snapshot.documentId) &&
   snapshot.managed === true &&
   snapshot.writable === true;
 
@@ -185,7 +178,7 @@ const checkCreateSkillAction = async (
   if (
     baseSnapshot.targetType !== 'skill' ||
     baseSnapshot.absent !== true ||
-    !hasRequiredString(baseSnapshot.skillName)
+    !isTrimmedNonEmptyString(baseSnapshot.skillName)
   ) {
     return { allowed: false, reason: 'snapshot_incomplete' };
   }

@@ -19,7 +19,7 @@ import {
   RECOMMENDED_DISCOVERY_USER_MESSAGES,
   SAVE_USER_QUESTION_FIELDS,
 } from '@lobechat/types';
-import { merge } from '@lobechat/utils';
+import { isRecord, merge, pickTrimmedString } from '@lobechat/utils';
 import { and, count, eq, sql } from 'drizzle-orm';
 
 import { AgentModel } from '@/database/models/agent';
@@ -63,24 +63,9 @@ const formatNaturalList = (items: string[]) => {
 const isStructuredField = (value: string): value is SaveUserQuestionField =>
   SAVE_USER_QUESTION_FIELDS.includes(value as SaveUserQuestionField);
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
+const normalizeTitle = (value: unknown) => pickTrimmedString(value);
 
-const normalizeTitle = (value: unknown) => {
-  if (typeof value !== 'string') return undefined;
-
-  const trimmed = value.trim();
-
-  return trimmed.length > 0 ? trimmed : undefined;
-};
-
-const normalizeUserInfoField = (value: unknown) => {
-  if (typeof value !== 'string') return undefined;
-
-  const trimmed = value.trim();
-
-  return trimmed || undefined;
-};
+const normalizeUserInfoField = (value: unknown) => pickTrimmedString(value);
 
 const normalizeStringArray = (value: unknown) =>
   Array.isArray(value)
