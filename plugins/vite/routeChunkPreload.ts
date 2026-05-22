@@ -31,6 +31,8 @@ interface OutputChunkLike {
 
 type OutputBundleLike = Record<string, OutputChunkLike | { type: string }>;
 
+const minInitialRoutePreloadSize = 2048;
+
 const defaultRoutePreloadGroups = [
   {
     id: 'desktop-chat-launch',
@@ -315,10 +317,12 @@ function injectRouteModulepreloadsIntoHtml(
   manifest: RuntimeRoutePreloadEntry[],
   base: string,
   deploymentId?: string,
+  shouldInjectFile: (fileName: string) => boolean = () => true,
 ) {
   const existing = collectExistingHtmlAssets(html, base);
   const routeFiles = new Set(manifest.flatMap((entry) => entry.preload));
   const links = [...routeFiles]
+    .filter(shouldInjectFile)
     .filter((fileName) => !existing.has(fileName))
     .map((fileName) => `    <link rel="modulepreload" crossorigin href="${createAssetHref(fileName, base, deploymentId)}">`);
 
@@ -382,7 +386,7 @@ export function routeChunkPreload(options: RouteChunkPreloadOptions = {}): Plugi
   let config: ResolvedConfig | undefined;
   const groups = options.groups ?? defaultRoutePreloadGroups;
   const idleGroups = options.idleGroups ?? defaultIdleRoutePreloadGroups;
-  const allJsWarmup = options.allJsWarmup ?? true;
+  const allJsWarmup = options.allJsWarmup ?? false;
 
   return {
     name: 'lobe-route-chunk-preload',
@@ -407,13 +411,26 @@ export function routeChunkPreload(options: RouteChunkPreloadOptions = {}): Plugi
         const manifest = createRoutePreloadManifest(outputBundle, config.root, groups);
         const idleManifest = createRoutePreloadManifest(outputBundle, config.root, idleGroups);
         const deploymentId = process.env.VERCEL_DEPLOYMENT_ID;
-        const htmlWithInitialPreloads = injectRouteModulepreloadsIntoHtml(html, manifest, config.base, deploymentId);
+        const chunkSizeByFileName = new Map(
+          Object.values(outputBundle)
+            .filter(isOutputChunk)
+            .map((chunk) => [chunk.fileName, Buffer.byteLength(chunk.code)]),
+        );
+        const htmlWithInitialPreloads = injectRouteModulepreloadsIntoHtml(
+          html,
+          manifest,
+          config.base,
+          deploymentId,
+          (fileName) => (chunkSizeByFileName.get(fileName) ?? minInitialRoutePreloadSize) >= minInitialRoutePreloadSize,
+        );
 
         return injectIdleWarmupScriptIntoHtml(
           htmlWithInitialPreloads,
           {
             allJsManifestFileName: allJsWarmup ? allJsWarmupManifestFileName : undefined,
-            idleRoutePreload: [...new Set(idleManifest.flatMap((entry) => entry.preload))],
+            idleRoutePreload: [
+              ...new Set([...manifest.flatMap((entry) => entry.preload), ...idleManifest.flatMap((entry) => entry.preload)]),
+            ],
           },
           config.base,
           deploymentId,

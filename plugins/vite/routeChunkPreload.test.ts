@@ -260,15 +260,17 @@ describe('routeChunkPreload', () => {
   });
 
   it('injects emitted route preloads into html with the Vite html transform hook', () => {
-    const plugin = routeChunkPreload();
+    const plugin = routeChunkPreload({ allJsWarmup: true });
     const configResolved = plugin.configResolved as (config: { base: string; root: string }) => void;
     const bundle = {
       'assets/agent-CJm8x.js': createChunk({
+        code: 'x'.repeat(2048),
         facadeModuleId: '/repo/src/routes/(main)/agent/index.tsx',
         fileName: 'assets/agent-CJm8x.js',
         moduleIds: ['/repo/src/routes/(main)/agent/index.tsx'],
       }),
       'assets/settings-D8p.js': createChunk({
+        code: 'x'.repeat(2048),
         facadeModuleId: '/repo/src/routes/(main)/settings/index.tsx',
         fileName: 'assets/settings-D8p.js',
         moduleIds: ['/repo/src/routes/(main)/settings/index.tsx'],
@@ -290,6 +292,68 @@ describe('routeChunkPreload', () => {
     expect(result).toContain('rel="modulepreload"');
     expect(result).not.toContain('window.__LOBE_PRELOAD_ROUTE__');
     expect(result).not.toContain("import('@/routes");
+  });
+
+  it('does not inject the all-JS warmup manifest by default', () => {
+    const plugin = routeChunkPreload();
+    const configResolved = plugin.configResolved as (config: { base: string; root: string }) => void;
+    const bundle = {
+      'assets/agent-CJm8x.js': createChunk({
+        code: 'x'.repeat(2048),
+        facadeModuleId: '/repo/src/routes/(main)/agent/index.tsx',
+        fileName: 'assets/agent-CJm8x.js',
+        moduleIds: ['/repo/src/routes/(main)/agent/index.tsx'],
+      }),
+      'assets/settings-D8p.js': createChunk({
+        code: 'x'.repeat(2048),
+        facadeModuleId: '/repo/src/routes/(main)/settings/index.tsx',
+        fileName: 'assets/settings-D8p.js',
+        moduleIds: ['/repo/src/routes/(main)/settings/index.tsx'],
+      }),
+    } satisfies TestOutputBundle;
+    const transformIndexHtml = plugin.transformIndexHtml as {
+      handler: (html: string, ctx: { bundle: TestOutputBundle }) => string;
+    };
+
+    configResolved({ base: '/_spa/', root: '/repo' });
+    const result = transformIndexHtml.handler('<html><head></head><body></body></html>', {
+      bundle,
+    });
+
+    expect(result).toContain('/_spa/assets/agent-CJm8x.js');
+    expect(result).toContain('/_spa/assets/settings-D8p.js');
+    expect(result).not.toContain('js-warmup-manifest.json');
+  });
+
+  it('keeps tiny route dependencies out of initial html while preserving idle warmup coverage', () => {
+    const plugin = routeChunkPreload();
+    const configResolved = plugin.configResolved as (config: { base: string; root: string }) => void;
+    const bundle = {
+      'assets/agent-CJm8x.js': createChunk({
+        code: 'x'.repeat(2048),
+        dynamicImports: ['assets/tiny-D8p.js'],
+        facadeModuleId: '/repo/src/routes/(main)/agent/index.tsx',
+        fileName: 'assets/agent-CJm8x.js',
+        moduleIds: ['/repo/src/routes/(main)/agent/index.tsx'],
+      }),
+      'assets/tiny-D8p.js': createChunk({
+        code: 'x'.repeat(128),
+        fileName: 'assets/tiny-D8p.js',
+        moduleIds: ['/repo/src/routes/(main)/agent/Tiny.tsx'],
+      }),
+    } satisfies TestOutputBundle;
+    const transformIndexHtml = plugin.transformIndexHtml as {
+      handler: (html: string, ctx: { bundle: TestOutputBundle }) => string;
+    };
+
+    configResolved({ base: '/_spa/', root: '/repo' });
+    const result = transformIndexHtml.handler('<html><head></head><body></body></html>', {
+      bundle,
+    });
+
+    expect(result).toContain('<link rel="modulepreload" crossorigin href="/_spa/assets/agent-CJm8x.js');
+    expect(result).not.toContain('<link rel="modulepreload" crossorigin href="/_spa/assets/tiny-D8p.js');
+    expect(result).toContain('"/_spa/assets/tiny-D8p.js');
   });
 
   it('can omit the all-JS warmup manifest while keeping idle route warmup', () => {
