@@ -401,6 +401,32 @@ describe('hetero exec command', () => {
       expect(exitSpy).toHaveBeenCalledWith(0);
     });
 
+    it('retries without --resume when the error indicates context overflow', async () => {
+      const contextOverflowEvent = {
+        data: { error: 'prompt is too long: 215168 tokens > 200000 maximum', message: 'prompt is too long: 215168 tokens > 200000 maximum' },
+        operationId: 'op-ctx',
+        stepIndex: 0,
+        timestamp: 1,
+        type: 'error',
+      };
+      mockSpawnAgent
+        .mockReturnValueOnce(createFakeHandle({ events: [contextOverflowEvent], exitCode: 1 }))
+        .mockReturnValueOnce(createFakeHandle({ exitCode: 0 }));
+
+      await runCmd([
+        'hetero', 'exec',
+        '--type', 'claude-code',
+        '--prompt', 'next question',
+        '--resume', 'cc-longctx',
+        '--operation-id', 'op-ctx',
+      ]);
+
+      expect(mockSpawnAgent).toHaveBeenCalledTimes(2);
+      expect(mockSpawnAgent.mock.calls[0][0]).toMatchObject({ resumeSessionId: 'cc-longctx' });
+      expect(mockSpawnAgent.mock.calls[1][0].resumeSessionId).toBeUndefined();
+      expect(exitSpy).toHaveBeenCalledWith(0);
+    });
+
     it('does NOT retry on a non-resume error exit', async () => {
       // Exit code 1 but no resume-related error message
       mockSpawnAgent.mockReturnValueOnce(

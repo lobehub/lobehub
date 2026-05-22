@@ -18,25 +18,38 @@ import { TrpcIngestSink } from '../utils/TrpcIngestSink';
 const SUPPORTED_AGENT_TYPES = new Set(['claude-code', 'codex']);
 
 /**
- * Patterns that indicate a `--resume <sessionId>` flag was rejected because
- * the session file no longer exists in the agent's project directory.  This
- * happens in cloud sandboxes when the container is recycled between turns:
- * the new sandbox has an empty `~/.claude/projects/` so the previous session
- * id stored in `topic.metadata.heteroSessionId` is stale.
+ * Patterns that indicate a `--resume <sessionId>` run should be retried
+ * without `--resume`.  Two classes of failure:
+ *
+ *   1. Session file missing (sandbox recycled): the container is ephemeral
+ *      (~1 h idle TTL), so a new sandbox has an empty `~/.claude/projects/`
+ *      and the stored session id is stale.
+ *
+ *   2. Context overflow (long conversation): the resumed session carries all
+ *      accumulated history; when the combined token count exceeds the model's
+ *      context window the API rejects the request immediately after CC
+ *      initialises.  Starting fresh (no `--resume`) drops the old history and
+ *      lets CC respond to the new prompt alone.
  *
  * Checked against:
  *   - `error` stream events emitted by the CC adapter from CC's result event
  *   - Accumulated stderr output (fallback when CC exits without a result event)
  */
-const RESUME_NOT_FOUND_PATTERNS = [
+const RESUME_RETRY_PATTERNS = [
+  // Session file missing — sandbox was recycled
   /no conversation found/i,
   /session.*not found/i,
   /conversation.*not found/i,
   /resume.*not found/i,
+  // Context overflow — API rejected the resumed session's accumulated history
+  /prompt.*too long/i,
+  /context.*too long/i,
+  /context window.*exceed/i,
+  /maximum.*context.*length/i,
 ] as const;
 
-const looksLikeResumeNotFound = (text: string): boolean =>
-  RESUME_NOT_FOUND_PATTERNS.some((p) => p.test(text));
+const looksLikeNeedsRetryWithoutResume = (text: string): boolean =>
+  RESUME_RETRY_PATTERNS.some((p) => p.test(text));
 
 interface ExecOptions {
   command?: string;
@@ -243,7 +256,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
    * Spawn one agent process and stream all its events into `ingester`.
    *
    * When `interceptResumeErrors` is true, any `error`-type event whose
-   * message matches `RESUME_NOT_FOUND_PATTERNS` is withheld from the
+   * message matches `RESUME_RETRY_PATTERNS` is withheld from the
    * ingester and signals a retry instead.  This keeps the server's
    * operation state clean: no terminal error event is pushed, so the
    * retry's events land on the same operationId without confusing the
@@ -329,7 +342,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
         if (interceptResumeErrors && event.type === 'error') {
           const data = event.data as Record<string, unknown> | undefined;
           const msg = String(data?.message ?? data?.error ?? '');
-          if (looksLikeResumeNotFound(msg)) {
+          if (looksLikeNeedsRetryWithoutResume(msg)) {
             resumeNotFound = true;
             // Emit to JSONL for observability but do NOT push to ingester —
             // we are about to retry; the server must not see a terminal error.
@@ -369,7 +382,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
       interceptResumeErrors &&
       !resumeNotFound &&
       code !== 0 &&
-      looksLikeResumeNotFound(stderrContent)
+      looksLikeNeedsRetryWithoutResume(stderrContent)
     ) {
       resumeNotFound = true;
     }
@@ -392,17 +405,22 @@ const exec = async (options: ExecOptions): Promise<void> => {
     interceptResume,
   );
 
-  // ─── Auto-retry without --resume when the sandbox lost the session ───────
+  // ─── Auto-retry without --resume when the session cannot be used ─────────
   //
-  // Cloud sandboxes are ephemeral (~1 h idle TTL).  When a new container is
-  // spawned for the next turn, the previous CC session files under
-  // `~/.claude/projects/<cwd>/` are gone, so `--resume <staleId>` fails.
-  // Rather than surfacing an error to the user, transparently restart CC
-  // without `--resume`.  The server's `heteroSessionId` is then updated with
-  // the fresh session id produced by the retry, breaking the stale-loop.
+  // Two classes of failure detected via `RESUME_RETRY_PATTERNS`:
+  //   A. Sandbox recycled: container is ephemeral (~1 h idle TTL); new sandbox
+  //      has no CC session files so `--resume <staleId>` is rejected with a
+  //      "no conversation found" error.
+  //   B. Context overflow: the resumed session carries accumulated history that
+  //      pushes the combined token count past the model limit; the API rejects
+  //      the call with a "prompt is too long" error.
+  //
+  // In both cases we transparently restart CC without `--resume` so it starts a
+  // fresh session.  The server's `heteroSessionId` is updated with the new id,
+  // breaking the stale-session loop.
   let result = first;
   if (first.resumeNotFound) {
-    log.info('Resume session not found — retrying without --resume');
+    log.info('Resume failed (session not found or context overflow) — retrying without --resume');
     result = await runOneAgent(
       {
         agentType: options.type,
