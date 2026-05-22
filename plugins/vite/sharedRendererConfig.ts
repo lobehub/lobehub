@@ -60,6 +60,12 @@ const DAYJS_LOCALE: Record<string, string> = {
   'zh-tw': 'zh-TW',
 };
 
+const isNodePackage = (id: string, packageName: string) => {
+  const normalized = id.replaceAll('\\', '/');
+
+  return normalized.includes(`/node_modules/${packageName}/`);
+};
+
 function sharedManualChunks(id: string): string | undefined {
   // i18n locale JSON/TS files
   const localeMatch = id.match(/\/locales\/([^/]+)\/([^/.]+)/);
@@ -89,17 +95,27 @@ function sharedManualChunks(id: string): string | undefined {
     if (locale) return `i18n-${locale}`;
   }
 
+  if (
+    isNodePackage(id, 'react') ||
+    isNodePackage(id, 'react-dom') ||
+    isNodePackage(id, 'react-router') ||
+    isNodePackage(id, 'react-router-dom') ||
+    isNodePackage(id, 'scheduler')
+  ) {
+    return 'vendor-react';
+  }
+
+  if (
+    id.includes('es-toolkit') ||
+    id.includes('@emotion/') ||
+    id.includes('/motion/') ||
+    id.includes('framer-motion')
+  ) {
+    return 'vendor-ui-runtime';
+  }
+
   // Lucide icons
   if (id.includes('lucide-react')) return 'vendor-icons';
-
-  // es-toolkit
-  if (id.includes('es-toolkit')) return 'vendor-es-toolkit';
-
-  // emotion (CSS-in-JS runtime)
-  if (id.includes('@emotion/')) return 'vendor-emotion';
-
-  // motion (framer-motion)
-  if (id.includes('/motion/') || id.includes('framer-motion')) return 'vendor-motion';
 }
 
 const sharedChunkFileNames = (chunkInfo: { name: string }) => {
@@ -235,4 +251,8 @@ export const sharedOptimizeDeps = {
     'ahooks',
     'motion/react',
   ],
+};
+
+export const __testing = {
+  sharedManualChunks,
 };
