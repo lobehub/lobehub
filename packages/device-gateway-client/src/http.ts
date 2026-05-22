@@ -11,6 +11,7 @@ export interface DeviceStatusResult {
 export interface DeviceToolCallResult {
   content: string;
   error?: string;
+  state?: unknown;
   success: boolean;
 }
 
@@ -83,9 +84,22 @@ export class GatewayHttpClient {
 
     const data = await res.json();
     return {
+      // Device sends a typed envelope ({ content, state, success }). The legacy
+      // fallback used to JSON.stringify `data.content ?? data` — when content
+      // was missing it would stringify the *entire response body* including
+      // `success` and any other top-level fields, which leaked the structured
+      // payload into the LLM-facing content string. Only stringify the
+      // `content` field itself; never fall back to the whole body.
       content:
-        typeof data.content === 'string' ? data.content : JSON.stringify(data.content ?? data),
+        typeof data.content === 'string'
+          ? data.content
+          : data.content !== undefined && data.content !== null
+            ? JSON.stringify(data.content)
+            : typeof data.error === 'string'
+              ? data.error
+              : '',
       error: data.error,
+      state: data.state,
       success: data.success ?? true,
     };
   }

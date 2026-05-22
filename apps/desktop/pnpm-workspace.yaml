@@ -11,6 +11,8 @@ packages:
   - '../../packages/device-gateway-client'
   - '../../packages/device-identity'
   - '../../packages/local-file-shell'
+  - '../../packages/tool-runtime'
+  - '../../packages/prompts'
   - './stubs/business-const'
   - './stubs/types'
   - '.'

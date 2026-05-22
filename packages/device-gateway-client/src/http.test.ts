@@ -137,7 +137,34 @@ describe('GatewayHttpClient', () => {
         { apiName: 'readFile', arguments: '{}', identifier: 'test' },
       );
 
-      expect(result).toEqual({ content: 'file contents', error: undefined, success: true });
+      expect(result).toEqual({
+        content: 'file contents',
+        error: undefined,
+        state: undefined,
+        success: true,
+      });
+    });
+
+    it('should preserve structured state alongside content', async () => {
+      // The wire envelope carries `state` separately from `content`. This is
+      // what makes `pluginState` work end-to-end for remote device tool calls.
+      mockFetch({
+        json: vi.fn().mockResolvedValue({
+          content: 'Renamed shell-1 → /tmp/foo',
+          state: { commandId: 'shell-1', exitCode: 0, stdout: 'ok' },
+          success: true,
+        }),
+        ok: true,
+      });
+
+      const result = await client.executeToolCall(
+        { userId: 'user-1' },
+        { apiName: 'runCommand', arguments: '{}', identifier: 'test' },
+      );
+
+      expect(result.content).toBe('Renamed shell-1 → /tmp/foo');
+      expect(result.state).toEqual({ commandId: 'shell-1', exitCode: 0, stdout: 'ok' });
+      expect(result.success).toBe(true);
     });
 
     it('should handle non-string content', async () => {
@@ -154,9 +181,13 @@ describe('GatewayHttpClient', () => {
       expect(result.content).toBe(JSON.stringify({ key: 'value' }));
     });
 
-    it('should handle null/undefined content', async () => {
+    it('should return empty content when content and error are missing', async () => {
+      // Regression guard: previously the client JSON.stringify'd the entire
+      // response body when `content` was missing, leaking `success`/`state`
+      // into the LLM-facing content string. The fix returns empty content
+      // instead — the structured payload, if any, is read from `state`.
       mockFetch({
-        json: vi.fn().mockResolvedValue({ success: true }),
+        json: vi.fn().mockResolvedValue({ success: true, state: { foo: 'bar' } }),
         ok: true,
       });
 
@@ -165,8 +196,8 @@ describe('GatewayHttpClient', () => {
         { apiName: 'readFile', arguments: '{}', identifier: 'test' },
       );
 
-      // content is undefined, so JSON.stringify(undefined ?? data) -> JSON.stringify(data)
-      expect(result.content).toContain('success');
+      expect(result.content).toBe('');
+      expect(result.state).toEqual({ foo: 'bar' });
     });
 
     it('should handle missing success field', async () => {

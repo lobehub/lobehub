@@ -56,6 +56,7 @@ export interface ToolCallResponseMessage {
   result: {
     content: string;
     error?: string;
+    state?: unknown;
     success: boolean;
   };
   type: 'tool_call_response';

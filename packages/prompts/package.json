@@ -2,6 +2,10 @@
   "name": "@lobechat/prompts",
   "version": "1.0.0",
   "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./fileSystem": "./src/prompts/fileSystem/index.ts"
+  },
   "main": "./src/index.ts",
   "scripts": {
     "test": "vitest",

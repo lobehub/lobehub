@@ -526,15 +526,18 @@ describe('GatewayConnectionCtr', () => {
       ['renameLocalFile', 'handleRenameFile', mockLocalFileCtr],
     ] as const)('should route %s to %s', async (apiName, methodName, controller) => {
       const client = await connectAndOpen();
-      const args = { test: 'arg' };
 
-      client.simulateToolCallRequest(apiName, args);
+      // Each tool's args are domain-shaped (path, file_path, items, etc.).
+      // The runtime denormalizes them before calling the controller, so this
+      // test only asserts that the *right* controller method runs — see the
+      // envelope-shape test below for end-to-end content/state coverage.
+      client.simulateToolCallRequest(apiName, { test: 'arg' });
       await vi.advanceTimersByTimeAsync(0);
 
-      expect((controller as any)[methodName]).toHaveBeenCalledWith(args);
+      expect((controller as any)[methodName]).toHaveBeenCalled();
     });
 
-    it('should send tool_call_response with success result', async () => {
+    it('should send tool_call_response with content + state envelope on success', async () => {
       vi.mocked(mockLocalFileCtr.readFile).mockResolvedValueOnce({
         charCount: 5,
         content: 'hello',
@@ -552,23 +555,20 @@ describe('GatewayConnectionCtr', () => {
       client.simulateToolCallRequest('readFile', { path: '/a.txt' }, 'req-42');
       await vi.advanceTimersByTimeAsync(0);
 
-      expect(client.sendToolCallResponse).toHaveBeenCalledWith({
-        requestId: 'req-42',
-        result: {
-          content: JSON.stringify({
-            charCount: 5,
-            content: 'hello',
-            createdTime: new Date('2024-01-01'),
-            filename: 'a.txt',
-            fileType: '.txt',
-            lineCount: 1,
-            loc: [1, 1],
-            modifiedTime: new Date('2024-01-01'),
-            totalCharCount: 5,
-            totalLineCount: 1,
-          }),
-          success: true,
-        },
+      // The runtime produces a formatted prompt string for `content` and a
+      // structured snapshot for `state`. We only assert envelope shape here
+      // — the exact prompt format is owned by the runtime/prompts packages.
+      expect(client.sendToolCallResponse).toHaveBeenCalledTimes(1);
+      const response = client.sendToolCallResponse.mock.calls[0][0];
+      expect(response.requestId).toBe('req-42');
+      expect(response.result.success).toBe(true);
+      expect(typeof response.result.content).toBe('string');
+      expect(response.result.content.length).toBeGreaterThan(0);
+      expect(response.result.content).toContain('hello');
+      expect(response.result.state).toMatchObject({
+        content: 'hello',
+        filename: 'a.txt',
+        path: '/a.txt',
       });
     });
 
@@ -976,6 +976,7 @@ describe('GatewayConnectionCtr', () => {
         requestId: 'req-cap',
         result: {
           content: JSON.stringify({ available: true, version: 'openclaw 1.2.3' }),
+          state: { available: true, version: 'openclaw 1.2.3' },
           success: true,
         },
       });
@@ -1000,6 +1001,7 @@ describe('GatewayConnectionCtr', () => {
         requestId: 'req-cap-nover',
         result: {
           content: JSON.stringify({ available: true }),
+          state: { available: true },
           success: true,
         },
       });
@@ -1025,6 +1027,10 @@ describe('GatewayConnectionCtr', () => {
             available: false,
             reason: 'openclaw is not installed on this device',
           }),
+          state: {
+            available: false,
+            reason: 'openclaw is not installed on this device',
+          },
           success: true,
         },
       });
@@ -1043,6 +1049,7 @@ describe('GatewayConnectionCtr', () => {
         requestId: 'req-unknown-plat',
         result: {
           content: JSON.stringify({ available: false, reason: 'Unknown platform: unknownBot' }),
+          state: { available: false, reason: 'Unknown platform: unknownBot' },
           success: true,
         },
       });
@@ -1057,6 +1064,7 @@ describe('GatewayConnectionCtr', () => {
         requestId: 'req-profile',
         result: {
           content: JSON.stringify({}),
+          state: {},
           success: true,
         },
       });

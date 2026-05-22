@@ -4,7 +4,23 @@ import os from 'node:os';
 import path from 'node:path';
 
 import type { AgentRunRequestMessage } from '@lobechat/device-gateway-client';
-import type { GatewayConnectionStatus } from '@lobechat/electron-client-ipc';
+import type {
+  EditLocalFileParams,
+  GatewayConnectionStatus,
+  GetCommandOutputParams,
+  GlobFilesParams,
+  GrepContentParams,
+  KillCommandParams,
+  ListLocalFileParams,
+  LocalReadFileParams,
+  LocalReadFilesParams,
+  LocalSearchFilesParams,
+  MoveLocalFilesParams,
+  RenameLocalFileParams,
+  RunCommandParams,
+  WriteLocalFileParams,
+} from '@lobechat/electron-client-ipc';
+import { type ILocalSystemService, LocalSystemExecutionRuntime } from '@lobechat/tool-runtime';
 
 import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import ImessageBridgeService from '@/services/imessageBridgeSrv';
@@ -55,8 +71,62 @@ interface PlatformTaskEntry {
   topicId: string;
 }
 
-type ToolCallHandler = () => Promise<unknown>;
-type ToolCallHandlerMap = Record<string, ToolCallHandler>;
+/**
+ * Local mirror of `@lobechat/types`' `BuiltinServerRuntimeOutput`. Inlined
+ * because the desktop tsconfig doesn't expose `@lobechat/types`, and the shape
+ * is tiny + stable.
+ */
+interface BuiltinServerRuntimeOutput {
+  content: string;
+  error?: unknown;
+  state?: unknown;
+  success: boolean;
+}
+
+/**
+ * Legacy API name aliases used by older gateway versions. Normalized to the
+ * current `LocalSystemApiEnum` names before dispatch. `renameLocalFile` is
+ * intentionally absent — it has no equivalent on the new surface and is
+ * handled by a dedicated branch below.
+ */
+const LEGACY_API_ALIASES: Record<string, string> = {
+  editLocalFile: 'editFile',
+  globLocalFiles: 'globFiles',
+  listLocalFiles: 'listFiles',
+  moveLocalFiles: 'moveFiles',
+  readLocalFile: 'readFile',
+  searchLocalFiles: 'searchFiles',
+  writeLocalFile: 'writeFile',
+};
+
+/**
+ * Parse a JSON string, returning `undefined` on failure. Used to surface the
+ * structured shape of platform-agent tool results (which return pre-stringified
+ * JSON) as `state` for the renderer, without crashing on malformed input.
+ */
+const safeJsonParse = (input: string): unknown => {
+  try {
+    return JSON.parse(input);
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * Resolve a relative path against a scope (CWD). Mirrors the renderer-side
+ * `resolveArgsWithScope` helper in `@lobechat/builtin-tool-local-system` — kept
+ * here as a small inline copy to avoid pulling the renderer-side `./client`
+ * subpath (which transitively requires React + antd) into the main process.
+ */
+const resolveArgsWithScope = <T extends { scope?: string }>(args: T, pathField: string): T => {
+  const scope = args.scope;
+  const bag = args as Record<PropertyKey, unknown>;
+  const currentPath = typeof bag[pathField] === 'string' ? (bag[pathField] as string) : undefined;
+  if (!scope) return args;
+  if (!currentPath) return { ...args, [pathField]: scope };
+  if (path.isAbsolute(currentPath)) return args;
+  return { ...args, [pathField]: path.join(scope, currentPath) };
+};
 
 /**
  * GatewayConnectionCtr
@@ -71,6 +141,8 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
   /** Maps topicId → hermes session_id for multi-turn conversation continuity. */
   private readonly hermesSessionMap = new Map<string, string>();
+
+  private localSystemRuntime: LocalSystemExecutionRuntime | null = null;
 
   // ─── Service Accessor ───
 
@@ -219,21 +291,208 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
   // ─── Tool Call Routing ───
 
-  private async executeToolCall(apiName: string, args: any): Promise<unknown> {
-    const methodMap = {
-      ...this.getLocalFileToolHandlers(args),
-      ...this.getShellCommandToolHandlers(args),
-      ...this.getPlatformAgentToolHandlers(args),
-    } satisfies ToolCallHandlerMap;
-
-    const handler = methodMap[apiName];
-    if (!handler) {
-      throw new Error(
-        `Tool "${apiName}" is not available on this device. It may not be supported in the current desktop version. Please skip this tool and try alternative approaches.`,
-      );
+  /**
+   * Lazy-construct the LocalSystemExecutionRuntime backed by a thin service
+   * adapter over the existing controllers. The runtime is the same one the
+   * renderer uses, so remote tool calls produce identical
+   * `{ content, state, success }` envelopes — `content` is the LLM-facing
+   * prompt text, `state` is the structured payload, both flow downstream
+   * intact (the gateway / DeviceProxy / RuntimeExecutors paths preserve them
+   * and write `state` to the tool message's `pluginState`).
+   */
+  private getLocalSystemRuntime(): LocalSystemExecutionRuntime {
+    if (!this.localSystemRuntime) {
+      const local = this.localFileCtr;
+      const shell = this.shellCommandCtr;
+      const service: ILocalSystemService = {
+        editLocalFile: (p) => local.handleEditFile(p),
+        getCommandOutput: (p) => shell.handleGetCommandOutput(p),
+        globFiles: (p) => local.handleGlobFiles(p),
+        grepContent: (p) => local.handleGrepContent(p),
+        killCommand: (p) => shell.handleKillCommand(p),
+        listLocalFiles: (p) => local.listLocalFiles(p),
+        moveLocalFiles: (p) => local.handleMoveFiles(p),
+        readLocalFile: (p) => local.readFile(p),
+        readLocalFiles: (p) => local.readFiles(p),
+        renameLocalFile: (p) => local.handleRenameFile(p),
+        runCommand: (p) => shell.handleRunCommand(p),
+        searchLocalFiles: (p) => local.handleLocalFilesSearch(p),
+        writeFile: (p) => local.handleWriteFile(p),
+      };
+      this.localSystemRuntime = new LocalSystemExecutionRuntime(service);
     }
+    return this.localSystemRuntime;
+  }
 
-    return handler();
+  private async executeToolCall(
+    apiName: string,
+    args: unknown,
+  ): Promise<BuiltinServerRuntimeOutput> {
+    const runtime = this.getLocalSystemRuntime();
+    const normalized = LEGACY_API_ALIASES[apiName] ?? apiName;
+
+    // Each case narrows `args` to its IPC param type — the manifest guarantees
+    // the gateway sends params matching the apiName. The `as never` casts on
+    // runtime calls are legitimate widenings: the runtime's typed signatures
+    // (e.g. `ListFilesParams`) are narrower than what the IPC layer accepts
+    // (`limit`, `run_in_background`, etc.), and the same casts exist in the
+    // renderer-side `LocalSystemExecutor`.
+    switch (normalized) {
+      case 'listFiles': {
+        const p = args as ListLocalFileParams;
+        return runtime.listFiles({
+          directoryPath: p.path,
+          limit: p.limit,
+          sortBy: p.sortBy,
+          sortOrder: p.sortOrder,
+        } as never);
+      }
+
+      case 'readFile': {
+        const p = args as LocalReadFileParams;
+        return runtime.readFile({
+          endLine: p.loc?.[1],
+          path: p.path,
+          startLine: p.loc?.[0],
+        });
+      }
+
+      case 'readFiles': {
+        return runtime.readFiles(args as LocalReadFilesParams);
+      }
+
+      case 'searchFiles': {
+        const resolved = resolveArgsWithScope(args as LocalSearchFilesParams, 'directory');
+        return runtime.searchFiles({
+          ...resolved,
+          directory: resolved.directory || '',
+        });
+      }
+
+      case 'moveFiles': {
+        const p = args as MoveLocalFilesParams;
+        return runtime.moveFiles({
+          operations: p.items?.map((item) => ({
+            destination: item.newPath,
+            source: item.oldPath,
+          })),
+        });
+      }
+
+      case 'writeFile': {
+        return runtime.writeFile(args as WriteLocalFileParams);
+      }
+
+      case 'editFile': {
+        const p = args as EditLocalFileParams;
+        return runtime.editFile({
+          all: p.replace_all,
+          path: p.file_path,
+          replace: p.new_string,
+          search: p.old_string,
+        });
+      }
+
+      case 'runCommand': {
+        // ComputerRuntime's RunCommandState reads `args.background`; the manifest
+        // exposes `run_in_background`. Without this normalize the state would
+        // always show foreground even for background commands.
+        const p = args as RunCommandParams;
+        return runtime.runCommand({
+          ...p,
+          background: p.run_in_background,
+        } as never);
+      }
+
+      case 'getCommandOutput': {
+        const p = args as GetCommandOutputParams;
+        return runtime.getCommandOutput({
+          commandId: p.shell_id,
+          filter: p.filter,
+        } as never);
+      }
+
+      case 'killCommand': {
+        const p = args as KillCommandParams;
+        return runtime.killCommand({
+          commandId: p.shell_id,
+        });
+      }
+
+      case 'grepContent': {
+        const resolved = resolveArgsWithScope(args as GrepContentParams, 'path');
+        return runtime.grepContent(resolved as never);
+      }
+
+      case 'globFiles': {
+        const p = args as GlobFilesParams;
+        return runtime.globFiles({
+          directory: p.scope,
+          pattern: p.pattern,
+        });
+      }
+
+      case 'renameLocalFile': {
+        // ComputerRuntime has no public rename method — new surface uses
+        // `moveFiles`. Legacy gateway versions may still emit this name, so we
+        // call the IPC handler directly and wrap the raw result into the
+        // BuiltinServerRuntimeOutput shape so `state` still flows downstream.
+        const raw = await this.localFileCtr.handleRenameFile(args as RenameLocalFileParams);
+        return {
+          content: raw.success
+            ? `Renamed to ${raw.newPath}`
+            : `Rename failed: ${raw.error ?? 'unknown error'}`,
+          state: raw,
+          success: raw.success,
+        };
+      }
+
+      // ─── Platform agent tools (openclaw / hermes) ───
+      // These don't go through LocalSystemExecutionRuntime — they return raw
+      // domain payloads that we envelope into BuiltinServerRuntimeOutput here.
+      // `content` is the JSON-serialized payload (what the LLM reads); `state`
+      // carries the parsed object so the renderer can render structured UI.
+
+      case 'checkPlatformCapability': {
+        const result = await this.checkPlatformCapability(args as { platform: string });
+        return { content: JSON.stringify(result), state: result, success: true };
+      }
+
+      case 'getAgentProfile': {
+        const result = await this.getAgentProfile(
+          args as { agentId?: string; platform: string },
+        );
+        return { content: JSON.stringify(result), state: result, success: true };
+      }
+
+      case 'runHeteroTask': {
+        // runHeteroTask returns a pre-stringified JSON payload — pass it through
+        // as `content` and surface the parsed shape as `state`.
+        const json = await this.runHeteroTask(
+          args as {
+            agentId?: string;
+            agentType: string;
+            cwd?: string;
+            operationId: string;
+            prompt: string;
+            taskId: string;
+            topicId: string;
+          },
+        );
+        return { content: json, state: safeJsonParse(json), success: true };
+      }
+
+      case 'cancelHeteroTask': {
+        const json = await this.cancelHeteroTask(args as { signal?: string; taskId: string });
+        return { content: json, state: safeJsonParse(json), success: true };
+      }
+
+      default: {
+        throw new Error(
+          `Tool "${apiName}" is not available on this device. It may not be supported in the current desktop version. Please skip this tool and try alternative approaches.`,
+        );
+      }
+    }
   }
 
   private async executeMessageApi(
@@ -248,59 +507,6 @@ export default class GatewayConnectionCtr extends ControllerModule {
     throw new Error(
       `Message API "${platform}/${apiName}" is not available on this device. It may not be supported in the current desktop version.`,
     );
-  }
-
-  private getLocalFileToolHandlers(args: any): ToolCallHandlerMap {
-    const editFile = () => this.localFileCtr.handleEditFile(args);
-    const globFiles = () => this.localFileCtr.handleGlobFiles(args);
-    const listFiles = () => this.localFileCtr.listLocalFiles(args);
-    const moveFiles = () => this.localFileCtr.handleMoveFiles(args);
-    const readFile = () => this.localFileCtr.readFile(args);
-    const searchFiles = () => this.localFileCtr.handleLocalFilesSearch(args);
-    const writeFile = () => this.localFileCtr.handleWriteFile(args);
-
-    return {
-      editFile,
-      globFiles,
-      grepContent: () => this.localFileCtr.handleGrepContent(args),
-      listFiles,
-      moveFiles,
-      readFile,
-      searchFiles,
-      writeFile,
-
-      // Legacy aliases — keep these so older Gateway versions sending the long
-      // names continue to route correctly. `renameLocalFile` is also kept even
-      // though the new surface drops rename (it's now handled by `moveFiles`).
-      editLocalFile: editFile,
-      globLocalFiles: globFiles,
-      listLocalFiles: listFiles,
-      moveLocalFiles: moveFiles,
-      readLocalFile: readFile,
-      renameLocalFile: () => this.localFileCtr.handleRenameFile(args),
-      searchLocalFiles: searchFiles,
-      writeLocalFile: writeFile,
-    };
-  }
-
-  private getShellCommandToolHandlers(args: any): ToolCallHandlerMap {
-    return {
-      getCommandOutput: () => this.shellCommandCtr.handleGetCommandOutput(args),
-      killCommand: () => this.shellCommandCtr.handleKillCommand(args),
-      runCommand: () => this.shellCommandCtr.handleRunCommand(args),
-    };
-  }
-
-  private getPlatformAgentToolHandlers(args: any): ToolCallHandlerMap {
-    return {
-      // Platform agent capability probing
-      checkPlatformCapability: () => this.checkPlatformCapability(args),
-      getAgentProfile: () => this.getAgentProfile(args),
-
-      // Platform agent task execution (openclaw / hermes)
-      cancelHeteroTask: () => this.cancelHeteroTask(args),
-      runHeteroTask: () => this.runHeteroTask(args),
-    };
   }
 
   // ─── Platform Capability Probing ───

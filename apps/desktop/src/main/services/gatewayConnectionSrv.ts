@@ -6,6 +6,7 @@ import type {
   MessageApiRequestMessage,
   SystemInfoRequestMessage,
   ToolCallRequestMessage,
+  ToolCallResponseMessage,
 } from '@lobechat/device-gateway-client';
 import { GatewayClient } from '@lobechat/device-gateway-client';
 import type { IdentitySource } from '@lobechat/device-identity';
@@ -22,13 +23,45 @@ const logger = createLogger('services:GatewayConnectionSrv');
 
 const DEFAULT_GATEWAY_URL = 'https://device-gateway.lobehub.com';
 
-interface ToolCallHandler {
-  (apiName: string, args: any): Promise<unknown>;
+/**
+ * Result envelope a tool-call handler must return. Mirrors
+ * `BuiltinServerRuntimeOutput` so the renderer-side and remote-device paths
+ * stay symmetric: `content` is the LLM-facing prompt text; `state` carries the
+ * structured payload that downstream persists into `pluginState`.
+ */
+interface ToolCallResult {
+  content: string;
+  error?: unknown;
+  state?: unknown;
+  success: boolean;
 }
 
 interface MessageApiHandler {
   (platform: string, apiName: string, payload: Record<string, unknown>): Promise<unknown>;
 }
+
+interface ToolCallHandler {
+  (apiName: string, args: unknown): Promise<ToolCallResult>;
+}
+
+/**
+ * Coerce a runtime error (which may be an Error, string, or `{ message }`
+ * object) into the string shape the wire protocol expects. Returns undefined
+ * when there's no error to transmit.
+ */
+const serializeWireError = (err: unknown): string | undefined => {
+  if (err === undefined || err === null) return undefined;
+  if (typeof err === 'string') return err;
+  if (err instanceof Error) return err.message;
+  if (typeof err === 'object' && 'message' in err && typeof err.message === 'string') {
+    return err.message;
+  }
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return String(err);
+  }
+};
 
 interface AgentRunHandler {
   (request: AgentRunRequestMessage): Promise<{ reason?: string; status: 'accepted' | 'rejected' }>;
@@ -387,13 +420,21 @@ export default class GatewayConnectionService extends ServiceModule {
       const args = JSON.parse(argsStr);
       const result = await this.toolCallHandler(apiName, args);
 
-      client.sendToolCallResponse({
-        requestId,
-        result: {
-          content: typeof result === 'string' ? result : JSON.stringify(result),
-          success: true,
-        },
-      });
+      // Forward the typed envelope unchanged. Critically, do NOT stringify the
+      // whole result into `content` — that would bury the structured payload
+      // inside a JSON blob and lose `state`. The wire protocol carries each
+      // field separately so downstream (`DeviceProxy` → `RuntimeExecutors`)
+      // can persist `state` to `pluginState`. Optional fields are only set
+      // when present so payloads stay minimal.
+      const wireResult: ToolCallResponseMessage['result'] = {
+        content: result.content,
+        success: result.success,
+      };
+      const wireError = serializeWireError(result.error);
+      if (wireError !== undefined) wireResult.error = wireError;
+      if (result.state !== undefined) wireResult.state = result.state;
+
+      client.sendToolCallResponse({ requestId, result: wireResult });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       logger.error(`Tool call failed: apiName=${apiName}, error=${errorMsg}`);
