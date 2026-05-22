@@ -1,8 +1,8 @@
-import type { ChatModelCard } from '@lobechat/types';
 import { longcat as longchatCahtModels, ModelProvider } from 'model-bank';
 
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import { getModelMaxOutputs } from '../../utils/getModelMaxOutputs';
+import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
 
 export interface LongCatModelCard {
   id: string;
@@ -30,28 +30,13 @@ export const LobeLongCatAI = createOpenAICompatibleRuntime({
     chatCompletion: () => process.env.DEBUG_LONGCAT_CHAT_COMPLETION === '1',
   },
   models: async ({ client }) => {
-    const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
-
     const modelsPage = (await client.models.list()) as any;
     const modelList: LongCatModelCard[] = modelsPage.data;
 
-    return modelList
-      .map((model) => {
-        const knownModel = LOBE_DEFAULT_MODEL_LIST.find(
-          (m) => model.id.toLowerCase() === m.id.toLowerCase(),
-        );
-
-        return {
-          contextWindowTokens: knownModel?.contextWindowTokens ?? undefined,
-          displayName: knownModel?.displayName ?? undefined,
-          enabled: knownModel?.enabled || false,
-          functionCall: knownModel?.abilities?.functionCall || false,
-          id: model.id,
-          reasoning: knownModel?.abilities?.reasoning || false,
-          vision: knownModel?.abilities?.vision || false,
-        };
-      })
-      .filter(Boolean) as ChatModelCard[];
+    const standardModelList = modelList.map((model) => ({
+      id: model.id,
+    }));
+    return processModelList(standardModelList, MODEL_LIST_CONFIGS.longcat, 'longcat');
   },
   provider: ModelProvider.LongCat,
 });
