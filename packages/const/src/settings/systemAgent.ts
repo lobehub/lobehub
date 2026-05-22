@@ -29,8 +29,15 @@ export const DEFAULT_INPUT_COMPLETION_SYSTEM_AGENT_ITEM: SystemAgentItem = {
   provider: DEFAULT_MINI_SYSTEM_AGENT_ITEM.provider,
 };
 
+export const DEFAULT_FOLLOW_UP_ACTION_SYSTEM_AGENT_ITEM: SystemAgentItem = {
+  enabled: false,
+  model: DEFAULT_MINI_SYSTEM_AGENT_ITEM.model,
+  provider: DEFAULT_MINI_SYSTEM_AGENT_ITEM.provider,
+};
+
 export const DEFAULT_SYSTEM_AGENT_CONFIG: UserSystemAgentConfig = {
   agentMeta: DEFAULT_SYSTEM_AGENT_ITEM,
+  followUpAction: DEFAULT_FOLLOW_UP_ACTION_SYSTEM_AGENT_ITEM,
   generationTopic: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
   historyCompress: DEFAULT_SYSTEM_AGENT_ITEM,
   inputCompletion: DEFAULT_INPUT_COMPLETION_SYSTEM_AGENT_ITEM,

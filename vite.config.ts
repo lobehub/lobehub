@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { DevTools } from '@vitejs/devtools';
 import type { PluginOption, ViteDevServer } from 'vite';
 import { defineConfig, loadEnv } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
@@ -9,6 +10,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 import { viteEnvRestartKeys } from './plugins/vite/envRestartKeys';
 import {
   createSharedRolldownOutput,
+  sharedModulePreload,
   sharedOptimizeDeps,
   sharedRendererDefine,
   sharedRendererPlugins,
@@ -22,6 +24,7 @@ Object.assign(process.env, loadEnv(mode, process.cwd(), ''));
 
 const isDev = process.env.NODE_ENV !== 'production';
 const platform = isMobile ? 'mobile' : 'web';
+const enableViteDevTools = process.env.LOBE_VITE_DEVTOOLS === 'true';
 
 const resolveCommandExecutable = (cmd: string) => {
   const pathValue = process.env.PATH;
@@ -100,9 +103,11 @@ const openExternalBrowser = async (
 export default defineConfig({
   base: isDev ? '/' : process.env.VITE_CDN_BASE || '/_spa/',
   build: {
+    modulePreload: sharedModulePreload,
     outDir: isMobile ? 'dist/mobile' : 'dist/desktop',
     reportCompressedSize: false,
     rolldownOptions: {
+      ...(enableViteDevTools && { devtools: {} }),
       input: path.resolve(__dirname, isMobile ? 'index.mobile.html' : 'index.html'),
       output: createSharedRolldownOutput({ strictExecutionOrder: true }),
     },
@@ -118,6 +123,11 @@ export default defineConfig({
   plugins: [
     vercelSkewProtection(),
     viteEnvRestartKeys(['APP_URL']),
+    enableViteDevTools && DevTools({
+      build: {
+        withApp: true,
+      },
+    }),
     ...sharedRendererPlugins({ platform }),
 
     isDev && {

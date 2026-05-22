@@ -51,6 +51,23 @@ Supported crawler types are listed below:
 
 ---
 
+## `JINA_USE_CN_DOMAINS`
+
+Switch Jina Reader/Search to the mainland China fallback domains.
+
+```env
+JINA_USE_CN_DOMAINS=true
+```
+
+When enabled, LobeHub replaces the Jina endpoints as follows:
+
+- `https://r.jina.ai` → `https://r.jinaai.cn`
+- `https://s.jina.ai` → `https://s.jinaai.cn`
+
+> 📌 Useful when `jina.ai` is unreachable from mainland China. Authentication and API behavior stay the same.
+
+---
+
 ## `CRAWL_CONCURRENCY`
 
 Controls crawler concurrency per crawl task. The default is `3`. On low-resource servers, use `1` to reduce CPU spikes.

@@ -158,9 +158,7 @@ export function buildCloudHeteroContext(params: {
           : entry.content;
       return `<${entry.role}>\n${body}\n</${entry.role}>`;
     });
-    parts.push(
-      `<previous_conversation>\n${entries.join('\n')}\n</previous_conversation>`,
-    );
+    parts.push(`<previous_conversation>\n${entries.join('\n')}\n</previous_conversation>`);
   }
 
   return parts.join('\n\n');

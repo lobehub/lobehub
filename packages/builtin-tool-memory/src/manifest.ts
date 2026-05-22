@@ -242,7 +242,8 @@ export const MemoryManifest: BuiltinToolManifest = {
             type: 'string',
           },
           sourceIds: {
-            description: 'Stable source message ids that support this memory. Use [] when unavailable.',
+            description:
+              'Stable source message ids that support this memory. Use [] when unavailable.',
             items: { type: 'string' },
             type: ['array', 'null'],
           },
@@ -398,7 +399,8 @@ export const MemoryManifest: BuiltinToolManifest = {
             type: 'string',
           },
           sourceIds: {
-            description: 'Stable source message ids that support this memory. Use [] when unavailable.',
+            description:
+              'Stable source message ids that support this memory. Use [] when unavailable.',
             items: { type: 'string' },
             type: ['array', 'null'],
           },
@@ -561,7 +563,8 @@ export const MemoryManifest: BuiltinToolManifest = {
             type: 'string',
           },
           sourceIds: {
-            description: 'Stable source message ids that support this memory. Use [] when unavailable.',
+            description:
+              'Stable source message ids that support this memory. Use [] when unavailable.',
             items: { type: 'string' },
             type: ['array', 'null'],
           },
@@ -770,7 +773,8 @@ export const MemoryManifest: BuiltinToolManifest = {
             type: 'string',
           },
           sourceIds: {
-            description: 'Stable source message ids that support this memory. Use [] when unavailable.',
+            description:
+              'Stable source message ids that support this memory. Use [] when unavailable.',
             items: { type: 'string' },
             type: ['array', 'null'],
           },

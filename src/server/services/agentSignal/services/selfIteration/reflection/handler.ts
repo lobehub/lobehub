@@ -1,6 +1,7 @@
 import type { SourceAgentSelfReflectionRequested } from '@lobechat/agent-signal/source';
 import { AGENT_SIGNAL_SOURCE_TYPES } from '@lobechat/agent-signal/source';
 import type { ModelRuntime } from '@lobechat/model-runtime';
+import { isNonEmptyString } from '@lobechat/utils';
 
 import { defineSourceHandler } from '../../../runtime/middleware';
 import type { AgentSignalReceipt } from '../../receiptService';
@@ -211,9 +212,6 @@ export interface CreateSelfReflectionSourceHandlerDependencies {
   /** Writes durable receipt records for the review summary and action outcomes. */
   writeReceipts?: (receipts: AgentSignalReceipt[]) => Promise<void>;
 }
-
-const isNonEmptyString = (value: unknown): value is string =>
-  typeof value === 'string' && value.length > 0;
 
 const isSelfReflectionScopeType = (value: unknown): value is SelfReflectionSourceScopeType =>
   value === 'topic' || value === 'task' || value === 'operation';

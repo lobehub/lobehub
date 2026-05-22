@@ -13,6 +13,7 @@ export * from './chatGroup';
 export * from './documentHistory';
 export * from './file';
 export * from './generation';
+export * from './llmGenerationTracing';
 export * from './message';
 export * from './messengerAccountLink';
 export * from './messengerInstallation';

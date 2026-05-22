@@ -9,6 +9,7 @@ import type {
 } from '@lobechat/types';
 import {
   boolean,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -82,6 +83,59 @@ export const agentEvalBenchmarks = pgTable(
 export type NewAgentEvalBenchmark = typeof agentEvalBenchmarks.$inferInsert;
 export type AgentEvalBenchmarkItem = typeof agentEvalBenchmarks.$inferSelect;
 
+// agent_eval_experiments
+export const agentEvalExperiments = pgTable(
+  'agent_eval_experiments',
+  {
+    id: text('id')
+      .$defaultFn(() => idGenerator('evalExperiments'))
+      .primaryKey(),
+
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    name: text('name').notNull(),
+    description: text('description'),
+
+    metadata: jsonb('metadata').$type<Record<string, unknown>>(),
+
+    ...timestamps,
+  },
+  (t) => [index('agent_eval_experiments_user_id_idx').on(t.userId)],
+);
+
+export type NewAgentEvalExperiment = typeof agentEvalExperiments.$inferInsert;
+export type AgentEvalExperimentItem = typeof agentEvalExperiments.$inferSelect;
+
+// agent_eval_experiment_benchmarks
+export const agentEvalExperimentBenchmarks = pgTable(
+  'agent_eval_experiment_benchmarks',
+  {
+    experimentId: text('experiment_id')
+      .references(() => agentEvalExperiments.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    benchmarkId: text('benchmark_id')
+      .references(() => agentEvalBenchmarks.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.experimentId, t.benchmarkId] }),
+    index('agent_eval_experiment_benchmarks_benchmark_id_idx').on(t.benchmarkId),
+    index('agent_eval_experiment_benchmarks_user_id_idx').on(t.userId),
+  ],
+);
+
+export type NewAgentEvalExperimentBenchmark = typeof agentEvalExperimentBenchmarks.$inferInsert;
+export type AgentEvalExperimentBenchmarkItem = typeof agentEvalExperimentBenchmarks.$inferSelect;
+
 // ============================================
 // 2. agent_eval_datasets (Evaluation Datasets)
 // ============================================
@@ -95,6 +149,10 @@ export const agentEvalDatasets = pgTable(
     benchmarkId: text('benchmark_id')
       .references(() => agentEvalBenchmarks.id, { onDelete: 'cascade' })
       .notNull(),
+
+    sourceExperimentId: text('source_experiment_id').references(() => agentEvalExperiments.id, {
+      onDelete: 'set null',
+    }),
 
     identifier: text('identifier').notNull(),
 
@@ -113,6 +171,7 @@ export const agentEvalDatasets = pgTable(
   (t) => [
     uniqueIndex('agent_eval_datasets_identifier_user_id_unique').on(t.identifier, t.userId),
     index('agent_eval_datasets_benchmark_id_idx').on(t.benchmarkId),
+    index('agent_eval_datasets_source_experiment_id_idx').on(t.sourceExperimentId),
     index('agent_eval_datasets_user_id_idx').on(t.userId),
   ],
 );
@@ -173,6 +232,10 @@ export const agentEvalRuns = pgTable(
       .references(() => agentEvalDatasets.id, { onDelete: 'cascade' })
       .notNull(),
 
+    experimentId: text('experiment_id').references(() => agentEvalExperiments.id),
+
+    parentRunId: text('parent_run_id'),
+
     targetAgentId: text('target_agent_id').references(() => agents.id, { onDelete: 'cascade' }),
 
     userId: text('user_id')
@@ -196,7 +259,14 @@ export const agentEvalRuns = pgTable(
     ...timestamps,
   },
   (t) => [
+    foreignKey({
+      columns: [t.parentRunId],
+      foreignColumns: [t.id],
+      name: 'agent_eval_runs_parent_run_id_agent_eval_runs_id_fk',
+    }),
     index('agent_eval_runs_dataset_id_idx').on(t.datasetId),
+    index('agent_eval_runs_experiment_id_idx').on(t.experimentId),
+    index('agent_eval_runs_parent_run_id_idx').on(t.parentRunId),
     index('agent_eval_runs_user_id_idx').on(t.userId),
     index('agent_eval_runs_status_idx').on(t.status),
     index('agent_eval_runs_target_agent_id_idx').on(t.targetAgentId),

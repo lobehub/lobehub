@@ -254,7 +254,12 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
 
         try {
           await dispatchNonHeteroSubAgent(
-            { kind: 'callAgent', targetAgentId: agentId, instruction, parentMessageId: ctx.messageId },
+            {
+              kind: 'callAgent',
+              targetAgentId: agentId,
+              instruction,
+              parentMessageId: ctx.messageId,
+            },
             {
               conversationContext,
               heterogeneousProvider: parentAgentConfig?.agencyConfig?.heterogeneousProvider,

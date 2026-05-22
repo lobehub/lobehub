@@ -19,6 +19,7 @@ export interface FollowUpModelConfig {
 export interface FollowUpExtractInput {
   hint?: FollowUpHint;
   modelConfig: FollowUpModelConfig;
+  threadId?: string;
   topicId: string;
 }
 
@@ -46,5 +47,6 @@ export const FollowUpModelConfigSchema = z.object({
 export const FollowUpExtractInputSchema = z.object({
   hint: FollowUpHintSchema.optional(),
   modelConfig: FollowUpModelConfigSchema,
+  threadId: z.string().optional(),
   topicId: z.string().min(1),
 });

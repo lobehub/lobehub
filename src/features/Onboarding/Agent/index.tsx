@@ -14,6 +14,8 @@ import { useNavigate } from 'react-router-dom';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import { ONBOARDING_PRODUCTION_DEFAULT_MODEL } from '@/const/onboarding';
+import { type ConversationHooks } from '@/features/Conversation/types';
+import { mergeConversationHooks } from '@/features/Conversation/utils/mergeConversationHooks';
 import ModeSwitch from '@/features/Onboarding/components/ModeSwitch';
 import { useOnboardingAgentTemplates } from '@/hooks/useOnboardingAgentTemplates';
 import { useClientDataSWR, useOnlyFetchOnceSWR } from '@/libs/swr';
@@ -141,12 +143,14 @@ const AgentOnboardingPage = memo(() => {
     [onboardingAgentConfig?.model, onboardingAgentConfig?.provider],
   );
 
-  const onboardingFollowUp = useOnboardingFollowUp({
+  const onboardingFollowUpHooks = useOnboardingFollowUp({
     enabled: !onboardingFinished && !viewingHistoricalTopic,
     isGreeting,
     modelConfig: onboardingFollowUpModelConfig,
+    onboardingAgentId,
+    phase: data?.context?.phase,
+    topicId: effectiveTopicId,
   });
-  const { onBeforeSendMessage, triggerExtract } = onboardingFollowUp;
 
   // Re-entry latch for the fresh-state first-send orchestration. The combination
   // of advisory lock + this ref ensures rapid double-submit cannot create two
@@ -157,7 +161,6 @@ const AgentOnboardingPage = memo(() => {
   const composedOnBeforeSendMessage = useCallback(
     async (params: SendMessageParams): Promise<boolean> => {
       params.metadata = { ...params.metadata, trigger: RequestTrigger.Onboarding };
-      await onBeforeSendMessage();
 
       if (!onboardingAgentId) {
         // ChatInput is gated by `isInputReady`; this branch should be unreachable.
@@ -212,7 +215,7 @@ const AgentOnboardingPage = memo(() => {
       await orchestration;
       return false;
     },
-    [effectiveTopicId, mutate, onBeforeSendMessage, onboardingAgentId],
+    [effectiveTopicId, mutate, onboardingAgentId],
   );
 
   const syncOnboardingContext = useCallback(async () => {
@@ -223,43 +226,52 @@ const AgentOnboardingPage = memo(() => {
     return nextContext;
   }, [mutate, mutateHistoryTopics, onboardingAgentId]);
 
-  const handleAssistantTurnSettled = useCallback(async () => {
-    if (!effectiveTopicId) return;
+  const onboardingTurnSettledHook = useMemo<ConversationHooks>(() => {
+    if (onboardingFinished || viewingHistoricalTopic) return {};
 
-    const prevPhase = data?.context?.phase;
-    const prevFinishedAt = agentOnboarding?.finishedAt;
+    return {
+      onAssistantTurnSettled: async () => {
+        if (!effectiveTopicId) return;
 
-    const extractPromise = triggerExtract(effectiveTopicId, prevPhase);
+        const prevPhase = data?.context?.phase;
+        const prevFinishedAt = agentOnboarding?.finishedAt;
 
-    // Sync first to learn the next phase/finishedAt; only then decide whether
-    // the heavier user-store / builtin-agent refreshes are needed this turn.
-    const [nextContext] = await Promise.all([syncOnboardingContext(), extractPromise]);
+        const nextContext = await syncOnboardingContext();
+        const newPhase = nextContext?.context?.phase;
+        const newFinishedAt = nextContext?.agentOnboarding?.finishedAt;
 
-    const newPhase = nextContext?.context?.phase;
-    const newFinishedAt = nextContext?.agentOnboarding?.finishedAt;
-
-    const refreshes: Promise<unknown>[] = [];
-    if (newFinishedAt !== prevFinishedAt) refreshes.push(refreshUserState());
-    if (newPhase !== prevPhase) {
-      refreshes.push(refreshBuiltinAgent(BUILTIN_AGENT_SLUGS.webOnboarding));
-    }
-    if (refreshes.length > 0) await Promise.all(refreshes);
+        const refreshes: Promise<unknown>[] = [];
+        if (newFinishedAt !== prevFinishedAt) refreshes.push(refreshUserState());
+        if (newPhase !== prevPhase) {
+          refreshes.push(refreshBuiltinAgent(BUILTIN_AGENT_SLUGS.webOnboarding));
+        }
+        if (refreshes.length > 0) await Promise.all(refreshes);
+      },
+    };
   }, [
-    agentOnboarding?.finishedAt,
-    data?.context?.phase,
+    onboardingFinished,
+    viewingHistoricalTopic,
     effectiveTopicId,
+    data?.context?.phase,
+    agentOnboarding?.finishedAt,
     refreshBuiltinAgent,
     refreshUserState,
     syncOnboardingContext,
-    triggerExtract,
   ]);
-  const assistantTurnSettledHandler =
-    onboardingFinished || viewingHistoricalTopic ? undefined : handleAssistantTurnSettled;
 
-  const conversationHooks = useMemo(
-    () => (onboardingFinished ? undefined : { onBeforeSendMessage: composedOnBeforeSendMessage }),
-    [onboardingFinished, composedOnBeforeSendMessage],
-  );
+  const conversationHooks = useMemo(() => {
+    if (onboardingFinished) return undefined;
+    return mergeConversationHooks(
+      { onBeforeSendMessage: composedOnBeforeSendMessage },
+      onboardingTurnSettledHook,
+      onboardingFollowUpHooks,
+    );
+  }, [
+    onboardingFinished,
+    composedOnBeforeSendMessage,
+    onboardingTurnSettledHook,
+    onboardingFollowUpHooks,
+  ]);
 
   if (error) {
     return (
@@ -316,7 +328,6 @@ const AgentOnboardingPage = memo(() => {
               showFeedback={!viewingHistoricalTopic}
               topicId={effectiveTopicId}
               onAfterWrapUp={syncOnboardingContext}
-              onAssistantTurnSettled={assistantTurnSettledHandler}
             />
           </ErrorBoundary>
         </OnboardingConversationProvider>

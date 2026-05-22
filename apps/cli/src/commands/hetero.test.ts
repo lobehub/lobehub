@@ -346,25 +346,31 @@ describe('hetero exec command', () => {
     it('retries without --resume when the error stream event indicates the session is gone', async () => {
       // First spawn: exits non-zero, emits a resume-not-found error event
       const resumeNotFoundEvent = {
-        data: { error: 'No conversation found with session ID cc-stale', message: 'No conversation found with session ID cc-stale' },
+        data: {
+          error: 'No conversation found with session ID cc-stale',
+          message: 'No conversation found with session ID cc-stale',
+        },
         operationId: 'op-r1',
         stepIndex: 0,
         timestamp: 1,
         type: 'error',
       };
       mockSpawnAgent
-        .mockReturnValueOnce(
-          createFakeHandle({ events: [resumeNotFoundEvent], exitCode: 1 }),
-        )
+        .mockReturnValueOnce(createFakeHandle({ events: [resumeNotFoundEvent], exitCode: 1 }))
         // Second spawn: succeeds
         .mockReturnValueOnce(createFakeHandle({ exitCode: 0 }));
 
       await runCmd([
-        'hetero', 'exec',
-        '--type', 'claude-code',
-        '--prompt', 'do the thing',
-        '--resume', 'cc-stale',
-        '--operation-id', 'op-r1',
+        'hetero',
+        'exec',
+        '--type',
+        'claude-code',
+        '--prompt',
+        'do the thing',
+        '--resume',
+        'cc-stale',
+        '--operation-id',
+        'op-r1',
       ]);
 
       // Two spawns: first with --resume, retry without
@@ -389,11 +395,16 @@ describe('hetero exec command', () => {
         .mockReturnValueOnce(createFakeHandle({ exitCode: 0 }));
 
       await runCmd([
-        'hetero', 'exec',
-        '--type', 'claude-code',
-        '--prompt', 'continue',
-        '--resume', 'xyz',
-        '--operation-id', 'op-r2',
+        'hetero',
+        'exec',
+        '--type',
+        'claude-code',
+        '--prompt',
+        'continue',
+        '--resume',
+        'xyz',
+        '--operation-id',
+        'op-r2',
       ]);
 
       expect(mockSpawnAgent).toHaveBeenCalledTimes(2);
@@ -403,7 +414,10 @@ describe('hetero exec command', () => {
 
     it('retries without --resume when the error indicates context overflow', async () => {
       const contextOverflowEvent = {
-        data: { error: 'prompt is too long: 215168 tokens > 200000 maximum', message: 'prompt is too long: 215168 tokens > 200000 maximum' },
+        data: {
+          error: 'prompt is too long: 215168 tokens > 200000 maximum',
+          message: 'prompt is too long: 215168 tokens > 200000 maximum',
+        },
         operationId: 'op-ctx',
         stepIndex: 0,
         timestamp: 1,
@@ -414,11 +428,16 @@ describe('hetero exec command', () => {
         .mockReturnValueOnce(createFakeHandle({ exitCode: 0 }));
 
       await runCmd([
-        'hetero', 'exec',
-        '--type', 'claude-code',
-        '--prompt', 'next question',
-        '--resume', 'cc-longctx',
-        '--operation-id', 'op-ctx',
+        'hetero',
+        'exec',
+        '--type',
+        'claude-code',
+        '--prompt',
+        'next question',
+        '--resume',
+        'cc-longctx',
+        '--operation-id',
+        'op-ctx',
       ]);
 
       expect(mockSpawnAgent).toHaveBeenCalledTimes(2);
@@ -434,10 +453,14 @@ describe('hetero exec command', () => {
       );
 
       await runCmd([
-        'hetero', 'exec',
-        '--type', 'claude-code',
-        '--prompt', 'hi',
-        '--resume', 'cc-valid',
+        'hetero',
+        'exec',
+        '--type',
+        'claude-code',
+        '--prompt',
+        'hi',
+        '--resume',
+        'cc-valid',
       ]);
 
       expect(mockSpawnAgent).toHaveBeenCalledTimes(1);
@@ -455,10 +478,14 @@ describe('hetero exec command', () => {
       mockSpawnAgent.mockReturnValueOnce(createFakeHandle({ events: [errorEvent], exitCode: 1 }));
 
       await runCmd([
-        'hetero', 'exec',
-        '--type', 'claude-code',
-        '--prompt', 'fresh run',
-        '--operation-id', 'op-nr',
+        'hetero',
+        'exec',
+        '--type',
+        'claude-code',
+        '--prompt',
+        'fresh run',
+        '--operation-id',
+        'op-nr',
       ]);
 
       // No --resume → no interception → no retry
@@ -468,7 +495,10 @@ describe('hetero exec command', () => {
 
     it('does NOT suppress the resume-error event from JSONL output', async () => {
       const resumeNotFoundEvent = {
-        data: { error: 'No conversation found with session ID old', message: 'No conversation found with session ID old' },
+        data: {
+          error: 'No conversation found with session ID old',
+          message: 'No conversation found with session ID old',
+        },
         operationId: 'op-jsonl',
         stepIndex: 0,
         timestamp: 1,
@@ -479,11 +509,16 @@ describe('hetero exec command', () => {
         .mockReturnValueOnce(createFakeHandle({ exitCode: 0 }));
 
       await runCmd([
-        'hetero', 'exec',
-        '--type', 'claude-code',
-        '--prompt', 'do thing',
-        '--resume', 'old',
-        '--render', 'jsonl',
+        'hetero',
+        'exec',
+        '--type',
+        'claude-code',
+        '--prompt',
+        'do thing',
+        '--resume',
+        'old',
+        '--render',
+        'jsonl',
       ]);
 
       // The error event is still emitted to JSONL (for observability) even
@@ -492,7 +527,11 @@ describe('hetero exec command', () => {
         .map((c) => c[0])
         .filter((s): s is string => typeof s === 'string');
       const errorLine = lines.find((l) => {
-        try { return JSON.parse(l).type === 'error'; } catch { return false; }
+        try {
+          return JSON.parse(l).type === 'error';
+        } catch {
+          return false;
+        }
       });
       expect(errorLine).toBeDefined();
     });
