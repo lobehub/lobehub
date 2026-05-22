@@ -1911,27 +1911,23 @@ export class AiAgentService {
         name: s.name,
       }));
 
-      // Agent-document skill bundles surfaced as runtime skills. The identifier
-      // is prefixed (`agent-document:<filename>`) so it cannot collide with a
-      // user/market skill name; the runtime activator (skills serverRuntime)
-      // resolves the prefix by reading SKILL.md content from the agent_document
-      // store. Name == identifier so the prompt's `<skill name="...">` line and
-      // the model's `activateSkill(name)` call carry the same prefixed value.
-      const agentDocs = await this.agentDocumentsService.getAgentDocuments(resolvedAgentId);
-      const agentDocMetas = agentDocs
-        .filter((doc) => doc.isSkillBundle)
-        .map((doc) => {
-          const identifier = `agent-document:${doc.filename}`;
-          return {
-            description: doc.description ?? '',
-            identifier,
-            name: identifier,
-          };
-        });
+      // Agent-document skill bundles surfaced as runtime skills via the shared
+      // `getAgentSkills` source of truth (prefix + index-child resolution lives
+      // there; see `AgentDocumentsService.getAgentSkills`). Identifier is
+      // prefixed (`agent-skills:<filename>`) so it can't collide with builtin
+      // / DB skill names, and we re-use it as `name` so the prompt's
+      // `<skill name="...">` line and the model's `activateSkill(name)` call
+      // carry the same value.
+      const agentSkills = await this.agentDocumentsService.getAgentSkills(resolvedAgentId);
+      const agentSkillMetas = agentSkills.map((skill) => ({
+        description: skill.description,
+        identifier: skill.identifier,
+        name: skill.name,
+      }));
 
       const skillEngine = new SkillEngine({
         enableChecker: (skill) => shouldEnableBuiltinSkill(skill.identifier),
-        skills: [...builtinMetas, ...dbMetas, ...agentDocMetas],
+        skills: [...builtinMetas, ...dbMetas, ...agentSkillMetas],
       });
       operationSkillSet = skillEngine.generate(agentPlugins ?? []);
     } catch (error) {

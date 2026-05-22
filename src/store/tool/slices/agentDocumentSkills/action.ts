@@ -1,3 +1,4 @@
+import { buildAgentSkillIdentifier } from '@lobechat/const';
 import useSWR, { type SWRResponse } from 'swr';
 
 import { agentDocumentService, agentDocumentSWRKeys } from '@/services/agentDocument';
@@ -11,8 +12,6 @@ const n = setNamespace('agentDocumentSkills');
 
 type Setter = StoreSetter<ToolStore>;
 
-const AGENT_DOCUMENT_SKILL_PREFIX = 'agent-document:';
-
 const mapDocsToSkills = (
   docs: Awaited<ReturnType<typeof agentDocumentService.getDocuments>>,
 ): AgentDocumentSkillItem[] =>
@@ -21,7 +20,7 @@ const mapDocsToSkills = (
     .map((doc) => ({
       description: doc.description ?? undefined,
       documentId: doc.documentId,
-      identifier: `${AGENT_DOCUMENT_SKILL_PREFIX}${doc.filename}`,
+      identifier: buildAgentSkillIdentifier(doc.filename),
       name: doc.filename,
       title: doc.title || undefined,
     }));
