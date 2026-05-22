@@ -50,10 +50,13 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ taskId, showTaskAgentPanelTo
     return () => setActiveTaskId(undefined);
   }, [taskId, setActiveTaskId]);
 
-  const { isLoading, error } = useFetchTaskDetail(taskId);
+  const { isLoading } = useFetchTaskDetail(taskId);
 
   const isInitialLoading = isLoading && !hasTaskDetail;
-  const isNotFound = !isInitialLoading && (!!error || !hasTaskDetail);
+  // Only treat as not-found when there is no cached detail and the initial fetch
+  // has settled. A transient revalidation error (focus/reconnect/poll/5xx) must not
+  // hide an already-loaded task behind the 404 fallback.
+  const isNotFound = !isLoading && !hasTaskDetail;
 
   if (isNotFound) {
     return (
