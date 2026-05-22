@@ -266,7 +266,9 @@ describe('OnboardingService', () => {
     expect(result.success).toBe(true);
     expect(result.savedFields).toEqual(['fullName']);
     expect(result.ignoredFields).toEqual(['agentName', 'agentEmoji']);
-    expect(result.content).toContain('Skipped agent identity because agentName matches the user identity');
+    expect(result.content).toContain(
+      'Skipped agent identity because agentName matches the user identity',
+    );
     expect(persistedUserState.fullName).toBe('anbex');
     expect(mockAgentModel.update).not.toHaveBeenCalled();
   });

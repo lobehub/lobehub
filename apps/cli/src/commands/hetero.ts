@@ -341,7 +341,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
     // into the ingester.  When intercepting resume errors, a matching
     // `error` event is withheld from the ingester and flags a retry instead.
     let resumeNotFound = false;
-    let ingestError = false;
+    const ingestError = false;
     try {
       for await (const event of handle.events) {
         if (interceptResumeErrors && event.type === 'error') {
@@ -393,7 +393,14 @@ const exec = async (options: ExecOptions): Promise<void> => {
       resumeNotFound = true;
     }
 
-    return { code, ingestError, resumeNotFound, sessionId: handle.sessionId, signal, stderrContent };
+    return {
+      code,
+      ingestError,
+      resumeNotFound,
+      sessionId: handle.sessionId,
+      signal,
+      stderrContent,
+    };
   };
 
   // ─── First run (with --resume if provided) ───────────────────────────────

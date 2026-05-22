@@ -29,6 +29,7 @@ const SYSTEM_AGENT_MODEL_ITEMS: SystemAgentModelItem[] = [
 ];
 
 const OPTIONAL_FEATURE_ITEMS: SystemAgentModelItem[] = [
+  { key: 'followUpAction' },
   { key: 'inputCompletion' },
   { key: 'promptRewrite' },
 ];
@@ -163,7 +164,9 @@ const ModelAssignmentsForm = memo(() => {
   });
 
   const isOptionalFeatureLoading =
-    loadingKey === 'inputCompletion' || loadingKey === 'promptRewrite';
+    loadingKey === 'followUpAction' ||
+    loadingKey === 'inputCompletion' ||
+    loadingKey === 'promptRewrite';
   const isModelAssignmentLoading = loadingKey && !isOptionalFeatureLoading;
 
   const modelAssignments: FormGroupItemType = {

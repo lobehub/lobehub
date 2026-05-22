@@ -143,6 +143,48 @@ describe('FollowUpActionService.extract', () => {
     expect(result).toEqual({ chips: [], messageId: FOUND_MSG });
   });
 
+  const captureWhereOps = () => {
+    const arg = queryFindFirstSpy.mock.calls[0][0];
+    const fakeTable = {
+      content: { col: 'content' },
+      createdAt: { col: 'createdAt' },
+      id: { col: 'id' },
+      role: { col: 'role' },
+      threadId: { col: 'threadId' },
+      topicId: { col: 'topicId' },
+      userId: { col: 'userId' },
+    };
+    const ops = {
+      and: (...parts: any[]) => ({ op: 'and', parts }),
+      eq: (col: any, value: any) => ({ col, op: 'eq', value }),
+      isNotNull: (col: any) => ({ col, op: 'isNotNull' }),
+      isNull: (col: any) => ({ col, op: 'isNull' }),
+      ne: (col: any, value: any) => ({ col, op: 'ne', value }),
+    };
+    const result = arg.where(fakeTable, ops);
+    return { parts: result.parts as any[], table: fakeTable };
+  };
+
+  it('filters by threadId when provided (thread isolation)', async () => {
+    queryFindFirstSpy.mockResolvedValue(undefined);
+    await svc.extract({
+      modelConfig: MODEL_CONFIG,
+      threadId: 'thread-A',
+      topicId: TEST_TOPIC,
+    });
+    const { parts, table } = captureWhereOps();
+    expect(parts).toContainEqual({ col: table.threadId, op: 'eq', value: 'thread-A' });
+    expect(parts.some((p) => p.op === 'isNull' && p.col === table.threadId)).toBe(false);
+  });
+
+  it('filters by isNull(threadId) when no threadId provided (main topic only)', async () => {
+    queryFindFirstSpy.mockResolvedValue(undefined);
+    await svc.extract({ modelConfig: MODEL_CONFIG, topicId: TEST_TOPIC });
+    const { parts, table } = captureWhereOps();
+    expect(parts).toContainEqual({ col: table.threadId, op: 'isNull' });
+    expect(parts.some((p) => p.op === 'eq' && p.col === table.threadId)).toBe(false);
+  });
+
   it('appends onboarding addendum to system prompt when hint is onboarding', async () => {
     queryFindFirstSpy.mockResolvedValue({ id: FOUND_MSG, content: 'q?' });
     runtimeMock.generateObject.mockResolvedValue({ chips: [] });
