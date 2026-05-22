@@ -820,7 +820,12 @@ export class ConversationControlActionImpl {
     // CC stream resumes so flip it back to `running`. The natural completion
     // (`runtime_end` → `writeTopicStatus('active')`) takes over from there.
     if (effectiveContext.topicId) {
-      void this.#get().updateTopicStatus?.(effectiveContext.topicId, 'running');
+      void this.#get().updateTopicStatus?.({
+        agentId: effectiveContext.agentId,
+        groupId: effectiveContext.groupId,
+        status: 'running',
+        topicId: effectiveContext.topicId,
+      });
     }
   };
 

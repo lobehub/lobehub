@@ -535,6 +535,7 @@ export default {
   'localSystem.workingDirectory.branchesNoMatch': 'No matching branches',
   'localSystem.workingDirectory.branchSearchPlaceholder': 'Search branches',
   'localSystem.workingDirectory.cancel': 'Cancel',
+  'localSystem.workingDirectory.clear': 'Clear',
   'localSystem.workingDirectory.checkoutAction': 'Checkout',
   'localSystem.workingDirectory.checkoutFailed': 'Checkout failed',
   'localSystem.workingDirectory.createBranchAction': 'Checkout new branch…',

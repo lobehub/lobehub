@@ -1196,7 +1196,12 @@ export const executeHeterogeneousAgent = async (
   };
   const writeTopicStatus = (status: ChatTopicStatus): void => {
     if (!context.topicId) return;
-    void get().updateTopicStatus?.(context.topicId, status);
+    void get().updateTopicStatus?.({
+      agentId: context.agentId,
+      groupId: context.groupId,
+      status,
+      topicId: context.topicId,
+    });
   };
   const retryWithoutResume = (error: unknown): boolean => {
     if (

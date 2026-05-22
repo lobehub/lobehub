@@ -55,6 +55,8 @@ describe('OnboardingService', () => {
   let mockDb: any;
   let mockMessageModel: {
     create: ReturnType<typeof vi.fn>;
+    findFirstAssistantInTopic: ReturnType<typeof vi.fn>;
+    hasTopicMessages: ReturnType<typeof vi.fn>;
     listMessagePluginsByTopic: ReturnType<typeof vi.fn>;
     query: ReturnType<typeof vi.fn>;
   };
@@ -91,6 +93,7 @@ describe('OnboardingService', () => {
 
     mockDb = {
       delete: vi.fn(() => ({ where: vi.fn(async () => undefined) })),
+      execute: vi.fn(async () => undefined),
       select: vi.fn(() => ({
         from: vi.fn(() => ({
           where: vi.fn(async () => [{ count: 0 }]),
@@ -98,6 +101,7 @@ describe('OnboardingService', () => {
       })),
       transaction: vi.fn(async (callback) =>
         callback({
+          execute: vi.fn(async () => undefined),
           update: vi.fn((table) => {
             const where = vi.fn(async () => undefined);
             const set = vi.fn(() => ({ where }));
@@ -131,7 +135,15 @@ describe('OnboardingService', () => {
       }),
     };
     mockMessageModel = {
-      create: vi.fn(async () => ({ id: 'message-1' })),
+      create: vi.fn(async () => ({
+        agentId: 'builtin-agent-1',
+        content: 'welcome',
+        id: 'message-1',
+        role: 'assistant',
+        topicId: 'topic-1',
+      })),
+      findFirstAssistantInTopic: vi.fn(async () => undefined),
+      hasTopicMessages: vi.fn(async () => false),
       listMessagePluginsByTopic: vi.fn(async () => []),
       query: vi.fn(async () => []),
     };
@@ -623,5 +635,149 @@ describe('OnboardingService', () => {
 
     // Baseline should remain 3, not updated to 6
     expect(persistedUserState.agentOnboarding.discoveryStartUserMessageCount).toBe(3);
+  });
+
+  describe('getBootstrapState', () => {
+    it('returns fresh state (topicId=null, hasMessages=false) when no topic exists', async () => {
+      const service = new OnboardingService(mockDb, userId);
+      const result = await service.getBootstrapState();
+
+      expect(result.topicId).toBeNull();
+      expect(result.hasMessages).toBe(false);
+      expect(mockMessageModel.hasTopicMessages).not.toHaveBeenCalled();
+      // Must NOT create a topic on a read-only call.
+      expect(mockTopicModel.create).not.toHaveBeenCalled();
+    });
+
+    it('returns returning state with hasMessages=true when topic has messages', async () => {
+      persistedUserState.agentOnboarding = {
+        activeTopicId: 'topic-1',
+        version: CURRENT_ONBOARDING_VERSION,
+      };
+      persistedTopics['topic-1'] = { agentId: 'builtin-agent-1', id: 'topic-1', metadata: {} };
+      mockMessageModel.hasTopicMessages.mockResolvedValue(true);
+
+      const service = new OnboardingService(mockDb, userId);
+      const result = await service.getBootstrapState();
+
+      expect(result.topicId).toBe('topic-1');
+      expect(result.hasMessages).toBe(true);
+      expect(mockMessageModel.hasTopicMessages).toHaveBeenCalledWith('topic-1');
+    });
+
+    it('does not expose stale activeTopicId when the topic no longer exists', async () => {
+      persistedUserState.agentOnboarding = {
+        activeTopicId: 'missing-topic',
+        version: CURRENT_ONBOARDING_VERSION,
+      };
+
+      const service = new OnboardingService(mockDb, userId);
+      const result = await service.getBootstrapState();
+
+      expect(result.topicId).toBeNull();
+      expect(result.context.topicId).toBeUndefined();
+      expect(result.hasMessages).toBe(false);
+      expect(mockTopicModel.findById).toHaveBeenCalledWith('missing-topic');
+      expect(mockMessageModel.hasTopicMessages).not.toHaveBeenCalled();
+      expect(mockTopicModel.create).not.toHaveBeenCalled();
+      expect(mockUserModel.updateUser).not.toHaveBeenCalled();
+    });
+
+    it('does not write the discovery baseline (read-only semantics)', async () => {
+      persistedUserState.agentOnboarding = {
+        activeTopicId: 'topic-1',
+        version: CURRENT_ONBOARDING_VERSION,
+      };
+      persistedTopics['topic-1'] = { agentId: 'builtin-agent-1', id: 'topic-1', metadata: {} };
+      persistedUserState.fullName = 'Ada';
+      mockAgentModel.getBuiltinAgent.mockResolvedValue({
+        avatar: '😀',
+        id: 'inbox-agent-1',
+        title: 'Inbox',
+      });
+      mockDb.select.mockReturnValue({
+        from: vi.fn(() => ({
+          where: vi.fn(async () => [{ count: 4 }]),
+        })),
+      });
+
+      const service = new OnboardingService(mockDb, userId);
+      await service.getBootstrapState();
+
+      // Baseline must remain undefined — read-only getBootstrapState never writes.
+      expect(persistedUserState.agentOnboarding.discoveryStartUserMessageCount).toBeUndefined();
+      expect(mockUserModel.updateUser).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('sendOnboardingFirstMessage', () => {
+    it('creates topic + welcome on first call (happy path)', async () => {
+      const service = new OnboardingService(mockDb, userId);
+      mockMessageModel.query.mockResolvedValueOnce([
+        { content: 'welcome', id: 'message-1', role: 'assistant' },
+      ]);
+
+      const result = await service.sendOnboardingFirstMessage({
+        agentId: 'builtin-agent-1',
+        welcomeContent: 'welcome',
+      });
+
+      expect(mockTopicModel.create).toHaveBeenCalledTimes(1);
+      expect(mockMessageModel.findFirstAssistantInTopic).toHaveBeenCalledWith('topic-1');
+      expect(mockMessageModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({ content: 'welcome', role: 'assistant', topicId: 'topic-1' }),
+      );
+      expect(persistedUserState.agentOnboarding.activeTopicId).toBe('topic-1');
+      expect(result.topicId).toBe('topic-1');
+      expect(result.messages).toHaveLength(1);
+    });
+
+    it('is idempotent — does not double-insert welcome when one already exists', async () => {
+      persistedUserState.agentOnboarding = {
+        activeTopicId: 'topic-1',
+        version: CURRENT_ONBOARDING_VERSION,
+      };
+      persistedTopics['topic-1'] = { agentId: 'builtin-agent-1', id: 'topic-1', metadata: {} };
+      mockMessageModel.findFirstAssistantInTopic.mockResolvedValueOnce({
+        content: 'welcome-old',
+        id: 'welcome-old',
+        role: 'assistant',
+      });
+      mockMessageModel.query.mockResolvedValueOnce([
+        { content: 'welcome-old', id: 'welcome-old', role: 'assistant' },
+      ]);
+
+      const service = new OnboardingService(mockDb, userId);
+      const result = await service.sendOnboardingFirstMessage({
+        agentId: 'builtin-agent-1',
+        welcomeContent: 'welcome-new',
+      });
+
+      expect(mockTopicModel.create).not.toHaveBeenCalled();
+      expect(mockMessageModel.create).not.toHaveBeenCalled();
+      expect(result.topicId).toBe('topic-1');
+    });
+
+    it('acquires the advisory lock before mutating', async () => {
+      const executeSpy = vi.fn(async () => undefined);
+      mockDb.transaction = vi.fn(async (callback: any) =>
+        callback({
+          execute: executeSpy,
+          update: vi.fn(() => ({ set: vi.fn(() => ({ where: vi.fn(async () => undefined) })) })),
+        }),
+      );
+      mockMessageModel.query.mockResolvedValueOnce([]);
+
+      const service = new OnboardingService(mockDb, userId);
+      await service.sendOnboardingFirstMessage({
+        agentId: 'builtin-agent-1',
+        welcomeContent: 'welcome',
+      });
+
+      expect(executeSpy).toHaveBeenCalledTimes(1);
+      // The first (only) execute call inside the transaction is the advisory lock.
+      // We assert structurally rather than on the exact SQL fragment.
+      expect(executeSpy).toHaveBeenCalled();
+    });
   });
 });

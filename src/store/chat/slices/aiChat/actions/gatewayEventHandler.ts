@@ -413,7 +413,13 @@ export const createGatewayEventHandler = (
           // Persist a paused marker so the sidebar reflects "waiting on user" across reload.
           // Resume back to 'running' is free: approve / reject both spawn a new op via the
           // executor entries, which already write 'running'.
-          if (context.topicId) void get().updateTopicStatus?.(context.topicId, 'paused');
+          if (context.topicId)
+            void get().updateTopicStatus?.({
+              agentId: context.agentId,
+              groupId: context.groupId,
+              status: 'paused',
+              topicId: context.topicId,
+            });
         }
 
         break;

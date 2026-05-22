@@ -181,6 +181,14 @@ export interface SearchOptions {
 }
 
 /**
+ * Topics and messages are ordered by recency rather than BM25 score, so we fetch
+ * a larger candidate pool first (most relevant matches), then keep the most recent
+ * ones. This prevents newly created/updated items from being buried under older
+ * high-scoring matches that would otherwise fill the small per-type limit.
+ */
+const RECENCY_CANDIDATE_MULTIPLIER = 4;
+
+/**
  * Search Repository - provides unified search across Agents, Topics, and Files
  */
 export class SearchRepo {
@@ -239,10 +247,11 @@ export class SearchRepo {
 
     const results = await Promise.all(searchPromises);
 
-    // Flatten and sort by relevance ASC, then by updatedAt DESC
-    return results
-      .flat()
-      .sort((a, b) => a.relevance - b.relevance || b.updatedAt.getTime() - a.updatedAt.getTime());
+    // Each search method already returns its results in the intended display order
+    // (topics/messages by recency, other types by BM25 score). The command palette
+    // groups results by type, so we only need to preserve each type's internal order
+    // here rather than re-sorting the merged list by relevance.
+    return results.flat();
   }
 
   /**
@@ -453,27 +462,30 @@ export class SearchRepo {
         ),
       )
       .orderBy(sql`paradedb.score(${topics.id}) DESC`)
-      .limit(limit);
+      .limit(limit * RECENCY_CANDIDATE_MULTIPLIER);
 
-    return this.mapScoresToRelevance(rows).map((row) => ({
-      agent: row.agentMatchedId
-        ? {
-            avatar: row.agentAvatar,
-            backgroundColor: row.agentBackgroundColor,
-            title: row.agentTitle,
-          }
-        : null,
-      agentId: row.agentId,
-      createdAt: row.createdAt,
-      description: this.truncate(row.content),
-      favorite: row.favorite,
-      id: row.id,
-      relevance: row.relevance,
-      sessionId: row.sessionId,
-      title: row.title || '',
-      type: 'topic' as const,
-      updatedAt: row.updatedAt,
-    }));
+    return this.mapScoresToRelevance(rows)
+      .map((row) => ({
+        agent: row.agentMatchedId
+          ? {
+              avatar: row.agentAvatar,
+              backgroundColor: row.agentBackgroundColor,
+              title: row.agentTitle,
+            }
+          : null,
+        agentId: row.agentId,
+        createdAt: row.createdAt,
+        description: this.truncate(row.content),
+        favorite: row.favorite,
+        id: row.id,
+        relevance: row.relevance,
+        sessionId: row.sessionId,
+        title: row.title || '',
+        type: 'topic' as const,
+        updatedAt: row.updatedAt,
+      }))
+      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+      .slice(0, limit);
   }
 
   /**
@@ -510,22 +522,25 @@ export class SearchRepo {
         ),
       )
       .orderBy(sql`paradedb.score(${messages.id}) DESC`)
-      .limit(limit);
+      .limit(limit * RECENCY_CANDIDATE_MULTIPLIER);
 
-    return this.mapScoresToRelevance(rows).map((row) => ({
-      agentId: row.agentId,
-      content: row.content || '',
-      createdAt: row.createdAt,
-      description: row.agentTitle || 'General Chat',
-      id: row.id,
-      model: row.model,
-      relevance: row.relevance,
-      role: row.role,
-      title: this.truncate(row.content) || '',
-      topicId: row.topicId,
-      type: 'message' as const,
-      updatedAt: row.updatedAt,
-    }));
+    return this.mapScoresToRelevance(rows)
+      .map((row) => ({
+        agentId: row.agentId,
+        content: row.content || '',
+        createdAt: row.createdAt,
+        description: row.agentTitle || 'General Chat',
+        id: row.id,
+        model: row.model,
+        relevance: row.relevance,
+        role: row.role,
+        title: this.truncate(row.content) || '',
+        topicId: row.topicId,
+        type: 'message' as const,
+        updatedAt: row.updatedAt,
+      }))
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, limit);
   }
 
   /**

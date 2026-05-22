@@ -13,6 +13,13 @@ const useMatchMock = vi.hoisted(() => vi.fn());
 const useNavigateMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@lobehub/ui', () => ({
+  Accordion: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  AccordionItem: ({ children, title }: { children?: ReactNode; title?: ReactNode }) => (
+    <div>
+      {title}
+      {children}
+    </div>
+  ),
   ActionIcon: ({ onClick, title }: { onClick?: (e: React.MouseEvent) => void; title?: string }) => (
     <button aria-label={title} onClick={onClick}>
       {title}
@@ -122,8 +129,8 @@ vi.mock('@/services/agentDocument', () => ({
 }));
 
 vi.mock('@/store/agent', () => ({
-  useAgentStore: (selector: (state: { activeAgentId: string }) => unknown) =>
-    selector({ activeAgentId: 'agent-1' }),
+  useAgentStore: (selector: (state: { activeAgentId: string; agentMap: object }) => unknown) =>
+    selector({ activeAgentId: 'agent-1', agentMap: {} }),
 }));
 
 const openDocument = vi.fn();

@@ -17,8 +17,8 @@ import {
 import { BaseExecutor, SEARCH_SEARXNG_NOT_CONFIG } from '@lobechat/types';
 
 import { agentDocumentService } from '@/services/agentDocument';
-import { notebookService } from '@/services/notebook';
 import { searchService } from '@/services/search';
+import { webBrowsingService } from '@/services/webBrowsing';
 
 const searchRuntime = new WebBrowsingExecutionRuntime({ searchService });
 
@@ -27,18 +27,14 @@ const createDocumentService = (ctx: BuiltinToolContext): WebBrowsingDocumentServ
     if (!ctx.agentId) return;
     await agentDocumentService.associateDocument({ agentId: ctx.agentId, documentId });
   },
-  createDocument: async ({ content, description, title, url }) => {
-    if (!ctx.topicId) throw new Error('topicId is required to save document');
-    return notebookService.createDocument({
+  createDocument: async ({ content, description, title, url }) =>
+    webBrowsingService.upsertCrawledDocument({
       content,
       description: description || `Crawled from ${url}`,
-      source: url,
-      sourceType: 'web',
       title,
-      topicId: ctx.topicId,
-      type: 'article',
-    });
-  },
+      topicId: ctx.topicId ?? undefined,
+      url,
+    }),
 });
 
 class WebBrowsingExecutor extends BaseExecutor<typeof WebBrowsingApiName> {

@@ -34,6 +34,7 @@ describe('AgentDocumentInjector', () => {
             loadPosition: 'before-first-user',
             loadRules: { priority: 1, rule: 'always' },
             policyId: 'claw',
+            policyLoad: 'always',
           },
         ],
       });
@@ -57,6 +58,7 @@ describe('AgentDocumentInjector', () => {
             content: 'Only show for release keyword',
             filename: 'todo.md',
             loadRules: { keywords: ['release'], rule: 'by-keywords' },
+            policyLoad: 'always',
           },
         ],
       });
@@ -76,6 +78,7 @@ describe('AgentDocumentInjector', () => {
             filename: 'instruction.md',
             loadPosition: 'before-first-user',
             loadRules: { rule: 'always' },
+            policyLoad: 'always',
           },
         ],
       });
@@ -99,6 +102,7 @@ describe('AgentDocumentInjector', () => {
               keywordMatchMode: 'all',
               rule: 'by-keywords',
             },
+            policyLoad: 'always',
           },
         ],
       });
@@ -117,6 +121,7 @@ describe('AgentDocumentInjector', () => {
             content: 'Sprint TODO policy',
             filename: 'todo.md',
             loadRules: { regexp: '\\btodo\\b', rule: 'by-regexp' },
+            policyLoad: 'always',
           },
         ],
       });
@@ -138,6 +143,7 @@ describe('AgentDocumentInjector', () => {
               rule: 'by-time-range',
               timeRange: { from: '2026-03-13T11:00:00.000Z', to: '2026-03-13T13:00:00.000Z' },
             },
+            policyLoad: 'always',
           },
         ],
       });
@@ -157,6 +163,7 @@ describe('AgentDocumentInjector', () => {
             id: 'doc-1',
             loadPosition: 'before-first-user',
             loadRules: { rule: 'always' },
+            policyLoad: 'always',
             policyLoadFormat: 'file',
             title: 'Rules',
           },
@@ -338,6 +345,79 @@ describe('AgentDocumentInjector', () => {
       expect(injected).toContain('doc-p');
       expect(injected).not.toContain('Progressive content hidden');
     });
+
+    // Regression: LOBE-9385 — `policyLoad: 'disabled'` rows were being routed
+    // into the full-content bucket (the old `!== 'progressive'` filter), so
+    // documents the user explicitly turned off still got inlined into the LLM
+    // payload. The disabled row must show up in neither bucket.
+    it('should drop disabled documents from both inline and progressive index', async () => {
+      const provider = new AgentDocumentContextInjector({
+        currentTime: new Date('2026-04-29T00:00:00.000Z'),
+        documents: [
+          {
+            content: 'DISABLED skill body that must never leak',
+            filename: 'SKILL.md',
+            id: 'disabled-1',
+            loadPosition: 'before-first-user',
+            loadRules: { rule: 'always' },
+            policyLoad: 'disabled',
+            sourceType: 'agent',
+            title: 'Disabled Skill',
+            updatedAt: new Date('2026-04-27T00:00:00.000Z'),
+          },
+          {
+            content: 'Always-loaded full content',
+            filename: 'full.md',
+            id: 'always-1',
+            loadPosition: 'before-first-user',
+            loadRules: { rule: 'always' },
+            policyLoad: 'always',
+          },
+        ],
+      });
+
+      const context = createContext([{ content: 'Hello', id: 'user-1', role: 'user' }]);
+      const result = await provider.process(context);
+
+      const injected = result.messages[0].content;
+      expect(injected).toContain('Always-loaded full content');
+      expect(injected).not.toContain('DISABLED skill body that must never leak');
+      expect(injected).not.toContain('disabled-1');
+      expect(injected).not.toContain('Disabled Skill');
+      expect(injected).not.toContain('<agent_documents_index>');
+    });
+
+    // Regression: combineDocuments switched to a strict `=== 'always'` inline
+    // whitelist. `policyLoad` is optional on AgentContextDocument, and some
+    // callers pass docs without it — those must default to progressive (shown
+    // in the index, not silently dropped from BOTH buckets).
+    it('routes documents with missing policyLoad into the progressive index', async () => {
+      const provider = new AgentDocumentContextInjector({
+        currentTime: new Date('2026-04-29T00:00:00.000Z'),
+        documents: [
+          {
+            content: 'Body of a doc that forgot to set policyLoad',
+            filename: 'setup.md',
+            id: 'no-policy-1',
+            loadPosition: 'before-first-user',
+            loadRules: { rule: 'always' },
+            sourceType: 'agent',
+            title: 'Setup',
+            updatedAt: new Date('2026-04-27T00:00:00.000Z'),
+          },
+        ],
+      });
+
+      const context = createContext([{ content: 'Hello', id: 'user-1', role: 'user' }]);
+      const result = await provider.process(context);
+
+      const injected = result.messages[0].content;
+      // Surfaced via the index (title + id), not inlined as full content.
+      expect(injected).toContain('<agent_documents_index>');
+      expect(injected).toContain('Setup');
+      expect(injected).toContain('no-policy-1');
+      expect(injected).not.toContain('Body of a doc that forgot to set policyLoad');
+    });
   });
 
   describe('AgentDocumentBeforeSystemInjector (before-system)', () => {
@@ -349,6 +429,7 @@ describe('AgentDocumentInjector', () => {
             filename: 'framework.md',
             loadPosition: 'before-system',
             loadRules: { rule: 'always' },
+            policyLoad: 'always',
           },
         ],
       });
@@ -375,6 +456,7 @@ describe('AgentDocumentInjector', () => {
             filename: 'system.md',
             loadPosition: 'system-append',
             loadRules: { rule: 'always' },
+            policyLoad: 'always',
           },
         ],
       });
@@ -401,6 +483,7 @@ describe('AgentDocumentInjector', () => {
             filename: 'override.md',
             loadPosition: 'system-replace',
             loadRules: { rule: 'always' },
+            policyLoad: 'always',
           },
         ],
       });
@@ -427,6 +510,7 @@ describe('AgentDocumentInjector', () => {
             filename: 'summary.md',
             loadPosition: 'context-end',
             loadRules: { rule: 'always' },
+            policyLoad: 'always',
           },
         ],
       });
@@ -450,6 +534,7 @@ describe('AgentDocumentInjector', () => {
             filename: 'after.md',
             loadPosition: 'after-first-user',
             loadRules: { rule: 'always' },
+            policyLoad: 'always',
           },
         ],
       });

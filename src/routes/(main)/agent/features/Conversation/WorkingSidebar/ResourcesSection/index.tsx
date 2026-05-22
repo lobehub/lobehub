@@ -28,7 +28,12 @@ const ResourcesSection = memo(() => {
       style={{ minHeight: 0 }}
     >
       {isHetero && workingDirectory && <SkillsGroup workingDirectory={workingDirectory} />}
-      {!isHetero && <AgentDocumentsGroup style={{ flex: 1, minHeight: 0 }} />}
+      {!isHetero && (
+        <AgentDocumentsGroup
+          style={{ flex: 1, minHeight: 0 }}
+          workingDirectory={workingDirectory}
+        />
+      )}
     </Flexbox>
   );
 });

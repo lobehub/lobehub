@@ -79,6 +79,37 @@ describe('PlaceholderVariablesProcessor — tool message substitution', () => {
     expect(result.messages[0].content).toBe('agent={{agent_id}}');
   });
 
+  // Regression for LOBE-9408: a tool error result (e.g. budget-exceeded) can
+  // arrive with `content: undefined`. The content-preview logging step used to
+  // call `JSON.stringify(undefined).slice(...)` — which throws because
+  // `JSON.stringify(undefined)` returns `undefined`, not a string — crashing
+  // the whole processor before any message was processed.
+  it('does not crash on a tool message with undefined content', async () => {
+    const processor = new PlaceholderVariablesProcessor({
+      variableGenerators: {
+        agent_id: () => 'agt_xyz',
+      },
+    });
+
+    const ctx = buildContext([
+      { role: 'user', content: 'hi {{agent_id}}' },
+      {
+        role: 'tool',
+        tool_call_id: 'toolu_err',
+        name: 'lobe-agent',
+        content: undefined,
+        error: { errorType: 'InsufficientBudgetForModel' },
+      },
+    ]);
+
+    const result = await processor.process(ctx);
+
+    // The user message after the crashing tool message must still be processed.
+    expect(result.messages[0].content).toBe('hi agt_xyz');
+    // The tool message is preserved untouched.
+    expect(result.messages[1].content).toBeUndefined();
+  });
+
   it('substitutes generator returning empty string to empty (NOT raw)', async () => {
     const processor = new PlaceholderVariablesProcessor({
       variableGenerators: {

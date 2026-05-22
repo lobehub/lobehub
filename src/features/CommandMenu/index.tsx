@@ -1,7 +1,7 @@
 'use client';
 
 import { Avatar, stopPropagation } from '@lobehub/ui';
-import { Command } from 'cmdk';
+import { Command, defaultFilter } from 'cmdk';
 import { CornerDownLeft } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -66,12 +66,29 @@ const CommandMenuContent = memo<CommandMenuContentProps>(({ isClosing, onClose }
     }
   }, [page, setSearch]);
 
+  // Search result items (value prefixed with "search-result ") are already ranked
+  // and ordered server-side — topics/messages by recency. cmdk would otherwise
+  // re-rank them by fuzzy match against the query; returning a constant keeps their
+  // server order (cmdk's sort is stable). They are force-mounted, so visibility is
+  // unaffected. The constant is below a strong command match (1 = exact, ~0.9 =
+  // prefix) so a well-matching built-in command still ranks above search results,
+  // but above incidental fuzzy matches — preserving the prior "rank after built-in
+  // commands" intent while fixing the within-group ordering.
+  const commandFilter = useCallback(
+    (itemValue: string, searchValue: string, keywords?: string[]) => {
+      if (itemValue.startsWith('search-result ')) return 0.5;
+      return defaultFilter?.(itemValue, searchValue, keywords) ?? 0;
+    },
+    [],
+  );
+
   return (
     <div className={styles.overlay} data-closing={isClosing} onClick={onClose}>
       <div onClick={stopPropagation}>
         <Command
           className={styles.commandRoot}
           data-closing={isClosing}
+          filter={commandFilter}
           shouldFilter={page !== 'ask-ai' && !selectedAgent && !search.trimStart().startsWith('@')}
           value={value}
           onValueChange={setValue}

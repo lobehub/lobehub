@@ -17,7 +17,6 @@ import { CredsIdentifier, type CredSummary, generateCredsList } from '@lobechat/
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import {
-  AGENT_DOCUMENT_INJECTION_POSITIONS,
   type AgentContextDocument,
   type BotPlatformContext,
   buildStepSkillDelta,
@@ -65,6 +64,7 @@ import {
   type ToolExecutionService,
 } from '@/server/services/toolExecution';
 import { archiveToolResultIfNeeded } from '@/server/services/toolExecution/archiveToolResult';
+import { toAgentContextDocuments } from '@/utils/agentDocumentContextMapping';
 
 import { dispatchClientTool } from './dispatchClientTool';
 import { formatErrorEventData } from './formatErrorEventData';
@@ -80,19 +80,6 @@ import { type IStreamEventManager } from './types';
 
 const log = debug('lobe-server:agent-runtime:streaming-executors');
 const timing = debug('lobe-server:agent-runtime:timing');
-
-const VALID_DOCUMENT_POSITIONS = new Set<AgentContextDocument['loadPosition']>(
-  AGENT_DOCUMENT_INJECTION_POSITIONS,
-);
-
-const normalizeDocumentPosition = (
-  position: string | null | undefined,
-): AgentContextDocument['loadPosition'] | undefined => {
-  if (!position) return undefined;
-  return VALID_DOCUMENT_POSITIONS.has(position as AgentContextDocument['loadPosition'])
-    ? (position as AgentContextDocument['loadPosition'])
-    : undefined;
-};
 
 // Tool pricing configuration (USD per call)
 const TOOL_PRICING: Record<string, number> = {
@@ -482,20 +469,7 @@ export const createRuntimeExecutors = (
             const agentDocService = new AgentDocumentsService(ctx.serverDB, ctx.userId);
             const docs = await agentDocService.getAgentDocuments(agentId);
             if (docs.length > 0) {
-              agentDocuments = docs.map((doc) => ({
-                content: doc.content,
-                description: doc.description ?? undefined,
-                filename: doc.filename,
-                id: doc.id,
-                loadPosition: normalizeDocumentPosition(
-                  doc.policy?.context?.position || doc.policyLoadPosition,
-                ),
-                loadRules: doc.loadRules,
-                policyId: doc.templateId,
-                policyLoad: doc.policyLoad as 'always' | 'progressive',
-                policyLoadFormat: doc.policy?.context?.policyLoadFormat || doc.policyLoadFormat,
-                title: doc.title,
-              }));
+              agentDocuments = toAgentContextDocuments(docs);
               log('Resolved %d agent documents for agent %s', agentDocuments.length, agentId);
             }
           } catch (error) {

@@ -20,7 +20,7 @@ import {
   SAVE_USER_QUESTION_FIELDS,
 } from '@lobechat/types';
 import { merge } from '@lobechat/utils';
-import { and, count, eq } from 'drizzle-orm';
+import { and, count, eq, sql } from 'drizzle-orm';
 
 import { AgentModel } from '@/database/models/agent';
 import { MessageModel } from '@/database/models/message';
@@ -497,6 +497,157 @@ export class OnboardingService {
       feedbackSubmitted: !!topic?.metadata?.onboardingFeedback,
       topicId,
     };
+  };
+
+  // Read-only bootstrap. Unlike getOrCreateState, this never creates a topic and
+  // never writes the discoveryStartUserMessageCount baseline. The baseline write
+  // is deferred to the next mutation path (e.g. getOnboardingAgentContext or
+  // a message-send context resolution), which is acceptable because the baseline
+  // is only consulted once the user is past pre-discovery anyway.
+  getBootstrapState = async () => {
+    const builtinAgent = await this.agentService.getBuiltinAgent(BUILTIN_AGENT_SLUGS.webOnboarding);
+
+    if (!builtinAgent?.id) {
+      throw new Error('Failed to initialize onboarding agent');
+    }
+
+    const userState = await this.getUserState();
+    const state = this.ensureState(userState.agentOnboarding);
+    const missingStructuredFields = await this.getMissingStructuredFields();
+    const activeTopicId = state.activeTopicId;
+    const topic = activeTopicId ? await this.topicModel.findById(activeTopicId) : undefined;
+    const topicId = activeTopicId && topic ? activeTopicId : null;
+
+    const hasMessages = topicId ? await this.messageModel.hasTopicMessages(topicId) : false;
+
+    let context: UserAgentOnboardingContext;
+    if (state.finishedAt) {
+      context = {
+        finished: true,
+        missingStructuredFields,
+        phase: 'summary',
+        topicId: topicId ?? undefined,
+        version: state.version,
+      };
+    } else {
+      let discoveryContext:
+        | { currentUserMessageCount: number; startUserMessageCount: number }
+        | undefined;
+
+      if (topicId) {
+        const pastPreDiscovery =
+          !missingStructuredFields.includes('agentName') &&
+          !missingStructuredFields.includes('fullName');
+        if (pastPreDiscovery) {
+          const currentUserMessageCount = await this.countTopicUserMessages(topicId);
+          // If baseline is not yet persisted, treat current count as the baseline
+          // for read-only derivation; the next mutation path will persist it.
+          const startUserMessageCount =
+            state.discoveryStartUserMessageCount ?? currentUserMessageCount;
+          discoveryContext = { currentUserMessageCount, startUserMessageCount };
+        }
+      }
+
+      const phase = await this.derivePhase(missingStructuredFields, discoveryContext);
+
+      let discoveryUserMessageCount: number | undefined;
+      let remainingDiscoveryExchanges: number | undefined;
+      if (discoveryContext) {
+        discoveryUserMessageCount = Math.max(
+          0,
+          discoveryContext.currentUserMessageCount - discoveryContext.startUserMessageCount,
+        );
+        remainingDiscoveryExchanges = Math.max(
+          0,
+          RECOMMENDED_DISCOVERY_USER_MESSAGES - discoveryUserMessageCount,
+        );
+      }
+
+      context = {
+        ...(discoveryUserMessageCount !== undefined && { discoveryUserMessageCount }),
+        finished: false,
+        missingStructuredFields,
+        phase,
+        ...(remainingDiscoveryExchanges !== undefined && { remainingDiscoveryExchanges }),
+        topicId: topicId ?? undefined,
+        version: state.version,
+      };
+    }
+
+    return {
+      agentId: builtinAgent.id,
+      agentOnboarding: state,
+      context,
+      feedbackSubmitted: !!topic?.metadata?.onboardingFeedback,
+      hasMessages,
+      topicId,
+    };
+  };
+
+  // Atomically create the onboarding topic (if absent) and persist the welcome
+  // assistant opener message. Idempotent under concurrent invocation:
+  //  - pg_advisory_xact_lock serializes per (userId, agentId)
+  //  - existing assistant message in the topic short-circuits the welcome insert
+  // The user message and assistant response are created by the existing
+  // sendMessage pipeline on the client immediately after this resolves.
+  sendOnboardingFirstMessage = async (input: { agentId: string; welcomeContent: string }) => {
+    const { topicId } = await this.db.transaction(async (trx) => {
+      // Serialize concurrent first-send per (userId, agentId). hashtext returns int4;
+      // pg_advisory_xact_lock takes bigint, so we cast.
+      await trx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext(${this.userId + ':' + input.agentId})::bigint)`,
+      );
+
+      const trxDb = trx as unknown as LobeChatDatabase;
+      const trxTopicModel = new TopicModel(trxDb, this.userId);
+      const trxMessageModel = new MessageModel(trxDb, this.userId);
+      const trxUserModel = new UserModel(trxDb, this.userId);
+
+      const userState = await trxUserModel.getUserState(KeyVaultsGateKeeper.getUserKeyVaults);
+      const state = this.ensureState(userState.agentOnboarding);
+
+      let nextTopicId = state.activeTopicId;
+      if (nextTopicId) {
+        const existing = await trxTopicModel.findById(nextTopicId);
+        if (!existing) nextTopicId = undefined;
+      }
+      if (!nextTopicId) {
+        const topic = await trxTopicModel.create({
+          agentId: input.agentId,
+          title: 'Onboarding',
+          trigger: 'chat',
+        });
+        nextTopicId = topic.id;
+      }
+
+      const existingAssistant = await trxMessageModel.findFirstAssistantInTopic(nextTopicId);
+      if (!existingAssistant) {
+        await trxMessageModel.create({
+          agentId: input.agentId,
+          content: input.welcomeContent,
+          role: 'assistant',
+          topicId: nextTopicId,
+        });
+      }
+
+      if (state.activeTopicId !== nextTopicId) {
+        const nextState = this.ensureState({ ...state, activeTopicId: nextTopicId });
+        await trxUserModel.updateUser({ agentOnboarding: nextState });
+      }
+
+      return { topicId: nextTopicId };
+    });
+
+    // Run the UI-shape query outside the lock so the response mirrors
+    // messageService.createMessage's grouping behavior.
+    const messages = await this.messageModel.query({
+      agentId: input.agentId,
+      current: 0,
+      pageSize: 9999,
+      topicId,
+    });
+
+    return { messages, topicId };
   };
 
   getState = async (): Promise<UserAgentOnboardingContext> => {
