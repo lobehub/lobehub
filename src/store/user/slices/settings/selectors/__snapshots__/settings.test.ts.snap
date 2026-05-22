@@ -57,8 +57,8 @@ exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AG
   "enableAutoReply": true,
   "followUpAction": {
     "enabled": false,
-    "model": "",
-    "provider": "",
+    "model": "gpt-5.4-mini",
+    "provider": "openai",
   },
   "generationTopic": {
     "model": "gpt-5.4-mini",
