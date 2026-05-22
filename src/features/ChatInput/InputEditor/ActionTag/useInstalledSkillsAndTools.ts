@@ -1,10 +1,8 @@
 import isEqual from 'fast-deep-equal';
 import { useMemo } from 'react';
 
-import { useAgentStore } from '@/store/agent';
 import { useToolStore } from '@/store/tool';
 import {
-  agentDocumentSkillsSelectors,
   agentSkillsSelectors,
   builtinToolSelectors,
   klavisStoreSelectors,
@@ -16,9 +14,8 @@ import type { ActionTagData } from './types';
 
 /**
  * Collects all installed skills and tools, returning them as ActionTagData[].
- * Skills: builtinSkills, lobehubSkillServers, marketAgentSkills, userAgentSkills,
- *         current-agent's agent-document skill bundles.
- * Tools:  installedPlugins (excluding skill-type entries), klavisServers.
+ * Skills: builtinSkills, lobehubSkillServers, marketAgentSkills, userAgentSkills
+ * Tools:  installedPlugins (excluding skill-type entries), klavisServers
  */
 export const useInstalledSkillsAndTools = (): ActionTagData[] => {
   const builtinSkills = useToolStore(builtinToolSelectors.installedBuiltinSkills, isEqual);
@@ -27,16 +24,6 @@ export const useInstalledSkillsAndTools = (): ActionTagData[] => {
   const lobehubSkillServers = useToolStore(lobehubSkillStoreSelectors.getServers, isEqual);
   const marketAgentSkills = useToolStore(agentSkillsSelectors.getMarketAgentSkills, isEqual);
   const userAgentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
-  const agentDocumentSkills = useToolStore(
-    agentDocumentSkillsSelectors.getAgentDocumentSkills,
-    isEqual,
-  );
-
-  // Keep the registry hydrated for the currently-active agent. Shares the SWR
-  // key with the working-sidebar panel, so this triggers at most one network
-  // request even if both consumers are mounted.
-  const activeAgentId = useAgentStore((s) => s.activeAgentId);
-  useToolStore((s) => s.useFetchAgentDocumentSkills)(activeAgentId);
 
   return useMemo(() => {
     const items: ActionTagData[] = [];
@@ -60,13 +47,6 @@ export const useInstalledSkillsAndTools = (): ActionTagData[] => {
     for (const item of userAgentSkills) {
       if (!skillMap.has(item.identifier)) {
         skillMap.set(item.identifier, { label: item.name || item.identifier });
-      }
-    }
-    // Agent-document skill bundles — identifier is prefixed (`agent-document:`)
-    // so no collision risk with the entries above; display label prefers title.
-    for (const item of agentDocumentSkills) {
-      if (!skillMap.has(item.identifier)) {
-        skillMap.set(item.identifier, { label: item.title || item.name });
       }
     }
 
@@ -100,7 +80,6 @@ export const useInstalledSkillsAndTools = (): ActionTagData[] => {
 
     return items;
   }, [
-    agentDocumentSkills,
     builtinSkills,
     installedPlugins,
     klavisServers,
