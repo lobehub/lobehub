@@ -92,6 +92,9 @@ describe('FollowUpActionService.extract', () => {
       expect.objectContaining({
         model: 'custom-scene-model',
       }),
+      expect.objectContaining({
+        metadata: expect.objectContaining({ scenario: 'follow_up' }),
+      }),
     );
   });
 

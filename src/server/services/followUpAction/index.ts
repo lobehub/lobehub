@@ -55,14 +55,19 @@ export class FollowUpActionService {
     let raw: unknown;
     try {
       const modelRuntime = await initModelRuntimeFromDB(this.db, this.userId, provider);
-      raw = await modelRuntime.generateObject({
-        messages: [
-          { content: system, role: 'system' as const },
-          { content: user, role: 'user' as const },
-        ],
-        model,
-        schema: SUGGESTION_RESPONSE_JSON_SCHEMA,
-      });
+      raw = await modelRuntime.generateObject(
+        {
+          messages: [
+            { content: system, role: 'system' as const },
+            { content: user, role: 'user' as const },
+          ],
+          model,
+          schema: SUGGESTION_RESPONSE_JSON_SCHEMA,
+        },
+        {
+          metadata: { schemaName: 'FollowUpSuggestionResponse', scenario: 'follow_up' },
+        },
+      );
     } catch (error) {
       log('LLM call failed: %O', error);
       return EMPTY_RESULT(row.id);

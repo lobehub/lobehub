@@ -1,0 +1,180 @@
+// @vitest-environment node
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const isEnabled = vi.fn(() => true);
+const record = vi.fn(async () => ({ tracingId: 'trace-1' }));
+
+vi.mock('./index', () => ({
+  getLLMGenerationTracingService: () => ({ isEnabled, record }),
+}));
+
+// next/server is optional at runtime; default to "not available" so the hook
+// falls back to its microtask path which is straightforward to test.
+vi.mock('next/server', () => ({}));
+
+const { createLLMGenerationTracingHook, mergeModelRuntimeHooks } = await import('./hook');
+
+const flushMicrotasks = async () => {
+  await new Promise((resolve) => setImmediate(resolve));
+};
+
+beforeEach(() => {
+  isEnabled.mockReturnValue(true);
+  record.mockClear();
+});
+
+describe('createLLMGenerationTracingHook', () => {
+  it('returns an empty object when the service is disabled', () => {
+    isEnabled.mockReturnValue(false);
+    const hooks = createLLMGenerationTracingHook('user-1', 'openai');
+    expect(hooks).toEqual({});
+  });
+
+  it('schedules a service.record call on success with payload-derived metadata', async () => {
+    const hooks = createLLMGenerationTracingHook('user-1', 'openai');
+    expect(hooks.onGenerateObjectComplete).toBeDefined();
+
+    hooks.onGenerateObjectComplete!(
+      {
+        latencyMs: 250,
+        output: { topic: 'greeting' },
+        success: true,
+        usage: { cost: 0.001, totalInputTokens: 100, totalOutputTokens: 30 } as any,
+      },
+      {
+        options: {
+          metadata: {
+            agentId: 'agt-1',
+            promptVersion: 'v2.0',
+            scenario: 'signal_skill_intent',
+            topicId: 'tpc-1',
+            trigger: 'agent_signal',
+          },
+        },
+        payload: {
+          messages: [
+            { content: 'be helpful', role: 'system' },
+            { content: 'hi there', role: 'user' },
+          ],
+          model: 'gpt-4o',
+          schema: { type: 'object' },
+        } as any,
+      },
+    );
+
+    await flushMicrotasks();
+    expect(record).toHaveBeenCalledTimes(1);
+    const call = record.mock.calls[0][0];
+    expect(call).toMatchObject({
+      agentId: 'agt-1',
+      costUsd: 0.001,
+      inputTokens: 100,
+      latencyMs: 250,
+      model: 'gpt-4o',
+      outputTokens: 30,
+      promptVersion: 'v2.0',
+      provider: 'openai',
+      scenario: 'signal_skill_intent',
+      success: true,
+      topicId: 'tpc-1',
+      trigger: 'agent_signal',
+      userId: 'user-1',
+    });
+    expect(call.payload.systemPrompt).toBe('be helpful');
+    expect(call.promptHash).toHaveLength(6);
+  });
+
+  it('flags validation failures using the error message heuristic', async () => {
+    const hooks = createLLMGenerationTracingHook('user-1', 'openai');
+    hooks.onGenerateObjectComplete!(
+      {
+        error: { message: 'ZodError: required field missing' },
+        latencyMs: 100,
+        success: false,
+      },
+      {
+        options: { metadata: { trigger: 'topic' } },
+        payload: { messages: [], model: 'gpt-4o', schema: { type: 'object' } } as any,
+      },
+    );
+
+    await flushMicrotasks();
+    expect(record.mock.calls[0][0]).toMatchObject({
+      errorDetail: 'ZodError: required field missing',
+      scenario: 'topic_title',
+      success: false,
+      validationFailed: true,
+    });
+  });
+
+  it('preserves unknown metadata keys (e.g. parent_memory_trace_key) into the row metadata', async () => {
+    const hooks = createLLMGenerationTracingHook('user-1', 'openai');
+    hooks.onGenerateObjectComplete!(
+      { latencyMs: 5, success: true },
+      {
+        options: {
+          metadata: {
+            agentId: 'agt-known',
+            parent_memory_trace_key: 'memory-extraction/user-1/topic/abc/trace/2026-05-22.json',
+            trigger: 'memory',
+            // KNOWN_METADATA_KEYS — must NOT bleed into the row metadata
+            provider: 'should-be-stripped',
+            userId: 'should-be-stripped',
+          },
+        },
+        payload: { messages: [], model: 'gpt-4o', schema: {} } as any,
+      },
+    );
+    await flushMicrotasks();
+    expect(record.mock.calls[0][0].metadata).toEqual({
+      parent_memory_trace_key: 'memory-extraction/user-1/topic/abc/trace/2026-05-22.json',
+      provider: 'openai',
+    });
+  });
+
+  it('falls back to the unknown scenario when no trigger metadata is provided', async () => {
+    const hooks = createLLMGenerationTracingHook('user-1', 'openai');
+    hooks.onGenerateObjectComplete!(
+      { latencyMs: 100, success: true },
+      { options: {}, payload: { messages: [], model: 'gpt-4o' } as any },
+    );
+
+    await flushMicrotasks();
+    expect(record.mock.calls[0][0]).toMatchObject({
+      promptVersion: 'v0',
+      scenario: 'unknown',
+    });
+  });
+});
+
+describe('mergeModelRuntimeHooks', () => {
+  it('returns undefined when both hooks are empty', () => {
+    expect(mergeModelRuntimeHooks(undefined, undefined)).toBeUndefined();
+  });
+
+  it('returns the only present hook untouched', () => {
+    const fn = vi.fn();
+    const merged = mergeModelRuntimeHooks({ beforeChat: fn }, undefined);
+    expect(merged?.beforeChat).toBe(fn);
+  });
+
+  it('chains hooks of the same name in business-first order', async () => {
+    const order: string[] = [];
+    const a = {
+      onGenerateObjectComplete: vi.fn(async () => {
+        order.push('business');
+      }),
+    };
+    const b = {
+      onGenerateObjectComplete: vi.fn(async () => {
+        order.push('tracing');
+      }),
+    };
+
+    const merged = mergeModelRuntimeHooks(a as any, b as any);
+    await merged?.onGenerateObjectComplete?.({ latencyMs: 0, success: true }, {} as any);
+    expect(order).toEqual(['business', 'tracing']);
+    expect(a.onGenerateObjectComplete).toHaveBeenCalledTimes(1);
+    expect(b.onGenerateObjectComplete).toHaveBeenCalledTimes(1);
+  });
+});
