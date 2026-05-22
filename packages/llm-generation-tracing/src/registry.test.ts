@@ -1,13 +1,28 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveScenario, TRACING_SCENARIO_REGISTRY, UNKNOWN_SCENARIO } from './registry';
+import {
+  resolveScenario,
+  TRACING_SCENARIO_REGISTRY,
+  UNKNOWN_PROMPT_VERSION,
+  UNKNOWN_SCENARIO,
+} from './registry';
+
+describe('TRACING_SCENARIO_REGISTRY', () => {
+  it('maps known triggers to scenario names (no versions)', () => {
+    expect(TRACING_SCENARIO_REGISTRY.topic).toBe('topic_title');
+    expect(TRACING_SCENARIO_REGISTRY.memory).toBe('memory_extract');
+  });
+});
 
 describe('resolveScenario', () => {
-  it('returns the registry entry when only trigger is provided', () => {
-    expect(resolveScenario({ trigger: 'topic' })).toEqual(TRACING_SCENARIO_REGISTRY.topic);
+  it('looks the scenario up by trigger and uses the caller-supplied promptVersion', () => {
+    expect(resolveScenario({ promptVersion: 'v3.1', trigger: 'topic' })).toEqual({
+      promptVersion: 'v3.1',
+      scenario: 'topic_title',
+    });
   });
 
-  it('honors explicit scenario override even when trigger has a registry mapping', () => {
+  it('honours an explicit scenario override even when trigger has a registry mapping', () => {
     expect(
       resolveScenario({
         promptVersion: 'v2.1',
@@ -17,15 +32,21 @@ describe('resolveScenario', () => {
     ).toEqual({ promptVersion: 'v2.1', scenario: 'signal_skill_intent' });
   });
 
-  it('defaults overridden promptVersion to v1.0 when omitted', () => {
+  it('falls back to UNKNOWN_PROMPT_VERSION when no version is provided', () => {
     expect(resolveScenario({ scenario: 'custom_thing' })).toEqual({
-      promptVersion: 'v1.0',
+      promptVersion: UNKNOWN_PROMPT_VERSION,
       scenario: 'custom_thing',
     });
   });
 
-  it('falls back to the unknown sentinel when neither matches', () => {
-    expect(resolveScenario({ trigger: 'does_not_exist' })).toEqual(UNKNOWN_SCENARIO);
-    expect(resolveScenario({})).toEqual(UNKNOWN_SCENARIO);
+  it('falls back to the unknown scenario sentinel when neither matches', () => {
+    expect(resolveScenario({ trigger: 'does_not_exist' })).toEqual({
+      promptVersion: UNKNOWN_PROMPT_VERSION,
+      scenario: UNKNOWN_SCENARIO,
+    });
+    expect(resolveScenario({})).toEqual({
+      promptVersion: UNKNOWN_PROMPT_VERSION,
+      scenario: UNKNOWN_SCENARIO,
+    });
   });
 });

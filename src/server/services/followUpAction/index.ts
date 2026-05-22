@@ -4,7 +4,7 @@ import debug from 'debug';
 import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
-import { buildSuggestionPrompt } from './prompts';
+import { buildSuggestionPrompt, FOLLOW_UP_PROMPT_VERSION } from './prompts';
 import { RawResponseSchema, SUGGESTION_RESPONSE_JSON_SCHEMA } from './schema';
 
 const log = debug('lobe-server:follow-up-action-service');
@@ -65,7 +65,11 @@ export class FollowUpActionService {
           schema: SUGGESTION_RESPONSE_JSON_SCHEMA,
         },
         {
-          metadata: { schemaName: 'FollowUpSuggestionResponse', scenario: 'follow_up' },
+          metadata: {
+            promptVersion: FOLLOW_UP_PROMPT_VERSION,
+            schemaName: 'FollowUpSuggestionResponse',
+            scenario: 'follow_up',
+          },
         },
       );
     } catch (error) {
