@@ -36,7 +36,6 @@
  */
 
 import type {
-  AgentCLIPreset,
   AgentEventAdapter,
   ExternalSignalContext,
   HeterogeneousAgentEvent,
@@ -387,27 +386,6 @@ const toUsageData = (
     totalOutputTokens,
     totalTokens: totalInputTokens + totalOutputTokens,
   };
-};
-
-// ─── CLI Preset ───
-
-// Note: the runtime spawn args are built by `spawnAgent` from
-// `CLAUDE_CODE_BASE_ARGS` (+ caller-controlled flags like
-// `--include-partial-messages`), not from this preset. The preset is kept as
-// adapter-shipped metadata for the registry — keep it aligned with the
-// invariant flags only, so spawn-site-specific flags (partial deltas,
-// permission mode) are not implied here.
-export const claudeCodePreset: AgentCLIPreset = {
-  baseArgs: [
-    '-p',
-    '--input-format',
-    'stream-json',
-    '--output-format',
-    'stream-json',
-    '--verbose',
-  ],
-  promptMode: 'stdin',
-  resumeArgs: (sessionId) => ['--resume', sessionId],
 };
 
 // ─── Adapter ───

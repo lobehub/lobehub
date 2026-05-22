@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { ClaudeCodeAdapter, CodexAdapter } from './adapters';
-import { createAdapter, getPreset, listAgentTypes } from './registry';
+import { createAdapter, listAgentTypes } from './registry';
 
 describe('registry', () => {
   describe('createAdapter', () => {
@@ -17,36 +17,6 @@ describe('registry', () => {
 
     it('throws for unknown agent type', () => {
       expect(() => createAdapter('unknown-agent')).toThrow('Unknown agent type: "unknown-agent"');
-    });
-  });
-
-  describe('getPreset', () => {
-    it('returns preset with stream-json args for claude-code', () => {
-      const preset = getPreset('claude-code');
-      expect(preset.baseArgs).toContain('--input-format');
-      expect(preset.baseArgs).toContain('--output-format');
-      expect(preset.baseArgs).toContain('stream-json');
-      expect(preset.baseArgs).toContain('-p');
-      expect(preset.promptMode).toBe('stdin');
-    });
-
-    it('preset has resumeArgs function', () => {
-      const preset = getPreset('claude-code');
-      expect(preset.resumeArgs).toBeDefined();
-      const args = preset.resumeArgs!('sess_abc');
-      expect(args).toContain('--resume');
-      expect(args).toContain('sess_abc');
-    });
-
-    it('returns preset with exec args for codex', () => {
-      const preset = getPreset('codex');
-      expect(preset.baseArgs).toContain('exec');
-      expect(preset.baseArgs).toContain('--json');
-      expect(preset.promptMode).toBe('stdin');
-    });
-
-    it('throws for unknown agent type', () => {
-      expect(() => getPreset('nope')).toThrow('Unknown agent type: "nope"');
     });
   });
 

@@ -1,4 +1,4 @@
-export { ClaudeCodeAdapter, claudeCodePreset } from './adapters';
+export { ClaudeCodeAdapter } from './adapters';
 export type {
   HeterogeneousAgentType,
   LocalHeterogeneousAgentType,
@@ -11,9 +11,8 @@ export {
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
 } from './config';
 export { HETEROGENEOUS_TYPE_LABELS } from './labels';
-export { createAdapter, getPreset, listAgentTypes } from './registry';
+export { createAdapter, listAgentTypes } from './registry';
 export type {
-  AgentCLIPreset,
   AgentEventAdapter,
   AgentProcessConfig,
   HeterogeneousAgentEvent,
