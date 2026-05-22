@@ -62,6 +62,21 @@ describe('routeChunkPreload', () => {
     ]);
   });
 
+  it('matches route modules when built from the cloud repository root', () => {
+    const bundle = {
+      'assets/agent-CJm8x.js': createChunk({
+        facadeModuleId: '/repo/lobehub/src/routes/(main)/agent/index.tsx',
+        fileName: 'assets/agent-CJm8x.js',
+        moduleIds: ['/repo/lobehub/src/routes/(main)/agent/index.tsx'],
+      }),
+    } satisfies TestOutputBundle;
+
+    const manifest = __testing.createRoutePreloadManifest(bundle, '/repo');
+    const agentEntry = manifest.find((entry) => entry.id === 'desktop-chat-launch');
+
+    expect(agentEntry?.preload).toEqual(['assets/agent-CJm8x.js']);
+  });
+
   it('matches non-index platform-specific route module variants', () => {
     const bundle = {
       'assets/settings-provider-CJm8x.js': createChunk({

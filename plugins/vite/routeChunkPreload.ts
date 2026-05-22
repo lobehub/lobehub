@@ -229,6 +229,10 @@ function normalizeComparableModuleId(id: string, root = '') {
     normalized = normalized.slice(normalizedRoot.length + 1);
   }
 
+  if (normalized.startsWith('lobehub/src/')) {
+    normalized = normalized.slice('lobehub/'.length);
+  }
+
   return stripModuleSuffix(normalized);
 }
 
