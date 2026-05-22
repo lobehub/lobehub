@@ -208,9 +208,13 @@ export const convertOpenAIImageUsage = (
   usage: OpenAI.Images.ImagesResponse.Usage,
   pricing?: Pricing,
 ): ModelUsage => {
+  const inputTokensDetails = usage.input_tokens_details as
+    | Partial<OpenAI.Images.ImagesResponse.Usage.InputTokensDetails>
+    | undefined;
+
   const data: ModelTokensUsage = {
-    inputImageTokens: usage.input_tokens_details.image_tokens,
-    inputTextTokens: usage.input_tokens_details.text_tokens,
+    inputImageTokens: inputTokensDetails?.image_tokens ?? 0,
+    inputTextTokens: inputTokensDetails?.text_tokens ?? usage.input_tokens,
     outputImageTokens: usage.output_tokens,
     totalInputTokens: usage.input_tokens,
     totalOutputTokens: usage.output_tokens,
