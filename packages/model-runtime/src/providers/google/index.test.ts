@@ -737,6 +737,7 @@ describe('buildGoogleToolsWithSearch', () => {
     const callArgs = (instance['client'].models.generateContentStream as any).mock.calls[0];
     const config = callArgs[0].config as any;
     expect(config.tools).toBeUndefined();
+    expect(config.toolConfig).toBeUndefined();
   });
 
   it('should drop googleSearch for image response models without search support', async () => {
@@ -771,6 +772,7 @@ describe('buildGoogleToolsWithSearch', () => {
     const callArgs = (instance['client'].models.generateContentStream as any).mock.calls[0];
     const config = callArgs[0].config as any;
     expect(config.tools).toBeUndefined();
+    expect(config.toolConfig).toBeUndefined();
   });
 
   it('should only keep googleSearch for image response models', async () => {
@@ -809,6 +811,7 @@ describe('buildGoogleToolsWithSearch', () => {
     expect(config.tools).toEqual([
       { googleSearch: { searchTypes: { imageSearch: {}, webSearch: {} } } },
     ]);
+    expect(config.toolConfig).toBeUndefined();
   });
 
   it('should combine search tools with function declarations for Gemini 3+ models', async () => {

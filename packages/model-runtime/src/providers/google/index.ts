@@ -201,6 +201,7 @@ export class LobeGoogleAI implements LobeRuntimeAI {
         }
       }
 
+      const tools = this.buildGoogleToolsWithSearch(payload.tools, payload);
       const config: GenerateContentConfig = {
         abortSignal: originalSignal,
         imageConfig:
@@ -245,10 +246,10 @@ export class LobeGoogleAI implements LobeRuntimeAI {
         // https://ai.google.dev/gemini-api/docs/tool-combination
         // Vertex AI does not support includeServerSideToolInvocations
         toolConfig:
-          !this.isVertexAi && this.needsServerSideToolInvocations(payload)
+          !this.isVertexAi && this.needsServerSideToolInvocations(model, tools)
             ? { includeServerSideToolInvocations: true }
             : undefined,
-        tools: this.buildGoogleToolsWithSearch(payload.tools, payload),
+        tools,
         topP: payload.top_p,
       };
 
@@ -509,11 +510,14 @@ export class LobeGoogleAI implements LobeRuntimeAI {
    * in that case.
    * @see https://ai.google.dev/gemini-api/docs/tool-combination
    */
-  private needsServerSideToolInvocations(payload?: ChatStreamPayload): boolean {
-    if (!isGemini3OrAbove(payload?.model)) return false;
+  private needsServerSideToolInvocations(
+    model: string | undefined,
+    tools: GoogleFunctionCallTool[] | undefined,
+  ): boolean {
+    if (!isGemini3OrAbove(model)) return false;
 
-    const hasBuiltIn = payload?.enabledSearch || payload?.urlContext;
-    const hasFunctions = payload?.tools && payload.tools.length > 0;
+    const hasBuiltIn = tools?.some((tool) => 'googleSearch' in tool || 'urlContext' in tool);
+    const hasFunctions = tools?.some((tool) => Boolean(tool.functionDeclarations?.length));
 
     return !!(hasBuiltIn && hasFunctions);
   }
