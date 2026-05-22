@@ -1,3 +1,4 @@
+import { EMPTY_ARRAY } from '@lobechat/const';
 import { Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { createStaticStyles } from 'antd-style';
@@ -225,11 +226,12 @@ interface SkillRowProps {
   onOpenFile?: (relativePath: string) => void;
   onOpenSkill?: () => void;
   onToggle: () => void;
+  reserveChevronSlot: boolean;
 }
 
 const SkillRow = memo<SkillRowProps>(
-  ({ expanded, item, onDragStart, onOpenFile, onOpenSkill, onToggle }) => {
-    const files = item.files ?? [];
+  ({ expanded, item, onDragStart, onOpenFile, onOpenSkill, onToggle, reserveChevronSlot }) => {
+    const files = item.files ?? EMPTY_ARRAY;
     const hasFiles = files.length > 0;
     const tree = useMemo(() => buildSkillTree(files), [files]);
     const [expandedFolders, setExpandedFolders] = useState<Set<string>>(() => new Set());
@@ -277,9 +279,9 @@ const SkillRow = memo<SkillRowProps>(
                   size={14}
                 />
               </Flexbox>
-            ) : (
+            ) : reserveChevronSlot ? (
               <span style={{ flexShrink: 0, height: 20, width: 20 }} />
-            )}
+            ) : null}
             <Icon className={styles.itemIcon} icon={SkillsIcon} size={14} />
             <Text ellipsis style={{ color: 'inherit', flex: 1, minWidth: 0 }} onClick={onOpenSkill}>
               {item.name}
@@ -321,6 +323,11 @@ const SkillsList = memo<SkillsListProps>(({ items, onOpenFile, onOpenSkill, onSk
     });
   }, []);
 
+  const reserveChevronSlot = useMemo(
+    () => items.some((item) => (item.files?.length ?? 0) > 0),
+    [items],
+  );
+
   return (
     <Flexbox gap={2}>
       {items.map((item) => (
@@ -328,6 +335,7 @@ const SkillsList = memo<SkillsListProps>(({ items, onOpenFile, onOpenSkill, onSk
           expanded={expanded.has(item.id)}
           item={item}
           key={item.id}
+          reserveChevronSlot={reserveChevronSlot}
           onDragStart={onSkillDragStart ? (event) => onSkillDragStart(item, event) : undefined}
           onOpenFile={onOpenFile ? (relativePath) => onOpenFile(item, relativePath) : undefined}
           onOpenSkill={onOpenSkill ? () => onOpenSkill(item) : undefined}
