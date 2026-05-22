@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { DevTools } from '@vitejs/devtools';
 import type { PluginOption, ViteDevServer } from 'vite';
 import { defineConfig, loadEnv } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
@@ -105,6 +106,7 @@ export default defineConfig({
     outDir: isMobile ? 'dist/mobile' : 'dist/desktop',
     reportCompressedSize: false,
     rolldownOptions: {
+      devtools: {},
       input: path.resolve(__dirname, isMobile ? 'index.mobile.html' : 'index.html'),
       output: createSharedRolldownOutput({ strictExecutionOrder: true }),
     },
@@ -120,6 +122,11 @@ export default defineConfig({
   plugins: [
     vercelSkewProtection(),
     viteEnvRestartKeys(['APP_URL']),
+    DevTools({
+      build: {
+        withApp: true,
+      },
+    }),
     ...sharedRendererPlugins({ platform }),
 
     isDev && {
