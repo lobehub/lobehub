@@ -15,8 +15,9 @@
  *   {type: 'result', is_error, result, ...}
  *   {type: 'rate_limit_event', ...}
  *
- * With `--include-partial-messages` (enabled by default in this adapter), CC
- * also emits token-level deltas wrapped as:
+ * When the spawn site passes `--include-partial-messages` (desktop driver
+ * does, CLI / sandbox runs do not), CC also emits token-level deltas wrapped
+ * as:
  *
  *   {type: 'stream_event', event: {type: 'message_start', message: {id, model, ...}}}
  *   {type: 'stream_event', event: {type: 'content_block_delta', index, delta: {type: 'text_delta', text}}}
@@ -35,7 +36,6 @@
  */
 
 import type {
-  AgentCLIPreset,
   AgentEventAdapter,
   ExternalSignalContext,
   HeterogeneousAgentEvent,
@@ -388,24 +388,6 @@ const toUsageData = (
   };
 };
 
-// ─── CLI Preset ───
-
-export const claudeCodePreset: AgentCLIPreset = {
-  baseArgs: [
-    '-p',
-    '--input-format',
-    'stream-json',
-    '--output-format',
-    'stream-json',
-    '--verbose',
-    '--include-partial-messages',
-    '--permission-mode',
-    'acceptEdits',
-  ],
-  promptMode: 'stdin',
-  resumeArgs: (sessionId) => ['--resume', sessionId],
-};
-
 // ─── Adapter ───
 
 export class ClaudeCodeAdapter implements AgentEventAdapter {
@@ -668,10 +650,10 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
 
     // Track the latest model — emitted alongside authoritative usage on the
     // matching `message_delta`. We deliberately do NOT emit turn_metadata
-    // here: under `--include-partial-messages` (our default), every
-    // content-block `assistant` event echoes a STALE usage snapshot from
-    // `message_start` (e.g. `output_tokens: 8`); the per-turn total only
-    // arrives on `stream_event: message_delta`.
+    // here: under `--include-partial-messages`, every content-block
+    // `assistant` event echoes a STALE usage snapshot from `message_start`
+    // (e.g. `output_tokens: 8`); the per-turn total only arrives on
+    // `stream_event: message_delta`.
     if (raw.message?.model) this.currentStreamEventModel = raw.message.model;
 
     // Each content array here is usually ONE block (thinking OR tool_use OR text)
