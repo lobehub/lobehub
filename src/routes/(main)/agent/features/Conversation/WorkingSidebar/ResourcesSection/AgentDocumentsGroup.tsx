@@ -1,33 +1,35 @@
-import { ActionIcon, Center, Empty, Flexbox, Text } from '@lobehub/ui';
-import { App, Spin } from 'antd';
+import { Accordion, AccordionItem, ActionIcon, Center, Empty, Flexbox, Text } from '@lobehub/ui';
+import { SkillsIcon } from '@lobehub/ui/icons';
+import { App } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import type { LucideIcon } from 'lucide-react';
-import { FileTextIcon, FolderIcon, GlobeIcon, Trash2Icon } from 'lucide-react';
+import { FileTextIcon, GlobeIcon, Trash2Icon } from 'lucide-react';
 import type { CSSProperties, MouseEvent } from 'react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMatch, useNavigate } from 'react-router-dom';
 
+import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { DocumentExplorerTree } from '@/features/AgentDocumentsExplorer';
-import {
-  isManagedSkillItem,
-  isOrphanSkillBundleItem,
-  isSkillBundleItem,
-  isSkillIndexItem,
-} from '@/features/AgentDocumentsExplorer/types';
+import SkillsList, { type SkillListItem } from '@/features/AgentDocumentsExplorer/SkillsList';
 import { useClientDataSWR } from '@/libs/swr';
 import { agentDocumentService, agentDocumentSWRKeys } from '@/services/agentDocument';
 import { useAgentStore } from '@/store/agent';
+import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
+
+import ProjectLevelSkills from './ProjectLevelSkills';
+
+const AGENT_SKILLS_ITEM_KEY = 'agent-skills';
 
 const PAGE_ROUTE_PATTERN = '/agent/:aid/:topicId/page/:docId?';
 
 dayjs.extend(relativeTime);
 
-type ResourceFilter = 'all' | 'documents' | 'web';
+type ResourceFilter = 'skills' | 'documents' | 'web';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
@@ -47,14 +49,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 12px;
     line-height: 1.5;
     color: ${cssVar.colorTextSecondary};
-  `,
-  groupLabel: css`
-    padding-inline: 4px;
-
-    font-size: 11px;
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.02em;
   `,
   meta: css`
     font-size: 12px;
@@ -92,13 +86,26 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       background: ${cssVar.colorFillTertiary};
     }
   `,
+  sectionCount: css`
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  sectionEmpty: css`
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  sectionLabel: css`
+    font-size: 12px;
+    font-weight: 500;
+  `,
   title: css`
     font-weight: 500;
   `,
 }));
 
 const FILTER_OPTIONS = [
-  { labelKey: 'workingPanel.resources.filter.all', value: 'all' },
+  { labelKey: 'workingPanel.resources.filter.skills', value: 'skills' },
   { labelKey: 'workingPanel.resources.filter.documents', value: 'documents' },
   { labelKey: 'workingPanel.resources.filter.web', value: 'web' },
 ] as const satisfies readonly { labelKey: string; value: ResourceFilter }[];
@@ -110,11 +117,10 @@ interface DocumentItemProps {
   document: AgentDocumentListItem;
   hideDelete?: boolean;
   mutate: () => Promise<unknown>;
-  openDocumentId?: string;
 }
 
 const DocumentItem = memo<DocumentItemProps>(
-  ({ agentId, document, hideDelete = false, mutate, openDocumentId }) => {
+  ({ agentId, document, hideDelete = false, mutate }) => {
     const { t } = useTranslation(['chat', 'common']);
     const { message, modal } = App.useApp();
     const [deleting, setDeleting] = useState(false);
@@ -127,11 +133,7 @@ const DocumentItem = memo<DocumentItemProps>(
     const title = document.title || document.filename || '';
     const description = document.description ?? undefined;
     const isWeb = document.sourceType === 'web';
-    const isSkillBundle = isSkillBundleItem(document);
-    const targetDocumentId = isSkillBundle
-      ? (openDocumentId ?? document.documentId)
-      : document.documentId;
-    const IconComponent: LucideIcon = isWeb ? GlobeIcon : isSkillBundle ? FolderIcon : FileTextIcon;
+    const IconComponent: LucideIcon = isWeb ? GlobeIcon : FileTextIcon;
     const updatedAtLabel = document.updatedAt
       ? t('workingPanel.resources.updatedAt', {
           ns: 'chat',
@@ -140,17 +142,17 @@ const DocumentItem = memo<DocumentItemProps>(
       : null;
 
     const activeDocumentId = pageMatch ? pageMatch.params.docId : portalDocumentId;
-    const isActive = activeDocumentId === targetDocumentId;
+    const isActive = activeDocumentId === document.documentId;
 
     const handleOpen = () => {
-      if (!targetDocumentId) return;
+      if (!document.documentId) return;
       if (pageMatch?.params.aid && pageMatch.params.topicId) {
         navigate(
-          `/agent/${pageMatch.params.aid}/${pageMatch.params.topicId}/page/${targetDocumentId}`,
+          `/agent/${pageMatch.params.aid}/${pageMatch.params.topicId}/page/${document.documentId}`,
         );
         return;
       }
-      openDocument(targetDocumentId);
+      openDocument(document.documentId);
     };
 
     const handleDelete = (e: MouseEvent) => {
@@ -225,15 +227,64 @@ const DocumentItem = memo<DocumentItemProps>(
 
 DocumentItem.displayName = 'AgentDocumentsGroupItem';
 
-interface AgentDocumentsGroupProps {
-  style?: CSSProperties;
-  viewMode?: 'list' | 'tree';
+interface SkillBundleView {
+  bundle: AgentDocumentListItem;
+  files: string[];
+  pathToDocumentId: Map<string, string>;
 }
 
-const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ style, viewMode = 'list' }) => {
+const buildSkillBundleViews = (data: AgentDocumentListItem[]): SkillBundleView[] => {
+  const childrenByParent = new Map<string, AgentDocumentListItem[]>();
+  for (const doc of data) {
+    if (!doc.parentId) continue;
+    const list = childrenByParent.get(doc.parentId) ?? [];
+    list.push(doc);
+    childrenByParent.set(doc.parentId, list);
+  }
+
+  return data
+    .filter((doc) => doc.isSkillBundle)
+    .map((bundle) => {
+      const files: string[] = [];
+      const pathToDocumentId = new Map<string, string>();
+
+      const walk = (parentDocId: string, prefix: string) => {
+        const children = childrenByParent.get(parentDocId) ?? [];
+        for (const child of children) {
+          const name = child.filename || child.title || 'untitled';
+          const relPath = prefix ? `${prefix}/${name}` : name;
+          if (child.isFolder) {
+            walk(child.documentId, relPath);
+          } else {
+            files.push(relPath);
+            pathToDocumentId.set(relPath, child.documentId);
+          }
+        }
+      };
+      walk(bundle.documentId, '');
+
+      return { bundle, files, pathToDocumentId };
+    });
+};
+
+interface AgentDocumentsGroupProps {
+  style?: CSSProperties;
+  workingDirectory?: string;
+}
+
+const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ style, workingDirectory }) => {
   const { t } = useTranslation('chat');
   const agentId = useAgentStore((s) => s.activeAgentId);
-  const [filter, setFilter] = useState<ResourceFilter>('all');
+  const isLocalEnabled = useAgentStore((s) =>
+    agentId ? chatConfigByIdSelectors.isLocalSystemEnabledById(agentId)(s) : false,
+  );
+  const openDocument = useChatStore((s) => s.openDocument);
+  const navigate = useNavigate();
+  const pageMatch = useMatch(PAGE_ROUTE_PATTERN);
+  const [filter, setFilter] = useState<ResourceFilter>('skills');
+  const [agentSkillsExpanded, setAgentSkillsExpanded] = useState(true);
+
+  const showProjectSkills = isLocalEnabled && !!workingDirectory;
 
   const {
     data = [],
@@ -244,52 +295,38 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ style, viewMode = 
     agentDocumentService.getDocuments({ agentId: agentId! }),
   );
 
-  const filteredData = useMemo(() => {
-    if (filter === 'documents') return data.filter((doc) => doc.sourceType !== 'web');
-    if (filter === 'web') return data.filter((doc) => doc.sourceType === 'web');
-    return data;
-  }, [data, filter]);
+  const webData = useMemo(() => data.filter((doc) => doc.category === 'web'), [data]);
 
-  const visibleFlatData = useMemo(
-    () => filteredData.filter((doc) => !isSkillIndexItem(doc)),
-    [filteredData],
+  const documentsData = useMemo(() => data.filter((doc) => doc.category === 'document'), [data]);
+
+  const skillBundleViews = useMemo(() => buildSkillBundleViews(data), [data]);
+
+  const skillItems = useMemo<SkillListItem[]>(
+    () =>
+      skillBundleViews.map(({ bundle, files }) => ({
+        description: bundle.description ?? undefined,
+        fileCount: files.length,
+        files,
+        id: bundle.documentId,
+        name: bundle.title || bundle.filename || '',
+      })),
+    [skillBundleViews],
   );
 
-  const skillIndexDocumentIdByBundleDocumentId = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const doc of data) {
-      if (isSkillIndexItem(doc) && doc.parentId) {
-        map.set(doc.parentId, doc.documentId);
-      }
+  const openDocumentByRoute = (documentId: string) => {
+    if (pageMatch?.params.aid && pageMatch.params.topicId) {
+      navigate(`/agent/${pageMatch.params.aid}/${pageMatch.params.topicId}/page/${documentId}`);
+      return;
     }
-    return map;
-  }, [data]);
-
-  const getOpenDocumentId = (document: AgentDocumentListItem): string | undefined =>
-    isSkillBundleItem(document)
-      ? (skillIndexDocumentIdByBundleDocumentId.get(document.documentId) ?? document.documentId)
-      : document.documentId;
-
-  const shouldHideDelete = (document: AgentDocumentListItem): boolean =>
-    isManagedSkillItem(document) && !isOrphanSkillBundleItem(document, data);
-
-  const treeGroups = useMemo(() => {
-    const docs = data.filter((doc) => doc.sourceType !== 'web' && !isSkillIndexItem(doc));
-    const webs = data.filter((doc) => doc.sourceType === 'web');
-    return (
-      [
-        { items: docs, labelKey: 'workingPanel.resources.filter.documents' },
-        { items: webs, labelKey: 'workingPanel.resources.filter.web' },
-      ] as const
-    ).filter((group) => group.items.length > 0);
-  }, [data]);
+    openDocument(documentId);
+  };
 
   if (!agentId) return null;
 
   if (isLoading) {
     return (
       <Center flex={1} paddingBlock={24}>
-        <Spin />
+        <NeuralNetworkLoading size={32} />
       </Center>
     );
   }
@@ -302,41 +339,107 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ style, viewMode = 
     );
   }
 
-  // For filter==='documents' we still render the tree even when empty, so the
-  // toolbar (new folder / new doc) remains reachable.
-  if (data.length === 0 && filter !== 'documents') {
-    return (
-      <Center flex={1} gap={8} paddingBlock={24}>
-        <Empty description={t('workingPanel.resources.empty')} icon={FileTextIcon} />
+  const renderAgentSkillsList = () =>
+    skillItems.length === 0 ? (
+      <Center paddingBlock={8}>
+        <Text className={styles.sectionEmpty}>{t('workingPanel.skills.emptyAgent')}</Text>
       </Center>
+    ) : (
+      <SkillsList
+        items={skillItems}
+        onOpenFile={(item, relativePath) => {
+          const view = skillBundleViews.find((v) => v.bundle.documentId === item.id);
+          const docId = view?.pathToDocumentId.get(relativePath);
+          if (docId) openDocumentByRoute(docId);
+        }}
+        onOpenSkill={(item) => {
+          // Open the SKILL.md (skills/index child) when present; fall back to
+          // the bundle itself (orphan bundles surface for recovery).
+          const view = skillBundleViews.find((v) => v.bundle.documentId === item.id);
+          const indexChild = data.find((doc) => doc.parentId === item.id && doc.isSkillIndex);
+          openDocumentByRoute(indexChild?.documentId ?? view?.bundle.documentId ?? item.id);
+        }}
+      />
     );
-  }
 
-  if (viewMode === 'tree') {
+  const renderAgentSkillsSection = () => (
+    <Accordion
+      expandedKeys={agentSkillsExpanded ? [AGENT_SKILLS_ITEM_KEY] : []}
+      gap={4}
+      onExpandedChange={(keys) => setAgentSkillsExpanded(keys.length > 0)}
+    >
+      <AccordionItem
+        itemKey={AGENT_SKILLS_ITEM_KEY}
+        paddingBlock={2}
+        paddingInline={4}
+        title={
+          <Flexbox horizontal align={'center'} gap={6}>
+            <Text className={styles.sectionLabel} type={'secondary'}>
+              {t('workingPanel.skills.section.agent')}
+            </Text>
+            {skillItems.length > 0 && (
+              <span className={styles.sectionCount}>{skillItems.length}</span>
+            )}
+          </Flexbox>
+        }
+      >
+        {renderAgentSkillsList()}
+      </AccordionItem>
+    </Accordion>
+  );
+
+  const renderSkills = () => {
+    // No project section (not local mode / no working dir): show the agent
+    // skills flat, without the redundant "Agent skills" group header.
+    if (!showProjectSkills) {
+      if (skillItems.length === 0) {
+        return (
+          <Center flex={1} gap={8} paddingBlock={24}>
+            <Empty description={t('workingPanel.skills.empty')} icon={SkillsIcon} />
+          </Center>
+        );
+      }
+      return renderAgentSkillsList();
+    }
+
+    // Both sections coexist — label each so the source is clear.
     return (
       <Flexbox gap={16}>
-        {treeGroups.map((group) => (
-          <Flexbox gap={8} key={group.labelKey}>
-            <Text className={styles.groupLabel} type={'secondary'}>
-              {t(group.labelKey)}
-            </Text>
-            <Flexbox gap={8}>
-              {group.items.map((doc) => (
-                <DocumentItem
-                  agentId={agentId}
-                  document={doc}
-                  hideDelete={shouldHideDelete(doc)}
-                  key={doc.id}
-                  mutate={mutate}
-                  openDocumentId={getOpenDocumentId(doc)}
-                />
-              ))}
-            </Flexbox>
-          </Flexbox>
+        {renderAgentSkillsSection()}
+        <ProjectLevelSkills workingDirectory={workingDirectory!} />
+      </Flexbox>
+    );
+  };
+
+  const renderDocuments = () => (
+    // Always render the tree for the Documents tab even when empty, so the
+    // toolbar (new folder / new doc) stays reachable.
+    <Flexbox flex={1} style={{ minHeight: 0 }}>
+      <DocumentExplorerTree
+        agentId={agentId}
+        data={documentsData}
+        mutate={mutate}
+        style={{ height: '100%' }}
+      />
+    </Flexbox>
+  );
+
+  const renderWeb = () => {
+    if (webData.length === 0) {
+      return (
+        <Center flex={1} gap={8} paddingBlock={24}>
+          <Empty description={t('workingPanel.resources.empty')} icon={GlobeIcon} />
+        </Center>
+      );
+    }
+    return (
+      <Flexbox gap={8}>
+        {webData.map((doc) => (
+          <DocumentItem agentId={agentId} document={doc} key={doc.id} mutate={mutate} />
         ))}
       </Flexbox>
     );
-  }
+  };
 
   return (
     <Flexbox gap={12} style={style}>
@@ -356,36 +459,9 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ style, viewMode = 
           );
         })}
       </Flexbox>
-      {filter === 'documents' ? (
-        <Flexbox flex={1} style={{ minHeight: 0 }}>
-          <DocumentExplorerTree
-            agentId={agentId}
-            data={data}
-            mutate={mutate}
-            style={{ height: '100%' }}
-          />
-        </Flexbox>
-      ) : visibleFlatData.length === 0 ? (
-        <Center flex={1} gap={8} paddingBlock={24}>
-          <Empty
-            description={t('workingPanel.resources.empty')}
-            icon={filter === 'web' ? GlobeIcon : FileTextIcon}
-          />
-        </Center>
-      ) : (
-        <Flexbox gap={8}>
-          {visibleFlatData.map((doc) => (
-            <DocumentItem
-              agentId={agentId}
-              document={doc}
-              hideDelete={shouldHideDelete(doc)}
-              key={doc.id}
-              mutate={mutate}
-              openDocumentId={getOpenDocumentId(doc)}
-            />
-          ))}
-        </Flexbox>
-      )}
+      {filter === 'skills' && renderSkills()}
+      {filter === 'documents' && renderDocuments()}
+      {filter === 'web' && renderWeb()}
     </Flexbox>
   );
 });

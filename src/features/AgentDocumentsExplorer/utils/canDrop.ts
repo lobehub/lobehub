@@ -1,7 +1,7 @@
 import type { ExplorerTreeCanDropCtx } from '@/features/ExplorerTree';
 
 import type { AgentDocumentItem } from '../types';
-import { isManagedSkillItem, isPendingId, isSkillBundleItem } from '../types';
+import { isPendingId } from '../types';
 
 interface CanDropArgs {
   ctx: ExplorerTreeCanDropCtx<AgentDocumentItem>;
@@ -27,7 +27,7 @@ export const canDropDocument = ({ ctx, parentMap }: CanDropArgs): boolean => {
 
   // Drop target must be a folder or root
   if (targetNode && !targetNode.isFolder) return false;
-  if (targetNode?.data && isSkillBundleItem(targetNode.data)) return false;
+  if (targetNode?.data?.isSkillBundle) return false;
 
   // Pending targets have no server-side row yet — refuse the drop instead of
   // surfacing an error after the fact.
@@ -47,10 +47,9 @@ export const canDropDocument = ({ ctx, parentMap }: CanDropArgs): boolean => {
       if (isAncestor(sourceId, targetId, parentMap)) return false;
     }
 
-    // Web docs cannot move (not part of tree management)
+    // Web docs and managed skills cannot move (not part of tree management).
     const data = node.data;
-    if (data && data.sourceType === 'web') return false;
-    if (data && isManagedSkillItem(data)) return false;
+    if (data && (data.category === 'web' || data.category === 'skill')) return false;
   }
 
   return true;

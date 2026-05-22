@@ -1,6 +1,6 @@
 import { nanoid } from 'nanoid';
 
-import { type AgentDocumentItem, FOLDER_FILE_TYPE, PENDING_ID_PREFIX } from '../types';
+import { type AgentDocumentItem, PENDING_ID_PREFIX } from '../types';
 
 interface MakePendingArgs {
   agentId: string;
@@ -22,6 +22,7 @@ export const makePendingDocument = ({
     accessSelf: 1,
     accessShared: 0,
     agentId,
+    category: 'document',
     content: '',
     createdAt: now,
     deletedAt: null,
@@ -32,8 +33,11 @@ export const makePendingDocument = ({
     documentId: id,
     editorData: null,
     filename: title,
-    fileType: isFolder ? FOLDER_FILE_TYPE : 'custom/document',
+    fileType: isFolder ? 'custom/folder' : 'custom/document',
     id,
+    isFolder,
+    isSkillBundle: false,
+    isSkillIndex: false,
     loadRules: {} as AgentDocumentItem['loadRules'],
     metadata: null,
     parentId,

@@ -55,7 +55,7 @@ describe('UserAgentOnboardingContextSchema', () => {
   it('accepts the minimal onboarding context', () => {
     const parsed = UserAgentOnboardingContextSchema.parse({
       finished: false,
-      missingStructuredFields: ['fullName', 'interests'],
+      missingStructuredFields: ['fullName', 'agentName'],
       phase: 'user_identity',
       topicId: 'topic-1',
       version: 2,
@@ -63,7 +63,7 @@ describe('UserAgentOnboardingContextSchema', () => {
 
     expect(parsed).toEqual({
       finished: false,
-      missingStructuredFields: ['fullName', 'interests'],
+      missingStructuredFields: ['fullName', 'agentName'],
       phase: 'user_identity',
       topicId: 'topic-1',
       version: 2,

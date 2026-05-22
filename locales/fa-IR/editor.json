@@ -1,8 +1,10 @@
 {
   "actionTag.category.command": "دستور",
+  "actionTag.category.projectSkill": "مهارت پروژه",
   "actionTag.category.skill": "مهارت",
   "actionTag.category.tool": "ابزار",
   "actionTag.tooltip.command": "پیش از ارسال، یک دستور اسلش سمت کلاینت را اجرا می‌کند.",
+  "actionTag.tooltip.projectSkill": "به عنوان یک فراخوانی اسلش ارسال می‌شود تا CLI عامل مهارت پروژه مطابقت‌یافته را اجرا کند.",
   "actionTag.tooltip.skill": "برای این درخواست، یک بسته مهارت قابل استفاده مجدد را بارگذاری می‌کند.",
   "actionTag.tooltip.tool": "ابزاری را که کاربر به‌طور صریح برای این درخواست انتخاب کرده است علامت‌گذاری می‌کند.",
   "actions.expand.off": "جمع کردن",

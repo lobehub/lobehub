@@ -1,8 +1,10 @@
 {
   "actionTag.category.command": "Lệnh",
+  "actionTag.category.projectSkill": "Kỹ năng dự án",
   "actionTag.category.skill": "Kỹ năng",
   "actionTag.category.tool": "Công cụ",
   "actionTag.tooltip.command": "Chạy lệnh slash phía client trước khi gửi.",
+  "actionTag.tooltip.projectSkill": "Được gửi dưới dạng lệnh gạch chéo để CLI của tác nhân chạy kỹ năng dự án tương ứng.",
   "actionTag.tooltip.skill": "Tải gói kỹ năng có thể tái sử dụng cho yêu cầu này.",
   "actionTag.tooltip.tool": "Đánh dấu công cụ mà người dùng đã chọn rõ ràng cho yêu cầu này.",
   "actions.expand.off": "Thu gọn",

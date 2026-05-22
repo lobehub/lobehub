@@ -1,12 +1,13 @@
-import { DEFAULT_SYSTEM_AGENT_CONFIG } from '@lobechat/const';
 import { chainSummaryTitle } from '@lobechat/prompts';
 import type { UserSystemAgentConfig, UserSystemAgentConfigKey } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 
 import { UserModel } from '@/database/models/user';
-import { type LobeChatDatabase } from '@/database/type';
+import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+
+import { resolveSystemAgentModelConfig } from './modelConfig';
 
 const log = debug('lobe-server:system-agent-service');
 
@@ -103,12 +104,7 @@ export class SystemAgentService {
     const systemAgent = settings?.systemAgent as Partial<UserSystemAgentConfig> | undefined;
 
     const taskConfig = systemAgent?.[taskKey];
-    const defaults = DEFAULT_SYSTEM_AGENT_CONFIG[taskKey];
-
-    return {
-      model: taskConfig?.model || defaults.model,
-      provider: taskConfig?.provider || defaults.provider,
-    };
+    return resolveSystemAgentModelConfig({ taskConfig, taskKey });
   }
 
   /**

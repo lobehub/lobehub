@@ -3,6 +3,7 @@ import { and, asc, desc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 import type { DocumentItem, NewAgentDocument, NewDocument } from '../../schemas';
 import { agentDocuments, documents } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
+import { deriveAgentDocumentFields } from './deriveFields';
 import { buildDocumentFilename } from './filename';
 import {
   composeToolPolicyUpdate,
@@ -875,6 +876,7 @@ export class AgentDocumentModel {
       const item = this.toAgentDocument(settings, doc);
       return {
         ...item,
+        ...deriveAgentDocumentFields(item),
         loadRules: parseLoadRules(item),
       };
     });
@@ -904,6 +906,7 @@ export class AgentDocumentModel {
       const item = this.toAgentDocument(settings, doc);
       return {
         ...item,
+        ...deriveAgentDocumentFields(item),
         loadRules: parseLoadRules(item),
       };
     });
@@ -944,6 +947,7 @@ export class AgentDocumentModel {
       const item = this.toAgentDocument(settings, doc);
       return {
         ...item,
+        ...deriveAgentDocumentFields(item),
         loadRules: parseLoadRules(item),
       };
     });

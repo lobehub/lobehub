@@ -85,6 +85,31 @@ describe('AgentDocument VFS Router Integration Tests', () => {
     );
   });
 
+  it('reads ordinary document line ranges through readDocumentByPath loc', async () => {
+    await agentDocumentModel.create(
+      agentId,
+      'tool-result.md',
+      ['line 0', 'line 1', 'line 2', 'line 3'].join('\n'),
+    );
+
+    const caller = agentDocumentRouter.createCaller(createTestContext(userId));
+    const read = await caller.readDocumentByPath({
+      agentId,
+      loc: [2, 4],
+      path: './tool-result.md',
+    });
+
+    expect(read).toEqual(
+      expect.objectContaining({
+        content: 'line 2\nline 3',
+        lineCount: 2,
+        loc: [2, 4],
+        path: './tool-result.md',
+        totalLineCount: 4,
+      }),
+    );
+  });
+
   it('stats mounted agent skills through unified ./lobe paths', async () => {
     const caller = agentDocumentRouter.createCaller(createTestContext(userId));
 

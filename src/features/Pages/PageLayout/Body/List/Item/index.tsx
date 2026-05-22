@@ -5,7 +5,6 @@ import { memo, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { isDesktop } from '@/const/version';
-import { pluginRegistry } from '@/features/Electron/titlebar/RecentlyViewed/plugins';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useElectronStore } from '@/store/electron';
 import { pageSelectors, usePageStore } from '@/store/page';
@@ -67,11 +66,8 @@ const PageListItem = memo<DocumentItemProps>(({ pageId, className }) => {
       clearTimeout(clickTimerRef.current);
       clickTimerRef.current = null;
     }
-    const reference = pluginRegistry.parseUrl(`/page/${pageId}`, '');
-    if (reference) {
-      addTab(reference);
-      selectPage(pageId);
-    }
+    addTab(`/page/${pageId}`);
+    selectPage(pageId);
   }, [pageId, addTab, selectPage]);
 
   // Icon with emoji support

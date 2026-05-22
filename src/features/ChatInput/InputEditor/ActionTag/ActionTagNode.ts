@@ -14,7 +14,7 @@ import {
 } from 'lexical';
 import { createElement } from 'react';
 
-import { ActionTagView } from './ActionTagView';
+import { ActionMention } from './ActionMention';
 import type { ActionTagCategory, ActionTagType } from './types';
 
 export type SerializedActionTagNode = Spread<
@@ -126,7 +126,7 @@ export class ActionTagNode extends DecoratorNode<any> implements HeadlessRendera
   }
 
   renderHeadless({ key }: HeadlessRenderContext) {
-    return createElement(ActionTagView, {
+    return createElement(ActionMention, {
       category: this.__actionCategory as ActionTagCategory,
       key,
       label: this.__actionLabel,

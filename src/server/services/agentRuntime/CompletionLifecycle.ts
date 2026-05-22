@@ -275,12 +275,26 @@ export class CompletionLifecycle {
 
   private buildLifecycleEvent(operationId: string, state: any, reason: string) {
     const metadata = state?.metadata || {};
-    const lastAssistantContent = state?.messages
-      ?.slice()
+    const messages: any[] = Array.isArray(state?.messages) ? state.messages : [];
+
+    // Pull text content off the **final** assistant turn. Content may be a
+    // plain string or an OpenAI-style multimodal part array; for the array
+    // case we concatenate the text parts so the reply body is preserved.
+    //
+    // We deliberately match on `role === 'assistant'` only — not on whether
+    // the turn has any text — so an image-only or tool-output final turn
+    // doesn't fall through to an earlier assistant message and ship stale
+    // text alongside the current attachments.
+    const lastAssistantMessage = messages
+      .slice()
       .reverse()
-      .find(
-        (m: { content?: string; role: string }) => m.role === 'assistant' && m.content,
-      )?.content;
+      .find((m: { content?: unknown; role: string }) => m.role === 'assistant');
+    const lastAssistantContent = lastAssistantMessage
+      ? extractTextFromMessageContent(lastAssistantMessage.content)
+      : undefined;
+
+    const attachments = extractOutboundAttachments(messages);
+
     const duration = state?.createdAt
       ? Date.now() - new Date(state.createdAt).getTime()
       : undefined;
@@ -288,6 +302,7 @@ export class CompletionLifecycle {
     return {
       event: {
         agentId: metadata?.agentId || '',
+        attachments: attachments.length > 0 ? attachments : undefined,
         cost: state?.cost?.total,
         duration,
         errorDetail: state?.error,
@@ -308,3 +323,168 @@ export class CompletionLifecycle {
     };
   }
 }
+
+// --------------------------------------------------------------------------
+// Outbound attachment extraction
+// --------------------------------------------------------------------------
+
+type OutboundAttachment = {
+  data?: string;
+  fetchUrl?: string;
+  mimeType?: string;
+  name?: string;
+  type: 'image' | 'file' | 'video' | 'audio';
+};
+
+const DATA_URL_RE = /^data:([^;]+);base64,(.+)$/;
+
+const inferAttachmentTypeFromMime = (mimeType: string | undefined): OutboundAttachment['type'] => {
+  if (!mimeType) return 'file';
+  if (mimeType.startsWith('image/')) return 'image';
+  if (mimeType.startsWith('video/')) return 'video';
+  if (mimeType.startsWith('audio/')) return 'audio';
+  return 'file';
+};
+
+/**
+ * Materialize a `url` field — either a `data:` URL (extract base64 inline) or
+ * a remote URL (record fetchUrl). Returns undefined for unsupported shapes.
+ */
+const buildAttachmentFromUrl = (
+  url: string | undefined,
+  fallbackType: OutboundAttachment['type'] = 'image',
+): OutboundAttachment | undefined => {
+  if (!url || typeof url !== 'string') return undefined;
+  const dataMatch = url.match(DATA_URL_RE);
+  if (dataMatch) {
+    const mimeType = dataMatch[1];
+    return {
+      data: dataMatch[2],
+      mimeType,
+      type: inferAttachmentTypeFromMime(mimeType),
+    };
+  }
+  // Bare http(s) URL — let the downstream messenger fetch it lazily.
+  if (/^https?:\/\//.test(url)) {
+    return { fetchUrl: url, type: fallbackType };
+  }
+  return undefined;
+};
+
+/**
+ * Pull text out of a message's `content` field. Accepts both string and
+ * OpenAI-style multimodal arrays `[{ type: 'text', text }, { type: 'image_url', image_url: { url } }]`.
+ */
+const extractTextFromMessageContent = (content: unknown): string | undefined => {
+  if (typeof content === 'string') return content || undefined;
+  if (!Array.isArray(content)) return undefined;
+  const parts: string[] = [];
+  for (const part of content) {
+    if (typeof part === 'string') {
+      parts.push(part);
+    } else if (part && typeof part === 'object' && (part as any).type === 'text') {
+      const text = (part as { text?: unknown }).text;
+      if (typeof text === 'string') parts.push(text);
+    }
+  }
+  const joined = parts.join('');
+  return joined || undefined;
+};
+
+/**
+ * Extract image/file parts from a message's `content` array. Each entry is
+ * mapped to the JSON-safe outbound attachment shape (data or fetchUrl).
+ */
+const extractAttachmentsFromContent = (content: unknown): OutboundAttachment[] => {
+  if (!Array.isArray(content)) return [];
+  const out: OutboundAttachment[] = [];
+  for (const part of content) {
+    if (!part || typeof part !== 'object') continue;
+    const type = (part as { type?: unknown }).type;
+    if (type === 'image_url') {
+      const url = (part as { image_url?: { url?: string } }).image_url?.url;
+      const att = buildAttachmentFromUrl(url, 'image');
+      if (att) out.push(att);
+    } else if (type === 'image') {
+      // Anthropic-style: { type: 'image', source: { type: 'base64', media_type, data } }
+      const source = (part as { source?: { data?: string; media_type?: string; type?: string } })
+        .source;
+      if (source?.type === 'base64' && source.data) {
+        const mimeType = source.media_type;
+        out.push({
+          data: source.data,
+          mimeType,
+          type: inferAttachmentTypeFromMime(mimeType),
+        });
+      } else if (source?.type === 'url') {
+        const url = (source as { url?: string }).url;
+        const att = buildAttachmentFromUrl(url, 'image');
+        if (att) out.push(att);
+      }
+    } else if (type === 'file' || type === 'file_url') {
+      const file = (part as { file?: { url?: string; name?: string; mime_type?: string } }).file;
+      const att = buildAttachmentFromUrl(file?.url, 'file');
+      if (att) {
+        att.name = file?.name ?? att.name;
+        att.mimeType = file?.mime_type ?? att.mimeType;
+        out.push(att);
+      }
+    }
+  }
+  return out;
+};
+
+/**
+ * Walk recent messages and collect outbound image/file attachments to send
+ * alongside the reply. Scans the last assistant message *and* any tool
+ * messages that came after the previous assistant turn — tool-generated
+ * images (e.g. a drawing tool that returns an image_url result) need to be
+ * delivered with the next reply.
+ *
+ * Deduplicates by data/fetchUrl identity.
+ */
+const extractOutboundAttachments = (messages: any[]): OutboundAttachment[] => {
+  if (!Array.isArray(messages) || messages.length === 0) return [];
+
+  // Walk from the end backwards: collect attachments until we hit the
+  // previous assistant turn that already has text — that boundary marks
+  // "the current reply window".
+  const collected: OutboundAttachment[] = [];
+  let crossedFinalAssistant = false;
+
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (!msg || typeof msg !== 'object') continue;
+    const role = (msg as { role?: string }).role;
+    const content = (msg as { content?: unknown }).content;
+
+    if (role === 'assistant') {
+      if (!crossedFinalAssistant) {
+        // The final assistant turn: harvest its multimodal parts.
+        collected.push(...extractAttachmentsFromContent(content));
+        crossedFinalAssistant = true;
+        continue;
+      }
+      // A previous assistant turn — stop walking, we don't want to dredge up
+      // attachments from prior conversation rounds.
+      break;
+    }
+
+    if (role === 'tool') {
+      // Tool results between the previous assistant turn and the final one.
+      collected.push(...extractAttachmentsFromContent(content));
+    }
+  }
+
+  // Reverse so message-order (older first) is preserved, then dedupe.
+  collected.reverse();
+  const seen = new Set<string>();
+  const result: OutboundAttachment[] = [];
+  for (const att of collected) {
+    const key = att.fetchUrl ?? att.data ?? '';
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(att);
+  }
+  return result;
+};

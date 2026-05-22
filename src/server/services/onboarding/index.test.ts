@@ -201,7 +201,7 @@ describe('OnboardingService', () => {
 
     expect(context).toEqual({
       finished: false,
-      missingStructuredFields: ['agentName', 'agentEmoji', 'fullName', 'interests'],
+      missingStructuredFields: ['agentName', 'agentEmoji', 'fullName'],
       phase: 'agent_identity',
       topicId: undefined,
       version: CURRENT_ONBOARDING_VERSION,
@@ -522,17 +522,16 @@ describe('OnboardingService', () => {
       title: 'Jarvis',
     });
     persistedUserState.fullName = 'Ada Lovelace';
-    persistedUserState.interests = ['AI tooling'];
     persistedUserState.agentOnboarding = {
       activeTopicId: 'topic-1',
       discoveryStartUserMessageCount: 3,
       version: CURRENT_ONBOARDING_VERSION,
     };
 
-    // 4 user messages total, baseline was 3 → only 1 discovery exchange (< MIN_DISCOVERY_USER_MESSAGES=2)
+    // 3 user messages total, baseline was 3 → 0 discovery exchanges (< MIN_DISCOVERY_USER_MESSAGES=1)
     mockDb.select.mockReturnValue({
       from: vi.fn(() => ({
-        where: vi.fn(async () => [{ count: 4 }]),
+        where: vi.fn(async () => [{ count: 3 }]),
       })),
     });
 
@@ -540,9 +539,9 @@ describe('OnboardingService', () => {
     const context = await service.getState();
 
     expect(context.phase).toBe('discovery');
-    expect(context.discoveryUserMessageCount).toBe(1);
-    // remaining = RECOMMENDED_DISCOVERY_USER_MESSAGES(3) - 1 = 2
-    expect(context.remainingDiscoveryExchanges).toBe(2);
+    expect(context.discoveryUserMessageCount).toBe(0);
+    // remaining = RECOMMENDED_DISCOVERY_USER_MESSAGES(1) - 0 = 1
+    expect(context.remainingDiscoveryExchanges).toBe(1);
   });
 
   it('advances to summary when discovery exchanges reach minimum threshold', async () => {
@@ -559,7 +558,7 @@ describe('OnboardingService', () => {
       version: CURRENT_ONBOARDING_VERSION,
     };
 
-    // 8 user messages total, baseline was 3 → 5 discovery exchanges (>= MIN_DISCOVERY_USER_MESSAGES=2)
+    // 8 user messages total, baseline was 3 → 5 discovery exchanges (>= MIN_DISCOVERY_USER_MESSAGES=1)
     mockDb.select.mockReturnValue({
       from: vi.fn(() => ({
         where: vi.fn(async () => [{ count: 8 }]),
@@ -579,7 +578,7 @@ describe('OnboardingService', () => {
       title: 'Jarvis',
     });
     persistedUserState.fullName = 'Ada Lovelace';
-    // interests NOT set — so phase would be discovery due to missing field
+    // agentName + fullName set → past pre-discovery; 0 discovery exchanges keeps phase in discovery
     persistedUserState.agentOnboarding = {
       activeTopicId: 'topic-1',
       version: CURRENT_ONBOARDING_VERSION,

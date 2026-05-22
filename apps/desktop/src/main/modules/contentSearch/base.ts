@@ -65,6 +65,12 @@ export abstract class BaseContentSearch {
     const { pattern, output_mode = 'files_with_matches' } = params;
     const args: string[] = [];
 
+    // When the caller's glob references a dot-prefixed segment (e.g.
+    // `.github/workflows/*.yml`), rg and ag both default to skipping hidden
+    // paths and would silently return zero results. `.git/` is still excluded
+    // explicitly below.
+    const wantsHidden = !!params.glob && /(?:^|\/)\.[^./]/.test(params.glob);
+
     switch (tool) {
       case 'rg': {
         // ripgrep arguments
@@ -74,6 +80,7 @@ export abstract class BaseContentSearch {
         if (params['-B']) args.push('-B', String(params['-B']));
         if (params['-C']) args.push('-C', String(params['-C']));
         if (params.multiline) args.push('-U');
+        if (wantsHidden) args.push('--hidden');
         if (params.glob) args.push('-g', params.glob);
         if (params.type) args.push('-t', params.type);
 
@@ -100,6 +107,7 @@ export abstract class BaseContentSearch {
         if (params['-A']) args.push('-A', String(params['-A']));
         if (params['-B']) args.push('-B', String(params['-B']));
         if (params['-C']) args.push('-C', String(params['-C']));
+        if (wantsHidden) args.push('--hidden');
         if (params.glob) args.push('-G', params.glob);
 
         // Output mode

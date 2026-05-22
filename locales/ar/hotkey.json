@@ -1,8 +1,6 @@
 {
   "addUserMessage.desc": "أضف الإدخال الحالي كرسالة مستخدم دون بدء التوليد",
   "addUserMessage.title": "إضافة رسالة مستخدم",
-  "clearCurrentMessages.desc": "مسح الرسائل والملفات المرفوعة من المحادثة الحالية",
-  "clearCurrentMessages.title": "مسح رسائل المحادثة",
   "commandPalette.desc": "افتح لوحة الأوامر العامة للوصول السريع إلى الميزات",
   "commandPalette.title": "لوحة الأوامر",
   "deleteAndRegenerateMessage.desc": "حذف الرسالة الأخيرة وإعادة توليدها",

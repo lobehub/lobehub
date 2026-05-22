@@ -8,12 +8,6 @@ export const CredsApiName = {
   connectKlavisService: 'connectKlavisService',
 
   /**
-   * Get plaintext value of a credential
-   * Use when AI needs to access credential value for API calls
-   */
-  getPlaintextCred: 'getPlaintextCred',
-
-  /**
    * Initiate OAuth connection flow
    * Returns authorization URL for user to click and authorize
    */
@@ -48,17 +42,6 @@ export type LobehubOAuthProviderId = (typeof LOBEHUB_OAUTH_PROVIDER_IDS)[number]
 
 // ==================== Tool Parameter Types ====================
 
-export interface GetPlaintextCredParams {
-  /**
-   * The unique key of the credential to retrieve
-   */
-  key: string;
-  /**
-   * Reason for accessing this credential (for audit purposes)
-   */
-  reason?: string;
-}
-
 export interface InitiateOAuthConnectParams {
   /**
    * The OAuth provider ID (e.g., 'linear', 'microsoft', 'notion', 'twitter')
@@ -83,17 +66,6 @@ export interface InitiateOAuthConnectState {
    * Provider display name
    */
   providerName: string;
-}
-
-export interface GetPlaintextCredState {
-  /**
-   * The credential key
-   */
-  key: string;
-  /**
-   * The plaintext values (key-value pairs)
-   */
-  values?: Record<string, string>;
 }
 
 export interface InjectCredsToSandboxParams {

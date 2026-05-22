@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Clean issue notice
-        uses: actions-cool/issues-helper@v3
+        uses: actions-cool/issues-helper@e361abf610221f09495ad510cb1e69328d839e1c # v3.7.6
         with:
           actions: 'close-issues'
           labels: '🚨 Sync Fail'
@@ -37,7 +37,7 @@ jobs:
 
       - name: Sync check
         if: failure()
-        uses: actions-cool/issues-helper@v3
+        uses: actions-cool/issues-helper@e361abf610221f09495ad510cb1e69328d839e1c # v3.7.6
         with:
           actions: 'create-issue'
           title: '🚨 同步失败 | Sync Fail'

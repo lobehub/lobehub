@@ -24,6 +24,27 @@ export type { AgentDocumentPolicy, DocumentLoadRules } from '@lobechat/agent-tem
 
 export type AgentDocumentSourceType = 'file' | 'web' | 'api' | 'topic' | 'agent' | 'agent-signal';
 
+/**
+ * UI-facing tab grouping for an agent document. Derived from `fileType` +
+ * `sourceType` + `templateId` server-side so the client never has to
+ * categorize itself.
+ */
+export type AgentDocumentCategory = 'skill' | 'document' | 'web';
+
+/**
+ * Fields the server computes from the raw row and attaches to every agent
+ * document response. Keeps UI predicates out of the frontend.
+ */
+export interface AgentDocumentDerivedFields {
+  category: AgentDocumentCategory;
+  /** Folder (`custom/folder`) or skill bundle — anything that can contain children. */
+  isFolder: boolean;
+  /** Top-level skill folder (`fileType === 'skills/bundle'`). */
+  isSkillBundle: boolean;
+  /** The `SKILL.md` index document inside a bundle (`fileType === 'skills/index'`). */
+  isSkillIndex: boolean;
+}
+
 export interface AgentDocument {
   accessPublic: number;
   accessSelf: number;
@@ -56,7 +77,7 @@ export interface AgentDocument {
   userId: string;
 }
 
-export interface AgentDocumentWithRules extends AgentDocument {
+export interface AgentDocumentWithRules extends AgentDocument, AgentDocumentDerivedFields {
   loadRules: DocumentLoadRules;
 }
 

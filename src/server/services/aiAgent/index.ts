@@ -263,7 +263,10 @@ export class AiAgentService {
     this.taskModel = new TaskModel(db, userId);
     this.threadModel = new ThreadModel(db, userId);
     this.topicModel = new TopicModel(db, userId);
-    this.agentRuntimeService = new AgentRuntimeService(db, userId, options?.runtimeOptions);
+    this.agentRuntimeService = new AgentRuntimeService(db, userId, {
+      ...options?.runtimeOptions,
+      execSubAgentTask: this.execSubAgentTask.bind(this),
+    });
     this.marketService = new MarketService({ userInfo: { userId } });
     this.klavisService = new KlavisService({ db, userId });
   }
@@ -403,9 +406,18 @@ export class AiAgentService {
     const agentSlug = agentConfig.slug;
     const builtinSlugs = Object.values(BUILTIN_AGENT_SLUGS) as string[];
     if (agentSlug && builtinSlugs.includes(agentSlug)) {
+      let userLocale: string | undefined;
+      try {
+        const userInfo = await UserModel.getInfoForAIGeneration(this.db, this.userId);
+        userLocale = userInfo.responseLanguage;
+      } catch (error) {
+        log('execAgent: failed to load user locale for builtin runtime config: %O', error);
+      }
+
       const runtimeConfig = getAgentRuntimeConfig(agentSlug, {
         model: agentConfig.model,
         plugins: agentConfig.plugins ?? [],
+        userLocale,
       });
       if (runtimeConfig) {
         // Runtime systemRole takes effect only if DB has no user-customized systemRole
@@ -735,9 +747,12 @@ export class AiAgentService {
       };
 
       // Seed topic.metadata.runningOperation so heteroIngest can validate the operation.
+      // completionWebhook is stored so heteroFinish can call back to the IM bot-callback
+      // endpoint even though the hetero path bypasses the normal hook registration flow.
       await this.topicModel.updateMetadata(topicId, {
         runningOperation: {
           assistantMessageId: assistantMsg.id,
+          completionWebhook: hooks?.find((h) => h.type === 'onComplete')?.webhook,
           operationId,
           scope: appContext?.scope ?? undefined,
           threadId: appContext?.threadId ?? undefined,
@@ -867,8 +882,9 @@ export class AiAgentService {
     let klavisManifests: LobeToolManifest[] = [];
     let agentPlugins: string[] = [...(agentConfig?.plugins ?? []), ...(additionalPluginIds || [])];
 
-    // model-bank is needed both for tool support check and model metadata
-    const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
+    // Model metadata is needed both for tool support checks and agent-management context.
+    const { loadModels } = await import('@/business/client/model-bank/loadModels');
+    const builtinModels = await loadModels();
     // Resolve S3 keys in imageList/videoList before visual tool activation checks and context build.
     const fileService = new FileService(this.db, this.userId);
     const postProcessUrl = (path: string | null) => fileService.getFullFileUrl(path);
@@ -913,7 +929,7 @@ export class AiAgentService {
 
       // 5b. Get model abilities from model-bank for function calling support check
       const isModelSupportToolUse = (m: string, p: string) => {
-        const info = LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === m && item.providerId === p);
+        const info = builtinModels.find((item) => item.id === m && item.providerId === p);
         return info?.abilities?.functionCall ?? true;
       };
 
@@ -972,8 +988,8 @@ export class AiAgentService {
       // Dynamically inject turn-scoped builtin tools.
       const hasTopicReference = /refer_topic/.test(prompt ?? '');
       const modelAbilities =
-        LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === model && item.providerId === provider)
-          ?.abilities ?? LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === model)?.abilities;
+        builtinModels.find((item) => item.id === model && item.providerId === provider)
+          ?.abilities ?? builtinModels.find((item) => item.id === model)?.abilities;
       const externalFileTypes = files?.map((file) => file.mimeType ?? '') ?? [];
       let attachedFileTypes: string[] = [];
       if (attachedFileIds && attachedFileIds.length > 0) {
@@ -1341,8 +1357,8 @@ export class AiAgentService {
         // Only include enabled chat models
         if (!userModel.enabled || userModel.type !== 'chat') continue;
 
-        // Get model info from LOBE_DEFAULT_MODEL_LIST for full metadata
-        const modelInfo = LOBE_DEFAULT_MODEL_LIST.find(
+        // Get model info from builtin metadata for full metadata.
+        const modelInfo = builtinModels.find(
           (m) => m.id === userModel.id && m.providerId === userModel.providerId,
         );
 

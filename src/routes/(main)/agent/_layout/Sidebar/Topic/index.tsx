@@ -42,8 +42,13 @@ const Topic = memo<TopicProps>(({ itemKey }) => {
       title={
         <Flexbox horizontal align="center" gap={4}>
           <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-            {`${t('title')} ${topicCount > 0 ? topicCount : ''}`}
+            {t('sidebar.title')}
           </Text>
+          {topicCount > 0 && (
+            <Text fontSize={11} type="secondary">
+              {topicCount}
+            </Text>
+          )}
           {isRevalidating && <NeuralNetworkLoading size={14} />}
         </Flexbox>
       }

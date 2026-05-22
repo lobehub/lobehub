@@ -88,6 +88,22 @@ const styles = createStaticStyles(({ css }) => ({
     overflow-y: auto;
     max-height: 360px;
   `,
+  clearText: css`
+    cursor: pointer;
+
+    padding-block: 6px 2px;
+    padding-inline: 8px;
+
+    font-size: 11px;
+    font-weight: 500;
+    color: ${cssVar.colorTextTertiary};
+
+    transition: color 0.2s;
+
+    &:hover {
+      color: ${cssVar.colorText};
+    }
+  `,
   sectionTitle: css`
     padding-block: 6px 2px;
     padding-inline: 8px;
@@ -196,6 +212,47 @@ const WorkingDirectoryContent = memo<WorkingDirectoryContentProps>(({ agentId, o
     ],
   );
 
+  const clearDir = useCallback(async () => {
+    // Mirror selectDir's scope: clear the topic binding once a topic is active,
+    // otherwise clear the agent-level default. Each falls back to the next
+    // level (topic → agent → desktop home) rather than to a hard-empty value.
+    const commit = async () => {
+      if (activeTopicId) {
+        await updateTopicMetadata(activeTopicId, { workingDirectory: undefined });
+      } else {
+        await updateAgentRuntimeEnvConfig(agentId, { workingDirectory: undefined });
+      }
+      onClose?.();
+    };
+
+    // Clearing changes the topic's cwd, which invalidates a pinned CC session
+    // the same way switching folders does — warn before the implicit reset.
+    const priorSessionId = activeTopic?.metadata?.heteroSessionId;
+    const priorCwd = activeTopic?.metadata?.workingDirectory;
+    const wouldResetSession = !!priorSessionId && !!priorCwd;
+
+    if (wouldResetSession) {
+      confirmModal({
+        cancelText: t('heteroAgent.switchCwd.cancel', { ns: 'chat' }),
+        content: t('heteroAgent.switchCwd.content', { ns: 'chat' }),
+        okText: t('heteroAgent.switchCwd.ok', { ns: 'chat' }),
+        onOk: commit,
+        title: t('heteroAgent.switchCwd.title', { ns: 'chat' }),
+      });
+      return;
+    }
+
+    await commit();
+  }, [
+    activeTopicId,
+    activeTopic,
+    agentId,
+    t,
+    updateAgentRuntimeEnvConfig,
+    updateTopicMetadata,
+    onClose,
+  ]);
+
   const handleChooseFolder = useCallback(async () => {
     if (!isDesktop) return;
     const result = await electronSystemService.selectFolder({
@@ -216,7 +273,14 @@ const WorkingDirectoryContent = memo<WorkingDirectoryContentProps>(({ agentId, o
 
   return (
     <Flexbox gap={4} style={{ minWidth: 280 }}>
-      <div className={styles.sectionTitle}>{t('localSystem.workingDirectory.recent')}</div>
+      <Flexbox horizontal align={'center'} distribution={'space-between'}>
+        <div className={styles.sectionTitle}>{t('localSystem.workingDirectory.recent')}</div>
+        {effectiveDir && (
+          <div className={styles.clearText} onClick={clearDir}>
+            {t('localSystem.workingDirectory.clear')}
+          </div>
+        )}
+      </Flexbox>
       <div className={styles.scrollContainer}>
         {displayDirs.length === 0 ? (
           <Flexbox

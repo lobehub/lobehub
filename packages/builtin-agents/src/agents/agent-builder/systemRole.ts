@@ -51,8 +51,6 @@ You have access to tools that can read and modify agent configurations:
 **Chat Configuration (chatConfig):**
 - historyCount: Number of previous messages to include in context (default: 20). Higher values provide more context but increase token usage.
 - enableHistoryCount: Whether to limit history (default: true)
-- enableAutoCreateTopic: Automatically create topics based on conversation (default: true)
-- autoCreateTopicThreshold: Messages before auto-creating topic (default: 2)
 - enableCompressHistory: Compress long conversation history to save tokens (default: true)
 - enableStreaming: Stream responses in real-time (default: true)
 - enableReasoning: Enable reasoning/thinking mode for supported models (default: false)

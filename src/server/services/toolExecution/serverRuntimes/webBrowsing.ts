@@ -1,9 +1,9 @@
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { WebBrowsingExecutionRuntime } from '@lobechat/builtin-tool-web-browsing/executionRuntime';
 
-import { DocumentModel } from '@/database/models/document';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { SearchService } from '@/server/services/search';
+import { WebBrowsingDocumentService } from '@/server/services/webBrowsing';
 
 import { type ServerRuntimeRegistration } from './types';
 
@@ -19,19 +19,12 @@ export const webBrowsingRuntime: ServerRuntimeRegistration = {
               const service = new AgentDocumentsService(serverDB, userId);
               await service.associateDocument(agentId, documentId);
             },
-            createDocument: async ({ content, description, title, url }) => {
-              const model = new DocumentModel(serverDB, userId);
-              return model.create({
-                content,
-                description,
-                fileType: 'article',
-                filename: title,
-                source: url,
-                sourceType: 'web',
-                title,
-                totalCharCount: content.length,
-                totalLineCount: content.split('\n').length,
-              });
+            createDocument: async (params) => {
+              // Same service the client trpc procedure uses — dedupe by URL,
+              // short-circuit on byte-identical content, write a history
+              // snapshot when content actually changed (LOBE-9384).
+              const service = new WebBrowsingDocumentService(serverDB, userId);
+              return service.upsertCrawledDocument(params);
             },
           }
         : undefined,

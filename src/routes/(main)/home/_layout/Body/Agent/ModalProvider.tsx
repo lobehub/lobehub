@@ -10,6 +10,7 @@ import EditingPopover from '@/features/EditingPopover';
 import { CreateAgentModal } from '@/routes/(main)/home/_layout/hooks/useCreateModal';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
+import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
 
 import ConfigGroupModal from './Modals/ConfigGroupModal';
@@ -87,6 +88,7 @@ const CreateModalRenderer = memo<CreateModalRendererProps>(({ open, type, groupI
   const handleCreateBlank = useCallback(async () => {
     if (type === 'agent') {
       const result = await storeCreateAgent({ groupId });
+      useGlobalStore.getState().toggleAgentBuilderPanel(true);
       navigate(`/agent/${result.agentId}/profile`);
       await refreshAgentList();
     } else {

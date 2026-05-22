@@ -36,6 +36,8 @@ export interface ToolExecutionContext {
   scope?: string | null;
   /** Server database for LobeHub Skills execution */
   serverDB?: LobeChatDatabase;
+  /** Skip low-level result truncation so the AgentRuntime boundary can archive full content first. */
+  skipResultTruncation?: boolean;
   /** Task ID when executing within the Task system */
   taskId?: string;
   /** Current thread ID for thread-scoped conversations */

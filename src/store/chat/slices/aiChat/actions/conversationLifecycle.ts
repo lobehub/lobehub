@@ -33,7 +33,11 @@ import { resolveSelectedSkillsWithContent } from '@/services/chat/mecha/skillPre
 import { resolveSelectedToolsWithContent } from '@/services/chat/mecha/toolPreload';
 import { messageService } from '@/services/message';
 import { getAgentStoreState, useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
+import {
+  agentByIdSelectors,
+  agentSelectors,
+  chatConfigByIdSelectors,
+} from '@/store/agent/selectors';
 import { agentGroupByIdSelectors, getChatGroupStoreState } from '@/store/agentGroup';
 import { selectRuntimeType } from '@/store/chat/slices/aiChat/actions/agentDispatcher';
 import { resolveHeteroResume } from '@/store/chat/slices/aiChat/actions/heteroResume';
@@ -294,11 +298,13 @@ export class ConversationLifecycleActionImpl {
     };
 
     const fileIdList = files?.map((f) => f.id);
+    const isLocalSystemEnabled =
+      chatConfigByIdSelectors.isLocalSystemEnabledById(agentId)(getAgentStoreState());
     const canMaterializeLocalFiles =
       isDesktop &&
       localFileReferences.length > 0 &&
       !metadata?.localSystemToolSnapshots?.length &&
-      (!!heterogeneousProvider || !!agentConfig?.plugins?.includes('lobe-local-system'));
+      (!!heterogeneousProvider || isLocalSystemEnabled);
     const localSystemToolSnapshots = canMaterializeLocalFiles
       ? await materializeLocalSystemToolSnapshots(localFileReferences)
       : [];
@@ -523,6 +529,7 @@ export class ConversationLifecycleActionImpl {
               operationContext.agentId,
               operationContext.groupId ?? undefined,
             ),
+            topicPageSize: systemStatusSelectors.topicPageSize(useGlobalStore.getState()),
             topicId: operationContext.topicId ?? undefined,
           },
           abortController,
@@ -712,6 +719,7 @@ export class ConversationLifecycleActionImpl {
       const toolContext = formatSelectedToolsContext(dedupedTools);
       const contextSuffix = [skillContext, toolContext].filter(Boolean).join('\n');
       const persistedContent = contextSuffix ? `${message}\n\n${contextSuffix}` : message;
+      const newTopicTitle = message.slice(0, 80) || t('defaultTitle', { ns: 'topic' });
 
       data = await aiChatService.sendMessageInServer(
         {
@@ -730,6 +738,7 @@ export class ConversationLifecycleActionImpl {
             operationContext.agentId,
             operationContext.groupId ?? undefined,
           ),
+          topicPageSize: systemStatusSelectors.topicPageSize(useGlobalStore.getState()),
           threadId: operationContext.threadId ?? undefined,
           // Support creating new thread along with message
           newThread: newThread
@@ -741,7 +750,7 @@ export class ConversationLifecycleActionImpl {
           newTopic: !topicId
             ? {
                 topicMessageIds: forceNewTopicFromExisting ? [] : messages.map((m) => m.id),
-                title: message.slice(0, 80) || t('defaultTitle', { ns: 'topic' }),
+                title: newTopicTitle,
               }
             : undefined,
           agentId: operationContext.agentId,
@@ -757,7 +766,7 @@ export class ConversationLifecycleActionImpl {
         abortController,
       );
       // Use created topicId/threadId if available, otherwise use original from context
-      let finalTopicId = operationContext.topicId;
+      let finalTopicId = data.topicId ?? operationContext.topicId;
       const finalThreadId = data.createdThreadId ?? operationContext.threadId;
 
       // refresh the total data
@@ -780,6 +789,18 @@ export class ConversationLifecycleActionImpl {
           // Record the created topicId in metadata (not context)
           this.#get().updateOperationMetadata(operationId, { createdTopicId: data.topicId });
         }
+      } else if (data.isCreateNewTopic && data.topicId && !context.isolatedTopic) {
+        this.#get().internal_dispatchTopic(
+          {
+            type: 'addTopic',
+            value: {
+              id: data.topicId,
+              title: newTopicTitle,
+            },
+          },
+          'sendMessage/createTopicPlaceholder',
+        );
+        this.#get().updateOperationMetadata(operationId, { createdTopicId: data.topicId });
       } else if (operationContext.topicId) {
         // Optimistically update topic's updatedAt so sidebar re-groups immediately
         this.#get().internal_dispatchTopic({

@@ -22,8 +22,6 @@ export enum SidebarTabKey {
 }
 
 export enum ChatSettingsTabs {
-  Chat = 'chat',
-  Modal = 'modal',
   Opening = 'opening',
   Plugin = 'plugin',
   Prompt = 'prompt',
@@ -204,6 +202,11 @@ export interface SystemStatus {
     name: number;
     size: number;
   };
+  /**
+   * Visibility of the Agent profile right-side Agent Builder panel.
+   * Independent from `showRightPanel` so builder creation flows do not affect chat pages.
+   */
+  showAgentBuilderPanel?: boolean;
   showCommandMenu?: boolean;
   showFilePanel?: boolean;
   showHotkeyHelper?: boolean;
@@ -368,6 +371,7 @@ export const INITIAL_STATUS = {
   showHotkeyHelper: false,
   showImagePanel: true,
   showImageTopicPanel: true,
+  showAgentBuilderPanel: false,
   showLeftPanel: true,
   showPageAgentPanel: true,
   showRightPanel: false,

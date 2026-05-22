@@ -6,13 +6,7 @@ import type { KeyedMutator } from 'swr';
 import { agentDocumentService } from '@/services/agentDocument';
 
 import type { AgentDocumentItem } from '../types';
-import {
-  FOLDER_FILE_TYPE,
-  isManagedSkillItem,
-  isPendingId,
-  isProtectedManagedSkillItem,
-  isSkillBundleItem,
-} from '../types';
+import { isPendingId, isProtectedManagedSkillItem } from '../types';
 import { makePendingDocument } from '../utils/pendingDocument';
 
 interface UseDocumentTreeOpsArgs {
@@ -108,7 +102,7 @@ export const useDocumentTreeOps = ({
       if (parentRowId === null) return ROOT_PATH;
       const parent = byRowId.get(parentRowId);
       if (!parent) return null;
-      if (isManagedSkillItem(parent)) return null;
+      if (parent.category === 'skill') return null;
       return buildItemPath(parent);
     },
     [byRowId, buildItemPath],
@@ -244,7 +238,7 @@ export const useDocumentTreeOps = ({
     async (id: string, newName: string) => {
       const target = dataRef.current.find((doc) => doc.id === id);
       if (!target) return;
-      if (isManagedSkillItem(target)) return;
+      if (target.category === 'skill') return;
 
       const trimmed = newName.trim();
       if (!trimmed) {
@@ -309,7 +303,7 @@ export const useDocumentTreeOps = ({
       }
 
       const targetItem = targetId ? byRowId.get(targetId) : null;
-      if (targetItem && isSkillBundleItem(targetItem)) return;
+      if (targetItem?.isSkillBundle) return;
 
       const targetParentDocId = targetItem ? targetItem.documentId : null;
 
@@ -317,7 +311,7 @@ export const useDocumentTreeOps = ({
       for (const id of sourceIds) {
         const node = sourceNodes.find((n) => n.data?.id === id)?.data;
         if (!node) continue;
-        if (isManagedSkillItem(node)) return;
+        if (node.category === 'skill') return;
         const fromPath = buildItemPath(node);
         if (!fromPath) continue;
         const toPath = joinPath(targetParentPath, node.filename);
@@ -373,7 +367,10 @@ export const useDocumentTreeOps = ({
         okButtonProps: { danger: true, type: 'primary' },
         okText: t('delete', { ns: 'common' }),
         onOk: () => {
-          const isFolder = target.fileType === FOLDER_FILE_TYPE;
+          // Use isFolder rather than the bundle-inclusive isFolder field —
+          // skill bundles are deleted via the bundle row (single doc), not
+          // via path-based recursive removal.
+          const isFolder = target.isFolder && !target.isSkillBundle;
           const folderPath = isFolder ? buildItemPath(target) : null;
           if (isFolder && folderPath === null) {
             message.error(t('workingPanel.resources.tree.parentMissing'));

@@ -8,6 +8,10 @@ import { FollowUpActionService } from './index';
 const TEST_USER = 'user-1';
 const TEST_TOPIC = 'topic-1';
 const FOUND_MSG = 'msg-real';
+const MODEL_CONFIG = {
+  model: 'scene-model',
+  provider: 'scene-provider',
+};
 
 describe('FollowUpActionService.extract', () => {
   let svc: FollowUpActionService;
@@ -37,7 +41,7 @@ describe('FollowUpActionService.extract', () => {
 
   it('returns empty (with empty messageId) when no eligible assistant message found', async () => {
     queryFindFirstSpy.mockResolvedValue(undefined);
-    const result = await svc.extract({ topicId: TEST_TOPIC });
+    const result = await svc.extract({ modelConfig: MODEL_CONFIG, topicId: TEST_TOPIC });
     expect(result).toEqual({ chips: [], messageId: '' });
     expect(runtimeMock.generateObject).not.toHaveBeenCalled();
   });
@@ -57,10 +61,38 @@ describe('FollowUpActionService.extract', () => {
     const result = await svc.extract({
       topicId: TEST_TOPIC,
       hint: { kind: 'onboarding', phase: 'agent_identity' },
+      modelConfig: MODEL_CONFIG,
     });
     expect(result.messageId).toBe(FOUND_MSG);
     expect(result.chips).toHaveLength(3);
     expect(result.chips[0].label).toBe('Lumi');
+  });
+
+  it('uses the caller-provided scene model config for extraction', async () => {
+    queryFindFirstSpy.mockResolvedValue({
+      id: FOUND_MSG,
+      content: 'What would you like to call me?',
+    });
+    runtimeMock.generateObject.mockResolvedValue({ chips: [] });
+
+    await svc.extract({
+      topicId: TEST_TOPIC,
+      modelConfig: {
+        model: 'custom-scene-model',
+        provider: 'custom-provider',
+      },
+    });
+
+    expect(ModelRuntimeModule.initModelRuntimeFromDB).toHaveBeenCalledWith(
+      dbMock,
+      TEST_USER,
+      'custom-provider',
+    );
+    expect(runtimeMock.generateObject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: 'custom-scene-model',
+      }),
+    );
   });
 
   it('truncates more than 4 chips', async () => {
@@ -68,7 +100,7 @@ describe('FollowUpActionService.extract', () => {
     runtimeMock.generateObject.mockResolvedValue({
       chips: Array.from({ length: 6 }, (_, i) => ({ label: `c${i}`, message: `c${i}` })),
     });
-    const result = await svc.extract({ topicId: TEST_TOPIC });
+    const result = await svc.extract({ modelConfig: MODEL_CONFIG, topicId: TEST_TOPIC });
     expect(result.chips).toHaveLength(4);
   });
 
@@ -80,7 +112,7 @@ describe('FollowUpActionService.extract', () => {
         { label: 'ok', message: 'ok' },
       ],
     });
-    const result = await svc.extract({ topicId: TEST_TOPIC });
+    const result = await svc.extract({ modelConfig: MODEL_CONFIG, topicId: TEST_TOPIC });
     expect(result.chips).toEqual([{ label: 'ok', message: 'ok' }]);
   });
 
@@ -93,21 +125,21 @@ describe('FollowUpActionService.extract', () => {
         { label: 'bad', message: '' },
       ],
     });
-    const result = await svc.extract({ topicId: TEST_TOPIC });
+    const result = await svc.extract({ modelConfig: MODEL_CONFIG, topicId: TEST_TOPIC });
     expect(result.chips).toEqual([{ label: 'ok', message: 'ok' }]);
   });
 
   it('returns empty (with messageId) when LLM throws', async () => {
     queryFindFirstSpy.mockResolvedValue({ id: FOUND_MSG, content: 'q?' });
     runtimeMock.generateObject.mockRejectedValue(new Error('boom'));
-    const result = await svc.extract({ topicId: TEST_TOPIC });
+    const result = await svc.extract({ modelConfig: MODEL_CONFIG, topicId: TEST_TOPIC });
     expect(result).toEqual({ chips: [], messageId: FOUND_MSG });
   });
 
   it('returns empty (with messageId) when LLM response fails schema validation', async () => {
     queryFindFirstSpy.mockResolvedValue({ id: FOUND_MSG, content: 'q?' });
     runtimeMock.generateObject.mockResolvedValue({ chips: 'not-an-array' });
-    const result = await svc.extract({ topicId: TEST_TOPIC });
+    const result = await svc.extract({ modelConfig: MODEL_CONFIG, topicId: TEST_TOPIC });
     expect(result).toEqual({ chips: [], messageId: FOUND_MSG });
   });
 
@@ -117,6 +149,7 @@ describe('FollowUpActionService.extract', () => {
     await svc.extract({
       topicId: TEST_TOPIC,
       hint: { kind: 'onboarding', phase: 'discovery' },
+      modelConfig: MODEL_CONFIG,
     });
     const passedMessages = runtimeMock.generateObject.mock.calls[0][0].messages;
     const sysContent = passedMessages.find((m: any) => m.role === 'system').content;

@@ -423,11 +423,11 @@ describe('LobeOpenRouterAI - custom features', () => {
         );
       });
 
-      it('should map 512px to 0.5K in image_config.image_size', async () => {
+      it("should map '512' to '0.5K' in image_config.image_size", async () => {
         await instance.chat({
           messages: [{ content: 'Generate an image', role: 'user' }],
           model: 'openai/dall-e-3-image',
-          imageResolution: '512px',
+          imageResolution: '512',
         } as any);
 
         expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(

@@ -90,6 +90,14 @@ export interface QQSendMessageParams {
   markdown?: {
     content: string;
   };
+  /**
+   * Rich-media payload used together with `msg_type: 7 (MEDIA)`. The
+   * `file_info` token comes from the upload step (see
+   * `QQApiClient.uploadGroupRichMedia` / `uploadC2CRichMedia`).
+   */
+  media?: {
+    file_info: string;
+  };
   msg_id?: string;
   msg_seq?: number;
   msg_type: number;

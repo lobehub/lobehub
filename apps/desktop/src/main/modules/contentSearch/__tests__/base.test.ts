@@ -143,6 +143,30 @@ describe('BaseContentSearch', () => {
         expect(args).toContain('*.ts');
       });
 
+      it('should add --hidden when glob references a dot-prefixed segment', () => {
+        const params: GrepContentParams = {
+          glob: '.github/workflows/*.yml',
+          pattern: 'jobs',
+        };
+
+        const args = contentSearch.testBuildGrepArgs('rg', params);
+
+        expect(args).toContain('--hidden');
+        expect(args).toContain('-g');
+        expect(args).toContain('.github/workflows/*.yml');
+      });
+
+      it('should not add --hidden for a normal glob', () => {
+        const params: GrepContentParams = {
+          glob: '*.ts',
+          pattern: 'test',
+        };
+
+        const args = contentSearch.testBuildGrepArgs('rg', params);
+
+        expect(args).not.toContain('--hidden');
+      });
+
       it('should build rg args with type filter', () => {
         const params: GrepContentParams = {
           pattern: 'test',
@@ -203,6 +227,17 @@ describe('BaseContentSearch', () => {
 
         expect(args).toContain('-G');
         expect(args).toContain('*.tsx');
+      });
+
+      it('should add --hidden when glob references a dot-prefixed segment', () => {
+        const params: GrepContentParams = {
+          glob: '.github/workflows/*.yml',
+          pattern: 'jobs',
+        };
+
+        const args = contentSearch.testBuildGrepArgs('ag', params);
+
+        expect(args).toContain('--hidden');
       });
 
       it('should build ag args for count mode', () => {

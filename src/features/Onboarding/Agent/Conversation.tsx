@@ -8,7 +8,7 @@ import { Flexbox } from '@lobehub/ui';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
-import type { ActionKeys } from '@/features/ChatInput';
+import type { ActionKeys, ChatInputFeature } from '@/features/ChatInput';
 import {
   ChatInput,
   ChatList,
@@ -18,12 +18,14 @@ import {
 } from '@/features/Conversation';
 import { dataSelectors, messageStateSelectors } from '@/features/Conversation/store';
 import WideScreenContainer from '@/features/WideScreenContainer';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import type { OnboardingPhase } from '@/types/user';
 import { isDev } from '@/utils/env';
 
 import CompletionPanel from './CompletionPanel';
 import NameSuggestions from './NameSuggestions';
 import Welcome from './Welcome';
+import WelcomeMobile from './Welcome.mobile';
 import WrapUpHint from './WrapUpHint';
 
 const assistantLikeRoles = new Set(['assistant', 'assistantGroup', 'supervisor']);
@@ -43,6 +45,11 @@ interface AgentOnboardingConversationProps {
 
 const chatInputLeftActions: ActionKeys[] = isDev ? ['model'] : [];
 const chatInputRightActions: ActionKeys[] = [];
+const chatInputFeature = {
+  inputCompletion: false,
+  mention: false,
+  slash: false,
+} satisfies ChatInputFeature;
 
 const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
   ({
@@ -57,6 +64,7 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
     showFeedback,
     topicId,
   }) => {
+    const isMobile = useIsMobile();
     const displayMessages = useConversationStore(conversationSelectors.displayMessages);
     const pendingInterventionCount = useConversationStore(
       (s) => dataSelectors.pendingInterventions(s).length,
@@ -146,8 +154,8 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
 
     const greetingWelcome = useMemo(() => {
       if (!shouldShowGreetingWelcome) return undefined;
-      return <Welcome />;
-    }, [shouldShowGreetingWelcome]);
+      return isMobile ? <WelcomeMobile /> : <Welcome />;
+    }, [shouldShowGreetingWelcome, isMobile]);
 
     const agentMarketplaceSpacer = useMemo(() => {
       if (!hasAgentMarketplaceIntervention) return undefined;
@@ -205,17 +213,19 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
               phase={phase}
               onAfterFinish={onAfterWrapUp}
             />
-            {shouldShowGreetingWelcome && (
-              <WideScreenContainer>
-                <NameSuggestions />
-              </WideScreenContainer>
-            )}
+            {shouldShowGreetingWelcome &&
+              (isMobile ? (
+                <NameSuggestions variant={'chips'} />
+              ) : (
+                <WideScreenContainer>
+                  <NameSuggestions />
+                </WideScreenContainer>
+              ))}
             <ChatInput
               disableFollowUpVariant
-              disableMention
               disableQueue
-              disableSlash
               allowExpand={false}
+              feature={chatInputFeature}
               leftActions={chatInputLeftActions}
               rightActions={chatInputRightActions}
               showRuntimeConfig={false}

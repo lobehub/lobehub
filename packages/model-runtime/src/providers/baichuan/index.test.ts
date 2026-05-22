@@ -247,6 +247,16 @@ describe('LobeBaichuanAI - custom features', () => {
       expect(calledPayload.max_tokens).toBe(500);
       expect(calledPayload.top_p).toBe(0.95);
     });
+
+    it('should not send budget_tokens when thinking budget is not provided', () => {
+      const result = params.chatCompletion!.handlePayload!({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'Baichuan-M2',
+        thinking: {},
+      } as any);
+
+      expect(result).not.toHaveProperty('budget_tokens');
+    });
   });
 
   describe('models', () => {

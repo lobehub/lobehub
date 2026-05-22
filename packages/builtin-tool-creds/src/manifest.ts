@@ -44,27 +44,7 @@ export const CredsManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Retrieve the plaintext value of a stored credential by its key. Use this when you need to access a credential for making API calls or other operations. Only call this when you actually need the credential value. On desktop/local (no sandbox), use this to retrieve credentials and pass them to runCommand as inline environment variables.',
-      name: CredsApiName.getPlaintextCred,
-      parameters: {
-        additionalProperties: false,
-        properties: {
-          key: {
-            description: 'The unique key of the credential to retrieve',
-            type: 'string',
-          },
-          reason: {
-            description: 'Brief explanation of why this credential is needed (for audit purposes)',
-            type: 'string',
-          },
-        },
-        required: ['key'],
-        type: 'object',
-      } satisfies JSONSchema7,
-    },
-    {
-      description:
-        'Inject credentials into the sandbox environment as environment variables. Only available when sandbox mode is enabled — do NOT call this on desktop/local. Use this before running code that requires credentials. For desktop/local, use getPlaintextCred instead.',
+        'Inject credentials into the sandbox environment as environment variables. Only available when sandbox mode is enabled — do NOT call this on desktop/local.',
       name: CredsApiName.injectCredsToSandbox,
       parameters: {
         additionalProperties: false,

@@ -96,7 +96,7 @@ sitemap*.xml
 robots.txt
 
 # Git hooks
-.husky/prepare-commit-msg
+.githooks/prepare-commit-msg
 
 # Documents and media
 *.pdf

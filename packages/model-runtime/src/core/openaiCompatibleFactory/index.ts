@@ -80,6 +80,13 @@ export const CHAT_MODELS_BLOCK_LIST = [
 
 type ConstructorOptions<T extends Record<string, any> = any> = ClientOptions & T;
 type OpenAIExtraParams = { prompt_cache_key?: string; safety_identifier?: string };
+type ChatCompletionCreateParamsWithPromptCacheKey = Omit<
+  OpenAI.ChatCompletionCreateParamsNonStreaming,
+  'reasoning_effort'
+> &
+  Pick<OpenAIExtraParams, 'prompt_cache_key'> &
+  Pick<GenerateObjectPayload, 'reasoning_effort'>;
+type GenerateObjectReasoningParams = Pick<GenerateObjectPayload, 'reasoning_effort' | 'thinking'>;
 type ResponseCreateParamsWithPromptCacheKey = (
   | OpenAI.Responses.ResponseCreateParamsStreaming
   | OpenAI.Responses.ResponseCreateParams
@@ -89,6 +96,16 @@ export type CreateImageOptions = Omit<ClientOptions, 'apiKey'> & {
   apiKey: string;
   provider: string;
 };
+
+const getGenerateObjectReasoningParams = ({
+  reasoning_effort,
+  thinking,
+}: GenerateObjectReasoningParams) => ({
+  // `thinking` is a Lobe runtime abstraction, not a generic OpenAI-compatible API field.
+  // Use it here only to suppress `reasoning_effort`; providers that support thinking
+  // must translate it via `generateObject.handlePayload`.
+  ...(reasoning_effort && thinking?.type !== 'disabled' ? { reasoning_effort } : {}),
+});
 
 export type CreateVideoOptions = Omit<ClientOptions, 'apiKey'> & {
   apiKey: string;
@@ -185,6 +202,14 @@ export interface OpenAICompatibleFactoryOptions<T extends Record<string, any> = 
      * Transform schema before sending to the provider (e.g., filter unsupported properties)
      */
     handleSchema?: (schema: any) => any;
+    /**
+     * Transform Chat Completions payload before sending generateObject requests to the provider.
+     */
+    handlePayload?: (
+      payload: GenerateObjectPayload,
+      requestPayload: ChatCompletionCreateParamsWithPromptCacheKey,
+      options: ConstructorOptions<T>,
+    ) => ChatCompletionCreateParamsWithPromptCacheKey;
     /**
      * If true, route generateObject requests to Responses API path directly
      */
@@ -393,6 +418,15 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       const promptCacheKey = this.resolvePromptCacheKey(model, user);
 
       return promptCacheKey ? { prompt_cache_key: promptCacheKey } : {};
+    }
+
+    private handleGenerateObjectPayload(
+      payload: GenerateObjectPayload,
+      requestPayload: ChatCompletionCreateParamsWithPromptCacheKey,
+    ) {
+      return generateObjectConfig?.handlePayload
+        ? generateObjectConfig.handlePayload(payload, requestPayload, this._options)
+        : requestPayload;
     }
 
     async chat({ responseMode, ...payload }: ChatStreamPayload, options?: ChatMethodOptions) {
@@ -806,14 +840,15 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           };
 
           const res = await this.client.chat.completions.create(
-            {
+            this.handleGenerateObjectPayload(payload, {
+              ...getGenerateObjectReasoningParams(payload),
               messages,
               model,
               ...this.resolvePromptCacheKeyParams(model, options?.user),
               tool_choice: { function: { name: tool.function.name }, type: 'function' },
               tools: [tool],
               user: options?.user,
-            },
+            }) as OpenAI.ChatCompletionCreateParamsNonStreaming,
             { headers: options?.headers, signal: options?.signal },
           );
 
@@ -891,13 +926,14 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
         log('calling chat.completions.create for structured output');
         const res = await this.client.chat.completions.create(
-          {
+          this.handleGenerateObjectPayload(payload, {
+            ...getGenerateObjectReasoningParams(payload),
             messages,
             model,
             response_format: { json_schema: processedSchema, type: 'json_schema' },
             ...this.resolvePromptCacheKeyParams(model, options?.user),
             user: options?.user,
-          },
+          }) as OpenAI.ChatCompletionCreateParamsNonStreaming,
           { headers: options?.headers, signal: options?.signal },
         );
         if (res.usage) {
@@ -1357,14 +1393,15 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       const msgs = messages;
 
       const res = await this.client.chat.completions.create(
-        {
+        this.handleGenerateObjectPayload(payload, {
+          ...getGenerateObjectReasoningParams(payload),
           messages: msgs,
           model,
           ...this.resolvePromptCacheKeyParams(model, options?.user),
           tool_choice: 'required',
           tools,
           user: options?.user,
-        },
+        }) as OpenAI.ChatCompletionCreateParamsNonStreaming,
         { headers: options?.headers, signal: options?.signal },
       );
 

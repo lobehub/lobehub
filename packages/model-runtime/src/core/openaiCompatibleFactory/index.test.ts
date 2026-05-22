@@ -3116,6 +3116,56 @@ describe('LobeOpenAICompatibleFactory', () => {
         ]);
       });
 
+      it('should not forward internal thinking to generic OpenAI-compatible generateObject requests', async () => {
+        const mockResponse = {
+          choices: [
+            {
+              message: {
+                tool_calls: [
+                  {
+                    function: {
+                      arguments: '{"name":"Alice","age":28}',
+                      name: 'person_extractor',
+                    },
+                    type: 'function' as const,
+                  },
+                ],
+              },
+            },
+          ],
+        };
+
+        vi.spyOn(instanceWithToolCalling['client'].chat.completions, 'create').mockResolvedValue(
+          mockResponse as any,
+        );
+
+        const payload = {
+          messages: [{ content: 'Extract person info', role: 'user' as const }],
+          model: 'deepseek-v4-pro',
+          reasoning_effort: 'high' as const,
+          schema: {
+            name: 'person_extractor',
+            schema: {
+              properties: { age: { type: 'number' }, name: { type: 'string' } },
+              type: 'object' as const,
+            },
+          },
+          thinking: { budget_tokens: 0, type: 'disabled' as const },
+        };
+
+        await instanceWithToolCalling.generateObject(payload);
+
+        const requestPayload =
+          instanceWithToolCalling['client'].chat.completions.create.mock.calls[0]![0];
+        expect(requestPayload).toEqual(
+          expect.objectContaining({
+            model: 'deepseek-v4-pro',
+          }),
+        );
+        expect(requestPayload).not.toHaveProperty('thinking');
+        expect(requestPayload).not.toHaveProperty('reasoning_effort');
+      });
+
       it('should return undefined when no tool call found', async () => {
         const mockResponse = {
           choices: [

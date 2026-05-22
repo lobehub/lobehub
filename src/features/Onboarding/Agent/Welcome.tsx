@@ -45,7 +45,6 @@ const Welcome = memo(() => {
           sentences={[
             t('agent.welcome.sentence.1'),
             t('agent.welcome.sentence.2'),
-            t('agent.welcome.sentence.3'),
           ]}
         />
         <Divider dashed style={{ margin: 0 }} />

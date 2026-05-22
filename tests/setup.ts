@@ -72,5 +72,5 @@ await i18n.init({
   },
 });
 
-// 将 React 设置为全局变量，这样就不需要在每个测试文件中导入它了
+// Set React as a global variable so it doesn't need to be imported in each test file
 (globalThis as any).React = React;

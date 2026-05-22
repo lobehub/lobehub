@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useHeteroAgentCloudConfig } from '@/business/client/hooks/useHeteroAgentCloudConfig';
 import { type ActionKeys } from '@/features/ChatInput';
 import { ChatInput } from '@/features/Conversation';
+import WideScreenContainer from '@/features/WideScreenContainer';
 import { useChatStore } from '@/store/chat';
 
 import WorkingDirectoryBar from './WorkingDirectoryBar';
@@ -34,20 +35,22 @@ const HeterogeneousChatInput = memo(() => {
   return (
     <Flexbox>
       {!isConfigured && (
-        <Flexbox paddingBlock={'0 6px'} paddingInline={12}>
-          <Alert
-            type={'warning'}
-            title={t('heteroAgent.cloudNotConfigured.title')}
-            description={
-              <Flexbox horizontal align={'center'} justify={'space-between'} gap={8}>
-                <span>{t('heteroAgent.cloudNotConfigured.desc')}</span>
-                <Button size={'small'} type={'primary'} onClick={goToConfig}>
-                  {t('heteroAgent.cloudNotConfigured.action')}
-                </Button>
-              </Flexbox>
-            }
-          />
-        </Flexbox>
+        <WideScreenContainer>
+          <Flexbox paddingBlock={'0 6px'} paddingInline={12}>
+            <Alert
+              type={'warning'}
+              title={t('heteroAgent.cloudNotConfigured.title')}
+              description={
+                <Flexbox horizontal align={'center'} justify={'space-between'} gap={8}>
+                  <span>{t('heteroAgent.cloudNotConfigured.desc')}</span>
+                  <Button size={'small'} type={'primary'} onClick={goToConfig}>
+                    {t('heteroAgent.cloudNotConfigured.action')}
+                  </Button>
+                </Flexbox>
+              }
+            />
+          </Flexbox>
+        </WideScreenContainer>
       )}
       <ChatInput
         skipScrollMarginWithList

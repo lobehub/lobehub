@@ -8,6 +8,7 @@ import { Trans, useTranslation } from 'react-i18next';
 
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
 import { useUpdateAgentConfig } from '@/features/ChatInput/hooks/useUpdateAgentConfig';
+import { resolveDefaultThinkingLevelForModel } from '@/services/chat/mecha/modelParamsResolver';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
@@ -37,7 +38,6 @@ import ThinkingBudgetSlider from './ThinkingBudgetSlider';
 import ThinkingLevel2Slider from './ThinkingLevel2Slider';
 import ThinkingLevel3Slider from './ThinkingLevel3Slider';
 import ThinkingLevel4Slider from './ThinkingLevel4Slider';
-import ThinkingLevel5Slider from './ThinkingLevel5Slider';
 import ThinkingLevelSlider from './ThinkingLevelSlider';
 import ThinkingSlider from './ThinkingSlider';
 
@@ -99,6 +99,7 @@ const ControlsForm = memo<ControlsFormProps>(
     const screens = Grid.useBreakpoint();
     const isNarrow = !screens.sm;
     const gpt52ReasoningEffortDefaultValue = model === 'gpt-5.5' ? 'medium' : 'none';
+    const thinkingLevelDefaultValue = resolveDefaultThinkingLevelForModel(model);
 
     const descWide = { display: 'inline-block', width: 300 } as const;
     const descNarrow = {
@@ -372,7 +373,7 @@ const ControlsForm = memo<ControlsFormProps>(
         },
       },
       {
-        children: <ThinkingLevelSlider />,
+        children: <ThinkingLevelSlider defaultValue={thinkingLevelDefaultValue} />,
         label: t('extendParams.thinkingLevel.title'),
         layout: 'vertical',
         minWidth: undefined,
@@ -410,17 +411,6 @@ const ControlsForm = memo<ControlsFormProps>(
         layout: 'vertical',
         minWidth: undefined,
         name: 'thinkingLevel4',
-        style: {
-          paddingBottom: 0,
-        },
-        desc: 'thinkingLevel',
-      },
-      {
-        children: <ThinkingLevel5Slider />,
-        label: t('extendParams.thinkingLevel.title'),
-        layout: 'vertical',
-        minWidth: undefined,
-        name: 'thinkingLevel5',
         style: {
           paddingBottom: 0,
         },

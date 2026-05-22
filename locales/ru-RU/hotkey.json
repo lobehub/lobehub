@@ -1,8 +1,6 @@
 {
   "addUserMessage.desc": "Добавить текущий ввод как сообщение пользователя без запуска генерации",
   "addUserMessage.title": "Добавить сообщение пользователя",
-  "clearCurrentMessages.desc": "Очистить сообщения и загруженные файлы из текущего разговора",
-  "clearCurrentMessages.title": "Очистить сообщения разговора",
   "commandPalette.desc": "Открыть глобальную палитру команд для быстрого доступа к функциям",
   "commandPalette.title": "Палитра команд",
   "deleteAndRegenerateMessage.desc": "Удалить последнее сообщение и сгенерировать заново",

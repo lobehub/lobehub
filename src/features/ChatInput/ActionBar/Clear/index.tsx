@@ -1,4 +1,3 @@
-import { HotkeyEnum } from '@lobechat/const/hotkeys';
 import { Popconfirm } from 'antd';
 import { Eraser } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
@@ -7,8 +6,6 @@ import { useTranslation } from 'react-i18next';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useChatStore } from '@/store/chat';
 import { useFileStore } from '@/store/file';
-import { useUserStore } from '@/store/user';
-import { settingsSelectors } from '@/store/user/selectors';
 
 import Action from '../components/Action';
 
@@ -24,7 +21,6 @@ export const useClearCurrentMessages = () => {
 
 const Clear = memo(() => {
   const { t } = useTranslation('setting');
-  const hotkey = useUserStore(settingsSelectors.getHotkeyById(HotkeyEnum.ClearCurrentMessages));
 
   const clearCurrentMessages = useClearCurrentMessages();
   const [confirmOpened, updateConfirmOpened] = useState(false);
@@ -52,7 +48,6 @@ const Clear = memo(() => {
         icon={Eraser}
         title={actionTitle}
         tooltipProps={{
-          hotkey,
           placement: 'bottom',
           styles: {
             root: { maxWidth: 'none' },

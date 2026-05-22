@@ -96,6 +96,10 @@ export interface SendMessageServerParams {
   };
   // if there is activeTopicId, then add topicId to message
   topicId?: string;
+  /**
+   * Page size for the topic list returned after creating a new topic.
+   */
+  topicPageSize?: number;
 }
 
 export const CreateThreadWithMessageSchema = z.object({
@@ -156,6 +160,7 @@ export const AiSendMessageServerSchema = z.object({
       includeTriggers: z.array(z.string()).optional(),
     })
     .optional(),
+  topicPageSize: z.number().int().min(1).max(100).optional(),
   topicId: z.string().optional(),
 });
 

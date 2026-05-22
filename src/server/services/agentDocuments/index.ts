@@ -17,6 +17,7 @@ import type {
 import {
   AgentDocumentModel,
   buildDocumentFilename,
+  deriveAgentDocumentFields,
   extractMarkdownH1Title,
 } from '@/database/models/agentDocuments';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
@@ -102,7 +103,12 @@ export class AgentDocumentsService {
   private async projectDocuments<T extends AgentDocument | AgentDocumentWithRules>(
     docs: T[],
   ): Promise<T[]> {
-    return Promise.all(docs.map((doc) => this.projectDocumentContent(doc)));
+    return Promise.all(
+      docs.map(async (doc) => {
+        const projected = await this.projectDocumentContent(doc);
+        return { ...projected, ...deriveAgentDocumentFields(projected) };
+      }),
+    );
   }
 
   private async attachLiteXML(doc: AgentDocument): Promise<AgentDocumentWithLiteXML> {

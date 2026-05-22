@@ -697,6 +697,171 @@ describe('BotCallbackService', () => {
 
       await expect(service.handleCallback(body)).resolves.toBeUndefined();
     });
+
+    // ==================== Attachments ====================
+
+    it('should pass attachments through to messenger when present on single-chunk reply', async () => {
+      const body = makeBody({
+        attachments: [
+          {
+            fetchUrl: 'https://cdn.example.com/foo.png',
+            mimeType: 'image/png',
+            name: 'foo.png',
+            type: 'image',
+          },
+        ],
+        lastAssistantContent: 'Here is the image you asked for.',
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await service.handleCallback(body);
+
+      expect(mockEditMessage).toHaveBeenCalledWith(
+        'progress-msg-1',
+        expect.objectContaining({
+          attachments: [
+            expect.objectContaining({
+              fetchUrl: 'https://cdn.example.com/foo.png',
+              type: 'image',
+            }),
+          ],
+          content: expect.stringContaining('Here is the image you asked for.'),
+        }),
+      );
+    });
+
+    it('should only attach to the last chunk in a multi-chunk reply', async () => {
+      const longContent = 'A'.repeat(2000) + '\n\n' + 'B'.repeat(2000);
+      const body = makeBody({
+        attachments: [{ fetchUrl: 'https://cdn.example.com/bar.png', type: 'image' }],
+        lastAssistantContent: longContent,
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await service.handleCallback(body);
+
+      // First chunk goes through editMessage as a plain string — no attachments.
+      expect(mockEditMessage).toHaveBeenCalledTimes(1);
+      const firstCallArg = mockEditMessage.mock.calls[0][1];
+      expect(typeof firstCallArg).toBe('string');
+
+      // Last chunk goes through createMessage with the attachments.
+      const lastCreateArg = mockCreateMessage.mock.calls.at(-1)?.[0];
+      expect(lastCreateArg).toMatchObject({
+        attachments: [{ fetchUrl: 'https://cdn.example.com/bar.png', type: 'image' }],
+      });
+    });
+
+    it('should fall back to createMessage with attachments when edit fails', async () => {
+      mockEditMessage.mockRejectedValueOnce(new Error('edit failed'));
+
+      const body = makeBody({
+        attachments: [{ data: 'aGVsbG8=', mimeType: 'image/png', type: 'image' }],
+        lastAssistantContent: 'reply',
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await service.handleCallback(body);
+
+      expect(mockCreateMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          attachments: [{ data: 'aGVsbG8=', mimeType: 'image/png', type: 'image' }],
+          content: expect.stringContaining('reply'),
+        }),
+      );
+    });
+
+    // Regression for Codex P1: image-only final assistant turn must still
+    // ship the attachments, instead of being silently dropped because there
+    // is no `lastAssistantContent.trim()`.
+    it('should deliver attachments even when reply text is empty', async () => {
+      const body = makeBody({
+        attachments: [{ fetchUrl: 'https://cdn.example.com/only.png', type: 'image' }],
+        lastAssistantContent: '',
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await service.handleCallback(body);
+
+      // Either edit or create — but the call MUST carry the attachments.
+      const editCalls = mockEditMessage.mock.calls;
+      const createCalls = mockCreateMessage.mock.calls;
+      const allCalls = [...editCalls.map((c) => c[1]), ...createCalls.map((c) => c[0])];
+      expect(
+        allCalls.some(
+          (arg) =>
+            arg &&
+            typeof arg === 'object' &&
+            'attachments' in arg &&
+            (arg as any).attachments?.[0]?.fetchUrl === 'https://cdn.example.com/only.png',
+        ),
+      ).toBe(true);
+    });
+
+    it('should still skip when there is neither text nor attachments', async () => {
+      const body = makeBody({
+        lastAssistantContent: '   \n  ',
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await service.handleCallback(body);
+
+      expect(mockEditMessage).not.toHaveBeenCalled();
+      expect(mockCreateMessage).not.toHaveBeenCalled();
+    });
+
+    it('should still ship attachments when reply text is whitespace-only', async () => {
+      // Whitespace text alone collapses to empty downstream and would be
+      // dropped, but the attachment-only path must still deliver the image.
+      const body = makeBody({
+        attachments: [{ fetchUrl: 'https://cdn.example.com/ws.png', type: 'image' }],
+        lastAssistantContent: '\n\n   ',
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await service.handleCallback(body);
+
+      const editCalls = mockEditMessage.mock.calls;
+      const createCalls = mockCreateMessage.mock.calls;
+      const allCalls = [...editCalls.map((c) => c[1]), ...createCalls.map((c) => c[0])];
+      expect(
+        allCalls.some(
+          (arg) =>
+            arg &&
+            typeof arg === 'object' &&
+            'attachments' in arg &&
+            (arg as any).attachments?.[0]?.fetchUrl === 'https://cdn.example.com/ws.png',
+        ),
+      ).toBe(true);
+    });
+
+    it('should not summarize topic title for attachment-only reply', async () => {
+      // Attachment-only reply has no assistant text, so the LLM summarizer
+      // has no body to work with. `summarizeTopicTitle` already guards on
+      // `!lastAssistantContent`; this regression-locks that contract.
+      mockFindById.mockResolvedValue({ title: null });
+
+      const body = makeBody({
+        attachments: [{ fetchUrl: 'https://cdn.example.com/x.png', type: 'image' }],
+        reason: 'completed',
+        topicId: 'topic-1',
+        type: 'completion',
+        userId: 'user-1',
+        userPrompt: 'Draw something',
+      });
+
+      await service.handleCallback(body);
+
+      await new Promise((r) => setTimeout(r, 50));
+      expect(mockGenerateTopicTitle).not.toHaveBeenCalled();
+      expect(mockTopicUpdate).not.toHaveBeenCalled();
+    });
   });
 
   // ==================== Message splitting ====================

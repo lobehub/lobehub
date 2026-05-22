@@ -119,6 +119,16 @@ export class FileService {
     return this.impl.uploadBuffer(key, buffer, contentType);
   }
 
+  private async isStoredFileAvailable(url: string): Promise<boolean> {
+    try {
+      await this.getFileMetadata(url);
+      return true;
+    } catch (error) {
+      console.error('Failed to verify existing file hash storage object:', error);
+      return false;
+    }
+  }
+
   /**
    * Create file record (common method)
    * Automatically handles globalFiles deduplication logic
@@ -137,7 +147,22 @@ export class FileService {
     url: string;
   }): Promise<{ fileId: string; url: string }> {
     // Check if hash already exists in globalFiles
-    const { isExist } = await this.fileModel.checkHash(params.fileHash);
+    const existingFile = await this.fileModel.checkHash(params.fileHash);
+    const { isExist } = existingFile;
+
+    let shouldRefreshGlobalFile = false;
+    if (isExist && existingFile.url && existingFile.url !== params.url) {
+      shouldRefreshGlobalFile = !(await this.isStoredFileAvailable(existingFile.url));
+    }
+
+    if (shouldRefreshGlobalFile) {
+      // Keep global hash dedup usable when the same file is uploaded again to a
+      // fresh object key after the previous storage object has been removed.
+      await this.fileModel.updateGlobalFile(params.fileHash, {
+        metadata: params.metadata,
+        url: params.url,
+      });
+    }
 
     // Create database record
     // If hash doesn't exist, also create globalFiles record

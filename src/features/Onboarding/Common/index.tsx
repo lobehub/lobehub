@@ -7,6 +7,7 @@ import { memo, useCallback, useEffect, useRef } from 'react';
 import { Navigate, useSearchParams } from 'react-router-dom';
 
 import Loading from '@/components/Loading/BrandTextLoading';
+import { useOnboardingAgentTemplates } from '@/hooks/useOnboardingAgentTemplates';
 import OnboardingContainer from '@/routes/onboarding/_layout';
 import { deriveOnboardingBranchPath } from '@/routes/onboarding/branch';
 import ResponseLanguageStep from '@/routes/onboarding/features/ResponseLanguageStep';
@@ -18,18 +19,18 @@ import { onboardingSelectors } from '@/store/user/selectors';
 /**
  * Remap a `currentStep` persisted under the old 5-step classic flow
  * (1=Telemetry, 2=FullName, 3=Interests, 4=Language, 5=ProSettings) onto
- * the new 3-step classic flow (1=FullName, 2=Interests, 3=ProSettings).
+ * the current classic flow (1=FullName, 2=Interests, 3=ProSettings,
+ * 4=AgentPicker).
  *
  * Telemetry/Language are extracted into the shared prefix, so an in-progress
- * legacy user must skip those positions when resuming classic. Without this
- * remap, persisted step 2 (FullName) would render Interests and persisted
- * step 3 (Interests) would render ProSettings — silently skipping required
- * profile steps. Idempotent for already-new values within [1, 3].
+ * legacy user must skip those positions when resuming classic. Legacy
+ * Language/ProSettings (raw >= 4) resume at the new ProSettings step
+ * (MAX_ONBOARDING_STEPS - 1) — never the trailing agent-picker step.
  */
 const remapLegacyClassicStep = (raw: number): number => {
   if (raw <= 2) return 1;
   if (raw === 3) return 2;
-  return MAX_ONBOARDING_STEPS;
+  return MAX_ONBOARDING_STEPS - 1;
 };
 
 const CommonOnboardingPage = memo(() => {
@@ -41,6 +42,8 @@ const CommonOnboardingPage = memo(() => {
   const [searchParams, setSearchParams] = useSearchParams();
   const step: 1 | 2 = searchParams.get('step') === '2' ? 2 : 1;
   const hasStepParam = searchParams.has('step');
+
+  useOnboardingAgentTemplates(isUserStateInit && (!commonStepsCompleted || hasStepParam));
 
   // One-time legacy migration: when the user lands on the shared prefix, if
   // their persisted `currentStep` was authored under the old 5-step schema,

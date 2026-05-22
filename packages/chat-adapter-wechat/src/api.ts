@@ -1,4 +1,4 @@
-import { createDecipheriv } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 
 import type {
   BaseInfo,
@@ -9,6 +9,26 @@ import type {
   WechatSendMessageResponse,
 } from './types';
 import { MessageItemType, MessageState, MessageType, WECHAT_RET_CODES } from './types';
+
+/** iLink CDN media types — see protocol-spec §8.2. */
+export enum WechatUploadMediaType {
+  IMAGE = 1,
+  VIDEO = 2,
+  FILE = 3,
+  VOICE = 4,
+}
+
+/** Result of uploading media to the iLink CDN. */
+export interface WechatUploadResult {
+  /** Base64-encoded hex string of the AES key — the format expected in outbound `media.aes_key`. */
+  aesKey: string;
+  /** AES-128-ECB ciphertext size (matches `mid_size` for image_item / video_item). */
+  cipherSize: number;
+  /** `encrypt_query_param` returned by CDN; place into outbound `media.encrypt_query_param`. */
+  encryptQueryParam: string;
+  /** Plaintext file size. */
+  rawSize: number;
+}
 
 export const DEFAULT_BASE_URL = 'https://ilinkai.weixin.qq.com';
 export const CDN_BASE_URL = 'https://novac2c.cdn.weixin.qq.com/c2c';
@@ -122,35 +142,128 @@ export class WechatApiClient {
     let lastResponse: WechatSendMessageResponse = { ret: 0 };
 
     for (const chunk of chunks) {
-      const item: MessageItem = {
-        text_item: { text: chunk },
-        type: MessageItemType.TEXT,
-      };
-
-      const body = {
-        base_info: BASE_INFO,
-        msg: {
-          client_id: crypto.randomUUID(),
-          context_token: contextToken,
-          from_user_id: '',
-          item_list: [item],
-          message_state: MessageState.FINISH,
-          message_type: MessageType.BOT,
-          to_user_id: toUserId,
-        },
-      };
-
-      const response = await fetch(`${this.baseUrl}/ilink/bot/sendmessage`, {
-        body: JSON.stringify(body),
-        headers: buildHeaders(this.botToken),
-        method: 'POST',
-        signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
-      });
-
-      lastResponse = await parseResponse<WechatSendMessageResponse>(response, 'sendmessage');
+      lastResponse = await this.sendItem(
+        toUserId,
+        { text_item: { text: chunk }, type: MessageItemType.TEXT },
+        contextToken,
+      );
     }
 
     return lastResponse;
+  }
+
+  /**
+   * Send a single MessageItem (text or media) via iLink Bot API.
+   *
+   * Per protocol-spec §6.7, the stable public pattern is one MessageItem per
+   * request — text + media messages are sent as separate calls. Callers should
+   * generate fresh `client_id`s per call; this method allocates one internally.
+   */
+  async sendItem(
+    toUserId: string,
+    item: MessageItem,
+    contextToken: string,
+  ): Promise<WechatSendMessageResponse> {
+    const body = {
+      base_info: BASE_INFO,
+      msg: {
+        client_id: crypto.randomUUID(),
+        context_token: contextToken,
+        from_user_id: '',
+        item_list: [item],
+        message_state: MessageState.FINISH,
+        message_type: MessageType.BOT,
+        to_user_id: toUserId,
+      },
+    };
+
+    const response = await fetch(`${this.baseUrl}/ilink/bot/sendmessage`, {
+      body: JSON.stringify(body),
+      headers: buildHeaders(this.botToken),
+      method: 'POST',
+      signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+    });
+
+    return parseResponse<WechatSendMessageResponse>(response, 'sendmessage');
+  }
+
+  /**
+   * Upload outbound media to the iLink CDN.
+   *
+   * Implements the 3-step flow from protocol-spec §8.2:
+   *   1. `getuploadurl` — request `upload_param` with media metadata + AES key
+   *   2. Local AES-128-ECB + PKCS7 encrypt
+   *   3. POST ciphertext to CDN; read `x-encrypted-param` response header
+   *
+   * The returned `aesKey` is base64-of-hex-string (the format openclaw uses for
+   * outbound `media.aes_key`, see protocol-spec §8.4 format B). Plug the result
+   * directly into `image_item.media` / `file_item.media` / `video_item.media`.
+   */
+  async uploadCdnMedia(
+    toUserId: string,
+    mediaType: WechatUploadMediaType,
+    plaintext: Buffer,
+  ): Promise<WechatUploadResult> {
+    const aesKeyBuf = randomBytes(16);
+    const aesKeyHex = aesKeyBuf.toString('hex');
+    const filekey = randomBytes(16).toString('hex');
+    const rawSize = plaintext.length;
+    const ciphertext = encryptAesEcb(plaintext, aesKeyBuf);
+    const cipherSize = ciphertext.length;
+    const rawfilemd5 = createHash('md5').update(plaintext).digest('hex');
+
+    // Step 1: request upload_param
+    const uploadParamResp = await fetch(`${this.baseUrl}/ilink/bot/getuploadurl`, {
+      body: JSON.stringify({
+        aeskey: aesKeyHex,
+        base_info: BASE_INFO,
+        filekey,
+        filesize: cipherSize,
+        media_type: mediaType,
+        no_need_thumb: true,
+        rawfilemd5,
+        rawsize: rawSize,
+        to_user_id: toUserId,
+      }),
+      headers: buildHeaders(this.botToken),
+      method: 'POST',
+      signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+    });
+
+    const { upload_param: uploadParam } = await parseResponse<{ upload_param?: string }>(
+      uploadParamResp,
+      'getuploadurl',
+    );
+    if (!uploadParam) {
+      throw new Error('getuploadurl returned empty upload_param');
+    }
+
+    // Step 2 + 3: upload ciphertext to CDN
+    const cdnUrl = `${CDN_BASE_URL}/upload?encrypted_query_param=${encodeURIComponent(
+      uploadParam,
+    )}&filekey=${filekey}`;
+    const cdnResp = await fetch(cdnUrl, {
+      body: new Uint8Array(ciphertext),
+      headers: { 'Content-Type': 'application/octet-stream' },
+      method: 'POST',
+      signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+    });
+
+    if (!cdnResp.ok) {
+      const text = await cdnResp.text().catch(() => '');
+      throw new Error(`CDN upload failed: ${cdnResp.status} ${text}`);
+    }
+
+    const encryptQueryParam = cdnResp.headers.get('x-encrypted-param');
+    if (!encryptQueryParam) {
+      throw new Error('CDN upload response missing x-encrypted-param header');
+    }
+
+    // Outbound media.aes_key encoding follows openclaw: base64 of the 32-char hex string
+    // (protocol-spec §8.4 format B). Inbound code accepts both formats.
+    const aesKey = Buffer.from(aesKeyHex, 'ascii').toString('base64');
+
+    return { aesKey, cipherSize, encryptQueryParam, rawSize };
   }
 
   /**
@@ -323,6 +436,16 @@ function chunkText(text: string, limit: number): string[] {
 function decryptAesEcb(ciphertext: Buffer, key: Buffer): Buffer {
   const decipher = createDecipheriv('aes-128-ecb', key, null);
   return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+}
+
+/**
+ * AES-128-ECB encrypt with PKCS7 padding (Node's default for createCipheriv).
+ *
+ * Used for outbound media uploads — see {@link WechatApiClient.uploadCdnMedia}.
+ */
+function encryptAesEcb(plaintext: Buffer, key: Buffer): Buffer {
+  const cipher = createCipheriv('aes-128-ecb', key, null);
+  return Buffer.concat([cipher.update(plaintext), cipher.final()]);
 }
 
 /**

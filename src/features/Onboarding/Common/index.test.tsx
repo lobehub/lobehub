@@ -40,6 +40,9 @@ const renderCommon = async ({
   vi.doMock('@/components/Loading/BrandTextLoading', () => ({
     default: ({ debugId }: { debugId: string }) => <div>Loading:{debugId}</div>,
   }));
+  vi.doMock('@/hooks/useOnboardingAgentTemplates', () => ({
+    useOnboardingAgentTemplates: vi.fn(),
+  }));
   vi.doMock('@/routes/onboarding/_layout', () => ({
     default: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   }));
@@ -108,6 +111,7 @@ afterEach(() => {
   vi.doUnmock('@lobechat/const');
   vi.doUnmock('@lobehub/ui');
   vi.doUnmock('@/components/Loading/BrandTextLoading');
+  vi.doUnmock('@/hooks/useOnboardingAgentTemplates');
   vi.doUnmock('@/routes/onboarding/_layout');
   vi.doUnmock('@/routes/onboarding/features/TelemetryStep');
   vi.doUnmock('@/routes/onboarding/features/ResponseLanguageStep');
@@ -201,7 +205,7 @@ describe('CommonOnboardingPage', () => {
       await waitFor(() => expect(setOnboardingStep).toHaveBeenCalledWith(2));
     });
 
-    it('remaps legacy step 4+ (old Language/ProSettings) to MAX', async () => {
+    it('remaps legacy step 4+ (old Language/ProSettings) to the ProSettings step', async () => {
       const setOnboardingStep = vi.fn();
       await renderCommon({ commonStepsCompleted: false, persistedStep: 5, setOnboardingStep });
       await waitFor(() => expect(setOnboardingStep).toHaveBeenCalledWith(3));

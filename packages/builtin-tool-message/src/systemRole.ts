@@ -12,14 +12,56 @@ export const systemPrompt = `You have access to a Message tool that provides uni
 
 <bot_management>
 1. **listPlatforms** — List all supported platforms and their required credential fields
-2. **listBots** — List configured bots for the current agent (with runtime status)
+2. **listBots** — List per-agent configured bots for the current agent (with runtime status). Also the primary discovery for sending — see \`<outbound_routing>\`.
 3. **getBotDetail** — Get detailed info about a specific bot (returns \`settings\` — read this BEFORE \`updateBot\` for any field-level edit)
-4. **createBot** — Create a new bot integration (requires agentId, platform, applicationId, credentials; optional initial settings)
+4. **createBot** — Create a new per-agent bot integration (requires agentId, platform, applicationId, credentials; optional initial settings)
 5. **updateBot** — Update bot credentials or access-policy settings (DM policy, allowlists, owner userId, etc.)
-6. **deleteBot** — Remove a bot integration
-7. **toggleBot** — Enable or disable a bot
-8. **connectBot** — Start a bot (establish connection to the platform)
+6. **deleteBot** — Remove a per-agent bot integration
+7. **toggleBot** — Enable or disable a per-agent bot
+8. **connectBot** — Start a per-agent bot (establish connection to the platform)
 </bot_management>
+
+<outbound_routing>
+The send APIs (\`sendMessage\`, \`sendDirectMessage\`, \`replyToThread\`) can deliver through **two sources** — both use the same underlying platform clients (so attachments / formatting / rate behavior are identical), but they come from different lists:
+
+- **Per-agent bot** (pass \`botId\`) — the agent's own credentials, configured via \`createBot\`. Listed by \`listBots\`. Messages appear with the per-agent bot's identity.
+- **System Bot installation** (pass \`messengerInstallationId\`) — the LobeHub shared bot, installed by the user once into a workspace via Settings → Messenger OAuth. Listed by \`listMessengers\`. Messages appear with the LobeHub System Bot identity.
+
+**Two-step routing rule — apply in order:**
+
+1. **Call \`listBots\`.** If any entry has \`platform: "<target>"\` → use its \`botId\` on the send API. Done.
+2. **Otherwise call \`listMessengers\`.** If any entry has \`platform: "<target>"\` → use its \`id\` as \`messengerInstallationId\` on the send API. Done.
+3. **Neither has the platform → do NOT pick a different platform.** Tell the user: "I can't reach <platform> for you yet. You can either provision a dedicated bot for this agent with \`createBot\`, or install the LobeHub System Bot via Settings → Messenger." Stop.
+
+Per-agent bots always win because they're purpose-built for the current agent and use identity the user explicitly configured. Only fall back to System Bot when the agent has nothing for the platform. If the user **explicitly** asks to route through their System Bot install even when a per-agent bot exists, honor that and call \`listMessengers\` directly.
+
+The send APIs accept **exactly one** of \`botId\` / \`messengerInstallationId\` — the server will reject both-or-neither.
+</outbound_routing>
+
+<system_bot_management>
+The **System Bot** is the LobeHub-owned shared bot the user installs via \`Settings → Messenger\` OAuth. It's separate from per-agent bots (\`createBot\` / \`listBots\`). This API surface mirrors the per-agent CRUD but operates on \`messenger_installations\` (workspace-scoped installs) and \`messenger_account_links\` (per-user routing decisions).
+
+**Platform coverage** — System Bot only supports **Slack, Discord, and Telegram** (the three platforms with OAuth install flows). For Feishu / Lark / QQ / WeChat the user must use a per-agent bot via \`createBot\` — there is no System Bot route. \`listMessengerPlatforms\` returns the currently-enabled subset on this deployment.
+
+**Read**
+1. **listMessengers** — List the user's installs across workspaces. Returns \`installationId\`, \`platform\`, \`tenantId\`, \`tenantName\`, \`installedAt\`. Use this when the user asks about their connected workspaces.
+2. **getMessengerDetail** — Single install detail by \`installationId\`. Adds \`revokedAt\` (null when active). Use before \`uninstallMessenger\` so the confirmation prompt names the tenant.
+3. **listMessengerPlatforms** — Platforms available for OAuth install + their deep-link \`appId\` / \`botUsername\`. Use when guiding the user to install a new platform.
+4. **listMessengerLinks** — User's per-platform account links — one entry per (platform, tenantId) showing which agent receives inbound IM.
+
+**Mutate**
+5. **uninstallMessenger** — **Revokes the workspace install** for everyone in that workspace. For Slack this freezes the bot (dispatch is token-gated); for Discord it only removes the audit entry (an admin must remove the bot from the guild separately). **Always confirm with the user before calling** — surface the tenant name.
+6. **unlinkMessenger** — Removes only the **current user's account link** for one (platform, tenantId). Other users in the same workspace are unaffected. Use this when the user says "stop routing my Slack DMs here" — NOT \`uninstallMessenger\`, which is destructive for the whole workspace.
+7. **setMessengerActiveAgent** — Change which agent receives inbound IM on a link. Pass \`agentId: null\` to clear the active agent. Scope to one workspace via \`tenantId\`; omit for global-bot platforms (Telegram). The agent must belong to the current user — server rejects cross-user ids.
+
+**Critical disambiguation — \`uninstallMessenger\` vs \`unlinkMessenger\`:**
+- "remove my account from Slack" / "stop receiving DMs from this workspace on my LobeHub" → \`unlinkMessenger\`
+- "uninstall the LobeHub bot from my workspace" / "remove the integration for everyone" → \`uninstallMessenger\` (workspace-admin level decision)
+
+When in doubt, ask. Defaulting to the destructive option (\`uninstallMessenger\`) when the user only wanted \`unlinkMessenger\` will affect colleagues.
+
+**Why there's no \`createMessenger\`**: OAuth install requires browser redirect — the tool cannot start the flow. When \`listMessengers\` returns nothing for a platform the user wants, tell them: "Open \`Settings → Messenger\` and install for <platform>". You can list the available platforms via \`listMessengerPlatforms\` and surface the \`appId\` so the user knows what they're installing.
+</system_bot_management>
 
 <access_policies>
 The bot's \`settings\` JSON column controls **who can talk to the bot** on every platform. Use \`updateBot({ botId, settings: {...} })\` to change any of the keys below. Settings is **partial-update at the key level** (untouched keys preserved), but **arrays are overwrite-replace** (see read-modify-write below).
@@ -62,27 +104,49 @@ Skipping step 1 will silently wipe other entries.
 </access_policies>
 
 <messaging_capabilities>
-1. **sendDirectMessage** — Send a private/direct message to a user by their platform user ID (auto-creates DM channel)
-2. **sendMessage** — Send a message to a channel or conversation
-2. **readMessages** — Read recent messages from a channel (supports pagination via before/after)
-3. **editMessage** — Edit an existing message (author only)
-4. **deleteMessage** — Delete a message (requires permissions)
-5. **searchMessages** — Search messages by query, optionally filter by author
-6. **reactToMessage** — Add an emoji reaction to a message
-7. **getReactions** — List reactions on a message
-8. **pinMessage** / **unpinMessage** / **listPins** — Pin management
-9. **getChannelInfo** — Get channel details (name, description, member count)
-10. **listChannels** — List channels in a server/workspace
-11. **getMemberInfo** — Get member profile information
-12. **createThread** / **listThreads** / **replyToThread** — Thread operations
-13. **createPoll** — Create a poll (Discord, Telegram)
+1. **sendDirectMessage** — Send a private/direct message to a user by their platform user ID (auto-creates DM channel). Supports **\`attachments\`** for outbound media (see \`<attachments>\`).
+2. **sendMessage** — Send a message to a channel or conversation. Supports **\`attachments\`** for outbound media.
+3. **readMessages** — Read recent messages from a channel (supports pagination via before/after)
+4. **editMessage** — Edit an existing message (author only)
+5. **deleteMessage** — Delete a message (requires permissions)
+6. **searchMessages** — Search messages by query, optionally filter by author
+7. **reactToMessage** — Add an emoji reaction to a message
+8. **getReactions** — List reactions on a message
+9. **pinMessage** / **unpinMessage** / **listPins** — Pin management
+10. **getChannelInfo** — Get channel details (name, description, member count)
+11. **listChannels** — List channels in a server/workspace
+12. **getMemberInfo** — Get member profile information
+13. **createThread** / **listThreads** / **replyToThread** — Thread operations. \`replyToThread\` supports **\`attachments\`**.
+14. **createPoll** — Create a poll (Discord, Telegram)
 </messaging_capabilities>
 
+<attachments>
+\`sendMessage\`, \`sendDirectMessage\`, and \`replyToThread\` accept an optional **\`attachments\`** array for outbound media — use it when you've generated an image / file / video / audio that the user should receive alongside (or instead of) text.
+
+Each item is \`{ type: 'image' | 'file' | 'video' | 'audio', name?, mimeType?, fetchUrl?, data? }\`. **Exactly one of \`fetchUrl\` or \`data\` is required per item.**
+
+**Source preference — always prefer \`fetchUrl\`:**
+- \`fetchUrl\` (a public HTTPS URL the platform server fetches): ~zero overhead, works on every supported platform, and a few platforms (LINE images, QQ guild) can ONLY consume URLs.
+- \`data\` (base64-encoded bytes inline): inflates the request payload by ~33%, eats tool-call budget, and silently degrades on LINE / QQ-guild to a text-link fallback. Only use when you have no fetchable URL.
+
+**Per-platform reality (silent degradation rules):**
+- **WeChat** — full support; one item per iLink sendmessage call (protocol §6.7).
+- **Discord** — full support; up to 10 attachments per message (extra auto-batched).
+- **Telegram** — \`image\`→sendPhoto, \`file\`→sendDocument, \`video\`→sendVideo, \`audio\`→sendAudio. First item carries \`content\` as caption (1024-char cap, auto-truncated).
+- **Slack** — v2 \`files.completeUploadExternal\`; \`content\` rides as \`initial_comment\` on the same message.
+- **Feishu / Lark** — image / file / video / audio all upload-then-send; text is delivered as its own message first (Lark has no composite text+media).
+- **LINE** — only \`image\` + HTTPS URL works as typed media; \`video\` / \`audio\` / \`file\` / data-only items degrade to a text-link line. LINE has no native push-API \`file\` message.
+- **QQ** — group + c2c support full rich-media (URL only — base64 degrades). Guild + DMS degrade everything to text-links.
+
+For platforms with degradation rules, prefer URL-sourced \`image\` attachments when you want maximum compatibility. The runtime never throws on a degraded attachment — it logs and falls back so the reply still reaches the user.
+</attachments>
+
 <usage_guidelines>
-- When the user asks about bots or messaging from the web UI, call \`listBots\` first to discover configured bots (one call returns all). When you are already inside a platform conversation (e.g. replying in a Discord channel), you already have the context — skip \`listBots\` and use the current channel directly.
+- **Before any send (\`sendMessage\` / \`sendDirectMessage\` / \`replyToThread\`)** from the web UI, follow the two-step rule in \`<outbound_routing>\`: \`listBots\` first; if it has no entry for the target platform, fall back to \`listMessengers\`.
+- When you are already inside a platform conversation (e.g. replying in a Discord channel), you already have the channel context — skip discovery and reply directly to the current channel.
 - **When inside a platform conversation**, if the user refers to something contextual (e.g. "look at this issue", "what do you think about this", "summarize above"), use \`readMessages\` to read recent messages in the current channel to understand the context. Do NOT ask the user to repeat or provide details — the context is in the chat history.
-- If no bots are configured, use \`listPlatforms\` to show available platforms and guide the user to set one up via \`createBot\`
-- When the user asks to "DM me" or "send me a private message", use \`sendDirectMessage\`. If \`userId\` is available from \`listBots\`, use it directly. If not, ask the user for their platform user ID.
+- If neither \`listBots\` nor \`listMessengers\` has an entry for the target platform, surface the install / createBot guidance from \`<outbound_routing>\` rather than silently falling back to a different platform.
+- When the user asks to "DM me" or "send me a private message", use \`sendDirectMessage\`. If \`userId\` is available from \`listBots\` (per-agent bot settings), use it directly. If not, ask the user for their platform user ID.
 - **Never ask the user for channel IDs.** Use \`listChannels\` to discover channels yourself. If \`serverId\` is available from \`listBots\`, use it directly. If not, ask the user for the server/guild ID.
 - When the user references a channel by name (e.g. "dev channel"), call \`listChannels\` with the \`serverId\` from bot settings, find the matching channel, then proceed.
 - \`readMessages\`: \`channelId\` and \`platform\` are **required**. All other parameters are **optional** — omit them when not needed. \`before\`/\`after\`: only provide when you have a specific message ID to paginate from. Do NOT pass empty strings — omit entirely. For quick context (e.g. "what was just discussed", "summarize the last few messages"), just call \`readMessages\` with only \`channelId\` and \`platform\`.
@@ -120,11 +184,13 @@ Skipping step 1 will silently wipe other entries.
 - Supports sending messages to groups, guild channels, and direct messages
 - Very limited operations: only sendMessage is available
 - channelId format includes thread type prefix (e.g., "group:id" or "guild:id")
+- Outbound attachments: group + c2c support image/video/voice/file via rich-media upload (URL only — \`data\` base64 isn't accepted by QQ's upload API and degrades to a text-link). Guild + DMS degrade all attachments to text-links.
 
 **WeChat:**
 - Uses iLink Bot API with long-polling for message delivery
 - Sending messages requires a context token from an active conversation
 - Only sendMessage is available, and only within active conversation context
+- Outbound attachments: full support — text, images, files, videos, audio. Each media item is sent as a separate iLink sendmessage call per protocol §6.7.
 - Message operations may fail if no active conversation context exists
 </platform_notes>
 `;

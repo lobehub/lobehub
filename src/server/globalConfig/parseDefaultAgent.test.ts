@@ -49,9 +49,9 @@ describe('parseAgentConfig', () => {
     });
 
     it('parses boolean values correctly', () => {
-      const envStr = 'enableAutoCreateTopic=true;enableCompressThreshold=false';
+      const envStr = 'enableHistoryCount=true;enableCompressThreshold=false';
       const expected = {
-        enableAutoCreateTopic: true,
+        enableHistoryCount: true,
         enableCompressThreshold: false,
       };
       expect(parseAgentConfig(envStr)).toEqual(expected);
@@ -113,10 +113,10 @@ describe('parseAgentConfig', () => {
 
     it('should parsers plugins correctly', () => {
       const envStr =
-        'enableAutoCreateTopic=true;model=gemini-pro;provider=google;plugins=lobe-image-designer';
+        'enableHistoryCount=true;model=gemini-pro;provider=google;plugins=lobe-image-designer';
 
       const expected = {
-        enableAutoCreateTopic: true,
+        enableHistoryCount: true,
         model: 'gemini-pro',
         plugins: ['lobe-image-designer'],
         provider: 'google',

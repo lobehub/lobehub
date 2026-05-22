@@ -89,6 +89,10 @@ vi.mock('electron', () => ({
     getPath: vi.fn((name: string) => `/mock/${name}`),
   },
   ipcMain: { handle: ipcMainHandleMock },
+  powerSaveBlocker: {
+    start: vi.fn(() => 1),
+    stop: vi.fn(),
+  },
 }));
 
 vi.mock('@/utils/logger', () => ({

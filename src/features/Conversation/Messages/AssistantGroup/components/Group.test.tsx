@@ -163,7 +163,7 @@ describe('Group', () => {
       {
         content: longContent,
         contentOverride: longContent,
-        disableMarkdownStreaming: true,
+        disableMarkdownStreaming: false,
         domId: 'block-1__answer',
         hasError: false,
         hasToolsOverride: false,
@@ -174,7 +174,7 @@ describe('Group', () => {
       {
         content: '',
         contentOverride: '',
-        disableMarkdownStreaming: true,
+        disableMarkdownStreaming: false,
         domId: 'block-1__workflow',
         hasError: false,
         hasToolsOverride: true,
@@ -204,7 +204,7 @@ describe('Group', () => {
     expect(parseAnswerSegments()).toEqual([
       {
         content: '现在我来搜索资料。',
-        disableMarkdownStreaming: true,
+        disableMarkdownStreaming: false,
         domId: undefined,
         hasError: false,
         id: 'block-1',
@@ -302,7 +302,7 @@ describe('Group', () => {
       {
         content: '',
         contentOverride: '',
-        disableMarkdownStreaming: true,
+        disableMarkdownStreaming: false,
         domId: 'block-1__workflow',
         hasError: false,
         hasToolsOverride: true,
@@ -312,7 +312,7 @@ describe('Group', () => {
     expect(parseAnswerSegment()).toEqual({
       content: '',
       contentOverride: '',
-      disableMarkdownStreaming: true,
+      disableMarkdownStreaming: false,
       domId: 'block-1__answer',
       hasError: true,
       hasToolsOverride: false,
@@ -341,13 +341,43 @@ describe('Group', () => {
     expect(parseAnswerSegments()).toEqual([
       {
         content: '',
-        disableMarkdownStreaming: true,
+        disableMarkdownStreaming: false,
         domId: undefined,
         hasError: false,
         id: 'block-1',
         isFirstBlock: false,
         toolCount: 1,
       },
+    ]);
+  });
+
+  it('only animates the last block in a multi-block group', () => {
+    const { container } = render(
+      <Group
+        id="assistant-1"
+        messageIndex={0}
+        blocks={[
+          blk({ content: 'first paragraph', id: 'block-1' }),
+          blk({ content: 'middle paragraph', id: 'block-2' }),
+          blk({ content: 'last paragraph', id: 'block-3' }),
+        ]}
+      />,
+    );
+
+    const sequence = Array.from(container.querySelectorAll('[data-testid]')).map((node) =>
+      node.getAttribute('data-testid'),
+    );
+
+    expect(sequence).toEqual(['answer-segment', 'answer-segment', 'answer-segment']);
+    expect(
+      parseAnswerSegments().map((seg: { disableMarkdownStreaming: boolean; id: string }) => ({
+        disableMarkdownStreaming: seg.disableMarkdownStreaming,
+        id: seg.id,
+      })),
+    ).toEqual([
+      { disableMarkdownStreaming: true, id: 'block-1' },
+      { disableMarkdownStreaming: true, id: 'block-2' },
+      { disableMarkdownStreaming: false, id: 'block-3' },
     ]);
   });
 });
