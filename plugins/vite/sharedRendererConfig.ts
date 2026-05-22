@@ -1,6 +1,5 @@
 import react from '@vitejs/plugin-react';
 import { codeInspectorPlugin } from 'code-inspector-plugin';
-
 import type { ModulePreloadOptions } from 'vite';
 
 import { viteEmotionSpeedy } from './emotionSpeedy';
