@@ -34,14 +34,13 @@ export interface ExecAgentAppContext {
 /**
  * A project-level skill discovered on the device filesystem
  * (`.agents/skills` / `.claude/skills`) by the client at request time.
- * Only frontmatter + the absolute SKILL.md path are carried; the full
- * content and directory tree are loaded on demand via the readFile tool.
+ * Only frontmatter + the absolute SKILL.md path are carried; the SKILL.md
+ * body and directory tree are loaded on demand at activation time via the
+ * readFile / listFiles tools.
  */
 export interface ProjectSkillMeta {
   /** Skill description from SKILL.md frontmatter. */
   description?: string;
-  /** Relative paths of files under the skill directory (the directory tree). */
-  files?: string[];
   /** Skill name from frontmatter (falls back to the directory name). */
   name: string;
   /** Absolute path to the skill's SKILL.md on the device filesystem. */

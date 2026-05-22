@@ -37,7 +37,7 @@ export interface ToolExecutionContext {
    * device filesystem. Used by the Skills runtime to load them on demand via
    * the device gateway. Derived from the operation's skill set.
    */
-  projectSkills?: { files?: string[]; location: string; name: string }[];
+  projectSkills?: { location: string; name: string }[];
   /** Conversation scope captured when the operation was created */
   scope?: string | null;
   /** Server database for LobeHub Skills execution */

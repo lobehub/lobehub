@@ -1,5 +1,7 @@
 import { builtinSkills } from '@lobechat/builtin-skills';
 import { LocalSystemApiName, LocalSystemIdentifier } from '@lobechat/builtin-tool-local-system';
+// Note: only `readFile` is wired through deviceProxy. Directory enumeration is
+// left to the model via `local-system.listFiles` so we don't double-fetch.
 import { type CommandResult, SkillsIdentifier } from '@lobechat/builtin-tool-skills';
 import {
   type DeviceFileAccess,

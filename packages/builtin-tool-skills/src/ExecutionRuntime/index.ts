@@ -56,11 +56,10 @@ export interface SkillRuntimeService {
  * A project-level skill discovered on the device filesystem
  * (`.agents/skills` / `.claude/skills`). The runtime only needs the name to
  * match an `activateSkill`/`readReference` call and the absolute SKILL.md path
- * to read its content.
+ * to read its content. The directory tree is enumerated lazily on activation
+ * via `DeviceFileAccess.listFiles` — keeping it out of the op param payload.
  */
 export interface ProjectSkillRuntimeItem {
-  /** Relative paths of files under the skill directory (the directory tree). */
-  files?: string[];
   /** Absolute path to the skill's SKILL.md on the device. */
   location: string;
   name: string;
@@ -98,15 +97,16 @@ const joinPath = (dir: string, rel: string): string => {
   return `${trimmed}${sep}${rel}`;
 };
 
-/** Plain-text resource listing for project skills (no size/hash metadata). */
-const buildProjectResourcesPrompt = (skillName: string, files: string[]): string => {
-  const list = files.map((file) => `- ${file}`).join('\n');
-  return `## Available Resources
+/**
+ * Hint appended to activated project-skill content so the model knows how to
+ * discover the rest of the skill's directory. We deliberately don't enumerate
+ * the tree here — the model has `local-system.listFiles` available and can
+ * call it on demand, which keeps the op-param payload small.
+ */
+const buildProjectDirectoryHint = (skillName: string, skillDir: string): string =>
+  `## Skill resources
 
-Use \`readReference\` with skillName="${skillName}" and one of these relative paths to read a file:
-
-${list}`;
-};
+This project skill lives in \`${skillDir}\`. Use \`local-system.listFiles\` on that path to discover reference files, then \`readReference\` with skillName="${skillName}" + the relative path to load any of them.`;
 
 export class SkillsExecutionRuntime {
   private builtinSkills: BuiltinSkill[];
@@ -318,11 +318,13 @@ export class SkillsExecutionRuntime {
       try {
         let content = await this.deviceFileAccess.readFile(projectSkill.location);
 
-        // Surface the skill's directory tree (carried in the op params) so the
-        // model can readReference its files.
-        const references = (projectSkill.files ?? []).filter((file) => file !== 'SKILL.md');
-        if (references.length > 0) {
-          content += '\n\n' + buildProjectResourcesPrompt(name, references);
+        // Don't enumerate the directory here — let the model do it on demand
+        // via `local-system.listFiles`. Just point at the skill's directory so
+        // it knows where to look. Keeps the op-param payload small and avoids
+        // a second deviceProxy round-trip at activation time.
+        const skillDir = getDirname(projectSkill.location);
+        if (skillDir) {
+          content += '\n\n' + buildProjectDirectoryHint(name, skillDir);
         }
 
         return {

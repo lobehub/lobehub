@@ -31,12 +31,6 @@ export interface SkillMeta {
    */
   content?: string;
   description: string;
-  /**
-   * Relative file paths under a project skill's directory (the directory tree).
-   * Carried for the Skills runtime to render a resource listing on activation;
-   * ignored by prompt rendering.
-   */
-  files?: string[];
   identifier: string;
   location?: string;
   name: string;

@@ -1710,8 +1710,7 @@ export const createRuntimeExecutors = (
                   (skill: { location?: string; source?: string }) =>
                     skill.source === 'project' && !!skill.location,
                 )
-                .map((skill: { files?: string[]; location: string; name: string }) => ({
-                  files: skill.files,
+                .map((skill: { location: string; name: string }) => ({
                   location: skill.location,
                   name: skill.name,
                 })),

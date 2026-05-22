@@ -29,9 +29,7 @@ import { createGatewayEventHandler } from './gatewayEventHandler';
  */
 const resolveProjectSkills = async (
   get: () => ChatStore,
-): Promise<
-  { description?: string; files?: string[]; name: string; path: string }[] | undefined
-> => {
+): Promise<{ description?: string; name: string; path: string }[] | undefined> => {
   if (!isDesktop) return undefined;
 
   const topicWorkingDirectory = topicSelectors.currentTopicWorkingDirectory(get());
@@ -42,9 +40,11 @@ const resolveProjectSkills = async (
   try {
     const { skills } = await localFileService.listProjectSkills({ scope: workingDirectory });
     if (skills.length === 0) return undefined;
+    // The directory tree is enumerated lazily at activation time by the Skills
+    // runtime (via the local-system `listFiles` tool), so we drop `files` here
+    // — keeps the op-param payload small.
     return skills.map((skill) => ({
       description: skill.description,
-      files: skill.files,
       name: skill.name,
       path: skill.path,
     }));

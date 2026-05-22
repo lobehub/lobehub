@@ -2048,7 +2048,6 @@ export class AiAgentService {
         activeDeviceId && params.projectSkills?.length
           ? params.projectSkills.map((s) => ({
               description: s.description ?? '',
-              files: s.files,
               identifier: `project:${s.name}`,
               location: s.path,
               name: s.name,

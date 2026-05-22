@@ -169,7 +169,6 @@ const ExecAgentSchema = z
       .array(
         z.object({
           description: z.string().optional(),
-          files: z.array(z.string()).optional(),
           name: z.string(),
           path: z.string(),
         }),

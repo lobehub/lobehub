@@ -185,12 +185,11 @@ describe('SkillsExecutionRuntime', () => {
 
   describe('project skills', () => {
     const projectSkill = {
-      files: ['SKILL.md', 'scripts/run.py'],
       location: '/repo/.agents/skills/deploy/SKILL.md',
       name: 'deploy',
     };
 
-    it('activateSkill reads SKILL.md via deviceFileAccess and appends the resource tree', async () => {
+    it('activateSkill reads SKILL.md and appends a directory hint for lazy discovery', async () => {
       const readFile = vi.fn().mockResolvedValue('# Deploy\nRun the deploy steps.');
       const runtime = new SkillsExecutionRuntime({
         deviceFileAccess: { readFile },
@@ -203,9 +202,10 @@ describe('SkillsExecutionRuntime', () => {
       expect(readFile).toHaveBeenCalledWith('/repo/.agents/skills/deploy/SKILL.md');
       expect(result.success).toBe(true);
       expect(result.content).toContain('Run the deploy steps.');
-      // Resource tree lists references but not SKILL.md itself.
-      expect(result.content).toContain('scripts/run.py');
-      expect(result.content).not.toMatch(/- SKILL\.md/);
+      // The hint points at the skill's directory and instructs the model to
+      // call `local-system.listFiles` itself rather than pre-enumerating here.
+      expect(result.content).toContain('/repo/.agents/skills/deploy');
+      expect(result.content).toContain('listFiles');
       expect(result.state).toMatchObject({ name: 'deploy', source: 'project' });
     });
 

@@ -45,7 +45,7 @@ export interface ExecAgentTaskParams {
    * (`.agents/skills` / `.claude/skills`). Surfaced in `<available_skills>`
    * and loaded on demand via the readFile tool.
    */
-  projectSkills?: { description?: string; files?: string[]; name: string; path: string }[];
+  projectSkills?: { description?: string; name: string; path: string }[];
   prompt: string;
   /** Resume a previous op paused on `human_approve_required` instead of starting from a fresh user prompt. */
   resumeApproval?: ResumeApprovalParam;
