@@ -1,0 +1,11 @@
+{
+  "name": "@lobechat/llm-generation-tracing",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./store": "./src/store/types.ts"
+  },
+  "main": "./src/index.ts",
+  "dependencies": {}
+}
