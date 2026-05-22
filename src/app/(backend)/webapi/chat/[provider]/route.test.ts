@@ -106,6 +106,35 @@ describe('POST handler', () => {
       });
     });
 
+    it('should pass chat request metadata from headers', async () => {
+      const mockParams = Promise.resolve({ provider: 'test-provider' });
+      const mockChatPayload = { message: 'Hello, world!' };
+      request = new Request(new URL('https://test.com'), {
+        body: JSON.stringify(mockChatPayload),
+        headers: {
+          'x-agent-id': 'agt_123',
+          'x-topic-id': 'tpc_456',
+        },
+        method: 'POST',
+      });
+
+      const mockChatResponse: any = { success: true, message: 'Reply from agent' };
+      const mockRuntime: LobeRuntimeAI = {
+        baseURL: 'abc',
+        chat: vi.fn().mockResolvedValue(mockChatResponse),
+      };
+
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue(new ModelRuntime(mockRuntime));
+
+      await POST(request as unknown as Request, { params: mockParams });
+
+      expect(mockRuntime.chat).toHaveBeenCalledWith(mockChatPayload, {
+        metadata: { chat: { agentId: 'agt_123', topicId: 'tpc_456' } },
+        user: 'test-user-id',
+        signal: expect.anything(),
+      });
+    });
+
     it('should return an error response when chat completion fails', async () => {
       const mockParams = Promise.resolve({ provider: 'test-provider' });
       const mockChatPayload = { message: 'Hello, world!' };

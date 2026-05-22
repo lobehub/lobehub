@@ -461,7 +461,7 @@ describe('LobeOpenAICompatibleFactory', () => {
         );
       });
 
-      it('should add prompt_cache_key for OpenAI chat requests with user', async () => {
+      it('should add prompt_cache_key for OpenAI chat requests with chat metadata', async () => {
         const LobeOpenAIProvider = createOpenAICompatibleRuntime({
           baseURL: 'https://api.openai.com/v1',
           provider: ModelProvider.OpenAI,
@@ -478,12 +478,12 @@ describe('LobeOpenAICompatibleFactory', () => {
             model: 'gpt-4o',
             temperature: 0,
           },
-          { user: 'testUser' },
+          { metadata: { chat: { agentId: 'agt_1', topicId: 'tpc_1' } }, user: 'testUser' },
         );
 
         expect(mockCreateMethod).toHaveBeenCalledWith(
           expect.objectContaining({
-            prompt_cache_key: 'lobe:testUser:gpt-4o',
+            prompt_cache_key: 'lobe_agt_1_tpc_1',
           }),
           expect.anything(),
         );
@@ -498,7 +498,7 @@ describe('LobeOpenAICompatibleFactory', () => {
             model: 'llama-3.1-8b-instant',
             temperature: 0,
           },
-          { user: 'testUser' },
+          { metadata: { chat: { agentId: 'agt_1', topicId: 'tpc_1' } }, user: 'testUser' },
         );
 
         expect(mockCreateMethod).toHaveBeenCalledWith(
@@ -509,7 +509,7 @@ describe('LobeOpenAICompatibleFactory', () => {
         );
       });
 
-      it('should not add prompt_cache_key for GPT chat requests without user', async () => {
+      it('should not add prompt_cache_key for GPT chat requests without chat metadata', async () => {
         const LobeOpenAIProvider = createOpenAICompatibleRuntime({
           baseURL: 'https://api.openai.com/v1',
           provider: ModelProvider.OpenAI,
@@ -551,12 +551,12 @@ describe('LobeOpenAICompatibleFactory', () => {
             model: 'gpt-4o-mini',
             temperature: 0,
           },
-          { user: 'testUser' },
+          { metadata: { chat: { agentId: 'agt_2', topicId: 'tpc_2' } }, user: 'testUser' },
         );
 
         expect(mockCreateMethod).toHaveBeenCalledWith(
           expect.objectContaining({
-            prompt_cache_key: 'lobe:testUser:gpt-4o-mini',
+            prompt_cache_key: 'lobe_agt_2_tpc_2',
           }),
           expect.anything(),
         );
@@ -587,7 +587,7 @@ describe('LobeOpenAICompatibleFactory', () => {
             model: 'gpt-4o',
             temperature: 0,
           },
-          { user: 'testUser' },
+          { metadata: { chat: { agentId: 'agt_1', topicId: 'tpc_1' } }, user: 'testUser' },
         );
 
         expect(mockCreateMethod).toHaveBeenCalledWith(
@@ -2063,7 +2063,6 @@ describe('LobeOpenAICompatibleFactory', () => {
         {
           input: payload.messages,
           model: payload.model,
-          prompt_cache_key: 'lobe:test-user:gpt-4o',
           // @ts-ignore
           text: { format: { strict: true, type: 'json_schema', ...payload.schema } },
           safety_identifier: options.user,
@@ -2074,7 +2073,7 @@ describe('LobeOpenAICompatibleFactory', () => {
       expect(result).toEqual({ status: 'success' });
     });
 
-    it('should add prompt_cache_key for OpenAI generateObject responses requests with user', async () => {
+    it('should add prompt_cache_key for OpenAI generateObject responses requests with chat metadata', async () => {
       const LobeOpenAIProvider = createOpenAICompatibleRuntime({
         baseURL: 'https://api.openai.com/v1',
         provider: ModelProvider.OpenAI,
@@ -2097,11 +2096,14 @@ describe('LobeOpenAICompatibleFactory', () => {
         },
       };
 
-      await instance.generateObject(payload, { user: 'testUser' });
+      await instance.generateObject(payload, {
+        metadata: { chat: { agentId: 'agt_1', topicId: 'tpc_1' } },
+        user: 'testUser',
+      });
 
       expect(instance['client'].responses.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          prompt_cache_key: 'lobe:testUser:gpt-4o',
+          prompt_cache_key: 'lobe_agt_1_tpc_1',
         }),
         expect.anything(),
       );
@@ -2353,7 +2355,6 @@ describe('LobeOpenAICompatibleFactory', () => {
           {
             messages: payload.messages,
             model: payload.model,
-            prompt_cache_key: 'lobe:test-user-123:gpt-4o',
             response_format: { json_schema: payload.schema, type: 'json_schema' },
             user: options.user,
           },
@@ -2363,7 +2364,7 @@ describe('LobeOpenAICompatibleFactory', () => {
         expect(result).toEqual({ status: 'completed' });
       });
 
-      it('should add prompt_cache_key for OpenAI generateObject chat completion requests with user', async () => {
+      it('should add prompt_cache_key for OpenAI generateObject chat completion requests with chat metadata', async () => {
         const LobeOpenAIProvider = createOpenAICompatibleRuntime({
           baseURL: 'https://api.openai.com/v1',
           provider: ModelProvider.OpenAI,
@@ -2394,11 +2395,14 @@ describe('LobeOpenAICompatibleFactory', () => {
           },
         };
 
-        await instance.generateObject(payload, { user: 'testUser' });
+        await instance.generateObject(payload, {
+          metadata: { chat: { agentId: 'agt_1', topicId: 'tpc_1' } },
+          user: 'testUser',
+        });
 
         expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
           expect.objectContaining({
-            prompt_cache_key: 'lobe:testUser:gpt-4o',
+            prompt_cache_key: 'lobe_agt_1_tpc_1',
           }),
           expect.anything(),
         );
