@@ -390,7 +390,12 @@ export class GatewayActionImpl {
 
     if (result.topicId) {
       this.#get().internal_updateTopicLoading(result.topicId, true);
-      void this.#get().updateTopicStatus?.(result.topicId, 'running');
+      void this.#get().updateTopicStatus?.({
+        agentId: context.agentId,
+        groupId: context.groupId,
+        status: 'running',
+        topicId: result.topicId,
+      });
     }
 
     // Create a dedicated operation for gateway execution with correct context.
@@ -418,7 +423,7 @@ export class GatewayActionImpl {
     // never block the local cancel flow.
     this.#get().onOperationCancel(gatewayOpId, async () => {
       await aiAgentService
-        .interruptTask({ operationId: result.operationId })
+        .interruptTask({ operationId: result.operationId, topicId: result.topicId })
         .catch((err) => console.error('[Gateway] interruptTask failed:', err));
     });
 
@@ -438,7 +443,12 @@ export class GatewayActionImpl {
         this.#get().completeOperation(gatewayOpId);
         if (result.topicId) {
           this.#get().internal_updateTopicLoading(result.topicId, false);
-          void this.#get().updateTopicStatus?.(result.topicId, 'active');
+          void this.#get().updateTopicStatus?.({
+            agentId: execContext.agentId,
+            groupId: execContext.groupId,
+            status: 'active',
+            topicId: result.topicId,
+          });
           // Clear running operation from topic metadata (best-effort from frontend;
           // if browser was closed, reconnect logic will handle stale entries)
           topicService
@@ -528,7 +538,11 @@ export class GatewayActionImpl {
       onSessionComplete: () => {
         this.#get().completeOperation(gatewayOpId);
         this.#get().internal_updateTopicLoading(topicId, false);
-        void this.#get().updateTopicStatus?.(topicId, 'active');
+        void this.#get().updateTopicStatus?.({
+          agentId: context.agentId,
+          status: 'active',
+          topicId,
+        });
         topicService.updateTopicMetadata(topicId, { runningOperation: null }).catch(() => {});
       },
       operationId,

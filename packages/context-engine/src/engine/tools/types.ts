@@ -1,6 +1,12 @@
 import type { ExtendedHumanInterventionConfig } from '@/types/index';
 
 export interface LobeChatPluginApi {
+  /**
+   * Default execution timeout in milliseconds for this API.
+   * Falls back to the global default (120_000 ms) when omitted.
+   * The resolver reads this when the LLM does not supply `arguments.timeout`.
+   */
+  defaultTimeoutMs?: number;
   description: string;
   /**
    * Human intervention configuration

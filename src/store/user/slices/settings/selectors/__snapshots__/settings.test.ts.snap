@@ -104,9 +104,7 @@ exports[`settingsSelectors > defaultAgent > should merge DEFAULT_AGENT and s.set
 {
   "config": {
     "chatConfig": {
-      "autoCreateTopicThreshold": 2,
       "enableAgentMode": true,
-      "enableAutoCreateTopic": true,
       "enableCompressHistory": true,
       "enableContextCompression": true,
       "enableHistoryCount": false,
@@ -149,9 +147,7 @@ exports[`settingsSelectors > defaultAgent > should merge DEFAULT_AGENT and s.set
 exports[`settingsSelectors > defaultAgentConfig > should merge DEFAULT_AGENT_CONFIG and defaultAgent(s).config correctly 1`] = `
 {
   "chatConfig": {
-    "autoCreateTopicThreshold": 2,
     "enableAgentMode": true,
-    "enableAutoCreateTopic": true,
     "enableCompressHistory": true,
     "enableContextCompression": true,
     "enableHistoryCount": false,

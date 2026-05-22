@@ -18,6 +18,9 @@ interface TaskTriggerTagProps {
   scheduleTimezone?: string | null;
 }
 
+const FLEX_MIN_WIDTH_0 = { minWidth: 0 };
+const PILL_STYLE = { borderRadius: 24, minWidth: 0 };
+
 const TaskTriggerTag = memo<TaskTriggerTagProps>(
   ({ automationMode, heartbeatInterval, mode = 'tag', schedulePattern, scheduleTimezone }) => {
     const { t, i18n } = useTranslation('chat');
@@ -63,11 +66,11 @@ const TaskTriggerTag = memo<TaskTriggerTagProps>(
       // plus timezone on hover, so no information is lost.
       return (
         <Tooltip title={data?.tooltip}>
-          <Flexbox horizontal align="center" gap={10} style={{ minWidth: 0 }}>
+          <Flexbox horizontal align="center" gap={10} style={FLEX_MIN_WIDTH_0}>
             <Icon color={cssVar.colorTextDescription} icon={ClockIcon} size={16} />
             <Text
               ellipsis
-              style={{ minWidth: 0 }}
+              style={FLEX_MIN_WIDTH_0}
               type={data ? undefined : 'secondary'}
               weight={data ? 500 : undefined}
             >
@@ -90,11 +93,11 @@ const TaskTriggerTag = memo<TaskTriggerTagProps>(
           gap={4}
           height={24}
           paddingInline={'4px 8px'}
-          style={{ borderRadius: 24 }}
+          style={PILL_STYLE}
           variant={'outlined'}
         >
           <Icon color={cssVar.colorTextDescription} icon={ClockIcon} size={16} />
-          <Text fontSize={12} type={'secondary'}>
+          <Text ellipsis fontSize={12} style={FLEX_MIN_WIDTH_0} type={'secondary'}>
             {data.primary}
           </Text>
         </Block>

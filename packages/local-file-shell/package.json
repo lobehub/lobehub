@@ -7,7 +7,12 @@
   "types": "./src/index.ts",
   "dependencies": {
     "@lobechat/file-loaders": "workspace:*",
+    "debug": "^4.4.3",
     "diff": "^8.0.2",
+    "execa": "^9.6.1",
     "fast-glob": "^3.3.3"
+  },
+  "devDependencies": {
+    "@types/debug": "^4.1.12"
   }
 }

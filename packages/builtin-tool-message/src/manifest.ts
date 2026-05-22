@@ -6,6 +6,60 @@ import { MessageApiName, MessageToolIdentifier } from './types';
 const platformEnum = ['discord', 'telegram', 'slack', 'feishu', 'lark', 'qq', 'wechat'];
 
 /**
+ * Shared schema fragment for the outbound `attachments` array on message-
+ * sending tools (`sendMessage`, `sendDirectMessage`, `replyToThread`). Mirrors
+ * the `SendMessageAttachment` TypeScript type and the TRPC zod schema.
+ *
+ * Either `data` (base64-encoded bytes) or `fetchUrl` (public URL the
+ * platform server can GET) must be provided. `fetchUrl` is preferred when
+ * the bytes already live somewhere reachable — base64 inflates the request
+ * payload ~33% and many platforms (LINE, QQ guild) can ONLY consume URLs.
+ *
+ * Platform support varies — see each platform's `sendAttachments` helper
+ * for the actual delivery shape:
+ * - WeChat / Discord / Telegram / Slack / Feishu / Lark: full support
+ * - LINE: image + HTTPS URL only; other types degrade to a text-link line
+ * - QQ: group / c2c only; guild / dms / data-only degrade to text-link
+ */
+const attachmentsSchema = {
+  description:
+    'Optional outbound media attachments (images / files / video / audio). Each item must provide either `fetchUrl` (preferred — a public URL the platform server fetches) or `data` (base64-encoded bytes). When you have a stable public URL for the file, ALWAYS use `fetchUrl` — base64 bloats the payload and a few platforms (LINE, QQ guild) only accept URLs.',
+  items: {
+    additionalProperties: false,
+    properties: {
+      data: {
+        description:
+          'Base64-encoded bytes. Use only when no public URL exists; prefer `fetchUrl`. Some platforms (LINE, QQ guild) cannot consume this and will fall back to a text-link mention of the attachment.',
+        type: 'string',
+      },
+      fetchUrl: {
+        description:
+          'Public HTTPS URL the platform server can GET to retrieve the bytes. Preferred over `data`.',
+        type: 'string',
+      },
+      mimeType: {
+        description: 'MIME type (e.g. "image/png", "application/pdf"). Optional but helpful.',
+        type: 'string',
+      },
+      name: {
+        description:
+          'Filename shown to the recipient (e.g. "report.pdf"). Optional; some platforms infer from URL.',
+        type: 'string',
+      },
+      type: {
+        description:
+          'Media category. Drives which platform-specific endpoint is used (e.g. image → Telegram sendPhoto, file → Telegram sendDocument).',
+        enum: ['image', 'file', 'video', 'audio'],
+        type: 'string',
+      },
+    },
+    required: ['type'],
+    type: 'object',
+  },
+  type: 'array',
+};
+
+/**
  * Schema for the bot's `settings` JSON column. Both `createBot` and
  * `updateBot` accept a partial object — only the keys you pass are written
  * (everything else preserved). Use this as the single source of truth for
@@ -106,13 +160,24 @@ export const MessageManifest: BuiltinToolManifest = {
     // ==================== Direct Messaging ====================
     {
       description:
-        'Send a direct/private message to a user by their platform user ID. Creates a DM channel automatically. Use this when the user asks to "DM me" or "send me a private message".',
+        'Send a direct/private message to a user by their platform user ID. Creates a DM channel automatically. Use this when the user asks to "DM me" or "send me a private message". Supports optional outbound media `attachments` (images / files / video / audio). To pick the target: call `listBots` for the platform first — if there\'s an entry, use its `botId`; otherwise call `listMessengers` and use that entry\'s `id` as `messengerInstallationId`.',
       name: MessageApiName.sendDirectMessage,
       parameters: {
         additionalProperties: false,
         properties: {
+          attachments: attachmentsSchema,
+          botId: {
+            description:
+              'Per-agent bot id from `listBots`. Provide exactly one of `botId` or `messengerInstallationId`.',
+            type: 'string',
+          },
           content: {
             description: 'Message content',
+            type: 'string',
+          },
+          messengerInstallationId: {
+            description:
+              'System Bot installation id from `listMessengers`. Provide exactly one of `botId` or `messengerInstallationId`.',
             type: 'string',
           },
           platform: {
@@ -132,11 +197,18 @@ export const MessageManifest: BuiltinToolManifest = {
 
     // ==================== Core Message Operations ====================
     {
-      description: 'Send a message to a specific channel or conversation on the target platform.',
+      description:
+        "Send a message to a specific channel or conversation on the target platform. Supports optional outbound media `attachments` (images / files / video / audio) — use this when you need to deliver a generated image, document, or other binary alongside your reply. To pick the target: call `listBots` first — if there's an entry for the platform, use its `botId`; otherwise call `listMessengers` and use that entry's `id` as `messengerInstallationId`.",
       name: MessageApiName.sendMessage,
       parameters: {
         additionalProperties: false,
         properties: {
+          attachments: attachmentsSchema,
+          botId: {
+            description:
+              'Per-agent bot id from `listBots`. Provide exactly one of `botId` or `messengerInstallationId`.',
+            type: 'string',
+          },
           channelId: {
             description: 'Channel / conversation / room ID to send the message to',
             type: 'string',
@@ -147,9 +219,15 @@ export const MessageManifest: BuiltinToolManifest = {
             type: 'string',
           },
           embeds: {
-            description: 'Optional array of embed/attachment objects (platform-specific structure)',
+            description:
+              'Optional array of platform-specific embed objects (Discord embeds, Slack blocks, etc.). For generic file/image delivery use `attachments` instead.',
             items: { type: 'object' },
             type: 'array',
+          },
+          messengerInstallationId: {
+            description:
+              'System Bot installation id from `listMessengers`. Provide exactly one of `botId` or `messengerInstallationId`.',
+            type: 'string',
           },
           platform: {
             description: 'Target messaging platform',
@@ -550,13 +628,25 @@ export const MessageManifest: BuiltinToolManifest = {
       },
     },
     {
-      description: 'Send a reply to a thread.',
+      description:
+        "Send a reply to a thread. Supports optional outbound media `attachments` (images / files / video / audio). To pick the target: call `listBots` first — if there's an entry for the platform, use its `botId`; otherwise call `listMessengers` and use that entry's `id` as `messengerInstallationId`.",
       name: MessageApiName.replyToThread,
       parameters: {
         additionalProperties: false,
         properties: {
+          attachments: attachmentsSchema,
+          botId: {
+            description:
+              'Per-agent bot id from `listBots`. Provide exactly one of `botId` or `messengerInstallationId`.',
+            type: 'string',
+          },
           content: {
             description: 'Reply message content',
+            type: 'string',
+          },
+          messengerInstallationId: {
+            description:
+              'System Bot installation id from `listMessengers`. Provide exactly one of `botId` or `messengerInstallationId`.',
             type: 'string',
           },
           platform: {
@@ -629,7 +719,7 @@ export const MessageManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'List all configured bot integrations for the current agent. Use this first to discover which platforms are connected and get bot IDs.',
+        "List all per-agent bot integrations configured for the current agent (with runtime status). Returns this agent's per-agent bots only — use `listMessengers` to see the user's System Bot installations (a separate outbound channel source). For sending decisions, try `listBots` first; if it has no entry for the target platform, fall back to `listMessengers`.",
       name: MessageApiName.listBots,
       parameters: {
         additionalProperties: false,
@@ -758,6 +848,117 @@ export const MessageManifest: BuiltinToolManifest = {
           },
         },
         required: ['botId'],
+        type: 'object',
+      },
+    },
+
+    // ==================== System Bot Messenger Management ====================
+    {
+      description:
+        "List the current user's LobeHub System Bot installations across workspaces (Slack workspaces, Discord guilds, Telegram). Each entry returns an `id` to pass back as `installationId` on `getMessengerDetail` / `uninstallMessenger`, or as `messengerInstallationId` on send APIs. Use this when the user asks about their connected workspaces, or as the fallback when `listBots` has no entry for the target platform.",
+      name: MessageApiName.listMessengers,
+      parameters: {
+        additionalProperties: false,
+        properties: {},
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Get detailed metadata about a single System Bot installation. Returns the same fields as `listMessengers` plus `revokedAt` (null when active). Use before `uninstallMessenger` to surface tenant info in the confirmation prompt.',
+      name: MessageApiName.getMessengerDetail,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          installationId: {
+            description: 'Stable installation id from `listMessengers`.',
+            type: 'string',
+          },
+        },
+        required: ['installationId'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        "Revoke a System Bot workspace install. **This affects every user in that workspace** — for Slack it freezes the workspace's bot since dispatch is gated on the install token; for Discord it removes the audit entry (the bot itself stays in the guild until an admin removes it). Always confirm with the user before calling. To disconnect only the current user's account (not the whole workspace), use `unlinkMessenger` instead.",
+      name: MessageApiName.uninstallMessenger,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          installationId: {
+            description: 'Installation id to revoke.',
+            type: 'string',
+          },
+        },
+        required: ['installationId'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'List the platforms where the user can install the LobeHub System Bot. Returns `appId` / `botUsername` for deep-link install URLs. Use when guiding the user through `Settings → Messenger` install for a new platform — note the actual install flow requires browser OAuth and cannot be initiated from this tool.',
+      name: MessageApiName.listMessengerPlatforms,
+      parameters: {
+        additionalProperties: false,
+        properties: {},
+        type: 'object',
+      },
+    },
+    {
+      description:
+        "List the user's per-platform account links — one entry per (platform, tenant). Each link determines which agent receives inbound IM messages from that platform/tenant. Use before `setMessengerActiveAgent` to find the current routing.",
+      name: MessageApiName.listMessengerLinks,
+      parameters: {
+        additionalProperties: false,
+        properties: {},
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Change which agent receives inbound IM messages on a specific platform link. Pass `agentId: null` to clear the active agent (next message gets the "/agents to pick" prompt). Pass `tenantId` to scope to one Slack workspace; omit for Telegram (global bot).',
+      name: MessageApiName.setMessengerActiveAgent,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          agentId: {
+            description:
+              'Agent id to route to, or null to clear. The agent must belong to the current user.',
+            type: ['string', 'null'],
+          },
+          platform: {
+            description: 'Target platform',
+            enum: platformEnum,
+            type: 'string',
+          },
+          tenantId: {
+            description: 'Optional tenant scope (Slack workspace id).',
+            type: 'string',
+          },
+        },
+        required: ['platform', 'agentId'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        "Remove the current user's account link for a platform. The workspace install stays — other users can still use the System Bot in that workspace; only the current user's inbound routing is removed. To revoke the install for everyone, use `uninstallMessenger`.",
+      name: MessageApiName.unlinkMessenger,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          platform: {
+            description: 'Target platform',
+            enum: platformEnum,
+            type: 'string',
+          },
+          tenantId: {
+            description: 'Optional tenant scope (Slack workspace id).',
+            type: 'string',
+          },
+        },
+        required: ['platform'],
         type: 'object',
       },
     },

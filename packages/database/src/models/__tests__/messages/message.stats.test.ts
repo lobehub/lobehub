@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { uuid } from '@/utils/uuid';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { embeddings, files, messages, sessions, users } from '../../../schemas';
+import { agents, embeddings, files, messages, sessions, topics, users } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { MessageModel } from '../../message';
 import { codeEmbedding } from '../fixtures/embedding';
@@ -659,6 +659,73 @@ describe('MessageModel Statistics Tests', () => {
       await serverDB.insert(users).values({ id: 'empty-count-user' });
       const result = await otherModel.countUpTo(10);
       expect(result).toBe(0);
+    });
+  });
+
+  describe('hasTopicMessages', () => {
+    const agentId = 'agent-has-topic-messages';
+    const topicWithMessages = 'topic-with-messages';
+    const emptyTopic = 'topic-empty';
+
+    beforeEach(async () => {
+      await serverDB.insert(agents).values({ id: agentId, userId });
+      await serverDB.insert(topics).values([
+        { id: topicWithMessages, userId, agentId, title: 'with-messages' },
+        { id: emptyTopic, userId, agentId, title: 'empty' },
+      ]);
+      await serverDB
+        .insert(messages)
+        .values([
+          { id: 'm1', userId, role: 'assistant', content: 'hi', topicId: topicWithMessages },
+        ]);
+    });
+
+    it('returns true when topic has at least one message', async () => {
+      const result = await messageModel.hasTopicMessages(topicWithMessages);
+      expect(result).toBe(true);
+    });
+
+    it('returns false when topic has no messages', async () => {
+      const result = await messageModel.hasTopicMessages(emptyTopic);
+      expect(result).toBe(false);
+    });
+
+    it('scopes by userId — other users’ messages do not leak', async () => {
+      const otherModel = new MessageModel(serverDB, otherUserId);
+      const result = await otherModel.hasTopicMessages(topicWithMessages);
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('findFirstAssistantInTopic', () => {
+    const agentId = 'agent-find-first-assistant';
+    const topicId = 'topic-find-first-assistant';
+
+    beforeEach(async () => {
+      await serverDB.insert(agents).values({ id: agentId, userId });
+      await serverDB.insert(topics).values({ id: topicId, userId, agentId, title: 'topic' });
+    });
+
+    it('returns undefined when no assistant message exists', async () => {
+      await serverDB
+        .insert(messages)
+        .values([
+          { id: 'u1', userId, role: 'user', content: 'hi', topicId, createdAt: new Date(1) },
+        ]);
+
+      const result = await messageModel.findFirstAssistantInTopic(topicId);
+      expect(result).toBeUndefined();
+    });
+
+    it('returns the earliest assistant message in the topic', async () => {
+      await serverDB.insert(messages).values([
+        { id: 'u1', userId, role: 'user', content: 'hi', topicId, createdAt: new Date(2) },
+        { id: 'a-late', userId, role: 'assistant', content: 'b', topicId, createdAt: new Date(3) },
+        { id: 'a-early', userId, role: 'assistant', content: 'a', topicId, createdAt: new Date(1) },
+      ]);
+
+      const result = await messageModel.findFirstAssistantInTopic(topicId);
+      expect(result?.id).toBe('a-early');
     });
   });
 });

@@ -255,6 +255,20 @@ export const userRouter = router({
     return onboardingService.getOrCreateState();
   }),
 
+  getOnboardingBootstrapState: userProcedure.query(async ({ ctx }) => {
+    const onboardingService = new OnboardingService(ctx.serverDB, ctx.userId);
+
+    return onboardingService.getBootstrapState();
+  }),
+
+  sendOnboardingFirstMessage: userProcedure
+    .input(z.object({ agentId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const onboardingService = new OnboardingService(ctx.serverDB, ctx.userId);
+
+      return onboardingService.sendOnboardingFirstMessage(input);
+    }),
+
   getOnboardingAgentContext: userProcedure.query(async ({ ctx }) => {
     const onboardingService = new OnboardingService(ctx.serverDB, ctx.userId);
     const docService = new AgentDocumentsService(ctx.serverDB, ctx.userId);

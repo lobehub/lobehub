@@ -499,6 +499,201 @@ describe('HeterogeneousPersistenceHandler', () => {
       const toolMsg = [...h.messages.values()].find((m) => m.role === 'tool');
       expect(newAssistants[0].parentId).toBe(toolMsg?.id);
     });
+
+    it('chains off the tool message even when the prior tools_calling landed on a DIFFERENT replica (multi-replica recovery)', async () => {
+      // Reproduces the prod bug: the in-memory state.toolState gets RESET at
+      // the end of every handleStepStart. If the next step's tools_calling
+      // event then lands on a different replica, this replica's toolState
+      // stays empty, and the FOLLOWING step boundary computes parentId from
+      // that empty state → falls back to currentAssistantMessageId →
+      // new assistant chains off the previous ASSISTANT rather than the
+      // previous TOOL message.
+      //
+      // Fix: `ingest()` refresh adopts `tools[]` from DB as authoritative
+      // whenever DB has more resolved tools than memory.
+      const h = createHarness({
+        assistantMessageId: 'asst-init',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      // Track topic.metadata so updateMetadata({heteroCurrentMsgId}) becomes
+      // observable to subsequent findById calls — the default harness mock is
+      // a no-op which would mask the bug behind a sync-rollback artifact.
+      const metaState: FakeTopicMetadata = {
+        runningOperation: { assistantMessageId: 'asst-init', operationId: 'op-1' },
+      };
+      h.topicModel.findById.mockImplementation(async (id: string) => {
+        if (id !== 'topic-1') return null;
+        return { agentId: null, id, metadata: { ...metaState } };
+      });
+      h.topicModel.updateMetadata.mockImplementation(async (_id: string, patch: any) => {
+        Object.assign(metaState, patch);
+      });
+
+      // ── Batch 1: this replica drains step 1's stream_start ──
+      // No tools yet on this asst → handleStepStart chains step 1 off
+      // 'asst-init' (correct, since asst-init had no tools).
+      await h.handler.ingest({
+        events: [buildEvent('stream_start', 1, { newStep: true })],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const step1Asst = [...h.messages.values()].find(
+        (m) => m.role === 'assistant' && m.id !== 'asst-init',
+      )!;
+      expect(step1Asst).toBeDefined();
+      expect(step1Asst.parentId).toBe('asst-init');
+
+      // ── Simulate "another replica drained step 1's tools_calling + result" ──
+      // The other replica would have:
+      //   1. Created a tool message
+      //   2. Rewritten step1Asst.tools[] with result_msg_id pointing at it
+      // Both writes hit DB. THIS replica's in-memory state.toolState stays []
+      // (reset by handleStepStart) and has no idea this happened.
+      h.messages.set('tool-other-replica', {
+        agentId: null,
+        content: 'result body',
+        id: 'tool-other-replica',
+        parentId: step1Asst.id,
+        role: 'tool',
+        tool_call_id: 'tc-1',
+        topicId: 'topic-1',
+      });
+      h.messages.set(step1Asst.id, {
+        ...h.messages.get(step1Asst.id)!,
+        model: 'claude-sonnet-4-6',
+        provider: 'claude-code',
+        tools: [
+          {
+            apiName: 'Bash',
+            arguments: '{}',
+            id: 'tc-1',
+            identifier: 'bash',
+            result_msg_id: 'tool-other-replica',
+            type: 'default',
+          },
+        ],
+      });
+
+      // ── Batch 2: step 2 stream_start lands back on THIS replica ──
+      // Pre-fix: state.toolState.payloads is still [] → lastToolMsgId is
+      // undefined → stepParentId falls back to step1Asst.id (BUG).
+      // Post-fix: ingest() refresh reads step1Asst.tools from DB → toolState
+      // gets the tool with result_msg_id → handleStepStart chains correctly.
+      await h.handler.ingest({
+        events: [buildEvent('stream_start', 2, { newStep: true })],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const step2Asst = [...h.messages.values()].find(
+        (m) => m.role === 'assistant' && m.id !== 'asst-init' && m.id !== step1Asst.id,
+      );
+      expect(step2Asst).toBeDefined();
+      expect(step2Asst!.parentId).toBe('tool-other-replica');
+      // And the new assistant should inherit model/provider that the other
+      // replica wrote — refresh also restores lastModel/lastProvider so we
+      // no longer create assistants with model=null/provider=null on the
+      // replica that didn't drain step_complete.
+      expect(step2Asst!.model).toBe('claude-sonnet-4-6');
+      expect(step2Asst!.provider).toBe('claude-code');
+    });
+
+    it('handleTurnMetadata persists model/provider to DB so other replicas can recover lastModel/lastProvider', async () => {
+      const h = createHarness({
+        assistantMessageId: 'asst-init',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      await h.handler.ingest({
+        events: [
+          buildEvent('step_complete', 0, {
+            model: 'claude-sonnet-4-6',
+            phase: 'turn_metadata',
+            provider: 'claude-code',
+            usage: { inputTokens: 10, outputTokens: 5 },
+          }),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      // Was previously `{ metadata: { usage } }` only — now extended to also
+      // carry model/provider so a replica picking up the next step boundary
+      // can read them back from DB even if it never drained this event.
+      expect(h.messageModel.update).toHaveBeenCalledWith('asst-init', {
+        metadata: { usage: { inputTokens: 10, outputTokens: 5 } },
+        model: 'claude-sonnet-4-6',
+        provider: 'claude-code',
+      });
+    });
+
+    it('retry recovers an unresolved tool that another replica only Phase-1 registered (no false-positive persistedIds)', async () => {
+      // Race: another replica wrote `assistant.tools[]` (Phase 1) but its
+      // Phase 2 — creating the `role:'tool'` row + backfilling
+      // `result_msg_id` — hasn't landed yet (or threw). The BatchIngester
+      // then retries the SAME tools_calling event onto THIS replica.
+      //
+      // If `persistedIds` includes the unresolved id, `persistToolBatch`
+      // filters it out of `freshForCreate`, skips the create, and rewrites
+      // `tools[]` unchanged → the tool is orphaned (never gets a tool
+      // message, never gets `result_msg_id`). Fix: only mark ids whose
+      // `result_msg_id` is filled in as persisted.
+      const h = createHarness({
+        assistantMessageId: 'asst-init',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      // Pre-populate the initial assistant with a Phase-1-only tool entry
+      // (no `result_msg_id`), simulating the other replica's mid-flight write.
+      h.messages.set('asst-init', {
+        ...h.messages.get('asst-init')!,
+        tools: [
+          {
+            apiName: 'Bash',
+            arguments: '{"cmd":"ls"}',
+            id: 'tc-unresolved',
+            identifier: 'bash',
+            type: 'default',
+            // NOTE: no result_msg_id — Phase 2 has not run yet.
+          },
+        ],
+      });
+
+      // Retry of the same tools_calling event lands on this replica.
+      await h.handler.ingest({
+        events: [
+          buildEvent('stream_chunk', 0, {
+            chunkType: 'tools_calling',
+            toolsCalling: [
+              {
+                apiName: 'Bash',
+                arguments: '{"cmd":"ls"}',
+                id: 'tc-unresolved',
+                identifier: 'bash',
+                type: 'default',
+              },
+            ],
+          }),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      // The tool message must have been created (Phase 2 completed via retry)
+      // and assistant.tools[0].result_msg_id must point at it.
+      const toolMsgs = [...h.messages.values()].filter((m) => m.role === 'tool');
+      expect(toolMsgs).toHaveLength(1);
+      expect(toolMsgs[0].tool_call_id).toBe('tc-unresolved');
+
+      const asst = h.messages.get('asst-init')!;
+      expect(asst.tools).toHaveLength(1);
+      expect(asst.tools![0].result_msg_id).toBe(toolMsgs[0].id);
+    });
   });
 
   describe('subagent threads', () => {

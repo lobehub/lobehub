@@ -47,12 +47,14 @@ export {
 } from './const';
 export { PlatformRegistry } from './registry';
 export type {
+  BotMessageAttachment,
   BotPlatformRedisClient,
   BotPlatformRuntimeContext,
   BotProviderConfig,
   ConnectionMode,
   ExtractFilesResult,
   FieldSchema,
+  MessengerContent,
   PlatformClient,
   PlatformDefinition,
   PlatformDocumentation,
@@ -61,7 +63,7 @@ export type {
   UsageStats,
   ValidationResult,
 } from './types';
-export { ClientFactory } from './types';
+export { ClientFactory, messengerContentText } from './types';
 export type { ProviderConfigInput, ResolvedBotProviderConfig } from './utils';
 export {
   buildRuntimeKey,

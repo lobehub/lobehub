@@ -77,14 +77,14 @@ describe('AgentSignalReviewContextModel', () => {
       await serverDB.insert(users).values({ id: userId });
       await serverDB.insert(agents).values([
         {
-          chatConfig: { autoCreateTopicThreshold: 2, selfIteration: { enabled: true } },
+          chatConfig: { selfIteration: { enabled: true } },
           id: 'agent-signal-review-context-enabled',
           slug: 'custom-agent',
           title: 'Custom enabled',
           userId,
         },
         {
-          chatConfig: { autoCreateTopicThreshold: 2, selfIteration: { enabled: false } },
+          chatConfig: { selfIteration: { enabled: false } },
           id: 'agent-signal-review-context-disabled',
           slug: 'custom-disabled',
           title: 'Custom disabled',
@@ -108,7 +108,7 @@ describe('AgentSignalReviewContextModel', () => {
       await serverDB.insert(users).values({ id: userId });
       await serverDB.insert(agents).values([
         {
-          chatConfig: { autoCreateTopicThreshold: 2, selfIteration: { enabled: true } },
+          chatConfig: { selfIteration: { enabled: true } },
           id: agentId,
           title: 'Review Context Agent',
           userId,
@@ -210,7 +210,7 @@ describe('AgentSignalReviewContextModel', () => {
       await serverDB.insert(users).values({ id: userId });
       await serverDB.insert(agents).values([
         {
-          chatConfig: { autoCreateTopicThreshold: 2, selfIteration: { enabled: true } },
+          chatConfig: { selfIteration: { enabled: true } },
           id: agentId,
           title: 'Review Context Agent',
           userId,
@@ -293,7 +293,7 @@ describe('AgentSignalReviewContextModel', () => {
       await serverDB.insert(users).values({ id: userId });
       await serverDB.insert(agents).values([
         {
-          chatConfig: { autoCreateTopicThreshold: 2, selfIteration: { enabled: true } },
+          chatConfig: { selfIteration: { enabled: true } },
           id: agentId,
           title: 'Review Context Agent',
           userId,

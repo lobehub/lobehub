@@ -21,6 +21,7 @@ import {
   peekPairingRequest,
   releasePairingClaim,
 } from './dmPairingStore';
+import { submitBotFeedback } from './feedbackSubmit';
 import {
   type BotPlatformRuntimeContext,
   type BotReplyLocale,
@@ -53,6 +54,7 @@ import {
   renderDmPairing,
   renderDmRejected,
   renderError,
+  renderFeedbackSubmitted,
   renderGroupRejected,
   renderInlineError,
   renderSenderRejected,
@@ -114,6 +116,22 @@ interface CommandContext {
    *  surface only the ID, not a friendly label. */
   authorUserName?: string;
   post: (text: string) => Promise<any>;
+  /**
+   * Post a reply visible only to the invoker.
+   *
+   * Set only on native-slash paths (Slack / Discord) where chat-sdk knows
+   * the interaction context — Slack uses native ephemeral, Discord uses an
+   * ephemeral interaction response, both fall back to a DM if needed
+   * (`fallbackToDM: true`). Undefined on text-based platforms (Telegram,
+   * Feishu) — handlers should fall back to `post` there since those
+   * platforms have no per-user ephemeral primitive.
+   *
+   * Used by `/feedback` so the user's feedback text and the bot's
+   * confirmation don't leak into the public channel; other commands keep
+   * using `post` to preserve the existing channel-visible behaviour
+   * (e.g. `/new` resetting is useful for everyone to see).
+   */
+  postEphemeral?: (text: string) => Promise<any>;
   /** Locale to use for any system-generated reply text. Plumbed in by the
    *  caller — text-based commands derive it per-message via the platform's
    *  `extractAuthorLocale`, native slash commands fall back to the platform
@@ -1623,6 +1641,47 @@ export class BotMessageRouter {
         },
         name: 'approve',
       },
+      {
+        description: 'Send feedback directly to the LobeHub team (no AI reply)',
+        // Declaring the argument so Discord/Slack surface a `/feedback <message>`
+        // prompt instead of registering the command as zero-arg (see the
+        // `options` comment on the BotCommand interface).
+        options: [
+          {
+            description: 'Your feedback message',
+            name: 'message',
+            required: true,
+          },
+        ],
+        handler: async (ctx) => {
+          log('command /feedback: agent=%s, platform=%s', agentId, platform);
+          // Prefer the ephemeral channel when available (Slack / Discord
+          // native slash) so the user's feedback content and the bot's
+          // confirmation never leak into the public channel. Text-based
+          // platforms (Telegram, Feishu) have no ephemeral primitive, so
+          // we fall back to a regular post — those platforms are DM-first
+          // anyway, so the privacy concern is much smaller.
+          const reply = ctx.postEphemeral ?? ctx.post;
+          const body = ctx.args.trim();
+          if (!body) {
+            await reply(renderCommandReply('cmdFeedbackUsage', ctx.replyLocale));
+            return;
+          }
+          const result = await submitBotFeedback(serverDB, {
+            applicationId,
+            body,
+            platform,
+            threadId: ctx.threadId,
+            userId,
+          });
+          if (!result.success) {
+            await reply(renderCommandReply('cmdFeedbackError', ctx.replyLocale));
+            return;
+          }
+          await reply(renderFeedbackSubmitted(result.issueUrl, ctx.replyLocale));
+        },
+        name: 'feedback',
+      },
     ];
   }
 
@@ -1696,6 +1755,16 @@ export class BotMessageRouter {
           authorUserId: authorLike.userId,
           authorUserName: authorLike.userName,
           post: (text) => event.channel.post(text),
+          // Wire chat-sdk's `postEphemeral` so commands that want a private
+          // reply (e.g. `/feedback`) can opt in. `fallbackToDM: true` so
+          // Discord — which has no channel-level ephemeral outside of an
+          // interaction response — still delivers privately by DMing the
+          // user instead of broadcasting to the channel. Wrapped here, not
+          // in the handler, so commands stay platform-agnostic.
+          postEphemeral: event.user
+            ? (text: string) =>
+                event.channel.postEphemeral(event.user!, text, { fallbackToDM: true })
+            : undefined,
           // Native slash-command events don't carry a Chat SDK Message, so
           // there's no per-sender locale field to read; use the channel
           // default. Telegram/Feishu/etc. dispatch via the text-based path

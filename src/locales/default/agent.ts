@@ -91,7 +91,7 @@ export default {
     'Connect this assistant to WeChat via iLink Bot for private and group chats.',
   'channel.wechatQrExpired': 'QR code expired. Please refresh to get a new one.',
   'channel.wechatQrRefresh': 'Refresh QR Code',
-  'channel.wechatQrScaned': 'QR code scanned. Please confirm the login in WeChat.',
+  'channel.wechatQrScaned': 'QR code scanned. Please confirm the login on WeChat.',
   'channel.wechatQrWait': 'Open WeChat and scan the QR code to connect.',
   'channel.wechatBotId': 'Bot ID',
   'channel.wechatConnectedInfo': 'Connected WeChat Account',
@@ -239,7 +239,7 @@ export default {
   'channel.userIdHint.qq': 'Your QQ number, shown on your QQ profile page.',
   'channel.userIdHint.slack': 'Open your Slack profile → ⋮ More → Copy member ID (starts with U).',
   'channel.userIdHint.telegram':
-    'Send any message to @userinfobot in Telegram — it replies with your numeric User ID.',
+    'Send any message to @userinfobot on Telegram — it replies with your numeric User ID.',
   'channel.refreshStatus': 'Refresh status',
   'channel.runtimeDisconnected': 'Bot disconnected',
   'channel.statusConnected': 'Connected',

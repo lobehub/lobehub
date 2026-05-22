@@ -7,9 +7,8 @@ import {
 import { buildAgentMarketplaceToolResult } from '@lobechat/builtin-tool-web-onboarding/agentMarketplace';
 import type { OnboardingAgentMarketplacePickSnapshot } from '@lobechat/types';
 
+import { installMarketplaceAgents } from '@/services/installMarketplaceAgents';
 import { topicService } from '@/services/topic';
-
-import { installMarketplaceAgents } from './installMarketplaceAgents';
 
 interface SubmitToolInteractionOptions {
   createUserMessage?: boolean;

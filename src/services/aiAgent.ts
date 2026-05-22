@@ -77,6 +77,7 @@ export interface GetSubAgentTaskStatusParams {
 export interface InterruptTaskParams {
   operationId?: string;
   threadId?: string;
+  topicId?: string;
 }
 
 /**

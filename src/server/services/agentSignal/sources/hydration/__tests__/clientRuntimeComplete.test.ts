@@ -82,11 +82,13 @@ describe('resolveClientRuntimeCompleteFeedbackSource', () => {
       expect(result.source).toEqual({
         payload: {
           agentId: 'client-agent',
+          anchorMessageId: assistantMessageId,
           message: 'Please remember this workflow.',
           messageId: parentMessageId,
           threadId: 'client-thread',
           topicId,
           trigger: AGENT_SIGNAL_SOURCE_TYPES.clientRuntimeComplete,
+          triggerMessageId: parentMessageId,
         },
         scopeKey: `topic:${topicId}`,
         sourceId: `${assistantMessageId}:completion:${parentMessageId}`,
@@ -94,6 +96,58 @@ describe('resolveClientRuntimeCompleteFeedbackSource', () => {
         timestamp: 123,
       });
       expect(result.source?.payload.serializedContext).toBeUndefined();
+    },
+    DB_HYDRATION_TEST_TIMEOUT,
+  );
+
+  /**
+   * @example
+   * client.runtime.complete({ anchorMessageId, triggerMessageId }) keeps explicit message anchors.
+   */
+  it(
+    'hydrates runtime complete with explicit anchorMessageId and triggerMessageId from the source payload',
+    async () => {
+      const db = await getTestDB();
+      const userId = `user_${uuid()}`;
+      const topicId = `topic_${uuid()}`;
+      const parentMessageId = `msg_${uuid()}`;
+      const assistantMessageId = `msg_${uuid()}`;
+      const anchorMessageId = `msg_${uuid()}`;
+      const triggerMessageId = `msg_${uuid()}`;
+
+      await db.insert(users).values({ id: userId });
+      await db.insert(topics).values({ id: topicId, title: 'Workflow Topic', userId });
+      await db.insert(messages).values({
+        content: 'Keep explicit completion anchors.',
+        id: parentMessageId,
+        role: 'user',
+        topicId,
+        userId,
+      });
+      await db.insert(messages).values({
+        content: 'Completion response.',
+        id: assistantMessageId,
+        parentId: parentMessageId,
+        role: 'assistant',
+        topicId,
+        userId,
+      });
+
+      const result = await resolveClientRuntimeCompleteFeedbackSource(
+        createCompleteSource({
+          anchorMessageId,
+          assistantMessageId,
+          triggerMessageId,
+        }),
+        { db, userId },
+      );
+
+      expect(result.source?.payload).toMatchObject({
+        anchorMessageId,
+        messageId: parentMessageId,
+        trigger: AGENT_SIGNAL_SOURCE_TYPES.clientRuntimeComplete,
+        triggerMessageId,
+      });
     },
     DB_HYDRATION_TEST_TIMEOUT,
   );

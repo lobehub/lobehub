@@ -214,6 +214,30 @@ export const createGatewayEventHandler = (
   let accumulatedContent = '';
   let accumulatedReasoning = '';
 
+  // Active reasoning sub-op id. Mirrors the LLM `StreamingHandler` lifecycle so
+  // `isMessageInReasoning(messageId)` (which drives the Thinking UI's
+  // "thinking..." title + auto-expand) flips to `true` while thinking is
+  // streaming. Without this, heterogeneous server-mode messages render the
+  // collapsed "completed" state from the first chunk on.
+  let reasoningOperationId: string | undefined;
+
+  const startReasoningIfNeeded = () => {
+    if (reasoningOperationId) return;
+    const { operationId: reasoningOpId } = get().startOperation({
+      context: { ...context, messageId: currentAssistantMessageId },
+      parentOperationId: operationId,
+      type: 'reasoning',
+    });
+    get().associateMessageWithOperation(currentAssistantMessageId, reasoningOpId);
+    reasoningOperationId = reasoningOpId;
+  };
+
+  const endReasoningIfNeeded = () => {
+    if (!reasoningOperationId) return;
+    get().completeOperation(reasoningOperationId);
+    reasoningOperationId = undefined;
+  };
+
   // Sequential processing queue — ensures stream_chunk waits for stream_start's fetch
   let processingChain: Promise<void> = Promise.resolve();
 
@@ -241,6 +265,12 @@ export const createGatewayEventHandler = (
             // Associate the new message with the operation so UI shows generating state
             get().associateMessageWithOperation(currentAssistantMessageId, operationId);
           }
+
+          // Close any reasoning op carried over from the previous step.
+          // Safe to run after the assistant-id swap: the op was started with
+          // its own messageId context, so completion doesn't depend on the
+          // current id.
+          endReasoningIfNeeded();
 
           // Reset accumulators for the new stream
           accumulatedContent = '';
@@ -271,7 +301,10 @@ export const createGatewayEventHandler = (
             payload: {
               agentId: context.agentId,
               ...(currentAssistantMessageId
-                ? { assistantMessageId: currentAssistantMessageId }
+                ? {
+                    anchorMessageId: currentAssistantMessageId,
+                    assistantMessageId: currentAssistantMessageId,
+                  }
                 : {}),
               operationId,
               stepIndex: event.stepIndex,
@@ -290,6 +323,9 @@ export const createGatewayEventHandler = (
           if (!data) return;
 
           if (data.chunkType === 'text' && data.content) {
+            // Text after reasoning marks the end of the thinking pass — see
+            // `StreamingHandler.handleText` for the same transition.
+            endReasoningIfNeeded();
             accumulatedContent += data.content;
             get().internal_dispatchMessage(
               {
@@ -302,6 +338,7 @@ export const createGatewayEventHandler = (
           }
 
           if (data.chunkType === 'reasoning' && data.reasoning) {
+            startReasoningIfNeeded();
             accumulatedReasoning += data.reasoning;
             get().internal_dispatchMessage(
               {
@@ -314,6 +351,7 @@ export const createGatewayEventHandler = (
           }
 
           if (data.chunkType === 'tools_calling' && data.toolsCalling) {
+            endReasoningIfNeeded();
             get().internal_dispatchMessage(
               {
                 id: currentAssistantMessageId,
@@ -348,6 +386,7 @@ export const createGatewayEventHandler = (
           // until agent_runtime_end so users don't think the session ended
           // during tool execution gaps between steps
           get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
+          endReasoningIfNeeded();
         });
         break;
       }
@@ -374,7 +413,13 @@ export const createGatewayEventHandler = (
           // Persist a paused marker so the sidebar reflects "waiting on user" across reload.
           // Resume back to 'running' is free: approve / reject both spawn a new op via the
           // executor entries, which already write 'running'.
-          if (context.topicId) void get().updateTopicStatus?.(context.topicId, 'paused');
+          if (context.topicId)
+            void get().updateTopicStatus?.({
+              agentId: context.agentId,
+              groupId: context.groupId,
+              status: 'paused',
+              topicId: context.topicId,
+            });
         }
 
         break;
@@ -434,7 +479,10 @@ export const createGatewayEventHandler = (
             payload: {
               agentId: context.agentId,
               ...(currentAssistantMessageId
-                ? { assistantMessageId: currentAssistantMessageId }
+                ? {
+                    anchorMessageId: currentAssistantMessageId,
+                    assistantMessageId: currentAssistantMessageId,
+                  }
                 : {}),
               operationId,
               topicId: context.topicId ?? undefined,
@@ -443,6 +491,7 @@ export const createGatewayEventHandler = (
             sourceType: 'client.gateway.runtime_end',
           });
           get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
+          endReasoningIfNeeded();
           get().completeOperation(operationId);
 
           const completedOp = get().operations[operationId];
@@ -450,6 +499,15 @@ export const createGatewayEventHandler = (
             get().markUnreadCompleted(completedOp.context.agentId, completedOp.context.topicId);
           }
 
+          await fetchAndReplaceMessages(get, context).catch(console.error);
+        });
+        break;
+      }
+
+      case 'notify_update': {
+        // Remote hetero agent (openclaw / hermes) wrote a message to DB via
+        // `lh notify`. DB is the source of truth — just refresh the message list.
+        enqueue(async () => {
           await fetchAndReplaceMessages(get, context).catch(console.error);
         });
         break;
@@ -472,6 +530,7 @@ export const createGatewayEventHandler = (
           });
 
           get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
+          endReasoningIfNeeded();
           get().completeOperation(operationId);
 
           const updateResult = await messageService

@@ -1,8 +1,10 @@
 {
   "actionTag.category.command": "Befehl",
+  "actionTag.category.projectSkill": "Projektfertigkeit",
   "actionTag.category.skill": "Fähigkeit",
   "actionTag.category.tool": "Werkzeug",
   "actionTag.tooltip.command": "Führt vor dem Senden einen clientseitigen Slash-Befehl aus.",
+  "actionTag.tooltip.projectSkill": "Als Slash-Befehl gesendet, damit die CLI des Agenten die passende Projektfertigkeit ausführt.",
   "actionTag.tooltip.skill": "Lädt für diese Anfrage ein wiederverwendbares Fähigkeitspaket.",
   "actionTag.tooltip.tool": "Markiert ein Werkzeug, das der Benutzer für diese Anfrage ausdrücklich ausgewählt hat.",
   "actions.expand.off": "Einklappen",

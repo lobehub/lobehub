@@ -325,6 +325,12 @@ const InterruptTaskSchema = z
     operationId: z.string().optional(),
     /** Thread ID */
     threadId: z.string().optional(),
+    /**
+     * Topic ID — required to cancel remote hetero tasks (openclaw / hermes).
+     * When provided and the topic's runningOperation has a deviceId, the server
+     * will dispatch a cancelHeteroTask tool call to kill the remote process.
+     */
+    topicId: z.string().optional(),
   })
   .refine((data) => data.threadId || data.operationId, {
     message: 'Either threadId or operationId must be provided',
@@ -357,6 +363,7 @@ const AgentStreamEventSchema = z.object({
     'agent_intervention_response',
     'step_start',
     'step_complete',
+    'notify_update',
     'error',
   ]),
 });
@@ -1131,12 +1138,12 @@ export const aiAgentRouter = router({
    * It updates both operation status and Thread status to cancelled state.
    */
   interruptTask: aiAgentProcedure.input(InterruptTaskSchema).mutation(async ({ input, ctx }) => {
-    const { threadId, operationId } = input;
+    const { threadId, operationId, topicId } = input;
 
-    log('interruptTask: threadId=%s, operationId=%s', threadId, operationId);
+    log('interruptTask: threadId=%s, operationId=%s, topicId=%s', threadId, operationId, topicId);
 
     try {
-      return await ctx.aiAgentService.interruptTask({ operationId, threadId });
+      return await ctx.aiAgentService.interruptTask({ operationId, threadId, topicId });
     } catch (error: any) {
       if (error.message === 'Thread not found') {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Thread not found' });

@@ -23,6 +23,27 @@ const buildProvider = (phaseGuidance: string, context?: Partial<OnboardingContex
   });
 
 describe('OnboardingActionHintInjector', () => {
+  describe('agent identity reminder', () => {
+    it('separates assistant naming from account displayName hints', async () => {
+      const provider = buildProvider('Phase: Agent Identity. Name the assistant.', {
+        userInfo: { displayName: 'anbex' },
+      });
+      const result = await provider.process(
+        createContext([
+          { content: 'sys', role: 'system' },
+          { content: '叫你摸鱼大师，头像用 🎣', role: 'user' },
+        ]),
+      );
+
+      const last = result.messages.at(-1);
+      expect(last?.content).toContain('X is agentName');
+      expect(last?.content).toContain('Y is agentEmoji');
+      expect(last?.content).toContain('anbex');
+      expect(last?.content).toContain('describe the user, not the assistant');
+      expect(last?.content).toContain('Do NOT include fullName in the same saveUserQuestion call');
+    });
+  });
+
   describe('discovery turn reminder', () => {
     const phaseGuidance = 'Phase: Discovery. Explore the user world.';
 
@@ -60,6 +81,24 @@ describe('OnboardingActionHintInjector', () => {
       const last = result.messages.at(-1);
       expect(last?.content).toContain('Recommended Discovery target has been reached');
       expect(last?.content).toContain('transition to Summary');
+    });
+  });
+
+  describe('turn order reminder', () => {
+    it('always warns against bundling a question into a tool-call message', async () => {
+      const provider = buildProvider('Phase: User Identity. Learn who the user is.');
+      const result = await provider.process(
+        createContext([
+          { content: 'sys', role: 'system' },
+          { content: 'hi', role: 'user' },
+        ]),
+      );
+
+      const last = result.messages.at(-1);
+      expect(last?.content).toContain('TURN ORDER');
+      expect(last?.content).toContain(
+        'never put a user-facing question in the same message as a tool call',
+      );
     });
   });
 

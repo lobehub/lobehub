@@ -1,15 +1,25 @@
+import { isDesktop } from '@lobechat/const';
+import { type ListProjectSkillsResult, type ProjectSkillItem } from '@lobechat/electron-client-ipc';
 import type { IEditor, SlashOptions } from '@lobehub/editor';
+import { SkillsIcon } from '@lobehub/ui/icons';
 import Fuse from 'fuse.js';
 import { $getSelection, $isRangeSelection } from 'lexical';
 import { ArchiveIcon, MessageSquarePlusIcon } from 'lucide-react';
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useClientDataSWR } from '@/libs/swr';
+import { localFileService } from '@/services/electron/localFileService';
+import { useAgentStore } from '@/store/agent';
+import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
+import { topicSelectors } from '@/store/chat/selectors';
 
+import { useAgentId } from '../../hooks/useAgentId';
 import { useChatInputStore } from '../../store';
 import { INSERT_ACTION_TAG_COMMAND, type InsertActionTagPayload } from './command';
 import { type ActionTagData, BUILTIN_COMMANDS } from './types';
+import { useInstalledSkillsAndTools } from './useInstalledSkillsAndTools';
 
 type SlashItem = NonNullable<SlashOptions['items'] extends (infer U)[] ? U : never>;
 
@@ -30,6 +40,34 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
   const { t } = useTranslation('editor');
   const editorInstance = useChatInputStore((s) => s.editor);
   const activeTopicId = useChatStore((s) => s.activeTopicId);
+
+  // Resolve hetero-agent working directory so we can surface its project skills.
+  // Topic-level override takes precedence over the agent's configured cwd.
+  const agentId = useAgentId();
+  const isHetero = useAgentStore((s) =>
+    agentId ? !!agentByIdSelectors.getAgencyConfigById(agentId)(s)?.heterogeneousProvider : false,
+  );
+  const agentWorkingDirectory = useAgentStore((s) =>
+    agentId ? agentByIdSelectors.getAgentWorkingDirectoryById(agentId)(s) : undefined,
+  );
+  const topicWorkingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
+  const workingDirectory = topicWorkingDirectory || agentWorkingDirectory;
+
+  const skillsEnabled = isDesktop && isHetero && !!workingDirectory;
+  const { data: projectSkillsData } = useClientDataSWR<ListProjectSkillsResult>(
+    skillsEnabled ? ['project-skills', workingDirectory] : null,
+    () => localFileService.listProjectSkills({ scope: workingDirectory! }),
+    { revalidateOnFocus: false, shouldRetryOnError: false },
+  );
+  const projectSkills = projectSkillsData?.skills;
+
+  // Installed skills shared with the @ mention menu (builtin / lobehub / market / user agent skills).
+  // Tools intentionally stay out of slash — they remain @-mention only.
+  const installedSkillsAndTools = useInstalledSkillsAndTools();
+  const installedSkills = useMemo(
+    () => installedSkillsAndTools.filter((item) => item.category === 'skill'),
+    [installedSkillsAndTools],
+  );
 
   return useCallback(
     async (
@@ -52,32 +90,96 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
         },
       });
 
-      // All action tags are line-start only for now
+      const makeProjectSkillItem = (skill: ProjectSkillItem): SlashMenuOption => ({
+        // Slash is already implied by the trigger + tag color, so we render the
+        // bare skill name here. The markdown writer adds the `/` back on send.
+        icon: SkillsIcon,
+        key: `project-skill-${skill.name}`,
+        label: skill.name,
+        metadata: {
+          category: 'projectSkill',
+          description: skill.description,
+          type: skill.name,
+        },
+        onSelect: (editor: IEditor) => {
+          const payload: InsertActionTagPayload = {
+            category: 'projectSkill',
+            label: skill.name,
+            type: skill.name,
+          };
+          editor.dispatchCommand(INSERT_ACTION_TAG_COMMAND, payload);
+        },
+      });
+
+      const makeSkillItem = (skill: ActionTagData): SlashMenuOption => ({
+        icon: SkillsIcon,
+        key: `skill-${skill.type}`,
+        label: skill.label,
+        metadata: { category: 'skill', type: skill.type },
+        onSelect: (editor: IEditor) => {
+          const payload: InsertActionTagPayload = {
+            category: 'skill',
+            label: skill.label,
+            type: skill.type,
+          };
+          editor.dispatchCommand(INSERT_ACTION_TAG_COMMAND, payload);
+        },
+      });
+
+      // Trigger position:
+      //   - line-start  → commands + installed skills + project skills
+      //   - mid-line w/ preceding whitespace → installed skills + project skills only (no commands)
+      //   - otherwise (e.g. inside http://, a/b) → menu suppressed
       let isAtLineStart = search === null;
+      let isMidLineAfterWhitespace = false;
       if (!isAtLineStart && editorInstance) {
         const lexicalEditor = editorInstance.getLexicalEditor();
         if (lexicalEditor) {
           lexicalEditor.getEditorState().read(() => {
             const selection = $getSelection();
-            if ($isRangeSelection(selection)) {
-              const node = selection.anchor.getNode();
-              const topElement = node.getTopLevelElement();
-              if (topElement) {
-                const paragraphText = topElement.getTextContent();
-                const triggerAndSearch = '/' + (search?.matchingString || '');
-                isAtLineStart = paragraphText === triggerAndSearch;
-              }
+            if (!$isRangeSelection(selection)) return;
+            const node = selection.anchor.getNode();
+            const topElement = node.getTopLevelElement();
+            if (!topElement) return;
+
+            const paragraphText = topElement.getTextContent();
+            const triggerAndSearch = '/' + (search?.matchingString || '');
+
+            if (paragraphText === triggerAndSearch) {
+              isAtLineStart = true;
+              return;
+            }
+
+            const triggerIndex = paragraphText.lastIndexOf(triggerAndSearch);
+            if (triggerIndex === 0) {
+              isAtLineStart = true;
+            } else if (triggerIndex > 0 && /\s/.test(paragraphText[triggerIndex - 1])) {
+              isMidLineAfterWhitespace = true;
             }
           });
         }
       }
 
-      if (!isAtLineStart) return [];
+      if (!isAtLineStart && !isMidLineAfterWhitespace) return [];
 
-      // Built-in commands only (filter newTopic when no active topic)
-      for (const action of BUILTIN_COMMANDS) {
-        if (action.type === 'newTopic' && !activeTopicId) continue;
-        allItems.push(makeCommandItem(action) as SlashItem);
+      // Built-in commands — line-start only
+      if (isAtLineStart) {
+        for (const action of BUILTIN_COMMANDS) {
+          if (action.type === 'newTopic' && !activeTopicId) continue;
+          allItems.push(makeCommandItem(action) as SlashItem);
+        }
+      }
+
+      // Installed skills — shown in both positions
+      for (const skill of installedSkills) {
+        allItems.push(makeSkillItem(skill) as SlashItem);
+      }
+
+      // Hetero-agent project skills (file-system based, resolved by the CLI agent itself)
+      if (projectSkills && projectSkills.length > 0) {
+        for (const skill of projectSkills) {
+          allItems.push(makeProjectSkillItem(skill) as SlashItem);
+        }
       }
 
       // Fuzzy filtering
@@ -88,6 +190,6 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
 
       return allItems;
     },
-    [t, editorInstance, activeTopicId],
+    [t, editorInstance, activeTopicId, projectSkills, installedSkills],
   );
 };

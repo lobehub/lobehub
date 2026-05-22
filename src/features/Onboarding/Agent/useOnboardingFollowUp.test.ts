@@ -5,6 +5,11 @@ import { useFollowUpActionStore } from '@/store/followUpAction';
 
 import { useOnboardingFollowUp } from './useOnboardingFollowUp';
 
+const MODEL_CONFIG = {
+  model: 'scene-model',
+  provider: 'scene-provider',
+};
+
 describe('useOnboardingFollowUp', () => {
   let fetchFor: ReturnType<typeof vi.fn>;
   let clear: ReturnType<typeof vi.fn>;
@@ -24,7 +29,7 @@ describe('useOnboardingFollowUp', () => {
 
   it('triggerExtract skips when disabled', async () => {
     const { result } = renderHook(() =>
-      useOnboardingFollowUp({ enabled: false, isGreeting: false }),
+      useOnboardingFollowUp({ enabled: false, isGreeting: false, modelConfig: MODEL_CONFIG }),
     );
     await result.current.triggerExtract('topic-1', 'discovery');
     expect(fetchFor).not.toHaveBeenCalled();
@@ -32,7 +37,7 @@ describe('useOnboardingFollowUp', () => {
 
   it('triggerExtract skips when phase is undefined', async () => {
     const { result } = renderHook(() =>
-      useOnboardingFollowUp({ enabled: true, isGreeting: false }),
+      useOnboardingFollowUp({ enabled: true, isGreeting: false, modelConfig: MODEL_CONFIG }),
     );
     await result.current.triggerExtract('topic-1', undefined);
     expect(fetchFor).not.toHaveBeenCalled();
@@ -40,32 +45,37 @@ describe('useOnboardingFollowUp', () => {
 
   it('triggerExtract skips when phase is summary', async () => {
     const { result } = renderHook(() =>
-      useOnboardingFollowUp({ enabled: true, isGreeting: false }),
+      useOnboardingFollowUp({ enabled: true, isGreeting: false, modelConfig: MODEL_CONFIG }),
     );
     await result.current.triggerExtract('topic-1', 'summary');
     expect(fetchFor).not.toHaveBeenCalled();
   });
 
   it('triggerExtract skips when isGreeting is true', async () => {
-    const { result } = renderHook(() => useOnboardingFollowUp({ enabled: true, isGreeting: true }));
+    const { result } = renderHook(() =>
+      useOnboardingFollowUp({ enabled: true, isGreeting: true, modelConfig: MODEL_CONFIG }),
+    );
     await result.current.triggerExtract('topic-1', 'agent_identity');
     expect(fetchFor).not.toHaveBeenCalled();
   });
 
   it('triggerExtract fires fetchFor with onboarding hint on a normal turn', async () => {
     const { result } = renderHook(() =>
-      useOnboardingFollowUp({ enabled: true, isGreeting: false }),
+      useOnboardingFollowUp({ enabled: true, isGreeting: false, modelConfig: MODEL_CONFIG }),
     );
     await result.current.triggerExtract('topic-1', 'discovery');
     expect(fetchFor).toHaveBeenCalledWith('topic-1', {
-      kind: 'onboarding',
-      phase: 'discovery',
+      hint: {
+        kind: 'onboarding',
+        phase: 'discovery',
+      },
+      modelConfig: MODEL_CONFIG,
     });
   });
 
   it('onBeforeSendMessage clears when enabled', async () => {
     const { result } = renderHook(() =>
-      useOnboardingFollowUp({ enabled: true, isGreeting: false }),
+      useOnboardingFollowUp({ enabled: true, isGreeting: false, modelConfig: MODEL_CONFIG }),
     );
     await result.current.onBeforeSendMessage();
     expect(clear).toHaveBeenCalledTimes(1);
@@ -73,7 +83,7 @@ describe('useOnboardingFollowUp', () => {
 
   it('onBeforeSendMessage does nothing when disabled', async () => {
     const { result } = renderHook(() =>
-      useOnboardingFollowUp({ enabled: false, isGreeting: false }),
+      useOnboardingFollowUp({ enabled: false, isGreeting: false, modelConfig: MODEL_CONFIG }),
     );
     await result.current.onBeforeSendMessage();
     expect(clear).not.toHaveBeenCalled();

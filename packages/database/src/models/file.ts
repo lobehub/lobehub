@@ -95,8 +95,9 @@ export class FileModel {
   updateGlobalFile = async (
     hashId: string,
     data: Partial<Pick<NewGlobalFile, 'metadata' | 'url'>>,
+    trx?: Transaction,
   ) => {
-    return this.db.update(globalFiles).set(data).where(eq(globalFiles.hashId, hashId));
+    return (trx ?? this.db).update(globalFiles).set(data).where(eq(globalFiles.hashId, hashId));
   };
 
   checkHash = async (hash: string) => {

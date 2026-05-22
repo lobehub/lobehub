@@ -4,7 +4,7 @@ import { Icon } from '@lobehub/ui';
 import { GroupBotSquareIcon } from '@lobehub/ui/icons';
 import { App } from 'antd';
 import type { ItemType } from 'antd/es/menu/interface';
-import { BotIcon, FileTextIcon, FolderCogIcon, FolderPlus } from 'lucide-react';
+import { BotIcon, FileTextIcon, FolderCogIcon, FolderPlus, MonitorSmartphone } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -21,6 +21,8 @@ import { useAgentStore } from '@/store/agent';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useHomeStore } from '@/store/home';
 import { usePageStore } from '@/store/page';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 interface CreateAgentOptions {
   groupId?: string;
@@ -198,6 +200,7 @@ export const useCreateMenuItems = () => {
 
   const agentModal = useOptionalAgentModal();
   const openCreateModal = agentModal?.openCreateModal;
+  const enablePlatformAgent = useUserStore(labPreferSelectors.enablePlatformAgent);
 
   /**
    * Create agent menu item
@@ -241,6 +244,28 @@ export const useCreateMenuItems = () => {
       });
     },
     [t, createHeterogeneousAgent],
+  );
+
+  /**
+   * Create platform agent menu item (openclaw / hermes — remote device agents)
+   * Opens the 3-step creation modal
+   */
+  const createPlatformAgentMenuItem = useCallback(
+    (options?: CreateAgentOptions): ItemType => {
+      if (!enablePlatformAgent) return null;
+      return {
+        icon: <Icon icon={MonitorSmartphone} />,
+        key: 'newPlatformAgent',
+        label: t('newPlatformAgent'),
+        onClick: (info) => {
+          info.domEvent?.stopPropagation();
+          agentModal?.openCreatePlatformAgentModal(
+            options?.groupId ? { groupId: options.groupId } : undefined,
+          );
+        },
+      };
+    },
+    [t, agentModal, enablePlatformAgent],
   );
 
   /**
@@ -340,6 +365,7 @@ export const useCreateMenuItems = () => {
     createGroupWithMembers,
     createPage,
     createPageMenuItem,
+    createPlatformAgentMenuItem,
     createSessionGroupMenuItem,
     openCreateModal,
 

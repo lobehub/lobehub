@@ -84,15 +84,20 @@ export interface AgentSignalSourcePayloadMap {
   };
   [AGENT_SIGNAL_SOURCE_TYPES.agentUserMessage]: {
     agentId?: string;
+    /** Message the receipt or UI should attach to, usually the assistant response. */
+    anchorMessageId?: string;
     documentPayload?: Record<string, unknown>;
     intents?: Array<'document' | 'memory' | 'persona' | 'prompt' | 'skill'>;
     memoryPayload?: Record<string, unknown>;
     message: string;
+    /** Legacy source message identifier kept for compatibility. */
     messageId: string;
     serializedContext?: string;
     threadId?: string;
     topicId?: string;
     trigger?: string;
+    /** Message that initiated the source or run, usually the user message. */
+    triggerMessageId?: string;
   };
   [AGENT_SIGNAL_SOURCE_TYPES.botMessageMerged]: {
     agentId?: string;
@@ -105,52 +110,81 @@ export interface AgentSignalSourcePayloadMap {
   };
   [AGENT_SIGNAL_SOURCE_TYPES.clientGatewayError]: {
     agentId?: string;
+    /** Message the receipt or UI should attach to, usually the assistant response. */
+    anchorMessageId?: string;
+    /** Legacy assistant response identifier kept for compatibility. */
     assistantMessageId?: string;
     errorMessage?: string;
     operationId: string;
     serializedContext?: string;
     topicId?: string;
+    /** Message that initiated the source or run, usually the user message. */
+    triggerMessageId?: string;
   };
   [AGENT_SIGNAL_SOURCE_TYPES.clientGatewayRuntimeEnd]: {
     agentId?: string;
+    /** Message the receipt or UI should attach to, usually the assistant response. */
+    anchorMessageId?: string;
+    /** Legacy assistant response identifier kept for compatibility. */
     assistantMessageId?: string;
     operationId: string;
     serializedContext?: string;
     topicId?: string;
+    /** Message that initiated the source or run, usually the user message. */
+    triggerMessageId?: string;
   };
   [AGENT_SIGNAL_SOURCE_TYPES.clientGatewayStepComplete]: {
     agentId?: string;
+    /** Message the receipt or UI should attach to, usually the assistant response. */
+    anchorMessageId?: string;
+    /** Legacy assistant response identifier kept for compatibility. */
     assistantMessageId?: string;
     operationId: string;
     serializedContext?: string;
     stepIndex: number;
     topicId?: string;
+    /** Message that initiated the source or run, usually the user message. */
+    triggerMessageId?: string;
   };
   [AGENT_SIGNAL_SOURCE_TYPES.clientGatewayStreamStart]: {
     agentId?: string;
+    /** Message the receipt or UI should attach to, usually the assistant response. */
+    anchorMessageId?: string;
+    /** Legacy assistant response identifier kept for compatibility. */
     assistantMessageId?: string;
     operationId: string;
     serializedContext?: string;
     stepIndex: number;
     topicId?: string;
+    /** Message that initiated the source or run, usually the user message. */
+    triggerMessageId?: string;
   };
   [AGENT_SIGNAL_SOURCE_TYPES.clientRuntimeComplete]: {
     agentId?: string;
+    /** Message the receipt or UI should attach to, usually the assistant response. */
+    anchorMessageId?: string;
+    /** Legacy assistant response identifier kept for compatibility. */
     assistantMessageId?: string;
     operationId: string;
     serializedContext?: string;
     status?: 'cancelled' | 'completed' | 'failed';
     threadId?: string;
     topicId?: string;
+    /** Message that initiated the source or run, usually the user message. */
+    triggerMessageId?: string;
   };
   [AGENT_SIGNAL_SOURCE_TYPES.clientRuntimeStart]: {
     agentId?: string;
+    /** Message the receipt or UI should attach to, usually the assistant response. */
+    anchorMessageId?: string;
     operationId: string;
     parentMessageId?: string;
     parentMessageType?: string;
     serializedContext?: string;
     threadId?: string;
     topicId?: string;
+    /** Message that initiated the source or run, usually the user message. */
+    triggerMessageId?: string;
   };
   [AGENT_SIGNAL_SOURCE_TYPES.runtimeAfterStep]: {
     agentId?: string;

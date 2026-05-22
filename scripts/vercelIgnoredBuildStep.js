@@ -21,7 +21,7 @@ function shouldProceedBuild() {
       ":!./*.md" \
       ":!./Dockerfile" \
       ":!./.github" \
-      ":!./.husky" \
+      ":!./.githooks" \
       ":!./scripts"';
 
     execSync(diffCommand);

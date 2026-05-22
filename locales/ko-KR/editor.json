@@ -1,8 +1,10 @@
 {
   "actionTag.category.command": "명령",
+  "actionTag.category.projectSkill": "프로젝트 스킬",
   "actionTag.category.skill": "스킬",
   "actionTag.category.tool": "도구",
   "actionTag.tooltip.command": "전송 전에 클라이언트 측 슬래시 명령을 실행합니다.",
+  "actionTag.tooltip.projectSkill": "슬래시 호출로 전송되어 에이전트의 CLI가 일치하는 프로젝트 스킬을 실행합니다.",
   "actionTag.tooltip.skill": "이번 요청에 사용할 재사용 가능한 스킬 패키지를 불러옵니다.",
   "actionTag.tooltip.tool": "이번 요청에서 사용자가 명시적으로 선택한 도구를 표시합니다.",
   "actions.expand.off": "접기",

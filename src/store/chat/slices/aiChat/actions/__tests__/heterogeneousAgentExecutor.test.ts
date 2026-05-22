@@ -2959,12 +2959,11 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
     });
 
     /**
-     * Hypothesis 2 from the issue: a toolless step in the middle.
-     * If Monitor's stdout triggers CC to respond with only text (no tool_use),
-     * the next step must still chain through. This test documents current
-     * behavior: toolless step breaks tool → next-tool chain.
+     * LOBE-8993 regression: a toolless step in the middle must NOT break the
+     * zigzag chain. The next step should chain back to the most recent tool
+     * result ever produced in the run, not to the toolless assistant.
      */
-    it('toolless middle step: chain visibly breaks at text-only step', async () => {
+    it('toolless middle step: next step chains back to last real tool', async () => {
       const idCounter = { tool: 0, assistant: 0 };
       mockCreateMessage.mockImplementation(async (params: any) => {
         if (params.role === 'tool') {
@@ -2993,15 +2992,61 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       );
       expect(assistantCreates.length).toBe(2);
 
-      // Step 1 parent = Monitor tool from step 0 → this IS correct (tool-1)
+      // Step 1 parent = Monitor tool from step 0 (tool-1)
       expect(assistantCreates[0][0].parentId).toBe('tool-1');
 
-      // Step 2 parent: step 1 had NO tools, so toolState.payloads is empty.
-      // Code falls back to currentAssistantMessageId (= step 1 assistant).
-      // BUG: this breaks the assistantGroup chain because collectAssistantChain
-      // only walks tool → assistant, never assistant → assistant.
-      expect(assistantCreates[1][0].parentId).toBe('ast-new-1');
-      // ^ If this assertion passes, the chain IS broken.
+      // Step 2 parent: step 1 was toolless, but the chain must skip back to
+      // step 0's Monitor (tool-1) so MessageCollector's assistant → tool →
+      // assistant walk keeps every assistant in the same group.
+      expect(assistantCreates[1][0].parentId).toBe('tool-1');
+    });
+
+    /**
+     * LOBE-8993 follow-up: N consecutive toolless steps (Monitor pushing
+     * stdout line by line, each line triggering a new LLM call that only
+     * answers with text). All toolless assistants must chain back to the
+     * same originating tool result; otherwise the UI splits one bubble per
+     * Monitor line.
+     */
+    it('consecutive toolless steps: all parents resolve to the originating tool', async () => {
+      const idCounter = { tool: 0, assistant: 0 };
+      mockCreateMessage.mockImplementation(async (params: any) => {
+        if (params.role === 'tool') {
+          idCounter.tool++;
+          return { id: `tool-${idCounter.tool}` };
+        }
+        idCounter.assistant++;
+        return { id: `ast-new-${idCounter.assistant}` };
+      });
+
+      await runWithEvents([
+        ccInit(),
+        // Step 0: Monitor kicks off the long-running task
+        ccToolUse('msg_01', 'toolu_mon_0', 'Monitor', { shell: 'tail -f log' }),
+        ccToolResult('toolu_mon_0', 'Monitor started'),
+        // Step 1, 2, 3: each Monitor stdout line drives a toolless reply
+        ccText('msg_02', '等 list 完。'),
+        ccText('msg_03', '84842 列完，开干。'),
+        ccText('msg_04', '100/84842 全 skip…'),
+        // Step 4: CC finally reacts with a Bash tool
+        ccToolUse('msg_05', 'toolu_bash_1', 'Bash', { command: 'echo ack' }),
+        ccToolResult('toolu_bash_1', 'ack'),
+        ccResult(),
+      ]);
+
+      const assistantCreates = mockCreateMessage.mock.calls.filter(
+        ([p]: any) => p.role === 'assistant',
+      );
+      // 4 new assistants (steps 1–4); step 0 reuses ast-initial
+      expect(assistantCreates.length).toBe(4);
+
+      // All toolless steps chain back to the Monitor tool from step 0
+      expect(assistantCreates[0][0].parentId).toBe('tool-1');
+      expect(assistantCreates[1][0].parentId).toBe('tool-1');
+      expect(assistantCreates[2][0].parentId).toBe('tool-1');
+      // Step 4 also chains to tool-1 — its own step had no tools yet at
+      // step_start, the Bash tool only persists after stream_start fires.
+      expect(assistantCreates[3][0].parentId).toBe('tool-1');
     });
 
     /**
@@ -3046,6 +3091,145 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       // result_msg_id is set by persistToolBatch Phase 2 (queued on persistQueue
       // BEFORE the step_boundary persistQueue.then), so this should work.
       expect(assistantCreates[0][0].parentId).toBe('tool-1');
+    });
+  });
+
+  // ────────────────────────────────────────────────────
+  // LOBE-8998: external signal stamping on Monitor-driven follow-up steps
+  // ────────────────────────────────────────────────────
+
+  describe('LOBE-8998 external signal (metadata.signal)', () => {
+    const ccTaskStarted = (taskId: string, toolUseId: string) => ({
+      session_id: 'cc-sess-1',
+      subtype: 'task_started',
+      task_id: taskId,
+      tool_use_id: toolUseId,
+      type: 'system',
+    });
+    const ccTaskNotification = (taskId: string) => ({
+      session_id: 'cc-sess-1',
+      subtype: 'task_notification',
+      task_id: taskId,
+      type: 'system',
+    });
+
+    it('stamps metadata.signal on assistant turns CC opens without user input while a task is active', async () => {
+      const idCounter = { tool: 0, assistant: 0 };
+      mockCreateMessage.mockImplementation(async (params: any) => {
+        if (params.role === 'tool') {
+          idCounter.tool++;
+          return { id: `tool-${idCounter.tool}` };
+        }
+        idCounter.assistant++;
+        return { id: `ast-new-${idCounter.assistant}` };
+      });
+
+      await runWithEvents([
+        ccInit(),
+        // Step 0: LLM calls Monitor; CC registers it as a long-running
+        // task; Monitor's initial "started" tool_result lands as a user
+        // event — so the FOLLOW-UP turn is a natural confirmation, NOT
+        // a signal callback.
+        ccMessageStart('msg_01'),
+        ccToolUse('msg_01', 'toolu_mon_0', 'Monitor', { shell: 'every 1s' }),
+        ccTaskStarted('task_a', 'toolu_mon_0'),
+        ccToolResult('toolu_mon_0', 'Monitor started'),
+        // Step 1: natural confirmation turn — NO signal tag.
+        ccMessageStart('msg_02'),
+        ccText('msg_02', 'Monitor 已启动。'),
+        // Step 2: Monitor pushed stdout → CC re-invokes LLM. No new
+        // user event was emitted between msg_02 end and msg_03 start.
+        // This IS a signal callback.
+        ccMessageStart('msg_03'),
+        ccText('msg_03', '第 1 次：12:00:01'),
+        // Step 3: another Monitor push → another signal callback.
+        ccMessageStart('msg_04'),
+        ccText('msg_04', '第 2 次：12:00:02'),
+        // Task ends; Step 4 is a natural summary turn, NOT signal.
+        ccTaskNotification('task_a'),
+        ccMessageStart('msg_05'),
+        ccText('msg_05', 'Monitor 任务已完成。'),
+        ccResult(),
+      ]);
+
+      const assistantCreates = mockCreateMessage.mock.calls.filter(
+        ([p]: any) => p.role === 'assistant',
+      );
+      // Step 0 reuses ast-initial; steps 1..4 → 4 fresh creates.
+      expect(assistantCreates.length).toBe(4);
+
+      // Step 1 confirmation: no signal
+      expect(assistantCreates[0][0].metadata?.signal).toBeUndefined();
+      // Step 2 first signal callback
+      expect(assistantCreates[1][0].metadata?.signal).toEqual({
+        sequence: 1,
+        sourceToolCallId: 'toolu_mon_0',
+        sourceToolName: 'Monitor',
+        type: 'tool-stdout',
+      });
+      // Step 3 second signal callback, sequence advances
+      expect(assistantCreates[2][0].metadata?.signal).toEqual({
+        sequence: 2,
+        sourceToolCallId: 'toolu_mon_0',
+        sourceToolName: 'Monitor',
+        type: 'tool-stdout',
+      });
+      // Step 4 post-task summary: tagged with `task-completion` (LOBE-8998)
+      // so MessageCollector renders it inside the same AssistantGroup,
+      // after the SignalCallbacks accordion.
+      expect(assistantCreates[3][0].metadata?.signal).toEqual({
+        sourceToolCallId: 'toolu_mon_0',
+        sourceToolName: 'Monitor',
+        type: 'task-completion',
+      });
+    });
+
+    it('does NOT stamp metadata.signal on turns following a tool_result (main-chain follow-up)', async () => {
+      const idCounter = { tool: 0, assistant: 0 };
+      mockCreateMessage.mockImplementation(async (params: any) => {
+        if (params.role === 'tool') {
+          idCounter.tool++;
+          return { id: `tool-${idCounter.tool}` };
+        }
+        idCounter.assistant++;
+        return { id: `ast-new-${idCounter.assistant}` };
+      });
+
+      await runWithEvents([
+        ccInit(),
+        ccMessageStart('msg_01'),
+        ccToolUse('msg_01', 'toolu_mon_0', 'Monitor', {}),
+        ccTaskStarted('task_a', 'toolu_mon_0'),
+        ccToolResult('toolu_mon_0', 'Monitor started'),
+        // Step 1: Monitor confirmation — main chain, no signal.
+        ccMessageStart('msg_02'),
+        ccText('msg_02', 'ok'),
+        // Step 2: LLM emits Bash. Adapter can't know about tool_use at
+        // stream_start time, so the signal tag IS stamped (Monitor is
+        // active and no user input arrived). Reader-side
+        // (`MessageCollector.getMessageSignal`) ignores the tag when
+        // `tools.length > 0`, so the mismatch is benign.
+        ccMessageStart('msg_03'),
+        ccToolUse('msg_03', 'toolu_bash_0', 'Bash', { command: 'echo' }),
+        ccToolResult('toolu_bash_0', 'echo result'),
+        // Step 3: post-Bash continuation — adapter saw the tool_result,
+        // so the next turn is a natural follow-up, no signal.
+        ccMessageStart('msg_04'),
+        ccText('msg_04', 'bash done'),
+        ccResult(),
+      ]);
+
+      const assistantCreates = mockCreateMessage.mock.calls.filter(
+        ([p]: any) => p.role === 'assistant',
+      );
+      expect(assistantCreates.length).toBe(3);
+      // Step 1 confirmation — no signal
+      expect(assistantCreates[0][0].metadata?.signal).toBeUndefined();
+      // Step 2 with Bash tool — signal IS stamped at stream_start, but
+      // collector defangs it (tools.length > 0).
+      expect(assistantCreates[1][0].metadata?.signal?.sourceToolCallId).toBe('toolu_mon_0');
+      // Step 3 post-Bash continuation — no signal.
+      expect(assistantCreates[2][0].metadata?.signal).toBeUndefined();
     });
   });
 

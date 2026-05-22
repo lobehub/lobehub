@@ -1,4 +1,4 @@
-import { REST } from '@discordjs/rest';
+import { type RawFile, REST } from '@discordjs/rest';
 import debug from 'debug';
 import {
   ApplicationCommandOptionType,
@@ -118,10 +118,19 @@ export class DiscordApi {
     await this.rest.patch(Routes.channel(channelId), { body: { name: truncatedName } });
   }
 
-  async createMessage(channelId: string, content: string): Promise<{ id: string }> {
-    log('createMessage: channel=%s', channelId);
+  async createMessage(
+    channelId: string,
+    content: string,
+    files?: RawFile[],
+  ): Promise<{ id: string }> {
+    log('createMessage: channel=%s, files=%d', channelId, files?.length ?? 0);
+    // When `files` is set, @discordjs/rest packs `body` into `payload_json`
+    // and emits multipart/form-data automatically. Without files we keep the
+    // application/json path because that's what the API rate-limit bucket
+    // expects for plain messages.
     const data = (await this.rest.post(Routes.channelMessages(channelId), {
       body: { content },
+      ...(files && files.length > 0 ? { files } : {}),
     })) as RESTPostAPIChannelMessageResult;
 
     return { id: data.id };

@@ -8,6 +8,7 @@ import { type ChatInputEditor } from './hooks/useChatInputEditor';
 import { useChatInputEditor } from './hooks/useChatInputEditor';
 import { type PublicState } from './store';
 import { useStoreApi } from './store';
+import { DEFAULT_CHAT_INPUT_FEATURE } from './store/initialState';
 
 export interface StoreUpdaterProps extends Partial<PublicState> {
   chatInputEditorRef?: ForwardedRef<ChatInputEditor | null>;
@@ -18,8 +19,8 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     agentId,
     chatInputEditorRef,
     contextWindowMessages,
-    disableMention,
-    disableSlash,
+    draftKey,
+    feature = DEFAULT_CHAT_INPUT_FEATURE,
     mobile,
     sendButtonProps,
     leftActions,
@@ -38,13 +39,13 @@ const StoreUpdater = memo<StoreUpdaterProps>(
 
     useStoreUpdater('agentId', agentId);
     useStoreUpdater('contextWindowMessages', contextWindowMessages);
+    useStoreUpdater('draftKey', draftKey);
     useStoreUpdater('mobile', mobile!);
     useStoreUpdater('mentionItems', mentionItems);
     useStoreUpdater('leftActions', leftActions!);
     useStoreUpdater('rightActions', rightActions!);
     useStoreUpdater('allowExpand', allowExpand);
-    useStoreUpdater('disableMention', disableMention);
-    useStoreUpdater('disableSlash', disableSlash);
+    useStoreUpdater('feature', feature);
     useStoreUpdater('slashPlacement', slashPlacement);
     useStoreUpdater('getMessages', getMessages);
 

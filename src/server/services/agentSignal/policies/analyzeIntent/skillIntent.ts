@@ -1,5 +1,6 @@
 import { DEFAULT_MINI_SYSTEM_AGENT_ITEM } from '@lobechat/const';
-import type { GenerateObjectPayload, GenerateObjectSchema } from '@lobechat/model-runtime';
+import type { GenerateObjectSchema } from '@lobechat/model-runtime';
+import { createAgentSignalAnalyzeIntentSkillIntentMessages } from '@lobechat/prompts';
 import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 import { z } from 'zod';
@@ -254,27 +255,6 @@ export interface SkillIntentClassifierAgentModelConfig {
   provider: string;
 }
 
-const createSkillIntentClassifierMessages = (
-  input: SkillIntentClassifierInput,
-): GenerateObjectPayload['messages'] => [
-  {
-    content:
-      'Classify skill intent for Agent Signal using semantic meaning and structured evidence. Return direct_decision only for explicit skill actions or implicit strong future-use procedural learning. Return accumulate for generic praise or weak approval. Return non_skill for user preference that does not belong to skill management. Do not author skills.',
-    role: 'system',
-  },
-  {
-    content: JSON.stringify({
-      message: input.message,
-      serializedContext:
-        input.serializedContext && input.serializedContext.length > 1800
-          ? `${input.serializedContext.slice(0, 1800)}...`
-          : input.serializedContext,
-      topicLabel: input.topicLabel,
-    }),
-    role: 'user',
-  },
-];
-
 /**
  * Model-backed skill-intent classifier for skill-domain feedback.
  *
@@ -335,7 +315,7 @@ export class SkillIntentClassifierAgentService implements SkillIntentClassifierS
 
     const result = await modelRuntime.generateObject(
       {
-        messages: createSkillIntentClassifierMessages(input),
+        messages: createAgentSignalAnalyzeIntentSkillIntentMessages(input),
         model: this.modelConfig.model,
         schema: SkillIntentGenerateObjectSchema,
       },

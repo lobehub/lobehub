@@ -1,4 +1,8 @@
-import type { AiFullModelCard } from 'model-bank';
+import type { AiFullModelCard, LobeDefaultAiModelListItem } from 'model-bank';
+
+interface BusinessModelConfigModule {
+  loadModels: () => Promise<LobeDefaultAiModelListItem[]>;
+}
 
 /**
  * Get the model property value, first from the specified provider, and then from other providers as a fallback.
@@ -12,13 +16,13 @@ export const getModelPropertyWithFallback = async <T>(
   propertyName: keyof AiFullModelCard,
   providerId?: string,
 ): Promise<T> => {
-  const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
+  const { loadModels } =
+    (await import('@lobechat/business-model-bank/model-config')) as BusinessModelConfigModule;
+  const models = await loadModels();
 
   // Step 1: If providerId is provided, prioritize an exact match (same provider + same id)
   if (providerId) {
-    const exactMatch = LOBE_DEFAULT_MODEL_LIST.find(
-      (m) => m.id === modelId && m.providerId === providerId,
-    );
+    const exactMatch = models.find((m) => m.id === modelId && m.providerId === providerId);
 
     if (exactMatch && exactMatch[propertyName] !== undefined) {
       return exactMatch[propertyName] as T;
@@ -26,7 +30,7 @@ export const getModelPropertyWithFallback = async <T>(
   }
 
   // Step 2: Fallback to a match ignoring the provider (match id only)
-  const fallbackMatch = LOBE_DEFAULT_MODEL_LIST.find((m) => m.id === modelId);
+  const fallbackMatch = models.find((m) => m.id === modelId);
 
   if (fallbackMatch && fallbackMatch[propertyName] !== undefined) {
     return fallbackMatch[propertyName] as T;

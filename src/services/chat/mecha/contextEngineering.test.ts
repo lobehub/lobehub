@@ -99,6 +99,9 @@ describe('contextEngineering', () => {
           content: 'Project setup steps',
           filename: 'setup.md',
           id: 'doc-1',
+          // `always` keeps this doc in the inline bucket; without it the
+          // default is progressive (metadata-only index, content hidden).
+          policyLoad: 'always',
           title: 'Setup',
         },
       ],

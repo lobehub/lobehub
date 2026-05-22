@@ -1,4 +1,4 @@
-import { AgentRuntimeErrorType } from '@lobechat/types';
+import { AgentRuntimeErrorType, RequestTrigger } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobeRuntimeAI } from '../BaseAI';
@@ -1102,6 +1102,37 @@ describe('createRouterRuntime', () => {
       const result = await runtime.generateObject(payload, options);
       expect(result).toEqual({ name: 'test' });
       expect(mockGenerateObject).toHaveBeenCalledWith(payload, options);
+    });
+
+    it('should forward options.metadata to onRouteAttempt', async () => {
+      const mockGenerateObject = vi.fn().mockResolvedValue({ name: 'test' });
+      const onRouteAttempt = vi.fn().mockResolvedValue(undefined);
+
+      class MockRuntime implements LobeRuntimeAI {
+        generateObject = mockGenerateObject;
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        onRouteAttempt,
+        routers: [
+          {
+            apiType: 'openai',
+            options: {},
+            runtime: MockRuntime as any,
+            models: ['gpt-4'],
+          },
+        ],
+      });
+
+      const runtime = new Runtime();
+      const payload = { model: 'gpt-4', messages: [{ role: 'user' as const, content: 'test' }] };
+      const metadata = { trigger: RequestTrigger.SignupEmailLLMReview };
+
+      await runtime.generateObject(payload, { metadata });
+
+      expect(mockGenerateObject).toHaveBeenCalledWith(payload, { metadata });
+      expect(onRouteAttempt).toHaveBeenCalledWith(expect.objectContaining({ metadata }));
     });
   });
 

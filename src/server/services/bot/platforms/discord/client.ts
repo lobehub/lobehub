@@ -14,6 +14,7 @@ import {
   type BotPlatformRuntimeContext,
   type BotProviderConfig,
   ClientFactory,
+  messengerContentText,
   type PlatformClient,
   type PlatformMessenger,
   type UsageStats,
@@ -22,6 +23,7 @@ import {
 import { formatUsageStats } from '../utils';
 import { DiscordApi } from './api';
 import { patchDiscordForwardedInteractions, patchDiscordThreadRecovery } from './patch';
+import { batchDiscordFiles, materializeAttachmentsForDiscord } from './sendAttachments';
 
 const log = debug('bot-platform:discord:bot');
 
@@ -228,8 +230,29 @@ class DiscordGatewayClient implements PlatformClient {
     const discord = this.discord;
     return {
       addReaction: (messageId, emoji) => discord.createReaction(channelId, messageId, emoji),
-      createMessage: (content) => discord.createMessage(channelId, content).then(() => {}),
-      editMessage: (messageId, content) => discord.editMessage(channelId, messageId, content),
+      createMessage: async (content) => {
+        const text = messengerContentText(content);
+        const attachments = typeof content === 'string' ? undefined : content.attachments;
+        if (!attachments?.length) {
+          await discord.createMessage(channelId, text);
+          return;
+        }
+        const files = await materializeAttachmentsForDiscord(attachments);
+        if (files.length === 0) {
+          await discord.createMessage(channelId, text);
+          return;
+        }
+        const batches = batchDiscordFiles(files);
+        for (const [i, batch] of batches.entries()) {
+          await discord.createMessage(channelId, i === 0 ? text : '', batch);
+        }
+      },
+      // editMessage: keep the text-only contract. Editing a message to add
+      // attachments is an advanced flow (PATCH with `attachments[]` keep-set
+      // + `files[]` adds) that isn't worth the complexity for the bot reply
+      // path — new chunks with attachments flow through `createMessage`.
+      editMessage: (messageId, content) =>
+        discord.editMessage(channelId, messageId, messengerContentText(content)),
       removeReaction: (messageId, emoji) => discord.removeOwnReaction(channelId, messageId, emoji),
       replaceReaction: async (messageId, prevEmoji, nextEmoji) => {
         if (prevEmoji === nextEmoji) return;

@@ -1,8 +1,6 @@
 {
   "addUserMessage.desc": "Adicione a entrada atual como uma mensagem do usuário sem iniciar a geração",
   "addUserMessage.title": "Adicionar Mensagem do Usuário",
-  "clearCurrentMessages.desc": "Limpe as mensagens e arquivos enviados da conversa atual",
-  "clearCurrentMessages.title": "Limpar Mensagens da Conversa",
   "commandPalette.desc": "Abra o painel de comandos global para acesso rápido às funcionalidades",
   "commandPalette.title": "Painel de Comandos",
   "deleteAndRegenerateMessage.desc": "Excluir a última mensagem e gerar novamente",

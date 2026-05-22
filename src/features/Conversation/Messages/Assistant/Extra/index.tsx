@@ -1,4 +1,5 @@
 import { LOADING_FLAT } from '@lobechat/const';
+import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
 import { type ModelPerformance, type ModelUsage } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
@@ -30,7 +31,10 @@ export const AssistantMessageExtra = memo<AssistantMessageExtraProps>(
     const isLogin = useUserStore(authSelectors.isLogin);
     const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
 
-    const showUsage = isDevMode && content !== LOADING_FLAT && !!model;
+    const showUsage =
+      isDevMode &&
+      content !== LOADING_FLAT &&
+      (!!model || !!(provider && HETEROGENEOUS_TYPE_LABELS[provider]));
     const showTts = isLogin && !!extra?.tts;
     const showTranslate = isLogin && !!extra?.translate;
 

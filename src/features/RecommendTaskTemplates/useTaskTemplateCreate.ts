@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
+import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import { taskTemplateService } from '@/services/taskTemplate';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
@@ -63,7 +64,9 @@ export const useTaskTemplateCreate = ({
       setCreated(true);
       onCreated(template.id);
       if (createdTask?.identifier) {
-        navigate(`/task/${createdTask.identifier}`);
+        navigate(
+          taskDetailPath(createdTask.identifier, createdTask.assigneeAgentId ?? inboxAgentId),
+        );
       }
     } catch (error) {
       console.error('[taskTemplate:create]', error);

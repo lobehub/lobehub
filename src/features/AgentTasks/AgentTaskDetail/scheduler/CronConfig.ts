@@ -16,7 +16,7 @@ export interface TimezoneOption {
 
 // IANA timezone identifiers are stored in `value` (Drizzle/cron expect the
 // underscored form). `label` is the human-readable display (underscores → spaces),
-// `offset` renders subtly on the right of each dropdown row à la Notion.
+// `offset` renders subtly on the right of each dropdown row, similar to Notion's style.
 export const TIMEZONE_OPTIONS: TimezoneOption[] = [
   { label: 'UTC', offset: 'UTC+0', value: 'UTC' },
 

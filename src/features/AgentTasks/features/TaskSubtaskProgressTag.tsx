@@ -75,7 +75,7 @@ const flattenSubtasks = (nodes: TaskDetailSubtask[]) => {
 
 interface TaskSubtaskProgressTagProps {
   currentIdentifier?: string;
-  onSubtaskClick?: (identifier: string) => void;
+  onSubtaskClick?: (identifier: string, assigneeAgentId?: string) => void;
   subtasks?: TaskDetailSubtask[];
 }
 
@@ -116,7 +116,8 @@ const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
             </Text>
           </Flexbox>
         ),
-        onClick: () => onSubtaskClick?.(subtask.task.identifier),
+        onClick: () =>
+          onSubtaskClick?.(subtask.task.identifier, subtask.task.assignee?.id ?? undefined),
       };
     }) as DropdownMenuProps['items'];
 

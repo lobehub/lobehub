@@ -42,6 +42,7 @@ import { PlatformUnsupportedError } from '@/server/services/toolExecution/server
 
 import type { SlackApi } from './api';
 import { MAX_SLACK_HISTORY_LIMIT } from './const';
+import { sendSlackAttachments } from './sendAttachments';
 
 /**
  * Normalize a Slack message object to MessageItem.
@@ -61,6 +62,19 @@ export class SlackMessageService implements MessageRuntimeService {
   // ==================== Core Message Operations ====================
 
   sendMessage = async (params: SendMessageParams): Promise<SendMessageState> => {
+    if (params.attachments?.length) {
+      const delivered = await sendSlackAttachments(this.api, {
+        attachments: params.attachments,
+        channelId: params.channelId,
+        initialComment: params.content,
+        // The TRPC / builtin-tool path doesn't carry a thread anchor today.
+        // The agent-reply path goes through `SlackGatewayClient.getMessenger`
+        // which DOES carry thread_ts and uses `sendSlackAttachments` directly.
+      });
+      if (delivered > 0) {
+        return { channelId: params.channelId, platform: 'slack' };
+      }
+    }
     const result = await this.api.postMessage(params.channelId, params.content);
     return { channelId: params.channelId, messageId: result.ts, platform: 'slack' };
   };

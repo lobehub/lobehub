@@ -95,9 +95,7 @@ describe('AgentSignalNightlyReviewModel', () => {
 
   describe('listActiveAgentTargets', () => {
     const chatConfigForSelfIteration = (enabled?: boolean) =>
-      enabled === undefined
-        ? { autoCreateTopicThreshold: 2 }
-        : { autoCreateTopicThreshold: 2, selfIteration: { enabled } };
+      enabled === undefined ? {} : { selfIteration: { enabled } };
 
     const seedNightlyCapabilityTargets = async (caseName: string, blockedEnabled?: boolean) => {
       await serverDB.insert(users).values({ id: enabledUserId });
@@ -205,38 +203,38 @@ describe('AgentSignalNightlyReviewModel', () => {
           .insert(agents)
           .values([
             {
-              chatConfig: { autoCreateTopicThreshold: 2, selfIteration: { enabled: true } },
+              chatConfig: { selfIteration: { enabled: true } },
               id: 'nightly-active-agent',
               title: 'Active agent',
               userId: enabledUserId,
             },
             {
-              chatConfig: { autoCreateTopicThreshold: 2, selfIteration: { enabled: true } },
+              chatConfig: { selfIteration: { enabled: true } },
               id: 'nightly-legacy-agent',
               title: 'Legacy agent',
               userId: enabledUserId,
             },
             {
-              chatConfig: { autoCreateTopicThreshold: 2, selfIteration: { enabled: true } },
+              chatConfig: { selfIteration: { enabled: true } },
               id: 'nightly-inactive-agent',
               title: 'Inactive agent',
               userId: enabledUserId,
             },
             {
-              chatConfig: { autoCreateTopicThreshold: 2, selfIteration: { enabled: false } },
+              chatConfig: { selfIteration: { enabled: false } },
               id: 'nightly-disabled-agent',
               title: 'Disabled agent',
               userId: enabledUserId,
             },
             {
-              chatConfig: { autoCreateTopicThreshold: 2, selfIteration: { enabled: true } },
+              chatConfig: { selfIteration: { enabled: true } },
               id: 'nightly-virtual-agent',
               title: 'Virtual agent',
               userId: enabledUserId,
               virtual: true,
             },
             {
-              chatConfig: { autoCreateTopicThreshold: 2, selfIteration: { enabled: true } },
+              chatConfig: { selfIteration: { enabled: true } },
               id: 'nightly-other-user-agent',
               title: 'Other user',
               userId: otherUserId,

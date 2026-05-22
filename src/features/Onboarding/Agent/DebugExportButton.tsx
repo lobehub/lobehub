@@ -17,7 +17,7 @@ interface DebugExportButtonContentProps {
 
 interface DebugExportButtonProps {
   agentId: string;
-  topicId: string;
+  topicId: string | undefined;
 }
 
 const DEBUG_EXPORT_FIELDS = {

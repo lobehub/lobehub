@@ -37,6 +37,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     --trees-font-size-override: 12px;
     --trees-border-radius-override: 6px;
 
+    /* Drop the doubled outline pierre/trees draws via ::before on a
+     * focused+selected row — the filled background from
+     * --trees-selected-bg-override is already a clear selection signal. */
+    --trees-selected-focused-border-color-override: transparent;
+
     flex: 1;
     min-height: 0;
   `,

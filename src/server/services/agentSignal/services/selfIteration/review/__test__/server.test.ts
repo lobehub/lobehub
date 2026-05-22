@@ -19,6 +19,27 @@ const mocks = vi.hoisted(() => ({
   executeSelfIteration: vi.fn(),
   skillReadTargetSnapshot: vi.fn(),
   skillReplaceSkillIndex: vi.fn(),
+  translation: vi.fn(async () => ({
+    locale: 'zh-CN',
+    t: (key: string, options: Record<string, string> = {}) => {
+      const resources: Record<string, string> = {
+        'brief.agentSignal.selfReview.proposal.heading': '建议',
+        'brief.agentSignal.selfReview.proposal.summary': '有 {{count}} 条助理建议需要你确认。',
+        'brief.agentSignal.selfReview.proposal.summary_plural':
+          '有 {{count}} 条助理建议需要你确认。',
+        'brief.agentSignal.selfReview.proposal.title': '有助理建议需要确认',
+      };
+
+      return Object.entries(options).reduce(
+        (content, [name, value]) => content.replace(`{{${name}}}`, value),
+        resources[key] ?? key,
+      );
+    },
+  })),
+  userGetInfoForAIGeneration: vi.fn(async () => ({
+    responseLanguage: 'zh-CN',
+    userName: 'User',
+  })),
 }));
 
 vi.mock('@/server/modules/ModelRuntime', () => ({
@@ -52,6 +73,16 @@ vi.mock('@/database/models/brief', () => ({
     listUnresolvedByAgentAndTrigger = mocks.briefListUnresolvedByAgentAndTrigger;
     updateMetadata = mocks.briefUpdateMetadata;
   },
+}));
+
+vi.mock('@/database/models/user', () => ({
+  UserModel: {
+    getInfoForAIGeneration: mocks.userGetInfoForAIGeneration,
+  },
+}));
+
+vi.mock('@/server/translation', () => ({
+  translation: mocks.translation,
 }));
 
 vi.mock('@/server/services/skillManagement', async (importOriginal) => ({
@@ -596,6 +627,8 @@ describe('createServerSelfReviewPolicyOptions', () => {
           },
         },
       },
+      summary: expect.stringContaining('有 1 条助理建议需要你确认。'),
+      title: '有助理建议需要确认',
       type: 'decision',
     });
     expect(result.execution.actions).toEqual([]);

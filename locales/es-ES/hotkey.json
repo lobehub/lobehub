@@ -1,8 +1,6 @@
 {
   "addUserMessage.desc": "Agregar la entrada actual como un mensaje de usuario sin activar la generación",
   "addUserMessage.title": "Agregar un mensaje de usuario",
-  "clearCurrentMessages.desc": "Borrar los mensajes y archivos subidos de la conversación actual",
-  "clearCurrentMessages.title": "Borrar mensajes de la conversación",
   "commandPalette.desc": "Abrir el panel de comandos global para acceder rápidamente a las funciones",
   "commandPalette.title": "Panel de comandos",
   "deleteAndRegenerateMessage.desc": "Eliminar el último mensaje y regenerarlo",

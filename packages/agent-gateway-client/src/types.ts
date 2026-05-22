@@ -35,6 +35,13 @@ export type AgentStreamEventType =
   | 'agent_intervention_response'
   | 'step_start'
   | 'step_complete'
+  /**
+   * Lightweight invalidation signal emitted by `agentNotify.notify` when a
+   * remote hetero agent (openclaw / hermes) writes a message to DB via
+   * `lh notify`. The frontend reacts by calling `fetchAndReplaceMessages` —
+   * no content is carried in the event itself (DB is the source of truth).
+   */
+  | 'notify_update'
   | 'error';
 
 export interface AgentStreamEvent {

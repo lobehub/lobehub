@@ -1,5 +1,6 @@
 import { type StateCreator } from 'zustand/vanilla';
 
+import { removeDraft } from '../draftStorage';
 import { type PublicState, type State } from './initialState';
 import { initialState } from './initialState';
 
@@ -42,6 +43,10 @@ export const store: CreateStore = (publicState) => (set, get) => ({
       getEditorData: get().getJSONState,
       getMarkdownContent: get().getMarkdownContent,
     });
+
+    const { draftKey } = get();
+    if (draftKey) removeDraft(draftKey);
+
     if (get().expand) {
       set({ _savedEditorState: undefined, expand: false });
     }

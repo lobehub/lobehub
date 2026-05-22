@@ -1143,6 +1143,23 @@ export const executeHeterogeneousAgent = async (
   /** Adapter/CLI provider (e.g. `claude-code`) — carried on every turn_metadata. */
   let lastProvider: string | undefined;
   /**
+   * Most recent tool `result_msg_id` seen across step boundaries — survives the
+   * `toolState.payloads` reset that happens on every new step.
+   *
+   * Required for the **toolless middle step** case (LOBE-8993): when a step
+   * produces only text (e.g. Monitor stdout drives Claude to reply "等一下…"
+   * without invoking a tool), `toolState.payloads` is empty at the next step
+   * boundary. Without this tracker, `stepParentId` would fall back to
+   * `currentAssistantMessageId` (= the toolless assistant), forming an
+   * `assistant → assistant` link. `MessageCollector.collectAssistantChain`
+   * only walks the `assistant → tool → assistant` zigzag, so the UI splits
+   * into one bubble per Monitor stdout line.
+   *
+   * Scope: executor lifetime (one user run). A new user message spawns a
+   * new executor, so this resets implicitly at run boundaries.
+   */
+  let lastToolMsgIdEver: string | undefined;
+  /**
    * Deferred terminal event (agent_runtime_end or error). We don't forward
    * these to the gateway handler immediately because handler triggers
    * fetchAndReplaceMessages which would clobber our in-flight content
@@ -1179,7 +1196,12 @@ export const executeHeterogeneousAgent = async (
   };
   const writeTopicStatus = (status: ChatTopicStatus): void => {
     if (!context.topicId) return;
-    void get().updateTopicStatus?.(context.topicId, status);
+    void get().updateTopicStatus?.({
+      agentId: context.agentId,
+      groupId: context.groupId,
+      status,
+      topicId: context.topicId,
+    });
   };
   const retryWithoutResume = (error: unknown): boolean => {
     if (
@@ -1362,6 +1384,10 @@ export const executeHeterogeneousAgent = async (
               { intervention: { status: 'pending' } },
               { operationId },
             );
+            // Sidebar topic row swaps the running spinner for a hand icon
+            // so it's obvious from the topic list that this conversation is
+            // blocked on the user, not still streaming.
+            writeTopicStatus('waitingForHuman');
           } catch (err) {
             console.error('[HeterogeneousAgent] persist intervention pending failed:', err);
           }
@@ -1396,6 +1422,10 @@ export const executeHeterogeneousAgent = async (
               },
               { operationId },
             );
+            // Bridge resolved without the user — drop the hand state so the
+            // sidebar reflects that we're back to whatever the stream does
+            // next (`active`/`failed` lands shortly after via runtime_end).
+            writeTopicStatus('running');
           } catch (err) {
             console.error('[HeterogeneousAgent] persist intervention rejection failed:', err);
           }
@@ -1513,6 +1543,17 @@ export const executeHeterogeneousAgent = async (
         const prevReasoning = accumulatedReasoning;
         const prevModel = lastModel;
         const prevProvider = lastProvider;
+        // External-signal context (LOBE-8998): set when the adapter
+        // detected a repeated tool_result on the same tool_use.id
+        // (Monitor stdout push, etc.). Stamp on the new message's
+        // `metadata.signal` so MessageCollector can route toolless
+        // signal-tagged assistants into a SignalCallbacksNode.
+        //
+        // Phase 1 lives in metadata; Phase 2 (LOBE-8999) promotes to a
+        // dedicated `messages.signal` column — to migrate, change THIS
+        // assignment and the `getMessageSignal()` helper in
+        // conversation-flow, nothing else.
+        const externalSignal = event.data.externalSignal;
 
         // Reset content accumulators synchronously so new-step chunks go to fresh state
         accumulatedContent = '';
@@ -1552,11 +1593,16 @@ export const executeHeterogeneousAgent = async (
           const lastToolMsgId = [...toolState.payloads]
             .reverse()
             .find((p) => !!p.result_msg_id)?.result_msg_id;
-          const stepParentId = lastToolMsgId || currentAssistantMessageId;
+          if (lastToolMsgId) lastToolMsgIdEver = lastToolMsgId;
+          // Prefer this step's last tool, then the most recent tool ever seen
+          // in the run (rescues toolless middle steps — see LOBE-8993), then
+          // the previous assistant as a last resort.
+          const stepParentId = lastToolMsgId ?? lastToolMsgIdEver ?? currentAssistantMessageId;
 
           const newMsg = await messageService.createMessage({
             agentId: context.agentId,
             content: '',
+            ...(externalSignal ? { metadata: { signal: externalSignal } } : {}),
             model: lastModel,
             parentId: stepParentId,
             provider: lastProvider,

@@ -16,12 +16,13 @@ const ParamsPanelToggle = memo(() => {
   const { t } = useTranslation('setting');
   const { pathname } = useLocation();
   const isHetero = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
-  const [showRightPanel, workingSidebarTab, setWorkingSidebarTab, toggleRightPanel] =
+  const [showRightPanel, workingSidebarTab, setWorkingSidebarTab, toggleRightPanel, isStatusInit] =
     useGlobalStore((s) => [
       systemStatusSelectors.showRightPanel(s),
       s.status.workingSidebarTab,
       s.setWorkingSidebarTab,
       s.toggleRightPanel,
+      systemStatusSelectors.isStatusInit(s),
     ]);
 
   const active = showRightPanel && workingSidebarTab === 'params';
@@ -37,6 +38,10 @@ const ParamsPanelToggle = memo(() => {
   }, [active, setWorkingSidebarTab, toggleRightPanel]);
 
   if (isHetero || pathname.startsWith('/popup')) return null;
+
+  // Defer render until status hydrates — toggleRightPanel is a no-op while
+  // !isStatusInit and clicks would be silently dropped.
+  if (!isStatusInit) return null;
 
   return (
     <ActionIcon

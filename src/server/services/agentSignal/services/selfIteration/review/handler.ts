@@ -11,6 +11,7 @@ import type { EvidenceRef, Plan, RunResult } from '../types';
 import { buildNightlyReviewSourceId, ReviewRunStatus } from '../types';
 import type { SelfReviewBriefProjection } from './brief';
 import { createBriefSelfReviewService, getNightlySelfReviewBriefMetadata } from './brief';
+import type { SelfReviewBriefTextTranslator } from './briefText';
 import type { CollectNightlyReviewContextInput, NightlyReviewContext } from './collect';
 import type { SelfReviewProposalPlan } from './proposal';
 
@@ -86,6 +87,10 @@ export interface CreateNightlyReviewSourceHandlerDependencies {
   canRunReview: (input: NightlyReviewSourceGuardInput) => Promise<boolean>;
   /** Collects bounded digest context without mutating shared resources. */
   collectContext: (input: CollectNightlyReviewContextInput) => Promise<NightlyReviewContext>;
+  /** Resolves a home-namespace translator for persisted nightly Brief text. */
+  resolveBriefTextTranslator?: (input: {
+    userId: string;
+  }) => Promise<SelfReviewBriefTextTranslator | undefined>;
   /** Runs the bounded self-iteration agent and returns execution plus the frozen projection plan. */
   runSelfReviewAgent: (input: {
     context: NightlyReviewContext;
@@ -503,6 +508,7 @@ export const createNightlyReviewSourceHandler = (
 
         await writeNightlyReceipts(deps, receipts);
 
+        const t = await deps.resolveBriefTextTranslator?.({ userId: payload.userId });
         const brief = createBriefSelfReviewService().projectNightlyReviewBrief({
           agentId: payload.agentId,
           evidenceRefs: collectPlanEvidenceRefs(plan),
@@ -512,6 +518,7 @@ export const createNightlyReviewSourceHandler = (
           result: executionWithReceipts,
           reviewWindowEnd: payload.reviewWindowEnd,
           reviewWindowStart: payload.reviewWindowStart,
+          t,
           timezone: payload.timezone,
           userId: payload.userId,
         });

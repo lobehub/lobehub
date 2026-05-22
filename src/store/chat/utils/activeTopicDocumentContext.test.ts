@@ -37,7 +37,7 @@ describe('activeTopicDocumentContext', () => {
 
     expect(agentDocumentService.listDocuments).toHaveBeenCalledWith({
       agentId: 'agt_1',
-      target: 'currentTopic',
+      scope: 'currentTopic',
       topicId: 'tpc_1',
     });
     expect(context?.initialContext?.activeTopicDocument).toEqual({

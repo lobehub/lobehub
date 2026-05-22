@@ -815,7 +815,18 @@ export class ConversationControlActionImpl {
       console.error('[submitHeteroIntervention] IPC submitIntervention failed:', err);
     }
 
-    void effectiveContext;
+    // Sidebar topic row was swapped to the `waitingForHuman` hand icon when
+    // the intervention was raised; once the user submits/skips/cancels the
+    // CC stream resumes so flip it back to `running`. The natural completion
+    // (`runtime_end` → `writeTopicStatus('active')`) takes over from there.
+    if (effectiveContext.topicId) {
+      void this.#get().updateTopicStatus?.({
+        agentId: effectiveContext.agentId,
+        groupId: effectiveContext.groupId,
+        status: 'running',
+        topicId: effectiveContext.topicId,
+      });
+    }
   };
 
   /**

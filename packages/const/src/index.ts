@@ -17,6 +17,7 @@ export * from './protocol';
 export * from './recommendedSkill';
 export * from './session';
 export * from './settings';
+export * from './skill';
 export * from './taskTemplate';
 export * from './theme';
 export * from './trace';

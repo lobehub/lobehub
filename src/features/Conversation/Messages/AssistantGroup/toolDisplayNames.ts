@@ -1,3 +1,4 @@
+import { formatLinearMcpShortLabel } from '@lobechat/builtin-tool-claude-code/client/labels';
 import { type ChatToolPayloadWithResult } from '@lobechat/types';
 import { t } from 'i18next';
 
@@ -102,6 +103,9 @@ const toTitleCase = (apiName: string): string => {
 };
 
 export const getToolDisplayName = (apiName: string): string => {
+  const linearLabel = formatLinearMcpShortLabel(apiName);
+  if (linearLabel) return linearLabel;
+
   const defaultValue = toTitleCase(apiName);
   const key = TOOL_API_DISPLAY_NAMES[apiName];
   if (!key) return defaultValue;

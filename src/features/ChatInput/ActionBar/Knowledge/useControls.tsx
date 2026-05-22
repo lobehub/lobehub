@@ -1,7 +1,9 @@
 import { type ItemType } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { ArrowRight, LibraryBig } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import FileIcon from '@/components/FileIcon';
@@ -14,8 +16,41 @@ import CheckboxItem from '../components/CheckboxWithLoading';
 
 const labelMaxWidth = 'min(400px, 56vw)';
 
+const styles = createStaticStyles(({ css }) => ({
+  viewMore: css`
+    cursor: pointer;
+
+    display: flex;
+    gap: 8px;
+    align-items: center;
+
+    width: calc(100% + 8px);
+    min-height: 32px;
+    margin-block-end: -4px;
+    margin-inline-start: -4px;
+    border: 0;
+    border-radius: 6px;
+
+    font-size: 14px;
+    color: ${cssVar.colorText};
+
+    background: transparent;
+
+    transition: background 150ms ${cssVar.motionEaseOut};
+
+    &:hover {
+      background: ${cssVar.colorFillTertiary};
+    }
+  `,
+  viewMoreLabel: css`
+    flex: 1;
+    text-align: start;
+  `,
+}));
+
 export interface KnowledgeControls {
   enabledCount: number;
+  footer: ReactNode;
   items: ItemType[];
 }
 
@@ -97,20 +132,20 @@ export const useControls = ({
       : []),
   ];
 
-  const items: ItemType[] = [
-    ...relatedGroups,
-    ...(relatedGroups.length > 0 ? [{ type: 'divider' as const }] : []),
-    {
-      closeOnClick: true,
-      extra: <Icon icon={ArrowRight} />,
-      icon: LibraryBig,
-      key: 'knowledge-base-store',
-      label: <span data-fixed-menu-footer>{t('knowledgeBase.viewMore')}</span>,
-      onClick: () => {
+  const footer = (
+    <button
+      className={cx(styles.viewMore)}
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
         openAttachKnowledgeModal();
-      },
-    },
-  ];
+      }}
+    >
+      <Icon icon={LibraryBig} size={16} />
+      <span className={cx(styles.viewMoreLabel)}>{t('knowledgeBase.viewMore')}</span>
+      <Icon icon={ArrowRight} size={16} />
+    </button>
+  );
 
-  return { enabledCount, items } satisfies KnowledgeControls;
+  return { enabledCount, footer, items: relatedGroups } satisfies KnowledgeControls;
 };

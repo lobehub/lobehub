@@ -219,6 +219,10 @@ type SystemStrings = {
   cmdApproveSuccess: (label: string) => string;
   cmdApproveUnknownCode: string;
   cmdApproveUsage: string;
+  cmdFeedbackError: string;
+  cmdFeedbackSubmitted: string;
+  cmdFeedbackSubmittedWithLink: (issueUrl: string) => string;
+  cmdFeedbackUsage: string;
   cmdNewReset: string;
   cmdStopNotActive: string;
   cmdStopRequested: string;
@@ -264,6 +268,12 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
     cmdApproveSuccess: (label) => `Approved ${label}.`,
     cmdApproveUnknownCode: 'That pairing code is unknown or has expired.',
     cmdApproveUsage: 'Usage: `/approve <code>`',
+    cmdFeedbackError: "Couldn't send your feedback right now. Please try again in a moment.",
+    cmdFeedbackSubmitted: 'Thanks — your feedback has been sent to the LobeHub team.',
+    cmdFeedbackSubmittedWithLink: (issueUrl) =>
+      `Thanks — your feedback has been sent to the LobeHub team. Tracked at: ${issueUrl}`,
+    cmdFeedbackUsage:
+      'Usage: `/feedback <your message>` — sends feedback directly to the LobeHub team (no AI reply).',
     cmdNewReset: 'Conversation reset. Your next message will start a new topic.',
     cmdStopNotActive: 'No active execution to stop.',
     cmdStopRequested: 'Stop requested.',
@@ -318,6 +328,12 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
     cmdApproveSuccess: (label) => `已审批 ${label}。`,
     cmdApproveUnknownCode: '该配对码不存在或已过期。',
     cmdApproveUsage: '用法：`/approve <配对码>`',
+    cmdFeedbackError: '发送反馈失败，请稍后再试。',
+    cmdFeedbackSubmitted: '已收到，感谢反馈，已转交 LobeHub 团队。',
+    cmdFeedbackSubmittedWithLink: (issueUrl) =>
+      `已收到，感谢反馈，已转交 LobeHub 团队。跟踪链接：${issueUrl}`,
+    cmdFeedbackUsage:
+      '用法：`/feedback <你的反馈内容>` —— 反馈会直达 LobeHub 团队，不会触发 AI 回复。',
     cmdNewReset: '对话已重置，下一条消息会开启新话题。',
     cmdStopNotActive: '当前没有正在执行的任务可以停止。',
     cmdStopRequested: '已发出停止请求。',
@@ -467,6 +483,9 @@ export type CommandReplyKey =
   | 'cmdApproveNotOwner'
   | 'cmdApproveUnknownCode'
   | 'cmdApproveUsage'
+  | 'cmdFeedbackError'
+  | 'cmdFeedbackSubmitted'
+  | 'cmdFeedbackUsage'
   | 'cmdNewReset'
   | 'cmdStopNotActive'
   | 'cmdStopRequested'
@@ -489,6 +508,17 @@ export function renderCommandReply(key: CommandReplyKey, lng?: BotReplyLocale): 
  */
 export function renderApproveSuccess(label: string, lng?: BotReplyLocale): string {
   return getSystemStrings(lng).cmdApproveSuccess(label);
+}
+
+/**
+ * Render the `/feedback` success reply. When the feedback backend returns a
+ * tracked issue URL, surface it so the user knows where to follow up — for
+ * Slack / Discord that surface autolinks the URL, on Telegram it remains
+ * tappable in monospace.
+ */
+export function renderFeedbackSubmitted(issueUrl?: string, lng?: BotReplyLocale): string {
+  const strings = getSystemStrings(lng);
+  return issueUrl ? strings.cmdFeedbackSubmittedWithLink(issueUrl) : strings.cmdFeedbackSubmitted;
 }
 
 /**

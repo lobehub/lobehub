@@ -4,9 +4,11 @@
 
 # LobeHub
 
-LobeHub is the ultimate space for work and life: <br/>
-to find, build, and collaborate with agent teammates that grow with you.<br/>
-We’re building the world’s largest human–agent co-evolving network.
+LobeHub organizes your agents into 7×24 operation.
+
+It hires, schedules, reports on your entire AI team.
+
+You stay in charge — without staying online.
 
 **English** · [简体中文](./README.zh-CN.md) · [Official Site][official-site] · [Changelog][changelog] · [Documents][docs] · [Blog][blog] · [Feedback][github-issues-link]
 
@@ -25,7 +27,6 @@ We’re building the world’s largest human–agent co-evolving network.
 [![][github-stars-shield]][github-stars-link]
 [![][github-issues-shield]][github-issues-link]
 [![][github-license-shield]][github-license-link]<br>
-[![][sponsor-shield]][sponsor-link]
 
 **Share LobeHub Repository**
 
@@ -37,9 +38,9 @@ We’re building the world’s largest human–agent co-evolving network.
 [![][share-mastodon-shield]][share-mastodon-link]
 [![][share-linkedin-shield]][share-linkedin-link]
 
-<sup>Agent teammates that grow with you</sup>
+<sup>Your Chief Agent Operator</sup>
 
-[![][github-trending-shield]][github-trending-url]
+<a href="https://www.producthunt.com/products/lobehub?embed=true&amp;utm_source=badge-top-post-badge&amp;utm_medium=badge&amp;utm_campaign=badge-lobehub-2" target="_blank" rel="noopener noreferrer"><img alt="LobeHub - Your Chief Agent Operator for multi-agent work | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/top-post-badge.svg?post_id=1147569&amp;theme=light&amp;period=daily&amp;t=1779247564355"></a> <a href="https://trendshift.io/repositories/19224" target="_blank"><img src="https://trendshift.io/api/badge/repositories/19224" alt="lobehub%2Flobehub | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 
 [![](https://vercel.com/oss/program-badge.svg)](https://vercel.com/oss)
 
@@ -52,30 +53,10 @@ We’re building the world’s largest human–agent co-evolving network.
 
 - [👋🏻 Getting Started & Join Our Community](#-getting-started--join-our-community)
 - [✨ Features](#-features)
+  - [Operator: Agents as the Unit of Work](#operator-agents-as-the-unit-of-work)
   - [Create: Agents as the Unit of Work](#create-agents-as-the-unit-of-work)
   - [Collaborate: Scale New Forms of Collaboration Networks](#collaborate-scale-new-forms-of-collaboration-networks)
   - [Evolve: Co-evolution of Humans and Agents](#evolve-co-evolution-of-humans-and-agents)
-  - [MCP Plugin One-Click Installation](#mcp-plugin-one-click-installation)
-  - [MCP Marketplace](#mcp-marketplace)
-  - [Desktop App](#desktop-app)
-  - [Smart Internet Search](#smart-internet-search)
-  - [Chain of Thought](#chain-of-thought)
-  - [Branching Conversations](#branching-conversations)
-  - [Artifacts Support](#artifacts-support)
-  - [File Upload /Knowledge Base](#file-upload-knowledge-base)
-  - [Multi-Model Service Provider Support](#multi-model-service-provider-support)
-  - [Local Large Language Model (LLM) Support](#local-large-language-model-llm-support)
-  - [Model Visual Recognition](#model-visual-recognition)
-  - [TTS & STT Voice Conversation](#tts--stt-voice-conversation)
-  - [Text to Image Generation](#text-to-image-generation)
-  - [Plugin System (Function Calling)](#plugin-system-function-calling)
-  - [Agent Market (GPTs)](#agent-market-gpts)
-  - [Support Local / Remote Database](#support-local--remote-database)
-  - [Support Multi-User Management](#support-multi-user-management)
-  - [Progressive Web App (PWA)](#progressive-web-app-pwa)
-  - [Mobile Device Adaptation](#mobile-device-adaptation)
-  - [Custom Themes](#custom-themes)
-  - [`*` What's more](#-whats-more)
 - [🛳 Self Hosting](#-self-hosting)
   - [`A` Deploying with Vercel, Zeabur , Sealos or Alibaba Cloud](#a-deploying-with-vercel-zeabur--sealos-or-alibaba-cloud)
   - [`B` Deploying with Docker](#b-deploying-with-docker)
@@ -95,7 +76,7 @@ We’re building the world’s largest human–agent co-evolving network.
 
 <br/>
 
-<https://github.com/user-attachments/assets/6710ad97-03d0-4175-bd75-adff9b55eca2>
+<https://github.com/user-attachments/assets/0a33365f-b786-48b5-9ed6-f8af7927bccb>
 
 ## 👋🏻 Getting Started & Join Our Community
 
@@ -104,9 +85,9 @@ By adopting the Bootstrapping approach, we aim to provide developers and users w
 
 Whether for users or professional developers, LobeHub will be your AI Agent playground. Please be aware that LobeHub is currently under active development, and feedback is welcome for any [issues][issues-link] encountered.
 
-| [![](https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1065874&theme=light&t=1769347414733)](https://www.producthunt.com/products/lobehub?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-lobehub) | We are live on Product Hunt! We are thrilled to bring LobeHub to the world. If you believe in a future where humans and agents co-evolve, please support our journey. |
-| :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [![][discord-shield-badge]][discord-link]                                                                                                                                                                                                         | Join our Discord community! This is where you can connect with developers and other enthusiastic users of LobeHub.                                                    |
+| [![](https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1065874&theme=light&t=1769347414733)](https://www.producthunt.com/products/lobehub?launch=lobehub-2&embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-lobehub) | We are live on Product Hunt! We are thrilled to bring LobeHub to the world. If you believe in a future where humans and agents co-evolve, please support our journey. |
+| :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [![][discord-shield-badge]][discord-link]                                                                                                                                                                                                                          | Join our Discord community! This is where you can connect with developers and other enthusiastic users of LobeHub.                                                    |
 
 > \[!IMPORTANT]
 >
@@ -130,7 +111,26 @@ Today’s agents are one-off, task-driven tools. They lack context, live in isol
 
 LobeHub is a work-and-lifestyle space to find, build, and collaborate with agent teammates that grow with you. In LobeHub, we treat **Agents as the unit of work**, providing an infrastructure where humans and agents co-evolve.
 
-![](https://hub-apac-1.lobeobjects.space/blog/assets/2204cde2228fb3f583f3f2c090bc49fb.webp)
+![](https://github.com/user-attachments/assets/89d1c402-a62b-4794-82ea-17e5ee1a6165)
+
+### Operator: Agents as the Unit of Work
+
+Hires, schedules, and reports on your entire AI team.
+
+- **More productivity. Fewer tools**: Bring all your agents under one roof.
+- **IM Gateway**: Agents where you already chat.
+
+![](https://github.com/user-attachments/assets/7b08d6d9-9dff-4b06-a919-324630554509)
+
+[![][back-to-top]](#readme-top)
+
+<div align="right">
+
+[![][back-to-top]](#readme-top)
+
+</div>
+
+![](https://github.com/user-attachments/assets/81e89324-fc66-4024-99a3-aa8e16ec8184)
 
 ### Create: Agents as the Unit of Work
 
@@ -138,6 +138,8 @@ Building a personalized AI team starts with the **Agent Builder**. You can descr
 
 - **Unified Intelligence**: Seamlessly access any model and any modality—all under your control.
 - **10,000+ Skills**: Connect your agents to the skills you use every day with a library of over 10,000 tools and MCP-compatible plugins.
+
+![](https://github.com/user-attachments/assets/949b8166-486d-4750-ad7a-cfe7bfcb84e3)
 
 [![][back-to-top]](#readme-top)
 
@@ -158,6 +160,8 @@ LobeHub introduces **Agent Groups**, allowing you to work with agents like real 
 - **Project**: Organize work by project to keep everything structured and easy to track.
 - **Workspace**: A shared space for teams to collaborate with agents, ensuring clear ownership and visibility across the organization.
 
+![](https://github.com/user-attachments/assets/e51526c6-e09c-4a5a-9cec-dcd3fd68a3a8)
+
 [![][back-to-top]](#readme-top)
 
 <div align="right">
@@ -175,390 +179,13 @@ The best AI is one that understands you deeply. LobeHub features **Personal Memo
 - **Continual Learning**: Your agents learn from how you work, adapting their behavior to act at the right moment.
 - **White-Box Memory**: We believe in transparency. Your agents use structured, editable memory, giving you full control over what they remember.
 
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-<details>
-<summary>More Features</summary>
-
-![][image-feat-mcp]
-
-### MCP Plugin One-Click Installation
-
-**Seamlessly Connect Your AI to the World**
-
-Unlock the full potential of your AI by enabling smooth, secure, and dynamic interactions with external tools, data sources, and services. LobeHub's MCP (Model Context Protocol) plugin system breaks down the barriers between your AI and the digital ecosystem, allowing for unprecedented connectivity and functionality.
-
-Transform your conversations into powerful workflows by connecting to databases, APIs, file systems, and more. Experience the freedom of AI that truly understands and interacts with your world.
-
-[![][back-to-top]](#readme-top)
-
-![][image-feat-mcp-market]
-
-### MCP Marketplace
-
-**Discover, Connect, Extend**
-
-Browse a growing library of MCP plugins to expand your AI's capabilities and streamline your workflows effortlessly. Visit [lobehub.com/mcp](https://lobehub.com/mcp) to explore the MCP Marketplace, which offers a curated collection of integrations that enhance your AI's ability to work with various tools and services.
-
-From productivity tools to development environments, discover new ways to extend your AI's reach and effectiveness. Connect with the community and find the perfect plugins for your specific needs.
-
-[![][back-to-top]](#readme-top)
-
-![][image-feat-desktop]
-
-### Desktop App
-
-**Peak Performance, Zero Distractions**
-
-Get the full LobeHub experience without browser limitations—comprehensive, focused, and always ready to go. Our desktop application provides a dedicated environment for your AI interactions, ensuring optimal performance and minimal distractions.
-
-Experience faster response times, better resource management, and a more stable connection to your AI assistant. The desktop app is designed for users who demand the best performance from their AI tools.
-
-[![][back-to-top]](#readme-top)
-
-![][image-feat-web-search]
-
-### Smart Internet Search
-
-**Online Knowledge On Demand**
-
-With real-time internet access, your AI keeps up with the world—news, data, trends, and more. Stay informed and get the most current information available, enabling your AI to provide accurate and up-to-date responses.
-
-Access live information, verify facts, and explore current events without leaving your conversation. Your AI becomes a gateway to the world's knowledge, always current and comprehensive.
-
-[![][back-to-top]](#readme-top)
-
-[![][image-feat-cot]][docs-feat-cot]
-
-### [Chain of Thought][docs-feat-cot]
-
-Experience AI reasoning like never before. Watch as complex problems unfold step by step through our innovative Chain of Thought (CoT) visualization. This breakthrough feature provides unprecedented transparency into AI's decision-making process, allowing you to observe how conclusions are reached in real-time.
-
-By breaking down complex reasoning into clear, logical steps, you can better understand and validate the AI's problem-solving approach. Whether you're debugging, learning, or simply curious about AI reasoning, CoT visualization transforms abstract thinking into an engaging, interactive experience.
-
-[![][back-to-top]](#readme-top)
-
-[![][image-feat-branch]][docs-feat-branch]
-
-### [Branching Conversations][docs-feat-branch]
-
-Introducing a more natural and flexible way to chat with AI. With Branch Conversations, your discussions can flow in multiple directions, just like human conversations do. Create new conversation branches from any message, giving you the freedom to explore different paths while preserving the original context.
-
-Choose between two powerful modes:
-
-- **Continuation Mode:** Seamlessly extend your current discussion while maintaining valuable context
-- **Standalone Mode:** Start fresh with a new topic based on any previous message
-
-This groundbreaking feature transforms linear conversations into dynamic, tree-like structures, enabling deeper exploration of ideas and more productive interactions.
-
-[![][back-to-top]](#readme-top)
-
-[![][image-feat-artifacts]][docs-feat-artifacts]
-
-### [Artifacts Support][docs-feat-artifacts]
-
-Experience the power of Claude Artifacts, now integrated into LobeHub. This revolutionary feature expands the boundaries of AI-human interaction, enabling real-time creation and visualization of diverse content formats.
-
-Create and visualize with unprecedented flexibility:
-
-- Generate and display dynamic SVG graphics
-- Build and render interactive HTML pages in real-time
-- Produce professional documents in multiple formats
-
-[![][back-to-top]](#readme-top)
-
-[![][image-feat-knowledgebase]][docs-feat-knowledgebase]
-
-### [File Upload /Knowledge Base][docs-feat-knowledgebase]
-
-LobeHub supports file upload and knowledge base functionality. You can upload various types of files including documents, images, audio, and video, as well as create knowledge bases, making it convenient for users to manage and search for files. Additionally, you can utilize files and knowledge base features during conversations, enabling a richer dialogue experience.
-
-<https://github.com/user-attachments/assets/faa8cf67-e743-4590-8bf6-ebf6ccc34175>
-
-> \[!TIP]
->
-> Learn more on [📘 LobeHub Knowledge Base Launch — From Now On, Every Step Counts](https://lobehub.com/blog/knowledge-base)
+![](https://github.com/user-attachments/assets/5c6e16f0-7f47-4baf-9aeb-3a00deb8ff5b)
 
 <div align="right">
 
 [![][back-to-top]](#readme-top)
 
 </div>
-
-[![][image-feat-privoder]][docs-feat-provider]
-
-### [Multi-Model Service Provider Support][docs-feat-provider]
-
-In the continuous development of LobeHub, we deeply understand the importance of diversity in model service providers for meeting the needs of the community when providing AI conversation services. Therefore, we have expanded our support to multiple model service providers, rather than being limited to a single one, in order to offer users a more diverse and rich selection of conversations.
-
-In this way, LobeHub can more flexibly adapt to the needs of different users, while also providing developers with a wider range of choices.
-
-#### Supported Model Service Providers
-
-We have implemented support for the following model service providers:
-
-<!-- PROVIDER LIST -->
-
-<details><summary><kbd>See more providers (+-10)</kbd></summary>
-
-</details>
-
-> 📊 Total providers: [<kbd>**0**</kbd>](https://lobechat.com/discover/providers)
-
- <!-- PROVIDER LIST -->
-
-At the same time, we are also planning to support more model service providers. If you would like LobeHub to support your favorite service provider, feel free to join our [💬 community discussion](https://github.com/lobehub/lobehub/discussions/1284).
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-[![][image-feat-local]][docs-feat-local]
-
-### [Local Large Language Model (LLM) Support][docs-feat-local]
-
-To meet the specific needs of users, LobeHub also supports the use of local models based on [Ollama](https://ollama.ai), allowing users to flexibly use their own or third-party models.
-
-> \[!TIP]
->
-> Learn more about [📘 Using Ollama in LobeHub][docs-usage-ollama] by checking it out.
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-[![][image-feat-vision]][docs-feat-vision]
-
-### [Model Visual Recognition][docs-feat-vision]
-
-LobeHub now supports OpenAI's latest [`gpt-4-vision`](https://platform.openai.com/docs/guides/vision) model with visual recognition capabilities,
-a multimodal intelligence that can perceive visuals. Users can easily upload or drag and drop images into the dialogue box,
-and the agent will be able to recognize the content of the images and engage in intelligent conversation based on this,
-creating smarter and more diversified chat scenarios.
-
-This feature opens up new interactive methods, allowing communication to transcend text and include a wealth of visual elements.
-Whether it's sharing images in daily use or interpreting images within specific industries, the agent provides an outstanding conversational experience.
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-[![][image-feat-tts]][docs-feat-tts]
-
-### [TTS & STT Voice Conversation][docs-feat-tts]
-
-LobeHub supports Text-to-Speech (TTS) and Speech-to-Text (STT) technologies, enabling our application to convert text messages into clear voice outputs,
-allowing users to interact with our conversational agent as if they were talking to a real person. Users can choose from a variety of voices to pair with the agent.
-
-Moreover, TTS offers an excellent solution for those who prefer auditory learning or desire to receive information while busy.
-In LobeHub, we have meticulously selected a range of high-quality voice options (OpenAI Audio, Microsoft Edge Speech) to meet the needs of users from different regions and cultural backgrounds.
-Users can choose the voice that suits their personal preferences or specific scenarios, resulting in a personalized communication experience.
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-[![][image-feat-t2i]][docs-feat-t2i]
-
-### [Text to Image Generation][docs-feat-t2i]
-
-With support for the latest text-to-image generation technology, LobeHub now allows users to invoke image creation tools directly within conversations with the agent. By leveraging the capabilities of AI tools such as [`DALL-E 3`](https://openai.com/dall-e-3), [`MidJourney`](https://www.midjourney.com/), and [`Pollinations`](https://pollinations.ai/), the agents are now equipped to transform your ideas into images.
-
-This enables a more private and immersive creative process, allowing for the seamless integration of visual storytelling into your personal dialogue with the agent.
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-[![][image-feat-plugin]][docs-feat-plugin]
-
-### [Plugin System (Function Calling)][docs-feat-plugin]
-
-The plugin ecosystem of LobeHub is an important extension of its core functionality, greatly enhancing the practicality and flexibility of the LobeHub assistant.
-
-<video controls src="https://github.com/lobehub/lobehub/assets/28616219/f29475a3-f346-4196-a435-41a6373ab9e2" muted="false"></video>
-
-By utilizing plugins, LobeHub assistants can obtain and process real-time information, such as searching for web information and providing users with instant and relevant news.
-
-In addition, these plugins are not limited to news aggregation, but can also extend to other practical functions, such as quickly searching documents, generating images, obtaining data from various platforms like Bilibili, Steam, and interacting with various third-party services.
-
-> \[!TIP]
->
-> Learn more about [📘 Plugin Usage][docs-usage-plugin] by checking it out.
-
-<!-- PLUGIN LIST -->
-
-| Recent Submits                                                                                                             | Description                                                                                                                                     |
-| -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Shopping tools](https://lobechat.com/discover/plugin/ShoppingTools)<br/><sup>By **shoppingtools** on **2026-01-12**</sup> | Search for products on eBay & AliExpress, find eBay events & coupons. Get prompt examples.<br/>`shopping` `e-bay` `ali-express` `coupons`       |
-| [SEO Assistant](https://lobechat.com/discover/plugin/seo_assistant)<br/><sup>By **webfx** on **2026-01-12**</sup>          | The SEO Assistant can generate search engine keyword information in order to aid the creation of content.<br/>`seo` `keyword`                   |
-| [Video Captions](https://lobechat.com/discover/plugin/VideoCaptions)<br/><sup>By **maila** on **2025-12-13**</sup>         | Convert Youtube links into transcribed text, enable asking questions, create chapters, and summarize its content.<br/>`video-to-text` `youtube` |
-| [WeatherGPT](https://lobechat.com/discover/plugin/WeatherGPT)<br/><sup>By **steven-tey** on **2025-12-13**</sup>           | Get current weather information for a specific location.<br/>`weather`                                                                          |
-
-> 📊 Total plugins: [<kbd>**40**</kbd>](https://lobechat.com/discover/plugins)
-
- <!-- PLUGIN LIST -->
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-[![][image-feat-agent]][docs-feat-agent]
-
-### [Agent Market (GPTs)][docs-feat-agent]
-
-In LobeHub Agent Marketplace, creators can discover a vibrant and innovative community that brings together a multitude of well-designed agents,
-which not only play an important role in work scenarios but also offer great convenience in learning processes.
-Our marketplace is not just a showcase platform but also a collaborative space. Here, everyone can contribute their wisdom and share the agents they have developed.
-
-> \[!TIP]
->
-> By [🤖/🏪 Submit Agents][submit-agents-link], you can easily submit your agent creations to our platform.
-> Importantly, LobeHub has established a sophisticated automated internationalization (i18n) workflow,
-> capable of seamlessly translating your agent into multiple language versions.
-> This means that no matter what language your users speak, they can experience your agent without barriers.
-
-> \[!IMPORTANT]
->
-> We welcome all users to join this growing ecosystem and participate in the iteration and optimization of agents.
-> Together, we can create more interesting, practical, and innovative agents, further enriching the diversity and practicality of the agent offerings.
-
-<!-- AGENT LIST -->
-
-| Recent Submits                                                                                                                                                                 | Description                                                                                                                                                                                                              |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [Turtle Soup Host](https://lobechat.com/discover/assistant/lateral-thinking-puzzle)<br/><sup>By **[CSY2022](https://github.com/CSY2022)** on **2025-06-19**</sup>              | A turtle soup host needs to provide the scenario, the complete story (truth of the event), and the key point (the condition for guessing correctly).<br/>`turtle-soup` `reasoning` `interaction` `puzzle` `role-playing` |
-| [Academic Writing Assistant](https://lobechat.com/discover/assistant/academic-writing-assistant)<br/><sup>By **[swarfte](https://github.com/swarfte)** on **2025-06-17**</sup> | Expert in academic research paper writing and formal documentation<br/>`academic-writing` `research` `formal-style`                                                                                                      |
-| [Gourmet Reviewer🍟](https://lobechat.com/discover/assistant/food-reviewer)<br/><sup>By **[renhai-lab](https://github.com/renhai-lab)** on **2025-06-17**</sup>                | Food critique expert<br/>`gourmet` `review` `writing`                                                                                                                                                                    |
-| [Minecraft Senior Developer](https://lobechat.com/discover/assistant/java-development)<br/><sup>By **[iamyuuk](https://github.com/iamyuuk)** on **2025-06-17**</sup>           | Expert in advanced Java development and Minecraft mod and server plugin development<br/>`development` `programming` `minecraft` `java`                                                                                   |
-
-> 📊 Total agents: [<kbd>**505**</kbd> ](https://lobechat.com/discover/assistants)
-
- <!-- AGENT LIST -->
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-[![][image-feat-database]][docs-feat-database]
-
-### [Support Local / Remote Database][docs-feat-database]
-
-LobeHub supports the use of both server-side and local databases. Depending on your needs, you can choose the appropriate deployment solution:
-
-- **Local database**: suitable for users who want more control over their data and privacy protection. LobeHub uses CRDT (Conflict-Free Replicated Data Type) technology to achieve multi-device synchronization. This is an experimental feature aimed at providing a seamless data synchronization experience.
-- **Server-side database**: suitable for users who want a more convenient user experience. LobeHub supports PostgreSQL as a server-side database. For detailed documentation on how to configure the server-side database, please visit [Configure Server-side Database](https://lobehub.com/docs/self-hosting/advanced/server-database).
-
-Regardless of which database you choose, LobeHub can provide you with an excellent user experience.
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-[![][image-feat-auth]][docs-feat-auth]
-
-### [Support Multi-User Management][docs-feat-auth]
-
-LobeHub supports multi-user management and provides flexible user authentication solutions:
-
-- **Better Auth**: LobeHub integrates `Better Auth`, a modern and flexible authentication library that supports multiple authentication methods, including OAuth, email login, credential login, magic links, and more. With `Better Auth`, you can easily implement user registration, login, session management, social login, multi-factor authentication (MFA), and other functions to ensure the security and privacy of user data.
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-[![][image-feat-pwa]][docs-feat-pwa]
-
-### [Progressive Web App (PWA)][docs-feat-pwa]
-
-We deeply understand the importance of providing a seamless experience for users in today's multi-device environment.
-Therefore, we have adopted Progressive Web Application ([PWA](https://support.google.com/chrome/answer/9658361)) technology,
-a modern web technology that elevates web applications to an experience close to that of native apps.
-
-Through PWA, LobeHub can offer a highly optimized user experience on both desktop and mobile devices while maintaining high-performance characteristics.
-Visually and in terms of feel, we have also meticulously designed the interface to ensure it is indistinguishable from native apps,
-providing smooth animations, responsive layouts, and adapting to different device screen resolutions.
-
-> \[!NOTE]
->
-> If you are unfamiliar with the installation process of PWA, you can add LobeHub as your desktop application (also applicable to mobile devices) by following these steps:
->
-> - Launch the Chrome or Edge browser on your computer.
-> - Visit the LobeHub webpage.
-> - In the upper right corner of the address bar, click on the <kbd>Install</kbd> icon.
-> - Follow the instructions on the screen to complete the PWA Installation.
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-[![][image-feat-mobile]][docs-feat-mobile]
-
-### [Mobile Device Adaptation][docs-feat-mobile]
-
-We have carried out a series of optimization designs for mobile devices to enhance the user's mobile experience. Currently, we are iterating on the mobile user experience to achieve smoother and more intuitive interactions. If you have any suggestions or ideas, we welcome you to provide feedback through GitHub Issues or Pull Requests.
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-[![][image-feat-theme]][docs-feat-theme]
-
-### [Custom Themes][docs-feat-theme]
-
-As a design-engineering-oriented application, LobeHub places great emphasis on users' personalized experiences,
-hence introducing flexible and diverse theme modes, including a light mode for daytime and a dark mode for nighttime.
-Beyond switching theme modes, a range of color customization options allow users to adjust the application's theme colors according to their preferences.
-Whether it's a desire for a sober dark blue, a lively peach pink, or a professional gray-white, users can find their style of color choices in LobeHub.
-
-> \[!TIP]
->
-> The default configuration can intelligently recognize the user's system color mode and automatically switch themes to ensure a consistent visual experience with the operating system.
-> For users who like to manually control details, LobeHub also offers intuitive setting options and a choice between chat bubble mode and document mode for conversation scenarios.
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-### `*` What's more
-
-Beside these features, LobeHub also have much better basic technique underground:
-
-- [x] 💨 **Quick Deployment**: Using the Vercel platform or docker image, you can deploy with just one click and complete the process within 1 minute without any complex configuration.
-- [x] 🌐 **Custom Domain**: If users have their own domain, they can bind it to the platform for quick access to the dialogue agent from anywhere.
-- [x] 🔒 **Privacy Protection**: All data is stored locally in the user's browser, ensuring user privacy.
-- [x] 💎 **Exquisite UI Design**: With a carefully designed interface, it offers an elegant appearance and smooth interaction. It supports light and dark themes and is mobile-friendly. PWA support provides a more native-like experience.
-- [x] 🗣️ **Smooth Conversation Experience**: Fluid responses ensure a smooth conversation experience. It fully supports Markdown rendering, including code highlighting, LaTex formulas, Mermaid flowcharts, and more.
-
-</details>
 
 > ✨ more features will be added when LobeHub evolve.
 
@@ -855,28 +482,10 @@ This project is [LobeHub Community License](./LICENSE) licensed.
 [docs-dev-guide]: https://lobehub.com/docs/development/start
 [docs-docker]: https://lobehub.com/docs/self-hosting/server-database/docker-compose
 [docs-env-var]: https://lobehub.com/docs/self-hosting/environment-variables
-[docs-feat-agent]: https://lobehub.com/docs/usage/features/agent-market
-[docs-feat-artifacts]: https://lobehub.com/docs/usage/features/artifacts
-[docs-feat-auth]: https://lobehub.com/docs/usage/features/auth
-[docs-feat-branch]: https://lobehub.com/docs/usage/features/branching-conversations
-[docs-feat-cot]: https://lobehub.com/docs/usage/features/cot
-[docs-feat-database]: https://lobehub.com/docs/usage/features/database
-[docs-feat-knowledgebase]: https://lobehub.com/blog/knowledge-base
-[docs-feat-local]: https://lobehub.com/docs/usage/features/local-llm
-[docs-feat-mobile]: https://lobehub.com/docs/usage/features/mobile
-[docs-feat-plugin]: https://lobehub.com/docs/usage/features/plugin-system
-[docs-feat-provider]: https://lobehub.com/docs/usage/features/multi-ai-providers
-[docs-feat-pwa]: https://lobehub.com/docs/usage/features/pwa
-[docs-feat-t2i]: https://lobehub.com/docs/usage/features/text-to-image
-[docs-feat-theme]: https://lobehub.com/docs/usage/features/theme
-[docs-feat-tts]: https://lobehub.com/docs/usage/features/tts
-[docs-feat-vision]: https://lobehub.com/docs/usage/features/vision
 [docs-function-call]: https://lobehub.com/blog/openai-function-call
 [docs-plugin-dev]: https://lobehub.com/docs/usage/plugins/development
 [docs-self-hosting]: https://lobehub.com/docs/self-hosting/start
 [docs-upstream-sync]: https://lobehub.com/docs/self-hosting/advanced/upstream-sync
-[docs-usage-ollama]: https://lobehub.com/docs/usage/providers/ollama
-[docs-usage-plugin]: https://lobehub.com/docs/usage/plugins/basic
 [fossa-license-link]: https://app.fossa.com/projects/git%2Bgithub.com%2Flobehub%2Flobehub
 [fossa-license-shield]: https://app.fossa.com/api/projects/git%2Bgithub.com%2Flobehub%2Flobehub.svg?type=large
 [github-action-release-link]: https://github.com/actions/workflows/lobehub/lobehub/release.yml
@@ -898,29 +507,7 @@ This project is [LobeHub Community License](./LICENSE) licensed.
 [github-releasedate-shield]: https://img.shields.io/github/release-date/lobehub/lobehub?labelColor=black&style=flat-square
 [github-stars-link]: https://github.com/lobehub/lobehub/stargazers
 [github-stars-shield]: https://img.shields.io/github/stars/lobehub/lobehub?color=ffcb47&labelColor=black&style=flat-square
-[github-trending-shield]: https://trendshift.io/api/badge/repositories/2256
-[github-trending-url]: https://trendshift.io/repositories/2256
-[image-banner]: https://github.com/user-attachments/assets/0fe626a3-0ddc-4f67-b595-3c5b3f1701e0
-[image-feat-agent]: https://github.com/user-attachments/assets/b3ab6e35-4fbc-468d-af10-e3e0c687350f
-[image-feat-artifacts]: https://github.com/user-attachments/assets/7f95fad6-b210-4e6e-84a0-7f39e96f3a00
-[image-feat-auth]: https://github.com/user-attachments/assets/80bb232e-19d1-4f97-98d6-e291f3585e6d
-[image-feat-branch]: https://github.com/user-attachments/assets/92f72082-02bd-4835-9c54-b089aad7fd41
-[image-feat-cot]: https://github.com/user-attachments/assets/f74f1139-d115-4e9c-8c43-040a53797a5e
-[image-feat-database]: https://github.com/user-attachments/assets/f1697c8b-d1fb-4dac-ba05-153c6295d91d
-[image-feat-desktop]: https://github.com/user-attachments/assets/a7bac8d3-ea96-4000-bb39-fadc9b610f96
-[image-feat-knowledgebase]: https://github.com/user-attachments/assets/7da7a3b2-92fd-4630-9f4e-8560c74955ae
-[image-feat-local]: https://github.com/user-attachments/assets/1239da50-d832-4632-a7ef-bd754c0f3850
-[image-feat-mcp]: https://github.com/user-attachments/assets/1be85d36-3975-4413-931f-27e05e440995
-[image-feat-mcp-market]: https://github.com/user-attachments/assets/bb114f9f-24c5-4000-a984-c10d187da5a0
-[image-feat-mobile]: https://github.com/user-attachments/assets/32cf43c4-96bd-4a4c-bfb6-59acde6fe380
-[image-feat-plugin]: https://github.com/user-attachments/assets/66a891ac-01b6-4e3f-b978-2eb07b489b1b
-[image-feat-privoder]: https://github.com/user-attachments/assets/e553e407-42de-4919-977d-7dbfcf44a821
-[image-feat-pwa]: https://github.com/user-attachments/assets/9647f70f-b71b-43b6-9564-7cdd12d1c24d
-[image-feat-t2i]: https://github.com/user-attachments/assets/708274a7-2458-494b-a6ec-b73dfa1fa7c2
-[image-feat-theme]: https://github.com/user-attachments/assets/b47c39f1-806f-492b-8fcb-b0fa973937c1
-[image-feat-tts]: https://github.com/user-attachments/assets/50189597-2cc3-4002-b4c8-756a52ad5c0a
-[image-feat-vision]: https://github.com/user-attachments/assets/18574a1f-46c2-4cbc-af2c-35a86e128a07
-[image-feat-web-search]: https://github.com/user-attachments/assets/cfdc48ac-b5f8-4a00-acee-db8f2eba09ad
+[image-banner]: https://github.com/user-attachments/assets/5f78ae58-ed4f-4d38-8037-96109fbba58c
 [image-star]: https://github.com/user-attachments/assets/3216e25b-186f-4a54-9cb4-2f124aec0471
 [issues-link]: https://img.shields.io/github/issues/lobehub/lobehub.svg?style=flat
 [lobe-chat-plugins]: https://github.com/lobehub/lobe-chat-plugins
@@ -958,8 +545,6 @@ This project is [LobeHub Community License](./LICENSE) licensed.
 [share-whatsapp-shield]: https://img.shields.io/badge/-share%20on%20whatsapp-black?labelColor=black&logo=whatsapp&logoColor=white&style=flat-square
 [share-x-link]: https://x.com/intent/tweet?hashtags=chatbot%2CchatGPT%2CopenAI&text=Check%20this%20GitHub%20repository%20out%20%F0%9F%A4%AF%20LobeHub%20-%20An%20open-source%2C%20extensible%20%28Function%20Calling%29%2C%20high-performance%20chatbot%20framework.%20It%20supports%20one-click%20free%20deployment%20of%20your%20private%20ChatGPT%2FLLM%20web%20application.&url=https%3A%2F%2Fgithub.com%2Flobehub%2Flobehub
 [share-x-shield]: https://img.shields.io/badge/-share%20on%20x-black?labelColor=black&logo=x&logoColor=white&style=flat-square
-[sponsor-link]: https://opencollective.com/lobehub 'Become ❤️ LobeHub Sponsor'
-[sponsor-shield]: https://img.shields.io/badge/-Sponsor%20LobeHub-f04f88?logo=opencollective&logoColor=white&style=flat-square
 [submit-agents-link]: https://github.com/lobehub/lobe-chat-agents
 [submit-agents-shield]: https://img.shields.io/badge/🤖/🏪_submit_agent-%E2%86%92-c4f042?labelColor=black&style=for-the-badge
 [submit-plugin-link]: https://github.com/lobehub/lobe-chat-plugins

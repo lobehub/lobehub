@@ -94,3 +94,104 @@ describe('CompletionLifecycle.extractErrorMessage', () => {
     expect(result).toBe('Budget exceeded');
   });
 });
+
+describe('CompletionLifecycle.buildLifecycleEvent', () => {
+  const callBuild = (state: unknown, reason = 'completed') =>
+    (buildLifecycle() as any).buildLifecycleEvent('op-1', state, reason);
+
+  it('extracts text content from a plain-string final assistant turn', () => {
+    const state = {
+      messages: [
+        { content: 'user prompt', role: 'user' },
+        { content: 'final answer', role: 'assistant' },
+      ],
+      metadata: { agentId: 'agent-1', userId: 'user-1' },
+    };
+
+    const { event } = callBuild(state);
+
+    expect(event.lastAssistantContent).toBe('final answer');
+    expect(event.attachments).toBeUndefined();
+  });
+
+  it('concatenates text parts from a multimodal final assistant turn', () => {
+    const state = {
+      messages: [
+        {
+          content: [
+            { text: 'here is the image: ', type: 'text' },
+            { image_url: { url: 'https://cdn.example.com/a.png' }, type: 'image_url' },
+            { text: '\n\nhope it helps', type: 'text' },
+          ],
+          role: 'assistant',
+        },
+      ],
+      metadata: {},
+    };
+
+    const { event } = callBuild(state);
+
+    expect(event.lastAssistantContent).toBe('here is the image: \n\nhope it helps');
+    expect(event.attachments).toEqual([
+      expect.objectContaining({ fetchUrl: 'https://cdn.example.com/a.png', type: 'image' }),
+    ]);
+  });
+
+  it('returns undefined text for image-only final assistant turn (no fallback to earlier text)', () => {
+    // Regression: the previous implementation `.find(m => role === 'assistant' && hasText)`
+    // would skip the image-only final turn and walk back to the earlier text
+    // turn, shipping stale prose alongside the current image. The fix matches
+    // on role only — text must be undefined when the final turn has no text.
+    const state = {
+      messages: [
+        { content: 'stale prior text', role: 'assistant' },
+        { content: 'follow-up prompt', role: 'user' },
+        {
+          content: [{ image_url: { url: 'https://cdn.example.com/new.png' }, type: 'image_url' }],
+          role: 'assistant',
+        },
+      ],
+      metadata: {},
+    };
+
+    const { event } = callBuild(state);
+
+    expect(event.lastAssistantContent).toBeUndefined();
+    expect(event.attachments).toEqual([
+      expect.objectContaining({ fetchUrl: 'https://cdn.example.com/new.png', type: 'image' }),
+    ]);
+  });
+
+  it('returns undefined text when there are no assistant messages', () => {
+    const state = {
+      messages: [{ content: 'just a user prompt', role: 'user' }],
+      metadata: {},
+    };
+
+    const { event } = callBuild(state);
+
+    expect(event.lastAssistantContent).toBeUndefined();
+    expect(event.attachments).toBeUndefined();
+  });
+
+  it('returns undefined text when content is an empty string', () => {
+    // `extractTextFromMessageContent` returns undefined for empty strings, so
+    // an empty-string final assistant turn must not pretend it has text.
+    const state = {
+      messages: [{ content: '', role: 'assistant' }],
+      metadata: {},
+    };
+
+    const { event } = callBuild(state);
+
+    expect(event.lastAssistantContent).toBeUndefined();
+  });
+
+  it('handles missing messages array gracefully', () => {
+    const { event } = callBuild({ metadata: { agentId: 'a' } });
+
+    expect(event.lastAssistantContent).toBeUndefined();
+    expect(event.attachments).toBeUndefined();
+    expect(event.agentId).toBe('a');
+  });
+});

@@ -140,8 +140,8 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
             () => service.createForTopic(agentId, title, content, topicId, { hintIsSkill }),
           ),
         ),
-      listDocuments: async ({ agentId }) => {
-        const docs = await service.listDocuments(agentId);
+      listDocuments: async ({ agentId, sourceType }) => {
+        const docs = await service.listDocuments(agentId, sourceType);
         return docs.map((d) => ({
           documentId: d.documentId,
           filename: d.filename,
@@ -149,8 +149,8 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
           title: d.title,
         }));
       },
-      listTopicDocuments: async ({ agentId, topicId }) => {
-        const docs = await service.listDocumentsForTopic(agentId, topicId);
+      listTopicDocuments: async ({ agentId, sourceType, topicId }) => {
+        const docs = await service.listDocumentsForTopic(agentId, topicId, sourceType);
         return docs.map((d) => ({
           documentId: d.documentId,
           filename: d.filename,

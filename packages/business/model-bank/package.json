@@ -1,0 +1,13 @@
+{
+  "name": "@lobechat/business-model-bank",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./model-config": "./src/model-config.ts"
+  },
+  "main": "./src/index.ts",
+  "dependencies": {
+    "model-bank": "workspace:*"
+  }
+}

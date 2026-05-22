@@ -1,4 +1,5 @@
 import { isDesktop as defaultIsDesktop } from '@lobechat/const';
+import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import { type HeterogeneousProviderConfig } from '@lobechat/types';
 
 /**
@@ -9,6 +10,41 @@ import { type HeterogeneousProviderConfig } from '@lobechat/types';
  * - `hetero`: heterogeneous CLI agent (Claude Code, Codex, …) via desktop IPC or sandbox
  */
 export type AgentRuntimeType = 'client' | 'gateway' | 'hetero';
+
+/**
+ * Unified intent for a non-hetero, non-group sub-agent invocation.
+ *
+ * All three caller patterns (`callSubAgent` / `callAgent` / `@agent`) map
+ * their parameters into this shape before handing off to
+ * `dispatchNonHeteroSubAgent`. Runtime routing is entirely the dispatcher's
+ * responsibility — callers only declare *what* they want, not *how* to run it.
+ *
+ * Excluded from this contract:
+ * - Hetero agents (handled by the heterogeneous pipeline)
+ * - Group orchestration (handled by `groupOrchestration.triggerSpeak`)
+ * - Async task mode (handled by the `execSubAgent` executor via state.type)
+ */
+export interface AgentInvocationIntent {
+  /**
+   * Instruction delivered to the sub-agent.
+   * In client mode it is injected as a virtual user message prepended to the
+   * existing message history. In gateway mode it becomes the `message` param
+   * of `executeGatewayAgent` (i.e. a real user message on the server).
+   */
+  instruction: string;
+  /**
+   * Which invocation pattern produced this intent.
+   * Preserved for logging / debugging; has no effect on runtime selection.
+   */
+  kind: 'callAgent' | 'callSubAgent' | 'mention';
+  /**
+   * ID of the tool result message that triggered this invocation.
+   * Used as `parentMessageId` by the client executor.
+   */
+  parentMessageId: string;
+  /** Target agent to execute. */
+  targetAgentId: string;
+}
 
 export interface RuntimeSelectionContext {
   /** Per-agent heterogeneous provider config (desktop only — takes priority over gateway). */
@@ -45,9 +81,15 @@ export const selectRuntimeType = (
   { isDesktop = defaultIsDesktop }: SelectRuntimeTypeOptions = {},
 ): AgentRuntimeType => {
   if (ctx.parentRuntime) return ctx.parentRuntime;
+  // Remote device agents (openclaw / hermes) always use the gateway path regardless of
+  // desktop/web — they communicate via a device connected with `lh connect`, not via
+  // local desktop IPC. No special desktop handling needed.
+  if (ctx.heterogeneousProvider && isRemoteHeterogeneousType(ctx.heterogeneousProvider.type)) {
+    return 'gateway';
+  }
+  // Local CLI agents (claude-code, codex) run as desktop subprocesses.
   if (isDesktop && ctx.heterogeneousProvider) return 'hetero';
-  // On web, heterogeneous agents always run via Gateway sandbox regardless of the
-  // isGatewayMode user preference — the sandbox is the only execution environment.
+  // On web, all remaining hetero agents run via the Gateway sandbox.
   if (!isDesktop && ctx.heterogeneousProvider) return 'gateway';
   if (ctx.isGatewayMode) return 'gateway';
   return 'client';

@@ -1,6 +1,5 @@
 'use client';
 
-import { BRANDING_NAME } from '@lobechat/business-const';
 import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, useTheme } from 'antd-style';
 import { memo, useCallback, useEffect, useMemo } from 'react';
@@ -109,8 +108,6 @@ const ResourceManager = memo(() => {
       prev.delete('file');
       return prev;
     });
-    // Reset document title to default
-    document.title = BRANDING_NAME;
   };
 
   // Optimistic update handlers for page title and emoji

@@ -30,12 +30,14 @@ import { useAutoScrollEnabled } from './AutoScroll/useAutoScrollEnabled';
 import BackBottom from './BackBottom';
 
 const CONVERSATION_FOOTER_ID = '__conversation_footer__';
+const CONVERSATION_HEADER_ID = '__conversation_header__';
 const USER_SCROLL_INTENT_TTL_MS = 500;
 const SCROLL_KEYS = new Set(['ArrowDown', 'ArrowUp', 'End', 'Home', 'PageDown', 'PageUp', ' ']);
 
 interface VirtualizedListProps {
   dataSource: string[];
   footerSlot?: ReactNode;
+  headerSlot?: ReactNode;
   itemContent: (index: number, data: string) => ReactNode;
 }
 
@@ -44,7 +46,8 @@ interface VirtualizedListProps {
  *
  * Based on ConversationStore data flow, no dependency on global ChatStore.
  */
-const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, footerSlot, itemContent }) => {
+const VirtualizedList = memo<VirtualizedListProps>(
+  ({ dataSource, footerSlot, headerSlot, itemContent }) => {
   const virtuaRef = useRef<VListHandle>(null);
   const scrollEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastUserScrollIntentAtRef = useRef(0);
@@ -244,16 +247,25 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, footerSlot, it
   const overlayHeight = useConversationStore(inputSelectors.chatInputOverlayHeight);
   const paddingBottom = Math.max(24, overlayHeight + 12);
 
-  const dataWithFooter = useMemo(
-    () => (footerSlot ? [...listData, CONVERSATION_FOOTER_ID] : listData),
-    [listData, footerSlot],
+  const dataWithSlots = useMemo(
+    () => [
+      ...(headerSlot ? [CONVERSATION_HEADER_ID] : []),
+      ...listData,
+      ...(footerSlot ? [CONVERSATION_FOOTER_ID] : []),
+    ],
+    [footerSlot, headerSlot, listData],
+  );
+
+  const keepMountedIndicesWithSlots = useMemo(
+    () => (headerSlot ? keepMountedIndices.map((index) => index + 1) : keepMountedIndices),
+    [headerSlot, keepMountedIndices],
   );
 
   // Mirror the latest data length into a ref so the scroll-methods registered
   // once on mount can read the current total count (including spacer/footer)
   // without re-registering on every render.
-  const totalCountRef = useRef(dataWithFooter.length);
-  totalCountRef.current = dataWithFooter.length;
+  const totalCountRef = useRef(dataWithSlots.length);
+  totalCountRef.current = dataWithSlots.length;
 
   return (
     <div
@@ -268,14 +280,21 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, footerSlot, it
       {OPEN_DEV_INSPECTOR && <DebugInspector />}
       <VList
         bufferSize={typeof window !== 'undefined' ? window.innerHeight : 0}
-        data={dataWithFooter}
-        keepMounted={keepMountedIndices}
+        data={dataWithSlots}
+        keepMounted={keepMountedIndicesWithSlots}
         ref={virtuaRef}
         style={{ height: '100%', overflowAnchor: 'none', paddingBottom }}
         onScroll={handleScroll}
         onScrollEnd={handleScrollEnd}
       >
         {(messageId, index): ReactElement => {
+          if (messageId === CONVERSATION_HEADER_ID) {
+            return (
+              <WideScreenContainer key={messageId} style={{ position: 'relative' }}>
+                {headerSlot}
+              </WideScreenContainer>
+            );
+          }
           if (messageId === CONVERSATION_FOOTER_ID) {
             return (
               <WideScreenContainer key={messageId} style={{ position: 'relative' }}>
@@ -309,8 +328,9 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, footerSlot, it
           }
 
           const isAgentCouncil = messageId.includes('agentCouncil');
-          const isLastItem = index === dataSource.length - 1;
-          const content = itemContent(index, messageId);
+          const messageIndex = headerSlot ? index - 1 : index;
+          const isLastItem = messageIndex === dataSource.length - 1;
+          const content = itemContent(messageIndex, messageId);
 
           if (isAgentCouncil) {
             // AgentCouncil needs full width for horizontal scroll

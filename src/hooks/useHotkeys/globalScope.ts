@@ -15,6 +15,13 @@ import { useHotkeyById } from './useHotkeyById';
 export const isTaskPanelRoute = (pathname: string) =>
   pathname === '/tasks' || pathname.startsWith('/tasks/') || pathname.startsWith('/task/');
 
+/**
+ * Agent profile renders AgentBuilder, whose panel status is intentionally
+ * independent from the generic right panel used by chat routes.
+ */
+export const isAgentProfilePanelRoute = (pathname: string) =>
+  /^\/agent\/[^/]+\/profile\/?$/.test(pathname);
+
 // Switch to chat tab (and focus on Lobe AI)
 export const useNavigateToChatHotkey = () => {
   const navigateToAgent = useNavigateToAgent();
@@ -49,10 +56,12 @@ export const useToggleLeftPanelHotkey = () => {
 export const useToggleRightPanelHotkey = () => {
   const { pathname } = useLocation();
   const isZenMode = useGlobalStore((s) => s.status.zenMode);
-  const [toggleRightPanel, toggleTaskAgentPanel] = useGlobalStore((s) => [
+  const [toggleAgentBuilderPanel, toggleRightPanel, toggleTaskAgentPanel] = useGlobalStore((s) => [
+    s.toggleAgentBuilderPanel,
     s.toggleRightPanel,
     s.toggleTaskAgentPanel,
   ]);
+  const isAgentProfileRoute = isAgentProfilePanelRoute(pathname);
   const isTaskRoute = isTaskPanelRoute(pathname);
 
   return useHotkeyById(
@@ -63,13 +72,24 @@ export const useToggleRightPanelHotkey = () => {
         return;
       }
 
+      if (isAgentProfileRoute) {
+        toggleAgentBuilderPanel();
+        return;
+      }
+
       toggleRightPanel();
     },
     {
       enableOnContentEditable: true,
       enabled: !isZenMode,
     },
-    [isTaskRoute, toggleRightPanel, toggleTaskAgentPanel],
+    [
+      isAgentProfileRoute,
+      isTaskRoute,
+      toggleAgentBuilderPanel,
+      toggleRightPanel,
+      toggleTaskAgentPanel,
+    ],
   );
 };
 

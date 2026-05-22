@@ -294,5 +294,17 @@ describe('LobeWenxinAI - Custom Features', () => {
       expect(result.enable_thinking).toBeUndefined();
       expect(result.thinking_budget).toBe(2048);
     });
+
+    it('should not send thinking_budget when thinking budget is not provided', () => {
+      const payload = {
+        messages: [{ role: 'user', content: 'Hello' }],
+        model: 'deepseek-r1-250528',
+        thinking: {},
+      };
+
+      const result = params.chatCompletion!.handlePayload!(payload as any);
+
+      expect(result.thinking_budget).toBeUndefined();
+    });
   });
 });

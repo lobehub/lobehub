@@ -1,6 +1,8 @@
 import { isDesktop } from '@lobechat/const';
-import { Center, Empty, Flexbox, Highlighter } from '@lobehub/ui';
-import { memo, useEffect, useState } from 'react';
+import { Center, Empty, Flexbox, Highlighter, Icon, Markdown, Segmented, Text } from '@lobehub/ui';
+import { createStaticStyles, cssVar } from 'antd-style';
+import { CodeIcon, EyeIcon } from 'lucide-react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import Loading from '@/components/Loading/CircleLoading';
@@ -8,6 +10,12 @@ import { useClientDataSWR } from '@/libs/swr';
 import { localFileService } from '@/services/electron/localFileService';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
+import {
+  parseSkillMarkdownFrontmatter,
+  parseSkillMarkdownFrontmatterFields,
+  parseSkillMarkdownMetadata,
+  type SkillMarkdownMetadataItem,
+} from '@/utils/skillMarkdown';
 
 import { extensionToLanguage, getFileExtension } from './Body.helpers';
 
@@ -98,6 +106,157 @@ const ImagePreview = memo<ImagePreviewProps>(({ blob, filename }) => {
 
 ImagePreview.displayName = 'ImagePreview';
 
+// ============== TextPreviewPane ==============
+
+const MARKDOWN_EXTS = new Set(['md', 'mdx', 'markdown']);
+
+const frontmatterStyles = createStaticStyles(({ css }) => ({
+  card: css`
+    margin-block: 8px 12px;
+    margin-inline: 12px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: 8px;
+
+    background: ${cssVar.colorBgContainer};
+  `,
+  key: css`
+    flex-shrink: 0;
+
+    width: 96px;
+
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: 12px;
+    color: ${cssVar.colorTextSecondary};
+  `,
+  row: css`
+    padding-block: 8px;
+    padding-inline: 12px;
+
+    &:not(:last-child) {
+      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+    }
+  `,
+  value: css`
+    min-width: 0;
+    font-size: 12px;
+    white-space: pre-wrap;
+  `,
+}));
+
+interface SkillFrontmatterPreviewCardProps {
+  metadata: SkillMarkdownMetadataItem[];
+}
+
+const SkillFrontmatterPreviewCard = memo<SkillFrontmatterPreviewCardProps>(({ metadata }) => {
+  if (metadata.length === 0) return null;
+
+  return (
+    <Flexbox className={frontmatterStyles.card} style={{ flexShrink: 0 }}>
+      {metadata.map((item) => (
+        <Flexbox horizontal align={'flex-start'} className={frontmatterStyles.row} key={item.key}>
+          <Text className={frontmatterStyles.key}>{item.key}</Text>
+          <Text className={frontmatterStyles.value}>{item.value}</Text>
+        </Flexbox>
+      ))}
+    </Flexbox>
+  );
+});
+
+SkillFrontmatterPreviewCard.displayName = 'SkillFrontmatterPreviewCard';
+
+type TextPreviewMode = 'render' | 'raw';
+
+interface TextPreviewPaneProps {
+  content: string;
+  ext: string;
+  truncated: boolean;
+  truncatedLabel: string;
+}
+
+const TextPreviewPane = memo<TextPreviewPaneProps>(
+  ({ content, ext, truncated, truncatedLabel }) => {
+    const { t } = useTranslation('chat');
+    const isMarkdown = useMemo(() => MARKDOWN_EXTS.has(ext.toLowerCase()), [ext]);
+
+    const { body, frontmatter } = useMemo(
+      () => (isMarkdown ? parseSkillMarkdownFrontmatter(content) : { body: content }),
+      [isMarkdown, content],
+    );
+    const frontmatterFields = useMemo(
+      () => (frontmatter ? parseSkillMarkdownFrontmatterFields(frontmatter) : {}),
+      [frontmatter],
+    );
+    const frontmatterMetadata = useMemo(
+      () => (frontmatter ? parseSkillMarkdownMetadata(frontmatter) : []),
+      [frontmatter],
+    );
+
+    const [mode, setMode] = useState<TextPreviewMode>(isMarkdown ? 'render' : 'raw');
+
+    useEffect(() => {
+      setMode(isMarkdown ? 'render' : 'raw');
+    }, [isMarkdown]);
+
+    return (
+      <Flexbox flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
+        {isMarkdown && (
+          <Flexbox
+            horizontal
+            align={'center'}
+            gap={8}
+            paddingBlock={6}
+            paddingInline={12}
+            style={{ flexShrink: 0 }}
+          >
+            <Text ellipsis style={{ flex: 1, fontSize: 13, fontWeight: 500, minWidth: 0 }}>
+              {frontmatterFields.name ?? ''}
+            </Text>
+            <Segmented
+              size={'small'}
+              value={mode}
+              options={[
+                {
+                  icon: <Icon icon={EyeIcon} />,
+                  label: t('workingPanel.localFile.preview.render'),
+                  value: 'render',
+                },
+                {
+                  icon: <Icon icon={CodeIcon} />,
+                  label: t('workingPanel.localFile.preview.raw'),
+                  value: 'raw',
+                },
+              ]}
+              onChange={(v) => setMode(v as TextPreviewMode)}
+            />
+          </Flexbox>
+        )}
+        {truncated && (
+          <Center paddingBlock={4} style={{ flexShrink: 0 }}>
+            <span style={{ fontSize: 12, opacity: 0.65 }}>{truncatedLabel}</span>
+          </Center>
+        )}
+        <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+          {isMarkdown && mode === 'render' ? (
+            <>
+              <SkillFrontmatterPreviewCard metadata={frontmatterMetadata} />
+              <Markdown style={{ paddingBlock: 8, paddingInline: 12 }}>{body}</Markdown>
+            </>
+          ) : (
+            <Highlighter
+              language={extensionToLanguage(ext)}
+              style={{ fontSize: 12, minHeight: '100%' }}
+            >
+              {content}
+            </Highlighter>
+          )}
+        </div>
+      </Flexbox>
+    );
+  },
+);
+
+TextPreviewPane.displayName = 'TextPreviewPane';
+
 // ============== ActiveFileView ==============
 
 interface ActiveFileViewProps {
@@ -167,23 +326,14 @@ const ActiveFileView = memo<ActiveFileViewProps>(({ filePath, workingDirectory }
   const displayContent = truncated ? preview.content.slice(0, MAX_PREVIEW_CHARS) : preview.content;
 
   return (
-    <Flexbox flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'auto' }}>
-      {truncated && (
-        <Center paddingBlock={4} style={{ flexShrink: 0 }}>
-          <span style={{ fontSize: 12, opacity: 0.65 }}>
-            {t('workingPanel.localFile.truncated', { limit: MAX_PREVIEW_CHARS.toLocaleString() })}
-          </span>
-        </Center>
-      )}
-      <Flexbox flex={1} style={{ minHeight: 0, overflow: 'auto' }}>
-        <Highlighter
-          language={extensionToLanguage(ext)}
-          style={{ fontSize: 12, minHeight: '100%', overflow: 'visible' }}
-        >
-          {displayContent}
-        </Highlighter>
-      </Flexbox>
-    </Flexbox>
+    <TextPreviewPane
+      content={displayContent}
+      ext={ext}
+      truncated={truncated}
+      truncatedLabel={t('workingPanel.localFile.truncated', {
+        limit: MAX_PREVIEW_CHARS.toLocaleString(),
+      })}
+    />
   );
 });
 

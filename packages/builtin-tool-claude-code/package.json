@@ -4,7 +4,8 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
-    "./client": "./src/client/index.ts"
+    "./client": "./src/client/index.ts",
+    "./client/labels": "./src/client/Inspector/linearMcpLabels.ts"
   },
   "main": "./src/index.ts",
   "dependencies": {

@@ -1,4 +1,5 @@
 import { log } from '../utils/logger';
+import { checkPlatformCapability } from './checkPlatformCapability';
 import {
   editLocalFile,
   globLocalFiles,
@@ -8,9 +9,14 @@ import {
   searchLocalFiles,
   writeLocalFile,
 } from './file';
+import { getAgentProfile } from './getAgentProfile';
+import { cancelHeteroTask, runHeteroTask } from './heteroTask';
 import { getCommandOutput, killCommand, runCommand } from './shell';
 
 const methodMap: Record<string, (args: any) => Promise<unknown>> = {
+  cancelHeteroTask,
+  checkPlatformCapability,
+  getAgentProfile,
   editFile: editLocalFile,
   getCommandOutput,
   globFiles: globLocalFiles,
@@ -19,6 +25,7 @@ const methodMap: Record<string, (args: any) => Promise<unknown>> = {
   listFiles: listLocalFiles,
   readFile: readLocalFile,
   runCommand,
+  runHeteroTask,
   searchFiles: searchLocalFiles,
   writeFile: writeLocalFile,
 

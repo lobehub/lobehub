@@ -2,6 +2,8 @@
  * Input used by the focused skill refinement prompt.
  */
 export interface AgentSkillRefinePromptInput {
+  /** Language instruction block for persisted skill artifact text. */
+  languageInstruction?: string;
   /** Reason the skill should be refined. */
   reason: string;
   /** Optional package tree summary for adjacent resources. */
@@ -80,5 +82,7 @@ Output ONLY the JSON object, no markdown fences or explanations.`;
  * - A compact prompt containing serialized refinement context
  */
 export const createAgentSkillRefinePrompt = (input: AgentSkillRefinePromptInput) => {
-  return `Refine this skill.\ninput=${JSON.stringify(input)}`;
+  const languageInstruction = input.languageInstruction ? `\n\n${input.languageInstruction}` : '';
+
+  return `Refine this skill.${languageInstruction}\ninput=${JSON.stringify(input)}`;
 };

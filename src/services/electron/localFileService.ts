@@ -13,6 +13,8 @@ import {
   type KillCommandResult,
   type ListLocalFileParams,
   type ListLocalFilesResult,
+  type ListProjectSkillsParams,
+  type ListProjectSkillsResult,
   type LocalFileItem,
   type LocalFilePreviewUrlParams,
   type LocalFilePreviewUrlResult,
@@ -60,6 +62,10 @@ class LocalFileService {
 
   async getProjectFileIndex(params: ProjectFileIndexParams): Promise<ProjectFileIndexResult> {
     return ensureElectronIpc().localSystem.getProjectFileIndex(params);
+  }
+
+  async listProjectSkills(params: ListProjectSkillsParams): Promise<ListProjectSkillsResult> {
+    return ensureElectronIpc().localSystem.listProjectSkills(params);
   }
 
   async openLocalFile(params: OpenLocalFileParams) {

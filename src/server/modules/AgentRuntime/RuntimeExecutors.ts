@@ -2,6 +2,9 @@ import {
   type AgentEvent,
   type AgentInstruction,
   type AgentInstructionCompressContext,
+  type AgentInstructionExecSubAgent,
+  type AgentInstructionExecSubAgents,
+  type AgentRuntimeContext,
   type AgentState,
   type CallLLMPayload,
   type GeneralAgentCallLLMResultPayload,
@@ -12,8 +15,8 @@ import {
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { CredsIdentifier, type CredSummary, generateCredsList } from '@lobechat/builtin-tool-creds';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
+import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import {
-  AGENT_DOCUMENT_INJECTION_POSITIONS,
   type AgentContextDocument,
   type BotPlatformContext,
   buildStepSkillDelta,
@@ -30,7 +33,12 @@ import {
 import { parse } from '@lobechat/conversation-flow';
 import { consumeStreamUntilDone } from '@lobechat/model-runtime';
 import { chainCompressContext } from '@lobechat/prompts';
-import { type ChatToolPayload, type MessageToolCall, type UIChatMessage } from '@lobechat/types';
+import {
+  type ChatToolPayload,
+  type ExecSubAgentTaskParams,
+  type MessageToolCall,
+  type UIChatMessage,
+} from '@lobechat/types';
 import { sanitizeToolCallArguments, serializePartsForStorage } from '@lobechat/utils';
 import debug from 'debug';
 
@@ -55,6 +63,8 @@ import {
   type ToolExecutionResultResponse,
   type ToolExecutionService,
 } from '@/server/services/toolExecution';
+import { archiveToolResultIfNeeded } from '@/server/services/toolExecution/archiveToolResult';
+import { toAgentContextDocuments } from '@/utils/agentDocumentContextMapping';
 
 import { dispatchClientTool } from './dispatchClientTool';
 import { formatErrorEventData } from './formatErrorEventData';
@@ -65,23 +75,11 @@ import {
   isPersistFatal,
   markPersistFatal,
 } from './messagePersistErrors';
+import { resolveToolTimeoutMs } from './resolveToolTimeout';
 import { type IStreamEventManager } from './types';
 
 const log = debug('lobe-server:agent-runtime:streaming-executors');
 const timing = debug('lobe-server:agent-runtime:timing');
-
-const VALID_DOCUMENT_POSITIONS = new Set<AgentContextDocument['loadPosition']>(
-  AGENT_DOCUMENT_INJECTION_POSITIONS,
-);
-
-const normalizeDocumentPosition = (
-  position: string | null | undefined,
-): AgentContextDocument['loadPosition'] | undefined => {
-  if (!position) return undefined;
-  return VALID_DOCUMENT_POSITIONS.has(position as AgentContextDocument['loadPosition'])
-    ? (position as AgentContextDocument['loadPosition'])
-    : undefined;
-};
 
 // Tool pricing configuration (USD per call)
 const TOOL_PRICING: Record<string, number> = {
@@ -106,6 +104,40 @@ const getToolFailureKind = (result: ToolExecutionResultResponse): ToolFailureKin
 const shouldRetryTool = (kind: ToolFailureKind | undefined, attempt: number, maxRetries: number) =>
   kind === 'retry' && attempt <= maxRetries;
 
+const archiveRuntimeToolResult = async (
+  result: ToolExecutionResultResponse,
+  {
+    agentId,
+    identifier,
+    limit,
+    serverDB,
+    toolCallId,
+    topicId,
+    userId,
+  }: {
+    agentId?: string | null;
+    identifier?: string;
+    limit?: number;
+    serverDB: LobeChatDatabase;
+    toolCallId?: string;
+    topicId?: string | null;
+    userId?: string;
+  },
+): Promise<ToolExecutionResultResponse> => {
+  const archive = await archiveToolResultIfNeeded({
+    agentId,
+    content: result.content,
+    identifier,
+    limit,
+    serverDB,
+    toolCallId,
+    topicId,
+    userId,
+  });
+
+  return archive.content === result.content ? result : { ...result, content: archive.content };
+};
+
 // Builds a postProcessUrl callback that resolves S3 keys in file-backed fields
 // (imageList, videoList, fileList) to absolute URLs. Must be passed to every
 // messageModel.query() call whose output is later fed to the LLM — otherwise
@@ -128,6 +160,21 @@ const buildPostProcessUrl = (ctx: Pick<RuntimeExecutorContext, 'serverDB' | 'use
 
 const shouldRetryLLM = (kind: LLMErrorKind, attempt: number, maxRetries: number) =>
   kind === 'retry' && attempt <= maxRetries;
+
+const resolveLLMMaxRetries = (provider: string) =>
+  // The branded provider already routes through its own fallback chain. Retrying
+  // again here multiplies the same failed routed request across every channel.
+  provider === BRANDING_PROVIDER ? 0 : LLM_MAX_RETRIES;
+
+const resolveRuntimeHistoryCount = (historyCount?: number) => {
+  if (historyCount === undefined) return undefined;
+
+  // Agent config stores historical message count, excluding the current turn.
+  // Runtime executors already pass the current user/tool turn in `llmPayload.messages`;
+  // without this +1, `historyCount: 0` truncates the current message too and sends
+  // `messages: []` to providers.
+  return historyCount + 1;
+};
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -209,6 +256,12 @@ export interface RuntimeExecutorContext {
   botPlatformContext?: BotPlatformContext;
   discordContext?: any;
   evalContext?: EvalContext;
+  /**
+   * Callback to spawn a sub-agent task server-side.
+   * Injected by AiAgentService so exec_sub_agent / exec_sub_agents executors
+   * can dispatch callAgent-triggered tasks without a circular import.
+   */
+  execSubAgentTask?: (params: ExecSubAgentTaskParams) => Promise<unknown>;
   hookDispatcher?: HookDispatcher;
   loadAgentState?: (operationId: string) => Promise<AgentState | null>;
   messageModel: MessageModel;
@@ -375,7 +428,8 @@ export const createRuntimeExecutors = (
       const agentConfig = ctx.agentConfig;
       let processedMessages;
       if (agentConfig) {
-        const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
+        const { loadModels } = await import('@/business/client/model-bank/loadModels');
+        const builtinModels = await loadModels();
 
         // Extract <refer_topic> tags from messages and fetch summaries.
         // Skip if messages already contain injected topic_reference_context
@@ -415,20 +469,7 @@ export const createRuntimeExecutors = (
             const agentDocService = new AgentDocumentsService(ctx.serverDB, ctx.userId);
             const docs = await agentDocService.getAgentDocuments(agentId);
             if (docs.length > 0) {
-              agentDocuments = docs.map((doc) => ({
-                content: doc.content,
-                description: doc.description ?? undefined,
-                filename: doc.filename,
-                id: doc.id,
-                loadPosition: normalizeDocumentPosition(
-                  doc.policy?.context?.position || doc.policyLoadPosition,
-                ),
-                loadRules: doc.loadRules,
-                policyId: doc.templateId,
-                policyLoad: doc.policyLoad as 'always' | 'progressive',
-                policyLoadFormat: doc.policy?.context?.policyLoadFormat || doc.policyLoadFormat,
-                title: doc.title,
-              }));
+              agentDocuments = toAgentContextDocuments(docs);
               log('Resolved %d agent documents for agent %s', agentDocuments.length, agentId);
             }
           } catch (error) {
@@ -605,15 +646,13 @@ export const createRuntimeExecutors = (
           userTimezone: ctx.userTimezone,
           capabilities: {
             isCanUseFC: (m: string, p: string) => {
-              const info = LOBE_DEFAULT_MODEL_LIST.find(
-                (item) => item.id === m && item.providerId === p,
-              );
+              const info = builtinModels.find((item) => item.id === m && item.providerId === p);
               return info?.abilities?.functionCall ?? true;
             },
             isCanUseVideo: (m: string, p: string) => {
               const info =
-                LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === m && item.providerId === p) ??
-                LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === m);
+                builtinModels.find((item) => item.id === m && item.providerId === p) ??
+                builtinModels.find((item) => item.id === m);
               return info?.abilities?.video ?? false;
             },
             isCanUseVision: (m: string, p: string) => {
@@ -622,8 +661,8 @@ export const createRuntimeExecutors = (
               // fall back to a cross-provider lookup by model id when the
               // (model, provider) pair has no direct entry.
               const info =
-                LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === m && item.providerId === p) ??
-                LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === m);
+                builtinModels.find((item) => item.id === m && item.providerId === p) ??
+                builtinModels.find((item) => item.id === m);
               return info?.abilities?.vision ?? false;
             },
           },
@@ -632,7 +671,7 @@ export const createRuntimeExecutors = (
           enableHistoryCount: agentConfig.chatConfig?.enableHistoryCount ?? undefined,
           evalContext: ctx.evalContext,
           forceFinish: state.forceFinish,
-          historyCount: agentConfig.chatConfig?.historyCount ?? undefined,
+          historyCount: resolveRuntimeHistoryCount(agentConfig.chatConfig?.historyCount),
           initialContext: (state as any).initialContext?.initialContext,
           knowledge: {
             fileContents: agentConfig.files
@@ -768,7 +807,8 @@ export const createRuntimeExecutors = (
         }
       };
 
-      const maxAttempts = LLM_MAX_RETRIES + 1;
+      const llmMaxRetries = resolveLLMMaxRetries(provider);
+      const maxAttempts = llmMaxRetries + 1;
 
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         let content = '';
@@ -1121,7 +1161,7 @@ export const createRuntimeExecutors = (
           const classified = classifyLLMError(error);
           const interrupted = await isOperationInterrupted(ctx);
 
-          if (!interrupted && shouldRetryLLM(classified.kind, attempt, LLM_MAX_RETRIES)) {
+          if (!interrupted && shouldRetryLLM(classified.kind, attempt, llmMaxRetries)) {
             const delayMs = getLLMRetryDelayMs(attempt);
 
             log(
@@ -1507,7 +1547,9 @@ export const createRuntimeExecutors = (
         typeof chatToolPayload.arguments === 'string'
           ? JSON.parse(chatToolPayload.arguments)
           : (chatToolPayload.arguments ?? {});
-    } catch {}
+    } catch {
+      // Keep malformed tool arguments as an empty preview payload; execution still uses raw args.
+    }
 
     try {
       // Check if this is a client-side function tool — pause instead of executing
@@ -1633,9 +1675,15 @@ export const createRuntimeExecutors = (
         };
       } else if (canDispatchToClient) {
         log(`[${operationLogId}] Dispatching tool ${toolName} to client via Agent Gateway`);
+        const timeoutMs = resolveToolTimeoutMs({
+          apiName: chatToolPayload.apiName,
+          args: parsedArgs,
+          manifest: effectiveManifestMap[chatToolPayload.identifier],
+        });
         const dispatchResult = await dispatchClientTool(chatToolPayload, {
           operationId,
           streamManager,
+          timeoutMs,
         });
         execution = { attempts: 1, result: dispatchResult };
       } else {
@@ -1659,6 +1707,7 @@ export const createRuntimeExecutors = (
               operationId,
               scope: state.metadata?.scope,
               serverDB: ctx.serverDB,
+              skipResultTruncation: true,
               taskId: state.metadata?.taskId,
               threadId: state.metadata?.threadId,
               toolCallId: chatToolPayload.id,
@@ -1676,7 +1725,15 @@ export const createRuntimeExecutors = (
         );
       }
 
-      const executionResult = execution.result;
+      const executionResult = await archiveRuntimeToolResult(execution.result, {
+        agentId: state.metadata?.agentId,
+        identifier: chatToolPayload.identifier,
+        limit: toolResultMaxLength,
+        serverDB: ctx.serverDB,
+        toolCallId: chatToolPayload.id,
+        topicId: ctx.topicId ?? state.metadata?.topicId,
+        userId: ctx.userId,
+      });
       const executionTime = executionResult.executionTime;
       const isSuccess = executionResult.success;
       if (ctx.hookDispatcher) {
@@ -1846,6 +1903,15 @@ export const createRuntimeExecutors = (
 
       log('[%s:%d] Tool execution completed', operationId, stepIndex);
 
+      // When the tool result carries an execSubAgent / execSubAgents state the
+      // GeneralChatAgent needs `stop: true` in the payload to detect it and
+      // emit the matching exec_sub_agent / exec_sub_agents instruction.  Without
+      // this flag the agent falls through to the normal LLM-call path and the
+      // sub-agent is never spawned.
+      const execTaskStateType = executionResult.state?.type as string | undefined;
+      const isExecTaskState =
+        execTaskStateType === 'execSubAgent' || execTaskStateType === 'execSubAgents';
+
       return {
         events,
         newState,
@@ -1856,6 +1922,7 @@ export const createRuntimeExecutors = (
             isSuccess,
             // Pass tool message ID as parentMessageId for the next LLM call
             parentMessageId: toolMessageId,
+            ...(isExecTaskState && { stop: true }),
             toolCall: chatToolPayload,
             toolCallId: chatToolPayload.id,
           },
@@ -2012,7 +2079,9 @@ export const createRuntimeExecutors = (
             typeof chatToolPayload.arguments === 'string'
               ? JSON.parse(chatToolPayload.arguments)
               : (chatToolPayload.arguments ?? {});
-        } catch {}
+        } catch {
+          // Keep malformed tool arguments as an empty preview payload; execution still uses raw args.
+        }
 
         try {
           log(`[${operationLogId}] Executing tool ${toolName} ...`);
@@ -2088,9 +2157,15 @@ export const createRuntimeExecutors = (
             };
           } else if (canDispatchToClient) {
             log(`[${operationLogId}] Dispatching tool ${toolName} to client via Agent Gateway`);
+            const timeoutMs = resolveToolTimeoutMs({
+              apiName: chatToolPayload.apiName,
+              args: batchParsedArgs,
+              manifest: batchManifestMap[chatToolPayload.identifier],
+            });
             const dispatchResult = await dispatchClientTool(chatToolPayload, {
               operationId,
               streamManager,
+              timeoutMs,
             });
             execution = { attempts: 1, result: dispatchResult };
           } else {
@@ -2115,6 +2190,7 @@ export const createRuntimeExecutors = (
                   operationId,
                   scope: state.metadata?.scope,
                   serverDB: ctx.serverDB,
+                  skipResultTruncation: true,
                   taskId: state.metadata?.taskId,
                   threadId: state.metadata?.threadId,
                   toolCallId: chatToolPayload.id,
@@ -2132,7 +2208,15 @@ export const createRuntimeExecutors = (
             );
           }
 
-          const executionResult = execution.result;
+          const executionResult = await archiveRuntimeToolResult(execution.result, {
+            agentId: state.metadata?.agentId,
+            identifier: chatToolPayload.identifier,
+            limit: batchAgentConfig?.chatConfig?.toolResultMaxLength,
+            serverDB: ctx.serverDB,
+            toolCallId: chatToolPayload.id,
+            topicId: ctx.topicId ?? state.metadata?.topicId,
+            userId: ctx.userId,
+          });
           const executionTime = executionResult.executionTime;
           const isSuccess = executionResult.success;
           if (ctx.hookDispatcher) {
@@ -2410,6 +2494,210 @@ export const createRuntimeExecutors = (
           stepCount: state.stepCount + 1,
         },
       },
+    };
+  },
+
+  /**
+   * Server-side exec_sub_agent executor
+   *
+   * Mirrors the client-side exec_sub_agent executor in createAgentExecutors.ts
+   * but runs entirely server-side (no polling required).  Flow:
+   *   1. Create a task message (role: 'task') as a placeholder visible in the UI.
+   *   2. Fire execSubAgentTask via the injected callback so the sub-agent runs as
+   *      an independent QStash operation.
+   *   3. Return a sub_agent_result context so GeneralChatAgent calls the LLM once
+   *      more and the parent agent can acknowledge the delegation.
+   */
+  exec_sub_agent: async (instruction, state) => {
+    const { payload } = instruction as AgentInstructionExecSubAgent;
+    const { parentMessageId, task } = payload;
+    const events: AgentEvent[] = [];
+    const { operationId } = ctx;
+    const taskLogId = `${operationId}:exec_sub_agent`;
+
+    const topicId = ctx.topicId ?? state.metadata?.topicId;
+    const agentId = state.metadata?.agentId;
+    // targetAgentId is a cloud extension injected by agentManagement.callAgent
+    const targetAgentId = (task as any).targetAgentId ?? agentId;
+
+    let taskMessageId: string | undefined;
+    try {
+      const taskMessage = await ctx.messageModel.create({
+        agentId: agentId!,
+        content: '',
+        metadata: {
+          instruction: task.instruction,
+          taskTitle: task.description,
+          ...(targetAgentId && targetAgentId !== agentId && { targetAgentId }),
+        },
+        parentId: parentMessageId,
+        role: 'task',
+        threadId: state.metadata?.threadId ?? undefined,
+        topicId: topicId!,
+      });
+      taskMessageId = taskMessage.id;
+      log('[%s] Created task message: %s', taskLogId, taskMessageId);
+    } catch (error) {
+      log('[%s] Failed to create task message: %O', taskLogId, error);
+    }
+
+    const effectiveTaskMessageId = taskMessageId ?? parentMessageId;
+
+    let dispatched = false;
+    if (ctx.execSubAgentTask && topicId && agentId) {
+      try {
+        await ctx.execSubAgentTask({
+          agentId: targetAgentId,
+          groupId: state.metadata?.groupId ?? undefined,
+          instruction: task.instruction,
+          parentMessageId: effectiveTaskMessageId,
+          parentOperationId: operationId,
+          timeout: task.timeout,
+          title: task.description,
+          topicId,
+        });
+        dispatched = true;
+        log('[%s] Spawned sub-agent task for agent %s', taskLogId, targetAgentId);
+      } catch (error) {
+        log('[%s] Failed to spawn sub-agent task: %O', taskLogId, error);
+        if (taskMessageId) {
+          try {
+            await ctx.messageModel.update(taskMessageId, {
+              content: `Task failed to start: ${(error as Error).message}`,
+            });
+          } catch {
+            // best-effort
+          }
+        }
+      }
+    } else {
+      log('[%s] execSubAgentTask not available, skipping sub-agent dispatch', taskLogId);
+    }
+
+    return {
+      events,
+      newState: state,
+      nextContext: {
+        payload: {
+          parentMessageId: effectiveTaskMessageId,
+          result: {
+            success: dispatched,
+            taskMessageId: effectiveTaskMessageId,
+            threadId: '',
+          },
+        },
+        phase: 'sub_agent_result',
+        session: {
+          messageCount: state.messages.length,
+          sessionId: operationId,
+          status: 'running',
+          stepCount: state.stepCount + 1,
+        },
+      } as unknown as AgentRuntimeContext,
+    };
+  },
+
+  /**
+   * Server-side exec_sub_agents executor
+   *
+   * Same as exec_sub_agent but for a batch.  Each sub-agent is fired
+   * independently via execSubAgentTask and a task message is created for each.
+   */
+  exec_sub_agents: async (instruction, state) => {
+    const { payload } = instruction as AgentInstructionExecSubAgents;
+    const { parentMessageId, tasks } = payload;
+    const events: AgentEvent[] = [];
+    const { operationId } = ctx;
+    const taskLogId = `${operationId}:exec_sub_agents`;
+
+    const topicId = ctx.topicId ?? state.metadata?.topicId;
+    const agentId = state.metadata?.agentId;
+
+    log('[%s] Starting batch of %d tasks', taskLogId, tasks.length);
+
+    let lastTaskMessageId: string | undefined;
+    const taskResults: Array<{ success: boolean; taskMessageId: string; threadId: string }> = [];
+
+    for (const task of tasks) {
+      const targetAgentId = (task as any).targetAgentId ?? agentId;
+      let taskMessageId: string | undefined;
+
+      try {
+        const taskMessage = await ctx.messageModel.create({
+          agentId: agentId!,
+          content: '',
+          metadata: {
+            instruction: task.instruction,
+            taskTitle: task.description,
+            ...(targetAgentId && targetAgentId !== agentId && { targetAgentId }),
+          },
+          parentId: parentMessageId,
+          role: 'task',
+          threadId: state.metadata?.threadId ?? undefined,
+          topicId: topicId!,
+        });
+        taskMessageId = taskMessage.id;
+        lastTaskMessageId = taskMessageId;
+      } catch (error) {
+        log('[%s] Failed to create task message for "%s": %O', taskLogId, task.description, error);
+      }
+
+      let taskDispatched = false;
+      if (ctx.execSubAgentTask && topicId && agentId) {
+        try {
+          await ctx.execSubAgentTask({
+            agentId: targetAgentId,
+            groupId: state.metadata?.groupId ?? undefined,
+            instruction: task.instruction,
+            parentMessageId: taskMessageId ?? parentMessageId,
+            parentOperationId: operationId,
+            timeout: task.timeout,
+            title: task.description,
+            topicId,
+          });
+          taskDispatched = true;
+          log(
+            '[%s] Spawned sub-agent task "%s" for agent %s',
+            taskLogId,
+            task.description,
+            targetAgentId,
+          );
+        } catch (error) {
+          log('[%s] Failed to spawn task "%s": %O', taskLogId, task.description, error);
+          if (taskMessageId) {
+            try {
+              await ctx.messageModel.update(taskMessageId, {
+                content: `Task failed to start: ${(error as Error).message}`,
+              });
+            } catch {
+              // best-effort
+            }
+          }
+        }
+      }
+      taskResults.push({
+        success: taskDispatched,
+        taskMessageId: taskMessageId ?? parentMessageId,
+        threadId: '',
+      });
+    }
+
+    return {
+      events,
+      newState: state,
+      nextContext: {
+        payload: {
+          parentMessageId: lastTaskMessageId ?? parentMessageId,
+          results: taskResults,
+        },
+        phase: 'sub_agents_batch_result',
+        session: {
+          messageCount: state.messages.length,
+          sessionId: operationId,
+          status: 'running',
+          stepCount: state.stepCount + 1,
+        },
+      } as unknown as AgentRuntimeContext,
     };
   },
 

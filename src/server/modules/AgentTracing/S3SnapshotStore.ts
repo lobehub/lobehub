@@ -17,6 +17,19 @@ const LEGACY_SUFFIX = '.json';
 const ZSTD_CONTENT_TYPE = 'application/zstd';
 
 /**
+ * Canonical S3 key for a finalized operation snapshot. Single source of truth
+ * for the layout — both this store's `save()` and the DB-persistence path
+ * (CompletionLifecycle) build keys through this helper so the value written to
+ * `agent_operations.trace_s3_key` stays aligned with the object actually put
+ * in S3.
+ */
+export const buildFinalSnapshotKey = (
+  agentId: string,
+  topicId: string,
+  operationId: string,
+): string => `${TRACE_PREFIX}/${agentId}/${topicId}/${operationId}${SNAPSHOT_SUFFIX}`;
+
+/**
  * S3-backed snapshot store for production agent trace persistence.
  *
  * S3 paths:
@@ -61,7 +74,7 @@ export class S3SnapshotStore implements ISnapshotStore {
   async save(snapshot: ExecutionSnapshot): Promise<void> {
     const agentId = snapshot.agentId ?? 'unknown';
     const topicId = snapshot.topicId ?? 'unknown';
-    const key = `${TRACE_PREFIX}/${agentId}/${topicId}/${snapshot.operationId}${SNAPSHOT_SUFFIX}`;
+    const key = buildFinalSnapshotKey(agentId, topicId, snapshot.operationId);
 
     log('Saving snapshot to S3: %s', key);
     const compressed = await this.encodeSnapshot(snapshot);

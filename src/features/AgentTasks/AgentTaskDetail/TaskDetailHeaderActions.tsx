@@ -9,12 +9,15 @@ import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
+import { taskDetailPath } from '../shared/taskDetailPath';
+
 const TaskDetailHeaderActions = memo(() => {
   const { t } = useTranslation(['chat', 'common']);
   const { modal, message } = App.useApp();
   const navigate = useNavigate();
   const appOrigin = useAppOrigin();
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
+  const taskAgentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
   const deleteTask = useTaskStore((s) => s.deleteTask);
 
   const triggerDelete = useCallback(() => {
@@ -36,7 +39,7 @@ const TaskDetailHeaderActions = memo(() => {
   const menuItems = useMemo<DropdownItem[]>(() => {
     if (!taskId) return [];
 
-    const taskUrl = `${appOrigin}/task/${taskId}`;
+    const taskUrl = `${appOrigin}${taskDetailPath(taskId, taskAgentId ?? undefined)}`;
 
     return [
       {
@@ -66,7 +69,7 @@ const TaskDetailHeaderActions = memo(() => {
         onClick: triggerDelete,
       },
     ];
-  }, [taskId, appOrigin, t, message, triggerDelete]);
+  }, [taskId, taskAgentId, appOrigin, t, message, triggerDelete]);
 
   if (!taskId) return null;
 

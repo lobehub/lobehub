@@ -17,9 +17,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
     cursor: pointer;
 
-    padding-block: 10px;
-    padding-inline: 12px;
-    border-radius: 8px;
+    padding-block: 14px;
+    padding-inline: 14px;
+    border-radius: 10px;
 
     background: ${cssVar.colorFillQuaternary};
 
@@ -37,9 +37,18 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
+  content: css`
+    /* Allow the text column to shrink below its content width so the
+       nowrap title/description ellipsize instead of overflowing the card. */
+    min-width: 0;
+  `,
   title: css`
-    font-size: 13px;
+    overflow: hidden;
+
+    font-size: 14px;
     font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   `,
 }));
 
@@ -63,21 +72,15 @@ const Render = memo<LobeAgentsProps>(
     if (!identifier) return null;
 
     return (
-      <Flexbox
-        align={'center'}
-        className={styles.card}
-        gap={12}
-        horizontal
-        onClick={handleClick}
-      >
+      <Flexbox horizontal align={'center'} className={styles.card} gap={12} onClick={handleClick}>
         <Avatar
           avatar={avatar || '🤖'}
           background={backgroundColor}
           shape={'square'}
-          size={36}
+          size={40}
           title={title || undefined}
         />
-        <Flexbox flex={1} gap={2}>
+        <Flexbox className={styles.content} flex={1} gap={4}>
           <span className={styles.title}>{title || identifier}</span>
           {description && <span className={styles.description}>{description}</span>}
         </Flexbox>

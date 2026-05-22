@@ -545,6 +545,7 @@ export class StreamingExecutorActionImpl {
         parentMessageType,
         threadId: threadId ?? undefined,
         topicId: topicId ?? undefined,
+        ...(parentMessageType === 'user' ? { triggerMessageId: parentMessageId } : {}),
       },
       sourceId: `${operationId}:client:start`,
       sourceType: 'client.runtime.start',
@@ -652,11 +653,13 @@ export class StreamingExecutorActionImpl {
       void emitClientAgentSignalSourceEvent({
         payload: {
           agentId,
+          ...(assistantMessageId ? { anchorMessageId: assistantMessageId } : {}),
           assistantMessageId,
           operationId,
           status: normalizeClientRuntimeCompleteStatus(state.status, operationStatus),
           threadId: threadId ?? undefined,
           topicId: topicId ?? undefined,
+          ...(parentMessageType === 'user' ? { triggerMessageId: parentMessageId } : {}),
         },
         sourceId: `${operationId}:client:complete`,
         sourceType: 'client.runtime.complete',

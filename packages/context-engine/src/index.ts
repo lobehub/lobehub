@@ -21,16 +21,26 @@ export * from './providers';
 export type {
   ContextTokenAccounting,
   CountContextTokensParams,
+  InputTokenBuckets,
   MessageTokenBreakdown,
   TokenSourceType,
   ToolDefinitionTokenBreakdown,
 } from './tokenAccounting';
-export { countContextTokens, DEFAULT_DRIFT_MULTIPLIER } from './tokenAccounting';
+export {
+  addTokenBuckets,
+  countContextTokens,
+  DEFAULT_DRIFT_MULTIPLIER,
+  EMPTY_TOKEN_BUCKETS,
+  estimatePendingUploadTokenBuckets,
+  estimateSentMessageAttachmentTokenBuckets,
+  isTextLikeUploadFile,
+} from './tokenAccounting';
 // Processors
 export type { PlaceholderValue, PlaceholderValueMap } from './processors';
 export {
   buildPlaceholderGenerators,
   formatPlaceholderValues,
+  getSlicedMessages,
   GroupMessageFlattenProcessor,
   HistoryTruncateProcessor,
   InputTemplateProcessor,

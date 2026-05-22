@@ -100,6 +100,7 @@ const AgentWorkingSidebar = memo(() => {
     if (storedTab === 'review' && reviewAvailable) return 'review';
     if (storedTab === 'files' && filesAvailable) return 'files';
     if (storedTab === 'resources') return 'resources';
+    if (isHetero) return 'resources';
     if (reviewAvailable) return 'review';
     if (filesAvailable) return 'files';
     return 'resources';

@@ -12,6 +12,7 @@ import { autoUpdater } from 'electron-updater';
 import { isDev, isWindows } from '@/const/env';
 import { getDesktopEnv } from '@/env';
 import { UPDATE_CHANNEL, UPDATE_SERVER_URL, updaterConfig } from '@/modules/updater/configs';
+import { extractRestoreRoute } from '@/modules/updater/utils';
 import { createLogger } from '@/utils/logger';
 
 import type { App as AppCore } from '../App';
@@ -239,11 +240,28 @@ export class UpdaterManager {
     }
   };
 
+  private captureRestoreRoute = () => {
+    try {
+      const url = this.mainWindow.webContents?.getURL();
+      if (!url) return;
+
+      const route = extractRestoreRoute(url);
+      if (!route) return;
+
+      this.app.storeManager.set('pendingRestoreRoute', route);
+      logger.info(`Captured route for restore after update restart: ${route}`);
+    } catch (error) {
+      logger.warn('Failed to capture route for restore after update restart:', error);
+    }
+  };
+
   /**
    * Install update immediately
    */
   public installNow = () => {
     logger.info('Installing update now...');
+
+    this.captureRestoreRoute();
 
     this.app.isQuiting = true;
 

@@ -1,4 +1,5 @@
 import { type LobeChatDatabase } from '@lobechat/database';
+import { TRPCError } from '@trpc/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DocumentModel } from '@/database/models/document';
@@ -14,12 +15,21 @@ vi.mock('../../file');
 vi.mock('../history');
 vi.mock('@lobechat/file-loaders', () => ({
   loadFile: vi.fn(),
+  UnsupportedFileTypeError: class UnsupportedFileTypeError extends Error {
+    fileType: string;
+
+    constructor(fileType: string, filename: string) {
+      super(`Unsupported file type '${fileType || 'unknown'}' for file '${filename}'.`);
+      this.name = 'UnsupportedFileTypeError';
+      this.fileType = fileType;
+    }
+  },
 }));
 vi.mock('debug', () => ({
   default: () => vi.fn(),
 }));
 
-const { loadFile } = await import('@lobechat/file-loaders');
+const { loadFile, UnsupportedFileTypeError } = await import('@lobechat/file-loaders');
 
 const createEditorDataWithDiffNode = () => ({
   root: {
@@ -1063,6 +1073,23 @@ describe('DocumentService', () => {
       vi.mocked(loadFile).mockRejectedValue(new Error('File not parseable'));
 
       await expect(service.parseFile('file-1')).rejects.toThrow('File not parseable');
+
+      expect(mockCleanup).toHaveBeenCalled();
+    });
+
+    it('should surface unsupported file types as BAD_REQUEST', async () => {
+      vi.mocked(loadFile).mockRejectedValue(new UnsupportedFileTypeError('zip', 'archive.zip'));
+
+      try {
+        await service.parseFile('file-1');
+        throw new Error('parseFile should reject unsupported file types');
+      } catch (error) {
+        expect(error).toBeInstanceOf(TRPCError);
+        expect(error).toMatchObject({
+          code: 'BAD_REQUEST',
+          message: "Unsupported file type 'zip' for file 'archive.zip'.",
+        });
+      }
 
       expect(mockCleanup).toHaveBeenCalled();
     });

@@ -2034,6 +2034,68 @@ describe('LobeOpenAICompatibleFactory', () => {
       expect(result).toEqual({ age: 30, name: 'John' });
     });
 
+    it('should map disabled thinking to no reasoning effort for GPT-5.4 Responses generateObject', async () => {
+      const mockResponse = {
+        output_text: '{"name": "John", "age": 30}',
+      };
+
+      vi.spyOn(instance['client'].responses, 'create').mockResolvedValue(mockResponse as any);
+
+      const payload = {
+        messages: [{ content: 'Generate a person object', role: 'user' as const }],
+        model: 'gpt-5.4-mini',
+        schema: {
+          name: 'person_extractor',
+          schema: {
+            properties: { age: { type: 'number' }, name: { type: 'string' } },
+            type: 'object' as const,
+          },
+        },
+        thinking: { budget_tokens: 0, type: 'disabled' as const },
+      };
+
+      await instance.generateObject(payload);
+
+      expect(instance['client'].responses.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: 'gpt-5.4-mini',
+          reasoning: { effort: 'none' },
+        }),
+        expect.anything(),
+      );
+    });
+
+    it('should normalize GPT-5 Pro-family Responses generateObject reasoning effort to high', async () => {
+      const mockResponse = {
+        output_text: '{"name": "John", "age": 30}',
+      };
+
+      vi.spyOn(instance['client'].responses, 'create').mockResolvedValue(mockResponse as any);
+
+      const payload = {
+        messages: [{ content: 'Generate a person object', role: 'user' as const }],
+        model: 'gpt-5.4-pro',
+        reasoning_effort: 'medium' as const,
+        schema: {
+          name: 'person_extractor',
+          schema: {
+            properties: { age: { type: 'number' }, name: { type: 'string' } },
+            type: 'object' as const,
+          },
+        },
+      };
+
+      await instance.generateObject(payload);
+
+      expect(instance['client'].responses.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: 'gpt-5.4-pro',
+          reasoning: { effort: 'high' },
+        }),
+        expect.anything(),
+      );
+    });
+
     it('should handle options correctly', async () => {
       const mockResponse = {
         output_text: '{"status": "success"}',
@@ -3114,6 +3176,56 @@ describe('LobeOpenAICompatibleFactory', () => {
         expect(result).toEqual([
           { arguments: { age: 28, name: 'Alice' }, name: 'person_extractor' },
         ]);
+      });
+
+      it('should not forward internal thinking to generic OpenAI-compatible generateObject requests', async () => {
+        const mockResponse = {
+          choices: [
+            {
+              message: {
+                tool_calls: [
+                  {
+                    function: {
+                      arguments: '{"name":"Alice","age":28}',
+                      name: 'person_extractor',
+                    },
+                    type: 'function' as const,
+                  },
+                ],
+              },
+            },
+          ],
+        };
+
+        vi.spyOn(instanceWithToolCalling['client'].chat.completions, 'create').mockResolvedValue(
+          mockResponse as any,
+        );
+
+        const payload = {
+          messages: [{ content: 'Extract person info', role: 'user' as const }],
+          model: 'deepseek-v4-pro',
+          reasoning_effort: 'high' as const,
+          schema: {
+            name: 'person_extractor',
+            schema: {
+              properties: { age: { type: 'number' }, name: { type: 'string' } },
+              type: 'object' as const,
+            },
+          },
+          thinking: { budget_tokens: 0, type: 'disabled' as const },
+        };
+
+        await instanceWithToolCalling.generateObject(payload);
+
+        const requestPayload =
+          instanceWithToolCalling['client'].chat.completions.create.mock.calls[0]![0];
+        expect(requestPayload).toEqual(
+          expect.objectContaining({
+            model: 'deepseek-v4-pro',
+          }),
+        );
+        expect(requestPayload).not.toHaveProperty('thinking');
+        expect(requestPayload).not.toHaveProperty('reasoning_effort');
       });
 
       it('should return undefined when no tool call found', async () => {

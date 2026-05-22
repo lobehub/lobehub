@@ -4,6 +4,7 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
+import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useGlobalStore } from '@/store/global';
@@ -33,7 +34,7 @@ const RecentsList = memo(() => {
     const taskId = item.id;
     if (!taskId) return item.routePath;
 
-    return `/task/${taskId}`;
+    return taskDetailPath(taskId, item.agentId ?? undefined);
   }, []);
 
   if (!isInit) {
