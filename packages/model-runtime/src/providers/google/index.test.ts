@@ -11,6 +11,11 @@ import { LobeGoogleAI } from './index';
 const provider = 'google';
 const bizErrorType = 'ProviderBizError';
 const invalidErrorType = 'InvalidProviderAPIKey';
+const getModelPricingMock = vi.hoisted(() => vi.fn());
+
+vi.mock('../../utils/getModelPricing', () => ({
+  getModelPricing: getModelPricingMock,
+}));
 
 async function* createEmptyAsyncGenerator<T>(): AsyncGenerator<T> {
   yield* [] as unknown as T[];
@@ -22,6 +27,8 @@ vi.spyOn(console, 'error').mockImplementation(() => {});
 let instance: LobeGoogleAI;
 
 beforeEach(() => {
+  getModelPricingMock.mockReset();
+  getModelPricingMock.mockResolvedValue(undefined);
   instance = new LobeGoogleAI({ apiKey: 'test' });
 
   // Use vi.spyOn to mock the chat.completions.create method

@@ -9,6 +9,29 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useImageStore } from '@/store/image';
 
+const localStorageMock = vi.hoisted(() => {
+  let store: Record<string, string> = {};
+  const storage = {
+    clear: vi.fn(() => {
+      store = {};
+    }),
+    getItem: vi.fn((key: string) => store[key] ?? null),
+    removeItem: vi.fn((key: string) => {
+      delete store[key];
+    }),
+    setItem: vi.fn((key: string, value: string) => {
+      store[key] = value;
+    }),
+  };
+
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: storage,
+  });
+
+  return storage;
+});
+
 const { currentImageSettingsMock } = vi.hoisted(() => ({
   currentImageSettingsMock: vi.fn(() => ({
     defaultImageNum: 4,
@@ -124,6 +147,7 @@ const initialTestState = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorageMock.clear();
   currentImageSettingsMock.mockReturnValue({ defaultImageNum: 4 });
   useImageStore.setState(initialTestState);
 });
@@ -279,7 +303,6 @@ describe('GenerationConfigAction', () => {
     });
 
     it('should convert imageUrl to imageUrls array when switching to multi-image model', () => {
-      const { result } = renderHook(() => useImageStore());
       const singleImageSchema: ModelParamsSchema = {
         prompt: { default: '' },
         imageUrl: { default: '' },
