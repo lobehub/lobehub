@@ -24,6 +24,7 @@ Object.assign(process.env, loadEnv(mode, process.cwd(), ''));
 
 const isDev = process.env.NODE_ENV !== 'production';
 const platform = isMobile ? 'mobile' : 'web';
+const enableViteDevTools = process.env.LOBE_VITE_DEVTOOLS === 'true';
 
 const resolveCommandExecutable = (cmd: string) => {
   const pathValue = process.env.PATH;
@@ -106,7 +107,7 @@ export default defineConfig({
     outDir: isMobile ? 'dist/mobile' : 'dist/desktop',
     reportCompressedSize: false,
     rolldownOptions: {
-      devtools: {},
+      ...(enableViteDevTools && { devtools: {} }),
       input: path.resolve(__dirname, isMobile ? 'index.mobile.html' : 'index.html'),
       output: createSharedRolldownOutput({ strictExecutionOrder: true }),
     },
@@ -122,7 +123,7 @@ export default defineConfig({
   plugins: [
     vercelSkewProtection(),
     viteEnvRestartKeys(['APP_URL']),
-    DevTools({
+    enableViteDevTools && DevTools({
       build: {
         withApp: true,
       },
