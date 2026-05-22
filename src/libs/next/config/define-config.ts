@@ -2,13 +2,6 @@ import { codeInspectorPlugin } from 'code-inspector-plugin';
 import { type NextConfig } from 'next';
 import { type Header, type Redirect } from 'next/dist/lib/load-custom-routes';
 
-const OPTIONAL_SERVER_NATIVE_DEPENDENCIES = [
-  'bufferutil',
-  'utf-8-validate',
-  'zlib-sync',
-  'zipfile',
-] as const;
-
 interface CustomNextConfig {
   experimental?: NextConfig['experimental'];
   headers?: Header[];
@@ -17,7 +10,6 @@ interface CustomNextConfig {
   redirects?: Redirect[];
   serverExternalPackages?: NextConfig['serverExternalPackages'];
   turbopack?: NextConfig['turbopack'];
-  webpack?: NextConfig['webpack'];
 }
 
 export function defineConfig(config: CustomNextConfig) {
@@ -361,57 +353,22 @@ export function defineConfig(config: CustomNextConfig) {
     // when external packages in dev mode with turbopack, this config will lead to bundle error
     // @napi-rs/canvas is a native module that can't be bundled by Turbopack
     // pdfjs-dist uses @napi-rs/canvas for DOMMatrix polyfill in Node.js environment
+    // epub2 optionally loads the native `zipfile` package and falls back to `adm-zip`
+    // at runtime, so we keep the whole package external for Turbopack/Vercel builds.
     serverExternalPackages: config.serverExternalPackages ?? [
       '@chat-adapter/discord',
       'pdfkit',
       '@napi-rs/canvas',
       '@lobehub/editor',
       'discord.js',
+      'epub2',
       'ffmpeg-static',
       'pdfjs-dist',
       'ajv',
       'oidc-provider',
-      'zipfile',
     ],
 
     transpilePackages: ['mermaid', 'better-auth-harmony'],
-    webpack: (webpackConfig, options) => {
-      const configuredWebpack = config.webpack?.(webpackConfig, options) ?? webpackConfig;
-
-      const applyWebpackTweaks = (resolvedConfig: typeof webpackConfig) => {
-        resolvedConfig.module ??= {};
-        resolvedConfig.module.rules ??= [];
-        resolvedConfig.module.rules.push({
-          test: /\.md$/i,
-          type: 'asset/source',
-        });
-
-        if (options.isServer) {
-          const optionalNativeExternals = Object.fromEntries(
-            OPTIONAL_SERVER_NATIVE_DEPENDENCIES.map((dependency) => [
-              dependency,
-              `commonjs ${dependency}`,
-            ]),
-          );
-
-          if (Array.isArray(resolvedConfig.externals)) {
-            resolvedConfig.externals.push(optionalNativeExternals);
-          } else if (resolvedConfig.externals) {
-            resolvedConfig.externals = [resolvedConfig.externals, optionalNativeExternals];
-          } else {
-            resolvedConfig.externals = [optionalNativeExternals];
-          }
-        }
-
-        return resolvedConfig;
-      };
-
-      if (configuredWebpack instanceof Promise) {
-        return configuredWebpack.then(applyWebpackTweaks);
-      }
-
-      return applyWebpackTweaks(configuredWebpack);
-    },
     turbopack: {
       rules: {
         ...(enableCodeInspector

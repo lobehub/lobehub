@@ -4,7 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DiscoverService } from '@/server/services/discover';
 import { getCanonicalUrl } from '@/server/utils/url';
 
-import { clearSitemapCaches, LAST_MODIFIED, Sitemap, SitemapType } from './sitemap';
+import {
+  clearSitemapCaches,
+  LAST_MODIFIED,
+  SITEMAP_REVALIDATE_SECONDS,
+  Sitemap,
+  SitemapType,
+} from './sitemap';
 
 const LOCALE_COUNT = 18;
 
@@ -261,6 +267,22 @@ describe('Sitemap', () => {
       const secondPageSitemap = await sitemap.getModels(2);
       expect(secondPageSitemap.length).toBe(20 * LOCALE_COUNT); // 20 items * LOCALE_COUNT locales
     });
+
+    it('should apply the configured timeout when generating model sitemap pages', async () => {
+      vi.useFakeTimers();
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const isolatedSitemap = new Sitemap({ modelPageCountTimeoutMs: 100 });
+      const isolatedSitemapWithService = isolatedSitemap as unknown as SitemapWithDiscoverService;
+      vi.spyOn(isolatedSitemapWithService.discoverService, 'getModelIdentifiers').mockReturnValue(
+        new Promise(() => {}),
+      );
+
+      const modelsPromise = isolatedSitemap.getModels(1);
+      await vi.advanceTimersByTimeAsync(100);
+
+      await expect(modelsPromise).resolves.toEqual([]);
+    });
   });
 
   describe('getProviders', () => {
@@ -351,6 +373,25 @@ describe('Sitemap', () => {
       expect(pageCount).toBe(2);
       expect(assistantsSitemap.length).toBe(100 * LOCALE_COUNT);
       expect(getAssistantIdentifiers).toHaveBeenCalledTimes(1);
+    });
+
+    it('should expire cached assistant identifiers with the sitemap revalidation window', async () => {
+      vi.useFakeTimers();
+
+      const getAssistantIdentifiers = vi
+        .spyOn(sitemap['discoverService'], 'getAssistantIdentifiers')
+        .mockResolvedValue([{ identifier: 'assistant-1', lastModified: '2023-01-01' }] as any);
+
+      await expect(sitemap.getAssistantPageCount()).resolves.toBe(1);
+      await vi.advanceTimersByTimeAsync(SITEMAP_REVALIDATE_SECONDS * 1000 - 1);
+      await expect(sitemap.getAssistantPageCount()).resolves.toBe(1);
+
+      expect(getAssistantIdentifiers).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(sitemap.getAssistantPageCount()).resolves.toBe(1);
+
+      expect(getAssistantIdentifiers).toHaveBeenCalledTimes(2);
     });
 
     it('should return correct model page count', async () => {

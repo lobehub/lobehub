@@ -33,20 +33,26 @@ export enum SitemapType {
 }
 
 export const LAST_MODIFIED = new Date().toISOString();
+export const SITEMAP_REVALIDATE_SECONDS = 86_400;
 
 // Number of items per page
 const ITEMS_PER_PAGE = 100;
 const DEFAULT_MODEL_PAGE_COUNT_TIMEOUT_MS = 15 * 60 * 1000;
+const SITEMAP_IDENTIFIER_CACHE_TTL_MS = SITEMAP_REVALIDATE_SECONDS * 1000;
 
 interface SitemapOptions {
   modelPageCountTimeoutMs?: number;
 }
 
 type SitemapIdentifiersKey = 'assistant' | 'model' | 'plugin' | 'provider';
+interface SitemapIdentifiersCacheEntry {
+  expiresAt: number;
+  promise: Promise<IdentifiersResponse>;
+}
 
 const discoverService = new DiscoverService();
 const sitemapIdentifiersCache: Partial<
-  Record<SitemapIdentifiersKey, Promise<IdentifiersResponse>>
+  Record<SitemapIdentifiersKey, SitemapIdentifiersCacheEntry>
 > = {};
 const SITEMAP_IDENTIFIER_TIMEOUT_MS = 15_000;
 
@@ -61,9 +67,10 @@ function getCachedIdentifiers(
   key: SitemapIdentifiersKey,
   loader: () => Promise<IdentifiersResponse>,
   timeoutMs = SITEMAP_IDENTIFIER_TIMEOUT_MS,
+  cacheTtlMs = SITEMAP_IDENTIFIER_CACHE_TTL_MS,
 ) {
   const cached = sitemapIdentifiersCache[key];
-  if (cached) return cached;
+  if (cached && cached.expiresAt > Date.now()) return cached.promise;
 
   const promise = withSitemapIdentifierTimeout(key, loader(), timeoutMs).catch((error) => {
     delete sitemapIdentifiersCache[key];
@@ -72,7 +79,11 @@ function getCachedIdentifiers(
     return [];
   });
 
-  sitemapIdentifiersCache[key] = promise;
+  sitemapIdentifiersCache[key] = {
+    expiresAt: Date.now() + cacheTtlMs,
+    promise,
+  };
+
   return promise;
 }
 
@@ -344,8 +355,10 @@ export class Sitemap {
   }
 
   async getModels(page?: number): Promise<MetadataRoute.Sitemap> {
-    const list = await getCachedIdentifiers('model', () =>
-      this.discoverService.getModelIdentifiers(),
+    const list = await getCachedIdentifiers(
+      'model',
+      () => this.discoverService.getModelIdentifiers(),
+      this.modelPageCountTimeoutMs,
     );
 
     if (page !== undefined) {

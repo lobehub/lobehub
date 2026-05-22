@@ -1,9 +1,9 @@
 import { type MetadataRoute } from 'next';
 
-import { LAST_MODIFIED, Sitemap, SitemapType } from '@/server/sitemap';
+import { LAST_MODIFIED, SITEMAP_REVALIDATE_SECONDS, Sitemap, SitemapType } from '@/server/sitemap';
 
 // Sitemap cache configuration - revalidate every 24 hours
-export const revalidate = 86_400; // 24 hours - content page cache
+export const revalidate = SITEMAP_REVALIDATE_SECONDS;
 export const dynamic = 'force-static';
 
 export const generateSitemapLink = (url: string) =>

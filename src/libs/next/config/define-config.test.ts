@@ -5,31 +5,11 @@ vi.mock('code-inspector-plugin', () => ({
 }));
 
 describe('defineConfig', () => {
-  it('should treat zipfile as an optional server-native dependency', async () => {
+  it('should externalize epub2 so optional zipfile resolution stays at runtime', async () => {
     const { defineConfig } = await import('./define-config');
 
     const config = defineConfig({});
 
-    expect(config.serverExternalPackages).toContain('zipfile');
-
-    const resolvedWebpackConfig = config.webpack?.(
-      {
-        externals: undefined,
-        module: {},
-      } as any,
-      {
-        isServer: true,
-      } as any,
-    ) as any;
-
-    const externals = Array.isArray(resolvedWebpackConfig.externals)
-      ? resolvedWebpackConfig.externals
-      : [resolvedWebpackConfig.externals];
-
-    expect(externals).toContainEqual(
-      expect.objectContaining({
-        zipfile: 'commonjs zipfile',
-      }),
-    );
+    expect(config.serverExternalPackages).toContain('epub2');
   });
 });
