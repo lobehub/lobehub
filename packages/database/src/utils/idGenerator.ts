@@ -17,6 +17,7 @@ const prefixes = {
   documents: 'docs',
   evalBenchmarks: 'evb',
   evalDatasets: 'ds',
+  evalExperiments: 'exp',
   evalRuns: 'run',
   evalTestCases: 'case',
   files: 'file',
