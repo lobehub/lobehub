@@ -10,6 +10,7 @@ import AgentHome from '@/features/AgentHome';
 import ChatMiniMap from '@/features/ChatMiniMap';
 import { ChatList, ConversationProvider } from '@/features/Conversation';
 import { useChatFollowUp } from '@/features/Conversation/hooks/useChatFollowUp';
+import { mergeConversationHooks } from '@/features/Conversation/utils/mergeConversationHooks';
 import ZenModeToast from '@/features/ZenModeToast';
 import { useGatewayReconnect } from '@/hooks/useGatewayReconnect';
 import { useOperationState } from '@/hooks/useOperationState';
@@ -80,12 +81,14 @@ const Conversation = memo(() => {
     topicId: context.topicId ?? undefined,
   });
 
+  const hooks = useMemo(() => mergeConversationHooks(chatFollowUpHooks), [chatFollowUpHooks]);
+
   return (
     <ConversationProvider
       actionsBar={actionsBarConfig}
       context={context}
       hasInitMessages={!!messages}
-      hooks={chatFollowUpHooks}
+      hooks={hooks}
       messages={messages}
       operationState={operationState}
       onMessagesChange={(messages, ctx) => {
