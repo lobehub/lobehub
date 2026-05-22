@@ -5,10 +5,10 @@ import { ArrowLeftIcon, MoreHorizontal } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ShareButton from '@/business/client/features/PageShare/ShareButton';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { AutoSaveHint } from '@/features/EditorCanvas';
 import NavHeader from '@/features/NavHeader';
-import ShareButton from '@/features/PageShare/ShareButton';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 
 import { usePageAgentPanelControl } from '../RightPanel/OverrideContext';

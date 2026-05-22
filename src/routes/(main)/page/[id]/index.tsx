@@ -6,9 +6,9 @@ import { memo, Suspense } from 'react';
 import { useOutletContext, useParams } from 'react-router-dom';
 import { createStoreUpdater } from 'zustand-utils';
 
+import ReadOnlyPageViewer from '@/business/client/features/PageShare/ReadOnlyPageViewer';
 import Loading from '@/components/Loading/BrandTextLoading';
 import PageExplorer from '@/features/PageExplorer';
-import ReadOnlyPageViewer from '@/features/PageShare/ReadOnlyPageViewer';
 import { usePageStore } from '@/store/page';
 import { getIdFromIdentifier } from '@/utils/identifier';
 

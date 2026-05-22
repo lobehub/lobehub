@@ -196,8 +196,8 @@ export function defineConfig() {
     // public share pages
     '/share(.*)',
     // shared pages — anonymous access is allowed at the middleware layer; the SPA
-    // probes `share.getSharedDocument` and renders either the published viewer or a
-    // 403/private CTA. Note the trailing slash — `/page` (the list landing) stays
+    // probes `pageShare.getSharedDocument` and renders either the published viewer or
+    // a 403/private CTA. Note the trailing slash — `/page` (the list landing) stays
     // protected, only `/page/:id` is public.
     '/page/(.*)',
     // messenger verify-im — page itself handles unauth (in-page sign-in CTA)

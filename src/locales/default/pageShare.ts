@@ -1,3 +1,4 @@
+// Cloud-only feature; namespace kept here so locale dictionary stays centralized.
 export default {
   'banner.copy':
     'Like this page? <strong>Create your own with {{appName}}</strong> — free workspace for AI-native docs.',
