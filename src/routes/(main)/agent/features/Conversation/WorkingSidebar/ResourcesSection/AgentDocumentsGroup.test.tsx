@@ -72,6 +72,9 @@ vi.mock('react-i18next', () => ({
           'workingPanel.resources.filter.web': 'Web',
           'workingPanel.resources.updatedAt': `Updated ${options?.time}`,
           'workingPanel.skills.empty': 'No skills found',
+          'workingPanel.skills.section.agent': 'Agent skills',
+          'workingPanel.skills.section.project': 'Project skills',
+          'workingPanel.skills.section.user': 'User skills',
         }) as Record<string, string>
       )[key] || key,
   }),
@@ -89,7 +92,7 @@ vi.mock('@/features/AgentDocumentsExplorer', () => ({
 }));
 
 vi.mock('@/features/SkillsList', () => {
-  type Item = { fileCount: number; id: string; name: string };
+  type Item = { fileCount?: number; id: string; name: string };
   const SkillsList = ({
     items,
     onOpenFile,
@@ -114,15 +117,19 @@ vi.mock('@/features/SkillsList', () => {
       ))}
     </div>
   );
-  // SkillSection is a thin presentational wrapper — the real one only adds
-  // an Accordion / header. For these tests we pass children through and
-  // surface the count so assertions that key off the section header still
-  // work.
+  // SkillSection is a thin presentational wrapper — the real one swaps the
+  // children for an empty placeholder when `isEmpty` is true. We mirror that
+  // here so co-located assertions (e.g. "skills-list does not render when no
+  // bundles are present") line up with production behavior.
   const SkillSection = ({
     children,
+    emptyText,
+    isEmpty,
     sectionHeader,
   }: {
     children?: ReactNode;
+    emptyText?: string;
+    isEmpty?: boolean;
     sectionHeader?: { count?: number; title: string };
   }) => (
     <div data-testid={sectionHeader ? `skill-section-${sectionHeader.title}` : 'skill-section'}>
@@ -132,7 +139,7 @@ vi.mock('@/features/SkillsList', () => {
           {typeof sectionHeader.count === 'number' && <span>{sectionHeader.count}</span>}
         </div>
       )}
-      {children}
+      {isEmpty ? <div data-testid="skill-section-empty">{emptyText}</div> : children}
     </div>
   );
   const useProjectSkills = () => ({
@@ -144,6 +151,19 @@ vi.mock('@/features/SkillsList', () => {
   });
   return { SkillSection, SkillsList, useProjectSkills };
 });
+
+// UserLevelSkills owns its own store wiring and is exercised separately. We
+// stub it (component + the lifted hook) so AgentDocumentsGroup's render logic
+// can be tested without dragging the tool store into the working-sidebar
+// tests. Default to an empty user-skill list so the empty-state branch is
+// reachable; individual tests can re-mock before render to override.
+vi.mock('./UserLevelSkills', () => ({
+  default: () => null,
+  useUserSkills: () => [],
+}));
+vi.mock('@/features/ChatInput/InputEditor/ActionTag/skillDragData', () => ({
+  startSkillDrag: () => undefined,
+}));
 
 vi.mock('@/services/agentDocument', () => ({
   agentDocumentSWRKeys: {
@@ -393,7 +413,7 @@ describe('AgentDocumentsGroup', () => {
     expect(openDocument).not.toHaveBeenCalled();
   });
 
-  it('shows the skills empty state when no bundles are present', () => {
+  it('falls back to a single empty placeholder when every skill source is empty', () => {
     useClientDataSWR.mockReturnValue({
       data: [fileDocRow, webDocRow],
       error: undefined,
@@ -403,6 +423,9 @@ describe('AgentDocumentsGroup', () => {
 
     render(<AgentDocumentsGroup />);
 
+    // No agent bundles, no working dir (no Project section), no user-installed
+    // skills → renderSkills collapses to the global "No skills found"
+    // placeholder rather than rendering an empty section per source.
     expect(screen.getByText('No skills found')).toBeInTheDocument();
     expect(screen.queryByTestId('skills-list')).not.toBeInTheDocument();
   });

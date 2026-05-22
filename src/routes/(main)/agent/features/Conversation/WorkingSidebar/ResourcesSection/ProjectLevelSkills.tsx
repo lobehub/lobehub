@@ -5,37 +5,47 @@ import { startSkillDrag } from '@/features/ChatInput/InputEditor/ActionTag/skill
 import { SkillSection, SkillsList, useProjectSkills } from '@/features/SkillsList';
 
 interface ProjectLevelSkillsProps {
+  /**
+   * Skip the `SkillSection` wrapper (no header row). Set when the parent has
+   * collapsed to a single visible source and wants the list rendered flat.
+   */
+  hideHeader?: boolean;
   workingDirectory: string;
 }
 
-const ProjectLevelSkills = memo<ProjectLevelSkillsProps>(({ workingDirectory }) => {
+const ProjectLevelSkills = memo<ProjectLevelSkillsProps>(({ hideHeader, workingDirectory }) => {
   const { t } = useTranslation('chat');
-  const { isLoading, items, onOpenFile, onOpenSkill } = useProjectSkills(workingDirectory);
+  const { items, onOpenFile, onOpenSkill } = useProjectSkills(workingDirectory);
+
+  if (items.length === 0) return null;
+
+  const list = (
+    <SkillsList
+      items={items}
+      onOpenFile={onOpenFile}
+      onOpenSkill={onOpenSkill}
+      onSkillDragStart={(item, event) => {
+        // Project skills are resolved by the underlying CLI agent itself, so
+        // we serialize them as a literal `/skill-name` (projectSkill chip).
+        startSkillDrag(event, {
+          category: 'projectSkill',
+          label: item.name,
+          type: item.name,
+        });
+      }}
+    />
+  );
+
+  if (hideHeader) return list;
 
   return (
     <SkillSection
-      emptyText={t('workingPanel.skills.empty')}
-      isEmpty={items.length === 0}
-      isLoading={isLoading}
       sectionHeader={{
         count: items.length,
         title: t('workingPanel.skills.section.project'),
       }}
     >
-      <SkillsList
-        items={items}
-        onOpenFile={onOpenFile}
-        onOpenSkill={onOpenSkill}
-        onSkillDragStart={(item, event) => {
-          // Project skills are resolved by the underlying CLI agent itself, so
-          // we serialize them as a literal `/skill-name` (projectSkill chip).
-          startSkillDrag(event, {
-            category: 'projectSkill',
-            label: item.name,
-            type: item.name,
-          });
-        }}
-      />
+      {list}
     </SkillSection>
   );
 });

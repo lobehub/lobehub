@@ -7,8 +7,16 @@ import { memo, useCallback, useMemo, useState } from 'react';
 
 export interface SkillListItem {
   description?: string;
-  fileCount: number;
-  files: string[];
+  /**
+   * File count shown next to the name. Omit (or pass 0) for atomic skills with
+   * no embedded files — e.g. user-level skills sourced from MCP servers.
+   */
+  fileCount?: number;
+  /**
+   * Optional file tree for skills that bundle markdown/script assets. When
+   * empty or omitted the row stays atomic (no chevron, no expansion).
+   */
+  files?: string[];
   id: string;
   name: string;
 }
@@ -221,7 +229,9 @@ interface SkillRowProps {
 
 const SkillRow = memo<SkillRowProps>(
   ({ expanded, item, onDragStart, onOpenFile, onOpenSkill, onToggle }) => {
-    const tree = useMemo(() => buildSkillTree(item.files), [item.files]);
+    const files = item.files ?? [];
+    const hasFiles = files.length > 0;
+    const tree = useMemo(() => buildSkillTree(files), [files]);
     const [expandedFolders, setExpandedFolders] = useState<Set<string>>(() => new Set());
 
     const toggleFolder = useCallback((folderPath: string) => {
@@ -251,29 +261,36 @@ const SkillRow = memo<SkillRowProps>(
             gap={6}
             onDragStart={onDragStart}
           >
-            <Flexbox
-              align={'center'}
-              justify={'center'}
-              style={{ cursor: 'pointer', flexShrink: 0, height: 20, width: 20 }}
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggle();
-              }}
-            >
-              <Icon
-                className={`${styles.chevron} ${expanded ? styles.chevronExpanded : ''}`}
-                icon={ChevronRightIcon}
-                size={14}
-              />
-            </Flexbox>
+            {hasFiles ? (
+              <Flexbox
+                align={'center'}
+                justify={'center'}
+                style={{ cursor: 'pointer', flexShrink: 0, height: 20, width: 20 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggle();
+                }}
+              >
+                <Icon
+                  className={`${styles.chevron} ${expanded ? styles.chevronExpanded : ''}`}
+                  icon={ChevronRightIcon}
+                  size={14}
+                />
+              </Flexbox>
+            ) : (
+              <span style={{ flexShrink: 0, height: 20, width: 20 }} />
+            )}
             <Icon className={styles.itemIcon} icon={SkillsIcon} size={14} />
             <Text ellipsis style={{ color: 'inherit', flex: 1, minWidth: 0 }} onClick={onOpenSkill}>
               {item.name}
             </Text>
-            <span className={styles.itemCount}>{item.fileCount}</span>
+            {typeof item.fileCount === 'number' && item.fileCount > 0 && (
+              <span className={styles.itemCount}>{item.fileCount}</span>
+            )}
           </Flexbox>
         </Tooltip>
         {expanded &&
+          hasFiles &&
           onOpenFile &&
           tree.map((node) => (
             <TreeRow
