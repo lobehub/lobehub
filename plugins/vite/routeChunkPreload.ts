@@ -276,11 +276,17 @@ function createRoutePreloadManifest(
     .filter((entry) => entry.preload.length > 0);
 }
 
-function createAssetHref(fileName: string, base: string) {
-  if (base === '' || base === './') return fileName;
+function appendDeploymentQuery(href: string, deploymentId = process.env.VERCEL_DEPLOYMENT_ID) {
+  if (!deploymentId || href.includes('dpl=')) return href;
+
+  return `${href}${href.includes('?') ? '&' : '?'}dpl=${deploymentId}`;
+}
+
+function createAssetHref(fileName: string, base: string, deploymentId?: string) {
+  if (base === '' || base === './') return appendDeploymentQuery(fileName, deploymentId);
 
   const normalizedBase = base.endsWith('/') ? base : `${base}/`;
-  return `${normalizedBase}${fileName}`;
+  return appendDeploymentQuery(`${normalizedBase}${fileName}`, deploymentId);
 }
 
 function createAllJsWarmupManifest(bundle: OutputBundleLike) {
@@ -296,7 +302,7 @@ function collectExistingHtmlAssets(html: string, base: string) {
   const sourcePattern = /<(?:link|script)\b[^>]+(?:href|src)="([^"]+)"/g;
 
   for (const match of html.matchAll(sourcePattern)) {
-    const href = match[1];
+    const href = match[1].split('?')[0];
     const basePrefix = base === '' || base === './' ? '' : base.endsWith('/') ? base : `${base}/`;
     existing.add(basePrefix && href.startsWith(basePrefix) ? href.slice(basePrefix.length) : href.replace(/^\//, ''));
   }
@@ -304,12 +310,17 @@ function collectExistingHtmlAssets(html: string, base: string) {
   return existing;
 }
 
-function injectRouteModulepreloadsIntoHtml(html: string, manifest: RuntimeRoutePreloadEntry[], base: string) {
+function injectRouteModulepreloadsIntoHtml(
+  html: string,
+  manifest: RuntimeRoutePreloadEntry[],
+  base: string,
+  deploymentId?: string,
+) {
   const existing = collectExistingHtmlAssets(html, base);
   const routeFiles = new Set(manifest.flatMap((entry) => entry.preload));
   const links = [...routeFiles]
     .filter((fileName) => !existing.has(fileName))
-    .map((fileName) => `    <link rel="modulepreload" crossorigin href="${createAssetHref(fileName, base)}">`);
+    .map((fileName) => `    <link rel="modulepreload" crossorigin href="${createAssetHref(fileName, base, deploymentId)}">`);
 
   if (links.length === 0) return html;
 
@@ -324,11 +335,13 @@ function injectRouteModulepreloadsIntoHtml(html: string, manifest: RuntimeRouteP
   return html.replace('</head>', `${injection}\n  </head>`);
 }
 
-function createIdleWarmupScript(manifest: IdleWarmupManifest, base: string) {
+function createIdleWarmupScript(manifest: IdleWarmupManifest, base: string, deploymentId?: string) {
   const payload = {
-    allJsManifest: manifest.allJsManifestFileName ? createAssetHref(manifest.allJsManifestFileName, base) : undefined,
+    allJsManifest: manifest.allJsManifestFileName
+      ? createAssetHref(manifest.allJsManifestFileName, base, deploymentId)
+      : undefined,
     base,
-    idleRoutePreload: manifest.idleRoutePreload.map((fileName) => createAssetHref(fileName, base)),
+    idleRoutePreload: manifest.idleRoutePreload.map((fileName) => createAssetHref(fileName, base, deploymentId)),
   };
 
   return [
@@ -353,10 +366,10 @@ function createIdleWarmupScript(manifest: IdleWarmupManifest, base: string) {
   ].join('\n');
 }
 
-function injectIdleWarmupScriptIntoHtml(html: string, manifest: IdleWarmupManifest, base: string) {
+function injectIdleWarmupScriptIntoHtml(html: string, manifest: IdleWarmupManifest, base: string, deploymentId?: string) {
   if (manifest.idleRoutePreload.length === 0 && !manifest.allJsManifestFileName) return html;
 
-  return html.replace('</body>', `${createIdleWarmupScript(manifest, base)}\n  </body>`);
+  return html.replace('</body>', `${createIdleWarmupScript(manifest, base, deploymentId)}\n  </body>`);
 }
 
 interface RouteChunkPreloadOptions {
@@ -393,7 +406,8 @@ export function routeChunkPreload(options: RouteChunkPreloadOptions = {}): Plugi
         const outputBundle = ctx.bundle as OutputBundleLike;
         const manifest = createRoutePreloadManifest(outputBundle, config.root, groups);
         const idleManifest = createRoutePreloadManifest(outputBundle, config.root, idleGroups);
-        const htmlWithInitialPreloads = injectRouteModulepreloadsIntoHtml(html, manifest, config.base);
+        const deploymentId = process.env.VERCEL_DEPLOYMENT_ID;
+        const htmlWithInitialPreloads = injectRouteModulepreloadsIntoHtml(html, manifest, config.base, deploymentId);
 
         return injectIdleWarmupScriptIntoHtml(
           htmlWithInitialPreloads,
@@ -402,6 +416,7 @@ export function routeChunkPreload(options: RouteChunkPreloadOptions = {}): Plugi
             idleRoutePreload: [...new Set(idleManifest.flatMap((entry) => entry.preload))],
           },
           config.base,
+          deploymentId,
         );
       },
     },
@@ -409,6 +424,7 @@ export function routeChunkPreload(options: RouteChunkPreloadOptions = {}): Plugi
 }
 
 export const __testing = {
+  appendDeploymentQuery,
   collectExistingHtmlAssets,
   createAllJsWarmupManifest,
   createAssetHref,

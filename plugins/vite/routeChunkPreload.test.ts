@@ -232,21 +232,31 @@ describe('routeChunkPreload', () => {
     const html = [
       '<html>',
       '  <head>',
-      '    <script type="module" crossorigin src="/_spa/assets/index-D8p.js"></script>',
-      '    <link rel="modulepreload" crossorigin href="/_spa/assets/existing-B2.js">',
+      '    <script type="module" crossorigin src="/_spa/assets/index-D8p.js?dpl=dpl_test"></script>',
+      '    <link rel="modulepreload" crossorigin href="/_spa/assets/existing-B2.js?dpl=dpl_test">',
       '  </head>',
       '</html>',
     ].join('\n');
 
     const result = __testing.injectRouteModulepreloadsIntoHtml(
       html,
-      [{ id: 'desktop-page', patterns: ['^/page(/|$)'], preload: ['assets/page-B9kLm.js'] }],
+      [{ id: 'desktop-page', patterns: ['^/page(/|$)'], preload: ['assets/page-B9kLm.js', 'assets/existing-B2.js'] }],
       '/_spa/',
+      'dpl_test',
     );
 
-    expect(result).toContain('<link rel="modulepreload" crossorigin href="/_spa/assets/page-B9kLm.js">');
+    expect(result).toContain('<link rel="modulepreload" crossorigin href="/_spa/assets/page-B9kLm.js?dpl=dpl_test">');
     expect(result.match(/assets\/existing-B2\.js/g)).toHaveLength(1);
     expect(result.match(/assets\/index-D8p\.js/g)).toHaveLength(1);
+  });
+
+  it('appends the deployment query to emitted preload assets', () => {
+    expect(__testing.createAssetHref('assets/page-B9kLm.js', '/_spa/', 'dpl_test')).toBe(
+      '/_spa/assets/page-B9kLm.js?dpl=dpl_test',
+    );
+    expect(__testing.createAssetHref('assets/page-B9kLm.js?dpl=dpl_test', '/_spa/', 'dpl_test')).toBe(
+      '/_spa/assets/page-B9kLm.js?dpl=dpl_test',
+    );
   });
 
   it('injects emitted route preloads into html with the Vite html transform hook', () => {
@@ -287,9 +297,10 @@ describe('routeChunkPreload', () => {
       '<html><body></body></html>',
       { idleRoutePreload: ['assets/settings-D8p.js'] },
       '/_spa/',
+      'dpl_test',
     );
 
-    expect(result).toContain('/_spa/assets/settings-D8p.js');
+    expect(result).toContain('/_spa/assets/settings-D8p.js?dpl=dpl_test');
     expect(result).not.toContain('js-warmup-manifest.json');
   });
 });
