@@ -13,13 +13,13 @@ import {
 } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { Copy, MoreHorizontal, Share2 } from 'lucide-react';
-import dynamic from 'next/dynamic';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ChatList, ConversationProvider, MessageItem } from '@/features/Conversation';
 import { TaskCardScopeProvider } from '@/features/Conversation/Markdown/plugins/Task';
 import { useShareModal } from '@/features/ShareModal';
+import { LazySharePopover as SharePopover } from '@/features/SharePopover/lazy';
 import { useGatewayReconnect } from '@/hooks/useGatewayReconnect';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useAgentStore } from '@/store/agent';
@@ -34,8 +34,6 @@ import { authSelectors } from '@/store/user/selectors';
 
 import TopicStatusIcon from '../TopicStatusIcon';
 import FeedbackInput from './FeedbackInput';
-
-const SharePopover = dynamic(() => import('@/features/SharePopover'));
 
 interface TopicChatDrawerBodyProps {
   agentId: string;

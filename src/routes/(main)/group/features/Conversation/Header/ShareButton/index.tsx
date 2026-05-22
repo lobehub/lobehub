@@ -7,12 +7,10 @@ import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SIZE, MOBILE_HEADER_ICON_SIZE } from '@/const/layoutTokens';
 import { useShareModal } from '@/features/ShareModal';
-import dynamic from '@/libs/next/dynamic';
+import { LazySharePopover as SharePopover } from '@/features/SharePopover/lazy';
 import { useChatStore } from '@/store/chat';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
-
-const SharePopover = dynamic(() => import('@/features/SharePopover'));
 
 interface ShareButtonProps {
   mobile?: boolean;
