@@ -188,6 +188,7 @@ table agent_eval_benchmarks {
 table agent_eval_datasets {
   id text [pk, not null]
   benchmark_id text [not null]
+  source_experiment_id text
   identifier text [not null]
   user_id text
   name text [not null]
@@ -202,7 +203,36 @@ table agent_eval_datasets {
   indexes {
     (identifier, user_id) [name: 'agent_eval_datasets_identifier_user_id_unique', unique]
     benchmark_id [name: 'agent_eval_datasets_benchmark_id_idx']
+    source_experiment_id [name: 'agent_eval_datasets_source_experiment_id_idx']
     user_id [name: 'agent_eval_datasets_user_id_idx']
+  }
+}
+
+table agent_eval_experiment_benchmarks {
+  experiment_id text [not null]
+  benchmark_id text [not null]
+  user_id text [not null]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (experiment_id, benchmark_id) [pk]
+    benchmark_id [name: 'agent_eval_experiment_benchmarks_benchmark_id_idx']
+    user_id [name: 'agent_eval_experiment_benchmarks_user_id_idx']
+  }
+}
+
+table agent_eval_experiments {
+  id text [pk, not null]
+  user_id text [not null]
+  name text [not null]
+  description text
+  metadata jsonb
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    user_id [name: 'agent_eval_experiments_user_id_idx']
   }
 }
 
@@ -228,6 +258,8 @@ table agent_eval_run_topics {
 table agent_eval_runs {
   id text [pk, not null]
   dataset_id text [not null]
+  experiment_id text
+  parent_run_id text
   target_agent_id text
   user_id text [not null]
   name text
@@ -240,7 +272,10 @@ table agent_eval_runs {
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
+    
     dataset_id [name: 'agent_eval_runs_dataset_id_idx']
+    experiment_id [name: 'agent_eval_runs_experiment_id_idx']
+    parent_run_id [name: 'agent_eval_runs_parent_run_id_idx']
     user_id [name: 'agent_eval_runs_user_id_idx']
     status [name: 'agent_eval_runs_status_idx']
     target_agent_id [name: 'agent_eval_runs_target_agent_id_idx']
@@ -744,6 +779,56 @@ table generations {
     user_id [name: 'generations_user_id_idx']
     generation_batch_id [name: 'generations_batch_id_idx']
     file_id [name: 'generations_file_id_idx']
+  }
+}
+
+table llm_generation_tracing {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  scenario text [not null]
+  prompt_version text [not null]
+  prompt_hash text [not null]
+  schema_name text
+  user_id text [not null]
+  agent_id text
+  topic_id text
+  trigger text
+  parent_tracing_id uuid
+  provider text
+  model text
+  success boolean [not null]
+  error_code text
+  error_detail text
+  validation_failed boolean [not null, default: false]
+  input_hash text
+  input_hint text
+  latency_ms integer
+  input_tokens integer
+  output_tokens integer
+  cost_usd "numeric(12, 8)"
+  storage_key text
+  feedback_signal text
+  feedback_score "numeric(3, 2)"
+  feedback_source text
+  feedback_data jsonb
+  feedback_updated_at "timestamp with time zone"
+  trace_id text
+  span_id text
+  metadata jsonb [default: `{}`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    scenario [name: 'llm_generation_tracing_scenario_idx']
+    prompt_version [name: 'llm_generation_tracing_prompt_version_idx']
+    user_id [name: 'llm_generation_tracing_user_id_idx']
+    agent_id [name: 'llm_generation_tracing_agent_id_idx']
+    topic_id [name: 'llm_generation_tracing_topic_id_idx']
+    provider [name: 'llm_generation_tracing_provider_idx']
+    model [name: 'llm_generation_tracing_model_idx']
+    success [name: 'llm_generation_tracing_success_idx']
+    error_code [name: 'llm_generation_tracing_error_code_idx']
+    validation_failed [name: 'llm_generation_tracing_validation_failed_idx']
+    feedback_signal [name: 'llm_generation_tracing_feedback_signal_idx']
+    created_at [name: 'llm_generation_tracing_created_at_idx']
   }
 }
 
