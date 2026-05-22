@@ -5,6 +5,7 @@ import { viteEmotionSpeedy } from './emotionSpeedy';
 import { viteMarkdownImport } from './markdownImport';
 import { viteNodeModuleStub } from './nodeModuleStub';
 import { vitePlatformResolve } from './platformResolve';
+import { routeChunkPreload } from './routeChunkPreload';
 
 /**
  * Shared manual chunk naming — groups leaf-node modules to reduce chunk file count.
@@ -130,6 +131,7 @@ export const createSharedRolldownOutput = (options: SharedRolldownOutputOptions 
 type Platform = 'web' | 'mobile' | 'desktop';
 
 const isDev = process.env.NODE_ENV !== 'production';
+const enableRouteChunkPreload = process.env.LOBE_ROUTE_CHUNK_PRELOAD !== 'false';
 
 interface SharedRendererOptions {
   platform: Platform;
@@ -142,6 +144,7 @@ export function sharedRendererPlugins(options: SharedRendererOptions) {
     viteMarkdownImport(),
     viteNodeModuleStub(),
     vitePlatformResolve(options.platform),
+    enableRouteChunkPreload && routeChunkPreload(),
 
     isDev && {
       name: 'lobe-dev-strip-manifest',
