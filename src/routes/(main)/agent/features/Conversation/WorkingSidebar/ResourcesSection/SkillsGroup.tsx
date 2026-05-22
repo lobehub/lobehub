@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import SkillsList, { type SkillListItem } from '@/features/AgentDocumentsExplorer/SkillsList';
+import { startSkillDrag } from '@/features/ChatInput/InputEditor/ActionTag/skillDragData';
 import { useClientDataSWR } from '@/libs/swr';
 import { localFileService } from '@/services/electron/localFileService';
 import { useChatStore } from '@/store/chat';
@@ -99,6 +100,15 @@ const SkillsGroup = memo<SkillsGroupProps>(({ workingDirectory }) => {
             const skill = skillByDir.get(item.id);
             if (!skill) return;
             openLocalFile({ filePath: skill.path, workingDirectory: previewWorkspaceRoot });
+          }}
+          onSkillDragStart={(item, event) => {
+            // Project skills are resolved by the underlying CLI agent itself, so
+            // we serialize them as a literal `/skill-name` (projectSkill chip).
+            startSkillDrag(event, {
+              category: 'projectSkill',
+              label: item.name,
+              type: item.name,
+            });
           }}
         />
       )}
