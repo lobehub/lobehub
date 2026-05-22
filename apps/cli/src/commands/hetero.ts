@@ -320,6 +320,16 @@ const exec = async (options: ExecOptions): Promise<void> => {
     }
 
     const exitedClean = !ingestError && (code === 0 || signal === 'SIGTERM');
+
+    // Detect sandbox session expiry: CC ignored the --resume flag and started a
+    // new session (different sessionId). Conversation history was pre-injected
+    // as context by the server, so CC should have stayed coherent.
+    if (options.resume && handle.sessionId && handle.sessionId !== options.resume) {
+      log.warn(
+        `Sandbox session expired — new session started (requested: ${options.resume}, got: ${handle.sessionId})`,
+      );
+    }
+
     try {
       await sink.finish({
         result: exitedClean ? 'success' : 'error',

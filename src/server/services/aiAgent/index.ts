@@ -733,11 +733,48 @@ export class AiAgentService {
         log('execAgent: failed to resolve GitHub token: %O', err);
       }
 
+      // When resuming a prior session, fetch recent conversation messages so CC
+      // retains continuity even if the sandbox was recreated and its session
+      // files are gone. We cap at the most-recent 30 user/assistant turns and
+      // exclude the just-created placeholder and the current user message.
+      let conversationHistory:
+        | Array<{ content: string; role: 'assistant' | 'user' }>
+        | undefined;
+      if (resumeSessionId) {
+        try {
+          const currentTurnIds = new Set<string>(
+            [userMsg?.id, assistantMsg.id].filter((id): id is string => Boolean(id)),
+          );
+          const allMessages = await this.messageModel.query({ pageSize: 200, topicId });
+          const filtered = allMessages.filter(
+            (m) =>
+              (m.role === 'user' || m.role === 'assistant') &&
+              !m.threadId &&
+              !currentTurnIds.has(m.id) &&
+              m.content &&
+              m.content !== LOADING_FLAT,
+          );
+          const historySlice = filtered.slice(-30);
+          if (historySlice.length > 0) {
+            conversationHistory = historySlice.map((m) => ({
+              content: m.content,
+              role: m.role as 'assistant' | 'user',
+            }));
+          }
+        } catch (err) {
+          log(
+            'execAgent: failed to fetch conversation history for resume context (non-fatal): %O',
+            err,
+          );
+        }
+      }
+
       // Build cloud-specific system context (repo list + workspace info + optional agent-level static context).
       const { buildCloudHeteroContext } =
         await import('@/server/services/heterogeneousAgent/cloudHeteroContext');
       const systemContext = buildCloudHeteroContext({
         agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
+        conversationHistory,
         githubToken,
         repos: topicRepos,
       });

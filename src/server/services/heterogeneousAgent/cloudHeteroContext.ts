@@ -1,9 +1,27 @@
+/** One message entry from the topic's conversation history, used for resume context. */
+export interface ConversationHistoryEntry {
+  content: string;
+  role: 'assistant' | 'user';
+}
+
+// Max chars to include per message in the history section. Long code dumps are
+// truncated with an ellipsis so the context block stays token-efficient.
+const HISTORY_MAX_CHARS_USER = 1000;
+const HISTORY_MAX_CHARS_ASSISTANT = 2000;
+
+const truncate = (text: string, limit: number): string =>
+  text.length <= limit ? text : `${text.slice(0, limit)}…[truncated]`;
+
 /**
  * Builds the system context injected before every user prompt for cloud Claude Code runs.
  *
  * This context is cloud-sandbox-specific: it describes the workspace layout,
  * lists the GitHub repos that were pre-cloned, and tells CC how to handle
  * repos that may not have been cloned successfully.
+ *
+ * When `conversationHistory` is supplied (resume turns only), a
+ * "Previous Conversation Context" section is prepended so Claude Code retains
+ * continuity even when the sandbox session has expired and CC starts fresh.
  *
  * It is NOT the agent's systemRole (which lives in agentConfig.systemRole and
  * is a user-facing persona definition). This is pure infra context for CC.
@@ -16,16 +34,51 @@ export function buildCloudHeteroContext(params: {
   repos: string[];
   /** Static systemContext from HeterogeneousProviderConfig.systemContext (agent-level). */
   agentSystemContext?: string;
+  /**
+   * Recent conversation messages from the DB (resume turns only).
+   * Injected before the workspace section so CC has conversational continuity
+   * even if the sandbox was recreated and session files are gone.
+   */
+  conversationHistory?: ConversationHistoryEntry[];
   /** GitHub OAuth token injected as GITHUB_TOKEN env var in the sandbox. */
   githubToken?: string;
 }): string {
-  const { repos, agentSystemContext, githubToken } = params;
+  const { repos, agentSystemContext, conversationHistory, githubToken } = params;
 
   const parts: string[] = [];
 
   // --- Agent-level static context (highest priority, goes first) ---
   if (agentSystemContext?.trim()) {
     parts.push(agentSystemContext.trim());
+  }
+
+  // --- Previous conversation history (resume turns only) ---
+  // Injected so CC retains context when the sandbox session has expired and
+  // CC starts a fresh session (new container, no ~/.claude session files).
+  // When the session IS alive CC already has the full history from its own
+  // session state; the block below is a lightweight fallback that CC can
+  // ignore in that case.
+  if (conversationHistory && conversationHistory.length > 0) {
+    const historyLines: string[] = [
+      '## Previous Conversation Context',
+      'This sandbox session may have expired and been recreated since the last turn.',
+      'The following conversation history is provided for continuity.',
+      'If your session state is intact you can ignore this section.',
+      'Note: file system state is **not** preserved across sandbox restarts —',
+      're-clone repositories or recreate any local files as needed.',
+      '',
+      '<previous_conversation>',
+    ];
+
+    for (const msg of conversationHistory) {
+      const label = msg.role === 'user' ? 'User' : 'Assistant';
+      const limit = msg.role === 'user' ? HISTORY_MAX_CHARS_USER : HISTORY_MAX_CHARS_ASSISTANT;
+      historyLines.push(`${label}: ${truncate(msg.content, limit)}`);
+      historyLines.push('');
+    }
+
+    historyLines.push('</previous_conversation>');
+    parts.push(historyLines.join('\n'));
   }
 
   // --- Cloud workspace context ---
