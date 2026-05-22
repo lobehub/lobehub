@@ -27,6 +27,9 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   actionTagLabel: css`
     font-weight: 500;
   `,
+  agentSkillTag: css`
+    ${colored(cssVar.colorSuccess, cssVar.borderRadius)}
+  `,
   commandTag: css`
     ${colored(cssVar.purple, cssVar.borderRadius)}
   `,
