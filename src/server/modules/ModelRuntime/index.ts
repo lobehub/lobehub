@@ -1,7 +1,8 @@
 import { type GoogleGenAIOptions } from '@google/genai';
-import { ModelRuntime, type ModelRuntimeHooks } from '@lobechat/model-runtime';
+import { AgentRuntimeError, ModelRuntime, type ModelRuntimeHooks } from '@lobechat/model-runtime';
 import { LobeVertexAI } from '@lobechat/model-runtime/vertexai';
 import {
+  AgentRuntimeErrorType,
   type AWSBedrockKeyVault,
   type AzureOpenAIKeyVault,
   type ClientSecretPayload,
@@ -153,6 +154,17 @@ export const buildPayloadFromKeyVaults = (
   }
 };
 
+// Security: a user-supplied `baseURL` must not inherit the server-global apiKey — that leaks it to the user's endpoint.
+// (Admin-configured `*_PROXY_URL` is intentionally unaffected; only `payload.baseURL` is treated as user input.)
+const resolveApiKey = (payload: ClientSecretPayload, serverApiKey: string | undefined) => {
+  if (payload.baseURL && !payload.apiKey) {
+    throw AgentRuntimeError.createError(AgentRuntimeErrorType.InvalidProviderAPIKey);
+  }
+
+  const keys = payload.baseURL ? payload.apiKey : payload.apiKey || serverApiKey;
+  return apiKeyManager.pick(keys);
+};
+
 /**
  * Retrieves the options object from environment and apikeymanager
  * based on the provider and payload.
@@ -180,8 +192,8 @@ const getParamsFromPayload = (provider: string, payload: ClientSecretPayload) =>
         upperProvider = ModelProvider.OpenAI.toUpperCase(); // Use OpenAI options as default
       }
 
-      const apiKey = apiKeyManager.pick(payload?.apiKey || llmConfig[`${upperProvider}_API_KEY`]);
       const baseURL = payload?.baseURL || process.env[`${upperProvider}_PROXY_URL`];
+      const apiKey = resolveApiKey(payload, llmConfig[`${upperProvider}_API_KEY`]);
 
       return baseURL ? { apiKey, baseURL } : { apiKey };
     }
@@ -194,15 +206,15 @@ const getParamsFromPayload = (provider: string, payload: ClientSecretPayload) =>
 
     case ModelProvider.Azure: {
       const { AZURE_API_KEY, AZURE_ENDPOINT } = llmConfig;
-      const apiKey = apiKeyManager.pick(payload?.apiKey || AZURE_API_KEY);
       const baseURL = payload?.baseURL || AZURE_ENDPOINT;
+      const apiKey = resolveApiKey(payload, AZURE_API_KEY);
       return { apiKey, baseURL };
     }
 
     case ModelProvider.AzureAI: {
       const { AZUREAI_ENDPOINT, AZUREAI_ENDPOINT_KEY } = llmConfig;
-      const apiKey = payload?.apiKey || AZUREAI_ENDPOINT_KEY;
       const baseURL = payload?.baseURL || AZUREAI_ENDPOINT;
+      const apiKey = resolveApiKey(payload, AZUREAI_ENDPOINT_KEY);
       return { apiKey, baseURL };
     }
 
@@ -260,7 +272,8 @@ const getParamsFromPayload = (provider: string, payload: ClientSecretPayload) =>
       // ComfyUI supports multiple auth types: none, basic, bearer, custom
       // Extract all relevant auth fields from the payload or environment
       const authType = payload?.authType || COMFYUI_AUTH_TYPE || 'none';
-      const apiKey = payload?.apiKey || COMFYUI_API_KEY;
+      // Security: skip COMFYUI_API_KEY fallback when user supplies baseURL. Non-bearer auth types legitimately omit apiKey, so leave it undefined instead of throwing.
+      const apiKey = payload?.baseURL ? payload?.apiKey : payload?.apiKey || COMFYUI_API_KEY;
       const username = payload?.username || COMFYUI_USERNAME;
       const password = payload?.password || COMFYUI_PASSWORD;
 
