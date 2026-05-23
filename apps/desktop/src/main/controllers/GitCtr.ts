@@ -1063,15 +1063,16 @@ export default class GitController extends ControllerModule {
 
     // Step 4 — split per-file. When submodule recursion is enabled, peel out
     // any pointer-bump entries (block path matches a registered submodule)
-    // into a separate bucket; their internal diffs are collected in Step 5.
+    // into `pointerBumpPaths`; we'll surface those groups unconditionally in
+    // Step 5 even if the submodule's own branch is clean.
     const submodulePaths = recurseSubmodules
       ? await this.listSubmodulePaths(dirPath)
       : new Set<string>();
     const patches: GitWorkingTreePatch[] = [];
-    const submoduleDirtyPaths: string[] = [];
+    const pointerBumpPaths = new Set<string>();
     for (const block of splitBulkDiff(bulkDiff)) {
       if (submodulePaths.has(block.path)) {
-        submoduleDirtyPaths.push(block.path);
+        pointerBumpPaths.add(block.path);
         continue;
       }
       const status = detectDiffBlockStatus(block.patch);
@@ -1081,31 +1082,39 @@ export default class GitController extends ControllerModule {
     const order: Record<GitFileDiffStatus, number> = { added: 0, modified: 1, deleted: 2 };
     patches.sort((a, b) => order[a.status] - order[b.status]);
 
-    // Step 5 — for each submodule whose pointer differs, recurse to compute
-    // its OWN branch diff (against its own origin/HEAD). Single-level only
-    // (`recurseSubmodules: false` on the inner call) because phase 1's UI
-    // groups direct children; nested submodules would need a tree view we
-    // don't have yet. Empty groups are kept so the user still sees the
-    // submodule surfaced even when its own branch matches its default.
+    // Step 5 — recurse for EVERY registered submodule (not just those with
+    // pointer-bumps) so we also surface submodules whose own branch diverges
+    // from its own origin/HEAD even when the parent's pointer is unchanged.
+    // Single-level only (`recurseSubmodules: false` on the inner call). A
+    // group is kept when EITHER its pointer changed in the parent OR its own
+    // branch diff has at least one patch; submodules that are clean on both
+    // axes are dropped to keep the panel quiet. Submodule count is expected
+    // to be small (single digits in practice), so per-submodule fetch + diff
+    // in parallel is acceptable.
     let submodules: SubmoduleWorkingTreePatches[] | undefined;
-    if (submoduleDirtyPaths.length > 0) {
-      submodules = await Promise.all(
-        submoduleDirtyPaths.map(async (relativePath) => {
+    if (submodulePaths.size > 0) {
+      const candidates = await Promise.all(
+        Array.from(submodulePaths).map(async (relativePath) => {
           const absolutePath = path.resolve(dirPath, relativePath);
           const [sub, branchInfo] = await Promise.all([
             this.collectBranchDiff(absolutePath, undefined, false),
             this.getGitBranch(absolutePath),
           ]);
           return {
-            absolutePath,
-            branch: branchInfo.branch,
-            detached: branchInfo.detached,
-            name: path.basename(relativePath),
-            patches: sub.patches,
-            relativePath,
+            group: {
+              absolutePath,
+              branch: branchInfo.branch,
+              detached: branchInfo.detached,
+              name: path.basename(relativePath),
+              patches: sub.patches,
+              relativePath,
+            },
+            keep: pointerBumpPaths.has(relativePath) || sub.patches.length > 0,
           };
         }),
       );
+      const filtered = candidates.filter((c) => c.keep).map((c) => c.group);
+      if (filtered.length > 0) submodules = filtered;
     }
 
     return { baseRef, headRef, patches, submodules };
