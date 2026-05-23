@@ -113,7 +113,7 @@
   "modeSelection.title3": "告诉我，为你定制",
   "next": "下一步",
   "proSettings.connectors.title": "连接你常用的工具",
-  "proSettings.devMode.title": "开发者模式",
+  "proSettings.devMode.title": "高级工具",
   "proSettings.model.fixed": "默认模型在此环境中预设为 {{provider}}/{{model}}。",
   "proSettings.model.title": "助理默认模型",
   "proSettings.title": "先配置一些进阶选项",

@@ -12,6 +12,10 @@ import OnboardingContainer from '@/routes/onboarding/_layout';
 import { deriveOnboardingBranchPath } from '@/routes/onboarding/branch';
 import ResponseLanguageStep from '@/routes/onboarding/features/ResponseLanguageStep';
 import TelemetryStep from '@/routes/onboarding/features/TelemetryStep';
+import {
+  trackOnboardingStepCompleted,
+  trackOnboardingStepViewed,
+} from '@/services/onboardingMetrics';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { onboardingSelectors } from '@/store/user/selectors';
@@ -33,6 +37,11 @@ const remapLegacyClassicStep = (raw: number): number => {
   return MAX_ONBOARDING_STEPS - 1;
 };
 
+const COMMON_STEP_TRACKING = {
+  1: { flow: 'common', step: 'telemetry', stepIndex: 1 },
+  2: { flow: 'common', step: 'response_language', stepIndex: 2 },
+} as const;
+
 const CommonOnboardingPage = memo(() => {
   const isUserStateInit = useUserStore((s) => s.isUserStateInit);
   const commonStepsCompleted = useUserStore(onboardingSelectors.commonStepsCompleted);
@@ -42,6 +51,7 @@ const CommonOnboardingPage = memo(() => {
   const [searchParams, setSearchParams] = useSearchParams();
   const step: 1 | 2 = searchParams.get('step') === '2' ? 2 : 1;
   const hasStepParam = searchParams.has('step');
+  const viewedStepKeysRef = useRef<Set<string>>(new Set());
 
   useOnboardingAgentTemplates(isUserStateInit && (!commonStepsCompleted || hasStepParam));
 
@@ -72,7 +82,18 @@ const CommonOnboardingPage = memo(() => {
     void import('@/routes/onboarding/classic');
   }, []);
 
+  useEffect(() => {
+    if (!isUserStateInit || (commonStepsCompleted && !hasStepParam)) return;
+
+    const payload = COMMON_STEP_TRACKING[step];
+    if (viewedStepKeysRef.current.has(payload.step)) return;
+
+    viewedStepKeysRef.current.add(payload.step);
+    trackOnboardingStepViewed(payload);
+  }, [commonStepsCompleted, hasStepParam, isUserStateInit, step]);
+
   const goNextFromTelemetry = useCallback(() => {
+    trackOnboardingStepCompleted(COMMON_STEP_TRACKING[1]);
     setSearchParams({ step: '2' }, { replace: true });
   }, [setSearchParams]);
 
@@ -81,6 +102,7 @@ const CommonOnboardingPage = memo(() => {
   }, [setSearchParams]);
 
   const finishCommon = useCallback(() => {
+    trackOnboardingStepCompleted(COMMON_STEP_TRACKING[2]);
     setSearchParams({}, { replace: true });
   }, [setSearchParams]);
 
