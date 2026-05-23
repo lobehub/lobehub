@@ -253,6 +253,37 @@ describe('GatewayStreamNotifier', () => {
       const body = JSON.parse(pushCall![1].body);
       expect(body.event.data.errorType).toBeUndefined();
     });
+
+    it('forwards uiMessages to the gateway push payload when provided', async () => {
+      const uiMessages = [{ id: 'msg_z', role: 'assistantGroup' }] as any;
+
+      await notifier.publishAgentRuntimeEnd({
+        finalState: { status: 'done' },
+        operationId: 'op-1',
+        reason: 'completed',
+        stepIndex: 4,
+        uiMessages,
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      const pushCall = mockFetch.mock.calls.find((c: any[]) => c[0].includes('push-event'));
+      const body = JSON.parse(pushCall![1].body);
+      expect(body.event.data.uiMessages).toEqual(uiMessages);
+    });
+
+    it('omits uiMessages from the gateway push payload when not provided', async () => {
+      await notifier.publishAgentRuntimeEnd({
+        finalState: { status: 'done' },
+        operationId: 'op-1',
+        reason: 'completed',
+        stepIndex: 4,
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      const pushCall = mockFetch.mock.calls.find((c: any[]) => c[0].includes('push-event'));
+      const body = JSON.parse(pushCall![1].body);
+      expect(body.event.data).not.toHaveProperty('uiMessages');
+    });
   });
 
   // ─── Read/subscribe methods: must delegate directly to inner ───

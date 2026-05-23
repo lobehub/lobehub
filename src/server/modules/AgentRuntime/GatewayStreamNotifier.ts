@@ -79,14 +79,24 @@ export class GatewayStreamNotifier implements IStreamEventManager {
   }
 
   async publishAgentRuntimeEnd(params: PublishAgentRuntimeEndParams): Promise<string> {
-    const { operationId, stepIndex, finalState, reason, reasonDetail } = params;
+    const { operationId, stepIndex, finalState, reason, reasonDetail, uiMessages } = params;
     const result = await this.inner.publishAgentRuntimeEnd(params);
 
     const effectiveReasonDetail = reasonDetail || getDefaultReasonDetail(finalState, reason);
     const errorType = finalState?.error?.type || finalState?.error?.errorType;
 
     this.pushEvent(operationId, {
-      data: { errorType, finalState, reason, reasonDetail: effectiveReasonDetail },
+      // Forward `uiMessages` to the gateway push channel so terminal-state
+      // clients consuming /push-event get the canonical UIChatMessage[]
+      // snapshot — the final step has no later step_start to carry a fresh
+      // snapshot, so dropping it here would break the SoT contract.
+      data: {
+        errorType,
+        finalState,
+        reason,
+        reasonDetail: effectiveReasonDetail,
+        ...(uiMessages !== undefined && { uiMessages }),
+      },
       operationId,
       stepIndex,
       timestamp: Date.now(),
