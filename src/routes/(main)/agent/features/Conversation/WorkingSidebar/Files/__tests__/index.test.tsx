@@ -250,15 +250,15 @@ describe('Files — reveal request integration', () => {
     expect(messageSpy.warning).not.toHaveBeenCalled();
   });
 
-  it('(b) missing path triggers message.warning with localized key', async () => {
+  it('(b) missing path is a silent no-op', async () => {
     render(<Files workingDirectory="/repo" />);
 
     setReveal('nonexistent/deep/file.ts', 1);
 
-    await vi.waitFor(() => {
-      expect(messageSpy.warning).toHaveBeenCalledWith('workingPanel.review.revealNotFound');
-    });
+    // Give the effect a tick to run so we can assert nothing happened.
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
+    expect(messageSpy.warning).not.toHaveBeenCalled();
     expect(handleSpies.setExpanded).not.toHaveBeenCalled();
     expect(handleSpies.select).not.toHaveBeenCalled();
     expect(handleSpies.focus).not.toHaveBeenCalled();
