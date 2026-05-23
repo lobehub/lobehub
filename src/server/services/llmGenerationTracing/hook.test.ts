@@ -133,7 +133,7 @@ describe('createLLMGenerationTracingHook', () => {
     });
   });
 
-  it('writes caller-supplied tracing.metadata to the DB jsonb column, tagged with provider', async () => {
+  it('writes caller-supplied tracing.metadata verbatim to the DB jsonb column (no auto-stamped provider)', async () => {
     const hooks = createLLMGenerationTracingHook('user-1', 'openai');
     hooks.onGenerateObjectComplete!(
       { latencyMs: 5, success: true },
@@ -151,10 +151,23 @@ describe('createLLMGenerationTracingHook', () => {
       },
     );
     await flushMicrotasks();
+    // `provider` is a first-class column — must NOT be duplicated into metadata.
     expect(record.mock.calls[0][0].metadata).toEqual({
       parent_memory_trace_key: 'memory-extraction/user-1/topic/abc/trace/2026-05-22.json',
-      provider: 'openai',
     });
+  });
+
+  it('omits the metadata field when the caller passes no tracing.metadata', async () => {
+    const hooks = createLLMGenerationTracingHook('user-1', 'openai');
+    hooks.onGenerateObjectComplete!(
+      { latencyMs: 5, success: true },
+      {
+        options: { tracing: { scenario: 'input_completion' } },
+        payload: { messages: [], model: 'gpt-4o', schema: {} } as any,
+      },
+    );
+    await flushMicrotasks();
+    expect(record.mock.calls[0][0].metadata).toBeUndefined();
   });
 
   it('falls back to the unknown scenario when no trigger / scenario is provided anywhere', async () => {

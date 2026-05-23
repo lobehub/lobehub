@@ -109,8 +109,9 @@ export const createLLMGenerationTracingHook = (
             inputHint: tracing.inputHint,
             inputTokens: data.usage?.totalInputTokens ?? data.usage?.inputTextTokens,
             latencyMs: data.latencyMs,
-            // Caller-supplied jsonb context (rare) + provider tagged by the hook.
-            metadata: { ...tracing.metadata, provider },
+            // Caller-supplied jsonb context only. `provider` is already a
+            // first-class column on the row — no need to duplicate it here.
+            metadata: tracing.metadata,
             model: context.payload.model,
             outputTokens: data.usage?.totalOutputTokens ?? data.usage?.outputTextTokens,
             parentTracingId: tracing.parentTracingId,
