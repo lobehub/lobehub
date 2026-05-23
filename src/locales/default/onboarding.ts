@@ -121,7 +121,7 @@ export default {
   'modeSelection.title3': 'Tell me, so I can tailor it just for you~',
   'next': 'Next',
   'proSettings.connectors.title': 'Connect Your Favorite Tools',
-  'proSettings.devMode.title': 'Developer Mode',
+  'proSettings.devMode.title': 'Advanced tools',
   'proSettings.model.fixed':
     'Default model is preset to {{provider}}/{{model}} in this environment.',
   'proSettings.model.title': 'Default Model Used by the Agent',
