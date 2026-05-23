@@ -1,6 +1,6 @@
 import { codeInspectorPlugin } from 'code-inspector-plugin';
 import { type NextConfig } from 'next';
-import { type Header, type Redirect } from 'next/dist/lib/load-custom-routes';
+import { type Header, type Redirect, type Rewrite } from 'next/dist/lib/load-custom-routes';
 
 interface CustomNextConfig {
   experimental?: NextConfig['experimental'];
@@ -8,6 +8,7 @@ interface CustomNextConfig {
   outputFileTracingExcludes?: NextConfig['outputFileTracingExcludes'];
   outputFileTracingIncludes?: NextConfig['outputFileTracingIncludes'];
   redirects?: Redirect[];
+  rewrites?: NextConfig['rewrites'];
   serverExternalPackages?: NextConfig['serverExternalPackages'];
   turbopack?: NextConfig['turbopack'];
 }
@@ -58,6 +59,16 @@ export function defineConfig(config: CustomNextConfig) {
   };
 
   const assetPrefix = process.env.NEXT_PUBLIC_ASSET_PREFIX;
+  const sitemapRuntimeRewrites: Rewrite[] = [
+    {
+      destination: '/sitemap.xml',
+      source: '/sitemap-index.xml',
+    },
+    {
+      destination: '/sitemap/:id',
+      source: '/sitemap/:id.xml',
+    },
+  ];
 
   const nextConfig: NextConfig = {
     ...(isStandaloneMode ? standaloneConfig : {}),
@@ -350,6 +361,18 @@ export function defineConfig(config: CustomNextConfig) {
       },
       ...(config.redirects ?? []),
     ],
+    rewrites: async () => {
+      const customRewrites = typeof config.rewrites === 'function' ? await config.rewrites() : [];
+
+      if (Array.isArray(customRewrites)) {
+        return [...sitemapRuntimeRewrites, ...customRewrites];
+      }
+
+      return {
+        ...customRewrites,
+        beforeFiles: [...sitemapRuntimeRewrites, ...(customRewrites.beforeFiles ?? [])],
+      };
+    },
     // when external packages in dev mode with turbopack, this config will lead to bundle error
     // @napi-rs/canvas is a native module that can't be bundled by Turbopack
     // pdfjs-dist uses @napi-rs/canvas for DOMMatrix polyfill in Node.js environment
