@@ -194,6 +194,13 @@ export const StructureSchema = z.object({
 });
 
 export const StructureOutputSchema = z.object({
+  /**
+   * Per-call metadata propagated to `ModelRuntime.generateObject` options.
+   * Caller may set `scenario` / `promptVersion` / `schemaName` so the
+   * llm_generation_tracing row groups the call correctly; `trigger` is
+   * defaulted by the server route when absent.
+   */
+  metadata: z.record(z.string(), z.unknown()).optional(),
   messages: z.array(z.any()),
   model: z.string(),
   provider: z.string(),
@@ -204,7 +211,7 @@ export const StructureOutputSchema = z.object({
 });
 
 interface IStructureSchema {
-  description: string;
+  description?: string;
   name: string;
   schema: {
     additionalProperties?: boolean;
@@ -218,6 +225,12 @@ interface IStructureSchema {
 export interface StructureOutputParams {
   keyVaultsPayload: string;
   messages: OpenAIChatMessage[];
+  /**
+   * Per-call metadata propagated to `ModelRuntime.generateObject` options.
+   * Use it to declare `scenario` / `promptVersion` / `schemaName` for
+   * `llm_generation_tracing` grouping; `trigger` is defaulted server-side.
+   */
+  metadata?: Record<string, unknown>;
   model: string;
   provider: string;
   schema?: IStructureSchema;

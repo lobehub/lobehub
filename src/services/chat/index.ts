@@ -87,12 +87,6 @@ type ChatStreamInputParams = Partial<Omit<ChatStreamPayload, 'messages'>> & {
 
 interface FetchAITaskResultParams extends FetchSSEOptions {
   abortController?: AbortController;
-  /**
-   * Optional request metadata (trigger / scenario / promptVersion / ...).
-   * Plumbed through to `getChatCompletion` so server-side hooks can group
-   * preset-task runs by caller. Mirrors `chatService.createAssistantMessage`.
-   */
-  metadata?: FetchOptions['metadata'];
   onError?: (e: Error, rawError?: any) => void;
   /**
    * Loading state change handler function
@@ -507,7 +501,6 @@ class ChatService {
     onError,
     onLoadingChange,
     abortController,
-    metadata,
     trace,
   }: FetchAITaskResultParams) => {
     const errorHandle = (error: Error, errorContent?: any) => {
@@ -531,7 +524,6 @@ class ChatService {
       await this.getChatCompletion(
         { ...params, messages: llmMessages },
         {
-          metadata,
           onErrorHandle: (error) => {
             errorHandle(new Error(error.message), error);
           },

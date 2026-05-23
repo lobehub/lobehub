@@ -5,8 +5,9 @@ import {
   chainInputCompletion,
   escapeXmlAttr,
   INPUT_COMPLETION_PROMPT_VERSION,
+  INPUT_COMPLETION_SCHEMA_NAME,
 } from '@lobechat/prompts';
-import { isCommandPressed, merge } from '@lobechat/utils';
+import { isCommandPressed } from '@lobechat/utils';
 import type { IEditor } from '@lobehub/editor';
 import { INSERT_MENTION_COMMAND, ReactAutoCompletePlugin, ReactMathPlugin } from '@lobehub/editor';
 import { Editor, FloatMenu, useEditorState } from '@lobehub/editor/react';
@@ -20,7 +21,7 @@ import { useHotkeysContext } from 'react-hotkeys-hook';
 import { usePasteFile, useUploadFiles } from '@/components/DragUploadZone';
 import { useEnterToSend } from '@/hooks/useEnterToSend';
 import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
-import { chatService } from '@/services/chat';
+import { aiChatService } from '@/services/aiChat';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useUserStore } from '@/store/user';
@@ -217,38 +218,40 @@ const InputEditor = memo<{
       // mid-text causes nested editor updates that freeze the input
       if (afterText.trim()) return null;
 
-      const { enabled: _, ...config } = systemAgentSelectors.inputCompletion(
-        useUserStore.getState(),
-      );
+      const config = systemAgentSelectors.inputCompletion(useUserStore.getState());
       const context = getMessagesRef.current?.();
-      const chainParams = chainInputCompletion(input, afterText, context);
+      const { messages, schema } = chainInputCompletion(input, afterText, context);
 
       const abortController = new AbortController();
       abortSignal.addEventListener('abort', () => abortController.abort());
 
-      let result = '';
-
+      let response: { completion?: string } | null;
       try {
-        await chatService.fetchPresetTaskResult({
+        response = (await aiChatService.generateJSON(
+          {
+            // keyVaultsPayload is server-resolved from the user's DB config;
+            // the client doesn't fill it for this trpc-backed call.
+            keyVaultsPayload: '',
+            messages,
+            metadata: {
+              promptVersion: INPUT_COMPLETION_PROMPT_VERSION,
+              scenario: 'input_completion',
+              schemaName: INPUT_COMPLETION_SCHEMA_NAME,
+            },
+            model: config.model,
+            provider: config.provider,
+            schema,
+          },
           abortController,
-          metadata: {
-            promptVersion: INPUT_COMPLETION_PROMPT_VERSION,
-            scenario: 'input_completion',
-          },
-          onMessageHandle: (chunk) => {
-            if (chunk.type === 'text') {
-              result += chunk.text;
-            }
-          },
-          params: merge(config, chainParams),
-        });
+        )) as { completion?: string } | null;
       } catch {
         return null;
       }
 
       if (abortSignal.aborted) return null;
 
-      return result.trimEnd() || null;
+      const completion = response?.completion?.trimEnd();
+      return completion || null;
     },
     [isComposingRef],
   );

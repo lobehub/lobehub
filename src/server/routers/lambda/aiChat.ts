@@ -48,6 +48,9 @@ export const aiChatRouter = router({
     const modelRuntime = await initModelRuntimeFromDB(ctx.serverDB, ctx.userId, input.provider);
 
     log('calling generateObject');
+    // Caller-supplied metadata wins (scenario / promptVersion / schemaName) but
+    // we always stamp a trigger so tracing rows don't lose their scenario when
+    // the caller forgets to set one.
     const result = await modelRuntime.generateObject(
       {
         messages: input.messages,
@@ -55,7 +58,7 @@ export const aiChatRouter = router({
         schema: input.schema,
         tools: input.tools,
       },
-      { metadata: { trigger: RequestTrigger.Chat } },
+      { metadata: { trigger: RequestTrigger.Chat, ...input.metadata } },
     );
 
     log('generateObject completed, result: %O', result);
