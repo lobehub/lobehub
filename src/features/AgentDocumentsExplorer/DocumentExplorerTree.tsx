@@ -194,9 +194,17 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
       const isFolder = !!node.isFolder;
       const targetParentId = isFolder ? node.id : (node.parentId ?? null);
 
+      // Right-click on a row that's part of the current multi-selection acts
+      // on the whole selection; otherwise it targets only the right-clicked
+      // row (which matches typical file-tree UX where right-clicking outside
+      // the selection narrows the action).
+      const selectedIds = treeRef.current?.getSelectedIds() ?? [];
+      const isMulti = selectedIds.length > 1 && selectedIds.includes(node.id);
+      const deleteIds = isMulti ? selectedIds : [node.id];
+
       const items: NonNullable<MenuProps['items']> = [];
 
-      if (isFolder && !isSkill) {
+      if (isFolder && !isSkill && !isMulti) {
         items.push(
           {
             key: 'new-folder',
@@ -212,7 +220,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
         );
       }
 
-      if (!isSkill) {
+      if (!isSkill && !isMulti) {
         items.push({
           key: 'rename',
           label: t('workingPanel.resources.tree.rename'),
@@ -224,8 +232,10 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
         danger: true,
         icon: <Trash2Icon size={14} />,
         key: 'delete',
-        label: t('delete', { ns: 'common' }),
-        onClick: () => ops.deleteDocument(node.id),
+        label: isMulti
+          ? t('workingPanel.resources.tree.deleteSelected', { count: deleteIds.length })
+          : t('delete', { ns: 'common' }),
+        onClick: () => ops.deleteDocuments(deleteIds),
       });
 
       return items;

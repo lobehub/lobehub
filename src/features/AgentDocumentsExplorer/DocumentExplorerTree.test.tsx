@@ -28,6 +28,10 @@ vi.mock('@lobehub/ui', () => ({
   Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
 }));
 
+vi.mock('@lobehub/ui/base-ui', () => ({
+  confirmModal: modalConfirm,
+}));
+
 vi.mock('antd', () => ({
   App: {
     useApp: () => ({
