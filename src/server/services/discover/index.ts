@@ -80,6 +80,9 @@ const loadBuiltinModels = async () => {
   return loadModels();
 };
 
+let cachedRawModelListPromise: Promise<DiscoverModelItem[]> | undefined;
+let cachedProviderListPromise: Promise<DiscoverProviderItem[]> | undefined;
+
 export interface DiscoverServiceOptions {
   /** Access token from OIDC flow (legacy) */
   accessToken?: string;
@@ -1296,6 +1299,17 @@ export class DiscoverService {
   // ============================== Providers ==============================
 
   private _getProviderList = async (): Promise<DiscoverProviderItem[]> => {
+    if (cachedProviderListPromise) return cachedProviderListPromise;
+
+    cachedProviderListPromise = this._buildProviderList().catch((error) => {
+      cachedProviderListPromise = undefined;
+      throw error;
+    });
+
+    return cachedProviderListPromise;
+  };
+
+  private _buildProviderList = async (): Promise<DiscoverProviderItem[]> => {
     log('_getProviderList: fetching provider list');
     const [builtinModels, { DEFAULT_MODEL_PROVIDER_LIST }] = await Promise.all([
       loadBuiltinModels(),
@@ -1461,21 +1475,47 @@ export class DiscoverService {
   // ============================== Models ==============================
 
   private _getRawModelList = async (): Promise<DiscoverModelItem[]> => {
+    if (cachedRawModelListPromise) return cachedRawModelListPromise;
+
+    cachedRawModelListPromise = this._buildRawModelList().catch((error) => {
+      cachedRawModelListPromise = undefined;
+      throw error;
+    });
+
+    return cachedRawModelListPromise;
+  };
+
+  private _buildRawModelList = async (): Promise<DiscoverModelItem[]> => {
     log('_getRawModelList: fetching raw model list');
     const builtinModels = await loadBuiltinModels();
     const visibleModels = builtinModels.filter(isAiModelVisible);
+
+    const providerGroups = new Map<string, Set<string>>();
+    const canonicalKeyToModels = new Map<string, typeof visibleModels>();
+
+    for (const model of visibleModels) {
+      const identifier = (model.id.split('/').at(-1) || model.id).toLowerCase();
+      const displayNameKey = model.displayName?.toLowerCase() || '';
+      const canonicalKeys = uniq([identifier, displayNameKey].filter(Boolean));
+
+      for (const key of canonicalKeys) {
+        if (!providerGroups.has(key)) providerGroups.set(key, new Set());
+        providerGroups.get(key)!.add(model.providerId);
+
+        if (!canonicalKeyToModels.has(key)) canonicalKeyToModels.set(key, []);
+        canonicalKeyToModels.get(key)!.push(model);
+      }
+    }
+
     const result = visibleModels.map((item) => {
       const identifier = (item.id.split('/').at(-1) || item.id).toLowerCase();
-      const providers = uniq(
-        visibleModels
-          .filter(
-            (m) =>
-              m.id.toLowerCase() === identifier ||
-              m.id.includes(`/${identifier}`) ||
-              m.displayName?.toLowerCase() === item.displayName?.toLowerCase(),
-          )
-          .map((m) => m.providerId),
-      );
+      const displayNameKey = item.displayName?.toLowerCase() || '';
+      const providers = uniq([
+        ...(providerGroups.get(identifier) ? [...providerGroups.get(identifier)!] : []),
+        ...(displayNameKey && providerGroups.get(displayNameKey)
+          ? [...providerGroups.get(displayNameKey)!]
+          : []),
+      ]);
       const model = {
         ...item,
         category: item.providerId,

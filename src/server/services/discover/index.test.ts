@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { loadModels } from '@/business/client/model-bank/loadModels';
 import { AssistantStore } from '@/server/modules/AssistantStore';
 import { PluginStore } from '@/server/modules/PluginStore';
 import { ModelSorts, PluginSorts, ProviderSorts } from '@/types/discover';
@@ -699,6 +700,14 @@ describe('DiscoverService', () => {
         const result = await service.getModelList({ q: 'onboarding' });
 
         expect(result.items).toEqual([]);
+      });
+
+      it('should reuse cached model derivations across repeated list calls', async () => {
+        await service.getModelList();
+        await service.getModelList({ q: 'gpt' });
+        await service.getModelIdentifiers();
+
+        expect(loadModels).toHaveBeenCalledTimes(1);
       });
     });
 
