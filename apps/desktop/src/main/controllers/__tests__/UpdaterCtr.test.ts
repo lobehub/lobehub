@@ -110,6 +110,13 @@ describe('UpdaterCtr', () => {
       expect(mockSwitchChannel).toHaveBeenCalledWith('canary');
     });
 
+    it('should accept Hardy channel', async () => {
+      await updaterCtr.setUpdateChannel('HARDY');
+
+      expect(mockStoreSet).toHaveBeenCalledWith('updateChannel', 'HARDY');
+      expect(mockSwitchChannel).toHaveBeenCalledWith('HARDY');
+    });
+
     it('should ignore invalid legacy input', async () => {
       await updaterCtr.setUpdateChannel(
         'nightly' as unknown as Parameters<UpdaterCtr['setUpdateChannel']>[0],

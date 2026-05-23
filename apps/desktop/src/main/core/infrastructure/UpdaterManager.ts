@@ -401,7 +401,7 @@ export class UpdaterManager {
    */
   private getBaseUpdateUrl(): string | undefined {
     if (!UPDATE_SERVER_URL) return undefined;
-    return UPDATE_SERVER_URL.replace(/\/(stable|nightly|canary|beta)\/?$/, '');
+    return UPDATE_SERVER_URL.replace(/\/(stable|nightly|canary|beta|Hardy|HARDY)\/?$/, '');
   }
 
   /**
@@ -410,6 +410,21 @@ export class UpdaterManager {
    * electron-updater looks for {channel}-mac.yml
    */
   private configureUpdateProvider() {
+    // Hardy channel: use GitHub provider directly (no S3)
+    if (this.currentChannel === 'HARDY') {
+      logger.info('Hardy channel: using GitHub provider');
+
+      autoUpdater.setFeedURL({
+        owner: 'hardy-one',
+        provider: 'github',
+        repo: 'lobe-release',
+      });
+
+      autoUpdater.allowPrerelease = true;
+      // Use default latest.yml, don't set channel
+      return;
+    }
+
     const baseUrl = this.getBaseUpdateUrl();
     if (baseUrl) {
       const feedUrl = `${baseUrl}/${this.currentChannel}`;
@@ -575,7 +590,9 @@ export class UpdaterManager {
     if (!/cannot find/i.test(message)) return false;
     if (!/\b404\b/.test(message)) return false;
 
-    const manifestMatch = message.match(/\b(?:latest|stable|nightly|canary)(?:-[\da-z]+)?\.yml\b/i);
+    const manifestMatch = message.match(
+      /\b(?:latest|stable|nightly|canary|HARDY)(?:-[\da-z]+)?\.yml\b/i,
+    );
     return Boolean(manifestMatch);
   }
 

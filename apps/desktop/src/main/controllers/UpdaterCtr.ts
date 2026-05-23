@@ -62,7 +62,7 @@ export default class UpdaterCtr extends ControllerModule {
 
   @IpcMethod()
   async setUpdateChannel(channel: UpdateChannel): Promise<void> {
-    const validChannels = new Set<UpdateChannel>(['stable', 'canary']);
+    const validChannels = new Set<UpdateChannel>(['stable', 'canary', 'HARDY']);
     if (!validChannels.has(channel)) {
       logger.warn(`Invalid update channel: ${channel}, ignoring`);
       return;
