@@ -622,12 +622,23 @@ export class AgentRuntimeService {
         log('[%s] beforeStep hook dispatch error: %O', operationId, hookError);
       }
 
+      // Per-step buffer for context engine input/output. Populated by the
+      // `recordContextEngine` callback passed into the executor context;
+      // consumed by traceRecorder.appendStep below. Routing CE this way keeps
+      // its heavy payload (agentDocuments, systemRole, …) out of
+      // `stepResult.events` and therefore out of the Redis state pipeline.
+      // See LOBE-9110.
+      let contextEnginePayload: { input: unknown; output: unknown } | undefined;
+
       // Create Agent and Runtime instances
       // Use agentState.metadata which contains the full app context (topicId, agentId, etc.)
       // operationMetadata only contains basic fields (agentConfig, modelRuntimeConfig, userId)
       const { runtime } = await this.createAgentRuntime({
         metadata: agentState?.metadata,
         operationId,
+        recordContextEngine: (input, output) => {
+          contextEnginePayload = { input, output };
+        },
         stepIndex,
       });
 
@@ -800,6 +811,7 @@ export class AgentRuntimeService {
         afterStepSignalEvents,
         agentState,
         beforeStepSignalEvents,
+        contextEngine: contextEnginePayload,
         currentContext,
         externalRetryCount,
         presentation: stepPresentationData,
@@ -1336,10 +1348,12 @@ export class AgentRuntimeService {
   private async createAgentRuntime({
     metadata,
     operationId,
+    recordContextEngine,
     stepIndex,
   }: {
     metadata?: any;
     operationId: string;
+    recordContextEngine?: (input: unknown, output: unknown) => void;
     stepIndex: number;
   }) {
     const contextWindowTokens =
@@ -1380,6 +1394,7 @@ export class AgentRuntimeService {
       loadAgentState: this.coordinator.loadAgentState.bind(this.coordinator),
       messageModel: this.messageModel,
       operationId,
+      recordContextEngine,
       serverDB: this.serverDB,
       stepIndex,
       stream: metadata?.stream,
