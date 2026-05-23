@@ -244,4 +244,38 @@ describe('LLMGenerationTracingService.recordFeedback', () => {
       feedbackSource: 'explicit_thumbs',
     });
   });
+
+  it('throws LLMGenerationFeedbackError(not_found) when no row matches the tracingId', async () => {
+    const service = new LLMGenerationTracingService(stubStore);
+    await expect(
+      service.recordFeedback(userId, '00000000-0000-0000-0000-000000000abc', {
+        signal: 'positive',
+        source: 'explicit_thumbs',
+      }),
+    ).rejects.toMatchObject({
+      kind: 'not_found',
+      name: 'LLMGenerationFeedbackError',
+    });
+  });
+
+  it('throws LLMGenerationFeedbackError(not_found) when the row belongs to another user', async () => {
+    const service = new LLMGenerationTracingService(stubStore);
+    const { tracingId } = (await service.record({
+      promptHash: 'cafecafe',
+      promptVersion: 'v1.0',
+      scenario: 'agent_welcome',
+      success: true,
+      userId,
+    }))!;
+
+    await expect(
+      service.recordFeedback('some-other-user', tracingId, {
+        signal: 'negative',
+        source: 'manual_edit',
+      }),
+    ).rejects.toMatchObject({
+      kind: 'not_found',
+      name: 'LLMGenerationFeedbackError',
+    });
+  });
 });

@@ -92,7 +92,7 @@ describe('LlmGenerationTracingModel', () => {
   });
 
   describe('updateFeedback', () => {
-    it('writes feedback columns and the updated timestamp', async () => {
+    it('writes feedback columns + timestamp and returns updated:true on a match', async () => {
       const model = new LlmGenerationTracingModel(serverDB, userId);
       const { id } = await model.record({
         promptHash: 'aaaaaa',
@@ -101,12 +101,13 @@ describe('LlmGenerationTracingModel', () => {
         success: true,
       });
 
-      await model.updateFeedback(id, {
+      const result = await model.updateFeedback(id, {
         data: { clicked_question_index: 1 },
         score: 1,
         signal: 'positive',
         source: 'explicit_thumbs',
       });
+      expect(result).toEqual({ updated: true });
 
       const row = await model.findById(id);
       expect(row).toMatchObject({
@@ -118,7 +119,7 @@ describe('LlmGenerationTracingModel', () => {
       expect(row?.feedbackUpdatedAt).toBeInstanceOf(Date);
     });
 
-    it("does not touch another user's row", async () => {
+    it('returns updated:false (no-op) when the row is owned by another user', async () => {
       const owner = new LlmGenerationTracingModel(serverDB, userId);
       const intruder = new LlmGenerationTracingModel(serverDB, otherUserId);
 
@@ -129,13 +130,23 @@ describe('LlmGenerationTracingModel', () => {
         success: true,
       });
 
-      await intruder.updateFeedback(id, {
+      const result = await intruder.updateFeedback(id, {
         signal: 'negative',
         source: 'manual_edit',
       });
+      expect(result).toEqual({ updated: false });
 
       const row = await owner.findById(id);
       expect(row?.feedbackSignal).toBeNull();
+    });
+
+    it('returns updated:false when the id does not exist', async () => {
+      const model = new LlmGenerationTracingModel(serverDB, userId);
+      const result = await model.updateFeedback('00000000-0000-0000-0000-000000000000', {
+        signal: 'positive',
+        source: 'explicit_thumbs',
+      });
+      expect(result).toEqual({ updated: false });
     });
   });
 

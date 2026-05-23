@@ -96,8 +96,18 @@ export class LlmGenerationTracingModel {
     return { id: row.id };
   }
 
-  async updateFeedback(id: string, params: UpdateLlmGenerationFeedbackParams): Promise<void> {
-    await this.db
+  /**
+   * Returns `{ updated: true }` when a row matched `id + this.userId` and was
+   * patched. `{ updated: false }` means no row matched — either the id doesn't
+   * exist, or it belongs to a different user. Callers (e.g. the tracing
+   * service / tRPC router) must treat the `false` case as a NOT_FOUND so the
+   * client doesn't see a misleading success.
+   */
+  async updateFeedback(
+    id: string,
+    params: UpdateLlmGenerationFeedbackParams,
+  ): Promise<{ updated: boolean }> {
+    const rows = await this.db
       .update(llmGenerationTracing)
       .set({
         feedbackData: params.data,
@@ -106,7 +116,9 @@ export class LlmGenerationTracingModel {
         feedbackSource: params.source,
         feedbackUpdatedAt: new Date(),
       })
-      .where(and(eq(llmGenerationTracing.id, id), eq(llmGenerationTracing.userId, this.userId)));
+      .where(and(eq(llmGenerationTracing.id, id), eq(llmGenerationTracing.userId, this.userId)))
+      .returning({ id: llmGenerationTracing.id });
+    return { updated: rows.length > 0 };
   }
 
   async findById(id: string) {
