@@ -73,6 +73,8 @@ export default {
   'builtins.lobe-claude-code.task.updateDeleted': 'Deleted',
   'builtins.lobe-claude-code.task.updateInProgress': 'Started',
   'builtins.lobe-claude-code.task.updatePending': 'Reset',
+  'builtins.lobe-claude-code.task.updateSubject.completed': 'Task updated',
+  'builtins.lobe-claude-code.task.updateSubject.loading': 'Updating task',
   'builtins.lobe-claude-code.todoWrite.allDone': 'All tasks completed',
   'builtins.lobe-claude-code.todoWrite.currentStep': 'Current step',
   'builtins.lobe-claude-code.todoWrite.todos': 'Todos',

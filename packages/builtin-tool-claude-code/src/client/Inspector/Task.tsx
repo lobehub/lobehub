@@ -248,6 +248,37 @@ export const TaskInspector = memo<BuiltinInspectorProps<TaskInspectorArgs, TaskP
           </div>
         );
       }
+
+      // Subject-only edit (rename / initial subject set, no status flip): the
+      // per-call signal IS the new subject — surface it like the status branch
+      // does, otherwise we fall through to the aggregate "Todos: x/y" chip
+      // which buries the per-row signal. Args wins over the pluginState
+      // snapshot since this call IS the new value being set.
+      const taskId = updateArgs?.taskId;
+      const subject =
+        updateArgs?.subject ??
+        (taskId ? items.find((item) => item.id === taskId)?.text : undefined);
+      if (subject) {
+        const inFlight = isArgumentsStreaming || isLoading;
+        const verb = t(
+          inFlight
+            ? 'builtins.lobe-claude-code.task.updateSubject.loading'
+            : 'builtins.lobe-claude-code.task.updateSubject.completed',
+        );
+        return (
+          <div className={cx(inspectorTextStyles.root, inFlight && shinyTextStyles.shinyText)}>
+            <ProgressRing stats={stats} />
+            {stats.total > 0 && (
+              <span className={styles.countChip}>
+                {stats.completed}/{stats.total}
+              </span>
+            )}
+            <span style={{ marginInlineStart: stats.total > 0 ? 6 : 0 }}>
+              {`${verb}: ${subject}`}
+            </span>
+          </div>
+        );
+      }
     }
 
     // No pluginState yet (args streaming or tool_use → tool_result gap):
