@@ -6,7 +6,7 @@
 export const SKILL_DRAG_MIME = 'application/x-lobe-skill';
 
 /**
- * Identifier prefix for agent-document skill bundles ("智能体 Skills" —
+ * Identifier prefix for agent-document skill bundles ("Agent Skills" —
  * `agent_document` rows with `isSkillBundle=true`). Mirrors the unified VFS
  * skill namespace `./lobe/skills/agent/skills/<name>` flattened to a single
  * token, so we can tell these apart from builtin / DB skill names anywhere an
