@@ -717,7 +717,7 @@ describe('HeterogeneousAgentCtr', () => {
    * `stdout.on('end')` handler can schedule `pipeline.flush()` onto the
    * broadcast queue), then drain the queue, then broadcast complete.
    */
-  describe('exit-before-end ordering (LOBE-8516 phase 0 race)', () => {
+  describe('exit-before-end ordering (phase 0 race)', () => {
     let broadcasts: Array<{ channel: string; data: any }>;
 
     beforeEach(() => {
@@ -808,7 +808,7 @@ describe('HeterogeneousAgentCtr', () => {
     });
   });
 
-  describe('app-quit cleanup of AskUserQuestion temp configs (LOBE-8725)', () => {
+  describe('app-quit cleanup of AskUserQuestion temp configs ()', () => {
     // The async exit-handler cleanup races Electron's main-process teardown
     // and used to leak `lobe-cc-mcp-<opId>.json` files in `os.tmpdir()` on
     // every quit. The controller now unlinks pending intervention temp

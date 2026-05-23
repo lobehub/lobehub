@@ -337,7 +337,7 @@ describe('ClaudeCodeAdapter', () => {
     });
   });
 
-  describe('ToolSearch tool_reference content (LOBE-7369)', () => {
+  describe('ToolSearch tool_reference content ()', () => {
     // CC CLI serializes ToolSearch results as `tool_reference` blocks — no
     // `text` or `content` field — which the generic array mapper dropped to
     // empty content, leaving the tool message in DB with `content: ''` and
@@ -458,7 +458,7 @@ describe('ClaudeCodeAdapter', () => {
     });
   });
 
-  describe('Read tool image content (LOBE-7338)', () => {
+  describe('Read tool image content ()', () => {
     // CC's `Read` on images returns a `tool_result` whose `content` is an
     // `image` block (base64). The generic mapper had no branch for it so
     // resultContent collapsed to '' and the UI's StatusIndicator stuck on the
@@ -2242,9 +2242,9 @@ describe('ClaudeCodeAdapter', () => {
   });
 
   // ────────────────────────────────────────────────────
-  // LOBE-8998: external signal detection (Monitor task callbacks)
+  // external signal detection (Monitor task callbacks)
   // ────────────────────────────────────────────────────
-  describe('external signal detection (LOBE-8998)', () => {
+  describe('external signal detection ()', () => {
     const init = (adapter: ClaudeCodeAdapter) => {
       adapter.adapt({
         model: 'claude-sonnet-4-6',

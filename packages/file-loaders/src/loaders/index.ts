@@ -13,7 +13,7 @@ type LazyLoaderFactory = () => Promise<new () => FileLoaderInterface>;
 // caused the chunk to back-reference the main bundle for `detectUtf16NoBom`,
 // re-evaluating the main entry and re-running `new App()` →
 // `protocol.registerSchemesAsPrivileged` after app ready → throw on every
-// readFile of .md / .json / .ts / etc. See LOBE-* for the regression.
+// readFile of .md / .json / .ts / etc. See for the regression.
 const lazyFileLoaders: Record<Exclude<SupportedFileType, 'txt'>, LazyLoaderFactory> = {
   doc: async () => {
     const { DocLoader } = await import('./doc');

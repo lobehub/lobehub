@@ -263,7 +263,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
   });
 
   describe('Web UI scenario (no botContext/discordContext)', () => {
-    // LOBE-9378: regular chat used to leave activeDeviceId undefined when no
+    // regular chat used to leave activeDeviceId undefined when no
     // device was bound, which caused the local-system system prompt's
     // {{workingDirectory}} / {{hostname}} placeholders to reach the LLM as
     // literals. The model would then waste the first N steps groping for cwd.
@@ -428,7 +428,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
     // the runtime bound device. Setup: topic.metadata says device-002, but the
     // only online device is device-001. If the topic metadata were reused as
     // boundDeviceId, activeDeviceId would be undefined (device-002 is offline).
-    // After LOBE-9378 auto-activate, we instead pick the most-recent online
+    // After auto-activate, we instead pick the most-recent online
     // device (device-001) — proving the topic's stale metadata wasn't honored.
     it('should not reuse topic boundDeviceId when no explicit deviceId is provided', async () => {
       mockDeviceProxy.isConfigured = true;
@@ -531,7 +531,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
     // different mock shape. Topic metadata stores device-002, but only
     // device-001 is online; if topic metadata leaked into boundDeviceId,
     // activeDeviceId would be undefined (since device-002 is offline). The
-    // post-LOBE-9378 auto-activate picks device-001 instead, confirming the
+    // post-auto-activate picks device-001 instead, confirming the
     // stale topic.metadata.boundDeviceId path is dead.
     it('should not reuse topic metadata bound device when no deviceId is supplied', async () => {
       mockDeviceProxy.isConfigured = true;

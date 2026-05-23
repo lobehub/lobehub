@@ -767,7 +767,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
     });
 
     it('should ignore stale usage on assistant events (from message_start echo)', async () => {
-      // Regression for LOBE-7258-style bug: under partial-messages mode, CC
+      // Regression for -style bug: under partial-messages mode, CC
       // echoes a stale message_start usage (e.g. output_tokens: 1) on every
       // content-block assistant event. If the adapter picked that up, the DB
       // would record output_tokens=1 instead of the real total. This verifies
@@ -1672,12 +1672,12 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   });
 
   // ────────────────────────────────────────────────────
-  // Real trace regression: multi-tool per turn (LOBE-7240 scenario)
+  // Real trace regression: multi-tool per turn (scenario)
   // ────────────────────────────────────────────────────
 
   describe('multi-tool per turn (real trace regression)', () => {
     /**
-     * Reproduces the exact CC event pattern from the LOBE-7240 orphan trace.
+     * Reproduces the exact CC event pattern from the orphan trace.
      * Key pattern: a single turn (same message.id) has text + multiple tool_uses.
      * After step transition, the new turn also has multiple tool_uses with
      * out-of-order tool_results.
@@ -1715,7 +1715,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         ccToolResult('toolu_search', 'tool loaded'),
 
         // Turn 3 (msg_03): tool (get_issue) — step boundary
-        ccToolUse('msg_03', 'toolu_getissue', 'mcp__linear__get_issue', { id: 'LOBE-7240' }),
+        ccToolUse('msg_03', 'toolu_getissue', 'mcp__linear__get_issue', { id: '' }),
         ccToolResult('toolu_getissue', '{"title":"i18n"}'),
 
         // Turn 4 (msg_04): thinking + text + Grep + Grep — step boundary
@@ -1931,7 +1931,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   });
 
   // ────────────────────────────────────────────────────
-  // LOBE-7258 reproduction: Skill → ToolSearch → MCP tool
+  // reproduction: Skill → ToolSearch → MCP tool
   //
   // Mirrors the exact trace from the user-reported screenshot where
   // ToolSearch loads deferred MCP schemas before the MCP tool is called.
@@ -1939,7 +1939,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   // UI stops showing "loading" after each tool completes.
   // ────────────────────────────────────────────────────
 
-  describe('LOBE-7258 Skill → ToolSearch → MCP repro', () => {
+  describe('Skill → ToolSearch → MCP repro', () => {
     it('persists tool_result content for Skill, ToolSearch, and the deferred MCP tool', async () => {
       const idCounter = { tool: 0, assistant: 0 };
       mockCreateMessage.mockImplementation(async (params: any) => {
@@ -1967,7 +1967,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         ccToolResult('toolu_search', schemaPayload),
         // Turn 3: the deferred MCP tool now callable
         ccToolUse('msg_03', 'toolu_get_issue', 'mcp__linear-server__get_issue', {
-          id: 'LOBE-7258',
+          id: '',
         }),
         ccToolResult('toolu_get_issue', '{"title":"resume error on topic switch"}'),
         ccText('msg_04', 'done'),
@@ -2094,7 +2094,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   });
 
   // ────────────────────────────────────────────────────
-  // CC subagent thread-container model (LOBE-7392 / LOBE-7319)
+  // CC subagent thread-container model ()
   //
   // A subagent Thread is shaped as a nested conversation:
   //   user (prompt) → assistant#1 (tools[]) → tool → assistant#2 (tools[]) → tool → ...
@@ -2815,7 +2815,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
     });
 
     /**
-     * Regression for LOBE-8991: the subagent forwarding guard initially only
+     * Regression for the subagent forwarding guard initially only
      * filtered `stream_chunk` events. `tool_start` / `tool_end` for subagent
      * inner tools still reached the main gateway handler, where:
      *   - `tool_start` would fire `dispatchOnBeforeCall` against the MAIN
@@ -2901,10 +2901,10 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   });
 
   // ────────────────────────────────────────────────────
-  // LOBE-7365: Monitor parentId chain regression
+  // Monitor parentId chain regression
   // ────────────────────────────────────────────────────
 
-  describe('LOBE-7365 Monitor parentId chain', () => {
+  describe('Monitor parentId chain', () => {
     /**
      * Monitor pattern: initial tool_use returns immediately ("Monitor started"),
      * then Monitor's stdout is fed back as synthetic user content that drives
@@ -2959,7 +2959,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
     });
 
     /**
-     * LOBE-8993 regression: a toolless step in the middle must NOT break the
+     * regression: a toolless step in the middle must NOT break the
      * zigzag chain. The next step should chain back to the most recent tool
      * result ever produced in the run, not to the toolless assistant.
      */
@@ -3002,7 +3002,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
     });
 
     /**
-     * LOBE-8993 follow-up: N consecutive toolless steps (Monitor pushing
+     * follow-up: N consecutive toolless steps (Monitor pushing
      * stdout line by line, each line triggering a new LLM call that only
      * answers with text). All toolless assistants must chain back to the
      * same originating tool result; otherwise the UI splits one bubble per
@@ -3095,10 +3095,10 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   });
 
   // ────────────────────────────────────────────────────
-  // LOBE-8998: external signal stamping on Monitor-driven follow-up steps
+  // external signal stamping on Monitor-driven follow-up steps
   // ────────────────────────────────────────────────────
 
-  describe('LOBE-8998 external signal (metadata.signal)', () => {
+  describe('external signal (metadata.signal)', () => {
     const ccTaskStarted = (taskId: string, toolUseId: string) => ({
       session_id: 'cc-sess-1',
       subtype: 'task_started',
@@ -3174,7 +3174,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         sourceToolName: 'Monitor',
         type: 'tool-stdout',
       });
-      // Step 4 post-task summary: tagged with `task-completion` (LOBE-8998)
+      // Step 4 post-task summary: tagged with `task-completion` ()
       // so MessageCollector renders it inside the same AssistantGroup,
       // after the SignalCallbacks accordion.
       expect(assistantCreates[3][0].metadata?.signal).toEqual({

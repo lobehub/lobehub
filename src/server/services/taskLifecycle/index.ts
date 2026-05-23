@@ -51,7 +51,7 @@ const TERMINAL_STATUSES = new Set(['canceled', 'completed', 'failed']);
 const isTerminal = (status: string) => TERMINAL_STATUSES.has(status);
 
 // Consecutive 'error' reasons after which we stop re-arming and let the
-// urgent brief surface for human attention. Hardcoded for now (per LOBE-8233);
+// urgent brief surface for human attention. Hardcoded for now (per );
 // move to task.config later if it needs to be tunable per-task.
 const HEARTBEAT_FAILURE_FUSE = 3;
 
@@ -135,7 +135,7 @@ export class TaskLifecycleService {
 
       // 4. Synthesize a programmatic brief for the user (auto mode only).
       //    The agent-driven `createBrief` tool path stays the default until
-      //    the GrowthBook flag flips. See LOBE-8333 for the rollout plan.
+      //    the GrowthBook flag flips. See for the rollout plan.
       if (getBriefMode(currentTask) === 'auto' && currentTask && topicId && lastAssistantContent) {
         await this.synthesizeTopicBrief(
           taskId,

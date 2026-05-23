@@ -206,7 +206,7 @@ describe('MessageCollector', () => {
     });
 
     it('skips signal-tagged callbacks when locating the group tail', () => {
-      // LOBE-8998: when [signal callback, next tool-using assistant]
+      // when [signal callback, next tool-using assistant]
       // both live under the same tool, the tail finder must follow the
       // real main-chain assistant — taking children[0] blindly lands on
       // the callback (which is a leaf) and truncates the AssistantGroup.
@@ -304,7 +304,7 @@ describe('MessageCollector', () => {
   });
 
   // ────────────────────────────────────────────────────
-  // LOBE-8998: external signal callback collection
+  // external signal callback collection
   // ────────────────────────────────────────────────────
   describe('collectSignalCallbacks', () => {
     const mkAssistant = (id: string, opts?: Partial<Message>): Message => ({
@@ -522,7 +522,7 @@ describe('MessageCollector', () => {
   });
 
   // ────────────────────────────────────────────────────
-  // LOBE-8998: collectAssistantGroupMessages skips signal-tagged children
+  // collectAssistantGroupMessages skips signal-tagged children
   // ────────────────────────────────────────────────────
   describe('collectAssistantGroupMessages with signal callbacks', () => {
     it('skips signal-tagged callbacks when picking the main-chain follower', () => {

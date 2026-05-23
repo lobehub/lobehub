@@ -14,7 +14,7 @@
  *      physical filter on `builtinTools` before they reach the
  *      `ToolsEngine.manifestSchemas` or the activator-discovery
  *      `toolManifestMap`. Routing every builtin discovery through this
- *      helper closes the activator bypass documented in LOBE-8768 (an
+ *      helper closes the activator bypass documented in (an
  *      external sender could otherwise `activateTools(["lobe-remote-device"])`
  *      because the manifest was still resolvable in the engine even when
  *      the rule-layer gate denied it).
@@ -59,7 +59,7 @@ export interface AllowedBuiltinToolsParams {
  *
  * Defense-in-depth note: the rule-layer gates in `AgentToolsEngine` are
  * kept as a secondary line of defense, but they are bypassed by
- * `allowExplicitActivation` (LOBE-8768 B2), so the **physical** filter
+ * `allowExplicitActivation` (B2), so the **physical** filter
  * here is the only reliable enforcement point.
  */
 export const buildAllowedBuiltinTools = (params: AllowedBuiltinToolsParams) => {

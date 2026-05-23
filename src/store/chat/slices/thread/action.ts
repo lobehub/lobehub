@@ -57,7 +57,7 @@ export class ChatThreadActionImpl {
     // Always use main scope key to get messages, not activeDisplayMessages,
     // because activeDisplayMessages includes activeThreadId in the key.
     // When inside a subtopic, that would return thread-scoped messages
-    // instead of main conversation messages, causing the fork to fail (LOBE-5023).
+    // instead of main conversation messages, causing the fork to fail ().
     const mainKey = messageMapKey({
       agentId: activeAgentId,
       groupId: activeGroupId,

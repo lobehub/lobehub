@@ -77,14 +77,14 @@ export const createServerToolsEngine = (
   // Get builtin tool manifests from the (possibly pre-filtered) list. The
   // filter is one half of the hard wall keeping device tools out of an
   // external bot sender's manifestSchemas — see `buildAllowedBuiltinTools`
-  // and LOBE-8768. The enableChecker rules below are defense-in-depth
+  // and . The enableChecker rules below are defense-in-depth
   // because `allowExplicitActivation` lets activator-driven activation
   // bypass them.
   const builtinManifests = builtinToolsOverride.map((tool) => tool.manifest as LobeToolManifest);
 
   // Combine all manifests, then drop anything whose identifier the caller
   // has explicitly forbidden for this turn. The post-merge filter closes
-  // the second half of the LOBE-8768 wall: an installed plugin or a
+  // the second half of the wall: an installed plugin or a
   // Skill/Klavis manifest claiming `lobe-remote-device` would otherwise
   // slip through `buildAllowedBuiltinTools` (which only touches the
   // builtin source).
@@ -242,7 +242,7 @@ export const createServerAgentToolsEngine = (
     // Physically drop device-tool manifests for turns whose access policy
     // denies them. Without this filter, `lobe-activator`'s explicit
     // activation could resolve the manifest and bypass the rule-layer
-    // gates below (LOBE-8768).
+    // gates below ().
     builtinTools: buildAllowedBuiltinTools({ canUseDevice, disableLocalSystem }),
     // Add default tools based on configuration
     defaultToolIds: isChatMode ? chatModeAllowedToolIds : defaultToolIds,

@@ -587,7 +587,7 @@ describe('ConversationLifecycle actions', () => {
       });
 
       it('should enqueue when an execHeterogeneousAgent op is running (CC queue mode)', async () => {
-        // LOBE-7346: With Plan A, sends during a running CC turn must hit the
+        // With Plan A, sends during a running CC turn must hit the
         // same queue path used by client mode — without this we'd spawn a
         // second `claude` process in parallel.
         const { result } = renderHook(() => useChatStore());

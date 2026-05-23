@@ -180,7 +180,7 @@ describe('Google generateObject', () => {
       });
     });
 
-    // LOBE-8661: enum should only be copied for STRING type properties
+    // enum should only be copied for STRING type properties
     it('should strip enum from non-STRING types', () => {
       const openAISchema = {
         name: 'test',
@@ -207,7 +207,7 @@ describe('Google generateObject', () => {
       });
     });
 
-    // LOBE-8661: enum with empty array should be stripped even for STRING type
+    // enum with empty array should be stripped even for STRING type
     it('should strip empty enum arrays', () => {
       const openAISchema = {
         name: 'test',
@@ -229,7 +229,7 @@ describe('Google generateObject', () => {
       });
     });
 
-    // LOBE-8661: required should only be copied for OBJECT types
+    // required should only be copied for OBJECT types
     it('should strip required from non-OBJECT types', () => {
       const openAISchema = {
         name: 'test',
@@ -400,7 +400,7 @@ describe('Google generateObject', () => {
       expect(sanitizeGeminiSchema(undefined)).toBeUndefined();
     });
 
-    // LOBE-8661: nullable string enums should be preserved
+    // nullable string enums should be preserved
     it('should preserve enum on nullable STRING types (type: array with string)', () => {
       const schema = {
         properties: {
@@ -425,7 +425,7 @@ describe('Google generateObject', () => {
       });
     });
 
-    // LOBE-8661: nullable object required should be preserved
+    // nullable object required should be preserved
     it('should preserve required on nullable OBJECT types (type: array with object)', () => {
       const schema = {
         properties: {
@@ -452,7 +452,7 @@ describe('Google generateObject', () => {
       });
     });
 
-    // LOBE-8661: should strip enum from nullable non-STRING types
+    // should strip enum from nullable non-STRING types
     it('should strip enum from nullable non-STRING types (type: array without string)', () => {
       const schema = {
         properties: {
@@ -476,7 +476,7 @@ describe('Google generateObject', () => {
       });
     });
 
-    // LOBE-8661: recurse into definitions/$defs
+    // recurse into definitions/$defs
     it('should sanitize schemas under definitions', () => {
       const schema = {
         definitions: {
@@ -505,7 +505,7 @@ describe('Google generateObject', () => {
       });
     });
 
-    // LOBE-8661: recurse into $defs
+    // recurse into $defs
     it('should sanitize schemas under $defs', () => {
       const schema = {
         $defs: {
@@ -1315,7 +1315,7 @@ describe('Google generateObject', () => {
       expect(result).toEqual([{ arguments: {}, name: 'simple_function' }]);
     });
 
-    // LOBE-8661: buildGoogleTool should sanitize schema to strip enum from non-STRING types
+    // buildGoogleTool should sanitize schema to strip enum from non-STRING types
     it('should sanitize enum from non-STRING types in tool parameters', () => {
       const tool: any = {
         function: {
@@ -1350,7 +1350,7 @@ describe('Google generateObject', () => {
       warnSpy.mockRestore();
     });
 
-    // LOBE-8661: buildGoogleTool should sanitize nested tool parameters
+    // buildGoogleTool should sanitize nested tool parameters
     it('should sanitize nested enum/required in tool parameters', () => {
       const tool: any = {
         function: {
@@ -1396,7 +1396,7 @@ describe('Google generateObject', () => {
       warnSpy.mockRestore();
     });
 
-    // LOBE-8661: buildGoogleTool should preserve nullable string enum
+    // buildGoogleTool should preserve nullable string enum
     it('should preserve enum on nullable STRING type in tool parameters', () => {
       const tool: any = {
         function: {

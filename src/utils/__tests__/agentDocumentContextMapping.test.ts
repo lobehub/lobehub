@@ -48,7 +48,7 @@ const buildDoc = (overrides: Partial<AgentDocumentWithRules> = {}): AgentDocumen
   }) as AgentDocumentWithRules;
 
 describe('toAgentContextDocument', () => {
-  // Regression: LOBE-9383 — server-side mapper used to drop sourceType, which
+  // Regression: — server-side mapper used to drop sourceType, which
   // disabled the "hide web-crawled docs from the progressive index" filter for
   // every chat that went through RuntimeExecutors. Keep this lock tight so any
   // future field addition that forgets one side trips here.
@@ -144,7 +144,7 @@ describe('toAgentContextDocuments', () => {
     expect(result.map((d) => d.sourceType)).toEqual(['web', 'agent', 'file']);
   });
 
-  // Regression: LOBE-9386 — folder VFS nodes (plain folders + skill bundles)
+  // Regression: — folder VFS nodes (plain folders + skill bundles)
   // carry empty content but inherit loadRules/loadPosition, so they used to
   // leak into the injection candidate pool as empty slots. They must never
   // become context documents.

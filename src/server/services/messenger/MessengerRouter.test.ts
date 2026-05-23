@@ -816,7 +816,7 @@ describe('MessengerRouter onSubscribedMessage gating', () => {
     expect(mockHandleMention).not.toHaveBeenCalled();
   });
 
-  it('responds to a non-mention follow-up while the channel thread is still single-human (LOBE-8981)', async () => {
+  it('responds to a non-mention follow-up while the channel thread is still single-human ()', async () => {
     // The original @mentioner already counts as participant #1 (tracked
     // in `onNewMention`); when their next post arrives in
     // `onSubscribedMessage` the thread is still 1-human, so the bot should
@@ -846,7 +846,7 @@ describe('MessengerRouter onSubscribedMessage gating', () => {
     );
   });
 
-  it('announces mention-only mode and drops the message when a second human joins (LOBE-8981)', async () => {
+  it('announces mention-only mode and drops the message when a second human joins ()', async () => {
     // Alice already in the participants list; Bob's first non-mention post
     // pushes count to 2 → bot must announce + skip dispatch.
     await loadSlackBot();
@@ -881,7 +881,7 @@ describe('MessengerRouter onSubscribedMessage gating', () => {
     expect(thread.post).toHaveBeenCalledWith(expect.stringContaining('@mention me'));
   });
 
-  it('only announces mention-only mode once per channel thread (LOBE-8981)', async () => {
+  it('only announces mention-only mode once per channel thread ()', async () => {
     // Second non-mention in a multi-human thread → `setIfNotExists` returns
     // false, the announcement is suppressed.
     await loadSlackBot();
@@ -931,7 +931,7 @@ describe('MessengerRouter onSubscribedMessage gating', () => {
     expect(mockHandleMention).not.toHaveBeenCalled();
   });
 
-  it('responds to a @mention even after multi-human switch (LOBE-8981)', async () => {
+  it('responds to a @mention even after multi-human switch ()', async () => {
     // After the mode switch, a fresh @mention still gets a reply — the
     // gate keys off `isMention || count <= 1`.
     await loadSlackBot();

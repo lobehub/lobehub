@@ -47,7 +47,7 @@ describe('LobeMinimaxAI - handlePayload', () => {
   });
 
   it('caps max_tokens when input + tools fill most of the context window', () => {
-    // Mimic the LOBE-7017 scenario: many large tool definitions.
+    // Mimic the scenario: many large tool definitions.
     // MiniMax-M2.7: contextWindow=204_800, maxOutput=131_072. Need >72k tokens
     // of input to push the dynamic cap below maxOutput.
     const heavyTool = {

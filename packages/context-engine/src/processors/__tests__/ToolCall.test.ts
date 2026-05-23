@@ -264,7 +264,7 @@ describe('ToolCallProcessor', () => {
       });
     });
 
-    // LOBE-7761: protect against history poisoning from invalid tool_call arguments
+    // protect against history poisoning from invalid tool_call arguments
     it('should sanitize invalid tool arguments in history to "{}"', async () => {
       const processor = new ToolCallProcessor(defaultConfig);
       const context = createContext([
@@ -275,7 +275,7 @@ describe('ToolCallProcessor', () => {
           tools: [
             {
               apiName: 'executeCode',
-              // exact shape from the LOBE-7761 NVIDIA/Qwen trace
+              // exact shape from the NVIDIA/Qwen trace
               arguments: '{, "description": "Create data models", "language": "python"}',
               id: 'call_1',
               identifier: 'code',

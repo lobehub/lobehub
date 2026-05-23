@@ -148,7 +148,7 @@ const createBaseAgentConfig = (overrides: Record<string, any> = {}) => ({
   ...overrides,
 });
 
-describe('AiAgentService.execAgent - device tool pipeline (LOBE-5636)', () => {
+describe('AiAgentService.execAgent - device tool pipeline ()', () => {
   let service: AiAgentService;
   const mockDb = {} as any;
   const userId = 'test-user-id';

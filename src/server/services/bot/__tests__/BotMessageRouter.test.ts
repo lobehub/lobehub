@@ -69,7 +69,7 @@ const mockOnNewMention = vi.hoisted(() => vi.fn());
 const mockOnSubscribedMessage = vi.hoisted(() => vi.fn());
 const mockOnNewMessage = vi.hoisted(() => vi.fn());
 const mockOnSlashCommand = vi.hoisted(() => vi.fn());
-// Default state mocks for the LOBE-8981 participant tracking. Tests that
+// Default state mocks for the participant tracking. Tests that
 // care about the multi-human transition reassign `mockGetList` to seed the
 // pre-existing participant list.
 const mockGetList = vi.hoisted(() => vi.fn().mockResolvedValue([]));
@@ -103,7 +103,7 @@ vi.mock('@/server/services/aiAgent', () => ({
 const mockHandleMention = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const mockHandleSubscribedMessage = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 // Default to "platform does not opt into thread isolation" so existing tests
-// keep their pre-LOBE-8891 behaviour. Individual tests can replace this via
+// keep their pre-behaviour. Individual tests can replace this via
 // `.mockResolvedValueOnce(...)` to simulate Discord's auto-thread upgrade.
 const mockOpenThreadForChannelWake = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 
@@ -292,7 +292,7 @@ vi.mock('../platforms', () => ({
     if (!operatorId || explicit.includes(operatorId)) return { ids: explicit };
     return { ids: [...explicit, operatorId] };
   },
-  // LOBE-8891: mirror the production helpers just well enough that
+  // mirror the production helpers just well enough that
   // BotMessageRouter.registerHandlers can read a clean list of entries.
   // Tests can populate `settings.watchKeywords` with the canonical
   // `[{ keyword, instruction? }]` shape to exercise both the keyword-match
@@ -436,7 +436,7 @@ describe('BotMessageRouter', () => {
     mockHandleMention.mockResolvedValue(undefined);
     mockHandleSubscribedMessage.mockResolvedValue(undefined);
     mockOpenThreadForChannelWake.mockResolvedValue(undefined);
-    // LOBE-8981 participant tracking — restore defaults wiped by
+    // participant tracking — restore defaults wiped by
     // clearAllMocks. Empty list = fresh single-human thread; individual
     // describes / tests override as needed.
     mockGetList.mockResolvedValue([]);
@@ -597,7 +597,7 @@ describe('BotMessageRouter', () => {
   });
 
   describe('onSubscribedMessage policy', () => {
-    // LOBE-8981 introduced single-human thread relaxation: a non-mention
+    // introduced single-human thread relaxation: a non-mention
     // post in a thread with ≤1 known humans now reaches the agent. Most of
     // the existing policy tests are about the multi-human gate (keyword
     // wake, command pass-through, allowlist rejection), so seed two
@@ -652,7 +652,7 @@ describe('BotMessageRouter', () => {
     }
 
     it('should skip non-mention messages in a multi-human group thread', async () => {
-      // LOBE-8981: post-fix the gate keys off thread.isDM || mention ||
+      // post-fix the gate keys off thread.isDM || mention ||
       // singleHumanThread. Default beforeEach seeds two known participants,
       // a third sender keeps the thread in multi-human territory.
       const handler = await loadSubscribedHandler();
@@ -668,7 +668,7 @@ describe('BotMessageRouter', () => {
       expect(mockHandleSubscribedMessage).not.toHaveBeenCalled();
     });
 
-    it('should respond to non-mention messages while the channel thread is still single-human (LOBE-8981)', async () => {
+    it('should respond to non-mention messages while the channel thread is still single-human ()', async () => {
       // Override the default multi-human seed: no prior participants →
       // tracker records alice as participant #1 → gate lets her through
       // without an explicit @mention.
@@ -682,7 +682,7 @@ describe('BotMessageRouter', () => {
       expect(mockHandleSubscribedMessage).toHaveBeenCalledTimes(1);
     });
 
-    it('should announce mention-only mode once when a second human joins (LOBE-8981)', async () => {
+    it('should announce mention-only mode once when a second human joins ()', async () => {
       // Alice is already tracked; bob's first non-mention post is the
       // multi-human transition.
       mockGetList.mockResolvedValue(['alice-id']);
@@ -739,7 +739,7 @@ describe('BotMessageRouter', () => {
       expect(mockHandleSubscribedMessage).toHaveBeenCalledTimes(1);
     });
 
-    it('should wake on a watch-keyword match in a subscribed group thread (LOBE-8891)', async () => {
+    it('should wake on a watch-keyword match in a subscribed group thread ()', async () => {
       const handler = await loadSubscribedHandler({
         dmPolicy: 'open',
         watchKeywords: [{ keyword: 'bug' }, { keyword: 'outage' }],
@@ -785,7 +785,7 @@ describe('BotMessageRouter', () => {
     });
 
     it('should not change behaviour when watchKeywords is empty/missing', async () => {
-      // Sanity: existing call sites must keep their pre-LOBE-8891 semantics.
+      // Sanity: existing call sites must keep their pre-semantics.
       const handler = await loadSubscribedHandler({ dmPolicy: 'open' });
       const thread = makeThread({ isDM: false });
       const message = makeMessage({ isMention: false, text: 'there is a bug somewhere' });
@@ -1297,7 +1297,7 @@ describe('BotMessageRouter', () => {
       expect(thread.post).not.toHaveBeenCalled();
     });
 
-    // ---- LOBE-8891: channel-side keyword wake via catch-all ----
+    // ---- channel-side keyword wake via catch-all ----
     //
     // Discord (and any platform that opts out of subscribing top-level
     // channels via `shouldSubscribe`) never fires `onSubscribedMessage` for

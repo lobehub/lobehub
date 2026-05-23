@@ -259,7 +259,7 @@ export interface PlatformClient {
 
   /**
    * Optional hook called from the router when a non-DM message wakes the
-   * bot via a watch-keyword match (LOBE-8891). Platforms that prefer to
+   * bot via a watch-keyword match (). Platforms that prefer to
    * isolate the reply in a sub-thread (Discord, where the chat-sdk
    * auto-creates a thread only on @-mention) should spawn one off the
    * triggering message and return the upgraded composite threadId so the

@@ -29,7 +29,7 @@ export const normalizeAgentDocumentPosition = (
  * to every caller (client SWR fetch, server agent runtime) at once. Two
  * hand-rolled copies of this map previously diverged when `sourceType` was
  * added on the client only, which broke the "hide web crawls from the
- * progressive index" filter on every server-driven chat (LOBE-9383).
+ * progressive index" filter on every server-driven chat ().
  */
 export const toAgentContextDocument = (doc: AgentDocumentWithRules): AgentContextDocument => ({
   content: doc.content,
@@ -56,7 +56,7 @@ export const toAgentContextDocument = (doc: AgentDocumentWithRules): AgentContex
  * empty `content` but inherit `loadRules`/`loadPosition`, so without this
  * filter they slip into the injection candidate pool and either bloat the
  * progressive index with empty "slots" or emit empty `<agent_document>`
- * blocks (LOBE-9386). `AgentContextDocument` deliberately has no `fileType`
+ * blocks (). `AgentContextDocument` deliberately has no `fileType`
  * field, so the folder check has to happen here, at the DB→context boundary,
  * where the derived `isFolder` flag is still available.
  */

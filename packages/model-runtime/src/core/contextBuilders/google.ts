@@ -252,7 +252,7 @@ export const buildGoogleMessages = async (messages: OpenAIChatMessage[]): Promis
   // This handles cross-provider scenarios (e.g., OpenAI → Gemini switch) where
   // historical tool_calls lack thoughtSignature, as well as multi-turn Gemini
   // conversations where earlier turns may have lost their signatures.
-  // @see https://linear.app/lobehub/issue/LOBE-8662
+  // @see https://linear.app/lobehub/issue/
   for (const content of filteredContents) {
     if (content.role === 'model' && content.parts) {
       for (const part of content.parts) {
@@ -275,7 +275,7 @@ export const buildGoogleMessages = async (messages: OpenAIChatMessage[]): Promis
  * schema may place `enum` on non-STRING types (e.g. number, boolean)
  * or `required` on non-OBJECT types.
  *
- * @see https://linear.app/lobehub/issue/LOBE-8661
+ * @see https://linear.app/lobehub/issue/
  */
 export const sanitizeGeminiSchema = (schema: any): any => {
   if (!schema || typeof schema !== 'object') return schema;

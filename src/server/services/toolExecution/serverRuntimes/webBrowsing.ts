@@ -22,7 +22,7 @@ export const webBrowsingRuntime: ServerRuntimeRegistration = {
             createDocument: async (params) => {
               // Same service the client trpc procedure uses — dedupe by URL,
               // short-circuit on byte-identical content, write a history
-              // snapshot when content actually changed (LOBE-9384).
+              // snapshot when content actually changed ().
               const service = new WebBrowsingDocumentService(serverDB, userId);
               return service.upsertCrawledDocument(params);
             },

@@ -605,7 +605,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     }
   }
 
-  // ─── AskUserQuestion MCP server (LOBE-8725) ───
+  // ─── AskUserQuestion MCP server () ───
 
   /**
    * Lazy single-instance MCP server for CC's AskUserQuestion replacement.
@@ -651,7 +651,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
 
     // `alwaysLoad: true` is the undocumented CC flag that promotes our
     // server's tool out of the deferred set so the model calls it directly
-    // (no ToolSearch hop). See LOBE-8725 spike notes — falls back to the
+    // (no ToolSearch hop). See spike notes — falls back to the
     // 2-hop ToolSearch path if a future CC drops the flag, no breakage.
     const config = {
       mcpServers: {

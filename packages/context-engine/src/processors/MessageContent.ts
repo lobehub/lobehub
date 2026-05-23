@@ -23,7 +23,7 @@ const log = debug('context-engine:processor:MessageContentProcessor');
  * does not declare vision capability. Dropping the part silently loses the
  * conversational signal that an image ever existed, while leaving the raw part
  * in the payload causes provider-side 400s (e.g. DeepSeek rejects the
- * `image_url` variant outright — see LOBE-7214).
+ * `image_url` variant outright — see ).
  */
 export const VISION_DOWNGRADE_PLACEHOLDER = '[image omitted: not supported by this model]';
 
