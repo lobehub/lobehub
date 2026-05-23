@@ -28,6 +28,9 @@ prd
 # Recordings
 .records/
 
+# Agent-gateway probe captures (local debugging dumps)
+.agent-gateway/
+
 # Temporary files
 .temp/
 temp/
