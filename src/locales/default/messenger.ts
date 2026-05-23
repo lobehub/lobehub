@@ -28,7 +28,6 @@ export default {
     "This connection isn't available right now. Please try again later.",
   'messenger.linkModal.openCta': 'Open in {{platform}}',
   'messenger.linkModal.scanHint': 'Or scan with your phone to open {{platform}}.',
-  'messenger.linkModal.title': 'Connect Messenger',
   'messenger.noPlatformsConfigured': 'No platforms are available yet. Check back soon.',
   'messenger.slack.connectModal.continueButton': 'Continue in Slack',
   'messenger.slack.connectModal.description':
@@ -75,6 +74,30 @@ export default {
   'messenger.discord.connections.disconnectFailed': 'Failed to remove server.',
   'messenger.discord.connections.disconnectSuccess': 'Server removed.',
   'messenger.discord.connections.disconnectTitle': 'Remove server',
+  'messenger.discord.installBlocked.dismiss': 'Got it',
+  'messenger.discord.installBlocked.suggestion':
+    "DM the LobeHub bot in Discord to link your personal account — you don't need to add the bot again. Or ask the original installer to remove this server in LobeHub Settings → Messenger before re-adding it.",
+  'messenger.discord.installBlocked.title': 'Server already connected',
+  'messenger.discord.installBlocked.withName':
+    '"{{workspace}}" is already connected to LobeHub by another user.',
+  'messenger.discord.installBlocked.withoutName':
+    'This Discord server is already connected to LobeHub by another user.',
+  'messenger.discord.installResult.failed':
+    'Discord install failed ({{reason}}). Please try again or contact support.',
+  'messenger.discord.installResult.reasons.accessDenied': 'authorization was cancelled',
+  'messenger.discord.installResult.reasons.exchangeFailed': 'Discord authorization failed',
+  'messenger.discord.installResult.reasons.generic': 'an unknown error occurred',
+  'messenger.discord.installResult.reasons.invalidState': 'the install session expired',
+  'messenger.discord.installResult.reasons.missingAppId':
+    'Discord returned incomplete app information',
+  'messenger.discord.installResult.reasons.missingCodeOrState':
+    'Discord returned incomplete install parameters',
+  'messenger.discord.installResult.reasons.missingTenant':
+    'Discord did not return a server identifier',
+  'messenger.discord.installResult.reasons.missingToken': 'Discord did not return an access token',
+  'messenger.discord.installResult.reasons.persistFailed':
+    'the server connection could not be saved',
+  'messenger.discord.installResult.success': 'Discord server connected.',
   'messenger.discord.userPending.cta': 'Open in Discord',
   'messenger.discord.userPending.hint':
     'Open the bot in Discord and send any message to finish linking your account.',
@@ -110,18 +133,23 @@ export default {
   'verify.confirm.fields.workspace': 'Workspace',
   'verify.confirm.noAgents':
     "You don't have any agents yet. Create one in LobeHub, then come back to finish linking.",
+  'verify.confirm.relink.description':
+    'This LobeHub account is already linked to {{platform}} account {{account}}. To link a different {{platform}} account, disconnect the current one first in Settings → Messenger.',
+  'verify.confirm.relink.manage': 'Open Messenger settings',
+  'verify.confirm.relink.title': 'Another {{platform}} account is already linked',
   'verify.confirm.title': 'Confirm linking',
   'verify.confirm.workspace': 'Workspace: {{workspace}}',
+  'verify.error.alreadyConsumed':
+    'This link has already been used to connect an account. Sign in to that LobeHub account to manage the connection, or return to the bot and send /start again to issue a new link.',
+  'verify.error.alreadyConsumedTitle': 'This link is already used',
   'verify.error.alreadyLinkedToOther':
     'This account is already linked to a different LobeHub account. Sign in to that account first.',
   'verify.error.expired': 'This link has expired. Please return to the bot and send /start again.',
   'verify.error.generic': 'Something went wrong. Please try again.',
   'verify.error.missingToken': 'Invalid link. Open this page from the bot.',
   'verify.error.title': 'Unable to confirm link',
-  'verify.labRequired.description':
-    'Messenger is currently a Labs feature. Enable it in Settings → Advanced → Labs and reload this page.',
-  'verify.labRequired.openSettings': 'Open Labs settings',
-  'verify.labRequired.title': 'Enable Messenger to continue',
+  'verify.error.unlinkBeforeRelink':
+    'This LobeHub account is already linked to another account on this platform. Disconnect it in Settings → Messenger before linking a new one.',
   'verify.signInCta': 'Sign in to continue',
   'verify.signInRequired': 'Please sign in to LobeHub to confirm the link.',
   'verify.success.description':

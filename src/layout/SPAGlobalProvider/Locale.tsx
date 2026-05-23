@@ -5,19 +5,15 @@ import { isRtlLang } from 'rtl-detect';
 
 import Editor from '@/layout/GlobalProvider/Editor';
 import { createI18nNext } from '@/locales/create';
+import { normalizeDayjsLocale } from '@/utils/dayjsLocale';
 import { getAntdLocale } from '@/utils/locale';
 
 const dayjsLocaleLoaders = import.meta.glob<{ default: ILocale }>(
   '/node_modules/dayjs/esm/locale/{ar,bg,de,en,es,fa,fr,it,ja,ko,nl,pl,pt-br,ru,tr,vi,zh-cn,zh-tw}.js',
 );
 
-const dayjsLocaleAliases: Record<string, string> = {
-  'en-us': 'en',
-  'zh': 'zh-cn',
-};
-
 const updateDayjs = async (lang: string) => {
-  const locale = dayjsLocaleAliases[lang.toLowerCase()] ?? lang.toLowerCase();
+  const locale = normalizeDayjsLocale(lang);
   const key = `/node_modules/dayjs/esm/locale/${locale}.js`;
   const loader =
     dayjsLocaleLoaders[key] ?? dayjsLocaleLoaders['/node_modules/dayjs/esm/locale/en.js'];

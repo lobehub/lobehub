@@ -12,7 +12,7 @@ import {
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
+import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
 
@@ -196,7 +196,7 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
       trigger={['click']}
       onOpenChange={setIsViewConfigOpen}
     >
-      <ActionIcon icon={Settings2Icon} size={DESKTOP_HEADER_ICON_SIZE} />
+      <ActionIcon icon={Settings2Icon} size={DESKTOP_HEADER_ICON_SMALL_SIZE} />
     </Popover>
   );
 });

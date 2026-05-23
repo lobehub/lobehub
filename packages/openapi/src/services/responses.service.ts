@@ -301,6 +301,7 @@ export class ResponsesService extends BaseService {
         instructions,
         prompt,
         stream: false,
+        trigger: 'openapi',
       });
 
       if (!execResult.success) {
@@ -399,6 +400,7 @@ export class ResponsesService extends BaseService {
         instructions,
         prompt,
         stream: true,
+        trigger: 'openapi',
       });
 
       if (!execResult.success) {

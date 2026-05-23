@@ -16,6 +16,16 @@ export { ContextEngine } from './pipeline';
 
 // Context Providers
 export * from './providers';
+
+// Token accounting (compression triggers + UI breakdown)
+export type {
+  ContextTokenAccounting,
+  CountContextTokensParams,
+  MessageTokenBreakdown,
+  TokenSourceType,
+  ToolDefinitionTokenBreakdown,
+} from './tokenAccounting';
+export { countContextTokens, DEFAULT_DRIFT_MULTIPLIER } from './tokenAccounting';
 // Processors
 export type { PlaceholderValue, PlaceholderValueMap } from './processors';
 export {

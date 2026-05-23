@@ -1,5 +1,6 @@
 'use client';
 
+import { normalizeInterestsForStorage } from '@lobechat/const';
 import { Block, Button, Flexbox, Icon, Input, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { BriefcaseIcon, Undo2Icon } from 'lucide-react';
@@ -10,6 +11,7 @@ import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
 import LobeMessage from '../components/LobeMessage';
+import type { InterestAreaKey } from '../config';
 import { INTEREST_AREAS } from '../config';
 
 interface InterestsStepProps {
@@ -22,7 +24,9 @@ const InterestsStep = memo<InterestsStepProps>(({ onBack, onNext }) => {
   const existingInterests = useUserStore(userProfileSelectors.interests);
   const updateInterests = useUserStore((s) => s.updateInterests);
 
-  const [selectedInterests, setSelectedInterests] = useState<string[]>(existingInterests);
+  const [selectedInterests, setSelectedInterests] = useState<string[]>(() =>
+    normalizeInterestsForStorage(existingInterests),
+  );
   const [customInput, setCustomInput] = useState('');
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
@@ -37,9 +41,9 @@ const InterestsStep = memo<InterestsStepProps>(({ onBack, onNext }) => {
     [t],
   );
 
-  const toggleInterest = useCallback((label: string) => {
+  const toggleInterest = useCallback((key: InterestAreaKey) => {
     setSelectedInterests((prev) =>
-      prev.includes(label) ? prev.filter((i) => i !== label) : [...prev, label],
+      prev.includes(key) ? prev.filter((i) => i !== key) : [...prev, key],
     );
   }, []);
 
@@ -63,8 +67,7 @@ const InterestsStep = memo<InterestsStepProps>(({ onBack, onNext }) => {
       finalInterests.push(trimmedCustom);
     }
 
-    // Deduplicate
-    const uniqueInterests = [...new Set(finalInterests)];
+    const uniqueInterests = normalizeInterestsForStorage(finalInterests);
 
     updateInterests(uniqueInterests);
     onNext();
@@ -84,7 +87,7 @@ const InterestsStep = memo<InterestsStepProps>(({ onBack, onNext }) => {
       />
       <Flexbox horizontal align={'center'} gap={12} wrap={'wrap'}>
         {areas.map((item) => {
-          const isSelected = selectedInterests.includes(item.label);
+          const isSelected = selectedInterests.includes(item.key);
           return (
             <Block
               clickable
@@ -101,7 +104,7 @@ const InterestsStep = memo<InterestsStepProps>(({ onBack, onNext }) => {
                     }
                   : {}
               }
-              onClick={() => toggleInterest(item.label)}
+              onClick={() => toggleInterest(item.key)}
             >
               <Icon color={cssVar.colorTextSecondary} icon={item.icon} size={16} />
               <Text fontSize={15} weight={500}>

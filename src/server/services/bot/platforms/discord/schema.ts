@@ -12,6 +12,7 @@ import {
   makeGroupPolicyFields,
   makeServerIdField,
   makeUserIdField,
+  watchKeywordsField,
 } from '../const';
 import type { FieldSchema } from '../types';
 import { MAX_DISCORD_HISTORY_LIMIT } from './const';
@@ -100,6 +101,7 @@ export const schema: FieldSchema[] = [
       makeDmPolicyField({ policy: 'open' }),
       ...makeGroupPolicyFields({ policy: 'open' }),
       allowFromField,
+      watchKeywordsField,
     ],
     type: 'object',
   },

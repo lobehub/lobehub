@@ -3,6 +3,7 @@ import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { CURRENT_ONBOARDING_VERSION } from '@lobechat/const';
 import type { OnboardingUserInfo } from '@lobechat/context-engine';
 import type {
+  AgentOnboardingStructuredField,
   ChatTopicMetadata,
   MessagePluginItem,
   OnboardingPhase,
@@ -40,6 +41,7 @@ import { AgentDocumentsService } from '@/server/services/agentDocuments';
 const STRUCTURED_FIELD_LABELS: Record<SaveUserQuestionField, string> = {
   agentEmoji: 'agent emoji',
   agentName: 'agent name',
+  customInterests: 'custom interests',
   fullName: 'full name',
   interests: 'interests',
 };
@@ -79,6 +81,14 @@ const normalizeUserInfoField = (value: unknown) => {
 
   return trimmed || undefined;
 };
+
+const normalizeStringArray = (value: unknown) =>
+  Array.isArray(value)
+    ? value
+        .filter((item): item is string => typeof item === 'string')
+        .map((item) => item.trim())
+        .filter(Boolean)
+    : undefined;
 
 const parseToolArguments = (value?: string) => {
   if (!value) return undefined;
@@ -293,9 +303,9 @@ export class OnboardingService {
     return { created: true, topicId: topic.id };
   };
 
-  private getMissingStructuredFields = async (): Promise<SaveUserQuestionField[]> => {
+  private getMissingStructuredFields = async (): Promise<AgentOnboardingStructuredField[]> => {
     const userState = await this.getUserState();
-    const missingFields: SaveUserQuestionField[] = [];
+    const missingFields: AgentOnboardingStructuredField[] = [];
 
     // Agent identity fields — stored on inbox agent
     const inboxAgent = await this.agentModel.getBuiltinAgent(BUILTIN_AGENT_SLUGS.inbox);
@@ -447,7 +457,7 @@ export class OnboardingService {
   };
 
   private derivePhase = async (
-    missingStructuredFields: SaveUserQuestionField[],
+    missingStructuredFields: AgentOnboardingStructuredField[],
     discoveryContext?: { currentUserMessageCount: number; startUserMessageCount: number },
   ): Promise<OnboardingPhase> => {
     if (missingStructuredFields.includes('agentName')) return 'agent_identity';
@@ -598,11 +608,11 @@ export class OnboardingService {
       }
     }
 
-    const interests = Array.isArray(parsed.interests)
-      ? parsed.interests
-          .filter((item): item is string => typeof item === 'string')
-          .map((item) => item.trim())
-          .filter(Boolean)
+    const interestKeys = normalizeStringArray(parsed.interests);
+    const customInterests = normalizeStringArray(parsed.customInterests);
+    const hasInterestInput = Boolean(interestKeys || customInterests);
+    const interests = hasInterestInput
+      ? [...new Set([...(interestKeys ?? []), ...(customInterests ?? [])])]
       : undefined;
     if (interests?.length) {
       if (JSON.stringify(interests) === JSON.stringify(userState.interests ?? [])) {

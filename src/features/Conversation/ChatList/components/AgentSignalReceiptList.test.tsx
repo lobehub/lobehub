@@ -72,6 +72,7 @@ describe('AgentSignalReceiptList', () => {
     expect(screen.getByText('GitHub PR review workflow')).toBeInTheDocument();
     expect(screen.getByText('Memory saved')).toBeInTheDocument();
     expect(screen.getByText('Skill updated')).toBeInTheDocument();
+    expect(screen.getAllByTitle('Agent Signal')).toHaveLength(2);
   });
 
   it('renders receipt cards without the recent activity label', () => {

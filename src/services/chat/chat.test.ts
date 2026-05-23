@@ -491,6 +491,69 @@ describe('ChatService', () => {
         );
       });
 
+      it('should map DeepSeek reasoning effort to enabled thinking', async () => {
+        const getChatCompletionSpy = vi.spyOn(chatService, 'getChatCompletion');
+        const messages = [
+          { content: 'Test DeepSeek reasoning effort', role: 'user' },
+        ] as UIChatMessage[];
+
+        vi.spyOn(aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(() => true);
+        vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'deepseekV4ReasoningEffort',
+        ]);
+
+        await chatService.createAssistantMessage({
+          messages,
+          model: 'deepseek-v4-pro',
+          provider: 'deepseek',
+          resolvedAgentConfig: createMockResolvedConfig({
+            agentConfig: { model: 'deepseek-v4-pro', provider: 'deepseek' },
+            chatConfig: { deepseekV4ReasoningEffort: 'max' },
+          }),
+        });
+
+        expect(getChatCompletionSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            reasoning_effort: 'max',
+            thinking: {
+              type: 'enabled',
+            },
+          }),
+          expect.anything(),
+        );
+      });
+
+      it('should map DeepSeek reasoning effort none to disabled thinking', async () => {
+        const getChatCompletionSpy = vi.spyOn(chatService, 'getChatCompletion');
+        const messages = [
+          { content: 'Test DeepSeek reasoning disabled', role: 'user' },
+        ] as UIChatMessage[];
+
+        vi.spyOn(aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(() => true);
+        vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'deepseekV4ReasoningEffort',
+        ]);
+
+        await chatService.createAssistantMessage({
+          messages,
+          model: 'deepseek-v4-pro',
+          provider: 'deepseek',
+          resolvedAgentConfig: createMockResolvedConfig({
+            agentConfig: { model: 'deepseek-v4-pro', provider: 'deepseek' },
+            chatConfig: { deepseekV4ReasoningEffort: 'none' },
+          }),
+        });
+
+        expect(getChatCompletionSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            thinking: {
+              type: 'disabled',
+            },
+          }),
+          expect.anything(),
+        );
+      });
+
       it('should set thinkingBudget when model supports thinkingBudget and user configures it', async () => {
         const getChatCompletionSpy = vi.spyOn(chatService, 'getChatCompletion');
         const messages = [{ content: 'Test thinking budget', role: 'user' }] as UIChatMessage[];
@@ -1642,7 +1705,7 @@ describe('ChatService', () => {
       };
 
       await chatService.getChatCompletion(params, {
-        requestTrigger: RequestTrigger.VisualAnalysis,
+        metadata: { trigger: RequestTrigger.VisualAnalysis },
       });
 
       expect(mockFetchSSE).toHaveBeenCalledWith(
@@ -1656,6 +1719,7 @@ describe('ChatService', () => {
 
       const payload = JSON.parse(mockFetchSSE.mock.calls[0][1].body);
       expect(payload).not.toHaveProperty('requestTrigger');
+      expect(payload).not.toHaveProperty('metadata');
     });
 
     it('should make a POST request with chatCompletion apiMode in non-openai provider payload', async () => {

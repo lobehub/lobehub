@@ -34,7 +34,7 @@ const formatActiveTopicDocumentContext = (document: RuntimeActiveTopicDocumentCo
 The current conversation is not inside the page editor. Do not use PageAgent editor tools.
 When the user asks to continue editing this topic document, use lobe-agent-documents tools instead.
 Prefer readDocument with format="xml" and modifyNodes with agent_document_id when it is present.
-If agent_document_id is missing, call listDocuments with target="currentTopic" and match document_id.
+If agent_document_id is missing, call listDocuments with scope="currentTopic" and match document_id.
 </guidance>`;
 };
 

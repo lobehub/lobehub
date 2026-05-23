@@ -1,8 +1,10 @@
 import type { LobeChatDatabase } from '@lobechat/database';
+import { sha256 } from 'js-sha256';
 
 import { AgentDocumentModel, PolicyLoad } from '@/database/models/agentDocuments';
 
 import type { AgentDocumentEditorSnapshot } from '../agentDocuments/headlessEditor';
+import { createMarkdownEditorSnapshot as createDefaultMarkdownEditorSnapshot } from '../agentDocuments/headlessEditor';
 import { DocumentService } from '../document';
 import {
   AGENT_SKILL_TEMPLATE_ID,
@@ -29,6 +31,7 @@ import type {
   SkillDocumentRef,
   SkillSummary,
   SkillTargetInput,
+  SkillTargetSnapshot,
 } from './types';
 
 type SkillManagementAgentDocumentModel = Pick<
@@ -90,6 +93,7 @@ const buildSkillMetadata = (
  */
 export class SkillManagementDocumentService {
   private agentDocumentModel: SkillManagementAgentDocumentModel;
+  private createMarkdownEditorSnapshot: (content: string) => Promise<AgentDocumentEditorSnapshot>;
   private documentService: Pick<DocumentService, 'trySaveCurrentDocumentHistory'>;
 
   constructor(
@@ -98,6 +102,8 @@ export class SkillManagementDocumentService {
     deps?: SkillManagementDocumentServiceDeps,
   ) {
     this.agentDocumentModel = deps?.agentDocumentModel ?? new AgentDocumentModel(db, userId);
+    this.createMarkdownEditorSnapshot =
+      deps?.createMarkdownEditorSnapshot ?? createDefaultMarkdownEditorSnapshot;
     this.documentService = deps?.documentService ?? new DocumentService(db, userId);
   }
 
@@ -124,6 +130,14 @@ export class SkillManagementDocumentService {
     });
     const frontmatter = parseSkillFrontmatter(normalizedContent);
     const metadata = buildSkillMetadata(frontmatter);
+    // NOTICE:
+    // Managed skill indexes are Markdown-backed, but document history snapshots are
+    // editor-data-backed. Always keep `content` and `editorData` in sync so the next
+    // automated skill refinement can save a pre-mutation `document_histories` row.
+    // Root cause: older managed-skill writes only persisted Markdown content, which made
+    // `DocumentService.trySaveCurrentDocumentHistory` no-op for `editorData = NULL`.
+    // Removal condition: only if document history can snapshot Markdown content directly.
+    const indexEditorSnapshot = await this.createMarkdownEditorSnapshot(normalizedContent);
     const duplicateBundles = (
       await this.agentDocumentModel.listByParentAndFilename(input.agentId, null, name)
     ).filter((doc) => doc.fileType === SKILL_BUNDLE_FILE_TYPE);
@@ -166,6 +180,7 @@ export class SkillManagementDocumentService {
         const index = await this.agentDocumentModel.convertAgentDocumentToSkillIndexWithTx(trx, {
           agentDocumentId: input.sourceAgentDocumentId,
           content: normalizedContent,
+          editorData: indexEditorSnapshot.editorData,
           filename: SKILL_INDEX_FILENAME,
           metadata,
           parentId: bundle.documentId,
@@ -187,6 +202,7 @@ export class SkillManagementDocumentService {
         SKILL_INDEX_FILENAME,
         normalizedContent,
         {
+          editorData: indexEditorSnapshot.editorData,
           fileType: SKILL_INDEX_FILE_TYPE,
           metadata,
           parentId: bundle.documentId,
@@ -267,6 +283,46 @@ export class SkillManagementDocumentService {
   }
 
   /**
+   * Reads current managed skill state for proposal merge preflight.
+   *
+   * Use when:
+   * - Agent Signal applies a previously-created maintenance proposal
+   * - The apply path needs a compare-and-set guard before replacing skill content
+   *
+   * Expects:
+   * - `agentDocumentId` may be either the skill bundle id or SKILL.md index id
+   *
+   * Returns:
+   * - Current target snapshot, or `undefined` when the skill no longer exists
+   */
+  async readSkillTargetSnapshot(input: {
+    agentDocumentId: string;
+    agentId: string;
+  }): Promise<SkillTargetSnapshot | undefined> {
+    const detail = await this.getSkill({
+      agentDocumentId: input.agentDocumentId,
+      agentId: input.agentId,
+      includeContent: true,
+    });
+
+    if (!detail) return undefined;
+
+    // NOTICE:
+    // The content hash is a compare-and-set guard for applying old maintenance proposals.
+    // It intentionally hashes the current normalized SKILL.md content from the skill-management
+    // service so approve/apply can reject proposals when the user or another agent changed the
+    // target after the proposal was created.
+    return {
+      agentDocumentId: detail.bundle.agentDocumentId,
+      contentHash: `sha256:${sha256(detail.content ?? '')}`,
+      documentId: detail.bundle.documentId,
+      managed: true,
+      targetTitle: detail.title,
+      writable: true,
+    };
+  }
+
+  /**
    * Replaces a managed skill index while preserving document ids.
    *
    * Use when:
@@ -293,6 +349,13 @@ export class SkillManagementDocumentService {
     });
     const frontmatter = parseSkillFrontmatter(normalizedContent);
     const metadata = buildSkillMetadata(frontmatter);
+    // NOTICE:
+    // The replacement body must be projected into editor data before updating the backing
+    // document. Without this, history capture works for ordinary agent documents but silently
+    // skips managed skills because there is no valid editor state to snapshot.
+    // Root cause: `document_histories.editor_data` stores editor snapshots, not Markdown.
+    // Removal condition: only if document history can snapshot Markdown content directly.
+    const editorSnapshot = await this.createMarkdownEditorSnapshot(normalizedContent);
 
     await this.documentService.trySaveCurrentDocumentHistory(index.documentId, 'llm_call');
     const updatedBundle =
@@ -301,6 +364,7 @@ export class SkillManagementDocumentService {
       })) ?? resolved;
     await this.agentDocumentModel.update(index.id, {
       content: normalizedContent,
+      editorData: editorSnapshot.editorData,
       metadata,
       policyLoad: PolicyLoad.DISABLED,
     });
@@ -338,6 +402,7 @@ export class SkillManagementDocumentService {
     });
     const frontmatter = parseSkillFrontmatter(normalizedContent);
     const metadata = buildSkillMetadata(frontmatter);
+    const editorSnapshot = await this.createMarkdownEditorSnapshot(normalizedContent);
 
     if (normalizedContent !== index.content) {
       await this.documentService.trySaveCurrentDocumentHistory(index.documentId, 'llm_call');
@@ -357,6 +422,7 @@ export class SkillManagementDocumentService {
     });
     await this.agentDocumentModel.update(index.id, {
       content: normalizedContent,
+      editorData: editorSnapshot.editorData,
       metadata,
       policyLoad: PolicyLoad.DISABLED,
     });

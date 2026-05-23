@@ -1,3 +1,4 @@
+import { RequestTrigger } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { z } from 'zod';
@@ -64,6 +65,7 @@ export const agentNotifyRouter = router({
         agentId,
         appContext: { threadId, topicId },
         prompt: content,
+        trigger: RequestTrigger.Notify,
       });
 
       return {

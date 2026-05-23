@@ -61,7 +61,12 @@ describe('aiAgentRouter.heteroIngest / heteroFinish', () => {
     vi.clearAllMocks();
   });
 
-  const createCaller = () => aiAgentRouter.createCaller({ userId, jwtPayload: { userId } } as any);
+  const createCaller = () =>
+    aiAgentRouter.createCaller({
+      jwtPayload: { userId },
+      oidcAuth: { purpose: 'hetero-operation', sub: userId },
+      userId,
+    } as any);
 
   describe('heteroIngest', () => {
     it('delegates the batch to HeterogeneousAgentService and acks', async () => {

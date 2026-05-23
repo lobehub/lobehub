@@ -6,6 +6,33 @@ import type { OnboardingContextInjectorConfig } from './OnboardingContextInjecto
 
 const log = debug('context-engine:provider:OnboardingActionHintInjector');
 
+const buildDiscoveryTurnReminder = (
+  discoveryUserMessageCount: number | undefined,
+  remainingDiscoveryExchanges: number | undefined,
+): string | null => {
+  if (discoveryUserMessageCount === undefined || remainingDiscoveryExchanges === undefined) {
+    return null;
+  }
+
+  const recommendedTarget = discoveryUserMessageCount + remainingDiscoveryExchanges;
+
+  if (remainingDiscoveryExchanges > 0) {
+    return [
+      'SYSTEM REMINDER: Current Discovery turn status:',
+      `- User discovery exchanges observed: ${discoveryUserMessageCount}.`,
+      `- Recommended target before Summary: ${recommendedTarget}.`,
+      `- Continue Discovery for about ${remainingDiscoveryExchanges} more user exchange(s). Ask exactly one focused question, persist any new persona fact, and do not drift into long problem-solving.`,
+    ].join('\n');
+  }
+
+  return [
+    'SYSTEM REMINDER: Current Discovery turn status:',
+    `- User discovery exchanges observed: ${discoveryUserMessageCount}.`,
+    '- Recommended Discovery target has been reached.',
+    '- If you have enough signal, call saveUserQuestion with interests/customInterests, persist any new persona fact, and transition to Summary instead of continuing open-ended Discovery.',
+  ].join('\n');
+};
+
 /**
  * Onboarding Action Hint Injector
  * Injects a standalone virtual user message AFTER the last user message with phase-specific
@@ -45,10 +72,7 @@ export class OnboardingActionHintInjector extends BaseVirtualLastUserContentProv
       if (msg?.role !== 'assistant') return false;
       if (
         Array.isArray(msg.tools) &&
-        msg.tools.some(
-          (t: any) =>
-            t?.apiName === 'showAgentMarketplace' || t?.identifier === 'lobe-agent-marketplace',
-        )
+        msg.tools.some((t: any) => t?.apiName === 'showAgentMarketplace')
       ) {
         return true;
       }
@@ -62,6 +86,14 @@ export class OnboardingActionHintInjector extends BaseVirtualLastUserContentProv
       return false;
     };
     const marketplaceAlreadyOpened = context.messages.some((msg) => isMarketplaceShowCall(msg));
+
+    if (phase.includes('Discovery')) {
+      const reminder = buildDiscoveryTurnReminder(
+        ctx.discoveryUserMessageCount,
+        ctx.remainingDiscoveryExchanges,
+      );
+      if (reminder) hints.push(reminder);
+    }
 
     // Detect empty documents and nudge tool calls (empty docs use writeDocument; non-empty use updateDocument)
     if (!ctx.soulContent) {
@@ -95,15 +127,15 @@ export class OnboardingActionHintInjector extends BaseVirtualLastUserContentProv
       );
     } else if (phase.includes('Discovery')) {
       hints.push(
-        'Each turn where you learn a new fact (pain point, goal, preference, workflow detail, interest), call updateDocument(type="persona") BEFORE replying. Preferred shape: `{ mode: "insertAt", line: <line shown in <current_user_persona>>, content: "- new fact" }`. This is the default every turn — not an end-of-phase action. Do NOT save facts only in memory waiting for a final full write. After sufficient discovery (5-6 exchanges), also call saveUserQuestion with interests. The preferred reply language is configured before onboarding starts and is already injected into your system prompt — do not ask about it or pass a responseLanguage field to saveUserQuestion. Use writeDocument(type="persona") only if the document is still empty.',
+        'Each turn where you learn a new fact (pain point, goal, preference, workflow detail, interest), call updateDocument(type="persona") BEFORE replying. Preferred shape: `{ mode: "insertAt", line: <line shown in <current_user_persona>>, content: "- new fact" }`. This is the default every turn — not an end-of-phase action. Do NOT save facts only in memory waiting for a final full write. After sufficient discovery (usually 2-3 exchanges), also call saveUserQuestion with interests and/or customInterests. The preferred reply language is configured before onboarding starts and is already injected into your system prompt — do not ask about it or pass a responseLanguage field to saveUserQuestion. Use writeDocument(type="persona") only if the document is still empty.',
       );
       hints.push(
-        'EARLY EXIT: A true early-exit signal is the user explicitly wanting to END onboarding (e.g., "我累了", "我先走", "下次再聊", "没空", "暂时不弄了", "结束吧", "Thanks, that\'s enough", "I have to go"). Short affirmations like "好的" / "行" / "嗯" / "ok" are NOT early-exit signals — they confirm what you just said and you should keep exploring or move toward summary normally. When you see a real exit signal: stop exploring, save whatever fields you have (call saveUserQuestion with interests even if partial), present a brief summary, then call `showAgentMarketplace` and only after it resolves call `finishOnboarding`. Do NOT skip the marketplace step unless the user explicitly cancels/skips the picker.',
+        'EARLY EXIT: A true early-exit signal is the user explicitly wanting to END onboarding (e.g., "I\'m tired", "I have to go", "let\'s chat next time", "no time right now", "let\'s stop for now", "let\'s wrap it up", "that\'s enough"; recognize equivalent phrasing in any language). Short affirmations like "ok" / "sure" / "alright" / "yes" / "got it" are NOT early-exit signals — they confirm what you just said and you should keep exploring or move toward summary normally. When you see a real exit signal: stop exploring, persist any unsaved fields best-effort (call saveUserQuestion with whatever you have, including partial interests), persist the persona via updateDocument (or writeDocument if it is still empty) — do NOT retry on failure — send a short warm farewell (1–2 sentences), then call `finishOnboarding`. Do NOT call `showAgentMarketplace` on early exit — that handoff is for normal completion only.',
       );
     } else if (phase.includes('Summary')) {
       if (!marketplaceAlreadyOpened) {
         hints.push(
-          'Present a summary, then THIS TURN call `showAgentMarketplace` exactly once with `{ requestId, categoryHints, prompt }` — pick 1–3 MarketplaceCategory slugs from what you learned in discovery. The picker is the required handoff that lets the user choose recommended assistants; do NOT skip it on normal completion. After the showAgentMarketplace tool result comes back, **STOP this turn** — no more tool calls and no closing text yet. The picker resolves directly via the tool result UI (the user will pick / skip in place); when it resolves, the runtime will start a NEW assistant turn whose tool result describes what was picked. The closing + `finishOnboarding` belong to that next turn.',
+          'Present a summary, then THIS TURN call `showAgentMarketplace` exactly once with `{ requestId, categoryHints, prompt }` — pick 1–3 MarketplaceCategory slugs from what you learned in discovery. The picker is the required handoff that lets the user choose recommended assistants; do NOT skip it on normal completion. After the showAgentMarketplace tool result comes back, **STOP this turn** — no more tool calls and no closing text yet. The picker resolves directly via the tool result UI (the user will pick / skip in place); when it resolves, the runtime will start a NEW assistant turn whose tool result describes what was picked. The closing + `finishOnboarding` belong to that next turn. EXCEPTION: if the user has just signaled true early exit (e.g., "I have to go", "let\'s chat next time", "I\'m tired"; equivalents in any language) in this same turn, skip the marketplace entirely. Instead: persist any unsaved fields (best-effort), send a brief warm farewell, then call `finishOnboarding`. The marketplace handoff is mandatory for normal completion only — never on early exit.',
         );
       } else {
         hints.push(
@@ -116,7 +148,7 @@ export class OnboardingActionHintInjector extends BaseVirtualLastUserContentProv
       'PERSISTENCE RULE: Call the persistence tools (saveUserQuestion, writeDocument, updateDocument) to save information as you collect it — simply acknowledging in conversation is NOT enough. For document writes: use writeDocument only for the first write when the document is empty; for every subsequent edit use updateDocument with the appropriate hunk mode (`insertAt` / `replaceLines` / `deleteLines` for line-based edits, `replace` / `delete` for byte-exact textual edits). The injected <current_*_document> view shows each line prefixed with its 1-based number and `→` — use those numbers for line-based hunks.',
     );
     hints.push(
-      'CONFIRMATION vs EARLY EXIT: Short replies like "好的" / "行" / "嗯" / "ok" / "可以" / "好" are CONFIRMATIONS, not early-exit signals. Continue the current phase normally — in Summary that means calling `showAgentMarketplace` next, NOT `finishOnboarding` directly.',
+      'CONFIRMATION vs EARLY EXIT: Short replies like "ok" / "sure" / "alright" / "yes" / "got it" (and equivalents in any language) are CONFIRMATIONS, not early-exit signals. Continue the current phase normally — in Summary that means calling `showAgentMarketplace` next, NOT `finishOnboarding` directly.',
     );
     if (
       phase.includes('Agent Identity') ||
@@ -124,7 +156,7 @@ export class OnboardingActionHintInjector extends BaseVirtualLastUserContentProv
       phase.includes('Discovery')
     ) {
       hints.push(
-        'EARLY EXIT REMINDER: A true early-exit signal means the user explicitly wants the onboarding to END — examples: "我累了", "我先走", "下次再聊", "没空", "暂时不弄了", "结束吧", "Thanks, that\'s enough", "I have to go". When you see one (and only then), persist any unsaved fields, give a brief summary, then call `showAgentMarketplace` once and only after the picker resolves call `finishOnboarding`. Skip the picker only if the user explicitly refuses it in words ("不用推荐", "别给我装东西", "skip the picker"); a generic exit signal is NOT a refusal of the picker.',
+        'EARLY EXIT REMINDER: A true early-exit signal means the user explicitly wants the onboarding to END — examples: "I\'m tired", "I have to go", "let\'s chat next time", "no time right now", "let\'s stop for now", "let\'s wrap it up", "that\'s enough"; recognize equivalent phrasing in any language. When you see one (and only then), persist any unsaved fields, persist SOUL.md and the user persona via updateDocument (or writeDocument if either is still empty) — best-effort; do NOT retry on failure — send a brief warm farewell, then call `finishOnboarding`. Do NOT call `showAgentMarketplace` on early exit — that handoff is for normal completion only.',
       );
     }
 

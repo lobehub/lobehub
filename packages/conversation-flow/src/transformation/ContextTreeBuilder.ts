@@ -231,6 +231,24 @@ export class ContextTreeBuilder {
     // Recursively collect all assistant messages in this group
     this.messageCollector.collectAssistantGroupMessages(message, idNode, children);
 
+    // Append external-signal callback blocks (LOBE-8998) at the END of
+    // children — one block per source tool that fired callbacks. They
+    // ride INSIDE the AssistantGroup but BELOW the main-chain zigzag,
+    // since the toolless reactive replies aren't part of the
+    // assistant → tool → assistant chain MessageCollector walks.
+    const signalCallbacks = this.messageCollector.collectSignalCallbacks(message, idNode);
+    children.push(...signalCallbacks);
+
+    // After the callbacks block, append the post-task-summary turns
+    // (LOBE-8998) — toolless assistants tagged with
+    // `signal.type === 'task-completion'`, fired by the LLM after CC's
+    // `task_notification` ended a long-running tool. They're peers of
+    // the callbacks under the same tool_result; collecting them here
+    // keeps the natural narrative inside ONE AssistantGroup:
+    //   initial reply → SignalCallbacks (collapsible) → summary.
+    const taskCompletions = this.messageCollector.collectTaskCompletions(message, idNode);
+    children.push(...taskCompletions);
+
     return {
       children,
       id: message.id,

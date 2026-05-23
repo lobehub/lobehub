@@ -11,15 +11,11 @@ import {
 } from '@lobechat/agent-runtime';
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { CredsIdentifier, type CredSummary, generateCredsList } from '@lobechat/builtin-tool-creds';
-import {
-  CronIdentifier,
-  type CronJobSummaryForContext,
-  generateCronJobsList,
-} from '@lobechat/builtin-tool-cron';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import {
   AGENT_DOCUMENT_INJECTION_POSITIONS,
   type AgentContextDocument,
+  type BotPlatformContext,
   buildStepSkillDelta,
   buildStepToolDelta,
   type LobeToolManifest,
@@ -38,7 +34,6 @@ import { type ChatToolPayload, type MessageToolCall, type UIChatMessage } from '
 import { sanitizeToolCallArguments, serializePartsForStorage } from '@lobechat/utils';
 import debug from 'debug';
 
-import { AgentCronJobModel } from '@/database/models/agentCronJob';
 import { type MessageModel, MessageModel as MessageModelClass } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
@@ -48,6 +43,11 @@ import { type EvalContext } from '@/server/modules/Mecha/ContextEngineering/type
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import type { HookDispatcher } from '@/server/services/agentRuntime/hooks/HookDispatcher';
+import {
+  type DeviceAccessReason,
+  isDeviceToolIdentifier,
+  logDeviceToolAudit,
+} from '@/server/services/aiAgent/deviceToolAudit';
 import { FileService } from '@/server/services/file';
 import { MessageService } from '@/server/services/message';
 import { OnboardingService } from '@/server/services/onboarding';
@@ -65,6 +65,7 @@ import {
   isPersistFatal,
   markPersistFatal,
 } from './messagePersistErrors';
+import { resolveToolTimeoutMs } from './resolveToolTimeout';
 import { type IStreamEventManager } from './types';
 
 const log = debug('lobe-server:agent-runtime:streaming-executors');
@@ -206,7 +207,7 @@ const buildToolDiscoveryConfig = (operationToolSet: OperationToolSet, enabledToo
 
 export interface RuntimeExecutorContext {
   agentConfig?: any;
-  botPlatformContext?: any;
+  botPlatformContext?: BotPlatformContext;
   discordContext?: any;
   evalContext?: EvalContext;
   hookDispatcher?: HookDispatcher;
@@ -239,8 +240,19 @@ export const createRuntimeExecutors = (
     // Fallback to state's modelRuntimeConfig if not in payload
     const model = llmPayload.model || state.modelRuntimeConfig?.model;
     const provider = llmPayload.provider || state.modelRuntimeConfig?.provider;
-    // Resolve tools via ToolResolver (unified tool injection)
-    const activeDeviceId = state.metadata?.activeDeviceId;
+    // Resolve tools via ToolResolver (unified tool injection).
+    //
+    // Belt-and-suspenders: even if `aiAgent.execAgent` ever forgets to clear
+    // `state.metadata.activeDeviceId` for a non-trusted sender, swallowing
+    // it here keeps `buildStepToolDelta` from re-injecting `local-system` —
+    // the engine's enabledToolIds exclusion alone is not enough, since the
+    // delta builder treats activeDeviceId as an independent activation
+    // signal and only dedupes against already-enabled tools.
+    const devicePolicy = state.metadata?.deviceAccessPolicy as
+      | { canUseDevice: boolean; reason: DeviceAccessReason }
+      | undefined;
+    const activeDeviceId =
+      devicePolicy?.canUseDevice === false ? undefined : state.metadata?.activeDeviceId;
     const operationToolSet: OperationToolSet = state.operationToolSet ?? {
       enabledToolIds: [],
       executorMap: state.toolExecutorMap ?? {},
@@ -473,8 +485,10 @@ export const createRuntimeExecutors = (
             ]);
 
             onboardingContext = {
+              discoveryUserMessageCount: onboardingState.discoveryUserMessageCount,
               personaContent: persona?.persona ?? null,
               phaseGuidance: formatWebOnboardingStateMessage(onboardingState),
+              remainingDiscoveryExchanges: onboardingState.remainingDiscoveryExchanges,
               soulContent: soulDoc?.content ?? null,
               userInfo,
             };
@@ -527,7 +541,7 @@ export const createRuntimeExecutors = (
         // and lambdaClient. In execAgent (server/bot) mode we must fetch from DB
         // directly. Each block is gated on the relevant tool being enabled.
 
-        // {{username}} / {{language}} — used by memory, cron, and creds system roles.
+        // {{username}} / {{language}} — used by memory and creds system roles.
         // Single indexed DB lookup; cheap enough to run on each call_llm step.
         let serverUsername = '';
         let serverLanguage = '';
@@ -575,35 +589,6 @@ export const createRuntimeExecutors = (
           }
         }
 
-        // {{CRON_JOBS_LIST}} — used by lobe-cron system role.
-        // Mirrors client-side: lambdaClient.agentCronJob.list.query({ agentId, limit: 4 })
-        const isCronEnabled = resolved.enabledToolIds.includes(CronIdentifier);
-        let cronJobsListStr = '';
-        if (isCronEnabled && lobehubSkillAgentId && ctx.serverDB && ctx.userId) {
-          try {
-            const cronJobModel = new AgentCronJobModel(ctx.serverDB, ctx.userId);
-            const { jobs, total } = await cronJobModel.findWithPagination({
-              agentId: lobehubSkillAgentId,
-              limit: 4,
-            });
-            const summaries: CronJobSummaryForContext[] = jobs.map((job) => ({
-              cronPattern: job.cronPattern,
-              description: job.description ?? undefined,
-              enabled: job.enabled ?? false,
-              id: job.id,
-              lastExecutedAt: job.lastExecutedAt?.toISOString() ?? null,
-              name: job.name ?? null,
-              remainingExecutions: job.remainingExecutions ?? null,
-              timezone: job.timezone ?? 'UTC',
-              totalExecutions: job.totalExecutions ?? 0,
-            }));
-            cronJobsListStr = generateCronJobsList(summaries, total);
-            log('Fetched %d cron jobs for {{CRON_JOBS_LIST}} substitution', jobs.length);
-          } catch (error) {
-            log('Failed to fetch cron jobs for {{CRON_JOBS_LIST}} substitution: %O', error);
-          }
-        }
-
         const contextEngineInput = {
           agentDocuments,
           additionalVariables: {
@@ -617,8 +602,6 @@ export const createRuntimeExecutors = (
             ...(isCredsEnabled && { CREDS_LIST: credsListStr }),
             // Memory tool variables
             memory_effort: memoryEffort,
-            // Cron tool variables
-            ...(isCronEnabled && { CRON_JOBS_LIST: cronJobsListStr }),
           },
           userTimezone: ctx.userTimezone,
           capabilities: {
@@ -678,10 +661,13 @@ export const createRuntimeExecutors = (
           },
           userMemory: state.metadata?.userMemory,
 
-          // Skills configuration for <available_skills> injection
+          // Skills configuration for <available_skills> injection.
+          // In chat mode the MessagesEngine force-disables this injector via
+          // its `enableAgentMode` param — no extra gate needed here.
           ...(resolvedSkills?.enabledSkills?.length && {
             skillsConfig: { enabledSkills: resolvedSkills.enabledSkills },
           }),
+          enableAgentMode: agentConfig.chatConfig?.enableAgentMode,
 
           // Topic reference summaries
           ...(topicReferences && { topicReferences }),
@@ -1617,6 +1603,28 @@ export const createRuntimeExecutors = (
         : null;
 
       let execution: { result: ToolExecutionResultResponse; attempts: number };
+      if (isDeviceToolIdentifier(chatToolPayload.identifier) && !hookResult?.isMocked) {
+        // Per-call audit for device tools (local-system / remote-device).
+        // Emitted before dispatch so the record exists even if dispatch
+        // throws. We rely on the engine's enable gate to keep `canUseDevice`
+        // true here; recording the policy reason inline lets an operator
+        // distinguish first-party vs bot-owner runs without joining logs.
+        const policy = state.metadata?.deviceAccessPolicy as
+          | { canUseDevice: boolean; reason: DeviceAccessReason }
+          | undefined;
+        logDeviceToolAudit({
+          apiName: chatToolPayload.apiName,
+          botContext: state.metadata?.botContext,
+          canUseDevice: policy?.canUseDevice ?? true,
+          messageId: state.metadata?.sourceMessageId,
+          operationId,
+          reason: policy?.reason ?? 'first-party',
+          toolIdentifier: chatToolPayload.identifier,
+          topicId: ctx.topicId,
+          userId: ctx.userId,
+        });
+      }
+
       if (hookResult?.isMocked) {
         log(`[${operationLogId}] Tool ${toolName} mocked by beforeToolCall hook`);
         toolCallMocked = true;
@@ -1626,9 +1634,15 @@ export const createRuntimeExecutors = (
         };
       } else if (canDispatchToClient) {
         log(`[${operationLogId}] Dispatching tool ${toolName} to client via Agent Gateway`);
+        const timeoutMs = resolveToolTimeoutMs({
+          apiName: chatToolPayload.apiName,
+          args: parsedArgs,
+          manifest: effectiveManifestMap[chatToolPayload.identifier],
+        });
         const dispatchResult = await dispatchClientTool(chatToolPayload, {
           operationId,
           streamManager,
+          timeoutMs,
         });
         execution = { attempts: 1, result: dispatchResult };
       } else {
@@ -2054,6 +2068,23 @@ export const createRuntimeExecutors = (
               })()
             : null;
 
+          if (isDeviceToolIdentifier(chatToolPayload.identifier) && !batchHookResult?.isMocked) {
+            const policy = state.metadata?.deviceAccessPolicy as
+              | { canUseDevice: boolean; reason: DeviceAccessReason }
+              | undefined;
+            logDeviceToolAudit({
+              apiName: chatToolPayload.apiName,
+              botContext: state.metadata?.botContext,
+              canUseDevice: policy?.canUseDevice ?? true,
+              messageId: state.metadata?.sourceMessageId,
+              operationId,
+              reason: policy?.reason ?? 'first-party',
+              toolIdentifier: chatToolPayload.identifier,
+              topicId: ctx.topicId,
+              userId: ctx.userId,
+            });
+          }
+
           let execution: { result: ToolExecutionResultResponse; attempts: number };
           if (batchHookResult?.isMocked) {
             log(`[${operationLogId}] Tool ${toolName} mocked by beforeToolCall hook`);
@@ -2064,9 +2095,15 @@ export const createRuntimeExecutors = (
             };
           } else if (canDispatchToClient) {
             log(`[${operationLogId}] Dispatching tool ${toolName} to client via Agent Gateway`);
+            const timeoutMs = resolveToolTimeoutMs({
+              apiName: chatToolPayload.apiName,
+              args: batchParsedArgs,
+              manifest: batchManifestMap[chatToolPayload.identifier],
+            });
             const dispatchResult = await dispatchClientTool(chatToolPayload, {
               operationId,
               streamManager,
+              timeoutMs,
             });
             execution = { attempts: 1, result: dispatchResult };
           } else {

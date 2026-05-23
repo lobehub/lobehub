@@ -13,7 +13,8 @@ import {
   sharedRendererPlugins,
   sharedRollupOutput,
 } from '../../plugins/vite/sharedRendererConfig';
-import { getExternalDependencies } from './native-deps.config.mjs';
+import { externalRuntimeModules } from './external-runtime-deps.config.mjs';
+import { getNativeExternalDependencies } from './native-deps.config.mjs';
 
 /**
  * Force `base: '/'` in renderer config. The `electron-vite` preset
@@ -99,7 +100,11 @@ const desktopPackageJson = JSON.parse(
   readFileSync(path.resolve(__dirname, 'package.json'), 'utf8'),
 ) as { version: string };
 const electronRuntimeExternals = ['electron'];
-const mainProcessRuntimeExternals = [...electronRuntimeExternals, 'node-mac-permissions'];
+const mainProcessRuntimeExternals = [
+  ...electronRuntimeExternals,
+  ...externalRuntimeModules,
+  'node-mac-permissions',
+];
 
 console.info(`[electron-vite.config.ts] Detected UPDATE_CHANNEL: ${updateChannel}`);
 
@@ -113,15 +118,43 @@ export default defineConfig({
         // bufferutil and utf-8-validate are optional peer deps of ws that may not be installed.
         external: [
           ...mainProcessRuntimeExternals,
-          ...getExternalDependencies(),
+          ...getNativeExternalDependencies(),
           'bufferutil',
           'utf-8-validate',
         ],
         output: {
-          // Prevent debug package from being bundled into index.js to avoid side-effect pollution
+          // Prevent shared deps from being bundled into index.js to avoid side-effect pollution.
+          // Pattern: when a module is imported by both the main bundle (statically) and a
+          // dynamic-import chunk (lazy loader), rolldown places it in main and makes the
+          // chunk back-reference `require("./index.js")`. Electron's main entry isn't in
+          // Node's CJS cache, so that require recompiles `index.js` from scratch — which
+          // re-runs `new App()` at top-level and triggers `protocol.registerSchemesAsPrivileged`
+          // *after* the app is ready → throw.
+          //
+          // Same root cause as the original `debug` regression fixed in #11827. Isolate
+          // each shared module into its own vendor chunk so both ends reference the vendor
+          // chunk instead of back-referencing main.
           manualChunks(id) {
             if (id.includes('node_modules/debug')) {
               return 'vendor-debug';
+            }
+
+            // Small text/binary detection utilities in file-loaders/utils. Imported by
+            // main (via `sniffBinaryFile`) and potentially by lazy loader chunks.
+            // Explicitly enumerated to avoid catching `parser-utils.ts`, which pulls in
+            // xmldom / yauzl / concat-stream — those belong in docx/pptx loader chunks.
+            if (
+              /packages\/file-loaders\/src\/utils\/(?:detectUtf16|isBinaryContent|isTextReadableFile)\.ts$/.test(
+                id,
+              )
+            ) {
+              return 'vendor-file-loaders-utils';
+            }
+
+            // jszip — imported by main (via some static path) AND by the docx loader chunk.
+            // Without this, reading a .docx file throws the protocol re-init error.
+            if (id.includes('node_modules/jszip')) {
+              return 'vendor-jszip';
             }
 
             // Split i18n json resources by namespace (ns), not by locale.

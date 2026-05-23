@@ -19,17 +19,11 @@ import { aiChatSelectors } from '@/store/chat/selectors';
 import MessageFromUrl from './MessageFromUrl';
 import { useSendMenuItems } from './useSendMenuItems';
 
-const leftActions: ActionKeys[] = [
-  'typo',
-  'fileUpload',
-  '---',
-  ['tools', 'params', 'clear'],
-  'mainToken',
-];
+const leftActions: ActionKeys[] = ['typo', 'fileUpload', '---', ['tools', 'params', 'clear']];
 
 const dmLeftActions: ActionKeys[] = ['typo', 'fileUpload', '---', ['stt']];
 
-const rightActions: ActionKeys[] = [];
+const rightActions: ActionKeys[] = ['contextWindow'];
 
 /**
  * Message Editor for Group Chat along with DM Portal
@@ -39,6 +33,7 @@ const Desktop = memo((props: { targetMemberId?: string }) => {
 
   const isDMPortal = !!props.targetMemberId;
   const currentGroupMembers = useAgentGroupStore(agentGroupSelectors.currentGroupAgents, isEqual);
+  const isGroupConfigLoading = useAgentGroupStore(agentGroupSelectors.isGroupsInit);
 
   const [mainInputSendErrorMsg, clearSendMessageError] = useChatStore((s) => [
     aiChatSelectors.isCurrentSendMessageError(s),
@@ -77,7 +72,7 @@ const Desktop = memo((props: { targetMemberId?: string }) => {
         metadata: { id: member.id },
       })),
     ];
-  }, [currentGroupMembers]);
+  }, [currentGroupMembers, t]);
 
   const sendMenuItems = useSendMenuItems();
 
@@ -108,7 +103,7 @@ const Desktop = memo((props: { targetMemberId?: string }) => {
             />
           </Flexbox>
         )}
-        <DesktopChatInput />
+        <DesktopChatInput isConfigLoading={isGroupConfigLoading} />
       </WideScreenContainer>
       <Suspense>
         <MessageFromUrl />

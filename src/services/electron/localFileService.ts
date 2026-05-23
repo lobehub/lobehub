@@ -13,7 +13,11 @@ import {
   type KillCommandResult,
   type ListLocalFileParams,
   type ListLocalFilesResult,
+  type ListProjectSkillsParams,
+  type ListProjectSkillsResult,
   type LocalFileItem,
+  type LocalFilePreviewUrlParams,
+  type LocalFilePreviewUrlResult,
   type LocalMoveFilesResultItem,
   type LocalReadFileParams,
   type LocalReadFileResult,
@@ -60,6 +64,10 @@ class LocalFileService {
     return ensureElectronIpc().localSystem.getProjectFileIndex(params);
   }
 
+  async listProjectSkills(params: ListProjectSkillsParams): Promise<ListProjectSkillsResult> {
+    return ensureElectronIpc().localSystem.listProjectSkills(params);
+  }
+
   async openLocalFile(params: OpenLocalFileParams) {
     return ensureElectronIpc().localSystem.handleOpenLocalFile(params);
   }
@@ -82,6 +90,12 @@ class LocalFileService {
 
   async auditSafePaths(params: AuditSafePathsParams): Promise<AuditSafePathsResult> {
     return ensureElectronIpc().localSystem.auditSafePaths(params);
+  }
+
+  async getLocalFilePreviewUrl(
+    params: LocalFilePreviewUrlParams,
+  ): Promise<LocalFilePreviewUrlResult> {
+    return ensureElectronIpc().localSystem.getLocalFilePreviewUrl(params);
   }
 
   async prepareSkillDirectory(

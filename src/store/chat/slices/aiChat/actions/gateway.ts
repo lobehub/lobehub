@@ -4,12 +4,13 @@ import {
   type AgentStreamEvent,
   type ConnectionStatus,
 } from '@lobechat/agent-gateway-client';
-import type { ConversationContext, ExecAgentResult } from '@lobechat/types';
+import type { ConversationContext, ExecAgentResult, MessageMetadata } from '@lobechat/types';
 
 import { isDesktop } from '@/const/version';
 import { aiAgentService, type ResumeApprovalParam } from '@/services/aiAgent';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
+import { consumePendingTopicRepos, getPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
 import type { ChatStore } from '@/store/chat/store';
 import type { StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
@@ -254,6 +255,8 @@ export class GatewayActionImpl {
     /** File IDs of already-uploaded attachments to attach to the new user message */
     fileIds?: string[];
     message: string;
+    /** Request metadata carried from the originating user message. */
+    metadata?: Pick<MessageMetadata, 'trigger'>;
     /** Called when the gateway session completes (agent finished running) */
     onComplete?: () => void;
     /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
@@ -279,6 +282,7 @@ export class GatewayActionImpl {
       context,
       fileIds,
       message,
+      metadata,
       onComplete,
       parentMessageId,
       parentOperationId,
@@ -290,6 +294,17 @@ export class GatewayActionImpl {
 
     const isCreateNewTopic = !context.topicId;
     const taskId = context.viewedTask?.type === 'detail' ? context.viewedTask.taskId : undefined;
+
+    // If this is a new topic, read any repos the user pre-selected before
+    // sending the first message. We read without consuming yet — if execAgentTask
+    // fails or is aborted, the selection is preserved so a retry can still pick
+    // it up. We clear only after the server confirms the topic was created.
+    const pendingRepos =
+      isCreateNewTopic && context.agentId ? getPendingTopicRepos(context.agentId) : [];
+    const initialTopicMetadata =
+      pendingRepos.length > 0
+        ? { repos: pendingRepos, workingDirectory: pendingRepos[0] }
+        : undefined;
 
     // Honour user-initiated cancel during phase-1 init: while we await the
     // execAgentTask round-trip the caller's loading state (e.g. `sendMessage`)
@@ -309,6 +324,7 @@ export class GatewayActionImpl {
           defaultTaskAssigneeAgentId: context.defaultTaskAssigneeAgentId,
           documentId: context.documentId,
           groupId: context.groupId,
+          ...(initialTopicMetadata && { initialTopicMetadata }),
           scope: context.scope,
           taskId,
           threadId: context.threadId,
@@ -322,6 +338,7 @@ export class GatewayActionImpl {
         parentMessageId,
         prompt: message,
         resumeApproval,
+        trigger: metadata?.trigger,
       },
       { signal: abortSignal },
     );
@@ -337,6 +354,8 @@ export class GatewayActionImpl {
     // If server created a new topic, fetch messages first then switch topic
     // (same pattern as client mode: replaceMessages before switchTopic to avoid skeleton flash)
     if (isCreateNewTopic && result.topicId) {
+      // Topic created successfully — now safe to clear the pending repo selection.
+      if (context.agentId) consumePendingTopicRepos(context.agentId);
       try {
         const newContext = { ...context, topicId: result.topicId };
         const messages = await messageService.getMessages(newContext);
@@ -349,6 +368,14 @@ export class GatewayActionImpl {
         clearNewKey: true,
         skipRefreshMessage: true,
       });
+
+      // Refresh the topic list so the new topic appears in topicDataMap (sidebar).
+      // Unlike the direct-API sendMessage path (which receives topics[] in the
+      // response and calls internal_updateTopics), the gateway path only gets a
+      // topicId — we must explicitly refetch so the sidebar shows the new topic.
+      this.#get()
+        .refreshTopic()
+        .catch((err) => console.error('[Gateway] refreshTopic after topic creation failed:', err));
 
       if (abortSignal?.aborted) {
         aiAgentService
@@ -363,6 +390,7 @@ export class GatewayActionImpl {
 
     if (result.topicId) {
       this.#get().internal_updateTopicLoading(result.topicId, true);
+      void this.#get().updateTopicStatus?.(result.topicId, 'running');
     }
 
     // Create a dedicated operation for gateway execution with correct context.
@@ -410,6 +438,7 @@ export class GatewayActionImpl {
         this.#get().completeOperation(gatewayOpId);
         if (result.topicId) {
           this.#get().internal_updateTopicLoading(result.topicId, false);
+          void this.#get().updateTopicStatus?.(result.topicId, 'active');
           // Clear running operation from topic metadata (best-effort from frontend;
           // if browser was closed, reconnect logic will handle stale entries)
           topicService
@@ -443,6 +472,17 @@ export class GatewayActionImpl {
     const agentGatewayUrl =
       window.global_serverConfigStore?.getState()?.serverConfig?.agentGatewayUrl;
     if (!agentGatewayUrl) return;
+
+    // Skip reconnect if the gateway action already established (or is establishing)
+    // a fresh connection for this operation. This prevents a race on new-topic creation
+    // where switchTopic loads runningOperation → useGatewayReconnect fires → overwrites
+    // the connectToGateway call made by executeGatewayAgent with resumeOnConnect: true,
+    // causing the gateway to treat a brand-new session as a resume → stuck / no events.
+    // Any status other than 'disconnected' means the gateway action already owns this
+    // connection (connecting / authenticating / reconnecting / connected). Skip to avoid
+    // overwriting the fresh non-resume connect with resumeOnConnect:true.
+    const existingStatus = this.#get().gatewayConnections[operationId]?.status;
+    if (existingStatus && existingStatus !== 'disconnected') return;
 
     // Get a fresh JWT token (original expired after 5 min)
     const { token } = await aiAgentService.refreshGatewayToken(topicId);
@@ -488,6 +528,7 @@ export class GatewayActionImpl {
       onSessionComplete: () => {
         this.#get().completeOperation(gatewayOpId);
         this.#get().internal_updateTopicLoading(topicId, false);
+        void this.#get().updateTopicStatus?.(topicId, 'active');
         topicService.updateTopicMetadata(topicId, { runningOperation: null }).catch(() => {});
       },
       operationId,

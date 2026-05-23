@@ -37,8 +37,10 @@ const formatElapsedTime = (ms: number): string => {
   const seconds = ms / 1000;
   if (seconds < 60) return `${seconds.toFixed(1)}s`;
 
-  const minutes = seconds / 60;
-  return `${minutes.toFixed(1)}min`;
+  const totalSeconds = Math.floor(seconds);
+  const minutes = Math.floor(totalSeconds / 60);
+  const remainingSeconds = totalSeconds % 60;
+  return `${minutes}min${remainingSeconds}s`;
 };
 
 const ExecutionTime = memo<ExecutionTimeProps>(({ isExecuting, startTime, timerKey }) => {

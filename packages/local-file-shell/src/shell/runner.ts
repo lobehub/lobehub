@@ -37,6 +37,8 @@ export async function runCommand(
   // Build the child environment first so that extraEnv overrides are visible
   // to expandEnvVars. This fixes the case where %VAR% references a key that
   // is only present in extraEnv and not in process.env.
+  const effectiveTimeout = Math.min(Math.max(timeout, 1000), 800_000);
+  const shellConfig = getShellConfig(command);
   const childEnv = extraEnv ? { ...process.env, ...extraEnv } : process.env;
   const expandedCommand = expandEnvVars(command, childEnv);
   const shellConfig = getShellConfig(expandedCommand);

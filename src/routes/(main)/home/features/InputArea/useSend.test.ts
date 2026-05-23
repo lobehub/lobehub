@@ -62,8 +62,19 @@ const globalState = vi.hoisted(() => ({
   updateSystemStatus: vi.fn(),
 }));
 
+const homeDailyBriefState = vi.hoisted(() => ({
+  advance: vi.fn(),
+  currentIndex: 0,
+  currentPair: undefined as { hint: string; welcome: string } | undefined,
+  pairs: [] as { hint: string; welcome: string }[],
+}));
+
 vi.mock('@/hooks/useQueryRoute', () => ({
   useQueryRoute: () => routerMock,
+}));
+
+vi.mock('@/hooks/useHomeDailyBrief', () => ({
+  useHomeDailyBrief: () => homeDailyBriefState,
 }));
 
 vi.mock('@/store/agent', () => ({
@@ -126,6 +137,9 @@ describe('Home InputArea useSend', () => {
     clearContentMock.mockReset();
     clearChatUploadFileListMock.mockReset();
     clearChatContextSelectionsMock.mockReset();
+    homeDailyBriefState.advance.mockReset();
+    homeDailyBriefState.currentPair = undefined;
+    chatState.inputMessage = 'hello';
   });
 
   it('routes cold homepage sends to the created topic instead of relying on ChatHydration timing', async () => {
@@ -157,5 +171,34 @@ describe('Home InputArea useSend', () => {
     });
 
     expect(routerMock.replace).toHaveBeenCalledWith('/agent/agt_inbox/tpc_created');
+  });
+
+  it('drops editorData when sending the placeholder hint so the user message renders the markdown content', async () => {
+    homeDailyBriefState.currentPair = {
+      hint: '看下 Bug #14153 + #14112 Agent 手机端不同步/不显示...',
+      welcome: 'welcome',
+    };
+    chatState.inputMessage = '';
+
+    const { result } = renderHook(() => useSend());
+    const params: Parameters<SendButtonHandler>[0] = {
+      clearContent: vi.fn(),
+      editor: {} as Parameters<SendButtonHandler>[0]['editor'],
+      // Empty editor still returns a non-null JSON state; this would
+      // previously be forwarded as editorData and blank the rendered
+      // user bubble.
+      getEditorData: () => ({ type: 'doc' }),
+      getMarkdownContent: () => '',
+    };
+
+    await act(async () => {
+      await result.current.send(params);
+    });
+
+    expect(sendMessageMock).toHaveBeenCalledTimes(1);
+    const sentPayload = sendMessageMock.mock.calls[0][0];
+    expect(sentPayload.message).toBe('看下 Bug #14153 + #14112 Agent 手机端不同步/不显示');
+    expect(sentPayload.editorData).toBeUndefined();
+    expect(homeDailyBriefState.advance).toHaveBeenCalledTimes(1);
   });
 });

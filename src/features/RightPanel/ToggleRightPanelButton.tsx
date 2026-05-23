@@ -32,9 +32,10 @@ interface ToggleRightPanelButtonProps {
 
 const ToggleRightPanelButton = memo<ToggleRightPanelButtonProps>(
   ({ title, showActive, icon, hideWhenExpanded, size, expand: expandProp, onToggle }) => {
-    const [globalExpand, globalToggle] = useGlobalStore((s) => [
+    const [globalExpand, globalToggle, isStatusInit] = useGlobalStore((s) => [
       systemStatusSelectors.showRightPanel(s),
       s.toggleRightPanel,
+      systemStatusSelectors.isStatusInit(s),
     ]);
     const hotkey = useUserStore(settingsSelectors.getHotkeyById(HotkeyEnum.ToggleRightPanel));
 
@@ -42,6 +43,11 @@ const ToggleRightPanelButton = memo<ToggleRightPanelButtonProps>(
 
     const expand = expandProp ?? globalExpand;
     const handleClick = onToggle ?? (() => globalToggle());
+
+    // Defer render until status hydrates when relying on the global store —
+    // toggleRightPanel is a no-op while !isStatusInit and clicks would be
+    // silently dropped. Callers that pass `expand`+`onToggle` override this.
+    if (expandProp === undefined && !isStatusInit) return null;
 
     if (hideWhenExpanded && expand) return null;
     return (

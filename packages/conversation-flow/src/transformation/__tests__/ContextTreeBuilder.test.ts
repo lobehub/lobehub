@@ -427,4 +427,133 @@ describe('ContextTreeBuilder', () => {
       expect(result[2]).toEqual({ id: 'msg-4', type: 'message' });
     });
   });
+
+  // ────────────────────────────────────────────────────
+  // LOBE-8998: AssistantGroupNode embeds SignalCallbacksNode children
+  // ────────────────────────────────────────────────────
+  describe('AssistantGroup with signal callbacks (LOBE-8998)', () => {
+    it('appends SignalCallbacksNode at the end of AssistantGroup children', () => {
+      const signalMeta = (sequence: number) => ({
+        signal: {
+          sequence,
+          sourceToolCallId: 'toolu_mon',
+          sourceToolName: 'Monitor',
+          type: 'tool-stdout' as const,
+        },
+      });
+
+      const messageMap = new Map<string, Message>([
+        [
+          'ast-0',
+          {
+            agentId: 'agent-x',
+            content: '',
+            createdAt: 0,
+            id: 'ast-0',
+            role: 'assistant',
+            tools: [
+              {
+                apiName: 'Monitor',
+                arguments: '{}',
+                id: 'toolu_mon',
+                identifier: 'claude-code',
+                type: 'default',
+              },
+            ],
+            updatedAt: 0,
+          },
+        ],
+        [
+          'tool-1',
+          {
+            content: 'started',
+            createdAt: 0,
+            id: 'tool-1',
+            parentId: 'ast-0',
+            role: 'tool',
+            tool_call_id: 'toolu_mon',
+            updatedAt: 0,
+          },
+        ],
+        [
+          'cb-1',
+          {
+            agentId: 'agent-x',
+            content: '等 list 完。',
+            createdAt: 0,
+            id: 'cb-1',
+            metadata: signalMeta(1) as any,
+            parentId: 'tool-1',
+            role: 'assistant',
+            updatedAt: 0,
+          },
+        ],
+        [
+          'cb-2',
+          {
+            agentId: 'agent-x',
+            content: '84842 列完，开干。',
+            createdAt: 0,
+            id: 'cb-2',
+            metadata: signalMeta(2) as any,
+            parentId: 'tool-1',
+            role: 'assistant',
+            updatedAt: 0,
+          },
+        ],
+        [
+          'ast-4',
+          {
+            agentId: 'agent-x',
+            content: '',
+            createdAt: 0,
+            id: 'ast-4',
+            parentId: 'tool-1',
+            role: 'assistant',
+            updatedAt: 0,
+          },
+        ],
+      ]);
+
+      const builder = createBuilder(messageMap);
+      const idNodes: IdNode[] = [
+        {
+          children: [
+            {
+              children: [
+                { children: [], id: 'cb-1' },
+                { children: [], id: 'cb-2' },
+                { children: [], id: 'ast-4' },
+              ],
+              id: 'tool-1',
+            },
+          ],
+          id: 'ast-0',
+        },
+      ];
+
+      const result = builder.transformAll(idNodes);
+      // One AssistantGroup node at the top
+      expect(result).toHaveLength(1);
+      const group = result[0] as any;
+      expect(group.type).toBe('assistantGroup');
+
+      // Main chain assistants then signalCallbacks block at the end
+      expect(group.children.map((c: any) => c.type)).toEqual([
+        'message', // ast-0
+        'message', // ast-4
+        'signalCallbacks',
+      ]);
+      expect(group.children[0].id).toBe('ast-0');
+      expect(group.children[0].tools).toEqual(['tool-1']);
+      expect(group.children[1].id).toBe('ast-4');
+      expect(group.children[2]).toMatchObject({
+        sourceToolCallId: 'toolu_mon',
+        sourceToolMessageId: 'tool-1',
+        sourceToolName: 'Monitor',
+        type: 'signalCallbacks',
+      });
+      expect(group.children[2].callbacks.map((c: any) => c.id)).toEqual(['cb-1', 'cb-2']);
+    });
+  });
 });

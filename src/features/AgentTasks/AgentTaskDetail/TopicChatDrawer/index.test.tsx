@@ -55,6 +55,7 @@ vi.mock('@lobehub/ui', () => ({
     open ? <div data-testid="topic-drawer">{children}</div> : null,
   DropdownMenu: ({ children }: { children?: ReactNode }) => <>{children}</>,
   Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  Freeze: ({ children }: { children?: ReactNode; frozen?: boolean }) => <>{children}</>,
   Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
 }));
 

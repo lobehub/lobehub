@@ -1,8 +1,8 @@
 'use client';
 
-import { Markdown, ScrollShadow } from '@lobehub/ui';
+import { Markdown, ScrollArea } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { type RefObject } from 'react';
+import type { RefObject } from 'react';
 import { memo, useEffect } from 'react';
 
 import { useAutoScroll } from '@/hooks/useAutoScroll';
@@ -13,6 +13,10 @@ const styles = createStaticStyles(({ css }) => ({
     padding-inline: 16px;
     border-radius: 8px;
     font-size: 14px;
+  `,
+  scrollRoot: css`
+    border-radius: 0;
+    background: transparent;
   `,
 }));
 
@@ -36,18 +40,29 @@ const StreamingMarkdown = memo<StreamingMarkdownProps>(({ children, maxHeight = 
   if (!children) return null;
 
   return (
-    <ScrollShadow
-      className={styles.container}
-      offset={12}
-      ref={ref as RefObject<HTMLDivElement>}
-      size={12}
-      style={{ maxHeight }}
-      onScroll={handleScroll}
+    <ScrollArea
+      scrollFade
+      className={styles.scrollRoot}
+      contentProps={{
+        style: {
+          color: 'inherit',
+          display: 'block',
+          fontSize: 'inherit',
+          gap: 0,
+          lineHeight: 'inherit',
+        },
+      }}
+      viewportProps={{
+        className: styles.container,
+        ref: ref as RefObject<HTMLDivElement>,
+        style: { maxHeight },
+        onScroll: handleScroll,
+      }}
     >
       <Markdown animated style={{ overflow: 'unset' }} variant={'chat'}>
         {children}
       </Markdown>
-    </ScrollShadow>
+    </ScrollArea>
   );
 });
 

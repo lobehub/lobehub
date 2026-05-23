@@ -7,6 +7,10 @@ import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 
 import {
+  copyExternalRuntimeModulesToSource,
+  getExternalRuntimeModulesFilesConfig,
+} from './external-runtime-deps.config.mjs';
+import {
   copyNativeModules,
   copyNativeModulesToSource,
   getAsarUnpackPatterns,
@@ -106,6 +110,7 @@ const config = {
    */
   beforePack: async () => {
     await copyNativeModulesToSource();
+    await copyExternalRuntimeModulesToSource();
 
     console.info('📦 Downloading agent-browser binary...');
     execSync('node scripts/download-agent-browser.mjs', { stdio: 'inherit', cwd: __dirname });
@@ -251,6 +256,8 @@ const config = {
     '!node_modules',
     // Then explicitly include native modules using object form (handles pnpm symlinks)
     ...getNativeModulesFilesConfig(),
+    // Include non-native runtime modules that are intentionally externalized from Vite.
+    ...getExternalRuntimeModulesFilesConfig(),
   ],
   generateUpdatesFilesForAllChannels: true,
   linux: {

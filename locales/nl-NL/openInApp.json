@@ -1,0 +1,8 @@
+{
+  "dropdownLabel": "Werkmap openen in",
+  "errors.appNotInstalled": "{{appName}} is niet geïnstalleerd",
+  "errors.launchFailed": "Kan niet openen in {{appName}}: {{error}}",
+  "errors.pathNotFound": "Pad niet gevonden: {{path}}",
+  "errors.unknown": "onbekende fout",
+  "tooltip": "Openen in {{appName}}"
+}

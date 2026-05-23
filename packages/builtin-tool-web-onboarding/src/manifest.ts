@@ -1,10 +1,12 @@
+import { INTEREST_AREA_KEYS } from '@lobechat/const';
 import type { BuiltinToolManifest, HumanInterventionRule } from '@lobechat/types';
 
+import { MARKETPLACE_CATEGORY_VALUES } from './agentMarketplace/types';
 import { toolSystemPrompt } from './toolSystemRole';
 import { WebOnboardingApiName, WebOnboardingIdentifier } from './types';
 
 // Agent identity (name/emoji) surface a confirmation card;
-// user profile fields (fullName) and interests saves bypass intervention.
+// user profile fields (fullName) and interest saves bypass intervention.
 const saveUserQuestionConfirmationRules: HumanInterventionRule[] = [
   {
     match: {
@@ -25,7 +27,7 @@ export const WebOnboardingManifest: BuiltinToolManifest = {
   api: [
     {
       description:
-        'Persist structured onboarding fields. agentName and agentEmoji (updates inbox agent title/avatar) require user confirmation; interests-only saves run without confirmation.',
+        'Persist structured onboarding fields. agentName and agentEmoji (updates inbox agent title/avatar) require user confirmation; interests/customInterests saves run without confirmation.',
       humanIntervention: saveUserQuestionConfirmationRules,
       name: WebOnboardingApiName.saveUserQuestion,
       parameters: {
@@ -42,8 +44,18 @@ export const WebOnboardingManifest: BuiltinToolManifest = {
           fullName: {
             type: 'string',
           },
-          interests: {
+          customInterests: {
+            description:
+              'Specific freeform user interests that do not fit the predefined interest keys.',
             items: {
+              type: 'string',
+            },
+            type: 'array',
+          },
+          interests: {
+            description: 'Predefined interest keys selected from the supported enum values.',
+            items: {
+              enum: [...INTEREST_AREA_KEYS],
               type: 'string',
             },
             type: 'array',
@@ -208,6 +220,60 @@ export const WebOnboardingManifest: BuiltinToolManifest = {
           },
         },
         required: ['type', 'hunks'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Open an Agent Marketplace picker card in the UI, prioritizing tabs by the provided category hints. Returns the request in pending state.',
+      humanIntervention: 'always',
+      name: WebOnboardingApiName.showAgentMarketplace,
+      parameters: {
+        properties: {
+          categoryHints: {
+            description:
+              'One or more fixed MarketplaceCategory slugs used to move matching picker tabs to the front.',
+            items: {
+              enum: [...MARKETPLACE_CATEGORY_VALUES],
+              type: 'string',
+            },
+            minItems: 1,
+            type: 'array',
+          },
+          description: {
+            description: 'Optional secondary line shown below the prompt.',
+            type: 'string',
+          },
+          prompt: {
+            description:
+              'Short, natural sentence shown to the user explaining what the marketplace is for.',
+            type: 'string',
+          },
+          requestId: {
+            description: 'Unique identifier for this pick request.',
+            type: 'string',
+          },
+        },
+        required: ['categoryHints', 'prompt', 'requestId'],
+        type: 'object',
+      },
+      renderDisplayControl: 'collapsed',
+    },
+    {
+      description:
+        "Record the user's template selection for a pending pick request. Normally client-handled after the user submits in the UI.",
+      name: WebOnboardingApiName.submitAgentPick,
+      parameters: {
+        properties: {
+          requestId: { description: 'The pick request ID to submit.', type: 'string' },
+          selectedTemplateIds: {
+            description: 'Template IDs the user selected from the marketplace.',
+            items: { type: 'string' },
+            minItems: 1,
+            type: 'array',
+          },
+        },
+        required: ['requestId', 'selectedTemplateIds'],
         type: 'object',
       },
     },

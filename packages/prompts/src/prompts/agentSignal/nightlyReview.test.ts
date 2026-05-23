@@ -8,31 +8,92 @@ import {
 describe('agent signal nightly review prompt', () => {
   /**
    * @example
-   * The prompt keeps automatic mutations constrained to explicit low-risk maintenance.
+   * The prompt keeps automatic mutations constrained to explicit low-risk self-review.
    */
-  it('documents the auto-apply boundary for nightly maintenance', () => {
+  it('documents the auto-apply boundary for nightly self-review', () => {
     expect(AGENT_SIGNAL_NIGHTLY_REVIEW_SYSTEM_ROLE).toContain(
       'Use noop for ordinary successful days',
+    );
+    expect(AGENT_SIGNAL_NIGHTLY_REVIEW_SYSTEM_ROLE).toContain(
+      'noop is silent and must not create a Daily Brief or proposal',
     );
     expect(AGENT_SIGNAL_NIGHTLY_REVIEW_SYSTEM_ROLE).toContain(
       'Auto-safe memory candidates must be explicit',
     );
     expect(AGENT_SIGNAL_NIGHTLY_REVIEW_SYSTEM_ROLE).toContain(
-      'Consolidation should stay proposal_only',
+      'A durable_user_preference signal means',
+    );
+    expect(AGENT_SIGNAL_NIGHTLY_REVIEW_SYSTEM_ROLE).toContain(
+      'Consolidation must be proposed with a frozen consolidate_skill operation',
     );
   });
 
   /**
    * @example
-   * The prompt starts from maintenance signals and forbids model-side reclassification.
+   * The prompt starts from structured self-review signals and forbids model-side reclassification.
    */
-  it('documents the structured maintenance signal boundary', () => {
-    const [system] = createAgentSignalNightlyReviewMessages({ maintenanceSignals: [] });
+  it('documents the structured self-review signal boundary', () => {
+    const [system] = createAgentSignalNightlyReviewMessages({ selfReviewSignals: [] });
 
-    expect(system.content).toContain('Start from maintenanceSignals');
+    expect(system.content).toContain('Start from selfReviewSignals');
+    expect(system.content).toContain('proposalActivity');
     expect(system.content).toContain('Do not re-judge satisfaction');
     expect(system.content).toContain('Tool activity alone must not trigger skill consolidation');
-    expect(system.content).toContain('Use receiptActivity to avoid duplicate or stale proposals');
+    expect(system.content).toContain(
+      'Use proposalActivity for unresolved proposal refresh, stale proposal, duplicate proposal checks',
+    );
+  });
+
+  /**
+   * @example
+   * expect(prompt).toContain('write tools')
+   */
+  it('instructs nightly self-review to use tools as the only mutation boundary', () => {
+    const prompt = createAgentSignalNightlyReviewMessages({ selfReviewSignals: [] })
+      .map((message) => message.content)
+      .join('\n');
+
+    expect(prompt).toContain('Mutations only count through write tools');
+    expect(prompt).toContain(
+      'this structured review may only emit candidate write actions for the server self-review executor',
+    );
+    expect(prompt).toContain(
+      'Never infer intent with regexp, keyword lists, or hard-coded content heuristics',
+    );
+    expect(prompt).toContain('refine_skill requires complete replacement bodyMarkdown');
+    expect(prompt).toContain('do not emit patch-only');
+  });
+
+  /**
+   * @example
+   * The prompt treats existing proposals as lifecycle state and keeps destructive changes reviewable.
+   */
+  it('documents proposal lifecycle and mutation safety boundaries', () => {
+    const [system] = createAgentSignalNightlyReviewMessages({
+      selfReviewSignals: [],
+      proposalActivity: { active: [] },
+    });
+
+    expect(system.content).toContain(
+      'Existing self-review proposals are state, not fresh evidence',
+    );
+    expect(system.content).toContain(
+      'Refresh a compatible pending proposal instead of creating a duplicate',
+    );
+    expect(system.content).toContain('Supersede an incompatible pending proposal');
+    expect(system.content).toContain(
+      'Do not use old proposal content as the only evidence for a mutation',
+    );
+    expect(system.content).toContain(
+      'Broad in-document rewrites can be auto-applied when they preserve resource identity',
+    );
+    expect(system.content).toContain(
+      'value.bodyMarkdown must contain the complete replacement Markdown body',
+    );
+    expect(system.content).toContain('Self-review proposal only: structural/destructive changes');
+    expect(system.content).toContain(
+      'Plan only mutations that can be routed through safe write tools',
+    );
   });
 
   /**

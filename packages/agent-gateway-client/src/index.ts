@@ -1,5 +1,7 @@
 export { AgentStreamClient } from './client';
 export type {
+  AgentInterventionRequestData,
+  AgentInterventionResponseData,
   AgentStreamClientEvents,
   AgentStreamClientOptions,
   AgentStreamEvent,

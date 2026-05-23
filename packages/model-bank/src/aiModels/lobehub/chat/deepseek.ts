@@ -14,26 +14,25 @@ export const deepseekChatModels: AIChatModelCard[] = [
     id: 'deepseek-v4-pro',
     maxOutput: 384_000,
     pricing: {
-      // LobeHub-hosted discount price. Official DeepSeek API pricing stays in model-bank/deepseek.
       units: [
         {
           name: 'textInput_cacheRead',
           originalRate: 0.0145,
-          rate: 0.0003625,
+          rate: 0.003625,
           strategy: 'fixed',
           unit: 'millionTokens',
         },
         {
           name: 'textInput',
           originalRate: 1.74,
-          rate: 0.0435,
+          rate: 0.435,
           strategy: 'fixed',
           unit: 'millionTokens',
         },
         {
           name: 'textOutput',
           originalRate: 3.48,
-          rate: 0.087,
+          rate: 0.87,
           strategy: 'fixed',
           unit: 'millionTokens',
         },
@@ -41,13 +40,7 @@ export const deepseekChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-24',
     settings: {
-      extendParamOptions: {
-        enableReasoning: {
-          defaultValue: true,
-          includeBudget: false,
-        },
-      },
-      extendParams: ['enableReasoning', 'deepseekV4ReasoningEffort'],
+      extendParams: ['deepseekV4ReasoningEffort'],
     },
     type: 'chat',
   },
@@ -64,22 +57,15 @@ export const deepseekChatModels: AIChatModelCard[] = [
     id: 'deepseek-v4-flash',
     maxOutput: 384_000,
     pricing: {
-      // LobeHub-hosted discount price. Official DeepSeek API pricing stays in model-bank/deepseek.
       units: [
-        { name: 'textInput_cacheRead', rate: 0.00028, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 0.014, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.028, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.0028, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.14, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.28, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-04-24',
     settings: {
-      extendParamOptions: {
-        enableReasoning: {
-          defaultValue: true,
-          includeBudget: false,
-        },
-      },
-      extendParams: ['enableReasoning', 'deepseekV4ReasoningEffort'],
+      extendParams: ['deepseekV4ReasoningEffort'],
     },
     type: 'chat',
   },
@@ -98,11 +84,10 @@ export const deepseekChatModels: AIChatModelCard[] = [
     legacy: true,
     maxOutput: 384_000,
     pricing: {
-      // LobeHub-hosted discount price. Official DeepSeek API pricing stays in model-bank/deepseek.
       units: [
-        { name: 'textInput_cacheRead', rate: 0.00028, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 0.014, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.028, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.0028, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.14, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.28, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2025-12-01',
@@ -123,11 +108,10 @@ export const deepseekChatModels: AIChatModelCard[] = [
     legacy: true,
     maxOutput: 384_000,
     pricing: {
-      // LobeHub-hosted discount price. Official DeepSeek API pricing stays in model-bank/deepseek.
       units: [
-        { name: 'textInput_cacheRead', rate: 0.00028, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 0.014, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.028, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.0028, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.14, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.28, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2025-12-01',

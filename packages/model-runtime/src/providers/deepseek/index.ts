@@ -1,6 +1,6 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import type { ChatModelCard } from '@lobechat/types';
-import { ModelProvider } from 'model-bank';
+import { deepseek as deepseekChatModels, ModelProvider } from 'model-bank';
 import type OpenAI from 'openai';
 
 import {
@@ -200,12 +200,15 @@ const buildDeepSeekOpenAIPayload = (
   });
 
   // DeepSeek rejects `reasoning_effort` when thinking is explicitly disabled.
-  const { reasoning_effort, ...restPayload } = payload;
+  const { reasoning_effort, thinking, ...restPayload } = payload;
 
   return {
     ...restPayload,
     messages,
     ...(!thinkingExplicitlyDisabled && reasoning_effort && { reasoning_effort }),
+    ...(thinking?.type === 'enabled' || thinking?.type === 'disabled'
+      ? { thinking: { type: thinking.type } }
+      : {}),
     stream: payload.stream ?? true,
   } as OpenAI.ChatCompletionCreateParamsStreaming;
 };
@@ -248,6 +251,10 @@ export const LobeDeepSeekAnthropicAI = createAnthropicCompatibleRuntime(anthropi
 export const openAIParams = {
   baseURL: DEFAULT_DEEPSEEK_BASE_URL,
   chatCompletion: {
+    // DeepSeek upstream rejects requests where input alone exceeds the
+    // model context window with a 400 carrying `max_completion=0` in the
+    // message. Fail fast before round-tripping. See LOBE-8974.
+    contextPreFlight: { models: deepseekChatModels },
     handlePayload: buildDeepSeekOpenAIPayload,
   },
   debug: {

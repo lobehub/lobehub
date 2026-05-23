@@ -119,8 +119,8 @@ describe('constants', () => {
     expect(MAX_IMAGE_SIZE).toBe(1920);
   });
 
-  it('MAX_IMAGE_BYTES should be 5MB', () => {
-    expect(MAX_IMAGE_BYTES).toBe(5 * 1024 * 1024);
+  it('MAX_IMAGE_BYTES should be 3MB (binary cap so base64 stays ~4MB, well under 5MB)', () => {
+    expect(MAX_IMAGE_BYTES).toBe(3 * 1024 * 1024);
   });
 });
 

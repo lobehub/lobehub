@@ -1,10 +1,13 @@
-import { type AgentRuntimeContext, type TasksBatchResultPayload } from '@lobechat/agent-runtime';
+import {
+  type AgentRuntimeContext,
+  type SubAgentsBatchResultPayload,
+} from '@lobechat/agent-runtime';
 import { type Mock } from 'vitest';
 import { describe, expect, it, vi } from 'vitest';
 
 import { aiAgentService } from '@/services/aiAgent';
 
-import { createExecTasksInstruction } from './fixtures';
+import { createExecSubAgentsInstruction } from './fixtures';
 import { createMockStore } from './fixtures/mockStore';
 import { createInitialState, createTestContext, executeWithMockContext } from './helpers';
 
@@ -20,7 +23,7 @@ vi.mock('@/services/aiAgent', () => ({
 const mockExecSubAgentTask = aiAgentService.execSubAgentTask as Mock;
 const mockGetSubAgentTaskStatus = aiAgentService.getSubAgentTaskStatus as Mock;
 
-describe('exec_tasks executor', () => {
+describe('exec_sub_agents executor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -30,7 +33,7 @@ describe('exec_tasks executor', () => {
       // Given
       const mockStore = createMockStore();
       const context = createTestContext();
-      const instruction = createExecTasksInstruction(
+      const instruction = createExecSubAgentsInstruction(
         [{ description: 'Test task 1', instruction: 'Do something' }],
         'msg_parent',
       );
@@ -56,7 +59,7 @@ describe('exec_tasks executor', () => {
       // When
       const result = await executeWithMockContext({
         context,
-        executor: 'exec_tasks',
+        executor: 'exec_sub_agents',
         instruction,
         mockStore,
         state,
@@ -64,10 +67,10 @@ describe('exec_tasks executor', () => {
 
       // Then
       expect(result.nextContext).toBeDefined();
-      expect((result.nextContext as AgentRuntimeContext).phase).toBe('tasks_batch_result');
+      expect((result.nextContext as AgentRuntimeContext).phase).toBe('sub_agents_batch_result');
 
       const payload = (result.nextContext as AgentRuntimeContext)
-        .payload as TasksBatchResultPayload;
+        .payload as SubAgentsBatchResultPayload;
       expect(payload.results).toHaveLength(1);
       expect(payload.results[0].success).toBe(true);
       expect(payload.results[0].threadId).toBe('thread_1');
@@ -78,7 +81,7 @@ describe('exec_tasks executor', () => {
       // Given
       const mockStore = createMockStore();
       const context = createTestContext();
-      const instruction = createExecTasksInstruction(
+      const instruction = createExecSubAgentsInstruction(
         [
           { description: 'Task 1', instruction: 'Do task 1' },
           { description: 'Task 2', instruction: 'Do task 2' },
@@ -124,7 +127,7 @@ describe('exec_tasks executor', () => {
       // When
       const result = await executeWithMockContext({
         context,
-        executor: 'exec_tasks',
+        executor: 'exec_sub_agents',
         instruction,
         mockStore,
         state,
@@ -133,7 +136,7 @@ describe('exec_tasks executor', () => {
       // Then
       expect(result.nextContext).toBeDefined();
       const payload = (result.nextContext as AgentRuntimeContext)
-        .payload as TasksBatchResultPayload;
+        .payload as SubAgentsBatchResultPayload;
       expect(payload.results).toHaveLength(3);
       expect(payload.results.every((r) => r.success)).toBe(true);
     });
@@ -144,7 +147,7 @@ describe('exec_tasks executor', () => {
       // Given
       const mockStore = createMockStore();
       const context = createTestContext({ agentId: undefined, topicId: null });
-      const instruction = createExecTasksInstruction();
+      const instruction = createExecSubAgentsInstruction();
       const state = createInitialState({ operationId: 'test-op' });
 
       // Override operation context to have no agentId/topicId
@@ -164,7 +167,7 @@ describe('exec_tasks executor', () => {
       // When
       const result = await executeWithMockContext({
         context,
-        executor: 'exec_tasks',
+        executor: 'exec_sub_agents',
         instruction,
         mockStore,
         state,
@@ -173,7 +176,7 @@ describe('exec_tasks executor', () => {
       // Then
       expect(result.nextContext).toBeDefined();
       const payload = (result.nextContext as AgentRuntimeContext)
-        .payload as TasksBatchResultPayload;
+        .payload as SubAgentsBatchResultPayload;
       expect(payload.results).toHaveLength(1);
       expect(payload.results[0].success).toBe(false);
       expect(payload.results[0].error).toBe('No valid context available');
@@ -183,7 +186,7 @@ describe('exec_tasks executor', () => {
       // Given
       const mockStore = createMockStore();
       const context = createTestContext();
-      const instruction = createExecTasksInstruction();
+      const instruction = createExecSubAgentsInstruction();
       const state = createInitialState({ operationId: 'test-op' });
 
       // Mock task message creation failure
@@ -192,7 +195,7 @@ describe('exec_tasks executor', () => {
       // When
       const result = await executeWithMockContext({
         context,
-        executor: 'exec_tasks',
+        executor: 'exec_sub_agents',
         instruction,
         mockStore,
         state,
@@ -200,7 +203,7 @@ describe('exec_tasks executor', () => {
 
       // Then
       const payload = (result.nextContext as AgentRuntimeContext)
-        .payload as TasksBatchResultPayload;
+        .payload as SubAgentsBatchResultPayload;
       expect(payload.results[0].success).toBe(false);
       expect(payload.results[0].error).toBe('Failed to create task message');
     });
@@ -209,7 +212,7 @@ describe('exec_tasks executor', () => {
       // Given
       const mockStore = createMockStore();
       const context = createTestContext();
-      const instruction = createExecTasksInstruction();
+      const instruction = createExecSubAgentsInstruction();
       const state = createInitialState({ operationId: 'test-op' });
 
       (mockStore.optimisticCreateMessage as Mock).mockResolvedValueOnce({ id: 'task_msg_1' });
@@ -225,7 +228,7 @@ describe('exec_tasks executor', () => {
       // When
       const result = await executeWithMockContext({
         context,
-        executor: 'exec_tasks',
+        executor: 'exec_sub_agents',
         instruction,
         mockStore,
         state,
@@ -233,7 +236,7 @@ describe('exec_tasks executor', () => {
 
       // Then
       const payload = (result.nextContext as AgentRuntimeContext)
-        .payload as TasksBatchResultPayload;
+        .payload as SubAgentsBatchResultPayload;
       expect(payload.results[0].success).toBe(false);
       expect(payload.results[0].error).toBe('API error');
       expect(mockStore.optimisticUpdateMessageContent).toHaveBeenCalledWith(
@@ -248,7 +251,7 @@ describe('exec_tasks executor', () => {
       // Given
       const mockStore = createMockStore();
       const context = createTestContext();
-      const instruction = createExecTasksInstruction();
+      const instruction = createExecSubAgentsInstruction();
       const state = createInitialState({ operationId: 'test-op' });
 
       (mockStore.optimisticCreateMessage as Mock).mockResolvedValueOnce({ id: 'task_msg_1' });
@@ -268,7 +271,7 @@ describe('exec_tasks executor', () => {
       // When
       const result = await executeWithMockContext({
         context,
-        executor: 'exec_tasks',
+        executor: 'exec_sub_agents',
         instruction,
         mockStore,
         state,
@@ -276,7 +279,7 @@ describe('exec_tasks executor', () => {
 
       // Then
       const payload = (result.nextContext as AgentRuntimeContext)
-        .payload as TasksBatchResultPayload;
+        .payload as SubAgentsBatchResultPayload;
       expect(payload.results[0].success).toBe(false);
       expect(payload.results[0].error).toBe('Execution error');
     });
@@ -287,7 +290,7 @@ describe('exec_tasks executor', () => {
       // Given
       const mockStore = createMockStore();
       const context = createTestContext();
-      const instruction = createExecTasksInstruction();
+      const instruction = createExecSubAgentsInstruction();
       const state = createInitialState({ operationId: 'test-op' });
 
       (mockStore.optimisticCreateMessage as Mock).mockResolvedValueOnce({ id: 'task_msg_1' });
@@ -309,7 +312,7 @@ describe('exec_tasks executor', () => {
       // When
       const result = await executeWithMockContext({
         context,
-        executor: 'exec_tasks',
+        executor: 'exec_sub_agents',
         instruction,
         mockStore,
         state,
@@ -325,7 +328,7 @@ describe('exec_tasks executor', () => {
         { operationId: 'test-op' },
       );
       const payload = (result.nextContext as AgentRuntimeContext)
-        .payload as TasksBatchResultPayload;
+        .payload as SubAgentsBatchResultPayload;
       expect(payload.results[0].success).toBe(true);
     });
 
@@ -333,7 +336,7 @@ describe('exec_tasks executor', () => {
       // Given
       const mockStore = createMockStore();
       const context = createTestContext();
-      const instruction = createExecTasksInstruction();
+      const instruction = createExecSubAgentsInstruction();
       const state = createInitialState({ operationId: 'test-op' });
 
       (mockStore.optimisticCreateMessage as Mock).mockResolvedValueOnce({ id: 'task_msg_1' });
@@ -353,7 +356,7 @@ describe('exec_tasks executor', () => {
       // When
       const result = await executeWithMockContext({
         context,
-        executor: 'exec_tasks',
+        executor: 'exec_sub_agents',
         instruction,
         mockStore,
         state,
@@ -361,7 +364,7 @@ describe('exec_tasks executor', () => {
 
       // Then
       const payload = (result.nextContext as AgentRuntimeContext)
-        .payload as TasksBatchResultPayload;
+        .payload as SubAgentsBatchResultPayload;
       expect(payload.results[0].success).toBe(false);
       expect(payload.results[0].error).toBe('Task was cancelled');
       expect(mockStore.optimisticUpdateMessageContent).toHaveBeenCalledWith(
@@ -380,7 +383,7 @@ describe('exec_tasks executor', () => {
       // Use same operationId for both context and state
       const operationId = 'test-op';
       const context = createTestContext({ operationId });
-      const instruction = createExecTasksInstruction();
+      const instruction = createExecSubAgentsInstruction();
       const state = createInitialState({ operationId });
 
       (mockStore.optimisticCreateMessage as Mock).mockResolvedValueOnce({ id: 'task_msg_1' });
@@ -403,7 +406,7 @@ describe('exec_tasks executor', () => {
       // When
       const result = await executeWithMockContext({
         context,
-        executor: 'exec_tasks',
+        executor: 'exec_sub_agents',
         instruction,
         mockStore,
         state,
@@ -411,7 +414,7 @@ describe('exec_tasks executor', () => {
 
       // Then
       const payload = (result.nextContext as AgentRuntimeContext)
-        .payload as TasksBatchResultPayload;
+        .payload as SubAgentsBatchResultPayload;
       expect(payload.results[0].success).toBe(false);
       expect(payload.results[0].error).toBe('Operation cancelled');
       // getSubAgentTaskStatus should not be called since operation was cancelled before poll
@@ -424,7 +427,7 @@ describe('exec_tasks executor', () => {
       // Given
       const mockStore = createMockStore();
       const context = createTestContext();
-      const instruction = createExecTasksInstruction(
+      const instruction = createExecSubAgentsInstruction(
         [{ description: 'Test', instruction: 'Test instruction' }],
         'msg_parent',
       );
@@ -447,7 +450,7 @@ describe('exec_tasks executor', () => {
       // When
       const result = await executeWithMockContext({
         context,
-        executor: 'exec_tasks',
+        executor: 'exec_sub_agents',
         instruction,
         mockStore,
         state,
@@ -456,11 +459,11 @@ describe('exec_tasks executor', () => {
       // Then
       expect(result.nextContext).toBeDefined();
       const nextContext = result.nextContext as AgentRuntimeContext;
-      expect(nextContext.phase).toBe('tasks_batch_result');
+      expect(nextContext.phase).toBe('sub_agents_batch_result');
       expect(nextContext.session?.stepCount).toBe(6);
       expect(nextContext.session?.status).toBe('running');
 
-      const payload = nextContext.payload as TasksBatchResultPayload;
+      const payload = nextContext.payload as SubAgentsBatchResultPayload;
       expect(payload.parentMessageId).toBe('msg_parent');
     });
 
@@ -468,7 +471,7 @@ describe('exec_tasks executor', () => {
       // Given
       const mockStore = createMockStore();
       const context = createTestContext();
-      const instruction = createExecTasksInstruction();
+      const instruction = createExecSubAgentsInstruction();
       const state = createInitialState({ messages: [], operationId: 'test-op' });
 
       const updatedMessages = [{ content: 'test', id: 'msg_1', role: 'user' }];
@@ -491,7 +494,7 @@ describe('exec_tasks executor', () => {
       // When
       const result = await executeWithMockContext({
         context,
-        executor: 'exec_tasks',
+        executor: 'exec_sub_agents',
         instruction,
         mockStore,
         state,
@@ -507,7 +510,7 @@ describe('exec_tasks executor', () => {
       // Given
       const mockStore = createMockStore();
       const context = createTestContext({ agentId: 'agent_1', topicId: 'topic_1' });
-      const instruction = createExecTasksInstruction(
+      const instruction = createExecSubAgentsInstruction(
         [{ description: 'Test task', instruction: 'Do something important' }],
         'msg_parent',
       );
@@ -530,7 +533,7 @@ describe('exec_tasks executor', () => {
       // When
       await executeWithMockContext({
         context,
-        executor: 'exec_tasks',
+        executor: 'exec_sub_agents',
         instruction,
         mockStore,
         state,
@@ -557,7 +560,7 @@ describe('exec_tasks executor', () => {
       // Given
       const mockStore = createMockStore();
       const context = createTestContext();
-      const instruction = createExecTasksInstruction(
+      const instruction = createExecSubAgentsInstruction(
         [
           { description: 'Task 1', instruction: 'Success task' },
           { description: 'Task 2', instruction: 'Fail task' },
@@ -591,7 +594,7 @@ describe('exec_tasks executor', () => {
       // When
       const result = await executeWithMockContext({
         context,
-        executor: 'exec_tasks',
+        executor: 'exec_sub_agents',
         instruction,
         mockStore,
         state,
@@ -599,7 +602,7 @@ describe('exec_tasks executor', () => {
 
       // Then
       const payload = (result.nextContext as AgentRuntimeContext)
-        .payload as TasksBatchResultPayload;
+        .payload as SubAgentsBatchResultPayload;
       expect(payload.results).toHaveLength(2);
       expect(payload.results[0].success).toBe(true);
       expect(payload.results[1].success).toBe(false);

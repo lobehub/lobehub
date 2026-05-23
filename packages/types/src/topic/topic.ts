@@ -31,8 +31,37 @@ export interface TopicUserMemoryExtractRunState {
 
 export interface ChatTopicBotContext {
   applicationId: string;
+  /**
+   * Whether the message sender is the bot owner. Computed at the bot
+   * router/dispatcher entry point as
+   *   `senderExternalUserId === settings.userId`.
+   *
+   * Downstream policy (`resolveDeviceAccessPolicy`) consumes this directly
+   * and never recomputes — the routers own the owner-identity check.
+   *
+   * Fail-closed: if `settings.userId` is missing or the sender ID can't be
+   * resolved, this MUST be `false`. Never default to `true` "when in doubt".
+   */
+  isOwner: boolean;
+  /**
+   * Set when the run originated from the shared Messenger bot (Telegram global
+   * token, Slack per-workspace install, Discord global token). The value is
+   * the messenger installation key (`<platform>:<tenantId>` or
+   * `<platform>:singleton`) — `BotCallbackService` uses its presence as the
+   * deterministic switch to resolve credentials via the messenger install
+   * store instead of `agent_bot_providers`.
+   */
+  messengerInstallationKey?: string;
   platform: string;
   platformThreadId: string;
+  /**
+   * Platform-assigned ID of the actual sender of the inbound message
+   * (e.g. Discord/Slack `user.id`, Telegram `from.id`). Distinct from
+   * `applicationId` (the bot itself) — required so downstream code can tell
+   * "owner @ bot" apart from "external user @ bot" without re-reading
+   * platform-specific message shapes.
+   */
+  senderExternalUserId: string;
 }
 
 export interface OnboardingFeedbackEntry {
@@ -68,9 +97,6 @@ export interface OnboardingSessionSnapshot {
 export interface ChatTopicMetadata {
   bot?: ChatTopicBotContext;
   boundDeviceId?: string;
-  /**
-   * Cron job ID that triggered this topic creation (if created by scheduled task)
-   */
   cronJobId?: string;
   /**
    * Scoped pointer to the currently active assistant message for a running
@@ -106,6 +132,12 @@ export interface ChatTopicMetadata {
   onboardingSession?: OnboardingSessionSnapshot;
   provider?: string;
   /**
+   * Web (cloud) only. Ordered list of GitHub repos selected for this topic.
+   * Each repo will be cloned into the Gateway sandbox before execution.
+   * `workingDirectory` is kept in sync with repos[0] (the primary repo).
+   */
+  repos?: string[];
+  /**
    * Currently running Gateway operation on this topic.
    * Set when agent execution starts, cleared when it completes/fails.
    * Used to reconnect WebSocket after page reload.
@@ -119,10 +151,13 @@ export interface ChatTopicMetadata {
   userMemoryExtractRunState?: TopicUserMemoryExtractRunState;
   userMemoryExtractStatus?: 'pending' | 'completed' | 'failed';
   /**
-   * Topic-level working directory (desktop only).
+   * Topic-level working directory.
+   * On desktop: local filesystem path for the CC session cwd.
+   * On web (cloud): URL of the primary GitHub repo (first item of `repos`).
    * Priority is higher than Agent-level settings. Also serves as the
    * binding cwd for a CC session — written on first CC execution and
    * checked on subsequent turns to decide whether `--resume` is safe.
+   * For sidebar grouping, topics are bucketed by this field (byProject mode).
    */
   workingDirectory?: string;
 }
@@ -133,7 +168,14 @@ export interface ChatTopicSummary {
   provider: string;
 }
 
-export type ChatTopicStatus = 'active' | 'completed' | 'archived';
+export type ChatTopicStatus =
+  | 'active'
+  | 'running'
+  | 'paused'
+  | 'waitingForHuman'
+  | 'failed'
+  | 'completed'
+  | 'archived';
 
 export interface ChatTopic extends Omit<BaseDataModel, 'meta'> {
   completedAt?: Date | null;

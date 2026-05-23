@@ -5,7 +5,9 @@ import { LobeAgentManifest } from './manifest';
 describe('LobeAgentManifest', () => {
   it('should keep the package metadata generic for future Lobe Agent capabilities', () => {
     expect(LobeAgentManifest.meta.avatar).toBe('🤖');
-    expect(LobeAgentManifest.meta.description).toBe('Run built-in Lobe Agent capabilities.');
+    expect(LobeAgentManifest.meta.description).toBe(
+      'Run built-in Lobe Agent capabilities: plan + todo management, sub-agent dispatch, and visual media analysis.',
+    );
     expect(LobeAgentManifest.meta.readme).toContain(
       'built-in assistant capabilities that can be expanded over time',
     );

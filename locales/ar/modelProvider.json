@@ -227,6 +227,7 @@
   "providerModels.item.modelConfig.extendParams.options.gpt5_2ProReasoningEffort.hint": "لسلسلة GPT-5.2 Pro؛ يتحكم في شدة الاستدلال.",
   "providerModels.item.modelConfig.extendParams.options.gpt5_2ReasoningEffort.hint": "لسلسلة GPT-5.2؛ يتحكم في شدة الاستدلال.",
   "providerModels.item.modelConfig.extendParams.options.grok4_20ReasoningEffort.hint": "لسلسلة Grok 4.20؛ يتحكم في شدة التفكير. منخفض/متوسط يستخدم 4 وكلاء، عالي/عالي جدًا يستخدم 16 وكيلًا.",
+  "providerModels.item.modelConfig.extendParams.options.grok4_3ReasoningEffort.hint": "لسلسلة Grok 4.3؛ يتحكم في شدة التفكير.",
   "providerModels.item.modelConfig.extendParams.options.hy3ReasoningEffort.hint": "لنماذج Hy3؛ يتحكم في شدة التفكير. no_think (استجابة فائقة السرعة)، low (تفكير سريع)، و high (تفكير عميق) — لتلبية احتياجات زمن الاستجابة والعمق المختلفة، بدءًا من التفاعلات عالية التردد وحتى المهام الهندسية المعقدة.",
   "providerModels.item.modelConfig.extendParams.options.imageAspectRatio.hint": "لنماذج توليد الصور من Gemini؛ يتحكم في نسبة العرض إلى الارتفاع للصور المُولدة.",
   "providerModels.item.modelConfig.extendParams.options.imageAspectRatio2.hint": "لـ Nano Banana 2؛ يتحكم في نسبة العرض إلى الارتفاع للصور المُنشأة (يدعم النسب العريضة جدًا 1:4، 4:1، 1:8، 8:1).",

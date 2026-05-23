@@ -1,7 +1,7 @@
 import type { ChatTopicMetadata, ChatTopicStatus } from '@lobechat/types';
 import { Flexbox, Icon, Skeleton, Tag } from '@lobehub/ui';
 import { createStaticStyles, cssVar, keyframes, useTheme } from 'antd-style';
-import { CheckCircle2, HashIcon, MessageSquareDashed } from 'lucide-react';
+import { CheckCircle2, Hand, HashIcon, MessageSquareDashed } from 'lucide-react';
 import { memo, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -13,6 +13,7 @@ import { pluginRegistry } from '@/features/Electron/titlebar/RecentlyViewed/plug
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { getPlatformIcon } from '@/routes/(main)/agent/channel/const';
 import { useAgentStore } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { useElectronStore } from '@/store/electron';
@@ -97,6 +98,9 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
   const { t } = useTranslation('topic');
   const { isDarkMode } = useTheme();
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
+  // Heterogeneous agents (Claude Code, Codex, …) don't have the chat-style
+  // topic semantics, so skip the default `#` placeholder icon for their rows.
+  const isHeterogeneousAgent = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
   const addTab = useElectronStore((s) => s.addTab);
 
   const loadingRingColor = isDarkMode
@@ -176,6 +180,8 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
   });
 
   const isCompleted = status === 'completed';
+  const isRunning = status === 'running';
+  const isWaitingForHuman = status === 'waitingForHuman';
 
   const hasUnread = id && isUnreadCompleted;
   const unreadIcon = (
@@ -230,7 +236,10 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
         href={href}
         title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
         icon={(() => {
-          if (isLoading) {
+          if (isWaitingForHuman) {
+            return <Icon icon={Hand} size={'small'} style={{ color: cssVar.colorWarning }} />;
+          }
+          if (isLoading || isRunning) {
             return (
               <RingLoadingIcon
                 ringColor={loadingRingColor}
@@ -256,7 +265,17 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
             }
           }
           return (
-            <Icon icon={HashIcon} size={'small'} style={{ color: cssVar.colorTextDescription }} />
+            <Icon
+              icon={HashIcon}
+              size={'small'}
+              style={{
+                color: cssVar.colorTextDescription,
+                // Heterogeneous agents (Claude Code, Codex, …) have no chat-style
+                // topic semantics, so suppress the `#` glyph while keeping its
+                // box so the title stays aligned with sibling rows.
+                visibility: isHeterogeneousAgent ? 'hidden' : undefined,
+              }}
+            />
           );
         })()}
         onClick={handleClick}

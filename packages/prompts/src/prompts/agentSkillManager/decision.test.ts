@@ -21,6 +21,12 @@ describe('agentSkillManager decision prompt', () => {
     expect(AGENT_SKILL_MANAGER_DECISION_SYSTEM_ROLE).toContain('agent document ids');
     expect(AGENT_SKILL_MANAGER_DECISION_SYSTEM_ROLE).toContain('not backing documents.id values');
     expect(AGENT_SKILL_MANAGER_DECISION_SYSTEM_ROLE).toContain(
+      'documentRefs may contain only agent document ids',
+    );
+    expect(AGENT_SKILL_MANAGER_DECISION_SYSTEM_ROLE).toContain(
+      'documentRefs must not contain messageId',
+    );
+    expect(AGENT_SKILL_MANAGER_DECISION_SYSTEM_ROLE).toContain(
       'hintIsSkill:true as strong evidence, not automatic authorization',
     );
     expect(AGENT_SKILL_MANAGER_DECISION_SYSTEM_ROLE).toContain(

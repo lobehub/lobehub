@@ -13,7 +13,7 @@ import { topicSelectors } from '@/store/chat/selectors';
 
 import TopicItem from '../List/Item';
 
-const ITEM_HEIGHT = 44; // Each topic item height
+const ITEM_HEIGHT = 36; // Each topic item height (NavItem height, no vertical padding)
 
 interface ContentProps {
   open: boolean;
@@ -159,7 +159,7 @@ const Content = memo<ContentProps>(({ open, searchKeyword }) => {
       onScroll={handleScroll}
     >
       {activeTopicList?.map((topic) => (
-        <Flexbox gap={1} key={topic.id} padding={'4px 8px'}>
+        <Flexbox gap={1} key={topic.id} paddingInline={4}>
           <TopicItem
             active={activeTopicId === topic.id}
             fav={topic.favorite}

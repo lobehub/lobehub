@@ -40,6 +40,8 @@ export interface ToolOutcomeSelfReflectionDeps {
   getWindowStart: (input: ToolOutcomeSelfReflectionWindowInput) => string;
   /** Emits self-reflection requests when an accumulator threshold crosses. */
   service: SelfReflectionService;
+  /** Stable workflow user id used when the source renderer does not carry a hydrated scope. */
+  userId: string;
 }
 
 /**
@@ -153,7 +155,7 @@ const handleSelfReflectionToolOutcome = async (input: {
     const { selfReflection } = input.deps;
     if (!selfReflection) return;
 
-    const userId = input.source.scope?.userId;
+    const userId = input.source.scope?.userId ?? selfReflection.userId;
     const agentId = input.payload.agentId ?? input.source.scope?.agentId;
     const status = input.payload.outcome?.status;
     if (!userId || !agentId || !status) return;

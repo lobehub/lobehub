@@ -41,7 +41,7 @@ const RecentsList = memo(() => {
   }
 
   return (
-    <Flexbox gap={2}>
+    <Flexbox gap={1}>
       {displayItems.map((item) => (
         <Link
           key={`${item.type}-${item.id}`}

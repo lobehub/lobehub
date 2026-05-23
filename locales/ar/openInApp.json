@@ -1,0 +1,8 @@
+{
+  "dropdownLabel": "افتح دليل العمل في",
+  "errors.appNotInstalled": "{{appName}} غير مثبت",
+  "errors.launchFailed": "فشل الفتح في {{appName}}: {{error}}",
+  "errors.pathNotFound": "المسار غير موجود: {{path}}",
+  "errors.unknown": "خطأ غير معروف",
+  "tooltip": "افتح في {{appName}}"
+}

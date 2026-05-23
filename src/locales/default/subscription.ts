@@ -64,8 +64,11 @@ export default {
   'downgradePlans.title': 'Switch to {{plan}}',
   'credits.autoTopUp.currentBalance': 'Current Balance',
   'credits.autoTopUp.desc': 'Ensure your credits never run out',
+  'credits.autoTopUp.noCustomerHint':
+    'Purchase credits once to save a payment method before enabling auto top-up.',
   'credits.autoTopUp.noPaymentMethodHint':
     'No payment method on file. Auto top-up needs a saved card to charge automatically.',
+  'credits.autoTopUp.purchaseCredits': 'Purchase Credits',
   'credits.autoTopUp.setupPaymentMethod': 'Add Payment Method',
   'credits.autoTopUp.monthlyLimit': 'Monthly Limit',
   'credits.autoTopUp.monthlyLimitDesc':
@@ -114,6 +117,7 @@ export default {
   'credits.packages.title': 'My Credit Packages',
   'credits.topUp.cancel': 'Cancel',
   'credits.topUp.custom': 'Custom',
+  'credits.topUp.freeFeeHint': 'Free plan top-ups include a {{fee}} service fee per 1M credits.',
   'credits.topUp.maxAmountError': 'Single purchase amount cannot exceed ${{max}}',
   'credits.topUp.purchaseError': 'Purchase failed, please try again later',
   'credits.topUp.purchaseNow': 'Purchase Now',

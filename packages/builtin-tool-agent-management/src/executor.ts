@@ -119,7 +119,7 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
     } = params;
 
     if (runAsTask) {
-      // Execute as async task using GTD exec_task pattern
+      // Dispatch as a sub-agent using the lobe-agent exec_sub_agent pattern
       // Pre-load target agent config to ensure it exists
       const targetAgentExists = useAgentStore.getState().agentMap[agentId];
       if (!targetAgentExists) {
@@ -141,8 +141,8 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
         }
       }
 
-      // Return special state that will be recognized by AgentRuntime's exec_task executor
-      // Following GTD execTask pattern: stop: true + state.type = 'execTask'
+      // Return special state that will be recognized by AgentRuntime's exec_sub_agent executor
+      // Follows the lobe-agent callSubAgent pattern: stop: true + state.type = 'execSubAgent'
       return {
         content: `🚀 Triggered async task to call agent "${agentId}"${taskTitle ? `: ${taskTitle}` : ''}`,
         state: {
@@ -153,7 +153,7 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
             targetAgentId: agentId, // Special field for callAgent - indicates target agent
             timeout: timeout || 1_800_000,
           },
-          type: 'execTask', // Use same type as GTD to reuse existing executor
+          type: 'execSubAgent', // Same wire-level type as lobe-agent so the runtime reuses its executor
         },
         stop: true,
         success: true,

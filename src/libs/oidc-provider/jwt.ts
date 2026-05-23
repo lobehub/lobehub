@@ -138,6 +138,7 @@ export const validateOIDCJWT = async (token: string) => {
         exp: payload.exp,
         iat: payload.iat,
         jti: payload.jti,
+        purpose: payload.purpose as string | undefined,
         scope: payload.scope,
         sub: userId,
       },

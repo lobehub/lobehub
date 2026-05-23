@@ -6,14 +6,13 @@
     ".": "./src/index.ts",
     "./agentMarketplace": "./src/agentMarketplace/index.ts",
     "./agentMarketplace/client": "./src/agentMarketplace/client/index.ts",
-    "./agentMarketplace/executionRuntime": "./src/agentMarketplace/ExecutionRuntime/index.ts",
-    "./agentMarketplace/executor": "./src/agentMarketplace/executor/index.ts",
     "./client": "./src/client/index.ts",
     "./executionRuntime": "./src/ExecutionRuntime/index.ts",
     "./utils": "./src/ExecutionRuntime/utils.ts"
   },
   "main": "./src/index.ts",
   "dependencies": {
+    "@lobechat/const": "workspace:*",
     "@lobechat/markdown-patch": "workspace:*",
     "@lobechat/prompts": "workspace:*",
     "zod": "^3.25.76"

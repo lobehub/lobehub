@@ -36,7 +36,7 @@ const toTaskStatus = (status: string): TaskStatus =>
   TASK_STATUS_SET.has(status as TaskStatus) ? (status as TaskStatus) : 'backlog';
 
 const AgentTaskItem = memo<TaskItemProps>(({ task, variant = 'default' }) => {
-  const { t } = useTranslation('common');
+  const { t, i18n } = useTranslation('common');
   const { t: tChat } = useTranslation('chat');
   const useFetchTaskDetail = useTaskStore((s) => s.useFetchTaskDetail);
   useFetchTaskDetail(task.identifier);
@@ -49,6 +49,7 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, variant = 'default' }) => {
   const time = formatTaskItemDate(task.updatedAt || task.createdAt, {
     formatOtherYear: t('time.formatOtherYear'),
     formatThisYear: t('time.formatThisYear'),
+    locale: i18n.language,
   });
   const status = toTaskStatus(task.status);
   const hasName = Boolean(task.name?.trim());
