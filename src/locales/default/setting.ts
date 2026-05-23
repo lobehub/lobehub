@@ -812,6 +812,8 @@ export default {
   'settingSystem.oauth.signout.success': 'Sign out successful',
   'settingSystem.title': 'System Settings',
   'serviceModel.modelAssignments.title': 'Model Assignments',
+  'serviceModel.contextLimit.placeholder': 'Context limit',
+  'serviceModel.memoryModels.title': 'Memory Models',
   'serviceModel.optionalFeatures.title': 'Optional Features',
   'settingSystemTools.appEnvironment.chromium.desc': 'Chromium browser engine version',
   'settingSystemTools.appEnvironment.desc': 'Built-in runtime versions in the desktop app',
@@ -991,6 +993,22 @@ When I am ___, I need ___
   'systemAgent.inputCompletion.modelDesc':
     'Suggests text while you type. When enabled, this model generates the suggestions.',
   'systemAgent.inputCompletion.title': 'Input Suggestions',
+  'systemAgent.userMemoryEmbedding.label': 'Model',
+  'systemAgent.userMemoryEmbedding.modelDesc':
+    'Model used to embed memory content for retrieval. The context limit caps each embedding input.',
+  'systemAgent.userMemoryEmbedding.title': 'Memory Embedding',
+  'systemAgent.userMemoryGatekeeper.label': 'Model',
+  'systemAgent.userMemoryGatekeeper.modelDesc':
+    'Model used to decide whether a conversation contains memory worth extracting.',
+  'systemAgent.userMemoryGatekeeper.title': 'Memory Gatekeeper',
+  'systemAgent.userMemoryLayerExtractor.label': 'Model',
+  'systemAgent.userMemoryLayerExtractor.modelDesc':
+    'Model used to extract identities, preferences, contexts, activities, and experiences.',
+  'systemAgent.userMemoryLayerExtractor.title': 'Memory Extraction',
+  'systemAgent.userMemoryPersonaWriter.label': 'Model',
+  'systemAgent.userMemoryPersonaWriter.modelDesc':
+    'Model used to write persona-oriented memory summaries.',
+  'systemAgent.userMemoryPersonaWriter.title': 'Memory Persona Writer',
   'systemAgent.promptRewrite.label': 'Model',
   'systemAgent.promptRewrite.modelDesc':
     'Improves prompts before generation. When enabled, this model rewrites the prompt.',

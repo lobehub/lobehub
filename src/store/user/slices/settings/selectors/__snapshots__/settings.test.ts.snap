@@ -91,6 +91,22 @@ exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AG
     "model": "gpt-5.4-mini",
     "provider": "openai",
   },
+  "userMemoryEmbedding": {
+    "model": "text-embedding-3-small",
+    "provider": "openai",
+  },
+  "userMemoryGatekeeper": {
+    "model": "gpt-5.4-mini",
+    "provider": "openai",
+  },
+  "userMemoryLayerExtractor": {
+    "model": "gpt-5.4-mini",
+    "provider": "openai",
+  },
+  "userMemoryPersonaWriter": {
+    "model": "gpt-5.4-mini",
+    "provider": "openai",
+  },
 }
 `;
 
