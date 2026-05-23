@@ -95,12 +95,13 @@ describe('AgentRuntimeCoordinator', () => {
       await coordinator.saveAgentState(operationId, newState as any);
 
       expect(mockStateManager.saveAgentState).toHaveBeenCalledWith(operationId, newState);
-      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith(
+      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith({
+        finalState: newState,
         operationId,
-        newState.stepCount,
-        newState,
-        'done',
-      );
+        reason: 'done',
+        stepIndex: newState.stepCount,
+        uiMessages: undefined,
+      });
     });
 
     it('should publish end event when status changes to error', async () => {
@@ -112,12 +113,13 @@ describe('AgentRuntimeCoordinator', () => {
 
       await coordinator.saveAgentState(operationId, newState as any);
 
-      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith(
+      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith({
+        finalState: newState,
         operationId,
-        newState.stepCount,
-        newState,
-        'error',
-      );
+        reason: 'error',
+        stepIndex: newState.stepCount,
+        uiMessages: undefined,
+      });
     });
 
     it('should fallback to previous stepCount when terminal state is missing stepCount', async () => {
@@ -129,12 +131,13 @@ describe('AgentRuntimeCoordinator', () => {
 
       await coordinator.saveAgentState(operationId, newState as any);
 
-      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith(
+      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith({
+        finalState: newState,
         operationId,
-        previousState.stepCount,
-        newState,
-        'error',
-      );
+        reason: 'error',
+        stepIndex: previousState.stepCount,
+        uiMessages: undefined,
+      });
     });
 
     it('should publish end event when status changes to interrupted', async () => {
@@ -146,12 +149,13 @@ describe('AgentRuntimeCoordinator', () => {
 
       await coordinator.saveAgentState(operationId, newState as any);
 
-      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith(
+      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith({
+        finalState: newState,
         operationId,
-        newState.stepCount,
-        newState,
-        'interrupted',
-      );
+        reason: 'interrupted',
+        stepIndex: newState.stepCount,
+        uiMessages: undefined,
+      });
     });
 
     it('should publish end event when status changes to waiting_for_human so the client releases its loading state', async () => {
@@ -163,12 +167,13 @@ describe('AgentRuntimeCoordinator', () => {
 
       await coordinator.saveAgentState(operationId, newState as any);
 
-      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith(
+      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith({
+        finalState: newState,
         operationId,
-        newState.stepCount,
-        newState,
-        'waiting_for_human',
-      );
+        reason: 'waiting_for_human',
+        stepIndex: newState.stepCount,
+        uiMessages: undefined,
+      });
     });
 
     it('should not publish end event when status was already done', async () => {
@@ -214,12 +219,13 @@ describe('AgentRuntimeCoordinator', () => {
 
       expect(mockStateManager.loadAgentState).toHaveBeenCalledWith(operationId);
       expect(mockStateManager.saveStepResult).toHaveBeenCalledWith(operationId, stepResult);
-      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith(
+      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith({
+        finalState: stepResult.newState,
         operationId,
-        5,
-        stepResult.newState,
-        'done',
-      );
+        reason: 'done',
+        stepIndex: 5,
+        uiMessages: undefined,
+      });
     });
 
     it('should publish end event when status becomes error', async () => {
@@ -234,12 +240,13 @@ describe('AgentRuntimeCoordinator', () => {
 
       await coordinator.saveStepResult(operationId, stepResult as any);
 
-      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith(
+      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith({
+        finalState: stepResult.newState,
         operationId,
-        5,
-        stepResult.newState,
-        'error',
-      );
+        reason: 'error',
+        stepIndex: 5,
+        uiMessages: undefined,
+      });
     });
 
     it('should fallback to stepResult.stepIndex when terminal step result state is missing stepCount', async () => {
@@ -254,12 +261,13 @@ describe('AgentRuntimeCoordinator', () => {
 
       await coordinator.saveStepResult(operationId, stepResult as any);
 
-      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith(
+      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith({
+        finalState: stepResult.newState,
         operationId,
-        stepResult.stepIndex,
-        stepResult.newState,
-        'error',
-      );
+        reason: 'error',
+        stepIndex: stepResult.stepIndex,
+        uiMessages: undefined,
+      });
     });
 
     it('should publish end event when status becomes waiting_for_human (paused awaiting approval)', async () => {
@@ -274,12 +282,13 @@ describe('AgentRuntimeCoordinator', () => {
 
       await coordinator.saveStepResult(operationId, stepResult as any);
 
-      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith(
+      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith({
+        finalState: stepResult.newState,
         operationId,
-        4,
-        stepResult.newState,
-        'waiting_for_human',
-      );
+        reason: 'waiting_for_human',
+        stepIndex: 4,
+        uiMessages: undefined,
+      });
     });
 
     it('should publish end event when status becomes interrupted', async () => {
@@ -294,12 +303,13 @@ describe('AgentRuntimeCoordinator', () => {
 
       await coordinator.saveStepResult(operationId, stepResult as any);
 
-      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith(
+      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith({
+        finalState: stepResult.newState,
         operationId,
-        5,
-        stepResult.newState,
-        'interrupted',
-      );
+        reason: 'interrupted',
+        stepIndex: 5,
+        uiMessages: undefined,
+      });
     });
 
     it('should not publish end event when status is not done', async () => {
@@ -393,6 +403,107 @@ describe('AgentRuntimeCoordinator', () => {
 
       expect(mockStateManager.getExecutionHistory).toHaveBeenCalledWith(operationId, limit);
       expect(result).toBe(expectedHistory);
+    });
+  });
+
+  // Terminal events should carry the canonical UIChatMessage[] snapshot
+  // when a resolver is wired so the client can use the pushed payload as
+  // Source of Truth instead of refetching from DB.
+  describe('uiMessagesResolver on agent_runtime_end', () => {
+    it('passes resolver result through saveAgentState terminal publish', async () => {
+      const uiMessages = [{ id: 'msg_1', role: 'user' }] as any[];
+      const resolver = vi.fn().mockResolvedValue(uiMessages);
+      const coordinatorWithResolver = new AgentRuntimeCoordinator({
+        stateManager: mockStateManager,
+        streamEventManager: mockStreamManager,
+        uiMessagesResolver: resolver,
+      });
+
+      const previousState = { status: 'running', stepCount: 3 };
+      const newState = { status: 'done', stepCount: 5 };
+      mockStateManager.loadAgentState.mockResolvedValue(previousState);
+
+      await coordinatorWithResolver.saveAgentState('op-1', newState as any);
+
+      expect(resolver).toHaveBeenCalledWith(newState);
+      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith({
+        finalState: newState,
+        operationId: 'op-1',
+        reason: 'done',
+        stepIndex: 5,
+        uiMessages,
+      });
+    });
+
+    it('passes resolver result through saveStepResult terminal publish', async () => {
+      const uiMessages = [{ id: 'msg_a', role: 'assistantGroup' }] as any[];
+      const resolver = vi.fn().mockResolvedValue(uiMessages);
+      const coordinatorWithResolver = new AgentRuntimeCoordinator({
+        stateManager: mockStateManager,
+        streamEventManager: mockStreamManager,
+        uiMessagesResolver: resolver,
+      });
+
+      const stepResult = {
+        executionTime: 100,
+        newState: { status: 'done', stepCount: 4 },
+        stepIndex: 4,
+      };
+      mockStateManager.loadAgentState.mockResolvedValue({ status: 'running', stepCount: 3 });
+
+      await coordinatorWithResolver.saveStepResult('op-2', stepResult as any);
+
+      expect(resolver).toHaveBeenCalledWith(stepResult.newState);
+      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith({
+        finalState: stepResult.newState,
+        operationId: 'op-2',
+        reason: 'done',
+        stepIndex: 4,
+        uiMessages,
+      });
+    });
+
+    it('publishes with uiMessages=undefined when resolver rejects (must never fail the surrounding save)', async () => {
+      const resolver = vi.fn().mockRejectedValue(new Error('db down'));
+      const coordinatorWithResolver = new AgentRuntimeCoordinator({
+        stateManager: mockStateManager,
+        streamEventManager: mockStreamManager,
+        uiMessagesResolver: resolver,
+      });
+
+      const previousState = { status: 'running', stepCount: 3 };
+      const newState = { status: 'error', stepCount: 5 };
+      mockStateManager.loadAgentState.mockResolvedValue(previousState);
+
+      await coordinatorWithResolver.saveAgentState('op-3', newState as any);
+
+      expect(resolver).toHaveBeenCalled();
+      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith({
+        finalState: newState,
+        operationId: 'op-3',
+        reason: 'error',
+        stepIndex: 5,
+        uiMessages: undefined,
+      });
+    });
+
+    it('publishes with uiMessages=undefined when no resolver is wired (default constructor)', async () => {
+      // The default `coordinator` from the outer beforeEach is constructed
+      // without a resolver — proves the field is genuinely optional and
+      // legacy call sites stay unaffected.
+      const previousState = { status: 'running', stepCount: 3 };
+      const newState = { status: 'done', stepCount: 5 };
+      mockStateManager.loadAgentState.mockResolvedValue(previousState);
+
+      await coordinator.saveAgentState('op-4', newState as any);
+
+      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith({
+        finalState: newState,
+        operationId: 'op-4',
+        reason: 'done',
+        stepIndex: 5,
+        uiMessages: undefined,
+      });
     });
   });
 });

@@ -898,3 +898,82 @@ describe('AgentRuntimeService.executeStep - error-path snapshot finalize ()', ()
     dispatchSpy.mockRestore();
   });
 });
+
+// step_start event should carry the canonical UIChatMessage[] so the
+// client can use the pushed payload as Source of Truth.
+describe('AgentRuntimeService.executeStep - step_start uiMessages payload', () => {
+  const createService = () => {
+    return new AgentRuntimeService({} as any, 'user-1', { queueService: null });
+  };
+
+  it('attaches uiMessages to step_start data when topic context is known', async () => {
+    const service = createService();
+    const coordinator = (service as any).coordinator;
+    const streamManager = (service as any).streamManager;
+
+    coordinator.tryClaimStep = vi.fn().mockResolvedValue(true);
+    // Force early-exit path so we don't need to mock the entire runtime
+    // execution surface — terminal-state short-circuits right after
+    // step_start publishes.
+    coordinator.loadAgentState = vi.fn().mockResolvedValue({
+      status: 'done',
+      stepCount: 3,
+      lastModified: new Date().toISOString(),
+      metadata: { agentId: 'agt_1', topicId: 'tpc_1' },
+    });
+    streamManager.publishStreamEvent = vi.fn().mockResolvedValue(undefined);
+
+    // Inject a uiMessages-returning messageService — the runtime queries
+    // through MessageService (not the bare messageModel) so that file URLs
+    // go through FileService postProcessUrl.
+    const stubMessages = [{ id: 'msg_1', role: 'user' }];
+    (service as any).messageServiceInstance = {
+      queryMessages: vi.fn().mockResolvedValue(stubMessages),
+    };
+
+    await service.executeStep({
+      operationId: 'op-uimsg',
+      stepIndex: 5,
+      context: { phase: 'user_input' } as any,
+    });
+
+    // First publish call is step_start; assert its payload carries uiMessages.
+    const stepStartCall = streamManager.publishStreamEvent.mock.calls.find(
+      ([, evt]: any) => evt?.type === 'step_start',
+    );
+    expect(stepStartCall).toBeDefined();
+    expect(stepStartCall[1].data.uiMessages).toEqual(stubMessages);
+  });
+
+  it('omits uiMessages from step_start data when topic context is unknown', async () => {
+    const service = createService();
+    const coordinator = (service as any).coordinator;
+    const streamManager = (service as any).streamManager;
+
+    coordinator.tryClaimStep = vi.fn().mockResolvedValue(true);
+    coordinator.loadAgentState = vi.fn().mockResolvedValue({
+      status: 'done',
+      stepCount: 3,
+      lastModified: new Date().toISOString(),
+      metadata: {}, // no agentId/topicId
+    });
+    streamManager.publishStreamEvent = vi.fn().mockResolvedValue(undefined);
+
+    const queryMock = vi.fn();
+    (service as any).messageServiceInstance = { queryMessages: queryMock };
+
+    await service.executeStep({
+      operationId: 'op-noctx',
+      stepIndex: 5,
+      context: { phase: 'user_input' } as any,
+    });
+
+    const stepStartCall = streamManager.publishStreamEvent.mock.calls.find(
+      ([, evt]: any) => evt?.type === 'step_start',
+    );
+    expect(stepStartCall).toBeDefined();
+    expect(stepStartCall[1].data).not.toHaveProperty('uiMessages');
+    // Did not even attempt the DB query when context is missing.
+    expect(queryMock).not.toHaveBeenCalled();
+  });
+});

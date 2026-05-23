@@ -75,7 +75,11 @@ describe('StreamEventManager', () => {
 
       mockRedis.xadd.mockResolvedValue('event-id-456');
 
-      const result = await streamManager.publishAgentRuntimeEnd(operationId, stepIndex, finalState);
+      const result = await streamManager.publishAgentRuntimeEnd({
+        finalState,
+        operationId,
+        stepIndex,
+      });
 
       expect(result).toBe('event-id-456');
       expect(mockRedis.xadd).toHaveBeenCalledWith(
@@ -103,6 +107,50 @@ describe('StreamEventManager', () => {
       );
     });
 
+    // agent_runtime_end optionally carries the canonical UIChatMessage[]
+    // snapshot so the client can use the pushed payload as Source of Truth
+    // instead of refetching from DB.
+    it('should include uiMessages in serialized data when provided', async () => {
+      const operationId = 'test-operation-id';
+      const stepIndex = 5;
+      const finalState = { status: 'done', stepCount: 5 };
+      const uiMessages = [{ id: 'msg_a', role: 'assistantGroup' }] as any;
+
+      mockRedis.xadd.mockResolvedValue('event-id-ui');
+
+      await streamManager.publishAgentRuntimeEnd({
+        finalState,
+        operationId,
+        reason: 'done',
+        stepIndex,
+        uiMessages,
+      });
+
+      // Find the serialized `data` argument inline so this test stays robust
+      // if other positional args shift around.
+      const dataArg = mockRedis.xadd.mock.calls[0]?.find(
+        (a: any) => typeof a === 'string' && a.startsWith('{'),
+      );
+      const parsed = JSON.parse(dataArg);
+      expect(parsed.uiMessages).toEqual(uiMessages);
+      expect(parsed.finalState).toEqual(finalState);
+    });
+
+    it('should omit uiMessages from serialized data when not provided', async () => {
+      const operationId = 'test-operation-id';
+      const finalState = { status: 'done', stepCount: 3 };
+
+      mockRedis.xadd.mockResolvedValue('event-id-noui');
+
+      await streamManager.publishAgentRuntimeEnd({ finalState, operationId, stepIndex: 3 });
+
+      const dataArg = mockRedis.xadd.mock.calls[0]?.find(
+        (a: any) => typeof a === 'string' && a.startsWith('{'),
+      );
+      const parsed = JSON.parse(dataArg);
+      expect(parsed).not.toHaveProperty('uiMessages');
+    });
+
     it('should accept custom reason and reasonDetail', async () => {
       const operationId = 'test-operation-id';
       const stepIndex = 3;
@@ -112,13 +160,13 @@ describe('StreamEventManager', () => {
 
       mockRedis.xadd.mockResolvedValue('event-id-789');
 
-      await streamManager.publishAgentRuntimeEnd(
-        operationId,
-        stepIndex,
+      await streamManager.publishAgentRuntimeEnd({
         finalState,
+        operationId,
         reason,
         reasonDetail,
-      );
+        stepIndex,
+      });
 
       expect(mockRedis.xadd).toHaveBeenCalledWith(
         expect.any(String),
@@ -158,7 +206,12 @@ describe('StreamEventManager', () => {
 
       mockRedis.xadd.mockResolvedValue('event-id-790');
 
-      await streamManager.publishAgentRuntimeEnd(operationId, stepIndex, finalState, 'error');
+      await streamManager.publishAgentRuntimeEnd({
+        finalState,
+        operationId,
+        reason: 'error',
+        stepIndex,
+      });
 
       expect(mockRedis.xadd).toHaveBeenCalledWith(
         expect.any(String),

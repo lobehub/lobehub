@@ -13,6 +13,7 @@ import {
   ChatErrorType,
   type ChatMessageError,
   type ExecSubAgentTaskParams,
+  type UIChatMessage,
 } from '@lobechat/types';
 import debug from 'debug';
 import urlJoin from 'url-join';
@@ -30,6 +31,7 @@ import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
 import { emitAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { toAgentSignalTraceEvents } from '@/server/services/agentSignal/observability/traceEvents';
 import { mcpService } from '@/server/services/mcp';
+import { MessageService } from '@/server/services/message';
 import { QueueService } from '@/server/services/queue';
 import { LocalQueueServiceImpl } from '@/server/services/queue/impls';
 import { ToolExecutionService } from '@/server/services/toolExecution';
@@ -182,6 +184,17 @@ export class AgentRuntimeService {
   private serverDB: LobeChatDatabase;
   private userId: string;
   private messageModel: MessageModel;
+  // Lazily constructed because MessageService instantiates a FileService
+  // which eagerly creates the S3 client and throws when S3 env vars are
+  // missing — eager construction would break every test that builds an
+  // AgentRuntimeService without mocking the file backend.
+  private messageServiceInstance?: MessageService;
+  private get messageService(): MessageService {
+    if (!this.messageServiceInstance) {
+      this.messageServiceInstance = new MessageService(this.serverDB, this.userId);
+    }
+    return this.messageServiceInstance;
+  }
 
   constructor(db: LobeChatDatabase, userId: string, options?: AgentRuntimeServiceOptions) {
     // Use factory function to auto-select Redis or InMemory implementation
@@ -192,6 +205,10 @@ export class AgentRuntimeService {
     this.coordinator = new AgentRuntimeCoordinator({
       ...options?.coordinatorOptions,
       streamEventManager: this.streamManager,
+      // Provide the canonical UIChatMessage[] for terminal-state events so
+      // the client can use the pushed payload directly instead of refetching
+      // from DB. Falls back gracefully when topicId isn't set.
+      uiMessagesResolver: (state) => this.queryUiMessages(state),
     });
     this.queueService =
       options?.queueService === null ? null : (options?.queueService ?? new QueueService());
@@ -475,6 +492,31 @@ export class AgentRuntimeService {
   }
 
   /**
+   * Query the canonical UIChatMessage[] snapshot for the active topic — the
+   * same shape the `message.getMessages` trpc lambda returns to the client.
+   * Attached to step_start / agent_runtime_end stream events so the client
+   * can use the pushed payload directly instead of refetching from DB.
+   *
+   * Returns undefined when the topic isn't known yet (e.g. very early in
+   * bootstrap before the topic row has been committed) so callers can skip
+   * the `uiMessages` field entirely instead of pushing an empty array.
+   */
+  async queryUiMessages(agentState: AgentState): Promise<UIChatMessage[] | undefined> {
+    const agentId: string | undefined = agentState?.metadata?.agentId;
+    const topicId: string | undefined = agentState?.metadata?.topicId;
+    if (!agentId || !topicId) return undefined;
+
+    try {
+      return await this.messageService.queryMessages({ agentId, topicId });
+    } catch (error) {
+      // Stream events must never fail the step. If the DB hiccups, fall back
+      // to letting the client refresh as before.
+      console.error('[queryUiMessages] Failed to load uiMessages snapshot: %O', error);
+      return undefined;
+    }
+  }
+
+  /**
    * Execute Agent step
    */
   async executeStep(params: AgentExecutionParams): Promise<AgentExecutionResult> {
@@ -515,19 +557,26 @@ export class AgentRuntimeService {
     try {
       log('[%s][%d] Start step executing...', operationId, stepIndex);
 
-      // Publish step start event
-      await this.streamManager.publishStreamEvent(operationId, {
-        data: {},
-        stepIndex,
-        type: 'step_start',
-      });
-
-      // Get operation state and metadata
+      // Load agent state BEFORE publishing step_start so we can attach the
+      // canonical UIChatMessage snapshot to the event payload. step_start
+      // fires after the previous step's DB writes are awaited durable, so
+      // the snapshot query here reflects strongly-consistent state — that's
+      // the contract that lets the client treat the pushed uiMessages as
+      // the source of truth instead of doing its own refetch.
       const agentState = await this.coordinator.loadAgentState(operationId);
 
       if (!agentState) {
         throw new Error(`Agent state not found for operation ${operationId}`);
       }
+
+      const stepStartUiMessages = await this.queryUiMessages(agentState);
+      await this.streamManager.publishStreamEvent(operationId, {
+        data: {
+          ...(stepStartUiMessages !== undefined && { uiMessages: stepStartUiMessages }),
+        },
+        stepIndex,
+        type: 'step_start',
+      });
 
       agentState.metadata = {
         ...agentState.metadata,

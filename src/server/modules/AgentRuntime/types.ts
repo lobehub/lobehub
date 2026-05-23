@@ -1,8 +1,23 @@
 import type { ToolExecuteData } from '@lobechat/agent-gateway-client';
 import { type AgentState } from '@lobechat/agent-runtime';
+import { type UIChatMessage } from '@lobechat/types';
 
 import { type AgentOperationMetadata, type StepResult } from './AgentStateManager';
 import { type StreamChunkData, type StreamEvent } from './StreamEventManager';
+
+export interface PublishAgentRuntimeEndParams {
+  finalState: any;
+  operationId: string;
+  reason?: string;
+  reasonDetail?: string;
+  stepIndex: number;
+  /**
+   * Canonical UIChatMessage[] snapshot of the topic at terminal-state time.
+   * When present, the client uses this directly as Source of Truth instead
+   * of refetching from DB.
+   */
+  uiMessages?: UIChatMessage[];
+}
 
 /**
  * Agent State Manager Interface
@@ -114,15 +129,14 @@ export interface IStreamEventManager {
   getStreamHistory: (operationId: string, count?: number) => Promise<StreamEvent[]>;
 
   /**
-   * Publish Agent runtime end event
+   * Publish Agent runtime end event.
+   *
+   * `uiMessages` is the canonical UIChatMessage[] snapshot of the topic at
+   * terminal-state time so the client can use the pushed payload as Source
+   * of Truth instead of refetching from DB. Optional: callers without DB
+   * access may omit it and the client falls back to its existing behaviour.
    */
-  publishAgentRuntimeEnd: (
-    operationId: string,
-    stepIndex: number,
-    finalState: any,
-    reason?: string,
-    reasonDetail?: string,
-  ) => Promise<string>;
+  publishAgentRuntimeEnd: (params: PublishAgentRuntimeEndParams) => Promise<string>;
 
   /**
    * Publish Agent runtime initialization event

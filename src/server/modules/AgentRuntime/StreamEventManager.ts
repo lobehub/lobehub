@@ -4,6 +4,7 @@ import debug from 'debug';
 import { type Redis } from 'ioredis';
 
 import { getAgentRuntimeRedisClient } from './redis';
+import { type PublishAgentRuntimeEndParams } from './types';
 
 const log = debug('lobe-server:agent-runtime:stream-event-manager');
 const timing = debug('lobe-server:agent-runtime:timing');
@@ -182,13 +183,14 @@ export class StreamEventManager {
   /**
    * Publish Agent runtime end event
    */
-  async publishAgentRuntimeEnd(
-    operationId: string,
-    stepIndex: number,
-    finalState: any,
-    reason?: string,
-    reasonDetail?: string,
-  ): Promise<string> {
+  async publishAgentRuntimeEnd({
+    operationId,
+    stepIndex,
+    finalState,
+    reason,
+    reasonDetail,
+    uiMessages,
+  }: PublishAgentRuntimeEndParams): Promise<string> {
     return this.publishStreamEvent(operationId, {
       data: {
         finalState,
@@ -196,6 +198,7 @@ export class StreamEventManager {
         phase: 'execution_complete',
         reason: reason || 'completed',
         reasonDetail: reasonDetail || getDefaultReasonDetail(finalState, reason),
+        ...(uiMessages !== undefined && { uiMessages }),
       },
       stepIndex,
       type: 'agent_runtime_end',

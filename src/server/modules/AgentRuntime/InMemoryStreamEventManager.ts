@@ -1,7 +1,7 @@
 import debug from 'debug';
 
 import { type StreamChunkData, type StreamEvent } from './StreamEventManager';
-import { type IStreamEventManager } from './types';
+import { type IStreamEventManager, type PublishAgentRuntimeEndParams } from './types';
 
 const log = debug('lobe-server:agent-runtime:in-memory-stream-event-manager');
 
@@ -97,13 +97,14 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
     });
   }
 
-  async publishAgentRuntimeEnd(
-    operationId: string,
-    stepIndex: number,
-    finalState: any,
-    reason?: string,
-    reasonDetail?: string,
-  ): Promise<string> {
+  async publishAgentRuntimeEnd({
+    operationId,
+    stepIndex,
+    finalState,
+    reason,
+    reasonDetail,
+    uiMessages,
+  }: PublishAgentRuntimeEndParams): Promise<string> {
     return this.publishStreamEvent(operationId, {
       data: {
         finalState,
@@ -111,6 +112,7 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
         phase: 'execution_complete',
         reason: reason || 'completed',
         reasonDetail: reasonDetail || getDefaultReasonDetail(finalState, reason),
+        ...(uiMessages !== undefined && { uiMessages }),
       },
       stepIndex,
       type: 'agent_runtime_end',
