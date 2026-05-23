@@ -58,7 +58,7 @@ async function bundle(entry: string): Promise<string> {
     minify: false,
   });
   if (!r.success) {
-    const msgs = r.logs.map((l) => `${l.level}: ${l.message}`).path.join('\n');
+    const msgs = r.logs.map((l) => `${l.level}: ${l.message}`).join('\n');
     throw new Error(`bundle failed for ${entry}:\n${msgs}`);
   }
   return await r.outputs[0].text();
@@ -149,8 +149,8 @@ async function cmdDump(flags: Flags): Promise<void> {
   const json = unquoteAgentBrowserResult(raw);
   ensureDumpDir();
   const filename = `${name}-${isoStamp()}.json`;
-  const path = path.join(DUMP_DIR, filename);
-  writeFileSync(path, json, 'utf8');
+  const dumpPath = path.join(DUMP_DIR, filename);
+  writeFileSync(dumpPath, json, 'utf8');
   // Validate by parsing the meta header so we error early on bad capture
   try {
     const parsed = JSON.parse(json) as {
@@ -158,11 +158,11 @@ async function cmdDump(flags: Flags): Promise<void> {
     };
     const meta = parsed.meta ?? {};
     console.log(
-      `wrote ${path}  (${json.length} bytes  events=${meta.eventCount ?? '?'}  ` +
+      `wrote ${dumpPath}  (${json.length} bytes  events=${meta.eventCount ?? '?'}  ` +
         `calls=${meta.callCount ?? '?'}  samples=${meta.sampleCount ?? '?'})`,
     );
   } catch {
-    console.log(`wrote ${path}  (${json.length} bytes — JSON.parse failed; see file)`);
+    console.log(`wrote ${dumpPath}  (${json.length} bytes — JSON.parse failed; see file)`);
   }
 }
 
