@@ -1,10 +1,12 @@
+import { TRACING_SCENARIOS } from '@lobechat/const';
+import type { TracingOptions } from '@lobechat/llm-generation-tracing';
 import type { FollowUpChip, FollowUpExtractInput, FollowUpExtractResult } from '@lobechat/types';
 import debug from 'debug';
 
 import type { LobeChatDatabase } from '@/database/type';
-import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { AiGenerationService } from '@/server/services/aiGeneration';
 
-import { buildSuggestionPrompt } from './prompts';
+import { buildSuggestionPrompt, FOLLOW_UP_PROMPT_VERSION } from './prompts';
 import { RawResponseSchema, SUGGESTION_RESPONSE_JSON_SCHEMA } from './schema';
 
 const log = debug('lobe-server:follow-up-action-service');
@@ -52,17 +54,28 @@ export class FollowUpActionService {
     const { system, user } = buildSuggestionPrompt({ assistantText: text, hint });
     const { model, provider } = modelConfig;
 
+    const ai = new AiGenerationService(this.db, this.userId);
     let raw: unknown;
     try {
-      const modelRuntime = await initModelRuntimeFromDB(this.db, this.userId, provider);
-      raw = await modelRuntime.generateObject({
-        messages: [
-          { content: system, role: 'system' as const },
-          { content: user, role: 'user' as const },
-        ],
-        model,
-        schema: SUGGESTION_RESPONSE_JSON_SCHEMA,
-      });
+      raw = await ai.generateObject(
+        {
+          messages: [
+            { content: system, role: 'system' as const },
+            { content: user, role: 'user' as const },
+          ],
+          model,
+          provider,
+          schema: SUGGESTION_RESPONSE_JSON_SCHEMA,
+        },
+        {
+          tracing: {
+            promptVersion: FOLLOW_UP_PROMPT_VERSION,
+            scenario: TRACING_SCENARIOS.FollowUp,
+            schemaName: 'FollowUpSuggestionResponse',
+            topicId,
+          } satisfies TracingOptions,
+        },
+      );
     } catch (error) {
       log('LLM call failed: %O', error);
       return EMPTY_RESULT(row.id);

@@ -10,6 +10,7 @@ export * from './file';
 export * from './interests';
 export * from './klavis';
 export * from './layoutTokens';
+export * from './llmGenerationTracing';
 export * from './lobehubSkill';
 export * from './message';
 export * from './meta';

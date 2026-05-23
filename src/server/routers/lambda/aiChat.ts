@@ -11,9 +11,9 @@ import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { resolveContext } from '@/server/routers/lambda/_helpers/resolveContext';
 import { AiChatService } from '@/server/services/aiChat';
+import { AiGenerationService } from '@/server/services/aiGeneration';
 import { FileService } from '@/server/services/file';
 import { archiveToolResultIfNeeded } from '@/server/services/toolExecution/archiveToolResult';
 
@@ -29,6 +29,7 @@ const aiChatProcedure = authedProcedure.use(serverDatabase).use(async (opts) => 
     ctx: {
       agentModel: new AgentModel(ctx.serverDB, ctx.userId),
       aiChatService: new AiChatService(ctx.serverDB, ctx.userId),
+      aiGenerationService: new AiGenerationService(ctx.serverDB, ctx.userId),
       fileService: new FileService(ctx.serverDB, ctx.userId),
       messageModel: new MessageModel(ctx.serverDB, ctx.userId),
       threadModel: new ThreadModel(ctx.serverDB, ctx.userId),
@@ -43,19 +44,22 @@ export const aiChatRouter = router({
     log('messages count: %d', input.messages.length);
     log('schema: %O', input.schema);
 
-    log('initializing model runtime from DB with provider: %s', input.provider);
-    // Read user's provider config from database
-    const modelRuntime = await initModelRuntimeFromDB(ctx.serverDB, ctx.userId, input.provider);
-
-    log('calling generateObject');
-    const result = await modelRuntime.generateObject(
+    // Always stamp a trigger on metadata so cross-cutting hooks (timing,
+    // routing) and the tracing registry have a fallback when the caller
+    // forgets to set one. `tracing` carries the structured tracing config
+    // (scenario / promptVersion / schemaName / inputHint / ...).
+    const result = await ctx.aiGenerationService.generateObject(
       {
         messages: input.messages,
         model: input.model,
+        provider: input.provider,
         schema: input.schema,
         tools: input.tools,
       },
-      { metadata: { trigger: RequestTrigger.Chat } },
+      {
+        metadata: { trigger: RequestTrigger.Chat, ...input.metadata },
+        tracing: input.tracing,
+      },
     );
 
     log('generateObject completed, result: %O', result);

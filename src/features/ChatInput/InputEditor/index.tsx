@@ -1,8 +1,13 @@
-import { isDesktop } from '@lobechat/const';
+import { isDesktop, TRACING_SCENARIOS } from '@lobechat/const';
 import { HotkeyEnum, KeyEnum } from '@lobechat/const/hotkeys';
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
-import { chainInputCompletion, escapeXmlAttr } from '@lobechat/prompts';
-import { isCommandPressed, merge } from '@lobechat/utils';
+import {
+  chainInputCompletion,
+  escapeXmlAttr,
+  INPUT_COMPLETION_PROMPT_VERSION,
+  INPUT_COMPLETION_SCHEMA_NAME,
+} from '@lobechat/prompts';
+import { isCommandPressed } from '@lobechat/utils';
 import type { IEditor } from '@lobehub/editor';
 import { INSERT_MENTION_COMMAND, ReactAutoCompletePlugin, ReactMathPlugin } from '@lobehub/editor';
 import { Editor, FloatMenu, useEditorState } from '@lobehub/editor/react';
@@ -16,9 +21,10 @@ import { useHotkeysContext } from 'react-hotkeys-hook';
 import { usePasteFile, useUploadFiles } from '@/components/DragUploadZone';
 import { useEnterToSend } from '@/hooks/useEnterToSend';
 import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
-import { chatService } from '@/services/chat';
+import { aiChatService } from '@/services/aiChat';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
+import { useChatStore } from '@/store/chat';
 import { useUserStore } from '@/store/user';
 import {
   labPreferSelectors,
@@ -213,36 +219,47 @@ const InputEditor = memo<{
       // mid-text causes nested editor updates that freeze the input
       if (afterText.trim()) return null;
 
-      const { enabled: _, ...config } = systemAgentSelectors.inputCompletion(
-        useUserStore.getState(),
-      );
+      const config = systemAgentSelectors.inputCompletion(useUserStore.getState());
       const context = getMessagesRef.current?.();
-      const chainParams = chainInputCompletion(input, afterText, context);
+      const { messages, schema } = chainInputCompletion(input, afterText, context);
 
       const abortController = new AbortController();
       abortSignal.addEventListener('abort', () => abortController.abort());
 
-      let result = '';
+      const currentTopicId = useChatStore.getState().activeTopicId;
 
+      let response: { completion?: string } | null;
       try {
-        await chatService.fetchPresetTaskResult({
-          abortController,
-          onMessageHandle: (chunk) => {
-            if (chunk.type === 'text') {
-              result += chunk.text;
-            }
+        response = (await aiChatService.generateJSON(
+          {
+            messages,
+            model: config.model,
+            provider: config.provider,
+            schema,
+            tracing: {
+              agentId,
+              // Use the user's actual typed text as the row's `input_hint`
+              // — the wrapped prompt's first user message is templated and
+              // not human-scannable.
+              inputHint: input,
+              promptVersion: INPUT_COMPLETION_PROMPT_VERSION,
+              scenario: TRACING_SCENARIOS.InputCompletion,
+              schemaName: INPUT_COMPLETION_SCHEMA_NAME,
+              topicId: currentTopicId,
+            },
           },
-          params: merge(config, chainParams),
-        });
+          abortController,
+        )) as { completion?: string } | null;
       } catch {
         return null;
       }
 
       if (abortSignal.aborted) return null;
 
-      return result.trimEnd() || null;
+      const completion = response?.completion?.trimEnd();
+      return completion || null;
     },
-    [isComposingRef],
+    [isComposingRef, agentId],
   );
 
   const autoCompletePlugin = useMemo(

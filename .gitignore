@@ -106,6 +106,7 @@ vertex-ai-key.json
 
 # Agent tracing snapshots
 .agent-tracing/
+.llm-generation-tracing/
 
 # AI coding tools
 .local/

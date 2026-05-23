@@ -194,6 +194,11 @@ export const StructureSchema = z.object({
 });
 
 export const StructureOutputSchema = z.object({
+  /**
+   * Free-form context forwarded to non-tracing hooks (e.g. billing). Use
+   * `tracing` for `llm_generation_tracing` config.
+   */
+  metadata: z.record(z.string(), z.unknown()).optional(),
   messages: z.array(z.any()),
   model: z.string(),
   provider: z.string(),
@@ -201,10 +206,16 @@ export const StructureOutputSchema = z.object({
   tools: z
     .array(z.object({ function: LobeUniformToolSchema, type: z.literal('function') }))
     .optional(),
+  /**
+   * Structured tracing config (scenario / promptVersion / schemaName /
+   * agentId / topicId / inputHint / ...). See `TracingOptions` from
+   * `@lobechat/llm-generation-tracing` for the typed shape.
+   */
+  tracing: z.record(z.string(), z.unknown()).optional(),
 });
 
 interface IStructureSchema {
-  description: string;
+  description?: string;
   name: string;
   schema: {
     additionalProperties?: boolean;
@@ -216,8 +227,12 @@ interface IStructureSchema {
 }
 
 export interface StructureOutputParams {
-  keyVaultsPayload: string;
   messages: OpenAIChatMessage[];
+  /**
+   * Free-form context forwarded to non-tracing hooks (e.g. billing). Use
+   * `tracing` for `llm_generation_tracing` config.
+   */
+  metadata?: Record<string, unknown>;
   model: string;
   provider: string;
   schema?: IStructureSchema;
@@ -226,4 +241,10 @@ export interface StructureOutputParams {
     function: LobeUniformTool;
     type: 'function';
   }[];
+  /**
+   * Structured tracing config (scenario / promptVersion / schemaName /
+   * agentId / topicId / inputHint / ...). See `TracingOptions` from
+   * `@lobechat/llm-generation-tracing` for the typed shape.
+   */
+  tracing?: Record<string, unknown>;
 }
