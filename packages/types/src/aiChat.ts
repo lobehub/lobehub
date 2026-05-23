@@ -195,10 +195,8 @@ export const StructureSchema = z.object({
 
 export const StructureOutputSchema = z.object({
   /**
-   * Per-call metadata propagated to `ModelRuntime.generateObject` options.
-   * Caller may set `scenario` / `promptVersion` / `schemaName` so the
-   * llm_generation_tracing row groups the call correctly; `trigger` is
-   * defaulted by the server route when absent.
+   * Free-form context forwarded to non-tracing hooks (e.g. billing). Use
+   * `tracing` for `llm_generation_tracing` config.
    */
   metadata: z.record(z.string(), z.unknown()).optional(),
   messages: z.array(z.any()),
@@ -208,6 +206,12 @@ export const StructureOutputSchema = z.object({
   tools: z
     .array(z.object({ function: LobeUniformToolSchema, type: z.literal('function') }))
     .optional(),
+  /**
+   * Structured tracing config (scenario / promptVersion / schemaName /
+   * agentId / topicId / inputHint / ...). See `TracingOptions` from
+   * `@lobechat/llm-generation-tracing` for the typed shape.
+   */
+  tracing: z.record(z.string(), z.unknown()).optional(),
 });
 
 interface IStructureSchema {
@@ -225,9 +229,8 @@ interface IStructureSchema {
 export interface StructureOutputParams {
   messages: OpenAIChatMessage[];
   /**
-   * Per-call metadata propagated to `ModelRuntime.generateObject` options.
-   * Use it to declare `scenario` / `promptVersion` / `schemaName` for
-   * `llm_generation_tracing` grouping; `trigger` is defaulted server-side.
+   * Free-form context forwarded to non-tracing hooks (e.g. billing). Use
+   * `tracing` for `llm_generation_tracing` config.
    */
   metadata?: Record<string, unknown>;
   model: string;
@@ -238,4 +241,10 @@ export interface StructureOutputParams {
     function: LobeUniformTool;
     type: 'function';
   }[];
+  /**
+   * Structured tracing config (scenario / promptVersion / schemaName /
+   * agentId / topicId / inputHint / ...). See `TracingOptions` from
+   * `@lobechat/llm-generation-tracing` for the typed shape.
+   */
+  tracing?: Record<string, unknown>;
 }

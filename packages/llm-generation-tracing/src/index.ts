@@ -13,6 +13,7 @@ export type {
   ScenarioDefinition,
   TracingErrorPayload,
   TracingModelMetadata,
+  TracingOptions,
   TracingPayload,
   TracingSummary,
 } from './types';

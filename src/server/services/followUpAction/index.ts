@@ -1,4 +1,5 @@
 import { TRACING_SCENARIOS } from '@lobechat/const';
+import type { TracingOptions } from '@lobechat/llm-generation-tracing';
 import type { FollowUpChip, FollowUpExtractInput, FollowUpExtractResult } from '@lobechat/types';
 import debug from 'debug';
 
@@ -67,11 +68,12 @@ export class FollowUpActionService {
           schema: SUGGESTION_RESPONSE_JSON_SCHEMA,
         },
         {
-          metadata: {
+          tracing: {
             promptVersion: FOLLOW_UP_PROMPT_VERSION,
-            schemaName: 'FollowUpSuggestionResponse',
             scenario: TRACING_SCENARIOS.FollowUp,
-          },
+            schemaName: 'FollowUpSuggestionResponse',
+            topicId,
+          } satisfies TracingOptions,
         },
       );
     } catch (error) {

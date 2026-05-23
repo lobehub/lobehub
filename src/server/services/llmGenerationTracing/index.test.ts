@@ -116,6 +116,49 @@ describe('LLMGenerationTracingService.record', () => {
     });
   });
 
+  it('honours an explicit inputHint override instead of auto-extracting from the first user message', async () => {
+    const service = new LLMGenerationTracingService(stubStore);
+    const result = await service.record({
+      inputHint: '杭州天气',
+      payload: {
+        // Wrapper prompt — first user message is a template, not the real input.
+        input: [
+          { content: 'be helpful', role: 'system' },
+          { content: 'Before cursor: "杭州天气" After cursor: ""', role: 'user' },
+        ],
+      },
+      promptHash: 'ffffff',
+      promptVersion: 'v1.0',
+      scenario: 'input_completion',
+      success: true,
+      userId,
+    });
+
+    const [row] = await serverDB
+      .select()
+      .from(llmGenerationTracing)
+      .where(eq(llmGenerationTracing.id, result!.tracingId));
+    expect(row?.inputHint).toBe('杭州天气');
+  });
+
+  it('truncates an excessively long inputHint override to INPUT_HINT_MAX', async () => {
+    const service = new LLMGenerationTracingService(stubStore);
+    const long = 'x'.repeat(500);
+    const result = await service.record({
+      inputHint: long,
+      promptHash: 'ffffff',
+      promptVersion: 'v1.0',
+      scenario: 'input_completion',
+      success: true,
+      userId,
+    });
+    const [row] = await serverDB
+      .select()
+      .from(llmGenerationTracing)
+      .where(eq(llmGenerationTracing.id, result!.tracingId));
+    expect(row?.inputHint?.length).toBe(200);
+  });
+
   it('leaves storage_key null when the store reports a local-only save (key=null)', async () => {
     stubStore.save.mockResolvedValueOnce({ key: null });
     const service = new LLMGenerationTracingService(stubStore);

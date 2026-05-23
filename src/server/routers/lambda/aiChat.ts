@@ -44,9 +44,10 @@ export const aiChatRouter = router({
     log('messages count: %d', input.messages.length);
     log('schema: %O', input.schema);
 
-    // Caller-supplied metadata wins (scenario / promptVersion / schemaName) but
-    // we always stamp a trigger so tracing rows don't lose their scenario when
-    // the caller forgets to set one.
+    // Always stamp a trigger on metadata so cross-cutting hooks (timing,
+    // routing) and the tracing registry have a fallback when the caller
+    // forgets to set one. `tracing` carries the structured tracing config
+    // (scenario / promptVersion / schemaName / inputHint / ...).
     const result = await ctx.aiGenerationService.generateObject(
       {
         messages: input.messages,
@@ -55,7 +56,10 @@ export const aiChatRouter = router({
         schema: input.schema,
         tools: input.tools,
       },
-      { metadata: { trigger: RequestTrigger.Chat, ...input.metadata } },
+      {
+        metadata: { trigger: RequestTrigger.Chat, ...input.metadata },
+        tracing: input.tracing,
+      },
     );
 
     log('generateObject completed, result: %O', result);

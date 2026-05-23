@@ -18,12 +18,18 @@ export interface AiGenerationObjectInput {
 
 export interface AiGenerationObjectOptions {
   /**
-   * Metadata forwarded to `ModelRuntime.generateObject` options. Drives
-   * the `llm_generation_tracing` row (`scenario`, `promptVersion`,
-   * `schemaName`, `trigger`, ...) and any business hooks (billing).
+   * Free-form context forwarded to non-tracing hooks (billing, routing). Use
+   * `tracing` instead for `llm_generation_tracing` config.
    */
   metadata?: Record<string, unknown>;
   signal?: AbortSignal;
+  /**
+   * Structured tracing config (scenario / promptVersion / schemaName /
+   * agentId / topicId / inputHint / ...). Forwarded to the
+   * `llm_generation_tracing` hook. Strongly typed by `TracingOptions` from
+   * `@lobechat/llm-generation-tracing` at call sites.
+   */
+  tracing?: Record<string, unknown>;
 }
 
 /**
@@ -59,7 +65,7 @@ export class AiGenerationService {
         schema: input.schema,
         tools: input.tools,
       },
-      { metadata: options.metadata, signal: options.signal },
+      { metadata: options.metadata, signal: options.signal, tracing: options.tracing },
     )) as T;
   }
 }

@@ -32,6 +32,13 @@ export interface RecordLLMGenerationCallParams {
   costUsd?: number | null;
   errorCode?: string | null;
   errorDetail?: string | null;
+  /**
+   * Caller-supplied snippet stored on `input_hint`. When omitted, the service
+   * auto-extracts a hint from the first user message in `payload.input`.
+   * Callers wrapping the user's text in a template should pass the raw input
+   * here so the DB row stays human-scannable.
+   */
+  inputHint?: string | null;
   inputTokens?: number | null;
   latencyMs?: number | null;
   metadata?: Record<string, unknown>;
@@ -92,7 +99,7 @@ export class LLMGenerationTracingService {
       errorCode: params.errorCode,
       errorDetail: params.errorDetail,
       inputHash: params.payload?.input ? computeInputHash(params.payload.input) : null,
-      inputHint: pickInputHint(params.payload?.input),
+      inputHint: resolveInputHint(params.inputHint, params.payload?.input),
       inputTokens: params.inputTokens,
       latencyMs: params.latencyMs,
       metadata: params.metadata,
@@ -219,23 +226,29 @@ const createDefaultStore = (): ITracingStore | null => {
   return null;
 };
 
-const pickInputHint = (input: unknown): string | null => {
+const autoExtractHint = (input: unknown): string | null => {
   if (input == null) return null;
-  let text: string | null = null;
-  if (typeof input === 'string') {
-    text = input;
-  } else if (Array.isArray(input)) {
-    const firstUser = input.find(
-      (m): m is { content: unknown; role: string } =>
-        typeof m === 'object' &&
-        m !== null &&
-        'role' in m &&
-        (m as { role: unknown }).role === 'user',
-    );
-    if (firstUser && typeof firstUser.content === 'string') text = firstUser.content;
-  }
-  if (text == null) return null;
-  return text.slice(0, INPUT_HINT_MAX);
+  if (typeof input === 'string') return input;
+  if (!Array.isArray(input)) return null;
+  const firstUser = input.find(
+    (m): m is { content: unknown; role: string } =>
+      typeof m === 'object' &&
+      m !== null &&
+      'role' in m &&
+      (m as { role: unknown }).role === 'user',
+  );
+  return firstUser && typeof firstUser.content === 'string' ? firstUser.content : null;
+};
+
+/**
+ * Pick the `input_hint` value: caller-supplied override wins; otherwise fall
+ * back to a best-effort auto-extraction from the first user message. Always
+ * truncated to `INPUT_HINT_MAX` so the column stays scannable.
+ */
+const resolveInputHint = (override: string | null | undefined, input: unknown): string | null => {
+  const raw = override ?? autoExtractHint(input);
+  if (raw == null) return null;
+  return raw.slice(0, INPUT_HINT_MAX);
 };
 
 let cachedInstance: LLMGenerationTracingService | null = null;

@@ -55,3 +55,46 @@ export interface ScenarioDefinition {
   /** Symbolic scenario name, used for grouping and partitioning storage. */
   scenario: string;
 }
+
+/**
+ * Caller-facing tracing config for a single `generateObject` call. Passed
+ * through `GenerateObjectOptions.tracing` and consumed by the tracing hook
+ * to populate the `llm_generation_tracing` DB row + off-DB blob.
+ *
+ * Every field is optional — the hook fills sensible defaults (auto-extracted
+ * `inputHint`, registry-resolved `scenario`, `messages[0]` as system prompt).
+ * Supply the fields explicitly to keep the DB row scannable.
+ */
+export interface TracingOptions {
+  /** Owning agent ID; persisted to `agent_id`. */
+  agentId?: string;
+  /**
+   * Short snippet stored on `input_hint`. Pass the user's actual typed text
+   * when the prompt wraps it in a template — otherwise the auto-extracted
+   * hint ends up being the wrapper's first user message (e.g.
+   * `Before cursor: "…" After cursor: "…"`) instead of what the user wrote.
+   */
+  inputHint?: string;
+  /**
+   * Free-form context written to the row's `metadata` jsonb column. Use this
+   * for ad-hoc fields that don't deserve a typed slot (e.g. correlation IDs).
+   */
+  metadata?: Record<string, unknown>;
+  /** Parent tracing row for chained generations. */
+  parentTracingId?: string;
+  /** Semantic prompt version (e.g. `v1.0`). */
+  promptVersion?: string;
+  /** Scenario name; falls back to registry lookup by `trigger`. */
+  scenario?: string;
+  /** Structured-output schema identifier. */
+  schemaName?: string;
+  /**
+   * Override for the prompt-hash system text. Defaults to `messages[0]`
+   * when it's a system message.
+   */
+  systemPrompt?: string;
+  /** Topic / conversation ID. */
+  topicId?: string;
+  /** RequestTrigger string. */
+  trigger?: string;
+}

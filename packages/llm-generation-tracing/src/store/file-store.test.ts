@@ -101,6 +101,7 @@ describe('FileTracingStore', () => {
     // save() returns a null key, so locate the file on disk and read via its path.
     const dir = path.join(tmpRoot, DEFAULT_DIR, 'home_brief', 'v1.0-abcdef');
     const jsonFile = (await fs.readdir(dir)).find((f) => f.endsWith('.json'));
+    if (!jsonFile) throw new Error('expected a saved tracing file to exist');
     const loaded = await store.get(path.join(dir, jsonFile));
     expect(loaded).toMatchObject({
       input: { messages: [{ content: 'hi', role: 'user' }] },

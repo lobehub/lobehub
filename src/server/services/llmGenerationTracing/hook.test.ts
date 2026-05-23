@@ -32,7 +32,7 @@ describe('createLLMGenerationTracingHook', () => {
     expect(hooks).toEqual({});
   });
 
-  it('schedules a service.record call on success with payload-derived metadata', async () => {
+  it('schedules a service.record call on success, reading structured tracing config from options.tracing', async () => {
     const hooks = createLLMGenerationTracingHook('user-1', 'openai');
     expect(hooks.onGenerateObjectComplete).toBeDefined();
 
@@ -45,12 +45,12 @@ describe('createLLMGenerationTracingHook', () => {
       },
       {
         options: {
-          metadata: {
+          metadata: { trigger: 'agent_signal' },
+          tracing: {
             agentId: 'agt-1',
             promptVersion: 'v2.0',
             scenario: 'signal_skill_intent',
             topicId: 'tpc-1',
-            trigger: 'agent_signal',
           },
         },
         payload: {
@@ -86,7 +86,30 @@ describe('createLLMGenerationTracingHook', () => {
     expect(call.promptHash).toHaveLength(6);
   });
 
-  it('flags validation failures using the error message heuristic', async () => {
+  it('forwards caller-supplied inputHint through to the service', async () => {
+    const hooks = createLLMGenerationTracingHook('user-1', 'openai');
+    hooks.onGenerateObjectComplete!(
+      { latencyMs: 10, success: true },
+      {
+        options: {
+          tracing: {
+            inputHint: '杭州天气',
+            scenario: 'input_completion',
+            schemaName: 'InputCompletion',
+          },
+        },
+        payload: { messages: [], model: 'gpt-4o', schema: {} } as any,
+      },
+    );
+    await flushMicrotasks();
+    expect(record.mock.calls[0][0]).toMatchObject({
+      inputHint: '杭州天气',
+      scenario: 'input_completion',
+      schemaName: 'InputCompletion',
+    });
+  });
+
+  it('flags validation failures using the error message heuristic and resolves scenario from metadata.trigger fallback', async () => {
     const hooks = createLLMGenerationTracingHook('user-1', 'openai');
     hooks.onGenerateObjectComplete!(
       {
@@ -105,23 +128,23 @@ describe('createLLMGenerationTracingHook', () => {
       errorDetail: 'ZodError: required field missing',
       scenario: 'topic_title',
       success: false,
+      trigger: 'topic',
       validationFailed: true,
     });
   });
 
-  it('preserves unknown metadata keys (e.g. parent_memory_trace_key) into the row metadata', async () => {
+  it('writes caller-supplied tracing.metadata to the DB jsonb column, tagged with provider', async () => {
     const hooks = createLLMGenerationTracingHook('user-1', 'openai');
     hooks.onGenerateObjectComplete!(
       { latencyMs: 5, success: true },
       {
         options: {
-          metadata: {
+          metadata: { trigger: 'memory' },
+          tracing: {
             agentId: 'agt-known',
-            parent_memory_trace_key: 'memory-extraction/user-1/topic/abc/trace/2026-05-22.json',
-            trigger: 'memory',
-            // KNOWN_METADATA_KEYS — must NOT bleed into the row metadata
-            provider: 'should-be-stripped',
-            userId: 'should-be-stripped',
+            metadata: {
+              parent_memory_trace_key: 'memory-extraction/user-1/topic/abc/trace/2026-05-22.json',
+            },
           },
         },
         payload: { messages: [], model: 'gpt-4o', schema: {} } as any,
@@ -134,7 +157,7 @@ describe('createLLMGenerationTracingHook', () => {
     });
   });
 
-  it('falls back to the unknown scenario when no trigger metadata is provided', async () => {
+  it('falls back to the unknown scenario when no trigger / scenario is provided anywhere', async () => {
     const hooks = createLLMGenerationTracingHook('user-1', 'openai');
     hooks.onGenerateObjectComplete!(
       { latencyMs: 100, success: true },

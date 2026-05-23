@@ -233,16 +233,20 @@ const InputEditor = memo<{
         response = (await aiChatService.generateJSON(
           {
             messages,
-            metadata: {
+            model: config.model,
+            provider: config.provider,
+            schema,
+            tracing: {
               agentId,
+              // Use the user's actual typed text as the row's `input_hint`
+              // — the wrapped prompt's first user message is templated and
+              // not human-scannable.
+              inputHint: input,
               promptVersion: INPUT_COMPLETION_PROMPT_VERSION,
               scenario: TRACING_SCENARIOS.InputCompletion,
               schemaName: INPUT_COMPLETION_SCHEMA_NAME,
               topicId: currentTopicId,
             },
-            model: config.model,
-            provider: config.provider,
-            schema,
           },
           abortController,
         )) as { completion?: string } | null;

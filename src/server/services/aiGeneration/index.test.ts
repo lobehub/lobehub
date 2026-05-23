@@ -54,7 +54,7 @@ describe('AiGenerationService.generateObject', () => {
     });
   });
 
-  it('passes options.metadata through to ModelRuntime.generateObject', async () => {
+  it('forwards both options.metadata and options.tracing through to ModelRuntime.generateObject', async () => {
     generateObject.mockResolvedValue({});
     const ai = new AiGenerationService({} as any, 'user-1');
     await ai.generateObject(
@@ -64,19 +64,19 @@ describe('AiGenerationService.generateObject', () => {
         provider: 'openai',
       },
       {
-        metadata: {
+        metadata: { trigger: 'chat' },
+        tracing: {
           promptVersion: 'v1.0',
           scenario: 'input_completion',
-          trigger: 'chat',
         },
       },
     );
     const [, options] = generateObject.mock.calls[0];
     expect(options).toMatchObject({
-      metadata: {
+      metadata: { trigger: 'chat' },
+      tracing: {
         promptVersion: 'v1.0',
         scenario: 'input_completion',
-        trigger: 'chat',
       },
     });
   });

@@ -1,4 +1,8 @@
-import { computePromptHash, resolveScenario } from '@lobechat/llm-generation-tracing';
+import {
+  computePromptHash,
+  resolveScenario,
+  type TracingOptions,
+} from '@lobechat/llm-generation-tracing';
 import type { ModelRuntimeHooks } from '@lobechat/model-runtime';
 import debug from 'debug';
 
@@ -6,60 +10,31 @@ import { getLLMGenerationTracingService } from './index';
 
 const log = debug('lobe-server:llm-generation-tracing:hook');
 
-interface TracingMetadata {
-  agentId?: string;
-  parentTracingId?: string;
-  promptVersion?: string;
-  scenario?: string;
-  schemaName?: string;
-  /** Override for the system prompt used in hash computation; defaults to messages[0]. */
-  systemPromptOverride?: string;
-  topicId?: string;
-  trigger?: string;
-}
-
-const KNOWN_METADATA_KEYS = new Set([
-  'agentId',
-  'parentTracingId',
-  'promptVersion',
-  'scenario',
-  'schemaName',
-  'systemPrompt',
-  'topicId',
-  'trigger',
-  // ModelRuntime-internal metadata that should never bleed into the tracing row.
-  'provider',
-  'userId',
-  'traceId',
-  'spanId',
-]);
+const pickString = (value: unknown): string | undefined =>
+  typeof value === 'string' ? value : undefined;
 
 /**
- * Reads tracing metadata from options.metadata. Recognised keys map to the
- * tracing schema; everything else (e.g. `parent_memory_trace_key`) is preserved
- * verbatim under `passthrough` so callers can scribble custom context into the
- * row's `metadata` jsonb without round-tripping through the registry.
+ * Validate the loose `options.tracing` bag (the runtime declares it as
+ * `Record<string, unknown>`) into the strongly-typed `TracingOptions` shape
+ * the hook works with. Unknown keys flow through `metadata` for the DB jsonb
+ * column.
  */
-const extractMetadata = (
-  metadata: Record<string, unknown> | undefined,
-): TracingMetadata & { passthrough: Record<string, unknown> } => {
-  if (!metadata) return { passthrough: {} };
-  const passthrough: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(metadata)) {
-    if (!KNOWN_METADATA_KEYS.has(k)) passthrough[k] = v;
-  }
+const parseTracingOptions = (raw: Record<string, unknown> | undefined): TracingOptions => {
+  if (!raw) return {};
   return {
-    agentId: typeof metadata.agentId === 'string' ? metadata.agentId : undefined,
-    parentTracingId:
-      typeof metadata.parentTracingId === 'string' ? metadata.parentTracingId : undefined,
-    passthrough,
-    promptVersion: typeof metadata.promptVersion === 'string' ? metadata.promptVersion : undefined,
-    scenario: typeof metadata.scenario === 'string' ? metadata.scenario : undefined,
-    schemaName: typeof metadata.schemaName === 'string' ? metadata.schemaName : undefined,
-    systemPromptOverride:
-      typeof metadata.systemPrompt === 'string' ? (metadata.systemPrompt as string) : undefined,
-    topicId: typeof metadata.topicId === 'string' ? metadata.topicId : undefined,
-    trigger: typeof metadata.trigger === 'string' ? metadata.trigger : undefined,
+    agentId: pickString(raw.agentId),
+    inputHint: pickString(raw.inputHint),
+    metadata:
+      raw.metadata && typeof raw.metadata === 'object' && !Array.isArray(raw.metadata)
+        ? (raw.metadata as Record<string, unknown>)
+        : undefined,
+    parentTracingId: pickString(raw.parentTracingId),
+    promptVersion: pickString(raw.promptVersion),
+    scenario: pickString(raw.scenario),
+    schemaName: pickString(raw.schemaName),
+    systemPrompt: pickString(raw.systemPrompt),
+    topicId: pickString(raw.topicId),
+    trigger: pickString(raw.trigger),
   };
 };
 
@@ -102,15 +77,21 @@ export const createLLMGenerationTracingHook = (
 
   return {
     onGenerateObjectComplete: (data, context) => {
-      const meta = extractMetadata(context.options?.metadata as Record<string, unknown>);
+      const tracing = parseTracingOptions(context.options?.tracing as Record<string, unknown>);
+      // `trigger` is also read by ModelRuntime itself (timing logs) so it
+      // legitimately lives on `metadata`. Honour the explicit `tracing.trigger`
+      // override but fall back to the cross-cutting `metadata.trigger`.
+      const metadataTrigger = pickString(
+        (context.options?.metadata as Record<string, unknown> | undefined)?.trigger,
+      );
+      const trigger = tracing.trigger ?? metadataTrigger;
       const { scenario, promptVersion } = resolveScenario({
-        promptVersion: meta.promptVersion,
-        scenario: meta.scenario,
-        trigger: meta.trigger,
+        promptVersion: tracing.promptVersion,
+        scenario: tracing.scenario,
+        trigger,
       });
 
-      const systemPrompt =
-        meta.systemPromptOverride ?? extractSystemPrompt(context.payload.messages);
+      const systemPrompt = tracing.systemPrompt ?? extractSystemPrompt(context.payload.messages);
       const promptHash = computePromptHash(systemPrompt, context.payload.schema);
 
       // Heuristic: a Zod validation error message starts with the Zod marker.
@@ -121,16 +102,18 @@ export const createLLMGenerationTracingHook = (
       tryScheduleAfter(async () => {
         try {
           await service.record({
-            agentId: meta.agentId,
+            agentId: tracing.agentId,
             costUsd: (data.usage as { cost?: number } | undefined)?.cost,
             errorCode: data.error?.code,
             errorDetail: data.error?.message ?? data.error?.stack,
+            inputHint: tracing.inputHint,
             inputTokens: data.usage?.totalInputTokens ?? data.usage?.inputTextTokens,
             latencyMs: data.latencyMs,
-            metadata: { ...meta.passthrough, provider },
+            // Caller-supplied jsonb context (rare) + provider tagged by the hook.
+            metadata: { ...tracing.metadata, provider },
             model: context.payload.model,
             outputTokens: data.usage?.totalOutputTokens ?? data.usage?.outputTextTokens,
-            parentTracingId: meta.parentTracingId,
+            parentTracingId: tracing.parentTracingId,
             payload: {
               input: context.payload.messages,
               output: data.output,
@@ -141,10 +124,10 @@ export const createLLMGenerationTracingHook = (
             promptVersion,
             provider,
             scenario,
-            schemaName: meta.schemaName,
+            schemaName: tracing.schemaName,
             success: data.success,
-            topicId: meta.topicId,
-            trigger: meta.trigger,
+            topicId: tracing.topicId,
+            trigger,
             userId,
             validationFailed,
           });
