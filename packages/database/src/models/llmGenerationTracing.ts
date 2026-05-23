@@ -13,6 +13,13 @@ export interface RecordLlmGenerationParams {
   costUsd?: number | null;
   errorCode?: string | null;
   errorDetail?: string | null;
+  /**
+   * Caller-supplied row id. When omitted the DB autogenerates one. Pass an
+   * explicit UUID when the id needs to be known **before** the insert
+   * completes (e.g. so a tRPC route can return it in the response and the
+   * client can wire feedback against it).
+   */
+  id?: string;
   inputHash?: string | null;
   inputHint?: string | null;
   inputTokens?: number | null;
@@ -57,6 +64,7 @@ export class LlmGenerationTracingModel {
       costUsd: params.costUsd ?? null,
       errorCode: params.errorCode ?? null,
       errorDetail: params.errorDetail ?? null,
+      ...(params.id ? { id: params.id } : {}),
       inputHash: params.inputHash ?? null,
       inputHint: params.inputHint ?? null,
       inputTokens: params.inputTokens ?? null,

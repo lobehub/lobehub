@@ -116,6 +116,26 @@ describe('LLMGenerationTracingService.record', () => {
     });
   });
 
+  it('honours a caller-supplied tracingId as the row primary key', async () => {
+    const service = new LLMGenerationTracingService(stubStore);
+    const preAllocated = '00000000-0000-0000-0000-000000000abc';
+    const result = await service.record({
+      promptHash: 'ffffff',
+      promptVersion: 'v1.0',
+      scenario: 'input_completion',
+      success: true,
+      tracingId: preAllocated,
+      userId,
+    });
+
+    expect(result?.tracingId).toBe(preAllocated);
+    const [row] = await serverDB
+      .select()
+      .from(llmGenerationTracing)
+      .where(eq(llmGenerationTracing.id, preAllocated));
+    expect(row?.id).toBe(preAllocated);
+  });
+
   it('honours an explicit inputHint override instead of auto-extracting from the first user message', async () => {
     const service = new LLMGenerationTracingService(stubStore);
     const result = await service.record({

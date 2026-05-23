@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import {
   computeInputHash,
   FileTracingStore,
@@ -55,6 +57,12 @@ export interface RecordLLMGenerationCallParams {
   success: boolean;
   topicId?: string | null;
   traceId?: string | null;
+  /**
+   * Caller-supplied UUID for the row. When omitted the service generates one
+   * up-front (before DB insert), so the id is always known and returnable
+   * synchronously to the calling route.
+   */
+  tracingId?: string;
   trigger?: string | null;
   userId: string;
   validationFailed?: boolean;
@@ -93,11 +101,17 @@ export class LLMGenerationTracingService {
 
     const model = new LlmGenerationTracingModel(db, params.userId);
 
+    // Allocate the id up-front so the route can return it synchronously to
+    // the client (e.g. for feedback wiring) even though the actual `record()`
+    // call runs inside Next's `after()` after the response has been sent.
+    const id = params.tracingId ?? randomUUID();
+
     const dbValues: RecordLlmGenerationParams = {
       agentId: params.agentId,
       costUsd: params.costUsd,
       errorCode: params.errorCode,
       errorDetail: params.errorDetail,
+      id,
       inputHash: params.payload?.input ? computeInputHash(params.payload.input) : null,
       inputHint: resolveInputHint(params.inputHint, params.payload?.input),
       inputTokens: params.inputTokens,
@@ -119,12 +133,11 @@ export class LLMGenerationTracingService {
       validationFailed: params.validationFailed,
     };
 
-    // Insert first so the storage key can embed the row's id — every blob then
-    // points at exactly one row.
-    let tracingId: string;
+    // `id` was already allocated up-front (caller-supplied or randomUUID()).
+    // Insert first so the storage key can embed the row's id — every blob
+    // then points at exactly one row.
     try {
-      const row = await model.record(dbValues);
-      tracingId = row.id;
+      await model.record(dbValues);
     } catch (err) {
       log('DB insert failed: %O', err);
       return null;
@@ -150,7 +163,7 @@ export class LLMGenerationTracingService {
       scenario: params.scenario,
       schema: params.payload?.schema,
       system_prompt: params.payload?.systemPrompt,
-      tracing_id: tracingId,
+      tracing_id: id,
       validation_failed: params.validationFailed,
       version: '1.0',
     };
@@ -174,12 +187,12 @@ export class LLMGenerationTracingService {
             : (params.metadata ?? {}),
           storageKey,
         })
-        .where(eq(llmGenerationTracing.id, tracingId));
+        .where(eq(llmGenerationTracing.id, id));
     } catch (err) {
       log('Failed to patch storage_key onto row: %O', err);
     }
 
-    return { tracingId };
+    return { tracingId: id };
   }
 
   async recordFeedback(

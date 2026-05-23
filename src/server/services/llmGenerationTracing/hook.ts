@@ -34,6 +34,7 @@ const parseTracingOptions = (raw: Record<string, unknown> | undefined): TracingO
     schemaName: pickString(raw.schemaName),
     systemPrompt: pickString(raw.systemPrompt),
     topicId: pickString(raw.topicId),
+    tracingId: pickString(raw.tracingId),
     trigger: pickString(raw.trigger),
   };
 };
@@ -128,6 +129,7 @@ export const createLLMGenerationTracingHook = (
             schemaName: tracing.schemaName,
             success: data.success,
             topicId: tracing.topicId,
+            tracingId: tracing.tracingId,
             trigger,
             userId,
             validationFailed,
