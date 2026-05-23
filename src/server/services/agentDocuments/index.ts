@@ -26,6 +26,7 @@ import { TopicDocumentModel } from '@/database/models/topicDocument';
 import { AgentDocumentVfsError } from '../agentDocumentVfs/errors';
 import { isManagedSkillDocument } from '../agentDocumentVfs/mounts/skills/providers/providerSkillsAgentDocumentUtils';
 import { DocumentService } from '../document';
+import { TOOL_RESULTS_DIR_NAME } from '../toolExecution/constants';
 import {
   type AgentDocumentLiteXMLOperation,
   applyLiteXMLOperations,
@@ -54,6 +55,34 @@ interface CreateAgentDocumentOptions {
 }
 
 type AgentDocumentWithLiteXML = AgentDocument & { litexml?: string };
+
+/**
+ * Hide the auto-created `.tool-results/` archive (root folder + its children)
+ * from user-facing document lists. Agents still discover archived entries via
+ * the tool-oriented `listDocuments` / `listDocumentsForTopic` paths, which hit
+ * the model directly.
+ */
+const excludeArchivedToolResults = <
+  T extends Pick<AgentDocument, 'documentId' | 'parentId' | 'filename' | 'fileType'>,
+>(
+  docs: T[],
+): T[] => {
+  const archiveFolderIds = new Set(
+    docs
+      .filter(
+        (d) =>
+          d.filename === TOOL_RESULTS_DIR_NAME &&
+          !d.parentId &&
+          d.fileType === DOCUMENT_FOLDER_TYPE,
+      )
+      .map((d) => d.documentId),
+  );
+  if (archiveFolderIds.size === 0) return docs;
+  return docs.filter(
+    (d) =>
+      !archiveFolderIds.has(d.documentId) && (!d.parentId || !archiveFolderIds.has(d.parentId)),
+  );
+};
 
 /**
  * Service for managing agent documents with reusable template sets.
@@ -234,7 +263,7 @@ export class AgentDocumentsService {
 
   async getAgentDocuments(agentId: string): Promise<AgentDocumentWithRules[]> {
     const docs = await this.agentDocumentModel.findByAgent(agentId);
-    return this.projectDocuments(docs);
+    return this.projectDocuments(excludeArchivedToolResults(docs));
   }
 
   /**

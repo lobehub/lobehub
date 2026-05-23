@@ -20,6 +20,7 @@ import type {
   GitWorkingTreePatch,
   GitWorkingTreePatches,
   GitWorkingTreeStatus,
+  SubmoduleWorkingTreePatches,
 } from '@lobechat/electron-client-ipc';
 
 import { detectRepoType, resolveGitDir } from '@/utils/git';
@@ -739,9 +740,73 @@ export default class GitController extends ControllerModule {
    *
    * Per-file patches are capped at 256 KB; oversized or binary entries get an
    * empty `patch` string and a flag the renderer can use for a placeholder.
+   *
+   * Dirty submodules are detected via `git submodule status` and surfaced as
+   * grouped `submodules[]` entries — their internal patches live under each
+   * group, not in the parent's flat `patches` list. Nested submodules are not
+   * traversed (phase 1).
    */
   @IpcMethod()
   async getGitWorkingTreePatches(dirPath: string): Promise<GitWorkingTreePatches> {
+    return this.collectWorkingTreePatches(dirPath, true);
+  }
+
+  /**
+   * List paths of initialized submodules registered in `dirPath`. Uninitialized
+   * entries (`-` prefix in `git submodule status`) are skipped — there's no
+   * working tree to inspect for those. Failures (no submodules, shell errors)
+   * return an empty set so callers gracefully fall back to the flat layout.
+   *
+   * Only direct submodules are listed; nested submodules would need
+   * `--recursive` plus a tree-aware renderer we don't have in phase 1.
+   */
+  private async listSubmodulePaths(dirPath: string): Promise<Set<string>> {
+    const execFileAsync = promisify(execFile);
+    try {
+      const { stdout } = await execFileAsync('git', ['submodule', 'status'], {
+        cwd: dirPath,
+        timeout: 5000,
+      });
+      const paths = new Set<string>();
+      for (const line of stdout.split('\n')) {
+        if (line.length < 2) continue;
+        // Status char: ' ' (clean), '+' (modified content), '-' (uninit), 'U' (conflict).
+        if (line[0] === '-') continue;
+        // Format: "<status><sha> <path>[ (<describe>)]". Parse via string ops
+        // rather than a single regex — combining `\s+` separators with a
+        // greedy/lazy path capture trips eslint's ReDoS rule.
+        const rest = line.slice(1);
+        const firstSpace = rest.indexOf(' ');
+        if (firstSpace < 0) continue;
+        const sha = rest.slice(0, firstSpace);
+        if (!/^[\da-f]{7,40}$/.test(sha)) continue;
+        let path = rest.slice(firstSpace + 1);
+        // Drop the trailing ` (<describe>)` suffix when present.
+        if (path.endsWith(')')) {
+          const describeStart = path.lastIndexOf(' (');
+          if (describeStart > 0) path = path.slice(0, describeStart);
+        }
+        if (path) paths.add(path);
+      }
+      return paths;
+    } catch (error: any) {
+      logger.debug('[listSubmodulePaths] failed', {
+        cwd: dirPath,
+        stderr: error?.stderr?.toString?.() ?? error?.stderr,
+      });
+      return new Set();
+    }
+  }
+
+  /**
+   * Shared implementation for working-tree patch collection. The IPC entry
+   * passes `recurseSubmodules: true`; recursive calls into each submodule pass
+   * `false` to avoid traversing nested submodules (phase 1).
+   */
+  private async collectWorkingTreePatches(
+    dirPath: string,
+    recurseSubmodules: boolean,
+  ): Promise<GitWorkingTreePatches> {
     const MAX_PATCH_BYTES = 256 * 1024;
     const execFileAsync = promisify(execFile);
 
@@ -751,10 +816,19 @@ export default class GitController extends ControllerModule {
       status: GitFileDiffStatus;
     }
 
+    // Step 0 — when recursion is enabled, learn which paths in the parent's
+    // status are submodule roots. Their internal diffs are collected separately
+    // (see Step 4) so we filter them out of the parent's flat patch list.
+    const submodulePaths = recurseSubmodules
+      ? await this.listSubmodulePaths(dirPath)
+      : new Set<string>();
+
     // Step 1 — classify every dirty path. Mirrors getGitWorkingTreeFiles but
     // also distinguishes untracked (`??`) from staged-add (`A`) so we can pick
-    // the right path (git diff vs raw read) per entry.
+    // the right path (git diff vs raw read) per entry. Submodule entries are
+    // siphoned into `submoduleDirtyEntries` for separate recursion in Step 4.
     const entries: Entry[] = [];
+    const submoduleDirtyEntries: Entry[] = [];
     try {
       const { stdout } = await execFileAsync('git', ['status', '--porcelain', '-z'], {
         cwd: dirPath,
@@ -772,20 +846,27 @@ export default class GitController extends ControllerModule {
         // R/C entries carry an extra source-path token we must consume.
         if (x === 'R' || x === 'C') i++;
         if (!filePath) continue;
+        let parsed: Entry | null = null;
         if (x === '?' && y === '?') {
-          entries.push({ filePath, isUntracked: true, status: 'added' });
+          parsed = { filePath, isUntracked: true, status: 'added' };
         } else if (x === '!' && y === '!') {
           // ignored
         } else if (x === 'D' || y === 'D') {
-          entries.push({ filePath, isUntracked: false, status: 'deleted' });
+          parsed = { filePath, isUntracked: false, status: 'deleted' };
         } else if (x === 'A' || y === 'A') {
-          entries.push({ filePath, isUntracked: false, status: 'added' });
+          parsed = { filePath, isUntracked: false, status: 'added' };
         } else {
-          entries.push({ filePath, isUntracked: false, status: 'modified' });
+          parsed = { filePath, isUntracked: false, status: 'modified' };
+        }
+        if (!parsed) continue;
+        if (submodulePaths.has(filePath)) {
+          submoduleDirtyEntries.push(parsed);
+        } else {
+          entries.push(parsed);
         }
       }
     } catch (error: any) {
-      logger.warn('[getGitWorkingTreePatches] status failed', {
+      logger.warn('[collectWorkingTreePatches] status failed', {
         cwd: dirPath,
         stderr: error?.stderr?.toString?.() ?? error?.stderr,
       });
@@ -818,7 +899,7 @@ export default class GitController extends ControllerModule {
           30_000,
         );
       } catch (error: any) {
-        logger.warn('[getGitWorkingTreePatches] bulk diff failed; per-file fallback', {
+        logger.warn('[collectWorkingTreePatches] bulk diff failed; per-file fallback', {
           cwd: dirPath,
           stderr: error?.stderr?.toString?.() ?? error?.stderr,
         });
@@ -855,7 +936,33 @@ export default class GitController extends ControllerModule {
     const allPatches: GitWorkingTreePatch[] = [...trackedPatches.values(), ...untrackedPatches];
     allPatches.sort((a, b) => order[a.status] - order[b.status]);
 
-    return { patches: allPatches };
+    // Step 4 — for each dirty submodule, recurse for its own patches + branch.
+    // We only descend one level (`recurseSubmodules: false` on the inner call)
+    // because phase 1's UI groups direct children; nested submodules would
+    // need a tree view we don't have yet. Empty groups (pointer-only bumps)
+    // are kept so the user still sees the submodule surfaced in the panel.
+    let submodules: SubmoduleWorkingTreePatches[] | undefined;
+    if (submoduleDirtyEntries.length > 0) {
+      submodules = await Promise.all(
+        submoduleDirtyEntries.map(async (entry) => {
+          const absolutePath = path.resolve(dirPath, entry.filePath);
+          const [sub, branchInfo] = await Promise.all([
+            this.collectWorkingTreePatches(absolutePath, false),
+            this.getGitBranch(absolutePath),
+          ]);
+          return {
+            absolutePath,
+            branch: branchInfo.branch,
+            detached: branchInfo.detached,
+            name: path.basename(entry.filePath),
+            patches: sub.patches,
+            relativePath: entry.filePath,
+          };
+        }),
+      );
+    }
+
+    return { patches: allPatches, submodules };
   }
 
   /**
@@ -876,7 +983,23 @@ export default class GitController extends ControllerModule {
    */
   @IpcMethod()
   async getGitBranchDiff(payload: GetGitBranchDiffPayload): Promise<GitBranchDiffPatches> {
-    const { path: dirPath, baseRef: baseRefOverride } = payload;
+    return this.collectBranchDiff(payload.path, payload.baseRef, true);
+  }
+
+  /**
+   * Shared implementation for branch-diff collection. The IPC entry passes
+   * `recurseSubmodules: true`; recursive calls into each submodule pass
+   * `false` to avoid traversing nested submodules (phase 1). Each submodule's
+   * base ref is resolved independently — we don't try to derive it from the
+   * parent's base because (a) the parent's submodule pointer may not exist
+   * as a branch ref inside the submodule and (b) "this submodule's branch
+   * vs its own remote default" is what users typically want.
+   */
+  private async collectBranchDiff(
+    dirPath: string,
+    baseRefOverride: string | undefined,
+    recurseSubmodules: boolean,
+  ): Promise<GitBranchDiffPatches> {
     const MAX_PATCH_BYTES = 256 * 1024;
     const execFileAsync = promisify(execFile);
 
@@ -930,7 +1053,7 @@ export default class GitController extends ControllerModule {
         30_000,
       );
     } catch (error: any) {
-      logger.warn('[getGitBranchDiff] diff failed', {
+      logger.warn('[collectBranchDiff] diff failed', {
         baseRef,
         cwd: dirPath,
         stderr: error?.stderr?.toString?.() ?? error?.stderr,
@@ -938,9 +1061,20 @@ export default class GitController extends ControllerModule {
       if (typeof error?.partialStdout === 'string') bulkDiff = error.partialStdout;
     }
 
-    // Step 4 — split + classify per-file from the diff preamble alone.
+    // Step 4 — split per-file. When submodule recursion is enabled, peel out
+    // any pointer-bump entries (block path matches a registered submodule)
+    // into `pointerBumpPaths`; we'll surface those groups unconditionally in
+    // Step 5 even if the submodule's own branch is clean.
+    const submodulePaths = recurseSubmodules
+      ? await this.listSubmodulePaths(dirPath)
+      : new Set<string>();
     const patches: GitWorkingTreePatch[] = [];
+    const pointerBumpPaths = new Set<string>();
     for (const block of splitBulkDiff(bulkDiff)) {
+      if (submodulePaths.has(block.path)) {
+        pointerBumpPaths.add(block.path);
+        continue;
+      }
       const status = detectDiffBlockStatus(block.patch);
       patches.push(buildTrackedPatch({ filePath: block.path, status }, block, MAX_PATCH_BYTES));
     }
@@ -948,7 +1082,42 @@ export default class GitController extends ControllerModule {
     const order: Record<GitFileDiffStatus, number> = { added: 0, modified: 1, deleted: 2 };
     patches.sort((a, b) => order[a.status] - order[b.status]);
 
-    return { baseRef, headRef, patches };
+    // Step 5 — recurse for EVERY registered submodule (not just those with
+    // pointer-bumps) so we also surface submodules whose own branch diverges
+    // from its own origin/HEAD even when the parent's pointer is unchanged.
+    // Single-level only (`recurseSubmodules: false` on the inner call). A
+    // group is kept when EITHER its pointer changed in the parent OR its own
+    // branch diff has at least one patch; submodules that are clean on both
+    // axes are dropped to keep the panel quiet. Submodule count is expected
+    // to be small (single digits in practice), so per-submodule fetch + diff
+    // in parallel is acceptable.
+    let submodules: SubmoduleWorkingTreePatches[] | undefined;
+    if (submodulePaths.size > 0) {
+      const candidates = await Promise.all(
+        Array.from(submodulePaths).map(async (relativePath) => {
+          const absolutePath = path.resolve(dirPath, relativePath);
+          const [sub, branchInfo] = await Promise.all([
+            this.collectBranchDiff(absolutePath, undefined, false),
+            this.getGitBranch(absolutePath),
+          ]);
+          return {
+            group: {
+              absolutePath,
+              branch: branchInfo.branch,
+              detached: branchInfo.detached,
+              name: path.basename(relativePath),
+              patches: sub.patches,
+              relativePath,
+            },
+            keep: pointerBumpPaths.has(relativePath) || sub.patches.length > 0,
+          };
+        }),
+      );
+      const filtered = candidates.filter((c) => c.keep).map((c) => c.group);
+      if (filtered.length > 0) submodules = filtered;
+    }
+
+    return { baseRef, headRef, patches, submodules };
   }
 
   /**

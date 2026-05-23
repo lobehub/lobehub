@@ -73,13 +73,50 @@ export interface GitWorkingTreePatch {
   truncated: boolean;
 }
 
-export interface GitWorkingTreePatches {
+/**
+ * Patches collected from a dirty submodule of the parent repo. The submodule
+ * itself is a self-contained git repo, so its patches use the same
+ * `GitWorkingTreePatch` shape; we only add metadata the renderer needs to tag
+ * the group and route per-file ops (revert, etc.) into the right working dir.
+ */
+export interface SubmoduleWorkingTreePatches {
   /**
-   * All dirty file patches, ordered added → modified → deleted to match the
-   * working-tree file listing. Each entry corresponds to one file path in
-   * GitWorkingTreeFiles.
+   * Absolute path on disk — used as the `cwd` for revert / branch operations
+   * the renderer fires from inside the group.
+   */
+  absolutePath: string;
+  /** Current branch short name inside the submodule, or short SHA when detached. */
+  branch?: string;
+  /** True when the submodule's HEAD is detached (no branch ref). */
+  detached?: boolean;
+  /**
+   * Display name — the submodule's directory basename. Matches what users see
+   * in `.gitmodules` and in tools like WebStorm's commit grouping.
+   */
+  name: string;
+  /**
+   * Per-file diff blocks inside this submodule, same ordering as the parent's
+   * `patches`. Empty when the submodule's pointer moved in the parent but the
+   * submodule's own working tree is clean.
    */
   patches: GitWorkingTreePatch[];
+  /** Path relative to the parent repo root (e.g. `lobehub` or `packages/foo`). */
+  relativePath: string;
+}
+
+export interface GitWorkingTreePatches {
+  /**
+   * All dirty file patches in the parent repo, ordered added → modified →
+   * deleted. Submodule directories are filtered out of this list — their
+   * internal diffs live under `submodules[]` instead.
+   */
+  patches: GitWorkingTreePatch[];
+  /**
+   * One group per dirty submodule (pointer bumped, content changed, or both).
+   * Undefined when the parent has no submodules with pending changes — lets
+   * the renderer keep the flat single-repo layout in that common case.
+   */
+  submodules?: SubmoduleWorkingTreePatches[];
 }
 
 export interface GitRemoteBranchListItem {
@@ -112,10 +149,18 @@ export interface GitBranchDiffPatches {
    */
   headRef?: string;
   /**
-   * Per-file diff blocks, ordered added → modified → deleted. Same shape as
-   * GitWorkingTreePatch so the renderer can reuse the existing PatchDiff path.
+   * Per-file diff blocks for the parent repo, ordered added → modified →
+   * deleted. Submodule pointer-bump entries are filtered out and their
+   * internal branch diffs live under `submodules[]` instead.
    */
   patches: GitWorkingTreePatch[];
+  /**
+   * One group per submodule whose pointer differs between the parent's base
+   * and HEAD. Each group carries the submodule's own branch diff (its HEAD
+   * vs its own origin/HEAD). Undefined when no submodules differ — lets the
+   * renderer keep the flat single-repo layout in that case.
+   */
+  submodules?: SubmoduleWorkingTreePatches[];
 }
 
 export interface GitCheckoutResult {
