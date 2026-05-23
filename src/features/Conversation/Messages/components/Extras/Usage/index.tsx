@@ -1,4 +1,7 @@
-import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
+import {
+  HETEROGENEOUS_TYPE_LABELS,
+  isRemoteHeterogeneousType,
+} from '@lobechat/heterogeneous-agents';
 import { type ModelPerformance, type ModelUsage } from '@lobechat/types';
 import { ModelIcon } from '@lobehub/icons';
 import { Center, Flexbox } from '@lobehub/ui';
@@ -33,7 +36,14 @@ const Usage = memo<UsageProps>(({ model, usage, performance, provider }) => {
 
   if (!isDev && onboardingAgentId && conversationAgentId === onboardingAgentId) return null;
 
-  const heteroName = provider ? HETEROGENEOUS_TYPE_LABELS[provider] : undefined;
+  // Only remote platform agents (openclaw, hermes) replace the model name with
+  // the brand label — they don't expose a real model id. Local CLI agents
+  // (claude-code, codex) report their actual model on `turn_metadata` and
+  // should keep showing it.
+  const heteroName =
+    provider && isRemoteHeterogeneousType(provider)
+      ? HETEROGENEOUS_TYPE_LABELS[provider]
+      : undefined;
 
   return (
     <Flexbox
