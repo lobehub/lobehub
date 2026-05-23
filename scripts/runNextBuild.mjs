@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
-export const TURBOPACK_VERCEL_MAX_OLD_SPACE_SIZE_MB = 3072;
+export const TURBOPACK_VERCEL_MAX_OLD_SPACE_SIZE_MB = 2048;
 export const TURBOPACK_VERCEL_PARALLEL = '0';
 export const TURBOPACK_VERCEL_DEBUG_FLAGS = ['--debug', '--experimental-debug-memory-usage'];
 export const VERCEL_BUILD_SYSTEM_REPORT = '1';

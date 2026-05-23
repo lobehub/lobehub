@@ -24,6 +24,6 @@ describe('next.config', () => {
 
     const { default: config } = await import('./next.config');
 
-    expect(config.experimental?.turbopackMemoryLimit).toBe(4 * 1024 * 1024 * 1024);
+    expect(config.experimental?.turbopackMemoryLimit).toBe(2 * 1024 * 1024 * 1024);
   });
 });

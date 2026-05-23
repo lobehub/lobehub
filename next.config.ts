@@ -1,7 +1,7 @@
 import { defineConfig } from './src/libs/next/config/define-config';
 
 const isVercel = !!process.env.VERCEL_ENV;
-const TURBOPACK_VERCEL_MEMORY_LIMIT_BYTES = 4 * 1024 * 1024 * 1024;
+const TURBOPACK_VERCEL_MEMORY_LIMIT_BYTES = 2 * 1024 * 1024 * 1024;
 
 const vercelConfig = {
   experimental: {
