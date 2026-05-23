@@ -29,6 +29,7 @@ const aiChatProcedure = authedProcedure.use(serverDatabase).use(async (opts) => 
     ctx: {
       agentModel: new AgentModel(ctx.serverDB, ctx.userId),
       aiChatService: new AiChatService(ctx.serverDB, ctx.userId),
+      aiGenerationService: new AiGenerationService(ctx.serverDB, ctx.userId),
       fileService: new FileService(ctx.serverDB, ctx.userId),
       messageModel: new MessageModel(ctx.serverDB, ctx.userId),
       threadModel: new ThreadModel(ctx.serverDB, ctx.userId),
@@ -46,8 +47,7 @@ export const aiChatRouter = router({
     // Caller-supplied metadata wins (scenario / promptVersion / schemaName) but
     // we always stamp a trigger so tracing rows don't lose their scenario when
     // the caller forgets to set one.
-    const ai = new AiGenerationService(ctx.serverDB, ctx.userId);
-    const result = await ai.generateObject(
+    const result = await ctx.aiGenerationService.generateObject(
       {
         messages: input.messages,
         model: input.model,

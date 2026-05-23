@@ -1,3 +1,4 @@
+import { TRACING_SCENARIOS } from '@lobechat/const';
 import type { FollowUpChip, FollowUpExtractInput, FollowUpExtractResult } from '@lobechat/types';
 import debug from 'debug';
 
@@ -69,7 +70,7 @@ export class FollowUpActionService {
           metadata: {
             promptVersion: FOLLOW_UP_PROMPT_VERSION,
             schemaName: 'FollowUpSuggestionResponse',
-            scenario: 'follow_up',
+            scenario: TRACING_SCENARIOS.FollowUp,
           },
         },
       );

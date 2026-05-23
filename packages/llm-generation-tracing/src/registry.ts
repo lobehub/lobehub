@@ -1,3 +1,5 @@
+import { TRACING_SCENARIOS, type TracingScenario } from '@lobechat/const';
+
 import type { ScenarioDefinition } from './types';
 
 /**
@@ -14,15 +16,18 @@ import type { ScenarioDefinition } from './types';
  * `generateObject` call site). When the prompt or schema changes, bump that
  * local constant — keeping the version next to the thing it versions avoids
  * the drift you'd get from a central table that nobody remembers to update.
+ *
+ * For the full directory of scenario *names*, see `@lobechat/const`
+ * `TRACING_SCENARIOS`.
  */
-export const TRACING_SCENARIO_REGISTRY: Record<string, string> = {
-  agent_signal: 'agent_signal',
-  memory: 'memory_extract',
-  signup_email_llm_review: 'signup_email_review',
-  topic: 'topic_title',
+export const TRACING_SCENARIO_REGISTRY: Record<string, TracingScenario> = {
+  agent_signal: TRACING_SCENARIOS.AgentSignal,
+  memory: TRACING_SCENARIOS.MemoryExtract,
+  signup_email_llm_review: TRACING_SCENARIOS.SignupEmailReview,
+  topic: TRACING_SCENARIOS.TopicTitle,
 };
 
-export const UNKNOWN_SCENARIO = 'unknown';
+export const UNKNOWN_SCENARIO = TRACING_SCENARIOS.Unknown;
 export const UNKNOWN_PROMPT_VERSION = 'v0';
 
 export interface ResolveScenarioInput {

@@ -1,4 +1,4 @@
-import { isDesktop } from '@lobechat/const';
+import { isDesktop, TRACING_SCENARIOS } from '@lobechat/const';
 import { HotkeyEnum, KeyEnum } from '@lobechat/const/hotkeys';
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
 import {
@@ -232,7 +232,7 @@ const InputEditor = memo<{
             messages,
             metadata: {
               promptVersion: INPUT_COMPLETION_PROMPT_VERSION,
-              scenario: 'input_completion',
+              scenario: TRACING_SCENARIOS.InputCompletion,
               schemaName: INPUT_COMPLETION_SCHEMA_NAME,
             },
             model: config.model,
