@@ -85,7 +85,7 @@ const ChatList = memo<ChatListProps>(
     ]);
     const activeAgentId = useChatStore((s) => s.activeAgentId);
     const { enableAgentSelfIteration } = useServerConfigStore(featureFlagsSelectors);
-    useFetchMessages(context, skipFetch);
+    useFetchMessages(context, { skipFetch });
     const displayMessages = useConversationStore(dataSelectors.displayMessages);
     const displayMessageIds = useConversationStore(dataSelectors.displayMessageIds);
     const latestMessageId = displayMessageIds.at(-1);

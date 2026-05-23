@@ -67,14 +67,17 @@ export interface DataAction {
   switchMessageBranch: (messageId: string, branchIndex: number) => Promise<void>;
 
   /**
-   * Fetch messages for this conversation using SWR
+   * Fetch messages for this conversation using SWR.
    *
    * @param context - Conversation context with sessionId and topicId
-   * @param skipFetch - When true, SWR key is null and no fetch occurs
+   * @param options.skipFetch - When true, SWR key is null and no fetch occurs
+   * @param options.revalidateOnFocus - Override SWR's default focus revalidate.
+   *   Pass `false` while a streaming flow owns the in-memory message state so
+   *   a focus refetch doesn't clobber it with a stale DB snapshot.
    */
   useFetchMessages: (
     context: ConversationContext,
-    skipFetch?: boolean,
+    options?: { revalidateOnFocus?: boolean; skipFetch?: boolean },
   ) => SWRResponse<UIChatMessage[]>;
 }
 
@@ -184,7 +187,8 @@ export const dataSlice: StateCreator<
     await state.updateMessageMetadata(message.parentId, { activeBranchIndex: branchIndex });
   },
 
-  useFetchMessages: (context, skipFetch) => {
+  useFetchMessages: (context, options) => {
+    const { skipFetch, revalidateOnFocus } = options ?? {};
     // When skipFetch is true, SWR key is null - no fetch occurs
     // This is used when external messages are provided (e.g., creating new thread)
     // Also skip fetch when topicId is null (new conversation state) - there's no server data,
@@ -206,6 +210,7 @@ export const dataSlice: StateCreator<
 
       () => messageService.getMessages(context),
       {
+        ...(revalidateOnFocus !== undefined && { revalidateOnFocus }),
         onData: (data) => {
           if (!data) return;
           if (!context.topicId) return;
