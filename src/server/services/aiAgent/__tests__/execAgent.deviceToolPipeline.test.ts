@@ -229,44 +229,6 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
     });
   });
 
-  describe('clientRuntime forwarded to createServerAgentToolsEngine', () => {
-    it('forwards clientRuntime="desktop" so the engine enables local-system for Electron callers', async () => {
-      mockGetAgentConfig.mockResolvedValue(createBaseAgentConfig());
-
-      await service.execAgent({
-        agentId: 'agent-1',
-        clientRuntime: 'desktop',
-        prompt: 'Hello',
-      });
-
-      expect(mockCreateServerAgentToolsEngine).toHaveBeenCalledTimes(1);
-      const params = mockCreateServerAgentToolsEngine.mock.calls[0][1];
-      expect(params.clientRuntime).toBe('desktop');
-    });
-
-    it('forwards clientRuntime="web" verbatim', async () => {
-      mockGetAgentConfig.mockResolvedValue(createBaseAgentConfig());
-
-      await service.execAgent({
-        agentId: 'agent-1',
-        clientRuntime: 'web',
-        prompt: 'Hello',
-      });
-
-      const params = mockCreateServerAgentToolsEngine.mock.calls[0][1];
-      expect(params.clientRuntime).toBe('web');
-    });
-
-    it('omits clientRuntime when the caller does not specify one', async () => {
-      mockGetAgentConfig.mockResolvedValue(createBaseAgentConfig());
-
-      await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
-
-      const params = mockCreateServerAgentToolsEngine.mock.calls[0][1];
-      expect(params.clientRuntime).toBeUndefined();
-    });
-  });
-
   describe('RemoteDevice systemRole override', () => {
     it('should override RemoteDevice systemRole with dynamic prompt when enabled by ToolsEngine', async () => {
       const { deviceProxy } = await import('@/server/services/toolExecution/deviceProxy');
@@ -392,14 +354,12 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
     });
   });
 
-  describe('clientRuntime="desktop" bypasses the DEVICE_GATEWAY gate (Phase 6.4)', () => {
-    it('marks local-system as client when caller is desktop, even with DEVICE_GATEWAY configured', async () => {
-      // On cloud canary, DEVICE_GATEWAY is configured AND a remote Linux VM
-      // may be registered. Before this fix, `!gatewayConfigured` was false, so
-      // local-system was never stamped `executor='client'` — and dispatch fell
-      // through to the Remote Device proxy (which then tried to read the file
-      // on the wrong host). When clientRuntime='desktop', the caller itself is
-      // the execution target and wins.
+  describe('DEVICE_GATEWAY routing for local-system and stdio MCP', () => {
+    it('keeps executor unset for local-system when DEVICE_GATEWAY is configured', async () => {
+      // Desktop, web, and IM callers all share this path: tools route via the
+      // Remote Device proxy to the device registered with the gateway, never
+      // back to the caller. (LOBE-9378: the Phase 6.4 clientRuntime=desktop
+      // short-circuit that bypassed this gate was removed.)
       const { deviceProxy } = await import('@/server/services/toolExecution/deviceProxy');
       vi.spyOn(deviceProxy, 'isConfigured', 'get').mockReturnValue(true);
       mockQueryDeviceList.mockResolvedValue([
@@ -411,17 +371,13 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
       );
       mockGetAgentConfig.mockResolvedValue(createBaseAgentConfig());
 
-      await service.execAgent({
-        agentId: 'agent-1',
-        clientRuntime: 'desktop',
-        prompt: 'Hello',
-      });
+      await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
 
       const executorMap = mockCreateOperation.mock.calls[0][0].toolSet.executorMap;
-      expect(executorMap[LocalSystemManifest.identifier]).toBe('client');
+      expect(executorMap[LocalSystemManifest.identifier]).toBeUndefined();
     });
 
-    it('marks stdio MCP as client when caller is desktop, even with DEVICE_GATEWAY configured', async () => {
+    it('keeps executor unset for stdio MCP when DEVICE_GATEWAY is configured', async () => {
       const stdioPlugin = {
         customParams: { mcp: { type: 'stdio' } },
         identifier: 'my-stdio-mcp',
@@ -442,38 +398,10 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
       mockGetEnabledPluginManifests.mockReturnValue(new Map([['my-stdio-mcp', stdioManifest]]));
       mockGetAgentConfig.mockResolvedValue(createBaseAgentConfig({ plugins: ['my-stdio-mcp'] }));
 
-      await service.execAgent({
-        agentId: 'agent-1',
-        clientRuntime: 'desktop',
-        prompt: 'Hello',
-      });
+      await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
 
       const executorMap = mockCreateOperation.mock.calls[0][0].toolSet.executorMap;
-      expect(executorMap['my-stdio-mcp']).toBe('client');
-    });
-
-    it('keeps legacy routing for web callers with DEVICE_GATEWAY configured', async () => {
-      // Web client + DEVICE_GATEWAY configured → tools still route through
-      // Remote Device proxy; executor stays unset (legacy behaviour).
-      const { deviceProxy } = await import('@/server/services/toolExecution/deviceProxy');
-      vi.spyOn(deviceProxy, 'isConfigured', 'get').mockReturnValue(true);
-      mockQueryDeviceList.mockResolvedValue([
-        { deviceId: 'dev-1', deviceName: 'Remote VM', platform: 'linux' },
-      ]);
-
-      mockGetEnabledPluginManifests.mockReturnValue(
-        new Map([[LocalSystemManifest.identifier, LocalSystemManifest]]),
-      );
-      mockGetAgentConfig.mockResolvedValue(createBaseAgentConfig());
-
-      await service.execAgent({
-        agentId: 'agent-1',
-        clientRuntime: 'web',
-        prompt: 'Hello',
-      });
-
-      const executorMap = mockCreateOperation.mock.calls[0][0].toolSet.executorMap;
-      expect(executorMap[LocalSystemManifest.identifier]).toBeUndefined();
+      expect(executorMap['my-stdio-mcp']).toBeUndefined();
     });
   });
 

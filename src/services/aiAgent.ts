@@ -28,12 +28,6 @@ export interface ExecAgentTaskParams {
   agentId?: string;
   appContext?: ExecAgentAppContext;
   autoStart?: boolean;
-  /**
-   * Runtime of the client initiating this request. When 'desktop', server
-   * enables `executor: 'client'` tools (local-system, stdio MCP) and
-   * dispatches them over the Agent Gateway WS back to this client.
-   */
-  clientRuntime?: 'desktop' | 'web';
   deviceId?: string;
   existingMessageIds?: string[];
   /** File IDs of already-uploaded attachments to attach to the new user message */

@@ -146,12 +146,6 @@ const ExecAgentSchema = z
       .optional(),
     /** Whether to auto-start execution after creating operation */
     autoStart: z.boolean().optional().default(true),
-    /**
-     * Runtime of the client initiating this request.
-     * 'desktop' enables `executor: 'client'` tools (local-system, stdio MCP)
-     * to be dispatched over the Agent Gateway WS.
-     */
-    clientRuntime: z.enum(['desktop', 'web']).optional(),
     /** Explicit device ID to bind to the topic and activate for this run */
     deviceId: z.string().optional(),
     /** Optional existing message IDs to include in context */
@@ -633,7 +627,6 @@ export const aiAgentRouter = router({
       prompt,
       appContext,
       autoStart = true,
-      clientRuntime,
       deviceId,
       existingMessageIds = [],
       fileIds,
@@ -651,7 +644,6 @@ export const aiAgentRouter = router({
         agentId,
         appContext,
         autoStart,
-        clientRuntime,
         deviceId,
         existingMessageIds,
         fileIds,
