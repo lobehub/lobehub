@@ -542,7 +542,7 @@ export class BotMessageRouter {
     const groupSettings: GroupSettings = extractGroupSettings(info.settings);
     const userAllowlist: UserAllowlist = extractUserAllowlist(info.settings);
     /**
-     * Operator-configured keywords (LOBE-8891). When non-empty, a non-@mention
+     * Operator-configured keywords (). When non-empty, a non-@mention
      * non-command message in a subscribed group thread still wakes the bot if
      * its text contains any keyword — case-insensitive, word-boundary aware
      * (see `messageMatchesWatchKeyword`). Empty list keeps the legacy
@@ -887,7 +887,7 @@ export class BotMessageRouter {
       return false;
     };
 
-    // LOBE-8981: single-user thread relaxation. A subscribed channel thread
+    // single-user thread relaxation. A subscribed channel thread
     // with only one human follower is effectively a private 1:1 with the
     // bot, so we drop the @mention requirement for follow-ups. Once a
     // second human posts we revert to mention-only mode and announce the
@@ -1044,7 +1044,7 @@ export class BotMessageRouter {
       // type `/new` directly without mentioning the bot), but they are NOT exempt
       // from the access gates below.
       //
-      // LOBE-8981: a subscribed channel thread with only one human follower
+      // a subscribed channel thread with only one human follower
       // is functionally a private 1:1 with the bot, so the @mention
       // requirement is dropped while `count <= 1`. Tracked + counted here
       // regardless of which exemption ultimately fires so the
@@ -1057,7 +1057,7 @@ export class BotMessageRouter {
         context?.skipped?.some((m) => m.isMention === true) === true ||
         isSingleHumanThread;
       const isCommand = looksLikeCommand(message.text);
-      // LOBE-8891: operator-configured keyword match also wakes the bot in a
+      // operator-configured keyword match also wakes the bot in a
       // subscribed group thread. Skipped (debounced) siblings are inspected
       // too so a keyword queued behind a non-trigger still fires — same
       // pattern as the mention check above.
@@ -1075,7 +1075,7 @@ export class BotMessageRouter {
           message.author.userName,
           thread.id,
         );
-        // LOBE-8981: first skip in this thread → tell participants the bot
+        // first skip in this thread → tell participants the bot
         // is now mention-only so newcomers don't think it broke. Dedupe by
         // thread id so we never announce more than once.
         if (!thread.isDM && humanCount >= 2) {
@@ -1135,7 +1135,7 @@ export class BotMessageRouter {
       }
 
       let merged = BotMessageRouter.mergeSkippedMessages(message, context);
-      // LOBE-8891: when a keyword (and not a mention / DM / command) is what
+      // when a keyword (and not a mention / DM / command) is what
       // wakes the bot, prepend the matched entries' operator-authored
       // instructions to the user message so the agent gets a directive
       // rather than only the raw chatter. Mentions, DMs, and commands are
@@ -1236,7 +1236,7 @@ export class BotMessageRouter {
     // regex listener can serve both:
     //
     //   • DM path: every message in a DM thread (when DM policy allows it).
-    //   • Channel keyword path (LOBE-8891): non-DM messages whose text — or
+    //   • Channel keyword path (): non-DM messages whose text — or
     //     a debounced sibling's text — contains a configured watch keyword.
     //     This is the only way to wake the bot in a parent channel on
     //     platforms like Discord, where `shouldSubscribe` returns false for
@@ -1320,7 +1320,7 @@ export class BotMessageRouter {
         }
 
         let merged = BotMessageRouter.mergeSkippedMessages(message, context);
-        // LOBE-8891: same instruction-injection rule as `onSubscribedMessage`
+        // same instruction-injection rule as `onSubscribedMessage`
         // — prepend the matched entries' operator-authored instructions when
         // the keyword (not a mention / DM / command) is what wakes the bot.
         // DMs are explicit user intent and never get the prefix.

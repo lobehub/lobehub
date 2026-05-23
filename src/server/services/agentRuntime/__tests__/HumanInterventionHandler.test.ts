@@ -198,7 +198,7 @@ describe('HumanInterventionHandler.process', () => {
     it('stays paused (nextContext=undefined) when other tools are still pending', async () => {
       // makeState() has 2 pending; pluginQuery resolves tool-call-1 → 1 left.
       // Returning a `phase: 'user_input'` context here would resume the LLM
-      // before the remaining pending tools are decided (LOBE-7151 review P1).
+      // before the remaining pending tools are decided (review P1).
       const state = makeState();
       mockDBPluginQuery.mockResolvedValueOnce({ toolCallId: 'tool-call-1' });
 

@@ -51,7 +51,7 @@ If you don't have it, please run \`openssl rand -base64 32\` to create one.
   const client = new NeonPool({ connectionString });
   // NeonPool runs over WebSocket; transient drops surface as 'error' on the pool.
   // Without a listener Node escalates it to uncaughtException — on Vercel this killed
-  // the entire Lambda 1800+ times in 5 minutes (see LOBE-8704).
+  // the entire Lambda 1800+ times in 5 minutes (see ).
   client.on('error', (err: Error) => {
     console.error('[NeonPool] idle client error (swallowed to prevent process crash):', {
       code: (err as NodeJS.ErrnoException).code,

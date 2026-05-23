@@ -346,7 +346,7 @@ describe('AgentDocumentInjector', () => {
       expect(injected).not.toContain('Progressive content hidden');
     });
 
-    // Regression: LOBE-9385 — `policyLoad: 'disabled'` rows were being routed
+    // Regression: — `policyLoad: 'disabled'` rows were being routed
     // into the full-content bucket (the old `!== 'progressive'` filter), so
     // documents the user explicitly turned off still got inlined into the LLM
     // payload. The disabled row must show up in neither bucket.

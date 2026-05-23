@@ -511,7 +511,7 @@ describe('createGoogleImage', () => {
     });
 
     // Regression: nano banana 4K selection used to be silently dropped because
-    // imageSize was gated on aspectRatio !== 'auto'. See LOBE-9115.
+    // imageSize was gated on aspectRatio !== 'auto'. See .
     it('should pass imageSize when resolution is set even if aspectRatio is auto', async () => {
       // Arrange
       const realBase64ImageData =

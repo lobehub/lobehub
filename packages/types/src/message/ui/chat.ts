@@ -253,7 +253,7 @@ export interface UIChatMessage {
   search?: GroundingSearch | null;
   sessionId?: string;
   /**
-   * External-signal callback blocks (LOBE-8998). Set on virtual
+   * External-signal callback blocks (). Set on virtual
    * assistantGroup messages built by FlatListBuilder when the chain
    * contains toolless assistants triggered by repeated tool_results
    * (Monitor stdout push pattern). Rendered as `<SignalCallbacks>`
@@ -268,7 +268,7 @@ export interface UIChatMessage {
    */
   targetId?: string | null;
   /**
-   * Post-task summary blocks (LOBE-8998). Set on virtual assistantGroup
+   * Post-task summary blocks (). Set on virtual assistantGroup
    * messages by FlatListBuilder when the chain contains toolless
    * assistants tagged with `signal.type === 'task-completion'` — the
    * final-summary turn the LLM emits after CC delivers

@@ -289,7 +289,7 @@ describe('google contextBuilders', () => {
     });
 
     it('recovers functionCall.args from element[0] when arguments parse to an array', async () => {
-      // LOBE-8201 — same defense as Anthropic: prefer partial recovery from
+      // — same defense as Anthropic: prefer partial recovery from
       // element[0] over total loss when malformed JSON parses to an array.
       const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const message = {

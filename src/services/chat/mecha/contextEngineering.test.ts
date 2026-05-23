@@ -243,7 +243,7 @@ describe('contextEngineering', () => {
             {
               // Vision disabled: the image is surfaced in the file-context
               // block AND appended as a textual placeholder so the target
-              // model still sees that an image was sent (see LOBE-7214).
+              // model still sees that an image was sent (see ).
               text: `Hello
 
 [image omitted: not supported by this model]

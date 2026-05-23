@@ -1186,7 +1186,7 @@ export class ConversationLifecycleActionImpl {
 
       // Sub-agent dispatch inherits the parent's runtime selection — a
       // gateway/hetero parent must keep its sub-agents on the same path.
-      // Runtime routing is fully delegated to dispatchNonHeteroSubAgent (LOBE-8927).
+      // Runtime routing is fully delegated to dispatchNonHeteroSubAgent ().
       const parentAgentConfig = context.agentId
         ? agentSelectors.getAgentConfigById(context.agentId)(getAgentStoreState())
         : undefined;

@@ -65,7 +65,7 @@ describe('discordOAuthAdapter.buildAuthorizeUrl', () => {
     // bookend bits (ADD_REACTIONS=64 and SEND_MESSAGES_IN_THREADS=2^38) plus
     // CREATE_PUBLIC_THREADS=2^35 since that's the bit chat-adapter-discord
     // needs to auto-open a sub-thread on channel @mentions; a regression
-    // there silently falls back to in-channel replies (LOBE-8842 follow-up).
+    // there silently falls back to in-channel replies (follow-up).
     const perms = BigInt(url.searchParams.get('permissions') ?? '0');
     expect(perms & (1n << 6n)).toBe(1n << 6n); // ADD_REACTIONS
     expect(perms & (1n << 35n)).toBe(1n << 35n); // CREATE_PUBLIC_THREADS

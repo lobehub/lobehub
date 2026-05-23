@@ -26,7 +26,7 @@ export enum ClaudeCodeApiName {
   /**
    * Synthetic apiName the adapter rewrites the local
    * `mcp__lobe_cc__ask_user_question` MCP tool to. Routes the dedicated
-   * intervention UI for CC's clarifying-question flow (LOBE-8725); not
+   * intervention UI for CC's clarifying-question flow (); not
    * something CC's CLI emits directly.
    */
   AskUserQuestion = 'askUserQuestion',
@@ -38,7 +38,7 @@ export enum ClaudeCodeApiName {
    * Long-running command monitor (CC 2.1+). Spawns `command` as a tracked
    * background task; CC re-invokes the LLM each time the task pushes new
    * stdout (`system task_started` registers the task, `task_notification`
-   * terminates it — see LOBE-8998 in the adapter). Rendered by a dedicated
+   * terminates it — see in the adapter). Rendered by a dedicated
    * `MonitorInspector` so the chip iconography matches the SignalCallbacks
    * accordion underneath.
    */
@@ -104,7 +104,7 @@ export interface SkillArgs {
 /**
  * Arguments for CC's built-in `Monitor` tool — long-running command monitor.
  * CC spawns `command` as a tracked background task; `system task_started`
- * registers it and `system task_notification` ends it (see LOBE-8998 in the
+ * registers it and `system task_notification` ends it (see in the
  * CC adapter). Each stdout push between those two lifecycle events fires a
  * new LLM turn that's surfaced as a SignalCallbacks entry in the UI.
  *
