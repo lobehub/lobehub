@@ -89,7 +89,7 @@ vi.mock('@/store/agent', () => ({
 
 vi.mock('@/store/agent/selectors', () => ({
   agentSelectors: {
-    isCurrentAgentHeterogeneous: () => false,
+    currentAgentHeterogeneousProviderType: () => undefined,
   },
 }));
 

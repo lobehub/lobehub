@@ -17,7 +17,7 @@ import { formatPgError, pgErrorType, unwrapPgError } from './pgError';
  *   3. Anything else — falls back to `error.message` + `error.name`, or
  *      `"Unknown error"` when the value isn't even an Error.
  *
- * See LOBE-7158 / LOBE-7334 for the motivation: Drizzle wraps driver errors
+ * See for the motivation: Drizzle wraps driver errors
  * as `"Failed query: insert into ..."` and buries the real diagnostic fields
  * under `.cause`, which left the agent-gateway dashboard unable to bucket
  * DB failures by SQLSTATE.

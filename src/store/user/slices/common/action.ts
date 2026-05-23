@@ -54,6 +54,10 @@ export class CommonActionImpl {
   };
 
   updateInterests = async (interests: string[]): Promise<void> => {
+    const previousUser = this.#get().user;
+    if (previousUser) {
+      this.#set({ user: { ...previousUser, interests } }, false, n('updateInterests/optimistic'));
+    }
     await userService.updateInterests(interests);
     await this.#get().refreshUserState();
   };

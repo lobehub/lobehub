@@ -1,3 +1,4 @@
+import { INBOX_SESSION_ID } from '@lobechat/const';
 import {
   and,
   asc,
@@ -155,7 +156,7 @@ export class AgentSignalNightlyReviewModel {
   };
 
   /**
-   * Lists active non-virtual agents for one user's review window.
+   * Lists active agent targets for one user's review window.
    *
    * Use when:
    * - The scheduler must avoid running inactive agents
@@ -164,9 +165,10 @@ export class AgentSignalNightlyReviewModel {
    * Expects:
    * - `windowStart` and `windowEnd` are UTC instants for the user's local review date
    * - Message `agentId` wins when present; topic `agentId` covers legacy messages
+   * - Virtual agents are excluded except the product-owned Lobe AI inbox agent
    *
    * Returns:
-   * - Non-virtual agent targets with message/topic/failure counts
+   * - Agent targets with message/topic/failure counts
    */
   listActiveAgentTargets = (
     userId: string,
@@ -203,8 +205,11 @@ export class AgentSignalNightlyReviewModel {
           agentFilter,
           gte(messages.createdAt, options.windowStart),
           lte(messages.createdAt, options.windowEnd),
-          or(eq(agents.virtual, false), isNull(agents.virtual)),
-          sql`COALESCE((${agents.chatConfig}->'selfIteration'->>'enabled')::boolean, false) = true`,
+          or(eq(agents.virtual, false), isNull(agents.virtual), eq(agents.slug, INBOX_SESSION_ID)),
+          or(
+            eq(agents.slug, INBOX_SESSION_ID),
+            sql`COALESCE((${agents.chatConfig}->'selfIteration'->>'enabled')::boolean, false) = true`,
+          ),
         ),
       )
       .groupBy(agents.id, agents.title, userSettings.general)

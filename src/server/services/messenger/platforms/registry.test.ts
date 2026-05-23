@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { MessengerPlatformRegistry } from './registry';
 
 const buildDefinition = (overrides: Partial<any> = {}) => ({
+  connectionMode: 'webhook' as const,
   createBinder: vi.fn(() => ({ id: 'binder' }) as any),
   id: 'slack' as const,
   name: 'Slack',
@@ -37,7 +38,7 @@ describe('MessengerPlatformRegistry', () => {
     const reg = new MessengerPlatformRegistry();
     reg.register(buildDefinition() as any);
     const [serialized] = reg.listSerializedPlatforms();
-    expect(serialized).toEqual({ id: 'slack', name: 'Slack' });
+    expect(serialized).toEqual({ connectionMode: 'webhook', id: 'slack', name: 'Slack' });
     expect((serialized as any).createBinder).toBeUndefined();
     expect((serialized as any).oauth).toBeUndefined();
     expect((serialized as any).webhookGate).toBeUndefined();

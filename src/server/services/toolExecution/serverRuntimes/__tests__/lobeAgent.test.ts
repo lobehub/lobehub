@@ -13,6 +13,18 @@ const mockMessageModelQuery = vi.hoisted(() => vi.fn());
 const mockChat = vi.hoisted(() => vi.fn());
 const mockInitModelRuntimeFromDB = vi.hoisted(() => vi.fn());
 const mockConsumeStreamUntilDone = vi.hoisted(() => vi.fn());
+const mockBuiltinModels = vi.hoisted(() => [
+  {
+    abilities: { video: true, vision: true },
+    id: 'vision-model',
+    providerId: 'test-provider',
+  },
+  {
+    abilities: { video: false, vision: true },
+    id: 'image-only-model',
+    providerId: 'test-provider',
+  },
+]);
 
 vi.mock('@/envs/tools', () => ({
   toolsEnv: mockToolsEnv,
@@ -39,19 +51,12 @@ vi.mock('@lobechat/model-runtime', () => ({
   consumeStreamUntilDone: (...args: any[]) => mockConsumeStreamUntilDone(...args),
 }));
 
+vi.mock('@/business/client/model-bank/loadModels', () => ({
+  loadModels: vi.fn().mockResolvedValue(mockBuiltinModels),
+}));
+
 vi.mock('model-bank', () => ({
-  LOBE_DEFAULT_MODEL_LIST: [
-    {
-      abilities: { video: true, vision: true },
-      id: 'vision-model',
-      providerId: 'test-provider',
-    },
-    {
-      abilities: { video: false, vision: true },
-      id: 'image-only-model',
-      providerId: 'test-provider',
-    },
-  ],
+  LOBE_DEFAULT_MODEL_LIST: mockBuiltinModels,
 }));
 
 const { lobeAgentRuntime } = await import('../lobeAgent');
@@ -172,6 +177,7 @@ describe('lobeAgentRuntime', () => {
     });
 
     expect(result.success).toBe(true);
+    expect(result.content).toBe('visual answer');
     expect(mockMessageModelQueryByIds).not.toHaveBeenCalled();
     expect(result.state).toMatchObject({
       files: [{ name: 'generated.png', ref: 'url_1', type: 'image' }],
@@ -196,6 +202,33 @@ describe('lobeAgentRuntime', () => {
         }),
       }),
     );
+  });
+
+  it('should accumulate text content_part chunks from the visual model', async () => {
+    mockChat.mockImplementationOnce(async (_payload, options) => {
+      options?.callback?.onContentPart?.({
+        content: 'visual answer from content part',
+        mimeType: 'text/plain',
+        partType: 'text',
+      });
+      options?.callback?.onContentPart?.({
+        content: 'base64-image-data',
+        mimeType: 'image/png',
+        partType: 'image',
+      });
+      options?.callback?.onCompletion?.({ usage: { totalTokens: 12 } });
+
+      return new Response('ok');
+    });
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    const result = await runtime.analyzeVisualMedia({
+      question: 'what is this?',
+      urls: ['https://example.com/generated.png'],
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.content).toBe('visual answer from content part');
   });
 
   it('should reject unsupported direct media url protocols', async () => {

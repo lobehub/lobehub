@@ -1,6 +1,7 @@
 import { type GeneralAgentCallLLMResultPayload } from '@lobechat/agent-runtime';
 import { LOADING_FLAT } from '@lobechat/const';
-import { type MessageToolCall } from '@lobechat/types';
+import type { MessageToolCall } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
 import { chatService } from '@/services/chat';
@@ -165,6 +166,33 @@ describe('call_llm executor', () => {
             model: 'gpt-4',
             provider: 'openai',
           }),
+        }),
+      );
+    });
+
+    it('should forward request metadata to chatService', async () => {
+      const mockStore = createMockStore();
+      const context = createTestContext();
+      const instruction = createCallLLMInstruction({
+        messages: [createUserMessage({ content: 'Hello' })],
+      });
+      const state = createInitialState();
+
+      mockStreamResponse({ content: 'AI response' });
+      mockStore.dbMessagesMap[context.messageKey] = [];
+
+      await executeWithMockContext({
+        executor: 'call_llm',
+        instruction,
+        metadata: { trigger: RequestTrigger.Onboarding },
+        state,
+        mockStore,
+        context,
+      });
+
+      expect(chatService.createAssistantMessageStream).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: { trigger: RequestTrigger.Onboarding },
         }),
       );
     });

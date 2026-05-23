@@ -1,4 +1,4 @@
-import { type LobeChatDatabase } from '@lobechat/database';
+import type { LobeChatDatabase } from '@lobechat/database';
 import { describe, expect, it, vi } from 'vitest';
 
 import { MessageModel } from '@/database/models/message';
@@ -31,13 +31,18 @@ describe('AiChatService', () => {
       groupId: 'group-1',
       includeTopic: true,
       sessionId: 's1',
+      topicPageSize: 20,
     });
 
     expect(mockQueryMessages).toHaveBeenCalledWith(
       { agentId: 'agent-1', groupId: 'group-1', includeTopic: true, sessionId: 's1' },
       expect.objectContaining({ postProcessUrl: expect.any(Function) }),
     );
-    expect(mockQueryTopics).toHaveBeenCalledWith({ agentId: 'agent-1', groupId: 'group-1' });
+    expect(mockQueryTopics).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      groupId: 'group-1',
+      pageSize: 20,
+    });
     expect(res.messages).toEqual([{ id: 'm1' }]);
     expect(res.topics).toEqual([{ id: 't1' }]);
   });
@@ -63,6 +68,7 @@ describe('AiChatService', () => {
         excludeStatuses: ['completed'],
         excludeTriggers: ['cron', 'eval'],
       },
+      topicPageSize: 20,
     });
 
     expect(mockQueryTopics).toHaveBeenCalledWith({
@@ -70,10 +76,15 @@ describe('AiChatService', () => {
       excludeStatuses: ['completed'],
       excludeTriggers: ['cron', 'eval'],
       groupId: undefined,
+      pageSize: 20,
     });
     // topicFilter must not leak into messageModel.query
     expect(mockQueryMessages).toHaveBeenCalledWith(
       expect.not.objectContaining({ topicFilter: expect.anything() }),
+      expect.objectContaining({ postProcessUrl: expect.any(Function) }),
+    );
+    expect(mockQueryMessages).toHaveBeenCalledWith(
+      expect.not.objectContaining({ topicPageSize: 20 }),
       expect.objectContaining({ postProcessUrl: expect.any(Function) }),
     );
   });

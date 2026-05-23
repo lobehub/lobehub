@@ -1,34 +1,37 @@
 'use client';
 
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
+import { desktopRoutes } from '@/spa/router/desktopRouter.config';
 import { useElectronStore } from '@/store/electron';
 
-import { pluginRegistry } from '../plugins';
-import { type ResolvedPageData } from '../types';
-import { usePluginContext } from './usePluginContext';
+import { type ResolvedTab, resolveTab } from '../../TabBar/hooks/useResolvedTabs';
 
 interface UseResolvedPagesResult {
-  pinnedPages: ResolvedPageData[];
-  recentPages: ResolvedPageData[];
+  pinnedPages: ResolvedTab[];
+  recentPages: ResolvedTab[];
 }
 
-/**
- * Hook to resolve page references into display data
- * Automatically filters out pages where data no longer exists
- */
+type Translate = (key: string, options?: Record<string, unknown>) => string;
+
 export const useResolvedPages = (): UseResolvedPagesResult => {
-  const ctx = usePluginContext();
+  const { t } = useTranslation('electron');
 
   const pinnedRefs = useElectronStore((s) => s.pinnedPages);
   const recentRefs = useElectronStore((s) => s.recentPages);
 
-  const pinnedPages = useMemo(() => pluginRegistry.resolveAll(pinnedRefs, ctx), [pinnedRefs, ctx]);
+  const translate = t as unknown as Translate;
 
-  const recentPages = useMemo(() => pluginRegistry.resolveAll(recentRefs, ctx), [recentRefs, ctx]);
+  const pinnedPages = useMemo(
+    () => pinnedRefs.map((tab) => resolveTab(desktopRoutes, tab, false, translate)),
+    [pinnedRefs, translate],
+  );
 
-  return {
-    pinnedPages,
-    recentPages,
-  };
+  const recentPages = useMemo(
+    () => recentRefs.map((tab) => resolveTab(desktopRoutes, tab, false, translate)),
+    [recentRefs, translate],
+  );
+
+  return { pinnedPages, recentPages };
 };

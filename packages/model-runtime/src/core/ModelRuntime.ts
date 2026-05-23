@@ -1,4 +1,5 @@
 import type { ModelUsage, TracePayload } from '@lobechat/types';
+import { createTimingHelpers, getDurationMs } from '@lobechat/utils';
 import type { ClientOptions } from 'openai';
 
 import type { LobeBedrockAIParams } from '../providers/bedrock';
@@ -31,6 +32,13 @@ import type {
 } from '../types/video';
 import { AgentRuntimeError } from '../utils/createError';
 import type { LobeRuntimeAI } from './BaseAI';
+
+const { logger: timing } = createTimingHelpers('lobe-server:chat:lobehub:timing');
+
+const getLobeHubTimingMetadata = (options?: {
+  metadata?: Record<string, unknown>;
+}): Record<string, unknown> | undefined =>
+  options?.metadata?.provider === 'lobehub' ? options.metadata : undefined;
 
 export interface AgentChatOptions {
   enableTrace?: boolean;
@@ -74,6 +82,25 @@ export interface ModelRuntimeHooks {
   onEmbeddingsFinal?: (
     data: { latencyMs?: number; usage?: ModelUsage },
     context: { options?: EmbeddingsOptions; payload: EmbeddingsPayload },
+  ) => void | Promise<void>;
+
+  /**
+   * Always fires after `generateObject` returns or throws — success or failure.
+   * Use this for full-lifecycle observability (per-call tracing, prompt analytics).
+   * Unlike `onGenerateObjectFinal`, this fires regardless of whether the runtime
+   * surfaces a `usage` callback, so the gap of "succeeded but no usage" is covered.
+   *
+   * Hook failures are swallowed and logged — they must not interfere with the response.
+   */
+  onGenerateObjectComplete?: (
+    data: {
+      error?: { code?: string; message?: string; stack?: string };
+      latencyMs: number;
+      output?: unknown;
+      success: boolean;
+      usage?: ModelUsage;
+    },
+    context: { options?: GenerateObjectOptions; payload: GenerateObjectPayload },
   ) => void | Promise<void>;
 
   onGenerateObjectError?: (
@@ -126,6 +153,17 @@ export class ModelRuntime {
    * ```
    */
   async chat(payload: ChatStreamPayload, options?: ChatMethodOptions) {
+    const metadata = getLobeHubTimingMetadata(options);
+    const startedAt = Date.now();
+    if (metadata) {
+      timing(
+        'ModelRuntime.chat start model=%s trigger=%s traceId=%s',
+        payload.model,
+        metadata.trigger,
+        metadata.traceId,
+      );
+    }
+
     if (typeof this._runtime.chat !== 'function') {
       throw AgentRuntimeError.chat({
         error: new Error('Chat is not supported by this provider'),
@@ -135,11 +173,48 @@ export class ModelRuntime {
     }
 
     try {
+      const hooksStartedAt = Date.now();
       const finalOptions = await this.applyHooks(payload, options);
-      return await this._runtime.chat(payload, finalOptions);
+      if (metadata) {
+        timing(
+          'ModelRuntime.chat hooks done model=%s durationMs=%d traceId=%s',
+          payload.model,
+          getDurationMs(hooksStartedAt),
+          metadata.traceId,
+        );
+      }
+      const runtimeStartedAt = Date.now();
+      const response = await this._runtime.chat(payload, finalOptions);
+      if (metadata) {
+        timing(
+          'ModelRuntime.chat runtime done model=%s durationMs=%d totalMs=%d traceId=%s',
+          payload.model,
+          getDurationMs(runtimeStartedAt),
+          getDurationMs(startedAt),
+          metadata.traceId,
+        );
+      }
+      return response;
     } catch (error) {
+      if (metadata) {
+        timing(
+          'ModelRuntime.chat error model=%s durationMs=%d traceId=%s',
+          payload.model,
+          getDurationMs(startedAt),
+          metadata.traceId,
+        );
+      }
       if (this._hooks?.onChatError) {
+        const errorHookStartedAt = Date.now();
         await this._hooks.onChatError(error as ChatCompletionErrorPayload, { options, payload });
+        if (metadata) {
+          timing(
+            'ModelRuntime.chat onChatError done model=%s durationMs=%d traceId=%s',
+            payload.model,
+            getDurationMs(errorHookStartedAt),
+            metadata.traceId,
+          );
+        }
       }
       throw error;
     }
@@ -152,7 +227,37 @@ export class ModelRuntime {
     payload: ChatStreamPayload,
     options?: ChatMethodOptions,
   ): Promise<ChatMethodOptions | undefined> {
-    await this._hooks?.beforeChat?.(payload, options);
+    const metadata = getLobeHubTimingMetadata(options);
+    const beforeChatStartedAt = Date.now();
+    if (metadata) {
+      timing(
+        'ModelRuntime.beforeChat start model=%s trigger=%s traceId=%s',
+        payload.model,
+        metadata.trigger,
+        metadata.traceId,
+      );
+    }
+    try {
+      await this._hooks?.beforeChat?.(payload, options);
+    } catch (error) {
+      if (metadata) {
+        timing(
+          'ModelRuntime.beforeChat error model=%s durationMs=%d traceId=%s',
+          payload.model,
+          getDurationMs(beforeChatStartedAt),
+          metadata.traceId,
+        );
+      }
+      throw error;
+    }
+    if (metadata) {
+      timing(
+        'ModelRuntime.beforeChat done model=%s durationMs=%d traceId=%s',
+        payload.model,
+        getDurationMs(beforeChatStartedAt),
+        metadata.traceId,
+      );
+    }
 
     if (!this._hooks?.onChatFinal) return options;
 
@@ -163,10 +268,34 @@ export class ModelRuntime {
       callback: {
         ...options?.callback,
         async onFinal(data) {
+          const finalStartedAt = Date.now();
+          if (metadata) {
+            timing(
+              'ModelRuntime.onChatFinal start model=%s traceId=%s',
+              payload.model,
+              metadata.traceId,
+            );
+          }
           await existingOnFinal?.(data);
           try {
             await hookFn(data, { options, payload });
+            if (metadata) {
+              timing(
+                'ModelRuntime.onChatFinal done model=%s durationMs=%d traceId=%s',
+                payload.model,
+                getDurationMs(finalStartedAt),
+                metadata.traceId,
+              );
+            }
           } catch (e) {
+            if (metadata) {
+              timing(
+                'ModelRuntime.onChatFinal error model=%s durationMs=%d traceId=%s',
+                payload.model,
+                getDurationMs(finalStartedAt),
+                metadata.traceId,
+              );
+            }
             // Hook failures (billing, tracing) must not interfere with response completion
             console.error('[ModelRuntime] onChatFinal hook error:', e);
           }
@@ -176,16 +305,46 @@ export class ModelRuntime {
   }
 
   async generateObject(payload: GenerateObjectPayload, options?: GenerateObjectOptions) {
+    const startedAt = Date.now();
+    let usageCapture: ModelUsage | undefined;
+
+    const fireComplete = async (data: {
+      error?: { code?: string; message?: string; stack?: string };
+      output?: unknown;
+      success: boolean;
+    }) => {
+      if (!this._hooks?.onGenerateObjectComplete) return;
+      try {
+        await this._hooks.onGenerateObjectComplete(
+          {
+            error: data.error,
+            latencyMs: Date.now() - startedAt,
+            output: data.output,
+            success: data.success,
+            usage: usageCapture,
+          },
+          { options, payload },
+        );
+      } catch (e) {
+        // Hook failures must not affect the caller — log and move on.
+        console.error('[ModelRuntime] onGenerateObjectComplete hook error:', e);
+      }
+    };
+
     try {
       await this._hooks?.beforeGenerateObject?.(payload, options);
 
-      const finalOptions = this._hooks?.onGenerateObjectFinal
+      const needsUsageCapture =
+        this._hooks?.onGenerateObjectFinal || this._hooks?.onGenerateObjectComplete;
+
+      const finalOptions = needsUsageCapture
         ? {
             ...options,
             onUsage: async (usage: ModelUsage) => {
+              usageCapture = usage;
               await options?.onUsage?.(usage);
               try {
-                await this._hooks!.onGenerateObjectFinal!({ usage }, { options, payload });
+                await this._hooks?.onGenerateObjectFinal?.({ usage }, { options, payload });
               } catch (e) {
                 // Hook failures (billing, tracing) must not interfere with response completion
                 console.error('[ModelRuntime] onGenerateObjectFinal hook error:', e);
@@ -194,7 +353,9 @@ export class ModelRuntime {
           }
         : options;
 
-      return await this._runtime.generateObject!(payload, finalOptions);
+      const output = await this._runtime.generateObject!(payload, finalOptions);
+      await fireComplete({ output, success: true });
+      return output;
     } catch (error) {
       if (this._hooks?.onGenerateObjectError) {
         await this._hooks.onGenerateObjectError(error as ChatCompletionErrorPayload, {
@@ -202,6 +363,11 @@ export class ModelRuntime {
           payload,
         });
       }
+      const err = error as Error & { code?: string };
+      await fireComplete({
+        error: { code: err?.code, message: err?.message, stack: err?.stack },
+        success: false,
+      });
       throw error;
     }
   }

@@ -76,6 +76,12 @@ const toolLoadRuleSchema = z.object({
 });
 
 const readFormatSchema = z.enum(['xml', 'markdown', 'both']).optional();
+const readLocSchema = z
+  .tuple([z.number().int().min(0), z.number().int().min(0)])
+  .refine(([startLine, endLine]) => endLine >= startLine, {
+    message: 'loc end line must be greater than or equal to start line',
+  })
+  .optional();
 const writeCreateModeSchema = z.enum(['always-new', 'if-missing', 'must-exist']).optional();
 const recursiveSchema = z.boolean().optional();
 const mountedSkillNamespaceSchema = z.literal('agent');
@@ -347,18 +353,23 @@ export const agentDocumentRouter = router({
     .input(
       z.object({
         agentId: z.string(),
-        target: z.enum(['agent', 'currentTopic']).optional().default('agent'),
+        scope: z.enum(['agent', 'currentTopic']).optional().default('agent'),
+        sourceType: z.enum(['all', 'file', 'web']).optional().default('all'),
         topicId: z.string().optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
-      if (input.target === 'currentTopic') {
+      if (input.scope === 'currentTopic') {
         if (!input.topicId) throw new Error('topicId is required to list current topic documents');
 
-        return ctx.agentDocumentService.listDocumentsForTopic(input.agentId, input.topicId);
+        return ctx.agentDocumentService.listDocumentsForTopic(
+          input.agentId,
+          input.topicId,
+          input.sourceType,
+        );
       }
 
-      return ctx.agentDocumentService.listDocuments(input.agentId);
+      return ctx.agentDocumentService.listDocuments(input.agentId, input.sourceType);
     }),
 
   /**
@@ -421,16 +432,23 @@ export const agentDocumentRouter = router({
     .input(
       z.object({
         agentId: z.string(),
+        loc: readLocSchema,
         path: z.string(),
         topicId: z.string().optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
       try {
-        return await ctx.agentDocumentVfsService.read(input.path, {
-          agentId: input.agentId,
-          topicId: input.topicId,
-        });
+        return await ctx.agentDocumentVfsService.read(
+          input.path,
+          {
+            agentId: input.agentId,
+            topicId: input.topicId,
+          },
+          {
+            loc: input.loc,
+          },
+        );
       } catch (error) {
         handleAgentDocumentVfsError(error);
       }

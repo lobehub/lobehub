@@ -11,9 +11,13 @@ import {
   type ConversationHooks,
   ConversationProvider,
 } from '@/features/Conversation';
+import { useChatFollowUp } from '@/features/Conversation/hooks/useChatFollowUp';
 import { type ConversationContext } from '@/features/Conversation/types';
+import { mergeConversationHooks } from '@/features/Conversation/utils/mergeConversationHooks';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useActionsBarConfig } from '@/routes/(main)/agent/features/Conversation/useActionsBarConfig';
+import { useAgentStore } from '@/store/agent';
+import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
@@ -158,17 +162,28 @@ const FloatingChatPanel = memo<FloatingChatPanelProps>(
     const [open, setOpen] = useState(true);
     const [activeSnapPoint, setActiveSnapPoint] = useState<number>(REST_SNAP_POINT);
 
+    const agentChatConfig = useAgentStore(chatConfigByIdSelectors.getChatConfigById(agentId));
+    const chatFollowUpHooks = useChatFollowUp({
+      agentChatConfig,
+      conversationKey: chatKey,
+      threadId: threadId ?? undefined,
+      topicId: topicId ?? undefined,
+    });
+
     const mergedHooks = useMemo<ConversationHooks>(
-      () => ({
-        ...hooks,
-        // Expand the sheet the moment the user presses Send, so the chat grows
-        // into view before the AI response streams in — not after it finishes.
-        onBeforeSendMessage: async (params) => {
-          setActiveSnapPoint(MAX_SNAP_POINT);
-          return hooks?.onBeforeSendMessage?.(params);
-        },
-      }),
-      [hooks],
+      () =>
+        mergeConversationHooks(
+          hooks,
+          {
+            // Expand the sheet the moment the user presses Send, so the chat grows
+            // into view before the AI response streams in — not after it finishes.
+            onBeforeSendMessage: async () => {
+              setActiveSnapPoint(MAX_SNAP_POINT);
+            },
+          },
+          chatFollowUpHooks,
+        ),
+      [hooks, chatFollowUpHooks],
     );
 
     const sheetProps: FloatingSheetProps = {

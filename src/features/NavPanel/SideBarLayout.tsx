@@ -11,7 +11,7 @@ interface SidebarLayoutProps {
 
 const SideBarLayout = memo<SidebarLayoutProps>(({ header, body }) => {
   return (
-    <Flexbox gap={4} style={{ height: '100%', overflow: 'hidden' }}>
+    <Flexbox gap={1} style={{ height: '100%', overflow: 'hidden' }}>
       <Suspense fallback={<SkeletonItem height={44} style={{ marginTop: 8 }} />}>{header}</Suspense>
       <ScrollShadow size={2} style={{ height: '100%' }}>
         <TooltipGroup>

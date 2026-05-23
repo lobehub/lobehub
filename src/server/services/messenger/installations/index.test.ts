@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 
-import { getInstallationStore } from './index';
+import { getInstallationStore, messengerConnectionId, messengerConnectionIdForUser } from './index';
 
 vi.mock('./slack', () => ({
   SlackInstallationStore: vi.fn().mockImplementation(() => ({ kind: 'slack' })),
@@ -41,5 +41,64 @@ describe('getInstallationStore', () => {
 
   it('returns null for an unknown platform', () => {
     expect(getInstallationStore('unknown' as any)).toBeNull();
+  });
+});
+
+describe('messengerConnectionId', () => {
+  it('returns the singleton connectionId for a platform', () => {
+    expect(messengerConnectionId('discord')).toBe('messenger:discord:singleton');
+    expect(messengerConnectionId('telegram')).toBe('messenger:telegram:singleton');
+  });
+});
+
+describe('messengerConnectionIdForUser', () => {
+  it('drops the :singleton segment for telegram (no tenant)', () => {
+    expect(
+      messengerConnectionIdForUser({ installationKey: 'telegram:singleton', userId: 'u_abc' }),
+    ).toBe('messenger:telegram:user-u_abc');
+  });
+
+  it('drops the :singleton segment for discord (no tenant)', () => {
+    expect(
+      messengerConnectionIdForUser({ installationKey: 'discord:singleton', userId: 'u_abc' }),
+    ).toBe('messenger:discord:user-u_abc');
+  });
+
+  it('preserves the tenantId for slack workspaces', () => {
+    expect(messengerConnectionIdForUser({ installationKey: 'slack:T0123', userId: 'u_abc' })).toBe(
+      'messenger:slack:T0123:user-u_abc',
+    );
+  });
+
+  it('routes to the singleton connectionId when websocket mode + singleton install (discord)', () => {
+    expect(
+      messengerConnectionIdForUser({
+        connectionMode: 'websocket',
+        installationKey: 'discord:singleton',
+        userId: 'u_abc',
+      }),
+    ).toBe('messenger:discord:singleton');
+  });
+
+  it('keeps per-user sharding for webhook mode even with singleton install (telegram)', () => {
+    expect(
+      messengerConnectionIdForUser({
+        connectionMode: 'webhook',
+        installationKey: 'telegram:singleton',
+        userId: 'u_abc',
+      }),
+    ).toBe('messenger:telegram:user-u_abc');
+  });
+
+  it('keeps per-user sharding for websocket mode on multi-tenant installs (slack)', () => {
+    // Defensive: websocket + non-singleton tenant install should still shard
+    // by user, since each tenant has its own connection on the gateway.
+    expect(
+      messengerConnectionIdForUser({
+        connectionMode: 'websocket',
+        installationKey: 'slack:T0123',
+        userId: 'u_abc',
+      }),
+    ).toBe('messenger:slack:T0123:user-u_abc');
   });
 });

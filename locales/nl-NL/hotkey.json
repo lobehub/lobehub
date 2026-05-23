@@ -1,8 +1,6 @@
 {
   "addUserMessage.desc": "Voeg de huidige invoer toe als een gebruikersbericht zonder generatie te starten",
   "addUserMessage.title": "Gebruikersbericht Toevoegen",
-  "clearCurrentMessages.desc": "Wis de berichten en geüploade bestanden van het huidige gesprek",
-  "clearCurrentMessages.title": "Gespreksberichten Wissen",
   "commandPalette.desc": "Open de globale opdrachtpalet voor snelle toegang tot functies",
   "commandPalette.title": "Opdrachtpalet",
   "deleteAndRegenerateMessage.desc": "Verwijder het laatste bericht en genereer opnieuw",

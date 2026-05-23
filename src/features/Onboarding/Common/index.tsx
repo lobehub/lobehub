@@ -7,10 +7,15 @@ import { memo, useCallback, useEffect, useRef } from 'react';
 import { Navigate, useSearchParams } from 'react-router-dom';
 
 import Loading from '@/components/Loading/BrandTextLoading';
+import { useOnboardingAgentTemplates } from '@/hooks/useOnboardingAgentTemplates';
 import OnboardingContainer from '@/routes/onboarding/_layout';
-import { deriveOnboardingBranchPath } from '@/routes/onboarding/config';
+import { deriveOnboardingBranchPath } from '@/routes/onboarding/branch';
 import ResponseLanguageStep from '@/routes/onboarding/features/ResponseLanguageStep';
 import TelemetryStep from '@/routes/onboarding/features/TelemetryStep';
+import {
+  trackOnboardingStepCompleted,
+  trackOnboardingStepViewed,
+} from '@/services/onboardingMetrics';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { onboardingSelectors } from '@/store/user/selectors';
@@ -18,19 +23,24 @@ import { onboardingSelectors } from '@/store/user/selectors';
 /**
  * Remap a `currentStep` persisted under the old 5-step classic flow
  * (1=Telemetry, 2=FullName, 3=Interests, 4=Language, 5=ProSettings) onto
- * the new 3-step classic flow (1=FullName, 2=Interests, 3=ProSettings).
+ * the current classic flow (1=FullName, 2=Interests, 3=ProSettings,
+ * 4=AgentPicker).
  *
  * Telemetry/Language are extracted into the shared prefix, so an in-progress
- * legacy user must skip those positions when resuming classic. Without this
- * remap, persisted step 2 (FullName) would render Interests and persisted
- * step 3 (Interests) would render ProSettings — silently skipping required
- * profile steps. Idempotent for already-new values within [1, 3].
+ * legacy user must skip those positions when resuming classic. Legacy
+ * Language/ProSettings (raw >= 4) resume at the new ProSettings step
+ * (MAX_ONBOARDING_STEPS - 1) — never the trailing agent-picker step.
  */
 const remapLegacyClassicStep = (raw: number): number => {
   if (raw <= 2) return 1;
   if (raw === 3) return 2;
-  return MAX_ONBOARDING_STEPS;
+  return MAX_ONBOARDING_STEPS - 1;
 };
+
+const COMMON_STEP_TRACKING = {
+  1: { flow: 'common', step: 'telemetry', stepIndex: 1 },
+  2: { flow: 'common', step: 'response_language', stepIndex: 2 },
+} as const;
 
 const CommonOnboardingPage = memo(() => {
   const isUserStateInit = useUserStore((s) => s.isUserStateInit);
@@ -40,6 +50,10 @@ const CommonOnboardingPage = memo(() => {
 
   const [searchParams, setSearchParams] = useSearchParams();
   const step: 1 | 2 = searchParams.get('step') === '2' ? 2 : 1;
+  const hasStepParam = searchParams.has('step');
+  const viewedStepKeysRef = useRef<Set<string>>(new Set());
+
+  useOnboardingAgentTemplates(isUserStateInit && (!commonStepsCompleted || hasStepParam));
 
   // One-time legacy migration: when the user lands on the shared prefix, if
   // their persisted `currentStep` was authored under the old 5-step schema,
@@ -62,25 +76,43 @@ const CommonOnboardingPage = memo(() => {
     remappedRef.current = true;
   }, [isUserStateInit]);
 
+  useEffect(() => {
+    if (__TEST__) return;
+    void import('@/routes/onboarding/agent');
+    void import('@/routes/onboarding/classic');
+  }, []);
+
+  useEffect(() => {
+    if (!isUserStateInit || (commonStepsCompleted && !hasStepParam)) return;
+
+    const payload = COMMON_STEP_TRACKING[step];
+    if (viewedStepKeysRef.current.has(payload.step)) return;
+
+    viewedStepKeysRef.current.add(payload.step);
+    trackOnboardingStepViewed(payload);
+  }, [commonStepsCompleted, hasStepParam, isUserStateInit, step]);
+
   const goNextFromTelemetry = useCallback(() => {
+    trackOnboardingStepCompleted(COMMON_STEP_TRACKING[1]);
     setSearchParams({ step: '2' }, { replace: true });
   }, [setSearchParams]);
 
   const goBackFromLanguage = useCallback(() => {
-    setSearchParams({}, { replace: true });
+    setSearchParams({ step: '1' }, { replace: true });
   }, [setSearchParams]);
 
   const finishCommon = useCallback(() => {
-    // No-op: completion of step 2 writes responseLanguage, which flips
-    // commonStepsCompleted to true; the early-return below then handles
-    // the redirect on the next render.
-  }, []);
+    trackOnboardingStepCompleted(COMMON_STEP_TRACKING[2]);
+    setSearchParams({}, { replace: true });
+  }, [setSearchParams]);
 
   if (!isUserStateInit) {
     return <Loading debugId="CommonOnboarding/userState" />;
   }
 
-  if (commonStepsCompleted) {
+  // With the prefix complete, a bare `/onboarding` resumes the branch — but an
+  // explicit `?step` (FullNameStep's back button) re-enters the shared prefix.
+  if (commonStepsCompleted && !hasStepParam) {
     if (!serverConfigInit) {
       return <Loading debugId="CommonOnboarding/serverConfig" />;
     }

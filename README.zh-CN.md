@@ -4,8 +4,11 @@
 
 # LobeHub
 
-LobeHub 是一个工作与生活空间，用于发现、构建并与会随着您一起成长的 Agent 队友协作。<br/>
-在 LobeHub 中，我们将 **Agent 视为工作单元**，提供一个让人类与 Agent 共同进化的基础设施。
+LobeHub 帮你把专属 Agent 组织成 7×24 不打烊的高效队伍：
+
+自动为你招募适配的 AI 队友、调度任务排班、汇总生成工作报告，
+
+你始终掌控全局，从此不用再时刻在线盯守，真正解放自己的时间。
 
 [English](./README.md) · **简体中文** · [官网][official-site] · [更新日志][changelog] · [文档][docs] · [博客][blog] · [反馈问题][github-issues-link]
 
@@ -24,7 +27,6 @@ LobeHub 是一个工作与生活空间，用于发现、构建并与会随着您
 [![][github-stars-shield]][github-stars-link]
 [![][github-issues-shield]][github-issues-link]
 [![][github-license-shield]][github-license-link]<br>
-[![][sponsor-shield]][sponsor-link]
 
 **分享 LobeHub 给你的好友**
 
@@ -35,9 +37,9 @@ LobeHub 是一个工作与生活空间，用于发现、构建并与会随着您
 [![][share-weibo-shield]][share-weibo-link]
 [![][share-mastodon-shield]][share-mastodon-link]
 
-<sup>Agent teammates that grow with you</sup>
+<sup>你的首席 Agent 运营官</sup>
 
-[![][github-trending-shield]][github-trending-url]
+<a href="https://www.producthunt.com/products/lobehub?embed=true&amp;utm_source=badge-top-post-badge&amp;utm_medium=badge&amp;utm_campaign=badge-lobehub-2" target="_blank" rel="noopener noreferrer"><img alt="LobeHub - Your Chief Agent Operator for multi-agent work | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/top-post-badge.svg?post_id=1147569&amp;theme=light&amp;period=daily&amp;t=1779247564355"></a> <a href="https://trendshift.io/repositories/19224" target="_blank"><img src="https://trendshift.io/api/badge/repositories/19224" alt="lobehub%2Flobehub | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 [![][github-hello-shield]][github-hello-url]
 
 </div>
@@ -49,30 +51,10 @@ LobeHub 是一个工作与生活空间，用于发现、构建并与会随着您
 
 - [👋🏻 开始使用 & 交流](#-开始使用--交流)
 - [✨ 特性一览](#-特性一览)
+  - [运营：你制定策略，我们负责运行 Agent。](#运营你制定策略我们负责运行-agent)
   - [创建：以 Agent 为工作单元](#创建以-agent-为工作单元)
   - [协作：扩展新型协作网络](#协作扩展新型协作网络)
   - [进化：人类与 Agent 的共生进化](#进化人类与-agent-的共生进化)
-  - [MCP](#mcp)
-  - [发现、连接、扩展](#发现连接扩展)
-  - [巅峰性能，零干扰](#巅峰性能零干扰)
-  - [在线知识，按需获取](#在线知识按需获取)
-  - [思维链 (CoT)](#思维链-cot)
-  - [分支对话](#分支对话)
-  - [支持白板 (Artifacts)](#支持白板-artifacts)
-  - [文件上传 / 知识库](#文件上传--知识库)
-  - [多模型服务商支持](#多模型服务商支持)
-  - [支持本地大语言模型 (LLM)](#支持本地大语言模型-llm)
-  - [模型视觉识别 (Model Visual)](#模型视觉识别-model-visual)
-  - [TTS & STT 语音会话](#tts--stt-语音会话)
-  - [Text to Image 文生图](#text-to-image-文生图)
-  - [插件系统 (Tools Calling)](#插件系统-tools-calling)
-  - [助手市场 (GPTs)](#助手市场-gpts)
-  - [支持本地 / 远程数据库](#支持本地--远程数据库)
-  - [支持多用户管理](#支持多用户管理)
-  - [渐进式 Web 应用 (PWA)](#渐进式-web-应用-pwa)
-  - [移动设备适配](#移动设备适配)
-  - [自定义主题](#自定义主题)
-  - [`*` 更多特性](#-更多特性)
 - [🛳 开箱即用](#-开箱即用)
   - [`A` 使用 Vercel、Zeabur 、Sealos 或 阿里云计算巢 部署](#a-使用-vercelzeabur-sealos-或-阿里云计算巢-部署)
   - [`B` 使用 Docker 部署](#b-使用-docker-部署)
@@ -93,7 +75,7 @@ LobeHub 是一个工作与生活空间，用于发现、构建并与会随着您
 
 <br/>
 
-<https://github.com/user-attachments/assets/6710ad97-03d0-4175-bd75-adff9b55eca2>
+<https://github.com/user-attachments/assets/0a33365f-b786-48b5-9ed6-f8af7927bccb>
 
 ## 👋🏻 开始使用 & 交流
 
@@ -102,9 +84,9 @@ LobeHub 是一个工作与生活空间，用于发现、构建并与会随着您
 
 不论普通用户与专业开发者，LobeHub 旨在成为所有人的 AI Agent 实验场。LobeHub 目前正在积极开发中，有任何需求或者问题，欢迎提交 [issues][issues-link]
 
-| [![](https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1065874&theme=light&t=1769347414733)](https://www.producthunt.com/products/lobehub?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-lobehub) | 我们已在 Product Hunt 上线！我们很高兴将 LobeHub 推向世界。如果您相信人类与 Agent 共同进化的未来，请支持我们的旅程。 |
-| :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :------------------------------------------------------------------------------------------------------------------- |
-| [![][discord-shield-badge]][discord-link]                                                                                                                                                                                                         | 加入我们的 Discord 社区！这是你可以与开发者和其他 LobeHub 热衷用户交流的地方                                         |
+| [![](https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1065874&theme=light&t=1769347414733)](https://www.producthunt.com/products/lobehub?launch=lobehub-2&embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-lobehub) | 我们已在 Product Hunt 上线！我们很高兴将 LobeHub 推向世界。如果您相信人类与 Agent 共同进化的未来，请支持我们的旅程。 |
+| :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------- |
+| [![][discord-shield-badge]][discord-link]                                                                                                                                                                                                                          | 加入我们的 Discord 社区！这是你可以与开发者和其他 LobeHub 热衷用户交流的地方                                         |
 
 > \[!IMPORTANT]
 >
@@ -127,7 +109,26 @@ LobeHub 是一个工作与生活空间，用于发现、构建并与会随着您
 
 LobeHub 是一个工作与生活空间，用于发现、构建并与会随着您一起成长的 Agent 队友协作。在 LobeHub 中，我们将 **Agent 视为工作单元**，提供一个让人类与 Agent 共同进化的基础设施。
 
-![](https://hub-apac-1.lobeobjects.space/blog/assets/2204cde2228fb3f583f3f2c090bc49fb.webp)
+![](https://github.com/user-attachments/assets/89d1c402-a62b-4794-82ea-17e5ee1a6165)
+
+### 运营：你制定策略，我们负责运行 Agent。
+
+雇用、排程并汇报你整个 AI 团队的工作
+
+- **更高生产力，更少工具**：将你所有的 Agent 集中在一个平台。
+- **IM 网关**： Agent 连接到您每天使用的技能。
+
+![](https://github.com/user-attachments/assets/7b08d6d9-9dff-4b06-a919-324630554509)
+
+[![][back-to-top]](#readme-top)
+
+<div align="right">
+
+[![][back-to-top]](#readme-top)
+
+</div>
+
+![](https://github.com/user-attachments/assets/81e89324-fc66-4024-99a3-aa8e16ec8184)
 
 ### 创建：以 Agent 为工作单元
 
@@ -135,6 +136,8 @@ LobeHub 是一个工作与生活空间，用于发现、构建并与会随着您
 
 - **统一智能**：无缝访问任何模型与任何模态 —— 全部由您掌控。
 - **1 万 + 技能**：通过超过 10,000 个工具和与 MCP 兼容的插件，将 Agent 连接到您每天使用的技能。
+
+![](https://github.com/user-attachments/assets/949b8166-486d-4750-ad7a-cfe7bfcb84e3)
 
 [![][back-to-top]](#readme-top)
 
@@ -155,6 +158,8 @@ LobeHub 引入了 **Agent Groups**，让您可以像对待真实队友一样与 
 - **项目（Project）**：按项目组织工作，保持一切结构化且易于跟踪。
 - **工作区（Workspace）**：供团队与 Agent 协作的共享空间，确保明确的所有权和组织内的可见性。
 
+![](https://github.com/user-attachments/assets/e51526c6-e09c-4a5a-9cec-dcd3fd68a3a8)
+
 [![][back-to-top]](#readme-top)
 
 <div align="right">
@@ -172,367 +177,13 @@ LobeHub 引入了 **Agent Groups**，让您可以像对待真实队友一样与 
 - **持续学习**：您的 Agent 会从您的工作方式中学习，调整其行为以在恰当时刻采取行动。
 - **白盒记忆**：我们相信透明性。您的 Agent 使用结构化、可编辑的记忆，让您完全掌控它们记住的内容。
 
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-<details>
-<summary>更多特性</summary>
-
-[![](https://github.com/user-attachments/assets/1be85d36-3975-4413-931f-27e05e440995)](https://lobehub.com/mcp)
-
-### MCP
-
-通过启用与外部工具、数据源和服务的平滑、安全和动态交互，释放你的 AI 的全部潜力。基于 MCP（模型上下文协议）的插件系统打破了 AI 与数字生态系统之间的壁垒，实现了前所未有的连接性和功能性。
-
-将对话转化为强大的工作流程，连接数据库、API、文件系统等。体验真正理解并与你的世界互动的 AI Agent。
-
-[![][back-to-top]](#readme-top)
-
-![][image-feat-mcp-market]
-
-### 发现、连接、扩展
-
-浏览不断增长的 MCP 插件库，轻松扩展你的 AI 能力并简化工作流程。访问 [lobehub.com/mcp](https://lobehub.com/mcp) 探索 MCP 市场，提供精选的集成集合，增强你的 AI 与各种工具和服务协作的能力。
-
-从生产力工具到开发环境，发现扩展 AI 覆盖范围和效率的新方式。与社区连接，找到满足特定需求的完美插件。
-
-[![][back-to-top]](#readme-top)
-
-![][image-feat-desktop]
-
-### 巅峰性能，零干扰
-
-获得完整的 LobeHub 体验，摆脱浏览器限制 —— 轻量级、专注且随时就绪。我们的桌面应用程序为你的 AI 交互提供专用环境，确保最佳性能和最小干扰。
-
-体验更快的响应时间、更好的资源管理和与 AI 助手的更稳定连接。桌面应用专为要求 AI 工具最佳性能的用户设计。
-
-[![][back-to-top]](#readme-top)
-
-![][image-feat-web-search]
-
-### 在线知识，按需获取
-
-通过实时联网访问，你的 AI 与世界保持同步 —— 新闻、数据、趋势等。保持信息更新，获取最新可用信息，使你的 AI 能够提供准确和最新的回复。
-
-访问实时信息，验证事实，探索当前事件，无需离开对话。你的 AI 成为通向世界知识的门户，始终保持最新和全面。
-
-[![][back-to-top]](#readme-top)
-
-[![][image-feat-cot]][docs-feat-cot]
-
-### [思维链 (CoT)][docs-feat-cot]
-
-体验前所未有的 AI 推理过程。通过创新的思维链（CoT）可视化功能，您可以实时观察复杂问题是如何一步步被解析的。这项突破性的功能为 AI 的决策过程提供了前所未有的透明度，让您能够清晰地了解结论是如何得出的。
-
-通过将复杂的推理过程分解为清晰的逻辑步骤，您可以更好地理解和验证 AI 的解题思路。无论您是在调试问题、学习知识，还是单纯对 AI 推理感兴趣，思维链可视化都能将抽象思维转化为一种引人入胜的互动体验。
-
-[![][back-to-top]](#readme-top)
-
-[![][image-feat-branch]][docs-feat-branch]
-
-### [分支对话][docs-feat-branch]
-
-为您带来更自然、更灵活的 AI 对话方式。通过分支对话功能，您的讨论可以像人类对话一样自然延伸。在任意消息处创建新的对话分支，让您在保留原有上下文的同时，自由探索不同的对话方向。
-
-两种强大模式任您选择：
-
-- **延续模式**：无缝延展当前讨论，保持宝贵的对话上下文
-- **独立模式**：基于任意历史消息，开启全新话题探讨
-
-这项突破性功能将线性对话转变为动态的树状结构，让您能够更深入地探索想法，实现更高效的互动体验。
-
-[![][back-to-top]](#readme-top)
-
-[![][image-feat-artifacts]][docs-feat-artifacts]
-
-### [支持白板 (Artifacts)][docs-feat-artifacts]
-
-体验集成于 LobeHub 的 Claude Artifacts 能力。这项革命性功能突破了 AI 人机交互的边界，让您能够实时创建和可视化各种格式的内容。
-
-以前所未有的灵活度进行创作与可视化：
-
-- 生成并展示动态 SVG 图形
-- 实时构建与渲染交互式 HTML 页面
-- 输出多种格式的专业文档
-
-[![][back-to-top]](#readme-top)
-
-[![][image-feat-knowledgebase]][docs-feat-knowledgebase]
-
-### [文件上传 / 知识库][docs-feat-knowledgebase]
-
-LobeHub 支持文件上传与知识库功能，你可以上传文件、图片、音频、视频等多种类型的文件，以及创建知识库，方便用户管理和查找文件。同时在对话中使用文件和知识库功能，实现更加丰富的对话体验。
-
-<https://github.com/user-attachments/assets/faa8cf67-e743-4590-8bf6-ebf6ccc34175>
-
-> \[!TIP]
->
-> 查阅 [📘 LobeHub 知识库上线 —— 此刻起，跬步千里](https://lobehub.com/zh/blog/knowledge-base) 了解详情。
+![](https://github.com/user-attachments/assets/5c6e16f0-7f47-4baf-9aeb-3a00deb8ff5b)
 
 <div align="right">
 
 [![][back-to-top]](#readme-top)
 
 </div>
-
-[![][image-feat-privoder]][docs-feat-provider]
-
-### [多模型服务商支持][docs-feat-provider]
-
-在 LobeHub 的不断发展过程中，我们深刻理解到在提供 AI 会话服务时模型服务商的多样性对于满足社区需求的重要性。因此，我们不再局限于单一的模型服务商，而是拓展了对多种模型服务商的支持，以便为用户提供更为丰富和多样化的会话选择。
-
-通过这种方式，LobeHub 能够更灵活地适应不同用户的需求，同时也为开发者提供了更为广泛的选择空间。
-
-#### 已支持的模型服务商
-
-我们已经实现了对以下模型服务商的支持：
-
-<!-- PROVIDER LIST -->
-
-<details><summary><kbd>See more providers (+-10)</kbd></summary>
-
-</details>
-
-> 📊 Total providers: [<kbd>**0**</kbd>](https://lobechat.com/discover/providers)
-
- <!-- PROVIDER LIST -->
-
-同时，我们也在计划支持更多的模型服务商，以进一步丰富我们的服务商库。如果你希望让 LobeHub 支持你喜爱的服务商，欢迎加入我们的 [💬 社区讨论](https://github.com/lobehub/lobehub/discussions/6157)。
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-[![][image-feat-local]][docs-feat-local]
-
-### [支持本地大语言模型 (LLM)][docs-feat-local]
-
-为了满足特定用户的需求，LobeHub 还基于 [Ollama](https://ollama.ai) 支持了本地模型的使用，让用户能够更灵活地使用自己的或第三方的模型。
-
-> \[!TIP]
->
-> 查阅 [📘 在 LobeHub 中使用 Ollama][docs-usage-ollama] 获得更多信息
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-[![][image-feat-vision]][docs-feat-vision]
-
-### [模型视觉识别 (Model Visual)][docs-feat-vision]
-
-LobeHub 已经支持 OpenAI 最新的 [`gpt-4-vision`](https://platform.openai.com/docs/guides/vision) 支持视觉识别的模型，这是一个具备视觉识别能力的多模态应用。
-用户可以轻松上传图片或者拖拽图片到对话框中，助手将能够识别图片内容，并在此基础上进行智能对话，构建更智能、更多元化的聊天场景。
-
-这一特性打开了新的互动方式，使得交流不再局限于文字，而是可以涵盖丰富的视觉元素。无论是日常使用中的图片分享，还是在特定行业内的图像解读，助手都能提供出色的对话体验。
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-[![][image-feat-tts]][docs-feat-tts]
-
-### [TTS & STT 语音会话][docs-feat-tts]
-
-LobeHub 支持文字转语音（Text-to-Speech，TTS）和语音转文字（Speech-to-Text，STT）技术，这使得我们的应用能够将文本信息转化为清晰的语音输出，用户可以像与真人交谈一样与我们的对话助手进行交流。
-用户可以从多种声音中选择，给助手搭配合适的音源。 同时，对于那些倾向于听觉学习或者想要在忙碌中获取信息的用户来说，TTS 提供了一个极佳的解决方案。
-
-在 LobeHub 中，我们精心挑选了一系列高品质的声音选项 (OpenAI Audio, Microsoft Edge Speech)，以满足不同地域和文化背景用户的需求。用户可以根据个人喜好或者特定场景来选择合适的语音，从而获得个性化的交流体验。
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-[![][image-feat-t2i]][docs-feat-t2i]
-
-### [Text to Image 文生图][docs-feat-t2i]
-
-支持最新的文本到图片生成技术，LobeHub 现在能够让用户在与助手对话中直接调用文生图工具进行创作。
-通过利用 [`DALL-E 3`](https://openai.com/dall-e-3)、[`MidJourney`](https://www.midjourney.com/) 和 [`Pollinations`](https://pollinations.ai/) 等 AI 工具的能力， 助手们现在可以将你的想法转化为图像。
-同时可以更私密和沉浸式地完成你的创作过程。
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-[![][image-feat-plugin]][docs-feat-plugin]
-
-### [插件系统 (Tools Calling)][docs-feat-plugin]
-
-LobeHub 的插件生态系统是其核心功能的重要扩展，它极大地增强了 ChatGPT 的实用性和灵活性。
-
-<video controls src="https://github.com/lobehub/lobehub/assets/28616219/f29475a3-f346-4196-a435-41a6373ab9e2" muted="false"></video>
-
-通过利用插件，ChatGPT 能够实现实时信息的获取和处理，例如自动获取最新新闻头条，为用户提供即时且相关的资讯。
-
-此外，这些插件不仅局限于新闻聚合，还可以扩展到其他实用的功能，如快速检索文档、生成图象、获取电商平台数据，以及其他各式各样的第三方服务。
-
-> 通过文档了解更多 [📘 插件使用][docs-usage-plugin]
-
-<!-- PLUGIN LIST -->
-
-| 最近新增                                                                                                             | 描述                                                                                                               |
-| -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| [购物工具](https://lobechat.com/discover/plugin/ShoppingTools)<br/><sup>By **shoppingtools** on **2026-01-12**</sup> | 在 eBay 和 AliExpress 上搜索产品，查找 eBay 活动和优惠券。获取快速示例。<br/>`购物` `e-bay` `ali-express` `优惠券` |
-| [SEO 助手](https://lobechat.com/discover/plugin/seo_assistant)<br/><sup>By **webfx** on **2026-01-12**</sup>         | SEO 助手可以生成搜索引擎关键词信息，以帮助创建内容。<br/>`seo` `关键词`                                            |
-| [视频字幕](https://lobechat.com/discover/plugin/VideoCaptions)<br/><sup>By **maila** on **2025-12-13**</sup>         | 将 Youtube 链接转换为转录文本，使其能够提问，创建章节，并总结其内容。<br/>`视频转文字` `you-tube`                  |
-| [天气 GPT](https://lobechat.com/discover/plugin/WeatherGPT)<br/><sup>By **steven-tey** on **2025-12-13**</sup>       | 获取特定位置的当前天气信息。<br/>`天气`                                                                            |
-
-> 📊 Total plugins: [<kbd>**40**</kbd>](https://lobechat.com/discover/plugins)
-
- <!-- PLUGIN LIST -->
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-[![][image-feat-agent]][docs-feat-agent]
-
-### [助手市场 (GPTs)][docs-feat-agent]
-
-在 LobeHub 的助手市场中，创作者们可以发现一个充满活力和创新的社区，它汇聚了众多精心设计的助手，这些助手不仅在工作场景中发挥着重要作用，也在学习过程中提供了极大的便利。
-我们的市场不仅是一个展示平台，更是一个协作的空间。在这里，每个人都可以贡献自己的智慧，分享个人开发的助手。
-
-> \[!TIP]
->
-> 通过 [🤖/🏪 提交助手][submit-agents-link] ，你可以轻松地将你的助手作品提交到我们的平台。我们特别强调的是，LobeHub 建立了一套精密的自动化国际化（i18n）工作流程， 它的强大之处在于能够无缝地将你的助手转化为多种语言版本。
-> 这意味着，不论你的用户使用何种语言，他们都能无障碍地体验到你的助手。
-
-> \[!IMPORTANT]
->
-> 我欢迎所有用户加入这个不断成长的生态系统，共同参与到助手的迭代与优化中来。共同创造出更多有趣、实用且具有创新性的助手，进一步丰富助手的多样性和实用性。
-
-<!-- AGENT LIST -->
-
-| 最近新增                                                                                                                                                         | 描述                                                                                                              |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| [海龟汤主持人](https://lobechat.com/discover/assistant/lateral-thinking-puzzle)<br/><sup>By **[CSY2022](https://github.com/CSY2022)** on **2025-06-19**</sup>    | 一个海龟汤主持人，需要自己提供汤面，汤底与关键点（猜中的判定条件）。<br/>`海龟汤` `推理` `互动` `谜题` `角色扮演` |
-| [学术写作助手](https://lobechat.com/discover/assistant/academic-writing-assistant)<br/><sup>By **[swarfte](https://github.com/swarfte)** on **2025-06-17**</sup> | 专业的学术研究论文写作和正式文档编写专家<br/>`学术写作` `研究` `正式风格`                                         |
-| [美食评论员🍟](https://lobechat.com/discover/assistant/food-reviewer)<br/><sup>By **[renhai-lab](https://github.com/renhai-lab)** on **2025-06-17**</sup>        | 美食评价专家<br/>`美食` `评价` `写作`                                                                             |
-| [Minecraft 资深开发者](https://lobechat.com/discover/assistant/java-development)<br/><sup>By **[iamyuuk](https://github.com/iamyuuk)** on **2025-06-17**</sup>   | 擅长高级 Java 开发及 Minecraft 开发<br/>`开发` `编程` `minecraft` `java`                                          |
-
-> 📊 Total agents: [<kbd>**505**</kbd> ](https://lobechat.com/discover/assistants)
-
- <!-- AGENT LIST -->
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-[![][image-feat-database]][docs-feat-database]
-
-### [支持本地 / 远程数据库][docs-feat-database]
-
-LobeHub 支持同时使用服务端数据库和本地数据库。根据您的需求，您可以选择合适的部署方案：
-
-- 本地数据库：适合希望对数据有更多掌控感和隐私保护的用户。LobeHub 采用了 CRDT (Conflict-Free Replicated Data Type) 技术，实现了多端同步功能。这是一项实验性功能，旨在提供无缝的数据同步体验。
-- 服务端数据库：适合希望更便捷使用体验的用户。LobeHub 支持 PostgreSQL 作为服务端数据库。关于如何配置服务端数据库的详细文档，请前往 [配置服务端数据库](https://lobehub.com/zh/docs/self-hosting/advanced/server-database)。
-
-无论您选择哪种数据库，LobeHub 都能为您提供卓越的用户体验。
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-[![][image-feat-auth]][docs-feat-auth]
-
-### [支持多用户管理][docs-feat-auth]
-
-LobeHub 支持多用户管理，提供了灵活的用户认证方案：
-
-- **Better Auth**：LobeHub 集成了 `Better Auth`，一个现代化且灵活的身份验证库，支持多种身份验证方式，包括 OAuth、邮件登录、凭证登录、魔法链接等。通过 `Better Auth`，您可以轻松实现用户的注册、登录、会话管理、社交登录、多因素认证 (MFA) 等功能，确保用户数据的安全性和隐私性。
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-[![][image-feat-pwa]][docs-feat-pwa]
-
-### [渐进式 Web 应用 (PWA)][docs-feat-pwa]
-
-我们深知在当今多设备环境下为用户提供无缝体验的重要性。为此，我们采用了渐进式 Web 应用 [PWA](https://support.google.com/chrome/answer/9658361) 技术，
-这是一种能够将网页应用提升至接近原生应用体验的现代 Web 技术。通过 PWA，LobeHub 能够在桌面和移动设备上提供高度优化的用户体验，同时保持轻量级和高性能的特点。
-在视觉和感觉上，我们也经过精心设计，以确保它的界面与原生应用无差别，提供流畅的动画、响应式布局和适配不同设备的屏幕分辨率。
-
-> \[!NOTE]
->
-> 若您未熟悉 PWA 的安装过程，您可以按照以下步骤将 LobeHub 添加为您的桌面应用（也适用于移动设备）：
->
-> - 在电脑上运行 Chrome 或 Edge 浏览器 .
-> - 访问 LobeHub 网页 .
-> - 在地址栏的右上角，单击 <kbd>安装</kbd> 图标 .
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-[![][image-feat-mobile]][docs-feat-mobile]
-
-### [移动设备适配][docs-feat-mobile]
-
-针对移动设备进行了一系列的优化设计，以提升用户的移动体验。目前，我们正在对移动端的用户体验进行版本迭代，以实现更加流畅和直观的交互。如果您有任何建议或想法，我们非常欢迎您通过 GitHub Issues 或者 Pull Requests 提供反馈。
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-[![][image-feat-theme]][docs-feat-theme]
-
-### [自定义主题][docs-feat-theme]
-
-作为设计工程师出身，LobeHub 在界面设计上充分考虑用户的个性化体验，因此引入了灵活多变的主题模式，其中包括日间的亮色模式和夜间的深色模式。
-除了主题模式的切换，还提供了一系列的颜色定制选项，允许用户根据自己的喜好来调整应用的主题色彩。无论是想要沉稳的深蓝，还是希望活泼的桃粉，或者是专业的灰白，用户都能够在 LobeHub 中找到匹配自己风格的颜色选择。
-
-> \[!TIP]
->
-> 默认配置能够智能地识别用户系统的颜色模式，自动进行主题切换，以确保应用界面与操作系统保持一致的视觉体验。对于喜欢手动调控细节的用户，LobeHub 同样提供了直观的设置选项，针对聊天场景也提供了对话气泡模式和文档模式的选择。
-
-<div align="right">
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-</div>
-
-### `*` 更多特性
-
-除了上述功能特性以外，LobeHub 所具有的设计和技术能力将为你带来更多使用保障：
-
-- [x] 💎 **精致 UI 设计**：经过精心设计的界面，具有优雅的外观和流畅的交互效果，支持亮暗色主题，适配移动端。支持 PWA，提供更加接近原生应用的体验。
-- [x] 🗣️ **流畅的对话体验**：流式响应带来流畅的对话体验，并且支持完整的 Markdown 渲染，包括代码高亮、LaTex 公式、Mermaid 流程图等。
-- [x] 💨 **快速部署**：使用 Vercel 平台或者我们的 Docker 镜像，只需点击一键部署按钮，即可在 1 分钟内完成部署，无需复杂的配置过程。
-- [x] 🔒 **隐私安全**：所有数据保存在用户浏览器本地，保证用户的隐私安全。
-- [x] 🌐 **自定义域名**：如果用户拥有自己的域名，可以将其绑定到平台上，方便在任何地方快速访问对话助手。
-
-</details>
 
 > ✨ 随着产品迭代持续更新，我们将会带来更多更多令人激动的功能！
 
@@ -867,28 +518,10 @@ This project is [LobeHub Community License](./LICENSE) licensed.
 [docs-dev-guide]: https://lobehub.com/docs/development/start
 [docs-docker]: https://lobehub.com/zh/docs/self-hosting/server-database/docker-compose
 [docs-env-var]: https://lobehub.com/docs/self-hosting/environment-variables
-[docs-feat-agent]: https://lobehub.com/docs/usage/features/agent-market
-[docs-feat-artifacts]: https://lobehub.com/docs/usage/features/artifacts
-[docs-feat-auth]: https://lobehub.com/docs/usage/features/auth
-[docs-feat-branch]: https://lobehub.com/docs/usage/features/branching-conversations
-[docs-feat-cot]: https://lobehub.com/docs/usage/features/cot
-[docs-feat-database]: https://lobehub.com/docs/usage/features/database
-[docs-feat-knowledgebase]: https://lobehub.com/blog/knowledge-base
-[docs-feat-local]: https://lobehub.com/docs/usage/features/local-llm
-[docs-feat-mobile]: https://lobehub.com/docs/usage/features/mobile
-[docs-feat-plugin]: https://lobehub.com/docs/usage/features/plugin-system
-[docs-feat-provider]: https://lobehub.com/docs/usage/features/multi-ai-providers
-[docs-feat-pwa]: https://lobehub.com/docs/usage/features/pwa
-[docs-feat-t2i]: https://lobehub.com/docs/usage/features/text-to-image
-[docs-feat-theme]: https://lobehub.com/docs/usage/features/theme
-[docs-feat-tts]: https://lobehub.com/docs/usage/features/tts
-[docs-feat-vision]: https://lobehub.com/docs/usage/features/vision
 [docs-function-call]: https://lobehub.com/zh/blog/openai-function-call
 [docs-plugin-dev]: https://lobehub.com/docs/usage/plugins/development
 [docs-self-hosting]: https://lobehub.com/docs/self-hosting/start
 [docs-upstream-sync]: https://lobehub.com/docs/self-hosting/advanced/upstream-sync
-[docs-usage-ollama]: https://lobehub.com/docs/usage/providers/ollama
-[docs-usage-plugin]: https://lobehub.com/docs/usage/plugins/basic
 [fossa-license-link]: https://app.fossa.com/projects/git%2Bgithub.com%2Flobehub%2Flobehub
 [fossa-license-shield]: https://app.fossa.com/api/projects/git%2Bgithub.com%2Flobehub%2Flobehub.svg?type=large
 [github-action-release-link]: https://github.com/lobehub/lobehub/actions/workflows/release.yml
@@ -911,29 +544,8 @@ This project is [LobeHub Community License](./LICENSE) licensed.
 [github-releasedate-link]: https://github.com/lobehub/lobehub/releases
 [github-releasedate-shield]: https://img.shields.io/github/release-date/lobehub/lobehub?labelColor=black&style=flat-square
 [github-stars-link]: https://github.com/lobehub/lobehub/stargazers
-[github-stars-shield]: https://github.com/user-attachments/assets/3216e25b-186f-4a54-9cb4-2f124aec0471
-[github-trending-shield]: https://trendshift.io/api/badge/repositories/2256
-[github-trending-url]: https://trendshift.io/repositories/2256
-[image-banner]: https://github.com/user-attachments/assets/0fe626a3-0ddc-4f67-b595-3c5b3f1701e0
-[image-feat-agent]: https://github.com/user-attachments/assets/b3ab6e35-4fbc-468d-af10-e3e0c687350f
-[image-feat-artifacts]: https://github.com/user-attachments/assets/7f95fad6-b210-4e6e-84a0-7f39e96f3a00
-[image-feat-auth]: https://github.com/user-attachments/assets/80bb232e-19d1-4f97-98d6-e291f3585e6d
-[image-feat-branch]: https://github.com/user-attachments/assets/92f72082-02bd-4835-9c54-b089aad7fd41
-[image-feat-cot]: https://github.com/user-attachments/assets/f74f1139-d115-4e9c-8c43-040a53797a5e
-[image-feat-database]: https://github.com/user-attachments/assets/f1697c8b-d1fb-4dac-ba05-153c6295d91d
-[image-feat-desktop]: https://github.com/user-attachments/assets/a7bac8d3-ea96-4000-bb39-fadc9b610f96
-[image-feat-knowledgebase]: https://github.com/user-attachments/assets/7da7a3b2-92fd-4630-9f4e-8560c74955ae
-[image-feat-local]: https://github.com/user-attachments/assets/1239da50-d832-4632-a7ef-bd754c0f3850
-[image-feat-mcp-market]: https://github.com/user-attachments/assets/bb114f9f-24c5-4000-a984-c10d187da5a0
-[image-feat-mobile]: https://github.com/user-attachments/assets/32cf43c4-96bd-4a4c-bfb6-59acde6fe380
-[image-feat-plugin]: https://github.com/user-attachments/assets/66a891ac-01b6-4e3f-b978-2eb07b489b1b
-[image-feat-privoder]: https://github.com/user-attachments/assets/e553e407-42de-4919-977d-7dbfcf44a821
-[image-feat-pwa]: https://github.com/user-attachments/assets/9647f70f-b71b-43b6-9564-7cdd12d1c24d
-[image-feat-t2i]: https://github.com/user-attachments/assets/708274a7-2458-494b-a6ec-b73dfa1fa7c2
-[image-feat-theme]: https://github.com/user-attachments/assets/b47c39f1-806f-492b-8fcb-b0fa973937c1
-[image-feat-tts]: https://github.com/user-attachments/assets/50189597-2cc3-4002-b4c8-756a52ad5c0a
-[image-feat-vision]: https://github.com/user-attachments/assets/18574a1f-46c2-4cbc-af2c-35a86e128a07
-[image-feat-web-search]: https://github.com/user-attachments/assets/cfdc48ac-b5f8-4a00-acee-db8f2eba09ad
+[github-stars-shield]: https://img.shields.io/github/stars/lobehub/lobehub?color=ffcb47&labelColor=black&style=flat-square
+[image-banner]: https://github.com/user-attachments/assets/5f78ae58-ed4f-4d38-8037-96109fbba58c
 [image-star]: https://github.com/user-attachments/assets/c3b482e7-cef5-4e94-bef9-226900ecfaab
 [issues-link]: https://img.shields.io/github/issues/lobehub/lobehub.svg?style=flat
 [lobe-chat-plugins]: https://github.com/lobehub/lobe-chat-plugins
@@ -969,8 +581,6 @@ This project is [LobeHub Community License](./LICENSE) licensed.
 [share-whatsapp-shield]: https://img.shields.io/badge/-share%20on%20whatsapp-black?labelColor=black&logo=whatsapp&logoColor=white&style=flat-square
 [share-x-link]: https://x.com/intent/tweet?hashtags=chatbot%2CchatGPT%2CopenAI&text=%E6%8E%A8%E8%8D%90%E4%B8%80%E4%B8%AA%20GitHub%20%E5%BC%80%E6%BA%90%E9%A1%B9%E7%9B%AE%20%F0%9F%A4%AF%20LobeHub%20-%20%E5%BC%80%E6%BA%90%E7%9A%84%E3%80%81%E5%8F%AF%E6%89%A9%E5%B1%95%E7%9A%84%EF%BC%88Function%20Calling%EF%BC%89%E9%AB%98%E6%80%A7%E8%83%BD%E8%81%8A%E5%A4%A9%E6%9C%BA%E5%99%A8%E4%BA%BA%E6%A1%86%E6%9E%B6%E3%80%82%0A%E5%AE%83%E6%94%AF%E6%8C%81%E4%B8%80%E9%94%AE%E5%85%8D%E8%B4%B9%E9%83%A8%E7%BD%B2%E7%A7%81%E4%BA%BA%20ChatGPT%2FLLM%20%E7%BD%91%E9%A1%B5%E5%BA%94%E7%94%A8%E7%A8%8B%E5%BA%8F&url=https%3A%2F%2Fgithub.com%2Flobehub%2Flobehub
 [share-x-shield]: https://img.shields.io/badge/-share%20on%20x-black?labelColor=black&logo=x&logoColor=white&style=flat-square
-[sponsor-link]: https://opencollective.com/lobehub 'Become ❤ LobeHub Sponsor'
-[sponsor-shield]: https://img.shields.io/badge/-Sponsor%20LobeHub-f04f88?logo=opencollective&logoColor=white&style=flat-square
 [submit-agents-link]: https://github.com/lobehub/lobe-chat-agents
 [submit-agents-shield]: https://img.shields.io/badge/🤖/🏪_submit_agent-%E2%86%92-c4f042?labelColor=black&style=for-the-badge
 [submit-plugin-link]: https://github.com/lobehub/lobe-chat-plugins

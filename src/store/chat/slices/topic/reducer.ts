@@ -3,18 +3,30 @@ import { produce } from 'immer';
 
 import { type ChatTopic, type CreateTopicParams } from '@/types/topic';
 
-type AddChatTopicAction = {
+/**
+ * Optional scope on every topic dispatch. When set, `internal_dispatchTopic`
+ * routes the write to the matching bucket in `topicDataMap` regardless of
+ * `activeAgentId` — used when an agent run completes after the user has
+ * switched agents and the write must land in the run's *owning* bucket, not
+ * whichever bucket happens to be active.
+ */
+interface ChatTopicScope {
+  agentId?: string;
+  groupId?: string;
+}
+
+type AddChatTopicAction = ChatTopicScope & {
   type: 'addTopic';
   value: CreateTopicParams & { id?: string };
 };
 
-type UpdateChatTopicAction = {
+type UpdateChatTopicAction = ChatTopicScope & {
   id: string;
   type: 'updateTopic';
   value: Partial<ChatTopic>;
 };
 
-type DeleteChatTopicAction = {
+type DeleteChatTopicAction = ChatTopicScope & {
   id: string;
   type: 'deleteTopic';
 };

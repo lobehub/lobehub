@@ -9,6 +9,7 @@ import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
 import * as agentGroupStore from '@/store/agentGroup';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { getSessionStoreState } from '@/store/session';
 import * as toolStoreModule from '@/store/tool';
 
@@ -586,7 +587,7 @@ describe('ConversationLifecycle actions', () => {
       });
 
       it('should enqueue when an execHeterogeneousAgent op is running (CC queue mode)', async () => {
-        // LOBE-7346: With Plan A, sends during a running CC turn must hit the
+        // With Plan A, sends during a running CC turn must hit the
         // same queue path used by client mode — without this we'd spawn a
         // second `claude` process in parallel.
         const { result } = renderHook(() => useChatStore());
@@ -1622,7 +1623,6 @@ describe('ConversationLifecycle actions', () => {
             createMockMessage({ id: 'new-user-msg', role: 'user', topicId: newTopicId }),
             createMockMessage({ id: 'new-assistant-msg', role: 'assistant', topicId: newTopicId }),
           ],
-          topics: { items: [{ id: newTopicId, title: 'New Topic' }], total: 1 },
           topicId: newTopicId,
           isCreateNewTopic: true,
           assistantMessageId: 'new-assistant-msg',
@@ -1648,6 +1648,12 @@ describe('ConversationLifecycle actions', () => {
         // After new topic creation, the _new key should be cleared
         const messagesInNewKey = useChatStore.getState().messagesMap[newKey];
         expect(messagesInNewKey ?? []).toHaveLength(0);
+
+        const newTopicKey = messageMapKey({ agentId, topicId: newTopicId });
+        expect(useChatStore.getState().messagesMap[newTopicKey]).toHaveLength(2);
+        expect(useChatStore.getState().topicDataMap[topicMapKey({ agentId })]?.items[0]).toEqual(
+          expect.objectContaining({ id: newTopicId }),
+        );
       });
     });
   });

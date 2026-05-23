@@ -61,7 +61,7 @@ describe('UserUpdater', () => {
     rerender(<UserUpdater />);
 
     // Regression: interests / firstName / latestName must NOT be wiped by the
-    // session sync. (LOBE-8597 — wiped interests caused the home daily-brief
+    // session sync. (— wiped interests caused the home daily-brief
     // recommendation SWR key to reset and refetch with empty interestKeys.)
     expect(useUserStore.getState().user?.interests).toEqual(['内容创作', '编程']);
     expect(useUserStore.getState().user?.firstName).toBe('A');

@@ -6,12 +6,14 @@ describe('SaveUserQuestionInputSchema', () => {
   it('accepts the flat structured payload', () => {
     const parsed = SaveUserQuestionInputSchema.parse({
       fullName: 'Ada Lovelace',
-      interests: ['AI tooling'],
+      customInterests: ['AI tooling'],
+      interests: ['coding'],
     });
 
     expect(parsed).toEqual({
+      customInterests: ['AI tooling'],
       fullName: 'Ada Lovelace',
-      interests: ['AI tooling'],
+      interests: ['coding'],
     });
   });
 
@@ -31,11 +33,13 @@ describe('SaveUserQuestionInputSchema', () => {
 
   it('drops empty interests entries and an all-empty array', () => {
     const partial = SaveUserQuestionInputSchema.parse({
-      interests: ['AI tooling', '', '   '],
+      customInterests: ['AI tooling', '', '   '],
+      interests: ['coding', '', '   '],
     });
-    expect(partial).toEqual({ interests: ['AI tooling'] });
+    expect(partial).toEqual({ customInterests: ['AI tooling'], interests: ['coding'] });
 
     const allEmpty = SaveUserQuestionInputSchema.parse({
+      customInterests: ['', '   '],
       fullName: 'Ada',
       interests: ['', '   '],
     });
@@ -51,7 +55,7 @@ describe('UserAgentOnboardingContextSchema', () => {
   it('accepts the minimal onboarding context', () => {
     const parsed = UserAgentOnboardingContextSchema.parse({
       finished: false,
-      missingStructuredFields: ['fullName', 'interests'],
+      missingStructuredFields: ['fullName', 'agentName'],
       phase: 'user_identity',
       topicId: 'topic-1',
       version: 2,
@@ -59,7 +63,7 @@ describe('UserAgentOnboardingContextSchema', () => {
 
     expect(parsed).toEqual({
       finished: false,
-      missingStructuredFields: ['fullName', 'interests'],
+      missingStructuredFields: ['fullName', 'agentName'],
       phase: 'user_identity',
       topicId: 'topic-1',
       version: 2,

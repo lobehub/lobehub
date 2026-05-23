@@ -227,6 +227,7 @@
   "providerModels.item.modelConfig.extendParams.options.gpt5_2ProReasoningEffort.hint": "Voor GPT-5.2 Pro-serie; regelt de intensiteit van het redeneren.",
   "providerModels.item.modelConfig.extendParams.options.gpt5_2ReasoningEffort.hint": "Voor GPT-5.2-serie; regelt de intensiteit van het redeneren.",
   "providerModels.item.modelConfig.extendParams.options.grok4_20ReasoningEffort.hint": "Voor Grok 4.20-serie; regelt de intensiteit van het redeneren. Laag/Middel gebruikt 4 agenten, Hoog/XHoog gebruikt 16 agenten.",
+  "providerModels.item.modelConfig.extendParams.options.grok4_3ReasoningEffort.hint": "Voor de Grok 4.3-serie; regelt de intensiteit van het redeneren.",
   "providerModels.item.modelConfig.extendParams.options.hy3ReasoningEffort.hint": "Voor Hy3-modellen; bepaalt de intensiteit van het redeneerproces. no_think (supersnelle reactie), low (snelle redenering) en high (diepe redenering) — geschikt voor uiteenlopende behoeften op het gebied van latentie en diepgang, van hoogfrequente interacties tot complexe engineeringtaken.",
   "providerModels.item.modelConfig.extendParams.options.imageAspectRatio.hint": "Voor Gemini-afbeeldingsgeneratiemodellen; regelt de beeldverhouding van gegenereerde afbeeldingen.",
   "providerModels.item.modelConfig.extendParams.options.imageAspectRatio2.hint": "Voor Nano Banana 2; regelt de beeldverhouding van gegenereerde afbeeldingen (ondersteunt extra-breed 1:4, 4:1, 1:8, 8:1).",

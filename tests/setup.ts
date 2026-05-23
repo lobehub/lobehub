@@ -7,13 +7,59 @@ import { theme } from 'antd';
 import i18n from 'i18next';
 import { enableMapSet, enablePatches } from 'immer';
 import React from 'react';
-import { vi } from 'vitest';
+import { beforeEach, vi } from 'vitest';
 
 import chat from '@/locales/default/chat';
 import common from '@/locales/default/common';
 import discover from '@/locales/default/discover';
 import home from '@/locales/default/home';
 import oauth from '@/locales/default/oauth';
+
+class TestMemoryStorage implements Storage {
+  private readonly store = new Map<string, string>();
+
+  get length() {
+    return this.store.size;
+  }
+
+  clear() {
+    this.store.clear();
+  }
+
+  getItem(key: string) {
+    return this.store.get(key) ?? null;
+  }
+
+  key(index: number) {
+    return Array.from(this.store.keys())[index] ?? null;
+  }
+
+  removeItem(key: string) {
+    this.store.delete(key);
+  }
+
+  setItem(key: string, value: string) {
+    this.store.set(key, String(value));
+  }
+}
+
+const installTestStorage = () => {
+  const localStorage = new TestMemoryStorage();
+  const sessionStorage = new TestMemoryStorage();
+
+  Object.defineProperties(globalThis, {
+    Storage: { configurable: true, value: TestMemoryStorage, writable: true },
+    localStorage: { configurable: true, value: localStorage, writable: true },
+    sessionStorage: { configurable: true, value: sessionStorage, writable: true },
+  });
+
+  if (typeof globalThis.window !== 'undefined') {
+    Object.defineProperties(window, {
+      localStorage: { configurable: true, value: localStorage, writable: true },
+      sessionStorage: { configurable: true, value: sessionStorage, writable: true },
+    });
+  }
+};
 
 // Enable Immer MapSet plugin so store code using Map/Set in produce() works in tests
 enablePatches();
@@ -50,6 +96,9 @@ if (typeof globalThis.window === 'undefined') {
   });
 }
 
+installTestStorage();
+beforeEach(installTestStorage);
+
 // remove antd hash on test
 theme.defaultConfig.hashed = false;
 
@@ -72,5 +121,5 @@ await i18n.init({
   },
 });
 
-// 将 React 设置为全局变量，这样就不需要在每个测试文件中导入它了
+// Set React as a global variable so it doesn't need to be imported in each test file
 (globalThis as any).React = React;

@@ -71,7 +71,7 @@ export default defineFixtures({
               content: 'Issue thread describing the /devtools route rollout.',
               engines: ['bing'],
               title: 'Builtin render devtools issue',
-              url: 'https://linear.example.com/issue/LOBE-8114',
+              url: 'https://linear.example.com/issue/',
             },
           ],
         },

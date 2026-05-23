@@ -151,6 +151,13 @@ const categorizeError = (
     };
   }
 
+  if (providerContentPolicyMessage) {
+    return {
+      errorMessage: providerContentPolicyMessage,
+      errorType: AsyncTaskErrorType.ProviderContentModeration,
+    };
+  }
+
   if (error.errorType === AgentRuntimeErrorType.ProviderNoImageGenerated) {
     return {
       errorMessage: isEditingImage
@@ -166,13 +173,6 @@ const categorizeError = (
       errorMessage:
         error.error?.message || error.message || AgentRuntimeErrorType.InvalidProviderAPIKey,
       errorType: AsyncTaskErrorType.InvalidProviderAPIKey,
-    };
-  }
-
-  if (providerContentPolicyMessage) {
-    return {
-      errorMessage: providerContentPolicyMessage,
-      errorType: AsyncTaskErrorType.ProviderContentModeration,
     };
   }
 

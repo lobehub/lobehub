@@ -8,7 +8,7 @@ import type {
 } from '@lobechat/device-gateway-client';
 import { GatewayClient } from '@lobechat/device-gateway-client';
 import type { GatewayConnectionStatus } from '@lobechat/electron-client-ipc';
-import { app } from 'electron';
+import { app, powerSaveBlocker } from 'electron';
 
 import { createLogger } from '@/utils/logger';
 
@@ -36,6 +36,7 @@ export default class GatewayConnectionService extends ServiceModule {
   private client: GatewayClient | null = null;
   private status: GatewayConnectionStatus = 'disconnected';
   private deviceId: string | null = null;
+  private powerSaveBlockerId: number | null = null;
 
   private tokenProvider: (() => Promise<string | null>) | null = null;
   private tokenRefresher: (() => Promise<{ error?: string; success: boolean }>) | null = null;
@@ -318,6 +319,26 @@ export default class GatewayConnectionService extends ServiceModule {
     }
   };
 
+  // ─── Power Save Blocker ───
+
+  /**
+   * Start power save blocker to prevent macOS App Nap from suspending the process
+   * while the gateway connection is active. Uses 'prevent-app-suspension' so the
+   * display can still sleep — only the app process is kept alive.
+   */
+  private startPowerSaveBlocker() {
+    if (this.powerSaveBlockerId !== null) return;
+    this.powerSaveBlockerId = powerSaveBlocker.start('prevent-app-suspension');
+    logger.info(`Power save blocker started (id=${this.powerSaveBlockerId})`);
+  }
+
+  private stopPowerSaveBlocker() {
+    if (this.powerSaveBlockerId === null) return;
+    powerSaveBlocker.stop(this.powerSaveBlockerId);
+    logger.info(`Power save blocker stopped (id=${this.powerSaveBlockerId})`);
+    this.powerSaveBlockerId = null;
+  }
+
   // ─── Status Broadcasting ───
 
   private setStatus(status: GatewayConnectionStatus) {
@@ -325,6 +346,15 @@ export default class GatewayConnectionService extends ServiceModule {
 
     logger.info(`Connection status: ${this.status} → ${status}`);
     this.status = status;
+
+    // Keep the app process alive while gateway is connected so macOS App Nap
+    // does not suspend it during display sleep, which would drop the WebSocket.
+    if (status === 'connected') {
+      this.startPowerSaveBlocker();
+    } else {
+      this.stopPowerSaveBlocker();
+    }
+
     this.app.browserManager.broadcastToAllWindows('gatewayConnectionStatusChanged', { status });
   }
 

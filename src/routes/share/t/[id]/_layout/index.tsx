@@ -10,6 +10,7 @@ import { Link, Outlet } from 'react-router-dom';
 
 import { ProductLogo } from '@/components/Branding';
 import Loading from '@/components/Loading/BrandTextLoading';
+import { RouteMetaBridge } from '@/features/RouteMeta';
 import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
 import { useIsDark } from '@/hooks/useIsDark';
 import { useUserStore } from '@/store/user';
@@ -26,6 +27,7 @@ const ShareTopicLayout = memo<PropsWithChildren>(({ children }) => {
 
   return (
     <Flexbox className={styles.outerContainer} height={'100%'} padding={8} width={'100%'}>
+      <RouteMetaBridge />
       <Flexbox
         className={cx(isDarkMode ? styles.innerContainerDark : styles.innerContainerLight)}
         height={'100%'}

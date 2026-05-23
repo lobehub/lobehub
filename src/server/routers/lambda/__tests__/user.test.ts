@@ -1,6 +1,12 @@
 // @vitest-environment node
+import { Plans } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  getReferralStatus,
+  getSubscriptionPlan,
+  onUserActivityForBusiness,
+} from '@/business/server/user';
 import { MessageModel } from '@/database/models/message';
 import { SessionModel } from '@/database/models/session';
 import { UserModel } from '@/database/models/user';
@@ -9,7 +15,21 @@ import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 
 import { userRouter } from '../user';
 
+const mockAfterTasks = vi.hoisted((): Promise<void>[] => []);
+
 // Mock modules
+vi.mock('next/server', () => ({
+  after: (callback: () => Promise<void> | void) => {
+    mockAfterTasks.push(Promise.resolve(callback()));
+  },
+}));
+
+vi.mock('@/business/server/user', () => ({
+  getReferralStatus: vi.fn(),
+  getSubscriptionPlan: vi.fn(),
+  onUserActivityForBusiness: vi.fn(),
+}));
+
 vi.mock('@/database/server', () => ({
   serverDB: {},
 }));
@@ -27,8 +47,16 @@ describe('userRouter', () => {
     userId: mockUserId,
   };
 
+  const flushAfterTasks = async () => {
+    await Promise.all(mockAfterTasks.splice(0));
+  };
+
   beforeEach(() => {
+    mockAfterTasks.length = 0;
     vi.clearAllMocks();
+    vi.mocked(getReferralStatus).mockResolvedValue(undefined);
+    vi.mocked(getSubscriptionPlan).mockResolvedValue(Plans.Free);
+    vi.mocked(onUserActivityForBusiness).mockResolvedValue(undefined);
   });
 
   describe('getUserRegistrationDuration', () => {
@@ -84,6 +112,7 @@ describe('userRouter', () => {
       vi.mocked(UserModel).mockImplementation(
         () =>
           ({
+            advanceLastActiveAt: vi.fn().mockResolvedValue(undefined),
             getUserState: vi.fn().mockResolvedValue(mockState),
             updateUser: vi.fn().mockResolvedValue({ rowCount: 1 }),
           }) as any,
@@ -114,6 +143,88 @@ describe('userRouter', () => {
         canEnableTrace: true,
         userId: mockUserId,
       });
+    });
+
+    it('should invoke the user activity hook after winning the lastActiveAt update', async () => {
+      const createdAt = new Date('2026-01-01T00:00:00.000Z');
+      const previousLastActiveAt = new Date('2026-03-01T00:00:00.000Z');
+      const advanceLastActiveAt = vi.fn().mockResolvedValue({
+        previousLastActiveAt,
+        userCreatedAt: createdAt,
+      });
+      const mockState = {
+        isOnboarded: true,
+        preference: {},
+        settings: {},
+        userId: mockUserId,
+      };
+
+      vi.mocked(UserModel).mockImplementation(
+        () =>
+          ({
+            advanceLastActiveAt,
+            getUserState: vi.fn().mockResolvedValue(mockState),
+          }) as any,
+      );
+      vi.mocked(MessageModel).mockImplementation(
+        () =>
+          ({
+            countUpTo: vi.fn().mockResolvedValue(0),
+          }) as any,
+      );
+      vi.mocked(SessionModel).mockImplementation(
+        () =>
+          ({
+            hasMoreThanN: vi.fn().mockResolvedValue(false),
+          }) as any,
+      );
+
+      await userRouter.createCaller({ ...mockCtx }).getUserState();
+      await flushAfterTasks();
+
+      expect(advanceLastActiveAt).toHaveBeenCalledWith(expect.any(Date));
+      expect(onUserActivityForBusiness).toHaveBeenCalledWith({
+        currentTime: expect.any(Date),
+        previousLastActiveAt,
+        userCreatedAt: createdAt,
+        userId: mockUserId,
+      });
+    });
+
+    it('should skip the user activity hook when a concurrent request already updated lastActiveAt', async () => {
+      const advanceLastActiveAt = vi.fn().mockResolvedValue(undefined);
+      const mockState = {
+        isOnboarded: true,
+        preference: {},
+        settings: {},
+        userId: mockUserId,
+      };
+
+      vi.mocked(UserModel).mockImplementation(
+        () =>
+          ({
+            advanceLastActiveAt,
+            getUserState: vi.fn().mockResolvedValue(mockState),
+          }) as any,
+      );
+      vi.mocked(MessageModel).mockImplementation(
+        () =>
+          ({
+            countUpTo: vi.fn().mockResolvedValue(0),
+          }) as any,
+      );
+      vi.mocked(SessionModel).mockImplementation(
+        () =>
+          ({
+            hasMoreThanN: vi.fn().mockResolvedValue(false),
+          }) as any,
+      );
+
+      await userRouter.createCaller({ ...mockCtx }).getUserState();
+      await flushAfterTasks();
+
+      expect(advanceLastActiveAt).toHaveBeenCalledWith(expect.any(Date));
+      expect(onUserActivityForBusiness).not.toHaveBeenCalled();
     });
   });
 
@@ -172,6 +283,60 @@ describe('userRouter', () => {
       await userRouter.createCaller({ ...mockCtx }).updateSettings(mockSettings);
 
       expect(UserModel).toHaveBeenCalledWith(serverDB, mockUserId);
+    });
+
+    it('should allow legacy system agent model-only fields', async () => {
+      const updateSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
+
+      vi.mocked(UserModel).mockImplementation(
+        () =>
+          ({
+            updateSetting,
+          }) as any,
+      );
+
+      await userRouter.createCaller({ ...mockCtx }).updateSettings({
+        systemAgent: {
+          queryRewrite: { model: 'ag/gemini-3.1-pro-high' },
+          topic: { model: 'ag/gemini-3.1-pro-high' },
+        },
+      });
+
+      expect(updateSetting).toHaveBeenCalledWith(
+        expect.objectContaining({
+          systemAgent: {
+            queryRewrite: { model: 'ag/gemini-3.1-pro-high' },
+            topic: { model: 'ag/gemini-3.1-pro-high' },
+          },
+        }),
+      );
+    });
+
+    it('should allow legacy scalar system agent fields', async () => {
+      const updateSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
+
+      vi.mocked(UserModel).mockImplementation(
+        () =>
+          ({
+            updateSetting,
+          }) as any,
+      );
+
+      await userRouter.createCaller({ ...mockCtx }).updateSettings({
+        systemAgent: {
+          enableAutoReply: true,
+          replyMessage: 'Custom auto reply',
+        },
+      });
+
+      expect(updateSetting).toHaveBeenCalledWith(
+        expect.objectContaining({
+          systemAgent: {
+            enableAutoReply: true,
+            replyMessage: 'Custom auto reply',
+          },
+        }),
+      );
     });
   });
 });

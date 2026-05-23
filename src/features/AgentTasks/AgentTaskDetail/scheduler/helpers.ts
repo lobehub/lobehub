@@ -24,7 +24,7 @@ export const formatIntervalLabel = (seconds: number, t: TFunction<'chat'>): stri
 };
 
 /**
- * Localized timezone display name (e.g. "中国标准时间", "Pacific Daylight Time").
+ * Localized timezone display name (e.g. "China Standard Time", "Pacific Daylight Time").
  * Falls back to the IANA id when the runtime can't resolve a long name.
  */
 export const formatTimezoneName = (tz: string, locale: string): string => {
@@ -40,17 +40,25 @@ export const formatTimezoneName = (tz: string, locale: string): string => {
 };
 
 /**
- * Human description of a cron pattern like "每天 09:00" or "Every 2 hours :30".
+ * Human description of a cron pattern like "Every day 09:00" or "Every 2 hours :30".
  */
 export const formatScheduleDescription = (pattern: string, t: TFunction<'chat'>): string => {
   const parsed = parseCronPattern(pattern);
   switch (parsed.scheduleType) {
     case 'hourly': {
       const interval = parsed.hourlyInterval ?? 1;
-      const minute = `:${padTime(parsed.triggerMinute)}`;
-      return interval === 1
-        ? t('taskSchedule.summary.hourly', { minute })
-        : t('taskSchedule.summary.everyNHours', { count: interval, minute });
+      // Cron storage rounds minutes to 0 or 30 (see buildCronPattern). Reading
+      // ':30' literally felt awkward in the summary, so call it out as
+      // "half past" only when it's actually non-zero and stay implicit on :00.
+      const isHalfPast = parsed.triggerMinute === 30;
+      if (interval === 1) {
+        return isHalfPast
+          ? t('taskSchedule.summary.hourlyHalfPast')
+          : t('taskSchedule.summary.hourly');
+      }
+      return isHalfPast
+        ? t('taskSchedule.summary.everyNHoursHalfPast', { count: interval })
+        : t('taskSchedule.summary.everyNHours', { count: interval });
     }
     case 'daily': {
       return t('taskSchedule.summary.daily', {

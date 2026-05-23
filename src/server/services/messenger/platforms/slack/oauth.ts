@@ -9,32 +9,39 @@ import type {
 } from '../types';
 
 /**
- * Bot scopes requested at install. Keep in sync with
- * `docs/development/messenger/slack-app-manifest.yaml` — Slack rejects the
- * install with `invalid_scope` if the App's manifest doesn't authorise
- * everything we ask for.
+ * Bot scopes requested at install. The Slack App's manifest must declare
+ * every scope listed here, otherwise Slack rejects the install with
+ * `invalid_scope`.
  *
- * Deliberately narrower than the per-agent bot path documented at
- * `docs/usage/channels/slack.zh-CN.mdx`. The two products are different:
+ * Aligned with the per-agent bot path (`docs/usage/channels/slack.zh-CN.mdx`)
+ * so messenger v1 supports the full surface (channel @mention, slash
+ * commands, channel/group/DM history, reactions, Slack AI assistant) instead
+ * of the narrower DM-only set we shipped initially.
  *
- *   - per-agent bot = user installs their own Slack App for a single agent;
- *     wants @mention in channels, slash commands, channel/group history,
- *     reactions, Slack AI assistant — needs the full set
- *   - LobeHub messenger v1 = official LobeHub-distributed Marketplace App,
- *     DM-only, agent-as-coworker (Manus pattern). Channel @mention / slash
- *     commands / channel history land in PR3 (LOBE-8424); each addition
- *     triggers Marketplace re-review so we batch them
+ * Messenger-specific extras kept on top of the per-agent set:
+ *   - `im:write` — open a DM with the linker to deliver the account-link
+ *     button privately when a slash command is invoked from a public channel
+ *   - `users:read.email` — match Slack identity to a LobeHub account during
+ *     the link flow
  *
- * `reactions:write` is included because `AgentBridgeService.handleMention`
- * uses emoji reactions (👀 "processing" → ✅ "done") for inline feedback —
- * this is core UX even in DM-only mode. `reactions:read` is NOT needed: we
- * never react to users' own reactions in v1.
+ * `reactions:write` powers the inline feedback in
+ * `AgentBridgeService.handleMention` (👀 processing → ✅ done).
  */
 const SLACK_BOT_SCOPES = [
+  'app_mentions:read',
+  'assistant:write',
+  'channels:history',
+  'channels:read',
   'chat:write',
+  'commands',
+  'groups:history',
+  'groups:read',
   'im:history',
   'im:read',
   'im:write',
+  'mpim:history',
+  'mpim:read',
+  'reactions:read',
   'reactions:write',
   'users:read',
   'users:read.email',

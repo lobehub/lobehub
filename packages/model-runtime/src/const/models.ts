@@ -54,6 +54,9 @@ export const responsesAPIModels = new Set([
   'gpt-5.5-pro',
 ]);
 
+export const isGPT5ProResponsesModel = (model: string): boolean =>
+  /(?:^|\/)gpt-5(?:\.\d+)?-pro(?:-|$)/.test(model);
+
 /**
  * Regex patterns for models that support context caching (3.5+)
  */

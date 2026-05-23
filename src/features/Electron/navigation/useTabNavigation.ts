@@ -3,17 +3,9 @@
 import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 
-import { pluginRegistry } from '@/features/Electron/titlebar/RecentlyViewed/plugins';
+import { normalizeTabUrl } from '@/features/Electron/titlebar/TabBar/url';
 import { useElectronStore } from '@/store/electron';
 
-import { getCachedDataForReference } from './cachedData';
-
-/**
- * Hook to sync route changes with tab state
- * - Does NOT auto-create tabs (tabs are created explicitly via context menu / double-click)
- * - When navigating within an active tab, updates that tab's reference to track current location
- * - Updates tab cache when dynamic title changes
- */
 export const useTabNavigation = () => {
   const location = useLocation();
 
@@ -21,12 +13,12 @@ export const useTabNavigation = () => {
   const updateTab = useElectronStore((s) => s.updateTab);
   const updateTabCache = useElectronStore((s) => s.updateTabCache);
   const loadTabs = useElectronStore((s) => s.loadTabs);
-  const currentPageTitle = useElectronStore((s) => s.currentPageTitle);
+  const currentRouteMeta = useElectronStore((s) => s.currentRouteMeta);
+  const currentRouteMetaUrl = useElectronStore((s) => s.currentRouteMetaUrl);
 
   const prevLocationRef = useRef<string | null>(null);
   const loadedRef = useRef(false);
 
-  // Load tabs from localStorage on mount
   useEffect(() => {
     if (!loadedRef.current) {
       loadTabs();
@@ -34,46 +26,31 @@ export const useTabNavigation = () => {
     }
   }, [loadTabs]);
 
-  // Sync route changes to tabs (no auto-creation)
   useEffect(() => {
     const currentUrl = location.pathname + location.search;
 
     if (prevLocationRef.current === currentUrl) return;
     prevLocationRef.current = currentUrl;
 
-    const reference = pluginRegistry.parseUrl(location.pathname, location.search);
-    if (!reference) return;
-
+    const id = normalizeTabUrl(currentUrl);
     const { tabs, activeTabId } = useElectronStore.getState();
 
-    // If this exact page is already a tab, activate it
-    const existing = tabs.find((t) => t.id === reference.id);
+    const existing = tabs.find((t) => t.id === id);
     if (existing) {
-      if (existing.id !== activeTabId) {
-        activateTab(existing.id);
-      }
+      if (existing.id !== activeTabId) activateTab(existing.id);
       return;
     }
 
-    // If there's an active tab, update it to track the new location
-    if (activeTabId) {
-      const cached = getCachedDataForReference(reference);
-      updateTab(activeTabId, reference, cached);
-    }
+    if (activeTabId) updateTab(activeTabId, currentUrl);
   }, [location.pathname, location.search, activateTab, updateTab]);
 
-  // Update tab cache when dynamic title changes
   useEffect(() => {
-    if (!currentPageTitle) return;
+    if (!currentRouteMeta || !currentRouteMetaUrl) return;
 
-    const { tabs, activeTabId } = useElectronStore.getState();
+    const { activeTabId } = useElectronStore.getState();
     if (!activeTabId) return;
+    if (activeTabId !== normalizeTabUrl(currentRouteMetaUrl)) return;
 
-    const tab = tabs.find((t) => t.id === activeTabId);
-    if (!tab) return;
-
-    if (tab.cached?.title === currentPageTitle) return;
-
-    updateTabCache(activeTabId, { title: currentPageTitle });
-  }, [currentPageTitle, updateTabCache]);
+    updateTabCache(activeTabId, currentRouteMeta);
+  }, [currentRouteMeta, currentRouteMetaUrl, updateTabCache]);
 };

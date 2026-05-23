@@ -36,10 +36,12 @@ describe('BriefService', () => {
   };
 
   const mockBriefModel = {
+    findById: vi.fn(),
     list: vi.fn(),
     listUnresolved: vi.fn(),
     listUnresolvedEnriched: vi.fn(),
     resolve: vi.fn(),
+    updateMetadata: vi.fn(),
   };
 
   const mockTaskModel = {
@@ -57,6 +59,7 @@ describe('BriefService', () => {
     (TaskModel as any).mockImplementation(() => mockTaskModel);
     // Default: no downstream tasks unlocked. Specific tests can override.
     mockTaskModel.getUnlockedTasks.mockResolvedValue([]);
+    mockBriefModel.findById.mockResolvedValue(null);
   });
 
   describe('enrichBriefsWithAgents', () => {

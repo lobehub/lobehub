@@ -24,13 +24,13 @@ describe('web onboarding tool result helpers', () => {
   it('formats onboarding state as a plain-language summary', () => {
     const message = formatWebOnboardingStateMessage({
       finished: false,
-      missingStructuredFields: ['interests'],
+      missingStructuredFields: ['fullName'],
       phase: 'discovery',
       topicId: 'topic-1',
       version: 1,
     });
 
-    expect(message).toContain('Structured fields still needed: interests.');
+    expect(message).toContain('Structured fields still needed: full name.');
     expect(message).toContain('Phase: Discovery');
     expect(message).toContain(
       'Questioning rule: prefer the `lobe-user-interaction____askUserQuestion` tool call for structured collection or explicit UI input. For natural exploratory questions, plain text is allowed.',
@@ -48,11 +48,29 @@ describe('web onboarding tool result helpers', () => {
       version: 1,
     });
 
+    expect(message).toContain('Discovery progress: 1/4 user exchange(s) observed');
     expect(message).toContain('Recommended: 3 more user exchange(s) before moving to summary.');
     expect(message).toContain('Phase: Discovery');
   });
 
-  it('omits pacing hint when remaining discovery exchanges is 0', () => {
+  it('formats target-reached discovery progress only during discovery phase', () => {
+    const message = formatWebOnboardingStateMessage({
+      discoveryUserMessageCount: 4,
+      finished: false,
+      missingStructuredFields: [],
+      phase: 'discovery',
+      remainingDiscoveryExchanges: 0,
+      topicId: 'topic-1',
+      version: 1,
+    });
+
+    expect(message).not.toContain('more user exchange(s) before moving to summary');
+    expect(message).toContain(
+      'Discovery progress: recommended target reached after 4 user exchange(s).',
+    );
+  });
+
+  it('does not include discovery progress during summary phase', () => {
     const message = formatWebOnboardingStateMessage({
       discoveryUserMessageCount: 4,
       finished: false,
@@ -63,6 +81,7 @@ describe('web onboarding tool result helpers', () => {
       version: 1,
     });
 
-    expect(message).not.toContain('more user exchange(s) before moving to summary');
+    expect(message).toContain('Phase: Summary');
+    expect(message).not.toContain('Discovery progress:');
   });
 });

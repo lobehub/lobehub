@@ -28,6 +28,19 @@ const setNavPanelSnapshot = (snapshot: NavPanelSnapshot) => {
   listeners.forEach((listener) => listener());
 };
 
+export const resetNavPanel = () => {
+  if (!currentSnapshot) return;
+
+  setNavPanelSnapshot(null);
+};
+
+const FALLBACK_NAV_KEY = 'home';
+
+const getActiveNavKey = () => currentSnapshot?.key ?? FALLBACK_NAV_KEY;
+
+export const useActiveNavKey = () =>
+  useSyncExternalStore(subscribeNavPanel, getActiveNavKey, getActiveNavKey);
+
 const NavPanel = memo(() => {
   const panelContent = useSyncExternalStore(
     subscribeNavPanel,
@@ -36,7 +49,7 @@ const NavPanel = memo(() => {
   );
 
   // Use home Content as fallback when no portal content is provided
-  const activeContent = panelContent || { key: 'home', node: <Sidebar /> };
+  const activeContent = panelContent || { key: FALLBACK_NAV_KEY, node: <Sidebar /> };
 
   return (
     <>

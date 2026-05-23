@@ -306,7 +306,7 @@ export interface TaskDetailData {
   identifier: string;
   instruction: string;
   name?: string | null;
-  parent?: { identifier: string; name: string | null } | null;
+  parent?: { agentId?: string | null; identifier: string; name: string | null } | null;
   priority?: number | null;
   review?: Record<string, any> | null;
   schedule?: {

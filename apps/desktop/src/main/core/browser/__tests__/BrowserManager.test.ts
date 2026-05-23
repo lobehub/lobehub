@@ -110,6 +110,13 @@ describe('BrowserManager', () => {
       getController: vi.fn().mockReturnValue({
         isRemoteServerConfigured: vi.fn().mockResolvedValue(true),
       }),
+      storeManager: {
+        get: vi.fn((key: string) => {
+          if (key === 'pendingRestoreRoute') return '';
+          return '';
+        }),
+        set: vi.fn(),
+      },
     } as unknown as AppCore;
 
     manager = new BrowserManager(mockApp);
@@ -265,6 +272,43 @@ describe('BrowserManager', () => {
       // app has keepAlive: true, settings has keepAlive: false
       expect(manager.browsers.has('app')).toBe(true);
       expect(manager.browsers.has('settings')).toBe(false);
+    });
+
+    it('restores a captured route as the main window initial path', async () => {
+      (mockApp.storeManager.get as any).mockImplementation((key: string) => {
+        if (key === 'pendingRestoreRoute') return '/agent/abc';
+        return '';
+      });
+
+      await manager.initializeBrowsers();
+
+      expect(manager.browsers.get('app')?.options.path).toBe('/agent/abc');
+    });
+
+    it('clears the captured route after consuming it', async () => {
+      (mockApp.storeManager.get as any).mockImplementation((key: string) => {
+        if (key === 'pendingRestoreRoute') return '/agent/abc';
+        return '';
+      });
+
+      await manager.initializeBrowsers();
+
+      expect(mockApp.storeManager.set).toHaveBeenCalledWith('pendingRestoreRoute', '');
+    });
+
+    it('ignores the captured route when onboarding is not completed', async () => {
+      (mockApp.storeManager.get as any).mockImplementation((key: string) => {
+        if (key === 'pendingRestoreRoute') return '/agent/abc';
+        return '';
+      });
+      (mockApp.getController as any).mockReturnValue({
+        isRemoteServerConfigured: vi.fn().mockResolvedValue(false),
+      });
+
+      await manager.initializeBrowsers();
+
+      expect(manager.browsers.get('app')?.options.path).toBe('/desktop-onboarding');
+      expect(mockApp.storeManager.set).toHaveBeenCalledWith('pendingRestoreRoute', '');
     });
   });
 

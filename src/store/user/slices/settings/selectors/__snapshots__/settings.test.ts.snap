@@ -55,6 +55,11 @@ exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AG
     "provider": "deepseek",
   },
   "enableAutoReply": true,
+  "followUpAction": {
+    "enabled": false,
+    "model": "gpt-5.4-mini",
+    "provider": "openai",
+  },
   "generationTopic": {
     "model": "gpt-5.4-mini",
     "provider": "openai",
@@ -104,10 +109,10 @@ exports[`settingsSelectors > defaultAgent > should merge DEFAULT_AGENT and s.set
 {
   "config": {
     "chatConfig": {
-      "autoCreateTopicThreshold": 2,
-      "enableAutoCreateTopic": true,
+      "enableAgentMode": true,
       "enableCompressHistory": true,
       "enableContextCompression": true,
+      "enableFollowUpChips": false,
       "enableHistoryCount": false,
       "enableStreaming": true,
       "historyCount": 20,
@@ -148,10 +153,10 @@ exports[`settingsSelectors > defaultAgent > should merge DEFAULT_AGENT and s.set
 exports[`settingsSelectors > defaultAgentConfig > should merge DEFAULT_AGENT_CONFIG and defaultAgent(s).config correctly 1`] = `
 {
   "chatConfig": {
-    "autoCreateTopicThreshold": 2,
-    "enableAutoCreateTopic": true,
+    "enableAgentMode": true,
     "enableCompressHistory": true,
     "enableContextCompression": true,
+    "enableFollowUpChips": false,
     "enableHistoryCount": false,
     "enableStreaming": true,
     "historyCount": 20,

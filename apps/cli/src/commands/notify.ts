@@ -12,16 +12,38 @@ export function registerNotifyCommand(program: Command) {
     .requiredOption('-c, --content <content>', 'Message content')
     .option('--agent-id <agentId>', 'Agent ID (overrides topic default)')
     .option('--thread-id <threadId>', 'Thread ID for threaded conversations')
+    .option(
+      '--role <role>',
+      'Message role: user (default, triggers agent reply) | assistant (writes directly as agent message)',
+      'user',
+    )
+    .option(
+      '--message-id <messageId>',
+      'When --role assistant: update an existing message instead of creating a new one (keeps a single bubble)',
+    )
+    .option(
+      '--continue',
+      'When --role assistant: trigger a follow-up agent turn after writing the message',
+    )
     .option('--json', 'Output JSON')
     .action(
       async (options: {
         agentId?: string;
         content: string;
+        continue?: boolean;
         json?: boolean;
+        messageId?: string;
+        role?: 'assistant' | 'user';
         threadId?: string;
         topic: string;
       }) => {
-        log.debug('notify: topic=%s, agentId=%s', options.topic, options.agentId);
+        log.debug(
+          'notify: topic=%s, agentId=%s, role=%s, messageId=%s',
+          options.topic,
+          options.agentId,
+          options.role,
+          options.messageId,
+        );
 
         const client = await getTrpcClient();
 
@@ -29,6 +51,9 @@ export function registerNotifyCommand(program: Command) {
           const result = await client.agentNotify.notify.mutate({
             agentId: options.agentId,
             content: options.content,
+            continue: options.continue,
+            messageId: options.messageId,
+            role: options.role,
             threadId: options.threadId,
             topicId: options.topic,
           });

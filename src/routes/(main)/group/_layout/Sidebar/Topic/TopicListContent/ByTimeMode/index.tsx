@@ -24,7 +24,7 @@ const ByTimeMode = memo(() => {
   const topicGroupMode = useUserStore(preferenceSelectors.topicGroupMode);
 
   const [hasMore, isExpandingPageSize, openAllTopicsDrawer] = useChatStore((s) => [
-    topicSelectors.hasMoreTopics(s),
+    topicSelectors.hasMoreTopicsForSidebar(s),
     topicSelectors.isExpandingPageSize(s),
     s.openAllTopicsDrawer,
   ]);

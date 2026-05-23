@@ -3,8 +3,9 @@ import type {
   UserAgentOnboardingDraft,
   UserAgentOnboardingNode,
 } from '@lobechat/types';
+import { isRecord } from '@lobechat/utils';
 
-import { getScopedPatch, isRecord, normalizeFromSchema } from './nodeSchema';
+import { getScopedPatch, normalizeFromSchema } from './nodeSchema';
 
 type OnboardingPatchInput = Record<string, unknown>;
 type DraftKey = keyof UserAgentOnboardingDraft;

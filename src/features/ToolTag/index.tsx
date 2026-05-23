@@ -156,7 +156,7 @@ const ToolTag = memo<ToolTagProps>(({ identifier, variant = 'default' }) => {
     <Tag
       className={isCompact ? styles.compact : styles.tag}
       icon={renderIcon()}
-      variant={isCompact ? 'borderless' : isDarkMode ? 'filled' : 'outlined'}
+      variant={isCompact ? 'borderless' : 'filled'}
     >
       {displayTitle}
     </Tag>

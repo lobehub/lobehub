@@ -6,4 +6,4 @@ export {
   remapIdsToPaths,
   remapPathsToIds,
 } from './normalize';
-export { buildSegment, extractName } from './path';
+export { buildSegment, extractName, toCanonicalTreePath } from './path';

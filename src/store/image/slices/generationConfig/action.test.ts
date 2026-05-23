@@ -9,6 +9,29 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useImageStore } from '@/store/image';
 
+const localStorageMock = vi.hoisted(() => {
+  let store: Record<string, string> = {};
+  const storage = {
+    clear: vi.fn(() => {
+      store = {};
+    }),
+    getItem: vi.fn((key: string) => store[key] ?? null),
+    removeItem: vi.fn((key: string) => {
+      delete store[key];
+    }),
+    setItem: vi.fn((key: string, value: string) => {
+      store[key] = value;
+    }),
+  };
+
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: storage,
+  });
+
+  return storage;
+});
+
 const { currentImageSettingsMock } = vi.hoisted(() => ({
   currentImageSettingsMock: vi.fn(() => ({
     defaultImageNum: 4,
@@ -28,6 +51,12 @@ const customModelSchema: ModelParamsSchema = {
   width: { default: 1024, min: 256, max: 2048, step: 64 },
   height: { default: 1024, min: 256, max: 2048, step: 64 },
   steps: { default: 20, min: 1, max: 50 },
+};
+
+const sizeOnlyModelSchema: ModelParamsSchema = {
+  prompt: { default: '' },
+  imageUrls: { default: [] },
+  size: { default: 'auto', enum: ['auto', '1024x1024'] },
 };
 
 const testImageModels: AIImageModelCard[] = [
@@ -56,6 +85,13 @@ const testImageModels: AIImageModelCard[] = [
     } as ModelParamsSchema,
     releasedAt: '2024-01-01',
   },
+  {
+    id: 'size-only-model',
+    displayName: 'Size Only Model',
+    type: 'image',
+    parameters: sizeOnlyModelSchema,
+    releasedAt: '2024-01-01',
+  },
 ];
 
 const mockProviders = [
@@ -73,6 +109,11 @@ const mockProviders = [
     id: 'single-image-provider',
     name: 'Single Image Provider',
     children: [testImageModels[2]],
+  },
+  {
+    id: 'size-only-provider',
+    name: 'Size Only Provider',
+    children: [testImageModels[3]],
   },
 ];
 
@@ -106,6 +147,7 @@ const initialTestState = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorageMock.clear();
   currentImageSettingsMock.mockReturnValue({ defaultImageNum: 4 });
   useImageStore.setState(initialTestState);
 });
@@ -261,7 +303,6 @@ describe('GenerationConfigAction', () => {
     });
 
     it('should convert imageUrl to imageUrls array when switching to multi-image model', () => {
-      const { result } = renderHook(() => useImageStore());
       const singleImageSchema: ModelParamsSchema = {
         prompt: { default: '' },
         imageUrl: { default: '' },
@@ -357,7 +398,27 @@ describe('GenerationConfigAction', () => {
       });
 
       expect(result.current.parameters?.seed).toBeNull();
-      expect(result.current.parameters?.imageUrl).toBeNull();
+      expect(result.current.parameters?.imageUrl).toBeUndefined();
+    });
+
+    it('should drop settings that are unsupported by the target model schema', () => {
+      const { result } = renderHook(() => useImageStore());
+
+      act(() => {
+        result.current.reuseSettings('size-only-model', 'size-only-provider', {
+          height: 1024,
+          prompt: 'reuse prompt',
+          seed: 123,
+          size: '1024x1024',
+          width: 1024,
+        });
+      });
+
+      expect(result.current.parameters).toEqual({
+        imageUrls: [],
+        prompt: 'reuse prompt',
+        size: '1024x1024',
+      });
     });
 
     it('should update only seed parameter via reuseSeed', () => {

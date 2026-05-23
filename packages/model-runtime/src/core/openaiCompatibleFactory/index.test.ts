@@ -691,6 +691,141 @@ describe('LobeOpenAICompatibleFactory', () => {
       });
     });
 
+    describe('contextPreFlight option', () => {
+      const tightModel: any = {
+        contextWindowTokens: 2000,
+        displayName: 'Tight',
+        id: 'tight-model',
+        maxOutput: 8000,
+        type: 'chat',
+      };
+      const roomyModel: any = {
+        contextWindowTokens: 200_000,
+        displayName: 'Roomy',
+        id: 'roomy-model',
+        maxOutput: 8000,
+        type: 'chat',
+      };
+
+      it('aborts before dispatch with ExceededContextWindow when prompt exceeds ctx', async () => {
+        const LobePreFlightProvider = createOpenAICompatibleRuntime({
+          baseURL: defaultBaseURL,
+          chatCompletion: {
+            contextPreFlight: { models: [tightModel] },
+          },
+          provider: 'preflight-test',
+        });
+
+        const instance = new LobePreFlightProvider({ apiKey: 'test' });
+        const mockCreateMethod = vi
+          .spyOn(instance['client'].chat.completions, 'create')
+          .mockResolvedValue(new ReadableStream() as any);
+
+        const longContent = 'a'.repeat(20_000);
+
+        try {
+          await instance.chat({
+            messages: [{ content: longContent, role: 'user' }],
+            model: 'tight-model',
+            temperature: 0,
+          });
+          expect.fail('expected chat to reject');
+        } catch (error) {
+          expect((error as any).errorType).toBe(AgentRuntimeErrorType.ExceededContextWindow);
+          expect((error as any).error.type).toBe('context_exceeded_pre_flight');
+          expect((error as any).error.model).toBe('tight-model');
+          expect((error as any).error.ctx).toBe(2000);
+          expect((error as any).error.promptTokens).toBeGreaterThan(0);
+          expect((error as any).error.shortBy).toBe(
+            (error as any).error.promptTokens - (error as any).error.ctx,
+          );
+          expect((error as any).error.suggestions).toEqual([
+            'fork_topic',
+            'switch_to_larger_ctx_model',
+          ]);
+        }
+
+        expect(mockCreateMethod).not.toHaveBeenCalled();
+      });
+
+      it('passes through when prompt fits comfortably', async () => {
+        const LobePreFlightProvider = createOpenAICompatibleRuntime({
+          baseURL: defaultBaseURL,
+          chatCompletion: {
+            contextPreFlight: { models: [roomyModel] },
+          },
+          provider: 'preflight-test',
+        });
+
+        const instance = new LobePreFlightProvider({ apiKey: 'test' });
+        const mockCreateMethod = vi
+          .spyOn(instance['client'].chat.completions, 'create')
+          .mockResolvedValue(new ReadableStream() as any);
+
+        await instance.chat({
+          messages: [{ content: 'hi', role: 'user' }],
+          model: 'roomy-model',
+          temperature: 0,
+        });
+
+        expect(mockCreateMethod).toHaveBeenCalledTimes(1);
+      });
+
+      it('skips when the model is unknown to the pre-flight list', async () => {
+        const LobePreFlightProvider = createOpenAICompatibleRuntime({
+          baseURL: defaultBaseURL,
+          chatCompletion: {
+            contextPreFlight: { models: [tightModel] },
+          },
+          provider: 'preflight-test',
+        });
+
+        const instance = new LobePreFlightProvider({ apiKey: 'test' });
+        const mockCreateMethod = vi
+          .spyOn(instance['client'].chat.completions, 'create')
+          .mockResolvedValue(new ReadableStream() as any);
+
+        const longContent = 'a'.repeat(20_000);
+        await instance.chat({
+          messages: [{ content: longContent, role: 'user' }],
+          model: 'unknown-model',
+          temperature: 0,
+        });
+
+        expect(mockCreateMethod).toHaveBeenCalledTimes(1);
+      });
+
+      it('passes through a near-limit prompt that still fits the window', async () => {
+        // Regression: prior implementation deducted a 1024 buffer + 1024
+        // minOutputTokens before deciding, which rejected a ~198.5k-token
+        // prompt against a 200k-token window. The corrected threshold
+        // only fires on real overflow.
+        const LobePreFlightProvider = createOpenAICompatibleRuntime({
+          baseURL: defaultBaseURL,
+          chatCompletion: {
+            contextPreFlight: { models: [roomyModel] },
+          },
+          provider: 'preflight-test',
+        });
+
+        const instance = new LobePreFlightProvider({ apiKey: 'test' });
+        const mockCreateMethod = vi
+          .spyOn(instance['client'].chat.completions, 'create')
+          .mockResolvedValue(new ReadableStream() as any);
+
+        // ~4 chars/token, so this estimates around 198.5k tokens.
+        const nearLimitContent = 'a'.repeat(794_000);
+
+        await instance.chat({
+          messages: [{ content: nearLimitContent, role: 'user' }],
+          model: 'roomy-model',
+          temperature: 0,
+        });
+
+        expect(mockCreateMethod).toHaveBeenCalledTimes(1);
+      });
+    });
+
     describe('cancel request', () => {
       it('should cancel ongoing request correctly', async () => {
         const controller = new AbortController();
@@ -1899,6 +2034,68 @@ describe('LobeOpenAICompatibleFactory', () => {
       expect(result).toEqual({ age: 30, name: 'John' });
     });
 
+    it('should map disabled thinking to no reasoning effort for GPT-5.4 Responses generateObject', async () => {
+      const mockResponse = {
+        output_text: '{"name": "John", "age": 30}',
+      };
+
+      vi.spyOn(instance['client'].responses, 'create').mockResolvedValue(mockResponse as any);
+
+      const payload = {
+        messages: [{ content: 'Generate a person object', role: 'user' as const }],
+        model: 'gpt-5.4-mini',
+        schema: {
+          name: 'person_extractor',
+          schema: {
+            properties: { age: { type: 'number' }, name: { type: 'string' } },
+            type: 'object' as const,
+          },
+        },
+        thinking: { budget_tokens: 0, type: 'disabled' as const },
+      };
+
+      await instance.generateObject(payload);
+
+      expect(instance['client'].responses.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: 'gpt-5.4-mini',
+          reasoning: { effort: 'none' },
+        }),
+        expect.anything(),
+      );
+    });
+
+    it('should normalize GPT-5 Pro-family Responses generateObject reasoning effort to high', async () => {
+      const mockResponse = {
+        output_text: '{"name": "John", "age": 30}',
+      };
+
+      vi.spyOn(instance['client'].responses, 'create').mockResolvedValue(mockResponse as any);
+
+      const payload = {
+        messages: [{ content: 'Generate a person object', role: 'user' as const }],
+        model: 'gpt-5.4-pro',
+        reasoning_effort: 'medium' as const,
+        schema: {
+          name: 'person_extractor',
+          schema: {
+            properties: { age: { type: 'number' }, name: { type: 'string' } },
+            type: 'object' as const,
+          },
+        },
+      };
+
+      await instance.generateObject(payload);
+
+      expect(instance['client'].responses.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: 'gpt-5.4-pro',
+          reasoning: { effort: 'high' },
+        }),
+        expect.anything(),
+      );
+    });
+
     it('should handle options correctly', async () => {
       const mockResponse = {
         output_text: '{"status": "success"}',
@@ -2979,6 +3176,56 @@ describe('LobeOpenAICompatibleFactory', () => {
         expect(result).toEqual([
           { arguments: { age: 28, name: 'Alice' }, name: 'person_extractor' },
         ]);
+      });
+
+      it('should not forward internal thinking to generic OpenAI-compatible generateObject requests', async () => {
+        const mockResponse = {
+          choices: [
+            {
+              message: {
+                tool_calls: [
+                  {
+                    function: {
+                      arguments: '{"name":"Alice","age":28}',
+                      name: 'person_extractor',
+                    },
+                    type: 'function' as const,
+                  },
+                ],
+              },
+            },
+          ],
+        };
+
+        vi.spyOn(instanceWithToolCalling['client'].chat.completions, 'create').mockResolvedValue(
+          mockResponse as any,
+        );
+
+        const payload = {
+          messages: [{ content: 'Extract person info', role: 'user' as const }],
+          model: 'deepseek-v4-pro',
+          reasoning_effort: 'high' as const,
+          schema: {
+            name: 'person_extractor',
+            schema: {
+              properties: { age: { type: 'number' }, name: { type: 'string' } },
+              type: 'object' as const,
+            },
+          },
+          thinking: { budget_tokens: 0, type: 'disabled' as const },
+        };
+
+        await instanceWithToolCalling.generateObject(payload);
+
+        const requestPayload =
+          instanceWithToolCalling['client'].chat.completions.create.mock.calls[0]![0];
+        expect(requestPayload).toEqual(
+          expect.objectContaining({
+            model: 'deepseek-v4-pro',
+          }),
+        );
+        expect(requestPayload).not.toHaveProperty('thinking');
+        expect(requestPayload).not.toHaveProperty('reasoning_effort');
       });
 
       it('should return undefined when no tool call found', async () => {

@@ -27,7 +27,10 @@ export class PluginInternalsActionImpl {
     void get;
   }
 
-  internal_transformToolCalls = (toolCalls: MessageToolCall[]): ChatToolPayload[] => {
+  internal_transformToolCalls = (
+    toolCalls: MessageToolCall[],
+    offeredToolNames?: string[],
+  ): ChatToolPayload[] => {
     const toolNameResolver = new ToolNameResolver();
 
     // Build manifests map from tool store
@@ -73,7 +76,7 @@ export class PluginInternalsActionImpl {
     }
 
     // Resolve tool calls and add source field
-    const resolved = toolNameResolver.resolve(toolCalls, manifests);
+    const resolved = toolNameResolver.resolve(toolCalls, manifests, offeredToolNames);
 
     return resolved.map((payload) => {
       // Parse and repair arguments if needed

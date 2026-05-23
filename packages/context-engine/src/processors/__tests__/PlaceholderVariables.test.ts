@@ -274,6 +274,132 @@ describe('PlaceholderVariablesProcessor', () => {
       expect(result.messages).toHaveLength(1);
     });
 
+    it('should isolate generator throws per message and not over-count', async () => {
+      const faultyGenerators = {
+        error: () => {
+          throw new Error('Generator error');
+        },
+        working: () => 'works',
+      };
+
+      const processor = new PlaceholderVariablesProcessor({
+        variableGenerators: faultyGenerators,
+      });
+
+      const context = {
+        initialState: {
+          messages: [],
+          model: 'gpt-4',
+          provider: 'openai',
+          systemRole: '',
+          tools: [],
+        },
+        messages: [
+          {
+            id: 'bad',
+            role: 'user',
+            content: 'This {{working}} but this {{error}} fails',
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+          {
+            id: 'good',
+            role: 'user',
+            content: 'Only {{working}} here',
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+        ],
+        metadata: {
+          model: 'gpt-4',
+          maxTokens: 4096,
+        },
+        isAborted: false,
+        executedProcessors: [],
+      };
+
+      const result = await processor.process(context);
+
+      // The faulty message bails out of parsing and stays as-is — the throw must
+      // not propagate or corrupt the run, and the count must not double-claim it.
+      expect(result.messages[0].content).toBe('This {{working}} but this {{error}} fails');
+      // A separate, non-faulty message in the same batch is processed normally —
+      // the per-message try/catch in doProcess isolates the failure.
+      expect(result.messages[1].content).toBe('Only works here');
+      expect(result.metadata.placeholderVariablesProcessed).toBe(1);
+    });
+
+    it('should throw an actionable error when variableGenerators is missing', async () => {
+      const processor = new PlaceholderVariablesProcessor({
+        // Deliberately bypass the TS contract to simulate a misconfigured harness.
+        variableGenerators: undefined as unknown as Record<string, () => string>,
+      });
+
+      const context = {
+        initialState: {
+          messages: [],
+          model: 'gpt-4',
+          provider: 'openai',
+          systemRole: '',
+          tools: [],
+        },
+        messages: [
+          {
+            id: '1',
+            role: 'user',
+            content: 'Hello {{username}}',
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+        ],
+        metadata: {
+          model: 'gpt-4',
+          maxTokens: 4096,
+        },
+        isAborted: false,
+        executedProcessors: [],
+      };
+
+      await expect(processor.process(context)).rejects.toThrow(
+        /variableGenerators config is missing or invalid/,
+      );
+    });
+
+    it('should throw when variableGenerators is null', async () => {
+      const processor = new PlaceholderVariablesProcessor({
+        variableGenerators: null as unknown as Record<string, () => string>,
+      });
+
+      const context = {
+        initialState: {
+          messages: [],
+          model: 'gpt-4',
+          provider: 'openai',
+          systemRole: '',
+          tools: [],
+        },
+        messages: [
+          {
+            id: '1',
+            role: 'user',
+            content: 'Hello {{username}}',
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+        ],
+        metadata: {
+          model: 'gpt-4',
+          maxTokens: 4096,
+        },
+        isAborted: false,
+        executedProcessors: [],
+      };
+
+      await expect(processor.process(context)).rejects.toThrow(
+        /variableGenerators config is missing or invalid/,
+      );
+    });
+
     it('should use custom depth setting', async () => {
       const processor = new PlaceholderVariablesProcessor({
         variableGenerators: mockVariableGenerators,
@@ -343,6 +469,140 @@ describe('PlaceholderVariablesProcessor', () => {
       const result = await processor.process(context);
 
       expect(result.metadata.placeholderVariablesProcessed).toBe(0);
+    });
+
+    it('should not count messages that contain only unresolved placeholders', async () => {
+      const processor = new PlaceholderVariablesProcessor({
+        variableGenerators: mockVariableGenerators,
+      });
+
+      const originalContent = 'Hello {{missing}}, see also {{alsoMissing}}';
+      const context = {
+        initialState: {
+          messages: [],
+          model: 'gpt-4',
+          provider: 'openai',
+          systemRole: '',
+          tools: [],
+        },
+        messages: [
+          {
+            id: '1',
+            role: 'user',
+            content: originalContent,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+        ],
+        metadata: {
+          model: 'gpt-4',
+          maxTokens: 4096,
+        },
+        isAborted: false,
+        executedProcessors: [],
+      };
+
+      const result = await processor.process(context);
+
+      // Count should NOT increment when no placeholder was replaced
+      expect(result.metadata.placeholderVariablesProcessed).toBe(0);
+      // Content should be left exactly as-is (preserves {{missing}} tokens)
+      expect(result.messages[0].content).toBe(originalContent);
+    });
+
+    it('should not count array text-part messages with no replaceable placeholders', async () => {
+      const processor = new PlaceholderVariablesProcessor({
+        variableGenerators: mockVariableGenerators,
+      });
+
+      const arrayContent = [
+        { type: 'text', text: 'No placeholders in here' },
+        { type: 'text', text: 'Only {{missing}} here' },
+        { type: 'image', image_url: 'https://example.com/x.png' },
+      ];
+      const context = {
+        initialState: {
+          messages: [],
+          model: 'gpt-4',
+          provider: 'openai',
+          systemRole: '',
+          tools: [],
+        },
+        messages: [
+          {
+            id: '1',
+            role: 'user',
+            content: arrayContent,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+        ],
+        metadata: {
+          model: 'gpt-4',
+          maxTokens: 4096,
+        },
+        isAborted: false,
+        executedProcessors: [],
+      };
+
+      const result = await processor.process(context);
+
+      expect(result.metadata.placeholderVariablesProcessed).toBe(0);
+      // Content shape preserved verbatim
+      expect(result.messages[0].content).toEqual(arrayContent);
+    });
+
+    it('should count only messages whose content actually changed in a mixed batch', async () => {
+      const processor = new PlaceholderVariablesProcessor({
+        variableGenerators: mockVariableGenerators,
+      });
+
+      const context = {
+        initialState: {
+          messages: [],
+          model: 'gpt-4',
+          provider: 'openai',
+          systemRole: '',
+          tools: [],
+        },
+        messages: [
+          {
+            id: '1',
+            role: 'user',
+            content: 'No placeholders',
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+          {
+            id: '2',
+            role: 'user',
+            content: 'Hello {{username}}',
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+          {
+            id: '3',
+            role: 'user',
+            content: 'Only {{missing}}',
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+        ],
+        metadata: {
+          model: 'gpt-4',
+          maxTokens: 4096,
+        },
+        isAborted: false,
+        executedProcessors: [],
+      };
+
+      const result = await processor.process(context);
+
+      // Only message #2 had a real replacement
+      expect(result.metadata.placeholderVariablesProcessed).toBe(1);
+      expect(result.messages[0].content).toBe('No placeholders');
+      expect(result.messages[1].content).toBe('Hello TestUser');
+      expect(result.messages[2].content).toBe('Only {{missing}}');
     });
   });
 

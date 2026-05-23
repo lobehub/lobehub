@@ -19,6 +19,7 @@ import {
   renderSnapshot,
   renderStepDetail,
   renderSystemRole,
+  resolveCeSnapshot,
 } from '../viewer';
 
 async function fetchSnapshotFromUrl(url: string): Promise<ExecutionSnapshot> {
@@ -44,8 +45,8 @@ function findStep(snapshot: ExecutionSnapshot, stepIndex: number): StepSnapshot 
   return step;
 }
 
-function getSystemRole(step: StepSnapshot): string | undefined {
-  const ceEvent = step.events?.find((e) => e.type === 'context_engine_result') as any;
+function getSystemRole(step: StepSnapshot, allSteps?: StepSnapshot[]): string | undefined {
+  const ceEvent = resolveCeSnapshot(step, allSteps) as any;
   const inputRole = ceEvent?.input?.systemRole;
   if (inputRole) return inputRole;
   const outputMsgs = ceEvent?.output as any[] | undefined;
@@ -56,8 +57,8 @@ function getSystemRole(step: StepSnapshot): string | undefined {
     : JSON.stringify(systemMsg.content, null, 2);
 }
 
-function getEnvContent(step: StepSnapshot): string | undefined {
-  const ceEvent = step.events?.find((e) => e.type === 'context_engine_result') as any;
+function getEnvContent(step: StepSnapshot, allSteps?: StepSnapshot[]): string | undefined {
+  const ceEvent = resolveCeSnapshot(step, allSteps) as any;
   const outputMsgs = ceEvent?.output as any[] | undefined;
   const envMsg = outputMsgs?.find((m: any) => m.role === 'user');
   if (!envMsg) return undefined;
@@ -150,6 +151,28 @@ export function registerInspectCommand(program: Command) {
               snapshot = await remoteStore.fetch(url, traceId);
             }
           }
+        } else if (traceId && traceId.startsWith('op_')) {
+          // Partial op id (e.g. `op_<timestamp>`): first check the local
+          // FileSnapshotStore (which also covers `_partial/` in-progress
+          // snapshots via substring match), then fall back to a prefix scan
+          // of the `_remote/` cache so users don't have to paste the full
+          // `op_<ts>_agt_..._tpc_..._<suffix>` string.
+          const fileStore = new FileSnapshotStore();
+          snapshot = await fileStore.get(traceId);
+          if (!snapshot) {
+            const remoteStore = new RemoteSnapshotStore();
+            const matches = await remoteStore.findCachedByPrefix(traceId);
+            if (matches.length === 1) {
+              const fullId = matches[0];
+              snapshot = await remoteStore.getCached(fullId);
+              console.error(`✓ Resolved "${traceId}" → ${fullId}`);
+            } else if (matches.length > 1) {
+              console.error(`Ambiguous id prefix "${traceId}" — multiple cached snapshots match:`);
+              for (const m of matches) console.error(`  ${m}`);
+              console.error('Re-run with the full operation id.');
+              process.exit(1);
+            }
+          }
         } else {
           const store = new FileSnapshotStore();
           snapshot = traceId ? await store.get(traceId) : await store.getLatest();
@@ -195,8 +218,12 @@ export function registerInspectCommand(program: Command) {
           const stepA = findStep(snapshot, effectiveStepIndex);
           const stepB = findStep(snapshot, diffStepIndex);
           const label = opts.systemRole ? 'System Role' : 'Environment Context';
-          const contentA = opts.systemRole ? getSystemRole(stepA) : getEnvContent(stepA);
-          const contentB = opts.systemRole ? getSystemRole(stepB) : getEnvContent(stepB);
+          const contentA = opts.systemRole
+            ? getSystemRole(stepA, snapshot.steps)
+            : getEnvContent(stepA, snapshot.steps);
+          const contentB = opts.systemRole
+            ? getSystemRole(stepB, snapshot.steps)
+            : getEnvContent(stepB, snapshot.steps);
           console.log(
             renderDiff(contentA ?? '', contentB ?? '', {
               labelA: `Step ${effectiveStepIndex}`,
@@ -212,14 +239,18 @@ export function registerInspectCommand(program: Command) {
           const step = findStep(snapshot, effectiveStepIndex);
           if (opts.json) {
             if (opts.systemRole) {
-              console.log(JSON.stringify(getSystemRole(step) ?? null, null, 2));
+              console.log(JSON.stringify(getSystemRole(step, snapshot.steps) ?? null, null, 2));
             } else {
-              const ceEvent = step.events?.find((e) => e.type === 'context_engine_result') as any;
+              const ceEvent = resolveCeSnapshot(step, snapshot.steps) as any;
               const envMsg = (ceEvent?.output as any[])?.find((m: any) => m.role === 'user');
               console.log(JSON.stringify(envMsg ?? null, null, 2));
             }
           } else {
-            console.log(opts.systemRole ? renderSystemRole(step) : renderEnvContext(step));
+            console.log(
+              opts.systemRole
+                ? renderSystemRole(step, snapshot.steps)
+                : renderEnvContext(step, snapshot.steps),
+            );
           }
           return;
         }
@@ -228,12 +259,12 @@ export function registerInspectCommand(program: Command) {
         if (opts.payloadTools && effectiveStepIndex !== undefined) {
           const step = findStep(snapshot, effectiveStepIndex);
           if (opts.json) {
-            const ceEvent = step.events?.find((e) => e.type === 'context_engine_result') as any;
+            const ceEvent = resolveCeSnapshot(step, snapshot.steps) as any;
             const toolsConfig = ceEvent?.input?.toolsConfig;
             const payloadTools = (step.context?.payload as any)?.tools;
             console.log(JSON.stringify({ payloadTools, toolsConfig }, null, 2));
           } else {
-            console.log(renderPayloadTools(step));
+            console.log(renderPayloadTools(step, snapshot.steps));
           }
           return;
         }
@@ -242,10 +273,10 @@ export function registerInspectCommand(program: Command) {
         if (opts.payload && effectiveStepIndex !== undefined) {
           const step = findStep(snapshot, effectiveStepIndex);
           if (opts.json) {
-            const ceEvent = step.events?.find((e) => e.type === 'context_engine_result') as any;
+            const ceEvent = resolveCeSnapshot(step, snapshot.steps) as any;
             console.log(JSON.stringify(ceEvent?.input ?? null, null, 2));
           } else {
-            console.log(renderPayload(step));
+            console.log(renderPayload(step, snapshot.steps));
           }
           return;
         }
@@ -254,10 +285,10 @@ export function registerInspectCommand(program: Command) {
         if (opts.memory && effectiveStepIndex !== undefined) {
           const step = findStep(snapshot, effectiveStepIndex);
           if (opts.json) {
-            const ceEvent = step.events?.find((e) => e.type === 'context_engine_result') as any;
+            const ceEvent = resolveCeSnapshot(step, snapshot.steps) as any;
             console.log(JSON.stringify(ceEvent?.input?.userMemory ?? null, null, 2));
           } else {
-            console.log(renderMemory(step));
+            console.log(renderMemory(step, snapshot.steps));
           }
           return;
         }

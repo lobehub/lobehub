@@ -100,8 +100,15 @@ export const virtuaListSlice: StateCreator<State & VirtuaListAction, [], [], Vir
   scrollToBottom: (smooth = true) => {
     const { displayMessages, virtuaScrollMethods } = get();
     if (displayMessages.length === 0) return;
+    if (!virtuaScrollMethods) return;
 
-    virtuaScrollMethods?.scrollToIndex(displayMessages.length - 1, {
+    // Target the true last item rather than the last message — VList may
+    // append trailing items (spacer, SubAgent footer hint) that would
+    // otherwise be left below the viewport and keep atBottom = false.
+    const totalCount = virtuaScrollMethods.getTotalCount();
+    const targetIndex = Math.max(totalCount - 1, displayMessages.length - 1);
+
+    virtuaScrollMethods.scrollToIndex(targetIndex, {
       align: 'end',
       smooth,
     });

@@ -131,7 +131,7 @@ describe('SystemRoleInjector', () => {
     expect(result.metadata.systemRoleInjected).toBe(true);
   });
 
-  it('should append systemRole after AgentDocumentBeforeSystemInjector output (regression for LOBE-6892)', async () => {
+  it('should append systemRole after AgentDocumentBeforeSystemInjector output (regression for )', async () => {
     const provider = new SystemRoleInjector({
       systemRole: '你是一个思维活跃的工程师，擅长 Python、JavaScript、Docker、SQL。',
     });

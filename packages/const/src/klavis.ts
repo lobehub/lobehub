@@ -52,17 +52,6 @@ export const KLAVIS_SERVER_TYPES: KlavisServerType[] = [
   {
     author: 'Klavis',
     authorUrl: 'https://klavis.io',
-    description: 'Notion is a collaborative productivity and note-taking application',
-    icon: 'https://hub-apac-1.lobeobjects.space/assets/logos/notion.svg',
-    identifier: 'notion',
-    readme:
-      'Connect to Notion to access and manage your workspace. Create pages, search content, update databases, and organize your knowledge base—all through natural conversation with your AI assistant.',
-    label: 'Notion',
-    serverName: Klavis.McpServerName.Notion,
-  },
-  {
-    author: 'Klavis',
-    authorUrl: 'https://klavis.io',
     description:
       'Airtable is a cloud-based database and spreadsheet platform that combines the flexibility of a spreadsheet with the power of a database, enabling teams to organize, track, and collaborate on projects with customizable views and powerful automation features',
     icon: 'https://hub-apac-1.lobeobjects.space/assets/logos/airtable.svg',

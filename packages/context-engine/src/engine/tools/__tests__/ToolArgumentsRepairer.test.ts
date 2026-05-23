@@ -103,11 +103,11 @@ describe('ToolArgumentsRepairer', () => {
   describe('parse - integrated parsing and repair', () => {
     it('should parse and repair arguments using manifest schema', () => {
       const manifest: LobeToolManifest = {
-        identifier: 'lobe-gtd',
+        identifier: 'lobe-agent',
         api: [
           {
-            name: 'execTask',
-            description: 'Execute async task',
+            name: 'callSubAgent',
+            description: 'Dispatch a sub-agent',
             parameters: {
               type: 'object',
               required: ['description', 'instruction'],
@@ -131,7 +131,7 @@ describe('ToolArgumentsRepairer', () => {
           'Test task", "instruction": "Do something important", "runInClient": true, "timeout": 60000}',
       });
 
-      const result = repairer.parse('execTask', malformedArguments);
+      const result = repairer.parse('callSubAgent', malformedArguments);
 
       expect(result).toHaveProperty('description', 'Test task');
       expect(result).toHaveProperty('instruction', 'Do something important');

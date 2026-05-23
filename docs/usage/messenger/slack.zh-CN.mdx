@@ -1,0 +1,101 @@
+---
+title: 在 Slack 使用 LobeHub
+description: >-
+  在 Slack 工作区安装官方 LobeHub Slack 应用，再让每位成员各自关联自己的 LobeHub
+  账号；选择默认 Agent，就能在 Slack DM 里直接和 AI 助手对话，无需自建机器人。
+tags:
+  - Messenger
+  - Slack
+  - LobeHub 机器人
+  - 账号关联
+  - 工作区安装
+---
+
+# 在 Slack 使用 LobeHub
+
+Slack 接入分两步：**工作区管理员安装一次** 官方 LobeHub Slack 应用，然后 **每位成员各自关联** 自己的 LobeHub 账号。两步都在 **设置 → Messenger → Slack** 里完成。
+
+## 前置条件
+
+- 一个 LobeHub 账号
+- 一个 Slack 工作区
+- 安装环节：在该工作区里安装 Slack 应用的权限（通常是 Workspace Admin，或由管理员授予的权限）
+
+## 阶段 A —— 安装 LobeHub Slack 应用（管理员，每个工作区一次）
+
+<Steps>
+  ### 打开「设置 → Messenger → Slack」
+
+  在 LobeHub 中打开 **设置 → Messenger**，点击 **Slack** 卡片，再点右上角的 **连接**。
+
+  {/* TODO: 截图 —— Slack 详情页（Connections 列表为空 + Connect 按钮） */}
+
+  ### 在 Slack 中授权
+
+  页面跳转到 Slack 授权界面。选择要安装的目标工作区，点击 **Allow（允许）**。
+
+  {/* TODO: 截图 —— Slack OAuth 授权页 */}
+
+  ### 工作区出现在 Connections 列表
+
+  授权成功后跳回 LobeHub。该工作区会以 **workspace** 行的形式出现在 **Connections** 中，状态为 **已连接 (Connected)**。
+
+  {/* TODO: 截图 —— Slack 详情页：已连接的 workspace 行 */}
+
+  > **工作区已被他人连接？** LobeHub 会阻止安装并提示「Workspace already connected」。你**不需要**重新安装，只要在 Slack 里私聊 **@LobeHub** 完成个人账号关联即可。如果想接管所有权，请请求最初的安装者先断开连接。
+</Steps>
+
+## 阶段 B —— 关联个人账号（每位成员）
+
+<Steps>
+  ### 在 Slack 里打开 LobeHub 机器人
+
+  在 Slack 左侧 **Apps** 栏里找到 **LobeHub**，或直接搜索 `@LobeHub`，打开它的 DM 会话。
+
+  {/* TODO: 截图 —— Slack Apps 栏里高亮 LobeHub */}
+
+  ### 发送任意一条消息
+
+  给机器人发送任意一条消息触发关联流程。机器人会回复一个一次性确认链接。
+
+  {/* TODO: 截图 —— Slack DM 中机器人发送 "Link Account" 按钮 */}
+
+  ### 在浏览器里确认关联
+
+  点击链接，必要时登录 LobeHub，然后选择一个 **默认 Agent**。之后在该工作区私聊机器人的每条消息都会路由到这个 Agent。
+
+  {/* TODO: 截图 —— LobeHub 确认关联页面，含 Agent 选择器 */}
+
+  关联完成后，会在 **Connections** 里以 **user** 行的形式出现在该工作区下方。
+
+  {/* TODO: 截图 —— Slack 详情页：workspace 行 + 一条已连接的 user 行 */}
+</Steps>
+
+## 切换接收消息的 Agent
+
+两种等价方式：
+
+- **在 Slack 里** —— 私聊机器人发送 `/agents`，挑一个新的 Agent。
+- **在 LobeHub 里** —— 打开 **设置 → Messenger → Slack**，在你的关联行里使用 Agent 选择器。
+
+切换会对你发送的下一条消息立即生效。
+
+## 断开连接
+
+Slack 有两种含义不同的断开操作：
+
+| 操作                      | 效果                                                                              |
+| ----------------------- | ------------------------------------------------------------------------------- |
+| 在 *user* 行点 **断开**      | 解除 **你自己** 的 LobeHub 账号与该工作区 Slack 账号的关联。你的 DM 不再被接收，直到你再次给机器人发消息并完成关联。         |
+| 在 *workspace* 行点 **断开** | 移除工作区安装。由于消息分发受 token 控制，这会让该工作区里**所有人的机器人都失效**；现有 user 关联记录还在，但暂停工作直到工作区被重新安装。 |
+
+任何时候都可以重走对应阶段重新安装（工作区）或重新关联（个人）。
+
+## 故障排查
+
+- **"Workspace already connected"（工作区已连接）** —— 工作区已被另一位 LobeHub 用户安装过。私聊 **@LobeHub** 完成个人关联即可，无需重装。如需接管，请请求最初的安装者先断开。
+- **Slack 安装失败（`<原因>`）** —— 常见原因：用户取消授权、安装会话过期（重新打开弹窗再试）、Slack 返回的数据不完整（重试；持续失败请联系支持）。
+- **机器人不回 DM** —— 工作区安装可能已被断开。检查 **设置 → Messenger → Slack** 是否还有 workspace 行；没有就请管理员重新安装。
+- **"This link is already used"** —— 一次性确认链接只能用一次，给机器人再发一条消息获取新链接。
+- **"This account is already linked"** —— 这个 Slack 账号已绑定到另一个 LobeHub 账号。请用那个 LobeHub 账号登录管理，或先在那边解绑。
+- **"Another Slack account is already linked"** —— 你的 LobeHub 账号在该工作区里已有 Slack 关联。先在 **设置 → Messenger → Slack** 断开旧关联，再绑定新的 Slack 账号。

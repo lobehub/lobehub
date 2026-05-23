@@ -96,6 +96,22 @@ export const signUserJWT = async (userId: string): Promise<string> => {
 };
 
 /**
+ * Sign a long-lived OIDC-compatible JWT for hetero-agent operations.
+ * Claude Code / Codex tasks can run for hours; this 4-hour token prevents
+ * heteroIngest / heteroFinish from returning 401 mid-execution.
+ */
+export const signOperationJwt = async (userId: string): Promise<string> => {
+  const { key, kid } = await getSigningKey();
+
+  return new SignJWT({ purpose: 'hetero-operation' })
+    .setProtectedHeader({ alg: 'RS256', kid })
+    .setSubject(userId)
+    .setIssuedAt()
+    .setExpirationTime('4h')
+    .sign(key);
+};
+
+/**
  * Validate internal JWT from lambda → async calls
  * Returns true if valid, false otherwise
  */

@@ -1,6 +1,15 @@
 import { type LobeToolManifest } from '@lobechat/context-engine';
 import { type LobeChatDatabase } from '@lobechat/database';
-import { type ChatToolPayload } from '@lobechat/types';
+import { type ChatToolPayload, type ClientSecretPayload } from '@lobechat/types';
+
+export interface ToolExecutionMemoryEmbeddingRuntime {
+  /** Embedding model id used by the memory search runtime. */
+  model: string;
+  /** Provider credentials/config supplied by the trusted server caller. */
+  payload: ClientSecretPayload;
+  /** Model provider used to initialize the embedding runtime. */
+  provider: string;
+}
 
 export interface ToolExecutionContext {
   /** Target device ID for device proxy tool calls */
@@ -11,16 +20,30 @@ export interface ToolExecutionContext {
   documentId?: string | null;
   /** Current group ID for group chat context */
   groupId?: string | null;
+  /**
+   * Optional server-owned embedding runtime for memory search.
+   *
+   * Use when the acting user is synthetic and should not read user key vaults.
+   */
+  memoryEmbeddingRuntime?: ToolExecutionMemoryEmbeddingRuntime;
   /** Memory tool permission from agent chat config */
   memoryToolPermission?: 'read-only' | 'read-write';
   /** Source user message ID used by Agent Signal procedure suppression. */
   messageId?: string;
   /** Agent runtime operation ID for structured tool outcome identity. */
   operationId?: string;
+  /**
+   * Project-level skills (name + absolute SKILL.md path) discovered on the
+   * device filesystem. Used by the Skills runtime to load them on demand via
+   * the device gateway. Derived from the operation's skill set.
+   */
+  projectSkills?: { location: string; name: string }[];
   /** Conversation scope captured when the operation was created */
   scope?: string | null;
   /** Server database for LobeHub Skills execution */
   serverDB?: LobeChatDatabase;
+  /** Skip low-level result truncation so the AgentRuntime boundary can archive full content first. */
+  skipResultTruncation?: boolean;
   /** Task ID when executing within the Task system */
   taskId?: string;
   /** Current thread ID for thread-scoped conversations */

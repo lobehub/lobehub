@@ -16,7 +16,7 @@ export const CreateDocumentInspector = memo<
   const { t } = useTranslation('plugin');
 
   const title = args?.title || partialArgs?.title;
-  const target = args?.target || partialArgs?.target;
+  const scope = args?.scope || partialArgs?.scope;
   const styles = inspectorChipStyles;
 
   if (isArgumentsStreaming && !title) {
@@ -37,11 +37,11 @@ export const CreateDocumentInspector = memo<
     >
       <span>{t('builtins.lobe-agent-documents.apiName.createDocument')}</span>
       {title && <span className={styles.chip}>{title}</span>}
-      {target && (
+      {scope && (
         <>
           <span className={styles.separator}>·</span>
           <span className={styles.subdued}>
-            {t(`builtins.lobe-agent-documents.inspector.target.${target}` as const)}
+            {t(`builtins.lobe-agent-documents.inspector.scope.${scope}` as const)}
           </span>
         </>
       )}

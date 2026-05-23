@@ -3,12 +3,17 @@ export enum RequestTrigger {
   Api = 'api',
   Bot = 'bot',
   Chat = 'chat',
+  Cli = 'cli',
   Cron = 'cron',
   Eval = 'eval',
   FileEmbedding = 'file_embedding',
   Image = 'image',
   Memory = 'memory',
+  Notify = 'notify',
+  Onboarding = 'onboarding',
+  Openapi = 'openapi',
   SemanticSearch = 'semantic_search',
+  SignupEmailLLMReview = 'signup_email_llm_review',
   Topic = 'topic',
   Video = 'video',
   VisualAnalysis = 'visual_analysis',
@@ -24,6 +29,15 @@ export const AgentRuntimeErrorType = {
    * stops fail-fast instead of letting the next step hit another FK violation.
    */
   ConversationParentMissing: 'ConversationParentMissing',
+  /**
+   * The tools array (count or serialized size) exceeds the provider/model
+   * limit configured in the model registry (maxToolCount / maxToolPayloadBytes).
+   * The harness caught this before dispatching to upstream, so no API call was
+   * wasted. The error payload carries diagnostic fields (provider, model,
+   * toolCount, maxToolCount, etc.) that the UI can use to surface actionable
+   * advice (reduce MCP servers / switch model).
+   */
+  ExceededToolLimit: 'ExceededToolLimit',
   LocationNotSupportError: 'LocationNotSupportError',
   /**
    * No model provider is configured / enabled for the requested model. Surfaces

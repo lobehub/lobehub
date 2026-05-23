@@ -227,6 +227,7 @@
   "providerModels.item.modelConfig.extendParams.options.gpt5_2ProReasoningEffort.hint": "GPT-5.2 Pro 시리즈용; 추론 강도를 제어합니다.",
   "providerModels.item.modelConfig.extendParams.options.gpt5_2ReasoningEffort.hint": "GPT-5.2 시리즈용; 추론 강도를 제어합니다.",
   "providerModels.item.modelConfig.extendParams.options.grok4_20ReasoningEffort.hint": "Grok 4.20 시리즈용; 추론 강도를 제어합니다. 낮음/중간은 4개의 에이전트를 사용하고, 높음/매우 높음은 16개의 에이전트를 사용합니다.",
+  "providerModels.item.modelConfig.extendParams.options.grok4_3ReasoningEffort.hint": "Grok 4.3 시리즈용; 추론 강도를 조절합니다.",
   "providerModels.item.modelConfig.extendParams.options.hy3ReasoningEffort.hint": "Hy3 모델용 옵션으로, 추론 강도를 조절합니다. no_think(초고속 응답), low(빠른 추론), high(깊은 추론) 등 다양한 지연 시간 및 깊이 요구 사항을 충족하기 위해 사용할 수 있습니다. 고빈도 상호작용부터 복잡한 엔지니어링 작업까지 폭넓게 활용할 수 있습니다.",
   "providerModels.item.modelConfig.extendParams.options.imageAspectRatio.hint": "Gemini 이미지 생성 모델용; 생성된 이미지의 가로세로 비율을 제어합니다.",
   "providerModels.item.modelConfig.extendParams.options.imageAspectRatio2.hint": "Nano Banana 2용; 생성된 이미지의 가로세로 비율을 제어합니다 (초광폭 1:4, 4:1, 1:8, 8:1 지원).",

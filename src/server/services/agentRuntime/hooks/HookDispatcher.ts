@@ -18,7 +18,7 @@ const log = debug('lobe-server:hook-dispatcher');
 /**
  * Delivers a webhook via HTTP POST (fetch or QStash)
  */
-async function deliverWebhook(
+export async function deliverWebhook(
   webhook: AgentHookWebhook,
   payload: Record<string, unknown>,
 ): Promise<void> {

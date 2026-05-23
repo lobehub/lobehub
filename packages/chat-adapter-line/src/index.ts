@@ -24,6 +24,7 @@ export type {
   LineMessage,
   LineMessageContentType,
   LineMessageEvent,
+  LineOutboundMessage,
   LinePushMessageRequest,
   LineSource,
   LineSourceType,

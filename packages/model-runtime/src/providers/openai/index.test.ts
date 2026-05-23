@@ -438,6 +438,19 @@ describe('LobeOpenAI', () => {
       expect(createCall.reasoning).toEqual({ effort: 'high', summary: 'auto' });
     });
 
+    it('should set reasoning.effort to high for gpt-5.4-pro models', async () => {
+      const payload = {
+        messages: [{ content: 'Hello', role: 'user' as const }],
+        model: 'gpt-5.4-pro',
+        temperature: 0.7,
+      };
+
+      await instance.chat(payload);
+
+      const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
+      expect(createCall.reasoning).toEqual({ effort: 'high', summary: 'auto' });
+    });
+
     it('should convert max_tokens to max_output_tokens for responses API', async () => {
       const payload = {
         max_tokens: 2048,

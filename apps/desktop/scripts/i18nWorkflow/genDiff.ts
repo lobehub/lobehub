@@ -13,7 +13,7 @@ import {
 import { readJSON, tagWhite, writeJSON } from './utils';
 
 export const genDiff = () => {
-  consola.start(`对比开发与生产环境中的本地化文件...`);
+  consola.start(`Comparing localization files between dev and prod environments...`);
 
   const resources = require(srcDefaultLocales);
   const data = Object.entries(resources.default);
@@ -21,7 +21,7 @@ export const genDiff = () => {
   for (const [ns, devJSON] of data) {
     const filepath = entryLocaleJsonFilepath(`${ns}.json`);
     if (!existsSync(filepath)) {
-      consola.info(`文件不存在，跳过：${filepath}`);
+      consola.info(`File does not exist, skipping: ${filepath}`);
       continue;
     }
 
@@ -50,7 +50,7 @@ export const genDiff = () => {
     }
 
     if (clearLocals.length > 0) {
-      consola.info('清理了以下语言的过期项目：', clearLocals.join(', '));
+      consola.info('Cleaned up stale entries for the following locales:', clearLocals.join(', '));
     }
     consola.success(tagWhite(ns), colors.gray(filepath));
   }

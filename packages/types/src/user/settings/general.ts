@@ -9,6 +9,7 @@ export type ContextMenuMode = 'disabled' | 'default';
 export interface UserGeneralConfig {
   animationMode?: AnimationMode;
   contextMenuMode?: ContextMenuMode;
+  costEstimateWarningThreshold?: number;
   /**
    * Whether to auto-scroll during AI streaming output
    * @default true

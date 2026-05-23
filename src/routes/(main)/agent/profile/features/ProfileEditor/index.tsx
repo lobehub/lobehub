@@ -1,40 +1,58 @@
 'use client';
 
+import { isDesktop } from '@lobechat/const';
+import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import { Flexbox } from '@lobehub/ui';
-import { Divider } from 'antd';
+import { Divider, Tabs } from 'antd';
 import isEqual from 'fast-deep-equal';
 import React, { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import ModelSelect from '@/features/ModelSelect';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
-import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
-import AgentCronJobs from '../AgentCronJobs';
 import AgentSettings from '../AgentSettings';
 import EditorCanvas from '../EditorCanvas';
 import AgentHeader from './AgentHeader';
 import AgentTool from './AgentTool';
+import CloudHeterogeneousConfig from './CloudHeterogeneousConfig';
 import HeterogeneousAgentStatusCard from './HeterogeneousAgentStatusCard';
+import RemoteAgentConfigCard from './RemoteAgentConfigCard';
 
 const ProfileEditor = memo(() => {
+  const { t } = useTranslation('setting');
   const config = useAgentStore(agentSelectors.currentAgentConfig, isEqual);
   const updateConfig = useAgentStore((s) => s.updateAgentConfig);
   const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
-  const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const heterogeneousProvider = config.agencyConfig?.heterogeneousProvider;
+
   const updateHeterogeneousCommand = async (command: string) => {
     if (!heterogeneousProvider) return;
-
     await updateConfig({
       agencyConfig: {
-        heterogeneousProvider: {
-          ...heterogeneousProvider,
-          command,
-        },
+        heterogeneousProvider: { ...heterogeneousProvider, command },
       },
     });
   };
+
+  const updateHeterogeneousEnv = async (env: Record<string, string>) => {
+    if (!heterogeneousProvider) return;
+    await updateConfig({
+      agencyConfig: {
+        heterogeneousProvider: { ...heterogeneousProvider, env },
+      },
+    });
+  };
+
+  const updateBoundDeviceId = async (boundDeviceId: string) => {
+    await updateConfig({ agencyConfig: { ...config.agencyConfig, boundDeviceId } });
+  };
+
+  const isRemoteHetero =
+    isHeterogeneous &&
+    !!heterogeneousProvider &&
+    isRemoteHeterogeneousType(heterogeneousProvider.type);
 
   return (
     <>
@@ -46,11 +64,42 @@ const ProfileEditor = memo(() => {
       >
         {/* Header: Avatar + Name + Description */}
         <AgentHeader />
-        {isHeterogeneous && heterogeneousProvider ? (
-          // Heterogeneous integration mode: show provider CLI status instead of model/skills pickers
-          <HeterogeneousAgentStatusCard
-            provider={heterogeneousProvider}
-            onCommandChange={updateHeterogeneousCommand}
+        {isRemoteHetero && heterogeneousProvider ? (
+          // Remote platform agents (openclaw / hermes): show device config panel
+          <Flexbox paddingBlock={'8px 0'}>
+            <RemoteAgentConfigCard
+              provider={heterogeneousProvider}
+              onBoundDeviceChange={updateBoundDeviceId}
+            />
+          </Flexbox>
+        ) : isHeterogeneous && heterogeneousProvider ? (
+          // Local CLI agents (claude-code, codex): tabs for cloud (web) and desktop environments
+          <Tabs
+            defaultActiveKey={isDesktop ? 'desktop' : 'cloud'}
+            size="small"
+            items={[
+              {
+                key: 'cloud',
+                label: t('heterogeneousStatus.cloud.tabLabel'),
+                children: (
+                  <CloudHeterogeneousConfig
+                    provider={heterogeneousProvider}
+                    onEnvChange={updateHeterogeneousEnv}
+                  />
+                ),
+              },
+              {
+                key: 'desktop',
+                label: t('heterogeneousStatus.desktop.tabLabel'),
+                disabled: !isDesktop,
+                children: (
+                  <HeterogeneousAgentStatusCard
+                    provider={heterogeneousProvider}
+                    onCommandChange={updateHeterogeneousCommand}
+                  />
+                ),
+              },
+            ]}
           />
         ) : (
           <>
@@ -79,8 +128,6 @@ const ProfileEditor = memo(() => {
       <Divider />
       {/* Main Content: Prompt Editor */}
       <EditorCanvas />
-      {/* Agent Cron Jobs Display (only show if jobs exist) */}
-      {enableBusinessFeatures && <AgentCronJobs />}
       {/* Advanced Settings Modal */}
       <AgentSettings />
     </>

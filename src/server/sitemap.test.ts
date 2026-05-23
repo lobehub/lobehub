@@ -1,14 +1,24 @@
 // @vitest-environment node
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { DiscoverService } from '@/server/services/discover';
 import { getCanonicalUrl } from '@/server/utils/url';
 
 import { LAST_MODIFIED, Sitemap, SitemapType } from './sitemap';
 
 const LOCALE_COUNT = 18;
 
+interface SitemapWithDiscoverService {
+  discoverService: Pick<DiscoverService, 'getModelIdentifiers'>;
+}
+
 describe('Sitemap', () => {
   const sitemap = new Sitemap();
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
 
   describe('getIndex', () => {
     it('should return a valid sitemap index with pagination', async () => {
@@ -36,6 +46,37 @@ describe('Sitemap', () => {
       expect(index).toContain(`<loc>${getCanonicalUrl('/sitemap/models-2.xml')}</loc>`);
 
       expect(index).toContain(`<lastmod>${LAST_MODIFIED}</lastmod>`);
+    });
+  });
+
+  describe('getModelPageCount', () => {
+    it('should clear the timeout after model identifiers resolve', async () => {
+      vi.useFakeTimers();
+
+      const isolatedSitemap = new Sitemap({ modelPageCountTimeoutMs: 15 * 60 * 1000 });
+      const isolatedSitemapWithService = isolatedSitemap as unknown as SitemapWithDiscoverService;
+      vi.spyOn(isolatedSitemapWithService.discoverService, 'getModelIdentifiers').mockResolvedValue(
+        [{ identifier: 'test-model', lastModified: LAST_MODIFIED }],
+      );
+
+      await expect(isolatedSitemap.getModelPageCount()).resolves.toBe(1);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('should not block sitemap generation when model identifiers never resolve', async () => {
+      vi.useFakeTimers();
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const isolatedSitemap = new Sitemap({ modelPageCountTimeoutMs: 100 });
+      const isolatedSitemapWithService = isolatedSitemap as unknown as SitemapWithDiscoverService;
+      vi.spyOn(isolatedSitemapWithService.discoverService, 'getModelIdentifiers').mockReturnValue(
+        new Promise(() => {}),
+      );
+
+      const pageCountPromise = isolatedSitemap.getModelPageCount();
+      await vi.advanceTimersByTimeAsync(100);
+
+      await expect(pageCountPromise).resolves.toBe(0);
     });
   });
 
@@ -271,6 +312,15 @@ describe('Sitemap', () => {
 
       const pageCount = await sitemap.getModelPageCount();
       expect(pageCount).toBe(2); // 120 items / 100 per page = ceil(1.2) = 2 pages
+    });
+
+    it('should skip model sitemap pagination when model identifiers are unavailable', async () => {
+      const isolatedSitemap = new Sitemap();
+      vi.spyOn(isolatedSitemap['discoverService'], 'getModelIdentifiers').mockRejectedValue(
+        new Error('model config unavailable'),
+      );
+
+      await expect(isolatedSitemap.getModelPageCount()).resolves.toBe(0);
     });
   });
 

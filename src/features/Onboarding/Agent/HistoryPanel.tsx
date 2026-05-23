@@ -9,9 +9,9 @@ import type { ChatTopic } from '@/types/topic';
 import { getOnboardingHistoryTopics } from './history';
 
 interface HistoryPanelProps {
-  activeTopicId: string;
+  activeTopicId?: string;
   onSelectTopic: (topicId: string) => void;
-  selectedTopicId: string;
+  selectedTopicId?: string;
   topics: ChatTopic[];
 }
 

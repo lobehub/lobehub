@@ -28,22 +28,11 @@ class FollowUpActionStoreResetAction implements ResetableStore {
   }
 
   reset = () => {
-    // Cancel any in-flight LLM call before wiping state, otherwise the AbortController is leaked.
     const current = this.#api.getState();
-    current.abortController?.abort();
-    // Explicitly include undefined fields so zustand's merge-mode setState clears them.
-    this.#set(
-      {
-        abortController: undefined,
-        chips: [],
-        messageId: undefined,
-        pendingTopicId: undefined,
-        status: 'idle',
-        topicId: undefined,
-      },
-      false,
-      'resetFollowUpActionStore',
-    );
+    for (const slot of Object.values(current.slots)) {
+      slot.abortController?.abort();
+    }
+    this.#set({ slots: {} }, false, 'resetFollowUpActionStore');
   };
 }
 

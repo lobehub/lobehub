@@ -1,7 +1,7 @@
 import { type PropsWithChildren } from 'react';
 import { SWRConfig } from 'swr';
 
-// 全局的 SWR 配置
+// Global SWR configuration
 const swrConfig = {
   provider: () => new Map(),
 };
@@ -11,11 +11,11 @@ export const withSWR = ({ children }: PropsWithChildren) => (
 );
 
 interface TestServiceOptions {
-  /** 是否检查 async */
+  /** Whether to check async */
   checkAsync?: boolean;
-  /** 自定义的额外检查 */
+  /** Custom additional checks */
   extraChecks?: (method: string, func: () => any) => void;
-  /** 是否跳过某些方法 */
+  /** Whether to skip certain methods */
   skipMethods?: string[];
 }
 
@@ -34,20 +34,20 @@ export const testService = (ServiceClass: new () => any, options: TestServiceOpt
 
       methods.forEach((method) => {
         const func = service[method];
-        // 检查是否为函数
+        // Check if it's a function
         expect(typeof func).toBe('function');
 
         const funcString = func.toString();
 
-        // 验证是否是箭头函数
+        // Verify if it's an arrow function
         expect(funcString).toContain('=>');
 
-        // 可选的 async 检查
+        // Optional async check
         if (checkAsync) {
           expect(funcString).toMatch(/^async.*=>/);
         }
 
-        // 运行额外的自定义检查
+        // Run additional custom checks
         if (extraChecks) {
           extraChecks(method, func);
         }

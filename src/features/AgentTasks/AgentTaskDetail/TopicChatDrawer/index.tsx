@@ -2,16 +2,24 @@
 
 import type { ConversationContext } from '@lobechat/types';
 import type { DropdownItem } from '@lobehub/ui';
-import { ActionIcon, copyToClipboard, Drawer, DropdownMenu, Flexbox, Text } from '@lobehub/ui';
+import {
+  ActionIcon,
+  copyToClipboard,
+  Drawer,
+  DropdownMenu,
+  Flexbox,
+  Freeze,
+  Text,
+} from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { Copy, MoreHorizontal, Share2 } from 'lucide-react';
-import dynamic from 'next/dynamic';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ChatList, ConversationProvider, MessageItem } from '@/features/Conversation';
 import { TaskCardScopeProvider } from '@/features/Conversation/Markdown/plugins/Task';
 import { useShareModal } from '@/features/ShareModal';
+import { LazySharePopover as SharePopover } from '@/features/SharePopover/lazy';
 import { useGatewayReconnect } from '@/hooks/useGatewayReconnect';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useAgentStore } from '@/store/agent';
@@ -26,8 +34,6 @@ import { authSelectors } from '@/store/user/selectors';
 
 import TopicStatusIcon from '../TopicStatusIcon';
 import FeedbackInput from './FeedbackInput';
-
-const SharePopover = dynamic(() => import('@/features/SharePopover'));
 
 interface TopicChatDrawerBodyProps {
   agentId: string;
@@ -150,14 +156,14 @@ const TopicChatDrawer = memo(() => {
         disabled: !topicId,
         icon: Copy,
         key: 'copyTopicId',
-        label: t('taskDetail.topicMenu.copyId', { defaultValue: 'Copy topic ID' }),
+        label: t('taskDetail.topicMenu.copyId', { defaultValue: 'Copy Topic ID' }),
         onClick: handleCopyTopicId,
       },
       {
         disabled: !activity?.operationId,
         icon: Copy,
         key: 'copyOperationId',
-        label: t('taskDetail.topicMenu.copyOperationId', { defaultValue: 'Copy operation ID' }),
+        label: t('taskDetail.topicMenu.copyOperationId', { defaultValue: 'Copy Operation ID' }),
         onClick: handleCopyOperationId,
       },
     ],
@@ -200,17 +206,20 @@ const TopicChatDrawer = memo(() => {
     )
   ) : null;
 
+  // Freeze title/extra/body during the close animation so the drawer keeps
+  // its last rendered state instead of flashing to the empty/"untitled" view
+  // while topicId/agentId clear.
   return (
     <Drawer
       destroyOnHidden
       containerMaxWidth={'auto'}
-      extra={extra}
+      extra={<Freeze frozen={!open}>{extra}</Freeze>}
       getContainer={false}
       mask={false}
       open={open}
       placement={'right'}
       push={false}
-      title={title}
+      title={<Freeze frozen={!open}>{title}</Freeze>}
       width={640}
       styles={{
         body: { padding: 0 },
@@ -228,9 +237,11 @@ const TopicChatDrawer = memo(() => {
       }}
       onClose={closeTopicDrawer}
     >
-      {open && activeTaskId && (
-        <TopicChatDrawerBody agentId={agentId!} taskId={activeTaskId} topicId={topicId!} />
-      )}
+      <Freeze frozen={!open}>
+        {open && activeTaskId && (
+          <TopicChatDrawerBody agentId={agentId!} taskId={activeTaskId} topicId={topicId!} />
+        )}
+      </Freeze>
     </Drawer>
   );
 });
