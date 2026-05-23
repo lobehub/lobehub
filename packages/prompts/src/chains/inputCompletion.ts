@@ -6,7 +6,7 @@ import type { OpenAIChatMessage } from '@lobechat/types';
  * groups runs by prompt iteration. The 6-char prompt hash on the row catches
  * forgotten bumps.
  */
-export const INPUT_COMPLETION_PROMPT_VERSION = 'v2.0';
+export const INPUT_COMPLETION_PROMPT_VERSION = 'v1.0';
 
 /**
  * Symbolic schema name — also recorded on the tracing row's `schemaName`
