@@ -17,7 +17,7 @@ export interface AppendStepParams {
   beforeStepSignalEvents: SignalEvent[];
   /**
    * Context engine input/output captured for this step. Delivered via
-   * `RuntimeExecutorContext.recordContextEngine` rather than through the
+   * `RuntimeExecutorContext.tracingContextEngine` rather than through the
    * `events` array, so CE payloads (agentDocuments, systemRole, …) stay out
    * of the Redis state pipeline. See LOBE-9110.
    */
@@ -247,8 +247,8 @@ export class OperationTraceRecorder {
 
     // CE data is structural state, not a streaming event — delivered via the
     // typed `contextEngine` field on AppendStepParams (sourced from
-    // RuntimeExecutorContext.recordContextEngine). Uses the same delta pattern
-    // as messagesBaseline/messagesDelta.
+    // RuntimeExecutorContext.tracingContextEngine). Uses the same delta
+    // pattern as messagesBaseline/messagesDelta.
     const contextEngine: StepSnapshot['contextEngine'] = ceInput
       ? { input: ceInput.input, output: ceInput.output }
       : undefined;

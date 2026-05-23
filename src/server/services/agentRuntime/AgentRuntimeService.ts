@@ -623,7 +623,7 @@ export class AgentRuntimeService {
       }
 
       // Per-step buffer for context engine input/output. Populated by the
-      // `recordContextEngine` callback passed into the executor context;
+      // `tracingContextEngine` callback passed into the executor context;
       // consumed by traceRecorder.appendStep below. Routing CE this way keeps
       // its heavy payload (agentDocuments, systemRole, …) out of
       // `stepResult.events` and therefore out of the Redis state pipeline.
@@ -636,10 +636,10 @@ export class AgentRuntimeService {
       const { runtime } = await this.createAgentRuntime({
         metadata: agentState?.metadata,
         operationId,
-        recordContextEngine: (input, output) => {
+        stepIndex,
+        tracingContextEngine: (input, output) => {
           contextEnginePayload = { input, output };
         },
-        stepIndex,
       });
 
       // Handle human intervention
@@ -1348,13 +1348,13 @@ export class AgentRuntimeService {
   private async createAgentRuntime({
     metadata,
     operationId,
-    recordContextEngine,
     stepIndex,
+    tracingContextEngine,
   }: {
     metadata?: any;
     operationId: string;
-    recordContextEngine?: (input: unknown, output: unknown) => void;
     stepIndex: number;
+    tracingContextEngine?: (input: unknown, output: unknown) => void;
   }) {
     const contextWindowTokens =
       metadata?.modelRuntimeConfig?.model && metadata?.modelRuntimeConfig?.provider
@@ -1394,13 +1394,13 @@ export class AgentRuntimeService {
       loadAgentState: this.coordinator.loadAgentState.bind(this.coordinator),
       messageModel: this.messageModel,
       operationId,
-      recordContextEngine,
       serverDB: this.serverDB,
       stepIndex,
       stream: metadata?.stream,
       streamManager: this.streamManager,
       toolExecutionService: this.toolExecutionService,
       topicId: metadata?.topicId,
+      tracingContextEngine,
       userId: metadata?.userId,
     };
 
