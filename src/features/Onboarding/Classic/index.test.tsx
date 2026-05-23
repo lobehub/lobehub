@@ -6,6 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import ClassicOnboardingPage from './index';
 
+const metrics = vi.hoisted(() => ({
+  trackOnboardingStepCompleted: vi.fn(),
+  trackOnboardingStepViewed: vi.fn(),
+}));
+
 const mocks = vi.hoisted(() => ({
   commonStepsCompleted: true,
   currentStep: 1,
@@ -89,6 +94,11 @@ vi.mock('@/routes/onboarding/features/ProSettingsStep', () => ({
   ),
 }));
 
+vi.mock('@/services/onboardingMetrics', () => ({
+  trackOnboardingStepCompleted: metrics.trackOnboardingStepCompleted,
+  trackOnboardingStepViewed: metrics.trackOnboardingStepViewed,
+}));
+
 vi.mock('@/store/serverConfig', () => ({
   serverConfigSelectors: {
     enableKlavis: (s: { serverConfig: { enableKlavis?: boolean } }) =>
@@ -144,6 +154,8 @@ beforeEach(() => {
   mocks.goToPreviousStep.mockReset();
   mocks.isUserStateInit = true;
   mocks.serverConfigInit = true;
+  metrics.trackOnboardingStepCompleted.mockReset();
+  metrics.trackOnboardingStepViewed.mockReset();
 });
 
 afterEach(() => {
@@ -151,6 +163,30 @@ afterEach(() => {
 });
 
 describe('ClassicOnboardingPage', () => {
+  it('tracks the current classic step view', async () => {
+    renderClassic();
+
+    await waitFor(() =>
+      expect(metrics.trackOnboardingStepViewed).toHaveBeenCalledWith({
+        flow: 'classic',
+        step: 'fullname',
+        stepIndex: 1,
+      }),
+    );
+  });
+
+  it('tracks FullName completion before moving forward', () => {
+    renderClassic();
+    fireEvent.click(screen.getByText('full-name-next'));
+
+    expect(metrics.trackOnboardingStepCompleted).toHaveBeenCalledWith({
+      flow: 'classic',
+      step: 'fullname',
+      stepIndex: 1,
+    });
+    expect(mocks.goToNextStep).toHaveBeenCalledTimes(1);
+  });
+
   it('skips ProSettings when moving forward from interests without Klavis', () => {
     mocks.currentStep = 2;
     mocks.enableKlavis = false;
@@ -158,6 +194,12 @@ describe('ClassicOnboardingPage', () => {
     renderClassic();
     fireEvent.click(screen.getByText('interests-next'));
 
+    expect(metrics.trackOnboardingStepCompleted).toHaveBeenCalledWith({
+      flow: 'classic',
+      skippedNextStep: 'prosettings',
+      step: 'interests',
+      stepIndex: 2,
+    });
     expect(mocks.goToNextStep).toHaveBeenCalledTimes(2);
   });
 
@@ -200,6 +242,13 @@ describe('ClassicOnboardingPage', () => {
     renderClassic();
 
     await waitFor(() => expect(mocks.goToNextStep).toHaveBeenCalledTimes(1));
+    expect(metrics.trackOnboardingStepCompleted).toHaveBeenCalledWith({
+      action: 'auto_skip',
+      flow: 'classic',
+      skipped: true,
+      step: 'prosettings',
+      stepIndex: 3,
+    });
     expect(screen.queryByText('ProSettingsStep')).not.toBeInTheDocument();
   });
 
@@ -222,6 +271,11 @@ describe('ClassicOnboardingPage', () => {
     fireEvent.click(screen.getByText('pro-next'));
 
     expect(screen.getByText('ProSettingsStep')).toBeInTheDocument();
+    expect(metrics.trackOnboardingStepCompleted).toHaveBeenCalledWith({
+      flow: 'classic',
+      step: 'prosettings',
+      stepIndex: 3,
+    });
     expect(mocks.goToNextStep).toHaveBeenCalled();
   });
 });
