@@ -223,7 +223,6 @@ interface IStructureSchema {
 }
 
 export interface StructureOutputParams {
-  keyVaultsPayload: string;
   messages: OpenAIChatMessage[];
   /**
    * Per-call metadata propagated to `ModelRuntime.generateObject` options.

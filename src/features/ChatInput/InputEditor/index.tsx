@@ -229,9 +229,6 @@ const InputEditor = memo<{
       try {
         response = (await aiChatService.generateJSON(
           {
-            // keyVaultsPayload is server-resolved from the user's DB config;
-            // the client doesn't fill it for this trpc-backed call.
-            keyVaultsPayload: '',
             messages,
             metadata: {
               promptVersion: INPUT_COMPLETION_PROMPT_VERSION,

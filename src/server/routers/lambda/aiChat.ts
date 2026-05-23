@@ -11,9 +11,9 @@ import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { resolveContext } from '@/server/routers/lambda/_helpers/resolveContext';
 import { AiChatService } from '@/server/services/aiChat';
+import { AiGenerationService } from '@/server/services/aiGeneration';
 import { FileService } from '@/server/services/file';
 import { archiveToolResultIfNeeded } from '@/server/services/toolExecution/archiveToolResult';
 
@@ -43,18 +43,15 @@ export const aiChatRouter = router({
     log('messages count: %d', input.messages.length);
     log('schema: %O', input.schema);
 
-    log('initializing model runtime from DB with provider: %s', input.provider);
-    // Read user's provider config from database
-    const modelRuntime = await initModelRuntimeFromDB(ctx.serverDB, ctx.userId, input.provider);
-
-    log('calling generateObject');
     // Caller-supplied metadata wins (scenario / promptVersion / schemaName) but
     // we always stamp a trigger so tracing rows don't lose their scenario when
     // the caller forgets to set one.
-    const result = await modelRuntime.generateObject(
+    const ai = new AiGenerationService(ctx.serverDB, ctx.userId);
+    const result = await ai.generateObject(
       {
         messages: input.messages,
         model: input.model,
+        provider: input.provider,
         schema: input.schema,
         tools: input.tools,
       },

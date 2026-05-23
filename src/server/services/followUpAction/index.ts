@@ -2,7 +2,7 @@ import type { FollowUpChip, FollowUpExtractInput, FollowUpExtractResult } from '
 import debug from 'debug';
 
 import type { LobeChatDatabase } from '@/database/type';
-import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { AiGenerationService } from '@/server/services/aiGeneration';
 
 import { buildSuggestionPrompt, FOLLOW_UP_PROMPT_VERSION } from './prompts';
 import { RawResponseSchema, SUGGESTION_RESPONSE_JSON_SCHEMA } from './schema';
@@ -52,16 +52,17 @@ export class FollowUpActionService {
     const { system, user } = buildSuggestionPrompt({ assistantText: text, hint });
     const { model, provider } = modelConfig;
 
+    const ai = new AiGenerationService(this.db, this.userId);
     let raw: unknown;
     try {
-      const modelRuntime = await initModelRuntimeFromDB(this.db, this.userId, provider);
-      raw = await modelRuntime.generateObject(
+      raw = await ai.generateObject(
         {
           messages: [
             { content: system, role: 'system' as const },
             { content: user, role: 'user' as const },
           ],
           model,
+          provider,
           schema: SUGGESTION_RESPONSE_JSON_SCHEMA,
         },
         {
