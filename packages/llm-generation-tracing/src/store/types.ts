@@ -1,8 +1,13 @@
 import type { TracingPayload, TracingSummary } from '../types';
 
 export interface SaveResult {
-  /** Storage key (S3 object key or local file path) for the saved payload. */
-  key: string;
+  /**
+   * Canonical, globally addressable key for the saved payload (e.g. an S3
+   * object key). `null` when the payload was persisted only to a local /
+   * non-shareable location — the service should then leave `storage_key`
+   * empty in the DB rather than record a path no other process can resolve.
+   */
+  key: string | null;
 }
 
 export interface ITracingStore {

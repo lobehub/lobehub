@@ -36,7 +36,9 @@ export class FileTracingStore implements ITracingStore {
     await fs.writeFile(filePath, JSON.stringify(record, null, 2), 'utf8');
     await this.updateLatestSymlink(filePath);
 
-    return { key: path.relative(this.root, filePath) };
+    // Local-only path — return null so the DB row's `storage_key` stays empty.
+    // The CLI rediscovers files by walking `.llm-generation-tracing/`.
+    return { key: null };
   }
 
   async get(key: string): Promise<TracingPayload | null> {
@@ -49,16 +51,18 @@ export class FileTracingStore implements ITracingStore {
     }
   }
 
-  async list(options?: { limit?: number }): Promise<TracingSummary[]> {
+  async list(options?: { limit?: number; scenario?: string }): Promise<TracingSummary[]> {
     const limit = options?.limit ?? 20;
     const files = await this.collectFiles();
     files.sort((a, b) => (a.filename < b.filename ? 1 : -1));
 
     const summaries: TracingSummary[] = [];
-    for (const file of files.slice(0, limit)) {
+    for (const file of files) {
+      if (summaries.length >= limit) break;
       try {
         const content = await fs.readFile(file.fullPath, 'utf8');
         const record = JSON.parse(content) as TracingPayload;
+        if (options?.scenario && record.scenario !== options.scenario) continue;
         summaries.push({
           created_at: record.created_at,
           model: record.model_metadata?.model,
@@ -73,6 +77,46 @@ export class FileTracingStore implements ITracingStore {
       }
     }
     return summaries;
+  }
+
+  /**
+   * CLI helper: find a payload by tracing_id prefix. Returns the most-recent
+   * match when several rows share the same prefix (e.g. truncated short id).
+   */
+  async findByTracingId(prefix: string): Promise<TracingPayload | null> {
+    const files = await this.collectFiles();
+    files.sort((a, b) => (a.filename < b.filename ? 1 : -1));
+    for (const file of files) {
+      try {
+        const content = await fs.readFile(file.fullPath, 'utf8');
+        const record = JSON.parse(content) as TracingPayload;
+        if (record.tracing_id.startsWith(prefix)) return record;
+      } catch {
+        // skip corrupted files
+      }
+    }
+    return null;
+  }
+
+  /** CLI helper: resolve the `latest.json` symlink (or fall back to the newest file). */
+  async getLatest(): Promise<TracingPayload | null> {
+    const latestPath = path.join(this.root, 'latest.json');
+    try {
+      const real = await fs.realpath(latestPath);
+      const content = await fs.readFile(real, 'utf8');
+      return JSON.parse(content) as TracingPayload;
+    } catch {
+      // symlink missing or unreadable — fall back to newest by filename order
+    }
+    const files = await this.collectFiles();
+    if (files.length === 0) return null;
+    files.sort((a, b) => (a.filename < b.filename ? 1 : -1));
+    try {
+      const content = await fs.readFile(files[0].fullPath, 'utf8');
+      return JSON.parse(content) as TracingPayload;
+    } catch {
+      return null;
+    }
   }
 
   private bucketDir(record: TracingPayload): string {

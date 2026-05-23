@@ -24,6 +24,7 @@ import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
 import { aiChatService } from '@/services/aiChat';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
+import { useChatStore } from '@/store/chat';
 import { useUserStore } from '@/store/user';
 import {
   labPreferSelectors,
@@ -225,15 +226,19 @@ const InputEditor = memo<{
       const abortController = new AbortController();
       abortSignal.addEventListener('abort', () => abortController.abort());
 
+      const currentTopicId = useChatStore.getState().activeTopicId;
+
       let response: { completion?: string } | null;
       try {
         response = (await aiChatService.generateJSON(
           {
             messages,
             metadata: {
+              agentId,
               promptVersion: INPUT_COMPLETION_PROMPT_VERSION,
               scenario: TRACING_SCENARIOS.InputCompletion,
               schemaName: INPUT_COMPLETION_SCHEMA_NAME,
+              topicId: currentTopicId,
             },
             model: config.model,
             provider: config.provider,
@@ -250,7 +255,7 @@ const InputEditor = memo<{
       const completion = response?.completion?.trimEnd();
       return completion || null;
     },
-    [isComposingRef],
+    [isComposingRef, agentId],
   );
 
   const autoCompletePlugin = useMemo(

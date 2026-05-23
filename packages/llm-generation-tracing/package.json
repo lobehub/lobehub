@@ -7,7 +7,12 @@
     "./store": "./src/store/types.ts"
   },
   "main": "./src/index.ts",
+  "bin": {
+    "llm-tracing": "./src/cli/index.ts",
+    "lt": "./src/cli/index.ts"
+  },
   "dependencies": {
-    "@lobechat/const": "workspace:*"
+    "@lobechat/const": "workspace:*",
+    "commander": "^13.1.0"
   }
 }

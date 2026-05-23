@@ -28,12 +28,13 @@ afterEach(async () => {
 });
 
 describe('FileTracingStore', () => {
-  it('writes payloads under {scenario}/{promptVersion}-{promptHash}/', async () => {
+  it('writes payloads under {scenario}/{promptVersion}-{promptHash}/ and returns a null key (local-only)', async () => {
     const store = new FileTracingStore(tmpRoot);
     const payload = makePayload();
 
     const { key } = await store.save(payload);
-    expect(key).toMatch(/^home_brief\/v1\.0-abcdef\//);
+    // Local store is non-shareable — DB should leave `storage_key` empty.
+    expect(key).toBeNull();
 
     const dir = path.join(tmpRoot, DEFAULT_DIR, 'home_brief', 'v1.0-abcdef');
     const entries = await fs.readdir(dir);
@@ -89,15 +90,18 @@ describe('FileTracingStore', () => {
     expect(summaries.map((s) => s.tracing_id)).toEqual(['bbbb', 'aaaa']);
   });
 
-  it('round-trips a payload via get()', async () => {
+  it('round-trips a payload via get() using the on-disk file path', async () => {
     const store = new FileTracingStore(tmpRoot);
     const payload = makePayload({
       input: { messages: [{ content: 'hi', role: 'user' }] },
       output: { topic: 'greeting' },
     });
-    const { key } = await store.save(payload);
+    await store.save(payload);
 
-    const loaded = await store.get(key);
+    // save() returns a null key, so locate the file on disk and read via its path.
+    const dir = path.join(tmpRoot, DEFAULT_DIR, 'home_brief', 'v1.0-abcdef');
+    const jsonFile = (await fs.readdir(dir)).find((f) => f.endsWith('.json'));
+    const loaded = await store.get(path.join(dir, jsonFile));
     expect(loaded).toMatchObject({
       input: { messages: [{ content: 'hi', role: 'user' }] },
       output: { topic: 'greeting' },

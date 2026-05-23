@@ -18,9 +18,9 @@ vi.mock('@/database/server', () => ({ getServerDB: async () => serverDB }));
 const userId = 'llm-gen-trace-svc-user';
 
 const stubStore: ITracingStore & {
-  save: ReturnType<typeof vi.fn<(record: TracingPayload) => Promise<{ key: string }>>>;
+  save: ReturnType<typeof vi.fn<(record: TracingPayload) => Promise<{ key: string | null }>>>;
 } = {
-  save: vi.fn<(record: TracingPayload) => Promise<{ key: string }>>(async () => ({
+  save: vi.fn<(record: TracingPayload) => Promise<{ key: string | null }>>(async () => ({
     key: 'memo://saved',
   })),
 };
@@ -114,6 +114,25 @@ describe('LLMGenerationTracingService.record', () => {
       caller: 'home_brief_handler',
       store_error: 'S3 5xx',
     });
+  });
+
+  it('leaves storage_key null when the store reports a local-only save (key=null)', async () => {
+    stubStore.save.mockResolvedValueOnce({ key: null });
+    const service = new LLMGenerationTracingService(stubStore);
+
+    const result = await service.record({
+      promptHash: 'eeeeee',
+      promptVersion: 'v1.0',
+      scenario: 'home_brief',
+      success: true,
+      userId,
+    });
+
+    const [row] = await serverDB
+      .select()
+      .from(llmGenerationTracing)
+      .where(eq(llmGenerationTracing.id, result!.tracingId));
+    expect(row?.storageKey).toBeNull();
   });
 
   it('returns null and skips everything when no store is configured', async () => {

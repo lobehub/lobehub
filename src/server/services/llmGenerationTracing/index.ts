@@ -208,10 +208,7 @@ const createDefaultStore = (): ITracingStore | null => {
     }
   }
 
-  if (
-    process.env.NODE_ENV === 'development' ||
-    process.env.ENABLE_LLM_GENERATION_TRACING_LOCAL === '1'
-  ) {
+  if (process.env.NODE_ENV === 'development') {
     try {
       return new FileTracingStore();
     } catch {
