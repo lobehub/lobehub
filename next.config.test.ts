@@ -19,11 +19,11 @@ describe('next.config', () => {
     }
   });
 
-  it('should cap turbopack memory for vercel builds', async () => {
+  it('should not add turbopack-only memory config for vercel webpack builds', async () => {
     process.env.VERCEL_ENV = 'production';
 
     const { default: config } = await import('./next.config');
 
-    expect(config.experimental?.turbopackMemoryLimit).toBe(2 * 1024 * 1024 * 1024);
+    expect(config.experimental?.turbopackMemoryLimit).toBeUndefined();
   });
 });

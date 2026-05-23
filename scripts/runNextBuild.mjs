@@ -3,9 +3,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
-export const TURBOPACK_VERCEL_MAX_OLD_SPACE_SIZE_MB = 2048;
-export const TURBOPACK_VERCEL_PARALLEL = '0';
-export const TURBOPACK_VERCEL_DEBUG_FLAGS = ['--debug', '--experimental-debug-memory-usage'];
+export const WEBPACK_VERCEL_MAX_OLD_SPACE_SIZE_MB = 6144;
 export const VERCEL_BUILD_SYSTEM_REPORT = '1';
 export const LOBE_BUILD_DIAGNOSTICS = '1';
 export const BUILD_RSS_SAMPLING_INTERVAL_MS = 30_000;
@@ -137,7 +135,7 @@ function getProcessTreeSnapshot(rootPid) {
 }
 
 export function getVercelNodeOptions(nodeOptions = '') {
-  const maxOldSpaceSizeOption = `--max-old-space-size=${TURBOPACK_VERCEL_MAX_OLD_SPACE_SIZE_MB}`;
+  const maxOldSpaceSizeOption = `--max-old-space-size=${WEBPACK_VERCEL_MAX_OLD_SPACE_SIZE_MB}`;
 
   if (!nodeOptions.trim()) return maxOldSpaceSizeOption;
 
@@ -151,12 +149,7 @@ export function getVercelNodeOptions(nodeOptions = '') {
 export function getNextBuildArgs(extraArgs = [], isVercel = Boolean(process.env.VERCEL_ENV)) {
   const args = ['build'];
 
-  if (isVercel) {
-    args.push('--turbopack');
-    args.push(...TURBOPACK_VERCEL_DEBUG_FLAGS);
-  }
-
-  return [...args, ...extraArgs];
+  return isVercel ? [...args, ...extraArgs] : [...args, ...extraArgs];
 }
 
 export function getVercelBuildEnv(env = process.env) {
@@ -164,7 +157,6 @@ export function getVercelBuildEnv(env = process.env) {
     ...env,
     LOBE_BUILD_DIAGNOSTICS: env.LOBE_BUILD_DIAGNOSTICS ?? LOBE_BUILD_DIAGNOSTICS,
     NODE_OPTIONS: getVercelNodeOptions(env.NODE_OPTIONS),
-    TURBOPACK_PARALLEL: env.TURBOPACK_PARALLEL ?? TURBOPACK_VERCEL_PARALLEL,
     VERCEL_BUILD_SYSTEM_REPORT: env.VERCEL_BUILD_SYSTEM_REPORT ?? VERCEL_BUILD_SYSTEM_REPORT,
   };
 }
@@ -185,7 +177,6 @@ export function runNextBuild({
       ? {
           LOBE_BUILD_DIAGNOSTICS: childEnv.LOBE_BUILD_DIAGNOSTICS,
           NODE_OPTIONS: childEnv.NODE_OPTIONS,
-          TURBOPACK_PARALLEL: childEnv.TURBOPACK_PARALLEL,
           VERCEL_ENV: env.VERCEL_ENV,
         }
       : {
