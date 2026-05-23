@@ -172,35 +172,24 @@ export default class GatewayConnectionCtr extends ControllerModule {
     request: AgentRunRequestMessage,
   ): Promise<{ reason?: string; status: 'accepted' | 'rejected' }> {
     try {
-      const ctr = this.heterogeneousAgentCtr;
+      const serverUrl = await this.remoteServerConfigCtr.getRemoteServerUrl();
+      if (!serverUrl) {
+        return { reason: 'Remote server URL not configured', status: 'rejected' };
+      }
 
-      // Map agentType to binary name.
-      // claude-code → `claude` CLI; all other platforms use their type name as the binary.
-      const command = request.agentType === 'claude-code' ? 'claude' : request.agentType;
-
-      // Create a session for the hetero agent.
-      const { sessionId } = await ctr.startSession({
+      // Fire-and-forget: lh hetero exec handles spawn -> adapt ->
+      // BatchIngester -> heteroIngest/heteroFinish -> server -> Gateway -> clients.
+      // Same command as spawnHeteroSandbox() on the server side.
+      this.heterogeneousAgentCtr.spawnLhHeteroExec({
         agentType: request.agentType,
-        args: [],
-        command,
         cwd: request.cwd,
-        // Inject LOBEHUB_JWT so the CLI authenticates against heteroIngest.
-        env: { LOBEHUB_JWT: request.jwt },
+        jwt: request.jwt,
+        operationId: request.operationId,
+        prompt: request.prompt,
         resumeSessionId: request.resumeSessionId,
+        serverUrl,
+        topicId: request.topicId,
       });
-
-      // Fire-and-forget: sendPrompt runs the CLI until completion.
-      ctr
-        .sendPrompt({
-          operationId: request.operationId,
-          prompt: request.prompt,
-          sessionId,
-        })
-        .catch((err: Error) => {
-          // Errors are surfaced via heteroFinish on the server side.
-          // Log locally for desktop debugging only.
-          console.error('[GatewayConnectionCtr] agent run failed:', err.message);
-        });
 
       return { status: 'accepted' };
     } catch (err) {
