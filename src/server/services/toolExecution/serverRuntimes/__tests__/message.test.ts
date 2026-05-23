@@ -14,7 +14,7 @@ vi.mock('@/database/models/agentBotProvider', () => ({
 }));
 
 // ── System Bot model mocks ──────────────────────────────
-// The `botProvider.*` System Bot methods (added in LOBE-9288) talk directly
+// The `botProvider.*` System Bot methods (added in ) talk directly
 // to these models instead of going through the messenger TRPC router, so
 // the test must stub them at module boundary. Each mock returns a `vi.fn()`
 // the individual test can `mockResolvedValueOnce` against.
@@ -424,7 +424,7 @@ describe('messageRuntime', () => {
     });
   });
 
-  // ==================== System Bot management (LOBE-9288) ====================
+  // ==================== System Bot management () ====================
   // Each test exercises both layers in one shot:
   //  1. `botProvider.<method>` in `src/server/services/toolExecution/serverRuntimes/message/index.ts`
   //  2. `MessageExecutionRuntime.<method>` formatting in

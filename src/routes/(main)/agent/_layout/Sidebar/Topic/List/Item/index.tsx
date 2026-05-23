@@ -73,7 +73,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 // Module-scoped so a click on any topic cancels a pending click on another.
 // Per-item refs can't do that, which lets rapid clicks across items all
-// fire — each racing to write activeTopicId (see LOBE-7785).
+// fire — each racing to write activeTopicId (see ).
 let pendingSingleClickTimer: ReturnType<typeof setTimeout> | null = null;
 
 const cancelPendingSingleClick = () => {

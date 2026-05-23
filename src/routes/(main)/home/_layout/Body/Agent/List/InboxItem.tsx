@@ -14,7 +14,6 @@ import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
-import { prefetchRoute } from '@/utils/router';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   runningBadge: css`
@@ -61,7 +60,6 @@ const InboxItem = memo<InboxItemProps>(({ className, style }) => {
   const inboxUrl = SESSION_CHAT_URL(inboxAgentId, false);
 
   // Prefetch agent layout chunk and data eagerly since Lobe AI is almost always clicked
-  prefetchRoute(inboxUrl);
   prefetchAgent(inboxAgentId!);
 
   const avatarNode = (

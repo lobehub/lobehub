@@ -1,10 +1,12 @@
+import { TRACING_SCENARIOS } from '@lobechat/const';
+import type { TracingOptions } from '@lobechat/llm-generation-tracing';
 import type { FollowUpChip, FollowUpExtractInput, FollowUpExtractResult } from '@lobechat/types';
 import debug from 'debug';
 
 import type { LobeChatDatabase } from '@/database/type';
-import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { AiGenerationService } from '@/server/services/aiGeneration';
 
-import { buildSuggestionPrompt } from './prompts';
+import { buildSuggestionPrompt, FOLLOW_UP_PROMPT_VERSION } from './prompts';
 import { RawResponseSchema, SUGGESTION_RESPONSE_JSON_SCHEMA } from './schema';
 
 const log = debug('lobe-server:follow-up-action-service');
@@ -22,6 +24,7 @@ export class FollowUpActionService {
 
   async extract({
     topicId,
+    threadId,
     hint,
     modelConfig,
   }: FollowUpExtractInput): Promise<FollowUpExtractResult> {
@@ -30,10 +33,13 @@ export class FollowUpActionService {
     const row = await this.db.query.messages.findFirst({
       columns: { content: true, id: true },
       orderBy: (m, { desc }) => desc(m.createdAt),
-      where: (m, { and, eq, isNotNull, ne }) =>
+      where: (m, { and, eq, isNotNull, isNull, ne }) =>
         and(
           eq(m.userId, this.userId),
           eq(m.topicId, topicId),
+          // Discriminate thread vs main topic: an absent threadId must NOT
+          // surface a thread reply that lives under the same topicId.
+          threadId ? eq(m.threadId, threadId) : isNull(m.threadId),
           eq(m.role, 'assistant'),
           isNotNull(m.content),
           ne(m.content, ''),
@@ -48,17 +54,28 @@ export class FollowUpActionService {
     const { system, user } = buildSuggestionPrompt({ assistantText: text, hint });
     const { model, provider } = modelConfig;
 
+    const ai = new AiGenerationService(this.db, this.userId);
     let raw: unknown;
     try {
-      const modelRuntime = await initModelRuntimeFromDB(this.db, this.userId, provider);
-      raw = await modelRuntime.generateObject({
-        messages: [
-          { content: system, role: 'system' as const },
-          { content: user, role: 'user' as const },
-        ],
-        model,
-        schema: SUGGESTION_RESPONSE_JSON_SCHEMA,
-      });
+      raw = await ai.generateObject(
+        {
+          messages: [
+            { content: system, role: 'system' as const },
+            { content: user, role: 'user' as const },
+          ],
+          model,
+          provider,
+          schema: SUGGESTION_RESPONSE_JSON_SCHEMA,
+        },
+        {
+          tracing: {
+            promptVersion: FOLLOW_UP_PROMPT_VERSION,
+            scenario: TRACING_SCENARIOS.FollowUp,
+            schemaName: 'FollowUpSuggestionResponse',
+            topicId,
+          } satisfies TracingOptions,
+        },
+      );
     } catch (error) {
       log('LLM call failed: %O', error);
       return EMPTY_RESULT(row.id);

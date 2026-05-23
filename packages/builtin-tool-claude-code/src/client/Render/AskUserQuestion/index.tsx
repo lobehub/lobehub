@@ -51,7 +51,7 @@ interface QABlockProps {
  * One question/answer pair for the completed Render. The original question
  * stays visible (header + body); the answer renders as one card per picked
  * option (multi-select fans out into multiple rows). When `answer` is
- * absent — older messages persisted before LOBE-8725 added structured
+ * absent — older messages persisted before added structured
  * storage — we show a `—` placeholder so the layout stays uniform.
  */
 const QABlock = memo<QABlockProps>(({ question, answer }) => {

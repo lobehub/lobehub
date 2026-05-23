@@ -264,6 +264,8 @@
   "builtins.lobe-skill-store.render.repository": "Repository",
   "builtins.lobe-skill-store.render.version": "Version",
   "builtins.lobe-skill-store.title": "Skill Store",
+  "builtins.lobe-skills.apiName.activateAgentSkill": "Activate Agent Skill",
+  "builtins.lobe-skills.apiName.activateProjectSkill": "Activate Project Skill",
   "builtins.lobe-skills.apiName.activateSkill": "Activate Skill",
   "builtins.lobe-skills.apiName.execScript": "Run Script",
   "builtins.lobe-skills.apiName.exportFile": "Export File",

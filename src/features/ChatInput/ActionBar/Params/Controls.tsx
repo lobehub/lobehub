@@ -16,6 +16,8 @@ import ControlsForm from '@/features/ModelSwitchPanel/components/ControlsForm';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
+import { useUserStore } from '@/store/user';
+import { systemAgentSelectors } from '@/store/user/selectors';
 import type { LobeAgentConfig } from '@/types/agent';
 
 import { useAgentId } from '../../hooks/useAgentId';
@@ -113,6 +115,11 @@ const styles = createStaticStyles(({ css }) => ({
   divider: css`
     height: 1px;
     background: ${cssVar.colorSplit};
+  `,
+  hint: css`
+    font-size: 12px;
+    line-height: 18px;
+    color: ${cssVar.colorTextTertiary};
   `,
   form: css`
     margin: 0;
@@ -533,6 +540,11 @@ const Controls = memo<ControlsProps>(({ setUpdating, updating, variant = 'popove
     'enableAutoScrollOnStreaming',
   ]);
   const enableStreaming = form.getFieldValue(['chatConfig', 'enableStreaming']);
+  const enableFollowUpChips = form.getFieldValue(['chatConfig', 'enableFollowUpChips']);
+  const globalFollowUp = useUserStore(systemAgentSelectors.followUpAction, isEqual);
+  const globalFollowUpReady =
+    globalFollowUp.enabled === true && !!globalFollowUp.model && !!globalFollowUp.provider;
+  const showFollowUpHint = !globalFollowUpReady && Boolean(enableFollowUpChips);
   const enableReasoningEffort = form.getFieldValue(['chatConfig', 'enableReasoningEffort']);
   const reasoningEffortValue = form.getFieldValue(['params', 'reasoning_effort']);
   const disabledParams = useAiInfraStore(
@@ -783,6 +795,26 @@ const Controls = memo<ControlsProps>(({ setUpdating, updating, variant = 'popove
                 />
               }
             />
+            <ControlRow
+              tag="followUpChips"
+              title={t('settingChat.enableFollowUpChips.title')}
+              tooltip={t('settingChat.enableFollowUpChips.desc')}
+              action={
+                <Switch
+                  checked={Boolean(enableFollowUpChips)}
+                  size={'small'}
+                  onChange={(checked) => {
+                    handleFieldChange(['chatConfig', 'enableFollowUpChips'], checked);
+                  }}
+                />
+              }
+            >
+              {showFollowUpHint && (
+                <div className={styles.hint}>
+                  {t('settingChat.enableFollowUpChips.notConfiguredHint')}
+                </div>
+              )}
+            </ControlRow>
             <ControlRow
               tag="inputTemplate"
               title={t('settingChat.inputTemplate.title')}

@@ -180,7 +180,7 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   performance: ModelPerformanceSchema.optional(),
   reactions: z.array(EmojiReactionSchema).optional(),
   scope: z.string().optional(),
-  // External-signal lineage for Monitor-style callback turns (LOBE-8998).
+  // External-signal lineage for Monitor-style callback turns ().
   signal: MessageSignalSchema.optional(),
   subAgentId: z.string().optional(),
   toolExecutionTimeMs: z.number().optional(),
@@ -323,7 +323,7 @@ export interface MessageMetadata {
    * External-signal lineage for messages produced as reactive replies
    * to an out-of-band trigger (Monitor stdout push, webhook callback,
    * scheduled tick, …) rather than a fresh user turn. Phase-1 storage —
-   * Phase 2 (LOBE-8999) promotes this to a dedicated `messages.signal`
+   * Phase 2 () promotes this to a dedicated `messages.signal`
    * jsonb column.
    *
    * Conversation-flow groups signal-tagged TOOLLESS assistants into a
@@ -372,7 +372,7 @@ export interface MessageMetadata {
  * Persisted form of an external-signal trigger context — stamped on
  * messages produced as reactive replies to out-of-band events.
  *
- * Phase 1 lives under `MessageMetadata.signal`; Phase 2 (LOBE-8999)
+ * Phase 1 lives under `MessageMetadata.signal`; Phase 2 ()
  * promotes to a dedicated `messages.signal` column with the same
  * shape (plus `rootSourceId` / `scopeKey` for agent-signal alignment).
  */

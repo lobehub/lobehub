@@ -151,7 +151,7 @@ export interface OpenAICompatibleFactoryOptions<T extends Record<string, any> = 
      * provided model list before dispatching to upstream. If the estimated
      * prompt tokens strictly exceed the model's context window, the
      * request is aborted with a structured `ExceededContextWindow` error
-     * — see LOBE-8974.
+     * — see .
      *
      * This is for providers like NVIDIA / DeepSeek where the harness does
      * not cap `max_tokens` itself but we still want to fail fast on doomed
@@ -485,7 +485,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
         // Pre-flight: abort doomed requests before invoking handlePayload so
         // providers don't waste a round-trip to upstream just to get a 400.
-        // See LOBE-8974.
+        // See .
         if (chatCompletion?.contextPreFlight) {
           const { models: preFlightModels, ...preFlightOptions } = chatCompletion.contextPreFlight;
           assertContextWithinWindow(processedPayload, preFlightModels, preFlightOptions);
@@ -1058,7 +1058,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
       // Pre-flight context-window failures get a structured payload so the
       // UI can offer fork / switch-model affordances instead of surfacing a
-      // raw provider 400. See LOBE-8974.
+      // raw provider 400. See .
       if (error instanceof ContextExceededPreFlightError) {
         log('pre-flight context exceeded: %s', error.message);
         return AgentRuntimeError.chat({

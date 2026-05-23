@@ -25,7 +25,7 @@ The two reference tools to read end-to-end:
 1. **先保证折叠态可读。** 每个 API 都必须有 Inspector；用户不展开也应该能看懂 “正在做什么 / 对什么做 / 当前结果是什么”。Inspector 不应该只展示函数名和原始参数。
 2. **Inspector 是一句话，不是详情页。** 优先表达动作、关键对象、数量、状态，例如 “分析图片 3 张”“搜索 12 个结果”“读取 config.json”。长文本、列表和结构化结果放到 Render 或 Portal。
 3. **Inspector 要覆盖执行生命周期。** `args` 还在 streaming、工具执行中、执行完成、执行失败时都应该有稳定展示；必要时同时读取 `args`、`partialArgs` 和 `pluginState`，避免出现空白、跳变或只显示半截参数。
-4. **文案要随状态切换时态。** 同一个动作在 loading 与 completed 两个阶段必须用不同的措辞：执行中用现在进行时（“正在创建任务 / Creating task / 正在搜索”），执行完成后切到完成态（“已创建任务 / Task created / 已找到 N 条”）。Inspector chip 会一直留在聊天记录里——如果一直挂着 “正在 xxx”，几小时后回看历史时会读起来像还在跑。约定的 i18n 形式是 `<api>.loading` / `<api>.completed` 一对键（见 `lobe-agent.apiName.callSubAgent.{loading,completed}` 与 `lobe-claude-code.task.{create,list,update,get}.{loading,completed}`），渲染时按 `isArgumentsStreaming || isLoading` 决定取哪一个。只读 / 查询类（“查看任务”这种本来就是名词性的）可以共用一个键。
+4. **文案要随状态切换时态。** 同一个动作在 loading 与 completed 两个阶段必须用不同的措辞：执行中用现在进行时（“正在创建任务 / Creating task / 正在搜索”），执行完成后切到完成态（“已创建任务 / Task created / 已找到 N 条”）。Inspector chip 会一直留在聊天记录里 —— 如果一直挂着 “正在 xxx”，几小时后回看历史时会读起来像还在跑。约定的 i18n 形式是 `<api>.loading` / `<api>.completed` 一对键（见 `lobe-agent.apiName.callSubAgent.{loading,completed}` 与 `lobe-claude-code.task.{create,list,update,get}.{loading,completed}`），渲染时按 `isArgumentsStreaming || isLoading` 决定取哪一个。只读 / 查询类（“查看任务” 这种本来就是名词性的）可以共用一个键。
 5. **只有结构化结果才需要 Render。** 如果工具结果只是自然语言总结，通常不需要 Render；如果结果包含列表、媒体、文件、表格、代码、diff、地图、时间线、权限请求等结构，就应该提供 Render。
 6. **Render 要帮助用户检查结果，而不是复述参数。** Render 的主体应该围绕工具产物组织：可预览、可比较、可筛选、可定位。参数只作为上下文辅助出现，不要把 Render 做成一块更大的 args dump。
 7. **参数和结果要一起参与渲染。** 好的 Tool UI 通常同时用 `args` 解释意图，用 `pluginState` 展示真实执行结果；但 `pluginState` 只放结果域数据，不要反向塞入可以从 `args` 推导出的内容。

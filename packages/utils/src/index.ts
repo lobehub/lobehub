@@ -9,6 +9,7 @@ export * from './error';
 export * from './folderStructure';
 export * from './format';
 export * from './imageToBase64';
+export * from './jina';
 export * from './keyboard';
 export * from './merge';
 export * from './mimeType';

@@ -27,7 +27,7 @@ export interface ServerAgentToolsEngineConfig {
    * `manifestSchemas`. Defaults to the full `builtinTools` array from
    * `@lobechat/builtin-tools`. Callers gating device tools per-turn pass
    * `buildAllowedBuiltinTools(...)` here so an external bot sender cannot
-   * resolve `lobe-remote-device` via the activator (LOBE-8768).
+   * resolve `lobe-remote-device` via the activator ().
    */
   builtinTools?: readonly LobeBuiltinTool[];
   /** Default tool IDs that will always be added */
@@ -39,7 +39,7 @@ export interface ServerAgentToolsEngineConfig {
    * builtin, and additional manifests. Filtering builtins alone is not
    * enough: an installed plugin or a Skill/Klavis manifest can declare
    * `identifier: 'lobe-remote-device'` and slip past `buildAllowedBuiltinTools`.
-   * This is the final post-merge wall referenced in LOBE-8768.
+   * This is the final post-merge wall referenced in .
    */
   excludeIdentifiers?: ReadonlySet<string>;
 }

@@ -1,4 +1,4 @@
-import { type SkillItem, skillsPrompts } from '@lobechat/prompts';
+import { type SkillItem, type SkillSource, skillsPrompts } from '@lobechat/prompts';
 import debug from 'debug';
 
 import { BaseSystemRoleProvider } from '../base/BaseSystemRoleProvider';
@@ -34,6 +34,11 @@ export interface SkillMeta {
   identifier: string;
   location?: string;
   name: string;
+  /**
+   * Skill origin. `project` skills are discovered on the device filesystem and
+   * loaded on demand via the readFile tool (see `location`).
+   */
+  source?: SkillSource;
 }
 
 /**
@@ -88,6 +93,7 @@ export class SkillContextProvider extends BaseSystemRoleProvider {
         identifier: skill.identifier,
         location: skill.location,
         name: skill.name,
+        source: skill.source,
       }));
 
       const availableSkillsContent = skillsPrompts(skills);

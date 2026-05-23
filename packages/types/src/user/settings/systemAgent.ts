@@ -11,6 +11,7 @@ export interface PromptRewriteSystemAgent extends Omit<SystemAgentItem, 'enabled
 
 export interface UserSystemAgentConfig {
   agentMeta: SystemAgentItem;
+  followUpAction: SystemAgentItem;
   generationTopic: SystemAgentItem;
   historyCompress: SystemAgentItem;
   inputCompletion: SystemAgentItem;

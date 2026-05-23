@@ -34,7 +34,7 @@ vi.mock('@/server/services/agentDocuments/headlessEditor', () => ({
   })),
 }));
 
-describe('WebBrowsingDocumentService.upsertCrawledDocument (LOBE-9384)', () => {
+describe('WebBrowsingDocumentService.upsertCrawledDocument ()', () => {
   let service: WebBrowsingDocumentService;
 
   beforeEach(() => {

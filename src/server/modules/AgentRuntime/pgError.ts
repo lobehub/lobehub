@@ -6,7 +6,7 @@
  * (e.g. transaction runners), so walking a few layers is necessary. Without
  * unwrapping, the runtime only sees the generic `"Failed query: insert into ..."`
  * wrapper message, which strips every diagnostic field the Agent Harness
- * dashboard needs to classify the failure (see LOBE-7158 / LOBE-7334).
+ * dashboard needs to classify the failure (see ).
  *
  * @see https://www.postgresql.org/docs/current/errcodes-appendix.html
  */

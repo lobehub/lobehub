@@ -530,7 +530,7 @@ export class GeneralChatAgent implements Agent {
         // Silent-drop diagnostic: LLM emitted raw tool_calls but every one
         // failed to resolve to a known tool (e.g. malformed names without the
         // `____` separator). Surface this in reasonDetail so dashboards can
-        // distinguish it from a genuine no-tool completion. See LOBE-8696.
+        // distinguish it from a genuine no-tool completion. See .
         const rawToolCallCount = result?.tool_calls?.length ?? 0;
         const hasUnresolvedToolCalls = rawToolCallCount > 0;
 

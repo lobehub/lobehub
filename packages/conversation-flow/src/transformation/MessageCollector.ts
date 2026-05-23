@@ -6,7 +6,7 @@ import type { ContextNode, IdNode, Message, MessageNode, SignalCallbacksNode } f
  * Locally duplicated to avoid a cross-package import for a single
  * structural type.
  *
- * Phase 2 (LOBE-8999) promotes this to a dedicated `messages.signal`
+ * Phase 2 () promotes this to a dedicated `messages.signal`
  * jsonb column. To migrate, swap the `metadata?.signal` lookup in
  * `getMessageSignal` below for `(msg as any).signal ?? msg.metadata?.signal`
  * — UI and node shape are unchanged.
@@ -25,7 +25,7 @@ interface MessageSignal {
  * knows whether the step will end up using tools, so the collector
  * must defang that mismatch here.
  *
- * Phase 2 compat seam (LOBE-8999): when the `messages.signal` column
+ * Phase 2 compat seam (): when the `messages.signal` column
  * lands, prefer it over `metadata.signal`.
  */
 const getMessageSignal = (msg: Message): MessageSignal | undefined => {
@@ -118,7 +118,7 @@ export class MessageCollector {
         // Only continue if the next assistant has the SAME agentId
         // Different agentId means it's a different agent responding (e.g., via speak tool)
         const isSameAgent = nextMsg.agentId === groupAgentId;
-        // Skip signal-tagged toolless callbacks (LOBE-8998) — they're a
+        // Skip signal-tagged toolless callbacks () — they're a
         // side-channel under the same parent tool and get collected
         // separately by `collectFlatSignalCallbacks`.
         if (getMessageSignal(nextMsg)) continue;
@@ -204,7 +204,7 @@ export class MessageCollector {
   }
 
   /**
-   * Flat-list variant — find post-task-summary assistants (LOBE-8998),
+   * Flat-list variant — find post-task-summary assistants (),
    * i.e. toolless assistants tagged with
    * `metadata.signal.type === 'task-completion'`, fired by the LLM after
    * CC delivers `task_notification` for a long-running tool.
@@ -278,7 +278,7 @@ export class MessageCollector {
       }
 
       // Find the next main-chain assistant under this tool. Signal-tagged
-      // toolless siblings (Monitor callbacks etc., LOBE-8998) share the
+      // toolless siblings (Monitor callbacks etc., ) share the
       // same parent tool but live on a side-channel — skip them here so
       // the main chain still walks the real follower. The signal blocks
       // are emitted separately by `collectSignalCallbacks`.
@@ -370,7 +370,7 @@ export class MessageCollector {
   }
 
   /**
-   * Collect post-task-summary toolless siblings (LOBE-8998) — assistants
+   * Collect post-task-summary toolless siblings () — assistants
    * tagged with `metadata.signal.type === 'task-completion'`, fired by
    * the LLM after CC delivers `system task_notification` for a long-
    * running tool (Monitor, etc.). Each one belongs inside the same
@@ -495,7 +495,7 @@ export class MessageCollector {
 
       // Pick the next main-chain assistant under this tool. Mirror the
       // skip rule used by `collectAssistantGroupMessages`: signal-tagged
-      // toolless siblings (Monitor callbacks etc., LOBE-8998) share the
+      // toolless siblings (Monitor callbacks etc., ) share the
       // parent tool but live on a side-channel — if they appear before
       // the real follower, blindly taking children[0] would end the
       // walk on a callback node and truncate the AssistantGroup tail.

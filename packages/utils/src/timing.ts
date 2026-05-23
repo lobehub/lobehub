@@ -1,5 +1,7 @@
 import debug from 'debug';
 
+import { isRecord, pickString } from './object';
+
 export interface TimingContext {
   requestId: string;
   startedAt: number;
@@ -28,9 +30,6 @@ export const createTimingRequestId = () =>
   globalThis.crypto?.randomUUID?.() ??
   `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  !!value && typeof value === 'object';
-
 export const getTimingErrorMetadata = (error: unknown): TimingMetadata => {
   if (error instanceof Error) {
     return {
@@ -41,7 +40,7 @@ export const getTimingErrorMetadata = (error: unknown): TimingMetadata => {
 
   if (isRecord(error)) {
     return {
-      errorType: typeof error.errorType === 'string' ? error.errorType : undefined,
+      errorType: pickString(error.errorType),
       status: typeof error.status === 'number' ? error.status : undefined,
     };
   }

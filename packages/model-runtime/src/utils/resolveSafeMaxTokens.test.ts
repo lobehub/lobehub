@@ -209,7 +209,7 @@ describe('assertContextWithinWindow', () => {
     ).toThrow(ContextExceededPreFlightError);
   });
 
-  it('attaches LOBE-8974 structured payload via toPayload()', () => {
+  it('attaches structured payload via toPayload', () => {
     const longContent = 'a'.repeat(20_000);
     try {
       assertContextWithinWindow(
@@ -233,7 +233,7 @@ describe('assertContextWithinWindow', () => {
   });
 
   it('does NOT reject a near-limit prompt that still fits within the window', () => {
-    // Regression test for LOBE-8974 PR review feedback: the helper was
+    // Regression test for PR review feedback: the helper was
     // previously deducting a 1024 buffer + 1024 minOutputTokens and would
     // throw for a 198.5k-token prompt against a 200k-token window even
     // though the upstream would accept it. With the corrected threshold,

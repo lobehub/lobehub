@@ -707,9 +707,9 @@ describe('FlatListBuilder', () => {
   });
 
   // ────────────────────────────────────────────────────
-  // LOBE-8998: signal callbacks attached on virtual AssistantGroup
+  // signal callbacks attached on virtual AssistantGroup
   // ────────────────────────────────────────────────────
-  describe('signal callbacks (LOBE-8998)', () => {
+  describe('signal callbacks ()', () => {
     it('attaches signalCallbacks to the virtual group and processes callback messages', () => {
       const signalMeta = (sequence: number) =>
         ({

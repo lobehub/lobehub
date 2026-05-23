@@ -455,7 +455,7 @@ describe('DocumentModel', () => {
   });
 
   describe('findBySource', () => {
-    // Crawl dedupe (LOBE-9384) leans on this finder — same URL + sourceType
+    // Crawl dedupe () leans on this finder — same URL + sourceType
     // must always return the existing row so repeated crawls update in place
     // instead of stacking new rows.
     it('finds a document by (source, sourceType)', async () => {

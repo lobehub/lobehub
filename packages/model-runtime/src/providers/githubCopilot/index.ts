@@ -5,7 +5,6 @@ import OpenAI from 'openai';
 
 import { responsesAPIModels } from '../../const/models';
 import { buildDefaultAnthropicPayload } from '../../core/anthropicCompatibleFactory';
-import { assertToolLimits } from '../../utils/validateToolLimits';
 import { type LobeRuntimeAI } from '../../core/BaseAI';
 import {
   convertOpenAIMessages,
@@ -20,6 +19,7 @@ import { AgentRuntimeError } from '../../utils/createError';
 import { debugResponse, debugStream } from '../../utils/debugStream';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { StreamingResponse } from '../../utils/response';
+import { assertToolLimits } from '../../utils/validateToolLimits';
 
 const COPILOT_BASE_URL = 'https://api.githubcopilot.com';
 const TOKEN_EXCHANGE_URL = 'https://api.github.com/copilot_internal/v2/token';

@@ -213,7 +213,7 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
       }
 
       // Register afterCompletion to execute the agent.
-      // Runtime routing is fully delegated to dispatchNonHeteroSubAgent (LOBE-8927).
+      // Runtime routing is fully delegated to dispatchNonHeteroSubAgent ().
       ctx.registerAfterCompletion(async () => {
         const get = useChatStore.getState;
 
@@ -254,7 +254,12 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
 
         try {
           await dispatchNonHeteroSubAgent(
-            { kind: 'callAgent', targetAgentId: agentId, instruction, parentMessageId: ctx.messageId },
+            {
+              kind: 'callAgent',
+              targetAgentId: agentId,
+              instruction,
+              parentMessageId: ctx.messageId,
+            },
             {
               conversationContext,
               heterogeneousProvider: parentAgentConfig?.agencyConfig?.heterogeneousProvider,

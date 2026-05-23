@@ -17,9 +17,9 @@ describe('stripMarkdownLinks', () => {
   it('replaces multiple markdown links in one string', () => {
     expect(
       stripMarkdownLinks(
-        '帮我整理 [2.1 改版](/agent/inbox/tpc_a) 和 [LOBE-8516](/task/T-1) 的下一步...',
+        '帮我整理 [2.1 改版](/agent/inbox/tpc_a) 和 [发布计划](/task/T-1) 的下一步...',
       ),
-    ).toBe('帮我整理 2.1 改版 和 LOBE-8516 的下一步...');
+    ).toBe('帮我整理 2.1 改版 和 发布计划 的下一步...');
   });
 
   it('preserves the trailing ellipsis used as a typing indicator', () => {

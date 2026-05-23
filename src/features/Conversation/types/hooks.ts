@@ -70,6 +70,26 @@ export interface ConversationHooks {
   onAfterSendMessage?: () => Promise<void>;
 
   /**
+   * Fires once per assistant turn after streaming ends and any pending tool
+   * intervention has cleared. Use for post-turn side effects (e.g. extracting
+   * follow-up chips, syncing onboarding phase).
+   *
+   * Overlap: `onGenerationStop` also fires when the user stops generation;
+   * `onAssistantTurnSettled` will additionally fire in that case with
+   * `reason: 'stopped'`. Consumers tracking stop events should pick one and
+   * avoid double-counting.
+   *
+   * Registration order: consumers should be registered LAST in any hook-merge
+   * chain — the settlement handler may clear caches that depend on prior
+   * validators short-circuiting (e.g. a `false`-returning `onBeforeSendMessage`
+   * upstream must short-circuit before the chip slot is cleared).
+   */
+  onAssistantTurnSettled?: (
+    messageId: string,
+    meta: { reason: 'completed' | 'stopped' | 'regenerated' | 'continued' },
+  ) => Promise<unknown> | void;
+
+  /**
    * Called before continuing generation
    *
    * @param messageId - The message to continue from
@@ -103,37 +123,16 @@ export interface ConversationHooks {
    */
   onBeforeSendMessage?: (params: SendMessageParams) => Promise<boolean | void>;
 
+  // ========================================
+  // Generation State Change Hooks
+  // ========================================
+
   /**
    * Called after continue generation completes
    *
    * @param messageId - The message ID
    */
   onContinueComplete?: (messageId: string) => void;
-
-  // ========================================
-  // Generation State Change Hooks
-  // ========================================
-
-  /**
-   * Called when AI generation is cancelled
-   *
-   * @param operationId - The operation ID for this generation
-   */
-  onGenerationCancelled?: (operationId: string) => void;
-
-  /**
-   * Called when AI generation completes successfully
-   *
-   * @param operationId - The operation ID for this generation
-   */
-  onGenerationComplete?: (operationId: string) => void;
-
-  /**
-   * Called when AI generation starts
-   *
-   * @param operationId - The operation ID for this generation
-   */
-  onGenerationStart?: (operationId: string) => void;
 
   /**
    * Called when generation is stopped by user

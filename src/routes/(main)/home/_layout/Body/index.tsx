@@ -16,7 +16,6 @@ import Recents from '@/routes/(main)/home/features/Recents';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { isModifierClick } from '@/utils/navigation';
-import { prefetchRoute } from '@/utils/router';
 
 import Agent from './Agent';
 import { openCustomizeSidebarModal } from './CustomizeSidebarModal';
@@ -125,7 +124,6 @@ const Body = memo(() => {
         <Link
           key={key}
           to={navItem.url!}
-          onMouseEnter={() => prefetchRoute(navItem.url!)}
           onClick={(e) => {
             if (isModifierClick(e)) return;
             e.preventDefault();

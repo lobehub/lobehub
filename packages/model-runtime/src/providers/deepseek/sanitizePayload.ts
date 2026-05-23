@@ -1,3 +1,5 @@
+import { isPlainRecord } from '@lobechat/utils';
+
 const HIGH_SURROGATE_START = 0xd8_00;
 const HIGH_SURROGATE_END = 0xdb_ff;
 const LOW_SURROGATE_START = 0xdc_00;
@@ -38,13 +40,6 @@ const sanitizeDeepSeekJsonString = (value: string) => {
   }
 
   return sanitized;
-};
-
-const isPlainRecord = (value: unknown): value is Record<string, unknown> => {
-  if (!value || typeof value !== 'object') return false;
-
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
 };
 
 const setIfChanged = (

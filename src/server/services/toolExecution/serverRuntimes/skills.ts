@@ -1,6 +1,10 @@
 import { builtinSkills } from '@lobechat/builtin-skills';
+import { LocalSystemApiName, LocalSystemIdentifier } from '@lobechat/builtin-tool-local-system';
+// Note: only `readFile` is wired through deviceProxy. Directory enumeration is
+// left to the model via `local-system.listFiles` so we don't double-fetch.
 import { type CommandResult, SkillsIdentifier } from '@lobechat/builtin-tool-skills';
 import {
+  type DeviceFileAccess,
   type ExportFileResult,
   type SkillRuntimeService,
   SkillsExecutionRuntime,
@@ -21,6 +25,7 @@ import { MarketService } from '@/server/services/market';
 import { SkillResourceService } from '@/server/services/skill/resource';
 import { preprocessLhCommand } from '@/server/services/toolExecution/preprocessLhCommand';
 
+import { deviceProxy } from '../deviceProxy';
 import { type ServerRuntimeRegistration } from './types';
 
 const log = debug('lobe-server:skills-runtime');
@@ -350,7 +355,9 @@ export const skillsRuntime: ServerRuntimeRegistration = {
     // the identifier prefix and the bundle → index-child content resolution
     // (also used by `aiAgent/index.ts` when building `<available_skills>`).
     // `source: 'builtin'` is the type-system carrier shape required by
-    // `BuiltinSkill`; the runtime never reads `source`.
+    // `BuiltinSkill`; the runtime re-tags `source: 'agent'` in the activateSkill
+    // result based on the identifier prefix so the inspector can show
+    // "Activate Agent Skill" + the friendly `title`.
     const agentSkillBuiltins: BuiltinSkill[] = context.agentId
       ? await new AgentDocumentsService(context.serverDB, context.userId)
           .getAgentSkills(context.agentId)
@@ -361,6 +368,7 @@ export const skillsRuntime: ServerRuntimeRegistration = {
               identifier: skill.identifier,
               name: skill.name,
               source: 'builtin' as const,
+              ...(skill.title && { title: skill.title }),
             })),
           )
           .catch((error) => {
@@ -369,8 +377,70 @@ export const skillsRuntime: ServerRuntimeRegistration = {
           })
       : [];
 
+    // Project skills live on the device filesystem. Read them through the
+    // device gateway by reusing the local-system tools — no special
+    // file-read primitive, just the existing capabilities over deviceProxy.
+    //   - `readFile`  loads SKILL.md and validated reference files.
+    //   - `globFiles` enumerates the skill directory so `readReference` can
+    //     reject paths the model guessed (e.g. `.env`) instead of trusting
+    //     the raw string. The discovery payload no longer carries the file
+    //     tree (see commit 8e8f3aed14), so we enumerate live at read time.
+    const { activeDeviceId, projectSkills } = context;
+    let deviceFileAccess: DeviceFileAccess | undefined;
+    if (activeDeviceId && context.userId) {
+      const userId = context.userId;
+      deviceFileAccess = {
+        listFiles: async (dir: string) => {
+          const result = await deviceProxy.executeToolCall(
+            { deviceId: activeDeviceId, userId },
+            {
+              apiName: LocalSystemApiName.globFiles,
+              // `**/*` matches every regular file recursively under `dir`.
+              // The device-side enumerator already skips hidden files; the
+              // runtime re-checks segments as defense in depth.
+              arguments: JSON.stringify({ pattern: '**/*', scope: dir }),
+              identifier: LocalSystemIdentifier,
+            },
+          );
+          if (!result.success) {
+            throw new Error(result.error || result.content || `globFiles failed: ${dir}`);
+          }
+          let payload: { files?: unknown };
+          try {
+            payload = JSON.parse(result.content) as { files?: unknown };
+          } catch {
+            throw new Error(`globFiles returned a non-JSON payload for ${dir}`);
+          }
+          if (!Array.isArray(payload.files)) return [];
+          // Files come back as paths relative to `scope` (POSIX). Strip any
+          // absolute path the engine may have emitted so the runtime can
+          // compare against normalized user-supplied relative paths.
+          return payload.files
+            .filter((f): f is string => typeof f === 'string')
+            .map((f) => (f.startsWith(dir) ? f.slice(dir.length).replace(/^[/\\]+/, '') : f));
+        },
+        readFile: async (filePath: string) => {
+          const result = await deviceProxy.executeToolCall(
+            { deviceId: activeDeviceId, userId },
+            {
+              apiName: LocalSystemApiName.readFile,
+              // Read the whole file; SKILL.md and references are small.
+              arguments: JSON.stringify({ loc: [0, 5000], path: filePath }),
+              identifier: LocalSystemIdentifier,
+            },
+          );
+          if (!result.success) {
+            throw new Error(result.error || result.content || `readFile failed: ${filePath}`);
+          }
+          return result.content;
+        },
+      };
+    }
+
     return new SkillsExecutionRuntime({
       builtinSkills: [...filterBuiltinSkills(builtinSkills), ...agentSkillBuiltins],
+      deviceFileAccess,
+      projectSkills,
       service,
     });
   },

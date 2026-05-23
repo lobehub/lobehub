@@ -205,7 +205,7 @@ describe('DiscordGatewayClient', () => {
     });
   });
 
-  describe('openThreadForChannelWake (LOBE-8891)', () => {
+  describe('openThreadForChannelWake ()', () => {
     // The chat-sdk Discord adapter only auto-spawns a reply thread on
     // @-mention. For the watch-keyword wake path the bot would otherwise
     // reply directly in the parent channel; this hook opens a thread off

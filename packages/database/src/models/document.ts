@@ -162,7 +162,7 @@ export class DocumentModel {
    *
    * Crawl-style ingestion flows (`sourceType: 'web'`) use this to dedupe by URL
    * so repeated crawls of the same page update the existing row instead of
-   * appending a fresh one — see LOBE-9384.
+   * appending a fresh one — see .
    */
   findBySource = async (
     source: string,

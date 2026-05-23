@@ -76,7 +76,7 @@ const formatTimeout = (ms: number | undefined): string | undefined => {
 };
 
 /**
- * Dedicated inspector for CC's long-running `Monitor` tool (LOBE-8998).
+ * Dedicated inspector for CC's long-running `Monitor` tool ().
  *
  * Visual contract:
  *   [Monitor] <MonitorIcon>  <description-or-command>  · <timeout>   [✓/✗]

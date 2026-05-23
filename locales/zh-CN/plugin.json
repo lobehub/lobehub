@@ -264,6 +264,8 @@
   "builtins.lobe-skill-store.render.repository": "存储库",
   "builtins.lobe-skill-store.render.version": "版本",
   "builtins.lobe-skill-store.title": "技能商店",
+  "builtins.lobe-skills.apiName.activateAgentSkill": "激活 Agent Skill",
+  "builtins.lobe-skills.apiName.activateProjectSkill": "激活 Project Skill",
   "builtins.lobe-skills.apiName.activateSkill": "激活技能",
   "builtins.lobe-skills.apiName.execScript": "执行脚本",
   "builtins.lobe-skills.apiName.exportFile": "导出文件",

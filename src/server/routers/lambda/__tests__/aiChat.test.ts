@@ -1013,5 +1013,43 @@ describe('aiChatRouter', () => {
         { metadata: { trigger: 'chat' } },
       );
     });
+
+    it('merges caller metadata over the default trigger', async () => {
+      const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
+      const mockGenerateObject = vi.fn().mockResolvedValue({ completion: 'hi there' });
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+        generateObject: mockGenerateObject,
+      } as any);
+
+      const caller = aiChatRouter.createCaller({ ...mockCtx, serverDB: {} } as any);
+      await caller.outputJSON({
+        messages: [{ content: 'be helpful', role: 'system' }],
+        metadata: {
+          promptVersion: 'v2.0',
+          scenario: 'input_completion',
+          schemaName: 'InputCompletion',
+        },
+        model: 'gpt-4o-mini',
+        provider: 'openai',
+        schema: {
+          name: 'InputCompletion',
+          schema: {
+            additionalProperties: false,
+            properties: { completion: { type: 'string' } },
+            required: ['completion'],
+            type: 'object' as const,
+          },
+        },
+      });
+
+      expect(mockGenerateObject.mock.calls[0][1]).toEqual({
+        metadata: {
+          promptVersion: 'v2.0',
+          scenario: 'input_completion',
+          schemaName: 'InputCompletion',
+          trigger: 'chat',
+        },
+      });
+    });
   });
 });

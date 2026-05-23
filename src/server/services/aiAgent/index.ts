@@ -77,6 +77,7 @@ import {
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
+import type { ConversationHistoryEntry } from '@/server/services/heterogeneousAgent/cloudHeteroContext';
 import { KlavisService } from '@/server/services/klavis';
 import { MarketService } from '@/server/services/market';
 import { deviceProxy } from '@/server/services/toolExecution/deviceProxy';
@@ -733,11 +734,40 @@ export class AiAgentService {
         log('execAgent: failed to resolve GitHub token: %O', err);
       }
 
+      // When resuming, inject the recent conversation turns as context so CC can
+      // orient itself even if the native session file was cleared (sandbox recycled
+      // or context overflow caused the CLI to start a fresh session).
+      // Only fetch when there IS a stored session id — for first-turn runs CC has
+      // no prior history to inject.
+      let conversationHistory: ConversationHistoryEntry[] | undefined;
+      if (resumeSessionId) {
+        try {
+          const recentMsgs = await this.messageModel.query({ topicId, pageSize: 200 });
+          const turns = recentMsgs
+            .filter(
+              (m) =>
+                (m.role === 'user' || m.role === 'assistant') &&
+                !m.threadId &&
+                m.content &&
+                m.content !== LOADING_FLAT,
+            )
+            .slice(-30)
+            .map((m) => ({
+              content: m.content ?? '',
+              role: m.role as 'assistant' | 'user',
+            }));
+          if (turns.length > 0) conversationHistory = turns;
+        } catch (err) {
+          log('execAgent: failed to load conversation history for hetero context: %O', err);
+        }
+      }
+
       // Build cloud-specific system context (repo list + workspace info + optional agent-level static context).
       const { buildCloudHeteroContext } =
         await import('@/server/services/heterogeneousAgent/cloudHeteroContext');
       const systemContext = buildCloudHeteroContext({
         agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
+        conversationHistory,
         githubToken,
         repos: topicRepos,
       });
@@ -1146,17 +1176,25 @@ export class AiAgentService {
       // bypassing the engine's enabledToolIds exclusion. Skipping the
       // assignment here closes that bypass at the source.
       //
-      // 1. If this run explicitly requested a device and that device is online, use it
-      // 2. Otherwise, if the current topic has a bound device and it is online, use that
-      // 3. Otherwise, fall back to the agent-level bound device when it is online
-      // 4. Otherwise, in IM/Bot scenarios, auto-activate only when exactly one device is online
+      // Resolution order ():
+      // 1. boundDeviceId (topic-bound > agent-bound): use if online; if offline,
+      //    respect the explicit choice and stay unrouted — don't silently fall
+      //    back to a different device, that would surprise the user.
+      // 2. No bound device: auto-activate only when EXACTLY ONE device is
+      //    online. Multi-device users must bind explicitly — picking by
+      //    recency / first-online would be a guess that could route tool calls
+      //    to the wrong machine. This applies uniformly to regular chat and
+      //    IM/Bot — the previous "regular-chat does nothing" path was the bug
+      //    behind (the local-system system prompt's
+      //    `{{workingDirectory}}` reached the LLM as a literal, wasting the
+      //    first N steps groping for cwd).
       activeDeviceId = !canUseDevice
         ? undefined
         : boundDeviceId
           ? onlineDevices.some((device) => device.deviceId === boundDeviceId)
             ? boundDeviceId
             : undefined
-          : (discordContext || botContext) && onlineDevices.length === 1
+          : onlineDevices.length === 1
             ? onlineDevices[0].deviceId
             : undefined;
 
@@ -1215,7 +1253,7 @@ export class AiAgentService {
       // installed plugin, a LobeHub Skill, or a Klavis manifest declaring
       // `identifier: 'lobe-remote-device'` would otherwise reach the
       // activator-discovery map and let an external bot sender enable it
-      // (LOBE-8768). Centralising the check at the ingest layer means
+      // (). Centralising the check at the ingest layer means
       // every future manifest source automatically inherits the wall.
       const isManifestIngestAllowed = (identifier: string): boolean =>
         canUseDevice || !isDeviceToolIdentifier(identifier);
@@ -1379,33 +1417,44 @@ export class AiAgentService {
       };
     }
 
-    // 9.4. Fetch device system info for placeholder variable replacement
-    let deviceSystemInfo: Record<string, string> = {};
-    if (activeDeviceId) {
+    // 9.4. Fetch device system info for placeholder variable replacement.
+    //
+    // Decoupled from activeDeviceId routing (): pulled into a helper
+    // so the device whose info populates the template (`{{hostname}}`,
+    // `{{workingDirectory}}`, etc.) is a separate decision from the device
+    // that tool calls route to. Today they're aligned — but future policy
+    // changes (e.g., showing last-known info for an offline bound device)
+    // belong in this helper, not in the activeDeviceId resolution block.
+    const fetchDeviceSystemInfoForTemplate = async (
+      deviceId: string | undefined,
+    ): Promise<Record<string, string>> => {
+      if (!deviceId) return {};
       try {
-        const systemInfo = await deviceProxy.queryDeviceSystemInfo(this.userId, activeDeviceId);
-        if (systemInfo) {
-          const activeDevice = onlineDevices.find((d) => d.deviceId === activeDeviceId);
-          deviceSystemInfo = {
-            arch: systemInfo.arch,
-            desktopPath: systemInfo.desktopPath,
-            documentsPath: systemInfo.documentsPath,
-            downloadsPath: systemInfo.downloadsPath,
-            homePath: systemInfo.homePath,
-            hostname: activeDevice?.hostname ?? 'unknown',
-            musicPath: systemInfo.musicPath,
-            picturesPath: systemInfo.picturesPath,
-            platform: activeDevice?.platform ?? 'unknown',
-            userDataPath: systemInfo.userDataPath,
-            videosPath: systemInfo.videosPath,
-            workingDirectory: systemInfo.workingDirectory,
-          };
-          log('execAgent: fetched device system info for %s', activeDeviceId);
-        }
+        const systemInfo = await deviceProxy.queryDeviceSystemInfo(this.userId, deviceId);
+        if (!systemInfo) return {};
+        const device = onlineDevices.find((d) => d.deviceId === deviceId);
+        log('execAgent: fetched device system info for %s', deviceId);
+        return {
+          arch: systemInfo.arch,
+          desktopPath: systemInfo.desktopPath,
+          documentsPath: systemInfo.documentsPath,
+          downloadsPath: systemInfo.downloadsPath,
+          homePath: systemInfo.homePath,
+          hostname: device?.hostname ?? 'unknown',
+          musicPath: systemInfo.musicPath,
+          picturesPath: systemInfo.picturesPath,
+          platform: device?.platform ?? 'unknown',
+          userDataPath: systemInfo.userDataPath,
+          videosPath: systemInfo.videosPath,
+          workingDirectory: systemInfo.workingDirectory,
+        };
       } catch (error) {
         log('execAgent: failed to fetch device system info: %O', error);
+        return {};
       }
-    }
+    };
+
+    const deviceSystemInfo = await fetchDeviceSystemInfoForTemplate(activeDeviceId);
 
     // 9.5. Build Agent Management context
     // - availableAgents is injected whenever the user is in auto mode (so the supervisor
@@ -2039,9 +2088,39 @@ export class AiAgentService {
         name: skill.name,
       }));
 
+      // Project skills are filesystem SKILL.md discovered on the device. They
+      // are only meaningful when a device is active (readFile resolves against
+      // it). Only `location` (absolute SKILL.md path) flows through — the
+      // skill's directory tree is enumerated lazily at activation time via
+      // `local-system.listFiles` over the device gateway, keeping the op-param
+      // payload small.
+      const projectMetas =
+        activeDeviceId && params.projectSkills?.length
+          ? params.projectSkills.map((s) => ({
+              description: s.description ?? '',
+              identifier: `project:${s.name}`,
+              location: s.path,
+              name: s.name,
+              source: 'project' as const,
+            }))
+          : [];
+
+      // Precedence on name collision: project > db > agent-skills > builtin.
+      // Agent-skills carry the `agent-skills:` prefix in their `name`, so they
+      // can only collide with each other — but we still dedupe by name to keep
+      // a single shape for the SkillEngine input.
+      const seenNames = new Set<string>();
+      const skills = [...projectMetas, ...dbMetas, ...agentSkillMetas, ...builtinMetas].filter(
+        (skill) => {
+          if (seenNames.has(skill.name)) return false;
+          seenNames.add(skill.name);
+          return true;
+        },
+      );
+
       const skillEngine = new SkillEngine({
         enableChecker: (skill) => shouldEnableBuiltinSkill(skill.identifier),
-        skills: [...builtinMetas, ...dbMetas, ...agentSkillMetas],
+        skills,
       });
       operationSkillSet = skillEngine.generate(agentPlugins ?? []);
     } catch (error) {

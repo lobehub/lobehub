@@ -26,6 +26,7 @@ export const LobeAnalyticsProviderWrapper = memo<Props>(({ children }) => {
       postHogConfig={{
         debug: analytics?.posthog?.debug ?? false,
         enabled: !!analytics?.posthog?.key,
+        capture_pageview: 'history_change',
         host: analytics?.posthog?.host ?? '',
         key: analytics?.posthog?.key ?? '',
         person_profiles: 'always',

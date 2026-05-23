@@ -15,7 +15,12 @@ import { useMatch, useNavigate } from 'react-router-dom';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { DocumentExplorerTree } from '@/features/AgentDocumentsExplorer';
 import { startSkillDrag } from '@/features/ChatInput/InputEditor/ActionTag/skillDragData';
-import { type SkillListItem, SkillSection, SkillsList } from '@/features/SkillsList';
+import {
+  type SkillListItem,
+  SkillSection,
+  SkillsList,
+  useProjectSkills,
+} from '@/features/SkillsList';
 import { useClientDataSWR } from '@/libs/swr';
 import { agentDocumentService, agentDocumentSWRKeys } from '@/services/agentDocument';
 import { useAgentStore } from '@/store/agent';
@@ -24,6 +29,7 @@ import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
 import ProjectLevelSkills from './ProjectLevelSkills';
+import UserLevelSkills, { useUserSkills } from './UserLevelSkills';
 
 const PAGE_ROUTE_PATTERN = '/agent/:aid/:topicId/page/:docId?';
 
@@ -272,6 +278,14 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ style, workingDire
 
   const showProjectSkills = isLocalEnabled && !!workingDirectory;
 
+  // Mirror what each child component reads so the parent can decide the
+  // section layout (flat when a single source has items, sectioned otherwise).
+  // Both hooks are SWR-deduped against their respective child fetches.
+  const userSkillItems = useUserSkills();
+  const { items: projectSkillItems } = useProjectSkills(
+    showProjectSkills ? workingDirectory : undefined,
+  );
+
   const {
     data = [],
     error,
@@ -358,33 +372,45 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ style, workingDire
   );
 
   const renderSkills = () => {
-    // No project section (not local mode / no working dir): show the agent
-    // skills flat, without the redundant "Agent skills" group header.
-    if (!showProjectSkills) {
-      if (skillItems.length === 0) {
-        return (
-          <Center flex={1} gap={8} paddingBlock={24}>
-            <Empty description={t('workingPanel.skills.empty')} icon={SkillsIcon} />
-          </Center>
-        );
-      }
-      return renderAgentSkillsList();
+    // Sections render in fixed order — agent → project → user — and each one
+    // hides itself when it has nothing to show. When exactly one source has
+    // items we drop the group header and render the list flat (no redundant
+    // "User skills 1" label above a single row). When everything is empty we
+    // fall back to a single placeholder.
+    const hasAgent = skillItems.length > 0;
+    const hasProject = showProjectSkills && projectSkillItems.length > 0;
+    const hasUser = userSkillItems.length > 0;
+    const activeCount = (hasAgent ? 1 : 0) + (hasProject ? 1 : 0) + (hasUser ? 1 : 0);
+
+    if (activeCount === 0) {
+      return (
+        <Center flex={1} gap={8} paddingBlock={24}>
+          <Empty description={t('workingPanel.skills.empty')} icon={SkillsIcon} />
+        </Center>
+      );
     }
 
-    // Both sections coexist — label each so the source is clear.
+    const flat = activeCount === 1;
+
     return (
-      <Flexbox gap={16}>
-        <SkillSection
-          emptyText={t('workingPanel.skills.emptyAgent')}
-          isEmpty={skillItems.length === 0}
-          sectionHeader={{
-            count: skillItems.length,
-            title: t('workingPanel.skills.section.agent'),
-          }}
-        >
-          {renderAgentSkillsList()}
-        </SkillSection>
-        <ProjectLevelSkills workingDirectory={workingDirectory!} />
+      <Flexbox gap={16} style={{ paddingBottom: 16 }}>
+        {hasAgent &&
+          (flat ? (
+            renderAgentSkillsList()
+          ) : (
+            <SkillSection
+              sectionHeader={{
+                count: skillItems.length,
+                title: t('workingPanel.skills.section.agent'),
+              }}
+            >
+              {renderAgentSkillsList()}
+            </SkillSection>
+          ))}
+        {hasProject && (
+          <ProjectLevelSkills hideHeader={flat} workingDirectory={workingDirectory!} />
+        )}
+        {hasUser && <UserLevelSkills hideHeader={flat} />}
       </Flexbox>
     );
   };

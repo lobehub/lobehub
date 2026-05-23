@@ -9,6 +9,7 @@ export interface TopicData {
   excludeTriggers?: string[];
   hasMore: boolean;
   isExpandingPageSize?: boolean;
+  isInbox?: boolean;
   isLoadingMore?: boolean;
   items: ChatTopic[];
   /**

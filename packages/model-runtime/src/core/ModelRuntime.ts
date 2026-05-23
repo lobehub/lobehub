@@ -84,6 +84,25 @@ export interface ModelRuntimeHooks {
     context: { options?: EmbeddingsOptions; payload: EmbeddingsPayload },
   ) => void | Promise<void>;
 
+  /**
+   * Always fires after `generateObject` returns or throws — success or failure.
+   * Use this for full-lifecycle observability (per-call tracing, prompt analytics).
+   * Unlike `onGenerateObjectFinal`, this fires regardless of whether the runtime
+   * surfaces a `usage` callback, so the gap of "succeeded but no usage" is covered.
+   *
+   * Hook failures are swallowed and logged — they must not interfere with the response.
+   */
+  onGenerateObjectComplete?: (
+    data: {
+      error?: { code?: string; message?: string; stack?: string };
+      latencyMs: number;
+      output?: unknown;
+      success: boolean;
+      usage?: ModelUsage;
+    },
+    context: { options?: GenerateObjectOptions; payload: GenerateObjectPayload },
+  ) => void | Promise<void>;
+
   onGenerateObjectError?: (
     error: ChatCompletionErrorPayload,
     context: { options?: GenerateObjectOptions; payload: GenerateObjectPayload },
@@ -286,16 +305,46 @@ export class ModelRuntime {
   }
 
   async generateObject(payload: GenerateObjectPayload, options?: GenerateObjectOptions) {
+    const startedAt = Date.now();
+    let usageCapture: ModelUsage | undefined;
+
+    const fireComplete = async (data: {
+      error?: { code?: string; message?: string; stack?: string };
+      output?: unknown;
+      success: boolean;
+    }) => {
+      if (!this._hooks?.onGenerateObjectComplete) return;
+      try {
+        await this._hooks.onGenerateObjectComplete(
+          {
+            error: data.error,
+            latencyMs: Date.now() - startedAt,
+            output: data.output,
+            success: data.success,
+            usage: usageCapture,
+          },
+          { options, payload },
+        );
+      } catch (e) {
+        // Hook failures must not affect the caller — log and move on.
+        console.error('[ModelRuntime] onGenerateObjectComplete hook error:', e);
+      }
+    };
+
     try {
       await this._hooks?.beforeGenerateObject?.(payload, options);
 
-      const finalOptions = this._hooks?.onGenerateObjectFinal
+      const needsUsageCapture =
+        this._hooks?.onGenerateObjectFinal || this._hooks?.onGenerateObjectComplete;
+
+      const finalOptions = needsUsageCapture
         ? {
             ...options,
             onUsage: async (usage: ModelUsage) => {
+              usageCapture = usage;
               await options?.onUsage?.(usage);
               try {
-                await this._hooks!.onGenerateObjectFinal!({ usage }, { options, payload });
+                await this._hooks?.onGenerateObjectFinal?.({ usage }, { options, payload });
               } catch (e) {
                 // Hook failures (billing, tracing) must not interfere with response completion
                 console.error('[ModelRuntime] onGenerateObjectFinal hook error:', e);
@@ -304,7 +353,9 @@ export class ModelRuntime {
           }
         : options;
 
-      return await this._runtime.generateObject!(payload, finalOptions);
+      const output = await this._runtime.generateObject!(payload, finalOptions);
+      await fireComplete({ output, success: true });
+      return output;
     } catch (error) {
       if (this._hooks?.onGenerateObjectError) {
         await this._hooks.onGenerateObjectError(error as ChatCompletionErrorPayload, {
@@ -312,6 +363,11 @@ export class ModelRuntime {
           payload,
         });
       }
+      const err = error as Error & { code?: string };
+      await fireComplete({
+        error: { code: err?.code, message: err?.message, stack: err?.stack },
+        success: false,
+      });
       throw error;
     }
   }

@@ -36,12 +36,20 @@ export interface GenerateObjectOptions {
    */
   headers?: Record<string, any>;
 
-  /** Metadata passed to hooks (billing, tracing, etc.) */
+  /** Free-form context passed to hooks (e.g. billing, routing). */
   metadata?: Record<string, unknown>;
 
   onUsage?: (usage: ModelUsage) => void | Promise<void>;
 
   signal?: AbortSignal;
+  /**
+   * Structured tracing config consumed by tracing hooks (e.g.
+   * `llm_generation_tracing`). Loosely typed here so the runtime stays
+   * tracing-agnostic; callers should import `TracingOptions` from
+   * `@lobechat/llm-generation-tracing` for the strongly-typed shape.
+   */
+  tracing?: Record<string, unknown>;
+
   /**
    * userId for the GenerateObject
    */

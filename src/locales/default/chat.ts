@@ -359,8 +359,8 @@ export default {
   'newGroupChat': 'Create Group',
 
   // Platform agent: per-platform descriptions shown in step 0 of the creation modal
-  'platformAgent.create.desc.openclaw': 'Run OpenClaw agents on your local machine',
-  'platformAgent.create.desc.hermes': 'Run Hermes agents on your local machine',
+  'platformAgent.create.desc.openclaw': 'Connect to OpenClaw running on one of your devices',
+  'platformAgent.create.desc.hermes': 'Connect to Hermes running on one of your devices',
 
   // Platform agent: shared device status label (used in Select option labels)
   'platformAgent.device.online': 'Online',
@@ -378,13 +378,20 @@ export default {
   'platformAgent.create.descriptionPlaceholder': 'Brief description (optional)',
   'platformAgent.create.fetchingProfile': 'Fetching profile...',
   'platformAgent.create.noDevices': 'No devices connected',
-  'platformAgent.create.noDevicesHint': 'Run `lh connect` on the target machine first',
+  'platformAgent.create.noDevicesDesktopHint':
+    'Install the Desktop App — it connects automatically after login',
+  'platformAgent.create.downloadDesktop': 'Download Desktop App',
+  'platformAgent.create.noDevicesCliHint': 'Or connect any machine via CLI, then click Refresh:',
+  'platformAgent.create.noDevicesCmd': 'lh connect',
   'platformAgent.create.refresh': 'Refresh',
   'platformAgent.create.selectDevice': 'Select a device',
   'platformAgent.create.checking': 'Checking availability...',
   'platformAgent.create.available': 'Available',
   'platformAgent.create.notInstalled': '{{name}} not installed on this device',
   'platformAgent.create.checkFailed': 'Check failed',
+  'platformAgent.create.versionTooLow': 'lh version is too low',
+  'platformAgent.create.versionTooLowHint': 'Update lh to the latest version:',
+  'platformAgent.create.upgradeCmd': 'npm install -g @lobehub/cli',
   'platformAgent.create.comingSoon': 'Coming Soon',
 
   // Platform agent device guard banner
@@ -1012,8 +1019,8 @@ export default {
   'workingPanel.resources.deleteError': 'Failed to delete document',
   'workingPanel.resources.deleteSuccess': 'Document deleted',
   'workingPanel.resources.deleteTitle': 'Delete document?',
-  'workingPanel.resources.empty':
-    'No documents yet. Documents associated with this agent will show up here.',
+  'workingPanel.resources.deleteTitleMulti': 'Delete {{count}} items?',
+  'workingPanel.resources.empty': 'No webpages. Webpages crawled in this agent will show up here.',
   'workingPanel.resources.error': 'Failed to load resources',
   'workingPanel.resources.filter.documents': 'Documents',
   'workingPanel.resources.filter.skills': 'Skills',
@@ -1025,6 +1032,7 @@ export default {
   'workingPanel.resources.renameError': 'Failed to rename document',
   'workingPanel.resources.renameSuccess': 'Document renamed',
   'workingPanel.resources.tree.createError': 'Failed to create',
+  'workingPanel.resources.tree.deleteSelected': 'Delete selected ({{count}})',
   'workingPanel.resources.tree.moveError': 'Failed to move',
   'workingPanel.resources.tree.parentMissing': 'Parent folder is unavailable',
   'workingPanel.resources.tree.newDocument': 'New document',
@@ -1044,10 +1052,10 @@ export default {
   'workingPanel.localFile.preview.raw': 'Raw',
   'workingPanel.localFile.preview.render': 'Preview',
   'workingPanel.localFile.truncated': 'File preview truncated to {{limit}} characters',
-  'workingPanel.skills.empty': 'No skills found in this project',
-  'workingPanel.skills.emptyAgent': 'No skills attached to this agent',
+  'workingPanel.skills.empty': 'No skills available',
   'workingPanel.skills.section.agent': 'Agent skills',
   'workingPanel.skills.section.project': 'Project skills',
+  'workingPanel.skills.section.user': 'User skills',
   'workingPanel.skills.title': 'Skills',
   'workingPanel.files.count_one': '{{count}} file',
   'workingPanel.files.count_other': '{{count}} files',

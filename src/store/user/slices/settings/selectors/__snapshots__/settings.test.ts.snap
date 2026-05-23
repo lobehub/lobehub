@@ -55,6 +55,11 @@ exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AG
     "provider": "deepseek",
   },
   "enableAutoReply": true,
+  "followUpAction": {
+    "enabled": false,
+    "model": "gpt-5.4-mini",
+    "provider": "openai",
+  },
   "generationTopic": {
     "model": "gpt-5.4-mini",
     "provider": "openai",
@@ -107,6 +112,7 @@ exports[`settingsSelectors > defaultAgent > should merge DEFAULT_AGENT and s.set
       "enableAgentMode": true,
       "enableCompressHistory": true,
       "enableContextCompression": true,
+      "enableFollowUpChips": false,
       "enableHistoryCount": false,
       "enableStreaming": true,
       "historyCount": 20,
@@ -150,6 +156,7 @@ exports[`settingsSelectors > defaultAgentConfig > should merge DEFAULT_AGENT_CON
     "enableAgentMode": true,
     "enableCompressHistory": true,
     "enableContextCompression": true,
+    "enableFollowUpChips": false,
     "enableHistoryCount": false,
     "enableStreaming": true,
     "historyCount": 20,

@@ -618,6 +618,11 @@ export default {
   'settingChat.enableAutoScrollOnStreaming.desc': 'Override global setting for this assistant',
   'settingChat.enableAutoScrollOnStreaming.title': 'Auto-scroll During AI Response',
   'settingChat.enableCompressHistory.title': 'Enable Automatic Summary of Chat History',
+  'settingChat.enableFollowUpChips.desc':
+    'After each reply, show one-click follow-up reply chips below the message. Requires the global Follow-up model to be configured.',
+  'settingChat.enableFollowUpChips.notConfiguredHint':
+    'Configure the global Follow-up model first to enable this.',
+  'settingChat.enableFollowUpChips.title': 'Follow-up Suggestions',
   'settingChat.enableHistoryCount.alias': 'Unlimited',
   'settingChat.enableHistoryCount.limited': 'Include only {{number}} conversation messages',
   'settingChat.enableHistoryCount.setlimited': 'Set limited history messages',
@@ -650,8 +655,9 @@ export default {
   'settingChatAppearance.transitionMode.options.none.value': 'None',
   'settingChatAppearance.transitionMode.options.smooth': 'Smooth',
   'settingChatAppearance.transitionMode.title': 'Transition Animation',
-  'settingCommon.devMode.desc': 'Enable to show developer-related features and options',
-  'settingCommon.devMode.title': 'Developer Mode',
+  'settingCommon.devMode.desc':
+    'Show technical details and manual controls for chats, models, and local tools. This does not change model responses.',
+  'settingCommon.devMode.title': 'Advanced tools',
   'settingCommon.lang.autoMode': 'Follow System',
   'settingCommon.lang.title': 'Language',
   'settingCommon.liteMode.desc': 'Simplify the interface and hide advanced features',
@@ -969,6 +975,10 @@ When I am ___, I need ___
     'Once filled out, the system agent will use the custom prompt when generating content',
   'systemAgent.customPrompt.placeholder': 'Please enter custom prompt',
   'systemAgent.customPrompt.title': 'Custom Prompt',
+  'systemAgent.followUpAction.label': 'Follow-up Suggestions Model',
+  'systemAgent.followUpAction.modelDesc':
+    'Model used to suggest one-click follow-up replies under each assistant message',
+  'systemAgent.followUpAction.title': 'Follow-up Suggestions',
   'systemAgent.generationTopic.label': 'Model',
   'systemAgent.generationTopic.modelDesc': 'Model used to name AI image topics',
   'systemAgent.generationTopic.title': 'AI Image Topic Naming',
@@ -997,6 +1007,8 @@ When I am ___, I need ___
   'systemAgent.translation.title': 'Message Translation',
   'tab.about': 'About',
   'tab.advanced': 'Advanced',
+  'tab.advanced.appUpdates.title': 'App updates',
+  'tab.advanced.toolsAndDiagnostics.title': 'Tools and diagnostics',
   'tab.addAgentSkill': 'Add Agent Skill',
   'tab.advanced.updateChannel.canary': 'Canary',
   'tab.advanced.updateChannel.canaryDesc':
@@ -1007,7 +1019,7 @@ When I am ___, I need ___
   'tab.advanced.updateChannel.nightlyDesc': 'Automated daily builds with the latest changes.',
   'tab.advanced.updateChannel.stable': 'Stable',
   'tab.advanced.updateChannel.stableDesc': 'Production-ready releases.',
-  'tab.advanced.updateChannel.title': 'Update Channel',
+  'tab.advanced.updateChannel.title': 'Update channel',
   'tab.addCustomMcp': 'Add Custom MCP Skill',
   'tab.addCustomMcp.desc': 'Manually configure a custom MCP server',
   'tab.addCustomSkill': 'Add',

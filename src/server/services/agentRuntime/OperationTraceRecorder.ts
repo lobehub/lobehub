@@ -40,7 +40,7 @@ export interface FinalizeParams {
    * Synthetic step record for the error path. The real failing step never
    * reached `appendStep` because the executor threw before the partial push,
    * so the catch caller passes this to keep step counts aligned with the
-   * assistant message that triggered the call. See LOBE-8533.
+   * assistant message that triggered the call. See .
    */
   failedStep?: { startedAt: number; stepIndex: number };
   state: any;

@@ -2,6 +2,7 @@ import type { SourceAgentNightlyReviewRequested } from '@lobechat/agent-signal/s
 import { AGENT_SIGNAL_SOURCE_TYPES } from '@lobechat/agent-signal/source';
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import { tracer } from '@lobechat/observability-otel/modules/agent-signal';
+import { isNonEmptyString } from '@lobechat/utils';
 
 import { defineSourceHandler } from '../../../runtime/middleware';
 import type { AgentSignalReceipt } from '../../receiptService';
@@ -103,9 +104,6 @@ export interface CreateNightlyReviewSourceHandlerDependencies {
   /** Writes durable receipts for the review summary and action outcomes. */
   writeReceipts?: (receipts: AgentSignalReceipt[]) => Promise<void>;
 }
-
-const isNonEmptyString = (value: unknown): value is string =>
-  typeof value === 'string' && value.length > 0;
 
 interface NightlyReviewSpanLike {
   setAttribute: (key: string, value: string | number | boolean) => void;

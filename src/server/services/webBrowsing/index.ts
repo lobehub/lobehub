@@ -40,7 +40,7 @@ const hashContent = (content: string): string => Md5.hashStr(content);
  * client builtin-tool executor (`store/.../lobe-web-browsing.ts`) route
  * through `upsertCrawledDocument`, so dedupe + content-hash short-circuit +
  * `document_histories` snapshot all live in one place. Splitting these
- * across two call sites previously caused LOBE-9384 (client path created a
+ * across two call sites previously caused (client path created a
  * fresh row every crawl while the server path was being patched to dedupe).
  */
 export class WebBrowsingDocumentService {
