@@ -95,6 +95,13 @@ export interface TracingOptions {
   systemPrompt?: string;
   /** Topic / conversation ID. */
   topicId?: string;
+  /**
+   * Caller-supplied UUID used as the tracing row's primary key. Pass this
+   * when the id needs to be known **before** the generation completes —
+   * e.g. so the calling route can return it in the response and the client
+   * can later post feedback against it. Omit to let the service generate one.
+   */
+  tracingId?: string;
   /** RequestTrigger string. */
   trigger?: string;
 }

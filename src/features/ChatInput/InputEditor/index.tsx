@@ -228,9 +228,9 @@ const InputEditor = memo<{
 
       const currentTopicId = useChatStore.getState().activeTopicId;
 
-      let response: { completion?: string } | null;
+      let envelope: { data?: { completion?: string } | null; tracingId?: string } | null;
       try {
-        response = (await aiChatService.generateJSON(
+        envelope = (await aiChatService.generateJSON(
           {
             messages,
             model: config.model,
@@ -249,14 +249,18 @@ const InputEditor = memo<{
             },
           },
           abortController,
-        )) as { completion?: string } | null;
+        )) as { data?: { completion?: string } | null; tracingId?: string } | null;
       } catch {
         return null;
       }
 
       if (abortSignal.aborted) return null;
 
-      const completion = response?.completion?.trimEnd();
+      // envelope.tracingId is intentionally captured here — the feedback
+      // wiring (Tab=accept / Esc=reject / type-continue=cancel) will land
+      // in a follow-up commit (LOBE-9488 + companion cloud work) and use
+      // this id to call `llmGenerationTracing.recordFeedback`.
+      const completion = envelope?.data?.completion?.trimEnd();
       return completion || null;
     },
     [isComposingRef, agentId],
