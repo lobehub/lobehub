@@ -4,18 +4,54 @@ import {
   type AgentStreamEvent,
   type ConnectionStatus,
 } from '@lobechat/agent-gateway-client';
-import type { ConversationContext, ExecAgentResult } from '@lobechat/types';
+import type { ConversationContext, ExecAgentResult, MessageMetadata } from '@lobechat/types';
 
 import { isDesktop } from '@/const/version';
 import { aiAgentService, type ResumeApprovalParam } from '@/services/aiAgent';
+import { localFileService } from '@/services/electron/localFileService';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
+import { getAgentStoreState } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
 import { consumePendingTopicRepos, getPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
+import { topicSelectors } from '@/store/chat/selectors';
 import type { ChatStore } from '@/store/chat/store';
 import type { StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 
 import { createGatewayEventHandler } from './gatewayEventHandler';
+
+/**
+ * Scan the active working directory for project-level skills
+ * (`.agents/skills` / `.claude/skills`) so the server can surface them in
+ * `<available_skills>`. Desktop-only and best-effort: a failed scan must not
+ * block the send.
+ */
+const resolveProjectSkills = async (
+  get: () => ChatStore,
+): Promise<{ description?: string; name: string; path: string }[] | undefined> => {
+  if (!isDesktop) return undefined;
+
+  const topicWorkingDirectory = topicSelectors.currentTopicWorkingDirectory(get());
+  const agentWorkingDirectory = agentSelectors.currentAgentWorkingDirectory(getAgentStoreState());
+  const workingDirectory = topicWorkingDirectory ?? agentWorkingDirectory;
+  if (!workingDirectory) return undefined;
+
+  try {
+    const { skills } = await localFileService.listProjectSkills({ scope: workingDirectory });
+    if (skills.length === 0) return undefined;
+    // The directory tree is enumerated lazily at activation time by the Skills
+    // runtime (via the local-system `listFiles` tool), so we drop `files` here
+    // — keeps the op-param payload small.
+    return skills.map((skill) => ({
+      description: skill.description,
+      name: skill.name,
+      path: skill.path,
+    }));
+  } catch {
+    return undefined;
+  }
+};
 
 type Setter = StoreSetter<ChatStore>;
 
@@ -255,6 +291,8 @@ export class GatewayActionImpl {
     /** File IDs of already-uploaded attachments to attach to the new user message */
     fileIds?: string[];
     message: string;
+    /** Request metadata carried from the originating user message. */
+    metadata?: Pick<MessageMetadata, 'trigger'>;
     /** Called when the gateway session completes (agent finished running) */
     onComplete?: () => void;
     /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
@@ -280,6 +318,7 @@ export class GatewayActionImpl {
       context,
       fileIds,
       message,
+      metadata,
       onComplete,
       parentMessageId,
       parentOperationId,
@@ -314,6 +353,8 @@ export class GatewayActionImpl {
       ? this.#get().getOperationAbortSignal(parentOperationId)
       : undefined;
 
+    const projectSkills = await resolveProjectSkills(this.#get);
+
     const result = await aiAgentService.execAgentTask(
       {
         agentId: context.agentId,
@@ -333,8 +374,10 @@ export class GatewayActionImpl {
         clientRuntime: isDesktop ? 'desktop' : 'web',
         fileIds,
         parentMessageId,
+        projectSkills,
         prompt: message,
         resumeApproval,
+        trigger: metadata?.trigger,
       },
       { signal: abortSignal },
     );
@@ -386,6 +429,12 @@ export class GatewayActionImpl {
 
     if (result.topicId) {
       this.#get().internal_updateTopicLoading(result.topicId, true);
+      void this.#get().updateTopicStatus?.({
+        agentId: context.agentId,
+        groupId: context.groupId,
+        status: 'running',
+        topicId: result.topicId,
+      });
     }
 
     // Create a dedicated operation for gateway execution with correct context.
@@ -413,7 +462,7 @@ export class GatewayActionImpl {
     // never block the local cancel flow.
     this.#get().onOperationCancel(gatewayOpId, async () => {
       await aiAgentService
-        .interruptTask({ operationId: result.operationId })
+        .interruptTask({ operationId: result.operationId, topicId: result.topicId })
         .catch((err) => console.error('[Gateway] interruptTask failed:', err));
     });
 
@@ -433,6 +482,12 @@ export class GatewayActionImpl {
         this.#get().completeOperation(gatewayOpId);
         if (result.topicId) {
           this.#get().internal_updateTopicLoading(result.topicId, false);
+          void this.#get().updateTopicStatus?.({
+            agentId: execContext.agentId,
+            groupId: execContext.groupId,
+            status: 'active',
+            topicId: result.topicId,
+          });
           // Clear running operation from topic metadata (best-effort from frontend;
           // if browser was closed, reconnect logic will handle stale entries)
           topicService
@@ -522,6 +577,11 @@ export class GatewayActionImpl {
       onSessionComplete: () => {
         this.#get().completeOperation(gatewayOpId);
         this.#get().internal_updateTopicLoading(topicId, false);
+        void this.#get().updateTopicStatus?.({
+          agentId: context.agentId,
+          status: 'active',
+          topicId,
+        });
         topicService.updateTopicMetadata(topicId, { runningOperation: null }).catch(() => {});
       },
       operationId,

@@ -15,7 +15,7 @@ export const ListDocumentsInspector = memo<
 >(({ args, partialArgs, pluginState, isArgumentsStreaming, isLoading }) => {
   const { t } = useTranslation('plugin');
 
-  const target = args?.target || partialArgs?.target;
+  const scope = args?.scope || partialArgs?.scope;
   const count = pluginState?.documents?.length;
   const styles = inspectorChipStyles;
 
@@ -28,11 +28,11 @@ export const ListDocumentsInspector = memo<
       )}
     >
       <span>{t('builtins.lobe-agent-documents.apiName.listDocuments')}</span>
-      {target && (
+      {scope && (
         <>
           <span className={styles.separator}>·</span>
           <span className={styles.subdued}>
-            {t(`builtins.lobe-agent-documents.inspector.target.${target}` as const)}
+            {t(`builtins.lobe-agent-documents.inspector.scope.${scope}` as const)}
           </span>
         </>
       )}

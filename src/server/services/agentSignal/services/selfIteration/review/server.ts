@@ -1,10 +1,12 @@
 import { DEFAULT_MINI_SYSTEM_AGENT_ITEM } from '@lobechat/const';
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import { tracer } from '@lobechat/observability-otel/modules/agent-signal';
+import { pickTrimmedString, toRecord } from '@lobechat/utils';
 
 import { AgentSignalNightlyReviewModel } from '@/database/models/agentSignal/nightlyReview';
 import { AgentSignalReviewContextModel } from '@/database/models/agentSignal/reviewContext';
 import { BriefModel } from '@/database/models/brief';
+import { UserModel } from '@/database/models/user';
 import type { BriefItem } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
@@ -13,6 +15,7 @@ import { isAgentSignalEnabledForUser } from '@/server/services/agentSignal/featu
 import { runMemoryActionAgent } from '@/server/services/agentSignal/policies/analyzeIntent/actions/userMemory';
 import { redisSourceEventStore } from '@/server/services/agentSignal/store/adapters/redis/sourceEventStore';
 import { SkillManagementDocumentService } from '@/server/services/skillManagement';
+import { translation } from '@/server/translation';
 
 import { persistAgentSignalReceipts } from '../../receiptService';
 import { createAgentRunner, executeSelfIteration } from '../execute';
@@ -35,6 +38,7 @@ import { createMemoryService, createToolSet } from '../tools/shared';
 import type { EvidenceRef } from '../types';
 import { Risk, Scope } from '../types';
 import { createBriefSelfReviewService, createServerSelfReviewBriefWriter } from './brief';
+import type { SelfReviewBriefTextTranslator } from './briefText';
 import type {
   FeedbackActivityDigest,
   NightlyReviewManagedSkillSummary,
@@ -248,24 +252,24 @@ const createRefineProposalAction = (
   target: { skillDocumentId: input.skillDocumentId },
 });
 
-const getRecord = (value: unknown): Record<string, unknown> =>
-  value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-
-const getString = (value: unknown) =>
-  typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+const toRecordOrEmpty = (value: unknown): Record<string, unknown> =>
+  (toRecord(value) as Record<string, unknown> | undefined) ?? {};
 
 const getStringArray = (value: unknown) =>
-  Array.isArray(value) ? value.flatMap((item) => (getString(item) ? [getString(item)!] : [])) : [];
+  Array.isArray(value)
+    ? value.flatMap((item) => {
+        const text = pickTrimmedString(item);
+        return text ? [text] : [];
+      })
+    : [];
 
 const getBriefMetadataWithProposal = (
   brief: BriefItem,
   proposal: SelfReviewProposalMetadata,
 ): BriefItem['metadata'] => {
-  const metadata = getRecord(brief.metadata);
-  const agentSignal = getRecord(metadata.agentSignal);
-  const nightlySelfReview = getRecord(agentSignal.nightlySelfReview);
+  const metadata = toRecordOrEmpty(brief.metadata);
+  const agentSignal = toRecordOrEmpty(metadata.agentSignal);
+  const nightlySelfReview = toRecordOrEmpty(agentSignal.nightlySelfReview);
 
   return {
     ...metadata,
@@ -306,15 +310,17 @@ const collectPlanEvidenceRefs = (plan: ReturnType<typeof projectRun>['projection
 };
 
 const getProposalActionSnapshotInput = (action: Record<string, unknown>) => {
-  const operation = getRecord(action.operation);
-  const operationInput = getRecord(operation.input);
-  const target = getRecord(action.target);
+  const operation = toRecordOrEmpty(action.operation);
+  const operationInput = toRecordOrEmpty(operation.input);
+  const target = toRecordOrEmpty(action.target);
 
   return {
     ...operationInput,
-    name: getString(operationInput.name) ?? getString(target.skillName),
-    skillDocumentId: getString(operationInput.skillDocumentId) ?? getString(target.skillDocumentId),
-    title: getString(operationInput.title) ?? getString(target.skillName),
+    name: pickTrimmedString(operationInput.name) ?? pickTrimmedString(target.skillName),
+    skillDocumentId:
+      pickTrimmedString(operationInput.skillDocumentId) ??
+      pickTrimmedString(target.skillDocumentId),
+    title: pickTrimmedString(operationInput.title) ?? pickTrimmedString(target.skillName),
   };
 };
 
@@ -335,13 +341,13 @@ const withCompleteProposalSnapshots = async ({
 
   const actions = await Promise.all(
     input.actions.map(async (rawAction) => {
-      const action = getRecord(rawAction);
+      const action = toRecordOrEmpty(rawAction);
       const actionType = action.actionType;
 
       if (actionType === 'consolidate_skill') {
-        const operation = getRecord(action.operation);
-        const operationInput = getRecord(operation.input);
-        const canonicalSkillDocumentId = getString(operationInput.canonicalSkillDocumentId);
+        const operation = toRecordOrEmpty(action.operation);
+        const operationInput = toRecordOrEmpty(operation.input);
+        const canonicalSkillDocumentId = pickTrimmedString(operationInput.canonicalSkillDocumentId);
         const sourceSkillIds = getStringArray(operationInput.sourceSkillIds);
         const sourceSnapshots = await Promise.all(
           sourceSkillIds.map((skillDocumentId) =>
@@ -543,6 +549,7 @@ const updateSelfReviewProposalBrief = async ({
 export const createServerToolSet = ({
   agentId,
   briefModel,
+  briefTextTranslator,
   context,
   db,
   localDate,
@@ -553,6 +560,7 @@ export const createServerToolSet = ({
 }: {
   agentId: string;
   briefModel: BriefModel;
+  briefTextTranslator?: SelfReviewBriefTextTranslator;
   context: Parameters<
     CreateNightlyReviewSourceHandlerDependencies['runSelfReviewAgent']
   >[0]['context'];
@@ -632,6 +640,7 @@ export const createServerToolSet = ({
         result: projection.execution,
         reviewWindowEnd: context.reviewWindowEnd,
         reviewWindowStart: context.reviewWindowStart,
+        t: briefTextTranslator,
         timezone: 'UTC',
         userId,
       });
@@ -1058,6 +1067,12 @@ export const createServerSelfReviewPolicyOptions = ({
     },
   });
   const briefWriter = createServerSelfReviewBriefWriter(db, userId);
+  const resolveBriefTextTranslator = async ({ userId }: { userId: string }) => {
+    const userInfo = await UserModel.getInfoForAIGeneration(db, userId);
+    const { t } = await translation('home', userInfo.responseLanguage ?? 'en-US');
+
+    return t;
+  };
 
   return {
     acquireReviewGuard: (input) =>
@@ -1083,6 +1098,7 @@ export const createServerSelfReviewPolicyOptions = ({
     },
     collectContext: (input) => collector.collect(input),
     runSelfReviewAgent: async ({ context, localDate, sourceId, userId: runnerUserId }) => {
+      const briefTextTranslator = await resolveBriefTextTranslator({ userId: runnerUserId });
       const modelRuntime = await initModelRuntimeFromDB(
         db,
         runnerUserId,
@@ -1091,6 +1107,7 @@ export const createServerSelfReviewPolicyOptions = ({
       const toolSet = createServerToolSet({
         agentId: context.agentId,
         briefModel,
+        briefTextTranslator,
         context,
         db,
         localDate: localDate ?? context.reviewWindowEnd.slice(0, 10),
@@ -1140,6 +1157,7 @@ export const createServerSelfReviewPolicyOptions = ({
         userId: runnerUserId,
       });
     },
+    resolveBriefTextTranslator,
     writeDailyBrief: (brief) => briefWriter.writeDailyBrief(brief),
     writeReceipts: (receipts) => persistAgentSignalReceipts(receipts),
   };

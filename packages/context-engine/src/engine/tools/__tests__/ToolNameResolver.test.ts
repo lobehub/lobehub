@@ -714,7 +714,7 @@ describe('ToolNameResolver', () => {
       expect(result).toEqual([]);
     });
 
-    // Regression for LOBE-8696: some models (e.g. deepseek-v4-pro) drop the
+    // Regression for some models (e.g. deepseek-v4-pro) drop the
     // `<identifier>____` prefix and emit only the bare API name. When that
     // bare name uniquely matches an API in the available manifests, we should
     // recover the identifier from the manifest instead of silently dropping

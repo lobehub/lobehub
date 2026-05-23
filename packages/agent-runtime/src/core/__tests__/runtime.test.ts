@@ -1172,7 +1172,7 @@ describe('AgentRuntime', () => {
       expect(result.nextContext?.payload).toHaveProperty('toolCount', 3);
     });
 
-    // Regression test for LOBE-7759: Gemini 3 thoughtSignature must survive the
+    // Regression test for Gemini 3 thoughtSignature must survive the
     // OpenAI ToolsCalling -> ChatToolPayload normalization in call_tools_batch,
     // otherwise Gemini 3 400s on the second tool_call turn.
     it('should preserve thoughtSignature when normalizing call_tools_batch ToolsCalling payload', async () => {
@@ -1431,9 +1431,9 @@ describe('AgentRuntime', () => {
     });
   });
 
-  describe('Multi-Round Batch Tool Execution (LOBE-1657)', () => {
+  describe('Multi-Round Batch Tool Execution ()', () => {
     /**
-     * This test verifies the fix for LOBE-1657:
+     * This test verifies the fix for
      * When executing multiple rounds of batch tool calls, tool messages should not be duplicated.
      *
      * Root cause: The mergeToolResults method was extracting ALL tool messages from each result,

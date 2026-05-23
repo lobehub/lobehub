@@ -3,6 +3,7 @@ import { Avatar, Flexbox } from '@lobehub/ui';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useEnterToSend } from '@/hooks/useEnterToSend';
 import { useUserAvatar } from '@/hooks/useUserAvatar';
 import { useTaskStore } from '@/store/task';
 
@@ -15,6 +16,7 @@ const CommentInput = memo<{ taskId: string }>(({ taskId }) => {
   const userAvatar = useUserAvatar();
   const [submitting, setSubmitting] = useState(false);
   const [hasContent, setHasContent] = useState(false);
+  const shouldSendOnEnter = useEnterToSend();
 
   const handleSubmit = useCallback(async () => {
     const trimmed = String(editor?.getDocument?.('markdown') ?? '').trim();
@@ -41,14 +43,14 @@ const CommentInput = memo<{ taskId: string }>(({ taskId }) => {
           placeholder={t('taskDetail.commentPlaceholder')}
           type={'text'}
           variant={'chat'}
+          onChange={(ed) => {
+            setHasContent(!ed?.isEmpty);
+          }}
           onPressEnter={({ event }) => {
-            if (event.metaKey || event.ctrlKey) {
+            if (shouldSendOnEnter(event)) {
               handleSubmit();
               return true;
             }
-          }}
-          onTextChange={(ed) => {
-            setHasContent(!!String(ed?.getDocument?.('markdown') ?? '').trim());
           }}
         />
       </div>

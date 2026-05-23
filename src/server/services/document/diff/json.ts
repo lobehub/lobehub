@@ -1,7 +1,5 @@
+import { isRecord } from '@lobechat/utils';
 import { create, type Delta, patch as patchDelta } from 'jsondiffpatch';
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const createHashComparable = (value: unknown): unknown => {
   if (Array.isArray(value)) {

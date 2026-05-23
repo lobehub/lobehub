@@ -3,6 +3,7 @@ import {
   closeContextMenu,
   type ContextMenuItem,
   copyToClipboard,
+  type GenericItemType,
   Icon,
   type MenuInfo,
 } from '@lobehub/ui';
@@ -24,6 +25,7 @@ import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useTaskStore } from '@/store/task';
 
+import { taskDetailPath } from '../shared/taskDetailPath';
 import { renderMenuExtra } from './menuExtra';
 import { PRIORITY_META } from './TaskPriorityTag';
 import { STATUS_META, USER_SELECTABLE_STATUSES } from './TaskStatusTag';
@@ -124,7 +126,10 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
         } as ContextMenuItem;
       });
 
-      const taskUrl = `${appOrigin}/task/${task.identifier}`;
+      const taskUrl = `${appOrigin}${taskDetailPath(
+        task.identifier,
+        task.assigneeAgentId ?? undefined,
+      )}`;
       const canRunNow = RUN_NOW_STATUSES.has(currentStatus);
 
       return [
@@ -134,7 +139,7 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
                 icon: <Icon icon={PlayIcon} />,
                 key: 'runNow',
                 label: t('taskList.contextMenu.runNow'),
-                onClick: async ({ domEvent }) => {
+                onClick: async ({ domEvent }: MenuInfo) => {
                   domEvent.stopPropagation();
                   if (!task.assigneeAgentId && inboxAgentId) {
                     await updateTask(task.identifier, { assigneeAgentId: inboxAgentId });
@@ -287,13 +292,10 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
 
 export const useTaskItemContextMenu = (task: TaskContextMenuTarget): TaskItemContextMenu => {
   const { buildItems, installKeyboardHandlers } = useTaskContextMenuActions();
-  const items = useMemo(
-    () => buildItems(task),
-    [buildItems, task.identifier, task.status, task.priority, task.assigneeAgentId],
-  );
+  const items = useMemo(() => buildItems(task), [buildItems, task]);
   const onContextMenu = useCallback(
     () => installKeyboardHandlers(task),
-    [installKeyboardHandlers, task.identifier, task.status, task.priority],
+    [installKeyboardHandlers, task],
   );
   return { items, onContextMenu };
 };

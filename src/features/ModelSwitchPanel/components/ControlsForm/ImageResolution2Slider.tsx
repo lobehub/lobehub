@@ -1,7 +1,7 @@
 import { type CreatedLevelSliderProps } from './createLevelSlider';
 import { createLevelSliderComponent } from './createLevelSlider';
 
-const IMAGE_RESOLUTIONS_2 = ['512px', '1K', '2K', '4K'] as const;
+const IMAGE_RESOLUTIONS_2 = ['512', '1K', '2K', '4K'] as const;
 type ImageResolution2 = (typeof IMAGE_RESOLUTIONS_2)[number];
 
 export type ImageResolution2SliderProps = CreatedLevelSliderProps<ImageResolution2>;

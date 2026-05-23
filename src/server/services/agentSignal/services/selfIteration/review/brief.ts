@@ -8,6 +8,11 @@ import type { LobeChatDatabase } from '@/database/type';
 
 import type { EvidenceRef, RunResult } from '../types';
 import { ActionStatus, ReviewRunStatus } from '../types';
+import {
+  createSelfReviewBriefText,
+  type SelfReviewBriefTextActionSummaries,
+  type SelfReviewBriefTextTranslator,
+} from './briefText';
 import type {
   SelfReviewIdea,
   SelfReviewProposalMetadata,
@@ -260,6 +265,8 @@ export interface ProjectNightlyReviewBriefInput {
   reviewWindowEnd: string;
   /** Review window start ISO timestamp. */
   reviewWindowStart: string;
+  /** Locale-aware translator for persisted Daily Brief text. */
+  t?: SelfReviewBriefTextTranslator;
   /** IANA timezone used for nightly scheduling. */
   timezone: string;
   /** User that owns the agent and brief. */
@@ -353,37 +360,30 @@ const getOutcome = (
   return;
 };
 
-const formatActionSummaries = (
+const collectActionSummaries = (
   result: RunResult,
-  status: ActionStatus,
-  heading: string,
   plan?: SelfReviewProposalPlan,
-) => {
+): SelfReviewBriefTextActionSummaries => {
   const planActionByIdempotencyKey = getPlanActionByIdempotencyKey(plan);
-  const summaries = result.actions
-    .filter((action) => {
-      if (status !== ActionStatus.Proposed) return action.status === status;
+  const summaries: SelfReviewBriefTextActionSummaries = {
+    applied: [],
+    failed: [],
+    proposed: [],
+  };
 
-      return isVisibleProposalResult(action, planActionByIdempotencyKey);
-    })
-    .map((action) => action.summary?.trim() ?? '')
-    .filter(Boolean);
+  for (const action of result.actions) {
+    const summary = action.summary?.trim();
 
-  if (summaries.length === 0) return;
+    if (!summary) continue;
 
-  return [`**${heading}**`, ...summaries.map((summary) => `- ${summary}`)].join('\n');
-};
+    if (action.status === ActionStatus.Applied) summaries.applied.push(summary);
+    if (action.status === ActionStatus.Failed) summaries.failed.push(summary);
+    if (isVisibleProposalResult(action, planActionByIdempotencyKey)) {
+      summaries.proposed.push(summary);
+    }
+  }
 
-const createDetailedSummary = (
-  summary: string,
-  result: RunResult,
-  status: ActionStatus,
-  heading: string,
-  plan?: SelfReviewProposalPlan,
-) => {
-  const details = formatActionSummaries(result, status, heading, plan);
-
-  return details ? `${summary}\n\n${details}` : summary;
+  return summaries;
 };
 
 const collectBriefArtifactDocuments = ({
@@ -427,53 +427,6 @@ const createBriefArtifacts = (input: {
   const documents = collectBriefArtifactDocuments(input);
 
   return documents.length > 0 ? { documents } : undefined;
-};
-
-const createBriefCopy = (
-  outcome: SelfReviewBriefMetadata['outcome'],
-  counts: SelfReviewBriefActionCounts,
-  result: RunResult,
-  plan?: SelfReviewProposalPlan,
-) => {
-  if (outcome === 'proposal') {
-    const summary = `${counts.proposed} self-review proposal${counts.proposed === 1 ? '' : 's'} need review.`;
-
-    return {
-      priority: 'normal' as const,
-      summary: createDetailedSummary(summary, result, ActionStatus.Proposed, 'Proposal', plan),
-      title: 'Agent self-review proposal',
-      type: 'decision' as const,
-    };
-  }
-
-  if (outcome === 'error') {
-    const summary = 'Agent self-review could not finish all self-review actions.';
-
-    return {
-      priority: 'normal' as const,
-      summary: createDetailedSummary(summary, result, ActionStatus.Failed, 'Failure'),
-      title: 'Agent self-review needs attention',
-      type: 'error' as const,
-    };
-  }
-
-  if (outcome === 'ideas') {
-    return {
-      priority: 'info' as const,
-      summary: 'Agent self-review saved shared ideas for future review.',
-      title: 'Agent self-review ideas',
-      type: 'insight' as const,
-    };
-  }
-
-  const summary = `${counts.applied} self-iteration update${counts.applied === 1 ? '' : 's'} applied.`;
-
-  return {
-    priority: 'info' as const,
-    summary: createDetailedSummary(summary, result, ActionStatus.Applied, 'Updated'),
-    title: 'Agent self-review updated resources',
-    type: 'insight' as const,
-  };
 };
 
 /**
@@ -552,7 +505,12 @@ export const createBriefSelfReviewService = () => ({
 
     if (!outcome) return;
 
-    const copy = createBriefCopy(outcome, actionCounts, input.result, input.plan);
+    const copy = createSelfReviewBriefText({
+      actionCounts,
+      actionSummaries: collectActionSummaries(input.result, input.plan),
+      outcome,
+      t: input.t,
+    });
     const proposal =
       outcome === 'proposal' && input.plan
         ? buildSelfReviewProposalFromPlan({

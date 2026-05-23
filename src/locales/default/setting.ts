@@ -177,13 +177,10 @@ export default {
   'agentSkillModal.url.title': 'Import from URL',
   'agentSkillModal.url.urlPlaceholder': 'https://example.com/path/to/SKILL.md',
   'agentSkillTag': 'Agent Skill',
-  'agentTab.chat': 'Chat Preferences',
-  'agentTab.documents': 'Documents',
-  'agentTab.meta': 'Agent info',
-  'agentTab.modal': 'Model Settings',
   'agentTab.opening': 'Opening Settings',
   'agentTab.plugin': 'Skill Settings',
   'agentTab.prompt': 'Agent Profile',
+  'agentTab.selfIteration': 'Self-Iteration',
   'agentTab.tts': 'Voice Service',
   'agentDocuments.createSuccess': 'Documents created from template',
   'agentDocuments.createWithTemplate': 'Create with this template',
@@ -243,6 +240,22 @@ export default {
 
   // Heterogeneous agent — Desktop tab
   'heterogeneousStatus.desktop.tabLabel': 'Desktop',
+
+  // Remote platform agent profile config panel (openclaw / hermes)
+  'platformAgentConfig.title': 'Platform Configuration',
+  'platformAgentConfig.platform.label': 'Platform',
+  'platformAgentConfig.device.label': 'Bound Device',
+  'platformAgentConfig.device.none': 'None',
+  'platformAgentConfig.device.online': 'Online',
+  'platformAgentConfig.device.offline': 'Offline',
+  'platformAgentConfig.availability.label': 'Availability',
+  'platformAgentConfig.availability.checking': 'Checking...',
+  'platformAgentConfig.availability.available': 'Available',
+  'platformAgentConfig.availability.notInstalled': 'Not installed',
+  'platformAgentConfig.availability.noDevice': 'No device bound',
+  'platformAgentConfig.changeDevice': 'Change Device',
+  'platformAgentConfig.redetect': 'Re-detect',
+  'platformAgentConfig.selectDevice': 'Select a device',
 
   'checking': 'Checking...',
 
@@ -596,21 +609,20 @@ export default {
   'settingAppearance.primaryColor.desc': 'Custom theme color',
   'settingAppearance.primaryColor.title': 'Theme Color',
   'settingAppearance.title': 'Application Appearance',
-  'settingChat.autoCreateTopicThreshold.desc':
-    'Automatically create a topic when the current message count exceeds this value',
-  'settingChat.autoCreateTopicThreshold.title': 'Message Threshold',
   'settingChat.chatStyleType.title': 'Chat Window Style',
   'settingChat.chatStyleType.type.chat': 'Conversation Mode',
   'settingChat.chatStyleType.type.docs': 'Page Mode',
   'settingChat.compressThreshold.desc':
     'When the uncompressed history messages exceed this value, compression will be applied',
   'settingChat.compressThreshold.title': 'History Message Length Compression Threshold',
-  'settingChat.enableAutoCreateTopic.desc':
-    'Whether to automatically create a topic during the conversation, only effective in temporary topics',
-  'settingChat.enableAutoCreateTopic.title': 'Auto Create Topic',
   'settingChat.enableAutoScrollOnStreaming.desc': 'Override global setting for this assistant',
   'settingChat.enableAutoScrollOnStreaming.title': 'Auto-scroll During AI Response',
   'settingChat.enableCompressHistory.title': 'Enable Automatic Summary of Chat History',
+  'settingChat.enableFollowUpChips.desc':
+    'After each reply, show one-click follow-up reply chips below the message. Requires the global Follow-up model to be configured.',
+  'settingChat.enableFollowUpChips.notConfiguredHint':
+    'Configure the global Follow-up model first to enable this.',
+  'settingChat.enableFollowUpChips.title': 'Follow-up Suggestions',
   'settingChat.enableHistoryCount.alias': 'Unlimited',
   'settingChat.enableHistoryCount.limited': 'Include only {{number}} conversation messages',
   'settingChat.enableHistoryCount.setlimited': 'Set limited history messages',
@@ -625,10 +637,6 @@ export default {
   'settingChat.inputTemplate.placeholder':
     'Preprocessing template {{text}} will be replaced with real-time input information',
   'settingChat.inputTemplate.title': 'User Input Preprocessing',
-  'settingChat.selfIteration.enabled.desc':
-    'Allow this assistant to review recent signals and improve its own skills when the lab workflow runs',
-  'settingChat.selfIteration.enabled.title': 'Enable Self-Iteration',
-  'settingChat.selfIteration.title': 'Advanced Labs',
   'settingChat.submit': 'Update Chat Preferences',
   'settingChat.title': 'Chat Settings',
   'settingChatAppearance.autoScrollOnStreaming.desc':
@@ -647,8 +655,9 @@ export default {
   'settingChatAppearance.transitionMode.options.none.value': 'None',
   'settingChatAppearance.transitionMode.options.smooth': 'Smooth',
   'settingChatAppearance.transitionMode.title': 'Transition Animation',
-  'settingCommon.devMode.desc': 'Enable to show developer-related features and options',
-  'settingCommon.devMode.title': 'Developer Mode',
+  'settingCommon.devMode.desc':
+    'Show technical details and manual controls for chats, models, and local tools. This does not change model responses.',
+  'settingCommon.devMode.title': 'Advanced tools',
   'settingCommon.lang.autoMode': 'Follow System',
   'settingCommon.lang.title': 'Language',
   'settingCommon.liteMode.desc': 'Simplify the interface and hide advanced features',
@@ -743,6 +752,17 @@ export default {
   'settingModel.model.desc': '{{provider}} model',
   'settingModel.model.title': 'Model',
   'settingModel.params.title': 'Advanced Parameters',
+  'settingModel.params.panel.advanced': 'Advanced Settings',
+  'settingModel.params.panel.agentTitle': 'Agent Advanced Settings',
+  'settingModel.params.panel.contextCompression': 'Auto-compress Context',
+  'settingModel.params.panel.creativity': 'Creativity',
+  'settingModel.params.panel.historyLimit': 'Limit History Messages',
+  'settingModel.params.panel.openness': 'Openness',
+  'settingModel.params.panel.responseLength': 'Limit Response Length',
+  'settingModel.params.panel.tab': 'Params',
+  'settingModel.params.panel.title': 'Chat Parameter Settings',
+  'settingModel.params.panel.topicDivergence': 'Topic Divergence',
+  'settingModel.params.panel.vocabularyRichness': 'Vocabulary Richness',
   'settingModel.presencePenalty.desc':
     'The higher the value, the more inclined to use different expressions and avoid concept repetition; the lower the value, the more inclined to use repeated concepts or narratives, resulting in more consistent expression.',
   'settingModel.presencePenalty.title': 'Expression Divergence',
@@ -776,6 +796,12 @@ export default {
   'settingOpening.openingQuestions.title': 'Opening Questions',
   'settingOpening.title': 'Opening Settings',
   'settingPlugin.title': 'Skill List',
+  'settingSelfIteration.enabled.desc':
+    'Allow this assistant to review recent signals and improve its own skills when the self-iteration workflow runs.',
+  'settingSelfIteration.enabled.managedDesc':
+    'Always on for Lobe AI while Self-Iteration is available.',
+  'settingSelfIteration.enabled.title': 'Enable Self-Iteration',
+  'settingSelfIteration.title': 'Self-Iteration',
   'settingSystem.oauth.info.desc': 'Logged in',
   'settingSystem.oauth.info.title': 'Account Information',
   'settingSystem.oauth.signin.action': 'Sign In',
@@ -949,6 +975,10 @@ When I am ___, I need ___
     'Once filled out, the system agent will use the custom prompt when generating content',
   'systemAgent.customPrompt.placeholder': 'Please enter custom prompt',
   'systemAgent.customPrompt.title': 'Custom Prompt',
+  'systemAgent.followUpAction.label': 'Follow-up Suggestions Model',
+  'systemAgent.followUpAction.modelDesc':
+    'Model used to suggest one-click follow-up replies under each assistant message',
+  'systemAgent.followUpAction.title': 'Follow-up Suggestions',
   'systemAgent.generationTopic.label': 'Model',
   'systemAgent.generationTopic.modelDesc': 'Model used to name AI image topics',
   'systemAgent.generationTopic.title': 'AI Image Topic Naming',
@@ -977,6 +1007,8 @@ When I am ___, I need ___
   'systemAgent.translation.title': 'Message Translation',
   'tab.about': 'About',
   'tab.advanced': 'Advanced',
+  'tab.advanced.appUpdates.title': 'App updates',
+  'tab.advanced.toolsAndDiagnostics.title': 'Tools and diagnostics',
   'tab.addAgentSkill': 'Add Agent Skill',
   'tab.advanced.updateChannel.canary': 'Canary',
   'tab.advanced.updateChannel.canaryDesc':
@@ -987,7 +1019,7 @@ When I am ___, I need ___
   'tab.advanced.updateChannel.nightlyDesc': 'Automated daily builds with the latest changes.',
   'tab.advanced.updateChannel.stable': 'Stable',
   'tab.advanced.updateChannel.stableDesc': 'Production-ready releases.',
-  'tab.advanced.updateChannel.title': 'Update Channel',
+  'tab.advanced.updateChannel.title': 'Update channel',
   'tab.addCustomMcp': 'Add Custom MCP Skill',
   'tab.addCustomMcp.desc': 'Manually configure a custom MCP server',
   'tab.addCustomSkill': 'Add',
@@ -1049,10 +1081,6 @@ When I am ___, I need ___
   'tools.builtins.lobe-cloud-sandbox.readme':
     'Execute Python, JavaScript, and TypeScript code in an isolated cloud environment. Run shell commands, manage files, search content with regex, and export results securely.',
   'tools.builtins.lobe-cloud-sandbox.title': 'Cloud Sandbox',
-  'tools.builtins.lobe-gtd.description': 'Plan goals and track progress with GTD methodology',
-  'tools.builtins.lobe-gtd.readme':
-    'Plan goals and track progress using GTD methodology. Create strategic plans, manage todo lists with status tracking, and execute long-running async tasks.',
-  'tools.builtins.lobe-gtd.title': 'GTD Tools',
   'tools.builtins.lobe-local-system.description':
     'Access and manage local files, run shell commands on your desktop',
   'tools.builtins.lobe-local-system.readme':
@@ -1146,6 +1174,7 @@ When I am ___, I need ___
   'tools.builtins.task.description':
     'Task management and execution — create, track, review, and complete tasks via CLI.',
   'tools.builtins.task.title': 'Task',
+  'tools.builtins.configure': 'Configure',
   'tools.builtins.notInstalled': 'Not Installed',
   'tools.builtins.uninstall': 'Uninstall',
   'tools.builtins.uninstallConfirm.desc':
@@ -1363,6 +1392,10 @@ When I am ___, I need ___
   'tools.plugins.noEnabled': 'No skills enabled',
   'tools.plugins.store': 'Add skill',
   'tools.search': 'Search skills...',
+  'tools.activation.auto': 'Auto',
+  'tools.activation.auto.desc': 'Smart',
+  'tools.activation.pinned': 'Pinned',
+  'tools.activation.pinned.desc': 'Always On',
   'tools.skillActivateMode.auto.desc':
     'AI can autonomously activate tools, run skills, and install new skills from the store',
   'tools.skillActivateMode.auto.title': 'Auto',

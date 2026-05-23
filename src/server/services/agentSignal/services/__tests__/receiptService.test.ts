@@ -1,6 +1,7 @@
 // @vitest-environment node
 import type { BaseAction, ExecutorResult } from '@lobechat/agent-signal';
 import { createSource } from '@lobechat/agent-signal';
+import { LayersEnum } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AGENT_SIGNAL_POLICY_ACTION_TYPES } from '../../policies/types';
@@ -52,7 +53,100 @@ const result = (input: {
 });
 
 describe('projectAgentSignalReceipts', () => {
-  it('projects applied memory action results', () => {
+  it('prefers anchorMessageId over assistantMessageId for receipt anchoring', () => {
+    const anchoredSource = createSource({
+      payload: {
+        agentId: 'agent-1',
+        anchorMessageId: 'assistant-anchor-1',
+        assistantMessageId: 'assistant-legacy-1',
+        topicId: 'topic-1',
+      },
+      scope: { topicId: 'topic-1', userId: 'user-1' },
+      scopeKey: 'topic:topic-1',
+      sourceId: 'source-anchor-1',
+      sourceType: 'client.runtime.complete',
+      timestamp: 1_700_000,
+    });
+
+    expect(
+      projectAgentSignalReceipts({
+        actions: [
+          action({
+            actionId: 'action-memory-1',
+            actionType: AGENT_SIGNAL_POLICY_ACTION_TYPES.userMemoryHandle,
+            payload: {},
+          }),
+        ],
+        results: [result({ actionId: 'action-memory-1', status: 'applied' })],
+        source: anchoredSource,
+        userId: 'user-1',
+      }),
+    ).toMatchObject([{ anchorMessageId: 'assistant-anchor-1' }]);
+  });
+
+  it('falls back to assistantMessageId for legacy receipt anchoring payloads', () => {
+    expect(
+      projectAgentSignalReceipts({
+        actions: [
+          action({
+            actionId: 'action-memory-1',
+            actionType: AGENT_SIGNAL_POLICY_ACTION_TYPES.userMemoryHandle,
+            payload: {},
+          }),
+        ],
+        results: [result({ actionId: 'action-memory-1', status: 'applied' })],
+        source,
+        userId: 'user-1',
+      }),
+    ).toMatchObject([{ anchorMessageId: 'assistant-1' }]);
+  });
+
+  it('projects triggerMessageId and falls back to messageId for legacy trigger payloads', () => {
+    const triggerSource = createSource({
+      payload: {
+        agentId: 'agent-1',
+        messageId: 'message-legacy-1',
+        topicId: 'topic-1',
+        triggerMessageId: 'message-trigger-1',
+      },
+      scope: { topicId: 'topic-1', userId: 'user-1' },
+      scopeKey: 'topic:topic-1',
+      sourceId: 'source-trigger-1',
+      sourceType: 'agent.user.message',
+      timestamp: 1_700_000,
+    });
+    const legacyTriggerSource = createSource({
+      payload: {
+        agentId: 'agent-1',
+        messageId: 'message-legacy-1',
+        topicId: 'topic-1',
+      },
+      scope: { topicId: 'topic-1', userId: 'user-1' },
+      scopeKey: 'topic:topic-1',
+      sourceId: 'source-trigger-2',
+      sourceType: 'agent.user.message',
+      timestamp: 1_700_000,
+    });
+
+    const project = (projectSource: typeof triggerSource) =>
+      projectAgentSignalReceipts({
+        actions: [
+          action({
+            actionId: 'action-memory-1',
+            actionType: AGENT_SIGNAL_POLICY_ACTION_TYPES.userMemoryHandle,
+            payload: {},
+          }),
+        ],
+        results: [result({ actionId: 'action-memory-1', status: 'applied' })],
+        source: projectSource,
+        userId: 'user-1',
+      });
+
+    expect(project(triggerSource)).toMatchObject([{ triggerMessageId: 'message-trigger-1' }]);
+    expect(project(legacyTriggerSource)).toMatchObject([{ triggerMessageId: 'message-legacy-1' }]);
+  });
+
+  it('projects applied memory action results without unstructured feedback as target', () => {
     expect(
       projectAgentSignalReceipts({
         actions: [
@@ -78,13 +172,56 @@ describe('projectAgentSignalReceipts', () => {
         sourceId: 'source-1',
         sourceType: 'client.gateway.runtime_end',
         status: 'applied',
-        target: {
-          title: 'Remember that future PR reviews should be decision-first.',
-          type: 'memory',
-        },
         title: 'Memory saved',
         topicId: 'topic-1',
         userId: 'user-1',
+      },
+    ]);
+  });
+
+  it('prefers the memory target title from action output over the feedback message', () => {
+    expect(
+      projectAgentSignalReceipts({
+        actions: [
+          action({
+            actionId: 'action-memory-1',
+            actionType: AGENT_SIGNAL_POLICY_ACTION_TYPES.userMemoryHandle,
+            payload: {
+              message:
+                '<speaker id="833816919" username="nivra2000" nickname="Aa T" />\nEvery section is too short. Can it be longer?',
+            },
+          }),
+        ],
+        results: [
+          result({
+            actionId: 'action-memory-1',
+            output: {
+              target: {
+                id: 'preference_1',
+                memoryId: 'mem_1',
+                memoryLayer: LayersEnum.Preference,
+                summary: 'The user prefers longer, more developed answer sections.',
+                title: 'Preference for detailed answer sections',
+                type: 'memory',
+              },
+            },
+            status: 'applied',
+          }),
+        ],
+        source,
+        userId: 'user-1',
+      }),
+    ).toMatchObject([
+      {
+        kind: 'memory',
+        target: {
+          id: 'preference_1',
+          memoryId: 'mem_1',
+          memoryLayer: LayersEnum.Preference,
+          summary: 'The user prefers longer, more developed answer sections.',
+          title: 'Preference for detailed answer sections',
+          type: 'memory',
+        },
       },
     ]);
   });

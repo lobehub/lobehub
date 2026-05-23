@@ -3,6 +3,10 @@ import { dirname, join, resolve } from 'node:path';
 import tsconfigPaths from 'vite-tsconfig-paths';
 import { coverageConfigDefaults, defineConfig } from 'vitest/config';
 
+if (process.env.NODE_ENV === 'production') {
+  Reflect.set(process.env, 'NODE_ENV', 'test');
+}
+
 const alias = {
   // Downstream workspaces sometimes pnpm-override @lobechat/business-* packages to
   // internal implementations whose source files import alias paths that only exist
@@ -35,6 +39,7 @@ export default defineConfig({
     '__DEV__': process.env.NODE_ENV !== 'production' ? 'true' : 'false',
     '__ELECTRON__': 'false',
     '__MOBILE__': 'false',
+    '__TEST__': 'true',
   },
   optimizeDeps: {
     exclude: ['crypto', 'util', 'tty'],

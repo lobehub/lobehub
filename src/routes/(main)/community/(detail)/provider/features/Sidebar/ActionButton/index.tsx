@@ -13,7 +13,7 @@ import { useDetailContext } from '../../DetailProvider';
 import ProviderConfig from './ProviderConfig';
 
 const ActionButton = memo(() => {
-  const { models = [], identifier, name } = useDetailContext();
+  const { description, models = [], identifier, name } = useDetailContext();
   const { t } = useTranslation('providers');
   return (
     <Flexbox horizontal align={'center'} gap={8} width={'100%'}>
@@ -21,7 +21,7 @@ const ActionButton = memo(() => {
       <ShareButton
         meta={{
           avatar: <ProviderIcon provider={identifier} size={64} type={'avatar'} />,
-          desc: t(`${identifier}.description`),
+          desc: t(`${identifier}.description`, { defaultValue: description }),
           tags: (
             <Flexbox horizontal align={'center'} gap={4} justify={'center'} wrap={'wrap'}>
               {models

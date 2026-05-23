@@ -1,8 +1,6 @@
 {
   "addUserMessage.desc": "Aggiungi l'input corrente come messaggio utente senza avviare la generazione",
   "addUserMessage.title": "Aggiungi un Messaggio Utente",
-  "clearCurrentMessages.desc": "Cancella i messaggi e i file caricati dalla conversazione corrente",
-  "clearCurrentMessages.title": "Cancella Messaggi della Conversazione",
   "commandPalette.desc": "Apri la palette comandi globale per accedere rapidamente alle funzionalità",
   "commandPalette.title": "Palette Comandi",
   "deleteAndRegenerateMessage.desc": "Elimina l'ultimo messaggio e rigenera",

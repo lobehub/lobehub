@@ -2,7 +2,6 @@
 
 import { Flexbox, Modal } from '@lobehub/ui';
 import { memo } from 'react';
-import { useTranslation } from 'react-i18next';
 
 import type { MessengerPlatform } from '../constants';
 import DiscordLinkBody from './Discord';
@@ -20,8 +19,6 @@ interface LinkModalProps {
 }
 
 const LinkModal = memo<LinkModalProps>(({ appId, botUsername, name, onClose, open, platform }) => {
-  const { t } = useTranslation('messenger');
-
   const renderBody = () => {
     switch (platform) {
       case 'slack': {
@@ -37,14 +34,8 @@ const LinkModal = memo<LinkModalProps>(({ appId, botUsername, name, onClose, ope
   };
 
   return (
-    <Modal
-      footer={null}
-      open={open}
-      title={t('messenger.linkModal.title')}
-      width={480}
-      onCancel={onClose}
-    >
-      <Flexbox align="center" gap={20} style={{ paddingBlock: 16 }}>
+    <Modal footer={null} open={open} title={null} width={480} onCancel={onClose}>
+      <Flexbox align="center" gap={20} style={{ paddingBlockEnd: 16, paddingBlockStart: 40 }}>
         {renderBody()}
       </Flexbox>
     </Modal>

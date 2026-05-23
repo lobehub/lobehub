@@ -54,7 +54,16 @@ const updateSchema = z.object({
   config: z.record(z.unknown()).optional(),
   context: z.record(z.unknown()).optional(),
   description: z.string().optional(),
-  heartbeatInterval: z.number().min(0).optional(),
+  // 0 clears the interval (disables heartbeat); any positive value must be
+  // ≥600s (10 min) to match the UI minimum and prevent sub-minute ticks if an
+  // LLM calls setTaskSchedule with a tiny number.
+  heartbeatInterval: z
+    .number()
+    .int()
+    .refine((v) => v === 0 || v >= 600, {
+      message: 'heartbeatInterval must be 0 (disabled) or at least 600 seconds (10 minutes)',
+    })
+    .optional(),
   heartbeatTimeout: z.number().min(1).nullable().optional(),
   instruction: z.string().optional(),
   name: z.string().optional(),

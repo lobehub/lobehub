@@ -43,6 +43,9 @@ export const getServerGlobalConfig = async () => {
         enabledKey: 'ENABLED_AZURE_OPENAI',
         withDeploymentName: true,
       },
+      azureai: {
+        withDeploymentName: true,
+      },
       bedrock: {
         enabledKey: 'ENABLED_AWS_BEDROCK',
         modelListKey: 'AWS_BEDROCK_MODEL_LIST',
@@ -53,6 +56,9 @@ export const getServerGlobalConfig = async () => {
       giteeai: {
         enabledKey: 'ENABLED_GITEE_AI',
         modelListKey: 'GITEE_AI_MODEL_LIST',
+      },
+      kimicodingplan: {
+        withDeploymentName: true,
       },
       lmstudio: {
         fetchOnClient: isDesktop ? false : undefined,
@@ -67,11 +73,17 @@ export const getServerGlobalConfig = async () => {
       qwen: {
         withDeploymentName: true,
       },
+      spark: {
+        withDeploymentName: true,
+      },
       tencentcloud: {
         enabledKey: 'ENABLED_TENCENT_CLOUD',
         modelListKey: 'TENCENT_CLOUD_MODEL_LIST',
       },
       volcengine: {
+        withDeploymentName: true,
+      },
+      volcenginecodingplan: {
         withDeploymentName: true,
       },
     }),

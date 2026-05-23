@@ -174,6 +174,12 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
     );
     const streamingInitialLevel: WorkflowExpandLevel = streamingDefault ?? 'semi';
     const completionInitialLevel: WorkflowExpandLevel = completionDefault ?? 'collapsed';
+    /** When a consumer opts any phase into `full`, treat the workflow as a
+     *  "fully expanded" experience — manual expands from collapsed go to
+     *  `full` instead of the legacy `semi` cap. Heterogeneous agents rely on
+     *  this so all 40+ tool calls stay visible after the user re-expands. */
+    const manualExpandLevel: WorkflowExpandLevel =
+      streamingDefault === 'full' || completionDefault === 'full' ? 'full' : 'semi';
 
     const [expandLevel, setExpandLevel] = useState<WorkflowExpandLevel>(() =>
       allComplete ? completionInitialLevel : streamingInitialLevel,
@@ -308,13 +314,13 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
         if (forceExpanded && !nowExpanded) return;
 
         if (nowExpanded) {
-          setExpandLevel('semi');
+          setExpandLevel(manualExpandLevel);
           userOpenedRef.current = true;
         } else {
           setExpandLevel('collapsed');
         }
       },
-      [forceExpanded],
+      [forceExpanded, manualExpandLevel],
     );
     const expandedKeys = useMemo(() => (isExpanded ? ['workflow'] : []), [isExpanded]);
     const constrained = expandLevel === 'semi';
@@ -325,24 +331,64 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
       threshold: WORKFLOW_EXPANDED_SCROLL_THRESHOLD_PX,
     });
 
-    const getStatusIcon = (): React.ReactNode => {
+    const renderStatusBlock = (): React.ReactNode => {
+      const wrapInBlock = (inner: React.ReactNode) => (
+        <Block
+          horizontal
+          align="center"
+          flex="none"
+          height={24}
+          justify="center"
+          style={{ fontSize: 12 }}
+          variant="outlined"
+          width={24}
+        >
+          {inner}
+        </Block>
+      );
+
       if (streaming) {
-        return pendingInterventionPresent ? (
-          <Icon color={cssVar.colorInfo} icon={HandIcon} />
-        ) : (
-          <NeuralNetworkLoading size={16} />
+        return wrapInBlock(
+          pendingInterventionPresent ? (
+            <Icon color={cssVar.colorInfo} icon={HandIcon} />
+          ) : (
+            <NeuralNetworkLoading size={16} />
+          ),
         );
       }
 
       switch (completionStatus) {
         case 'error': {
-          return <Icon color={cssVar.colorError} icon={X} />;
+          return wrapInBlock(<Icon color={cssVar.colorError} icon={X} />);
         }
         case 'partial': {
-          return <Icon color={cssVar.colorWarning} icon={AlertTriangle} />;
+          // Mix of success + failure: show success as the primary state and
+          // surface a small warning badge at the bottom-right so the overall
+          // turn still reads as "done" rather than "broken".
+          return (
+            <div style={{ flex: 'none', position: 'relative' }}>
+              {wrapInBlock(<Icon color={cssVar.colorSuccess} icon={Check} />)}
+              <div
+                style={{
+                  alignItems: 'center',
+                  background: cssVar.colorBgContainer,
+                  borderRadius: '50%',
+                  bottom: 0,
+                  display: 'flex',
+                  height: 10,
+                  justifyContent: 'center',
+                  position: 'absolute',
+                  right: 0,
+                  width: 10,
+                }}
+              >
+                <Icon color={cssVar.colorWarning} icon={AlertTriangle} size={8} />
+              </div>
+            </div>
+          );
         }
         default: {
-          return <Icon color={cssVar.colorSuccess} icon={Check} />;
+          return wrapInBlock(<Icon color={cssVar.colorSuccess} icon={Check} />);
         }
       }
     };
@@ -385,18 +431,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
 
     const title = (
       <Flexbox horizontal align="center" gap={6} style={{ minWidth: 0 }}>
-        <Block
-          horizontal
-          align="center"
-          flex="none"
-          height={24}
-          justify="center"
-          style={{ fontSize: 12 }}
-          variant="outlined"
-          width={24}
-        >
-          {getStatusIcon()}
-        </Block>
+        {renderStatusBlock()}
         {streaming ? (
           <Flexbox
             horizontal
@@ -409,7 +444,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
             }}
           >
             <div style={{ minWidth: 0, overflow: 'hidden' }}>
-              <AnimatePresence initial={false} mode="wait">
+              <AnimatePresence initial={false} mode="popLayout">
                 <motion.div
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}

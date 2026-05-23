@@ -15,6 +15,7 @@ import { taskListSelectors } from '@/store/task/selectors';
 
 import { createTaskModal } from '../CreateTaskModal';
 import Breadcrumb from '../shared/Breadcrumb';
+import { taskDetailPath } from '../shared/taskDetailPath';
 import CreateTaskInlineEntry from './CreateTaskInlineEntry';
 import EmptyState from './EmptyState';
 import KanbanBoard from './KanbanBoard';
@@ -50,7 +51,7 @@ const AgentTasksPage = memo(() => {
   const handleCreateTask = useCallback(() => {
     createTaskModal({
       onCreated: (task) => {
-        navigate(`/task/${task.identifier}`);
+        navigate(taskDetailPath(task.identifier, task.agentId));
       },
     });
   }, [navigate]);

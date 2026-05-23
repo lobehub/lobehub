@@ -541,7 +541,7 @@ export const messengerRouter = router({
 /**
  * Best-effort confirmation back to the IM platform after a successful link.
  * Slack needs `tenantId` to resolve the right per-workspace bot token; Telegram
- * is a global bot and ignores it. PR2.4 (LOBE-8453) rewires the Slack binder
+ * is a global bot and ignores it. PR2.4 () rewires the Slack binder
  * to receive `InstallationCredentials` via the router's installation store —
  * until then this entry point falls back to no-op for Slack (binder.createClient
  * returns null in PR1's intermediate state).

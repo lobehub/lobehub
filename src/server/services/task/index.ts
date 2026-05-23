@@ -260,6 +260,22 @@ export class TaskService {
     const task = await this.taskModel.updateStatus(resolved.id, status, extra);
     if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
 
+    // Stamp the schedule run-count window each time the user (re)starts a
+    // scheduled task. The cron dispatcher itself flips a task running →
+    // scheduled on every tick, so we exclude that natural cycle by only
+    // resetting when the previous status was NOT 'running'. This lets
+    // `runScheduleTick` enforce `config.schedule.maxExecutions` by counting
+    // task_topics created since this timestamp.
+    if (
+      status === 'scheduled' &&
+      task.automationMode === 'schedule' &&
+      resolved.status !== 'running'
+    ) {
+      await this.taskModel.updateContext(task.id, {
+        scheduler: { scheduleStartedAt: new Date().toISOString() },
+      });
+    }
+
     const unlocked: string[] = [];
     const paused: string[] = [];
     let allSubtasksDone = false;
@@ -471,11 +487,15 @@ export class TaskService {
     );
 
     // Resolve parent
-    let parent: { identifier: string; name: string | null } | null = null;
+    let parent: { agentId: string | null; identifier: string; name: string | null } | null = null;
     if (task.parentTaskId) {
       const parentTask = await this.taskModel.findById(task.parentTaskId);
       if (parentTask) {
-        parent = { identifier: parentTask.identifier, name: parentTask.name };
+        parent = {
+          agentId: parentTask.assigneeAgentId,
+          identifier: parentTask.identifier,
+          name: parentTask.name,
+        };
       }
     }
 

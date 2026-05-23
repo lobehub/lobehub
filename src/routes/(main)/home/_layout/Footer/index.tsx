@@ -36,7 +36,6 @@ import { systemStatusSelectors } from '@/store/global/selectors/systemStatus';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors/general';
-import { prefetchRoute } from '@/utils/router';
 
 import { resolveFooterPromotionState } from './promotionPipeline';
 
@@ -387,7 +386,7 @@ const Footer = memo(() => {
             <ActionIcon aria-label={t('userPanel.help')} icon={CircleHelp} size={16} />
           </DropdownMenu>
           {isDevMode && (
-            <Link to="/settings" onMouseEnter={() => prefetchRoute('/settings')}>
+            <Link to="/settings">
               <ActionIcon
                 aria-label={t('userPanel.setting')}
                 icon={SettingsIcon}

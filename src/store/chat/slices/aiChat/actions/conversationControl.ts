@@ -1,7 +1,11 @@
 // Disable the auto sort key eslint rule to make the code more logic and readable
 import { type AgentRuntimeContext } from '@lobechat/agent-runtime';
 import { MESSAGE_CANCEL_FLAT } from '@lobechat/const';
-import { type ConversationContext } from '@lobechat/types';
+import {
+  type ConversationContext,
+  type MessageMetadata,
+  type UIChatMessage,
+} from '@lobechat/types';
 
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -37,11 +41,11 @@ export class ConversationControlActionImpl {
    * Decide whether approve/reject/reject_continue should go through the
    * Gateway resume path (new op carrying `resumeApproval`) instead of the
    * local `executeClientAgent` path. Mirrors the "interrupt + new op"
-   * pattern from LOBE-7142.
+   * pattern from .
    *
    * Routes via `selectRuntimeType` so approve/reject align with how the
    * conversation was dispatched at sendMessage time. Hetero resume is not yet
-   * implemented and falls through to client local resume — see LOBE-8519.
+   * implemented and falls through to client local resume — see .
    *
    * We deliberately do **not** look for a living `execServerAgentRuntime`
    * op here. The server's `waiting_for_human` → `agent_runtime_end` signal
@@ -86,6 +90,43 @@ export class ConversationControlActionImpl {
       (op) =>
         op.type === 'execServerAgentRuntime' && op.status === 'running' && !op.metadata?.isAborting,
     );
+  };
+
+  /**
+   * Local tool-interaction resumes are continuations of the original request.
+   * Preserve the request trigger so downstream chat requests keep the same
+   * headers after a human-intervention pause.
+   */
+  #getRequestMetadataFromMessageChain = (
+    anchorMessageId: string,
+    fallbackMessages: UIChatMessage[] = [],
+  ): Pick<MessageMetadata, 'trigger'> | undefined => {
+    const messagesById = new Map<string, UIChatMessage>();
+    const addMessages = (messages: UIChatMessage[]) => {
+      for (const message of messages) {
+        if (!messagesById.has(message.id)) messagesById.set(message.id, message);
+      }
+    };
+
+    for (const messages of Object.values(this.#get().dbMessagesMap)) {
+      addMessages(messages);
+    }
+    addMessages(fallbackMessages);
+
+    const visitedIds = new Set<string>();
+    let currentMessageId: string | undefined = anchorMessageId;
+
+    while (currentMessageId && !visitedIds.has(currentMessageId)) {
+      visitedIds.add(currentMessageId);
+
+      const message = messagesById.get(currentMessageId);
+      if (!message) return;
+
+      const trigger = message.metadata?.trigger;
+      if (trigger) return { trigger };
+
+      currentMessageId = message.parentId;
+    }
   };
 
   /**
@@ -218,6 +259,7 @@ export class ConversationControlActionImpl {
       { intervention: { status: 'approved' } },
       optimisticContext,
     );
+    const requestMetadata = this.#getRequestMetadataFromMessageChain(toolMessageId);
 
     // 2.5. Server-mode: start a **new** Gateway op carrying the approval
     // decision via `resumeApproval`. The server reads the target tool
@@ -242,6 +284,7 @@ export class ConversationControlActionImpl {
         await this.#get().executeGatewayAgent({
           context: effectiveContext,
           message: '',
+          metadata: requestMetadata,
           parentMessageId: toolMessageId,
           resumeApproval: {
             decision: 'approved',
@@ -265,6 +308,10 @@ export class ConversationControlActionImpl {
     // 3. Get current messages for state construction using context
     const chatKey = messageMapKey({ agentId, topicId, threadId, scope });
     const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
+    const currentRequestMetadata = this.#getRequestMetadataFromMessageChain(
+      toolMessageId,
+      currentMessages,
+    );
 
     // 4. Create agent state and context with user intervention config
     const { state, context: initialContext } = this.#get().internal_createAgentState({
@@ -296,6 +343,7 @@ export class ConversationControlActionImpl {
         parentMessageType: 'tool', // Type is 'tool'
         initialState: state,
         initialContext: agentRuntimeContext,
+        metadata: currentRequestMetadata,
         // Pass parent operation ID to establish parent-child relationship
         // This ensures proper cancellation propagation
         parentOperationId: operationId,
@@ -379,6 +427,10 @@ export class ConversationControlActionImpl {
     // tool result, not a fake user turn.
     if (!shouldCreateUserMessage) {
       const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
+      const requestMetadata = this.#getRequestMetadataFromMessageChain(
+        toolMessageId,
+        currentMessages,
+      );
 
       const { state, context: initialContext } = this.#get().internal_createAgentState({
         messages: currentMessages,
@@ -411,6 +463,7 @@ export class ConversationControlActionImpl {
           parentMessageType: 'tool',
           initialState: state,
           initialContext: agentRuntimeContext,
+          metadata: requestMetadata,
           parentOperationId: operationId,
         });
         completeOperation(operationId);
@@ -426,6 +479,7 @@ export class ConversationControlActionImpl {
     }
 
     // 2b. Default path: create a user message summarizing the response, resume from user
+    const requestMetadata = this.#getRequestMetadataFromMessageChain(toolMessageId);
     const userMessageContent = Object.values(response).join(', ');
     const groupId = toolMessage.groupId;
     const userMsg = await this.#get().optimisticCreateMessage(
@@ -433,6 +487,7 @@ export class ConversationControlActionImpl {
         agentId: agentId!,
         content: userMessageContent,
         groupId: groupId ?? undefined,
+        ...(requestMetadata && { metadata: requestMetadata }),
         role: 'user',
         threadId: threadId ?? undefined,
         topicId: topicId ?? undefined,
@@ -468,6 +523,7 @@ export class ConversationControlActionImpl {
         parentMessageType: 'user',
         initialState: state,
         initialContext,
+        metadata: requestMetadata,
         parentOperationId: operationId,
       });
       completeOperation(operationId);
@@ -528,6 +584,8 @@ export class ConversationControlActionImpl {
     );
 
     // 2. Create a user message indicating the skip
+    const chatKey = messageMapKey({ agentId, topicId, threadId, scope });
+    const requestMetadata = this.#getRequestMetadataFromMessageChain(toolMessageId);
     const userMessageContent = reason ? `I'll skip this. ${reason}` : "I'll skip this.";
     const groupId = toolMessage.groupId;
     const userMsg = await this.#get().optimisticCreateMessage(
@@ -535,6 +593,7 @@ export class ConversationControlActionImpl {
         agentId: agentId!,
         content: userMessageContent,
         groupId: groupId ?? undefined,
+        ...(requestMetadata && { metadata: requestMetadata }),
         role: 'user',
         threadId: threadId ?? undefined,
         topicId: topicId ?? undefined,
@@ -551,7 +610,6 @@ export class ConversationControlActionImpl {
     }
 
     // 3. Resume agent from user message
-    const chatKey = messageMapKey({ agentId, topicId, threadId, scope });
     const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
 
     const { state, context: initialContext } = this.#get().internal_createAgentState({
@@ -571,6 +629,7 @@ export class ConversationControlActionImpl {
         parentMessageType: 'user',
         initialState: state,
         initialContext,
+        metadata: requestMetadata,
         parentOperationId: operationId,
       });
       completeOperation(operationId);
@@ -686,7 +745,21 @@ export class ConversationControlActionImpl {
       topicId: this.#get().activeTopicId,
       threadId: this.#get().activeThreadId,
     };
-    const optimisticContext: OptimisticUpdateContext = { operationId };
+    // If the operation has already been garbage-collected (e.g. the bridge
+    // timed out earlier and `runtime_end` rolled the op into `completed`
+    // 30s+ ago), don't pass the stale opId into the optimistic chain — the
+    // `internal_getConversationContext` fallback uses global state, which
+    // matches the active conversation the user just clicked in. The IPC
+    // submit below stays unchanged: `bridge.resolve()` no-ops on unknown
+    // toolCallIds, so it's safe to fire even when the bridge is gone.
+    const operationAlive = !!this.#get().operations[operationId];
+    if (!operationAlive) {
+      console.warn(
+        '[submitHeteroIntervention] operation already gone, using global-state fallback for optimistic write:',
+        operationId,
+      );
+    }
+    const optimisticContext: OptimisticUpdateContext = operationAlive ? { operationId } : {};
 
     if (actionType === 'submit') {
       await this.#get().optimisticUpdateMessagePlugin(
@@ -742,7 +815,18 @@ export class ConversationControlActionImpl {
       console.error('[submitHeteroIntervention] IPC submitIntervention failed:', err);
     }
 
-    void effectiveContext;
+    // Sidebar topic row was swapped to the `waitingForHuman` hand icon when
+    // the intervention was raised; once the user submits/skips/cancels the
+    // CC stream resumes so flip it back to `running`. The natural completion
+    // (`runtime_end` → `writeTopicStatus('active')`) takes over from there.
+    if (effectiveContext.topicId) {
+      void this.#get().updateTopicStatus?.({
+        agentId: effectiveContext.agentId,
+        groupId: effectiveContext.groupId,
+        status: 'running',
+        topicId: effectiveContext.topicId,
+      });
+    }
   };
 
   /**
@@ -858,6 +942,7 @@ export class ConversationControlActionImpl {
       undefined,
       optimisticContext,
     );
+    const requestMetadata = this.#getRequestMetadataFromMessageChain(messageId);
 
     // Server-mode: start a **new** Gateway op carrying the rejection.
     // We use `rejected_continue` uniformly — server-side `rejected` and
@@ -878,6 +963,7 @@ export class ConversationControlActionImpl {
         await this.#get().executeGatewayAgent({
           context: effectiveContext,
           message: '',
+          metadata: requestMetadata,
           parentMessageId: messageId,
           resumeApproval: {
             decision: 'rejected_continue',
@@ -920,6 +1006,7 @@ export class ConversationControlActionImpl {
     // Skip the client-mode `rejectToolCalling` chain below — that would fire
     // a duplicate halting `reject` before this continue signal.
     if (this.#shouldUseGatewayResume(effectiveContext)) {
+      const requestMetadata = this.#getRequestMetadataFromMessageChain(messageId);
       const toolCallId = toolMessage.tool_call_id;
       if (!toolCallId) {
         console.warn(
@@ -961,6 +1048,7 @@ export class ConversationControlActionImpl {
         await this.#get().executeGatewayAgent({
           context: effectiveContext,
           message: '',
+          metadata: requestMetadata,
           parentMessageId: messageId,
           resumeApproval: {
             decision: 'rejected_continue',
@@ -1001,6 +1089,7 @@ export class ConversationControlActionImpl {
     // Get current messages for state construction using context
     const chatKey = messageMapKey({ agentId, topicId, threadId, scope });
     const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
+    const requestMetadata = this.#getRequestMetadataFromMessageChain(messageId, currentMessages);
 
     // Create agent state and context to continue from rejected tool message
     const { state, context: initialContext } = this.#get().internal_createAgentState({
@@ -1027,6 +1116,7 @@ export class ConversationControlActionImpl {
         parentMessageType: 'tool',
         initialState: state,
         initialContext: agentRuntimeContext,
+        metadata: requestMetadata,
         // Pass parent operation ID to establish parent-child relationship
         parentOperationId: operationId,
       });

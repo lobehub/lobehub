@@ -37,6 +37,12 @@ const shine = keyframes`
   }
 `;
 
+export const elapsedTimeStyles = createStaticStyles(({ css, cssVar }) => ({
+  elapsedTime: css`
+    color: ${cssVar.colorTextTertiary};
+  `,
+}));
+
 export const shinyTextStyles = createStaticStyles(({ css, cssVar }) => ({
   shinyText: css`
     color: color-mix(in srgb, ${cssVar.colorText} 45%, transparent);

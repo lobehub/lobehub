@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createMockResponse } from '../../test-utils';
 import * as withTimeoutModule from '../../utils/withTimeout';
@@ -19,6 +19,15 @@ describe('jina crawler', () => {
     vi.spyOn(withTimeoutModule, 'withTimeout').mockImplementation((fn) =>
       fn(new AbortController().signal),
     );
+    delete process.env.JINA_API_KEY;
+    delete process.env.JINA_READER_API_KEY;
+    delete process.env.JINA_USE_CN_DOMAINS;
+  });
+
+  afterEach(() => {
+    delete process.env.JINA_API_KEY;
+    delete process.env.JINA_READER_API_KEY;
+    delete process.env.JINA_USE_CN_DOMAINS;
   });
 
   it('should crawl url successfully', async () => {
@@ -141,6 +150,33 @@ describe('jina crawler', () => {
     await jina('https://example.com', { filterOptions: {} });
 
     expect(mockFetch).toHaveBeenCalledWith('https://r.jina.ai/https://example.com', {
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': '',
+        'x-send-from': 'LobeChat Community',
+      },
+      signal: expect.any(AbortSignal),
+    });
+  });
+
+  it('should use cn reader domain when JINA_USE_CN_DOMAINS is true', async () => {
+    process.env.JINA_USE_CN_DOMAINS = 'true';
+
+    const mockResponse = createMockResponse(
+      {
+        code: 200,
+        data: {
+          content: 'test content',
+        },
+      },
+      { ok: true },
+    );
+
+    mockFetch.mockResolvedValue(mockResponse);
+
+    await jina('https://example.com', { filterOptions: {} });
+
+    expect(mockFetch).toHaveBeenCalledWith('https://r.jinaai.cn/https://example.com', {
       headers: {
         'Accept': 'application/json',
         'Authorization': '',

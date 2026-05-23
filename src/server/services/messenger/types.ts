@@ -84,6 +84,17 @@ export interface MessengerPlatformBinder {
   ) => InboundCallbackAction | null;
 
   /**
+   * Slack-only: peek for an `app_home_opened` event with `tab: "messages"`.
+   * Slack's marketplace listing requires apps with the Messages tab enabled
+   * to send a welcome message on first open. chat-sdk's slack adapter only
+   * forwards Home-tab opens, so messages-tab opens have to be caught at the
+   * webhook level. Returns the user + IM channel to greet, or null when the
+   * inbound isn't the messages-tab opener. The router clones the request
+   * before calling so the body stays readable.
+   */
+  extractAppHomeOpened?: (req: Request) => Promise<{ channelId: string; userId: string } | null>;
+
+  /**
    * Try to extract a tap-action from a raw webhook request. Returns null when
    * the update is a regular message (in which case the caller hands it off to
    * chat-sdk). Platforms without tap callbacks return null unconditionally.
@@ -158,10 +169,21 @@ export interface MessengerPlatformBinder {
    * visible only to that user — used when `/agents` is invoked from a
    * public channel so the personal agent list isn't broadcast. Platforms
    * without an ephemeral primitive ignore the field and post normally.
+   *
+   * `interaction` (Discord-only today) carries the slash command's
+   * application id + interaction token. When set, the binder must complete
+   * the deferred interaction via the webhook follow-up endpoint — otherwise
+   * Discord keeps showing "Thinking..." and eventually flips to "The
+   * application did not respond". Other platforms ignore the field.
    */
   sendAgentPicker?: (
     chatId: string,
-    params: { entries: AgentPickerEntry[]; ephemeralTo?: string; text: string },
+    params: {
+      entries: AgentPickerEntry[];
+      ephemeralTo?: string;
+      interaction?: { applicationId: string; token: string };
+      text: string;
+    },
   ) => Promise<void>;
 
   /** Plain DM reply (used by /agents and various command help texts). */

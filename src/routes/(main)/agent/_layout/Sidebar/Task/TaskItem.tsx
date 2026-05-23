@@ -3,8 +3,8 @@
 import { Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { memo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 
+import { useNavigateToTaskDetail } from '@/features/AgentTasks/shared/taskDetailPath';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import type { TaskGroupItem } from '@/store/task/slices/list/initialState';
 
@@ -16,11 +16,11 @@ interface TaskItemProps {
 }
 
 const TaskItem = memo<TaskItemProps>(({ task, active }) => {
-  const navigate = useNavigate();
+  const navigateToTaskDetail = useNavigateToTaskDetail();
 
   const handleClick = useCallback(() => {
-    navigate(`/task/${task.identifier}`);
-  }, [navigate, task.identifier]);
+    navigateToTaskDetail(task.identifier);
+  }, [navigateToTaskDetail, task.identifier]);
 
   const hasName = Boolean(task.name?.trim());
   const displayTitle = hasName ? task.name : task.identifier;

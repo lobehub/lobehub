@@ -24,7 +24,7 @@ export const formatIntervalLabel = (seconds: number, t: TFunction<'chat'>): stri
 };
 
 /**
- * Localized timezone display name (e.g. "中国标准时间", "Pacific Daylight Time").
+ * Localized timezone display name (e.g. "China Standard Time", "Pacific Daylight Time").
  * Falls back to the IANA id when the runtime can't resolve a long name.
  */
 export const formatTimezoneName = (tz: string, locale: string): string => {
@@ -40,7 +40,7 @@ export const formatTimezoneName = (tz: string, locale: string): string => {
 };
 
 /**
- * Human description of a cron pattern like "每天 09:00" or "Every 2 hours :30".
+ * Human description of a cron pattern like "Every day 09:00" or "Every 2 hours :30".
  */
 export const formatScheduleDescription = (pattern: string, t: TFunction<'chat'>): string => {
   const parsed = parseCronPattern(pattern);

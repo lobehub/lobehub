@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { selectRuntimeType } from '../agentDispatcher';
 
 const heteroProvider = { command: 'claude', type: 'claude-code' as const };
+const remoteHeteroProvider = { type: 'openclaw' as const };
+const remoteHeteroProviderHermes = { type: 'hermes' as const };
 
 describe('selectRuntimeType', () => {
   describe('on web (isDesktop = false)', () => {
@@ -16,7 +18,7 @@ describe('selectRuntimeType', () => {
       expect(selectRuntimeType({ isGatewayMode: true }, opts)).toBe('gateway');
     });
 
-    it('routes heterogeneousProvider to gateway on web — cloud sandbox is the only execution env', () => {
+    it('routes local heterogeneousProvider to gateway on web — cloud sandbox is the only execution env', () => {
       expect(
         selectRuntimeType({ heterogeneousProvider: heteroProvider, isGatewayMode: true }, opts),
       ).toBe('gateway');
@@ -24,18 +26,49 @@ describe('selectRuntimeType', () => {
         selectRuntimeType({ heterogeneousProvider: heteroProvider, isGatewayMode: false }, opts),
       ).toBe('gateway');
     });
+
+    it('routes remote platform agents (openclaw/hermes) to gateway on web', () => {
+      expect(
+        selectRuntimeType(
+          { heterogeneousProvider: remoteHeteroProvider, isGatewayMode: false },
+          opts,
+        ),
+      ).toBe('gateway');
+      expect(
+        selectRuntimeType(
+          { heterogeneousProvider: remoteHeteroProviderHermes, isGatewayMode: false },
+          opts,
+        ),
+      ).toBe('gateway');
+    });
   });
 
   describe('on desktop (isDesktop = true)', () => {
     const opts = { isDesktop: true };
 
-    it('returns hetero when a heterogeneousProvider is configured', () => {
+    it('returns hetero for local CLI agents (claude-code, codex)', () => {
       expect(
         selectRuntimeType({ heterogeneousProvider: heteroProvider, isGatewayMode: true }, opts),
       ).toBe('hetero');
       expect(
         selectRuntimeType({ heterogeneousProvider: heteroProvider, isGatewayMode: false }, opts),
       ).toBe('hetero');
+    });
+
+    it('routes remote platform agents (openclaw/hermes) to gateway even on desktop', () => {
+      // openclaw and hermes use device gateway, not desktop subprocess — must not go to hetero
+      expect(
+        selectRuntimeType(
+          { heterogeneousProvider: remoteHeteroProvider, isGatewayMode: false },
+          opts,
+        ),
+      ).toBe('gateway');
+      expect(
+        selectRuntimeType(
+          { heterogeneousProvider: remoteHeteroProviderHermes, isGatewayMode: false },
+          opts,
+        ),
+      ).toBe('gateway');
     });
 
     it('falls back to gateway/client when no hetero provider', () => {

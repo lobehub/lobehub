@@ -1,6 +1,5 @@
 'use client';
 
-import type { ActionIconProps } from '@lobehub/ui';
 import { Flexbox, Icon, Text } from '@lobehub/ui';
 import type { BreadcrumbProps } from 'antd';
 import { Breadcrumb } from 'antd';
@@ -12,14 +11,12 @@ import { flushSync } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
-import { isDesktop } from '@/const/version';
 import { isModifierClick } from '@/utils/navigation';
 
 import BackButton from './components/BackButton';
 import ToggleLeftPanelButton from './ToggleLeftPanelButton';
 
 const prefixCls = 'ant';
-const SIDEBAR_HEADER_ACTION_ICON_SIZE: ActionIconProps['size'] = 'small';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   breadcrumb: css`
@@ -43,7 +40,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   container: css`
     overflow: hidden;
-    margin-block-start: ${isDesktop ? '' : '8px'};
   `,
 }));
 

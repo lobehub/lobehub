@@ -16,8 +16,6 @@ export { EvalContextSystemInjector } from './EvalContextSystemInjector';
 export { ForceFinishSummaryInjector } from './ForceFinishSummaryInjector';
 export { GroupAgentBuilderContextInjector } from './GroupAgentBuilderContextInjector';
 export { GroupContextInjector } from './GroupContextInjector';
-export { GTDPlanInjector } from './GTDPlanInjector';
-export { GTDTodoInjector } from './GTDTodoInjector';
 export { HistorySummaryProvider } from './HistorySummary';
 export { KnowledgeInjector } from './KnowledgeInjector';
 export { LocalSystemToolSnapshotInjector } from './LocalSystemToolSnapshotInjector';
@@ -26,6 +24,7 @@ export { OnboardingContextInjector } from './OnboardingContextInjector';
 export { OnboardingSyntheticStateInjector } from './OnboardingSyntheticStateInjector';
 export { PageEditorContextInjector } from './PageEditorContextInjector';
 export { PageSelectionsInjector } from './PageSelectionsInjector';
+export { PlanInjector } from './PlanInjector';
 export {
   formatSelectedSkills,
   formatSelectedSkillsContext,
@@ -40,6 +39,7 @@ export { SkillContextProvider } from './SkillContextProvider';
 export { SystemDateProvider } from './SystemDateProvider';
 export { SystemRoleInjector } from './SystemRoleInjector';
 export { TaskManagerContextInjector } from './TaskManagerContextInjector';
+export { TodoInjector } from './TodoInjector';
 export { ToolDiscoveryProvider } from './ToolDiscoveryProvider';
 export { ToolSystemRoleProvider } from './ToolSystemRole';
 export { TopicReferenceContextInjector } from './TopicReferenceContextInjector';
@@ -87,8 +87,6 @@ export type {
   GroupContextInjectorConfig,
   GroupMemberInfo as GroupContextMemberInfo,
 } from './GroupContextInjector';
-export type { GTDPlan, GTDPlanInjectorConfig } from './GTDPlanInjector';
-export type { GTDTodoInjectorConfig, GTDTodoItem, GTDTodoList } from './GTDTodoInjector';
 export type { HistorySummaryConfig } from './HistorySummary';
 export type { KnowledgeInjectorConfig } from './KnowledgeInjector';
 export type { LocalSystemToolSnapshotInjectorConfig } from './LocalSystemToolSnapshotInjector';
@@ -99,12 +97,14 @@ export type {
 } from './OnboardingContextInjector';
 export type { PageEditorContextInjectorConfig } from './PageEditorContextInjector';
 export type { PageSelectionsInjectorConfig } from './PageSelectionsInjector';
+export type { Plan, PlanInjectorConfig } from './PlanInjector';
 export type { SelectedSkillInjectorConfig } from './SelectedSkillInjector';
 export type { SelectedToolInjectorConfig } from './SelectedToolInjector';
 export type { SkillContextProviderConfig, SkillMeta } from './SkillContextProvider';
 export type { SystemDateProviderConfig } from './SystemDateProvider';
 export type { SystemRoleInjectorConfig } from './SystemRoleInjector';
 export type { TaskManagerContextInjectorConfig } from './TaskManagerContextInjector';
+export type { TodoInjectorConfig, TodoItem, TodoList } from './TodoInjector';
 export type { ToolDiscoveryMeta, ToolDiscoveryProviderConfig } from './ToolDiscoveryProvider';
 export type { ToolSystemRoleConfig } from './ToolSystemRole';
 export type {

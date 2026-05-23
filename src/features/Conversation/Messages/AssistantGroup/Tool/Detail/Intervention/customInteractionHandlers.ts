@@ -6,10 +6,10 @@ import {
 } from '@lobechat/builtin-tool-web-onboarding';
 import { buildAgentMarketplaceToolResult } from '@lobechat/builtin-tool-web-onboarding/agentMarketplace';
 import type { OnboardingAgentMarketplacePickSnapshot } from '@lobechat/types';
+import { pickString } from '@lobechat/utils';
 
+import { installMarketplaceAgents } from '@/services/installMarketplaceAgents';
 import { topicService } from '@/services/topic';
-
-import { installMarketplaceAgents } from './installMarketplaceAgents';
 
 interface SubmitToolInteractionOptions {
   createUserMessage?: boolean;
@@ -39,8 +39,6 @@ const isAgentMarketplaceCall = (identifier: string, apiName?: string) =>
 
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((item) => typeof item === 'string');
-
-const pickString = (value: unknown) => (typeof value === 'string' ? value : undefined);
 
 const resolveMarketplacePickBase = (
   payload: Record<string, unknown>,

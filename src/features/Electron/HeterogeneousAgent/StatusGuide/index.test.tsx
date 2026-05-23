@@ -41,6 +41,7 @@ vi.mock('antd-style', () => ({
 
 vi.mock('lucide-react', () => ({
   ExternalLink: () => <span>ExternalLink Icon</span>,
+  RotateCcw: () => <span>Retry Icon</span>,
   Settings2: () => <span>Settings Icon</span>,
 }));
 
@@ -81,6 +82,12 @@ vi.mock('react-i18next', () => ({
             'cliAuthGuide.errorDetails': 'Error details',
             'cliAuthGuide.runCommand': 'Run this in Terminal',
             'cliAuthGuide.title': `Sign in to ${options?.name ?? ''}`,
+            'cliOverloadedGuide.actions.retry': 'Retry',
+            'cliOverloadedGuide.desc': `${options?.name ?? ''}'s upstream model service is temporarily overloaded. This usually clears in a moment.`,
+            'cliOverloadedGuide.errorDetails': 'Error details',
+            'cliOverloadedGuide.retryHint':
+              'Wait a few seconds and retry. If it keeps failing, the provider may be having a wider incident.',
+            'cliOverloadedGuide.title': `${options?.name ?? ''} is temporarily overloaded`,
             'cliRateLimitGuide.actions.openSystemTools': 'Open System Tools',
             'cliRateLimitGuide.afterReset':
               'Wait until the reset time, then retry your message. If you are using API authorization, you can also check your provider quota and billing status.',
@@ -255,6 +262,41 @@ describe('HeterogeneousAgentStatusGuide', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('renders overloaded guidance with retry action', () => {
+    const onRetry = vi.fn();
+    render(
+      <HeterogeneousAgentStatusGuide
+        agentType={'claude-code'}
+        error={{
+          agentType: 'claude-code',
+          code: HeterogeneousAgentSessionErrorCode.Overloaded,
+          message:
+            'API Error: 529 {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}',
+          stderr:
+            'API Error: 529 {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}',
+        }}
+        onRetry={onRetry}
+      />,
+    );
+
+    expect(screen.getByText('Claude Code is temporarily overloaded')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Claude Code's upstream model service is temporarily overloaded. This usually clears in a moment.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Wait a few seconds and retry. If it keeps failing, the provider may be having a wider incident.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Error details')).toBeInTheDocument();
+
+    const retryButton = screen.getByRole('button', { name: 'Retry' });
+    retryButton.click();
+    expect(onRetry).toHaveBeenCalledTimes(1);
   });
 
   it('formats reset time with the active i18n locale instead of the system locale', () => {

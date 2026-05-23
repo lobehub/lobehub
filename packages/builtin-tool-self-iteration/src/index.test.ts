@@ -1,11 +1,12 @@
 import type { LobeToolManifest, OperationToolSet, ToolSource } from '@lobechat/context-engine';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   injectSelfFeedbackIntentTool,
   SELF_FEEDBACK_INTENT_API_NAME,
   SELF_FEEDBACK_INTENT_IDENTIFIER,
   SELF_FEEDBACK_INTENT_TOOL_NAME,
+  SelfFeedbackIntentExecutionRuntime,
   selfFeedbackIntentManifest,
   shouldExposeSelfFeedbackIntentTool,
 } from './index';
@@ -103,6 +104,7 @@ describe('selfFeedbackIntentTool', () => {
         'skillId',
       ]);
       expect(api.description).toContain('does not mutate memory or skills');
+      expect(properties.evidenceRefs.items.properties.summary).toBeDefined();
       expect(api.parameters.required).toEqual([
         'action',
         'kind',
@@ -110,6 +112,93 @@ describe('selfFeedbackIntentTool', () => {
         'summary',
         'reason',
       ]);
+      expect(selfFeedbackIntentManifest.systemRole).toContain('<aggressive_usage_policy>');
+    });
+  });
+
+  describe('SelfFeedbackIntentExecutionRuntime', () => {
+    /**
+     * @example
+     * The package runtime delegates declaration emission to an injected service and persists state.
+     */
+    it('delegates declarations to the injected service', async () => {
+      const service = {
+        declareIntent: vi.fn().mockResolvedValue({
+          accepted: true,
+          sourceId: 'self-feedback-intent:user-1:agent-1:topic:topic-1:tool-call-1',
+          strength: 'strong' as const,
+        }),
+      };
+      const runtime = new SelfFeedbackIntentExecutionRuntime({ service });
+
+      const result = await runtime.declareSelfFeedbackIntent(
+        {
+          action: 'refine',
+          confidence: 0.91,
+          evidenceRefs: [{ id: 'msg-1', type: 'message' }],
+          kind: 'skill',
+          reason: 'The release workflow correction should become reusable.',
+          summary: 'Refine the release workflow skill.',
+        },
+        {
+          agentId: 'agent-1',
+          toolCallId: 'tool-call-1',
+          topicId: 'topic-1',
+          userId: 'user-1',
+        },
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.state).toEqual({
+        accepted: true,
+        reason: null,
+        sourceId: 'self-feedback-intent:user-1:agent-1:topic:topic-1:tool-call-1',
+        strength: 'strong',
+      });
+      expect(service.declareIntent).toHaveBeenCalledWith({
+        agentId: 'agent-1',
+        input: {
+          action: 'refine',
+          confidence: 0.91,
+          evidenceRefs: [{ id: 'msg-1', type: 'message' }],
+          kind: 'skill',
+          reason: 'The release workflow correction should become reusable.',
+          summary: 'Refine the release workflow skill.',
+        },
+        toolCallId: 'tool-call-1',
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+    });
+
+    /**
+     * @example
+     * Missing runtime identity context returns a tool failure before crossing service boundaries.
+     */
+    it('returns missing context failure without calling the service', async () => {
+      const service = {
+        declareIntent: vi.fn(),
+      };
+      const runtime = new SelfFeedbackIntentExecutionRuntime({ service });
+
+      const result = await runtime.declareSelfFeedbackIntent(
+        {
+          action: 'proposal',
+          confidence: 0.6,
+          kind: 'gap',
+          reason: 'The inspector is missing.',
+          summary: 'Add a self-feedback inspector.',
+        },
+        { agentId: 'agent-1', userId: 'user-1' },
+      );
+
+      expect(result.success).toBe(false);
+      expect(JSON.parse(result.content)).toEqual({
+        accepted: false,
+        reason: 'missing_context',
+        required: ['agentId', 'userId', 'topicId'],
+      });
+      expect(service.declareIntent).not.toHaveBeenCalled();
     });
   });
 

@@ -119,6 +119,19 @@ const reviewAgentResult = {
   stepCount: 1,
 } satisfies AgentRunResult;
 
+const zhCNBriefText = {
+  'brief.agentSignal.selfReview.proposal.heading': '建议',
+  'brief.agentSignal.selfReview.proposal.summary': '有 {{count}} 条夜间回顾建议需要你确认。',
+  'brief.agentSignal.selfReview.proposal.summary_plural': '有 {{count}} 条夜间回顾建议需要你确认。',
+  'brief.agentSignal.selfReview.proposal.title': '有夜间回顾建议需要确认',
+};
+
+const t = (key: string, options: Record<string, string> = {}) =>
+  Object.entries(options).reduce(
+    (content, [name, value]) => content.replace(`{{${name}}}`, value),
+    zhCNBriefText[key as keyof typeof zhCNBriefText] ?? key,
+  );
+
 const createDependencies = (
   overrides: Partial<CreateNightlyReviewSourceHandlerDependencies> = {},
 ): CreateNightlyReviewSourceHandlerDependencies => ({
@@ -227,6 +240,7 @@ describe('nightly review source handler', () => {
           ],
         } satisfies SelfReviewProposalPlan,
       })),
+      resolveBriefTextTranslator: vi.fn(async () => t),
       writeDailyBrief: vi.fn(async () => {
         calls.push('brief');
 
@@ -274,6 +288,8 @@ describe('nightly review source handler', () => {
             }),
           }),
         }),
+        summary: expect.stringContaining('有 1 条夜间回顾建议需要你确认。'),
+        title: '有夜间回顾建议需要确认',
         trigger: 'agent-signal:nightly-review',
         type: 'decision',
       }),
@@ -353,7 +369,7 @@ describe('nightly review source handler', () => {
             }),
           }),
         }),
-        title: 'Agent self-review updated resources',
+        title: 'Dream updated resources',
         trigger: 'agent-signal:nightly-review',
         type: 'insight',
       }),

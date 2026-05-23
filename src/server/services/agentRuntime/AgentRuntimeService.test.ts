@@ -636,22 +636,20 @@ describe('AgentRuntimeService', () => {
 
       const mockRuntime = { step: vi.fn().mockResolvedValue(mockStepResult) };
       vi.spyOn(service as any, 'createAgentRuntime').mockReturnValue({ runtime: mockRuntime });
-      vi.spyOn(service as any, 'handleHumanIntervention').mockResolvedValue({
+      const processSpy = vi.spyOn((service as any).humanIntervention, 'process').mockResolvedValue({
         newState: mockState,
         nextContext: mockParams.context,
       });
 
       const result = await service.executeStep(paramsWithIntervention);
 
-      expect((service as any).handleHumanIntervention).toHaveBeenCalledWith(
-        mockRuntime,
-        mockState,
-        {
-          humanInput: paramsWithIntervention.humanInput,
-          approvedToolCall: paramsWithIntervention.approvedToolCall,
-          rejectionReason: paramsWithIntervention.rejectionReason,
-        },
-      );
+      expect(processSpy).toHaveBeenCalledWith(mockState, {
+        approvedToolCall: paramsWithIntervention.approvedToolCall,
+        humanInput: paramsWithIntervention.humanInput,
+        rejectAndContinue: undefined,
+        rejectionReason: paramsWithIntervention.rejectionReason,
+        toolMessageId: undefined,
+      });
 
       expect(result.success).toBe(true);
       expect(result.nextStepScheduled).toBe(false); // Should not schedule next step when status is 'done'

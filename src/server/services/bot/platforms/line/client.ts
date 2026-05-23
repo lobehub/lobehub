@@ -20,12 +20,14 @@ import {
   type BotPlatformRuntimeContext,
   type BotProviderConfig,
   ClientFactory,
+  messengerContentText,
   type PlatformClient,
   type PlatformMessenger,
   type UsageStats,
   type ValidationResult,
 } from '../types';
 import { formatUsageStats } from '../utils';
+import { sendLineAttachments } from './sendAttachments';
 
 const log = debug('bot-platform:line:bot');
 
@@ -167,13 +169,25 @@ class LineWebhookClient implements PlatformClient {
     const { id: recipient, type } = decodeThread(platformThreadId);
     return {
       createMessage: async (content) => {
-        await this.api.pushText(recipient, content);
+        const text = messengerContentText(content);
+        const attachments = typeof content === 'string' ? undefined : content.attachments;
+        if (attachments?.length) {
+          // LINE has no composite text+media message — the leading-text path
+          // packs both into a single `push` so the user reads context before
+          // the media. `sendLineAttachments` handles fallback text-links
+          // for unsupported types (video/audio/file/data-only).
+          await sendLineAttachments(this.api, recipient, attachments, text);
+          return;
+        }
+        if (text.trim()) {
+          await this.api.pushText(recipient, text);
+        }
       },
       // LINE does not support editing — `supportsMessageEdit: false` makes the
       // bridge skip the per-step progress edit, but we still implement this
       // path so any unexpected caller falls back to a fresh push.
       editMessage: async (_messageId, content) => {
-        await this.api.pushText(recipient, content);
+        await this.api.pushText(recipient, messengerContentText(content));
       },
       removeReaction: () => Promise.resolve(),
       triggerTyping: async () => {

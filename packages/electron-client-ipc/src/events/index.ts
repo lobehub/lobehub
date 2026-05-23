@@ -32,6 +32,13 @@ export type MainBroadcastParams<T extends MainBroadcastEventKey> = Parameters<
 
 export type { GatewayConnectionStatus } from './gatewayConnection';
 export type {
+  DetectAppsResult,
+  DetectedApp,
+  OpenInAppId,
+  OpenInAppParams,
+  OpenInAppResult,
+} from './openInApp';
+export type {
   AuthorizationPhase,
   AuthorizationProgress,
   MarketAuthorizationParams,

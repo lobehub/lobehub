@@ -23,6 +23,7 @@ export const calculateConversationSpacerHeight = (
 interface ConversationSpacerScrollEffectOptions {
   delta: number;
   hasPrevOffset: boolean;
+  hasUserIntent: boolean;
   isAIGenerating: boolean;
   isMounted: boolean;
 }
@@ -30,10 +31,11 @@ interface ConversationSpacerScrollEffectOptions {
 export const getConversationSpacerScrollEffect = ({
   delta,
   hasPrevOffset,
+  hasUserIntent,
   isAIGenerating,
   isMounted,
 }: ConversationSpacerScrollEffectOptions) => {
-  const cancelPin = isMounted && hasPrevOffset && delta < 0;
+  const cancelPin = isMounted && hasPrevOffset && hasUserIntent && delta < 0;
 
   return {
     cancelPin,
@@ -341,7 +343,7 @@ const useScrollShrink = ({
   const scrollShrinkEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const onScrollOffset = useCallback(
-    (currentScrollOffset: number) => {
+    (currentScrollOffset: number, hasUserIntent = false) => {
       const prevOffset = prevScrollOffsetRef.current;
       prevScrollOffsetRef.current = currentScrollOffset;
 
@@ -349,6 +351,7 @@ const useScrollShrink = ({
       const { cancelPin, shrinkSpacer } = getConversationSpacerScrollEffect({
         delta,
         hasPrevOffset: prevOffset !== null,
+        hasUserIntent,
         isAIGenerating: isAIGeneratingRef.current,
         isMounted: mountedRef.current,
       });
@@ -413,7 +416,7 @@ export interface UseConversationScrollResult {
   isScrollShrinking: boolean;
   isSpacerMessage: (id: string) => boolean;
   listData: string[];
-  onScrollOffset: (scrollOffset: number) => void;
+  onScrollOffset: (scrollOffset: number, hasUserIntent?: boolean) => void;
   registerSpacerNode: (node: HTMLElement | null) => void;
   spacerActive: boolean;
   spacerHeight: number;

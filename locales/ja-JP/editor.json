@@ -1,8 +1,10 @@
 {
   "actionTag.category.command": "コマンド",
+  "actionTag.category.projectSkill": "プロジェクトスキル",
   "actionTag.category.skill": "スキル",
   "actionTag.category.tool": "ツール",
   "actionTag.tooltip.command": "送信前にクライアント側のスラッシュコマンドを実行します。",
+  "actionTag.tooltip.projectSkill": "スラッシュ呼び出しとして送信され、エージェントのCLIが一致するプロジェクトスキルを実行します。",
   "actionTag.tooltip.skill": "このリクエスト用に再利用可能なスキルパッケージを読み込みます。",
   "actionTag.tooltip.tool": "このリクエストでユーザーが明示的に選択したツールを示します。",
   "actions.expand.off": "折りたたむ",

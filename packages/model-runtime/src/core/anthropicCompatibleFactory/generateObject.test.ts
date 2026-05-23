@@ -83,6 +83,54 @@ describe('Anthropic generateObject', () => {
       expect(result).toEqual({ age: 30, name: 'John' });
     });
 
+    it('should allow schema structured output to require any tool', async () => {
+      const mockClient = {
+        messages: {
+          create: vi.fn().mockResolvedValue({
+            content: [
+              {
+                input: { summary: 'Task completed', title: 'Done' },
+                name: 'task_topic_handoff',
+                type: 'tool_use',
+              },
+            ],
+          }),
+        },
+      };
+
+      const payload = {
+        messages: [{ content: 'Generate a task handoff', role: 'user' as const }],
+        model: 'claude-3-5-sonnet-20241022',
+        schema: {
+          name: 'task_topic_handoff',
+          schema: {
+            properties: { summary: { type: 'string' }, title: { type: 'string' } },
+            required: ['title', 'summary'],
+            type: 'object' as const,
+          },
+        },
+      };
+
+      const result = await createAnthropicGenerateObject(
+        mockClient as any,
+        payload,
+        undefined,
+        undefined,
+        { schemaToolChoice: 'any' },
+      );
+
+      expect(mockClient.messages.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tool_choice: {
+            type: 'any',
+          },
+        }),
+        expect.objectContaining({}),
+      );
+
+      expect(result).toEqual({ summary: 'Task completed', title: 'Done' });
+    });
+
     it('should ignore whitespace-only system prompts', async () => {
       const mockClient = {
         messages: {
@@ -198,6 +246,43 @@ describe('Anthropic generateObject', () => {
       );
 
       expect(result).toEqual({ data: 'test' });
+    });
+
+    it('should forward configured request params when provided', async () => {
+      const mockClient = {
+        messages: {
+          create: vi.fn().mockResolvedValue({
+            content: [
+              {
+                input: { data: 'test' },
+                name: 'data_extractor',
+                type: 'tool_use',
+              },
+            ],
+            usage: { input_tokens: 10, output_tokens: 5 },
+          }),
+        },
+      };
+
+      const payload = {
+        messages: [{ content: 'Generate data', role: 'user' as const }],
+        model: 'deepseek-v4-pro',
+        schema: {
+          name: 'data_extractor',
+          schema: { properties: { data: { type: 'string' } }, type: 'object' as const },
+        },
+      };
+
+      await createAnthropicGenerateObject(mockClient as any, payload, undefined, undefined, {
+        requestParams: { thinking: { type: 'disabled' } },
+      });
+
+      expect(mockClient.messages.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          thinking: { type: 'disabled' },
+        }),
+        expect.any(Object),
+      );
     });
 
     it('should return undefined when no tool use found in response', async () => {

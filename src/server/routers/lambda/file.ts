@@ -102,6 +102,19 @@ const getKnowledgeItemStatusMap = async (
   );
 };
 
+const isStoredObjectAvailable = async (fileService: FileService, url: string): Promise<boolean> => {
+  try {
+    // Hash records can outlive their backing object, for example when generated
+    // assets are cleaned up but the global hash row remains. Treat stale rows as
+    // missing so the client uploads a fresh copy instead of reusing a dead key.
+    await fileService.getFileMetadata(url);
+    return true;
+  } catch (error) {
+    console.error('Failed to verify existing file hash storage object:', error);
+    return false;
+  }
+};
+
 const fileProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
 
@@ -123,7 +136,13 @@ export const fileRouter = router({
     .use(checkFileStorageUsage)
     .input(z.object({ hash: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      return ctx.fileModel.checkHash(input.hash);
+      const existingFile = await ctx.fileModel.checkHash(input.hash);
+      const existingHashUrl = existingFile?.isExist ? existingFile.url : undefined;
+      if (!existingHashUrl) return existingFile;
+
+      const isStorageAvailable = await isStoredObjectAvailable(ctx.fileService, existingHashUrl);
+
+      return isStorageAvailable ? existingFile : { isExist: false };
     }),
 
   createFile: fileProcedure
@@ -135,7 +154,8 @@ export const fileRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { isExist } = await ctx.fileModel.checkHash(input.hash!);
+      const existingFile = await ctx.fileModel.checkHash(input.hash!);
+      const { isExist } = existingFile;
 
       // Resolve parentId if it's a slug
       let resolvedParentId = input.parentId;
@@ -156,32 +176,65 @@ export const fileRouter = router({
         // If metadata fetch fails, use original size from input
       }
 
-      await businessFileUploadCheck({
-        actualSize,
-        clientIp: ctx.clientIp ?? undefined,
-        inputSize: input.size,
-        url: input.url,
-        userId: ctx.userId,
-      });
-
       if (actualSize < 0) {
+        await businessFileUploadCheck({
+          actualSize,
+          clientIp: ctx.clientIp ?? undefined,
+          inputSize: input.size,
+          url: input.url,
+          userId: ctx.userId,
+        });
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'File size cannot be negative' });
       }
 
-      const { id } = await ctx.fileModel.create(
-        {
-          fileHash: input.hash,
-          fileType: input.fileType,
-          knowledgeBaseId: input.knowledgeBaseId,
-          metadata: input.metadata,
-          name: input.name,
-          parentId: resolvedParentId,
-          size: actualSize,
+      const { id } = await ctx.serverDB.transaction(async (trx) => {
+        await businessFileUploadCheck({
+          actualSize,
+          clientIp: ctx.clientIp ?? undefined,
+          inputSize: input.size,
+          transaction: trx,
           url: input.url,
-        },
-        // if the file is not exist in global file, create a new one
-        !isExist,
-      );
+          userId: ctx.userId,
+        });
+
+        let shouldRefreshGlobalFile = false;
+        if (isExist && existingFile.url && existingFile.url !== input.url) {
+          shouldRefreshGlobalFile = !(await isStoredObjectAvailable(
+            ctx.fileService,
+            existingFile.url,
+          ));
+        }
+
+        if (shouldRefreshGlobalFile) {
+          // A user may re-upload the same bytes after the old object key was
+          // removed. Keep the global hash pointer on the newly uploaded object so
+          // future dedup checks do not resolve back to the stale key.
+          await ctx.fileModel.updateGlobalFile(
+            input.hash!,
+            {
+              metadata: input.metadata,
+              url: input.url,
+            },
+            trx,
+          );
+        }
+
+        return ctx.fileModel.create(
+          {
+            fileHash: input.hash,
+            fileType: input.fileType,
+            knowledgeBaseId: input.knowledgeBaseId,
+            metadata: input.metadata,
+            name: input.name,
+            parentId: resolvedParentId,
+            size: actualSize,
+            url: input.url,
+          },
+          // if the file is not exist in global file, create a new one
+          !isExist,
+          trx,
+        );
+      });
 
       return { id, url: getFileProxyUrl(id) };
     }),

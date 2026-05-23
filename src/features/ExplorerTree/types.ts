@@ -1,4 +1,4 @@
-import type { FileTreeRowDecoration } from '@pierre/trees';
+import type { FileTreeRowDecoration, GitStatusEntry } from '@pierre/trees';
 import type { MenuProps } from 'antd';
 import type { CSSProperties, DragEvent, MouseEvent, ReactNode } from 'react';
 
@@ -59,6 +59,7 @@ export interface ExplorerTreeProps<TData = unknown> {
   getRowDecoration?: (
     ctx: ExplorerTreeRowDecorationCtx<TData>,
   ) => FileTreeRowDecoration | null | undefined;
+  gitStatus?: readonly GitStatusEntry[];
   header?: ReactNode;
   iconsColored?: boolean;
   iconSet?: 'minimal' | 'standard' | 'complete' | 'none';
@@ -79,4 +80,6 @@ export interface ExplorerTreeProps<TData = unknown> {
   overscan?: number;
   selectedIds?: string[];
   style?: CSSProperties;
+  /** Raw CSS injected into the pierre/trees shadow DOM via FILE_TREE_UNSAFE_CSS_ATTRIBUTE. */
+  unsafeCSS?: string;
 }

@@ -14,6 +14,7 @@ import {
   type BotPlatformRuntimeContext,
   type BotProviderConfig,
   ClientFactory,
+  messengerContentText,
   type PlatformClient,
   type PlatformMessenger,
   type UsageStats,
@@ -22,6 +23,7 @@ import {
 import { formatUsageStats } from '../utils';
 import { DiscordApi } from './api';
 import { patchDiscordForwardedInteractions, patchDiscordThreadRecovery } from './patch';
+import { batchDiscordFiles, materializeAttachmentsForDiscord } from './sendAttachments';
 
 const log = debug('bot-platform:discord:bot');
 
@@ -228,8 +230,29 @@ class DiscordGatewayClient implements PlatformClient {
     const discord = this.discord;
     return {
       addReaction: (messageId, emoji) => discord.createReaction(channelId, messageId, emoji),
-      createMessage: (content) => discord.createMessage(channelId, content).then(() => {}),
-      editMessage: (messageId, content) => discord.editMessage(channelId, messageId, content),
+      createMessage: async (content) => {
+        const text = messengerContentText(content);
+        const attachments = typeof content === 'string' ? undefined : content.attachments;
+        if (!attachments?.length) {
+          await discord.createMessage(channelId, text);
+          return;
+        }
+        const files = await materializeAttachmentsForDiscord(attachments);
+        if (files.length === 0) {
+          await discord.createMessage(channelId, text);
+          return;
+        }
+        const batches = batchDiscordFiles(files);
+        for (const [i, batch] of batches.entries()) {
+          await discord.createMessage(channelId, i === 0 ? text : '', batch);
+        }
+      },
+      // editMessage: keep the text-only contract. Editing a message to add
+      // attachments is an advanced flow (PATCH with `attachments[]` keep-set
+      // + `files[]` adds) that isn't worth the complexity for the bot reply
+      // path — new chunks with attachments flow through `createMessage`.
+      editMessage: (messageId, content) =>
+        discord.editMessage(channelId, messageId, messengerContentText(content)),
       removeReaction: (messageId, emoji) => discord.removeOwnReaction(channelId, messageId, emoji),
       replaceReaction: async (messageId, prevEmoji, nextEmoji) => {
         if (prevEmoji === nextEmoji) return;
@@ -401,6 +424,64 @@ class DiscordGatewayClient implements PlatformClient {
 
   shouldSubscribe(threadId: string): boolean {
     return isSubscribableThread(threadId);
+  }
+
+  /**
+   * Spawn a Discord thread off the triggering message when the bot wakes
+   * in a top-level guild channel via a watch-keyword match. The chat-sdk
+   * adapter only auto-creates a thread on @-mention (see chat-adapter
+   * discord/handleForwardedMessageEvent), so without this hook the
+   * keyword path would reply directly in the parent channel and clutter
+   * it with bot output.
+   *
+   * Returns the upgraded composite threadId (`discord:guildId:channelId:newThreadId`)
+   * so the caller can swap `thread.id` and have all downstream chat-sdk
+   * calls — `setReaction`, `subscribe`, `post`, `startTyping` — target
+   * the new sub-thread. The reaction call still lands on the parent
+   * channel because `resolveReactionThreadId` strips the thread segment
+   * when the message ID equals the thread starter.
+   *
+   * Skipped for DMs (`guildId === '@me'`) and for already-spawned threads
+   * (4-segment IDs); both deliver replies in the right context as-is.
+   * Best-effort: any API failure logs and returns undefined so the
+   * router falls back to the parent channel rather than dropping the
+   * message.
+   */
+  async openThreadForChannelWake(
+    threadId: string,
+    messageRaw: unknown,
+  ): Promise<string | undefined> {
+    const parts = threadId.split(':');
+    if (parts.length !== 3 || parts[0] !== 'discord' || parts[1] === '@me') return undefined;
+    const [, guildId, channelId] = parts;
+    if (!channelId) return undefined;
+    const raw = messageRaw as Record<string, unknown> | undefined;
+    const messageId = typeof raw?.id === 'string' ? raw.id : undefined;
+    if (!messageId) return undefined;
+
+    // Mirror chat-sdk's @-mention auto-thread name format (see
+    // chat-adapter discord/createDiscordThread) so operators see a
+    // consistent thread title regardless of which path opened it.
+    const threadName = `Thread ${new Date().toLocaleString()}`;
+    try {
+      const result = await this.discord.startThreadFromMessage(channelId, messageId, threadName);
+      const newThreadId = `discord:${guildId}:${channelId}:${result.id}`;
+      log(
+        'openThreadForChannelWake: spawned thread for keyword wake, channel=%s, msg=%s, thread=%s',
+        channelId,
+        messageId,
+        result.id,
+      );
+      return newThreadId;
+    } catch (error) {
+      log(
+        'openThreadForChannelWake failed; falling back to channel %s for msg %s: %O',
+        channelId,
+        messageId,
+        error,
+      );
+      return undefined;
+    }
   }
 
   async registerBotCommands(

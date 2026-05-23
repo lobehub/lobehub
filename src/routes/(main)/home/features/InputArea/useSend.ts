@@ -61,7 +61,6 @@ export const useSend = () => {
       // `onChange`, so a fast type-then-Enter sequence can fire before the
       // cache catches up and the empty-message guard would bail incorrectly.
       const typed = (getMarkdownContent?.() ?? inputMessage ?? '').trim();
-      const editorData = getEditorData?.() ?? mainInputEditor?.getJSONState();
       const fileList = fileChatSelectors.chatUploadFileList(useFileStore.getState());
       const contextList = fileChatSelectors.chatContextSelections(useFileStore.getState());
       const { sendAsAgent, sendAsGroup, sendAsWrite, sendAsResearch, inputActiveMode } =
@@ -75,6 +74,17 @@ export const useSend = () => {
       const usedHint = !typed && !!hint;
       const message = typed || hint;
       if (usedHint) advance();
+
+      // When falling back to the hint, the editor is empty — but its JSON
+      // state still contains root nodes (e.g. `{ type: 'doc' }`), which is
+      // truthy under `Object.keys(editorData).length > 0`. That makes the
+      // user-message renderer take the RichTextMessage branch and draw
+      // nothing, so the chat shows a blank user bubble while the agent
+      // happily processes the hint text. Skip editorData in that case so
+      // the renderer falls back to the markdown `content`.
+      const editorData = usedHint
+        ? undefined
+        : (getEditorData?.() ?? mainInputEditor?.getJSONState());
 
       // Require input content (except for default inbox which can have files/context)
       if (!message && fileList.length === 0 && contextList.length === 0) return;

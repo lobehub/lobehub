@@ -6,7 +6,7 @@ import { testProvider } from '../../providerTestUtils';
 import { LobeSparkAI, params } from './index';
 
 const provider = ModelProvider.Spark;
-const defaultBaseURL = 'https://spark-api-open.xf-yun.com/v2';
+const defaultBaseURL = 'https://spark-api-open.xf-yun.com/v1';
 
 testProvider({
   Runtime: LobeSparkAI,

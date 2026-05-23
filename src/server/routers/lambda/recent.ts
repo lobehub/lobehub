@@ -56,7 +56,9 @@ export const recentRouter = router({
             break;
           }
           case 'task': {
-            routePath = item.routeId ? `/agent/${item.routeId}` : '/';
+            routePath = item.routeId
+              ? `/agent/${item.routeId}/task/${item.id}`
+              : `/task/${item.id}`;
             break;
           }
         }

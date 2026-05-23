@@ -90,6 +90,7 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
 
       case 'listLocalFiles': {
         return {
+          limit: params.limit,
           path: params.directoryPath,
           sortBy: params.sortBy,
           sortOrder: params.sortOrder,
@@ -113,7 +114,7 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
       }
 
       case 'getCommandOutput': {
-        return { shell_id: params.commandId };
+        return { filter: params.filter, shell_id: params.commandId };
       }
 
       case 'killCommand': {
@@ -219,7 +220,7 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
           // to render instead of `JSON.stringify(undefined)` → undefined content.
           // Without this, a fast-glob throw (e.g. EACCES traversing a protected
           // dir under the wrong cwd) leaves the tool message with state set but
-          // content stuck at "" — see "Glob search files Response 空" report.
+          // content stuck at "" — see "Glob search files Response Empty" report.
           error: raw.error ? { message: String(raw.error) } : undefined,
           result: {
             files: raw.files,

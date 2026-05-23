@@ -2,13 +2,13 @@
 
 import { memo } from 'react';
 
+import { type ResolvedTab } from '../TabBar/hooks/useResolvedTabs';
 import PageItem from './PageItem';
 import { useStyles } from './styles';
-import { type ResolvedPageData } from './types';
 
 interface SectionProps {
   isPinned: boolean;
-  items: ResolvedPageData[];
+  items: ResolvedTab[];
   onClose: () => void;
   title: string;
 }
@@ -22,7 +22,7 @@ const Section = memo<SectionProps>(({ title, items, isPinned, onClose }) => {
     <>
       <div className={styles.title}>{title}</div>
       {items.map((item) => (
-        <PageItem isPinned={isPinned} item={item} key={item.reference.id} onClose={onClose} />
+        <PageItem isPinned={isPinned} item={item} key={item.tab.id} onClose={onClose} />
       ))}
     </>
   );

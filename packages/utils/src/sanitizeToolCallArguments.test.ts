@@ -21,7 +21,7 @@ describe('sanitizeToolCallArguments', () => {
     expect(sanitizeToolCallArguments(undefined)).toBe('{}');
   });
 
-  it('falls back to "{}" on LOBE-7761 shape "{, ..."', () => {
+  it('falls back to "{}" on shape "{, .."', () => {
     // exact shape from the reported NVIDIA/Qwen trace
     const input = '{, "description": "Create data models", "language": "python"}';
     expect(sanitizeToolCallArguments(input)).toBe('{}');

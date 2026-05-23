@@ -41,8 +41,10 @@ const List = memo<SessionListProps>(
 
     // Empty custom/default groups always show the Create button so the user can populate them.
     // Non-empty lists only show it at the bottom of the default group; custom groups rely on
-    // the group header dropdown for further additions.
-    const showCreateButton = isEmpty ? groupId !== undefined : isDefaultList;
+    // the group header dropdown for further additions. When the default list overflows and we
+    // already render the "More" entry, hide the Create button to keep the footer compact —
+    // creation is still reachable from the group header dropdown.
+    const showCreateButton = isEmpty ? groupId !== undefined : isDefaultList && !hasMore;
 
     if (isEmpty) {
       return showCreateButton ? (

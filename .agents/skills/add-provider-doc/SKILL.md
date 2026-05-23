@@ -1,6 +1,6 @@
 ---
 name: add-provider-doc
-description: Guide for adding new AI provider documentation. Use when adding documentation for a new AI provider (like OpenAI, Anthropic, etc.), including usage docs, environment variables, Docker config, and image resources. Triggers on provider documentation tasks.
+description: Add documentation for a new AI provider — usage docs, env vars, Docker config, image resources.
 disable-model-invocation: true
 argument-hint: '[provider-name]'
 ---

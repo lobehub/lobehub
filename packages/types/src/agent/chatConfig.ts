@@ -25,7 +25,6 @@ export interface AgentSelfIterationChatConfig {
 }
 
 export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIterationChatConfig {
-  autoCreateTopicThreshold: number;
   codexMaxReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
   /**
    * Model ID to use for generating compression summaries
@@ -43,7 +42,12 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
    * Whether to enable adaptive thinking (Claude Opus 4.6)
    */
   enableAdaptiveThinking?: boolean;
-  enableAutoCreateTopic?: boolean;
+  /**
+   * Whether the agent runs in agent mode (full tool access) vs chat mode
+   * (only runtime-managed tools like KB / memory / web-browsing).
+   * Treat undefined as `true` — agent mode is the default.
+   */
+  enableAgentMode?: boolean;
   /**
    * Whether to auto-scroll during AI streaming output
    * undefined = use global setting
@@ -59,6 +63,7 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
    * When enabled, old messages will be compressed into summaries when token threshold is reached
    */
   enableContextCompression?: boolean;
+  enableFollowUpChips?: boolean;
   /**
    * Enable historical message count
    */
@@ -100,9 +105,9 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
    */
   imageResolution?: '1K' | '2K' | '4K';
   /**
-   * Image resolution for image generation models (with 512px support)
+   * Image resolution for image generation models (with 512 support)
    */
-  imageResolution2?: '512px' | '1K' | '2K' | '4K';
+  imageResolution2?: '512' | '1K' | '2K' | '4K';
   inputTemplate?: string;
   /**
    * Effort level for Claude Opus 4.7 (adds xhigh tier between high and max)
@@ -145,7 +150,6 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
   thinkingLevel2?: 'low' | 'high';
   thinkingLevel3?: 'low' | 'medium' | 'high';
   thinkingLevel4?: 'minimal' | 'high';
-  thinkingLevel5?: 'minimal' | 'low' | 'medium' | 'high';
   /**
    * Maximum length for tool execution result content (in characters)
    * This prevents context overflow when sending tool results back to LLM
@@ -193,17 +197,17 @@ export const SelfIterationChatConfigSchema = z.object({
 
 export const AgentChatConfigSchema = z
   .object({
-    autoCreateTopicThreshold: z.number().default(2),
     codexMaxReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
     deepseekV4ReasoningEffort: z.enum(['none', 'high', 'max']).optional(),
     compressionModelId: z.string().optional(),
     disableContextCaching: z.boolean().optional(),
     effort: z.enum(['low', 'medium', 'high', 'max']).optional(),
     enableAdaptiveThinking: z.boolean().optional(),
-    enableAutoCreateTopic: z.boolean().optional(),
+    enableAgentMode: z.boolean().optional(),
     enableAutoScrollOnStreaming: z.boolean().optional(),
     enableCompressHistory: z.boolean().optional(),
     enableContextCompression: z.boolean().optional(),
+    enableFollowUpChips: z.boolean().optional(),
     enableHistoryCount: z.boolean().optional(),
     enableMaxTokens: z.boolean().optional(),
     enableReasoning: z.boolean().optional(),
@@ -220,7 +224,7 @@ export const AgentChatConfigSchema = z
     imageAspectRatio: z.string().optional(),
     imageAspectRatio2: z.string().optional(),
     imageResolution: z.enum(['1K', '2K', '4K']).optional(),
-    imageResolution2: z.enum(['512px', '1K', '2K', '4K']).optional(),
+    imageResolution2: z.enum(['512', '1K', '2K', '4K']).optional(),
     opus47Effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
     runtimeEnv: RuntimeEnvConfigSchema.optional(),
     reasoningBudgetToken: z.number().optional(),
@@ -242,7 +246,6 @@ export const AgentChatConfigSchema = z
     thinkingLevel2: z.enum(['low', 'high']).optional(),
     thinkingLevel3: z.enum(['low', 'medium', 'high']).optional(),
     thinkingLevel4: z.enum(['minimal', 'high']).optional(),
-    thinkingLevel5: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
     toolResultMaxLength: z.number().default(25000),
     topicGroupMode: z.enum(['byTime', 'byProject', 'flat']).optional(),
     urlContext: z.boolean().optional(),

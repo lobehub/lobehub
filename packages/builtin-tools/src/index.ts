@@ -8,7 +8,6 @@ import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { CredsManifest } from '@lobechat/builtin-tool-creds';
 import { GroupAgentBuilderManifest } from '@lobechat/builtin-tool-group-agent-builder';
 import { GroupManagementManifest } from '@lobechat/builtin-tool-group-management';
-import { GTDManifest } from '@lobechat/builtin-tool-gtd';
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
@@ -43,7 +42,6 @@ export const defaultToolIds = [
   CloudSandboxManifest.identifier,
   TopicReferenceManifest.identifier,
   AgentDocumentsManifest.identifier,
-  GTDManifest.identifier,
   TaskManifest.identifier,
   LobeAgentManifest.identifier,
 ];
@@ -66,6 +64,24 @@ export const alwaysOnToolIds = [
 export const manualModeExcludeToolIds = [
   LobeActivatorManifest.identifier,
   SkillStoreManifest.identifier,
+];
+
+/**
+ * Tool IDs allowed when the agent runs in chat mode
+ * (`chatConfig.enableAgentMode === false`). Each one still passes through
+ * its own runtime gate (e.g. knowledge base requires `hasEnabledKnowledgeBases`,
+ * memory requires the global memory setting, web-browsing requires search
+ * enabled) — this list is the strict outer whitelist.
+ *
+ * In chat mode, both the server `createServerAgentToolsEngine` and the
+ * frontend `createAgentToolsEngine` build their rules from ONLY these
+ * identifiers, drop user plugins / `alwaysOnToolIds` entirely, and disable
+ * `allowExplicitActivation` so the activator can't smuggle other tools in.
+ */
+export const chatModeAllowedToolIds = [
+  KnowledgeBaseManifest.identifier,
+  MemoryManifest.identifier,
+  WebBrowsingManifest.identifier,
 ];
 
 /**
@@ -200,11 +216,6 @@ export const builtinTools: LobeBuiltinTool[] = [
     hidden: true,
     identifier: AgentManagementManifest.identifier,
     manifest: AgentManagementManifest,
-    type: 'builtin',
-  },
-  {
-    identifier: GTDManifest.identifier,
-    manifest: GTDManifest,
     type: 'builtin',
   },
   {

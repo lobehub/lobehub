@@ -1,10 +1,13 @@
 import * as Icons from '@lobehub/ui/icons';
 import type { FC } from 'react';
 
+import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
+
 /** Known icon names from @lobehub/ui/icons that correspond to chat platforms. */
 const ICON_NAMES = [
   'Discord',
   'GoogleChat',
+  'IMessage',
   'Lark',
   'Line',
   'MicrosoftTeams',
@@ -33,3 +36,33 @@ export function getPlatformIcon(nameOrId: string): FC<any> | undefined {
   );
   return name ? (Icons as Record<string, any>)[name] : undefined;
 }
+
+/**
+ * Channel platform definition extended with a frontend-only `comingSoon` flag.
+ * Coming-soon platforms are virtual: they appear in the sidebar list and show
+ * a placeholder detail view, but never participate in credentials/runtime flow.
+ */
+export interface ChannelPlatformDefinition extends SerializedPlatformDefinition {
+  comingSoon?: boolean;
+}
+
+/**
+ * Virtual platforms shown in the sidebar with a "Coming Soon" badge.
+ * Not registered on the server — handled entirely on the client.
+ */
+export const COMING_SOON_PLATFORMS: ChannelPlatformDefinition[] = [
+  {
+    comingSoon: true,
+    connectionMode: 'webhook',
+    id: 'whatsapp',
+    name: 'WhatsApp',
+    schema: [],
+  },
+  {
+    comingSoon: true,
+    connectionMode: 'webhook',
+    id: 'imessage',
+    name: 'iMessage',
+    schema: [],
+  },
+];

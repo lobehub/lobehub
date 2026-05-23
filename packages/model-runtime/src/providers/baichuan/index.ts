@@ -45,11 +45,9 @@ export const params = {
           frequency_penalty: undefined,
           presence_penalty: undefined,
         }),
-        ...(thinking && {
+        ...(thinking?.budget_tokens !== undefined && {
           budget_tokens:
-            thinking?.budget_tokens === 0
-              ? 0
-              : Math.min(thinking?.budget_tokens, 1024) || undefined,
+            thinking.budget_tokens === 0 ? 0 : Math.min(thinking.budget_tokens, 1024) || undefined,
         }),
       } as any;
     },

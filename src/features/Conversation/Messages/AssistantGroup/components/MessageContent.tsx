@@ -33,7 +33,7 @@ const MessageContent = memo<MessageContentProps>(
     const hasTools = hasToolsOverride ?? storeHasTools;
 
     const message = normalizeThinkTags(processWithArtifact(content ?? ''));
-    const markdownProps = useMarkdown(id, disableStreaming);
+    const { drawer, markdownProps } = useMarkdown(id, disableStreaming);
 
     if (!content && !hasTools) return <ContentLoading id={id} />;
 
@@ -47,9 +47,12 @@ const MessageContent = memo<MessageContentProps>(
 
     return (
       content && (
-        <MarkdownMessage {...markdownProps} className={cx(isToolSingleLine && styles.pWithTool)}>
-          {message}
-        </MarkdownMessage>
+        <>
+          {drawer}
+          <MarkdownMessage {...markdownProps} className={cx(isToolSingleLine && styles.pWithTool)}>
+            {message}
+          </MarkdownMessage>
+        </>
       )
     );
   },

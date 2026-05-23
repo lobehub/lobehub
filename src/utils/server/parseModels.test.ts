@@ -1,8 +1,15 @@
 import { type AiFullModelCard } from 'model-bank';
 import { LOBE_DEFAULT_MODEL_LIST, openaiChatModels } from 'model-bank';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { extractEnabledModels, parseModelString, transformToAiModelList } from './parseModels';
+
+vi.mock('@lobechat/business-model-bank/model-config', async () => {
+  const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
+  return {
+    loadModels: vi.fn().mockResolvedValue(LOBE_DEFAULT_MODEL_LIST),
+  };
+});
 
 describe('parseModelString', () => {
   it('custom deletion, addition, and renaming of models', async () => {

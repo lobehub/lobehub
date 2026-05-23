@@ -15,10 +15,13 @@ const AgentBuilder = memo(() => {
   const agentId = useAgentStore((s) => s.activeAgentId);
   const agentBuilderId = useAgentStore(builtinAgentSelectors.agentBuilderId);
 
-  const [width, updateSystemStatus] = useGlobalStore((s) => [
-    systemStatusSelectors.agentBuilderPanelWidth(s),
-    s.updateSystemStatus,
-  ]);
+  const [showAgentBuilderPanel, toggleAgentBuilderPanel, width, updateSystemStatus] =
+    useGlobalStore((s) => [
+      systemStatusSelectors.showAgentBuilderPanel(s),
+      s.toggleAgentBuilderPanel,
+      systemStatusSelectors.agentBuilderPanelWidth(s),
+      s.updateSystemStatus,
+    ]);
 
   const useInitBuiltinAgent = useAgentStore((s) => s.useInitBuiltinAgent);
   useInitBuiltinAgent(BUILTIN_AGENT_SLUGS.agentBuilder);
@@ -26,6 +29,8 @@ const AgentBuilder = memo(() => {
   return (
     <RightPanel
       defaultWidth={width}
+      expand={showAgentBuilderPanel}
+      onExpandChange={toggleAgentBuilderPanel}
       onSizeChange={(size) => {
         if (size?.width) {
           const w = typeof size.width === 'string' ? Number.parseInt(size.width) : size.width;

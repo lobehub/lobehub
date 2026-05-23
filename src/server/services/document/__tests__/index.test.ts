@@ -1,4 +1,5 @@
 import { type LobeChatDatabase } from '@lobechat/database';
+import { TRPCError } from '@trpc/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DocumentModel } from '@/database/models/document';
@@ -14,12 +15,21 @@ vi.mock('../../file');
 vi.mock('../history');
 vi.mock('@lobechat/file-loaders', () => ({
   loadFile: vi.fn(),
+  UnsupportedFileTypeError: class UnsupportedFileTypeError extends Error {
+    fileType: string;
+
+    constructor(fileType: string, filename: string) {
+      super(`Unsupported file type '${fileType || 'unknown'}' for file '${filename}'.`);
+      this.name = 'UnsupportedFileTypeError';
+      this.fileType = fileType;
+    }
+  },
 }));
 vi.mock('debug', () => ({
   default: () => vi.fn(),
 }));
 
-const { loadFile } = await import('@lobechat/file-loaders');
+const { loadFile, UnsupportedFileTypeError } = await import('@lobechat/file-loaders');
 
 const createEditorDataWithDiffNode = () => ({
   root: {
@@ -105,6 +115,7 @@ describe('DocumentService', () => {
     };
 
     mockFileService = {
+      deleteFile: vi.fn(),
       downloadFileToLocal: vi.fn(),
     };
 
@@ -474,11 +485,27 @@ describe('DocumentService', () => {
         fileId: 'file-1',
       });
       mockDocumentModel.delete.mockResolvedValue(undefined);
-      mockFileModel.delete.mockResolvedValue(undefined);
+      mockFileModel.delete.mockResolvedValue({ url: 'files/doc-1.md' });
 
       await service.deleteDocument('doc-1');
 
       expect(mockFileModel.delete).toHaveBeenCalledWith('file-1');
+      expect(mockFileService.deleteFile).toHaveBeenCalledWith('files/doc-1.md');
+      expect(mockDocumentModel.delete).toHaveBeenCalledWith('doc-1');
+    });
+
+    it('should not delete storage for internal document placeholder files', async () => {
+      mockDocumentModel.findById.mockResolvedValue({
+        id: 'doc-1',
+        fileType: 'custom/document',
+        fileId: 'file-1',
+      });
+      mockFileModel.delete.mockResolvedValue({ url: 'internal://document/placeholder' });
+
+      await service.deleteDocument('doc-1');
+
+      expect(mockFileModel.delete).toHaveBeenCalledWith('file-1');
+      expect(mockFileService.deleteFile).not.toHaveBeenCalled();
       expect(mockDocumentModel.delete).toHaveBeenCalledWith('doc-1');
     });
 
@@ -525,11 +552,16 @@ describe('DocumentService', () => {
         { id: 'file-in-folder-1' },
         { id: 'file-in-folder-2' },
       ]);
+      mockFileModel.delete
+        .mockResolvedValueOnce({ url: 'files/file-in-folder-1.pdf' })
+        .mockResolvedValueOnce({ url: 'files/file-in-folder-2.pdf' });
 
       await service.deleteDocument('folder-1');
 
       expect(mockFileModel.delete).toHaveBeenCalledWith('file-in-folder-1');
       expect(mockFileModel.delete).toHaveBeenCalledWith('file-in-folder-2');
+      expect(mockFileService.deleteFile).toHaveBeenCalledWith('files/file-in-folder-1.pdf');
+      expect(mockFileService.deleteFile).toHaveBeenCalledWith('files/file-in-folder-2.pdf');
       expect(mockDocumentModel.delete).toHaveBeenCalledWith('folder-1');
     });
   });
@@ -1041,6 +1073,23 @@ describe('DocumentService', () => {
       vi.mocked(loadFile).mockRejectedValue(new Error('File not parseable'));
 
       await expect(service.parseFile('file-1')).rejects.toThrow('File not parseable');
+
+      expect(mockCleanup).toHaveBeenCalled();
+    });
+
+    it('should surface unsupported file types as BAD_REQUEST', async () => {
+      vi.mocked(loadFile).mockRejectedValue(new UnsupportedFileTypeError('zip', 'archive.zip'));
+
+      try {
+        await service.parseFile('file-1');
+        throw new Error('parseFile should reject unsupported file types');
+      } catch (error) {
+        expect(error).toBeInstanceOf(TRPCError);
+        expect(error).toMatchObject({
+          code: 'BAD_REQUEST',
+          message: "Unsupported file type 'zip' for file 'archive.zip'.",
+        });
+      }
 
       expect(mockCleanup).toHaveBeenCalled();
     });

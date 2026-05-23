@@ -1,7 +1,8 @@
 import { type LobeChatDatabase } from '@lobechat/database';
 import { type DocumentItem } from '@lobechat/database/schemas';
 import { documents, files } from '@lobechat/database/schemas';
-import { loadFile } from '@lobechat/file-loaders';
+import { loadFile, UnsupportedFileTypeError } from '@lobechat/file-loaders';
+import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
 import isEqual from 'fast-deep-equal';
@@ -29,6 +30,18 @@ import type {
 
 const log = debug('lobe-chat:service:document');
 
+const normalizeParseFileError = (error: unknown) => {
+  if (error instanceof UnsupportedFileTypeError) {
+    return new TRPCError({
+      cause: error,
+      code: 'BAD_REQUEST',
+      message: error.message,
+    });
+  }
+
+  return error;
+};
+
 export class DocumentService {
   userId: string;
   private fileModel: FileModel;
@@ -54,6 +67,13 @@ export class DocumentService {
     this.documentHistoryServiceInstance ??= new DocumentHistoryService(this.db, this.userId);
 
     return this.documentHistoryServiceInstance;
+  }
+
+  private async deleteFileRecordAndStorage(fileId: string) {
+    const file = await this.fileModel.delete(fileId);
+    if (!file?.url || file.url.startsWith('internal://')) return;
+
+    await this.fileService.deleteFile(file.url);
   }
 
   /**
@@ -269,13 +289,13 @@ export class DocumentService {
       });
 
       for (const file of childFiles) {
-        await this.fileModel.delete(file.id);
+        await this.deleteFileRecordAndStorage(file.id);
       }
     }
 
     // Delete the associated file record if it exists
     if (document.fileId) {
-      await this.fileModel.delete(document.fileId);
+      await this.deleteFileRecordAndStorage(document.fileId);
     }
 
     // Finally delete the document itself
@@ -426,8 +446,9 @@ export class DocumentService {
 
       return document as LobeDocument;
     } catch (error) {
-      console.error(`${logPrefix} File parsing failed:`, error);
-      throw error;
+      const parseError = normalizeParseFileError(error);
+      console.error(`${logPrefix} File parsing failed:`, parseError);
+      throw parseError;
     } finally {
       cleanup();
     }
@@ -479,8 +500,9 @@ export class DocumentService {
 
       return document as LobeDocument;
     } catch (error) {
-      console.error(`${logPrefix} File parsing failed:`, error);
-      throw error;
+      const parseError = normalizeParseFileError(error);
+      console.error(`${logPrefix} File parsing failed:`, parseError);
+      throw parseError;
     } finally {
       cleanup();
     }

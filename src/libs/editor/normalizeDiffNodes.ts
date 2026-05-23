@@ -1,3 +1,5 @@
+import { isRecord } from '@lobechat/utils';
+
 type DiffType =
   | 'add'
   | 'listItemAdd'
@@ -25,9 +27,6 @@ interface SerializedDiffNodeLike extends Record<string, unknown> {
   diffType?: DiffType;
   type: 'diff';
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const isDiffNode = (value: unknown): value is SerializedDiffNodeLike =>
   isRecord(value) && value.type === 'diff';

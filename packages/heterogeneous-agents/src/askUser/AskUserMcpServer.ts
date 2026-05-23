@@ -434,7 +434,19 @@ const formatAnswerForCC = (answer: InterventionAnswer, args: unknown) => {
   // Success: format the structured answer back as text. CC's built-in
   // AskUserQuestion returns "User answers:\n- <q>: <a>" style — match it
   // so the model handles our payload identically.
+  //
+  // Escape-mode response: when the renderer's "Or type directly" toggle is
+  // active, the payload is just `{ __freeform__: <text> }` — picks are
+  // intentionally absent. Forward the text verbatim as the user's reply, no
+  // structured framing, since the user opted out of the multi-choice form.
   const answerObj = (answer.result ?? {}) as Record<string, unknown>;
+  const freeform = answerObj['__freeform__'];
+  if (typeof freeform === 'string' && freeform.trim().length > 0) {
+    return {
+      content: [{ text: freeform.trim(), type: 'text' as const }],
+    };
+  }
+
   const questions = (args as { questions?: Array<{ question: string }> }).questions ?? [];
   const lines = ['User answers:'];
   for (const q of questions) {

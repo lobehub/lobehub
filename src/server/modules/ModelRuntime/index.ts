@@ -1,5 +1,9 @@
 import { type GoogleGenAIOptions } from '@google/genai';
-import { ModelRuntime, type ModelRuntimeHooks } from '@lobechat/model-runtime';
+import {
+  mergeModelRuntimeHooks,
+  ModelRuntime,
+  type ModelRuntimeHooks,
+} from '@lobechat/model-runtime';
 import { LobeVertexAI } from '@lobechat/model-runtime/vertexai';
 import {
   type AWSBedrockKeyVault,
@@ -18,6 +22,7 @@ import { getBusinessModelRuntimeHooks } from '@/business/server/model-runtime';
 import { AiProviderModel } from '@/database/models/aiProvider';
 import { type LobeChatDatabase } from '@/database/type';
 import { getLLMConfig } from '@/envs/llm';
+import { createLLMGenerationTracingHook } from '@/server/services/llmGenerationTracing/hook';
 
 import { KeyVaultsGateKeeper } from '../KeyVaultsEncrypt';
 import apiKeyManager from './apiKeyManager';
@@ -420,8 +425,13 @@ export const initModelRuntimeFromDB = async (
   const payload = buildPayloadFromKeyVaults(keyVaults, runtimeProvider);
 
   // 4. Get business hooks (billing in cloud, undefined in OSS)
-  const hooks = getBusinessModelRuntimeHooks(userId, provider);
+  const businessHooks = getBusinessModelRuntimeHooks(userId, provider);
 
-  // 5. Initialize ModelRuntime with the payload and hooks
+  // 5. Compose with the per-call llm_generation_tracing hook (no-op when the
+  //    service is unconfigured, so OSS / self-hosted setups pay nothing for it).
+  const tracingHooks = createLLMGenerationTracingHook(userId, provider);
+  const hooks = mergeModelRuntimeHooks(businessHooks, tracingHooks);
+
+  // 6. Initialize ModelRuntime with the payload and hooks
   return initModelRuntimeWithUserPayload(provider, payload, { userId }, hooks);
 };

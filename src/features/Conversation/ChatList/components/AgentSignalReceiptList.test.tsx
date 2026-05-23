@@ -1,3 +1,4 @@
+import { LayersEnum } from '@lobechat/types';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -72,6 +73,7 @@ describe('AgentSignalReceiptList', () => {
     expect(screen.getByText('GitHub PR review workflow')).toBeInTheDocument();
     expect(screen.getByText('Memory saved')).toBeInTheDocument();
     expect(screen.getByText('Skill updated')).toBeInTheDocument();
+    expect(screen.getAllByTitle('Agent Signal')).toHaveLength(2);
   });
 
   it('renders receipt cards without the recent activity label', () => {
@@ -260,5 +262,38 @@ describe('AgentSignalReceiptList', () => {
     fireEvent.click(screen.getByRole('button', { name: /Decision-first PR review preference/ }));
 
     expect(mocks.navigate).toHaveBeenCalledWith('/memory');
+  });
+
+  it('opens memory receipts on their layer detail route when target metadata is available', () => {
+    render(
+      <AgentSignalReceiptList
+        receipts={[
+          {
+            agentId: 'agent-1',
+            createdAt: 1,
+            detail: 'Saved this for future replies',
+            id: 'receipt-1',
+            kind: 'memory',
+            sourceId: 'source-1',
+            sourceType: 'client.gateway.runtime_end',
+            status: 'applied',
+            target: {
+              id: 'preference-1',
+              memoryId: 'memory-1',
+              memoryLayer: LayersEnum.Preference,
+              title: 'Decision-first PR review preference',
+              type: 'memory',
+            },
+            title: 'Memory saved',
+            topicId: 'topic-1',
+            userId: 'user-1',
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('Open'));
+
+    expect(mocks.navigate).toHaveBeenCalledWith('/memory/preferences?preferenceId=preference-1');
   });
 });

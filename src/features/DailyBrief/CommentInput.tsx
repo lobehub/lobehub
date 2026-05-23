@@ -5,6 +5,8 @@ import { ChevronLeft } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useEnterToSend } from '@/hooks/useEnterToSend';
+
 interface CommentInputProps {
   onCancel: () => void;
   onSubmit: (text: string) => Promise<void> | void;
@@ -14,6 +16,7 @@ const CommentInput = memo<CommentInputProps>(({ onSubmit, onCancel }) => {
   const { t } = useTranslation('home');
   const editor = useEditor();
   const [submitting, setSubmitting] = useState(false);
+  const shouldSendOnEnter = useEnterToSend();
 
   const handleSubmit = useCallback(async () => {
     const content = String(editor?.getDocument?.('markdown') ?? '').trim();
@@ -65,7 +68,7 @@ const CommentInput = memo<CommentInputProps>(({ onSubmit, onCancel }) => {
         type={'text'}
         variant={'chat'}
         onPressEnter={({ event }) => {
-          if (event.metaKey || event.ctrlKey) {
+          if (shouldSendOnEnter(event)) {
             handleSubmit();
             return true;
           }

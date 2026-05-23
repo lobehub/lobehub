@@ -75,7 +75,7 @@ export class SlackApi {
 
   /**
    * Post a message that combines a Block Kit URL button AND the same URL
-   * rendered as a plain inline link below it (邮件式 fallback). Mirrors how
+   * rendered as a plain inline link below it (email-style fallback). Mirrors how
    * email templates render "Click [Verify] / Or copy this link: …" so users
    * have a path through every Slack client (mobile, screen reader, copy-to-
    * other-device, future Block Kit regressions).
@@ -389,7 +389,7 @@ export class SlackApi {
     const data = await this.call('conversations.list', {
       exclude_archived: true,
       limit: 200,
-      types: 'public_channel,private_channel',
+      types: 'public_channel,private_channel,mpim',
       ...options,
     });
     return {
@@ -505,6 +505,73 @@ export class SlackApi {
       ...chunks.map((els) => ({ elements: els, type: 'actions' })),
     ];
   }
+
+  // ==================== Outbound File Upload (v2) ====================
+
+  /**
+   * Step 1 of the Slack v2 upload flow: request a one-shot upload URL plus a
+   * `file_id` we'll later associate with a channel via
+   * `completeFileUpload`.
+   *
+   * See: https://api.slack.com/methods/files.getUploadURLExternal
+   */
+  async getFileUploadUrl(params: {
+    filename: string;
+    length: number;
+  }): Promise<{ file_id: string; upload_url: string }> {
+    log('getFileUploadUrl: filename=%s, length=%d', params.filename, params.length);
+    const data = await this.call('files.getUploadURLExternal', {
+      filename: params.filename,
+      length: params.length,
+    });
+    return { file_id: data.file_id, upload_url: data.upload_url };
+  }
+
+  /**
+   * Step 2: PUT the binary bytes to the signed upload URL Slack returned in
+   * step 1. The URL is signed, so no `Authorization` header is needed (and
+   * including one is actively rejected).
+   */
+  async putFileBytes(uploadUrl: string, buffer: Buffer): Promise<void> {
+    log('putFileBytes: bytes=%d', buffer.length);
+    const response = await fetch(uploadUrl, {
+      body: new Uint8Array(buffer),
+      method: 'POST',
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Slack v2 upload failed: ${response.status} ${text}`);
+    }
+  }
+
+  /**
+   * Step 3: associate uploaded file_id(s) with a channel and post the file
+   * message. `initial_comment` doubles as the text leg of the reply so
+   * callers don't have to send a separate `chat.postMessage`.
+   *
+   * See: https://api.slack.com/methods/files.completeUploadExternal
+   */
+  async completeFileUpload(params: {
+    channelId: string;
+    files: Array<{ id: string; title?: string }>;
+    initialComment?: string;
+    threadTs?: string;
+  }): Promise<void> {
+    log(
+      'completeFileUpload: channel=%s, files=%d, thread=%s',
+      params.channelId,
+      params.files.length,
+      params.threadTs ?? '(none)',
+    );
+    await this.call('files.completeUploadExternal', {
+      channel_id: params.channelId,
+      files: params.files,
+      initial_comment: params.initialComment,
+      thread_ts: params.threadTs,
+    });
+  }
+
+  // ==================== Private ====================
 
   private async call(method: string, body: Record<string, unknown>): Promise<any> {
     const url = `${SLACK_API_BASE}/${method}`;

@@ -222,6 +222,45 @@ describe('deriveSelfReviewSignals', () => {
 
   /**
    * @example
+   * A single managed skill bundle plus its SKILL.md index should not become consolidate evidence.
+   */
+  it('does not create overlap signals from one managed skill bundle and its index document', () => {
+    const signals = deriveSelfReviewSignals({
+      documentActivity: {
+        ambiguousBucket: [],
+        excludedSummary: { count: 0, reasons: [] },
+        generalDocumentBucket: [],
+        skillBucket: [
+          {
+            agentDocumentId: 'skill-bundle-doc',
+            documentId: 'doc-bundle',
+            hintIsSkill: false,
+            reason: 'templateId=agent-skill',
+            skillFileType: 'agent-skill',
+            title: 'Release note checklist',
+            updatedAt: '2026-05-09T18:10:00.000Z',
+          },
+          {
+            agentDocumentId: 'skill-index-doc',
+            documentId: 'doc-index',
+            hintIsSkill: false,
+            reason: 'templateId=skills/index',
+            skillFileType: 'skills/index',
+            title: 'SKILL.md',
+            updatedAt: '2026-05-09T18:10:00.000Z',
+          },
+        ],
+      },
+      feedbackActivity: createEmptyFeedbackActivityForTest(),
+      receiptActivity: createEmptyReceiptActivityForTest(),
+      toolActivity: [],
+    });
+
+    expect(signals.map((signal) => signal.kind)).not.toContain('skill_documents_maybe_overlap');
+  });
+
+  /**
+   * @example
    * Pending receipts should create a suppression-oriented weak signal.
    */
   it('creates pending proposal signals from receipt activity', () => {

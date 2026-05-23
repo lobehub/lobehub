@@ -19,7 +19,7 @@ type DeletedTask = NonNullable<Awaited<ReturnType<typeof taskService.delete>>['d
 // - model/provider goes through configSlice.updateTaskModelConfig
 // - checkpoint goes through configSlice.updateCheckpoint
 // - review goes through configSlice.updateReview
-// - heartbeat config will get a dedicated action once the upstream infra in LOBE-6587 is complete
+// - heartbeat config will get a dedicated action once the upstream infra in is complete
 export interface TaskUpdatePayload {
   assigneeAgentId?: string | null;
   description?: string;

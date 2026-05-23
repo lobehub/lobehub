@@ -2,6 +2,7 @@ import type { SourceAgentNightlyReviewRequested } from '@lobechat/agent-signal/s
 import { AGENT_SIGNAL_SOURCE_TYPES } from '@lobechat/agent-signal/source';
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import { tracer } from '@lobechat/observability-otel/modules/agent-signal';
+import { isNonEmptyString } from '@lobechat/utils';
 
 import { defineSourceHandler } from '../../../runtime/middleware';
 import type { AgentSignalReceipt } from '../../receiptService';
@@ -11,6 +12,7 @@ import type { EvidenceRef, Plan, RunResult } from '../types';
 import { buildNightlyReviewSourceId, ReviewRunStatus } from '../types';
 import type { SelfReviewBriefProjection } from './brief';
 import { createBriefSelfReviewService, getNightlySelfReviewBriefMetadata } from './brief';
+import type { SelfReviewBriefTextTranslator } from './briefText';
 import type { CollectNightlyReviewContextInput, NightlyReviewContext } from './collect';
 import type { SelfReviewProposalPlan } from './proposal';
 
@@ -86,6 +88,10 @@ export interface CreateNightlyReviewSourceHandlerDependencies {
   canRunReview: (input: NightlyReviewSourceGuardInput) => Promise<boolean>;
   /** Collects bounded digest context without mutating shared resources. */
   collectContext: (input: CollectNightlyReviewContextInput) => Promise<NightlyReviewContext>;
+  /** Resolves a home-namespace translator for persisted nightly Brief text. */
+  resolveBriefTextTranslator?: (input: {
+    userId: string;
+  }) => Promise<SelfReviewBriefTextTranslator | undefined>;
   /** Runs the bounded self-iteration agent and returns execution plus the frozen projection plan. */
   runSelfReviewAgent: (input: {
     context: NightlyReviewContext;
@@ -98,9 +104,6 @@ export interface CreateNightlyReviewSourceHandlerDependencies {
   /** Writes durable receipts for the review summary and action outcomes. */
   writeReceipts?: (receipts: AgentSignalReceipt[]) => Promise<void>;
 }
-
-const isNonEmptyString = (value: unknown): value is string =>
-  typeof value === 'string' && value.length > 0;
 
 interface NightlyReviewSpanLike {
   setAttribute: (key: string, value: string | number | boolean) => void;
@@ -503,6 +506,7 @@ export const createNightlyReviewSourceHandler = (
 
         await writeNightlyReceipts(deps, receipts);
 
+        const t = await deps.resolveBriefTextTranslator?.({ userId: payload.userId });
         const brief = createBriefSelfReviewService().projectNightlyReviewBrief({
           agentId: payload.agentId,
           evidenceRefs: collectPlanEvidenceRefs(plan),
@@ -512,6 +516,7 @@ export const createNightlyReviewSourceHandler = (
           result: executionWithReceipts,
           reviewWindowEnd: payload.reviewWindowEnd,
           reviewWindowStart: payload.reviewWindowStart,
+          t,
           timezone: payload.timezone,
           userId: payload.userId,
         });

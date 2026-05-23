@@ -280,6 +280,182 @@ describe('ssrfSafeFetch', () => {
     });
   });
 
+  describe('maxContentLength (response body cap)', () => {
+    const buildBodyResponse = (chunks: Buffer[]) => ({
+      // arrayBuffer should NOT be called when maxContentLength is set;
+      // make it throw so the test fails loudly if the cap path falls through.
+      arrayBuffer: vi.fn().mockImplementation(async () => {
+        throw new Error('arrayBuffer should not be called when maxContentLength is set');
+      }),
+      body: (async function* () {
+        for (const chunk of chunks) yield chunk;
+      })(),
+      headers: new Map([['content-type', 'text/html']]),
+      status: 200,
+      statusText: 'OK',
+    });
+
+    it('returns the full body when it fits within the cap', async () => {
+      mockFetch.mockResolvedValue(buildBodyResponse([Buffer.from('hello '), Buffer.from('world')]));
+
+      const response = await ssrfSafeFetch('https://example.com', {}, { maxContentLength: 1024 });
+
+      expect(await response.text()).toBe('hello world');
+    });
+
+    it('truncates the body once the cap is reached and stops reading further chunks', async () => {
+      const chunks = [
+        Buffer.from('a'.repeat(60)),
+        Buffer.from('b'.repeat(60)),
+        Buffer.from('c'.repeat(60)),
+      ];
+      mockFetch.mockResolvedValue(buildBodyResponse(chunks));
+
+      const response = await ssrfSafeFetch('https://example.com', {}, { maxContentLength: 100 });
+
+      const text = await response.text();
+      expect(text).toHaveLength(100);
+      expect(text).toBe('a'.repeat(60) + 'b'.repeat(40));
+    });
+
+    it('returns an empty body when the response stream is null', async () => {
+      mockFetch.mockResolvedValue({
+        arrayBuffer: vi.fn(),
+        body: null,
+        headers: new Map(),
+        status: 200,
+        statusText: 'OK',
+      });
+
+      const response = await ssrfSafeFetch('https://example.com', {}, { maxContentLength: 1024 });
+
+      expect(await response.text()).toBe('');
+    });
+
+    it('falls back to arrayBuffer when maxContentLength is not set', async () => {
+      const mockResponse = createMockResponse({
+        arrayBuffer: new TextEncoder().encode('legacy path').buffer as ArrayBuffer,
+      });
+      mockFetch.mockResolvedValue(mockResponse);
+
+      const response = await ssrfSafeFetch('https://example.com');
+
+      expect(mockResponse.arrayBuffer).toHaveBeenCalledTimes(1);
+      expect(await response.text()).toBe('legacy path');
+    });
+  });
+
+  /*
+   * Regression tests for the production SIGABRT crashes on /trpc/tools/search.webSearch
+   * (rss=2889MB heap=2473MB → V8 "allocation failed" → SIGABRT). These verify the cap
+   * actually prevents unbounded buffering even when the source body is huge.
+   */
+  describe('OOM regression: bounded memory under oversized response bodies', () => {
+    const ONE_MB = 1024 * 1024;
+    const SIXTY_FOUR_KB = 64 * 1024;
+
+    /**
+     * Builds a mock response whose body generator tracks how many bytes it has
+     * yielded into a shared counter. Lets us assert that we did not drain the
+     * full source — the whole point of the cap is to stop pulling early.
+     */
+    const buildHugeBodyResponse = (
+      counter: { bytesYielded: number },
+      totalAvailableBytes: number,
+    ) => {
+      const chunk = Buffer.alloc(SIXTY_FOUR_KB, 0x61);
+      const totalChunks = Math.ceil(totalAvailableBytes / chunk.length);
+
+      async function* gen() {
+        for (let i = 0; i < totalChunks; i++) {
+          counter.bytesYielded += chunk.length;
+          yield chunk;
+        }
+      }
+
+      return {
+        arrayBuffer: vi.fn().mockImplementation(async () => {
+          throw new Error('arrayBuffer should not be called when maxContentLength is set');
+        }),
+        body: gen(),
+        headers: new Map([['content-type', 'text/html']]),
+        status: 200,
+        statusText: 'OK',
+      };
+    };
+
+    it('stops pulling chunks from the source once the cap is reached', async () => {
+      // Source has 200 MB available; cap at 1 MB. Pre-fix would buffer all 200 MB
+      // before the downstream truncation could apply.
+      const counter = { bytesYielded: 0 };
+      mockFetch.mockResolvedValue(buildHugeBodyResponse(counter, 200 * ONE_MB));
+
+      const response = await ssrfSafeFetch(
+        'https://huge.example.com',
+        {},
+        { maxContentLength: ONE_MB },
+      );
+      const body = await response.arrayBuffer();
+
+      expect(body.byteLength).toBe(ONE_MB);
+      // We should have pulled at most CAP + one chunk of slack (the last chunk
+      // that triggered the break). Definitely not the full 200 MB.
+      expect(counter.bytesYielded).toBeLessThanOrEqual(ONE_MB + SIXTY_FOUR_KB);
+    });
+
+    it('keeps total source pull bounded under CRAWL_CONCURRENCY=3 (production scenario)', async () => {
+      // Three concurrent oversized fetches — matches the production setup where
+      // pMap with concurrency=3 over 3 large search results triggered SIGABRT.
+      const counter = { bytesYielded: 0 };
+      mockFetch
+        .mockResolvedValueOnce(buildHugeBodyResponse(counter, 100 * ONE_MB))
+        .mockResolvedValueOnce(buildHugeBodyResponse(counter, 100 * ONE_MB))
+        .mockResolvedValueOnce(buildHugeBodyResponse(counter, 100 * ONE_MB));
+
+      const responses = await Promise.all([
+        ssrfSafeFetch('https://a.example.com', {}, { maxContentLength: ONE_MB }),
+        ssrfSafeFetch('https://b.example.com', {}, { maxContentLength: ONE_MB }),
+        ssrfSafeFetch('https://c.example.com', {}, { maxContentLength: ONE_MB }),
+      ]);
+
+      for (const r of responses) {
+        expect((await r.arrayBuffer()).byteLength).toBe(ONE_MB);
+      }
+      // Without the cap we would have pulled 300 MB. With cap=1 MB × 3 fetches,
+      // expect ≤ 3 × (cap + one chunk slack).
+      expect(counter.bytesYielded).toBeLessThanOrEqual(3 * (ONE_MB + SIXTY_FOUR_KB));
+    });
+
+    /*
+     * Real heap-pressure test — only runs when --expose-gc is available
+     * (e.g. `NODE_OPTIONS=--expose-gc bunx vitest run`). Skipped otherwise so CI
+     * doesn't false-fail due to GC timing.
+     */
+    const itIfGc = typeof globalThis.gc === 'function' ? it : it.skip;
+    itIfGc('heap delta stays bounded when a 50 MB body is fetched with a 1 MB cap', async () => {
+      const counter = { bytesYielded: 0 };
+      mockFetch.mockResolvedValue(buildHugeBodyResponse(counter, 50 * ONE_MB));
+
+      globalThis.gc!();
+      const before = process.memoryUsage().heapUsed;
+
+      const response = await ssrfSafeFetch(
+        'https://heavy.example.com',
+        {},
+        { maxContentLength: ONE_MB },
+      );
+      await response.arrayBuffer();
+
+      globalThis.gc!();
+      const after = process.memoryUsage().heapUsed;
+      const deltaMB = (after - before) / ONE_MB;
+
+      // Without the cap, delta would be ≥ 50 MB. With cap=1 MB, we expect
+      // a few MB of overhead at most.
+      expect(deltaMB).toBeLessThan(10);
+    });
+  });
+
   describe('integration scenarios', () => {
     it('should work with complex request configurations', async () => {
       process.env.SSRF_ALLOW_IP_ADDRESS_LIST = '127.0.0.1';

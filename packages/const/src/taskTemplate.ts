@@ -63,6 +63,8 @@ export const TASK_TEMPLATE_FALLBACK_CATEGORIES: TaskTemplateCategory[] = [
   'learning-research',
 ];
 
+export const TASK_TEMPLATE_RECOMMEND_COUNT = 3;
+
 export const taskTemplates: TaskTemplate[] = [
   // content-creation
   {

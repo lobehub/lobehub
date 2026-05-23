@@ -44,6 +44,11 @@ export interface ChatListProps {
    */
   footerSlot?: ReactNode;
   /**
+   * Optional content rendered as the first item inside the virtualized list.
+   * It scrolls with messages and does not participate in conversation state.
+   */
+  headerSlot?: ReactNode;
+  /**
    * Custom item renderer. If not provided, uses default ChatItem.
    */
   itemContent?: (index: number, id: string) => ReactNode;
@@ -66,6 +71,7 @@ const ChatList = memo<ChatListProps>(
     defaultWorkflowExpandLevel,
     disableActionsBar,
     footerSlot,
+    headerSlot,
     welcome,
     itemContent,
     showWelcome,
@@ -80,6 +86,7 @@ const ChatList = memo<ChatListProps>(
     const activeAgentId = useChatStore((s) => s.activeAgentId);
     const { enableAgentSelfIteration } = useServerConfigStore(featureFlagsSelectors);
     useFetchMessages(context, skipFetch);
+    const displayMessages = useConversationStore(dataSelectors.displayMessages);
     const displayMessageIds = useConversationStore(dataSelectors.displayMessageIds);
     const latestMessageId = displayMessageIds.at(-1);
 
@@ -87,8 +94,9 @@ const ChatList = memo<ChatListProps>(
     const isSharePage = !!context.topicShareId;
     // TODO: Migrate Agent Signal receipts behind a dedicated user-visible receipt capability.
     const canShowAgentSignalReceipts = enableAgentSelfIteration === true && !isSharePage;
-    const { receiptsByAnchor, unanchoredReceipts } = useAgentSignalReceipts({
+    const { receiptsByAnchor } = useAgentSignalReceipts({
       agentId: canShowAgentSignalReceipts ? activeAgentId : undefined,
+      displayMessages,
       enabled: canShowAgentSignalReceipts,
       pollingSignal: latestMessageId,
       topicId: canShowAgentSignalReceipts ? context.topicId : undefined,
@@ -105,13 +113,9 @@ const ChatList = memo<ChatListProps>(
       (index: number, id: string) => {
         const isLatestItem = displayMessageIds.length === index + 1;
         const anchoredReceipts = receiptsByAnchor.get(id) ?? [];
-        const latestUnanchoredReceipts = isLatestItem ? unanchoredReceipts : [];
         const receiptRender =
-          anchoredReceipts.length > 0 || latestUnanchoredReceipts.length > 0 ? (
-            <>
-              <AgentSignalReceiptList receipts={anchoredReceipts} />
-              <AgentSignalReceiptList receipts={latestUnanchoredReceipts} />
-            </>
+          anchoredReceipts.length > 0 ? (
+            <AgentSignalReceiptList receipts={anchoredReceipts} />
           ) : undefined;
 
         return (
@@ -124,7 +128,7 @@ const ChatList = memo<ChatListProps>(
           />
         );
       },
-      [displayMessageIds.length, defaultWorkflowExpandLevel, receiptsByAnchor, unanchoredReceipts],
+      [displayMessageIds.length, defaultWorkflowExpandLevel, receiptsByAnchor],
     );
     const messagesInit = useConversationStore(dataSelectors.messagesInit);
 
@@ -157,6 +161,7 @@ const ChatList = memo<ChatListProps>(
         <VirtualizedList
           dataSource={displayMessageIds}
           footerSlot={footerSlot}
+          headerSlot={headerSlot}
           itemContent={itemContent ?? defaultItemContent}
         />
       </MessageActionProvider>

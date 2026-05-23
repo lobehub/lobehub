@@ -11,6 +11,11 @@ import { LobeGoogleAI } from './index';
 const provider = 'google';
 const bizErrorType = 'ProviderBizError';
 const invalidErrorType = 'InvalidProviderAPIKey';
+const getModelPricingMock = vi.hoisted(() => vi.fn());
+
+vi.mock('../../utils/getModelPricing', () => ({
+  getModelPricing: getModelPricingMock,
+}));
 
 async function* createEmptyAsyncGenerator<T>(): AsyncGenerator<T> {
   yield* [] as unknown as T[];
@@ -22,6 +27,8 @@ vi.spyOn(console, 'error').mockImplementation(() => {});
 let instance: LobeGoogleAI;
 
 beforeEach(() => {
+  getModelPricingMock.mockReset();
+  getModelPricingMock.mockResolvedValue(undefined);
   instance = new LobeGoogleAI({ apiKey: 'test' });
 
   // Use vi.spyOn to mock the chat.completions.create method
@@ -434,7 +441,6 @@ describe('LobeGoogleAI', () => {
       });
 
       it('should handle AbortError without data', async () => {
-        // eslint-disable-next-line require-yield
         const mockStream = (async function* () {
           yield* [] as any;
           throw new Error('aborted');
@@ -697,6 +703,115 @@ describe('buildGoogleToolsWithSearch', () => {
     const callArgs = (instance['client'].models.generateContentStream as any).mock.calls[0];
     const config = callArgs[0].config as any;
     expect(config.tools).toEqual([{ googleSearch: {} }]);
+  });
+
+  it('should drop function declarations for image response models', async () => {
+    const mockStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue({
+          text: 'test',
+          candidates: [
+            {
+              content: { parts: [{ text: 'test' }], role: 'model' },
+              finishReason: 'STOP',
+              index: 0,
+            },
+          ],
+          usageMetadata: { promptTokenCount: 1, totalTokenCount: 2 },
+          modelVersion: 'gemini-2.5-flash-image',
+        });
+        controller.close();
+      },
+    });
+    vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(
+      mockStream as any,
+    );
+
+    await instance.chat({
+      messages: [{ content: 'Hello', role: 'user' }],
+      model: 'gemini-2.5-flash-image',
+      temperature: 0,
+      tools: [{ type: 'function', function: { name: 'test_tool', description: 'A test tool' } }],
+    });
+
+    const callArgs = (instance['client'].models.generateContentStream as any).mock.calls[0];
+    const config = callArgs[0].config as any;
+    expect(config.tools).toBeUndefined();
+    expect(config.toolConfig).toBeUndefined();
+  });
+
+  it('should drop googleSearch for image response models without search support', async () => {
+    const mockStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue({
+          text: 'test',
+          candidates: [
+            {
+              content: { parts: [{ text: 'test' }], role: 'model' },
+              finishReason: 'STOP',
+              index: 0,
+            },
+          ],
+          usageMetadata: { promptTokenCount: 1, totalTokenCount: 2 },
+          modelVersion: 'gemini-2.5-flash-image',
+        });
+        controller.close();
+      },
+    });
+    vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(
+      mockStream as any,
+    );
+
+    await instance.chat({
+      messages: [{ content: 'Hello', role: 'user' }],
+      model: 'gemini-2.5-flash-image',
+      temperature: 0,
+      enabledSearch: true,
+    });
+
+    const callArgs = (instance['client'].models.generateContentStream as any).mock.calls[0];
+    const config = callArgs[0].config as any;
+    expect(config.tools).toBeUndefined();
+    expect(config.toolConfig).toBeUndefined();
+  });
+
+  it('should only keep googleSearch for image response models', async () => {
+    const mockStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue({
+          text: 'test',
+          candidates: [
+            {
+              content: { parts: [{ text: 'test' }], role: 'model' },
+              finishReason: 'STOP',
+              index: 0,
+            },
+          ],
+          usageMetadata: { promptTokenCount: 1, totalTokenCount: 2 },
+          modelVersion: 'gemini-3.1-flash-image-preview',
+        });
+        controller.close();
+      },
+    });
+    vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(
+      mockStream as any,
+    );
+
+    await instance.chat({
+      messages: [{ content: 'Hello', role: 'user' }],
+      model: 'gemini-3.1-flash-image-preview',
+      temperature: 0,
+      enabledSearch: true,
+      urlContext: true,
+      tools: [{ type: 'function', function: { name: 'test_tool', description: 'A test tool' } }],
+    });
+
+    const callArgs = (instance['client'].models.generateContentStream as any).mock.calls[0];
+    const config = callArgs[0].config as any;
+    expect(config.tools).toEqual([
+      { googleSearch: { searchTypes: { imageSearch: {}, webSearch: {} } } },
+    ]);
+    expect(config.toolConfig).toBeUndefined();
   });
 
   it('should combine search tools with function declarations for Gemini 3+ models', async () => {

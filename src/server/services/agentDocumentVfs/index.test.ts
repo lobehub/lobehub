@@ -190,6 +190,66 @@ describe('AgentDocumentVfsService', () => {
     );
   });
 
+  it('reads an ordinary file line range with loc metadata', async () => {
+    mockAgentDocumentModel.listByParentAndFilename.mockResolvedValue([
+      {
+        accessSelf: AgentAccess.READ | AgentAccess.LIST,
+        content: ['line 0', 'line 1', 'line 2', 'line 3'].join('\n'),
+        createdAt: new Date('2024-01-01T00:00:00.000Z'),
+        documentId: 'documents-1',
+        fileType: 'agent/document',
+        filename: 'SOUL.md',
+        id: 'agent-doc-1',
+        updatedAt: new Date('2024-01-02T00:00:00.000Z'),
+      },
+    ]);
+
+    const service = new AgentDocumentVfsService(db, userId);
+    const result = await service.read('./SOUL.md', { agentId: 'agent-1' }, { loc: [1, 3] });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        content: 'line 1\nline 2',
+        lineCount: 2,
+        loc: [1, 3],
+        path: './SOUL.md',
+        totalLineCount: 4,
+      }),
+    );
+  });
+
+  it('reads a mounted skill file line range with loc metadata', async () => {
+    mockSkillMount.get.mockResolvedValue({
+      content: ['# Skill', '', 'Use this skill.', 'Extra notes.'].join('\n'),
+      contentType: 'text/markdown',
+      name: 'SKILL.md',
+      namespace: 'agent',
+      path: './lobe/skills/agent/skills/writer/SKILL.md',
+      readOnly: false,
+      type: 'file',
+    });
+
+    const service = new AgentDocumentVfsService(db, userId);
+    const result = await service.read(
+      './lobe/skills/agent/skills/writer/SKILL.md',
+      {
+        agentId: 'agent-1',
+      },
+      { loc: [2, 4] },
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        content: 'Use this skill.\nExtra notes.',
+        contentType: 'text/markdown',
+        lineCount: 2,
+        loc: [2, 4],
+        path: './lobe/skills/agent/skills/writer/SKILL.md',
+        totalLineCount: 4,
+      }),
+    );
+  });
+
   it('creates a new ordinary file through write when the path is missing', async () => {
     mockAgentDocumentModel.findByParentAndFilename.mockResolvedValue(undefined);
     mockAgentDocumentModel.listByParentAndFilename.mockResolvedValue([]);

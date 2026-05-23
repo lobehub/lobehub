@@ -3,7 +3,6 @@ import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
 import type {
   ConnectKlavisServiceParams,
-  GetPlaintextCredParams,
   InitiateOAuthConnectParams,
   InjectCredsToSandboxParams,
   SaveCredsParams,
@@ -15,21 +14,6 @@ import { LOBEHUB_OAUTH_PROVIDER_LIST } from '../types';
  * Abstracted to allow different implementations (e.g., MarketService-based)
  */
 export interface ICredsService {
-  /**
-   * Get plaintext credential by key
-   */
-  getByKey: (
-    key: string,
-    options?: { decrypt?: boolean },
-  ) => Promise<{
-    fileName?: string;
-    fileUrl?: string;
-    name?: string;
-    plaintext?: Record<string, string>;
-    type: string;
-    values?: Record<string, string>;
-  }>;
-
   /**
    * Get OAuth authorization URL
    */
@@ -202,79 +186,6 @@ export class CredsExecutionRuntime {
         error: {
           message: error instanceof Error ? error.message : 'Failed to initiate OAuth connection',
           type: 'InitiateOAuthFailed',
-        },
-        success: false,
-      };
-    }
-  }
-
-  /**
-   * Get plaintext credential value by key
-   */
-  async getPlaintextCred(args: GetPlaintextCredParams): Promise<BuiltinServerRuntimeOutput> {
-    try {
-      const result = await this.credsService.getByKey(args.key, { decrypt: true });
-
-      const credType = result.type;
-      const credName = result.name || args.key;
-
-      // Handle file type credentials
-      if (credType === 'file') {
-        const fileUrl = result.fileUrl;
-        const fileName = result.fileName;
-
-        if (!fileUrl) {
-          return {
-            content: `File credential "${credName}" (key: ${args.key}) found but file URL is not available.`,
-            error: {
-              message: 'File URL not available',
-              type: 'FileUrlNotAvailable',
-            },
-            success: false,
-          };
-        }
-
-        return {
-          content: `Successfully retrieved file credential "${credName}" (key: ${args.key}). File: ${fileName || 'unknown'}. The file download URL is available in the state.`,
-          state: {
-            fileName,
-            fileUrl,
-            key: args.key,
-            name: credName,
-            type: 'file',
-          },
-          success: true,
-        };
-      }
-
-      // Handle KV types (kv-env, kv-header, oauth)
-      const values = result.values || result.plaintext || {};
-      const valueKeys = Object.keys(values);
-
-      // Return content with masked values for security, but include actual values in state
-      const maskedValues = valueKeys.map((k) => `${k}: ****`).join(', ');
-
-      return {
-        content: `Successfully retrieved credential "${credName}" (key: ${args.key}). Contains ${valueKeys.length} value(s): ${maskedValues}. The actual values are available in the state for use.`,
-        state: {
-          key: args.key,
-          name: credName,
-          type: credType,
-          values,
-        },
-        success: true,
-      };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      const isNotFound = errorMessage.includes('not found') || errorMessage.includes('NOT_FOUND');
-
-      return {
-        content: isNotFound
-          ? `Credential not found: ${args.key}. Please check if the credential exists in Settings > Credentials.`
-          : `Failed to get credential: ${errorMessage}`,
-        error: {
-          message: errorMessage,
-          type: isNotFound ? 'CredentialNotFound' : 'GetCredentialFailed',
         },
         success: false,
       };

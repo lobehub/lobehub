@@ -6,6 +6,7 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
+import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import SideBarDrawer from '@/features/NavPanel/SideBarDrawer';
 import { useClientDataSWR } from '@/libs/swr';
@@ -40,7 +41,7 @@ const AllRecentsDrawer = memo<AllRecentsDrawerProps>(({ open, onClose }) => {
     const taskId = item.id;
     if (!taskId) return item.routePath;
 
-    return `/task/${taskId}`;
+    return taskDetailPath(taskId, item.agentId ?? undefined);
   }, []);
 
   return (

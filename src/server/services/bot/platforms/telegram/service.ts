@@ -39,6 +39,7 @@ import type { MessageRuntimeService } from '@/server/services/toolExecution/serv
 import { PlatformUnsupportedError } from '@/server/services/toolExecution/serverRuntimes/message/PlatformUnsupportedError';
 
 import type { TelegramApi } from './api';
+import { sendTelegramAttachments } from './sendAttachments';
 
 export class TelegramMessageService implements MessageRuntimeService {
   constructor(private api: TelegramApi) {}
@@ -46,6 +47,29 @@ export class TelegramMessageService implements MessageRuntimeService {
   // ==================== Core Message Operations ====================
 
   sendMessage = async (params: SendMessageParams): Promise<SendMessageState> => {
+    // Attachments path: the first attachment carries `content` as its caption
+    // (Telegram pairs caption with media), so we don't double up on a
+    // separate text-only sendMessage. If every attachment fails to
+    // materialize, fall back to the original text-only path so the reply
+    // still reaches the user.
+    if (params.attachments?.length) {
+      const delivered = await sendTelegramAttachments(
+        this.api,
+        params.channelId,
+        params.attachments,
+        params.content,
+      );
+      if (delivered > 0) {
+        return { channelId: params.channelId, platform: 'telegram' };
+      }
+    }
+
+    if (!params.content?.trim()) {
+      // No text and no successful attachments — nothing to send. Return a
+      // soft state instead of throwing so the caller doesn't see a crash
+      // for a no-op.
+      return { channelId: params.channelId, platform: 'telegram' };
+    }
     const result = await this.api.sendMessage(params.channelId, params.content);
     return {
       channelId: params.channelId,

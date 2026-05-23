@@ -167,7 +167,11 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
         horizontal
         align={'center'}
         justify={'space-between'}
-        style={{ borderTop: `1px solid ${cssVar.colorBorderSecondary}`, padding: '8px 16px' }}
+        style={{
+          borderTop: `1px solid ${cssVar.colorBorderSecondary}`,
+          paddingBlock: 8,
+          paddingInline: '8px 16px',
+        }}
       >
         <Flexbox horizontal gap={2} wrap={'wrap'}>
           <TaskPriorityTag priority={priority} onChange={setPriority}>

@@ -2,6 +2,8 @@
  * Input used by the focused skill consolidation prompt.
  */
 export interface AgentSkillConsolidatePromptInput {
+  /** Language instruction block for persisted skill artifact text. */
+  languageInstruction?: string;
   /** Reason the source skills should be consolidated. */
   reason: string;
   /** Overlapping skills that should be reconciled. */
@@ -84,5 +86,7 @@ Output ONLY the JSON object, no markdown fences or explanations.`;
  * - A compact prompt containing serialized consolidation context
  */
 export const createAgentSkillConsolidatePrompt = (input: AgentSkillConsolidatePromptInput) => {
-  return `Consolidate these skills.\ninput=${JSON.stringify(input)}`;
+  const languageInstruction = input.languageInstruction ? `\n\n${input.languageInstruction}` : '';
+
+  return `Consolidate these skills.${languageInstruction}\ninput=${JSON.stringify(input)}`;
 };

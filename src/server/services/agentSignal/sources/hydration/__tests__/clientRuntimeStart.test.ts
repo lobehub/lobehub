@@ -1,4 +1,5 @@
 // @vitest-environment node
+import type { SourceEventClientRuntimeStart } from '@lobechat/agent-signal/source';
 import { AGENT_SIGNAL_SOURCE_TYPES } from '@lobechat/agent-signal/source';
 import { messages, topics, users } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
@@ -7,6 +8,23 @@ import { describe, expect, it } from 'vitest';
 import { uuid } from '@/utils/uuid';
 
 import { resolveClientRuntimeStartFeedbackSource } from '../clientRuntimeStart';
+
+const createStartSource = (
+  payload: Partial<SourceEventClientRuntimeStart['payload']> = {},
+): SourceEventClientRuntimeStart => ({
+  payload: {
+    agentId: 'agent_1',
+    operationId: `op_${uuid()}`,
+    parentMessageId: `msg_${uuid()}`,
+    parentMessageType: 'user',
+    topicId: 'topic_1',
+    ...payload,
+  },
+  scopeKey: 'topic:topic_1',
+  sourceId: 'client:start',
+  sourceType: AGENT_SIGNAL_SOURCE_TYPES.clientRuntimeStart,
+  timestamp: Date.now(),
+});
 
 describe('resolveClientRuntimeStartFeedbackSource', { timeout: 15_000 }, () => {
   /**
@@ -85,8 +103,48 @@ describe('resolveClientRuntimeStartFeedbackSource', { timeout: 15_000 }, () => {
       messageId,
       topicId: 'topic_1',
       trigger: 'client.runtime.start',
+      triggerMessageId: messageId,
     });
+    expect(result.source?.payload.anchorMessageId).toBeUndefined();
     expect(result.source?.payload.serializedContext).toBeUndefined();
+  });
+
+  /**
+   * @example
+   * client.runtime.start({ triggerMessageId }) keeps the explicit trigger instead of replacing it.
+   */
+  it('hydrates runtime start with the explicit triggerMessageId from the source payload', async () => {
+    const db = await getTestDB();
+    const userId = `user_${uuid()}`;
+    const topicId = `topic_${uuid()}`;
+    const messageId = `msg_${uuid()}`;
+    const triggerMessageId = `msg_${uuid()}`;
+
+    await db.insert(users).values({ id: userId });
+    await db.insert(topics).values({ id: topicId, title: 'Workflow Topic', userId });
+    await db.insert(messages).values({
+      content: 'Use the source trigger when it is present.',
+      id: messageId,
+      role: 'user',
+      topicId,
+      userId,
+    });
+
+    const result = await resolveClientRuntimeStartFeedbackSource(
+      createStartSource({
+        parentMessageId: messageId,
+        topicId,
+        triggerMessageId,
+      }),
+      { db, userId },
+    );
+
+    expect(result.source?.payload).toMatchObject({
+      messageId,
+      trigger: AGENT_SIGNAL_SOURCE_TYPES.clientRuntimeStart,
+      triggerMessageId,
+    });
+    expect(result.source?.payload.anchorMessageId).toBeUndefined();
   });
 
   /**

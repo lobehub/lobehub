@@ -18,6 +18,9 @@ interface TaskTriggerTagProps {
   scheduleTimezone?: string | null;
 }
 
+const FLEX_MIN_WIDTH_0 = { minWidth: 0 };
+const PILL_STYLE = { borderRadius: 24, minWidth: 0 };
+
 const TaskTriggerTag = memo<TaskTriggerTagProps>(
   ({ automationMode, heartbeatInterval, mode = 'tag', schedulePattern, scheduleTimezone }) => {
     const { t, i18n } = useTranslation('chat');
@@ -57,25 +60,22 @@ const TaskTriggerTag = memo<TaskTriggerTagProps>(
     }, [automationMode, heartbeatInterval, schedulePattern, scheduleTimezone, t, i18n.language]);
 
     if (mode === 'inline') {
+      // Single-line row regardless of mode/content length — long primaries
+      // (e.g. "Every Mon/Tue/Wed/Thu/Fri/Sat at HH:MM") used to wrap to two
+      // lines and shift the rows below. Tooltip still surfaces the full text
+      // plus timezone on hover, so no information is lost.
       return (
         <Tooltip title={data?.tooltip}>
-          <Flexbox horizontal align="flex-start" gap={10}>
-            <Icon
-              color={cssVar.colorTextDescription}
-              icon={ClockIcon}
-              size={16}
-              style={{ marginTop: 2 }}
-            />
-            <Flexbox gap={2}>
-              <Text type={data ? undefined : 'secondary'} weight={data ? 500 : undefined}>
-                {data?.primary ?? t('taskSchedule.tag.add')}
-              </Text>
-              {data?.secondary && (
-                <Text style={{ color: cssVar.colorTextDescription, fontSize: 11 }}>
-                  {data.secondary}
-                </Text>
-              )}
-            </Flexbox>
+          <Flexbox horizontal align="center" gap={10} style={FLEX_MIN_WIDTH_0}>
+            <Icon color={cssVar.colorTextDescription} icon={ClockIcon} size={16} />
+            <Text
+              ellipsis
+              style={FLEX_MIN_WIDTH_0}
+              type={data ? undefined : 'secondary'}
+              weight={data ? 500 : undefined}
+            >
+              {data?.primary ?? t('taskSchedule.tag.add')}
+            </Text>
           </Flexbox>
         </Tooltip>
       );
@@ -93,11 +93,11 @@ const TaskTriggerTag = memo<TaskTriggerTagProps>(
           gap={4}
           height={24}
           paddingInline={'4px 8px'}
-          style={{ borderRadius: 24 }}
+          style={PILL_STYLE}
           variant={'outlined'}
         >
           <Icon color={cssVar.colorTextDescription} icon={ClockIcon} size={16} />
-          <Text fontSize={12} type={'secondary'}>
+          <Text ellipsis fontSize={12} style={FLEX_MIN_WIDTH_0} type={'secondary'}>
             {data.primary}
           </Text>
         </Block>

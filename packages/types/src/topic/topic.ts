@@ -144,6 +144,17 @@ export interface ChatTopicMetadata {
    */
   runningOperation?: {
     assistantMessageId: string;
+    /**
+     * Webhook to fire when the operation completes.
+     * Populated by the IM bot path so heterogeneous agents (Claude Code / Codex)
+     * can call back to the bot-callback endpoint even though they bypass the
+     * normal hook registration flow.
+     */
+    completionWebhook?: {
+      body?: Record<string, unknown>;
+      delivery?: 'fetch' | 'qstash';
+      url: string;
+    };
     operationId: string;
     scope?: string;
     threadId?: string | null;
@@ -168,7 +179,14 @@ export interface ChatTopicSummary {
   provider: string;
 }
 
-export type ChatTopicStatus = 'active' | 'completed' | 'archived';
+export type ChatTopicStatus =
+  | 'active'
+  | 'running'
+  | 'paused'
+  | 'waitingForHuman'
+  | 'failed'
+  | 'completed'
+  | 'archived';
 
 export interface ChatTopic extends Omit<BaseDataModel, 'meta'> {
   completedAt?: Date | null;

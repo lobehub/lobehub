@@ -1,11 +1,77 @@
 import {
+  PRESET_VIDEO_ASPECT_RATIOS,
+  PRESET_VIDEO_RESOLUTIONS,
+  type VideoModelParamsSchema,
+} from '../standard-parameters/video';
+import {
   type AIChatModelCard,
   type AIImageModelCard,
   type AIVideoModelCard,
 } from '../types/aiModel';
-import { seedance15ProParams, seedance20Params } from './lobehub/video';
 
 // https://www.volcengine.com/docs/82379/1330310
+
+const seedance20Params: VideoModelParamsSchema = {
+  aspectRatio: {
+    default: 'adaptive',
+    enum: ['adaptive', ...PRESET_VIDEO_ASPECT_RATIOS],
+  },
+  duration: { default: 5, max: 15, min: 4 },
+  endImageUrl: {
+    aspectRatio: { max: 2.5, min: 0.4 },
+    default: null,
+    height: { max: 6000, min: 300 },
+    maxFileSize: 30 * 1024 * 1024,
+    requiresImageUrl: true,
+    width: { max: 6000, min: 300 },
+  },
+  generateAudio: { default: true },
+  imageUrls: {
+    aspectRatio: { max: 2.5, min: 0.4 },
+    default: [],
+    height: { max: 6000, min: 300 },
+    maxCount: 9,
+    maxFileSize: 30 * 1024 * 1024,
+    width: { max: 6000, min: 300 },
+  },
+  prompt: { default: '' },
+  resolution: {
+    default: '720p',
+    enum: PRESET_VIDEO_RESOLUTIONS,
+  },
+  seed: { default: null },
+};
+
+const seedance15ProParams: VideoModelParamsSchema = {
+  aspectRatio: {
+    default: 'adaptive',
+    enum: ['adaptive', ...PRESET_VIDEO_ASPECT_RATIOS],
+  },
+  cameraFixed: { default: false },
+  duration: { default: 5, max: 12, min: 4 },
+  endImageUrl: {
+    aspectRatio: { max: 2.5, min: 0.4 },
+    default: null,
+    height: { max: 6000, min: 300 },
+    maxFileSize: 30 * 1024 * 1024,
+    requiresImageUrl: true,
+    width: { max: 6000, min: 300 },
+  },
+  generateAudio: { default: true },
+  imageUrl: {
+    aspectRatio: { max: 2.5, min: 0.4 },
+    default: null,
+    height: { max: 6000, min: 300 },
+    maxFileSize: 30 * 1024 * 1024,
+    width: { max: 6000, min: 300 },
+  },
+  prompt: { default: '' },
+  resolution: {
+    default: '720p',
+    enum: PRESET_VIDEO_RESOLUTIONS,
+  },
+  seed: { default: null },
+};
 
 const doubaoChatModels: AIChatModelCard[] = [
   {

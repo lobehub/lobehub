@@ -1,3 +1,8 @@
+export interface ConversationHistoryEntry {
+  content: string;
+  role: 'assistant' | 'user';
+}
+
 /**
  * Builds the system context injected before every user prompt for cloud Claude Code runs.
  *
@@ -16,10 +21,16 @@ export function buildCloudHeteroContext(params: {
   repos: string[];
   /** Static systemContext from HeterogeneousProviderConfig.systemContext (agent-level). */
   agentSystemContext?: string;
+  /**
+   * Recent conversation turns to inject when resuming a session whose context
+   * was cleared (sandbox recycled or context overflow).  Helps CC understand
+   * what happened in prior turns even without a native session file.
+   */
+  conversationHistory?: ConversationHistoryEntry[];
   /** GitHub OAuth token injected as GITHUB_TOKEN env var in the sandbox. */
   githubToken?: string;
 }): string {
-  const { repos, agentSystemContext, githubToken } = params;
+  const { repos, agentSystemContext, conversationHistory, githubToken } = params;
 
   const parts: string[] = [];
 
@@ -34,7 +45,7 @@ export function buildCloudHeteroContext(params: {
     'You are running inside a LobeHub cloud sandbox. Your working directory is `/workspace`.',
     '',
     '## Sandbox Persistence — CRITICAL',
-    'This sandbox is **ephemeral**: it will be wiped after a period of inactivity.',
+    'This sandbox is **ephemeral**: it will be destroyed after ~1 hour of inactivity.',
     '**Any file changes that are not pushed to a remote will be permanently lost.**',
     '',
     'Rules you MUST follow for every code change:',
@@ -45,6 +56,34 @@ export function buildCloudHeteroContext(params: {
     '   before reporting a task as complete.',
     '3. **Never rely on local-only state** — treat every file in `/workspace` as temporary.',
     '   The source of truth is the remote GitHub repository.',
+    '',
+    '## Pushing to GitHub — Public vs Private Repos',
+    '',
+    'Before pushing, check whether the repo is public or private:',
+    '```bash',
+    'gh repo view <owner>/<repo> --json isPrivate --jq .isPrivate',
+    '```',
+    '',
+    '**Private repo** — push directly to the origin remote:',
+    '```bash',
+    'git push origin <branch>',
+    '```',
+    '',
+    '**Public repo** — you likely do not have write access. Fork first, then push:',
+    '```bash',
+    '# 1. Fork the repo to your account (idempotent — safe to run even if fork exists)',
+    'gh repo fork <owner>/<repo> --clone=false',
+    '# 2. Add the fork as a remote (idempotent — safe to re-run if remote already exists)',
+    'GITHUB_USER=$(gh api user --jq .login)',
+    'git remote set-url fork https://github.com/$GITHUB_USER/<repo>.git 2>/dev/null || git remote add fork https://github.com/$GITHUB_USER/<repo>.git',
+    '# 3. Push to the fork',
+    'git push fork <branch>',
+    '# 4. Open a PR from the fork to the upstream repo',
+    'gh pr create --repo <owner>/<repo> --head $GITHUB_USER:<branch> --title "..." --body "..."',
+    '```',
+    '',
+    'If you are unsure whether you have push access, attempt `git push origin <branch>` first.',
+    'If it fails with a 403 / permission denied error, fall back to the fork workflow above.',
     '',
     'If the user asks you to make code changes, the task is NOT complete until those changes',
     'are visible on GitHub (pushed to a branch or merged via PR).',
@@ -103,6 +142,24 @@ export function buildCloudHeteroContext(params: {
   }
 
   parts.push(workspaceLines.join('\n'));
+
+  // --- Previous conversation context (injected when session was reset) ---
+  // Truncate per-message to avoid ballooning the system context:
+  //   user turns    → 1 KB (prompts are usually short)
+  //   assistant turns → 2 KB (responses may be longer but we want the gist)
+  if (conversationHistory && conversationHistory.length > 0) {
+    const USER_MAX = 1024;
+    const ASST_MAX = 2048;
+    const entries = conversationHistory.map((entry) => {
+      const limit = entry.role === 'user' ? USER_MAX : ASST_MAX;
+      const body =
+        entry.content.length > limit
+          ? `${entry.content.slice(0, limit)}… [truncated]`
+          : entry.content;
+      return `<${entry.role}>\n${body}\n</${entry.role}>`;
+    });
+    parts.push(`<previous_conversation>\n${entries.join('\n')}\n</previous_conversation>`);
+  }
 
   return parts.join('\n\n');
 }

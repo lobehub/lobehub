@@ -1,5 +1,6 @@
 import type {
   AgentInterventionRequestData,
+  AgentInterventionResponseData,
   AgentStreamEvent,
 } from '@lobechat/agent-gateway-client';
 import { isDesktop } from '@lobechat/const';
@@ -13,6 +14,7 @@ import type { SubagentEventContext, ToolCallPayload } from '@lobechat/heterogene
 import type {
   ChatMessageError,
   ChatToolPayload,
+  ChatTopicStatus,
   ConversationContext,
   HeterogeneousProviderConfig,
   MessageMapScope,
@@ -216,7 +218,7 @@ const resolveAdapterType = (config: HeterogeneousProviderConfig): string => {
 };
 
 /**
- * Subscribe to Electron IPC broadcasts. As of LOBE-8516 phase 0, the main
+ * Subscribe to Electron IPC broadcasts. As of phase 0, the main
  * process runs JSONL framing + adapter conversion + `toStreamEvent` itself
  * (`AgentStreamPipeline` from `@lobechat/heterogeneous-agents/spawn`), so the
  * renderer receives ready-made `AgentStreamEvent`s with no per-event adapter
@@ -1053,6 +1055,7 @@ export const executeHeterogeneousAgent = async (
     messageError: ChatMessageError,
     options?: { clearContent?: boolean },
   ) => {
+    writeTopicStatus('failed');
     get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
     get().completeOperation(operationId);
 
@@ -1140,6 +1143,23 @@ export const executeHeterogeneousAgent = async (
   /** Adapter/CLI provider (e.g. `claude-code`) — carried on every turn_metadata. */
   let lastProvider: string | undefined;
   /**
+   * Most recent tool `result_msg_id` seen across step boundaries — survives the
+   * `toolState.payloads` reset that happens on every new step.
+   *
+   * Required for the **toolless middle step** case (): when a step
+   * produces only text (e.g. Monitor stdout drives Claude to reply "等一下…"
+   * without invoking a tool), `toolState.payloads` is empty at the next step
+   * boundary. Without this tracker, `stepParentId` would fall back to
+   * `currentAssistantMessageId` (= the toolless assistant), forming an
+   * `assistant → assistant` link. `MessageCollector.collectAssistantChain`
+   * only walks the `assistant → tool → assistant` zigzag, so the UI splits
+   * into one bubble per Monitor stdout line.
+   *
+   * Scope: executor lifetime (one user run). A new user message spawns a
+   * new executor, so this resets implicitly at run boundaries.
+   */
+  let lastToolMsgIdEver: string | undefined;
+  /**
    * Deferred terminal event (agent_runtime_end or error). We don't forward
    * these to the gateway handler immediately because handler triggers
    * fetchAndReplaceMessages which would clobber our in-flight content
@@ -1172,6 +1192,15 @@ export const executeHeterogeneousAgent = async (
     await updateTopicMetadata(context.topicId, {
       heteroSessionId: undefined,
       workingDirectory: workingDirectory ?? '',
+    });
+  };
+  const writeTopicStatus = (status: ChatTopicStatus): void => {
+    if (!context.topicId) return;
+    void get().updateTopicStatus?.({
+      agentId: context.agentId,
+      groupId: context.groupId,
+      status,
+      topicId: context.topicId,
     });
   };
   const retryWithoutResume = (error: unknown): boolean => {
@@ -1294,6 +1323,8 @@ export const executeHeterogeneousAgent = async (
     agentSessionId = result.sessionId;
     if (!agentSessionId) throw new Error('Agent session returned no sessionId');
 
+    writeTopicStatus('running');
+
     // Register cancel hook on the operation — when the user hits Stop, the op
     // framework calls this; we SIGINT the CC process via the main-process IPC
     // so the CLI exits instead of running to completion off-screen.
@@ -1309,7 +1340,7 @@ export const executeHeterogeneousAgent = async (
     }
 
     /**
-     * Process a single `AgentStreamEvent` from main. As of LOBE-8516 phase 0,
+     * Process a single `AgentStreamEvent` from main. As of phase 0,
      * main runs the adapter and `toStreamEvent` itself, so each IPC arrival
      * carries exactly one already-stamped `AgentStreamEvent` (no per-line
      * batch). Per-event branches still mirror the pre-Phase-0 inner loop.
@@ -1353,8 +1384,50 @@ export const executeHeterogeneousAgent = async (
               { intervention: { status: 'pending' } },
               { operationId },
             );
+            // Sidebar topic row swaps the running spinner for a hand icon
+            // so it's obvious from the topic list that this conversation is
+            // blocked on the user, not still streaming.
+            writeTopicStatus('waitingForHuman');
           } catch (err) {
             console.error('[HeterogeneousAgent] persist intervention pending failed:', err);
+          }
+        });
+        return;
+      }
+
+      // ─── agent_intervention_response: bridge-side terminal state ───
+      // Mirrors the bridge's terminal state onto the UI. Only acts on the
+      // cases the user did NOT drive — `user_cancelled` and successful
+      // submits are already optimistic-updated by `submitHeteroIntervention`
+      // and arrive here as a wire echo. Timeout / session_ended are the
+      // ones that would otherwise strand the form on `status: 'pending'`
+      // until the owning operation gets garbage-collected (at which point
+      // a Submit click would throw `Operation not found`).
+      if (event.type === 'agent_intervention_response') {
+        const data = event.data as AgentInterventionResponseData;
+        const { cancelled, cancelReason, toolCallId } = data;
+        if (!cancelled) return;
+        if (cancelReason === 'user_cancelled') return;
+        persistQueue = persistQueue.then(async () => {
+          const toolMsgId = toolMsgIdByCallId.get(toolCallId);
+          if (!toolMsgId) return;
+          try {
+            await get().optimisticUpdateMessagePlugin(
+              toolMsgId,
+              {
+                intervention: {
+                  rejectedReason: cancelReason ?? 'session_ended',
+                  status: 'rejected',
+                },
+              },
+              { operationId },
+            );
+            // Bridge resolved without the user — drop the hand state so the
+            // sidebar reflects that we're back to whatever the stream does
+            // next (`active`/`failed` lands shortly after via runtime_end).
+            writeTopicStatus('running');
+          } catch (err) {
+            console.error('[HeterogeneousAgent] persist intervention rejection failed:', err);
           }
         });
         return;
@@ -1470,6 +1543,17 @@ export const executeHeterogeneousAgent = async (
         const prevReasoning = accumulatedReasoning;
         const prevModel = lastModel;
         const prevProvider = lastProvider;
+        // External-signal context (): set when the adapter
+        // detected a repeated tool_result on the same tool_use.id
+        // (Monitor stdout push, etc.). Stamp on the new message's
+        // `metadata.signal` so MessageCollector can route toolless
+        // signal-tagged assistants into a SignalCallbacksNode.
+        //
+        // Phase 1 lives in metadata; Phase 2 () promotes to a
+        // dedicated `messages.signal` column — to migrate, change THIS
+        // assignment and the `getMessageSignal()` helper in
+        // conversation-flow, nothing else.
+        const externalSignal = event.data.externalSignal;
 
         // Reset content accumulators synchronously so new-step chunks go to fresh state
         accumulatedContent = '';
@@ -1509,11 +1593,16 @@ export const executeHeterogeneousAgent = async (
           const lastToolMsgId = [...toolState.payloads]
             .reverse()
             .find((p) => !!p.result_msg_id)?.result_msg_id;
-          const stepParentId = lastToolMsgId || currentAssistantMessageId;
+          if (lastToolMsgId) lastToolMsgIdEver = lastToolMsgId;
+          // Prefer this step's last tool, then the most recent tool ever seen
+          // in the run (rescues toolless middle steps — see ), then
+          // the previous assistant as a last resort.
+          const stepParentId = lastToolMsgId ?? lastToolMsgIdEver ?? currentAssistantMessageId;
 
           const newMsg = await messageService.createMessage({
             agentId: context.agentId,
             content: '',
+            ...(externalSignal ? { metadata: { signal: externalSignal } } : {}),
             model: lastModel,
             parentId: stepParentId,
             provider: lastProvider,
@@ -1645,25 +1734,51 @@ export const executeHeterogeneousAgent = async (
         }
       }
 
-      // Subagent-tagged stream_chunks are persisted above via
-      // persistSubagent*Chunk into the in-thread assistant. The gateway
-      // handler is main-agent-only: forwarding would dispatch
-      // `updateMessage { tools }` onto `currentAssistantMessageId` (main),
-      // overwriting main.tools[] with subagent tools — main's own
-      // tool_use messages then lose their tools[] pairing and render
-      // as orphans until the next fetchAndReplaceMessages. Text /
-      // reasoning chunks similarly bleed subagent content into the
-      // main bubble. DB state is already correct (the subagent persist
-      // path writes to the thread scope), so dropping the forward
-      // keeps in-memory state aligned with DB.
-      if (event.type === 'stream_chunk' && (event.data as any)?.subagent) {
+      // ALL subagent-tagged events are handled inline (tool_result, line
+      // 1407) or routed through the per-spawn thread-scoped dispatcher
+      // (stream_chunk via persistSubagent*Chunk). They must NOT reach the
+      // main gateway handler, which is main-agent-only:
+      //   - `stream_chunk { tools_calling }` → handler dispatches
+      //     `updateMessage { tools }` onto `currentAssistantMessageId`
+      //     (main), overwriting main.tools[] with subagent tools. Main's
+      //     own tool_use messages then lose their tools[] pairing and
+      //     render as orphans until the next fetchAndReplaceMessages.
+      //   - `stream_chunk { text | reasoning }` → bleeds subagent content
+      //     into the main bubble.
+      //   - `tool_start` → fires `dispatchOnBeforeCall` against the MAIN
+      //     context for what is actually a subagent inner tool, leaking
+      //     renderer-side onBeforeCall hooks into the wrong scope.
+      //   - `tool_end`  → triggers `fetchAndReplaceMessages(main)` on
+      //     every subagent inner tool result. Wasted work, AND it widens
+      //     the in-memory ↔ DB drift window that surfaces as orphan
+      //     warnings even after the DB has settled ().
+      // DB state is already correct (the subagent persist path writes to
+      // the thread scope), so dropping the forward keeps in-memory state
+      // aligned with DB.
+      if ((event.data as any)?.subagent) {
         return;
       }
 
       // Forward to the unified Gateway handler.
-      // If a step transition is pending, defer through persistQueue so the
-      // handler receives stream_start (with new assistant ID) FIRST.
-      if (pendingStepTransition) {
+      //
+      // Events that drive `fetchAndReplaceMessages` on the handler side
+      // (`tool_end`, `step_complete:execution_complete`, `stream_chunk` with a
+      // server-attached `toolMessageIds`) must wait for `persistQueue` to drain
+      // — otherwise the handler reads `assistant.tools[]` while a parallel
+      // `persistToolBatch` is still mid-flight and `replaceMessages` clobbers
+      // the in-memory cumulative tools[] with a shorter snapshot. That's the
+      // "7 → 6 次技能调用" rollback users see on parallel CC tool batches.
+      //
+      // Other forwards (text / reasoning / tools_calling dispatches) stay
+      // synchronous so live streaming UX isn't gated on DB round-trips.
+      const triggersFetchAndReplace =
+        event.type === 'tool_end' ||
+        (event.type === 'step_complete' &&
+          (event.data as { phase?: string } | undefined)?.phase === 'execution_complete') ||
+        (event.type === 'stream_chunk' &&
+          (event.data as { toolMessageIds?: unknown } | undefined)?.toolMessageIds !== undefined);
+
+      if (pendingStepTransition || triggersFetchAndReplace) {
         persistQueue = persistQueue.then(() => {
           eventHandler(event);
         });
@@ -1727,6 +1842,7 @@ export const executeHeterogeneousAgent = async (
             clearContent: shouldClearTerminalErrorContent,
           });
         } else {
+          writeTopicStatus('active');
           // NOW forward the deferred terminal event — handler will fetchAndReplaceMessages
           // and pick up the final persisted state.
           const terminal: AgentStreamEvent = deferredTerminalEvent ?? {
@@ -1787,7 +1903,10 @@ export const executeHeterogeneousAgent = async (
         // If the error came from a user-initiated cancel (SIGINT → non-zero
         // exit), don't surface it as a runtime error toast — the operation is
         // already marked cancelled and the partial content is persisted above.
-        if (isAborted()) return;
+        if (isAborted()) {
+          writeTopicStatus('active');
+          return;
+        }
 
         await persistTerminalError(messageError, { clearContent: shouldClearTerminalErrorContent });
       },
@@ -1804,7 +1923,7 @@ export const executeHeterogeneousAgent = async (
     // executed here.
     //
     // Source of truth shifted from renderer's adapter to main's pipeline as of
-    // LOBE-8516 phase 0; pull it back through the existing `getSessionInfo`
+    // phase 0; pull it back through the existing `getSessionInfo`
     // IPC, which already returns the freshest `agentSessionId` main has
     // mirrored from `pipeline.sessionId`.
     const sessionInfo = await heterogeneousAgentService
@@ -1875,7 +1994,10 @@ export const executeHeterogeneousAgent = async (
       completed = true;
       // `sendPrompt` rejects when the CLI exits non-zero, which is how SIGINT
       // lands here too. If the user cancelled, don't surface an error.
-      if (isAborted()) return;
+      if (isAborted()) {
+        writeTopicStatus('active');
+        return;
+      }
       const messageError = toHeterogeneousAgentMessageError(error, adapterType);
       await persistTerminalError(messageError, {
         clearContent: shouldSuppressTerminalErrorEcho(accumulatedContent, messageError),
