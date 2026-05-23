@@ -1,14 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  BUILD_RSS_SAMPLING_INTERVAL_MS,
-  createProcessTreeSnapshot,
-  createMemorySnapshot,
   getNextBuildArgs,
   getVercelBuildEnv,
   getVercelNodeOptions,
-  LOBE_BUILD_DIAGNOSTICS,
   VERCEL_BUILD_SYSTEM_REPORT,
+  WEBPACK_VERCEL_BUILD_FLAGS,
   WEBPACK_VERCEL_MAX_OLD_SPACE_SIZE_MB,
 } from './runNextBuild.mjs';
 
@@ -28,6 +25,7 @@ describe('runNextBuild helpers', () => {
   it('should forward extra next build arguments on Vercel', () => {
     expect(getNextBuildArgs(['--debug-prerender', '--no-lint'], true)).toEqual([
       'build',
+      ...WEBPACK_VERCEL_BUILD_FLAGS,
       '--debug-prerender',
       '--no-lint',
     ]);
@@ -41,57 +39,5 @@ describe('runNextBuild helpers', () => {
     expect(getVercelBuildEnv({ VERCEL_ENV: 'production' }).VERCEL_BUILD_SYSTEM_REPORT).toBe(
       VERCEL_BUILD_SYSTEM_REPORT,
     );
-  });
-
-  it('should enable build diagnostics by default on Vercel', () => {
-    expect(getVercelBuildEnv({ VERCEL_ENV: 'production' }).LOBE_BUILD_DIAGNOSTICS).toBe(
-      LOBE_BUILD_DIAGNOSTICS,
-    );
-  });
-
-  it('should format RSS snapshots without heap max', () => {
-    const snapshot = createMemorySnapshot({
-      memoryUsage: () => ({
-        arrayBuffers: 5 * 1024 * 1024,
-        external: 7 * 1024 * 1024,
-        heapTotal: 11 * 1024 * 1024,
-        heapUsed: 3 * 1024 * 1024,
-        rss: 13 * 1024 * 1024,
-      }),
-    });
-
-    expect(snapshot).toEqual({
-      arrayBuffers: '5.00 MiB',
-      external: '7.00 MiB',
-      heapTotal: '11.00 MiB',
-      heapUsed: '3.00 MiB',
-      rss: '13.00 MiB',
-    });
-  });
-
-  it('should expose the RSS sampling interval constant', () => {
-    expect(BUILD_RSS_SAMPLING_INTERVAL_MS).toBe(30_000);
-  });
-
-  it('should summarize the next build process tree from ps output', () => {
-    const snapshot = createProcessTreeSnapshot(
-      101,
-      [
-        '101 1 2048 30.0 00:14:00 node',
-        '202 101 1024 12.5 00:05:00 next-server',
-        '303 202 512 6.0 00:04:00 rustc',
-      ].join('\n'),
-    );
-
-    expect(snapshot).toEqual({
-      processCount: 3,
-      rootPid: 101,
-      topProcesses: [
-        { command: 'node', etime: '00:14:00', pcpu: 30, pid: 101, rss: '2.00 MiB' },
-        { command: 'next-server', etime: '00:05:00', pcpu: 12.5, pid: 202, rss: '1.00 MiB' },
-        { command: 'rustc', etime: '00:04:00', pcpu: 6, pid: 303, rss: '0.50 MiB' },
-      ],
-      totalRss: '3.50 MiB',
-    });
   });
 });
