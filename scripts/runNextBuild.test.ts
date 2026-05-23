@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import {
   TURBOPACK_VERCEL_MAX_OLD_SPACE_SIZE_MB,
+  TURBOPACK_VERCEL_PARALLEL,
+  TURBOPACK_VERCEL_DEBUG_FLAGS,
   getNextBuildArgs,
+  getVercelBuildEnv,
   getVercelNodeOptions,
+  VERCEL_BUILD_SYSTEM_REPORT,
 } from './runNextBuild.mjs';
 
 describe('runNextBuild helpers', () => {
@@ -23,6 +27,7 @@ describe('runNextBuild helpers', () => {
     expect(getNextBuildArgs(['--debug-prerender', '--no-lint'], true)).toEqual([
       'build',
       '--turbopack',
+      ...TURBOPACK_VERCEL_DEBUG_FLAGS,
       '--debug-prerender',
       '--no-lint',
     ]);
@@ -33,5 +38,17 @@ describe('runNextBuild helpers', () => {
       'build',
       '--debug-prerender',
     ]);
+  });
+
+  it('should add the Vercel parallelism override', () => {
+    expect(getVercelBuildEnv({ VERCEL_ENV: 'production' }).TURBOPACK_PARALLEL).toBe(
+      TURBOPACK_VERCEL_PARALLEL,
+    );
+  });
+
+  it('should enable Vercel build system reports by default', () => {
+    expect(getVercelBuildEnv({ VERCEL_ENV: 'production' }).VERCEL_BUILD_SYSTEM_REPORT).toBe(
+      VERCEL_BUILD_SYSTEM_REPORT,
+    );
   });
 });
