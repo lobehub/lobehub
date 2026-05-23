@@ -1,9 +1,9 @@
-import { spawn } from 'node:child_process';
+﻿import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 
 import type { RunCommandParams, RunCommandResult } from '../types';
 import type { ShellProcess, ShellProcessManager } from './process-manager';
-import { getShellConfig, truncateOutput } from './utils';
+import { expandEnvVars, getShellConfig, truncateOutput } from './utils';
 
 export interface RunCommandOptions {
   logger?: {
@@ -32,9 +32,16 @@ export async function runCommand(
   const logPrefix = `[runCommand: ${description || command.slice(0, 50)}]`;
   logger?.debug(`${logPrefix} Starting`, { background: run_in_background, cwd, timeout });
 
+  const effectiveTimeout = Math.min(Math.max(timeout, 1000), 600_000);
+
+  // Build the child environment first so that extraEnv overrides are visible
+  // to expandEnvVars. This fixes the case where %VAR% references a key that
+  // is only present in extraEnv and not in process.env.
   const effectiveTimeout = Math.min(Math.max(timeout, 1000), 800_000);
   const shellConfig = getShellConfig(command);
   const childEnv = extraEnv ? { ...process.env, ...extraEnv } : process.env;
+  const expandedCommand = expandEnvVars(command, childEnv);
+  const shellConfig = getShellConfig(expandedCommand);
 
   try {
     if (run_in_background) {
@@ -43,6 +50,8 @@ export async function runCommand(
         cwd,
         env: childEnv,
         shell: false,
+        // windowsVerbatimArguments removed: not needed with -EncodedCommand
+        // (base64 payload has no spaces/quotes/backslashes to mis-parse).
       });
 
       const shellProcess: ShellProcess = {
@@ -75,6 +84,8 @@ export async function runCommand(
           cwd,
           env: childEnv,
           shell: false,
+          // windowsVerbatimArguments removed: not needed with -EncodedCommand
+          // (base64 payload has no spaces/quotes/backslashes to mis-parse).
         });
 
         let stdout = '';
