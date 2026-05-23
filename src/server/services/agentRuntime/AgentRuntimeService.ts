@@ -622,6 +622,14 @@ export class AgentRuntimeService {
         log('[%s] beforeStep hook dispatch error: %O', operationId, hookError);
       }
 
+      // Per-step buffer for context engine input/output. Populated by the
+      // `tracingContextEngine` callback passed into the executor context;
+      // consumed by traceRecorder.appendStep below. Routing CE this way keeps
+      // its heavy payload (agentDocuments, systemRole, …) out of
+      // `stepResult.events` and therefore out of the Redis state pipeline.
+      // See LOBE-9110.
+      let contextEnginePayload: { input: unknown; output: unknown } | undefined;
+
       // Create Agent and Runtime instances
       // Use agentState.metadata which contains the full app context (topicId, agentId, etc.)
       // operationMetadata only contains basic fields (agentConfig, modelRuntimeConfig, userId)
@@ -629,6 +637,9 @@ export class AgentRuntimeService {
         metadata: agentState?.metadata,
         operationId,
         stepIndex,
+        tracingContextEngine: (input, output) => {
+          contextEnginePayload = { input, output };
+        },
       });
 
       // Handle human intervention
@@ -800,6 +811,7 @@ export class AgentRuntimeService {
         afterStepSignalEvents,
         agentState,
         beforeStepSignalEvents,
+        contextEngine: contextEnginePayload,
         currentContext,
         externalRetryCount,
         presentation: stepPresentationData,
@@ -1337,10 +1349,12 @@ export class AgentRuntimeService {
     metadata,
     operationId,
     stepIndex,
+    tracingContextEngine,
   }: {
     metadata?: any;
     operationId: string;
     stepIndex: number;
+    tracingContextEngine?: (input: unknown, output: unknown) => void;
   }) {
     const contextWindowTokens =
       metadata?.modelRuntimeConfig?.model && metadata?.modelRuntimeConfig?.provider
@@ -1386,6 +1400,7 @@ export class AgentRuntimeService {
       streamManager: this.streamManager,
       toolExecutionService: this.toolExecutionService,
       topicId: metadata?.topicId,
+      tracingContextEngine,
       userId: metadata?.userId,
     };
 

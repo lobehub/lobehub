@@ -358,26 +358,29 @@ describe('OperationTraceRecorder', () => {
       recorder = new OperationTraceRecorder(store as any);
     });
 
-    const buildCeEvent = (overrides: Record<string, unknown> = {}) => ({
+    const buildCe = (overrides: { input?: unknown; output?: unknown } = {}) => ({
       input: { messages: ['hello'] },
       output: { tokens: 42 },
-      type: 'context_engine_result',
       ...overrides,
     });
 
-    const appendStepWithCe = (ceEvent: Record<string, unknown>, prevStepsInStore: any[]) => {
+    const appendStepWithCe = (
+      ce: { input?: unknown; output?: unknown },
+      prevStepsInStore: any[],
+    ) => {
       store.loadPartial.mockResolvedValue({ startedAt: 1, steps: prevStepsInStore });
       return recorder.appendStep('op-ce', {
         afterStepSignalEvents: [],
         agentState: { messages: [] },
         beforeStepSignalEvents: [],
+        contextEngine: ce,
         currentContext: { phase: 'user_input' },
         externalRetryCount: 0,
         presentation: buildPresentation(),
         startedAt: 1000,
         stepIndex: prevStepsInStore.length,
         stepResult: {
-          events: [ceEvent],
+          events: [],
           newState: { activatedStepTools: [], messages: [] },
         },
       });
@@ -388,8 +391,8 @@ describe('OperationTraceRecorder', () => {
       return saved.steps.find((s: any) => s.stepIndex === newStepIndex);
     };
 
-    it('extracts CE event into contextEngine, not in events', async () => {
-      await appendStepWithCe(buildCeEvent(), []);
+    it('routes CE input/output into contextEngine, never into events', async () => {
+      await appendStepWithCe(buildCe(), []);
 
       const step = getSavedStep(0);
       // CE data lives in contextEngine, not events
@@ -398,7 +401,7 @@ describe('OperationTraceRecorder', () => {
     });
 
     it('keeps both input and output on the first step (no previous CE to compare against)', async () => {
-      await appendStepWithCe(buildCeEvent(), []);
+      await appendStepWithCe(buildCe(), []);
 
       const step = getSavedStep(0);
       expect(step.contextEngine.input).toEqual({ messages: ['hello'] });
@@ -411,7 +414,7 @@ describe('OperationTraceRecorder', () => {
         stepIndex: 0,
         stepType: 'call_llm',
       };
-      await appendStepWithCe(buildCeEvent(), [prevStep]);
+      await appendStepWithCe(buildCe(), [prevStep]);
 
       const step = getSavedStep(1);
       expect(step.contextEngine.input).toBeUndefined();
@@ -424,10 +427,9 @@ describe('OperationTraceRecorder', () => {
         stepIndex: 0,
         stepType: 'call_llm',
       };
-      await appendStepWithCe(
-        buildCeEvent({ input: { messages: ['hello'] }, output: { tokens: 99 } }),
-        [prevStep],
-      );
+      await appendStepWithCe(buildCe({ input: { messages: ['hello'] }, output: { tokens: 99 } }), [
+        prevStep,
+      ]);
 
       const step = getSavedStep(1);
       expect(step.contextEngine.input).toBeUndefined();
@@ -440,10 +442,9 @@ describe('OperationTraceRecorder', () => {
         stepIndex: 0,
         stepType: 'call_llm',
       };
-      await appendStepWithCe(
-        buildCeEvent({ input: { messages: ['world'] }, output: { tokens: 42 } }),
-        [prevStep],
-      );
+      await appendStepWithCe(buildCe({ input: { messages: ['world'] }, output: { tokens: 42 } }), [
+        prevStep,
+      ]);
 
       const step = getSavedStep(1);
       expect(step.contextEngine.input).toEqual({ messages: ['world'] });
@@ -456,10 +457,9 @@ describe('OperationTraceRecorder', () => {
         stepIndex: 0,
         stepType: 'call_llm',
       };
-      await appendStepWithCe(
-        buildCeEvent({ input: { messages: ['new'] }, output: { tokens: 20 } }),
-        [prevStep],
-      );
+      await appendStepWithCe(buildCe({ input: { messages: ['new'] }, output: { tokens: 20 } }), [
+        prevStep,
+      ]);
 
       const step = getSavedStep(1);
       expect(step.contextEngine.input).toEqual({ messages: ['new'] });
@@ -476,7 +476,7 @@ describe('OperationTraceRecorder', () => {
         // step 1 has no contextEngine — dedup must skip it and walk back to step 0
         { stepIndex: 1, stepType: 'call_tool' },
       ];
-      await appendStepWithCe(buildCeEvent(), prevSteps);
+      await appendStepWithCe(buildCe(), prevSteps);
 
       const step = getSavedStep(2);
       expect(step.contextEngine.input).toBeUndefined();
@@ -492,7 +492,7 @@ describe('OperationTraceRecorder', () => {
         { contextEngine: { output: { tokens: 42 } }, stepIndex: 1, stepType: 'call_llm' },
       ];
       await appendStepWithCe(
-        buildCeEvent({ input: { messages: ['hello'] }, output: { tokens: 42 } }),
+        buildCe({ input: { messages: ['hello'] }, output: { tokens: 42 } }),
         prevSteps,
       );
 
@@ -501,7 +501,7 @@ describe('OperationTraceRecorder', () => {
       expect(step.contextEngine.output).toBeUndefined();
     });
 
-    it('sets contextEngine to undefined when the step has no context_engine_result event', async () => {
+    it('sets contextEngine to undefined when no CE was recorded for the step', async () => {
       const prevStep = {
         contextEngine: { input: { messages: ['hello'] }, output: { tokens: 42 } },
         stepIndex: 0,

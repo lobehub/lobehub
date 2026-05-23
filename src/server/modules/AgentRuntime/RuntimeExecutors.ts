@@ -272,6 +272,14 @@ export interface RuntimeExecutorContext {
   streamManager: IStreamEventManager;
   toolExecutionService: ToolExecutionService;
   topicId?: string;
+  /**
+   * Trace-pipeline sink for context engine input/output. Wired by
+   * AgentRuntimeService so the trace recorder can pick CE data up
+   * out-of-band, keeping the heavy CE payload (agentDocuments, systemRole, …)
+   * out of the `events` array and therefore out of the Redis state pipeline.
+   * See LOBE-9110.
+   */
+  tracingContextEngine?: (input: unknown, output: unknown) => void;
   userId?: string;
   userTimezone?: string;
 }
@@ -714,7 +722,7 @@ export const createRuntimeExecutors = (
 
         processedMessages = await serverMessagesEngine(contextEngineInput);
 
-        // Emit context engine event for tracing
+        // Hand context engine input/output to the trace sink out-of-band.
         // Omit large/redundant fields to reduce snapshot size:
         // - input.messages: reconstructible from step's messagesBaseline + messagesDelta
         // - input.toolsConfig: static per operation, ~47KB of manifests repeated every call_llm step
@@ -724,14 +732,10 @@ export const createRuntimeExecutors = (
           toolsConfig: _toolsConfig,
           ...contextEngineInputLite
         } = contextEngineInput;
-        events.push({
-          input: {
-            ...contextEngineInputLite,
-            toolCount: _toolsConfig?.tools?.length ?? 0,
-          },
-          output: processedMessages,
-          type: 'context_engine_result',
-        } as any);
+        ctx.tracingContextEngine?.(
+          { ...contextEngineInputLite, toolCount: _toolsConfig?.tools?.length ?? 0 },
+          processedMessages,
+        );
       } else {
         processedMessages = llmPayload.messages;
       }

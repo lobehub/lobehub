@@ -15,6 +15,13 @@ export interface AppendStepParams {
    */
   agentState: any;
   beforeStepSignalEvents: SignalEvent[];
+  /**
+   * Context engine input/output captured for this step. Delivered via
+   * `RuntimeExecutorContext.tracingContextEngine` rather than through the
+   * `events` array, so CE payloads (agentDocuments, systemRole, …) stay out
+   * of the Redis state pipeline. See LOBE-9110.
+   */
+  contextEngine?: { input?: unknown; output?: unknown };
   currentContext?: { payload?: unknown; phase?: string; stepContext?: unknown };
   externalRetryCount: number;
   presentation: StepPresentationData;
@@ -220,6 +227,7 @@ export class OperationTraceRecorder {
       agentState,
       afterStepSignalEvents,
       beforeStepSignalEvents,
+      contextEngine: ceInput,
       currentContext,
       externalRetryCount,
       presentation,
@@ -237,21 +245,20 @@ export class OperationTraceRecorder {
     const isBaseline = stepIndex === 0 || isCompression;
     const messagesDelta = afterMessages.slice(prevMessages.length);
 
-    // Extract context_engine_result into contextEngine (dedicated typed field).
-    // CE data is structural state, not a streaming event — it lives separately
-    // from events and uses the same delta pattern as messagesBaseline/messagesDelta.
-    const rawEvents = (stepResult.events as any[]) ?? [];
-    const ceEvent = rawEvents.find((e: any) => e.type === 'context_engine_result') as any;
-    const contextEngine: StepSnapshot['contextEngine'] = ceEvent
-      ? { input: ceEvent.input, output: ceEvent.output }
+    // CE data is structural state, not a streaming event — delivered via the
+    // typed `contextEngine` field on AppendStepParams (sourced from
+    // RuntimeExecutorContext.tracingContextEngine). Uses the same delta
+    // pattern as messagesBaseline/messagesDelta.
+    const contextEngine: StepSnapshot['contextEngine'] = ceInput
+      ? { input: ceInput.input, output: ceInput.output }
       : undefined;
 
     // Strip heavy/redundant data from events before persisting to snapshot.
-    // context_engine_result is excluded — stored in contextEngine instead.
+    const rawEvents = (stepResult.events as any[]) ?? [];
     const snapshotEvents = [
       ...beforeStepSignalEvents,
       ...rawEvents
-        .filter((e) => e.type !== 'llm_stream' && e.type !== 'context_engine_result')
+        .filter((e) => e.type !== 'llm_stream')
         .map((e) => {
           if (e.type === 'done' && e.finalState) {
             // Remove reconstructible fields from finalState:
