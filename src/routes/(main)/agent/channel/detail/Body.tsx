@@ -319,12 +319,10 @@ function getFields(schema: FieldSchema[], sectionKey: string): FieldSchema[] {
   if (!section?.properties) return [];
 
   return section.properties
-    .filter((f) => !f.devOnly || process.env.NODE_ENV === 'development')
+    .filter((f) => !f.devOnly || __DEV__)
     .flatMap((f) => {
       if (f.type === 'object' && f.properties) {
-        return f.properties.filter(
-          (child) => !child.devOnly || process.env.NODE_ENV === 'development',
-        );
+        return f.properties.filter((child) => !child.devOnly || __DEV__);
       }
       return f;
     });

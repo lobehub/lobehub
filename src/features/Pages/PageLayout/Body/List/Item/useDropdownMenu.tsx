@@ -7,7 +7,6 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import { isDesktop } from '@/const/version';
-import { pluginRegistry } from '@/features/Electron/titlebar/RecentlyViewed/plugins';
 import { useElectronStore } from '@/store/electron';
 import { usePageStore } from '@/store/page';
 
@@ -65,11 +64,8 @@ export const useDropdownMenu = ({
                 label: t('pageList.actions.openInNewTab', { ns: 'file' }),
                 onClick: () => {
                   const url = `/page/${pageId}`;
-                  const reference = pluginRegistry.parseUrl(url, '');
-                  if (reference) {
-                    addTab(reference);
-                    navigate(url);
-                  }
+                  addTab(url);
+                  navigate(url);
                 },
               },
               { type: 'divider' as const },

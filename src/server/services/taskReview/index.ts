@@ -1,11 +1,13 @@
-import { DEFAULT_SYSTEM_AGENT_CONFIG } from '@lobechat/const';
-import { evaluate, type EvaluateResult, type RubricResult } from '@lobechat/eval-rubric';
-import type { EvalBenchmarkRubric } from '@lobechat/types';
+import type { EvaluateResult, RubricResult } from '@lobechat/eval-rubric';
+import { evaluate } from '@lobechat/eval-rubric';
+import type { EvalBenchmarkRubric, UserSystemAgentConfig } from '@lobechat/types';
 import debug from 'debug';
 
 import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+
+import { resolveSystemAgentModelConfig } from '../systemAgent/modelConfig';
 
 const log = debug('task-review');
 
@@ -104,18 +106,21 @@ export class TaskReviewService {
     judge: ReviewJudge,
   ): Promise<{ model: string; provider: string }> {
     if (judge.model && judge.provider) {
-      return { model: judge.model, provider: judge.provider };
+      return resolveSystemAgentModelConfig({
+        override: judge,
+        taskKey: 'topic',
+      });
     }
 
     const userModel = new UserModel(this.db, this.userId);
     const settings = await userModel.getUserSettings();
-    const systemAgent = settings?.systemAgent as Record<string, any> | undefined;
+    const systemAgent = settings?.systemAgent as Partial<UserSystemAgentConfig> | undefined;
     const topicConfig = systemAgent?.topic;
-    const defaults = DEFAULT_SYSTEM_AGENT_CONFIG.topic;
 
-    return {
-      model: judge.model || topicConfig?.model || defaults.model,
-      provider: judge.provider || topicConfig?.provider || defaults.provider,
-    };
+    return resolveSystemAgentModelConfig({
+      override: judge,
+      taskConfig: topicConfig,
+      taskKey: 'topic',
+    });
   }
 }

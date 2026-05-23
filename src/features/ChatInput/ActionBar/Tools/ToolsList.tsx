@@ -3,9 +3,11 @@ import { Flexbox, Icon, Popover, Text } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import type { ReactNode } from 'react';
-import { Fragment, isValidElement, memo, useCallback, useState } from 'react';
+import { Fragment, isValidElement, memo, useCallback, useEffect, useRef, useState } from 'react';
 
 import { useScrollSignal } from './ScrollSignalContext';
+
+const CLOSE_TOOL_DETAIL_POPOVER_EVENT = 'lobe-chat-tool-detail-popover-close';
 
 export const toolsListStyles = createStaticStyles(({ css }) => ({
   groupLabel: css`
@@ -70,6 +72,7 @@ const DividerItem = memo<{ index: number }>(({ index }) => (
 
 const RegularItem = memo<{ index: number; item: ToolItemData }>(({ item, index }) => {
   const [open, setOpen] = useState(false);
+  const suppressUntilRef = useRef(0);
 
   // Close hover popover whenever the surrounding list scrolls — avoids the
   // detail panel hovering in mid-air after its anchor row has moved away.
@@ -78,6 +81,22 @@ const RegularItem = memo<{ index: number; item: ToolItemData }>(({ item, index }
       setOpen(false);
     }, []),
   );
+
+  // Close hover popover when a policy menu (or other consumer) signals it —
+  // prevents the detail panel from overlapping the policy menu opened from the "..." button.
+  useEffect(() => {
+    const close = () => {
+      suppressUntilRef.current = Date.now() + 600;
+      setOpen(false);
+    };
+    window.addEventListener(CLOSE_TOOL_DETAIL_POPOVER_EVENT, close);
+    return () => window.removeEventListener(CLOSE_TOOL_DETAIL_POPOVER_EVENT, close);
+  }, []);
+
+  const handleOpenChange = useCallback((nextOpen: boolean) => {
+    if (nextOpen && Date.now() < suppressUntilRef.current) return;
+    setOpen(nextOpen);
+  }, []);
 
   const iconNode = item.icon ? (
     isValidElement(item.icon) ? (
@@ -112,7 +131,7 @@ const RegularItem = memo<{ index: number; item: ToolItemData }>(({ item, index }
       placement={'rightTop'}
       positionerProps={{ sideOffset: 8 }}
       styles={{ content: { padding: 0 } }}
-      onOpenChange={setOpen}
+      onOpenChange={handleOpenChange}
     >
       {row}
     </Popover>

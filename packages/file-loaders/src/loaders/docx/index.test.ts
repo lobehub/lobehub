@@ -19,7 +19,7 @@ beforeEach(() => {
 describe('DocxLoader', () => {
   it('should load pages correctly from a DOCX file', async () => {
     const pages = await loader.loadPages(testFile);
-    // DOCX 通常加载为单个页面
+    // DOCX files are typically loaded as a single page
     expect(pages).toHaveLength(1);
     expect(pages).toMatchSnapshot();
   });
@@ -27,14 +27,14 @@ describe('DocxLoader', () => {
   it('should aggregate content correctly', async () => {
     const pages = await loader.loadPages(testFile);
     const content = await loader.aggregateContent(pages);
-    // 对于单页文档，聚合内容应与页面内容相同
+    // For single-page documents, aggregated content should equal the page content
     expect(content).toEqual(pages[0].pageContent);
     expect(content).toMatchSnapshot('aggregated_content');
   });
 
   it('should handle file read errors in loadPages', async () => {
     const pages = await loader.loadPages(nonExistentFile);
-    expect(pages).toHaveLength(1); // 即使失败也返回一个包含错误信息的页面
+    expect(pages).toHaveLength(1); // Returns one page containing error info even on failure
     expect(pages[0].pageContent).toBe('');
     expect(pages[0].metadata.error).toContain('Failed to load DOCX file');
   });

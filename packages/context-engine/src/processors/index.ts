@@ -9,7 +9,7 @@ export {
   type OrchestrationAgentInfo,
 } from './GroupOrchestrationFilter';
 export { GroupRoleTransformProcessor } from './GroupRoleTransform';
-export { HistoryTruncateProcessor } from './HistoryTruncate';
+export { getSlicedMessages, HistoryTruncateProcessor } from './HistoryTruncate';
 export { InputTemplateProcessor } from './InputTemplate';
 export { MessageCleanupProcessor } from './MessageCleanup';
 export { MessageContentProcessor } from './MessageContent';

@@ -13,4 +13,15 @@ export {
   type VideoCostResult,
   type VideoGenerationParams,
 } from './computeVideoCost';
+export {
+  type ChatCostEstimate,
+  type ChatInputTokenEstimate,
+  estimateChatCostFromMessages,
+  type EstimateChatCostFromMessagesOptions,
+  estimateChatCostFromTokens,
+  type EstimateChatCostFromTokensInput,
+  estimateChatOutputTokens,
+  estimateOpenAIChatInputTokens,
+  type EstimateOpenAIChatInputTokensOptions,
+} from './estimateChatCost';
 export { withUsageCost } from './withUsageCost';

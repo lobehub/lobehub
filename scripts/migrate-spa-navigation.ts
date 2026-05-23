@@ -8,7 +8,7 @@
  * - useSearchParams -> @/app/[variants]/(main)/hooks/useSearchParams
  * - useRouter -> @/app/[variants]/(main)/hooks/useRouter
  *
- * @see RFC 147: LOBE-2850 - Phase 3
+ * @see RFC 147: - Phase 3
  */
 import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';

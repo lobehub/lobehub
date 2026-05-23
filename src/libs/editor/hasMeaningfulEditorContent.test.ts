@@ -45,4 +45,9 @@ describe('hasMeaningfulEditorContent', () => {
       }),
     ).toBe(true);
   });
+
+  it('should preserve unknown array-shaped editor payloads as meaningful', () => {
+    expect(hasMeaningfulEditorContent([])).toBe(true);
+    expect(hasMeaningfulEditorContent({ root: [] })).toBe(true);
+  });
 });

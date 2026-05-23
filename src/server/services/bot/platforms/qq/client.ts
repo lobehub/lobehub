@@ -15,12 +15,14 @@ import {
   type BotPlatformRuntimeContext,
   type BotProviderConfig,
   ClientFactory,
+  messengerContentText,
   type PlatformClient,
   type PlatformMessenger,
   type UsageStats,
   type ValidationResult,
 } from '../types';
 import { formatUsageStats } from '../utils';
+import { sendQQAttachments } from './sendAttachments';
 
 const log = debug('bot-platform:qq:bot');
 
@@ -265,10 +267,18 @@ class QQGatewayClient implements PlatformClient {
     const targetId = extractChatId(platformThreadId);
     const threadType = extractThreadType(platformThreadId);
     return {
-      createMessage: (content) => sendQQMessage(api, threadType, targetId, content),
+      createMessage: async (content) => {
+        const text = messengerContentText(content);
+        const attachments = typeof content === 'string' ? undefined : content.attachments;
+        if (attachments?.length) {
+          await sendQQAttachments(api, threadType, targetId, attachments, text);
+          return;
+        }
+        await sendQQMessage(api, threadType, targetId, text);
+      },
       editMessage: (_messageId, content) =>
         // QQ does not support editing — send a new message as fallback
-        sendQQMessage(api, threadType, targetId, content),
+        sendQQMessage(api, threadType, targetId, messengerContentText(content)),
       // QQ Bot API doesn't support reactions or typing
       removeReaction: () => Promise.resolve(),
     };
@@ -365,8 +375,17 @@ class QQWebhookClient implements PlatformClient {
     const targetId = extractChatId(platformThreadId);
     const threadType = extractThreadType(platformThreadId);
     return {
-      createMessage: (content) => sendQQMessage(api, threadType, targetId, content),
-      editMessage: (_messageId, content) => sendQQMessage(api, threadType, targetId, content),
+      createMessage: async (content) => {
+        const text = messengerContentText(content);
+        const attachments = typeof content === 'string' ? undefined : content.attachments;
+        if (attachments?.length) {
+          await sendQQAttachments(api, threadType, targetId, attachments, text);
+          return;
+        }
+        await sendQQMessage(api, threadType, targetId, text);
+      },
+      editMessage: (_messageId, content) =>
+        sendQQMessage(api, threadType, targetId, messengerContentText(content)),
       removeReaction: () => Promise.resolve(),
     };
   }

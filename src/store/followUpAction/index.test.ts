@@ -2,11 +2,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { followUpActionService } from '@/services/followUpAction';
 
+import { followUpActionSelectors } from './selectors';
 import { useFollowUpActionStore } from './store';
 
-const TOPIC = 'topic-1';
-const NEW_TOPIC = 'topic-2';
+const KEY_A = 'main_agent-a_topic-a';
+const KEY_B = 'main_agent-b_topic-b';
+const TOPIC_A = 'topic-a';
+const TOPIC_B = 'topic-b';
 const MSG = 'msg-real';
+const MODEL_CONFIG = { model: 'scene-model', provider: 'scene-provider' };
+const FETCH_PARAMS_A = { modelConfig: MODEL_CONFIG, topicId: TOPIC_A };
+const FETCH_PARAMS_B = { modelConfig: MODEL_CONFIG, topicId: TOPIC_B };
+
+const slotA = () => useFollowUpActionStore.getState().slots[KEY_A];
+const slotB = () => useFollowUpActionStore.getState().slots[KEY_B];
 
 describe('useFollowUpActionStore', () => {
   beforeEach(() => {
@@ -24,64 +33,106 @@ describe('useFollowUpActionStore', () => {
       chips: [{ label: 'a', message: 'a' }],
     });
 
-    const promise = useFollowUpActionStore.getState().fetchFor(TOPIC);
-    expect(useFollowUpActionStore.getState().status).toBe('loading');
+    const promise = useFollowUpActionStore.getState().fetchFor(KEY_A, FETCH_PARAMS_A);
+    expect(slotA().status).toBe('loading');
     await promise;
     expect(spy).toHaveBeenCalledOnce();
-    expect(useFollowUpActionStore.getState().status).toBe('ready');
-    expect(useFollowUpActionStore.getState().chips).toHaveLength(1);
-    expect(useFollowUpActionStore.getState().messageId).toBe(MSG);
-    expect(useFollowUpActionStore.getState().topicId).toBe(TOPIC);
+    expect(slotA().status).toBe('ready');
+    expect(slotA().chips).toHaveLength(1);
+    expect(slotA().messageId).toBe(MSG);
   });
 
-  it('fetchFor returns idle when service returns null', async () => {
+  it('fetchFor forwards modelConfig, topicId, and threadId to the service', async () => {
+    const spy = vi.spyOn(followUpActionService, 'extract').mockResolvedValue({
+      messageId: MSG,
+      chips: [{ label: 'a', message: 'a' }],
+    });
+    await useFollowUpActionStore.getState().fetchFor(KEY_A, {
+      hint: { kind: 'onboarding', phase: 'discovery' },
+      modelConfig: MODEL_CONFIG,
+      threadId: 'thd-1',
+      topicId: TOPIC_A,
+    });
+
+    expect(spy).toHaveBeenCalledWith(
+      {
+        hint: { kind: 'onboarding', phase: 'discovery' },
+        modelConfig: MODEL_CONFIG,
+        threadId: 'thd-1',
+        topicId: TOPIC_A,
+      },
+      expect.any(AbortSignal),
+    );
+  });
+
+  it('fetchFor leaves slot idle when service returns null', async () => {
     vi.spyOn(followUpActionService, 'extract').mockResolvedValue(null);
-    await useFollowUpActionStore.getState().fetchFor(TOPIC);
-    expect(useFollowUpActionStore.getState().status).toBe('idle');
-    expect(useFollowUpActionStore.getState().chips).toHaveLength(0);
-    expect(useFollowUpActionStore.getState().messageId).toBeUndefined();
+    await useFollowUpActionStore.getState().fetchFor(KEY_A, FETCH_PARAMS_A);
+    expect(slotA().status).toBe('idle');
+    expect(slotA().chips).toHaveLength(0);
+    expect(slotA().messageId).toBeUndefined();
   });
 
-  it('fetchFor returns idle when service returns empty messageId', async () => {
+  it('fetchFor leaves slot idle when service returns empty messageId', async () => {
     vi.spyOn(followUpActionService, 'extract').mockResolvedValue({ chips: [], messageId: '' });
-    await useFollowUpActionStore.getState().fetchFor(TOPIC);
-    expect(useFollowUpActionStore.getState().status).toBe('idle');
-    expect(useFollowUpActionStore.getState().messageId).toBeUndefined();
+    await useFollowUpActionStore.getState().fetchFor(KEY_A, FETCH_PARAMS_A);
+    expect(slotA().status).toBe('idle');
+    expect(slotA().messageId).toBeUndefined();
   });
 
-  it('fetchFor dedupes same topicId while still loading', async () => {
+  it('fetchFor dedupes while the slot is loading', async () => {
     const spy = vi
       .spyOn(followUpActionService, 'extract')
       .mockImplementation(() => new Promise(() => {}));
-    const p1 = useFollowUpActionStore.getState().fetchFor(TOPIC);
-    const p2 = useFollowUpActionStore.getState().fetchFor(TOPIC);
-    void p1;
-    void p2;
+    void useFollowUpActionStore.getState().fetchFor(KEY_A, FETCH_PARAMS_A);
+    void useFollowUpActionStore.getState().fetchFor(KEY_A, FETCH_PARAMS_A);
     expect(spy).toHaveBeenCalledTimes(1);
   });
 
-  it('fetchFor with new topicId aborts the old controller', async () => {
-    let firstSignal: AbortSignal | undefined;
-    vi.spyOn(followUpActionService, 'extract').mockImplementation(async (_, signal) => {
-      if (!firstSignal) firstSignal = signal;
+  it('fetchFor on a different key does not abort an in-flight fetch on another key', async () => {
+    let signalA: AbortSignal | undefined;
+    let signalB: AbortSignal | undefined;
+    vi.spyOn(followUpActionService, 'extract').mockImplementation(async (input, signal) => {
+      if (input.topicId === TOPIC_A) signalA = signal;
+      else signalB = signal;
       return new Promise(() => {});
     });
-    const p1 = useFollowUpActionStore.getState().fetchFor(TOPIC);
-    void p1;
+    void useFollowUpActionStore.getState().fetchFor(KEY_A, FETCH_PARAMS_A);
     await Promise.resolve();
     await Promise.resolve();
-    void useFollowUpActionStore.getState().fetchFor(NEW_TOPIC);
-    expect(firstSignal?.aborted).toBe(true);
+    void useFollowUpActionStore.getState().fetchFor(KEY_B, FETCH_PARAMS_B);
+    await Promise.resolve();
+    expect(signalA?.aborted).toBe(false);
+    expect(signalB?.aborted).toBe(false);
+    expect(slotA().status).toBe('loading');
+    expect(slotB().status).toBe('loading');
   });
 
-  it('clear() aborts and resets state', async () => {
+  it('clear(keyA) does not touch slots[keyB]', async () => {
     vi.spyOn(followUpActionService, 'extract').mockImplementation(() => new Promise(() => {}));
-    const p = useFollowUpActionStore.getState().fetchFor(TOPIC);
-    void p;
-    useFollowUpActionStore.getState().clear();
-    expect(useFollowUpActionStore.getState().status).toBe('idle');
-    expect(useFollowUpActionStore.getState().messageId).toBeUndefined();
-    expect(useFollowUpActionStore.getState().pendingTopicId).toBeUndefined();
+    void useFollowUpActionStore.getState().fetchFor(KEY_A, FETCH_PARAMS_A);
+    void useFollowUpActionStore.getState().fetchFor(KEY_B, FETCH_PARAMS_B);
+    useFollowUpActionStore.getState().clear(KEY_A);
+    expect(slotA()).toBeUndefined();
+    expect(slotB()?.status).toBe('loading');
+  });
+
+  it('abort(keyA) does not affect keyB controller', async () => {
+    let signalA: AbortSignal | undefined;
+    let signalB: AbortSignal | undefined;
+    vi.spyOn(followUpActionService, 'extract').mockImplementation(async (input, signal) => {
+      if (input.topicId === TOPIC_A) signalA = signal;
+      else signalB = signal;
+      return new Promise(() => {});
+    });
+    void useFollowUpActionStore.getState().fetchFor(KEY_A, FETCH_PARAMS_A);
+    void useFollowUpActionStore.getState().fetchFor(KEY_B, FETCH_PARAMS_B);
+    await Promise.resolve();
+    useFollowUpActionStore.getState().abort(KEY_A);
+    expect(signalA?.aborted).toBe(true);
+    expect(signalB?.aborted).toBe(false);
+    expect(slotA().status).toBe('idle');
+    expect(slotB()?.status).toBe('loading');
   });
 
   it('20s timeout aborts the in-flight call', async () => {
@@ -90,23 +141,30 @@ describe('useFollowUpActionStore', () => {
       signal = s;
       return new Promise(() => {});
     });
-    const p = useFollowUpActionStore.getState().fetchFor(TOPIC);
-    void p;
+    void useFollowUpActionStore.getState().fetchFor(KEY_A, FETCH_PARAMS_A);
     await Promise.resolve();
     vi.advanceTimersByTime(20_000);
     expect(signal?.aborted).toBe(true);
   });
 
-  it('consume(chip) clears state', () => {
+  it('consume(key, chip) clears the slot for that key only', () => {
     useFollowUpActionStore.setState({
-      chips: [{ label: 'x', message: 'hello' }],
-      messageId: MSG,
-      status: 'ready',
+      slots: {
+        [KEY_A]: {
+          chips: [{ label: 'x', message: 'hello' }],
+          messageId: MSG,
+          status: 'ready',
+        },
+        [KEY_B]: {
+          chips: [{ label: 'y', message: 'hello' }],
+          messageId: MSG,
+          status: 'ready',
+        },
+      },
     });
-    useFollowUpActionStore.getState().consume({ label: 'x', message: 'hello' });
-    expect(useFollowUpActionStore.getState().status).toBe('idle');
-    expect(useFollowUpActionStore.getState().messageId).toBeUndefined();
-    expect(useFollowUpActionStore.getState().chips).toHaveLength(0);
+    useFollowUpActionStore.getState().consume(KEY_A, { label: 'x', message: 'hello' });
+    expect(slotA()).toBeUndefined();
+    expect(slotB()?.status).toBe('ready');
   });
 
   it('discards stale results when controller is replaced (race protection)', async () => {
@@ -123,46 +181,121 @@ describe('useFollowUpActionStore', () => {
         messageId: 'msg-new',
       });
 
-    // First fetchFor is in flight (does not yet resolve).
-    const p1 = useFollowUpActionStore.getState().fetchFor(TOPIC);
+    const p1 = useFollowUpActionStore.getState().fetchFor(KEY_A, FETCH_PARAMS_A);
     void p1;
     await Promise.resolve();
 
-    // User sends a new message → clear() aborts and resets.
-    useFollowUpActionStore.getState().clear();
-    expect(useFollowUpActionStore.getState().status).toBe('idle');
+    useFollowUpActionStore.getState().clear(KEY_A);
+    expect(slotA()).toBeUndefined();
 
-    // Next turn starts another fetchFor for the SAME topic.
-    const p2 = useFollowUpActionStore.getState().fetchFor(TOPIC);
+    const p2 = useFollowUpActionStore.getState().fetchFor(KEY_A, FETCH_PARAMS_A);
 
-    // The first call now resolves with a stale result. It must be discarded
-    // because its controller is no longer the active one — even though the
-    // topicId still matches.
     resolveFirst!({ chips: [{ label: 'a', message: 'a' }], messageId: 'msg-old' });
     await p1;
 
-    expect(useFollowUpActionStore.getState().messageId).not.toBe('msg-old');
+    expect(slotA()?.messageId).not.toBe('msg-old');
 
-    // Second call still writes through normally.
     await p2;
     expect(spy).toHaveBeenCalledTimes(2);
-    expect(useFollowUpActionStore.getState().status).toBe('ready');
-    expect(useFollowUpActionStore.getState().messageId).toBe('msg-new');
+    expect(slotA()?.status).toBe('ready');
+    expect(slotA()?.messageId).toBe('msg-new');
   });
 
-  it('reset aborts in-flight request and resets state', async () => {
-    let signal: AbortSignal | undefined;
+  it('reset aborts all in-flight requests and clears every slot', async () => {
+    const signals: AbortSignal[] = [];
     vi.spyOn(followUpActionService, 'extract').mockImplementation(async (_, s) => {
-      signal = s;
+      if (s) signals.push(s);
       return new Promise(() => {});
     });
-    const p = useFollowUpActionStore.getState().fetchFor(TOPIC);
-    void p;
+    void useFollowUpActionStore.getState().fetchFor(KEY_A, FETCH_PARAMS_A);
+    void useFollowUpActionStore.getState().fetchFor(KEY_B, FETCH_PARAMS_B);
     await Promise.resolve();
     useFollowUpActionStore.getState().reset();
-    expect(signal?.aborted).toBe(true);
-    expect(useFollowUpActionStore.getState().status).toBe('idle');
-    expect(useFollowUpActionStore.getState().messageId).toBeUndefined();
-    expect(useFollowUpActionStore.getState().pendingTopicId).toBeUndefined();
+    expect(signals.every((s) => s.aborted)).toBe(true);
+    expect(useFollowUpActionStore.getState().slots).toEqual({});
+  });
+});
+
+describe('followUpActionSelectors.chipsFor', () => {
+  beforeEach(() => {
+    useFollowUpActionStore.getState().reset?.();
+  });
+
+  it('returns chips when the slot matches messageId', () => {
+    useFollowUpActionStore.setState({
+      slots: {
+        [KEY_A]: {
+          chips: [{ label: 'a', message: 'a' }],
+          messageId: MSG,
+          status: 'ready',
+        },
+      },
+    });
+    const chips = followUpActionSelectors.chipsFor({
+      conversationKey: KEY_A,
+      messageId: MSG,
+    })(useFollowUpActionStore.getState());
+    expect(chips).toHaveLength(1);
+  });
+
+  it('returns empty when slot is missing', () => {
+    const chips = followUpActionSelectors.chipsFor({
+      conversationKey: KEY_A,
+      messageId: MSG,
+    })(useFollowUpActionStore.getState());
+    expect(chips).toHaveLength(0);
+  });
+
+  it('returns empty when slot is not ready', () => {
+    useFollowUpActionStore.setState({
+      slots: {
+        [KEY_A]: {
+          chips: [{ label: 'a', message: 'a' }],
+          messageId: MSG,
+          status: 'loading',
+        },
+      },
+    });
+    const chips = followUpActionSelectors.chipsFor({
+      conversationKey: KEY_A,
+      messageId: MSG,
+    })(useFollowUpActionStore.getState());
+    expect(chips).toHaveLength(0);
+  });
+
+  it('matches a child id via childIdsKey (assistantGroup case)', () => {
+    const CHILD = 'msg-child';
+    useFollowUpActionStore.setState({
+      slots: {
+        [KEY_A]: {
+          chips: [{ label: 'a', message: 'a' }],
+          messageId: CHILD,
+          status: 'ready',
+        },
+      },
+    });
+    const chips = followUpActionSelectors.chipsFor({
+      childIdsKey: `${CHILD}|other`,
+      conversationKey: KEY_A,
+      messageId: 'group-id',
+    })(useFollowUpActionStore.getState());
+    expect(chips).toHaveLength(1);
+  });
+
+  it('does not leak across conversation keys', () => {
+    useFollowUpActionStore.setState({
+      slots: {
+        [KEY_A]: {
+          chips: [{ label: 'a', message: 'a' }],
+          messageId: MSG,
+          status: 'ready',
+        },
+      },
+    });
+    const chips = followUpActionSelectors.chipsFor({
+      conversationKey: KEY_B,
+      messageId: MSG,
+    })(useFollowUpActionStore.getState());
+    expect(chips).toHaveLength(0);
   });
 });

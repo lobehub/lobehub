@@ -456,4 +456,187 @@ export class TelegramApi {
       return await attempt();
     }
   }
+
+  /**
+   * `multipart/form-data` variant for endpoints that take a binary upload
+   * (sendPhoto/sendDocument/...). `binaryField` names the form field that
+   * carries the file (Telegram inspects field names — `photo` for sendPhoto,
+   * `document` for sendDocument, etc.). Non-string scalars in `fields` are
+   * JSON-stringified so Telegram interprets numbers / booleans correctly.
+   */
+  private async callMultipart(
+    method: string,
+    fields: Record<string, string | number | boolean | undefined>,
+    file?: { binaryField: string; buffer: Buffer; filename: string; mimeType?: string },
+  ): Promise<any> {
+    const url = `${TELEGRAM_API_BASE}/bot${this.botToken}/${method}`;
+
+    const buildForm = (): FormData => {
+      const form = new FormData();
+      for (const [key, value] of Object.entries(fields)) {
+        if (value === undefined) continue;
+        form.append(key, typeof value === 'string' ? value : String(value));
+      }
+      if (file) {
+        const blob = new Blob([new Uint8Array(file.buffer)], {
+          type: file.mimeType ?? 'application/octet-stream',
+        });
+        form.append(file.binaryField, blob, file.filename);
+      }
+      return form;
+    };
+
+    const attempt = async (): Promise<any> => {
+      const response = await fetch(url, {
+        body: buildForm(),
+        method: 'POST',
+        // Let undici set the multipart boundary header automatically.
+        signal: AbortSignal.timeout(TELEGRAM_FETCH_TIMEOUT_MS),
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        log(
+          'Telegram API multipart error: method=%s, status=%d, body=%s',
+          method,
+          response.status,
+          text,
+        );
+        throw new Error(`Telegram API ${method} failed: ${response.status} ${text}`);
+      }
+
+      const data = await response.json();
+      if (data.ok === false) {
+        const desc = data.description || 'Unknown error';
+        log(
+          'Telegram API logical error: method=%s, error_code=%d, description=%s',
+          method,
+          data.error_code,
+          desc,
+        );
+        throw new Error(`Telegram API ${method} failed: ${data.error_code} ${desc}`);
+      }
+      return data;
+    };
+
+    try {
+      return await attempt();
+    } catch (error) {
+      if (!isTransientNetworkError(error)) throw error;
+      log('Telegram API %s: transient network error, retrying once: %O', method, error);
+      return await attempt();
+    }
+  }
+
+  // ==================== Outbound Media ====================
+
+  /**
+   * Send media (image/file/video/audio) on Telegram. Each media type has its
+   * own API endpoint and dedicated binary field name, so callers go through
+   * one of the typed helpers below. URL-source goes via JSON; Buffer-source
+   * goes via multipart/form-data.
+   */
+  private async sendMedia(
+    method: 'sendPhoto' | 'sendDocument' | 'sendVideo' | 'sendAudio',
+    binaryField: 'photo' | 'document' | 'video' | 'audio',
+    params: {
+      caption?: string;
+      chatId: string | number;
+      source: { url: string } | { buffer: Buffer; filename: string; mimeType?: string };
+    },
+  ): Promise<{ message_id: number }> {
+    const caption = params.caption ? this.truncateCaption(params.caption) : undefined;
+
+    // Captions render as HTML so links/formatting survive — but the LLM/user
+    // content can contain unbalanced or stray `<`,`>`,`&`. Without this
+    // fallback the whole attachment send fails and the message degrades to
+    // text-only delivery; mirror the sendMessage retry-as-plain-text path.
+    const send = (useHtml: boolean): Promise<any> => {
+      const captionForSend =
+        caption && !useHtml ? this.truncateCaption(stripHTML(caption)) : caption;
+
+      if ('url' in params.source) {
+        return this.call(method, {
+          caption: captionForSend,
+          chat_id: params.chatId,
+          parse_mode: captionForSend && useHtml ? 'HTML' : undefined,
+          [binaryField]: params.source.url,
+        });
+      }
+
+      return this.callMultipart(
+        method,
+        {
+          caption: captionForSend,
+          chat_id: params.chatId,
+          parse_mode: captionForSend && useHtml ? 'HTML' : undefined,
+        },
+        {
+          binaryField,
+          buffer: params.source.buffer,
+          filename: params.source.filename,
+          mimeType: params.source.mimeType,
+        },
+      );
+    };
+
+    try {
+      const data = await send(true);
+      return { message_id: data.result.message_id };
+    } catch (error) {
+      if (!caption || !isParseEntitiesError(error)) throw error;
+      log(
+        '%s: caption HTML parse failed, retrying as plain text. chatId=%s',
+        method,
+        params.chatId,
+      );
+      const data = await send(false);
+      return { message_id: data.result.message_id };
+    }
+  }
+
+  async sendPhoto(params: {
+    caption?: string;
+    chatId: string | number;
+    source: { url: string } | { buffer: Buffer; filename: string; mimeType?: string };
+  }): Promise<{ message_id: number }> {
+    log('sendPhoto: chatId=%s', params.chatId);
+    return this.sendMedia('sendPhoto', 'photo', params);
+  }
+
+  async sendDocument(params: {
+    caption?: string;
+    chatId: string | number;
+    source: { url: string } | { buffer: Buffer; filename: string; mimeType?: string };
+  }): Promise<{ message_id: number }> {
+    log('sendDocument: chatId=%s', params.chatId);
+    return this.sendMedia('sendDocument', 'document', params);
+  }
+
+  async sendVideo(params: {
+    caption?: string;
+    chatId: string | number;
+    source: { url: string } | { buffer: Buffer; filename: string; mimeType?: string };
+  }): Promise<{ message_id: number }> {
+    log('sendVideo: chatId=%s', params.chatId);
+    return this.sendMedia('sendVideo', 'video', params);
+  }
+
+  async sendAudio(params: {
+    caption?: string;
+    chatId: string | number;
+    source: { url: string } | { buffer: Buffer; filename: string; mimeType?: string };
+  }): Promise<{ message_id: number }> {
+    log('sendAudio: chatId=%s', params.chatId);
+    return this.sendMedia('sendAudio', 'audio', params);
+  }
+
+  /**
+   * Telegram caption limit is 1024 characters (vs. 4096 for sendMessage).
+   * Truncate with an ellipsis instead of letting the API reject the call.
+   */
+  private truncateCaption(text: string): string {
+    if (text.length > 1024) return text.slice(0, 1021) + '...';
+    return text;
+  }
 }

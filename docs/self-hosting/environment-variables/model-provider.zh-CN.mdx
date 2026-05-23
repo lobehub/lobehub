@@ -165,6 +165,13 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 - 默认值：`https://api.anthropic.com`
 - 示例：`https://my-anthropic-proxy.com`
 
+### `ANTHROPIC_CLIENT_TIMEOUT`
+
+- 类型：可选
+- 描述：Anthropic SDK 客户端请求超时时间，单位为毫秒。依赖 Anthropic SDK 的 Anthropic 兼容服务商也会使用此超时时间。
+- 默认值：`295000`
+- 示例：`780000`
+
 ## AWS Bedrock
 
 ### `ENABLED_AWS_BEDROCK`

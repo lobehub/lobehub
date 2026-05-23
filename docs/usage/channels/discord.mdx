@@ -117,11 +117,13 @@ By connecting a Discord channel to your LobeHub agent, users can interact with t
   ![](https://hub-apac-1.lobeobjects.space/docs/d83686461d14690e87512491c1349b6b.webp)
 
   Copy the generated URL, open it in your browser, select the server you want to add the bot to, and click **Authorize**.
+
+  > **Private channels need explicit access.** Server-level authorization only grants the bot category/server defaults. If a channel is marked **Private Channel**, Discord ignores the bot's server-wide role and the bot won't receive any events there — including @mentions — until you open the channel's **Settings → Permissions** and add the bot (or a role it has) under **Members and roles**. You can also click **Sync Now** to make the channel inherit its category's permissions.
 </Steps>
 
 ## Step 4: Test the Connection
 
-Back in LobeHub's channel settings for Discord, click **Test Connection** to verify everything is configured correctly. Then send a message to your bot in Discord to confirm it responds.
+Back in LobeHub's channel settings for Discord, click **Test Connection** to verify everything is configured correctly. Then send a message to your bot on Discord to confirm it responds.
 
 ## Step 5: Set Your Platform Identity (Recommended)
 
@@ -191,5 +193,6 @@ See the [Channels overview](/docs/usage/channels/overview#direct-message-policy)
 ## Troubleshooting
 
 - **Bot not responding in server:** Confirm the bot has been invited to the server with the correct permissions, and Message Content Intent is enabled. If **Group Policy** is `Disabled` or `Allowlist`, double-check the channel is in **Allowed Channel IDs**. If **Allowed User IDs** is set, the sender's user ID must be in it.
+- **@mention doesn't reach the bot in one specific channel:** The channel is likely a **Private Channel**. Discord drops every event for users/bots not explicitly listed in that channel's permissions, no matter what server-wide role they have. Open the channel's **Settings → Permissions**, click **Add members or roles**, and add the bot (or a role it has). Alternatively click **Sync Now** to inherit the parent category's permissions. A quick visual check: if the bot's name renders without an underline/link styling when you type `@<botname>`, Discord thinks it has no access to that channel.
 - **Bot not responding to DMs:** Open **Advanced Settings** and confirm **DM Policy** is not set to `Disabled`. If **Allowed User IDs** is set, make sure the sender's Discord user ID is in it.
 - **Test Connection failed:** Double-check the Application ID, Bot Token, and Public Key are correct.

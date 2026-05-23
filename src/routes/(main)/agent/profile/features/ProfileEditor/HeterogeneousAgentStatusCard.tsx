@@ -250,7 +250,13 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
     }, [provider.type, resolvedCommand]);
 
     const detect = useCallback(async () => {
-      if (!isDesktop || !resolvedCommand) {
+      // openclaw / hermes are remote device agents — no local CLI to detect.
+      if (
+        provider.type === 'openclaw' ||
+        provider.type === 'hermes' ||
+        !isDesktop ||
+        !resolvedCommand
+      ) {
         setDetecting(false);
         return;
       }

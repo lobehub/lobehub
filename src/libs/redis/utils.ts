@@ -1,4 +1,10 @@
-import { type RedisKey, type RedisMSetArgument, type RedisValue, type SetOptions } from './types';
+import {
+  type BaseRedisProvider,
+  type RedisKey,
+  type RedisMSetArgument,
+  type RedisValue,
+  type SetOptions,
+} from './types';
 
 export const normalizeRedisKey = (key: RedisKey) =>
   typeof key === 'string' ? key : key.toString();
@@ -14,6 +20,32 @@ export const normalizeMsetValues = (values: RedisMSetArgument): Record<string, R
   }
 
   return values;
+};
+
+/**
+ * Read a JSON-encoded value from Redis with consistent null fallbacks:
+ *
+ * - `null` redis client (Redis disabled / not initialized) → `null`
+ * - missing key                                            → `null`
+ * - malformed JSON                                         → `null`
+ *
+ * Lets callers reduce the typical 8-line "fetch + parse + try/catch" recipe
+ * to a single call. Caller is responsible for resolving the right Redis
+ * client (e.g. via `initializeRedisWithPrefix`) — this helper deliberately
+ * stays I/O-only.
+ */
+export const getJSONFromRedis = async <T>(
+  redis: BaseRedisProvider | null,
+  key: RedisKey,
+): Promise<T | null> => {
+  if (!redis) return null;
+  const value = await redis.get(key);
+  if (!value) return null;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return null;
+  }
 };
 
 export const buildIORedisSetArgs = (options?: SetOptions): Array<string | number> => {

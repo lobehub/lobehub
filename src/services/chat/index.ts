@@ -2,6 +2,8 @@ import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import {
   KLAVIS_SERVER_TYPES,
   LOBEHUB_SKILL_PROVIDERS,
+  REQUEST_AGENT_ID_HEADER,
+  REQUEST_TOPIC_ID_HEADER,
   REQUEST_TRIGGER_HEADER,
 } from '@lobechat/const';
 import { type OfficialToolItem } from '@lobechat/context-engine';
@@ -63,7 +65,9 @@ const providersWithDeploymentName = new Set<string>([
   ModelProvider.AzureAI,
   ModelProvider.KimiCodingPlan,
   ModelProvider.Qwen,
+  ModelProvider.Spark,
   ModelProvider.Volcengine,
+  ModelProvider.VolcengineCodingPlan,
 ]);
 interface GetChatCompletionPayload extends Partial<Omit<ChatStreamPayload, 'messages'>> {
   agentId?: string;
@@ -71,7 +75,7 @@ interface GetChatCompletionPayload extends Partial<Omit<ChatStreamPayload, 'mess
   messages: UIChatMessage[];
   /**
    * Pre-resolved agent config from AgentRuntime layer.
-   * Required to ensure config consistency and proper isSubTask filtering.
+   * Required to ensure config consistency and proper isSubAgent filtering.
    */
   resolvedAgentConfig: ResolvedAgentConfig;
   topicId?: string;
@@ -101,6 +105,7 @@ interface CreateAssistantMessageStream extends FetchSSEOptions {
   historySummary?: string;
   /** Initial context for page editor (captured at operation start) */
   initialContext?: RuntimeInitialContext;
+  metadata?: FetchOptions['metadata'];
   params: GetChatCompletionPayload;
   /** Step context for page editor (updated each step) */
   stepContext?: RuntimeStepContext;
@@ -141,7 +146,7 @@ class ChatService {
 
     // =================== 1. use pre-resolved agent config =================== //
     // Config is resolved in AgentRuntime layer (internal_createAgentState)
-    // which handles isSubTask filtering, disableTools, and tools generation
+    // which handles isSubAgent filtering, disableTools, and tools generation
 
     const targetAgentId = getTargetAgentId(agentId);
 
@@ -330,6 +335,7 @@ class ChatService {
     onMessageHandle,
     onErrorHandle,
     onFinish,
+    metadata,
     trace,
     historySummary,
     initialContext,
@@ -342,6 +348,7 @@ class ChatService {
       onErrorHandle,
       onFinish,
       onMessageHandle,
+      metadata,
       signal: abortController?.signal,
       stepContext,
       trace: this.mapTrace(trace, TraceTagMap.Chat),
@@ -349,7 +356,8 @@ class ChatService {
   };
 
   getChatCompletion = async (params: Partial<ChatStreamPayload>, options?: FetchOptions) => {
-    const { agentId, requestTrigger, signal, responseAnimation, topicId } = options ?? {};
+    const { agentId, metadata, signal, responseAnimation, topicId } = options ?? {};
+    const requestTrigger = metadata?.trigger;
 
     const { provider = ModelProvider.OpenAI, ...res } = params;
 
@@ -360,7 +368,8 @@ class ChatService {
       ? findDeploymentName(model, provider)
       : undefined;
     const shouldUseDeploymentField =
-      provider === ModelProvider.Azure && responsesAPIModels.has(model);
+      (provider === ModelProvider.Azure && responsesAPIModels.has(model)) ||
+      provider === ModelProvider.Spark;
 
     if (!shouldUseDeploymentField && deploymentName) {
       model = deploymentName;
@@ -445,9 +454,9 @@ class ChatService {
       headers: {
         'Content-Type': 'application/json',
         ...traceHeader,
-        ...(agentId && { 'x-agent-id': agentId }),
+        ...(agentId && { [REQUEST_AGENT_ID_HEADER]: agentId }),
         ...(requestTrigger && { [REQUEST_TRIGGER_HEADER]: requestTrigger }),
-        ...(topicId && { 'x-topic-id': topicId }),
+        ...(topicId && { [REQUEST_TOPIC_ID_HEADER]: topicId }),
       },
       provider,
     });

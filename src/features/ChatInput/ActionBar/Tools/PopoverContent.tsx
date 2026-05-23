@@ -13,12 +13,12 @@ import ToolsList, { toolsListStyles } from './ToolsList';
 const styles = createStaticStyles(({ css }) => ({
   footer: css`
     padding: 4px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+    border-block-start: 1px solid ${cssVar.colorFill};
   `,
   header: css`
     padding-block: 8px;
     padding-inline: 8px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+    border-block-end: 1px solid ${cssVar.colorFill};
   `,
   trailingIcon: css`
     opacity: 0.5;

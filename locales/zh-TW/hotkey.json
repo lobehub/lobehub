@@ -1,8 +1,6 @@
 {
   "addUserMessage.desc": "將當前輸入內容添加為使用者消息，但不觸發生成",
   "addUserMessage.title": "添加一條使用者消息",
-  "clearCurrentMessages.desc": "清空當前會話的消息和上傳的檔案",
-  "clearCurrentMessages.title": "清空會話消息",
   "commandPalette.desc": "開啟全域指令面板以快速存取功能",
   "commandPalette.title": "指令面板",
   "deleteAndRegenerateMessage.desc": "刪除最後一則訊息並重新產生",

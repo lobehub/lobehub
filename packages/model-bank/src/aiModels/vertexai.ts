@@ -1,8 +1,49 @@
-import { type AIChatModelCard, type AIImageModelCard } from '../types/aiModel';
-import { imagenGenParameters, nanoBananaParameters } from './google';
+import { nanoBananaParameters } from '../const/imageParameters';
+import type { AIChatModelCard, AIImageModelCard } from '../types/aiModel';
+import { imagenGenParameters } from './google';
 
 // ref: https://cloud.google.com/vertex-ai/generative-ai/docs/learn/models
 const vertexaiChatModels: AIChatModelCard[] = [
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_048_576 + 65_536,
+    description:
+      "Gemini's most intelligent model built for speed, combining frontier intelligence with superior search and grounding.",
+    displayName: 'Gemini 3.5 Flash',
+    enabled: true,
+    id: 'gemini-3.5-flash',
+    maxOutput: 65_536,
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'videoInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: { prices: { '1h': 1 }, pricingParams: ['ttl'] },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-05-19',
+    settings: {
+      extendParams: ['thinkingLevel', 'urlContext'],
+      searchImpl: 'params',
+      searchProvider: 'google',
+    },
+    type: 'chat',
+  },
   {
     abilities: {
       imageOutput: true,
@@ -133,9 +174,44 @@ const vertexaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576 + 65_536,
     description:
+      "Gemini 3.1 Flash-Lite is Google's most cost-efficient multimodal model, optimized for high-volume agentic tasks, translation, and data processing.",
+    displayName: 'Gemini 3.1 Flash-Lite',
+    enabled: true,
+    id: 'gemini-3.1-flash-lite',
+    maxOutput: 65_536,
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.025, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput_cacheRead', rate: 0.05, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'videoInput', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheWrite', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-05-07',
+    settings: {
+      extendParams: ['thinkingLevel', 'urlContext'],
+      searchImpl: 'params',
+      searchProvider: 'google',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_048_576 + 65_536,
+    description:
       "Gemini 3.1 Flash-Lite Preview is Google's most cost-efficient multimodal model, optimized for high-volume agentic tasks, translation, and data processing.",
     displayName: 'Gemini 3.1 Flash-Lite Preview',
-    enabled: true,
     id: 'gemini-3.1-flash-lite-preview',
     maxOutput: 65_536,
     pricing: {
@@ -150,7 +226,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-03-04',
     settings: {
-      extendParams: ['thinkingLevel5', 'urlContext'],
+      extendParams: ['thinkingLevel', 'urlContext'],
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -227,7 +303,6 @@ const vertexaiChatModels: AIChatModelCard[] = [
     description:
       'Gemini 3 Flash is the smartest model built for speed, combining cutting-edge intelligence with excellent search grounding.',
     displayName: 'Gemini 3 Flash Preview',
-    enabled: true,
     id: 'gemini-3-flash-preview',
     maxOutput: 65_536,
     pricing: {
@@ -265,7 +340,6 @@ const vertexaiChatModels: AIChatModelCard[] = [
     description:
       "Gemini 3 Pro Image (Nano Banana Pro) is Google's image generation model that also supports multimodal dialogue.",
     displayName: 'Nano Banana Pro',
-    enabled: true,
     id: 'gemini-3-pro-image-preview',
     maxOutput: 32_768,
     pricing: {
@@ -417,7 +491,6 @@ const vertexaiChatModels: AIChatModelCard[] = [
     description:
       'Nano Banana is Google’s newest, fastest, and most efficient native multimodal model, enabling conversational image generation and editing.',
     displayName: 'Nano Banana',
-    enabled: true,
     id: 'gemini-2.5-flash-image',
     maxOutput: 8192,
     pricing: {

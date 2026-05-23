@@ -187,6 +187,37 @@ describe('Crawler', () => {
     });
   });
 
+  it('should fall back to configured impls when rule impls are not in user-configured impls', async () => {
+    const mockResult = {
+      content: 'test content'.padEnd(101, ' '),
+      contentType: 'text' as const,
+      url: 'https://example.com',
+    };
+
+    const crawlerWithNaiveOnly = new Crawler({ impls: ['naive'] });
+
+    const { crawlImpls } = await import('../crawImpl');
+    vi.mocked(crawlImpls.naive).mockResolvedValue(mockResult);
+
+    const { applyUrlRules } = await import('../utils/appUrlRules');
+    vi.mocked(applyUrlRules).mockReturnValue({
+      transformedUrl: 'https://example.com',
+      filterOptions: {},
+      impls: ['jina'],
+    });
+
+    const result = await crawlerWithNaiveOnly.crawl({
+      url: 'https://example.com',
+    });
+
+    expect(result).toEqual({
+      crawler: 'naive',
+      data: mockResult,
+      originalUrl: 'https://example.com',
+      transformedUrl: undefined,
+    });
+  });
+
   it('should skip results with content length <= 100', async () => {
     const mockResult = {
       content: 'short content', // Content length <= 100

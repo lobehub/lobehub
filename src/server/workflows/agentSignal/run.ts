@@ -7,7 +7,7 @@ import {
   isAgentUserMessageSource,
   isClientRuntimeStartSource,
   isNightlyReviewSource,
-  isSelfIterationIntentSource,
+  isSelfFeedbackIntentSource,
   isSelfReflectionSource,
   isToolOutcomeSource,
 } from '@lobechat/agent-signal/source';
@@ -32,12 +32,12 @@ import type { GeneratedAgentSignalEmissionResult } from '@/server/services/agent
 import { executeAgentSignalSourceEvent } from '@/server/services/agentSignal/orchestrator';
 import { assembleFeedbackContext } from '@/server/services/agentSignal/policies/analyzeIntent/context/feedbackContextAssembler';
 import { createRedisRuntimeGuardBackend } from '@/server/services/agentSignal/runtime/backend/redisGuard';
+import { createServerSelfFeedbackIntentPolicyOptions } from '@/server/services/agentSignal/services/selfIteration/feedback/server';
 import {
-  createServerNightlyReviewPolicyOptions,
   createServerProcedurePolicyOptions,
-  createServerSelfIterationIntentPolicyOptions,
   createServerSelfReflectionPolicyOptions,
-} from '@/server/services/agentSignal/services/maintenance/serverRuntime';
+} from '@/server/services/agentSignal/services/selfIteration/reflection/server';
+import { createServerSelfReviewPolicyOptions } from '@/server/services/agentSignal/services/selfIteration/review/server';
 import type { ClientRuntimeCompleteHydrationDiagnostic } from '@/server/services/agentSignal/sources/hydration/clientRuntimeComplete';
 import { resolveClientRuntimeCompleteFeedbackSource } from '@/server/services/agentSignal/sources/hydration/clientRuntimeComplete';
 import type { ClientRuntimeStartHydrationDiagnostic } from '@/server/services/agentSignal/sources/hydration/clientRuntimeStart';
@@ -80,11 +80,11 @@ export interface AgentSignalWorkflowContext<TPayload = AgentSignalWorkflowRunPay
 
 /** Dependencies for executing one Agent Signal workflow payload. */
 export interface RunAgentSignalWorkflowDeps {
-  createNightlyReviewPolicyOptions?: typeof createServerNightlyReviewPolicyOptions;
   createProcedurePolicyOptions?: typeof createServerProcedurePolicyOptions;
   createRuntimeGuardBackend?: typeof createRedisRuntimeGuardBackend;
-  createSelfIterationIntentPolicyOptions?: typeof createServerSelfIterationIntentPolicyOptions;
+  createSelfFeedbackIntentPolicyOptions?: typeof createServerSelfFeedbackIntentPolicyOptions;
   createSelfReflectionPolicyOptions?: typeof createServerSelfReflectionPolicyOptions;
+  createSelfReviewPolicyOptions?: typeof createServerSelfReviewPolicyOptions;
   createSnapshotStore?: () => ISnapshotStore | null;
   executeSourceEvent?: typeof executeAgentSignalSourceEvent;
   getDb?: typeof getServerDB;
@@ -495,13 +495,13 @@ export const runAgentSignalWorkflow = async (
 
           const getDb = deps.getDb ?? getServerDB;
           const executeSourceEvent = deps.executeSourceEvent ?? executeAgentSignalSourceEvent;
-          const createNightlyReviewPolicyOptions =
-            deps.createNightlyReviewPolicyOptions ?? createServerNightlyReviewPolicyOptions;
+          const createSelfReviewPolicyOptions =
+            deps.createSelfReviewPolicyOptions ?? createServerSelfReviewPolicyOptions;
           const createSelfReflectionPolicyOptions =
             deps.createSelfReflectionPolicyOptions ?? createServerSelfReflectionPolicyOptions;
-          const createSelfIterationIntentPolicyOptions =
-            deps.createSelfIterationIntentPolicyOptions ??
-            createServerSelfIterationIntentPolicyOptions;
+          const createSelfFeedbackIntentPolicyOptions =
+            deps.createSelfFeedbackIntentPolicyOptions ??
+            createServerSelfFeedbackIntentPolicyOptions;
           const createProcedurePolicyOptions =
             deps.createProcedurePolicyOptions ?? createServerProcedurePolicyOptions;
           const createGuardBackend =
@@ -562,7 +562,7 @@ export const runAgentSignalWorkflow = async (
             async (executeSpan) => {
               try {
                 const nightlyReview = isNightlyReviewSource(normalizedSourceEvent)
-                  ? createNightlyReviewPolicyOptions({
+                  ? createSelfReviewPolicyOptions({
                       agentId: payload.agentId,
                       db,
                       selfIterationEnabled,
@@ -577,8 +577,8 @@ export const runAgentSignalWorkflow = async (
                       userId: payload.userId,
                     })
                   : undefined;
-                const selfIterationIntent = isSelfIterationIntentSource(normalizedSourceEvent)
-                  ? createSelfIterationIntentPolicyOptions({
+                const selfFeedbackIntent = isSelfFeedbackIntentSource(normalizedSourceEvent)
+                  ? createSelfFeedbackIntentPolicyOptions({
                       agentId: payload.agentId,
                       db,
                       selfIterationEnabled,
@@ -607,7 +607,7 @@ export const runAgentSignalWorkflow = async (
                         policyOptions: {
                           ...(nightlyReview ? { nightlyReview } : {}),
                           ...(procedure ? { procedure } : {}),
-                          ...(selfIterationIntent ? { selfIterationIntent } : {}),
+                          ...(selfFeedbackIntent ? { selfFeedbackIntent } : {}),
                           ...(selfReflection ? { selfReflection } : {}),
                           skillManagement: {
                             selfIterationEnabled,

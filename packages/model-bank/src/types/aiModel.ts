@@ -260,14 +260,15 @@ export type ExtendParamsType =
   | 'enableAdaptiveThinking'
   | 'disableContextCaching'
   | 'effort'
+  | 'deepseekV4ReasoningEffort'
   | 'reasoningEffort'
   | 'gpt5ReasoningEffort'
   | 'gpt5_1ReasoningEffort'
   | 'gpt5_2ReasoningEffort'
   | 'gpt5_2ProReasoningEffort'
   | 'grok4_20ReasoningEffort'
+  | 'grok4_3ReasoningEffort'
   | 'hy3ReasoningEffort'
-  | 'deepseekV4ReasoningEffort'
   | 'codexMaxReasoningEffort'
   | 'opus47Effort'
   | 'textVerbosity'
@@ -277,7 +278,6 @@ export type ExtendParamsType =
   | 'thinkingLevel2'
   | 'thinkingLevel3'
   | 'thinkingLevel4'
-  | 'thinkingLevel5'
   | 'imageAspectRatio'
   | 'imageAspectRatio2'
   | 'imageResolution'
@@ -286,15 +286,6 @@ export type ExtendParamsType =
 
 export type DisabledParamType = 'temperature' | 'top_p' | 'frequency_penalty' | 'presence_penalty';
 
-export interface EnableReasoningExtendParamOptions {
-  defaultValue?: boolean;
-  includeBudget?: boolean;
-}
-
-export interface ExtendParamOptions {
-  enableReasoning?: EnableReasoningExtendParamOptions;
-}
-
 export interface AiModelSettings {
   /**
    * Chat params that should be hidden from the agent config UI and stripped from
@@ -302,7 +293,6 @@ export interface AiModelSettings {
    * params (e.g. Claude Opus 4.7 returns 400 on any non-default temperature / top_p).
    */
   disabledParams?: DisabledParamType[];
-  extendParamOptions?: ExtendParamOptions;
   extendParams?: ExtendParamsType[];
   /**
    * How the model layer implements search
@@ -319,14 +309,15 @@ export const ExtendParamsTypeSchema = z.enum([
   'enableAdaptiveThinking',
   'disableContextCaching',
   'effort',
+  'deepseekV4ReasoningEffort',
   'reasoningEffort',
   'gpt5ReasoningEffort',
   'gpt5_1ReasoningEffort',
   'gpt5_2ReasoningEffort',
   'gpt5_2ProReasoningEffort',
   'grok4_20ReasoningEffort',
+  'grok4_3ReasoningEffort',
   'hy3ReasoningEffort',
-  'deepseekV4ReasoningEffort',
   'codexMaxReasoningEffort',
   'opus47Effort',
   'textVerbosity',
@@ -336,7 +327,6 @@ export const ExtendParamsTypeSchema = z.enum([
   'thinkingLevel2',
   'thinkingLevel3',
   'thinkingLevel4',
-  'thinkingLevel5',
   'imageAspectRatio',
   'imageAspectRatio2',
   'imageResolution',
@@ -353,18 +343,8 @@ export const DisabledParamTypeSchema = z.enum([
   'presence_penalty',
 ]);
 
-export const EnableReasoningExtendParamOptionsSchema = z.object({
-  defaultValue: z.boolean().optional(),
-  includeBudget: z.boolean().optional(),
-});
-
-export const ExtendParamOptionsSchema = z.object({
-  enableReasoning: EnableReasoningExtendParamOptionsSchema.optional(),
-});
-
 export const AiModelSettingsSchema = z.object({
   disabledParams: z.array(DisabledParamTypeSchema).optional(),
-  extendParamOptions: ExtendParamOptionsSchema.optional(),
   extendParams: z.array(ExtendParamsTypeSchema).optional(),
   searchImpl: ModelSearchImplementTypeSchema.optional(),
   searchProvider: z.string().optional(),

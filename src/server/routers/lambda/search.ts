@@ -193,12 +193,11 @@ export const searchRouter = router({
 
       // Execute searches in parallel and merge results
       const results = await Promise.all(searchPromises);
-      const mergedResults = results.flat();
 
-      // Sort by relevance and limit total results
-      return mergedResults.sort((a, b) => {
-        if (a.relevance !== b.relevance) return a.relevance - b.relevance;
-        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-      });
+      // Results arrive pre-ordered per type (DB types from SearchRepo with
+      // topics/messages by recency, marketplace types from the discover service).
+      // The command palette groups results by type, so we keep each source's order
+      // instead of re-sorting the merged list by relevance.
+      return results.flat();
     }),
 });

@@ -139,6 +139,21 @@ export interface AiProviderSettings {
    */
   disableBrowserRequest?: boolean;
   /**
+   * Maximum number of tools the provider accepts in a single request.
+   * When set, the harness will abort the request before dispatch if the
+   * tools array exceeds this count, instead of waiting for an upstream
+   * 422 / 400 rejection.
+   *
+   * Example: GitHub Copilot enforces max 128 tools across all its models.
+   */
+  maxToolCount?: number;
+  /**
+   * Maximum serialized tools payload size in bytes before the provider
+   * rejects the request (e.g. Cloudflare AI Workers ~100 KB). If unset,
+   * only the count-based check (`maxToolCount`) is applied.
+   */
+  maxToolPayloadBytes?: number;
+  /**
    * whether provider support edit model
    *
    * @default true
@@ -197,6 +212,8 @@ const AiProviderSettingsSchema = z.object({
   authType: z.enum(AiProviderAuthTypes).optional(),
   defaultShowBrowserRequest: z.boolean().optional(),
   disableBrowserRequest: z.boolean().optional(),
+  maxToolCount: z.number().optional(),
+  maxToolPayloadBytes: z.number().optional(),
   modelEditable: z.boolean().optional(),
   oauthDeviceFlow: OAuthDeviceFlowConfigSchema.optional(),
   proxyUrl: z

@@ -18,7 +18,7 @@ import { useMarkdown } from '../useMarkdown';
 
 const MessageContent = memo<UIChatMessage>(
   ({ id, tools, content, chunksList, search, imageList, metadata, ...props }) => {
-    const markdownProps = useMarkdown(id);
+    const { drawer, markdownProps } = useMarkdown(id);
     // Use ConversationStore instead of ChatStore
     const generating = useConversationStore(messageStateSelectors.isMessageGenerating(id));
     const isCreating = useConversationStore(messageStateSelectors.isMessageCreating(id));
@@ -68,6 +68,7 @@ const MessageContent = memo<UIChatMessage>(
 
     return (
       <Flexbox gap={8} id={id}>
+        {drawer}
         {showSearch && (
           <SearchGrounding
             citations={search?.citations}

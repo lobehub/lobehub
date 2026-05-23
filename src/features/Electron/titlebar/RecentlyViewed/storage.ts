@@ -1,11 +1,15 @@
-import { type PageReference } from './types';
+import { type TabItem } from '../TabBar/types';
 
-export const PINNED_PAGES_STORAGE_KEY = 'lobechat:desktop:pinned-pages:v2';
+export const PINNED_PAGES_STORAGE_KEY = 'lobechat:desktop:pinned-pages:v3';
 
-/**
- * Get pinned pages from localStorage
- */
-export const getPinnedPages = (): PageReference[] => {
+const isTabItem = (item: unknown): item is TabItem =>
+  !!item &&
+  typeof item === 'object' &&
+  typeof (item as TabItem).id === 'string' &&
+  typeof (item as TabItem).url === 'string' &&
+  typeof (item as TabItem).lastVisited === 'number';
+
+export const getPinnedPages = (): TabItem[] => {
   if (typeof window === 'undefined') return [];
 
   try {
@@ -15,25 +19,13 @@ export const getPinnedPages = (): PageReference[] => {
     const parsed = JSON.parse(data);
     if (!Array.isArray(parsed)) return [];
 
-    // Validate each entry has required fields
-    return parsed.filter(
-      (item): item is PageReference =>
-        item &&
-        typeof item === 'object' &&
-        typeof item.id === 'string' &&
-        typeof item.type === 'string' &&
-        typeof item.lastVisited === 'number' &&
-        item.params !== undefined,
-    );
+    return parsed.filter(isTabItem);
   } catch {
     return [];
   }
 };
 
-/**
- * Save pinned pages to localStorage
- */
-export const savePinnedPages = (pages: PageReference[]): boolean => {
+export const savePinnedPages = (pages: TabItem[]): boolean => {
   if (typeof window === 'undefined') return false;
 
   try {
@@ -44,9 +36,6 @@ export const savePinnedPages = (pages: PageReference[]): boolean => {
   }
 };
 
-/**
- * Clear pinned pages from localStorage
- */
 export const clearPinnedPages = (): boolean => {
   if (typeof window === 'undefined') return false;
 

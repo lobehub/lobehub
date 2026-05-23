@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   Circle,
   ExternalLink,
+  Hash,
   Link2,
   LucideCopy,
   PanelTop,
@@ -22,7 +23,6 @@ import { useNavigate } from 'react-router-dom';
 import { openRenameModal } from '@/components/RenameModal';
 import { SESSION_CHAT_TOPIC_URL } from '@/const/url';
 import { isDesktop } from '@/const/version';
-import { pluginRegistry } from '@/features/Electron/titlebar/RecentlyViewed/plugins';
 import { openShareModal } from '@/features/ShareModal';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { useAgentStore } from '@/store/agent';
@@ -142,11 +142,8 @@ export const useTopicItemDropdownMenu = ({
               onClick: () => {
                 if (!activeAgentId) return;
                 const url = SESSION_CHAT_TOPIC_URL(activeAgentId, id);
-                const reference = pluginRegistry.parseUrl(url, '');
-                if (reference) {
-                  addTab(reference);
-                  navigate(url);
-                }
+                addTab(url);
+                navigate(url);
               },
             },
             {
@@ -162,6 +159,15 @@ export const useTopicItemDropdownMenu = ({
             },
           ]
         : []),
+      {
+        icon: <Icon icon={Hash} />,
+        key: 'copySessionId',
+        label: t('actions.copySessionId'),
+        onClick: () => {
+          navigator.clipboard.writeText(id);
+          message.success(t('actions.copySessionIdSuccess'));
+        },
+      },
       {
         icon: <Icon icon={Link2} />,
         key: 'copyLink',

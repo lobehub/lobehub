@@ -18,7 +18,7 @@ import { discoverService } from '@/services/discover';
 import { getAgentStoreState, useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
-import { selectRuntimeType } from '@/store/chat/slices/aiChat/actions/agentDispatcher';
+import { dispatchNonHeteroSubAgent } from '@/store/chat/slices/aiChat/actions/nonHeteroSubAgentDispatcher';
 import { dbMessageSelectors } from '@/store/chat/slices/message/selectors';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
@@ -119,7 +119,7 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
     } = params;
 
     if (runAsTask) {
-      // Execute as async task using GTD exec_task pattern
+      // Dispatch as a sub-agent using the lobe-agent exec_sub_agent pattern
       // Pre-load target agent config to ensure it exists
       const targetAgentExists = useAgentStore.getState().agentMap[agentId];
       if (!targetAgentExists) {
@@ -141,8 +141,8 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
         }
       }
 
-      // Return special state that will be recognized by AgentRuntime's exec_task executor
-      // Following GTD execTask pattern: stop: true + state.type = 'execTask'
+      // Return special state that will be recognized by AgentRuntime's exec_sub_agent executor
+      // Follows the lobe-agent callSubAgent pattern: stop: true + state.type = 'execSubAgent'
       return {
         content: `🚀 Triggered async task to call agent "${agentId}"${taskTitle ? `: ${taskTitle}` : ''}`,
         state: {
@@ -153,7 +153,7 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
             targetAgentId: agentId, // Special field for callAgent - indicates target agent
             timeout: timeout || 1_800_000,
           },
-          type: 'execTask', // Use same type as GTD to reuse existing executor
+          type: 'execSubAgent', // Same wire-level type as lobe-agent so the runtime reuses its executor
         },
         stop: true,
         success: true,
@@ -212,18 +212,17 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
         }
       }
 
-      // Register afterCompletion to execute the agent
+      // Register afterCompletion to execute the agent.
+      // Runtime routing is fully delegated to dispatchNonHeteroSubAgent ().
       ctx.registerAfterCompletion(async () => {
         const get = useChatStore.getState;
 
-        // Build conversation context - use current agent's context
         const conversationContext: ConversationContext = {
           agentId: ctx.agentId || '',
           topicId: ctx.topicId || null,
-          // subAgentId will be set when calling executeClientAgent
         };
 
-        // Get current messages
+        // Get current messages for client-mode runner (gateway loads from DB).
         const chatKey = messageMapKey(conversationContext);
         const messages = dbMessageSelectors.getDbMessagesByKey(chatKey)(get());
 
@@ -232,9 +231,9 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
           return;
         }
 
-        // If instruction is provided, inject it as a virtual User Message
-        // Same pattern as group orchestration's call_agent executor:
-        // virtual message with <speaker> tag gives the called agent clear direction
+        // Inject a virtual instruction message so the sub-agent has clear direction.
+        // Only used by the client runner; gateway mode sends `instruction` as a real
+        // user message via dispatchNonHeteroSubAgent.
         const now = Date.now();
         const messagesWithInstruction = instruction
           ? [
@@ -249,35 +248,28 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
             ]
           : messages;
 
-        // callAgent inherits the parent's runtime selection — a hetero/gateway
-        // parent must keep the called sub-agent on the same path. See LOBE-8519.
         const parentAgentConfig = conversationContext.agentId
           ? agentSelectors.getAgentConfigById(conversationContext.agentId)(getAgentStoreState())
           : undefined;
-        const runtimeType = selectRuntimeType({
-          heterogeneousProvider: parentAgentConfig?.agencyConfig?.heterogeneousProvider,
-          isGatewayMode: get().isGatewayModeEnabled(),
-        });
-
-        // TODO(LOBE-8519 follow-up): only client sub-agent dispatch is wired.
-        // Gateway / hetero callAgent invocations fall through to client and
-        // will need their own runner once Step 2 lands.
-        if (runtimeType !== 'client') {
-          console.warn(
-            `[callAgent] runtime=${runtimeType} not yet supported for sub-agent dispatch; ` +
-              'falling through to client mode',
-          );
-        }
 
         try {
-          await get().executeClientAgent({
-            context: { ...conversationContext, subAgentId: agentId, scope: 'sub_agent' },
-            messages: messagesWithInstruction,
-            parentMessageId: ctx.messageId,
-            parentMessageType: 'tool',
-          });
+          await dispatchNonHeteroSubAgent(
+            {
+              kind: 'callAgent',
+              targetAgentId: agentId,
+              instruction,
+              parentMessageId: ctx.messageId,
+            },
+            {
+              conversationContext,
+              heterogeneousProvider: parentAgentConfig?.agencyConfig?.heterogeneousProvider,
+              isGatewayMode: get().isGatewayModeEnabled(),
+              messages: messagesWithInstruction,
+            },
+            get(),
+          );
         } catch (error) {
-          console.error('[callAgent] executeClientAgent failed:', error);
+          console.error('[callAgent] dispatchNonHeteroSubAgent failed:', error);
           throw error;
         }
       });

@@ -95,10 +95,8 @@ export const MessageGenerationParamsSchema = z.object({
   agentId: z.string().nullish(),
   chatConfig: z
     .object({
-      autoCreateTopicThreshold: z.number().nullish(),
       disableContextCaching: z.boolean().nullish(),
       displayMode: z.enum(['chat', 'docs']).nullish(),
-      enableAutoCreateTopic: z.boolean().nullish(),
       enableCompressHistory: z.boolean().nullish(),
       enableHistoryCount: z.boolean().nullish(),
       enableMaxTokens: z.boolean().nullish(),

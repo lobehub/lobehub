@@ -28,9 +28,10 @@ export const params = {
         }),
         ...(thinking && {
           enable_thinking: thinking.type ? thinking.type !== 'disabled' : undefined,
-          ...(thinking?.budget_tokens !== 0 && {
-            thinking_budget: Math.min(Math.max(thinking?.budget_tokens, 100), 16_384),
-          }),
+          ...(thinking.budget_tokens !== undefined &&
+            thinking.budget_tokens !== 0 && {
+              thinking_budget: Math.min(Math.max(thinking.budget_tokens, 100), 16_384),
+            }),
         }),
       } as any;
     },

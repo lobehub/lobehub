@@ -6,24 +6,32 @@ import { useNavigate } from 'react-router-dom';
 
 import { ChatGroupWizard } from '@/components/ChatGroupWizard';
 import { MemberSelectionModal } from '@/components/MemberSelectionModal';
+import CreatePlatformAgentModal from '@/features/CreatePlatformAgent';
 import EditingPopover from '@/features/EditingPopover';
 import { CreateAgentModal } from '@/routes/(main)/home/_layout/hooks/useCreateModal';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
+import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
 
 import ConfigGroupModal from './Modals/ConfigGroupModal';
 import CreateGroupModal from './Modals/CreateGroupModal';
 
+interface OpenCreateModalOptions {
+  groupId?: string;
+}
+
 interface AgentModalContextValue {
   closeAllModals: () => void;
   closeConfigGroupModal: () => void;
   closeCreateGroupModal: () => void;
+  closeCreatePlatformAgentModal: () => void;
   closeGroupWizardModal: () => void;
   closeMemberSelectionModal: () => void;
   openConfigGroupModal: () => void;
   openCreateGroupModal: (sessionId: string) => void;
-  openCreateModal: (type: 'agent' | 'group') => void;
+  openCreateModal: (type: 'agent' | 'group', options?: OpenCreateModalOptions) => void;
+  openCreatePlatformAgentModal: (options?: OpenCreateModalOptions) => void;
   openGroupWizardModal: (callbacks: GroupWizardCallbacks) => void;
   openMemberSelectionModal: (callbacks: MemberSelectionCallbacks) => void;
   setGroupWizardLoading: (loading: boolean) => void;
@@ -55,12 +63,13 @@ export const useOptionalAgentModal = () => {
 };
 
 interface CreateModalRendererProps {
+  groupId?: string;
   onClose: () => void;
   open: boolean;
   type: 'agent' | 'group';
 }
 
-const CreateModalRenderer = memo<CreateModalRendererProps>(({ open, type, onClose }) => {
+const CreateModalRenderer = memo<CreateModalRendererProps>(({ open, type, groupId, onClose }) => {
   const navigate = useNavigate();
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const storeCreateAgent = useAgentStore((s) => s.createAgent);
@@ -71,23 +80,24 @@ const CreateModalRenderer = memo<CreateModalRendererProps>(({ open, type, onClos
   const handleSubmit = useCallback(
     async (prompt: string) => {
       if (type === 'agent') {
-        await sendAsAgent({ message: prompt });
+        await sendAsAgent({ groupId, message: prompt });
       } else {
-        await sendAsGroup({ message: prompt });
+        await sendAsGroup({ groupId, message: prompt });
       }
     },
-    [type, sendAsAgent, sendAsGroup],
+    [type, sendAsAgent, sendAsGroup, groupId],
   );
 
   const handleCreateBlank = useCallback(async () => {
     if (type === 'agent') {
-      const result = await storeCreateAgent({});
+      const result = await storeCreateAgent({ groupId });
+      useGlobalStore.getState().toggleAgentBuilderPanel(true);
       navigate(`/agent/${result.agentId}/profile`);
       await refreshAgentList();
     } else {
-      await sendAsGroup({ message: '' });
+      await sendAsGroup({ groupId, message: '' });
     }
-  }, [type, storeCreateAgent, navigate, refreshAgentList, sendAsGroup]);
+  }, [type, storeCreateAgent, navigate, refreshAgentList, sendAsGroup, groupId]);
 
   return (
     <CreateAgentModal
@@ -126,6 +136,13 @@ export const AgentModalProvider = memo<AgentModalProviderProps>(({ children }) =
   // CreateAgentModal state
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createModalType, setCreateModalType] = useState<'agent' | 'group'>('agent');
+  const [createModalGroupId, setCreateModalGroupId] = useState<string | undefined>(undefined);
+
+  // CreatePlatformAgentModal state
+  const [createPlatformAgentOpen, setCreatePlatformAgentOpen] = useState(false);
+  const [createPlatformAgentGroupId, setCreatePlatformAgentGroupId] = useState<string | undefined>(
+    undefined,
+  );
 
   const contextValue = useMemo<AgentModalContextValue>(
     () => ({
@@ -135,9 +152,11 @@ export const AgentModalProvider = memo<AgentModalProviderProps>(({ children }) =
         setGroupWizardOpen(false);
         setMemberSelectionOpen(false);
         setCreateModalOpen(false);
+        setCreatePlatformAgentOpen(false);
       },
       closeConfigGroupModal: () => setConfigGroupModalOpen(false),
       closeCreateGroupModal: () => setCreateGroupModalOpen(false),
+      closeCreatePlatformAgentModal: () => setCreatePlatformAgentOpen(false),
       closeGroupWizardModal: () => setGroupWizardOpen(false),
       closeMemberSelectionModal: () => setMemberSelectionOpen(false),
       openConfigGroupModal: () => setConfigGroupModalOpen(true),
@@ -145,9 +164,14 @@ export const AgentModalProvider = memo<AgentModalProviderProps>(({ children }) =
         setCreateGroupSessionId(sessionId);
         setCreateGroupModalOpen(true);
       },
-      openCreateModal: (type: 'agent' | 'group') => {
+      openCreateModal: (type: 'agent' | 'group', options?: OpenCreateModalOptions) => {
         setCreateModalType(type);
+        setCreateModalGroupId(options?.groupId);
         setCreateModalOpen(true);
+      },
+      openCreatePlatformAgentModal: (options?: OpenCreateModalOptions) => {
+        setCreatePlatformAgentGroupId(options?.groupId);
+        setCreatePlatformAgentOpen(true);
       },
       openGroupWizardModal: (callbacks: GroupWizardCallbacks) => {
         setGroupWizardCallbacks(callbacks);
@@ -165,9 +189,15 @@ export const AgentModalProvider = memo<AgentModalProviderProps>(({ children }) =
   return (
     <AgentModalContext value={contextValue}>
       <CreateModalRenderer
+        groupId={createModalGroupId}
         open={createModalOpen}
         type={createModalType}
         onClose={() => setCreateModalOpen(false)}
+      />
+      <CreatePlatformAgentModal
+        groupId={createPlatformAgentGroupId}
+        open={createPlatformAgentOpen}
+        onClose={() => setCreatePlatformAgentOpen(false)}
       />
       {children}
 

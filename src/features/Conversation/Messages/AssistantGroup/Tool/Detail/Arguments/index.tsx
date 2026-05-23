@@ -1,12 +1,13 @@
-import { Flexbox, Highlighter, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Highlighter, Text } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { cssVar, cx } from 'antd-style';
+import { WrapText } from 'lucide-react';
 import { parse } from 'partial-json';
-import { type ReactNode } from 'react';
-import { memo, useMemo } from 'react';
+import type { ReactNode } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type DescriptionItem } from '@/components/Descriptions';
+import type { DescriptionItem } from '@/components/Descriptions';
 import Descriptions from '@/components/Descriptions';
 import { useYamlArguments } from '@/hooks/useYamlArguments';
 import { shinyTextStyles } from '@/styles';
@@ -32,6 +33,7 @@ export interface ArgumentsProps {
 
 const Arguments = memo<ArgumentsProps>(({ arguments: args = '', loading, actions }) => {
   const { t } = useTranslation('plugin');
+  const [wrap, setWrap] = useState(false);
 
   const displayArgs = useMemo(() => {
     try {
@@ -49,7 +51,7 @@ const Arguments = memo<ArgumentsProps>(({ arguments: args = '', loading, actions
 
   if (typeof displayArgs === 'string') {
     contentNode = !!yaml && (
-      <Highlighter language={'yaml'} showLanguage={false}>
+      <Highlighter language={'yaml'} showLanguage={false} wrap={wrap}>
         {yaml}
       </Highlighter>
     );
@@ -70,6 +72,7 @@ const Arguments = memo<ArgumentsProps>(({ arguments: args = '', loading, actions
           items={items}
           labelWidth={140}
           maxItemWidth={'100%'}
+          wrap={wrap}
           classNames={{
             label: cx(loading && shinyTextStyles.shinyText),
           }}
@@ -95,6 +98,16 @@ const Arguments = memo<ArgumentsProps>(({ arguments: args = '', loading, actions
       >
         <Text>{t('arguments.title')}</Text>
         <Flexbox horizontal gap={4}>
+          <ActionIcon
+            active={wrap}
+            icon={WrapText}
+            size={'small'}
+            title={t(
+              wrap ? 'workingPanel.review.wordWrap.disable' : 'workingPanel.review.wordWrap.enable',
+              { ns: 'chat' },
+            )}
+            onClick={() => setWrap((value) => !value)}
+          />
           {actions}
         </Flexbox>
       </Flexbox>

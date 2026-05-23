@@ -20,9 +20,9 @@
       {
         "id": "call_exec_tasks_1",
         "type": "builtin",
-        "apiName": "execTasks",
+        "apiName": "callSubAgents",
         "arguments": "{\"tasks\": [{\"description\": \"Research LLM architectures\"}, {\"description\": \"Research AI agents\"}, {\"description\": \"Research RAG systems\"}]}",
-        "identifier": "lobe-gtd"
+        "identifier": "lobe-agent"
       }
     ]
   },
@@ -35,7 +35,7 @@
     "createdAt": 1735526588116,
     "updatedAt": 1735526591337,
     "pluginState": {
-      "type": "execTasks",
+      "type": "execSubAgents",
       "tasks": [
         {
           "description": "Research LLM architectures"

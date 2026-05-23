@@ -60,7 +60,11 @@ const StatusGroup = memo<StatusGroupProps>(({ group }) => {
     >
       <Flexbox gap={1} paddingBlock={1}>
         {group.tasks.map((task) => (
-          <TaskItem active={taskId === task.identifier} key={task.id} task={task} />
+          <TaskItem
+            active={taskId === task.identifier || taskId === task.id}
+            key={task.id}
+            task={task}
+          />
         ))}
       </Flexbox>
     </AccordionItem>

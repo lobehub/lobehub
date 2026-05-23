@@ -46,6 +46,23 @@ CRAWLER_IMPLS="naive,search1api"
 
 ---
 
+## `JINA_USE_CN_DOMAINS`
+
+将 Jina Reader / Search 切换到中国大陆可用的备用域名。
+
+```env
+JINA_USE_CN_DOMAINS=true
+```
+
+启用后，LobeHub 会将 Jina 端点替换为：
+
+- `https://r.jina.ai` → `https://r.jinaai.cn`
+- `https://s.jina.ai` → `https://s.jinaai.cn`
+
+> 📌 适用于中国大陆网络无法访问 `jina.ai` 的场景。认证方式与 API 行为保持不变。
+
+---
+
 ## `CRAWL_CONCURRENCY`
 
 控制单次网页抓取任务的并发数量，默认值为 `3`。在低配置服务器上建议设置为 `1` 以降低 CPU 峰值。

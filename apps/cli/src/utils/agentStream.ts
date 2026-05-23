@@ -187,6 +187,7 @@ export async function streamAgentEventsViaWebSocket(
     const ctx = createRenderContext();
     let lastEventId = '';
     let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
+    let isSettled = false;
     let jsonPrinted = false;
 
     const cleanup = () => {
@@ -243,6 +244,8 @@ export async function streamAgentEventsViaWebSocket(
           } else if (!streamOpts.json) {
             renderEnd(agentEvent);
           }
+          if (isSettled) return;
+          isSettled = true;
           cleanup();
           resolve();
           return;
@@ -266,6 +269,8 @@ export async function streamAgentEventsViaWebSocket(
           jsonPrinted = true;
           console.log(JSON.stringify(jsonEvents, null, 2));
         }
+        if (isSettled) return;
+        isSettled = true;
         cleanup();
         resolve();
       }
@@ -273,16 +278,25 @@ export async function streamAgentEventsViaWebSocket(
 
     ws.onerror = (err) => {
       cleanup();
-      reject(err);
-    };
-
-    ws.onclose = () => {
-      if (heartbeatTimer) clearInterval(heartbeatTimer);
+      if (isSettled) return;
       if (streamOpts.json && jsonEvents.length > 0 && !jsonPrinted) {
         jsonPrinted = true;
         console.log(JSON.stringify(jsonEvents, null, 2));
       }
-      resolve();
+      isSettled = true;
+      reject(new Error(`Agent gateway WebSocket failed: ${String(err)}`));
+    };
+
+    ws.onclose = (event) => {
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
+      if (isSettled) return;
+
+      if (streamOpts.json && jsonEvents.length > 0 && !jsonPrinted) {
+        jsonPrinted = true;
+        console.log(JSON.stringify(jsonEvents, null, 2));
+      }
+      isSettled = true;
+      reject(new Error(`Agent gateway WebSocket closed before completion: ${String(event)}`));
     };
   });
 }

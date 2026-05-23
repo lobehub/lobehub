@@ -1,10 +1,9 @@
 import type { IconType } from '@lobehub/icons';
-import { Icon, Tooltip } from '@lobehub/ui';
-import { Dropdown, type MenuProps } from 'antd';
+import { type DropdownItem, DropdownMenu, Icon, type MenuInfo, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Loader2Icon } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useTaskStore } from '@/store/task';
@@ -30,6 +29,8 @@ export const PRIORITY_META: Record<number, PriorityMeta> = {
   3: { icon: PriorityMediumIcon, label: 'Normal', labelKey: 'priority.normal', level: 3 },
   4: { icon: PriorityLowIcon, label: 'Low', labelKey: 'priority.low', level: 4 },
 };
+
+const PRIORITY_LEVELS = [0, 1, 2, 3, 4];
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   trigger: css`
@@ -66,6 +67,7 @@ interface TaskPriorityTagProps {
 const TaskPriorityTag = memo<TaskPriorityTagProps>(
   ({ children, disableDropdown, onChange, size = 16, priority, taskIdentifier }) => {
     const [loading, setLoading] = useState(false);
+    const [open, setOpen] = useState(false);
     const { t } = useTranslation('chat');
     const updateTask = useTaskStore((s) => s.updateTask);
     const refreshTaskList = useTaskStore((s) => s.refreshTaskList);
@@ -89,7 +91,26 @@ const TaskPriorityTag = memo<TaskPriorityTagProps>(
       [currentLevel, onChange, refreshTaskList, taskIdentifier, updateTask],
     );
 
-    const menuItems = useMemo<MenuProps['items']>(
+    const handlePriorityChangeRef = useRef(handlePriorityChange);
+    handlePriorityChangeRef.current = handlePriorityChange;
+
+    useEffect(() => {
+      if (!open) return;
+      const onKeyDown = (event: KeyboardEvent) => {
+        const num = Number.parseInt(event.key, 10);
+        if (Number.isNaN(num)) return;
+        const idx = num - 1;
+        if (idx < 0 || idx >= PRIORITY_LEVELS.length) return;
+        event.preventDefault();
+        event.stopPropagation();
+        void handlePriorityChangeRef.current(PRIORITY_LEVELS[idx]);
+        setOpen(false);
+      };
+      document.addEventListener('keydown', onKeyDown, true);
+      return () => document.removeEventListener('keydown', onKeyDown, true);
+    }, [open]);
+
+    const menuItems = useMemo<DropdownItem[]>(
       () =>
         Object.entries(PRIORITY_META).map(([key, value], index) => {
           const level = Number(key);
@@ -106,7 +127,7 @@ const TaskPriorityTag = memo<TaskPriorityTagProps>(
             ),
             key,
             label: t(`taskDetail.${value.labelKey}` as never, { defaultValue: value.label }),
-            onClick: ({ domEvent }) => {
+            onClick: ({ domEvent }: MenuInfo) => {
               domEvent.stopPropagation();
               void handlePriorityChange(level);
             },
@@ -136,15 +157,9 @@ const TaskPriorityTag = memo<TaskPriorityTagProps>(
     if (disableDropdown) return <>{triggerNode}</>;
 
     return (
-      <Dropdown
-        trigger={['click']}
-        menu={{
-          items: menuItems,
-          selectedKeys: [String(currentLevel)],
-        }}
-      >
+      <DropdownMenu items={menuItems} open={open} onOpenChange={setOpen}>
         {triggerNode}
-      </Dropdown>
+      </DropdownMenu>
     );
   },
 );

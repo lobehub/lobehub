@@ -9,7 +9,6 @@ import { useChatStore } from '@/store/chat';
 
 import Conversation from './features/Conversation';
 import ChatHydration from './features/Conversation/ChatHydration';
-import PageTitle from './features/PageTitle';
 import Portal from './features/Portal';
 import TelemetryNotification from './features/TelemetryNotification';
 
@@ -25,7 +24,6 @@ const ChatPage = memo(() => {
     return (
       <>
         <ChatHydration />
-        <PageTitle />
         <TopicInPopupGuard popup={popup} />
       </>
     );
@@ -33,7 +31,6 @@ const ChatPage = memo(() => {
 
   return (
     <>
-      <PageTitle />
       <Flexbox
         horizontal
         height={'100%'}

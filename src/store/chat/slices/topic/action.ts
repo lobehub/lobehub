@@ -20,7 +20,7 @@ import { useGlobalStore } from '@/store/global';
 import { type StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { systemAgentSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
-import { type ChatTopic, type CreateTopicParams } from '@/types/topic';
+import { type ChatTopic, type ChatTopicStatus, type CreateTopicParams } from '@/types/topic';
 import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
 
@@ -73,7 +73,7 @@ export class ChatTopicActionImpl {
   // Monotonic token for switchTopic. Each call increments it and captures a
   // local copy; after awaited work, a mismatch means a newer switch has
   // started and our continuation is stale — drop it rather than let it
-  // clobber the newer topic (see LOBE-7785).
+  // clobber the newer topic (see ).
   #switchTopicEpoch = 0;
 
   constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
@@ -309,6 +309,52 @@ export class ChatTopicActionImpl {
     await this.#get().internal_updateTopic(id, { title });
   };
 
+  /**
+   * Persist the topic's status. Optimistically patches the in-memory map so
+   * the sidebar reflects the change immediately; persistence runs
+   * fire-and-forget so a transient network blip never tears down the agent
+   * run that owns the write.
+   *
+   * Pass `agentId`/`groupId` when the call originates from an agent run
+   * rather than the active UI — without them, the lookup falls back to the
+   * currently active agent, and a status write arriving after the user has
+   * switched agents lands in the wrong bucket. The DB write is unconditional
+   * so even if no bucket is loaded for this topic, the next refetch picks
+   * up the persisted status.
+   */
+  updateTopicStatus = async (params: {
+    agentId?: string;
+    groupId?: string;
+    status: ChatTopicStatus;
+    topicId: string;
+  }): Promise<void> => {
+    const { topicId, status, agentId, groupId } = params;
+    const state = this.#get();
+    const key = topicMapKey({
+      agentId: agentId ?? state.activeAgentId,
+      groupId: groupId ?? state.activeGroupId,
+    });
+    const topic = state.topicDataMap[key]?.items?.find((t) => t.id === topicId);
+
+    // Already at the target status — both the in-memory and DB writes are no-ops.
+    if (topic?.status === status) return;
+
+    // Scope on the payload routes the write to the owning bucket inside
+    // `internal_dispatchTopic`. A no-op if the bucket isn't loaded; the DB
+    // write below still ensures the status sticks across the next refetch.
+    state.internal_dispatchTopic({
+      type: 'updateTopic',
+      id: topicId,
+      value: { status },
+      agentId,
+      groupId,
+    });
+
+    await topicService.updateTopic(topicId, { status }).catch((err) => {
+      console.error('[updateTopicStatus] persist failed:', err);
+    });
+  };
+
   autoRenameTopicTitle = async (id: string): Promise<void> => {
     const { activeAgentId: agentId, summaryTopicTitle, internal_updateTopicLoading } = this.#get();
 
@@ -398,24 +444,55 @@ export class ChatTopicActionImpl {
           if (!hasValidContainer) return;
 
           const { items: topics, total: totalCount } = result;
-          const hasMore = topics.length >= pageSize;
 
           const currentData = this.#get().topicDataMap[containerKey];
 
+          const isRefreshingExpandedList =
+            !!currentData &&
+            currentData.currentPage > 0 &&
+            currentData.pageSize === pageSize &&
+            Boolean(currentData.isInbox) === Boolean(isInbox) &&
+            isEqual(currentData.excludeStatuses, effectiveExcludeStatuses) &&
+            isEqual(currentData.excludeTriggers, effectiveExcludeTriggers);
+
+          const nextItems = isRefreshingExpandedList
+            ? (() => {
+                const visibleCount = Math.min(currentData.items.length, totalCount);
+                const topicIds = new Set(topics.map((item) => item.id));
+
+                return [
+                  ...topics,
+                  ...currentData.items.filter((topic) => !topicIds.has(topic.id)),
+                ].slice(0, visibleCount);
+              })()
+            : topics;
+
+          const hasMore = totalCount > nextItems.length;
+
           // no need to update map if the current key's data exists and is the same
-          if (currentData && isEqual(topics, currentData.items)) return;
+          if (
+            currentData &&
+            isEqual(nextItems, currentData.items) &&
+            currentData.total === totalCount &&
+            isEqual(currentData.excludeStatuses, effectiveExcludeStatuses) &&
+            isEqual(currentData.excludeTriggers, effectiveExcludeTriggers)
+          ) {
+            return;
+          }
 
           this.#set(
             {
               topicDataMap: {
                 ...this.#get().topicDataMap,
                 [containerKey]: {
-                  currentPage: 0,
+                  currentPage: isRefreshingExpandedList ? currentData.currentPage : 0,
                   excludeStatuses: effectiveExcludeStatuses,
                   excludeTriggers: effectiveExcludeTriggers,
                   hasMore,
+                  isInbox: Boolean(isInbox),
                   isExpandingPageSize: false,
-                  items: topics,
+                  isLoadingMore: false,
+                  items: nextItems,
                   pageSize,
                   total: totalCount,
                 },
@@ -464,7 +541,8 @@ export class ChatTopicActionImpl {
       });
 
       const currentTopics = currentData?.items || [];
-      const hasMore = result.items.length >= pageSize;
+      const nextItems = [...currentTopics, ...result.items];
+      const hasMore = result.total > nextItems.length;
 
       this.#set(
         {
@@ -475,8 +553,9 @@ export class ChatTopicActionImpl {
               excludeStatuses,
               excludeTriggers,
               hasMore,
+              isInbox: currentData?.isInbox,
               isLoadingMore: false,
-              items: [...currentTopics, ...result.items],
+              items: nextItems,
               pageSize,
               total: result.total,
             },
@@ -632,6 +711,7 @@ export class ChatTopicActionImpl {
 
     // remove topic
     await topicService.removeTopic(id);
+    this.#get().internal_dispatchTopic({ type: 'deleteTopic', id }, 'removeTopic');
     purgeUnreadTopics([id]);
     await refreshTopic();
 
@@ -712,14 +792,32 @@ export class ChatTopicActionImpl {
     return topicId;
   };
 
+  /**
+   * Apply a topic reducer to a bucket in `topicDataMap`. Scope on the payload
+   * (`agentId`/`groupId`) wins; otherwise falls back to the currently active
+   * agent/group bucket. Pass scope on the payload when the write originates
+   * outside the active UI context — e.g. an agent run finishing after the
+   * user switched agents (see `updateTopicStatus`).
+   */
   internal_dispatchTopic = (payload: ChatTopicDispatch, action?: any): void => {
     const { activeAgentId, activeGroupId } = this.#get();
-    const key = topicMapKey({ agentId: activeAgentId, groupId: activeGroupId });
+    const key = topicMapKey({
+      agentId: payload.agentId ?? activeAgentId,
+      groupId: payload.groupId ?? activeGroupId,
+    });
     const currentData = this.#get().topicDataMap[key];
     const nextItems = topicReducer(currentData?.items, payload);
 
     // no need to update if is the same
     if (isEqual(nextItems, currentData?.items)) return;
+
+    const currentTotal = currentData?.total ?? currentData?.items?.length ?? 0;
+    const total =
+      payload.type === 'addTopic'
+        ? currentTotal + 1
+        : payload.type === 'deleteTopic'
+          ? Math.max(nextItems.length, currentTotal - 1)
+          : currentTotal;
 
     this.#set(
       {
@@ -728,9 +826,10 @@ export class ChatTopicActionImpl {
           [key]: {
             ...currentData,
             currentPage: currentData?.currentPage ?? 0,
-            hasMore: currentData?.hasMore ?? false,
+            hasMore: total > nextItems.length,
+            isInbox: currentData?.isInbox,
             items: nextItems,
-            total: currentData?.total ?? nextItems.length,
+            total,
           },
         },
       },
@@ -762,14 +861,10 @@ export class ChatTopicActionImpl {
           ...this.#get().topicDataMap,
           [key]: {
             currentPage,
-            // Carry filter fields forward so subsequent reads (e.g. the
-            // sendMessageInServer `topicFilter` helper) keep seeing the
-            // filter the SWR fetch was using; otherwise the next request
-            // forgets to exclude completed/cron topics until SWR
-            // revalidates.
             excludeStatuses: currentData?.excludeStatuses,
             excludeTriggers: currentData?.excludeTriggers,
-            hasMore: items.length >= pageSize,
+            hasMore: total > nextItems.length,
+            isInbox: currentData?.isInbox,
             isExpandingPageSize: false,
             isLoadingMore: false,
             items: nextItems,

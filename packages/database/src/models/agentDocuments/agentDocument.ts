@@ -3,6 +3,7 @@ import { and, asc, desc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 import type { DocumentItem, NewAgentDocument, NewDocument } from '../../schemas';
 import { agentDocuments, documents } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
+import { deriveAgentDocumentFields } from './deriveFields';
 import { buildDocumentFilename } from './filename';
 import {
   composeToolPolicyUpdate,
@@ -310,6 +311,13 @@ export class AgentDocumentModel {
       content,
       createdAt,
       description: this.getMetadataDescription(metadata),
+      // NOTICE:
+      // Agent documents often carry Markdown `content`, but editor history and restore UI
+      // depend on this serialized editor snapshot. Service callers that derive content from
+      // Markdown should pass a matching `editorData` snapshot instead of relying on content alone.
+      // Root cause: `document_histories` snapshots `editor_data`, so missing editor data makes
+      // pre-mutation history capture impossible.
+      // Removal condition: only if document history supports Markdown-content snapshots.
       editorData,
       fileType,
       filename,
@@ -523,6 +531,14 @@ export class AgentDocumentModel {
         const documentUpdate: Partial<NewDocument> = {};
 
         if (content !== undefined) {
+          // NOTICE:
+          // Updating Markdown content alone is valid for raw consumers, but it does not refresh
+          // the editor snapshot used by document history. Callers that replace full Markdown
+          // should also provide `editorData` from the same content when they expect history or
+          // editor restore support to keep working.
+          // Root cause: `DocumentService.trySaveCurrentDocumentHistory` validates editor data
+          // before creating history rows.
+          // Removal condition: only if document history supports Markdown-content snapshots.
           const stats = this.getDocumentStats(content);
           documentUpdate.content = content;
           documentUpdate.totalCharCount = stats.totalCharCount;
@@ -860,6 +876,7 @@ export class AgentDocumentModel {
       const item = this.toAgentDocument(settings, doc);
       return {
         ...item,
+        ...deriveAgentDocumentFields(item),
         loadRules: parseLoadRules(item),
       };
     });
@@ -889,6 +906,7 @@ export class AgentDocumentModel {
       const item = this.toAgentDocument(settings, doc);
       return {
         ...item,
+        ...deriveAgentDocumentFields(item),
         loadRules: parseLoadRules(item),
       };
     });
@@ -929,6 +947,7 @@ export class AgentDocumentModel {
       const item = this.toAgentDocument(settings, doc);
       return {
         ...item,
+        ...deriveAgentDocumentFields(item),
         loadRules: parseLoadRules(item),
       };
     });

@@ -1,4 +1,4 @@
-import { REST } from '@discordjs/rest';
+import { type RawFile, REST } from '@discordjs/rest';
 import debug from 'debug';
 import {
   ApplicationCommandOptionType,
@@ -118,10 +118,19 @@ export class DiscordApi {
     await this.rest.patch(Routes.channel(channelId), { body: { name: truncatedName } });
   }
 
-  async createMessage(channelId: string, content: string): Promise<{ id: string }> {
-    log('createMessage: channel=%s', channelId);
+  async createMessage(
+    channelId: string,
+    content: string,
+    files?: RawFile[],
+  ): Promise<{ id: string }> {
+    log('createMessage: channel=%s, files=%d', channelId, files?.length ?? 0);
+    // When `files` is set, @discordjs/rest packs `body` into `payload_json`
+    // and emits multipart/form-data automatically. Without files we keep the
+    // application/json path because that's what the API rate-limit bucket
+    // expects for plain messages.
     const data = (await this.rest.post(Routes.channelMessages(channelId), {
       body: { content },
+      ...(files && files.length > 0 ? { files } : {}),
     })) as RESTPostAPIChannelMessageResult;
 
     return { id: data.id };
@@ -147,6 +156,46 @@ export class DiscordApi {
         content,
       },
     })) as RESTPostAPIChannelMessageResult;
+    return { id: data.id };
+  }
+
+  /**
+   * Complete a deferred slash command interaction by editing its `@original`
+   * response with the actual content + button grid. Required after the
+   * `patchDiscordForwardedInteractions` patch ack's a slash command with
+   * `type: 5 DeferredChannelMessageWithSource` — without a follow-up to
+   * `@original`, Discord eventually flips the "Thinking..." indicator to
+   * "The application did not respond". Returns the resulting message id so
+   * callers can later re-render the picker via {@link editMessageWithButtons}.
+   *
+   * Auth: the interaction token in the URL is the auth — no bot token, no
+   * `Authorization` header. We use raw `fetch` rather than `@discordjs/rest`
+   * so the REST client doesn't attach the bot token (Discord rejects bot-token
+   * auth on interaction webhooks).
+   */
+  async editInteractionOriginalWithButtons(
+    applicationId: string,
+    interactionToken: string,
+    content: string,
+    buttons: DiscordButtonSpec[],
+  ): Promise<{ id: string }> {
+    log('editInteractionOriginalWithButtons: appId=%s, buttons=%d', applicationId, buttons.length);
+    const response = await fetch(
+      `https://discord.com/api/v10/webhooks/${applicationId}/${interactionToken}/messages/@original`,
+      {
+        body: JSON.stringify({
+          components: buildButtonComponents(buttons),
+          content,
+        }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'PATCH',
+      },
+    );
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Discord interaction follow-up failed: ${response.status} ${errorText}`);
+    }
+    const data = (await response.json()) as RESTPostAPIChannelMessageResult;
     return { id: data.id };
   }
 

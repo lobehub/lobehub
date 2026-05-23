@@ -21,13 +21,13 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { ActionIcon, Button, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
-import { Modal } from '@lobehub/ui/base-ui';
+import { createModal, type ModalInstance } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { t } from 'i18next';
 import { Eye, EyeOff, GripVertical, PinIcon, RotateCcw } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { create } from 'zustand';
 
 import { getRouteById } from '@/config/routes';
 import { useGlobalStore } from '@/store/global';
@@ -61,21 +61,6 @@ const ALL_SIDEBAR_ITEMS: SidebarItemConfig[] = [
 const ITEM_MAP = new Map(ALL_SIDEBAR_ITEMS.map((item) => [item.id, item]));
 
 const isAccordionKey = (id: string) => SIDEBAR_ACCORDION_KEYS.has(id);
-
-// ---------------------------------------------------------------------------
-// Modal store
-// ---------------------------------------------------------------------------
-
-const useCustomizeSidebarModalStore = create<{
-  open: boolean;
-  setOpen: (open: boolean) => void;
-}>((set) => ({
-  open: false,
-  setOpen: (open) => set({ open }),
-}));
-
-export const openCustomizeSidebarModal = () =>
-  useCustomizeSidebarModalStore.getState().setOpen(true);
 
 // ---------------------------------------------------------------------------
 // Styles
@@ -383,35 +368,23 @@ const CustomizeSidebarContent = memo(() => {
 });
 
 // ---------------------------------------------------------------------------
-// Modal wrapper
+// Modal entry
 // ---------------------------------------------------------------------------
 
-export const CustomizeSidebarModal = memo(() => {
-  const { t } = useTranslation('common');
-  const open = useCustomizeSidebarModalStore((s) => s.open);
-  const setOpen = useCustomizeSidebarModalStore((s) => s.setOpen);
-  const resetSidebarCustomization = useGlobalStore((s) => s.resetSidebarCustomization);
-
-  return (
-    <Modal
-      centered
-      destroyOnHidden
-      open={open}
-      title={t('navPanel.customizeSidebar')}
-      width={360}
-      footer={
-        <Button
-          block
-          icon={<Icon icon={RotateCcw} />}
-          type={'text'}
-          onClick={resetSidebarCustomization}
-        >
-          {t('navPanel.resetDefault' as any)}
-        </Button>
-      }
-      onCancel={() => setOpen(false)}
-    >
-      <CustomizeSidebarContent />
-    </Modal>
-  );
-});
+export const openCustomizeSidebarModal = (): ModalInstance =>
+  createModal({
+    content: <CustomizeSidebarContent />,
+    footer: (
+      <Button
+        block
+        icon={<Icon icon={RotateCcw} />}
+        type={'text'}
+        onClick={() => useGlobalStore.getState().resetSidebarCustomization()}
+      >
+        {t('navPanel.resetDefault', { ns: 'common' })}
+      </Button>
+    ),
+    maskClosable: true,
+    title: t('navPanel.customizeSidebar', { ns: 'common' }),
+    width: 360,
+  });

@@ -82,7 +82,7 @@ const openDM = async (api: DiscordApi, recipientId: string): Promise<string | nu
  *
  * MVP scope is DM-only: agent picker / interactive components ARE wired up
  * (see `sendAgentPicker` / `updateAgentPicker`), but the router defaults to
- * the text-based `/agents <n>` flow until LOBE-8489 lands native slash
+ * the text-based `/agents <n>` flow until lands native slash
  * registration.
  */
 export class MessengerDiscordBinder implements MessengerPlatformBinder {
@@ -159,7 +159,7 @@ export class MessengerDiscordBinder implements MessengerPlatformBinder {
     // where the unlinked message handler runs after the chat-sdk has already
     // dispatched the message — so we stick to a markdown link for v1.
     const text = [
-      "Hi, I'm LobeHub — your AI agent in Discord.",
+      "Hi, I'm LobeHub — your AI agent on Discord.",
       'To start, link your LobeHub account.',
       '',
       `🔗 [Link Account](${verifyUrl})`,
@@ -216,10 +216,23 @@ export class MessengerDiscordBinder implements MessengerPlatformBinder {
    * which fires after `@chat-adapter/discord` ack's the interaction with
    * `type: 6 DEFERRED_UPDATE_MESSAGE` (so we have ~15 minutes to do the
    * actual update via REST without the user seeing a spinner).
+   *
+   * When invoked from a slash command (`params.interaction` set), the picker
+   * MUST complete the deferred interaction by PATCHing `@original` — Discord
+   * already ack'd with `type: 5 DeferredChannelMessageWithSource` via
+   * `patchDiscordForwardedInteractions`, so posting a side-channel message
+   * leaves the "Thinking..." indicator hanging until it times out into "The
+   * application did not respond". Outside the slash context (e.g. from a
+   * regular message handler) we still fall back to `createMessageWithButtons`.
    */
   async sendAgentPicker(
     chatId: string,
-    params: { entries: AgentPickerEntry[]; text: string },
+    params: {
+      entries: AgentPickerEntry[];
+      ephemeralTo?: string;
+      interaction?: { applicationId: string; token: string };
+      text: string;
+    },
   ): Promise<void> {
     const config = await getMessengerDiscordConfig();
     if (!config) {
@@ -228,11 +241,17 @@ export class MessengerDiscordBinder implements MessengerPlatformBinder {
     }
     try {
       const api = new DiscordApi(config.botToken);
-      await api.createMessageWithButtons(
-        chatId,
-        params.text,
-        buildDiscordSwitchButtons(params.entries),
-      );
+      const buttons = buildDiscordSwitchButtons(params.entries);
+      if (params.interaction) {
+        await api.editInteractionOriginalWithButtons(
+          params.interaction.applicationId,
+          params.interaction.token,
+          params.text,
+          buttons,
+        );
+        return;
+      }
+      await api.createMessageWithButtons(chatId, params.text, buttons);
     } catch (error) {
       log('sendAgentPicker: failed for chat=%s: %O', chatId, error);
     }

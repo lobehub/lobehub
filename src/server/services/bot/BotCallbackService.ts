@@ -7,12 +7,21 @@ import { type LobeChatDatabase } from '@/database/type';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { getMessageGatewayClient } from '@/server/services/gateway/MessageGatewayClient';
-import { getInstallationStore } from '@/server/services/messenger/installations';
+import {
+  getInstallationStore,
+  messengerConnectionIdForUser,
+} from '@/server/services/messenger/installations';
 import { messengerPlatformRegistry } from '@/server/services/messenger/platforms';
 import { SystemAgentService } from '@/server/services/systemAgent';
 
 import { AgentBridgeService } from './AgentBridgeService';
-import type { BotReplyLocale, PlatformClient, PlatformMessenger, UsageStats } from './platforms';
+import type {
+  BotMessageAttachment,
+  BotReplyLocale,
+  PlatformClient,
+  PlatformMessenger,
+  UsageStats,
+} from './platforms';
 import {
   getBotReplyLocale,
   getStepReactionEmoji,
@@ -34,6 +43,14 @@ const log = debug('lobe-server:bot:callback');
 
 export interface BotCallbackBody {
   applicationId: string;
+  /**
+   * Outbound attachments (images/files) extracted from the agent's final
+   * assistant message or recent tool results. Forwarded to the platform
+   * messenger so platforms with attachment support (WeChat) can deliver them
+   * alongside the reply text. Platforms without attachment support silently
+   * drop these.
+   */
+  attachments?: BotMessageAttachment[];
   content?: string;
   cost?: number;
   duration?: number;
@@ -92,8 +109,14 @@ export class BotCallbackService {
   }
 
   async handleCallback(body: BotCallbackBody): Promise<void> {
-    const { type, applicationId, platformThreadId, progressMessageId, messengerInstallationKey } =
-      body;
+    const {
+      type,
+      applicationId,
+      platformThreadId,
+      progressMessageId,
+      messengerInstallationKey,
+      userId,
+    } = body;
     const platform = platformThreadId.split(':')[0];
 
     const { client, connectionId, messenger, charLimit, settings } = await this.createMessenger({
@@ -101,6 +124,7 @@ export class BotCallbackService {
       messengerInstallationKey,
       platform,
       platformThreadId,
+      userId,
     });
 
     const entry = platformRegistry.getPlatform(platform);
@@ -108,7 +132,7 @@ export class BotCallbackService {
     const replyLocale = getBotReplyLocale(platform);
 
     if (type === 'step') {
-      if (canEdit && progressMessageId && settings.displayToolCalls !== false) {
+      if (canEdit && progressMessageId && settings.displayToolCalls === true) {
         await this.handleStep(body, messenger, progressMessageId, client, replyLocale);
       }
       // Swap the user-message reaction to match the current step type (tool
@@ -148,6 +172,7 @@ export class BotCallbackService {
     messengerInstallationKey?: string;
     platform: string;
     platformThreadId: string;
+    userId?: string;
   }): Promise<{
     charLimit?: number;
     connectionId: string;
@@ -155,14 +180,19 @@ export class BotCallbackService {
     messenger: PlatformMessenger;
     settings: Record<string, unknown>;
   }> {
-    const { applicationId, messengerInstallationKey, platform, platformThreadId } = params;
+    const { applicationId, messengerInstallationKey, platform, platformThreadId, userId } = params;
 
     // Deterministic discriminator: any run originated from the shared
     // Messenger bot is tagged by `MessengerRouter` with the install key. We
     // never inspect the applicationId shape — that's a runtime bookkeeping
     // handle, not a routing key.
     if (messengerInstallationKey) {
-      return this.createMessengerClient(platform, messengerInstallationKey, platformThreadId);
+      return this.createMessengerClient(
+        platform,
+        messengerInstallationKey,
+        platformThreadId,
+        userId,
+      );
     }
 
     const row = await AgentBotProviderModel.findByPlatformAndAppId(
@@ -209,14 +239,18 @@ export class BotCallbackService {
    * but skips the Chat SDK + handler registration since the callback only
    * needs outbound messaging (edit / post / react), not webhook routing.
    *
-   * `connectionId` is returned empty: messenger runs don't have an
-   * `agent_bot_providers.id`, so gateway typing is skipped (see
-   * `renewGatewayTyping` / `stopGatewayTyping`).
+   * `connectionId` resolves to the per-user gateway shard
+   * (`messenger:<platform>[:<tenant>]:user-<userId>`) when both the install
+   * key and the userId are known — that lets `stopGatewayTyping` target the
+   * exact same DO that started typing in `AgentBridgeService`. Falls back to
+   * `''` (typing skipped) when the userId is missing, which preserves
+   * pre-PR2 behavior for any in-flight callbacks queued before the upgrade.
    */
   private async createMessengerClient(
     platform: string,
     installationKey: string,
     platformThreadId: string,
+    userId?: string,
   ): Promise<{
     charLimit?: number;
     connectionId: string;
@@ -248,7 +282,20 @@ export class BotCallbackService {
 
     const messenger = client.getMessenger(platformThreadId);
 
-    return { charLimit: undefined, client, connectionId: '', messenger, settings: {} };
+    // Pull the SystemBot's connectionMode from the messenger definition (NOT
+    // `bot/platforms`) — SystemBot's transport is fixed per platform and may
+    // diverge from a per-agent bot-channel provider's mode (e.g. Slack
+    // SystemBot is always webhook even when a bot-channel Slack provider runs
+    // Socket Mode). Websocket-singleton platforms (Discord) must target the
+    // singleton DO that `AgentBridgeService` started typing on — otherwise
+    // stopTyping fires at a non-existent per-user DO and never reaches the
+    // live WS.
+    const connectionMode = messengerPlatformRegistry.getPlatform(platform)?.connectionMode;
+    const connectionId = userId
+      ? messengerConnectionIdForUser({ connectionMode, installationKey, userId })
+      : '';
+
+    return { charLimit: undefined, client, connectionId, messenger, settings: {} };
   }
 
   private async handleStep(
@@ -313,7 +360,8 @@ export class BotCallbackService {
     charLimit?: number,
     canEdit = true,
   ): Promise<void> {
-    const { reason, lastAssistantContent, errorMessage, errorType, operationId } = body;
+    const { reason, lastAssistantContent, errorMessage, errorType, operationId, attachments } =
+      body;
 
     if (reason === 'error') {
       log(
@@ -322,7 +370,7 @@ export class BotCallbackService {
         errorType,
         errorMessage,
       );
-      const errorBody = renderAgentError(errorType, operationId, replyLocale);
+      const errorBody = renderAgentError(errorType, errorMessage, operationId, replyLocale);
       const errorText = client.formatMarkdown?.(errorBody) ?? errorBody;
       await this.deliverFirstChunk(messenger, progressMessageId, errorText, canEdit);
       return;
@@ -338,15 +386,21 @@ export class BotCallbackService {
       return;
     }
 
-    // `!lastAssistantContent` lets whitespace-only strings ("\n", "  ") through;
-    // those collapse to empty text downstream and get rejected by Telegram as
-    // "message text is empty", silently losing the reply. Trim before testing.
-    if (!lastAssistantContent?.trim()) {
-      log('handleCompletion: no lastAssistantContent, skipping');
+    // Skip only when there's nothing at all to send. An image/file-only reply
+    // (no text, but attachments present) is still a valid reply and must go
+    // through — silently dropping it would mean an agent that answered with
+    // just a generated image gets shown nothing on the user side.
+    //
+    // For the text leg: `!lastAssistantContent` lets whitespace-only strings
+    // ("\n", "  ") through; those collapse to empty text downstream and get
+    // rejected by Telegram as "message text is empty", silently losing the
+    // reply. Trim before testing.
+    const hasText = !!lastAssistantContent?.trim();
+    const hasAttachments = !!attachments?.length;
+    if (!hasText && !hasAttachments) {
+      log('handleCompletion: no lastAssistantContent and no attachments, skipping');
       return;
     }
-
-    const msgBody = renderFinalReply(lastAssistantContent);
 
     const stats: UsageStats = {
       elapsedMs: body.duration,
@@ -356,21 +410,44 @@ export class BotCallbackService {
       totalTokens: body.totalTokens ?? 0,
     };
 
-    const formattedBody = client.formatMarkdown?.(msgBody) ?? msgBody;
-    const finalText = client.formatReply?.(formattedBody, stats) ?? formattedBody;
-    const chunks = splitMessage(finalText, charLimit);
-
-    if (chunks.length === 0) {
-      log('handleCompletion: all chunks empty after formatting, skipping send');
-      return;
+    // Build the chunk list. Empty text → a single empty chunk so the
+    // attachment-only path still drives `deliverFirstChunk` once.
+    let chunks: string[];
+    if (hasText) {
+      const msgBody = renderFinalReply(lastAssistantContent!);
+      const formattedBody = client.formatMarkdown?.(msgBody) ?? msgBody;
+      const finalText = client.formatReply?.(formattedBody, stats) ?? formattedBody;
+      chunks = splitMessage(finalText, charLimit);
+      if (chunks.length === 0) {
+        log('handleCompletion: all chunks empty after formatting, skipping send');
+        // Even with no text we still want to deliver the attachments.
+        if (!hasAttachments) return;
+        chunks = [''];
+      }
+    } else {
+      chunks = [''];
     }
 
-    await this.deliverFirstChunk(messenger, progressMessageId, chunks[0], canEdit);
+    // Attach outbound attachments to the *last* chunk only so we don't send
+    // the same image/file once per chunk.
+    const lastIndex = chunks.length - 1;
+    const firstChunkAttachments = lastIndex === 0 ? attachments : undefined;
+
+    await this.deliverFirstChunk(
+      messenger,
+      progressMessageId,
+      chunks[0],
+      canEdit,
+      firstChunkAttachments,
+    );
     // Each remaining chunk gets its own try/catch so a single transient failure
     // (rate-limit, network blip) doesn't drop everything that follows.
     for (let i = 1; i < chunks.length; i++) {
       try {
-        await messenger.createMessage(chunks[i]);
+        const isLast = i === lastIndex;
+        await messenger.createMessage(
+          isLast && attachments?.length ? { attachments, content: chunks[i] } : chunks[i],
+        );
       } catch (error) {
         log('handleCompletion: failed to send chunk %d: %O', i, error);
       }
@@ -388,17 +465,20 @@ export class BotCallbackService {
     progressMessageId: string,
     text: string,
     canEdit: boolean,
+    attachments?: BotMessageAttachment[],
   ): Promise<void> {
+    const payload = attachments && attachments.length > 0 ? { attachments, content: text } : text;
+
     if (canEdit && progressMessageId) {
       try {
-        await messenger.editMessage(progressMessageId, text);
+        await messenger.editMessage(progressMessageId, payload);
         return;
       } catch (error) {
         log('handleCompletion: editMessage failed, falling back to createMessage: %O', error);
       }
     }
     try {
-      await messenger.createMessage(text);
+      await messenger.createMessage(payload);
     } catch (error) {
       log('handleCompletion: createMessage fallback failed: %O', error);
     }

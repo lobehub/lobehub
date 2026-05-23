@@ -118,18 +118,6 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     inset-inline-end: 8px;
   `,
 
-  addSubtaskButton: css`
-    &.ant-btn {
-      font-size: 13px;
-      color: ${cssVar.colorTextDescription};
-    }
-
-    &.ant-btn:hover,
-    &.ant-btn:focus {
-      color: ${cssVar.colorTextSecondary};
-    }
-  `,
-
   agentAuthorName: css`
     cursor: pointer;
     font-weight: 500;
@@ -142,8 +130,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 
   commentInputCard: css`
-    padding-block: 4px;
-    padding-inline: 8px;
+    padding: 8px;
     border: 1px solid transparent;
     border-radius: ${cssVar.borderRadiusLG};
 

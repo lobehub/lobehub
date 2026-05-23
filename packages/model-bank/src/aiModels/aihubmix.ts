@@ -1,5 +1,5 @@
-import { type AIChatModelCard, type AIImageModelCard } from '../types/aiModel';
-import { gptImage2Schema } from './lobehub';
+import { gptImage2Schema } from '../const/imageParameters';
+import type { AIChatModelCard, AIImageModelCard } from '../types/aiModel';
 
 const aihubmixChatModels: AIChatModelCard[] = [
   {
@@ -1588,7 +1588,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-03-04',
     settings: {
-      extendParams: ['thinkingLevel5', 'urlContext'],
+      extendParams: ['thinkingLevel', 'urlContext'],
       searchImpl: 'params',
       searchProvider: 'google',
     },

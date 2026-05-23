@@ -35,7 +35,7 @@ const GroupedAccordion = memo<GroupedAccordionProps>(({ GroupItem }) => {
   const { topicGroupMode } = useAgentTopicGroupMode();
 
   const [hasMore, isExpandingPageSize, openAllTopicsDrawer] = useChatStore((s) => [
-    topicSelectors.hasMoreTopics(s),
+    topicSelectors.hasMoreTopicsForSidebar(s),
     topicSelectors.isExpandingPageSize(s),
     s.openAllTopicsDrawer,
   ]);

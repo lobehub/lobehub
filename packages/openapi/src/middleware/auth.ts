@@ -5,6 +5,7 @@ import { HTTPException } from 'hono/http-exception';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { ApiKeyModel } from '@/database/models/apiKey';
 import { authEnv } from '@/envs/auth';
+import { assertOIDCUserActive } from '@/libs/oidc-provider/access-control';
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
 import { validateApiKeyFormat } from '@/utils/apiKey';
 import { extractBearerToken } from '@/utils/server/auth';
@@ -174,6 +175,8 @@ export const userAuthMiddleware = async (c: Context, next: Next) => {
       try {
         // Use direct JWT validation instead of OIDCService
         const tokenInfo = await validateOIDCJWT(bearerToken);
+        const db = await getServerDB();
+        await assertOIDCUserActive(db, tokenInfo.userId);
 
         userId = tokenInfo.userId;
         authType = 'oidc';

@@ -5,6 +5,7 @@ import {
   type UIChatMessage,
   type UpdateMessageParams,
 } from '@lobechat/types';
+import { createTimingHelpers, getDurationMs } from '@lobechat/utils';
 
 import { MessageModel } from '@/database/models/message';
 
@@ -15,8 +16,25 @@ interface QueryOptions {
   groupId?: string | null;
   sessionId?: string | null;
   threadId?: string | null;
+  timingRequestId?: string;
+  timingStartedAt?: number;
   topicId?: string | null;
 }
+
+const { createPrefixedTimingContext, logTiming, toTimingContext } = createTimingHelpers(
+  'lobe-server:chat:lobehub:timing',
+);
+
+const logMessageTiming = (
+  options: QueryOptions | undefined,
+  event: string,
+  metadata?: Record<string, unknown>,
+) => {
+  logTiming(toTimingContext(options), event, metadata);
+};
+
+const createModelTiming = (options: QueryOptions | undefined, prefix: string) =>
+  createPrefixedTimingContext(toTimingContext(options), prefix);
 
 interface CreateMessageResult {
   id: string;
@@ -70,15 +88,25 @@ export class MessageService {
         options.sessionId === undefined &&
         options.topicId === undefined)
     ) {
+      logMessageTiming(options, 'lambda.message.update.queryMessages:skipped');
       return { success: true };
     }
 
     const { agentId, sessionId, topicId, groupId, threadId } = options;
 
+    const queryStartedAt = Date.now();
+    const modelTiming = createModelTiming(options, 'lambda.message.update.queryMessages');
     const messages = await this.messageModel.query(
       { agentId, groupId, sessionId, threadId, topicId },
-      this.getQueryOptions(),
+      {
+        ...this.getQueryOptions(),
+        ...(modelTiming ? { timing: modelTiming } : {}),
+      },
     );
+    logMessageTiming(options, 'lambda.message.update.queryMessages:done', {
+      messageCount: messages.length,
+      stageMs: getDurationMs(queryStartedAt),
+    });
 
     return { messages, success: true };
   }
@@ -188,7 +216,18 @@ export class MessageService {
     value: UpdateMessageParams,
     options: QueryOptions,
   ): Promise<{ messages?: UIChatMessage[]; success: boolean }> {
-    await this.messageModel.update(id, value as any);
+    const updateStartedAt = Date.now();
+    const modelTiming = createModelTiming(options, 'lambda.message.update.dbUpdate');
+    if (modelTiming) {
+      await this.messageModel.update(id, value as any, modelTiming);
+    } else {
+      await this.messageModel.update(id, value as any);
+    }
+    logMessageTiming(options, 'lambda.message.update.dbUpdate:done', {
+      stageMs: getDurationMs(updateStartedAt),
+      valueKeys: Object.keys(value ?? {}),
+    });
+
     return this.queryWithSuccess(options);
   }
 

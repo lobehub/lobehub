@@ -36,6 +36,9 @@ export type AgentTemplateFetcher = (
   options?: FetchAgentTemplatesOptions,
 ) => Promise<AgentTemplate[]>;
 
+export const getAgentTemplatesSWRKey = (locale?: string) =>
+  `builtin-tool-web-onboarding/agent-marketplace/onboarding-templates/${locale ?? 'default'}`;
+
 const defaultFetcher: AgentTemplateFetcher = async () => {
   throw new Error(
     '[AgentMarketplace] Agent templates fetcher is not configured. ' +

@@ -3,19 +3,46 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mockCreateWechatAdapter = vi.hoisted(() => vi.fn());
 const mockGetUpdates = vi.hoisted(() => vi.fn());
 const mockStartTyping = vi.hoisted(() => vi.fn());
+const mockSendMessage = vi.hoisted(() => vi.fn().mockResolvedValue({ ret: 0 }));
+const mockSendItem = vi.hoisted(() => vi.fn().mockResolvedValue({ ret: 0 }));
+const mockUploadCdnMedia = vi.hoisted(() =>
+  vi.fn().mockResolvedValue({
+    aesKey: 'aes-key',
+    cipherSize: 128,
+    encryptQueryParam: 'enc-param',
+  }),
+);
 const mockDownloadMediaFromRawMessage = vi.hoisted(() => vi.fn());
 const MessageState = vi.hoisted(() => ({ FINISH: 2 }));
 const MessageType = vi.hoisted(() => ({ BOT: 2, USER: 1 }));
+const MessageItemType = vi.hoisted(() => ({
+  FILE: 4,
+  IMAGE: 1,
+  TEXT: 0,
+  VIDEO: 3,
+  VOICE: 2,
+}));
+const WechatUploadMediaType = vi.hoisted(() => ({
+  FILE: 4,
+  IMAGE: 1,
+  VIDEO: 3,
+  VOICE: 2,
+}));
 
 vi.mock('@lobechat/chat-adapter-wechat', () => ({
   createWechatAdapter: mockCreateWechatAdapter,
   downloadMediaFromRawMessage: mockDownloadMediaFromRawMessage,
+  MessageItemType,
   MessageState,
   MessageType,
   WechatApiClient: vi.fn().mockImplementation(() => ({
     getUpdates: mockGetUpdates,
+    sendItem: mockSendItem,
+    sendMessage: mockSendMessage,
     startTyping: mockStartTyping,
+    uploadCdnMedia: mockUploadCdnMedia,
   })),
+  WechatUploadMediaType,
 }));
 
 const { WechatClientFactory } = await import('./client');
@@ -313,6 +340,130 @@ describe('WechatGatewayClient', () => {
       await expect(
         client.extractFiles!(makeMessage({ item_list: [{ image_item: {}, type: 1 }] })),
       ).rejects.toThrow('helper crashed');
+    });
+  });
+
+  describe('messenger.createMessage with attachments', () => {
+    const createClient = () =>
+      new WechatClientFactory().createClient(
+        {
+          applicationId: 'wechat-app',
+          credentials: { botId: 'bot-id', botToken: 'bot-token' },
+          platform: 'wechat',
+          settings: {},
+        },
+        { appUrl: 'https://example.com', redisClient: runtimeRedis as any },
+      );
+
+    it('forwards inline base64 image attachments to uploadCdnMedia + sendItem', async () => {
+      const client = createClient();
+      const messenger = client.getMessenger('wechat:p2p:user-1@im.wechat');
+
+      // Pre-seed an in-memory context token; the adapter caches per-user.
+      runtimeRedis.get.mockResolvedValueOnce('ctx-from-redis');
+
+      await messenger.createMessage({
+        attachments: [
+          {
+            data: Buffer.from('image-bytes').toString('base64'),
+            mimeType: 'image/png',
+            name: 'foo.png',
+            type: 'image',
+          },
+        ],
+        content: 'Here you go',
+      });
+
+      // Text leg goes through the standard sendMessage call.
+      expect(mockSendMessage).toHaveBeenCalledWith(
+        'user-1@im.wechat',
+        'Here you go',
+        'ctx-from-redis',
+      );
+      // Attachment leg: upload bytes, then send a media item.
+      expect(mockUploadCdnMedia).toHaveBeenCalledWith(
+        'user-1@im.wechat',
+        WechatUploadMediaType.IMAGE,
+        expect.any(Buffer),
+      );
+      expect(mockSendItem).toHaveBeenCalledWith(
+        'user-1@im.wechat',
+        expect.objectContaining({
+          image_item: expect.objectContaining({
+            media: expect.objectContaining({
+              aes_key: 'aes-key',
+              encrypt_query_param: 'enc-param',
+            }),
+          }),
+          type: MessageItemType.IMAGE,
+        }),
+        'ctx-from-redis',
+      );
+    });
+
+    it('fetches and uploads attachments delivered as fetchUrl', async () => {
+      const client = createClient();
+      const messenger = client.getMessenger('wechat:p2p:user-2@im.wechat');
+
+      runtimeRedis.get.mockResolvedValueOnce('ctx-2');
+      const fetchMock = vi.mocked(fetch);
+      fetchMock.mockResolvedValueOnce(
+        new Response(new Uint8Array([1, 2, 3, 4]), {
+          headers: { 'Content-Type': 'image/png' },
+          status: 200,
+        }) as any,
+      );
+
+      await messenger.createMessage({
+        attachments: [
+          {
+            fetchUrl: 'https://cdn.example.com/pic.png',
+            name: 'pic.png',
+            type: 'image',
+          },
+        ],
+        content: 'pic',
+      });
+
+      expect(fetchMock).toHaveBeenCalledWith('https://cdn.example.com/pic.png', expect.any(Object));
+      expect(mockUploadCdnMedia).toHaveBeenCalledTimes(1);
+      expect(mockSendItem).toHaveBeenCalledTimes(1);
+    });
+
+    it('continues sending remaining attachments when one fails', async () => {
+      const client = createClient();
+      const messenger = client.getMessenger('wechat:p2p:user-3@im.wechat');
+
+      runtimeRedis.get.mockResolvedValueOnce('ctx-3');
+      mockUploadCdnMedia.mockRejectedValueOnce(new Error('upload failed')).mockResolvedValueOnce({
+        aesKey: 'aes-2',
+        cipherSize: 64,
+        encryptQueryParam: 'enc-2',
+      });
+
+      await messenger.createMessage({
+        attachments: [
+          { data: Buffer.from('a').toString('base64'), type: 'image' },
+          { data: Buffer.from('b').toString('base64'), type: 'image' },
+        ],
+        content: '',
+      });
+
+      // Two upload attempts, one sendItem success after the first failure.
+      expect(mockUploadCdnMedia).toHaveBeenCalledTimes(2);
+      expect(mockSendItem).toHaveBeenCalledTimes(1);
+    });
+
+    it('accepts plain string content (legacy form) and skips attachment path', async () => {
+      const client = createClient();
+      const messenger = client.getMessenger('wechat:p2p:user-4@im.wechat');
+
+      runtimeRedis.get.mockResolvedValueOnce('ctx-4');
+      await messenger.createMessage('text only');
+
+      expect(mockSendMessage).toHaveBeenCalledWith('user-4@im.wechat', 'text only', 'ctx-4');
+      expect(mockUploadCdnMedia).not.toHaveBeenCalled();
+      expect(mockSendItem).not.toHaveBeenCalled();
     });
   });
 });

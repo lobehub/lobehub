@@ -42,6 +42,7 @@ import type { MessageRuntimeService } from '@/server/services/toolExecution/serv
 import { PlatformUnsupportedError } from '@/server/services/toolExecution/serverRuntimes/message/PlatformUnsupportedError';
 
 import { MAX_FEISHU_HISTORY_LIMIT } from './const';
+import { sendFeishuAttachments } from './sendAttachments';
 
 /**
  * Normalize a Feishu/Lark message object to MessageItem.
@@ -82,10 +83,20 @@ export class FeishuMessageService implements MessageRuntimeService {
   // ==================== Core Message Operations ====================
 
   sendMessage = async (params: SendMessageParams): Promise<SendMessageState> => {
-    const result = await this.api.sendMessage(params.channelId, params.content);
+    // Lark/Feishu has no composite "text + media" message, so the text leg
+    // ships first (so the user reads context before media) and each
+    // attachment becomes its own follow-up message.
+    let messageId: string | undefined;
+    if (params.content?.trim()) {
+      const result = await this.api.sendMessage(params.channelId, params.content);
+      messageId = result.messageId;
+    }
+    if (params.attachments?.length) {
+      await sendFeishuAttachments(this.api, params.channelId, params.attachments);
+    }
     return {
       channelId: params.channelId,
-      messageId: result.messageId,
+      messageId,
       platform: this.platformName,
     };
   };

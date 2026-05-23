@@ -1,97 +1,10 @@
-import type { AgentContextDocument } from '@lobechat/context-engine';
-import { type UIChatMessage } from '@lobechat/types';
-
-import { createAgentToolsEngine } from '@/helpers/toolEngineering';
 import { lambdaClient } from '@/libs/trpc/client';
 import { type HumanInterventionRequest } from '@/services/agentRuntime/type';
-import { contextEngineering } from '@/services/chat/mecha';
-import { getAgentStoreState } from '@/store/agent';
-import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
 
 export { agentRuntimeClient } from './client';
 export * from './type';
 
-interface AgentOperationRequest {
-  appSessionId?: string;
-  autoStart?: boolean;
-  messages: UIChatMessage[];
-  threadId?: string;
-  topicId?: string;
-  userMessageId: string;
-}
-
 class AgentRuntimeService {
-  createOperation = async (data: AgentOperationRequest) => {
-    const agentStoreState = getAgentStoreState();
-    const agentConfig = agentSelectors.currentAgentConfig(agentStoreState);
-    const chatConfig = agentChatConfigSelectors.currentChatConfig(agentStoreState);
-    let agentDocuments: AgentContextDocument[] | undefined = agentSelectors.getAgentDocumentsById(
-      agentStoreState.activeAgentId || '',
-    )(agentStoreState);
-
-    if (agentStoreState.activeAgentId && agentDocuments === undefined) {
-      try {
-        agentDocuments = await agentStoreState.ensureAgentDocuments(agentStoreState.activeAgentId);
-      } catch (error) {
-        console.error('[AgentRuntimeService] Failed to ensure agent documents:', error);
-      }
-    }
-
-    const modelRuntimeConfig = {
-      model: agentConfig.model,
-      provider: agentConfig.provider!,
-    };
-
-    const toolsEngine = createAgentToolsEngine(modelRuntimeConfig);
-
-    const { tools, enabledToolIds } = toolsEngine.generateToolsDetailed({
-      model: agentConfig.model,
-      provider: agentConfig.provider!,
-      toolIds: agentConfig.plugins,
-    });
-
-    // Apply context engineering with preprocessing configuration
-    const llmMessages = await contextEngineering({
-      agentDocuments,
-      agentId: agentStoreState.activeAgentId,
-      enableHistoryCount: agentChatConfigSelectors.enableHistoryCount(agentStoreState),
-      // historyCount is number of history messages; add 1 for current user message
-      historyCount: agentChatConfigSelectors.historyCount(agentStoreState) + 1,
-      inputTemplate: chatConfig.inputTemplate,
-      messages: data.messages as any,
-      ...modelRuntimeConfig,
-      plugins: agentConfig.plugins,
-      systemRole: agentConfig.systemRole,
-      tools: enabledToolIds,
-    });
-
-    const toolManifestMap = Object.fromEntries(
-      toolsEngine.getEnabledPluginManifests(enabledToolIds).entries(),
-    );
-
-    return await lambdaClient.aiAgent.createOperation.mutate({
-      ...data,
-      agentConfig: {
-        enableSearch: agentChatConfigSelectors.isAgentEnableSearch(agentStoreState),
-        maxSteps: 50,
-        // costLimit: agentChatConfig.costLimit,
-        // enableRAG: false,
-        // humanApprovalRequired: agentChatConfig.humanApprovalRequired || false,
-      },
-      messages: llmMessages,
-      modelRuntimeConfig,
-      toolManifestMap,
-      tools,
-    });
-  };
-
-  /**
-   * Get operation status
-   */
-  async getOperationStatus(operationId: string, includeHistory = false): Promise<any> {
-    return await lambdaClient.aiAgent.getOperationStatus.query({ includeHistory, operationId });
-  }
-
   /**
    * Handle human intervention
    */

@@ -267,6 +267,8 @@ export default {
     'For GPT-5.2 series; controls reasoning intensity.',
   'providerModels.item.modelConfig.extendParams.options.grok4_20ReasoningEffort.hint':
     'For Grok 4.20 series; controls reasoning intensity. Low/Medium uses 4 agents, High/XHigh uses 16 agents.',
+  'providerModels.item.modelConfig.extendParams.options.grok4_3ReasoningEffort.hint':
+    'For Grok 4.3 series; controls reasoning intensity.',
   'providerModels.item.modelConfig.extendParams.options.hy3ReasoningEffort.hint':
     'For Hy3 models; controls reasoning intensity. no_think (ultra-fast response), low (quick reasoning), and high (deep reasoning)—to accommodate varying latency and depth requirements, from high-frequency interactions to complex engineering tasks.',
   'providerModels.item.modelConfig.extendParams.options.deepseekV4ReasoningEffort.hint':
@@ -303,8 +305,6 @@ export default {
     'For Gemini 3.1 Pro Preview models; controls thinking depth with low/medium/high levels.',
   'providerModels.item.modelConfig.extendParams.options.thinkingLevel4.hint':
     'For Gemini 3.1 Flash Image models; toggle thinking on/off.',
-  'providerModels.item.modelConfig.extendParams.options.thinkingLevel5.hint':
-    'For Gemini 3.1 Flash-Lite Preview; controls thinking depth with minimal/low/medium/high levels.',
   'providerModels.item.modelConfig.extendParams.options.urlContext.hint':
     'For Gemini series; supports providing URL context.',
   'providerModels.item.modelConfig.extendParams.placeholder':

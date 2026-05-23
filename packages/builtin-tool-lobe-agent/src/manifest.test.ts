@@ -5,7 +5,9 @@ import { LobeAgentManifest } from './manifest';
 describe('LobeAgentManifest', () => {
   it('should keep the package metadata generic for future Lobe Agent capabilities', () => {
     expect(LobeAgentManifest.meta.avatar).toBe('🤖');
-    expect(LobeAgentManifest.meta.description).toBe('Run built-in Lobe Agent capabilities.');
+    expect(LobeAgentManifest.meta.description).toBe(
+      'Run built-in Lobe Agent capabilities: plan + todo management, sub-agent dispatch, and visual media analysis.',
+    );
     expect(LobeAgentManifest.meta.readme).toContain(
       'built-in assistant capabilities that can be expanded over time',
     );
@@ -21,6 +23,16 @@ describe('LobeAgentManifest', () => {
     expect(apiDescription).toContain('msg_xxx.image_1');
     expect(apiDescription).toContain('use urls only for direct media URLs');
     expect(apiDescription).toContain('answer the user directly with the result');
+  });
+
+  it('should instruct agents to prefer native multimodal access before visual analysis', () => {
+    expect(LobeAgentManifest.systemRole).toContain('`analyzeVisualMedia` is only a fallback');
+    expect(LobeAgentManifest.systemRole).toContain(
+      'media is already visible in the current multimodal context',
+    );
+    expect(LobeAgentManifest.systemRole).toContain(
+      'active model lacks the needed image/video capability',
+    );
   });
 
   it('should keep visual analysis parameters compatible with strict tool schema validators', () => {

@@ -145,12 +145,14 @@ export const resolveClientRuntimeCompleteFeedbackSource = async (
     source: {
       payload: {
         agentId: parentMessage.agentId ?? assistantMessage.agentId ?? sourceEvent.payload.agentId,
+        anchorMessageId: sourceEvent.payload.anchorMessageId ?? assistantMessage.id,
         message: parentMessage.content,
         messageId: parentMessage.id,
         threadId:
           parentMessage.threadId ?? assistantMessage.threadId ?? sourceEvent.payload.threadId,
         topicId: trustedTopicId ?? sourceEvent.payload.topicId,
         trigger: AGENT_SIGNAL_SOURCE_TYPES.clientRuntimeComplete,
+        triggerMessageId: sourceEvent.payload.triggerMessageId ?? parentMessage.id,
       },
       scopeKey: getTrustedScopeKey(trustedTopicId, sourceEvent.scopeKey),
       sourceId: getHydratedSourceId(assistantMessage.id, parentMessage.id),

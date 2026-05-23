@@ -3,7 +3,7 @@ import type { UserAgentOnboarding, UserAgentOnboardingContext } from '@/types/us
 export interface AgentOnboardingBootstrapContext {
   agentOnboarding: UserAgentOnboarding;
   context: UserAgentOnboardingContext;
-  topicId: string;
+  topicId: string | null;
 }
 
 interface ResolveAgentOnboardingContextParams {

@@ -8,6 +8,7 @@ import { EditTaskInspector } from './EditTask';
 import { ListTasksInspector } from './ListTasks';
 import { RunTaskInspector } from './RunTask';
 import { RunTasksInspector } from './RunTasks';
+import { SetTaskScheduleInspector } from './SetTaskSchedule';
 import {
   AddTaskCommentInspector,
   DeleteTaskCommentInspector,
@@ -32,6 +33,7 @@ export const TaskInspectors: Record<string, BuiltinInspector> = {
   [TaskApiName.listTasks]: ListTasksInspector as BuiltinInspector,
   [TaskApiName.runTask]: RunTaskInspector as BuiltinInspector,
   [TaskApiName.runTasks]: RunTasksInspector as BuiltinInspector,
+  [TaskApiName.setTaskSchedule]: SetTaskScheduleInspector as BuiltinInspector,
   [TaskApiName.updateTaskComment]: UpdateTaskCommentInspector as BuiltinInspector,
   [TaskApiName.updateTaskStatus]: UpdateTaskStatusInspector as BuiltinInspector,
   [TaskApiName.viewTask]: ViewTaskInspector as BuiltinInspector,
@@ -44,6 +46,7 @@ export { EditTaskInspector } from './EditTask';
 export { ListTasksInspector } from './ListTasks';
 export { RunTaskInspector } from './RunTask';
 export { RunTasksInspector } from './RunTasks';
+export { SetTaskScheduleInspector } from './SetTaskSchedule';
 export {
   AddTaskCommentInspector,
   DeleteTaskCommentInspector,

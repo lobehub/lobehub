@@ -1,13 +1,4 @@
-import { KeyEnum } from '@lobechat/const/hotkeys';
-import {
-  ActionIcon,
-  combineKeys,
-  copyToClipboard,
-  type DropdownItem,
-  DropdownMenu,
-  Hotkey,
-  Icon,
-} from '@lobehub/ui';
+import { ActionIcon, copyToClipboard, type DropdownItem, DropdownMenu, Icon } from '@lobehub/ui';
 import { App } from 'antd';
 import { CopyIcon, LinkIcon, MoreHorizontal, Trash } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
@@ -18,12 +9,15 @@ import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
+import { taskDetailPath } from '../shared/taskDetailPath';
+
 const TaskDetailHeaderActions = memo(() => {
   const { t } = useTranslation(['chat', 'common']);
   const { modal, message } = App.useApp();
   const navigate = useNavigate();
   const appOrigin = useAppOrigin();
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
+  const taskAgentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
   const deleteTask = useTaskStore((s) => s.deleteTask);
 
   const triggerDelete = useCallback(() => {
@@ -45,7 +39,7 @@ const TaskDetailHeaderActions = memo(() => {
   const menuItems = useMemo<DropdownItem[]>(() => {
     if (!taskId) return [];
 
-    const taskUrl = `${appOrigin}/task/${taskId}`;
+    const taskUrl = `${appOrigin}${taskDetailPath(taskId, taskAgentId ?? undefined)}`;
 
     return [
       {
@@ -69,16 +63,13 @@ const TaskDetailHeaderActions = memo(() => {
       { type: 'divider' },
       {
         danger: true,
-        extra: (
-          <Hotkey keys={combineKeys([KeyEnum.Mod, KeyEnum.Backspace])} variant={'borderless'} />
-        ),
         icon: <Icon icon={Trash} />,
         key: 'delete',
         label: t('delete', { ns: 'common' }),
         onClick: triggerDelete,
       },
     ];
-  }, [taskId, appOrigin, t, message, triggerDelete]);
+  }, [taskId, taskAgentId, appOrigin, t, message, triggerDelete]);
 
   if (!taskId) return null;
 

@@ -1,6 +1,6 @@
 ---
 name: desktop
-description: Electron desktop development guide. Use when implementing desktop features, IPC handlers, controllers, preload scripts, window management, menu configuration, or Electron-specific functionality. Triggers on desktop app development, Electron IPC, or desktop local tools implementation.
+description: Electron desktop development guide — IPC handlers, controllers, preload scripts, window/menu management.
 disable-model-invocation: true
 ---
 

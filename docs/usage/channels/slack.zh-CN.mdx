@@ -82,6 +82,7 @@ LobeHub 支持两种 Slack 连接模式：
     event_subscriptions:
       bot_events:
         - app_mention
+        - app_home_opened
         - message.channels
         - message.groups
         - message.im
@@ -192,7 +193,7 @@ LobeHub 支持两种 Slack 连接模式：
 
   ### 配置事件订阅
 
-  在 Slack API 控制台 → **Event Subscriptions** 中，启用事件，将 Webhook URL 粘贴为 **Request URL**，订阅事件：`app_mention`、`message.channels`、`message.groups`、`message.im`、`message.mpim`、`member_joined_channel`。
+  在 Slack API 控制台 → **Event Subscriptions** 中，启用事件，将 Webhook URL 粘贴为 **Request URL**，订阅事件：`app_mention`、`app_home_opened`、`message.channels`、`message.groups`、`message.im`、`message.mpim`、`member_joined_channel`。
 
   ![](/blog/assets8f3657f3785fc04c42b0f53c17daa72e.webp)
 

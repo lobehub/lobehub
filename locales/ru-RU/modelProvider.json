@@ -227,6 +227,7 @@
   "providerModels.item.modelConfig.extendParams.options.gpt5_2ProReasoningEffort.hint": "Для серии GPT-5.2 Pro; управляет интенсивностью рассуждений.",
   "providerModels.item.modelConfig.extendParams.options.gpt5_2ReasoningEffort.hint": "Для серии GPT-5.2; управляет интенсивностью рассуждений.",
   "providerModels.item.modelConfig.extendParams.options.grok4_20ReasoningEffort.hint": "Для серии Grok 4.20; регулирует интенсивность рассуждений. Низкий/Средний использует 4 агента, Высокий/Очень высокий использует 16 агентов.",
+  "providerModels.item.modelConfig.extendParams.options.grok4_3ReasoningEffort.hint": "Для серии Grok 4.3; регулирует интенсивность рассуждений.",
   "providerModels.item.modelConfig.extendParams.options.hy3ReasoningEffort.hint": "Для моделей Hy3; регулирует интенсивность рассуждения. no_think (ультрабыстрый ответ), low (быстрое рассуждение) и high (глубокое рассуждение) — параметры для разных требований по задержке и глубине, от высокочастотных взаимодействий до сложных инженерных задач.",
   "providerModels.item.modelConfig.extendParams.options.imageAspectRatio.hint": "Для моделей генерации изображений Gemini; управляет соотношением сторон создаваемых изображений.",
   "providerModels.item.modelConfig.extendParams.options.imageAspectRatio2.hint": "Для Nano Banana 2; управляет соотношением сторон создаваемых изображений (поддерживает сверхширокие 1:4, 4:1, 1:8, 8:1).",

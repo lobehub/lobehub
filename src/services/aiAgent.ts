@@ -40,10 +40,22 @@ export interface ExecAgentTaskParams {
   fileIds?: string[];
   /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
   parentMessageId?: string;
+  /**
+   * Project-level skills discovered on the device filesystem
+   * (`.agents/skills` / `.claude/skills`). Surfaced in `<available_skills>`
+   * and loaded on demand via the readFile tool.
+   */
+  projectSkills?: { description?: string; name: string; path: string }[];
   prompt: string;
   /** Resume a previous op paused on `human_approve_required` instead of starting from a fresh user prompt. */
   resumeApproval?: ResumeApprovalParam;
   slug?: string;
+  /**
+   * Override what initiated this operation. Server defaults to `'chat'` when
+   * omitted. Pass a more specific value (`'cli'`, `'openapi'`, …) so the
+   * `agent_operations.trigger` column reflects the real source.
+   */
+  trigger?: string;
 }
 
 /**
@@ -71,6 +83,7 @@ export interface GetSubAgentTaskStatusParams {
 export interface InterruptTaskParams {
   operationId?: string;
   threadId?: string;
+  topicId?: string;
 }
 
 /**

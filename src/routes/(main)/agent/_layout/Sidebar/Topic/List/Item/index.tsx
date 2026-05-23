@@ -1,7 +1,7 @@
 import type { ChatTopicMetadata, ChatTopicStatus } from '@lobechat/types';
 import { Flexbox, Icon, Skeleton, Tag } from '@lobehub/ui';
 import { createStaticStyles, cssVar, keyframes, useTheme } from 'antd-style';
-import { CheckCircle2, HashIcon, MessageSquareDashed } from 'lucide-react';
+import { CheckCircle2, Hand, HashIcon, MessageSquareDashed } from 'lucide-react';
 import { memo, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -9,10 +9,10 @@ import DotsLoading from '@/components/DotsLoading';
 import RingLoadingIcon from '@/components/RingLoading';
 import { SESSION_CHAT_TOPIC_URL } from '@/const/url';
 import { isDesktop } from '@/const/version';
-import { pluginRegistry } from '@/features/Electron/titlebar/RecentlyViewed/plugins';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { getPlatformIcon } from '@/routes/(main)/agent/channel/const';
 import { useAgentStore } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { useElectronStore } from '@/store/electron';
@@ -73,7 +73,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 // Module-scoped so a click on any topic cancels a pending click on another.
 // Per-item refs can't do that, which lets rapid clicks across items all
-// fire — each racing to write activeTopicId (see LOBE-7785).
+// fire — each racing to write activeTopicId (see ).
 let pendingSingleClickTimer: ReturnType<typeof setTimeout> | null = null;
 
 const cancelPendingSingleClick = () => {
@@ -97,6 +97,9 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
   const { t } = useTranslation('topic');
   const { isDarkMode } = useTheme();
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
+  // Heterogeneous agents (Claude Code, Codex, …) don't have the chat-style
+  // topic semantics, so skip the default `#` placeholder icon for their rows.
+  const isHeterogeneousAgent = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
   const addTab = useElectronStore((s) => s.addTab);
 
   const loadingRingColor = isDarkMode
@@ -160,12 +163,8 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
       void navigateToTopic(id, { skipPopupFocus: true });
       return;
     }
-    const url = SESSION_CHAT_TOPIC_URL(activeAgentId, id);
-    const reference = pluginRegistry.parseUrl(url, '');
-    if (reference) {
-      addTab(reference);
-      void navigateToTopic(id);
-    }
+    addTab(SESSION_CHAT_TOPIC_URL(activeAgentId, id));
+    void navigateToTopic(id);
   }, [id, activeAgentId, addTab, focusTopicPopup, navigateToTopic]);
 
   const { dropdownMenu } = useTopicItemDropdownMenu({
@@ -176,6 +175,8 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
   });
 
   const isCompleted = status === 'completed';
+  const isRunning = status === 'running';
+  const isWaitingForHuman = status === 'waitingForHuman';
 
   const hasUnread = id && isUnreadCompleted;
   const unreadIcon = (
@@ -230,7 +231,10 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
         href={href}
         title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
         icon={(() => {
-          if (isLoading) {
+          if (isWaitingForHuman) {
+            return <Icon icon={Hand} size={'small'} style={{ color: cssVar.colorInfo }} />;
+          }
+          if (isLoading || isRunning) {
             return (
               <RingLoadingIcon
                 ringColor={loadingRingColor}
@@ -256,7 +260,17 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
             }
           }
           return (
-            <Icon icon={HashIcon} size={'small'} style={{ color: cssVar.colorTextDescription }} />
+            <Icon
+              icon={HashIcon}
+              size={'small'}
+              style={{
+                color: cssVar.colorTextDescription,
+                // Heterogeneous agents (Claude Code, Codex, …) have no chat-style
+                // topic semantics, so suppress the `#` glyph while keeping its
+                // box so the title stays aligned with sibling rows.
+                visibility: isHeterogeneousAgent ? 'hidden' : undefined,
+              }}
+            />
           );
         })()}
         onClick={handleClick}

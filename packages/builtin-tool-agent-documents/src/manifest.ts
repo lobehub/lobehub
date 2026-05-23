@@ -21,7 +21,7 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
               'Set true only when the document captures reusable procedural knowledge or durable agent behavior.',
             type: 'boolean',
           },
-          target: {
+          scope: {
             default: 'agent',
             description:
               'Where to create the document. Use currentTopic to associate it with the current topic; defaults to agent-scoped documents.',
@@ -194,15 +194,22 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'List agent documents. Defaults to all agent documents; use target=currentTopic to list documents associated with the current topic.',
+        'List agent documents. Use this to discover documents that are not auto-injected (e.g. web-crawled pages) or to resolve a title to a document ID.',
       name: AgentDocumentsApiName.listDocuments,
       parameters: {
         properties: {
-          target: {
+          scope: {
             default: 'agent',
             description:
-              'Which document set to list. currentTopic filters to documents associated with the current topic.',
+              'Which document set to list. Defaults to "agent" (all agent-scoped documents). Use "currentTopic" to filter to documents associated with the current topic.',
             enum: ['agent', 'currentTopic'],
+            type: 'string',
+          },
+          sourceType: {
+            default: 'all',
+            description:
+              'Filter by document source. "file" = user-created or uploaded; "web" = crawled from external URLs; "all" returns both. Web-crawled documents are hidden from the default agent_documents_index — pass sourceType="web" here to see them.',
+            enum: ['all', 'file', 'web'],
             type: 'string',
           },
         },

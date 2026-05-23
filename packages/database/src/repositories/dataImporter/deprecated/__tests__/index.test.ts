@@ -345,7 +345,7 @@ describe('DataImporter', () => {
         where: eq(sessions.clientId, 'session1'),
       });
       const session1Agent = await serverDB.query.agentsToSessions.findFirst({
-        where: eq(agentsToSessions.sessionId, session1?.id!),
+        where: eq(agentsToSessions.sessionId, session1!.id),
         with: { agent: true },
       });
 
@@ -355,7 +355,7 @@ describe('DataImporter', () => {
         where: eq(sessions.clientId, 'session2'),
       });
       const session2Agent = await serverDB.query.agentsToSessions.findFirst({
-        where: eq(agentsToSessions.sessionId, session2?.id!),
+        where: eq(agentsToSessions.sessionId, session2!.id),
         with: { agent: true },
       });
 
@@ -885,8 +885,6 @@ describe('DataImporter', () => {
                   voice: { openai: 'alloy' },
                 },
                 chatConfig: {
-                  autoCreateTopicThreshold: 2,
-                  enableAutoCreateTopic: true,
                   historyCount: 1,
                 },
                 openingQuestions: ['Question 1', 'Question 2'],

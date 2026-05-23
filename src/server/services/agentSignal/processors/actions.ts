@@ -15,6 +15,25 @@ interface SourcePayloadCarrier {
 }
 
 /**
+ * Extracts the assistant message id embedded in a hydrated `clientRuntimeComplete` source id.
+ *
+ * Hydration produces source ids with the format:
+ *   `${assistantMessageId}:completion:${parentMessageId}`
+ *
+ * For all other source types the source id does not follow this pattern, so undefined is returned.
+ */
+const extractAssistantMessageIdFromSourceId = (
+  sourceId: string | undefined,
+): string | undefined => {
+  if (!sourceId) return undefined;
+  const completionMarker = ':completion:';
+  const idx = sourceId.indexOf(completionMarker);
+  if (idx === -1) return undefined;
+  const candidate = sourceId.slice(0, idx);
+  return candidate.length > 0 ? candidate : undefined;
+};
+
+/**
  * Skill-domain feedback signal that is eligible for direct skill-management action planning.
  */
 export type DirectSkillFeedbackDomainSignal = SignalFeedbackDomainSkill & {
@@ -64,6 +83,10 @@ export const planUserMemory = (signal: SignalFeedbackDomainMemory): ActionUserMe
     },
     payload: {
       agentId: payload.agentId,
+      // Propagate the assistant message id so that the memory-agent thread
+      // can be anchored under the assistant message that completed the turn,
+      // rather than under the user message (messageId).
+      assistantMessageId: extractAssistantMessageIdFromSourceId(signal.source?.sourceId),
       conflictPolicy: payload.conflictPolicy,
       evidence: payload.evidence,
       feedbackHint: payload.satisfactionResult === 'satisfied' ? 'satisfied' : 'not_satisfied',

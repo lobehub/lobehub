@@ -1,8 +1,6 @@
 {
   "addUserMessage.desc": "Mevcut girdiyi kullanıcı mesajı olarak ekle, ancak oluşturmayı tetikleme",
   "addUserMessage.title": "Kullanıcı Mesajı Ekle",
-  "clearCurrentMessages.desc": "Geçerli konuşmadaki mesajları ve yüklenen dosyaları temizle",
-  "clearCurrentMessages.title": "Konuşma Mesajlarını Temizle",
   "commandPalette.desc": "Özelliklere hızlı erişim için genel komut paletini aç",
   "commandPalette.title": "Komut Paleti",
   "deleteAndRegenerateMessage.desc": "Son mesajı sil ve yeniden oluştur",

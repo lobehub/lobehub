@@ -32,7 +32,7 @@ export async function runCommand(
   const logPrefix = `[runCommand: ${description || command.slice(0, 50)}]`;
   logger?.debug(`${logPrefix} Starting`, { background: run_in_background, cwd, timeout });
 
-  const effectiveTimeout = Math.min(Math.max(timeout, 1000), 600_000);
+  const effectiveTimeout = Math.min(Math.max(timeout, 1000), 800_000);
   const shellConfig = getShellConfig(command);
   const childEnv = extraEnv ? { ...process.env, ...extraEnv } : process.env;
 

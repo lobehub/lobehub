@@ -1,3 +1,6 @@
+// Client-side executor (browser runtime adapter for the agent)
+export { localSystemExecutor } from './executor';
+
 // Inspector components (customized tool call headers)
 export { LocalSystemInspectors } from './Inspector';
 

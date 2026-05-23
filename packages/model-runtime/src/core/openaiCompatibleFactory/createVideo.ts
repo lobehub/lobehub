@@ -1,4 +1,5 @@
 import createDebug from 'debug';
+import { ModelProvider } from 'model-bank';
 
 import type {
   CreateVideoPayload,
@@ -115,7 +116,7 @@ export async function pollOpenAICompatibleVideoStatus(
  *   model: string,
  *   prompt: string,
  *   seconds?: string,      // OpenAI Sora format (string type)
- *   input_reference?: string | object,  // For image-to-video
+ *   input_reference?: string | { image_url: string } | { file_id: string },  // For image-to-video
  * }
  *
  * Creates a video generation task and returns immediately with inferenceId.
@@ -150,7 +151,10 @@ export async function createOpenAICompatibleVideo(
 
   // Image-to-video support
   if (imageUrl) {
-    body['input_reference'] = imageUrl;
+    // OpenAI JSON requests reject bare strings, for example:
+    // `input_reference: "https://example.com/image.jpg"`.
+    body['input_reference'] =
+      options.provider === ModelProvider.OpenAI ? { image_url: imageUrl } : imageUrl;
   }
 
   log('OpenAI-compatible video API request body: %O', body);

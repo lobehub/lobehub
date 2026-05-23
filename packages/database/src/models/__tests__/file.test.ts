@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import {
+  asyncTasks,
   chunks,
+  documents,
   embeddings,
   fileChunks,
   files,
@@ -196,6 +198,91 @@ describe('FileModel', () => {
       expect(file).toBeUndefined();
       expect(globalFile).toBeDefined();
     });
+
+    it('should delete mirror documents (sourceType=file) tied to the file', async () => {
+      const { id: fileId } = await fileModel.create({
+        name: 'mirror.pdf',
+        url: 'https://example.com/mirror.pdf',
+        size: 100,
+        fileType: 'application/pdf',
+      });
+
+      await serverDB.insert(documents).values({
+        userId,
+        fileId,
+        sourceType: 'file',
+        source: 'mirror.pdf',
+        fileType: 'application/pdf',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+
+      await fileModel.delete(fileId);
+
+      const remainingDocs = await serverDB.query.documents.findMany({
+        where: eq(documents.userId, userId),
+      });
+      expect(remainingDocs).toHaveLength(0);
+    });
+
+    it('should NOT delete non-mirror documents, only null out their fileId', async () => {
+      const { id: fileId } = await fileModel.create({
+        name: 'shared.pdf',
+        url: 'https://example.com/shared.pdf',
+        size: 100,
+        fileType: 'application/pdf',
+      });
+
+      const inserted = await serverDB
+        .insert(documents)
+        .values({
+          userId,
+          fileId,
+          // not a mirror — created from a topic, just happens to reference this file
+          sourceType: 'topic',
+          source: 'topic-source',
+          fileType: 'application/pdf',
+          totalCharCount: 0,
+          totalLineCount: 0,
+        })
+        .returning();
+      const docId = inserted[0]!.id;
+
+      await fileModel.delete(fileId);
+
+      const doc = await serverDB.query.documents.findFirst({
+        where: eq(documents.id, docId),
+      });
+      expect(doc).toBeDefined();
+      expect(doc?.fileId).toBeNull();
+    });
+
+    it('should delete asyncTasks attached to the file', async () => {
+      const [chunkTask] = await serverDB
+        .insert(asyncTasks)
+        .values({ userId, type: 'chunk', status: 'success' })
+        .returning();
+      const [embeddingTask] = await serverDB
+        .insert(asyncTasks)
+        .values({ userId, type: 'embedding', status: 'success' })
+        .returning();
+
+      const { id: fileId } = await fileModel.create({
+        name: 'tasked.pdf',
+        url: 'https://example.com/tasked.pdf',
+        size: 100,
+        fileType: 'application/pdf',
+        chunkTaskId: chunkTask!.id,
+        embeddingTaskId: embeddingTask!.id,
+      });
+
+      await fileModel.delete(fileId);
+
+      const remainingTasks = await serverDB.query.asyncTasks.findMany({
+        where: inArray(asyncTasks.id, [chunkTask!.id, embeddingTask!.id]),
+      });
+      expect(remainingTasks).toHaveLength(0);
+    });
   });
 
   describe('deleteMany', () => {
@@ -234,7 +321,7 @@ describe('FileModel', () => {
       });
       expect(globalFilesResult).toHaveLength(2);
 
-      await fileModel.deleteMany([file1.id, file2.id]);
+      const deletedFiles = await fileModel.deleteMany([file1.id, file2.id]);
 
       const remainingFiles = await serverDB.query.files.findMany({
         where: eq(files.userId, userId),
@@ -248,6 +335,7 @@ describe('FileModel', () => {
 
       expect(remainingFiles).toHaveLength(0);
       expect(globalFilesResult2).toHaveLength(0);
+      expect(deletedFiles.map((file) => file.id).sort()).toEqual([file1.id, file2.id].sort());
     });
     it('should delete multiple files but not remove global files if DISABLE_REMOVE_GLOBAL_FILE=true', async () => {
       await fileModel.createGlobalFile({
@@ -286,7 +374,7 @@ describe('FileModel', () => {
 
       expect(globalFilesResult).toHaveLength(2);
 
-      await fileModel.deleteMany([file1.id, file2.id], false);
+      const deletedFiles = await fileModel.deleteMany([file1.id, file2.id], false);
 
       const remainingFiles = await serverDB.query.files.findMany({
         where: eq(files.userId, userId),
@@ -297,6 +385,117 @@ describe('FileModel', () => {
 
       expect(remainingFiles).toHaveLength(0);
       expect(globalFilesResult2).toHaveLength(2);
+      expect(deletedFiles).toEqual([]);
+    });
+
+    it('should return only files whose backing global file is no longer referenced', async () => {
+      await fileModel.createGlobalFile({
+        hashId: 'shared-hash',
+        url: 'https://example.com/shared.txt',
+        size: 100,
+        fileType: 'text/plain',
+        creator: userId,
+      });
+      await fileModel.createGlobalFile({
+        hashId: 'exclusive-hash',
+        url: 'https://example.com/exclusive.txt',
+        size: 100,
+        fileType: 'text/plain',
+        creator: userId,
+      });
+
+      const sharedFileA = await fileModel.create({
+        name: 'shared-a.txt',
+        url: 'https://example.com/shared.txt',
+        size: 100,
+        fileHash: 'shared-hash',
+        fileType: 'text/plain',
+      });
+      await fileModel.create({
+        name: 'shared-b.txt',
+        url: 'https://example.com/shared.txt',
+        size: 100,
+        fileHash: 'shared-hash',
+        fileType: 'text/plain',
+      });
+      const exclusiveFile = await fileModel.create({
+        name: 'exclusive.txt',
+        url: 'https://example.com/exclusive.txt',
+        size: 100,
+        fileHash: 'exclusive-hash',
+        fileType: 'text/plain',
+      });
+
+      const deletedFiles = await fileModel.deleteMany([sharedFileA.id, exclusiveFile.id]);
+
+      expect(deletedFiles.map((file) => file.id)).toEqual([exclusiveFile.id]);
+
+      const sharedGlobalFile = await serverDB.query.globalFiles.findFirst({
+        where: eq(globalFiles.hashId, 'shared-hash'),
+      });
+      const exclusiveGlobalFile = await serverDB.query.globalFiles.findFirst({
+        where: eq(globalFiles.hashId, 'exclusive-hash'),
+      });
+      expect(sharedGlobalFile).toBeDefined();
+      expect(exclusiveGlobalFile).toBeUndefined();
+    });
+
+    it('should delete mirror documents and asyncTasks for all files in batch', async () => {
+      const [chunkTask1] = await serverDB
+        .insert(asyncTasks)
+        .values({ userId, type: 'chunk', status: 'success' })
+        .returning();
+      const [chunkTask2] = await serverDB
+        .insert(asyncTasks)
+        .values({ userId, type: 'chunk', status: 'success' })
+        .returning();
+
+      const file1 = await fileModel.create({
+        name: 'a.pdf',
+        url: 'https://example.com/a.pdf',
+        size: 100,
+        fileType: 'application/pdf',
+        chunkTaskId: chunkTask1!.id,
+      });
+      const file2 = await fileModel.create({
+        name: 'b.pdf',
+        url: 'https://example.com/b.pdf',
+        size: 100,
+        fileType: 'application/pdf',
+        chunkTaskId: chunkTask2!.id,
+      });
+
+      await serverDB.insert(documents).values([
+        {
+          userId,
+          fileId: file1.id,
+          sourceType: 'file',
+          source: 'a.pdf',
+          fileType: 'application/pdf',
+          totalCharCount: 0,
+          totalLineCount: 0,
+        },
+        {
+          userId,
+          fileId: file2.id,
+          sourceType: 'file',
+          source: 'b.pdf',
+          fileType: 'application/pdf',
+          totalCharCount: 0,
+          totalLineCount: 0,
+        },
+      ]);
+
+      await fileModel.deleteMany([file1.id, file2.id]);
+
+      const remainingDocs = await serverDB.query.documents.findMany({
+        where: eq(documents.userId, userId),
+      });
+      const remainingTasks = await serverDB.query.asyncTasks.findMany({
+        where: inArray(asyncTasks.id, [chunkTask1!.id, chunkTask2!.id]),
+      });
+      expect(remainingDocs).toHaveLength(0);
+      expect(remainingTasks).toHaveLength(0);
     });
   });
 

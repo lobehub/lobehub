@@ -1,3 +1,4 @@
+import type { ErrorType } from '@lobechat/types';
 import type { ModelProvider } from 'model-bank';
 import type OpenAI from 'openai';
 
@@ -13,7 +14,7 @@ export interface ChatCompletionErrorPayload {
   [key: string]: any;
   endpoint?: string;
   error: object;
-  errorType: ILobeAgentRuntimeErrorType;
+  errorType: ErrorType | ILobeAgentRuntimeErrorType;
   message?: string;
   provider: string;
 }
