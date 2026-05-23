@@ -95,9 +95,15 @@ for (const c of actionCalls) {
     console.log(`  t=${pad(c.t, 7)}  ${c.name}`);
     continue;
   }
+  const snapshot = (c.args as any)?.snapshot as
+    | Array<{ id: string; role: string; cLen: number; rLen: number }>
+    | undefined;
+  const snapStr = snapshot?.length
+    ? '  snapshot=' + snapshot.map((m) => `${m.id}:${m.role}/c${m.cLen}/r${m.rLen}`).join(' | ')
+    : '';
   const summary =
     c.name === 'replaceMessages'
-      ? `count=${c.args?.count} params=${JSON.stringify(c.args?.params)}`
+      ? `count=${c.args?.count} action=${(c.args?.params as any)?.action ?? '-'}${snapStr}`
       : c.name === 'refreshMessages'
         ? `ctx=${JSON.stringify(c.args?.context)}`
         : c.error

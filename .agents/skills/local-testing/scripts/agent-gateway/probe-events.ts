@@ -345,11 +345,28 @@ w.fetch = async function patchedFetch(input: RequestInfo | URL, init?: RequestIn
 
 // ── 3. Wrap store actions (best-effort for "who called replace") ────
 
+// Side-global stash for the original chat-store actions. Re-installs ALWAYS
+// rewrap from the originals so updates to the probe body take effect
+// without a page reload — using only a `__probeWrapped` flag on the chat
+// state object would freeze the first-installed wrapper across re-installs.
+declare global {
+  interface Window {
+    __PROBE_ORIG_REFRESH_MESSAGES?: any;
+    __PROBE_ORIG_REPLACE_MESSAGES?: any;
+  }
+}
+
 try {
   const chat = w.__LOBE_STORES?.chat?.();
-  if (chat && !chat.__probeWrapped) {
-    const origRefresh = chat.refreshMessages;
-    const origReplace = chat.replaceMessages;
+  if (chat) {
+    // First-time install: cache the originals. Re-install: restore from
+    // the cached originals before wrapping again.
+    if (!w.__PROBE_ORIG_REFRESH_MESSAGES) w.__PROBE_ORIG_REFRESH_MESSAGES = chat.refreshMessages;
+    if (!w.__PROBE_ORIG_REPLACE_MESSAGES) w.__PROBE_ORIG_REPLACE_MESSAGES = chat.replaceMessages;
+    const origRefresh = w.__PROBE_ORIG_REFRESH_MESSAGES;
+    const origReplace = w.__PROBE_ORIG_REPLACE_MESSAGES;
+    chat.refreshMessages = origRefresh;
+    chat.replaceMessages = origReplace;
 
     chat.refreshMessages = async function probeRefresh(this: unknown, ...args: any[]) {
       calls.push({
@@ -361,16 +378,25 @@ try {
       return origRefresh.apply(this, args);
     };
     chat.replaceMessages = function probeReplace(this: unknown, ...args: any[]) {
-      const msgs = (args[0] as unknown[]) ?? [];
+      const msgs = (args[0] as any[]) ?? [];
+      // Snapshot last 2 messages' role + cLen + rLen so we can see WHAT
+      // each replaceMessages call writes. "count=2" alone hides whether
+      // the call is restoring streamed content or wiping it to placeholder.
+      const snapshot = msgs.slice(-2).map((m) => ({
+        id: (m.id ?? '').slice(-8),
+        role: m.role,
+        cLen: (m.content ?? '').length,
+        rLen: (m.reasoning?.content ?? '').length,
+        updatedAt: m.updatedAt,
+      }));
       calls.push({
         t: now(),
         name: 'replaceMessages',
-        args: { count: msgs.length, params: args[1] ?? null },
+        args: { count: msgs.length, params: args[1] ?? null, snapshot } as any,
         stack: shortStack(),
       });
       return origReplace.apply(this, args);
     };
-    chat.__probeWrapped = true;
   }
 } catch (e: any) {
   calls.push({ t: now(), name: '_WRAP_ERROR_', error: String(e?.message ?? e) });
