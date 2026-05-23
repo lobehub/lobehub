@@ -428,7 +428,10 @@ const Review = memo<ReviewProps>(({ workingDirectory }) => {
         },
       ];
 
-  const isEmpty = totalEntryCount === 0;
+  // A pointer-only submodule bump produces a group with no file patches but is
+  // still worth surfacing (the GroupHeader + "submodule clean" line), so don't
+  // collapse into the global empty state when any submodule group is present.
+  const isEmpty = totalEntryCount === 0 && submoduleGroups.length === 0;
   const emptyText =
     mode === 'branch'
       ? baseRef
@@ -487,7 +490,7 @@ const Review = memo<ReviewProps>(({ workingDirectory }) => {
           )}
         </Flexbox>
         <Flexbox horizontal align={'center'} gap={2}>
-          {!isEmpty && (
+          {totalEntryCount > 0 && (
             <ActionIcon
               icon={allExpanded ? FoldVerticalIcon : UnfoldVerticalIcon}
               size={'small'}
