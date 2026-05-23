@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as withTimeoutModule from '../../utils/withTimeout';
 import { browserless } from '../browserless';
@@ -8,18 +8,25 @@ vi.spyOn(withTimeoutModule, 'withTimeout').mockImplementation((fn) =>
   fn(new AbortController().signal),
 );
 
+const originalEnv = { ...process.env };
+
+beforeEach(() => {
+  process.env = { ...originalEnv };
+  vi.clearAllMocks();
+});
+
+afterEach(() => {
+  process.env = { ...originalEnv };
+});
+
 describe('browserless', () => {
   it('should throw BrowserlessInitError when env vars not set', async () => {
-    const originalEnv = { ...process.env };
-    process.env = { ...originalEnv };
     delete process.env.BROWSERLESS_URL;
     delete process.env.BROWSERLESS_TOKEN;
 
     await expect(browserless('https://example.com', { filterOptions: {} })).rejects.toThrow(
       '`BROWSERLESS_URL` or `BROWSERLESS_TOKEN` are required',
     );
-
-    process.env = originalEnv;
   });
 
   it('should throw NetworkConnectionError on fetch failed', async () => {
@@ -110,6 +117,39 @@ describe('browserless', () => {
     ]);
   });
 
+  it('should default gotoOptions.waitUntil to load', async () => {
+    process.env.BROWSERLESS_TOKEN = 'test-token';
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      text: vi.fn().mockResolvedValue('<html><title>Test</title></html>'),
+    });
+    global.fetch = fetchMock;
+
+    await browserless('https://example.com', { filterOptions: {} });
+
+    const requestPayload = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(requestPayload.gotoOptions.waitUntil).toBe('load');
+  });
+
+  it('should pass through BROWSERLESS_WAIT_UNTIL when configured', async () => {
+    process.env.BROWSERLESS_TOKEN = 'test-token';
+    process.env.BROWSERLESS_WAIT_UNTIL = 'domcontentloaded';
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      text: vi.fn().mockResolvedValue('<html><title>Test</title></html>'),
+    });
+    global.fetch = fetchMock;
+
+    await browserless('https://example.com', { filterOptions: {} });
+
+    const requestPayload = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(requestPayload.gotoOptions.waitUntil).toBe('domcontentloaded');
+  });
+
   it('should allow requests to permitted file types', async () => {
     const allowedExtensions = ['html', 'css', 'js', 'json', 'xml', 'webmanifest', 'txt', 'md'];
     const pattern = /.*\.(?!(html|css|js|json|xml|webmanifest|txt|md)(\?|#|$))[\w-]+(?:[?#].*)?$/;
@@ -133,10 +173,8 @@ describe('browserless', () => {
   });
 
   it('should call fetch with the base URL and content path', async () => {
-    const originalEnv = { ...process.env };
     process.env.BROWSERLESS_TOKEN = 'test-token';
     global.fetch = vi.fn().mockImplementation((url) => {
-      // BASE_URL is captured at module load time, so we verify fetch is called with /content path
       expect(url).toContain('/content');
       return Promise.resolve({
         ok: true,
@@ -149,7 +187,5 @@ describe('browserless', () => {
     await browserless('https://example.com', { filterOptions: {} });
 
     expect(global.fetch).toHaveBeenCalled();
-
-    process.env = originalEnv;
   });
 });

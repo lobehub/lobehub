@@ -7,14 +7,19 @@ import { htmlToMarkdown } from '../utils/htmlToMarkdown';
 import { createHTTPStatusError } from '../utils/response';
 import { DEFAULT_TIMEOUT, withTimeout } from '../utils/withTimeout';
 
-const BASE_URL = process.env.BROWSERLESS_URL ?? 'https://chrome.browserless.io';
+const DEFAULT_BROWSERLESS_URL = 'https://chrome.browserless.io';
+const DEFAULT_BROWSERLESS_WAIT_UNTIL = 'load';
 // Allowed file types: html, css, js, json, xml, webmanifest, txt, md
 const REJECT_REQUEST_PATTERN =
   '.*\\.(?!(html|css|js|json|xml|webmanifest|txt|md)(\\?|#|$))[\\w-]+(?:[\\?#].*)?$';
-const BROWSERLESS_TOKEN = process.env.BROWSERLESS_TOKEN;
+const BROWSERLESS_WAIT_UNTIL_VALUES = [
+  'load',
+  'domcontentloaded',
+  'networkidle0',
+  'networkidle2',
+] as const;
 
-const BROWSERLESS_BLOCK_ADS = process.env.BROWSERLESS_BLOCK_ADS === '1';
-const BROWSERLESS_STEALTH_MODE = process.env.BROWSERLESS_STEALTH_MODE === '1';
+type BrowserlessWaitUntil = (typeof BROWSERLESS_WAIT_UNTIL_VALUES)[number];
 
 class BrowserlessInitError extends Error {
   constructor() {
@@ -23,13 +28,28 @@ class BrowserlessInitError extends Error {
   }
 }
 
+const getBrowserlessWaitUntil = (): BrowserlessWaitUntil => {
+  const waitUntil = process.env.BROWSERLESS_WAIT_UNTIL;
+
+  if (waitUntil && BROWSERLESS_WAIT_UNTIL_VALUES.includes(waitUntil as BrowserlessWaitUntil)) {
+    return waitUntil as BrowserlessWaitUntil;
+  }
+
+  return DEFAULT_BROWSERLESS_WAIT_UNTIL;
+};
+
 export const browserless: CrawlImpl = async (url, { filterOptions }) => {
   if (!process.env.BROWSERLESS_URL && !process.env.BROWSERLESS_TOKEN) {
     throw new BrowserlessInitError();
   }
 
+  const baseUrl = process.env.BROWSERLESS_URL ?? DEFAULT_BROWSERLESS_URL;
+  const browserlessToken = process.env.BROWSERLESS_TOKEN;
+  const browserlessBlockAds = process.env.BROWSERLESS_BLOCK_ADS === '1';
+  const browserlessStealthMode = process.env.BROWSERLESS_STEALTH_MODE === '1';
+
   const input = {
-    gotoOptions: { waitUntil: 'networkidle2' },
+    gotoOptions: { waitUntil: getBrowserlessWaitUntil() },
     rejectRequestPattern: [REJECT_REQUEST_PATTERN],
     url,
   };
@@ -42,11 +62,11 @@ export const browserless: CrawlImpl = async (url, { filterOptions }) => {
         fetch(
           qs.stringifyUrl({
             query: {
-              blockAds: BROWSERLESS_BLOCK_ADS,
-              launch: JSON.stringify({ stealth: BROWSERLESS_STEALTH_MODE }),
-              token: BROWSERLESS_TOKEN,
+              blockAds: browserlessBlockAds,
+              launch: JSON.stringify({ stealth: browserlessStealthMode }),
+              token: browserlessToken,
             },
-            url: urlJoin(BASE_URL, '/content'),
+            url: urlJoin(baseUrl, '/content'),
           }),
           {
             body: JSON.stringify(input),
