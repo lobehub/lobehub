@@ -9,6 +9,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useTaskStore } from '@/store/task';
 
 import { styles } from './style';
+import { taskDetailPath } from './taskDetailPath';
 
 interface BreadcrumbProps {
   taskId?: string;
@@ -23,13 +24,17 @@ const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
   const ancestors = useTaskStore(
     useShallow((s) => {
       if (!taskId) return [];
-      const chain: string[] = [];
+      const chain: Array<{ agentId?: string | null; identifier: string }> = [];
       const visited = new Set<string>([taskId]);
-      let cursor = s.taskDetailMap[taskId]?.parent?.identifier;
-      while (cursor && !visited.has(cursor)) {
-        visited.add(cursor);
-        chain.push(cursor);
-        cursor = s.taskDetailMap[cursor]?.parent?.identifier;
+      let cursor = s.taskDetailMap[taskId]?.parent;
+      while (cursor?.identifier && !visited.has(cursor.identifier)) {
+        const detail = s.taskDetailMap[cursor.identifier];
+        visited.add(cursor.identifier);
+        chain.push({
+          agentId: cursor.agentId === undefined ? detail?.agentId : cursor.agentId,
+          identifier: cursor.identifier,
+        });
+        cursor = detail?.parent;
       }
       return chain.reverse();
     }),
@@ -41,10 +46,10 @@ const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
     </Text>
   );
 
-  const ancestorCrumbs = ancestors.map((identifier) => ({
+  const ancestorCrumbs = ancestors.map(({ identifier, agentId }) => ({
     key: identifier,
     title: (
-      <Link to={`/task/${identifier}`}>
+      <Link to={taskDetailPath(identifier, agentId ?? undefined)}>
         <Text color={'inherit'} weight={500}>
           {identifier}
         </Text>

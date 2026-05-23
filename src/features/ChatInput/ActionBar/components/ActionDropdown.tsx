@@ -15,7 +15,7 @@ import {
   DropdownMenuTrigger,
   renderDropdownMenuItems,
 } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { createGlobalStyle, createStaticStyles, cssVar, cx } from 'antd-style';
 import { type CSSProperties, type ReactNode } from 'react';
 import {
   isValidElement,
@@ -41,6 +41,58 @@ const styles = createStaticStyles(({ css }) => ({
     outline: none;
   `,
 }));
+
+const SubmenuScrollStyle = createGlobalStyle`
+  /* base-ui DropdownMenu.Item reserves an indicator slot (empty aria-hidden
+     span) for checkbox/radio variants. Our menu items don't use it, so the
+     empty slot only contributes left whitespace. Collapse it across both
+     the top-level menu and any nested submenu popups. */
+  [role='menu'] [role='menuitem'] > * > span[aria-hidden='true']:empty,
+  [role='menu'] [role='menuitem'] > span[aria-hidden='true']:empty {
+    display: none;
+  }
+
+  [data-submenu] > [role='menu'] {
+    will-change: auto;
+
+    /* Submenus have 0ms animation, so disabling compositing is safe.
+       Both will-change:transform AND the inherited transform: scaleY(1) from
+       Menu.Positioner ('& > *' rule) create a new containing block, which
+       breaks position:sticky for descendants and lets items leak below the
+       popup. Disable both for submenus where animation is already 0ms. */
+    transform: none !important;
+
+    overflow: hidden auto;
+    overscroll-behavior: contain;
+
+    width: 360px;
+    max-height: min(50vh, 640px);
+    padding-block-end: 4px;
+  }
+
+  /* base-ui menu-item internal containers are flex by default but don't set
+     min-width:0, which blocks descendant text-overflow:ellipsis from working.
+     Force min-width:0 down the chain so long titles can truncate. */
+  [data-submenu] > [role='menu'] [role='menuitem'] > *,
+  [data-submenu] > [role='menu'] [role='menuitem'] > * > * {
+    min-width: 0;
+  }
+
+  /* Align base-ui separator color with the stats-footer's border-block-start
+     (colorBorderSecondary) so all dividers in the menu look consistent. */
+  [data-submenu] > [role='menu'] [role='separator'] {
+    background: ${cssVar.colorBorderSecondary};
+  }
+
+  /* base-ui group label is rendered inside a [role='presentation'] with its
+     own default vertical padding, which stacks with our activationGroupHeader
+     padding and inflates the gap above/below group headers. Reset only the
+     vertical padding for skill activation groups; other groups (e.g. the
+     Knowledge submenu's Libraries/Files headers) keep their default padding. */
+  [data-submenu] > [role='menu'] [role='group']:has([data-skill-activation-group]) > [role='presentation'] {
+    padding-block: 0;
+  }
+`;
 
 export type ActionDropdownMenuItem = MenuItemType;
 
@@ -101,6 +153,10 @@ const ActionDropdown = memo<ActionDropdownProps>(
 
     const handleOpenChange = useCallback(
       (nextOpen: boolean, details: Parameters<NonNullable<typeof onOpenChange>>[1]) => {
+        if (!nextOpen && (details as { reason?: string })?.reason === 'sibling-open') {
+          (details as { cancel?: () => void })?.cancel?.();
+          return;
+        }
         onOpenChange?.(nextOpen, details);
         if (open === undefined) setUncontrolledOpen(nextOpen);
       },
@@ -146,9 +202,13 @@ const ActionDropdown = memo<ActionDropdownProps>(
           }
 
           if ('children' in item && item.children) {
+            const originalOnOpenChange = (item as { onOpenChange?: unknown }).onOpenChange as
+              | ((open: boolean, details: unknown) => void)
+              | undefined;
             return {
               ...item,
               children: decorateMenuItems(item.children),
+              type: 'submenu',
             };
           }
           const itemOnClick = 'onClick' in item ? item.onClick : undefined;
@@ -188,10 +248,11 @@ const ActionDropdown = memo<ActionDropdownProps>(
       menuItemsRef.current = nextItems;
 
       return nextItems;
-    }, [decorateMenuItems, isOpen, menu.items, prefetch]);
+    }, [decorateMenuItems, isOpen, menu, prefetch]);
 
     const menuContent = useMemo(() => {
       if (!popupRender) return renderedItems;
+
       return popupRender(renderedItems ?? null);
     }, [popupRender, renderedItems]);
 
@@ -263,30 +324,33 @@ const ActionDropdown = memo<ActionDropdownProps>(
     }, [portalContainer]);
 
     return (
-      <DropdownMenuRoot
-        {...rest}
-        defaultOpen={defaultOpen}
-        open={open}
-        onOpenChange={handleOpenChange}
-        onOpenChangeComplete={handleOpenChangeComplete}
-      >
-        <DropdownMenuTrigger className={styles.trigger} {...resolvedTriggerProps}>
-          {children}
-        </DropdownMenuTrigger>
-        <DropdownMenuPortal container={resolvedPortalContainer} {...restPortalProps}>
-          <DropdownMenuPositioner
-            {...positionerProps}
-            hoverTrigger={Boolean(resolvedTriggerProps?.openOnHover)}
-            placement={isMobile ? 'top' : placement}
-          >
-            <DropdownMenuPopup {...resolvedPopupProps}>
-              <Suspense fallback={<DebugNode trace="ActionDropdown > popup" />}>
-                {menuContent}
-              </Suspense>
-            </DropdownMenuPopup>
-          </DropdownMenuPositioner>
-        </DropdownMenuPortal>
-      </DropdownMenuRoot>
+      <>
+        <SubmenuScrollStyle />
+        <DropdownMenuRoot
+          {...rest}
+          defaultOpen={defaultOpen}
+          open={open}
+          onOpenChange={handleOpenChange}
+          onOpenChangeComplete={handleOpenChangeComplete}
+        >
+          <DropdownMenuTrigger className={styles.trigger} {...resolvedTriggerProps}>
+            {children}
+          </DropdownMenuTrigger>
+          <DropdownMenuPortal container={resolvedPortalContainer} {...restPortalProps}>
+            <DropdownMenuPositioner
+              {...positionerProps}
+              hoverTrigger={Boolean(resolvedTriggerProps?.openOnHover)}
+              placement={isMobile ? 'top' : placement}
+            >
+              <DropdownMenuPopup {...resolvedPopupProps}>
+                <Suspense fallback={<DebugNode trace="ActionDropdown > popup" />}>
+                  {menuContent}
+                </Suspense>
+              </DropdownMenuPopup>
+            </DropdownMenuPositioner>
+          </DropdownMenuPortal>
+        </DropdownMenuRoot>
+      </>
     );
   },
 );

@@ -5,6 +5,13 @@ import type { PlatformClient } from '@/server/services/bot/platforms';
 export interface UnlinkedMessageContext {
   authorUserId: string;
   authorUserName?: string;
+  /** When set, the inbound was a non-DM `@mention` (Slack channel today).
+   *  The binder should respond ephemerally so the verify-im URL isn't
+   *  broadcast to the rest of the channel. The raw chat-sdk `thread.id`
+   *  carries the platform's thread anchor — Slack encodes it as the third
+   *  colon-segment of `slack:<channel>:<threadTs>` so the ephemeral can be
+   *  posted in-thread next to the mention. */
+  channelMentionThreadId?: string;
   chatId: string;
   /** Original inbound chat-sdk message. Absent on slash-command paths
    *  (Slack `/start`) where there is no underlying Message instance. */
@@ -77,6 +84,17 @@ export interface MessengerPlatformBinder {
   ) => InboundCallbackAction | null;
 
   /**
+   * Slack-only: peek for an `app_home_opened` event with `tab: "messages"`.
+   * Slack's marketplace listing requires apps with the Messages tab enabled
+   * to send a welcome message on first open. chat-sdk's slack adapter only
+   * forwards Home-tab opens, so messages-tab opens have to be caught at the
+   * webhook level. Returns the user + IM channel to greet, or null when the
+   * inbound isn't the messages-tab opener. The router clones the request
+   * before calling so the body stays readable.
+   */
+  extractAppHomeOpened?: (req: Request) => Promise<{ channelId: string; userId: string } | null>;
+
+  /**
    * Try to extract a tap-action from a raw webhook request. Returns null when
    * the update is a regular message (in which case the caller hands it off to
    * chat-sdk). Platforms without tap callbacks return null unconditionally.
@@ -105,6 +123,22 @@ export interface MessengerPlatformBinder {
   }) => Promise<void>;
 
   /**
+   * Post an ephemeral message visible only to `userId` in `channelId` —
+   * used by the channel-mention link flow so an unlinked mentioner sees
+   * the verify-im URL without leaking it to the rest of the channel. When
+   * `threadTs` is supplied the ephemeral is anchored in that Slack thread
+   * so it appears next to the mention rather than at the bottom of the
+   * channel. Platforms without an ephemeral primitive (Telegram) leave
+   * this unset and the router falls back to `handleUnlinkedMessage`.
+   */
+  replyEphemeral?: (params: {
+    channelId: string;
+    text: string;
+    threadTs?: string;
+    userId: string;
+  }) => Promise<void>;
+
+  /**
    * Send a private response back to the invoker of a chat-sdk interaction
    * (slash command today; modal submit / action follow-up tomorrow). The
    * binder picks the most-private channel the platform offers — Slack uses
@@ -130,10 +164,26 @@ export interface MessengerPlatformBinder {
    * without typing a number. Optional — platforms that don't support
    * tap-to-select keyboards (e.g. plain Slack DMs) can leave this unset and
    * the router will fall back to the text-based `/agents <n>` flow.
+   *
+   * `ephemeralTo` (when supported) renders the picker as a private message
+   * visible only to that user — used when `/agents` is invoked from a
+   * public channel so the personal agent list isn't broadcast. Platforms
+   * without an ephemeral primitive ignore the field and post normally.
+   *
+   * `interaction` (Discord-only today) carries the slash command's
+   * application id + interaction token. When set, the binder must complete
+   * the deferred interaction via the webhook follow-up endpoint — otherwise
+   * Discord keeps showing "Thinking..." and eventually flips to "The
+   * application did not respond". Other platforms ignore the field.
    */
   sendAgentPicker?: (
     chatId: string,
-    params: { entries: AgentPickerEntry[]; text: string },
+    params: {
+      entries: AgentPickerEntry[];
+      ephemeralTo?: string;
+      interaction?: { applicationId: string; token: string };
+      text: string;
+    },
   ) => Promise<void>;
 
   /** Plain DM reply (used by /agents and various command help texts). */

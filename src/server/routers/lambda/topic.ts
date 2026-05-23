@@ -218,12 +218,6 @@ export const topicRouter = router({
     return ctx.topicModel.queryAll();
   }),
 
-  getCronTopicsGroupedByCronJob: topicProcedure
-    .input(z.object({ agentId: z.string() }))
-    .query(async ({ input, ctx }) => {
-      return ctx.topicModel.getCronTopicsGroupedByCronJob(input.agentId);
-    }),
-
   getShareInfo: topicProcedure
     .input(z.object({ topicId: z.string() }))
     .query(async ({ input, ctx }) => {
@@ -558,7 +552,18 @@ export const topicRouter = router({
             })
             .optional(),
           sessionId: z.string().optional(),
-          status: z.enum(['active', 'completed', 'archived']).nullable().optional(),
+          status: z
+            .enum([
+              'active',
+              'running',
+              'paused',
+              'waitingForHuman',
+              'failed',
+              'completed',
+              'archived',
+            ])
+            .nullable()
+            .optional(),
           title: z.string().optional(),
         }),
       }),
@@ -620,12 +625,20 @@ export const topicRouter = router({
           runningOperation: z
             .object({
               assistantMessageId: z.string(),
+              completionWebhook: z
+                .object({
+                  body: z.record(z.unknown()).optional(),
+                  delivery: z.enum(['fetch', 'qstash']).optional(),
+                  url: z.string(),
+                })
+                .optional(),
               operationId: z.string(),
               scope: z.string().optional(),
               threadId: z.string().nullable().optional(),
             })
             .nullable()
             .optional(),
+          repos: z.array(z.string()).optional(),
           workingDirectory: z.string().optional(),
         }),
       }),

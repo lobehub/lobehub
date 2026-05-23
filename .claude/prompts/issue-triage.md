@@ -1,6 +1,10 @@
 # Issue Triage Guide
 
-This guide is used for batch triaging GitHub issues - analyzing issues and applying appropriate labels.
+This guide is used for triaging GitHub issues — analyzing issues and applying only the most essential business-domain labels.
+
+## Core Principle
+
+**Each issue should have 1-3 labels that describe its core business domain.** Do NOT apply redundant labels that can be inferred from other labels. Less is more.
 
 ## Workflow
 
@@ -20,23 +24,76 @@ For each issue number, run:
 gh issue view [ISSUE_NUMBER] --json number,title,body,labels,comments
 ```
 
-### Step 3: Analyze and Select Labels
+### Step 3: Select Labels (1-3 per issue)
 
-Extract information from the issue template and content:
+Only apply labels from these THREE categories:
 
-#### Template Fields Mapping
+#### Category 1: Technology Carrier
 
-- 📦 Platform field → `platform:web/desktop/mobile`
-- 💻 Operating System → `os:windows/macos/linux/ios`
-- 🌐 Browser → `device:pc/mobile`
-- 📦 Deployment mode → `deployment:server/client/pglite`
-- Platform (hosting) → `hosting:cloud/self-host/vercel/zeabur/railway`
+The runtime environment or technology wrapper where the issue occurs:
 
-#### Provider Detection
+| Label | When to apply |
+|-------|--------------|
+| `electron` | Desktop/Electron-specific issues. This REPLACES `platform:desktop`, `os:*`, `deployment:*`, `hosting:*` — do NOT add those. |
+| `pwa` | PWA/mobile-app-specific issues |
+| `docker` | Docker-specific deployment issues |
 
-**IMPORTANT**: Always check issue title and body for provider mentions!
+**Rule**: If `electron` is applied, do NOT add `platform:desktop`, `os:*`, `deployment:*`, or `hosting:*`. The `electron` label already implies all of these.
 
-**Official Providers** (check for these keywords in title/body):
+#### Category 2: Feature / Component
+
+The functional area affected. Select the 1-2 MOST relevant:
+
+Core Features:
+
+- `feature:agent` - Agent/Assistant functionality
+- `feature:topic` - Topic/Conversation management
+- `feature:marketplace` - Agent/plugin marketplace
+- `feature:settings` - Settings and configuration
+
+Content & Knowledge:
+
+- `feature:editor` - Lobe Editor / rich text / markdown rendering
+- `feature:markdown` - Markdown rendering (if separate from editor)
+- `feature:files` - File upload/management
+- `feature:knowledge-base` - Knowledge base and RAG
+- `feature:export` - Export functionality
+
+Model Capabilities:
+
+- `feature:tool` - Tool calling and function execution
+- `feature:streaming` - Streaming responses
+- `feature:vision` - Vision/multimodal capabilities
+- `feature:image` - AI image generation
+- `feature:tts` - Text-to-speech
+
+Technical:
+
+- `feature:api` - Backend API
+- `feature:auth` - Authentication/authorization
+- `feature:sync` - Cloud sync functionality
+- `feature:search` - Search functionality
+- `feature:mcp` - MCP integration
+- `feature:thread` - Thread/Subtopic functionality
+
+Collaboration:
+
+- `feature:group-chat` - Group chat functionality
+- `feature:memory` - Memory feature
+- `feature:team-workspace` - Team workspace
+- `feature:im-integration` - IM and bot integration
+
+Other:
+
+- `feature:schedule-task` - Scheduled task functionality
+
+**Rule**: Pick only the 1-2 most specific feature labels. Don't stack multiple features unless the issue genuinely spans multiple areas.
+
+#### Category 3: Model Provider
+
+Only when the issue is SPECIFICALLY about a provider's behavior:
+
+**Official Providers** (check title and body for these keywords):
 
 - `openai`, `gpt` → `provider:openai`
 - `gemini` → `provider:gemini`
@@ -57,197 +114,100 @@ Extract information from the issue template and content:
 **Third-party Aggregation Providers**:
 
 - `aihubmix`, `AIHubMix`, `AIHUBMIX` → `provider:aihubmix`
-- Check environment variables like `AIHUBMIX_*` in issue body
+- `zenmux` → `provider:zenmux`
 
-**Multiple Providers**: If issue mentions multiple providers, add ALL applicable provider labels.
+**Rule**: Only add a provider label if the issue is specifically about that provider's behavior (e.g., "Gemini returns error X"). Do NOT add provider labels just because the issue template mentions a provider.
 
-### Label Categories
+#### Special Labels (use sparingly)
 
-#### a) Issue Type (select ONE if applicable)
-
-- `💄 Design` - UI/UX design issues
-- `📝 Documentation` - Documentation improvements
-- `⚡️ Performance` - Performance optimization
-
-#### b) Priority (select ONE if applicable)
-
-- `priority:high` - Critical issues, data loss, security, maintainer mentions "urgent"/"serious"/"critical"
-- `priority:medium` - Important issues affecting multiple users, significant functionality impact
-- `priority:low` - Nice to have, minor issues, edge cases
-
-**Priority Guidelines**:
-
-- Set `priority:high` for: data loss, authentication failures, deployment blockers, critical bugs
-- Set `priority:medium` for: feature bugs affecting multiple users, workflow issues
-- Set `priority:low` for: cosmetic issues, feature requests, configuration questions
-
-#### c) Platform (select ALL applicable)
-
-- `platform:web`
-- `platform:desktop`
-- `platform:mobile`
-
-#### d) Device (for platform:web, select ONE)
-
-- `device:pc`
-- `device:mobile`
-
-#### e) Operating System (select ALL applicable)
-
-- `os:windows`
-- `os:macos`
-- `os:linux`
-- `os:ios`
-- `os:android`
-
-#### f) Hosting Platform (select ONE)
-
-- `hosting:cloud` - Official LobeHub Cloud
-- `hosting:self-host` - Self-hosted deployment
-- `hosting:vercel` - Vercel deployment
-- `hosting:zeabur` - Zeabur deployment
-- `hosting:railway` - Railway deployment
-
-#### g) Deployment Mode (select ONE if mentioned)
-
-- `deployment:server` - Server-side database mode
-- `deployment:client` - Client-side database mode
-- `deployment:pglite` - PGLite mode
-
-**Additional deployment tags**:
-
-- `docker` - If using Docker deployment
-- `electron` - If desktop/Electron specific
-
-#### h) Model Provider (select ALL applicable)
-
-See "Provider Detection" section above for complete list.
-
-**IMPORTANT**: Always scan issue title and body for provider keywords!
-
-#### i) Feature/Component (select ALL applicable)
-
-Core Features:
-
-- `feature:settings` - Settings and configuration
-- `feature:agent` - Agent/Assistant functionality
-- `feature:topic` - Topic/Conversation management
-- `feature:marketplace` - Agent marketplace
-
-File & Knowledge:
-
-- `feature:files` - File upload/management
-- `feature:knowledge-base` - Knowledge base and RAG
-- `feature:export` - Export functionality
-
-Model Capabilities:
-
-- `feature:streaming` - Streaming responses
-- `feature:tool` - Tool calling
-- `feature:vision` - Vision/multimodal capabilities
-- `feature:image` - AI image generation
-- `feature:dalle` - DALL-E specific
-- `feature:tts` - Text-to-speech
-
-Technical:
-
-- `feature:api` - Backend API
-- `feature:auth` - Authentication/authorization
-- `feature:sync` - Cloud sync functionality
-- `feature:search` - Search functionality
-- `feature:mcp` - MCP integration
-- `feature:editor` - Lobe Editor
-- `feature:markdown` - Markdown rendering
-- `feature:thread` - Thread/Subtopic functionality
-
-Collaboration:
-
-- `feature:group-chat` - Group chat functionality
-- `feature:memory` - Memory feature
-- `feature:team-workspace` - Team workspace
-
-#### j) Workflow/Status
-
+- `i18n` - Internationalization / translation issues
 - `Duplicate` - Only if duplicate of an OPEN issue (mention issue number)
-- `needs-reproduction` - Cannot reproduce, needs more information
-- `good-first-issue` - Good for first-time contributors
 - `🤔 Need Reproduce` - Needs reproduction steps
+- `good-first-issue` - Good for first-time contributors
 
 ### Step 4: Apply Labels
 
-Add labels (comma-separated, no spaces after commas):
-
 ```bash
-gh issue edit [ISSUE_NUMBER] --add-label "label1,label2,label3"
-```
-
-Remove "unconfirm" label if adding other labels:
-
-```bash
+gh issue edit [ISSUE_NUMBER] --add-label "label1,label2"
 gh issue edit [ISSUE_NUMBER] --remove-label "unconfirm"
 ```
 
-**Important**: Combine both commands when possible for efficiency.
-
 ### Step 5: Log Summary
 
-For each issue, provide reasoning (2-4 sentences):
+For each issue, provide a brief reasoning (1-2 sentences) explaining why each label was chosen.
 
-- Labels applied and why
-- Key factors from issue template/comments
-- Provider detection reasoning (if applicable)
+## What NOT to Label
+
+These categories are INTENTIONALLY OMITTED — do NOT apply them:
+
+| Do NOT apply | Reason |
+|-------------|--------|
+| `platform:web`, `platform:desktop`, `platform:mobile` | Inferred from `electron`/`pwa` or issue context |
+| `os:windows`, `os:macos`, `os:linux`, `os:ios`, `os:android` | Low triage value; inferred from `electron` |
+| `device:pc`, `device:mobile` | Redundant with platform |
+| `hosting:cloud`, `hosting:self-host`, `hosting:vercel`, etc. | Low triage value unless deployment-specific |
+| `deployment:server`, `deployment:client`, `deployment:pglite` | Low triage value; inferred from `electron` |
+| `priority:high`, `priority:medium`, `priority:low` | Maintainers judge priority themselves |
+| `🐛 Bug`, `💄 Design`, `📝 Documentation`, `⚡️ Performance` | Issue type is already indicated by GitHub issue template |
+| `Inactive` | Handled separately; do NOT add during triage |
+
+## Examples
+
+### Example 1: Electron desktop bug
+
+**Issue**: "Connection failure when executing tasks on macOS desktop app"
+
+**Analysis**: Desktop Electron app issue with task scheduling.
+
+**Labels**: `electron,feature:schedule-task`
+
+**Why**: `electron` covers the desktop platform. `feature:schedule-task` identifies the affected feature. No need for `platform:desktop`, `os:macos`, `hosting:cloud`, `priority:*`, or `Bug`.
+
+### Example 2: Provider-specific issue
+
+**Issue**: "Gemini tool calling returns empty response on desktop"
+
+**Analysis**: Desktop app issue, but the core problem is Gemini provider behavior with tool calling.
+
+**Labels**: `electron,provider:gemini`
+
+**Why**: `electron` for the desktop context. `provider:gemini` because the issue is about Gemini's behavior. The tool calling aspect is secondary — the provider is the key domain.
+
+### Example 3: Feature-specific issue
+
+**Issue**: "Underscore auto-escaped in markdown editor"
+
+**Analysis**: Markdown rendering bug in the editor component.
+
+**Labels**: `feature:markdown`
+
+**Why**: Single label is sufficient — the issue is purely about markdown rendering. No need for platform, OS, or priority labels.
+
+### Example 4: Web-only feature request
+
+**Issue**: "Add search functionality to plugin marketplace"
+
+**Analysis**: Feature request for marketplace search. Web platform, no specific provider.
+
+**Labels**: `feature:marketplace,feature:search`
+
+**Why**: Two feature labels capture the core domain. No platform label needed — it's a web app by default.
+
+### Example 5: Ollama self-hosted issue
+
+**Issue**: "Ollama model not loading on self-hosted Docker deployment"
+
+**Analysis**: Provider-specific issue with Ollama on Docker.
+
+**Labels**: `docker,provider:ollama`
+
+**Why**: `docker` for the deployment context, `provider:ollama` for the model provider. No need for `hosting:self-host` or `platform:*`.
 
 ## Important Rules
 
-1. **Read Carefully**: Read issue template fields AND issue body/title for complete context
-2. **Provider Detection**: ALWAYS check title and body for provider keywords (including aihubmix, etc.)
-3. **Multiple Categories**: Use ALL applicable labels from different categories
-4. **Label Prefixes**: Always use proper prefixes (`feature:`, `provider:`, `os:`, `platform:`, etc.)
-5. **Maintainer Comments**: Check maintainer comments for priority/status hints
-6. **No Comments**: Only apply labels, DO NOT post comments to issues
-7. **Batch Efficiency**: Process issues in parallel when possible
-
-## Common Patterns
-
-### Provider in Environment Variables
-
-If issue body contains `AIHUBMIX_*`, add `provider:aihubmix`
-
-### Multiple Provider Issues
-
-If comparing providers (e.g., "works with OpenAI but not Gemini"), add both provider labels
-
-### Desktop Issues
-
-Desktop issues often need: `platform:desktop`, `electron`, specific `os:*`, and `deployment:client` or `deployment:server`
-
-### Knowledge Base Issues
-
-Usually need: `feature:knowledge-base`, often with `feature:files`, may need `provider:*` for embedding models
-
-### Tool Calling Issues
-
-Usually need: `feature:tool`, specific `provider:*`, may need `feature:mcp` if MCP-related
-
-### Streaming Issues
-
-Usually need: `feature:streaming`, specific `provider:*`, check for timeout/performance issues
-
-## Example Triage
-
-**Issue #8850**: "aihubmix 的优惠 app 没有生效"
-
-**Analysis**:
-
-- Title contains "aihubmix" → `provider:aihubmix`
-- Template shows: Windows, Chrome, Docker, Client mode
-- About API discount codes not working
-
-**Labels Applied**:
-
-```bash
-gh issue edit 8850 --add-label "provider:aihubmix,platform:web,os:windows,deployment:client,hosting:self-host,docker"
-gh issue edit 8850 --remove-label "unconfirm"
-```
-
-**Reasoning**: AIHubMix provider discount feature not working. Client mode deployment on Windows with Docker. Provider detection from title keyword "aihubmix".
+1. **1-3 labels per issue** — Never exceed 3 labels. If you find yourself adding more, you're being too granular.
+2. **`electron` replaces all platform/OS/deployment labels** — Never combine `electron` with `platform:desktop`, `os:*`, `deployment:*`, or `hosting:*`.
+3. **Provider only when relevant** — Only add `provider:*` if the issue is specifically about that provider's behavior.
+4. **No priority, no type** — Do NOT add `priority:*`, `🐛 Bug`, `💄 Design`, etc. Maintainers handle these.
+5. **No comments** — Only apply labels. Do NOT post comments to issues.
+6. **Remove `unconfirm`** — Always remove the `unconfirm` label when applying triage labels.

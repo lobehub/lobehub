@@ -485,7 +485,7 @@ describe('Generation Actions', () => {
       expect(mockCompleteOperation).toHaveBeenCalledWith('test-op-id');
     });
 
-    it('should delete message BEFORE regeneration to prevent message not found issue (LOBE-2533)', async () => {
+    it('should delete message BEFORE regeneration to prevent message not found issue ()', async () => {
       // This test verifies the fix:
       // When "delete and regenerate" is called, if regeneration happens first,
       // it switches to a new branch, causing the original message to no longer

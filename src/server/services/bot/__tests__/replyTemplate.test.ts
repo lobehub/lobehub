@@ -360,7 +360,7 @@ describe('replyTemplate', () => {
 
   describe('renderAgentError', () => {
     it('returns the friendly NoAvailableProvider copy and appends the operation id footer', () => {
-      const out = renderAgentError('NoAvailableProvider', 'op-abc');
+      const out = renderAgentError('NoAvailableProvider', undefined, 'op-abc');
       expect(out).toContain('No model provider configured');
       // The friendly message guides the user; the op id is appended as a
       // traceable footer so operators can still find the failure in logs.
@@ -368,47 +368,63 @@ describe('replyTemplate', () => {
     });
 
     it('renders Chinese NoAvailableProvider copy with operation id footer when locale is zh-CN', () => {
-      const out = renderAgentError('NoAvailableProvider', 'op-abc', 'zh-CN');
+      const out = renderAgentError('NoAvailableProvider', undefined, 'op-abc', 'zh-CN');
       expect(out).toContain('未配置可用的模型 Provider');
       expect(out).toContain('op-abc');
     });
 
     it('omits the operation id footer when none is provided', () => {
-      const out = renderAgentError('NoAvailableProvider', undefined);
+      const out = renderAgentError('NoAvailableProvider', undefined, undefined);
       expect(out).toContain('No model provider configured');
       expect(out).not.toContain('Operation ID');
     });
 
     it('returns the friendly InvalidProviderAPIKey copy', () => {
-      const en = renderAgentError('InvalidProviderAPIKey', 'op-1');
+      const en = renderAgentError('InvalidProviderAPIKey', undefined, 'op-1');
       expect(en).toContain('Invalid or missing API key');
-      const zh = renderAgentError('InvalidProviderAPIKey', 'op-1', 'zh-CN');
+      const zh = renderAgentError('InvalidProviderAPIKey', undefined, 'op-1', 'zh-CN');
       expect(zh).toContain('API Key 无效');
     });
 
     it('returns the friendly ExceededContextWindow copy', () => {
-      expect(renderAgentError('ExceededContextWindow', 'op-1')).toContain(
+      expect(renderAgentError('ExceededContextWindow', undefined, 'op-1')).toContain(
         'Context window exceeded',
       );
-      expect(renderAgentError('ExceededContextWindow', 'op-1', 'zh-CN')).toContain('上下文已超出');
+      expect(renderAgentError('ExceededContextWindow', undefined, 'op-1', 'zh-CN')).toContain(
+        '上下文已超出',
+      );
     });
 
     it('maps both QuotaLimitReached and InsufficientQuota to the same quota copy', () => {
-      const a = renderAgentError('QuotaLimitReached', 'op-1');
-      const b = renderAgentError('InsufficientQuota', 'op-1');
+      const a = renderAgentError('QuotaLimitReached', undefined, 'op-1');
+      const b = renderAgentError('InsufficientQuota', undefined, 'op-1');
       expect(a).toContain('quota');
       expect(b).toContain('quota');
       expect(a).toBe(b);
     });
 
+    it('uses friendly copy for command connection close failures wrapped as 500 errors', () => {
+      const en = renderAgentError('500', 'Command aborted due to connection close', 'op-1');
+      expect(en).toContain('Command session disconnected');
+      expect(en).toContain('op-1');
+
+      const zh = renderAgentError(
+        '500',
+        'Command aborted due to connection close',
+        'op-1',
+        'zh-CN',
+      );
+      expect(zh).toContain('命令会话已断开');
+    });
+
     it('falls back to the generic op-id template for unknown error codes', () => {
-      expect(renderAgentError('SomeNewErrorCode', 'op-1')).toBe(
+      expect(renderAgentError('SomeNewErrorCode', undefined, 'op-1')).toBe(
         '**Agent Execution Failed**\nOperation ID: `op-1`',
       );
     });
 
     it('falls back to the generic header when neither errorType nor operationId is known', () => {
-      expect(renderAgentError(undefined, undefined)).toBe('**Agent Execution Failed**');
+      expect(renderAgentError(undefined, undefined, undefined)).toBe('**Agent Execution Failed**');
     });
   });
 

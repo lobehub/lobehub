@@ -26,6 +26,8 @@ export const useMarketUserProfile = (username: string | null | undefined) => {
       dedupingInterval: 60_000, // 1 minute deduplication
       revalidateOnFocus: false,
       revalidateOnReconnect: false,
+      // NOT_FOUND means the user hasn't created a market username yet — no point retrying
+      shouldRetryOnError: (error) => error?.data?.code !== 'NOT_FOUND',
     },
   );
 };

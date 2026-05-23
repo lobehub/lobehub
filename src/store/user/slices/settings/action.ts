@@ -1,23 +1,28 @@
 import isEqual from 'fast-deep-equal';
-import { type PartialDeep } from 'type-fest';
+import type { PartialDeep } from 'type-fest';
 
 import { MESSAGE_CANCEL_FLAT } from '@/const/message';
 import { shareService } from '@/services/share';
 import { userService } from '@/services/user';
-import { type StoreSetter } from '@/store/types';
-import { type UserStore } from '@/store/user';
-import { type LobeAgentSettings } from '@/types/session';
-import {
-  type SystemAgentItem,
-  type UserGeneralConfig,
-  type UserKeyVaults,
-  type UserSettings,
-  type UserSystemAgentConfigKey,
+import type { StoreSetter } from '@/store/types';
+import type { UserStore } from '@/store/user';
+import type { LobeAgentSettings } from '@/types/session';
+import type {
+  SystemAgentItem,
+  UserGeneralConfig,
+  UserKeyVaults,
+  UserSettings,
+  UserSystemAgentConfigKey,
 } from '@/types/user/settings';
 import { difference } from '@/utils/difference';
 import { merge } from '@/utils/merge';
 
+import { settingsSelectors } from './selectors/settings';
+
 type Setter = StoreSetter<UserStore>;
+
+type SystemAgentDiff = Partial<Record<string, unknown>>;
+
 export const createSettingsSlice = (set: Setter, get: () => UserStore, _api?: unknown) =>
   new UserSettingsActionImpl(set, get, _api);
 
@@ -89,7 +94,10 @@ export class UserSettingsActionImpl {
 
     const diffs = difference(nextSettings, defaultSettings);
     const isEmptyObjectDiff = (value: unknown): boolean =>
-      !!value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value as object).length === 0;
+      !!value &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      Object.keys(value as object).length === 0;
 
     // When user resets a field to default value, we need to explicitly include it in diffs
     // to override the previously saved non-default value in the backend
@@ -102,6 +110,81 @@ export class UserSettingsActionImpl {
       }
     }
 
+    const nextDefaultAgentConfig = nextSettings.defaultAgent?.config;
+    const changedDefaultAgentConfig = changedFields.defaultAgent?.config;
+    const hasDefaultAgentModelProviderChange =
+      !!changedDefaultAgentConfig &&
+      ('model' in changedDefaultAgentConfig || 'provider' in changedDefaultAgentConfig);
+    const defaultAgentModelProviderDiffersFromDefault =
+      nextDefaultAgentConfig?.model !== defaultSettings.defaultAgent?.config?.model ||
+      nextDefaultAgentConfig?.provider !== defaultSettings.defaultAgent?.config?.provider;
+
+    if (
+      hasDefaultAgentModelProviderChange &&
+      (defaultAgentModelProviderDiffersFromDefault || 'defaultAgent' in prevSetting) &&
+      nextDefaultAgentConfig?.model &&
+      nextDefaultAgentConfig.provider
+    ) {
+      const defaultAgentDiff = diffs.defaultAgent || {};
+      const configDiff = defaultAgentDiff.config || {};
+
+      diffs.defaultAgent = {
+        ...defaultAgentDiff,
+        config: {
+          ...configDiff,
+          model: nextDefaultAgentConfig.model,
+          provider: nextDefaultAgentConfig.provider,
+        },
+      };
+    }
+
+    const changedSystemAgent = changedFields.systemAgent as SystemAgentDiff | undefined;
+    const nextSystemAgent = nextSettings.systemAgent;
+    const previousSystemAgent = prevSetting.systemAgent;
+    const defaultSystemAgent = defaultSettings.systemAgent;
+
+    if (changedSystemAgent && nextSystemAgent) {
+      const mutableDiffs = diffs as PartialDeep<UserSettings> & { systemAgent?: SystemAgentDiff };
+
+      for (const key of Object.keys(changedSystemAgent)) {
+        const changedSystemAgentItem = changedSystemAgent[key];
+        if (
+          !changedSystemAgentItem ||
+          typeof changedSystemAgentItem !== 'object' ||
+          Array.isArray(changedSystemAgentItem) ||
+          (!('model' in changedSystemAgentItem) && !('provider' in changedSystemAgentItem))
+        )
+          continue;
+
+        const taskKey = key as UserSystemAgentConfigKey;
+        const nextSystemAgentItem = nextSystemAgent[taskKey];
+        const defaultSystemAgentItem = defaultSystemAgent?.[taskKey];
+        const systemAgentModelProviderDiffersFromDefault =
+          nextSystemAgentItem?.model !== defaultSystemAgentItem?.model ||
+          nextSystemAgentItem?.provider !== defaultSystemAgentItem?.provider;
+
+        if (
+          (!systemAgentModelProviderDiffersFromDefault &&
+            (!previousSystemAgent || !Object.hasOwn(previousSystemAgent, taskKey))) ||
+          !nextSystemAgentItem?.model ||
+          !nextSystemAgentItem.provider
+        )
+          continue;
+
+        const systemAgentDiff = mutableDiffs.systemAgent || {};
+        const systemAgentItemDiff = systemAgentDiff[taskKey] || {};
+
+        mutableDiffs.systemAgent = {
+          ...systemAgentDiff,
+          [taskKey]: {
+            ...systemAgentItemDiff,
+            model: nextSystemAgentItem.model,
+            provider: nextSystemAgentItem.provider,
+          },
+        };
+      }
+    }
+
     this.#set({ settings: diffs }, false, 'optimistic_updateSettings');
 
     const abortController = this.#get().internal_createSignal();
@@ -110,7 +193,27 @@ export class UserSettingsActionImpl {
   };
 
   updateDefaultAgent = async (defaultAgent: PartialDeep<LobeAgentSettings>): Promise<void> => {
-    await this.#get().setSettings({ defaultAgent });
+    const config = defaultAgent.config;
+    const shouldNormalizeModelProvider =
+      config && (config.model !== undefined || config.provider !== undefined);
+
+    if (!shouldNormalizeModelProvider) {
+      await this.#get().setSettings({ defaultAgent });
+      return;
+    }
+
+    const currentConfig = settingsSelectors.defaultAgentConfig(this.#get());
+
+    await this.#get().setSettings({
+      defaultAgent: {
+        ...defaultAgent,
+        config: {
+          ...config,
+          model: config.model ?? currentConfig.model,
+          provider: config.provider ?? currentConfig.provider,
+        },
+      },
+    });
   };
 
   updateGeneralConfig = async (general: Partial<UserGeneralConfig>): Promise<void> => {

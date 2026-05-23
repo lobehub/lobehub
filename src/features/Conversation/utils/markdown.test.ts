@@ -567,4 +567,48 @@ This HTML document includes the temperature converter with the requested feature
       expect(output).not.toContain('</lobeThinking>\n\n<lobeArtifact');
     });
   });
+
+  describe('lobeAgents tag', () => {
+    it('strips newlines inside a self-closing tag whose attributes span lines', () => {
+      const input = `<lobeAgents
+  identifier="session-abc"
+  title="高密度信息图生成器"
+/>`;
+
+      const output = processWithArtifact(input);
+
+      expect(output).toEqual('<lobeAgents  identifier="session-abc"  title="高密度信息图生成器"/>');
+    });
+
+    it('preserves trailing block-level Markdown after a self-closing tag', () => {
+      const input = `<lobeAgents identifier="session-abc" title="高密度信息图生成器" />
+
+---
+### 这个 Agent 的核心能力：
+
+| 维度 | 说明 |
+|------|------|
+| 风格 | 实验室精密手册感 |`;
+
+      const output = processWithArtifact(input);
+
+      expect(output).toEqual(input);
+    });
+
+    it('does not swallow trailing Markdown when the model omits the self-closing slash', () => {
+      // Some models (e.g. deepseek) emit a bare opening tag without `/>`.
+      // The newline stripper must still only touch the tag, not the rest.
+      const input = `<lobeAgents identifier="session-abc" title="高密度信息图生成器">
+
+---
+### 这个 Agent 的核心能力：
+
+| 维度 | 说明 |
+|------|------|`;
+
+      const output = processWithArtifact(input);
+
+      expect(output).toEqual(input);
+    });
+  });
 });

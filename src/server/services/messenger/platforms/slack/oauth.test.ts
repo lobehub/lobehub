@@ -48,20 +48,30 @@ describe('slackOAuthAdapter.buildAuthorizeUrl', () => {
     });
     const parsed = new URL(url);
     const scope = parsed.searchParams.get('scope') ?? '';
-    // Spot-check the messenger v1 scope shape — DM-only, includes
-    // reactions:write but not :read.
+    // Spot-check the messenger scope shape — aligned with the per-agent bot
+    // (channels/groups/mpim history, slash commands, assistant) plus the
+    // messenger-specific extras (im:write, users:read.email).
     expect(scope.split(',')).toEqual(
       expect.arrayContaining([
+        'app_mentions:read',
+        'assistant:write',
+        'channels:history',
+        'channels:read',
         'chat:write',
+        'commands',
+        'groups:history',
+        'groups:read',
         'im:history',
         'im:read',
         'im:write',
+        'mpim:history',
+        'mpim:read',
+        'reactions:read',
         'reactions:write',
         'users:read',
         'users:read.email',
       ]),
     );
-    expect(scope.split(',')).not.toContain('reactions:read');
     expect(parsed.searchParams.get('state')).toBe('nonce-1');
   });
 });

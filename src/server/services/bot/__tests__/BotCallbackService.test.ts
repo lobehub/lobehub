@@ -119,11 +119,28 @@ vi.mock('@/server/services/systemAgent', () => ({
 
 vi.mock('@/server/services/messenger/installations', () => ({
   getInstallationStore: mockMessengerGetInstallationStore,
+  messengerConnectionIdForUser: ({
+    installationKey,
+    userId,
+  }: {
+    installationKey: string;
+    userId: string;
+  }) => {
+    if (installationKey.endsWith(':singleton')) {
+      return `messenger:${installationKey.slice(0, -':singleton'.length)}:user-${userId}`;
+    }
+    return `messenger:${installationKey}:user-${userId}`;
+  },
 }));
 
 vi.mock('@/server/services/messenger/platforms', () => ({
   messengerPlatformRegistry: {
     createBinder: mockMessengerCreateBinder,
+    getPlatform: vi.fn().mockImplementation((platform: string) => ({
+      connectionMode: platform === 'discord' ? 'websocket' : 'webhook',
+      id: platform,
+      name: platform,
+    })),
   },
 }));
 
@@ -153,7 +170,15 @@ const FAKE_BOT_TOKEN = 'fake-bot-token-123';
 const FAKE_CREDENTIALS = JSON.stringify({ botToken: FAKE_BOT_TOKEN });
 
 function setupCredentials(credentials = FAKE_CREDENTIALS, extra?: Record<string, unknown>) {
-  mockFindByPlatformAndAppId.mockResolvedValue({ credentials, ...extra });
+  // Step rendering is opt-in (schema default: false). The legacy bot path
+  // tests in this file all exercise step rendering, so the default fixture
+  // turns it on. Tests that need to exercise the off-path can override
+  // `settings` via `extra`.
+  mockFindByPlatformAndAppId.mockResolvedValue({
+    credentials,
+    settings: { displayToolCalls: true },
+    ...extra,
+  });
   mockInitWithEnvKey.mockResolvedValue({ decrypt: mockDecrypt });
   mockDecrypt.mockResolvedValue({ plaintext: credentials });
 }
@@ -271,12 +296,16 @@ describe('BotCallbackService', () => {
       await service.handleCallback(body);
 
       // Crucially: never hits agent_bot_providers — that lookup throws for
-      // messenger-originated runs and was the cause of LOBE-8654.
+      // messenger-originated runs and was the cause of .
       expect(mockFindByPlatformAndAppId).not.toHaveBeenCalled();
       expect(mockMessengerGetInstallationStore).toHaveBeenCalledWith('telegram');
       expect(mockMessengerStoreResolveByKey).toHaveBeenCalledWith('telegram:singleton');
       expect(mockMessengerBinderCreateClient).toHaveBeenCalled();
-      expect(mockEditMessage).toHaveBeenCalled();
+      // `displayToolCalls` defaults to off (schema default + runtime gate),
+      // so step events don't edit the progress message — only completion does.
+      // This test only asserts the credential-resolution path; the gating is
+      // implicit confirmation that no `editMessage` side-effect leaked.
+      expect(mockEditMessage).not.toHaveBeenCalled();
     });
 
     it('should pass through the messenger install key verbatim for slack workspaces', async () => {
@@ -354,7 +383,10 @@ describe('BotCallbackService', () => {
     });
 
     it('should fall back to raw credentials when decryption fails', async () => {
-      mockFindByPlatformAndAppId.mockResolvedValue({ credentials: FAKE_CREDENTIALS });
+      mockFindByPlatformAndAppId.mockResolvedValue({
+        credentials: FAKE_CREDENTIALS,
+        settings: { displayToolCalls: true },
+      });
       mockInitWithEnvKey.mockResolvedValue({
         decrypt: vi.fn().mockRejectedValue(new Error('decrypt failed')),
       });
@@ -664,6 +696,171 @@ describe('BotCallbackService', () => {
       });
 
       await expect(service.handleCallback(body)).resolves.toBeUndefined();
+    });
+
+    // ==================== Attachments ====================
+
+    it('should pass attachments through to messenger when present on single-chunk reply', async () => {
+      const body = makeBody({
+        attachments: [
+          {
+            fetchUrl: 'https://cdn.example.com/foo.png',
+            mimeType: 'image/png',
+            name: 'foo.png',
+            type: 'image',
+          },
+        ],
+        lastAssistantContent: 'Here is the image you asked for.',
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await service.handleCallback(body);
+
+      expect(mockEditMessage).toHaveBeenCalledWith(
+        'progress-msg-1',
+        expect.objectContaining({
+          attachments: [
+            expect.objectContaining({
+              fetchUrl: 'https://cdn.example.com/foo.png',
+              type: 'image',
+            }),
+          ],
+          content: expect.stringContaining('Here is the image you asked for.'),
+        }),
+      );
+    });
+
+    it('should only attach to the last chunk in a multi-chunk reply', async () => {
+      const longContent = 'A'.repeat(2000) + '\n\n' + 'B'.repeat(2000);
+      const body = makeBody({
+        attachments: [{ fetchUrl: 'https://cdn.example.com/bar.png', type: 'image' }],
+        lastAssistantContent: longContent,
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await service.handleCallback(body);
+
+      // First chunk goes through editMessage as a plain string — no attachments.
+      expect(mockEditMessage).toHaveBeenCalledTimes(1);
+      const firstCallArg = mockEditMessage.mock.calls[0][1];
+      expect(typeof firstCallArg).toBe('string');
+
+      // Last chunk goes through createMessage with the attachments.
+      const lastCreateArg = mockCreateMessage.mock.calls.at(-1)?.[0];
+      expect(lastCreateArg).toMatchObject({
+        attachments: [{ fetchUrl: 'https://cdn.example.com/bar.png', type: 'image' }],
+      });
+    });
+
+    it('should fall back to createMessage with attachments when edit fails', async () => {
+      mockEditMessage.mockRejectedValueOnce(new Error('edit failed'));
+
+      const body = makeBody({
+        attachments: [{ data: 'aGVsbG8=', mimeType: 'image/png', type: 'image' }],
+        lastAssistantContent: 'reply',
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await service.handleCallback(body);
+
+      expect(mockCreateMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          attachments: [{ data: 'aGVsbG8=', mimeType: 'image/png', type: 'image' }],
+          content: expect.stringContaining('reply'),
+        }),
+      );
+    });
+
+    // Regression for Codex P1: image-only final assistant turn must still
+    // ship the attachments, instead of being silently dropped because there
+    // is no `lastAssistantContent.trim()`.
+    it('should deliver attachments even when reply text is empty', async () => {
+      const body = makeBody({
+        attachments: [{ fetchUrl: 'https://cdn.example.com/only.png', type: 'image' }],
+        lastAssistantContent: '',
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await service.handleCallback(body);
+
+      // Either edit or create — but the call MUST carry the attachments.
+      const editCalls = mockEditMessage.mock.calls;
+      const createCalls = mockCreateMessage.mock.calls;
+      const allCalls = [...editCalls.map((c) => c[1]), ...createCalls.map((c) => c[0])];
+      expect(
+        allCalls.some(
+          (arg) =>
+            arg &&
+            typeof arg === 'object' &&
+            'attachments' in arg &&
+            (arg as any).attachments?.[0]?.fetchUrl === 'https://cdn.example.com/only.png',
+        ),
+      ).toBe(true);
+    });
+
+    it('should still skip when there is neither text nor attachments', async () => {
+      const body = makeBody({
+        lastAssistantContent: '   \n  ',
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await service.handleCallback(body);
+
+      expect(mockEditMessage).not.toHaveBeenCalled();
+      expect(mockCreateMessage).not.toHaveBeenCalled();
+    });
+
+    it('should still ship attachments when reply text is whitespace-only', async () => {
+      // Whitespace text alone collapses to empty downstream and would be
+      // dropped, but the attachment-only path must still deliver the image.
+      const body = makeBody({
+        attachments: [{ fetchUrl: 'https://cdn.example.com/ws.png', type: 'image' }],
+        lastAssistantContent: '\n\n   ',
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await service.handleCallback(body);
+
+      const editCalls = mockEditMessage.mock.calls;
+      const createCalls = mockCreateMessage.mock.calls;
+      const allCalls = [...editCalls.map((c) => c[1]), ...createCalls.map((c) => c[0])];
+      expect(
+        allCalls.some(
+          (arg) =>
+            arg &&
+            typeof arg === 'object' &&
+            'attachments' in arg &&
+            (arg as any).attachments?.[0]?.fetchUrl === 'https://cdn.example.com/ws.png',
+        ),
+      ).toBe(true);
+    });
+
+    it('should not summarize topic title for attachment-only reply', async () => {
+      // Attachment-only reply has no assistant text, so the LLM summarizer
+      // has no body to work with. `summarizeTopicTitle` already guards on
+      // `!lastAssistantContent`; this regression-locks that contract.
+      mockFindById.mockResolvedValue({ title: null });
+
+      const body = makeBody({
+        attachments: [{ fetchUrl: 'https://cdn.example.com/x.png', type: 'image' }],
+        reason: 'completed',
+        topicId: 'topic-1',
+        type: 'completion',
+        userId: 'user-1',
+        userPrompt: 'Draw something',
+      });
+
+      await service.handleCallback(body);
+
+      await new Promise((r) => setTimeout(r, 50));
+      expect(mockGenerateTopicTitle).not.toHaveBeenCalled();
+      expect(mockTopicUpdate).not.toHaveBeenCalled();
     });
   });
 

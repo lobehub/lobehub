@@ -10,6 +10,10 @@ inputs:
     description: Pass-through to actions/setup-node package-manager-cache
     required: false
     default: 'false'
+  bun-version:
+    description: Bun version
+    required: false
+    default: '1.3.2'
 
 runs:
   using: composite
@@ -21,6 +25,8 @@ runs:
 
     - name: Install bun
       uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: ${{ inputs.bun-version }}
 
     - name: Setup Node.js
       uses: actions/setup-node@v6

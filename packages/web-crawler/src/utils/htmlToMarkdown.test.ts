@@ -50,7 +50,7 @@ describe('htmlToMarkdown', () => {
     expect(result.content.length).toBeLessThan(html.length);
   }, 20000);
 
-  it('should not crash on HTML with invalid CSS selectors (LOBE-6869)', () => {
+  it('should not crash on HTML with invalid CSS selectors ()', () => {
     // Regression: happy-dom throws TypeError on pages with CSS selectors it cannot parse.
     // htmlToMarkdown must not propagate this — it should fall back to raw HTML conversion.
     const html = `
@@ -67,7 +67,7 @@ describe('htmlToMarkdown', () => {
     expect(result.content).toContain('Valid content');
   });
 
-  it('should not crash on HTML with external stylesheet links (LOBE-6869)', () => {
+  it('should not crash on HTML with external stylesheet links ()', () => {
     // Regression: happy-dom's HTMLLinkElement.#loadStyleSheet can crash on CSS parsing.
     // disableCSSFileLoading should prevent this path entirely.
     const html = `

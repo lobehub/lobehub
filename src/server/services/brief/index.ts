@@ -22,6 +22,13 @@ export type BriefWithAgent = BriefItem & {
   taskStatus: TaskStatus | null;
 };
 
+export interface BriefResolveOptions {
+  /** User action selected from a Daily Brief card. */
+  action?: string;
+  /** Optional user comment attached to the resolution. */
+  comment?: string;
+}
+
 export class BriefService {
   private agentModel: AgentModel;
   private briefModel: BriefModel;
@@ -187,10 +194,7 @@ export class BriefService {
    * recurring task — which leaves the task in `scheduled` between runs — is
    * handled the same way.
    */
-  async resolve(
-    id: string,
-    options?: { action?: string; comment?: string },
-  ): Promise<BriefItem | null> {
+  async resolve(id: string, options?: BriefResolveOptions): Promise<BriefItem | null> {
     const brief = await this.briefModel.resolve(id, options);
     if (!brief) return null;
 

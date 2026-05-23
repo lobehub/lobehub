@@ -1,3 +1,5 @@
+import { setTimeout as sleep } from 'node:timers/promises';
+
 import { flatten } from 'es-toolkit/compat';
 import { type MetadataRoute } from 'next';
 import qs from 'query-string';
@@ -35,11 +37,40 @@ export const LAST_MODIFIED = new Date().toISOString();
 
 // Number of items per page
 const ITEMS_PER_PAGE = 100;
+const DEFAULT_MODEL_PAGE_COUNT_TIMEOUT_MS = 15 * 60 * 1000;
+
+interface SitemapOptions {
+  modelPageCountTimeoutMs?: number;
+}
 
 export class Sitemap {
+  private modelPageCountTimeoutMs: number;
+
   sitemapIndexs = [{ id: SitemapType.Pages }, { id: SitemapType.Providers }];
 
   private discoverService = new DiscoverService();
+
+  constructor(options: SitemapOptions = {}) {
+    this.modelPageCountTimeoutMs =
+      options.modelPageCountTimeoutMs ?? DEFAULT_MODEL_PAGE_COUNT_TIMEOUT_MS;
+  }
+
+  private _withModelPageCountTimeout = async <T>(promise: Promise<T>) => {
+    const timeoutController = new AbortController();
+
+    try {
+      return await Promise.race([
+        promise,
+        sleep(this.modelPageCountTimeoutMs, undefined, { signal: timeoutController.signal }).then(
+          () => {
+            throw new Error('Timed out while getting model identifiers for sitemap');
+          },
+        ),
+      ]);
+    } finally {
+      timeoutController.abort();
+    }
+  };
 
   // Get total number of plugin pages
   async getPluginPageCount(): Promise<number> {
@@ -55,7 +86,15 @@ export class Sitemap {
 
   // Get total number of model pages
   async getModelPageCount(): Promise<number> {
-    const list = await this.discoverService.getModelIdentifiers();
+    let list: Awaited<ReturnType<DiscoverService['getModelIdentifiers']>>;
+    try {
+      list = await this._withModelPageCountTimeout(this.discoverService.getModelIdentifiers());
+    } catch (error) {
+      // Keep sitemap generation from blocking deployment when model identifiers are unavailable.
+      console.error('[Sitemap] Failed to get model identifiers for sitemap', error);
+      return 0;
+    }
+
     return Math.ceil(list.length / ITEMS_PER_PAGE);
   }
 

@@ -15,9 +15,11 @@ const promptRewrite = (s: UserStore) => currentSystemAgent(s).promptRewrite;
 const historyCompress = (s: UserStore) => currentSystemAgent(s).historyCompress;
 const generationTopic = (s: UserStore) => currentSystemAgent(s).generationTopic;
 const inputCompletion = (s: UserStore) => currentSystemAgent(s).inputCompletion;
+const followUpAction = (s: UserStore) => currentSystemAgent(s).followUpAction;
 
 export const systemAgentSelectors = {
   agentMeta,
+  followUpAction,
   generationTopic,
   historyCompress,
   inputCompletion,

@@ -33,6 +33,9 @@ export const AGENT_SIGNAL_POLICY_SIGNAL_TYPES = {
 /** Server-owned built-in AgentSignal action type identifiers. */
 export const AGENT_SIGNAL_POLICY_ACTION_TYPES = {
   nudgeHandle: 'action.nudge.handle',
+  // TODO: Keep persona actions reserved until Agent Signal has a durable prompt/persona artifact,
+  // proposal payload, apply/revert path, and UI projection. The current analyze-intent path must
+  // not silently mutate persona state from prompt-shaped feedback.
   personaHandle: 'action.persona.handle',
   skillManagementHandle: 'action.skill-management.handle',
   userMemoryHandle: 'action.user-memory.handle',

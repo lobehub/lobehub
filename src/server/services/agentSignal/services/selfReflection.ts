@@ -3,7 +3,7 @@ import { AGENT_SIGNAL_SOURCE_TYPES } from '@lobechat/agent-signal/source';
 import type { AgentSignalSourceEventInput } from '@/server/services/agentSignal/emitter';
 
 import type { SelfReflectionRequestReason } from '../procedure/accumulators/selfReflection';
-import { buildSelfReflectionSourceId } from './maintenance/types';
+import { buildSelfReflectionSourceId } from './selfIteration/types';
 
 type MaybePromise<TValue> = TValue | Promise<TValue>;
 

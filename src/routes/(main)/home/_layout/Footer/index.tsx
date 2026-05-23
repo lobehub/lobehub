@@ -27,6 +27,7 @@ import HighlightNotification from '@/components/HighlightNotification';
 import { DOCUMENTS_REFER_URL, GITHUB } from '@/const/url';
 import Billboard from '@/features/Billboard';
 import { useBillboardMenuItems } from '@/features/Billboard/MenuItems';
+import { useActiveNavKey } from '@/features/NavPanel';
 import ThemeButton from '@/features/User/UserPanel/ThemeButton';
 import { useFeedbackModal } from '@/hooks/useFeedbackModal';
 import { useNavLayout } from '@/hooks/useNavLayout';
@@ -35,7 +36,6 @@ import { systemStatusSelectors } from '@/store/global/selectors/systemStatus';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors/general';
-import { prefetchRoute } from '@/utils/router';
 
 import { resolveFooterPromotionState } from './promotionPipeline';
 
@@ -66,6 +66,8 @@ const Footer = memo(() => {
   const navigate = useNavigate();
   const { analytics } = useAnalytics();
   const { footer } = useNavLayout();
+  const activeNavKey = useActiveNavKey();
+  const isHomeSidebar = activeNavKey === 'home';
   const billboardMenuItems = useBillboardMenuItems();
   const enableAgentOnboarding = useServerConfigStore((s) => s.featureFlags.enableAgentOnboarding);
   const isMobile = useServerConfigStore((s) => !!s.isMobile);
@@ -335,7 +337,7 @@ const Footer = memo(() => {
             },
           ]
         : []),
-      ...(billboardMenuItems && billboardMenuItems.length > 0
+      ...(isHomeSidebar && billboardMenuItems && billboardMenuItems.length > 0
         ? [{ type: 'divider' as const }, ...billboardMenuItems]
         : []),
     ],
@@ -350,6 +352,7 @@ const Footer = memo(() => {
       shouldShowProductHuntMenuEntry,
       t,
       billboardMenuItems,
+      isHomeSidebar,
     ],
   );
 
@@ -383,7 +386,7 @@ const Footer = memo(() => {
             <ActionIcon aria-label={t('userPanel.help')} icon={CircleHelp} size={16} />
           </DropdownMenu>
           {isDevMode && (
-            <Link to="/settings" onMouseEnter={() => prefetchRoute('/settings')}>
+            <Link to="/settings">
               <ActionIcon
                 aria-label={t('userPanel.setting')}
                 icon={SettingsIcon}
@@ -413,7 +416,7 @@ const Footer = memo(() => {
           onClose={activePromotion.onClose}
         />
       )}
-      <Billboard />
+      {isHomeSidebar && <Billboard />}
     </>
   );
 });

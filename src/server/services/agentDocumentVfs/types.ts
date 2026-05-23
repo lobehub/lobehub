@@ -98,9 +98,27 @@ export interface AgentDocumentTrashEntry extends AgentDocumentStats {
  * - File content plus the resolved VFS path
  */
 export interface AgentDocumentReadResult {
+  charCount: number;
   content: string;
   contentType?: string;
+  lineCount: number;
+  loc: [number, number];
   path: string;
+  totalCharCount: number;
+  totalLineCount: number;
+}
+
+/**
+ * Options accepted by VFS file reads.
+ *
+ * Use when:
+ * - Reading a bounded line range from a large virtual file
+ *
+ * Expects:
+ * - `loc` is zero-based and end-exclusive, matching `readLocalFile`
+ */
+export interface AgentDocumentReadOptions {
+  loc?: [number, number];
 }
 
 /**

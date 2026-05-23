@@ -6,6 +6,7 @@ import type {
   PolicyLoad,
 } from '@lobechat/agent-templates';
 import { DocumentLoadPosition, getDocumentTemplate } from '@lobechat/agent-templates';
+import { buildAgentSkillIdentifier } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { DOCUMENT_FOLDER_TYPE } from '@lobechat/database/schemas';
 
@@ -17,6 +18,7 @@ import type {
 import {
   AgentDocumentModel,
   buildDocumentFilename,
+  deriveAgentDocumentFields,
   extractMarkdownH1Title,
 } from '@/database/models/agentDocuments';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
@@ -102,7 +104,12 @@ export class AgentDocumentsService {
   private async projectDocuments<T extends AgentDocument | AgentDocumentWithRules>(
     docs: T[],
   ): Promise<T[]> {
-    return Promise.all(docs.map((doc) => this.projectDocumentContent(doc)));
+    return Promise.all(
+      docs.map(async (doc) => {
+        const projected = await this.projectDocumentContent(doc);
+        return { ...projected, ...deriveAgentDocumentFields(projected) };
+      }),
+    );
   }
 
   private async attachLiteXML(doc: AgentDocument): Promise<AgentDocumentWithLiteXML> {
@@ -228,6 +235,55 @@ export class AgentDocumentsService {
   async getAgentDocuments(agentId: string): Promise<AgentDocumentWithRules[]> {
     const docs = await this.agentDocumentModel.findByAgent(agentId);
     return this.projectDocuments(docs);
+  }
+
+  /**
+   * Return this agent's skill-bundle documents in a shape ready for the
+   * homogeneous skill runtime: identifier is prefixed
+   * (`agent-skills:<filename>`) and the body is resolved from the bundle's
+   * `SKILL.md` index child (falling back to the bundle row for orphans).
+   *
+   * Single source of truth for the agent-document skill registry: both the
+   * SkillEngine assembly (`<available_skills>` for the model) and the skills
+   * `activateSkill` runtime call this; neither re-implements the prefix or the
+   * bundle → index child mapping.
+   */
+  async getAgentSkills(agentId: string): Promise<
+    Array<{
+      content: string;
+      description: string;
+      filename: string;
+      identifier: string;
+      name: string;
+      title: string | null;
+    }>
+  > {
+    const docs = await this.getAgentDocuments(agentId);
+
+    const childrenByParent = new Map<string, AgentDocumentWithRules[]>();
+    for (const doc of docs) {
+      if (!doc.parentId) continue;
+      const list = childrenByParent.get(doc.parentId) ?? [];
+      list.push(doc);
+      childrenByParent.set(doc.parentId, list);
+    }
+
+    return docs
+      .filter((doc) => doc.isSkillBundle)
+      .map((bundle) => {
+        const indexChild = (childrenByParent.get(bundle.documentId) ?? []).find(
+          (child) => child.isSkillIndex,
+        );
+        const identifier = buildAgentSkillIdentifier(bundle.filename);
+        return {
+          content: indexChild?.content ?? bundle.content ?? '',
+          description: bundle.description ?? '',
+          filename: bundle.filename,
+          identifier,
+          name: identifier,
+          title: bundle.title,
+        };
+      });
   }
 
   async getDocumentsByTemplate(
@@ -468,20 +524,27 @@ export class AgentDocumentsService {
     }
   }
 
-  async listDocuments(agentId: string) {
+  async listDocuments(agentId: string, sourceType?: 'all' | 'file' | 'web') {
     const docs = await this.agentDocumentModel.findByAgent(agentId);
-    return docs.map((d) => ({
+    const filtered =
+      sourceType && sourceType !== 'all' ? docs.filter((d) => d.sourceType === sourceType) : docs;
+    return filtered.map((d) => ({
       documentId: d.documentId,
       fileType: d.fileType,
       filename: d.filename,
       id: d.id,
       loadPosition: d.policy?.context?.position,
       parentId: d.parentId,
+      sourceType: d.sourceType,
       title: d.title,
     }));
   }
 
-  async listDocumentsForTopic(agentId: string, topicId: string) {
+  async listDocumentsForTopic(
+    agentId: string,
+    topicId: string,
+    sourceType?: 'all' | 'file' | 'web',
+  ) {
     const topicDocs = await this.topicDocumentModel.findByTopicId(topicId);
     const documentIds = topicDocs.map((doc) => doc.id);
     const docs = await this.agentDocumentModel.findByDocumentIds(agentId, documentIds);
@@ -490,6 +553,7 @@ export class AgentDocumentsService {
     return topicDocs
       .map((topicDoc) => docsByDocumentId.get(topicDoc.id))
       .filter((doc): doc is AgentDocumentWithRules => Boolean(doc))
+      .filter((doc) => !sourceType || sourceType === 'all' || doc.sourceType === sourceType)
       .map((doc) => ({
         documentId: doc.documentId,
         fileType: doc.fileType,
@@ -497,6 +561,7 @@ export class AgentDocumentsService {
         id: doc.id,
         loadPosition: doc.policy?.context?.position,
         parentId: doc.parentId,
+        sourceType: doc.sourceType,
         title: doc.title,
       }));
   }

@@ -219,6 +219,10 @@ type SystemStrings = {
   cmdApproveSuccess: (label: string) => string;
   cmdApproveUnknownCode: string;
   cmdApproveUsage: string;
+  cmdFeedbackError: string;
+  cmdFeedbackSubmitted: string;
+  cmdFeedbackSubmittedWithLink: (issueUrl: string) => string;
+  cmdFeedbackUsage: string;
   cmdNewReset: string;
   cmdStopNotActive: string;
   cmdStopRequested: string;
@@ -232,6 +236,7 @@ type SystemStrings = {
   error: string;
   errorExceededContextWindow: string;
   errorInvalidProviderAPIKey: string;
+  errorCommandConnectionClosed: string;
   errorLocationNotSupported: string;
   errorModelNotFound: string;
   errorNoAvailableProvider: string;
@@ -263,6 +268,12 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
     cmdApproveSuccess: (label) => `Approved ${label}.`,
     cmdApproveUnknownCode: 'That pairing code is unknown or has expired.',
     cmdApproveUsage: 'Usage: `/approve <code>`',
+    cmdFeedbackError: "Couldn't send your feedback right now. Please try again in a moment.",
+    cmdFeedbackSubmitted: 'Thanks — your feedback has been sent to the LobeHub team.',
+    cmdFeedbackSubmittedWithLink: (issueUrl) =>
+      `Thanks — your feedback has been sent to the LobeHub team. Tracked at: ${issueUrl}`,
+    cmdFeedbackUsage:
+      'Usage: `/feedback <your message>` — sends feedback directly to the LobeHub team (no AI reply).',
     cmdNewReset: 'Conversation reset. Your next message will start a new topic.',
     cmdStopNotActive: 'No active execution to stop.',
     cmdStopRequested: 'Stop requested.',
@@ -280,6 +291,8 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
     error: '**Agent Execution Failed**',
     errorExceededContextWindow:
       "**Context window exceeded.**\nThe conversation is too long for this model. Send `/new` to start a fresh topic, or switch to a model with a larger context window in the agent's settings.",
+    errorCommandConnectionClosed:
+      '**Command session disconnected.**\nThe agent lost its command connection before finishing. Please retry. If this keeps happening, check the sandbox or device connection and review the server logs for the operation.',
     errorInvalidProviderAPIKey:
       "**Invalid or missing API key.**\nThe configured model provider rejected its API key. Please verify the key in the agent's provider settings (it may be expired, revoked, or mistyped) and try again.",
     errorLocationNotSupported:
@@ -315,6 +328,12 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
     cmdApproveSuccess: (label) => `已审批 ${label}。`,
     cmdApproveUnknownCode: '该配对码不存在或已过期。',
     cmdApproveUsage: '用法：`/approve <配对码>`',
+    cmdFeedbackError: '发送反馈失败，请稍后再试。',
+    cmdFeedbackSubmitted: '已收到，感谢反馈，已转交 LobeHub 团队。',
+    cmdFeedbackSubmittedWithLink: (issueUrl) =>
+      `已收到，感谢反馈，已转交 LobeHub 团队。跟踪链接：${issueUrl}`,
+    cmdFeedbackUsage:
+      '用法：`/feedback <你的反馈内容>` —— 反馈会直达 LobeHub 团队，不会触发 AI 回复。',
     cmdNewReset: '对话已重置，下一条消息会开启新话题。',
     cmdStopNotActive: '当前没有正在执行的任务可以停止。',
     cmdStopRequested: '已发出停止请求。',
@@ -329,6 +348,8 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
     error: '**Agent 执行失败**',
     errorExceededContextWindow:
       '**上下文已超出模型上限**\n当前对话长度超过了该模型的上下文窗口。可以发送 `/new` 开启新话题，或在 Agent 设置中切换到上下文更大的模型后重试。',
+    errorCommandConnectionClosed:
+      '**命令会话已断开**\nAgent 在完成前丢失了命令连接。请重试；如果该问题持续出现，请检查 sandbox 或设备连接，并结合 Operation ID 查看服务端日志。',
     errorInvalidProviderAPIKey:
       '**API Key 无效或缺失**\n所配置的模型 Provider 拒绝了 API Key，可能已过期、被吊销或填写错误。请到 Agent 的 Provider 设置中检查并更新 API Key 后重试。',
     errorLocationNotSupported:
@@ -386,6 +407,16 @@ const FRIENDLY_ERROR_BY_TYPE: Record<string, keyof SystemStrings> = {
   QuotaLimitReached: 'errorQuotaLimitReached',
 };
 
+const isCommandConnectionClosedError = (
+  errorType: string | undefined,
+  errorMessage: string | undefined,
+) => {
+  if (errorType && errorType !== '500') return false;
+  if (!errorMessage) return false;
+
+  return /command aborted due to connection close/i.test(errorMessage);
+};
+
 /**
  * Render an agent-execution failure for the user. Switches on the stable
  * `errorType` code (from `AgentRuntimeError.chat`) to surface a friendly,
@@ -396,10 +427,16 @@ const FRIENDLY_ERROR_BY_TYPE: Record<string, keyof SystemStrings> = {
  */
 export function renderAgentError(
   errorType: string | undefined,
+  errorMessage: string | undefined,
   operationId: string | undefined,
   lng?: BotReplyLocale,
 ): string {
   const strings = getSystemStrings(lng);
+
+  if (isCommandConnectionClosedError(errorType, errorMessage)) {
+    const value = strings.errorCommandConnectionClosed;
+    return operationId ? `${value}\nOperation ID: \`${operationId}\`` : value;
+  }
 
   const stringKey = errorType ? FRIENDLY_ERROR_BY_TYPE[errorType] : undefined;
   if (stringKey) {
@@ -446,6 +483,9 @@ export type CommandReplyKey =
   | 'cmdApproveNotOwner'
   | 'cmdApproveUnknownCode'
   | 'cmdApproveUsage'
+  | 'cmdFeedbackError'
+  | 'cmdFeedbackSubmitted'
+  | 'cmdFeedbackUsage'
   | 'cmdNewReset'
   | 'cmdStopNotActive'
   | 'cmdStopRequested'
@@ -468,6 +508,17 @@ export function renderCommandReply(key: CommandReplyKey, lng?: BotReplyLocale): 
  */
 export function renderApproveSuccess(label: string, lng?: BotReplyLocale): string {
   return getSystemStrings(lng).cmdApproveSuccess(label);
+}
+
+/**
+ * Render the `/feedback` success reply. When the feedback backend returns a
+ * tracked issue URL, surface it so the user knows where to follow up — for
+ * Slack / Discord that surface autolinks the URL, on Telegram it remains
+ * tappable in monospace.
+ */
+export function renderFeedbackSubmitted(issueUrl?: string, lng?: BotReplyLocale): string {
+  const strings = getSystemStrings(lng);
+  return issueUrl ? strings.cmdFeedbackSubmittedWithLink(issueUrl) : strings.cmdFeedbackSubmitted;
 }
 
 /**

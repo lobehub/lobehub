@@ -29,7 +29,7 @@ const UserUpdater = memo(() => {
   // than replace it — fields like `interests`, `firstName`, `latestName` are
   // populated by `useInitUserState` (one-shot SWR) and would otherwise be
   // wiped on every focus, breaking downstream selectors (e.g. the daily-brief
-  // recommendation SWR key resets to empty interests and refetches). LOBE-8597.
+  // recommendation SWR key resets to empty interests and refetches). .
   //
   // Guard the merge by user id: if the session switches to a different
   // account (e.g. another tab signed in as a different user, focus refetch

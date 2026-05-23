@@ -145,7 +145,7 @@ export function registerReviewCommands(task: Command) {
 
   rc.command('add <id>')
     .description('Add a review rubric')
-    .requiredOption('-n, --name <name>', 'Rubric name (e.g. "内容准确性")')
+    .requiredOption('-n, --name <name>', 'Rubric name (e.g. "Content Accuracy")')
     .option('--type <type>', 'Rubric type (default: llm-rubric)', 'llm-rubric')
     .option('-t, --threshold <n>', 'Pass threshold 0-100 (converted to 0-1)')
     .option('-d, --description <text>', 'Criteria description (for llm-rubric type)')

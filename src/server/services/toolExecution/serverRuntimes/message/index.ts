@@ -4,8 +4,19 @@ import { MessageExecutionRuntime } from '@lobechat/builtin-tool-message/executio
 import { LarkApiClient } from '@lobechat/chat-adapter-feishu';
 import { QQApiClient } from '@lobechat/chat-adapter-qq';
 import { WechatApiClient } from '@lobechat/chat-adapter-wechat';
+import { TRPCError } from '@trpc/server';
+import { and, eq } from 'drizzle-orm';
 
+import {
+  getEnabledMessengerPlatforms,
+  getMessengerDiscordConfig,
+  getMessengerSlackConfig,
+  getMessengerTelegramConfig,
+} from '@/config/messenger';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
+import { MessengerAccountLinkModel } from '@/database/models/messengerAccountLink';
+import { MessengerInstallationModel } from '@/database/models/messengerInstallation';
+import { agents } from '@/database/schemas';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import {
   assertBotAccessSettings,
@@ -24,6 +35,7 @@ import { TelegramMessageService } from '@/server/services/bot/platforms/telegram
 import { WechatMessageService } from '@/server/services/bot/platforms/wechat/service';
 import { GatewayService } from '@/server/services/gateway';
 import { getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
+import { messengerPlatformRegistry } from '@/server/services/messenger';
 
 import type { ServerRuntimeRegistration } from '../types';
 import { MessageDispatcherService } from './MessageDispatcherService';
@@ -211,6 +223,197 @@ export const messageRuntime: ServerRuntimeRegistration = {
           },
           {},
         );
+      },
+
+      // ─── System Bot messenger management ─────────────────────────────────
+      // Mirrors `messenger.*` TRPC procedures but exposed via the tool runtime
+      // so LLM-driven flows can manage installs + links the same way the
+      // Settings → Messenger UI does. Each handler enforces user ownership;
+      // the underlying models are already user-scoped where applicable.
+      listMessengers: async () => {
+        if (!context.userId || !context.serverDB) {
+          throw new Error('userId and serverDB are required to list System Bot installations');
+        }
+        const linkGateKeeper = await KeyVaultsGateKeeper.initWithEnvKey().catch(() => undefined);
+        const rows = await MessengerInstallationModel.listByInstallerUserId(
+          context.serverDB,
+          context.userId,
+          linkGateKeeper,
+        );
+        // We intentionally skip the Slack auth.test reconciliation that the
+        // `messenger.listMyInstallations` TRPC procedure runs. A stale Slack
+        // install will still appear here; the actual send/uninstall call will
+        // surface the underlying token error if and when it matters.
+        return rows
+          .filter((row) => !row.revokedAt)
+          .map((row) => ({
+            applicationId: row.applicationId,
+            enterpriseId:
+              ((row.metadata as Record<string, unknown> | null)?.enterpriseId as
+                | string
+                | null
+                | undefined) ?? null,
+            id: row.id,
+            installedAt:
+              row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
+            isEnterpriseInstall:
+              (row.metadata as Record<string, unknown> | null)?.isEnterpriseInstall === true,
+            platform: row.platform,
+            scope: ((row.metadata as Record<string, unknown> | null)?.scope as string) ?? '',
+            tenantId: row.tenantId,
+            tenantName:
+              ((row.metadata as Record<string, unknown> | null)?.tenantName as string) ?? '',
+          }));
+      },
+
+      getMessengerDetail: async (installationId) => {
+        if (!context.userId || !context.serverDB) {
+          throw new Error('userId and serverDB are required to load installation');
+        }
+        const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey().catch(() => undefined);
+        const row = await MessengerInstallationModel.findById(
+          context.serverDB,
+          installationId,
+          gateKeeper,
+        );
+        if (!row) return null;
+        // Same ownership guard as `messenger.uninstallInstallation` — the
+        // installer is the only user who can see install metadata via the tool.
+        if (row.installedByUserId !== context.userId) {
+          throw new Error('You can only view installations you initiated');
+        }
+        return {
+          applicationId: row.applicationId,
+          enterpriseId:
+            ((row.metadata as Record<string, unknown> | null)?.enterpriseId as
+              | string
+              | null
+              | undefined) ?? null,
+          id: row.id,
+          installedAt:
+            row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
+          isEnterpriseInstall:
+            (row.metadata as Record<string, unknown> | null)?.isEnterpriseInstall === true,
+          platform: row.platform,
+          revokedAt:
+            row.revokedAt instanceof Date ? row.revokedAt.toISOString() : (row.revokedAt ?? null),
+          scope: ((row.metadata as Record<string, unknown> | null)?.scope as string) ?? '',
+          tenantId: row.tenantId,
+          tenantName:
+            ((row.metadata as Record<string, unknown> | null)?.tenantName as string) ?? '',
+        };
+      },
+
+      uninstallMessenger: async (installationId) => {
+        if (!context.userId || !context.serverDB) {
+          throw new Error('userId and serverDB are required to uninstall');
+        }
+        const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey().catch(() => undefined);
+        const row = await MessengerInstallationModel.findById(
+          context.serverDB,
+          installationId,
+          gateKeeper,
+        );
+        if (!row) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: `Installation not found: ${installationId}`,
+          });
+        }
+        if (row.installedByUserId !== context.userId) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'You can only uninstall installations you initiated',
+          });
+        }
+        await MessengerInstallationModel.markRevoked(context.serverDB, row.id);
+      },
+
+      listMessengerPlatforms: async () => {
+        // Mirror of `messenger.availablePlatforms` — surfaces per-deployment
+        // OAuth deep-link fields (appId / botUsername) so the LLM can tell the
+        // user *which* LobeHub bot identity they'd be installing.
+        const enabled = await getEnabledMessengerPlatforms();
+        const enabledSet = new Set<string>(enabled);
+        const definitions = messengerPlatformRegistry
+          .listSerializedPlatforms()
+          .filter((def) => enabledSet.has(def.id));
+
+        const [discordConfig, slackConfig, telegramConfig] = await Promise.all([
+          enabledSet.has('discord') ? getMessengerDiscordConfig() : Promise.resolve(null),
+          enabledSet.has('slack') ? getMessengerSlackConfig() : Promise.resolve(null),
+          enabledSet.has('telegram') ? getMessengerTelegramConfig() : Promise.resolve(null),
+        ]);
+
+        return definitions.map((def) => ({
+          appId:
+            def.id === 'slack'
+              ? slackConfig?.appId
+              : def.id === 'discord'
+                ? discordConfig?.applicationId
+                : undefined,
+          botUsername: def.id === 'telegram' ? telegramConfig?.botUsername : undefined,
+          id: def.id,
+          name: def.name,
+        }));
+      },
+
+      listMessengerLinks: async () => {
+        if (!context.userId || !context.serverDB) {
+          throw new Error('userId and serverDB are required to list account links');
+        }
+        const linkModel = new MessengerAccountLinkModel(context.serverDB, context.userId);
+        const rows = await linkModel.list();
+        return rows.map((row) => ({
+          activeAgentId: row.activeAgentId ?? null,
+          createdAt:
+            row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
+          platform: row.platform,
+          platformUserId: row.platformUserId,
+          platformUsername: row.platformUsername ?? undefined,
+          tenantId: row.tenantId || undefined,
+        }));
+      },
+
+      setMessengerActiveAgent: async (params) => {
+        if (!context.userId || !context.serverDB) {
+          throw new Error('userId and serverDB are required');
+        }
+        // Validate agent ownership before mutating the link — matches the
+        // `messenger.setActiveAgent` behavior (rejects cross-user agent ids).
+        if (params.agentId !== null) {
+          const [agentRow] = await context.serverDB
+            .select({ id: agents.id })
+            .from(agents)
+            .where(and(eq(agents.id, params.agentId), eq(agents.userId, context.userId)))
+            .limit(1);
+          if (!agentRow) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: `Agent not found or not owned by you: ${params.agentId}`,
+            });
+          }
+        }
+        const linkModel = new MessengerAccountLinkModel(context.serverDB, context.userId);
+        const updated = await linkModel.setActiveAgent(
+          params.platform,
+          params.agentId,
+          params.tenantId,
+        );
+        if (!updated) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: `No account link found for ${params.platform}${params.tenantId ? ` (tenant ${params.tenantId})` : ''}. The user must complete verify-im first.`,
+          });
+        }
+      },
+
+      unlinkMessenger: async (params) => {
+        if (!context.userId || !context.serverDB) {
+          throw new Error('userId and serverDB are required');
+        }
+        const linkModel = new MessengerAccountLinkModel(context.serverDB, context.userId);
+        await linkModel.deleteByPlatform(params.platform, params.tenantId);
       },
     };
 

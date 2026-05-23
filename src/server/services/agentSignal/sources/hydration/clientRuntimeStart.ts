@@ -89,6 +89,7 @@ export const resolveClientRuntimeStartFeedbackSource = async (
         threadId: parentMessage.threadId ?? sourceEvent.payload.threadId,
         topicId: parentMessage.topicId ?? sourceEvent.payload.topicId,
         trigger: AGENT_SIGNAL_SOURCE_TYPES.clientRuntimeStart,
+        triggerMessageId: sourceEvent.payload.triggerMessageId ?? parentMessage.id,
       },
       scopeKey: getTrustedScopeKey(parentMessage.topicId, sourceEvent.scopeKey),
       sourceId: parentMessage.id,

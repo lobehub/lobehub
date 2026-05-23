@@ -24,6 +24,7 @@ import type { TaskGroupItem, TaskListItem } from '@/store/task/slices/list/initi
 
 import { createTaskModal } from '../CreateTaskModal';
 import AgentTaskItem from '../features/AgentTaskItem';
+import { taskDetailPath } from '../shared/taskDetailPath';
 import HiddenColumnsPanel from './HiddenColumnsPanel';
 import KanbanColumn, { COLUMN_I18N_KEYS, COLUMN_STATUS_ICON, COLUMN_WIDTH } from './KanbanColumn';
 
@@ -135,7 +136,7 @@ const KanbanBoard = memo(() => {
   const handleCreateTask = useCallback(() => {
     createTaskModal({
       onCreated: (task) => {
-        navigate(`/task/${task.identifier}`);
+        navigate(taskDetailPath(task.identifier, task.agentId));
       },
       showInlineToggle: false,
     });

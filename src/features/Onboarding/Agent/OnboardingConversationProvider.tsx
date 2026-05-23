@@ -15,7 +15,11 @@ interface OnboardingConversationProviderProps {
   children: ReactNode;
   frozen?: boolean;
   hooks?: ConversationHooks;
-  topicId: string;
+  // Allow undefined for the fresh-state window before the first message has
+  // created a real topic. Underlying ConversationProvider keys on
+  // messageMapKey(context) and remounts on transition, and useFetchMessages
+  // short-circuits when topicId is missing — so no extra refactor is needed.
+  topicId: string | undefined;
 }
 
 const OnboardingConversationProvider = memo<OnboardingConversationProviderProps>(

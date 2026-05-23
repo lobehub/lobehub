@@ -716,6 +716,46 @@ describe('ModelRuntime', () => {
 
         await expect(runtime.generateObject(genObjPayload)).resolves.toEqual({ result: 'ok' });
       });
+
+      it('onGenerateObjectComplete fires on success with output, latency and usage', async () => {
+        const onGenerateObjectComplete = vi.fn();
+        const { runtime, mockRuntimeAI } = createMockRuntime({ onGenerateObjectComplete });
+        const usage = { totalInputTokens: 50, totalOutputTokens: 20, cost: 0.001 };
+        mockRuntimeAI.generateObject.mockImplementation(async (_p: any, opts: any) => {
+          await opts?.onUsage?.(usage);
+          return { result: 'ok' };
+        });
+
+        await runtime.generateObject(genObjPayload);
+
+        expect(onGenerateObjectComplete).toHaveBeenCalledTimes(1);
+        const [data, context] = onGenerateObjectComplete.mock.calls[0];
+        expect(data).toMatchObject({ output: { result: 'ok' }, success: true, usage });
+        expect(data.latencyMs).toBeGreaterThanOrEqual(0);
+        expect(context.payload).toBe(genObjPayload);
+      });
+
+      it('onGenerateObjectComplete fires on failure with structured error and is awaited before throw', async () => {
+        const onGenerateObjectComplete = vi.fn();
+        const { runtime, mockRuntimeAI } = createMockRuntime({ onGenerateObjectComplete });
+        const cause = new Error('boom');
+        mockRuntimeAI.generateObject.mockRejectedValue(cause);
+
+        await expect(runtime.generateObject(genObjPayload)).rejects.toBe(cause);
+        expect(onGenerateObjectComplete).toHaveBeenCalledTimes(1);
+        const [data] = onGenerateObjectComplete.mock.calls[0];
+        expect(data.success).toBe(false);
+        expect(data.error?.message).toBe('boom');
+      });
+
+      it('hook errors thrown from onGenerateObjectComplete are swallowed and do not surface', async () => {
+        const onGenerateObjectComplete = vi.fn().mockRejectedValue(new Error('hook broke'));
+        const { runtime, mockRuntimeAI } = createMockRuntime({ onGenerateObjectComplete });
+        mockRuntimeAI.generateObject.mockResolvedValue({ result: 'ok' });
+
+        await expect(runtime.generateObject(genObjPayload)).resolves.toEqual({ result: 'ok' });
+        expect(onGenerateObjectComplete).toHaveBeenCalledTimes(1);
+      });
     });
 
     describe('embeddings hooks', () => {

@@ -20,6 +20,7 @@ import {
   type BotPlatformRuntimeContext,
   type BotProviderConfig,
   ClientFactory,
+  messengerContentText,
   type PlatformClient,
   type PlatformMessenger,
   type UsageStats,
@@ -27,6 +28,7 @@ import {
 } from '../types';
 import { formatUsageStats } from '../utils';
 import { FeishuWSConnection } from './gateway';
+import { sendFeishuAttachments } from './sendAttachments';
 
 const log = debug('bot-platform:feishu:client');
 
@@ -62,8 +64,18 @@ function createMessenger(
   const chatId = extractChatId(platformThreadId);
   return {
     addReaction: (messageId, emoji) => api.addReaction(messageId, emoji).then(() => {}),
-    createMessage: (content) => api.sendMessage(chatId, content).then(() => {}),
-    editMessage: (messageId, content) => api.editMessage(messageId, content).then(() => {}),
+    createMessage: async (content) => {
+      const text = messengerContentText(content);
+      const attachments = typeof content === 'string' ? undefined : content.attachments;
+      if (text.trim()) {
+        await api.sendMessage(chatId, text);
+      }
+      if (attachments?.length) {
+        await sendFeishuAttachments(api, chatId, attachments);
+      }
+    },
+    editMessage: (messageId, content) =>
+      api.editMessage(messageId, messengerContentText(content)).then(() => {}),
     // Feishu / Lark currently expose no authenticated removeReaction endpoint.
     // Callers should treat this as a best-effort no-op — step swaps will stack
     // additions rather than clear the previous emoji.

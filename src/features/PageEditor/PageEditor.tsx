@@ -16,7 +16,6 @@ import EditorCanvas from './EditorCanvas';
 import Header from './Header';
 import { PageAgentProvider } from './PageAgentProvider';
 import { PageEditorProvider } from './PageEditorProvider';
-import PageTitle from './PageTitle';
 import RightPanel from './RightPanel';
 import { usePageEditorStore } from './store';
 import TitleSection from './TitleSection';
@@ -99,36 +98,26 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>(({ header, fullWidthHeader 
 
   if (fullWidthHeader) {
     return (
-      <>
-        <PageTitle />
-        <Flexbox
-          height={'100%'}
-          style={{ backgroundColor: cssVar.colorBgContainer }}
-          width={'100%'}
-        >
-          {headerSlot}
-          <Flexbox horizontal flex={1} style={{ minHeight: 0 }} width={'100%'}>
-            {editorPane}
-            <RightPanel />
-          </Flexbox>
+      <Flexbox height={'100%'} style={{ backgroundColor: cssVar.colorBgContainer }} width={'100%'}>
+        {headerSlot}
+        <Flexbox horizontal flex={1} style={{ minHeight: 0 }} width={'100%'}>
+          {editorPane}
+          <RightPanel />
         </Flexbox>
-      </>
+      </Flexbox>
     );
   }
 
   return (
-    <>
-      <PageTitle />
-      <Flexbox
-        horizontal
-        height={'100%'}
-        style={{ backgroundColor: cssVar.colorBgContainer }}
-        width={'100%'}
-      >
-        {editorPane}
-        <RightPanel />
-      </Flexbox>
-    </>
+    <Flexbox
+      horizontal
+      height={'100%'}
+      style={{ backgroundColor: cssVar.colorBgContainer }}
+      width={'100%'}
+    >
+      {editorPane}
+      <RightPanel />
+    </Flexbox>
   );
 });
 

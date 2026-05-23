@@ -133,6 +133,7 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
     }, [escapeActive]);
 
     const isFreeform = !question.fields || question.fields.length === 0;
+    const shouldShowEscapeAction = !isFreeform;
 
     const isSubmitDisabled = escapeActive
       ? !escapeText.trim()
@@ -207,7 +208,7 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
         )}
         <Flexbox horizontal gap={8} justify={'space-between'}>
           <Flexbox horizontal gap={8} justify="flex-start">
-            {escapeActive ? (
+            {escapeActive && shouldShowEscapeAction ? (
               <Text className={styles.escapeLink} type="secondary" onClick={handleEscapeToggle}>
                 <Icon icon={ArrowLeft} /> {t('form.otherBack')}
               </Text>
@@ -216,9 +217,11 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
                 <Text className={styles.escapeLink} type="secondary" onClick={handleSkip}>
                   {t('form.skip')}
                 </Text>
-                <Text className={styles.escapeLink} type="secondary" onClick={handleEscapeToggle}>
-                  {t('form.other')} <Icon icon={PenLine} />
-                </Text>
+                {shouldShowEscapeAction && (
+                  <Text className={styles.escapeLink} type="secondary" onClick={handleEscapeToggle}>
+                    {t('form.other')} <Icon icon={PenLine} />
+                  </Text>
+                )}
               </>
             )}
           </Flexbox>

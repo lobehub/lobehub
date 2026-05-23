@@ -17,6 +17,7 @@ const RateLimitState = ({
   config,
   error,
   onOpenSystemTools,
+  onRetry,
   variant,
 }: HeterogeneousAgentGuideStateProps) => {
   const { t, i18n } = useTranslation('chat');
@@ -92,8 +93,12 @@ const RateLimitState = ({
       variant={variant}
       actions={
         <GuideActions
-          openSystemToolsLabel={t('cliRateLimitGuide.actions.openSystemTools')}
-          onOpenSystemTools={onOpenSystemTools}
+          retryLabel={t('cliRateLimitGuide.actions.retry')}
+          openSystemToolsLabel={
+            onRetry ? undefined : t('cliRateLimitGuide.actions.openSystemTools')
+          }
+          onOpenSystemTools={onRetry ? undefined : onOpenSystemTools}
+          onRetry={onRetry}
         />
       }
     >

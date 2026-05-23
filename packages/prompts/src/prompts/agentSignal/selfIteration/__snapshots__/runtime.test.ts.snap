@@ -1,0 +1,23 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`agent signal self-iteration runtime prompt > renders reflection mode prompt with explicit mode and context JSON 1`] = `
+"Agent id: agent-1
+User id: user-1
+Source id: source-2
+Mode: reflection
+Evidence window: 2026-05-09T15:00:00.000Z to 2026-05-09T16:00:00.000Z
+Self-iteration context JSON:
+{"selfFeedbackCandidates":[{"messageId":"m-1"}]}"
+`;
+
+exports[`agent signal self-iteration runtime prompt > renders review mode prompt in stable XML sections 1`] = `
+"<self_iteration_review agent_id="agent-1" review_window_end="2026-05-09T16:00:00.000Z" review_window_start="2026-05-08T16:00:00.000Z" source_id="source-1" user_id="user-1"><review_objective>Inspect this nightly review context and create a self-review proposal when the evidence supports an approval-gated change. Do not finish with only text when a proposal is required.</review_objective><review_policy_markdown>Use these deterministic self-review signal rules before deciding to finish without tools.
+
+| Signal kind | Required decision | Tool call | Notes |
+| --- | --- | --- | --- |
+| \`skill_document_with_tool_failure\` | Approval-gated skill refinement proposal | \`createSelfReviewProposal\` with one \`refine_skill\` action | Use the matching \`managedSkills[].documentId\` or \`documentActivity.skillBucket[].agentDocumentId\` as \`target.skillDocumentId\`; include \`operation: { domain: "skill", operation: "refine", input: { skillDocumentId, bodyMarkdown } }\`; cite topic/message/agent_document evidence refs. |
+| \`repeated_tool_failure\` involving \`replaceSkillContentCAS\` | Do not retry the write directly during nightly review | \`createSelfReviewProposal\` when the failed args contain a corrected skill body or a clear skill target | Prefer the failed tool args as the proposed body; call \`getEvidenceDigest\` first if the body or target is not visible in context. |
+| \`skill_documents_maybe_overlap\` | Consolidation candidate | \`createSelfReviewProposal\` with \`consolidate_skill\` only when there is a canonical skill and explicit source skills | Otherwise record no proposal for this signal alone. |
+
+If a rule says \`createSelfReviewProposal\`, do not stop with only explanatory text. If required fields are missing, use read tools once to gather them; only skip when evidence remains insufficient after reading.</review_policy_markdown><review_window>Review window: 2026-05-08T16:00:00.000Z to 2026-05-09T16:00:00.000Z</review_window><nightly_review_context_json>{"selfReviewSignals":[{"evidenceRefs":[{"id":"doc-1","type":"agent_document"}],"kind":"skill_document_with_tool_failure"}],"topics":[{"id":"topic-1","summary":"Skill update failed after a tool call."}]}</nightly_review_context_json></self_iteration_review>"
+`;

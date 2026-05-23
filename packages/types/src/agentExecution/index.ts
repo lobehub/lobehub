@@ -11,6 +11,14 @@ export interface ExecAgentAppContext {
   documentId?: string | null;
   /** Group ID for group chat */
   groupId?: string | null;
+  /**
+   * Initial metadata to merge into the topic when a new topic is created for
+   * this execution. Ignored when a topicId is already provided (existing topic).
+   */
+  initialTopicMetadata?: {
+    repos?: string[];
+    workingDirectory?: string;
+  };
   /** Scope identifier */
   scope?: string | null;
   /** Session ID */
@@ -21,6 +29,22 @@ export interface ExecAgentAppContext {
   threadId?: string | null;
   /** Topic ID */
   topicId?: string | null;
+}
+
+/**
+ * A project-level skill discovered on the device filesystem
+ * (`.agents/skills` / `.claude/skills`) by the client at request time.
+ * Only frontmatter + the absolute SKILL.md path are carried; the SKILL.md
+ * body and directory tree are loaded on demand at activation time via the
+ * readFile / listFiles tools.
+ */
+export interface ProjectSkillMeta {
+  /** Skill description from SKILL.md frontmatter. */
+  description?: string;
+  /** Skill name from frontmatter (falls back to the directory name). */
+  name: string;
+  /** Absolute path to the skill's SKILL.md on the device filesystem. */
+  path: string;
 }
 
 /**
@@ -57,6 +81,19 @@ export interface ExecAgentParams {
   instructions?: string;
   /** Override the agent's default model */
   model?: string;
+  /**
+   * Parent operation ID when this run is a sub-agent invocation. Forwarded
+   * to `agent_operations.parent_operation_id` so analytics can join the
+   * sub-tree back to its root.
+   */
+  parentOperationId?: string;
+  /**
+   * Project-level skills discovered on the device filesystem
+   * (`.agents/skills` / `.claude/skills`) at request time. Surfaced in the
+   * `<available_skills>` list and loaded on demand via the readFile tool.
+   * Only applied when a device is active for this run.
+   */
+  projectSkills?: ProjectSkillMeta[];
   /** The user input/prompt */
   prompt: string;
   /** Override the agent's default provider */

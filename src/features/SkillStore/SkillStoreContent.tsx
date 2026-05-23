@@ -27,7 +27,7 @@ export const SkillStoreContent = () => {
 
   const options: SegmentedOptions = [
     { label: t('skillStore.tabs.lobehub'), value: SkillStoreTab.LobeHub },
-    { label: 'Skills', value: SkillStoreTab.Skills },
+    { label: t('skillStore.tabs.skills'), value: SkillStoreTab.Skills },
     { label: t('skillStore.tabs.mcp'), value: SkillStoreTab.MCP },
     { label: t('skillStore.tabs.custom'), value: SkillStoreTab.Custom },
   ];

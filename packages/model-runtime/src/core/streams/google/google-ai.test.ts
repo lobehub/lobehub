@@ -155,7 +155,7 @@ describe('GoogleGenerativeAIStream', () => {
         `data: "STOP"\n\n`,
         'id: chat_E5M9dFKw\n',
         'event: usage\n',
-        `data: {"inputCachedTokens":0,"inputImageTokens":0,"inputTextTokens":0,"outputImageTokens":0,"outputTextTokens":0,"totalInputTokens":0,"totalOutputTokens":0,"totalTokens":0}\n\n`,
+        `data: {"inputCacheMissTokens":0,"inputCachedTokens":0,"inputImageTokens":0,"inputTextTokens":0,"outputImageTokens":0,"outputTextTokens":0,"totalInputTokens":0,"totalOutputTokens":0,"totalTokens":0}\n\n`,
       ]);
     });
 
@@ -1391,7 +1391,7 @@ describe('GoogleGenerativeAIStream', () => {
                 parts: [
                   {
                     functionCall: {
-                      name: 'lobe-gtd____createPlan',
+                      name: 'lobe-agent____createPlan',
                       args: {
                         goal: 'Fix Linear API Argument Validation Error',
                         description: 'Investigate the Linear API error.',
@@ -1424,7 +1424,7 @@ describe('GoogleGenerativeAIStream', () => {
                 parts: [
                   {
                     functionCall: {
-                      name: 'lobe-gtd____createTodos',
+                      name: 'lobe-agent____createTodos',
                       args: {
                         adds: [
                           'Verify Linear GraphQL API requirements',
@@ -1498,12 +1498,12 @@ describe('GoogleGenerativeAIStream', () => {
           // First tool call (createPlan)
           'id: chat_test',
           'event: tool_calls',
-          'data: [{"function":{"arguments":"{\\"goal\\":\\"Fix Linear API Argument Validation Error\\",\\"description\\":\\"Investigate the Linear API error.\\",\\"context\\":\\"The user is encountering a validation error.\\"}","name":"lobe-gtd____createPlan"},"id":"lobe-gtd____createPlan_0_tool_id_1","index":0,"thoughtSignature":"EoIYCv8XAXLI2nx+C18votz5l0A...","type":"function"}]\n',
+          'data: [{"function":{"arguments":"{\\"goal\\":\\"Fix Linear API Argument Validation Error\\",\\"description\\":\\"Investigate the Linear API error.\\",\\"context\\":\\"The user is encountering a validation error.\\"}","name":"lobe-agent____createPlan"},"id":"lobe-agent____createPlan_0_tool_id_1","index":0,"thoughtSignature":"EoIYCv8XAXLI2nx+C18votz5l0A...","type":"function"}]\n',
 
           // Second tool call (createTodos) - should be a SEPARATE event with index:0
           'id: chat_test',
           'event: tool_calls',
-          'data: [{"function":{"arguments":"{\\"adds\\":[\\"Verify Linear GraphQL API requirements\\",\\"Determine if code needs to look up Team UUID\\",\\"Provide corrected code\\"]}","name":"lobe-gtd____createTodos"},"id":"lobe-gtd____createTodos_0_tool_id_2","index":0,"type":"function"}]\n',
+          'data: [{"function":{"arguments":"{\\"adds\\":[\\"Verify Linear GraphQL API requirements\\",\\"Determine if code needs to look up Team UUID\\",\\"Provide corrected code\\"]}","name":"lobe-agent____createTodos"},"id":"lobe-agent____createTodos_0_tool_id_2","index":0,"type":"function"}]\n',
 
           // Stop and usage
           'id: chat_test',

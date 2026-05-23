@@ -15,7 +15,6 @@ import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
-import { prefetchRoute } from '@/utils/router';
 
 import { useAgentModal } from '../../ModalProvider';
 import Actions from '../Item/Actions';
@@ -122,8 +121,7 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate }) 
   // Memoize event handlers
   const handleMouseEnter = useCallback(() => {
     prefetchAgent(id);
-    prefetchRoute(agentUrl);
-  }, [id, prefetchAgent, agentUrl]);
+  }, [id, prefetchAgent]);
 
   const handleDoubleClick = useCallback(() => {
     openAgentInNewWindow(id);

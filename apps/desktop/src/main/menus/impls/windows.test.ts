@@ -205,6 +205,9 @@ describe('WindowsMenu', () => {
 
   describe('menu item click handlers', () => {
     it('should handle preferences click', () => {
+      const mainWindow = { broadcast: vi.fn(), loadUrl: vi.fn(), show: vi.fn() };
+      (mockApp.browserManager.getMainWindow as any).mockReturnValue(mainWindow);
+
       windowsMenu.buildAndSetAppMenu();
 
       const template = (Menu.buildFromTemplate as any).mock.calls[0][0];
@@ -213,7 +216,9 @@ describe('WindowsMenu', () => {
 
       expect(preferencesItem).toBeDefined();
       preferencesItem.click();
-      expect(mockApp.browserManager.retrieveByIdentifier).toHaveBeenCalledWith('settings');
+      expect(mockApp.browserManager.getMainWindow).toHaveBeenCalled();
+      expect(mainWindow.show).toHaveBeenCalled();
+      expect(mainWindow.broadcast).toHaveBeenCalledWith('navigate', { path: '/settings' });
     });
 
     it('should handle check for updates click', () => {

@@ -26,7 +26,7 @@ export const PERSIST_FATAL_MARKER = 'persistFatal';
  * Detect whether an error returned by `messageModel.create` is a `parent_id`
  * FK violation — meaning the parent message no longer exists. Most commonly
  * caused by the parent being deleted concurrently with agent execution
- * (see LOBE-7154 / LOBE-7158).
+ * (see ).
  *
  * `drizzle` + `postgres-js` wrap the raw PG error as `.cause`, so the check
  * looks at both the top level and the cause.

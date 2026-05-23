@@ -34,7 +34,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   footer: css`
     display: flex;
     justify-content: flex-end;
-    margin-block-start: 12px;
+    margin-block-start: 8px;
   `,
   number: css`
     flex-shrink: 0;
@@ -49,9 +49,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 8px;
     align-items: center;
 
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-radius: 8px;
+    min-height: 40px;
+    padding-block: 7px;
+    padding-inline: 16px;
+    border-radius: calc(${cssVar.borderRadiusLG} - 2px);
 
     color: ${cssVar.colorTextSecondary};
 
@@ -120,6 +121,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
     margin-inline-start: 6px;
     color: ${cssVar.colorTextTertiary};
+  `,
+  submitButton: css`
+    &.ant-btn {
+      min-width: 88px;
+      height: 36px;
+      border-radius: calc(${cssVar.borderRadiusLG} - 2px);
+    }
   `,
 }));
 
@@ -290,9 +298,9 @@ const ApprovalActions = memo<ApprovalActionsProps>(
 
         <div className={styles.footer}>
           <Button
+            className={styles.submitButton}
             disabled={isMessageCreating}
             loading={loading}
-            shape={'round'}
             size={'middle'}
             type={'primary'}
             onClick={handleSubmit}

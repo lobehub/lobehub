@@ -190,12 +190,15 @@ export class AiModelModel {
     }
 
     // Get default model list to preserve type information
-    const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
-    const defaultModelMap = new Map(LOBE_DEFAULT_MODEL_LIST.map((m) => [m.id, m]));
+    const { loadModels } = await import('@lobechat/business-model-bank/model-config');
+    const defaultModels = await loadModels();
+    const defaultModelMap = new Map(defaultModels.map((m) => [`${m.providerId}:${m.id}`, m]));
 
     // Prepare all records for batch upsert
     const allRecords = models.map((modelId) => {
-      const defaultModel = defaultModelMap.get(modelId);
+      const defaultModel =
+        defaultModelMap.get(`${providerId}:${modelId}`) ??
+        defaultModels.find((model) => model.id === modelId);
       const record: typeof aiModels.$inferInsert = {
         enabled,
         id: modelId,

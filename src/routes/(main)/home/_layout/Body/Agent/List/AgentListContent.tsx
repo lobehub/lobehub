@@ -25,32 +25,30 @@ const AgentListContent = memo<AgentListContentProps>(({ onMoreClick }) => {
   useFetchAgentList();
 
   // Memoize computed visibility flags to prevent unnecessary recalculations
-  const { showPinned, showCustom, showDefault } = useMemo(() => {
+  const { showPinned, showCustom } = useMemo(() => {
     const hasPinned = Boolean(pinnedList?.length);
     const hasCustom = Boolean(customList?.length);
-    const hasDefault = Boolean(defaultList?.length);
 
     return {
       showCustom: hasCustom,
-      showDefault: hasDefault,
       showPinned: hasPinned,
     };
-  }, [pinnedList?.length, customList?.length, defaultList?.length]);
+  }, [pinnedList?.length, customList?.length]);
 
   if (!isInit) return <SkeletonList rows={6} />;
 
+  // Always render the default SessionList so the "+ Create Agent" entry is visible
+  // even when the user has only the built-in Lobe AI inbox.
   return (
     <>
       <InboxItem style={{ minHeight: 36 }} />
       {showPinned && <SessionList dataSource={pinnedList!} />}
       {showCustom && <Group dataSource={customList!} />}
-      {showDefault && (
-        <SessionList
-          dataSource={defaultList!}
-          groupId={SessionDefaultGroup.Default}
-          onMoreClick={onMoreClick}
-        />
-      )}
+      <SessionList
+        dataSource={defaultList ?? []}
+        groupId={SessionDefaultGroup.Default}
+        onMoreClick={onMoreClick}
+      />
     </>
   );
 });

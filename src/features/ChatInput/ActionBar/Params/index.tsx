@@ -1,4 +1,4 @@
-import { SlidersHorizontal } from 'lucide-react';
+import { Settings2Icon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -17,16 +17,24 @@ const Params = memo(() => {
   const [updating, setUpdating] = useState(false);
   const { t } = useTranslation('setting');
 
-  if (isLoading) return <Action disabled icon={SlidersHorizontal} />;
+  if (isLoading) return <Action disabled icon={Settings2Icon} />;
 
   return (
     <Action
-      icon={SlidersHorizontal}
-      loading={updating}
+      icon={Settings2Icon}
       showTooltip={false}
       title={t('settingModel.params.title')}
       popover={{
         content: <Controls setUpdating={setUpdating} updating={updating} />,
+        maxWidth: 384,
+        minWidth: 384,
+        styles: {
+          content: {
+            borderRadius: 16,
+            overflow: 'hidden',
+            padding: 0,
+          },
+        },
       }}
     />
   );

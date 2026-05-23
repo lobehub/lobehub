@@ -177,13 +177,10 @@ export default {
   'agentSkillModal.url.title': 'Import from URL',
   'agentSkillModal.url.urlPlaceholder': 'https://example.com/path/to/SKILL.md',
   'agentSkillTag': 'Agent Skill',
-  'agentTab.chat': 'Chat Preferences',
-  'agentTab.documents': 'Documents',
-  'agentTab.meta': 'Agent info',
-  'agentTab.modal': 'Model Settings',
   'agentTab.opening': 'Opening Settings',
   'agentTab.plugin': 'Skill Settings',
   'agentTab.prompt': 'Agent Profile',
+  'agentTab.selfIteration': 'Self-Iteration',
   'agentTab.tts': 'Voice Service',
   'agentDocuments.createSuccess': 'Documents created from template',
   'agentDocuments.createWithTemplate': 'Create with this template',
@@ -219,6 +216,47 @@ export default {
   'heterogeneousStatus.plan.label': 'Plan',
   'heterogeneousStatus.redetect': 'Re-detect',
   'heterogeneousStatus.unavailable': '{{name}} CLI not found. Please install or configure it.',
+
+  // Heterogeneous agent — Cloud tab (web environment config)
+  'heterogeneousStatus.cloud.tabLabel': 'Cloud',
+  'heterogeneousStatus.cloud.tokenLabel': 'Claude Code Token',
+  'heterogeneousStatus.cloud.tokenDesc':
+    'Your Claude Code OAuth token. Saved securely to Credentials once submitted. Run `claude setup-token` in your terminal to generate one.',
+  'heterogeneousStatus.cloud.tokenPlaceholder': 'Paste your OAuth token here',
+  'heterogeneousStatus.cloud.tokenChange': 'Change',
+  'heterogeneousStatus.cloud.tokenSave': 'Save',
+  'heterogeneousStatus.cloud.tokenCancel': 'Cancel',
+  'heterogeneousStatus.cloud.githubLabel': 'GitHub Connection',
+  'heterogeneousStatus.cloud.githubDesc':
+    'Select a GitHub OAuth credential to allow the sandbox to clone your private repositories.',
+  'heterogeneousStatus.cloud.githubPlaceholder': 'Select a GitHub credential...',
+  'heterogeneousStatus.cloud.githubNoCreds': 'No GitHub credentials found.',
+  'heterogeneousStatus.cloud.manageCredentials': 'Manage Credentials →',
+  'heterogeneousStatus.cloud.repoLabel': 'Repositories',
+  'heterogeneousStatus.cloud.repoDesc':
+    'Add repositories to the list. Switch the active one from the bottom bar in the chat view.',
+  'heterogeneousStatus.cloud.repoPlaceholder': 'owner/repo or https://github.com/owner/repo',
+  'heterogeneousStatus.cloud.repoAdd': 'Add',
+
+  // Heterogeneous agent — Desktop tab
+  'heterogeneousStatus.desktop.tabLabel': 'Desktop',
+
+  // Remote platform agent profile config panel (openclaw / hermes)
+  'platformAgentConfig.title': 'Platform Configuration',
+  'platformAgentConfig.platform.label': 'Platform',
+  'platformAgentConfig.device.label': 'Bound Device',
+  'platformAgentConfig.device.none': 'None',
+  'platformAgentConfig.device.online': 'Online',
+  'platformAgentConfig.device.offline': 'Offline',
+  'platformAgentConfig.availability.label': 'Availability',
+  'platformAgentConfig.availability.checking': 'Checking...',
+  'platformAgentConfig.availability.available': 'Available',
+  'platformAgentConfig.availability.notInstalled': 'Not installed',
+  'platformAgentConfig.availability.noDevice': 'No device bound',
+  'platformAgentConfig.changeDevice': 'Change Device',
+  'platformAgentConfig.redetect': 'Re-detect',
+  'platformAgentConfig.selectDevice': 'Select a device',
+
   'checking': 'Checking...',
 
   // Credentials Management
@@ -300,9 +338,9 @@ export default {
   'danger.reset.desc': 'Restore all settings to defaults. Your data wont be deleted.',
   'danger.reset.success': 'All settings have been reset',
   'danger.reset.title': 'Reset All Settings',
-  'defaultAgent.model.desc': 'Default model used when creating a new Agent',
+  'defaultAgent.model.desc': 'Model used when creating new agents',
   'defaultAgent.model.title': 'Model',
-  'defaultAgent.title': 'Default Agent Settings',
+  'defaultAgent.title': 'New Agent',
   'group.aiConfig': 'Agent',
   'group.common': 'General',
   'group.profile': 'Account',
@@ -571,21 +609,20 @@ export default {
   'settingAppearance.primaryColor.desc': 'Custom theme color',
   'settingAppearance.primaryColor.title': 'Theme Color',
   'settingAppearance.title': 'Application Appearance',
-  'settingChat.autoCreateTopicThreshold.desc':
-    'Automatically create a topic when the current message count exceeds this value',
-  'settingChat.autoCreateTopicThreshold.title': 'Message Threshold',
   'settingChat.chatStyleType.title': 'Chat Window Style',
   'settingChat.chatStyleType.type.chat': 'Conversation Mode',
   'settingChat.chatStyleType.type.docs': 'Page Mode',
   'settingChat.compressThreshold.desc':
     'When the uncompressed history messages exceed this value, compression will be applied',
   'settingChat.compressThreshold.title': 'History Message Length Compression Threshold',
-  'settingChat.enableAutoCreateTopic.desc':
-    'Whether to automatically create a topic during the conversation, only effective in temporary topics',
-  'settingChat.enableAutoCreateTopic.title': 'Auto Create Topic',
   'settingChat.enableAutoScrollOnStreaming.desc': 'Override global setting for this assistant',
   'settingChat.enableAutoScrollOnStreaming.title': 'Auto-scroll During AI Response',
   'settingChat.enableCompressHistory.title': 'Enable Automatic Summary of Chat History',
+  'settingChat.enableFollowUpChips.desc':
+    'After each reply, show one-click follow-up reply chips below the message. Requires the global Follow-up model to be configured.',
+  'settingChat.enableFollowUpChips.notConfiguredHint':
+    'Configure the global Follow-up model first to enable this.',
+  'settingChat.enableFollowUpChips.title': 'Follow-up Suggestions',
   'settingChat.enableHistoryCount.alias': 'Unlimited',
   'settingChat.enableHistoryCount.limited': 'Include only {{number}} conversation messages',
   'settingChat.enableHistoryCount.setlimited': 'Set limited history messages',
@@ -600,10 +637,6 @@ export default {
   'settingChat.inputTemplate.placeholder':
     'Preprocessing template {{text}} will be replaced with real-time input information',
   'settingChat.inputTemplate.title': 'User Input Preprocessing',
-  'settingChat.selfIteration.enabled.desc':
-    'Allow this assistant to review recent signals and improve its own skills when the lab workflow runs',
-  'settingChat.selfIteration.enabled.title': 'Enable Self-Iteration',
-  'settingChat.selfIteration.title': 'Advanced Labs',
   'settingChat.submit': 'Update Chat Preferences',
   'settingChat.title': 'Chat Settings',
   'settingChatAppearance.autoScrollOnStreaming.desc':
@@ -622,8 +655,9 @@ export default {
   'settingChatAppearance.transitionMode.options.none.value': 'None',
   'settingChatAppearance.transitionMode.options.smooth': 'Smooth',
   'settingChatAppearance.transitionMode.title': 'Transition Animation',
-  'settingCommon.devMode.desc': 'Enable to show developer-related features and options',
-  'settingCommon.devMode.title': 'Developer Mode',
+  'settingCommon.devMode.desc':
+    'Show technical details and manual controls for chats, models, and local tools. This does not change model responses.',
+  'settingCommon.devMode.title': 'Advanced tools',
   'settingCommon.lang.autoMode': 'Follow System',
   'settingCommon.lang.title': 'Language',
   'settingCommon.liteMode.desc': 'Simplify the interface and hide advanced features',
@@ -718,6 +752,17 @@ export default {
   'settingModel.model.desc': '{{provider}} model',
   'settingModel.model.title': 'Model',
   'settingModel.params.title': 'Advanced Parameters',
+  'settingModel.params.panel.advanced': 'Advanced Settings',
+  'settingModel.params.panel.agentTitle': 'Agent Advanced Settings',
+  'settingModel.params.panel.contextCompression': 'Auto-compress Context',
+  'settingModel.params.panel.creativity': 'Creativity',
+  'settingModel.params.panel.historyLimit': 'Limit History Messages',
+  'settingModel.params.panel.openness': 'Openness',
+  'settingModel.params.panel.responseLength': 'Limit Response Length',
+  'settingModel.params.panel.tab': 'Params',
+  'settingModel.params.panel.title': 'Chat Parameter Settings',
+  'settingModel.params.panel.topicDivergence': 'Topic Divergence',
+  'settingModel.params.panel.vocabularyRichness': 'Vocabulary Richness',
   'settingModel.presencePenalty.desc':
     'The higher the value, the more inclined to use different expressions and avoid concept repetition; the lower the value, the more inclined to use repeated concepts or narratives, resulting in more consistent expression.',
   'settingModel.presencePenalty.title': 'Expression Divergence',
@@ -751,6 +796,12 @@ export default {
   'settingOpening.openingQuestions.title': 'Opening Questions',
   'settingOpening.title': 'Opening Settings',
   'settingPlugin.title': 'Skill List',
+  'settingSelfIteration.enabled.desc':
+    'Allow this assistant to review recent signals and improve its own skills when the self-iteration workflow runs.',
+  'settingSelfIteration.enabled.managedDesc':
+    'Always on for Lobe AI while Self-Iteration is available.',
+  'settingSelfIteration.enabled.title': 'Enable Self-Iteration',
+  'settingSelfIteration.title': 'Self-Iteration',
   'settingSystem.oauth.info.desc': 'Logged in',
   'settingSystem.oauth.info.title': 'Account Information',
   'settingSystem.oauth.signin.action': 'Sign In',
@@ -760,6 +811,8 @@ export default {
   'settingSystem.oauth.signout.confirm': 'Confirm sign out?',
   'settingSystem.oauth.signout.success': 'Sign out successful',
   'settingSystem.title': 'System Settings',
+  'serviceModel.modelAssignments.title': 'Model Assignments',
+  'serviceModel.optionalFeatures.title': 'Optional Features',
   'settingSystemTools.appEnvironment.chromium.desc': 'Chromium browser engine version',
   'settingSystemTools.appEnvironment.desc': 'Built-in runtime versions in the desktop app',
   'settingSystemTools.appEnvironment.electron.desc': 'Electron framework version',
@@ -915,42 +968,47 @@ When I am ___, I need ___
   'sync.webrtc.title': 'WebRTC Sync',
   'systemAgent.agentMeta.label': 'Model',
   'systemAgent.agentMeta.modelDesc':
-    'Model designated for generating agent name, description, avatar, and tags',
-  'systemAgent.agentMeta.title': 'Agent Info Generation Helper',
+    'Model used to generate names, descriptions, avatars, and tags',
+  'systemAgent.agentMeta.title': 'Profile Generation',
   'systemAgent.customPrompt.addPrompt': 'Add Custom Prompt',
   'systemAgent.customPrompt.desc':
     'Once filled out, the system agent will use the custom prompt when generating content',
   'systemAgent.customPrompt.placeholder': 'Please enter custom prompt',
   'systemAgent.customPrompt.title': 'Custom Prompt',
+  'systemAgent.followUpAction.label': 'Follow-up Suggestions Model',
+  'systemAgent.followUpAction.modelDesc':
+    'Model used to suggest one-click follow-up replies under each assistant message',
+  'systemAgent.followUpAction.title': 'Follow-up Suggestions',
   'systemAgent.generationTopic.label': 'Model',
-  'systemAgent.generationTopic.modelDesc':
-    'Model designated for automatic naming of AI image topics',
-  'systemAgent.generationTopic.title': 'AI Image Topic Naming Agent',
+  'systemAgent.generationTopic.modelDesc': 'Model used to name AI image topics',
+  'systemAgent.generationTopic.title': 'AI Image Topic Naming',
   'systemAgent.helpInfo':
     'When creating a new agent, the default agent settings will be used as preset values.',
   'systemAgent.historyCompress.label': 'Model',
-  'systemAgent.historyCompress.modelDesc':
-    'Specify the model used to compress conversation history',
-  'systemAgent.historyCompress.title': 'Conversation History Compression Agent',
+  'systemAgent.historyCompress.modelDesc': 'Model used to compress conversation history',
+  'systemAgent.historyCompress.title': 'Conversation History Compression',
   'systemAgent.inputCompletion.label': 'Model',
   'systemAgent.inputCompletion.modelDesc':
-    'Model used for input auto-completion suggestions (like GitHub Copilot ghost text)',
-  'systemAgent.inputCompletion.title': 'Input Auto-Completion Agent',
+    'Suggests text while you type. When enabled, this model generates the suggestions.',
+  'systemAgent.inputCompletion.title': 'Input Suggestions',
   'systemAgent.promptRewrite.label': 'Model',
-  'systemAgent.promptRewrite.modelDesc': 'Specify the model used to rewrite prompts',
-  'systemAgent.promptRewrite.title': 'Prompt Rewrite Agent',
+  'systemAgent.promptRewrite.modelDesc':
+    'Improves prompts before generation. When enabled, this model rewrites the prompt.',
+  'systemAgent.promptRewrite.title': 'Prompt Rewriting',
   'systemAgent.thread.label': 'Model',
-  'systemAgent.thread.modelDesc': 'The model designated for automatic renaming of subtopics',
-  'systemAgent.thread.title': 'Subtopic Auto-Naming Agent',
-  'systemAgent.title': 'System Agents',
+  'systemAgent.thread.modelDesc': 'Model used to rename subtopics',
+  'systemAgent.thread.title': 'Subtopic Auto-Naming',
+  'systemAgent.title': 'System Tasks',
   'systemAgent.topic.label': 'Model',
-  'systemAgent.topic.modelDesc': 'Model designated for automatic topic renaming',
-  'systemAgent.topic.title': 'Topic Auto-Naming Agent',
+  'systemAgent.topic.modelDesc': 'Model used to rename topics',
+  'systemAgent.topic.title': 'Topic Auto-Naming',
   'systemAgent.translation.label': 'Model',
-  'systemAgent.translation.modelDesc': 'Specify the model used for translation',
-  'systemAgent.translation.title': 'Message Translation Agent',
+  'systemAgent.translation.modelDesc': 'Model used to translate messages',
+  'systemAgent.translation.title': 'Message Translation',
   'tab.about': 'About',
   'tab.advanced': 'Advanced',
+  'tab.advanced.appUpdates.title': 'App updates',
+  'tab.advanced.toolsAndDiagnostics.title': 'Tools and diagnostics',
   'tab.addAgentSkill': 'Add Agent Skill',
   'tab.advanced.updateChannel.canary': 'Canary',
   'tab.advanced.updateChannel.canaryDesc':
@@ -961,7 +1019,7 @@ When I am ___, I need ___
   'tab.advanced.updateChannel.nightlyDesc': 'Automated daily builds with the latest changes.',
   'tab.advanced.updateChannel.stable': 'Stable',
   'tab.advanced.updateChannel.stableDesc': 'Production-ready releases.',
-  'tab.advanced.updateChannel.title': 'Update Channel',
+  'tab.advanced.updateChannel.title': 'Update channel',
   'tab.addCustomMcp': 'Add Custom MCP Skill',
   'tab.addCustomMcp.desc': 'Manually configure a custom MCP server',
   'tab.addCustomSkill': 'Add',
@@ -1023,10 +1081,6 @@ When I am ___, I need ___
   'tools.builtins.lobe-cloud-sandbox.readme':
     'Execute Python, JavaScript, and TypeScript code in an isolated cloud environment. Run shell commands, manage files, search content with regex, and export results securely.',
   'tools.builtins.lobe-cloud-sandbox.title': 'Cloud Sandbox',
-  'tools.builtins.lobe-gtd.description': 'Plan goals and track progress with GTD methodology',
-  'tools.builtins.lobe-gtd.readme':
-    'Plan goals and track progress using GTD methodology. Create strategic plans, manage todo lists with status tracking, and execute long-running async tasks.',
-  'tools.builtins.lobe-gtd.title': 'GTD Tools',
   'tools.builtins.lobe-local-system.description':
     'Access and manage local files, run shell commands on your desktop',
   'tools.builtins.lobe-local-system.readme':
@@ -1052,9 +1106,6 @@ When I am ___, I need ___
   'tools.builtins.lobe-agent-documents.title': 'Documents',
   'tools.builtins.lobe-agent-management.description': 'Create, manage, and orchestrate AI agents',
   'tools.builtins.lobe-agent-management.title': 'Agent Management',
-  'tools.builtins.lobe-agent-marketplace.description':
-    'Show users a curated Agent Marketplace card and record which templates they pick.',
-  'tools.builtins.lobe-agent-marketplace.title': 'Agent Marketplace',
   'tools.builtins.lobe-brief.description':
     'Report progress, deliver results, and request user decisions',
   'tools.builtins.lobe-brief.title': 'Brief Tools',
@@ -1123,6 +1174,7 @@ When I am ___, I need ___
   'tools.builtins.task.description':
     'Task management and execution — create, track, review, and complete tasks via CLI.',
   'tools.builtins.task.title': 'Task',
+  'tools.builtins.configure': 'Configure',
   'tools.builtins.notInstalled': 'Not Installed',
   'tools.builtins.uninstall': 'Uninstall',
   'tools.builtins.uninstallConfirm.desc':
@@ -1318,6 +1370,10 @@ When I am ___, I need ___
     'Outlook Calendar is an integrated scheduling tool within Microsoft Outlook that enables users to create appointments, organize meetings with others, and manage their time and events effectively.',
   'tools.lobehubSkill.providers.microsoft.readme':
     'Integrate with Outlook Calendar to view, create, and manage your events seamlessly. Schedule meetings, check availability, set reminders, and coordinate your time—all through natural language commands.',
+  'tools.lobehubSkill.providers.notion.description':
+    'Notion is a collaborative productivity and note-taking application.',
+  'tools.lobehubSkill.providers.notion.readme':
+    'Connect to Notion to access and manage your workspace. Create pages, search content, update databases, and organize your knowledge base—all through natural conversation with your AI assistant.',
   'tools.lobehubSkill.providers.twitter.description':
     'X (Twitter) is a social media platform for sharing real-time updates, news, and engaging with your audience through posts, replies, and direct messages.',
   'tools.lobehubSkill.providers.twitter.readme':
@@ -1336,6 +1392,10 @@ When I am ___, I need ___
   'tools.plugins.noEnabled': 'No skills enabled',
   'tools.plugins.store': 'Add skill',
   'tools.search': 'Search skills...',
+  'tools.activation.auto': 'Auto',
+  'tools.activation.auto.desc': 'Smart',
+  'tools.activation.pinned': 'Pinned',
+  'tools.activation.pinned.desc': 'Always On',
   'tools.skillActivateMode.auto.desc':
     'AI can autonomously activate tools, run skills, and install new skills from the store',
   'tools.skillActivateMode.auto.title': 'Auto',

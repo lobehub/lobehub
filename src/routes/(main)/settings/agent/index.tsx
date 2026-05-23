@@ -16,6 +16,7 @@ const Page = () => {
       <SystemAgentForm systemAgentKey="translation" />
       <SystemAgentForm systemAgentKey="historyCompress" />
       <SystemAgentForm systemAgentKey="agentMeta" />
+      <SystemAgentForm allowDisable systemAgentKey="followUpAction" />
       <SystemAgentForm allowDisable systemAgentKey="inputCompletion" />
       <SystemAgentForm allowDisable systemAgentKey="promptRewrite" />
     </>

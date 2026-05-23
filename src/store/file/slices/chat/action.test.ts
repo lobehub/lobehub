@@ -1,9 +1,16 @@
+import { toast } from '@lobehub/ui/base-ui';
 import { act, renderHook } from '@testing-library/react';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useFileStore as useStore } from '../../store';
 
 vi.mock('zustand/traditional');
+
+vi.mock('@lobehub/ui/base-ui', () => ({
+  toast: {
+    error: vi.fn(),
+  },
+}));
 
 // Mock necessary modules and functions
 vi.mock('@/components/AntdStaticMethods', () => ({
@@ -46,5 +53,28 @@ describe('useFileStore:chat', () => {
     });
 
     expect(result.current.chatUploadFileList).toEqual([]);
+  });
+
+  it('uploadChatFiles should reject unsupported files before upload', async () => {
+    const { result } = renderHook(() => useStore());
+    const uploadWithProgress = vi.fn();
+
+    act(() => {
+      useStore.setState({
+        chatUploadFileList: [],
+        uploadWithProgress: uploadWithProgress as any,
+      });
+    });
+
+    await act(async () => {
+      await result.current.uploadChatFiles([
+        new File(['<svg />'], 'icon.svg', { type: 'image/svg+xml' }),
+        new File(['zip'], 'archive.zip', { type: 'application/zip' }),
+      ]);
+    });
+
+    expect(uploadWithProgress).not.toHaveBeenCalled();
+    expect(result.current.chatUploadFileList).toEqual([]);
+    expect(toast.error).toHaveBeenCalledWith(expect.any(String));
   });
 });

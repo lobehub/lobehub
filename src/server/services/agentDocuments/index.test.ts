@@ -650,4 +650,191 @@ describe('AgentDocumentsService', () => {
       expect(result).toEqual({ id: 'ad-1' });
     });
   });
+
+  describe('getAgentSkills', () => {
+    // Inject docs with the derive flags already set so we test the
+    // bundle → index-child → identifier mapping in isolation, not the
+    // model's deriveAgentDocumentFields projection.
+    const stubDocs = (docs: Array<Partial<any>>): any[] =>
+      docs.map((doc) => ({
+        content: '',
+        description: null,
+        filename: '',
+        isSkillBundle: false,
+        isSkillIndex: false,
+        parentId: null,
+        title: null,
+        ...doc,
+      }));
+
+    it('returns an empty list when the agent has no skill bundles', async () => {
+      const service = new AgentDocumentsService(db, userId);
+      vi.spyOn(service, 'getAgentDocuments').mockResolvedValue(
+        stubDocs([
+          { documentId: 'doc-1', filename: 'note.md', isSkillBundle: false },
+          { documentId: 'doc-2', filename: 'web.md', isSkillBundle: false },
+        ]),
+      );
+
+      const result = await service.getAgentSkills('agent-1');
+
+      expect(service.getAgentDocuments).toHaveBeenCalledWith('agent-1');
+      expect(result).toEqual([]);
+    });
+
+    it('prefixes the identifier with `agent-skills:` and pulls content from the SKILL.md index child', async () => {
+      const service = new AgentDocumentsService(db, userId);
+      vi.spyOn(service, 'getAgentDocuments').mockResolvedValue(
+        stubDocs([
+          {
+            content: '',
+            description: 'Triage workflow',
+            documentId: 'bundle-1',
+            filename: 'bug-triage',
+            isSkillBundle: true,
+            title: 'Bug Triage',
+          },
+          {
+            content: '# Bug triage\n\nbody',
+            documentId: 'index-1',
+            filename: 'SKILL.md',
+            isSkillIndex: true,
+            parentId: 'bundle-1',
+          },
+          // Sibling non-index child — must be ignored.
+          {
+            content: 'reference',
+            documentId: 'asset-1',
+            filename: 'reference.md',
+            parentId: 'bundle-1',
+          },
+        ]),
+      );
+
+      const result = await service.getAgentSkills('agent-1');
+
+      expect(result).toEqual([
+        {
+          content: '# Bug triage\n\nbody',
+          description: 'Triage workflow',
+          filename: 'bug-triage',
+          identifier: 'agent-skills:bug-triage',
+          name: 'agent-skills:bug-triage',
+          title: 'Bug Triage',
+        },
+      ]);
+    });
+
+    it('falls back to the bundle row content when the index child is missing', async () => {
+      const service = new AgentDocumentsService(db, userId);
+      vi.spyOn(service, 'getAgentDocuments').mockResolvedValue(
+        stubDocs([
+          {
+            content: 'orphan body',
+            description: null,
+            documentId: 'orphan-1',
+            filename: 'orphan-skill',
+            isSkillBundle: true,
+            title: 'Orphan',
+          },
+        ]),
+      );
+
+      const result = await service.getAgentSkills('agent-1');
+
+      expect(result).toEqual([
+        {
+          content: 'orphan body',
+          description: '',
+          filename: 'orphan-skill',
+          identifier: 'agent-skills:orphan-skill',
+          name: 'agent-skills:orphan-skill',
+          title: 'Orphan',
+        },
+      ]);
+    });
+
+    it('emits empty content for a bundle with no index child and no body', async () => {
+      const service = new AgentDocumentsService(db, userId);
+      vi.spyOn(service, 'getAgentDocuments').mockResolvedValue(
+        stubDocs([
+          {
+            content: '',
+            documentId: 'empty-1',
+            filename: 'empty',
+            isSkillBundle: true,
+            title: 'Empty',
+          },
+        ]),
+      );
+
+      const [skill] = await service.getAgentSkills('agent-1');
+
+      expect(skill.content).toBe('');
+      expect(skill.identifier).toBe('agent-skills:empty');
+    });
+
+    it('returns one entry per skill bundle and ignores non-bundle docs', async () => {
+      const service = new AgentDocumentsService(db, userId);
+      vi.spyOn(service, 'getAgentDocuments').mockResolvedValue(
+        stubDocs([
+          {
+            documentId: 'b-1',
+            filename: 'one',
+            isSkillBundle: true,
+            title: 'One',
+          },
+          {
+            content: 'one body',
+            documentId: 'b-1-idx',
+            isSkillIndex: true,
+            parentId: 'b-1',
+          },
+          {
+            documentId: 'b-2',
+            filename: 'two',
+            isSkillBundle: true,
+            title: 'Two',
+          },
+          {
+            content: 'two body',
+            documentId: 'b-2-idx',
+            isSkillIndex: true,
+            parentId: 'b-2',
+          },
+          // Unrelated regular doc.
+          { documentId: 'note', filename: 'note.md' },
+        ]),
+      );
+
+      const result = await service.getAgentSkills('agent-1');
+
+      expect(result.map((s) => s.identifier)).toEqual(['agent-skills:one', 'agent-skills:two']);
+      expect(result.map((s) => s.content)).toEqual(['one body', 'two body']);
+    });
+
+    it('matches index children strictly by parentId — does not leak across bundles', async () => {
+      const service = new AgentDocumentsService(db, userId);
+      vi.spyOn(service, 'getAgentDocuments').mockResolvedValue(
+        stubDocs([
+          { documentId: 'b-1', filename: 'first', isSkillBundle: true },
+          { documentId: 'b-2', filename: 'second', isSkillBundle: true },
+          // Only b-2 has an index child; b-1 must fall back to its own (empty)
+          // content rather than borrow b-2's content.
+          {
+            content: 'second body',
+            documentId: 'b-2-idx',
+            isSkillIndex: true,
+            parentId: 'b-2',
+          },
+        ]),
+      );
+
+      const result = await service.getAgentSkills('agent-1');
+
+      expect(result).toHaveLength(2);
+      expect(result.find((s) => s.filename === 'first')?.content).toBe('');
+      expect(result.find((s) => s.filename === 'second')?.content).toBe('second body');
+    });
+  });
 });

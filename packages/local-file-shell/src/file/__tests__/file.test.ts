@@ -100,6 +100,82 @@ describe('file operations', () => {
       expect(result.createdTime).toBeInstanceOf(Date);
       expect(result.modifiedTime).toBeInstanceOf(Date);
     });
+
+    it('should reject unsupported binary file extensions', async () => {
+      const filePath = path.join(tmpDir, 'cm.bundle.b64');
+      await writeFile(filePath, 'A'.repeat(20_000));
+
+      const result = await readLocalFile({ path: filePath });
+
+      expect(result.content).toContain('Unsupported binary file type');
+      expect(result.content).toContain('.b64');
+      expect(result.charCount).toBe(0);
+      expect(result.lineCount).toBe(0);
+    });
+
+    it('should reject .bin / .exe / .zip extensions', async () => {
+      for (const ext of ['bin', 'exe', 'zip']) {
+        const filePath = path.join(tmpDir, `payload.${ext}`);
+        await writeFile(filePath, 'data');
+        const result = await readLocalFile({ path: filePath });
+        expect(result.content).toContain('Unsupported binary file type');
+        expect(result.content).toContain(`.${ext}`);
+      }
+    });
+
+    it('should reject files whose content sniffs as binary even with text extension', async () => {
+      const filePath = path.join(tmpDir, 'sneaky.txt');
+      const buf = Buffer.concat([Buffer.from('header\n'), Buffer.from([0x00, 0x01, 0x02, 0x03])]);
+      await writeFile(filePath, buf);
+
+      const result = await readLocalFile({ path: filePath });
+      expect(result.content).toContain('binary');
+    });
+
+    it('should truncate single very long lines to per-line cap', async () => {
+      const filePath = path.join(tmpDir, 'long-line.txt');
+      // 27KB single line of base64-like text — the scenario.
+      await writeFile(filePath, 'A'.repeat(27_000));
+
+      const result = await readLocalFile({ path: filePath });
+
+      expect(result.linesTruncated).toBeGreaterThan(0);
+      // The returned content for a single line must be bounded.
+      expect(result.content.length).toBeLessThan(10_000);
+      expect(result.content).toContain('line truncated');
+    });
+
+    it('should cap total content length and set truncated flag', async () => {
+      const filePath = path.join(tmpDir, 'huge.txt');
+      // Many short lines, totalling > 500K chars.
+      const lines = Array.from({ length: 8000 }, (_, i) => `line ${i} ${'x'.repeat(80)}`);
+      await writeFile(filePath, lines.join('\n'));
+
+      const result = await readLocalFile({ fullContent: true, path: filePath });
+
+      expect(result.truncated).toBe(true);
+      expect(result.content).toContain('content truncated');
+    });
+
+    it('should reject files larger than the hard size cap', async () => {
+      const filePath = path.join(tmpDir, 'big.txt');
+      // Slightly over 10MB.
+      await writeFile(filePath, 'a'.repeat(10 * 1024 * 1024 + 1));
+
+      const result = await readLocalFile({ path: filePath });
+
+      expect(result.content).toContain('too large');
+      expect(result.charCount).toBe(0);
+    });
+
+    it('should still read normal source files of allowed extensions', async () => {
+      const filePath = path.join(tmpDir, 'app.cjs');
+      await writeFile(filePath, "module.exports = { hello: 'world' };\n");
+
+      const result = await readLocalFile({ path: filePath });
+      expect(result.content).toContain("hello: 'world'");
+      expect(result.charCount).toBeGreaterThan(0);
+    });
   });
 
   // ─── writeLocalFile ───
@@ -439,6 +515,38 @@ describe('file operations', () => {
 
       expect(result.files).toEqual(['src.ts']);
     });
+
+    it('should auto-enable hidden matching when pattern contains a dot-prefixed segment', async () => {
+      await mkdir(path.join(tmpDir, '.github', 'workflows'), { recursive: true });
+      await writeFile(path.join(tmpDir, '.github', 'workflows', 'ci.yml'), 'name: ci');
+      await writeFile(path.join(tmpDir, '.github', 'workflows', 'release.yaml'), 'name: release');
+
+      const result = await globLocalFiles({
+        cwd: tmpDir,
+        pattern: '.github/workflows/*.{yml,yaml}',
+      });
+
+      expect(result.files).toHaveLength(2);
+      expect(result.files).toContain('.github/workflows/ci.yml');
+      expect(result.files).toContain('.github/workflows/release.yaml');
+      expect(result.hint).toContain('hidden');
+    });
+
+    it('should not return a hint when pattern has no dot-prefixed segment', async () => {
+      await writeFile(path.join(tmpDir, 'a.ts'), 'a');
+
+      const result = await globLocalFiles({ cwd: tmpDir, pattern: '*.ts' });
+
+      expect(result.hint).toBeUndefined();
+    });
+
+    it('should treat ./ and ../ as relative path indicators, not hidden segments', async () => {
+      await writeFile(path.join(tmpDir, 'a.ts'), 'a');
+
+      const result = await globLocalFiles({ cwd: tmpDir, pattern: './*.ts' });
+
+      expect(result.hint).toBeUndefined();
+    });
   });
 
   // ─── grepContent ───
@@ -458,6 +566,29 @@ describe('file operations', () => {
 
       const result = await grepContent({ cwd: tmpDir, pattern: 'xyz_not_found' });
       expect(result.matches).toEqual([]);
+    });
+
+    it('should return a hidden-matching hint when filePattern contains a dot-prefixed segment', async () => {
+      // The hint is set regardless of whether rg is installed on the host —
+      // it signals to the agent why we're auto-enabling --hidden so a zero
+      // match doesn't look like a silent failure.
+      const result = await grepContent({
+        cwd: tmpDir,
+        filePattern: '.github/workflows/*.yml',
+        pattern: 'jobs',
+      });
+
+      expect(result.hint).toContain('hidden');
+    });
+
+    it('should not return a hint for a normal filePattern', async () => {
+      const result = await grepContent({
+        cwd: tmpDir,
+        filePattern: '*.ts',
+        pattern: 'jobs',
+      });
+
+      expect(result.hint).toBeUndefined();
     });
   });
 
@@ -496,6 +627,18 @@ describe('file operations', () => {
       });
 
       expect(result).toEqual([]);
+    });
+
+    it('should find dot-prefixed files when keywords starts with a dot', async () => {
+      await writeFile(path.join(tmpDir, '.env'), 'A=1');
+      await writeFile(path.join(tmpDir, '.envrc'), 'export A=1');
+      await writeFile(path.join(tmpDir, 'env.txt'), 'unrelated');
+
+      const result = await searchLocalFiles({ directory: tmpDir, keywords: '.env' });
+
+      const names = result.map((r) => r.name);
+      expect(names).toContain('.env');
+      expect(names).toContain('.envrc');
     });
   });
 });

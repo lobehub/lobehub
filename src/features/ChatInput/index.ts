@@ -4,4 +4,4 @@ export { default as DesktopChatInput } from './Desktop';
 export type { ChatInputEditor } from './hooks/useChatInputEditor';
 export { useChatInputEditor } from './hooks/useChatInputEditor';
 export { default as MobileChatInput } from './Mobile';
-export type { SendButtonHandler } from './store/initialState';
+export type { ChatInputFeature, SendButtonHandler } from './store/initialState';

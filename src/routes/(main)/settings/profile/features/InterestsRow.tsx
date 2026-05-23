@@ -1,5 +1,7 @@
 'use client';
 
+import type { InterestAreaKey } from '@lobechat/const';
+import { normalizeInterestsForStorage, resolveInterestAreaKey } from '@lobechat/const';
 import { Block, Flexbox, Icon, Input, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { BriefcaseIcon } from 'lucide-react';
@@ -20,7 +22,22 @@ const InterestsRow = () => {
   const updateInterests = useUserStore((s) => s.updateInterests);
   const [customInput, setCustomInput] = useState('');
   const [showCustomInput, setShowCustomInput] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const normalizedInterests = useMemo(() => normalizeInterestsForStorage(interests), [interests]);
+
+  const saveInterests = useCallback(
+    async (updated: string[]) => {
+      try {
+        await updateInterests(updated);
+      } catch (error) {
+        console.error('Failed to update interests:', error);
+        fetchErrorNotification.error({
+          errorMessage: error instanceof Error ? error.message : String(error),
+          status: 500,
+        });
+      }
+    },
+    [updateInterests],
+  );
 
   const areas = useMemo(
     () =>
@@ -32,54 +49,41 @@ const InterestsRow = () => {
   );
 
   const toggleInterest = useCallback(
-    async (label: string) => {
-      const updated = interests.includes(label)
-        ? interests.filter((i) => i !== label)
-        : [...interests, label];
+    async (key: InterestAreaKey) => {
+      const updated = normalizedInterests.includes(key)
+        ? normalizedInterests.filter((i) => i !== key)
+        : [...normalizedInterests, key];
 
-      try {
-        setSaving(true);
-        await updateInterests(updated);
-      } catch (error) {
-        console.error('Failed to update interests:', error);
-        fetchErrorNotification.error({
-          errorMessage: error instanceof Error ? error.message : String(error),
-          status: 500,
-        });
-      } finally {
-        setSaving(false);
-      }
+      await saveInterests(updated);
     },
-    [interests, updateInterests],
+    [normalizedInterests, saveInterests],
+  );
+
+  const removeCustomInterest = useCallback(
+    async (interest: string) => {
+      const updated = normalizedInterests.filter((i) => i !== interest);
+
+      await saveInterests(updated);
+    },
+    [normalizedInterests, saveInterests],
   );
 
   const handleAddCustom = useCallback(async () => {
     const trimmed = customInput.trim();
-    if (!trimmed || interests.includes(trimmed)) return;
+    if (!trimmed || normalizedInterests.includes(trimmed)) return;
 
-    const updated = [...interests, trimmed];
+    const updated = [...normalizedInterests, trimmed];
     setCustomInput('');
 
-    try {
-      setSaving(true);
-      await updateInterests(updated);
-    } catch (error) {
-      console.error('Failed to update interests:', error);
-      fetchErrorNotification.error({
-        errorMessage: error instanceof Error ? error.message : String(error),
-        status: 500,
-      });
-    } finally {
-      setSaving(false);
-    }
-  }, [customInput, interests, updateInterests]);
+    await saveInterests(updated);
+  }, [customInput, normalizedInterests, saveInterests]);
 
   return (
     <ProfileRow label={t('profile.interests')}>
       <Flexbox gap={12}>
         <Flexbox horizontal align="center" gap={8} wrap="wrap">
           {areas.map((item) => {
-            const isSelected = interests.includes(item.label);
+            const isSelected = normalizedInterests.includes(item.key);
             return (
               <Block
                 clickable
@@ -93,11 +97,10 @@ const InterestsRow = () => {
                     ? {
                         background: cssVar.colorFillSecondary,
                         borderColor: cssVar.colorFillSecondary,
-                        opacity: saving ? 0.6 : 1,
                       }
-                    : { opacity: saving ? 0.6 : 1 }
+                    : undefined
                 }
-                onClick={() => !saving && toggleInterest(item.label)}
+                onClick={() => toggleInterest(item.key)}
               >
                 <Icon color={cssVar.colorTextSecondary} icon={item.icon} size={14} />
                 <Text fontSize={13} weight={500}>
@@ -106,8 +109,8 @@ const InterestsRow = () => {
               </Block>
             );
           })}
-          {interests
-            .filter((i) => !areas.some((a) => a.label === i))
+          {normalizedInterests
+            .filter((i) => !resolveInterestAreaKey(i))
             .map((interest) => (
               <Block
                 clickable
@@ -117,9 +120,8 @@ const InterestsRow = () => {
                 style={{
                   background: cssVar.colorFillSecondary,
                   borderColor: cssVar.colorFillSecondary,
-                  opacity: saving ? 0.6 : 1,
                 }}
-                onClick={() => !saving && toggleInterest(interest)}
+                onClick={() => removeCustomInterest(interest)}
               >
                 <Text fontSize={13} weight={500}>
                   {interest}

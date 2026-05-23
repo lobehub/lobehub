@@ -23,12 +23,12 @@ const AgentOnboardingRoute = memo(() => {
 
   if (!serverConfigInit || !isUserStateInit) return <Loading debugId="AgentOnboardingRoute" />;
 
-  if (!enableAgentOnboarding) {
-    return <Navigate replace to="/onboarding/classic" />;
-  }
-
   if (!commonStepsCompleted) {
     return <Navigate replace to="/onboarding" />;
+  }
+
+  if (!enableAgentOnboarding) {
+    return <Navigate replace to="/onboarding/classic" />;
   }
 
   return <AgentOnboardingPage />;

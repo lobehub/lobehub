@@ -4,15 +4,28 @@ import {
   ONBOARDING_METRICS_EVENTS,
   ONBOARDING_METRICS_SPM,
   setOnboardingAnalyticsClient,
+  trackOnboardingCompleted,
   trackOnboardingMarketplacePicked,
   trackOnboardingMarketplaceShown,
+  trackOnboardingStepCompleted,
+  trackOnboardingStepViewed,
 } from './index';
+
+const analyticsMocks = vi.hoisted(() => ({
+  getSingletonAnalyticsOptional: vi.fn(),
+}));
+
+vi.mock('@lobehub/analytics', () => ({
+  getSingletonAnalyticsOptional: analyticsMocks.getSingletonAnalyticsOptional,
+}));
 
 describe('onboardingMetrics', () => {
   const track = vi.fn();
 
   beforeEach(() => {
     track.mockReset();
+    analyticsMocks.getSingletonAnalyticsOptional.mockReset();
+    analyticsMocks.getSingletonAnalyticsOptional.mockReturnValue(null);
     setOnboardingAnalyticsClient({ track });
   });
 
@@ -48,6 +61,88 @@ describe('onboardingMetrics', () => {
         requestId: 'req-b',
         selectedTemplateIds: ['pair-programmer', 'code-reviewer'],
         spm: ONBOARDING_METRICS_SPM.MARKETPLACE_PICKED,
+      },
+    });
+  });
+
+  it('fires onboarding_step_viewed with flow, step and stepIndex', () => {
+    trackOnboardingStepViewed({
+      flow: 'common',
+      step: 'telemetry',
+      stepIndex: 1,
+    });
+
+    expect(track).toHaveBeenCalledTimes(1);
+    expect(track).toHaveBeenCalledWith({
+      name: ONBOARDING_METRICS_EVENTS.STEP_VIEWED,
+      properties: {
+        flow: 'common',
+        spm: ONBOARDING_METRICS_SPM.STEP_VIEWED,
+        step: 'telemetry',
+        stepIndex: 1,
+      },
+    });
+  });
+
+  it('fires onboarding_step_completed with extra step context', () => {
+    trackOnboardingStepCompleted({
+      action: 'auto_skip',
+      flow: 'classic',
+      skipped: true,
+      step: 'prosettings',
+      stepIndex: 3,
+    });
+
+    expect(track).toHaveBeenCalledTimes(1);
+    expect(track).toHaveBeenCalledWith({
+      name: ONBOARDING_METRICS_EVENTS.STEP_COMPLETED,
+      properties: {
+        action: 'auto_skip',
+        flow: 'classic',
+        skipped: true,
+        spm: ONBOARDING_METRICS_SPM.STEP_COMPLETED,
+        step: 'prosettings',
+        stepIndex: 3,
+      },
+    });
+  });
+
+  it('fires onboarding_completed with the branch flow and targetUrl', () => {
+    trackOnboardingCompleted({
+      flow: 'classic',
+      targetUrl: '/',
+    });
+
+    expect(track).toHaveBeenCalledTimes(1);
+    expect(track).toHaveBeenCalledWith({
+      name: ONBOARDING_METRICS_EVENTS.COMPLETED,
+      properties: {
+        flow: 'classic',
+        spm: ONBOARDING_METRICS_SPM.COMPLETED,
+        targetUrl: '/',
+      },
+    });
+  });
+
+  it('falls back to the global analytics singleton when no explicit client is configured', () => {
+    const singletonTrack = vi.fn();
+    setOnboardingAnalyticsClient(null);
+    analyticsMocks.getSingletonAnalyticsOptional.mockReturnValue({ track: singletonTrack });
+
+    trackOnboardingStepViewed({
+      flow: 'classic',
+      step: 'fullname',
+      stepIndex: 1,
+    });
+
+    expect(singletonTrack).toHaveBeenCalledTimes(1);
+    expect(singletonTrack).toHaveBeenCalledWith({
+      name: ONBOARDING_METRICS_EVENTS.STEP_VIEWED,
+      properties: {
+        flow: 'classic',
+        spm: ONBOARDING_METRICS_SPM.STEP_VIEWED,
+        step: 'fullname',
+        stepIndex: 1,
       },
     });
   });

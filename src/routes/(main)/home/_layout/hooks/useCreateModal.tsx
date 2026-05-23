@@ -2,7 +2,7 @@ import { ActionIcon, Block, Button, Flexbox, Text } from '@lobehub/ui';
 import { Modal } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { Lightbulb, PencilLineIcon, RefreshCw, X } from 'lucide-react';
-import { memo, useCallback, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -12,6 +12,9 @@ import {
   DesktopChatInput,
 } from '@/features/ChatInput';
 import { useRandomQuestions } from '@/routes/(main)/home/features/SuggestQuestions/useRandomQuestions';
+
+import type { CreateAgentModalSubmitSource } from './createAgentModalAnalytics';
+import { trackCreateAgentModalCreationSucceeded } from './createAgentModalAnalytics';
 
 const LEFT_ACTIONS: ActionKeys[] = ['model'];
 
@@ -98,8 +101,8 @@ const Examples = memo<ExamplesProps>(({ suggestMode, onExampleClick }) => {
 export interface CreateAgentModalProps {
   agentId?: string;
   onClose: () => void;
-  onCreateBlank: () => void;
-  onSubmit: (prompt: string) => void;
+  onCreateBlank: () => Promise<void> | void;
+  onSubmit: (prompt: string) => Promise<void> | void;
   open: boolean;
   type: 'agent' | 'group';
 }
@@ -109,34 +112,73 @@ export const CreateAgentModal = memo<CreateAgentModalProps>(
     const { t } = useTranslation('chat');
     const editorRef = useRef<ChatInputEditor | null>(null);
     const contentRef = useRef('');
+    const examplePromptRef = useRef('');
+    const submitSourceRef = useRef<CreateAgentModalSubmitSource>('manual');
     const [loading, setLoading] = useState(false);
 
     const isAgent = type === 'agent';
     const modalTitle = isAgent ? t('createModal.title') : t('createModal.groupTitle');
+
+    const resetInputTracking = useCallback(() => {
+      contentRef.current = '';
+      examplePromptRef.current = '';
+      submitSourceRef.current = 'manual';
+    }, []);
+
+    useEffect(() => {
+      if (open) resetInputTracking();
+    }, [open, resetInputTracking]);
+
+    const handleClose = useCallback(() => {
+      resetInputTracking();
+      onClose();
+    }, [onClose, resetInputTracking]);
+
+    const getSubmitSource = useCallback((text: string): CreateAgentModalSubmitSource => {
+      if (examplePromptRef.current && submitSourceRef.current !== 'manual') {
+        return text.trim() === examplePromptRef.current ? 'example' : 'example_edited';
+      }
+
+      return submitSourceRef.current;
+    }, []);
 
     const handleSubmit = useCallback(
       async (prompt?: string) => {
         const text = prompt || contentRef.current.trim();
         if (!text || loading) return;
         setLoading(true);
-        contentRef.current = '';
-        await onSubmit(text);
-        setLoading(false);
-        onClose();
+        try {
+          await onSubmit(text);
+          void trackCreateAgentModalCreationSucceeded({
+            source: getSubmitSource(text),
+            type,
+          });
+          handleClose();
+        } finally {
+          setLoading(false);
+        }
       },
-      [onClose, onSubmit, loading],
+      [getSubmitSource, handleClose, loading, onSubmit, type],
     );
 
     const handleCreateBlank = useCallback(async () => {
       if (loading) return;
       setLoading(true);
-      contentRef.current = '';
-      await onCreateBlank();
-      setLoading(false);
-      onClose();
-    }, [onClose, onCreateBlank, loading]);
+      try {
+        await onCreateBlank();
+        void trackCreateAgentModalCreationSucceeded({
+          source: 'blank',
+          type,
+        });
+        handleClose();
+      } finally {
+        setLoading(false);
+      }
+    }, [handleClose, loading, onCreateBlank, type]);
 
     const handleExampleClick = useCallback((prompt: string) => {
+      examplePromptRef.current = prompt.trim();
+      submitSourceRef.current = 'example';
       editorRef.current?.instance?.setDocument('markdown', prompt);
       editorRef.current?.focus();
       contentRef.current = prompt;
@@ -176,7 +218,7 @@ export const CreateAgentModal = memo<CreateAgentModalProps>(
         styles={{
           body: { padding: 0 },
         }}
-        onCancel={onClose}
+        onCancel={handleClose}
       >
         <Flexbox gap={24} paddingBlock={'16px 24px'} paddingInline={24}>
           {/* Header: Create Blank + Close */}
@@ -184,7 +226,7 @@ export const CreateAgentModal = memo<CreateAgentModalProps>(
             <Button icon={<PencilLineIcon size={14} />} type="text" onClick={handleCreateBlank}>
               {t('createModal.createBlank')}
             </Button>
-            <ActionIcon icon={X} onClick={onClose} />
+            <ActionIcon icon={X} onClick={handleClose} />
           </Flexbox>
           {/* Title */}
           <Flexbox align="center">
@@ -204,14 +246,23 @@ export const CreateAgentModal = memo<CreateAgentModalProps>(
               onSend={handleSend}
               onMarkdownContentChange={(content) => {
                 contentRef.current = content;
+                const trimmedContent = content.trim();
+                if (
+                  examplePromptRef.current &&
+                  (submitSourceRef.current === 'example' ||
+                    submitSourceRef.current === 'example_edited')
+                ) {
+                  submitSourceRef.current =
+                    trimmedContent === examplePromptRef.current ? 'example' : 'example_edited';
+                }
               }}
             >
               <DesktopChatInput
                 inputContainerProps={inputContainerProps}
+                showRuntimeConfig={false}
                 placeholder={
                   isAgent ? t('createModal.placeholder') : t('createModal.groupPlaceholder')
                 }
-                showRuntimeConfig={false}
               />
             </ChatInputProvider>
           )}

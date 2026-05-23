@@ -19,7 +19,9 @@ export interface ElectronMainStore {
   gatewayEnabled: boolean;
   gatewayUrl: string;
   locale: string;
+  localFileWorkspaceRoots: string[];
   networkProxy: NetworkProxySettings;
+  pendingRestoreRoute: string;
   shortcuts: Record<string, string>;
   storagePath: string;
   themeMode: 'dark' | 'light' | 'system';

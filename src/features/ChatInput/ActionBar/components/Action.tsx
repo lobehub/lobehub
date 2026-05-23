@@ -36,6 +36,7 @@ const Action = memo<ActionProps>(
     trigger,
     disabled,
     onClick,
+    size,
     ...rest
   }) => {
     const [show, setShow] = useMergeState(false, {
@@ -62,9 +63,10 @@ const Action = memo<ActionProps>(
         }}
         {...rest}
         size={
-          actionSize ?? {
-            blockSize: 36,
-            size: 20,
+          actionSize ??
+          size ?? {
+            blockSize: 32,
+            size: 18,
           }
         }
       />

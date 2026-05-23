@@ -1,8 +1,6 @@
 {
   "addUserMessage.desc": "Füge die aktuelle Eingabe als Benutzernachricht hinzu, ohne die Generierung auszulösen",
   "addUserMessage.title": "Benutzernachricht hinzufügen",
-  "clearCurrentMessages.desc": "Lösche die Nachrichten und hochgeladenen Dateien aus dem aktuellen Gespräch",
-  "clearCurrentMessages.title": "Gesprächsnachrichten löschen",
   "commandPalette.desc": "Öffne die globale Befehlspalette für schnellen Zugriff auf Funktionen",
   "commandPalette.title": "Befehlspalette",
   "deleteAndRegenerateMessage.desc": "Lösche die letzte Nachricht und generiere sie neu",

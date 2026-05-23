@@ -2,7 +2,6 @@ import { HotkeyEnum, HotkeyScopeEnum } from '@lobechat/const/hotkeys';
 import { useEffect } from 'react';
 import { useHotkeysContext } from 'react-hotkeys-hook';
 
-import { useClearCurrentMessages } from '@/features/ChatInput/ActionBar/Clear';
 import { useOpenChatSettings } from '@/hooks/useInterceptingRoutes';
 import { useActionSWR } from '@/libs/swr';
 import { useChatStore } from '@/store/chat';
@@ -42,13 +41,6 @@ export const useAddUserMessageHotkey = (send: () => void) => {
   );
 };
 
-export const useClearCurrentMessagesHotkey = () => {
-  const clearCurrentMessages = useClearCurrentMessages();
-  return useHotkeyById(HotkeyEnum.ClearCurrentMessages, () => clearCurrentMessages(), {
-    enableOnContentEditable: true,
-  });
-};
-
 // Register aggregate
 
 export const useRegisterChatHotkeys = () => {
@@ -63,7 +55,6 @@ export const useRegisterChatHotkeys = () => {
   // Conversation
   // Note: Regenerate and delete hotkeys have been moved to ConversationStore
   useSaveTopicHotkey();
-  useClearCurrentMessagesHotkey();
 
   useEffect(() => {
     enableScope(HotkeyScopeEnum.Chat);

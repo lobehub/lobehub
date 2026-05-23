@@ -852,7 +852,7 @@ describe('ChatPluginAction', () => {
         {
           id: 'tool1',
           function: {
-            name: ['lobe-gtd', 'execTask', 'default'].join(PLUGIN_SCHEMA_SEPARATOR),
+            name: ['lobe-agent', 'callSubAgent', 'default'].join(PLUGIN_SCHEMA_SEPARATOR),
             arguments: malformedArguments,
           },
           type: 'function',
@@ -865,13 +865,13 @@ describe('ChatPluginAction', () => {
           builtinTools: [
             {
               type: 'builtin',
-              identifier: 'lobe-gtd',
+              identifier: 'lobe-agent',
               manifest: {
-                identifier: 'lobe-gtd',
+                identifier: 'lobe-agent',
                 api: [
                   {
-                    name: 'execTask',
-                    description: 'Execute async task',
+                    name: 'callSubAgent',
+                    description: 'Dispatch a sub-agent',
                     parameters: {
                       type: 'object',
                       required: ['description', 'instruction'],

@@ -14,6 +14,7 @@ import {
   type BotProviderConfig,
   ClientFactory,
   type ExtractFilesResult,
+  messengerContentText,
   type PlatformClient,
   type PlatformMessenger,
   type UsageStats,
@@ -23,6 +24,7 @@ import { formatUsageStats } from '../utils';
 import { TELEGRAM_API_BASE, TelegramApi } from './api';
 import { extractBotId, setTelegramWebhook } from './helpers';
 import { markdownToTelegramHTML } from './markdownToHTML';
+import { sendTelegramAttachments } from './sendAttachments';
 
 const log = debug('bot-platform:telegram:bot');
 
@@ -175,9 +177,28 @@ class TelegramWebhookClient implements PlatformClient {
     return {
       addReaction: (messageId, emoji) =>
         telegram.setMessageReaction(chatId, parseTelegramMessageId(messageId), emoji),
-      createMessage: (content) => telegram.sendMessage(chatId, content).then(() => {}),
+      createMessage: async (content) => {
+        const text = messengerContentText(content);
+        const attachments = typeof content === 'string' ? undefined : content.attachments;
+        if (attachments?.length) {
+          const delivered = await sendTelegramAttachments(telegram, chatId, attachments, text);
+          if (delivered > 0) return;
+          // All attachments failed → fall through to text-only so the reply
+          // still reaches the user.
+        }
+        if (text.trim()) {
+          await telegram.sendMessage(chatId, text);
+        }
+      },
+      // editMessage keeps the text-only contract. Telegram doesn't support
+      // converting a text message into a media message — new chunks with
+      // attachments flow through createMessage instead.
       editMessage: (messageId, content) =>
-        telegram.editMessageText(chatId, parseTelegramMessageId(messageId), content),
+        telegram.editMessageText(
+          chatId,
+          parseTelegramMessageId(messageId),
+          messengerContentText(content),
+        ),
       removeReaction: (messageId) =>
         telegram.removeMessageReaction(chatId, parseTelegramMessageId(messageId)),
       // Telegram replaces the whole reaction list in one call — one API

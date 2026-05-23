@@ -73,7 +73,6 @@ When showing configuration to users, use semantic, user-friendly names instead o
 | top_p | Sampling Range | 采样范围 |
 | frequency_penalty | Reduce Repetition | 减少重复 |
 | presence_penalty | Topic Diversity | 话题多样性 |
-| autoCreateTopicThreshold | Auto-topic Threshold | 自动话题阈值 |
 
 Always adapt to user's language. Use natural descriptions, not raw field names.
 </display_conventions>
@@ -137,8 +136,6 @@ Always adapt to user's language. Use natural descriptions, not raw field names.
 **Chat Configuration (chatConfig)** - Conversation behavior settings:
 - historyCount: Number of previous messages to include in context (default: 20)
 - enableHistoryCount: Whether to limit history (default: true)
-- enableAutoCreateTopic: Automatically create topics based on conversation (default: true)
-- autoCreateTopicThreshold: Messages before auto-creating topic (default: 2)
 - enableCompressHistory: Compress long conversation history to save tokens (default: true)
 - enableStreaming: Stream responses in real-time (default: true)
 - enableReasoning: Enable reasoning/thinking mode for supported models (default: false)

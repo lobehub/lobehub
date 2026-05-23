@@ -11,6 +11,10 @@ export default {
   'channel.botTokenPlaceholderNew': 'Paste your bot token here',
   'channel.connectionConfig': 'Connection Configuration',
   'channel.copied': 'Copied to clipboard',
+  'channel.comingSoon': 'Coming Soon',
+  'channel.comingSoonDesc':
+    'We are working on bringing this integration to LobeHub. Stay tuned for updates.',
+  'channel.comingSoonTitle': '{{name}} integration is coming soon',
   'channel.copy': 'Copy',
   'channel.deleteAllChannels': 'Remove All Channels',
   'channel.deleteAllConfirm': 'Are you sure you want to remove all channels?',
@@ -28,6 +32,10 @@ export default {
   'channel.discord.description':
     'Connect this assistant to Discord server for channel chat and direct messages.',
   'channel.documentation': 'Documentation',
+  'channel.messengerPromo.action': 'Try Messenger',
+  'channel.messengerPromo.desc': 'No bot setup. Chat with LobeHub on Slack, Discord, Telegram.',
+  'channel.messengerPromo.dismiss': 'Dismiss',
+  'channel.messengerPromo.title': 'Skip the setup',
   'channel.exportConfig': 'Export Configuration',
   'channel.importConfig': 'Import Configuration',
   'channel.importSuccess': 'Configuration imported successfully',
@@ -83,7 +91,7 @@ export default {
     'Connect this assistant to WeChat via iLink Bot for private and group chats.',
   'channel.wechatQrExpired': 'QR code expired. Please refresh to get a new one.',
   'channel.wechatQrRefresh': 'Refresh QR Code',
-  'channel.wechatQrScaned': 'QR code scanned. Please confirm the login in WeChat.',
+  'channel.wechatQrScaned': 'QR code scanned. Please confirm the login on WeChat.',
   'channel.wechatQrWait': 'Open WeChat and scan the QR code to connect.',
   'channel.wechatBotId': 'Bot ID',
   'channel.wechatConnectedInfo': 'Connected WeChat Account',
@@ -187,6 +195,17 @@ export default {
   'channel.groupAllowFromAdd': 'Add channel',
   'channel.groupAllowFromEmpty': 'No channels added yet — the bot will not respond anywhere.',
   'channel.allowListRemove': 'Remove',
+  'channel.watchKeywords': 'Watch Keywords',
+  'channel.watchKeywordsHint':
+    'A keyword match wakes the bot without an @mention; its instruction is prepended to the user message. Whole-word, case-insensitive.',
+  'channel.watchKeywordLabel': 'Keyword',
+  'channel.watchKeywordPlaceholder': 'e.g. bug',
+  'channel.watchKeywordInstructionLabel': 'Instruction',
+  'channel.watchKeywordInstructionPlaceholder':
+    'e.g. Scan the recent thread and reply if there is an actionable bug report',
+  'channel.watchKeywordsAdd': 'Add keyword',
+  'channel.watchKeywordsEmpty':
+    'No keywords added yet — bot only wakes on @mention or DM in subscribed channels.',
   'channel.settings': 'Advanced Settings',
   'channel.settingsResetConfirm': 'Are you sure you want to reset advanced settings to default?',
   'channel.settingsResetDefault': 'Reset to Default',
@@ -220,7 +239,7 @@ export default {
   'channel.userIdHint.qq': 'Your QQ number, shown on your QQ profile page.',
   'channel.userIdHint.slack': 'Open your Slack profile → ⋮ More → Copy member ID (starts with U).',
   'channel.userIdHint.telegram':
-    'Send any message to @userinfobot in Telegram — it replies with your numeric User ID.',
+    'Send any message to @userinfobot on Telegram — it replies with your numeric User ID.',
   'channel.refreshStatus': 'Refresh status',
   'channel.runtimeDisconnected': 'Bot disconnected',
   'channel.statusConnected': 'Connected',

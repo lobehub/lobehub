@@ -52,6 +52,19 @@ export class LineApiClient {
   }
 
   /**
+   * Generic push for one or more outbound `LineOutboundMessage` objects. The
+   * Messaging API caps a single push at 5 messages — callers must batch.
+   * Used by the agent-reply outbound media path; plain text replies stay on
+   * the simpler `pushText`.
+   * @see https://developers.line.biz/en/reference/messaging-api/#send-push-message
+   */
+  async push(to: string, messages: LinePushMessageRequest['messages']): Promise<void> {
+    if (messages.length === 0) return;
+    const payload: LinePushMessageRequest = { messages, to };
+    await this.post('/v2/bot/message/push', payload);
+  }
+
+  /**
    * Surface the typing-style "loading" animation in a 1:1 user chat. LINE
    * does not expose this for groups or multi-person rooms — callers must
    * already have decided the recipient is a user. Returns silently on

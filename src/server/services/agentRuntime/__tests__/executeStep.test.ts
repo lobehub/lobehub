@@ -597,7 +597,7 @@ describe('AgentRuntimeService.executeStep - Redis failure in error handler', () 
   });
 });
 
-describe('AgentRuntimeService.executeStep - error-path snapshot finalize (LOBE-8533)', () => {
+describe('AgentRuntimeService.executeStep - error-path snapshot finalize ()', () => {
   it('finalizes a snapshot with completionReason=error and a synthetic failed step when the executor throws', async () => {
     const snapshotStore = {
       get: vi.fn(),

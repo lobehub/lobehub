@@ -389,7 +389,7 @@ describe('CompressionRepository', () => {
   });
 
   /**
-   * Tests for LOBE-2066: MessageGroup aggregation in queryMessage
+   * Tests for MessageGroup aggregation in queryMessage
    *
    * These tests verify the expected behavior for querying messages with compression groups,
    * specifically focusing on:

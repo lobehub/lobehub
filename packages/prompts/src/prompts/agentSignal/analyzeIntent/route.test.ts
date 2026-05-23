@@ -10,7 +10,7 @@ import {
 describe('agent signal analyze-intent route prompt', () => {
   /**
    * @example
-   * Existing reusable checklist maintenance should route to skill, while prompt
+   * Existing reusable checklist self-iteration should route to skill, while prompt
    * remains reserved for assistant self-rules.
    */
   it('keeps prompt lane limited to assistant self-rules and routes reusable artifacts to skill', () => {

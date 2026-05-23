@@ -182,28 +182,50 @@ describe('genServerAiProvidersConfig', () => {
       expect(Array.isArray(result[provider].serverModelLists)).toBe(true);
     });
   });
+
+  it('should allow LobeHub models to come from the async model bank loader', async () => {
+    const result = await genServerAiProvidersConfig({});
+
+    expect(result).toHaveProperty('lobehub');
+    expect(result.lobehub).toHaveProperty('serverModelLists');
+    expect(Array.isArray(result.lobehub.serverModelLists)).toBe(true);
+  });
 });
 
 describe('genServerAiProvidersConfig Error Handling', () => {
-  it('should throw error when a provider is not found in aiModels', async () => {
-    // Reset all mocks to create a clean test environment
+  it('should throw error when a non-LobeHub provider is not found in aiModels', async () => {
     vi.resetModules();
 
-    // Mock dependencies with a missing provider scenario
     vi.doMock('model-bank', () => ({
-      // Explicitly set openai to undefined to simulate missing provider
-      openai: undefined,
+      ModelProvider: {
+        Anthropic: 'anthropic',
+        LobeHub: 'lobehub',
+        OpenAI: 'openai',
+      },
       anthropic: [
         {
-          id: 'claude-3',
           displayName: 'Claude 3',
-          type: 'chat',
           enabled: true,
+          id: 'claude-3',
+          type: 'chat',
         },
       ],
     }));
 
-    vi.doMock('@/config/llm', () => ({
+    vi.doMock('@/business/client/model-bank/loadModels', () => ({
+      loadModels: vi.fn(async () => [
+        {
+          abilities: {},
+          enabled: true,
+          id: 'claude-3',
+          providerId: 'anthropic',
+          source: 'builtin',
+          type: 'chat',
+        },
+      ]),
+    }));
+
+    vi.doMock('@/envs/llm', () => ({
       getLLMConfig: vi.fn(() => ({})),
     }));
 
@@ -212,22 +234,12 @@ describe('genServerAiProvidersConfig Error Handling', () => {
       transformToAiModelList: vi.fn(async () => []),
     }));
 
-    // Mock ModelProvider to include the missing provider
-    vi.doMock('model-bank', () => ({
-      ModelProvider: {
-        openai: 'openai', // This exists in enum
-        anthropic: 'anthropic', // This exists in both enum and aiModels
-      },
-    }));
-
-    // Import the function with the new mocks
     const { genServerAiProvidersConfig } = await import(
       './genServerAiProviderConfig?v=' + Date.now()
     );
 
-    // This should throw because 'openai' is in ModelProvider but not in aiModels
     await expect(async () => {
       await genServerAiProvidersConfig({});
-    }).rejects.toThrow();
+    }).rejects.toThrow('Provider [openai] not found in aiModels');
   });
 });

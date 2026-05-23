@@ -30,6 +30,12 @@ vi.mock('./Review', () => ({
   ),
 }));
 
+vi.mock('./Files', () => ({
+  default: ({ workingDirectory }: { workingDirectory: string }) => (
+    <div data-testid="files-panel">{workingDirectory}</div>
+  ),
+}));
+
 vi.mock('@/features/ChatInput/RuntimeConfig/useRepoType', () => ({
   useRepoType: (path?: string) => (path ? mocks.repoType : undefined),
 }));
@@ -137,10 +143,16 @@ vi.mock('react-i18next', () => ({
         ({
           'workingPanel.resources.empty': 'No agent documents yet',
           'workingPanel.review.title': 'Review',
+          'workingPanel.skills.empty': 'No skills found',
           'workingPanel.space': 'Space',
         }) as Record<string, string>
       )[key] || key,
   }),
+}));
+
+vi.mock('react-router-dom', () => ({
+  useMatch: () => null,
+  useNavigate: () => vi.fn(),
 }));
 
 vi.mock('@/store/agent', () => ({
@@ -154,6 +166,12 @@ vi.mock('@/store/agent/selectors', () => ({
       (agentId: string) =>
       (state: { agentWorkingDirectoryById?: Record<string, string | undefined> }) =>
         state.agentWorkingDirectoryById?.[agentId],
+  },
+  agentSelectors: {
+    isCurrentAgentHeterogeneous: (_state: Record<string, unknown>) => false,
+  },
+  chatConfigByIdSelectors: {
+    isLocalSystemEnabledById: (_agentId: string) => (_state: Record<string, unknown>) => true,
   },
 }));
 
@@ -213,7 +231,8 @@ describe('AgentWorkingSidebar', () => {
     expect(screen.getAllByText('Space').length).toBeGreaterThan(0);
 
     const resources = screen.getByTestId('workspace-resources');
-    expect(resources).toHaveTextContent('No agent documents yet');
+    // Default tab is Skills; empty data shows the skills empty state.
+    expect(resources).toHaveTextContent('No skills found');
   });
 
   it('mounts a right panel wrapper', () => {
