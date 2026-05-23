@@ -141,7 +141,7 @@ describe('createServerToolsEngine', () => {
     expect(availablePlugins).toContain('additional-tool');
   });
 
-  it('drops device manifests from every source when excludeIdentifiers is set ()', => {
+  it('drops device manifests from every source when excludeIdentifiers is set ()', () => {
     // Simulate a plugin + an additional manifest that claim the device
     // identifiers. The pre-merge `buildAllowedBuiltinTools` filter only
     // touches builtins; the post-merge `excludeIdentifiers` wall is what
@@ -780,7 +780,7 @@ describe('createServerAgentToolsEngine', () => {
     });
   });
 
-  describe('canUseDevice gate (device access policy)', => {
+  describe('canUseDevice gate (device access policy)', () => {
     it('drops LocalSystem when canUseDevice is false even on a desktop caller', () => {
       // External bot sender impersonating a desktop session must not get
       // local-system back through Phase 6.4 dispatch.

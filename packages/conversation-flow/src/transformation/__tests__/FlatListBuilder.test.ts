@@ -709,7 +709,7 @@ describe('FlatListBuilder', () => {
   // ────────────────────────────────────────────────────
   // signal callbacks attached on virtual AssistantGroup
   // ────────────────────────────────────────────────────
-  describe('signal callbacks ()', => {
+  describe('signal callbacks ()', () => {
     it('attaches signalCallbacks to the virtual group and processes callback messages', () => {
       const signalMeta = (sequence: number) =>
         ({

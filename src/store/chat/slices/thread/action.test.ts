@@ -211,7 +211,7 @@ describe('thread action', () => {
       );
     });
 
-    it('should use main scope messages even when activeThreadId is set ()', => {
+    it('should use main scope messages even when activeThreadId is set ()', () => {
       const { result } = renderHook(() => useChatStore());
 
       const mainMessages: UIChatMessage[] = [

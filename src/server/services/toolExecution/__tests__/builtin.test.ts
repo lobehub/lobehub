@@ -102,7 +102,7 @@ describe('BuiltinToolsExecutor truncated arguments', () => {
   // boundaries (to unbreak strict providers), so the raw bad string must still
   // reach the executor — otherwise the model loses the "fix your JSON syntax"
   // feedback and degrades to a generic "missing required field" error.
-  it('emits INVALID_JSON_ARGUMENTS for the Qwen shape with raw args echoed', async => {
+  it('emits INVALID_JSON_ARGUMENTS for the Qwen shape with raw args echoed', async () => {
     const invalid = '{, "description": "Create data models", "language": "python"}';
 
     const result = await executor.execute(buildPayload(invalid), context);

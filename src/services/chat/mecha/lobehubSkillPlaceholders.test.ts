@@ -24,7 +24,7 @@ const lobeHubContent = LobeHubSkill.content;
  * vice versa), this test fails before users see a broken `lh agent run -a {{agent_id}}`
  * literal in their prompts.
  */
-describe('LobeHub skill identity placeholders ()', => {
+describe('LobeHub skill identity placeholders ()', () => {
   const PLACEHOLDER_KEYS = [
     'agent_id',
     'agent_title',

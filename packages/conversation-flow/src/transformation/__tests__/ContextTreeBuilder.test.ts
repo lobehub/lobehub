@@ -431,7 +431,7 @@ describe('ContextTreeBuilder', () => {
   // ────────────────────────────────────────────────────
   // AssistantGroupNode embeds SignalCallbacksNode children
   // ────────────────────────────────────────────────────
-  describe('AssistantGroup with signal callbacks ()', => {
+  describe('AssistantGroup with signal callbacks ()', () => {
     it('appends SignalCallbacksNode at the end of AssistantGroup children', () => {
       const signalMeta = (sequence: number) => ({
         signal: {

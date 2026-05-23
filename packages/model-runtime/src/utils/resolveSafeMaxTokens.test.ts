@@ -209,7 +209,7 @@ describe('assertContextWithinWindow', () => {
     ).toThrow(ContextExceededPreFlightError);
   });
 
-  it('attaches structured payload via toPayload', => {
+  it('attaches structured payload via toPayload', () => {
     const longContent = 'a'.repeat(20_000);
     try {
       assertContextWithinWindow(

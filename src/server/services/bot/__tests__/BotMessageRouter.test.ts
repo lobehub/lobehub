@@ -668,7 +668,7 @@ describe('BotMessageRouter', () => {
       expect(mockHandleSubscribedMessage).not.toHaveBeenCalled();
     });
 
-    it('should respond to non-mention messages while the channel thread is still single-human ()', async => {
+    it('should respond to non-mention messages while the channel thread is still single-human ()', async () => {
       // Override the default multi-human seed: no prior participants →
       // tracker records alice as participant #1 → gate lets her through
       // without an explicit @mention.
@@ -682,7 +682,7 @@ describe('BotMessageRouter', () => {
       expect(mockHandleSubscribedMessage).toHaveBeenCalledTimes(1);
     });
 
-    it('should announce mention-only mode once when a second human joins ()', async => {
+    it('should announce mention-only mode once when a second human joins ()', async () => {
       // Alice is already tracked; bob's first non-mention post is the
       // multi-human transition.
       mockGetList.mockResolvedValue(['alice-id']);
@@ -739,7 +739,7 @@ describe('BotMessageRouter', () => {
       expect(mockHandleSubscribedMessage).toHaveBeenCalledTimes(1);
     });
 
-    it('should wake on a watch-keyword match in a subscribed group thread ()', async => {
+    it('should wake on a watch-keyword match in a subscribed group thread ()', async () => {
       const handler = await loadSubscribedHandler({
         dmPolicy: 'open',
         watchKeywords: [{ keyword: 'bug' }, { keyword: 'outage' }],

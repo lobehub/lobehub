@@ -1939,7 +1939,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   // UI stops showing "loading" after each tool completes.
   // ────────────────────────────────────────────────────
 
-  describe('Skill → ToolSearch → MCP repro', => {
+  describe('Skill → ToolSearch → MCP repro', () => {
     it('persists tool_result content for Skill, ToolSearch, and the deferred MCP tool', async () => {
       const idCounter = { tool: 0, assistant: 0 };
       mockCreateMessage.mockImplementation(async (params: any) => {
@@ -2904,7 +2904,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   // Monitor parentId chain regression
   // ────────────────────────────────────────────────────
 
-  describe('Monitor parentId chain', => {
+  describe('Monitor parentId chain', () => {
     /**
      * Monitor pattern: initial tool_use returns immediately ("Monitor started"),
      * then Monitor's stdout is fed back as synthetic user content that drives
@@ -3098,7 +3098,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   // external signal stamping on Monitor-driven follow-up steps
   // ────────────────────────────────────────────────────
 
-  describe('external signal (metadata.signal)', => {
+  describe('external signal (metadata.signal)', () => {
     const ccTaskStarted = (taskId: string, toolUseId: string) => ({
       session_id: 'cc-sess-1',
       subtype: 'task_started',

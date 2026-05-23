@@ -250,7 +250,7 @@ describe('RuntimeExecutors', () => {
       );
     });
 
-    it('should throw ConversationParentMissing if parent preflight misses ()', async => {
+    it('should throw ConversationParentMissing if parent preflight misses ()', async () => {
       // parent existence preflight — if the parent row was deleted between
       // operation kickoff and call_llm, fail fast before spending LLM tokens
       // on a chain that would hit a FK violation anyway.
@@ -1521,7 +1521,7 @@ describe('RuntimeExecutors', () => {
       expect(result.nextContext!.phase).toBe('tool_result');
     });
 
-    it('should re-throw when messageModel.create fails (no silent swallow)', async => {
+    it('should re-throw when messageModel.create fails (no silent swallow)', async () => {
       // Before we silently swallowed this error and returned
       // `parentMessageId: undefined`, which let the operation continue into
       // the next step and re-hit the same failure without context. The fix
@@ -1548,7 +1548,7 @@ describe('RuntimeExecutors', () => {
       await expect(executors.call_tool!(instruction, state)).rejects.toThrow('Database error');
     });
 
-    it('should throw ConversationParentMissing on a parent_id FK violation ()', async => {
+    it('should throw ConversationParentMissing on a parent_id FK violation ()', async () => {
       // Simulate the drizzle + postgres-js wrapped error shape.
       const fkError: any = new Error(
         'Failed query: insert into "messages" ... violates foreign key constraint',
@@ -2330,7 +2330,7 @@ describe('RuntimeExecutors', () => {
       expect(result.nextContext!.phase).toBe('tools_batch_result');
     });
 
-    it('should propagate persist failures instead of silently falling back ()', async => {
+    it('should propagate persist failures instead of silently falling back ()', async () => {
       // Before we fell back to the original parentMessageId here,
       // which was itself the deleted parent that caused the failure — so the
       // next step would hit the same FK violation with no context. The fix
@@ -2361,7 +2361,7 @@ describe('RuntimeExecutors', () => {
       );
     });
 
-    it('should throw ConversationParentMissing on a parent_id FK violation ()', async => {
+    it('should throw ConversationParentMissing on a parent_id FK violation ()', async () => {
       const fkError: any = new Error(
         'Failed query: insert into "messages" ... violates foreign key constraint',
       );
@@ -2447,7 +2447,7 @@ describe('RuntimeExecutors', () => {
       expect(result.nextContext!.phase).toBe('tools_batch_result');
     });
 
-    it('should fail the batch if tool message creation fails for any tool ()', async => {
+    it('should fail the batch if tool message creation fails for any tool ()', async () => {
       // Before we swallowed per-tool persist failures and kept
       // going. The fix requires the batch to abort — a FK violation on one
       // tool means every concurrent tool has the same doomed parent.
@@ -3229,7 +3229,7 @@ describe('RuntimeExecutors', () => {
       });
     });
 
-    it('should propagate persist failures instead of silently swallowing ()', async => {
+    it('should propagate persist failures instead of silently swallowing ()', async () => {
       // The pre-behavior logged the error and kept walking the
       // aborted-tool list. That left a half-persisted state and hid the real
       // cause from ops. Now we fail fast.

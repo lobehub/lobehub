@@ -1431,9 +1431,9 @@ describe('AgentRuntime', () => {
     });
   });
 
-  describe('Multi-Round Batch Tool Execution ()', => {
+  describe('Multi-Round Batch Tool Execution ()', () => {
     /**
-     * This test verifies the fix for 
+     * This test verifies the fix for
      * When executing multiple rounds of batch tool calls, tool messages should not be duplicated.
      *
      * Root cause: The mergeToolResults method was extracting ALL tool messages from each result,
