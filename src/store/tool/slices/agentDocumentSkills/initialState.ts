@@ -1,6 +1,6 @@
 /**
- * Lightweight registry entry for an agent-document skill bundle (the "智能体
- * Skills" group, sourced from the `agent_document` table).
+ * Lightweight registry entry for an agent-document skill bundle (the "Agent Skills"
+ * group, sourced from the `agent_document` table).
  *
  * Distinct from the user/market `SkillListItem` shape because these skills are
  * per-agent and don't carry a full `SkillManifest`. The slash menu, drag chip,
