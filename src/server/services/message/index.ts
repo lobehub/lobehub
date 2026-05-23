@@ -2,6 +2,7 @@ import { type LobeChatDatabase } from '@lobechat/database';
 import { CompressionRepository } from '@lobechat/database';
 import {
   type CreateMessageParams,
+  type QueryMessageParams,
   type UIChatMessage,
   type UpdateMessageParams,
 } from '@lobechat/types';
@@ -109,6 +110,18 @@ export class MessageService {
     });
 
     return { messages, success: true };
+  }
+
+  /**
+   * Fetch the canonical message list for an agent / topic scope, using the
+   * standard UIChatMessage shape (file URLs resolved through FileService).
+   *
+   * Mirrors the read path exposed by the `message.getMessages` trpc lambda
+   * so server-internal callers (e.g. agent runtime stream events) can push
+   * the same payload the client would otherwise fetch.
+   */
+  async queryMessages(params: QueryMessageParams): Promise<UIChatMessage[]> {
+    return this.messageModel.query(params, this.getQueryOptions());
   }
 
   /**

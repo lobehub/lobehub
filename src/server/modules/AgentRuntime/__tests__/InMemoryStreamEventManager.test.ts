@@ -157,4 +157,46 @@ describe('InMemoryStreamEventManager', () => {
       expect(manager.getAllEvents('op-1')).toHaveLength(0);
     });
   });
+
+  // agent_runtime_end optionally carries the canonical UIChatMessage[]
+  // snapshot so the client can use the pushed payload as Source of Truth
+  // instead of refetching from DB.
+  describe('publishAgentRuntimeEnd uiMessages', () => {
+    it('includes uiMessages in event data when provided', async () => {
+      const uiMessages = [
+        { id: 'msg_u', role: 'user' },
+        { id: 'msg_a', role: 'assistantGroup' },
+      ] as any[];
+      const finalState = { status: 'done', stepCount: 3 };
+
+      await manager.publishAgentRuntimeEnd({
+        finalState,
+        operationId: 'op-1',
+        reason: 'done',
+        stepIndex: 3,
+        uiMessages,
+      });
+
+      const events = manager.getAllEvents('op-1');
+      expect(events).toHaveLength(1);
+      expect(events[0].type).toBe('agent_runtime_end');
+      expect(events[0].data.uiMessages).toEqual(uiMessages);
+      expect(events[0].data.finalState).toEqual(finalState);
+    });
+
+    it('omits uiMessages when not provided (legacy callers stay unaffected)', async () => {
+      const finalState = { status: 'done', stepCount: 3 };
+
+      await manager.publishAgentRuntimeEnd({
+        finalState,
+        operationId: 'op-1',
+        reason: 'done',
+        stepIndex: 3,
+      });
+
+      const events = manager.getAllEvents('op-1');
+      expect(events[0].data).not.toHaveProperty('uiMessages');
+      expect(events[0].data.finalState).toEqual(finalState);
+    });
+  });
 });

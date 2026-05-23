@@ -132,13 +132,13 @@ export const agentNotifyRouter = router({
         const stream = getStreamManager();
         if (done) {
           // Signal task completion — frontend gateway WS subscription closes.
-          await stream.publishAgentRuntimeEnd(
-            remoteOperationId,
-            0,
-            { reason: 'success' },
-            'success',
-            'Remote hetero agent task completed',
-          );
+          await stream.publishAgentRuntimeEnd({
+            finalState: { reason: 'success' },
+            operationId: remoteOperationId,
+            reason: 'success',
+            reasonDetail: 'Remote hetero agent task completed',
+            stepIndex: 0,
+          });
         } else {
           // Lightweight invalidation — frontend calls fetchAndReplaceMessages.
           await stream.publishStreamEvent(remoteOperationId, {

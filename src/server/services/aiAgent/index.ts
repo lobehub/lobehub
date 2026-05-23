@@ -873,7 +873,13 @@ export class AiAgentService {
         if (!result.success) {
           log('execAgent: remote hetero dispatch failed: %s', result.error);
           await streamManager
-            .publishAgentRuntimeEnd(operationId, 0, { error: result.error }, 'error', result.error)
+            .publishAgentRuntimeEnd({
+              finalState: { error: result.error },
+              operationId,
+              reason: 'error',
+              reasonDetail: result.error,
+              stepIndex: 0,
+            })
             .catch(() => {});
           await this.messageModel.update(assistantMsg.id, {
             content: '',

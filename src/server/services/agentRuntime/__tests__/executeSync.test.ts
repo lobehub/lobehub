@@ -256,7 +256,11 @@ describe('AgentRuntimeService.executeSync', () => {
 
       // Publish event after a small delay
       setTimeout(async () => {
-        await streamEventManager.publishAgentRuntimeEnd(operationId, 1, { status: 'done' });
+        await streamEventManager.publishAgentRuntimeEnd({
+          finalState: { status: 'done' },
+          operationId,
+          stepIndex: 1,
+        });
       }, 10);
 
       const event = await streamEventManager.waitForEvent(operationId, 'agent_runtime_end', 1000);
