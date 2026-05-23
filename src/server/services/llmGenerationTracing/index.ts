@@ -195,6 +195,17 @@ export class LLMGenerationTracingService {
     return { tracingId: id };
   }
 
+  /**
+   * Write a feedback row to `llm_generation_tracing`. Surfaces failures so
+   * callers can distinguish "actually persisted" from "silently dropped":
+   *
+   * - DB init / update throws → `LLMGenerationFeedbackError({ kind: 'db_failure' })`
+   * - WHERE matched no row (wrong id, or row owned by another user) →
+   *   `LLMGenerationFeedbackError({ kind: 'not_found' })`
+   *
+   * The tRPC route translates these into `INTERNAL_SERVER_ERROR` /
+   * `NOT_FOUND` so the client can choose retry vs give-up semantics.
+   */
   async recordFeedback(
     userId: string,
     tracingId: string,
@@ -204,15 +215,43 @@ export class LLMGenerationTracingService {
     try {
       db = await getServerDB();
     } catch (err) {
-      log('Skipping feedback — getServerDB failed: %O', err);
-      return;
+      log('Feedback DB init failed: %O', err);
+      throw new LLMGenerationFeedbackError('db_failure', 'database not reachable', {
+        cause: err,
+      });
     }
     const model = new LlmGenerationTracingModel(db, userId);
+    let result: { updated: boolean };
     try {
-      await model.updateFeedback(tracingId, params);
+      result = await model.updateFeedback(tracingId, params);
     } catch (err) {
       log('Feedback update failed: %O', err);
+      throw new LLMGenerationFeedbackError('db_failure', 'database update failed', {
+        cause: err,
+      });
     }
+    if (!result.updated) {
+      log('Feedback update affected 0 rows (id=%s userId=%s)', tracingId, userId);
+      throw new LLMGenerationFeedbackError(
+        'not_found',
+        `no tracing row matched id=${tracingId} for the calling user`,
+      );
+    }
+  }
+}
+
+/**
+ * Typed failure for `recordFeedback`. `kind` discriminates between an absent
+ * row (caller probably retrying with a wrong id or wrong user) and an actual
+ * DB outage (caller may want to retry).
+ */
+export class LLMGenerationFeedbackError extends Error {
+  readonly kind: 'not_found' | 'db_failure';
+
+  constructor(kind: 'not_found' | 'db_failure', message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = 'LLMGenerationFeedbackError';
+    this.kind = kind;
   }
 }
 
