@@ -1268,23 +1268,31 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     serverUrl: string;
     topicId: string;
   }): void {
-    const { agentType, cwd, jwt, operationId, prompt, resumeSessionId, serverUrl, topicId } = params;
+    const { agentType, cwd, jwt, operationId, prompt, resumeSessionId, serverUrl, topicId } =
+      params;
     const workDir = cwd ?? process.cwd();
 
     const args = [
-      'lh', 'hetero', 'exec',
-      '--type', agentType,
-      '--operation-id', operationId,
-      '--topic', topicId,
-      '--render', 'none',
-      '--input-json', '-',
-      '--cwd', workDir,
+      'hetero',
+      'exec',
+      '--type',
+      agentType,
+      '--operation-id',
+      operationId,
+      '--topic',
+      topicId,
+      '--render',
+      'none',
+      '--input-json',
+      '-',
+      '--cwd',
+      workDir,
       ...(resumeSessionId ? ['--resume', resumeSessionId] : []),
     ];
 
     const env = {
       ...process.env,
-      ...buildProxyEnv(this.app.storeManager.get("networkProxy")),
+      ...buildProxyEnv(this.app.storeManager.get('networkProxy')),
       LOBEHUB_JWT: jwt,
       LOBEHUB_SERVER: serverUrl,
     };
@@ -1308,5 +1316,4 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       logger.info('spawnLhHeteroExec: exited — op=%s code=%s signal=%s', operationId, code, signal);
     });
   }
-
 }
