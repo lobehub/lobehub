@@ -36,8 +36,7 @@ const OPTIONAL_FEATURE_ITEMS: SystemAgentModelItem[] = [
 ];
 
 const MEMORY_MODEL_ITEMS: SystemAgentModelItem[] = [
-  { key: 'userMemoryGatekeeper' },
-  { contextLimit: true, key: 'userMemoryLayerExtractor' },
+  { contextLimit: true, key: 'memoryAnalysisAgentConfig' },
   { contextLimit: true, key: 'userMemoryPersonaWriter' },
   { contextLimit: true, key: 'userMemoryEmbedding' },
 ];
@@ -134,15 +133,10 @@ const ModelAssignmentsForm = memo(() => {
 
     return {
       children: (
-        <Flexbox
-          align="center"
-          direction="horizontal"
-          gap={12}
-          style={{ flexWrap: 'wrap', width: 'min(100%, 640px)' }}
-        >
+        <Flexbox direction="vertical" gap={8} style={{ width: 'min(100%, 448px)' }}>
           <ModelSelect
             showAbility={false}
-            style={{ minWidth: 260, width: 'min(100%, 448px)' }}
+            style={{ minWidth: 0, width: '100%' }}
             value={value}
             onChange={(props) => updateSystemAgentModel(key, props)}
           />
@@ -150,7 +144,7 @@ const ModelAssignmentsForm = memo(() => {
             <InputNumber
               min={1}
               placeholder={t('serviceModel.contextLimit.placeholder')}
-              style={{ width: 180 }}
+              style={{ alignSelf: 'flex-end', width: 180 }}
               value={value.contextLimit}
               onChange={(contextLimit) =>
                 updateSystemAgentModel(key, {

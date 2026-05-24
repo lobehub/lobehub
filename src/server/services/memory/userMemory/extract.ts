@@ -700,10 +700,7 @@ export class MemoryExtractionExecutor {
     systemAgent: Partial<UserServiceModelConfig> | undefined,
     key: keyof Pick<
       UserServiceModelConfig,
-      | 'userMemoryEmbedding'
-      | 'userMemoryGatekeeper'
-      | 'userMemoryLayerExtractor'
-      | 'userMemoryPersonaWriter'
+      'userMemoryEmbedding' | 'memoryAnalysisAgentConfig' | 'userMemoryPersonaWriter'
     >,
     fallback: MemoryAgentConfig,
   ): MemoryAgentConfig {
@@ -734,12 +731,12 @@ export class MemoryExtractionExecutor {
   ): ResolvedMemoryServiceConfig {
     const gatekeeper = this.resolveUserMemoryAgent(
       systemAgent,
-      'userMemoryGatekeeper',
+      'memoryAnalysisAgentConfig',
       this.privateConfig.agentGateKeeper,
     );
     const layerExtractor = this.resolveUserMemoryAgent(
       systemAgent,
-      'userMemoryLayerExtractor',
+      'memoryAnalysisAgentConfig',
       this.privateConfig.agentLayerExtractor,
     );
     const embedding = this.resolveUserMemoryAgent(
@@ -747,7 +744,7 @@ export class MemoryExtractionExecutor {
       'userMemoryEmbedding',
       this.privateConfig.embedding,
     );
-    const layerModels = systemAgent?.userMemoryLayerExtractor?.model
+    const layerModels = systemAgent?.memoryAnalysisAgentConfig?.model
       ? {
           activity: layerExtractor.model,
           context: layerExtractor.model,
@@ -777,12 +774,12 @@ export class MemoryExtractionExecutor {
           provider: Boolean(systemAgent?.userMemoryEmbedding?.provider),
         },
         gatekeeper: {
-          model: Boolean(systemAgent?.userMemoryGatekeeper?.model),
-          provider: Boolean(systemAgent?.userMemoryGatekeeper?.provider),
+          model: Boolean(systemAgent?.memoryAnalysisAgentConfig?.model),
+          provider: Boolean(systemAgent?.memoryAnalysisAgentConfig?.provider),
         },
         layerExtractor: {
-          model: Boolean(systemAgent?.userMemoryLayerExtractor?.model),
-          provider: Boolean(systemAgent?.userMemoryLayerExtractor?.provider),
+          model: Boolean(systemAgent?.memoryAnalysisAgentConfig?.model),
+          provider: Boolean(systemAgent?.memoryAnalysisAgentConfig?.provider),
         },
       },
     };

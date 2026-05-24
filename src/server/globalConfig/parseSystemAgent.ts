@@ -4,7 +4,12 @@ import { type UserServiceModelConfig } from '@/types/user/settings';
 const protectedKeys = Object.keys(DEFAULT_SYSTEM_AGENT_CONFIG);
 
 const defaultTrueLey = new Set(['promptRewrite', 'autoSuggestion']);
-const defaultModelAssignmentKeys = protectedKeys.filter((key) => !key.startsWith('userMemory'));
+const memoryServiceModelKeys = new Set([
+  'memoryAnalysisAgentConfig',
+  'userMemoryEmbedding',
+  'userMemoryPersonaWriter',
+]);
+const defaultModelAssignmentKeys = protectedKeys.filter((key) => !memoryServiceModelKeys.has(key));
 
 export const parseSystemAgent = (envString: string = ''): Partial<UserServiceModelConfig> => {
   if (!envString) return {};

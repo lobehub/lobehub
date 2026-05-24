@@ -997,14 +997,10 @@ When I am ___, I need ___
   'systemAgent.userMemoryEmbedding.modelDesc':
     'Model used to embed memory content for retrieval. The context limit caps each embedding input.',
   'systemAgent.userMemoryEmbedding.title': 'Memory Embedding',
-  'systemAgent.userMemoryGatekeeper.label': 'Model',
-  'systemAgent.userMemoryGatekeeper.modelDesc':
-    'Model used to decide whether a conversation contains memory worth extracting.',
-  'systemAgent.userMemoryGatekeeper.title': 'Memory Gatekeeper',
-  'systemAgent.userMemoryLayerExtractor.label': 'Model',
-  'systemAgent.userMemoryLayerExtractor.modelDesc':
-    'Model used to extract identities, preferences, contexts, activities, and experiences.',
-  'systemAgent.userMemoryLayerExtractor.title': 'Memory Extraction',
+  'systemAgent.memoryAnalysisAgentConfig.label': 'Model',
+  'systemAgent.memoryAnalysisAgentConfig.modelDesc':
+    'Model used to decide whether conversations contain memory and extract identities, preferences, contexts, activities, and experiences.',
+  'systemAgent.memoryAnalysisAgentConfig.title': 'Memory Analysis',
   'systemAgent.userMemoryPersonaWriter.label': 'Model',
   'systemAgent.userMemoryPersonaWriter.modelDesc':
     'Model used to write persona-oriented memory summaries.',

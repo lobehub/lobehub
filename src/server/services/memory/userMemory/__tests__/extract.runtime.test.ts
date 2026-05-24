@@ -117,6 +117,59 @@ describe('MemoryExtractionExecutor.resolveRuntimeKeyVaults', () => {
     });
   });
 
+  it('shares ServiceModel memory analysis config between gatekeeper and layer extractor', () => {
+    const executor = createExecutor({
+      agentGateKeeper: {
+        apiKey: 'gate-system-key',
+        baseURL: 'https://gate.example.com',
+        model: 'gate-1',
+        provider: 'provider-gate',
+      },
+      agentLayerExtractor: {
+        apiKey: 'layer-system-key',
+        baseURL: 'https://layer.example.com',
+        contextLimit: 2048,
+        layers: {
+          activity: 'layer-act',
+          context: 'layer-ctx',
+          experience: 'layer-exp',
+          identity: 'layer-id',
+          preference: 'layer-pref',
+        },
+        model: 'layer-1',
+        provider: 'provider-layer',
+      },
+    });
+
+    const memoryServiceConfig = (executor as any).resolveUserMemoryServiceConfig({
+      memoryAnalysisAgentConfig: {
+        contextLimit: 4096,
+        model: 'analysis-1',
+        provider: 'provider-analysis',
+      },
+    });
+
+    expect(memoryServiceConfig.agents.gatekeeper).toMatchObject({
+      model: 'analysis-1',
+      provider: 'provider-analysis',
+    });
+    expect(memoryServiceConfig.agents.layerExtractor).toMatchObject({
+      contextLimit: 4096,
+      model: 'analysis-1',
+      provider: 'provider-analysis',
+    });
+    expect(memoryServiceConfig.agents.gatekeeper.apiKey).toBeUndefined();
+    expect(memoryServiceConfig.agents.layerExtractor.apiKey).toBeUndefined();
+    expect(memoryServiceConfig.modelConfig.gateModel).toBe('analysis-1');
+    expect(memoryServiceConfig.modelConfig.layerModels).toEqual({
+      activity: 'analysis-1',
+      context: 'analysis-1',
+      experience: 'analysis-1',
+      identity: 'analysis-1',
+      preference: 'analysis-1',
+    });
+  });
+
   it('uses ServiceModel provider before env preferred providers when provider is overridden', async () => {
     const executor = createExecutor({
       agentGateKeeper: {

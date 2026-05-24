@@ -23,9 +23,8 @@ export interface UserSystemAgentConfig {
 }
 
 export interface UserMemoryServiceModelConfig {
+  memoryAnalysisAgentConfig: SystemAgentItem;
   userMemoryEmbedding: SystemAgentItem;
-  userMemoryGatekeeper: SystemAgentItem;
-  userMemoryLayerExtractor: SystemAgentItem;
   userMemoryPersonaWriter: SystemAgentItem;
 }
 

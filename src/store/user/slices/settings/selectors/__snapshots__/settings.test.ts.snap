@@ -73,6 +73,10 @@ exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AG
     "model": "gpt-5.4-mini",
     "provider": "openai",
   },
+  "memoryAnalysisAgentConfig": {
+    "model": "gpt-5.4-mini",
+    "provider": "openai",
+  },
   "promptRewrite": {
     "enabled": true,
     "model": "gpt-5.4-mini",
@@ -93,14 +97,6 @@ exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AG
   },
   "userMemoryEmbedding": {
     "model": "text-embedding-3-small",
-    "provider": "openai",
-  },
-  "userMemoryGatekeeper": {
-    "model": "gpt-5.4-mini",
-    "provider": "openai",
-  },
-  "userMemoryLayerExtractor": {
-    "model": "gpt-5.4-mini",
     "provider": "openai",
   },
   "userMemoryPersonaWriter": {
