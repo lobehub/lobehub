@@ -152,7 +152,7 @@ export class LobeBedrockAI implements LobeRuntimeAI {
     ) as GenerateObjectPayload['messages'];
     const { requestParams, schemaToolName } = await buildAnthropicGenerateObjectRequest(
       { ...payload, messages: [...systemMessages, ...normalizedMessages] },
-      { maxTokens: resolvedMaxTokens, schemaToolStrict: true },
+      { maxTokens: resolvedMaxTokens },
     );
     const bedrockRequestParams: Omit<Anthropic.MessageCreateParams, 'model'> & {
       model?: Anthropic.MessageCreateParams['model'];

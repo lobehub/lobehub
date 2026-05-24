@@ -1093,10 +1093,10 @@ describe('LobeBedrockAI', () => {
               type: 'object',
             },
             name: 'task_topic_handoff',
-            strict: true,
           },
         ],
       });
+      expect(body.tools[0]).not.toHaveProperty('strict');
       expect(sendSpy).toHaveBeenCalledWith(expect.any(InvokeModelCommand), {
         abortSignal: abortController.signal,
       });
