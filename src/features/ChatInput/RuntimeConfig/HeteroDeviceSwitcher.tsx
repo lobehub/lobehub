@@ -1,18 +1,13 @@
 'use client';
 
+import { SiApple, SiLinux } from '@icons-pack/react-simple-icons';
 import { isDesktop } from '@lobechat/const';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import type { HeteroExecutionTarget } from '@lobechat/types';
+import { Microsoft } from '@lobehub/icons';
 import { Flexbox, Icon, Popover } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import {
-  BotIcon,
-  CheckIcon,
-  ChevronDownIcon,
-  CloudIcon,
-  LaptopIcon,
-  type LucideIcon,
-} from 'lucide-react';
+import { CheckIcon, ChevronDownIcon, CloudIcon, LaptopIcon, MonitorIcon } from 'lucide-react';
 import { memo, type ReactNode, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -160,7 +155,7 @@ interface OptionRowProps {
   active: boolean;
   desc?: ReactNode;
   disabled?: boolean;
-  icon: LucideIcon;
+  icon: ReactNode;
   label: string;
   onClick: () => void;
 }
@@ -177,9 +172,7 @@ const OptionRow = memo<OptionRowProps>(({ active, desc, disabled, icon, label, o
         if (!disabled) onClick();
       }}
     >
-      <div className={styles.optionIcon}>
-        <Icon icon={icon} size={14} />
-      </div>
+      <div className={styles.optionIcon}>{icon}</div>
       <div className={styles.optionMeta}>
         <div className={styles.optionTitle}>{label}</div>
         {desc ? <div className={styles.desc}>{desc}</div> : null}
@@ -190,6 +183,23 @@ const OptionRow = memo<OptionRowProps>(({ active, desc, disabled, icon, label, o
 });
 
 OptionRow.displayName = 'HeteroDeviceSwitcher.OptionRow';
+
+const getDeviceIcon = (platform: string | undefined, size = 14): ReactNode => {
+  switch (platform) {
+    case 'darwin': {
+      return <SiApple color="currentColor" size={size} />;
+    }
+    case 'linux': {
+      return <SiLinux color="currentColor" size={size} />;
+    }
+    case 'win32': {
+      return <Microsoft color="currentColor" size={size} />;
+    }
+    default: {
+      return <Icon icon={MonitorIcon} size={size} />;
+    }
+  }
+};
 
 interface HeteroDeviceSwitcherProps {
   agentId: string;
@@ -234,13 +244,13 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     executionTarget === 'device' ? devices?.find((d) => d.deviceId === boundDeviceId) : undefined;
 
   // Compute chip
-  let chipIcon: LucideIcon = CloudIcon;
+  let chipIcon: ReactNode = <Icon icon={CloudIcon} size={14} />;
   let chipLabel = t('heteroAgent.executionTarget.sandbox');
   if (executionTarget === 'local') {
-    chipIcon = LaptopIcon;
+    chipIcon = <Icon icon={LaptopIcon} size={14} />;
     chipLabel = t('heteroAgent.executionTarget.local');
   } else if (executionTarget === 'device') {
-    chipIcon = BotIcon;
+    chipIcon = getDeviceIcon(boundDevice?.platform);
     chipLabel = boundDevice?.hostname ?? t('heteroAgent.executionTarget.unknownDevice');
   }
 
@@ -256,7 +266,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
         <OptionRow
           active={isActive('local')}
           desc={t('heteroAgent.executionTarget.localDesc')}
-          icon={LaptopIcon}
+          icon={<Icon icon={LaptopIcon} size={14} />}
           label={t('heteroAgent.executionTarget.local')}
           onClick={() => void handleSelect('local')}
         />
@@ -264,7 +274,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
       <OptionRow
         active={isActive('sandbox')}
         desc={t('heteroAgent.executionTarget.sandboxDesc')}
-        icon={CloudIcon}
+        icon={<Icon icon={CloudIcon} size={14} />}
         label={t('heteroAgent.executionTarget.sandbox')}
         onClick={() => void handleSelect('sandbox')}
       />
@@ -280,7 +290,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           <OptionRow
             active={isActive('device', d.deviceId)}
             disabled={!d.online}
-            icon={BotIcon}
+            icon={getDeviceIcon(d.platform)}
             key={d.deviceId}
             label={d.hostname}
             desc={
@@ -310,7 +320,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
       onOpenChange={setOpen}
     >
       <div className={styles.button}>
-        <Icon icon={chipIcon} size={14} />
+        {chipIcon}
         <span>{chipLabel}</span>
         <Icon icon={ChevronDownIcon} size={12} />
       </div>
