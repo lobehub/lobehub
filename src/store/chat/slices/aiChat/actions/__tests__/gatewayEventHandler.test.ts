@@ -654,6 +654,47 @@ describe('createGatewayEventHandler', () => {
         }),
       );
     });
+
+    // LOBE-9523: cancel path. The server-side coordinator skips the
+    // uiMessages snapshot when state.status='interrupted' to avoid
+    // pushing a LOADING_FLAT placeholder. The client must mirror that
+    // intent: when `reason='interrupted'` arrives without uiMessages,
+    // do NOT fall back to a DB refetch — the executor's partial-finalize
+    // catch is still racing to write the real content, and a fetch here
+    // would return placeholder and clobber in-memory streamed content.
+    it('should NOT refetch from DB when reason=interrupted and uiMessages is absent (LOBE-9523)', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('agent_runtime_end', { reason: 'interrupted' }));
+      await flush();
+
+      expect(store.completeOperation).toHaveBeenCalledWith('op-1');
+      expect(messageService.getMessages).not.toHaveBeenCalled();
+      expect(store.replaceMessages).not.toHaveBeenCalled();
+    });
+
+    it('should still use uiMessages SoT when reason=interrupted but server included a snapshot', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+      const uiMessages = [{ id: 'msg-initial', role: 'assistant', content: 'partial' }];
+
+      handler(
+        makeEvent('agent_runtime_end', {
+          reason: 'interrupted',
+          uiMessages,
+        }),
+      );
+      await flush();
+
+      // uiMessages present takes precedence over the interrupted skip — the
+      // SoT push is authoritative when server chose to send it.
+      expect(store.replaceMessages).toHaveBeenCalledWith(uiMessages, {
+        action: 'gateway/agent_runtime_end',
+        context: expect.any(Object),
+      });
+      expect(messageService.getMessages).not.toHaveBeenCalled();
+    });
   });
 
   describe('error', () => {

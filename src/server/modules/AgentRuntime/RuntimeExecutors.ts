@@ -1192,6 +1192,47 @@ export const createRuntimeExecutors = (
             continue;
           }
 
+          // LOBE-9523: cancel/interrupt path — the model-runtime stream was aborted
+          // before reaching the post-stream finalize at line 1078, so the DB row is
+          // still the LOADING_FLAT placeholder. Persist whatever partial content the
+          // `onText` / `onThinking` / `onToolsCalling` callbacks already accumulated
+          // so (a) a subsequent reload still shows the user's streamed answer, and
+          // (b) the agent_runtime_end uiMessages snapshot doesn't carry placeholder
+          // values that would clobber the client's in-memory streamed content.
+          if (interrupted && (content || thinkingContent || toolsCalling.length > 0)) {
+            try {
+              const persistedTools =
+                toolsCalling.length > 0
+                  ? toolsCalling.map((t) => ({
+                      ...t,
+                      arguments: sanitizeToolCallArguments(t.arguments),
+                    }))
+                  : undefined;
+              const interruptedReasoning = thinkingContent
+                ? { content: thinkingContent }
+                : undefined;
+              const interruptedMetadata: Record<string, any> = { interruptedMidStream: true };
+              if (currentStepUsage && typeof currentStepUsage === 'object') {
+                Object.assign(interruptedMetadata, currentStepUsage);
+              }
+              await ctx.messageModel.update(assistantMessageItem.id, {
+                content,
+                metadata: interruptedMetadata,
+                reasoning: interruptedReasoning,
+                tools: persistedTools,
+              });
+              log(
+                '[%s] Interrupted finalize: persisted partial content (c=%d r=%d tools=%d)',
+                operationLogId,
+                content.length,
+                thinkingContent.length,
+                toolsCalling.length,
+              );
+            } catch (persistErr) {
+              log('[%s] Interrupted finalize update failed: %O', operationLogId, persistErr);
+            }
+          }
+
           throw error;
         }
       }

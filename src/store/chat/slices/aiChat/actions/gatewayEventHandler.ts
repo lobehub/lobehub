@@ -501,7 +501,7 @@ export const createGatewayEventHandler = (
 
       case 'agent_runtime_end': {
         enqueue(async () => {
-          const data = event.data as { uiMessages?: UIChatMessage[] } | undefined;
+          const data = event.data as { reason?: string; uiMessages?: UIChatMessage[] } | undefined;
 
           void emitClientAgentSignalSourceEvent({
             payload: {
@@ -536,6 +536,16 @@ export const createGatewayEventHandler = (
               action: 'gateway/agent_runtime_end',
               context,
             });
+          } else if (data?.reason === 'interrupted') {
+            // LOBE-9523: cancel path skips uiMessages by design (server-side
+            // `AgentRuntimeCoordinator.resolveUiMessages` returns undefined
+            // for status='interrupted'). The executor's partial-finalize
+            // catch writes the real content to DB asynchronously, but it
+            // may not be durable yet — refetching here would race against
+            // that update and clobber the in-memory streamed content with
+            // the LOADING_FLAT placeholder. Keep what we have; the next
+            // explicit refresh (route change, user-driven mutate) will
+            // pick up the finalized partial content from DB.
           } else {
             await fetchAndReplaceMessages(get, context).catch(console.error);
           }
