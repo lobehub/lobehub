@@ -82,7 +82,7 @@ describe('createGatewayEventHandler', () => {
   });
 
   describe('stream_start', () => {
-    it('should associate new message with operation', async () => {
+    it('should associate new message with operation and skip the DB refetch (LOBE-9501)', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
@@ -90,7 +90,12 @@ describe('createGatewayEventHandler', () => {
       await flush();
 
       expect(store.associateMessageWithOperation).toHaveBeenCalledWith('msg-step2', 'op-1');
-      expect(store.replaceMessages).toHaveBeenCalled();
+      // Native gateway streams carry the new assistant id directly + a SoT
+      // uiMessages snapshot on the preceding step_start, so stream_start must
+      // NOT trigger a DB refetch (the refetch is what clobbered the streamed
+      // assistantGroup with a stale placeholder).
+      expect(messageService.getMessages).not.toHaveBeenCalled();
+      expect(store.replaceMessages).not.toHaveBeenCalled();
       expect(emitClientAgentSignalSourceEvent).toHaveBeenCalledWith(
         expect.objectContaining({
           payload: expect.objectContaining({
@@ -843,17 +848,14 @@ describe('createGatewayEventHandler', () => {
   });
 
   describe('sequential processing', () => {
-    it('should process stream_chunk only after stream_start refresh completes', async () => {
+    it('should dispatch stream_chunk to the new assistant id after stream_start switches it', async () => {
+      // Native gateway streams no longer await a DB fetch on stream_start
+      // (LOBE-9501) — but stream_chunk must still queue behind stream_start
+      // so the chunk targets the NEW assistant id (from stream_start.data),
+      // not the previous one.
       const store = createMockStore();
       const callOrder: string[] = [];
 
-      const { messageService } = await import('@/services/message');
-      (messageService.getMessages as any).mockImplementation(async () => {
-        callOrder.push('refresh_start');
-        await new Promise((r) => setTimeout(r, 10));
-        callOrder.push('refresh_end');
-        return [];
-      });
       store.internal_dispatchMessage.mockImplementation(() => {
         callOrder.push('dispatch');
       });
@@ -867,10 +869,34 @@ describe('createGatewayEventHandler', () => {
       handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'Hello' }));
       await flush();
 
-      const refreshEndIdx = callOrder.indexOf('refresh_end');
+      // associate (from stream_start) precedes dispatch (from stream_chunk)
+      const associateIdx = callOrder.indexOf('associate');
       const dispatchIdx = callOrder.indexOf('dispatch');
-      expect(refreshEndIdx).toBeGreaterThan(-1);
-      expect(dispatchIdx).toBeGreaterThan(refreshEndIdx);
+      expect(associateIdx).toBeGreaterThan(-1);
+      expect(dispatchIdx).toBeGreaterThan(associateIdx);
+
+      // Chunk targets the new id, proving the queue ordering held
+      expect(store.internal_dispatchMessage).toHaveBeenLastCalledWith(
+        expect.objectContaining({ id: 'msg-new', value: { content: 'Hello' } }),
+        { operationId: 'op-1' },
+      );
+      // And no DB refetch was issued for the native stream
+      expect(messageService.getMessages).not.toHaveBeenCalled();
+    });
+
+    it('should still fetch from DB on stream_start when assistantMessage id is absent (hetero CLI)', async () => {
+      // Hetero CLI adapters (Claude Code / Codex) never set
+      // `assistantMessage.id` on stream_start, so the DB read is still
+      // mandatory — it pulls the executor-created placeholder into
+      // `dbMessagesMap` so subsequent chunks have a target.
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('stream_start', {}));
+      await flush();
+
+      expect(messageService.getMessages).toHaveBeenCalled();
+      expect(store.replaceMessages).toHaveBeenCalled();
     });
   });
 
@@ -901,18 +927,22 @@ describe('createGatewayEventHandler', () => {
       // Loading stays active between steps — only tool streaming is cleared
       expect(store.internal_toggleToolCallingStreaming).toHaveBeenCalledWith('msg-1', undefined);
 
-      // Tool execution
+      // Tool execution — tool_end still refreshes from DB to pick up the
+      // server-created tool message row.
       handler(makeEvent('tool_start', { parentMessageId: 'msg-1', toolCalling: tools[0] }));
       handler(makeEvent('tool_end', { isSuccess: true }));
       await flush();
       expect(store.replaceMessages).toHaveBeenCalled();
 
-      // Step 2: Next LLM call with new assistant message
+      // Step 2: Next LLM call with new assistant message — native stream_start
+      // carries the id directly, so it must NOT trigger a DB refetch
+      // (LOBE-9501). Only the association switch happens.
       vi.clearAllMocks();
       handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-2' } }));
       await flush();
-      expect(store.replaceMessages).toHaveBeenCalled();
       expect(store.associateMessageWithOperation).toHaveBeenCalledWith('msg-2', 'op-1');
+      expect(messageService.getMessages).not.toHaveBeenCalled();
+      expect(store.replaceMessages).not.toHaveBeenCalled();
 
       handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'Here are the results.' }));
       await flush();
