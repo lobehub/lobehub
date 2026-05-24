@@ -216,10 +216,10 @@ const GroupMessage = memo<GroupMessageProps>(
           </div>
         )}
         {interrupted && <InterruptedHint />}
-        {footerRender}
         {isDevMode && model && (
           <Usage model={model} performance={performance} provider={provider!} usage={usage} />
         )}
+        {footerRender}
         {reactions.length > 0 && (
           <ReactionDisplay
             isActive={isReactionActive}

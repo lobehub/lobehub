@@ -2,9 +2,10 @@
 
 import { LayersEnum } from '@lobechat/types';
 import { Icon } from '@lobehub/ui';
+import { SkillsIcon } from '@lobehub/ui/icons';
 import { createStaticStyles } from 'antd-style';
 import type { LucideIcon } from 'lucide-react';
-import { Brain, ClipboardCheck, FileText, RadioTower } from 'lucide-react';
+import { Brain, ClipboardCheck } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -23,25 +24,7 @@ const MEMORY_ROUTE_BY_LAYER = {
   [LayersEnum.Preference]: { idParam: 'preferenceId', path: '/memory/preferences' },
 } satisfies Record<LayersEnum, { idParam: string; path: string }>;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  agentSignalDescription: css`
-    display: inline-flex;
-    gap: 4px;
-    align-items: center;
-    max-width: 100%;
-  `,
-  agentSignalMarker: css`
-    display: inline-flex;
-    flex: none;
-    align-items: center;
-    color: ${cssVar.colorPrimary};
-  `,
-  descriptionText: css`
-    overflow: hidden;
-    min-width: 0;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
+const styles = createStaticStyles(({ css }) => ({
   list: css`
     display: flex;
     flex-direction: column;
@@ -52,11 +35,16 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const RECEIPT_ICON_BY_KIND = {
+const RECEIPT_LUCIDE_ICON_BY_KIND = {
   memory: Brain,
   review: ClipboardCheck,
-  skill: FileText,
-} satisfies Record<AgentSignalReceiptView['kind'], LucideIcon>;
+} as const satisfies Partial<Record<AgentSignalReceiptView['kind'], LucideIcon>>;
+
+const renderReceiptIcon = (kind: AgentSignalReceiptView['kind']) => {
+  if (kind === 'skill') return <SkillsIcon size={28} />;
+  const LucideIconComponent = RECEIPT_LUCIDE_ICON_BY_KIND[kind];
+  return LucideIconComponent ? <Icon icon={LucideIconComponent} size={28} /> : null;
+};
 
 interface AgentSignalReceiptListProps {
   receipts: AgentSignalReceiptView[];
@@ -81,26 +69,13 @@ const AgentSignalReceiptItem = memo<AgentSignalReceiptItemProps>(({ receipt }) =
   const { t } = useTranslation(['chat', 'common']);
   const navigate = useStableNavigate();
   const openDocument = useChatStore((s) => s.openDocument);
-  const ReceiptIcon = RECEIPT_ICON_BY_KIND[receipt.kind];
+  const iconNode = renderReceiptIcon(receipt.kind);
   const fallbackTitle = t(`agentSignal.receipts.${receipt.kind}.title`, receipt.title);
   const detail = t(`agentSignal.receipts.${receipt.kind}.detail`, receipt.detail);
   const title = receipt.target?.title ?? fallbackTitle;
   const description = receipt.target ? fallbackTitle : detail;
   const summary = receipt.target?.summary ?? detail;
   const tooltip = `${fallbackTitle}: ${summary}`;
-  const agentSignalLabel = t('agentSignal.receipts.agentSignalLabel', 'Agent Signal');
-  const descriptionRender = (
-    <span className={styles.agentSignalDescription}>
-      <span
-        aria-label={agentSignalLabel}
-        className={styles.agentSignalMarker}
-        title={agentSignalLabel}
-      >
-        <Icon icon={RadioTower} size={12} />
-      </span>
-      <span className={styles.descriptionText}>{description}</span>
-    </span>
-  );
   const target = receipt.target;
   const documentId = target?.type === 'skill' ? (target.documentId ?? target.id) : undefined;
   const memoryRoute = getMemoryRoute(target);
@@ -127,8 +102,8 @@ const AgentSignalReceiptItem = memo<AgentSignalReceiptItemProps>(({ receipt }) =
 
   return (
     <PortalResourceCard
-      description={descriptionRender}
-      icon={ReceiptIcon}
+      description={description}
+      icon={iconNode}
       openLabel={canOpen ? t('common:cmdk.toOpen', 'Open') : undefined}
       title={title}
       tooltip={tooltip}

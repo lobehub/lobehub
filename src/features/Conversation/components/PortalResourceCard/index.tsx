@@ -2,7 +2,6 @@
 
 import { Center, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
-import type { LucideIcon } from 'lucide-react';
 import { FileText } from 'lucide-react';
 import type { KeyboardEvent, ReactNode } from 'react';
 import { memo } from 'react';
@@ -22,6 +21,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   avatar: css`
     flex: none;
+    align-self: stretch;
     border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
     background: ${cssVar.colorFillQuaternary};
   `,
@@ -42,10 +42,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorBgContainer};
   `,
   container: css`
+    overflow: hidden;
+
     width: 100%;
-    min-height: 48px;
+    height: 64px;
     border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 6px;
+    border-radius: 12px;
 
     color: ${cssVar.colorText};
 
@@ -69,7 +71,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 export interface PortalResourceCardProps {
   className?: string;
   description?: ReactNode;
-  icon?: LucideIcon;
+  icon?: ReactNode;
   onOpen?: () => void;
   openLabel?: ReactNode;
   title: ReactNode;
@@ -77,7 +79,7 @@ export interface PortalResourceCardProps {
 }
 
 const PortalResourceCard = memo<PortalResourceCardProps>(
-  ({ className, description, icon = FileText, openLabel, title, tooltip, onOpen }) => {
+  ({ className, description, icon, openLabel, title, tooltip, onOpen }) => {
     const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
       if (!onOpen) return;
       if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -97,10 +99,10 @@ const PortalResourceCard = memo<PortalResourceCardProps>(
         onClick={onOpen}
         onKeyDown={onOpen ? handleKeyDown : undefined}
       >
-        <Center horizontal className={styles.avatar} height={48} width={48}>
-          <Icon icon={icon} size={22} />
+        <Center horizontal className={styles.avatar} width={64}>
+          {icon ?? <Icon icon={FileText} size={28} />}
         </Center>
-        <Flexbox className={styles.content} flex={1} gap={2} paddingBlock={6} paddingInline={10}>
+        <Flexbox className={styles.content} flex={1} gap={4} paddingInline={12}>
           <Text ellipsis className={styles.title}>
             {title}
           </Text>
