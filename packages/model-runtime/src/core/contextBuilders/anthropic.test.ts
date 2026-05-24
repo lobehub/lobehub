@@ -13,9 +13,12 @@ import {
 
 // Mock the parseDataUri function since it's an implementation detail
 vi.mock('../../utils/uriParser');
-vi.mock('@lobechat/utils', () => ({
+vi.mock('@lobechat/utils', async (importOriginal) => ({
+  ...((await importOriginal()) as object),
   imageUrlToBase64: vi.fn(),
 }));
+
+const PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ';
 
 describe('anthropicHelpers', () => {
   beforeEach(() => {
@@ -46,6 +49,30 @@ describe('anthropicHelpers', () => {
         source: {
           data: 'base64EncodedString',
           media_type: 'image/jpeg',
+          type: 'base64',
+        },
+        type: 'image',
+      });
+    });
+
+    it('should correct data URL MIME type when declared type does not match image bytes', async () => {
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        mimeType: 'image/jpeg',
+        base64: PNG_BASE64,
+        type: 'base64',
+      });
+
+      const content: UserMessageContentPart = {
+        type: 'image_url',
+        image_url: { url: `data:image/jpeg;base64,${PNG_BASE64}` },
+      };
+
+      const result = await buildAnthropicBlock(content);
+
+      expect(result).toEqual({
+        source: {
+          data: PNG_BASE64,
+          media_type: 'image/png',
           type: 'base64',
         },
         type: 'image',

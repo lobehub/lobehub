@@ -1,5 +1,5 @@
 import type Anthropic from '@anthropic-ai/sdk';
-import { imageUrlToBase64 } from '@lobechat/utils';
+import { imageUrlToBase64, resolveImageMimeTypeFromBase64 } from '@lobechat/utils';
 import type OpenAI from 'openai';
 
 import type { OpenAIChatMessage, UserMessageContentPart } from '../../types';
@@ -43,12 +43,14 @@ export const buildAnthropicBlock = async (
       const { mimeType, base64, type } = parseDataUri(content.image_url.url);
 
       if (type === 'base64') {
-        if (!isImageTypeSupported(mimeType)) return undefined;
+        const resolvedMimeType = await resolveImageMimeTypeFromBase64(mimeType, base64);
+
+        if (!isImageTypeSupported(resolvedMimeType)) return undefined;
 
         return {
           source: {
             data: base64 as string,
-            media_type: mimeType as Anthropic.Base64ImageSource['media_type'],
+            media_type: resolvedMimeType as Anthropic.Base64ImageSource['media_type'],
             type: 'base64',
           },
           type: 'image',
