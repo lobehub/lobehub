@@ -279,4 +279,16 @@ describe('compressImageFile', () => {
     expect(result).toBe(file);
     global.Image = originalImage;
   });
+
+  it('should resolve original file when MIME correction fails after image load', async () => {
+    const file = createMockFile('broken-buffer.png', 'image/png', 1000);
+    vi.spyOn(file, 'arrayBuffer').mockRejectedValue(new Error('Failed to read file'));
+
+    const restoreImage = mockImageLoad(800, 600);
+
+    const result = await compressImageFile(file);
+
+    expect(result).toBe(file);
+    restoreImage();
+  });
 });

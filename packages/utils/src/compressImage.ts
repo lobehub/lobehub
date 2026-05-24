@@ -78,29 +78,34 @@ export const compressImageFile = (file: File): Promise<File> =>
 
     img.addEventListener('load', async () => {
       URL.revokeObjectURL(objectUrl);
-      const normalizedFile = await correctImageFileType(file);
-      const outputType = normalizedFile.type;
 
-      // skip if image is small enough in both dimensions and file size
-      if (
-        img.width <= MAX_IMAGE_SIZE &&
-        img.height <= MAX_IMAGE_SIZE &&
-        normalizedFile.size <= MAX_IMAGE_BYTES
-      ) {
-        resolve(normalizedFile);
-        return;
+      try {
+        const normalizedFile = await correctImageFileType(file);
+        const outputType = normalizedFile.type;
+
+        // skip if image is small enough in both dimensions and file size
+        if (
+          img.width <= MAX_IMAGE_SIZE &&
+          img.height <= MAX_IMAGE_SIZE &&
+          normalizedFile.size <= MAX_IMAGE_BYTES
+        ) {
+          resolve(normalizedFile);
+          return;
+        }
+
+        // progressively shrink until under 5MB
+        let maxSize = MAX_IMAGE_SIZE;
+        let result: File;
+        do {
+          const dataUrl = compressImage({ img, maxSize, type: outputType });
+          result = dataUrlToFile(dataUrl, normalizedFile.name);
+          maxSize = Math.round(maxSize * 0.8);
+        } while (result.size > MAX_IMAGE_BYTES && maxSize > 100);
+
+        resolve(result);
+      } catch {
+        resolve(file);
       }
-
-      // progressively shrink until under 5MB
-      let maxSize = MAX_IMAGE_SIZE;
-      let result: File;
-      do {
-        const dataUrl = compressImage({ img, maxSize, type: outputType });
-        result = dataUrlToFile(dataUrl, normalizedFile.name);
-        maxSize = Math.round(maxSize * 0.8);
-      } while (result.size > MAX_IMAGE_BYTES && maxSize > 100);
-
-      resolve(result);
     });
 
     img.addEventListener('error', () => {
