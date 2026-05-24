@@ -505,5 +505,63 @@ describe('AgentRuntimeCoordinator', () => {
         uiMessages: undefined,
       });
     });
+
+    // LOBE-9523: cancel/interrupt path leaves the streaming assistant row
+    // at the LOADING_FLAT placeholder until the executor's partial-finalize
+    // catch writes the accumulated content asynchronously. Publishing a
+    // pre-finalize snapshot would clobber the client's in-memory streamed
+    // content, so the resolver is skipped entirely for status='interrupted'.
+    it('skips uiMessages on saveAgentState when status=interrupted (LOBE-9523)', async () => {
+      const resolver = vi.fn().mockResolvedValue([{ id: 'placeholder', role: 'assistant' }]);
+      const coordinatorWithResolver = new AgentRuntimeCoordinator({
+        stateManager: mockStateManager,
+        streamEventManager: mockStreamManager,
+        uiMessagesResolver: resolver,
+      });
+
+      const previousState = { status: 'running', stepCount: 3 };
+      const newState = { status: 'interrupted', stepCount: 3 };
+      mockStateManager.loadAgentState.mockResolvedValue(previousState);
+
+      await coordinatorWithResolver.saveAgentState('op-int-1', newState as any);
+
+      // Resolver should NOT be called — the whole point is to avoid the DB
+      // read that would return the LOADING_FLAT placeholder.
+      expect(resolver).not.toHaveBeenCalled();
+      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith({
+        finalState: newState,
+        operationId: 'op-int-1',
+        reason: 'interrupted',
+        stepIndex: 3,
+        uiMessages: undefined,
+      });
+    });
+
+    it('skips uiMessages on saveStepResult when stepResult.newState.status=interrupted (LOBE-9523)', async () => {
+      const resolver = vi.fn().mockResolvedValue([{ id: 'placeholder', role: 'assistant' }]);
+      const coordinatorWithResolver = new AgentRuntimeCoordinator({
+        stateManager: mockStateManager,
+        streamEventManager: mockStreamManager,
+        uiMessagesResolver: resolver,
+      });
+
+      const stepResult = {
+        executionTime: 100,
+        newState: { status: 'interrupted', stepCount: 2 },
+        stepIndex: 2,
+      };
+      mockStateManager.loadAgentState.mockResolvedValue({ status: 'running', stepCount: 1 });
+
+      await coordinatorWithResolver.saveStepResult('op-int-2', stepResult as any);
+
+      expect(resolver).not.toHaveBeenCalled();
+      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith({
+        finalState: stepResult.newState,
+        operationId: 'op-int-2',
+        reason: 'interrupted',
+        stepIndex: 2,
+        uiMessages: undefined,
+      });
+    });
   });
 });

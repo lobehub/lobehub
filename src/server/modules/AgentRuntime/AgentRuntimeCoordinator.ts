@@ -113,9 +113,21 @@ export class AgentRuntimeCoordinator {
    * failures — stream-event publishing must never fail the surrounding
    * save. Errors are logged and surfaced to the client as a missing field,
    * which falls back to the legacy refresh path.
+   *
+   * LOBE-9523: skip the resolve entirely when the run is moving into
+   * `interrupted`. The executor's per-step finalize at line 1078 of
+   * RuntimeExecutors only runs on the success path, so a mid-stream cancel
+   * leaves the assistant row as the LOADING_FLAT placeholder. Pushing that
+   * placeholder as SoT would clobber the client's in-memory streamed
+   * content. The executor's catch-block partial-finalize (LOBE-9523 fix #1)
+   * writes the real partial content asynchronously, but that update may
+   * not be durable by the time we publish — leaving the field undefined
+   * lets the client preserve its in-memory state (`gatewayEventHandler.ts`
+   * also skips the DB refetch fallback when reason='interrupted').
    */
   private async resolveUiMessages(state: AgentState): Promise<UIChatMessage[] | undefined> {
     if (!this.uiMessagesResolver) return undefined;
+    if (state.status === 'interrupted') return undefined;
     try {
       return await this.uiMessagesResolver(state);
     } catch (error) {

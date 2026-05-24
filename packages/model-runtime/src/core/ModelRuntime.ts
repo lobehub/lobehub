@@ -1,4 +1,4 @@
-import type { ModelUsage, TracePayload } from '@lobechat/types';
+import type { ModelPerformance, ModelUsage, TracePayload } from '@lobechat/types';
 import { createTimingHelpers, getDurationMs } from '@lobechat/utils';
 import type { ClientOptions } from 'openai';
 
@@ -39,6 +39,20 @@ const getLobeHubTimingMetadata = (options?: {
   metadata?: Record<string, unknown>;
 }): Record<string, unknown> | undefined =>
   options?.metadata?.provider === 'lobehub' ? options.metadata : undefined;
+
+const buildGenerateObjectSpeed = (startedAt: number, usage: ModelUsage): ModelPerformance => {
+  const latency = Math.max(Date.now() - startedAt, 0);
+  const totalOutputTokens = usage.totalOutputTokens ?? usage.outputTextTokens ?? 0;
+  const tps =
+    latency > 0 && totalOutputTokens > 0 ? totalOutputTokens / (latency / 1000) : undefined;
+
+  return {
+    duration: latency,
+    latency,
+    tps,
+    ttft: 0,
+  };
+};
 
 export interface AgentChatOptions {
   enableTrace?: boolean;
@@ -109,7 +123,7 @@ export interface ModelRuntimeHooks {
   ) => void | Promise<void>;
 
   onGenerateObjectFinal?: (
-    data: { usage?: ModelUsage },
+    data: { speed?: ModelPerformance; usage?: ModelUsage },
     context: { options?: GenerateObjectOptions; payload: GenerateObjectPayload },
   ) => void | Promise<void>;
 }
@@ -333,6 +347,7 @@ export class ModelRuntime {
 
     try {
       await this._hooks?.beforeGenerateObject?.(payload, options);
+      const runtimeStartedAt = Date.now();
 
       const needsUsageCapture =
         this._hooks?.onGenerateObjectFinal || this._hooks?.onGenerateObjectComplete;
@@ -342,9 +357,10 @@ export class ModelRuntime {
             ...options,
             onUsage: async (usage: ModelUsage) => {
               usageCapture = usage;
+              const speed = buildGenerateObjectSpeed(runtimeStartedAt, usage);
               await options?.onUsage?.(usage);
               try {
-                await this._hooks?.onGenerateObjectFinal?.({ usage }, { options, payload });
+                await this._hooks?.onGenerateObjectFinal?.({ speed, usage }, { options, payload });
               } catch (e) {
                 // Hook failures (billing, tracing) must not interfere with response completion
                 console.error('[ModelRuntime] onGenerateObjectFinal hook error:', e);

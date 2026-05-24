@@ -19,7 +19,11 @@ export interface AppendStepParams {
    * Context engine input/output captured for this step. Delivered via
    * `RuntimeExecutorContext.tracingContextEngine` rather than through the
    * `events` array, so CE payloads (agentDocuments, systemRole, …) stay out
-   * of the Redis state pipeline. See LOBE-9110.
+   * of the Redis state pipeline.
+   *
+   * Context: agent-runtime state blob was hitting Upstash Redis 10MB limit
+   * because ~97% of each step payload was tracing-only fields. Routing CE
+   * via tracingContextEngine keeps it in trace only, keeping Redis state lean.
    */
   contextEngine?: { input?: unknown; output?: unknown };
   currentContext?: { payload?: unknown; phase?: string; stepContext?: unknown };

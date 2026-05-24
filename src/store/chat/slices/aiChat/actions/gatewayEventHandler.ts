@@ -219,6 +219,15 @@ export const createGatewayEventHandler = (
   let accumulatedContent = '';
   let accumulatedReasoning = '';
 
+  // LOBE-9523: tracks whether any server-confirmed state has actually arrived
+  // (server-assigned assistant id, streamed text/reasoning/tools, or a SoT
+  // uiMessages snapshot). Used by `agent_runtime_end` to decide between
+  // preserving in-memory streamed content (when interrupted MID-stream) vs.
+  // falling back to a DB refetch (when interrupted BEFORE any server state
+  // landed — otherwise the optimistic `tmp_*` placeholder messages stay in
+  // the store indefinitely).
+  let hasStreamedContent = false;
+
   // Active reasoning sub-op id. Mirrors the LLM `StreamingHandler` lifecycle so
   // `isMessageInReasoning(messageId)` (which drives the Thinking UI's
   // "thinking..." title + auto-expand) flips to `true` while thinking is
@@ -269,6 +278,9 @@ export const createGatewayEventHandler = (
             currentAssistantMessageId = newAssistantMessageId;
             // Associate the new message with the operation so UI shows generating state
             get().associateMessageWithOperation(currentAssistantMessageId, operationId);
+            // Server-confirmed assistant id is durable state — preserve it on
+            // interrupt instead of falling back to a placeholder-clobbering refetch.
+            hasStreamedContent = true;
           }
 
           // Close any reasoning op carried over from the previous step.
@@ -343,6 +355,7 @@ export const createGatewayEventHandler = (
             // `StreamingHandler.handleText` for the same transition.
             endReasoningIfNeeded();
             accumulatedContent += data.content;
+            hasStreamedContent = true;
             get().internal_dispatchMessage(
               {
                 id: currentAssistantMessageId,
@@ -356,6 +369,7 @@ export const createGatewayEventHandler = (
           if (data.chunkType === 'reasoning' && data.reasoning) {
             startReasoningIfNeeded();
             accumulatedReasoning += data.reasoning;
+            hasStreamedContent = true;
             get().internal_dispatchMessage(
               {
                 id: currentAssistantMessageId,
@@ -368,6 +382,7 @@ export const createGatewayEventHandler = (
 
           if (data.chunkType === 'tools_calling' && data.toolsCalling) {
             endReasoningIfNeeded();
+            hasStreamedContent = true;
             get().internal_dispatchMessage(
               {
                 id: currentAssistantMessageId,
@@ -501,7 +516,7 @@ export const createGatewayEventHandler = (
 
       case 'agent_runtime_end': {
         enqueue(async () => {
-          const data = event.data as { uiMessages?: UIChatMessage[] } | undefined;
+          const data = event.data as { reason?: string; uiMessages?: UIChatMessage[] } | undefined;
 
           void emitClientAgentSignalSourceEvent({
             payload: {
@@ -536,6 +551,24 @@ export const createGatewayEventHandler = (
               action: 'gateway/agent_runtime_end',
               context,
             });
+          } else if (data?.reason === 'interrupted' && hasStreamedContent) {
+            // LOBE-9523: MID-stream cancel. The server's
+            // `AgentRuntimeCoordinator.resolveUiMessages` omits uiMessages
+            // for status='interrupted' precisely so we can preserve the
+            // in-memory streamed content here. The executor's partial-
+            // finalize catch writes the real content to DB asynchronously,
+            // but it may not be durable yet — refetching here would race
+            // against that update and clobber the streamed content with
+            // the LOADING_FLAT placeholder. Keep what we have; the next
+            // explicit refresh (route change, user-driven mutate) picks
+            // up the finalized partial content from DB.
+            //
+            // The `hasStreamedContent` guard limits this skip to the case
+            // where server state actually landed (server-assigned assistant
+            // id from stream_start OR any chunk dispatched). If cancel
+            // arrives BEFORE any stream activity, the optimistic `tmp_*`
+            // messages are the only in-memory state and they need the
+            // refetch to be reconciled with the server-side rows.
           } else {
             await fetchAndReplaceMessages(get, context).catch(console.error);
           }

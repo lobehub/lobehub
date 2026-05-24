@@ -697,6 +697,41 @@ describe('ModelRuntime', () => {
         expect(callOrder).toEqual(['existing', 'hook']);
       });
 
+      it('onGenerateObjectFinal receives synthetic speed metrics', async () => {
+        const nowSpy = vi
+          .spyOn(Date, 'now')
+          .mockReturnValueOnce(1000)
+          .mockReturnValueOnce(2000)
+          .mockReturnValueOnce(2500);
+        const onGenerateObjectFinal = vi.fn();
+        const { runtime, mockRuntimeAI } = createMockRuntime({ onGenerateObjectFinal });
+        const usage = { totalInputTokens: 100, totalOutputTokens: 20, totalTokens: 120 };
+
+        mockRuntimeAI.generateObject.mockImplementation(async (_p: any, opts: any) => {
+          await opts?.onUsage?.(usage);
+          return { result: 'ok' };
+        });
+
+        try {
+          await runtime.generateObject(genObjPayload);
+
+          expect(onGenerateObjectFinal).toHaveBeenCalledWith(
+            {
+              speed: {
+                duration: 500,
+                latency: 500,
+                tps: 40,
+                ttft: 0,
+              },
+              usage,
+            },
+            { options: undefined, payload: genObjPayload },
+          );
+        } finally {
+          nowSpy.mockRestore();
+        }
+      });
+
       it('onGenerateObjectError is called when generateObject throws, error is re-thrown', async () => {
         const genError = { errorType: 'ProviderBizError', error: new Error('fail') };
         const onGenerateObjectError = vi.fn();

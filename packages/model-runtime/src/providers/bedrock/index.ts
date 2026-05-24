@@ -8,6 +8,12 @@ import { cloudModelIdMapping } from '@lobechat/business-const';
 import { ModelProvider } from 'model-bank';
 
 import { shouldDropUnsupportedClaudeAssistantPrefill } from '../../const/models';
+import type { AnthropicGenerateObjectResponse } from '../../core/anthropicCompatibleFactory/generateObject';
+import {
+  buildAnthropicGenerateObjectRequest,
+  emitAnthropicGenerateObjectUsage,
+  parseAnthropicGenerateObjectResponse,
+} from '../../core/anthropicCompatibleFactory/generateObject';
 import { resolveCacheTTL } from '../../core/anthropicCompatibleFactory/resolveCacheTTL';
 import { resolveMaxTokens } from '../../core/anthropicCompatibleFactory/resolveMaxTokens';
 import type { LobeRuntimeAI } from '../../core/BaseAI';
@@ -24,6 +30,8 @@ import type {
   Embeddings,
   EmbeddingsOptions,
   EmbeddingsPayload,
+  GenerateObjectOptions,
+  GenerateObjectPayload,
 } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { AgentRuntimeError } from '../../utils/createError';
@@ -123,6 +131,71 @@ export class LobeBedrockAI implements LobeRuntimeAI {
     );
     return Promise.all(promises);
   }
+
+  async generateObject(payload: GenerateObjectPayload, options?: GenerateObjectOptions) {
+    return this.invokeClaudeGenerateObject(payload, options);
+  }
+
+  private invokeClaudeGenerateObject = async (
+    payload: GenerateObjectPayload,
+    options?: GenerateObjectOptions,
+  ) => {
+    const { bedrock: bedrockModels } = await import('model-bank');
+    const resolvedMaxTokens = await resolveMaxTokens({
+      model: payload.model,
+      providerModels: bedrockModels,
+      thinking: payload.thinking,
+    });
+    const systemMessages = payload.messages.filter((m) => m.role === 'system');
+    const normalizedMessages = normalizeClaudeThinkingHistoryMessages(
+      payload.messages.filter((m) => m.role !== 'system') as ChatStreamPayload['messages'],
+    ) as GenerateObjectPayload['messages'];
+    const { requestParams, schemaToolName } = await buildAnthropicGenerateObjectRequest(
+      { ...payload, messages: [...systemMessages, ...normalizedMessages] },
+      { maxTokens: resolvedMaxTokens },
+    );
+    const bedrockRequestParams: Omit<Anthropic.MessageCreateParams, 'model'> & {
+      model?: Anthropic.MessageCreateParams['model'];
+    } = { ...requestParams };
+    delete bedrockRequestParams.model;
+
+    const command = new InvokeModelCommand({
+      accept: 'application/json',
+      body: JSON.stringify({
+        anthropic_version: 'bedrock-2023-05-31',
+        ...bedrockRequestParams,
+      }),
+      contentType: 'application/json',
+      modelId: cloudModelIdMapping[payload.model] || payload.model,
+    });
+
+    try {
+      const [res, pricing] = await Promise.all([
+        this.client.send(command, { abortSignal: options?.signal }),
+        getModelPricing(payload.model, this.id),
+      ]);
+      const responseBody = JSON.parse(
+        new TextDecoder().decode(res.body),
+      ) as AnthropicGenerateObjectResponse;
+
+      await emitAnthropicGenerateObjectUsage(responseBody, options, pricing);
+
+      return parseAnthropicGenerateObjectResponse(responseBody, schemaToolName);
+    } catch (e) {
+      const err = e as Error & { $metadata: any };
+
+      throw AgentRuntimeError.chat({
+        error: {
+          body: err.$metadata,
+          message: err.message,
+          type: err.name,
+        },
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        provider: this.id,
+        region: this.region,
+      });
+    }
+  };
 
   private invokeEmbeddingModel = async (
     payload: EmbeddingsPayload,

@@ -1377,6 +1377,140 @@ describe('RuntimeExecutors', () => {
         expect(callArgs).not.toHaveProperty('onboardingContext');
       });
     });
+
+    // LOBE-9523: cancel/interrupt mid-stream — the model-runtime call is
+    // aborted before the post-stream finalize at line 1078, so the DB row
+    // would normally stay at LOADING_FLAT placeholder. The executor's
+    // inner catch must persist whatever partial content the streaming
+    // callbacks already accumulated so (a) reload doesn't lose the user's
+    // streamed answer and (b) any later uiMessages snapshot reflects real
+    // content instead of placeholder.
+    describe('interrupted mid-stream partial finalize (LOBE-9523)', () => {
+      it('persists accumulated content + reasoning when stream throws and operation is interrupted', async () => {
+        const mockChat = vi.fn().mockImplementation(async (_payload, options) => {
+          await options?.callback?.onText?.('Hello, this is a partial ');
+          await options?.callback?.onText?.('streamed answer.');
+          await options?.callback?.onThinking?.('Let me think step by step. ');
+          await options?.callback?.onThinking?.('First, consider the context.');
+          throw new Error('AbortError: stream aborted');
+        });
+        vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
+
+        // Make isOperationInterrupted return true so the catch hits the
+        // partial-finalize branch instead of the retry path.
+        const interruptedCtx: RuntimeExecutorContext = {
+          ...ctx,
+          loadAgentState: vi.fn().mockResolvedValue({ status: 'interrupted' }),
+        };
+        mockMessageModel.create.mockResolvedValueOnce({ id: 'asst-interrupted' });
+
+        const executors = createRuntimeExecutors(interruptedCtx);
+        const state = createMockState();
+
+        await expect(
+          executors.call_llm!(
+            {
+              payload: {
+                messages: [{ content: 'Hi', role: 'user' }],
+                model: 'gpt-4',
+                provider: 'openai',
+                tools: [],
+              },
+              type: 'call_llm' as const,
+            },
+            state,
+          ),
+        ).rejects.toThrow();
+
+        // The success-path update at line 1078 is unreachable when the
+        // stream throws — only the cancel-path partial-finalize remains.
+        expect(mockMessageModel.update).toHaveBeenCalledWith(
+          'asst-interrupted',
+          expect.objectContaining({
+            content: 'Hello, this is a partial streamed answer.',
+            reasoning: { content: 'Let me think step by step. First, consider the context.' },
+            metadata: expect.objectContaining({ interruptedMidStream: true }),
+          }),
+        );
+      });
+
+      it('does NOT persist when interrupted but no content was streamed (avoid empty-content noise)', async () => {
+        const mockChat = vi.fn().mockImplementation(async () => {
+          throw new Error('AbortError: stream aborted before any chunks');
+        });
+        vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
+
+        const interruptedCtx: RuntimeExecutorContext = {
+          ...ctx,
+          loadAgentState: vi.fn().mockResolvedValue({ status: 'interrupted' }),
+        };
+        mockMessageModel.create.mockResolvedValueOnce({ id: 'asst-empty-interrupt' });
+
+        const executors = createRuntimeExecutors(interruptedCtx);
+        const state = createMockState();
+
+        await expect(
+          executors.call_llm!(
+            {
+              payload: {
+                messages: [{ content: 'Hi', role: 'user' }],
+                model: 'gpt-4',
+                provider: 'openai',
+                tools: [],
+              },
+              type: 'call_llm' as const,
+            },
+            state,
+          ),
+        ).rejects.toThrow();
+
+        // No content / reasoning / tools accumulated — skip the update so
+        // we don't overwrite the placeholder with another empty record
+        // (and don't bump `updated_at` for no functional reason).
+        expect(mockMessageModel.update).not.toHaveBeenCalled();
+      });
+
+      it('does NOT persist partial content on non-interrupt errors (preserves existing retry/error flow)', async () => {
+        // Use a stop-classified error (status 400) so the retry loop exits
+        // immediately and the test doesn't burn the timeout on backoff sleeps.
+        const mockChat = vi.fn().mockImplementation(async (_payload, options) => {
+          await options?.callback?.onText?.('Partial before crash');
+          const err: any = new Error('invalid_request_error: bad input');
+          err.errorType = 'ProviderBizError';
+          err.status = 400;
+          throw err;
+        });
+        vi.mocked(initModelRuntimeFromDB).mockResolvedValue({ chat: mockChat } as any);
+
+        // loadAgentState returns running — not interrupted — so the partial-
+        // finalize branch should be skipped even with accumulated content.
+        const runningCtx: RuntimeExecutorContext = {
+          ...ctx,
+          loadAgentState: vi.fn().mockResolvedValue({ status: 'running' }),
+        };
+        mockMessageModel.create.mockResolvedValueOnce({ id: 'asst-error' });
+
+        const executors = createRuntimeExecutors(runningCtx);
+        const state = createMockState();
+
+        await expect(
+          executors.call_llm!(
+            {
+              payload: {
+                messages: [{ content: 'Hi', role: 'user' }],
+                model: 'gpt-4',
+                provider: 'openai',
+                tools: [],
+              },
+              type: 'call_llm' as const,
+            },
+            state,
+          ),
+        ).rejects.toThrow();
+
+        expect(mockMessageModel.update).not.toHaveBeenCalled();
+      });
+    });
   });
 
   describe('call_tool executor', () => {
