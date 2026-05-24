@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 interface AgentSignalRedisTestGlobal {
   __agentSignalRedisClient?: typeof mockRedis | null;
@@ -13,12 +13,24 @@ const mockRedis = {
   set: vi.fn(),
 };
 
+const stubUiMessagesSnapshot = (service: unknown) => {
+  (
+    service as { messageServiceInstance?: { queryMessages: ReturnType<typeof vi.fn> } }
+  ).messageServiceInstance = {
+    queryMessages: vi.fn().mockResolvedValue([]),
+  };
+};
+
 vi.mock('@/envs/app', () => ({ appEnv: { APP_URL: 'http://localhost:3010' } }));
 vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn().mockImplementation(() => ({
     create: vi.fn(),
+    query: vi.fn().mockResolvedValue([]),
     update: vi.fn(),
   })),
+}));
+vi.mock('@/server/modules/ModelRuntime', () => ({
+  initModelRuntimeFromDB: vi.fn(),
 }));
 vi.mock('@/server/modules/AgentRuntime', () => ({
   AgentRuntimeCoordinator: vi.fn().mockImplementation(() => ({
@@ -51,7 +63,12 @@ vi.mock('@/server/services/queue/impls', () => ({
   LocalQueueServiceImpl: class {},
   isQueueAgentRuntimeEnabled: vi.fn().mockReturnValue(false),
 }));
-vi.mock('@/server/services/agentSignal/featureGate', () => ({
+vi.mock('@/server/featureFlags', () => ({
+  getServerFeatureFlagsStateFromRuntimeConfig: vi
+    .fn()
+    .mockResolvedValue({ enableAgentSelfIteration: true }),
+}));
+vi.mock('../../agentSignal/featureGate', () => ({
   isAgentSignalEnabledForUser: vi.fn().mockResolvedValue(true),
 }));
 vi.mock('@/server/services/toolExecution', () => ({
@@ -65,6 +82,11 @@ vi.mock('@lobechat/builtin-tools/dynamicInterventionAudits', () => ({
 }));
 
 describe('AgentRuntimeService Agent Signal hook integration', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (globalThis as AgentSignalRedisTestGlobal).__agentSignalRedisClient = undefined;
+  });
+
   it(
     'emits source events for beforeStep and afterStep boundaries',
     { timeout: 20_000 },
@@ -78,6 +100,7 @@ describe('AgentRuntimeService Agent Signal hook integration', () => {
 
       const { AgentRuntimeService } = await import('../AgentRuntimeService');
       const service = new AgentRuntimeService({} as any, 'user-1', { queueService: null });
+      stubUiMessagesSnapshot(service);
       const coordinator = (service as any).coordinator;
 
       vi.spyOn(coordinator, 'loadAgentState').mockResolvedValue({
@@ -180,6 +203,7 @@ describe('AgentRuntimeService Agent Signal hook integration', () => {
       queueService: null,
       snapshotStore: snapshotStore as any,
     });
+    stubUiMessagesSnapshot(service);
     const coordinator = (service as any).coordinator;
 
     vi.spyOn(coordinator, 'loadAgentState').mockResolvedValue({
@@ -278,6 +302,7 @@ describe('AgentRuntimeService Agent Signal hook integration', () => {
       queueService: null,
       snapshotStore: snapshotStore as any,
     });
+    stubUiMessagesSnapshot(service);
     const coordinator = (service as any).coordinator;
 
     vi.spyOn(coordinator, 'loadAgentState').mockResolvedValue({
