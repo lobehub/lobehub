@@ -2079,22 +2079,36 @@ export class AiAgentService {
         name: skill.name,
       }));
 
-      // Project skills are filesystem SKILL.md discovered on the device. They
-      // are only meaningful when a device is active (readFile resolves against
-      // it). Only `location` (absolute SKILL.md path) flows through — the
-      // skill's directory tree is enumerated lazily at activation time via
-      // `local-system.listFiles` over the device gateway, keeping the op-param
-      // payload small.
+      // Project skills are filesystem SKILL.md discovered on the device. Their
+      // presence in `params.projectSkills` is itself proof that a client just
+      // scanned the working directory, so we surface them in
+      // `<available_skills>` unconditionally — decoupled from `activeDeviceId`
+      // (a routing decision for `LocalSystemManifest` injection that can
+      // legitimately be `undefined` for multi-device-no-bind or
+      // device-just-went-offline cases). Whether SKILL.md can actually be read
+      // at activation time is re-gated at the executor in
+      // `serverRuntimes/skills.ts` — there `deviceFileAccess` is only built
+      // when `activeDeviceId` resolves, and a missing reader naturally fails
+      // the `activateSkill` call rather than silently hiding the option.
+      // Only `location` (absolute SKILL.md path) flows through; the directory
+      // tree is enumerated lazily at activation time via
+      // `local-system.listFiles`, keeping the op-param payload small.
       const projectMetas =
-        activeDeviceId && params.projectSkills?.length
-          ? params.projectSkills.map((s) => ({
-              description: s.description ?? '',
-              identifier: `project:${s.name}`,
-              location: s.path,
-              name: s.name,
-              source: 'project' as const,
-            }))
-          : [];
+        params.projectSkills?.map((s) => ({
+          description: s.description ?? '',
+          identifier: `project:${s.name}`,
+          location: s.path,
+          name: s.name,
+          source: 'project' as const,
+        })) ?? [];
+
+      if (params.projectSkills?.length) {
+        log(
+          'execAgent: projectSkills merged: %d (activeDeviceId=%s)',
+          projectMetas.length,
+          activeDeviceId ?? 'none',
+        );
+      }
 
       // Precedence on name collision: project > db > agent-skills > builtin.
       // Agent-skills carry the `agent-skills:` prefix in their `name`, so they
