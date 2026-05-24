@@ -1,24 +1,23 @@
 import { en, zhCn } from '@lobehub/ui/es/i18n/resources/index';
 
-import { normalizeLocale } from '@/locales/resources';
-
-type UILocaleResources = Record<string, Record<string, string>>;
+import type { UILocaleResourceInput, UILocaleResources } from './getUILocaleAndResources.utils';
+import {
+  mergeUILocaleResources,
+  normalizeUILocaleResources,
+  resolveUILocale,
+} from './getUILocaleAndResources.utils';
 
 // eager: true — UI locale fully inlined at build time
-const uiLocaleModules = import.meta.glob<{ default: UILocaleResources }>('/locales/*/ui.json', {
+const uiLocaleModules = import.meta.glob<{ default: UILocaleResourceInput }>('/locales/*/ui.json', {
   eager: true,
 });
-
-const getUILocale = (locale: string): string => {
-  if (locale.startsWith('zh')) return 'zh-CN';
-  if (locale.startsWith('en')) return 'en-US';
-  return locale;
-};
 
 const loadBusinessResources = (locale: string): UILocaleResources | null => {
   const key = `/locales/${locale}/ui.json`;
   const mod = uiLocaleModules[key];
-  return mod ? (mod.default as UILocaleResources) : null;
+  const resources = mod?.default as UILocaleResourceInput | null | undefined;
+
+  return resources ? normalizeUILocaleResources(resources) : null;
 };
 
 const loadLobeUIBuiltinResources = (locale: string): UILocaleResources | null => {
@@ -29,15 +28,14 @@ const loadLobeUIBuiltinResources = (locale: string): UILocaleResources | null =>
 export const getUILocaleAndResources = async (
   locale: string | 'auto',
 ): Promise<{ locale: string; resources: UILocaleResources }> => {
-  const effectiveLocale = locale === 'auto' ? 'en-US' : locale;
-  const normalizedLocale = normalizeLocale(effectiveLocale);
-  const uiLocale = getUILocale(normalizedLocale);
+  const { normalizedLocale, uiLocale } = resolveUILocale(locale);
 
   const resources =
-    loadBusinessResources(normalizedLocale) ??
-    loadLobeUIBuiltinResources(normalizedLocale) ??
-    loadBusinessResources('en-US') ??
-    loadLobeUIBuiltinResources('en-US');
+    mergeUILocaleResources(
+      loadLobeUIBuiltinResources(normalizedLocale),
+      loadBusinessResources(normalizedLocale),
+    ) ??
+    mergeUILocaleResources(loadLobeUIBuiltinResources('en-US'), loadBusinessResources('en-US'));
 
   if (!resources)
     throw new Error(
