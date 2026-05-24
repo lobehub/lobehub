@@ -27,7 +27,6 @@ import { useChatInputStore } from '../store';
 import ApprovalMode from './ApprovalMode';
 import CloudRepoSwitcher from './CloudRepoSwitcher';
 import GitStatus from './GitStatus';
-import HeteroDeviceSwitcher from './HeteroDeviceSwitcher';
 import ModeSelector from './ModeSelector';
 import { useRepoType } from './useRepoType';
 import WorkingDirectory from './WorkingDirectory';
@@ -237,14 +236,10 @@ const RuntimeConfig = memo(() => {
   );
 
   const rightContent = () => {
-    // Heterogeneous agent: show execution target chip (local / sandbox / device)
-    if (isHeterogeneous && agentId) {
-      return (
-        <>
-          <HeteroDeviceSwitcher agentId={agentId} />
-          {!isDesktop ? <CloudRepoSwitcher agentId={agentId} /> : null}
-        </>
-      );
+    // Web + heterogeneous agent always shows the cloud repo switcher,
+    // regardless of the stored runtimeMode (which may be 'local' from desktop).
+    if (!isDesktop && isHeterogeneous && agentId) {
+      return <CloudRepoSwitcher agentId={agentId} />;
     }
 
     // Desktop local mode: show working directory picker
