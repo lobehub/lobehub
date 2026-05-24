@@ -17,6 +17,11 @@ import { parseDataUri } from '../../utils/uriParser';
 // Maximum number of images allowed for processing
 const MAX_IMAGE_COUNT = 10;
 
+export const GOOGLE_IMAGE_TEXT_ONLY_RESPONSE_MESSAGE = [
+  'The model returned text instead of an image.',
+  'Ask it to generate or edit an image instead of describing or analyzing one.',
+].join(' ');
+
 interface ErrorWithRawProviderResponse extends Error {
   providerResponse?: GenerateContentResponse;
 }
@@ -95,6 +100,13 @@ function extractImageFromResponse(response: GenerateContentResponse): CreateImag
       const imageUrl = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
       return { imageUrl };
     }
+  }
+
+  if (
+    candidate.finishReason === 'STOP' &&
+    candidate.content.parts.some((part) => Boolean(part.text?.trim()))
+  ) {
+    throw createGoogleImageNoImageError(GOOGLE_IMAGE_TEXT_ONLY_RESPONSE_MESSAGE, response);
   }
 
   // Fallback when no inlineData is present (commonly moderation or policy blocks)

@@ -20,7 +20,7 @@ export { LobeCometAPIAI } from './providers/cometapi';
 export { LobeComfyUI } from './providers/comfyui';
 export { LobeDeepSeekAI } from './providers/deepseek';
 export { LobeGLMCodingPlanAI } from './providers/glmCodingPlan';
-export { LobeGoogleAI } from './providers/google';
+export { GOOGLE_IMAGE_TEXT_ONLY_RESPONSE_MESSAGE, LobeGoogleAI } from './providers/google';
 export { LobeGroq } from './providers/groq';
 export { LobeKimiCodingPlanAI } from './providers/kimiCodingPlan';
 export { LobeHubAI } from './providers/lobehub';

@@ -210,6 +210,15 @@ describe('googleErrorParser', () => {
       expect(result.error.message).toBe(input);
     });
 
+    it('should classify text-only image response messages as no-image errors', () => {
+      const input =
+        'The model returned text instead of an image. Try an image generation instruction.';
+      const result = parseGoogleErrorMessage(input);
+
+      expect(result.errorType).toBe(AgentRuntimeErrorType.ProviderNoImageGenerated);
+      expect(result.error.message).toBe(input);
+    });
+
     it('should handle status JSON format', () => {
       const input =
         'got status: UNAVAILABLE. {"error":{"code":503,"message":"Service temporarily unavailable","status":"UNAVAILABLE"}}';
