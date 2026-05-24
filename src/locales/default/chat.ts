@@ -186,7 +186,7 @@ export default {
   'heteroAgent.executionTarget.online': 'Online',
   'heteroAgent.executionTarget.sandbox': 'Cloud sandbox',
   'heteroAgent.executionTarget.sandboxDesc': 'Run in an ephemeral cloud sandbox',
-  'heteroAgent.executionTarget.title': 'Execution target',
+  'heteroAgent.executionTarget.title': 'Execution Device',
   'heteroAgent.executionTarget.unknownDevice': 'Unknown device',
   'hideForYou':
     "Direct message content is hidden. Please enable 'Show Direct Message Content' in settings to view.",

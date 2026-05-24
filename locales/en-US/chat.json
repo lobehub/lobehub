@@ -217,7 +217,7 @@
   "heteroAgent.executionTarget.online": "Online",
   "heteroAgent.executionTarget.sandbox": "Cloud sandbox",
   "heteroAgent.executionTarget.sandboxDesc": "Run in an ephemeral cloud sandbox",
-  "heteroAgent.executionTarget.title": "Execution target",
+  "heteroAgent.executionTarget.title": "Execution Device",
   "heteroAgent.executionTarget.unknownDevice": "Unknown device",
   "heteroAgent.fullAccess.label": "Full access",
   "heteroAgent.fullAccess.tooltip": "Claude Code runs locally with full read/write access to the working directory. Switching permission modes is not available yet.",
