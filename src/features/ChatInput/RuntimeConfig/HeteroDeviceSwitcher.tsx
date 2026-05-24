@@ -5,9 +5,16 @@ import { isDesktop } from '@lobechat/const';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import type { HeteroExecutionTarget } from '@lobechat/types';
 import { Microsoft } from '@lobehub/icons';
-import { Flexbox, Icon, Popover } from '@lobehub/ui';
+import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { CheckIcon, ChevronDownIcon, CloudIcon, LaptopIcon, MonitorIcon } from 'lucide-react';
+import {
+  CheckIcon,
+  ChevronDownIcon,
+  CloudIcon,
+  InfoIcon,
+  LaptopIcon,
+  MonitorIcon,
+} from 'lucide-react';
 import { memo, type ReactNode, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -135,16 +142,25 @@ const styles = createStaticStyles(({ css }) => ({
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
-  sectionDesc: css`
-    padding-block: 0 4px;
-    padding-inline: 8px;
-    font-size: 11px;
-    color: ${cssVar.colorTextDescription};
-  `,
-  sectionTitle: css`
-    padding-block: 6px 2px;
-    padding-inline: 8px;
+  header: css`
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    justify-content: space-between;
 
+    padding-block: 6px 4px;
+    padding-inline: 8px;
+  `,
+  headerInfo: css`
+    cursor: help;
+    color: ${cssVar.colorTextQuaternary};
+    transition: color 0.2s;
+
+    &:hover {
+      color: ${cssVar.colorTextSecondary};
+    }
+  `,
+  headerTitle: css`
     font-size: 12px;
     font-weight: 500;
     color: ${cssVar.colorTextTertiary};
@@ -242,6 +258,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
 
   const boundDevice =
     executionTarget === 'device' ? devices?.find((d) => d.deviceId === boundDeviceId) : undefined;
+  const hasNoDevices = !devices || devices.length === 0;
 
   // Compute chip
   let chipIcon: ReactNode = <Icon icon={CloudIcon} size={14} />;
@@ -261,7 +278,14 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
 
   const content = (
     <Flexbox gap={2} style={{ maxWidth: 320, minWidth: 280 }}>
-      <div className={styles.sectionTitle}>{t('heteroAgent.executionTarget.envSection')}</div>
+      <div className={styles.header}>
+        <span className={styles.headerTitle}>{t('heteroAgent.executionTarget.title')}</span>
+        <Tooltip title={t('heteroAgent.executionTarget.infoTooltip')}>
+          <span className={styles.headerInfo}>
+            <Icon icon={InfoIcon} size={12} />
+          </span>
+        </Tooltip>
+      </div>
       {isDesktop ? (
         <OptionRow
           active={isActive('local')}
@@ -278,35 +302,32 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
         label={t('heteroAgent.executionTarget.sandbox')}
         onClick={() => void handleSelect('sandbox')}
       />
-
-      <div className={styles.sectionTitle}>{t('heteroAgent.executionTarget.deviceSection')}</div>
-      <div className={styles.sectionDesc}>{t('heteroAgent.executionTarget.deviceSectionDesc')}</div>
-      {isLoading ? (
+      {(devices ?? []).map((d) => (
+        <OptionRow
+          active={isActive('device', d.deviceId)}
+          disabled={!d.online}
+          icon={getDeviceIcon(d.platform)}
+          key={d.deviceId}
+          label={d.hostname}
+          desc={
+            <>
+              <span className={d.online ? styles.dotOnline : styles.dotOffline} />
+              <span>
+                {d.online
+                  ? t('heteroAgent.executionTarget.online')
+                  : t('heteroAgent.executionTarget.offline')}
+              </span>
+            </>
+          }
+          onClick={() => void handleSelect('device', d.deviceId)}
+        />
+      ))}
+      {hasNoDevices && isLoading ? (
         <div className={styles.empty}>{t('heteroAgent.executionTarget.loading')}</div>
-      ) : (devices?.length ?? 0) === 0 ? (
+      ) : null}
+      {hasNoDevices && !isLoading ? (
         <div className={styles.empty}>{t('heteroAgent.executionTarget.noDevices')}</div>
-      ) : (
-        (devices ?? []).map((d) => (
-          <OptionRow
-            active={isActive('device', d.deviceId)}
-            disabled={!d.online}
-            icon={getDeviceIcon(d.platform)}
-            key={d.deviceId}
-            label={d.hostname}
-            desc={
-              <>
-                <span className={d.online ? styles.dotOnline : styles.dotOffline} />
-                <span>
-                  {d.online
-                    ? t('heteroAgent.executionTarget.online')
-                    : t('heteroAgent.executionTarget.offline')}
-                </span>
-              </>
-            }
-            onClick={() => void handleSelect('device', d.deviceId)}
-          />
-        ))
-      )}
+      ) : null}
     </Flexbox>
   );
 

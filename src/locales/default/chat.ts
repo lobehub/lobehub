@@ -175,19 +175,18 @@ export default {
   'heteroAgent.cloudRepo.notSet': 'No repo selected',
   'heteroAgent.cloudRepo.noRepos': 'No repositories configured. Add them in agent settings.',
   'heteroAgent.cloudRepo.multiSelected': '{{count}} repos selected',
-  'heteroAgent.executionTarget.deviceSection': 'Other devices',
-  'heteroAgent.executionTarget.deviceSectionDesc':
-    'Machines connected via the desktop app or `lh connect`',
-  'heteroAgent.executionTarget.envSection': 'Execution environment',
+  'heteroAgent.executionTarget.infoTooltip':
+    'Pick a remote device to drive that machine from the web. "This device" runs the agent locally and is only available inside the desktop app.',
   'heteroAgent.executionTarget.loading': 'Loading devices…',
   'heteroAgent.executionTarget.local': 'This device',
   'heteroAgent.executionTarget.localDesc': 'Run as a local process on this desktop app',
   'heteroAgent.executionTarget.noDevices':
-    'No other devices yet. Install the desktop app or run `lh connect` on another machine.',
+    'No remote devices yet. Install the desktop app or run `lh connect` on another machine.',
   'heteroAgent.executionTarget.offline': 'Offline',
   'heteroAgent.executionTarget.online': 'Online',
   'heteroAgent.executionTarget.sandbox': 'Cloud sandbox',
   'heteroAgent.executionTarget.sandboxDesc': 'Run in an ephemeral cloud sandbox',
+  'heteroAgent.executionTarget.title': 'Execution target',
   'heteroAgent.executionTarget.unknownDevice': 'Unknown device',
   'hideForYou':
     "Direct message content is hidden. Please enable 'Show Direct Message Content' in settings to view.",
