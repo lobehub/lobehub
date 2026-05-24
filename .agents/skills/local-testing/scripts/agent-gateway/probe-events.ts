@@ -33,12 +33,29 @@ import type {
 const w = window;
 
 // ── Buffers ─────────────────────────────────────────────────────────
+
+declare global {
+  interface Window {
+    __PROBE_MUTATIONS?: Array<{
+      t: number;
+      key: string;
+      n: number;
+      last?: { id: string; role: string; cLen: number; rLen: number; updatedAt?: unknown };
+      prevLast?: { id: string; role: string; cLen: number; rLen: number };
+      delta?: string;
+    }>;
+    __PROBE_STORE_UNSUB?: () => void;
+  }
+}
+
 const events: ProbeStreamEvent[] = (w.__PROBE_STREAM_EVENTS ??= []);
 const calls: ProbeActionCall[] = (w.__PROBE_ACTION_CALLS ??= []);
 const timeline: ProbeTimelineSample[] = (w.__PROBE_MSG_TIMELINE ??= []);
+const mutations = (w.__PROBE_MUTATIONS ??= []);
 events.length = 0;
 calls.length = 0;
 timeline.length = 0;
+mutations.length = 0;
 
 const t0 = Date.now();
 w.__PROBE_T0 = t0;
@@ -379,9 +396,6 @@ try {
     };
     chat.replaceMessages = function probeReplace(this: unknown, ...args: any[]) {
       const msgs = (args[0] as any[]) ?? [];
-      // Snapshot last 2 messages' role + cLen + rLen so we can see WHAT
-      // each replaceMessages call writes. "count=2" alone hides whether
-      // the call is restoring streamed content or wiping it to placeholder.
       const snapshot = msgs.slice(-2).map((m) => ({
         id: (m.id ?? '').slice(-8),
         role: m.role,
@@ -395,11 +409,155 @@ try {
         args: { count: msgs.length, params: args[1] ?? null, snapshot } as any,
         stack: shortStack(),
       });
+
+      // Pair the call with a mutation row so the analyzer can build a
+      // single ordered timeline across replaceMessages + dispatchMessage.
+      const stackTop = shortStack().split(' ← ')[0]?.slice(0, 80);
+      const last = msgs.at(-1);
+      const lastSum = last
+        ? {
+            id: (last.id ?? '').slice(-8),
+            role: last.role,
+            cLen: (last.content ?? '').length,
+            rLen: (last.reasoning?.content ?? '').length,
+            updatedAt: last.updatedAt,
+          }
+        : undefined;
+      const params: any = args[1] ?? {};
+      const ctxKey = params.context
+        ? `main_${params.context.agentId ?? '?'}_${
+            params.context.topicId ? 'tpc_' + params.context.topicId : 'new'
+          }`.replace('main_tpc_', 'main_') // crude key inference
+        : '(no-ctx)';
+      mutations.push({
+        t: now(),
+        key: ctxKey,
+        n: msgs.length,
+        last: lastSum,
+        delta: `replaceMessages(action=${params.action ?? '-'})  src=${stackTop ?? '-'}`,
+      });
+
       return origReplace.apply(this, args);
     };
   }
 } catch (e: any) {
   calls.push({ t: now(), name: '_WRAP_ERROR_', error: String(e?.message ?? e) });
+}
+
+// ── 3.5. Mutation log — wrap the TWO ChatStore writers (replaceMessages,
+// internal_dispatchMessage) to record EVERY dbMessagesMap[key] reference
+// change with a one-line "before/after last assistant message" delta. This
+// reveals dispatchMessage-driven collapses that the replaceMessages wrap
+// alone cannot see.
+
+declare global {
+  interface Window {
+    __PROBE_ORIG_DISPATCH_MESSAGE?: any;
+  }
+}
+
+try {
+  const chat = w.__LOBE_STORES?.chat?.();
+  if (chat?.internal_dispatchMessage) {
+    if (!w.__PROBE_ORIG_DISPATCH_MESSAGE)
+      w.__PROBE_ORIG_DISPATCH_MESSAGE = chat.internal_dispatchMessage;
+    const origDispatch = w.__PROBE_ORIG_DISPATCH_MESSAGE;
+    chat.internal_dispatchMessage = origDispatch;
+
+    chat.internal_dispatchMessage = function probeDispatch(this: unknown, payload: any, ctx?: any) {
+      // Snapshot BEFORE — read the would-be target key + last message.
+      const before = (() => {
+        try {
+          const state = w.__LOBE_STORES?.chat?.();
+          if (!state) return null;
+          // Replicate state.internal_getConversationContext logic enough to
+          // resolve a key — but most callers pass operationId on ctx, and
+          // operationId-keyed lookup needs store internals. Easiest: snapshot
+          // ALL keys' last-assistant cLen and compare BEFORE vs AFTER below.
+          const map = state.dbMessagesMap ?? {};
+          const out: Record<string, any> = {};
+          for (const k of Object.keys(map)) {
+            const last = (map[k] ?? []).at(-1);
+            out[k] = last
+              ? {
+                  id: (last.id ?? '').slice(-8),
+                  cLen: (last.content ?? '').length,
+                  rLen: (last.reasoning?.content ?? '').length,
+                  n: map[k].length,
+                }
+              : { n: 0 };
+          }
+          return out;
+        } catch {
+          return null;
+        }
+      })();
+
+      const result = origDispatch.apply(this, [payload, ctx]);
+
+      // Snapshot AFTER — find which key(s) actually changed.
+      try {
+        const state = w.__LOBE_STORES?.chat?.();
+        if (state && before) {
+          const map = state.dbMessagesMap ?? {};
+          for (const k of Object.keys(map)) {
+            const last = (map[k] ?? []).at(-1);
+            const beforeSnap = before[k];
+            const afterSnap = last
+              ? {
+                  id: (last.id ?? '').slice(-8),
+                  cLen: (last.content ?? '').length,
+                  rLen: (last.reasoning?.content ?? '').length,
+                  n: map[k].length,
+                }
+              : { n: 0 };
+            const changed =
+              !beforeSnap ||
+              beforeSnap.n !== afterSnap.n ||
+              beforeSnap.id !== (afterSnap as any).id ||
+              beforeSnap.cLen !== (afterSnap as any).cLen ||
+              beforeSnap.rLen !== (afterSnap as any).rLen;
+            if (!changed) continue;
+            let delta = '';
+            if (beforeSnap?.id !== undefined && beforeSnap.id !== (afterSnap as any).id)
+              delta += `id:${beforeSnap.id}→${(afterSnap as any).id};`;
+            if (
+              beforeSnap?.cLen !== undefined &&
+              (afterSnap as any).cLen !== undefined &&
+              (afterSnap as any).cLen < beforeSnap.cLen
+            )
+              delta += `cLen↓${beforeSnap.cLen}→${(afterSnap as any).cLen};`;
+            if (
+              beforeSnap?.rLen !== undefined &&
+              (afterSnap as any).rLen !== undefined &&
+              (afterSnap as any).rLen < beforeSnap.rLen
+            )
+              delta += `rLen↓${beforeSnap.rLen}→${(afterSnap as any).rLen};`;
+            if (beforeSnap?.n !== undefined && afterSnap.n < beforeSnap.n)
+              delta += `n↓${beforeSnap.n}→${afterSnap.n};`;
+            mutations.push({
+              t: now(),
+              key: k,
+              n: afterSnap.n,
+              last: (afterSnap as any).id ? (afterSnap as any) : undefined,
+              prevLast: beforeSnap?.id ? beforeSnap : undefined,
+              delta: delta || `dispatch:${payload?.type}`,
+            });
+          }
+        }
+      } catch (e: any) {
+        mutations.push({
+          t: now(),
+          key: '_DISPATCH_PROBE_ERROR_',
+          n: -1,
+          delta: String(e?.message ?? e),
+        });
+      }
+      return result;
+    };
+  }
+} catch (e: any) {
+  calls.push({ t: now(), name: '_DISPATCH_WRAP_ERROR_', error: String(e?.message ?? e) });
 }
 
 // ── 4. Periodic per-key timeline snapshots ─────────────────────────

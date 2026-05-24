@@ -18,7 +18,9 @@ if (w.__PROBE_TIMELINE_TIMER) {
   w.__PROBE_TIMELINE_TIMER = null;
 }
 
-const dump: ProbeDump = {
+const mutations = w.__PROBE_MUTATIONS ?? [];
+
+const dump: ProbeDump & { mutations: typeof mutations } = {
   meta: {
     t0: w.__PROBE_T0 ?? 0,
     collectedAt: Date.now(),
@@ -29,6 +31,7 @@ const dump: ProbeDump = {
   streamEvents: w.__PROBE_STREAM_EVENTS ?? [],
   actionCalls: w.__PROBE_ACTION_CALLS ?? [],
   timeline: w.__PROBE_MSG_TIMELINE ?? [],
+  mutations,
 };
 
 w.__PROBE_LAST_DUMP_JSON = JSON.stringify(dump);
