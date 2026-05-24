@@ -1,4 +1,5 @@
 export interface SystemAgentItem {
+  contextLimit?: number;
   customPrompt?: string;
   enabled?: boolean;
   model: string;
@@ -21,4 +22,15 @@ export interface UserSystemAgentConfig {
   translation: SystemAgentItem;
 }
 
+export interface UserMemoryServiceModelConfig {
+  memoryAnalysisAgentConfig: SystemAgentItem;
+  userMemoryEmbedding: SystemAgentItem;
+  userMemoryPersonaWriter: SystemAgentItem;
+}
+
+export interface UserServiceModelConfig
+  extends UserSystemAgentConfig, UserMemoryServiceModelConfig {}
+
 export type UserSystemAgentConfigKey = keyof UserSystemAgentConfig;
+export type UserMemoryServiceModelConfigKey = keyof UserMemoryServiceModelConfig;
+export type UserServiceModelConfigKey = keyof UserServiceModelConfig;

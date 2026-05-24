@@ -1,14 +1,20 @@
 import { DEFAULT_SYSTEM_AGENT_CONFIG } from '@/const/settings';
-import { type UserSystemAgentConfig } from '@/types/user/settings';
+import { type UserServiceModelConfig } from '@/types/user/settings';
 
 const protectedKeys = Object.keys(DEFAULT_SYSTEM_AGENT_CONFIG);
 
 const defaultTrueLey = new Set(['promptRewrite', 'autoSuggestion']);
+const memoryServiceModelKeys = new Set([
+  'memoryAnalysisAgentConfig',
+  'userMemoryEmbedding',
+  'userMemoryPersonaWriter',
+]);
+const defaultModelAssignmentKeys = protectedKeys.filter((key) => !memoryServiceModelKeys.has(key));
 
-export const parseSystemAgent = (envString: string = ''): Partial<UserSystemAgentConfig> => {
+export const parseSystemAgent = (envString: string = ''): Partial<UserServiceModelConfig> => {
   if (!envString) return {};
 
-  const config: Partial<UserSystemAgentConfig> = {};
+  const config: Partial<UserServiceModelConfig> = {};
 
   // Handle full-width commas and extra spaces
   const envValue = envString.replaceAll('，', ',').trim();
@@ -39,7 +45,7 @@ export const parseSystemAgent = (envString: string = ''): Partial<UserSystemAgen
       }
 
       if (protectedKeys.includes(key)) {
-        config[key as keyof UserSystemAgentConfig] = {
+        config[key as keyof UserServiceModelConfig] = {
           enabled: defaultTrueLey.has(key) ? true : undefined,
           model: model.trim(),
           provider: provider.trim(),
@@ -52,9 +58,9 @@ export const parseSystemAgent = (envString: string = ''): Partial<UserSystemAgen
 
   // If there are default settings, apply them to all unconfigured system agents
   if (defaultSetting) {
-    for (const key of protectedKeys) {
-      if (!config[key as keyof UserSystemAgentConfig]) {
-        config[key as keyof UserSystemAgentConfig] = {
+    for (const key of defaultModelAssignmentKeys) {
+      if (!config[key as keyof UserServiceModelConfig]) {
+        config[key as keyof UserServiceModelConfig] = {
           enabled: defaultTrueLey.has(key) ? true : undefined,
           model: defaultSetting.model,
           provider: defaultSetting.provider,

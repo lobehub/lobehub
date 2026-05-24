@@ -11,6 +11,7 @@ import type {
   SystemAgentItem,
   UserGeneralConfig,
   UserKeyVaults,
+  UserServiceModelConfigKey,
   UserSettings,
   UserSystemAgentConfigKey,
 } from '@/types/user/settings';
@@ -237,7 +238,7 @@ export class UserSettingsActionImpl {
   };
 
   updateSystemAgent = async (
-    key: UserSystemAgentConfigKey,
+    key: UserServiceModelConfigKey,
     value: Partial<SystemAgentItem>,
   ): Promise<void> => {
     await this.#get().setSettings({

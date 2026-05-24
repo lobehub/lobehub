@@ -57,7 +57,202 @@ const createExecutor = (privateOverrides?: Partial<MemoryExtractionPrivateConfig
   });
 };
 
+const resolveRuntimeKeyVaults = async (
+  executor: MemoryExtractionExecutor,
+  runtimeState: AiProviderRuntimeState,
+) => {
+  const memoryServiceConfig = (executor as any).resolveUserMemoryServiceConfig();
+
+  return (executor as any).resolveRuntimeKeyVaults(runtimeState, memoryServiceConfig);
+};
+
 describe('MemoryExtractionExecutor.resolveRuntimeKeyVaults', () => {
+  it('drops fallback credentials when user memory provider is overridden', () => {
+    const executor = createExecutor({
+      embedding: {
+        apiKey: 'openai-system-key',
+        baseURL: 'https://openai.example.com',
+        model: 'embed-1',
+        provider: 'openai',
+      },
+    });
+
+    const memoryServiceConfig = (executor as any).resolveUserMemoryServiceConfig({
+      userMemoryEmbedding: {
+        model: 'embed-2',
+        provider: 'anthropic',
+      },
+    });
+
+    expect(memoryServiceConfig.agents.embedding).toMatchObject({
+      model: 'embed-2',
+      provider: 'anthropic',
+    });
+    expect(memoryServiceConfig.agents.embedding.apiKey).toBeUndefined();
+    expect(memoryServiceConfig.agents.embedding.baseURL).toBeUndefined();
+  });
+
+  it('keeps fallback credentials when user memory provider is unchanged', () => {
+    const executor = createExecutor({
+      embedding: {
+        apiKey: 'openai-system-key',
+        baseURL: 'https://openai.example.com',
+        model: 'embed-1',
+        provider: 'openai',
+      },
+    });
+
+    const memoryServiceConfig = (executor as any).resolveUserMemoryServiceConfig({
+      userMemoryEmbedding: {
+        model: 'embed-2',
+        provider: 'openai',
+      },
+    });
+
+    expect(memoryServiceConfig.agents.embedding).toMatchObject({
+      apiKey: 'openai-system-key',
+      baseURL: 'https://openai.example.com',
+      model: 'embed-2',
+      provider: 'openai',
+    });
+  });
+
+  it('shares ServiceModel memory analysis config between gatekeeper and layer extractor', () => {
+    const executor = createExecutor({
+      agentGateKeeper: {
+        apiKey: 'gate-system-key',
+        baseURL: 'https://gate.example.com',
+        model: 'gate-1',
+        provider: 'provider-gate',
+      },
+      agentLayerExtractor: {
+        apiKey: 'layer-system-key',
+        baseURL: 'https://layer.example.com',
+        contextLimit: 2048,
+        layers: {
+          activity: 'layer-act',
+          context: 'layer-ctx',
+          experience: 'layer-exp',
+          identity: 'layer-id',
+          preference: 'layer-pref',
+        },
+        model: 'layer-1',
+        provider: 'provider-layer',
+      },
+    });
+
+    const memoryServiceConfig = (executor as any).resolveUserMemoryServiceConfig({
+      memoryAnalysisAgentConfig: {
+        contextLimit: 4096,
+        model: 'analysis-1',
+        provider: 'provider-analysis',
+      },
+    });
+
+    expect(memoryServiceConfig.agents.gatekeeper).toMatchObject({
+      model: 'analysis-1',
+      provider: 'provider-analysis',
+    });
+    expect(memoryServiceConfig.agents.layerExtractor).toMatchObject({
+      contextLimit: 4096,
+      model: 'analysis-1',
+      provider: 'provider-analysis',
+    });
+    expect(memoryServiceConfig.agents.gatekeeper.apiKey).toBeUndefined();
+    expect(memoryServiceConfig.agents.layerExtractor.apiKey).toBeUndefined();
+    expect(memoryServiceConfig.modelConfig.gateModel).toBe('analysis-1');
+    expect(memoryServiceConfig.modelConfig.layerModels).toEqual({
+      activity: 'analysis-1',
+      context: 'analysis-1',
+      experience: 'analysis-1',
+      identity: 'analysis-1',
+      preference: 'analysis-1',
+    });
+  });
+
+  it('uses ServiceModel provider before env preferred providers when provider is overridden', async () => {
+    const executor = createExecutor({
+      agentGateKeeper: {
+        model: 'gate-1',
+        provider: 'provider-g',
+      },
+      agentLayerExtractor: {
+        contextLimit: 2048,
+        layers: {
+          activity: 'layer-1',
+          context: 'layer-1',
+          experience: 'layer-1',
+          identity: 'layer-1',
+          preference: 'layer-1',
+        },
+        model: 'layer-1',
+        provider: 'provider-l',
+      },
+      embedding: {
+        apiKey: 'openai-system-key',
+        baseURL: 'https://openai.example.com',
+        model: 'embed-1',
+        provider: 'openai',
+      },
+      embeddingPreferredProviders: ['provider-b'],
+    });
+
+    const memoryServiceConfig = (executor as any).resolveUserMemoryServiceConfig({
+      userMemoryEmbedding: {
+        model: 'embed-2',
+        provider: 'provider-a',
+      },
+    });
+    const runtimeState = createRuntimeState(
+      [
+        {
+          abilities: {},
+          enabled: true,
+          id: 'gate-1',
+          providerId: 'provider-g',
+          type: 'chat',
+        },
+        {
+          abilities: {},
+          enabled: true,
+          id: 'layer-1',
+          providerId: 'provider-l',
+          type: 'chat',
+        },
+        {
+          abilities: {},
+          enabled: true,
+          id: 'embed-2',
+          providerId: 'provider-a',
+          type: 'embedding',
+        },
+        {
+          abilities: {},
+          enabled: true,
+          id: 'embed-2',
+          providerId: 'provider-b',
+          type: 'embedding',
+        },
+      ],
+      {
+        'provider-a': { apiKey: 'a-key' },
+        'provider-b': { apiKey: 'b-key' },
+        'provider-g': { apiKey: 'g-key' },
+        'provider-l': { apiKey: 'l-key' },
+      },
+    );
+
+    const keyVaults = await (executor as any).resolveRuntimeKeyVaults(
+      runtimeState,
+      memoryServiceConfig,
+    );
+
+    expect(keyVaults).toMatchObject({
+      'provider-a': { apiKey: 'a-key' },
+    });
+    expect(keyVaults).not.toHaveProperty('provider-b');
+  });
+
   it('prefers configured providers/models for gatekeeper, embedding, and layer extractors', async () => {
     const executor = createExecutor({
       embeddingPreferredProviders: ['provider-c', 'provider-a'],
@@ -119,7 +314,7 @@ describe('MemoryExtractionExecutor.resolveRuntimeKeyVaults', () => {
       },
     );
 
-    const keyVaults = await (executor as any).resolveRuntimeKeyVaults(runtimeState);
+    const keyVaults = await resolveRuntimeKeyVaults(executor, runtimeState);
 
     expect(keyVaults).toMatchObject({
       'provider-a': { apiKey: 'a-key' },
@@ -182,7 +377,7 @@ describe('MemoryExtractionExecutor.resolveRuntimeKeyVaults', () => {
       },
     );
 
-    const keyVaults = await (executor as any).resolveRuntimeKeyVaults(runtimeState);
+    const keyVaults = await resolveRuntimeKeyVaults(executor, runtimeState);
 
     expect(keyVaults).toMatchObject({
       'provider-b': { apiKey: 'b-key' },
@@ -222,7 +417,7 @@ describe('MemoryExtractionExecutor.resolveRuntimeKeyVaults', () => {
       },
     );
 
-    const keyVaults = await (executor as any).resolveRuntimeKeyVaults(runtimeState);
+    const keyVaults = await resolveRuntimeKeyVaults(executor, runtimeState);
 
     expect(keyVaults).toMatchObject({
       'provider-a': { apiKey: 'a-key' },
@@ -253,7 +448,7 @@ describe('MemoryExtractionExecutor.resolveRuntimeKeyVaults', () => {
       },
     );
 
-    const keyVaults = await (executor as any).resolveRuntimeKeyVaults(runtimeState);
+    const keyVaults = await resolveRuntimeKeyVaults(executor, runtimeState);
 
     expect(keyVaults).toMatchObject({
       'provider-b': { apiKey: 'b-key' }, // picks first preferred provider
@@ -271,7 +466,7 @@ describe('MemoryExtractionExecutor.resolveRuntimeKeyVaults', () => {
       'provider-fallback': { apiKey: 'fb-key' },
     });
 
-    const keyVaults = await (executor as any).resolveRuntimeKeyVaults(runtimeState);
+    const keyVaults = await resolveRuntimeKeyVaults(executor, runtimeState);
 
     expect(keyVaults).toMatchObject({
       'provider-fallback': { apiKey: 'fb-key' },

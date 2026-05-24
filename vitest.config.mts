@@ -16,6 +16,14 @@ const alias = {
     __dirname,
     './packages/business/model-runtime/src/index.ts',
   ),
+  '@lobechat/business-model-bank/model-config': resolve(
+    __dirname,
+    './packages/business/model-bank/src/model-config.ts',
+  ),
+  '@lobechat/business-model-bank': resolve(
+    __dirname,
+    './packages/business/model-bank/src/index.ts',
+  ),
   '@emoji-mart/data': resolve(__dirname, './tests/mocks/emojiMartData.ts'),
   '@emoji-mart/react': resolve(__dirname, './tests/mocks/emojiMartReact.tsx'),
   '@/database/_deprecated': resolve(__dirname, './src/database/_deprecated'),

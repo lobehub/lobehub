@@ -1,11 +1,12 @@
 // @vitest-environment node
 import { type LobeChatDatabase } from '@lobechat/database';
-import { users } from '@lobechat/database/schemas';
+import { users, userSettings } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
 import type * as AiInfraReposModule from '@/database/repositories/aiInfra';
+import { resolveRuntimeAgentConfig } from '@/server/services/memory/userMemory/extract';
 
 import { UserPersonaService } from '../service';
 
@@ -132,6 +133,48 @@ describe('UserPersonaService', () => {
       expect.objectContaining({
         existingPersona: '# Persona',
       }),
+    );
+  });
+
+  it('drops fallback credentials when persona writer provider is overridden', async () => {
+    await db.insert(userSettings).values({
+      id: userId,
+      systemAgent: {
+        userMemoryPersonaWriter: {
+          model: 'claude-mock',
+          provider: 'anthropic',
+        },
+      },
+    });
+    aiInfraMocks.tryMatchingProviderFrom.mockResolvedValue('anthropic');
+    aiInfraMocks.getAiProviderRuntimeState.mockResolvedValue({
+      enabledAiModels: [
+        { abilities: {}, enabled: true, id: 'claude-mock', providerId: 'anthropic', type: 'chat' },
+      ],
+      enabledAiProviders: [],
+      enabledChatAiProviders: [],
+      enabledImageAiProviders: [],
+      runtimeConfig: {},
+    });
+
+    const service = new UserPersonaService(db);
+    await service.composeWriting({ userId, username: 'User' });
+
+    expect(resolveRuntimeAgentConfig).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        apiKey: undefined,
+        baseURL: undefined,
+        model: 'claude-mock',
+        provider: 'anthropic',
+      }),
+      expect.any(Object),
+      expect.objectContaining({
+        fallback: {
+          apiKey: undefined,
+          baseURL: undefined,
+        },
+      }),
+      undefined,
     );
   });
 });
