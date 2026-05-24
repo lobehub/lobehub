@@ -6,6 +6,8 @@ import { type StateCreator } from 'zustand/vanilla';
 
 import { useClientDataSWRWithSync } from '@/libs/swr';
 import { messageService } from '@/services/message';
+import { getChatStoreState } from '@/store/chat';
+import { operationSelectors } from '@/store/chat/selectors';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { type Store as ConversationStore } from '../../action';
@@ -214,6 +216,22 @@ export const dataSlice: StateCreator<
         onData: (data) => {
           if (!data) return;
           if (!context.topicId) return;
+
+          // Defense-in-depth gate (LOBE-9501): drop any SWR onData while the
+          // topic is streaming. DB fan-out for chunk writes is async and lags
+          // the WS push by anywhere from 100ms to several seconds; an SWR
+          // refetch that lands inside that window returns the assistant row
+          // as the LOADING_FLAT placeholder (cLen=3) and would collapse the
+          // in-memory streamed content. SWR's own cache still receives the
+          // value, so once streaming ends a normal revalidate writes through.
+          //
+          // This is the catch-all backstop sitting BELOW the SoT consumption
+          // in gatewayEventHandler — `mergeFetchedMessagesWithLocalState`'s
+          // updatedAt tie-breaker handles most cases on its own, but the
+          // updatedAt comparison degenerates when server's pushed snapshot
+          // carries a DB updatedAt equal to a later stale fetch's row.
+          if (operationSelectors.isAgentRuntimeRunningByContext(context)(getChatStoreState()))
+            return;
 
           const prevDbMessages = get().dbMessages;
           const mergedMessages = mergeFetchedMessagesWithLocalState(data, prevDbMessages);
