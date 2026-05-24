@@ -61,6 +61,7 @@ export class ConversationControlActionImpl {
       : undefined;
     return (
       selectRuntimeType({
+        executionTarget: agentConfig?.agencyConfig?.executionTarget,
         heterogeneousProvider: agentConfig?.agencyConfig?.heterogeneousProvider,
         isGatewayMode: this.#get().isGatewayModeEnabled(),
       }) === 'gateway'

@@ -311,6 +311,7 @@ export const generationSlice: StateCreator<
 
     const agentConfig = agentSelectors.getAgentConfigById(context.agentId)(getAgentStoreState());
     const runtimeType = selectRuntimeType({
+      executionTarget: agentConfig?.agencyConfig?.executionTarget,
       heterogeneousProvider: agentConfig?.agencyConfig?.heterogeneousProvider,
       isGatewayMode: chatStore.isGatewayModeEnabled(),
     });
@@ -488,6 +489,7 @@ export const generationSlice: StateCreator<
       const agentConfig = agentSelectors.getAgentConfigById(context.agentId)(getAgentStoreState());
       const heterogeneousProvider = agentConfig?.agencyConfig?.heterogeneousProvider;
       const runtimeType = selectRuntimeType({
+        executionTarget: agentConfig?.agencyConfig?.executionTarget,
         heterogeneousProvider,
         isGatewayMode: chatStore.isGatewayModeEnabled(),
       });

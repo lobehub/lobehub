@@ -1,6 +1,6 @@
 import { isDesktop as defaultIsDesktop } from '@lobechat/const';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
-import { type HeterogeneousProviderConfig } from '@lobechat/types';
+import { type HeteroExecutionTarget, type HeterogeneousProviderConfig } from '@lobechat/types';
 
 /**
  * Which agent runtime should handle an operation.
@@ -47,6 +47,16 @@ export interface AgentInvocationIntent {
 }
 
 export interface RuntimeSelectionContext {
+  /**
+   * Per-agent execution device choice from the composer's Execution Device
+   * switcher. Only meaningful when `heterogeneousProvider` is a local CLI
+   * (claude-code / codex). Controls the desktop fork:
+   *   - `'device'` / `'sandbox'` → route through Gateway so the server can
+   *     dispatch to an `lh connect` device or spawn a sandbox.
+   *   - `'local'` / `undefined`  → keep today's default (desktop → `hetero`
+   *     in-process spawn, web → `gateway` sandbox).
+   */
+  executionTarget?: HeteroExecutionTarget;
   /** Per-agent heterogeneous provider config (desktop only — takes priority over gateway). */
   heterogeneousProvider?: HeterogeneousProviderConfig;
   /** Result of `chatStore.isGatewayModeEnabled()`. */
@@ -87,10 +97,15 @@ export const selectRuntimeType = (
   if (ctx.heterogeneousProvider && isRemoteHeterogeneousType(ctx.heterogeneousProvider.type)) {
     return 'gateway';
   }
-  // Local CLI agents (claude-code, codex) run as desktop subprocesses.
-  if (isDesktop && ctx.heterogeneousProvider) return 'hetero';
-  // On web, all remaining hetero agents run via the Gateway sandbox.
-  if (!isDesktop && ctx.heterogeneousProvider) return 'gateway';
+  // Local CLI hetero (claude-code / codex) — route by executionTarget.
+  // `device` / `sandbox` need server-side dispatch; `local` runs in-process
+  // on the desktop. Default (unset) preserves legacy behavior: desktop → hetero,
+  // web → gateway sandbox.
+  if (ctx.heterogeneousProvider) {
+    if (ctx.executionTarget === 'device' || ctx.executionTarget === 'sandbox') return 'gateway';
+    if (ctx.executionTarget === 'local') return isDesktop ? 'hetero' : 'gateway';
+    return isDesktop ? 'hetero' : 'gateway';
+  }
   if (ctx.isGatewayMode) return 'gateway';
   return 'client';
 };
