@@ -5,49 +5,31 @@ vi.mock('code-inspector-plugin', () => ({
 }));
 
 describe('defineConfig', () => {
-  it('should externalize epub2 so optional zipfile resolution stays at runtime', async () => {
+  it('should treat zipfile as an optional server-native dependency', async () => {
     const { defineConfig } = await import('./define-config');
 
     const config = defineConfig({});
 
-    expect(config.serverExternalPackages).toContain('epub2');
-  });
+    expect(config.serverExternalPackages).toContain('zipfile');
 
-  it('should rewrite sitemap xml endpoints to runtime route handlers', async () => {
-    const { defineConfig } = await import('./define-config');
+    const resolvedWebpackConfig = config.webpack?.(
+      {
+        externals: undefined,
+        module: {},
+      } as any,
+      {
+        isServer: true,
+      } as any,
+    ) as any;
 
-    const config = defineConfig({});
-    const rewrites = await config.rewrites?.();
+    const externals = Array.isArray(resolvedWebpackConfig.externals)
+      ? resolvedWebpackConfig.externals
+      : [resolvedWebpackConfig.externals];
 
-    expect(rewrites).toEqual(
-      expect.arrayContaining([
-        { destination: '/sitemap.xml', source: '/sitemap-index.xml' },
-        { destination: '/sitemap/:id', source: '/sitemap/:id.xml' },
-      ]),
-    );
-  });
-
-  it('should prepend sitemap runtime rewrites before object-shaped custom rewrites', async () => {
-    const { defineConfig } = await import('./define-config');
-
-    const config = defineConfig({
-      rewrites: async () => ({
-        afterFiles: [{ destination: '/bar', source: '/foo' }],
-        beforeFiles: [{ destination: '/qux', source: '/baz' }],
-        fallback: [{ destination: '/fallback', source: '/legacy' }],
+    expect(externals).toContainEqual(
+      expect.objectContaining({
+        zipfile: 'commonjs zipfile',
       }),
-    });
-
-    const rewrites = await config.rewrites?.();
-
-    expect(rewrites).toEqual({
-      afterFiles: [{ destination: '/bar', source: '/foo' }],
-      beforeFiles: [
-        { destination: '/sitemap.xml', source: '/sitemap-index.xml' },
-        { destination: '/sitemap/:id', source: '/sitemap/:id.xml' },
-        { destination: '/qux', source: '/baz' },
-      ],
-      fallback: [{ destination: '/fallback', source: '/legacy' }],
-    });
+    );
   });
 });

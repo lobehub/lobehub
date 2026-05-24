@@ -1,4 +1,5 @@
 import { type IdentifiersResponse } from '@lobechat/types';
+import { flatten } from 'es-toolkit/compat';
 import { type MetadataRoute } from 'next';
 import qs from 'query-string';
 import urlJoin from 'url-join';
@@ -32,40 +33,22 @@ export enum SitemapType {
 }
 
 export const LAST_MODIFIED = new Date().toISOString();
-export const SITEMAP_REVALIDATE_SECONDS = 86_400;
-const SITEMAP_BUILD_DIAGNOSTICS_ENABLED = process.env.LOBE_BUILD_DIAGNOSTICS === '1';
 
 // Number of items per page
 const ITEMS_PER_PAGE = 100;
 const DEFAULT_MODEL_PAGE_COUNT_TIMEOUT_MS = 15 * 60 * 1000;
-const SITEMAP_IDENTIFIER_CACHE_TTL_MS = SITEMAP_REVALIDATE_SECONDS * 1000;
 
 interface SitemapOptions {
   modelPageCountTimeoutMs?: number;
 }
 
 type SitemapIdentifiersKey = 'assistant' | 'model' | 'plugin' | 'provider';
-interface SitemapIdentifiersCacheEntry {
-  expiresAt: number;
-  promise: Promise<IdentifiersResponse>;
-}
 
 const discoverService = new DiscoverService();
 const sitemapIdentifiersCache: Partial<
-  Record<SitemapIdentifiersKey, SitemapIdentifiersCacheEntry>
+  Record<SitemapIdentifiersKey, Promise<IdentifiersResponse>>
 > = {};
 const SITEMAP_IDENTIFIER_TIMEOUT_MS = 15_000;
-
-function logSitemapBuildStep(step: string, details?: unknown) {
-  if (!SITEMAP_BUILD_DIAGNOSTICS_ENABLED) return;
-
-  if (details !== undefined) {
-    console.error(`[sitemap:build] ${step}`, details);
-    return;
-  }
-
-  console.error(`[sitemap:build] ${step}`);
-}
 
 function clearCachedIdentifiers() {
   delete sitemapIdentifiersCache.assistant;
@@ -78,38 +61,18 @@ function getCachedIdentifiers(
   key: SitemapIdentifiersKey,
   loader: () => Promise<IdentifiersResponse>,
   timeoutMs = SITEMAP_IDENTIFIER_TIMEOUT_MS,
-  cacheTtlMs = SITEMAP_IDENTIFIER_CACHE_TTL_MS,
 ) {
   const cached = sitemapIdentifiersCache[key];
-  if (cached && cached.expiresAt > Date.now()) {
-    logSitemapBuildStep('identifier cache hit', { key });
-    return cached.promise;
-  }
+  if (cached) return cached;
 
-  const startedAt = Date.now();
-  logSitemapBuildStep('identifier fetch start', { cacheTtlMs, key, timeoutMs });
+  const promise = withSitemapIdentifierTimeout(key, loader(), timeoutMs).catch((error) => {
+    delete sitemapIdentifiersCache[key];
+    console.error(`[SitemapIdentifierFetchError] failed to fetch ${key} sitemap identifiers`);
+    console.error(error);
+    return [];
+  });
 
-  const promise = withSitemapIdentifierTimeout(key, loader(), timeoutMs)
-    .catch((error) => {
-      delete sitemapIdentifiersCache[key];
-      console.error(`[SitemapIdentifierFetchError] failed to fetch ${key} sitemap identifiers`);
-      console.error(error);
-      return [];
-    })
-    .then((result) => {
-      logSitemapBuildStep('identifier fetch complete', {
-        count: result.length,
-        durationMs: Date.now() - startedAt,
-        key,
-      });
-      return result;
-    });
-
-  sitemapIdentifiersCache[key] = {
-    expiresAt: Date.now() + cacheTtlMs,
-    promise,
-  };
-
+  sitemapIdentifiersCache[key] = promise;
   return promise;
 }
 
@@ -121,7 +84,11 @@ async function withSitemapIdentifierTimeout(
   let timeout: ReturnType<typeof setTimeout> | undefined;
   const timeoutPromise = new Promise<never>((_, reject) => {
     timeout = setTimeout(() => {
-      reject(new Error(`Timed out fetching ${key} sitemap identifiers after ${timeoutMs}ms`));
+      reject(
+        new Error(
+          `Timed out fetching ${key} sitemap identifiers after ${timeoutMs}ms`,
+        ),
+      );
     }, timeoutMs);
   });
 
@@ -269,37 +236,7 @@ export class Sitemap {
     );
   }
 
-  private _appendLocalizedItems(
-    target: MetadataRoute.Sitemap,
-    list: IdentifiersResponse,
-    routePrefix: string,
-    page?: number,
-  ) {
-    const startIndex = page !== undefined ? (page - 1) * ITEMS_PER_PAGE : 0;
-    const endIndex =
-      page !== undefined ? Math.min(startIndex + ITEMS_PER_PAGE, list.length) : list.length;
-
-    for (let index = startIndex; index < endIndex; index += 1) {
-      const item = list[index];
-      if (!item?.identifier) continue;
-
-      const lastModified = item.lastModified || LAST_MODIFIED;
-
-      for (const locale of allLocales) {
-        target.push(
-          this._genSitemapItem(locale, urlJoin(routePrefix, item.identifier), {
-            lastModified,
-          }),
-        );
-      }
-    }
-
-    return target;
-  }
-
   async getIndex(): Promise<string> {
-    const startedAt = Date.now();
-    logSitemapBuildStep('index start');
     const staticSitemaps = this.sitemapIndexs.map((item) =>
       this._generateSitemapLink(
         getCanonicalUrl(SITEMAP_BASE_URL, isDev ? item.id : `${item.id}.xml`),
@@ -334,91 +271,126 @@ export class Sitemap {
         ),
       ),
     ];
-    const result = [
+
+    return [
       '<?xml version="1.0" encoding="UTF-8"?>',
       '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
       ...staticSitemaps,
       ...paginatedSitemaps,
       '</sitemapindex>',
     ].join('\n');
-
-    logSitemapBuildStep('index complete', {
-      assistantPages,
-      durationMs: Date.now() - startedAt,
-      modelPages,
-      pluginPages,
-      sitemapLinks: staticSitemaps.length + paginatedSitemaps.length,
-    });
-
-    return result;
   }
 
   async getAssistants(page?: number): Promise<MetadataRoute.Sitemap> {
-    const startedAt = Date.now();
-    logSitemapBuildStep('assistants sitemap start', { page: page ?? null });
     const list = await getCachedIdentifiers('assistant', () =>
       this.discoverService.getAssistantIdentifiers(),
     );
-    const result = this._appendLocalizedItems([], list, '/community/agent', page);
-    logSitemapBuildStep('assistants sitemap complete', {
-      durationMs: Date.now() - startedAt,
-      items: result.length,
-      page: page ?? null,
-    });
-    return result;
+
+    if (page !== undefined) {
+      const startIndex = (page - 1) * ITEMS_PER_PAGE;
+      const endIndex = startIndex + ITEMS_PER_PAGE;
+      const pageAssistants = list.slice(startIndex, endIndex);
+
+      const sitmap = pageAssistants
+        .filter((item) => item.identifier) // Filter out items with empty identifiers
+        .map((item) =>
+          this._genSitemap(urlJoin('/community/agent', item.identifier), {
+            lastModified: item?.lastModified || LAST_MODIFIED,
+          }),
+        );
+      return flatten(sitmap);
+    }
+
+    // If page number is not specified, return all (backward compatibility)
+    const sitmap = list
+      .filter((item) => item.identifier) // Filter out items with empty identifiers
+      .map((item) =>
+        this._genSitemap(urlJoin('/community/agent', item.identifier), {
+          lastModified: item?.lastModified || LAST_MODIFIED,
+        }),
+      );
+    return flatten(sitmap);
   }
 
   async getPlugins(page?: number): Promise<MetadataRoute.Sitemap> {
-    const startedAt = Date.now();
-    logSitemapBuildStep('plugins sitemap start', { page: page ?? null });
     const list = await getCachedIdentifiers('plugin', () =>
       this.discoverService.getPluginIdentifiers(),
     );
-    const result = this._appendLocalizedItems([], list, '/community/plugin', page);
-    logSitemapBuildStep('plugins sitemap complete', {
-      durationMs: Date.now() - startedAt,
-      items: result.length,
-      page: page ?? null,
-    });
-    return result;
+
+    if (page !== undefined) {
+      const startIndex = (page - 1) * ITEMS_PER_PAGE;
+      const endIndex = startIndex + ITEMS_PER_PAGE;
+      const pagePlugins = list.slice(startIndex, endIndex);
+
+      const sitmap = pagePlugins
+        .filter((item) => item.identifier) // Filter out items with empty identifiers
+        .map((item) =>
+          this._genSitemap(urlJoin('/community/plugin', item.identifier), {
+            lastModified: item?.lastModified || LAST_MODIFIED,
+          }),
+        );
+      return flatten(sitmap);
+    }
+
+    // If page number is not specified, return all (backward compatibility)
+    const sitmap = list
+      .filter((item) => item.identifier) // Filter out items with empty identifiers
+      .map((item) =>
+        this._genSitemap(urlJoin('/community/plugin', item.identifier), {
+          lastModified: item?.lastModified || LAST_MODIFIED,
+        }),
+      );
+    return flatten(sitmap);
   }
 
   async getModels(page?: number): Promise<MetadataRoute.Sitemap> {
-    const startedAt = Date.now();
-    logSitemapBuildStep('models sitemap start', { page: page ?? null });
-    const list = await getCachedIdentifiers(
-      'model',
-      () => this.discoverService.getModelIdentifiers(),
-      this.modelPageCountTimeoutMs,
+    const list = await getCachedIdentifiers('model', () =>
+      this.discoverService.getModelIdentifiers(),
     );
-    const result = this._appendLocalizedItems([], list, '/community/model', page);
-    logSitemapBuildStep('models sitemap complete', {
-      durationMs: Date.now() - startedAt,
-      items: result.length,
-      page: page ?? null,
-    });
-    return result;
+
+    if (page !== undefined) {
+      const startIndex = (page - 1) * ITEMS_PER_PAGE;
+      const endIndex = startIndex + ITEMS_PER_PAGE;
+      const pageModels = list.slice(startIndex, endIndex);
+
+      const sitmap = pageModels
+        .filter((item) => item.identifier) // Filter out items with empty identifiers
+        .map((item) =>
+          this._genSitemap(urlJoin('/community/model', item.identifier), {
+            lastModified: item?.lastModified || LAST_MODIFIED,
+          }),
+        );
+      return flatten(sitmap);
+    }
+
+    // If page number is not specified, return all (backward compatibility)
+    const sitmap = list
+      .filter((item) => item.identifier) // Filter out items with empty identifiers
+      .map((item) =>
+        this._genSitemap(urlJoin('/community/model', item.identifier), {
+          lastModified: item?.lastModified || LAST_MODIFIED,
+        }),
+      );
+    return flatten(sitmap);
   }
 
   async getProviders(): Promise<MetadataRoute.Sitemap> {
-    const startedAt = Date.now();
-    logSitemapBuildStep('providers sitemap start');
     const list = await getCachedIdentifiers('provider', () =>
       this.discoverService.getProviderIdentifiers(),
     );
-    const result = this._appendLocalizedItems([], list, '/community/provider');
-    logSitemapBuildStep('providers sitemap complete', {
-      durationMs: Date.now() - startedAt,
-      items: result.length,
-    });
-    return result;
+    const sitmap = list
+      .filter((item) => item.identifier) // Filter out items with empty identifiers
+      .map((item) =>
+        this._genSitemap(urlJoin('/community/provider', item.identifier), {
+          lastModified: item?.lastModified || LAST_MODIFIED,
+        }),
+      );
+    return flatten(sitmap);
   }
 
   async getPage(): Promise<MetadataRoute.Sitemap> {
-    const startedAt = Date.now();
-    logSitemapBuildStep('pages sitemap start');
     const hideDocs = serverFeatureFlags().hideDocs;
-    const result = [
+    return [
       ...this._genSitemap('/', { noLocales: true }),
       ...this._genSitemap('/agent', { noLocales: true }),
       ...(!hideDocs ? this._genSitemap('/changelog', { noLocales: true }) : []),
@@ -429,11 +401,6 @@ export class Sitemap {
       ...this._genSitemap('/community/model', { changeFrequency: 'daily', priority: 0.7 }),
       ...this._genSitemap('/community/provider', { changeFrequency: 'daily', priority: 0.7 }),
     ].filter(Boolean);
-    logSitemapBuildStep('pages sitemap complete', {
-      durationMs: Date.now() - startedAt,
-      items: result.length,
-    });
-    return result;
   }
   getRobots() {
     return [

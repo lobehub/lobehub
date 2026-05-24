@@ -1,14 +1,15 @@
-import { NextResponse } from 'next/server';
-import { resolveRouteData } from 'next/dist/build/webpack/loaders/metadata/resolve-route-data';
+import { type MetadataRoute } from 'next';
 
 import { Sitemap } from '@/server/sitemap';
 import { getCanonicalUrl } from '@/server/utils/url';
 
-export const revalidate = 86_400;
+// Robots file cache configuration - revalidate every 24 hours
+export const revalidate = 86_400; // 24 hours - content page cache
+export const dynamic = 'force-static';
 
-export async function GET() {
+const robots = (): MetadataRoute.Robots => {
   const sitemapModule = new Sitemap();
-  const data = {
+  return {
     host: getCanonicalUrl(),
     rules: [
       {
@@ -31,13 +32,6 @@ export async function GET() {
     ],
     sitemap: sitemapModule.getRobots(),
   };
+};
 
-  const content = resolveRouteData(data, 'robots');
-
-  return new NextResponse(content, {
-    headers: {
-      'Cache-Control': 'public, max-age=0, must-revalidate',
-      'Content-Type': 'text/plain',
-    },
-  });
-}
+export default robots;
