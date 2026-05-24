@@ -106,8 +106,24 @@ export class MessageQueryActionImpl {
 
   useFetchMessages = (
     context: ConversationContext,
-    skipFetch?: boolean,
+    options?: {
+      /**
+       * Skip the fetch entirely (e.g. while another flow owns the data).
+       * Equivalent to passing a null SWR key.
+       */
+      skipFetch?: boolean;
+      /**
+       * Revalidate when the window regains focus. Defaults to SWR's
+       * client-data default (true). Pass `false` to suppress the focus
+       * refetch — used during streaming so the in-memory stream payload
+       * (Source of Truth) isn't clobbered by a stale DB read while DB
+       * fan-out writes are still in flight.
+       */
+      revalidateOnFocus?: boolean;
+    },
   ): SWRResponse<UIChatMessage[]> => {
+    const { skipFetch, revalidateOnFocus } = options ?? {};
+
     // Skip fetch when skipFetch is true or required fields are missing
     const shouldFetch = !skipFetch && !!context.agentId && !!context.topicId;
 
@@ -121,6 +137,7 @@ export class MessageQueryActionImpl {
           // Use replaceMessages to store the fetched messages
           this.#get().replaceMessages(data, { action: 'useFetchMessages', context });
         },
+        ...(revalidateOnFocus !== undefined && { revalidateOnFocus }),
       },
     );
   };
