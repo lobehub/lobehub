@@ -175,13 +175,15 @@ export default {
   'heteroAgent.cloudRepo.notSet': 'No repo selected',
   'heteroAgent.cloudRepo.noRepos': 'No repositories configured. Add them in agent settings.',
   'heteroAgent.cloudRepo.multiSelected': '{{count}} repos selected',
-  'heteroAgent.executionTarget.deviceSection': 'Remote devices (lh connect)',
+  'heteroAgent.executionTarget.deviceSection': 'Other devices',
+  'heteroAgent.executionTarget.deviceSectionDesc':
+    'Machines connected via the desktop app or `lh connect`',
   'heteroAgent.executionTarget.envSection': 'Execution environment',
   'heteroAgent.executionTarget.loading': 'Loading devices…',
   'heteroAgent.executionTarget.local': 'This device',
   'heteroAgent.executionTarget.localDesc': 'Run as a local process on this desktop app',
   'heteroAgent.executionTarget.noDevices':
-    'No devices yet. Run `lh connect` on a machine to add one.',
+    'No other devices yet. Install the desktop app or run `lh connect` on another machine.',
   'heteroAgent.executionTarget.offline': 'Offline',
   'heteroAgent.executionTarget.online': 'Online',
   'heteroAgent.executionTarget.sandbox': 'Cloud sandbox',

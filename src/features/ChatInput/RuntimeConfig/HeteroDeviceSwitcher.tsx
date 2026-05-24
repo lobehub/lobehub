@@ -13,7 +13,7 @@ import {
   LaptopIcon,
   type LucideIcon,
 } from 'lucide-react';
-import { memo, useCallback, useState } from 'react';
+import { memo, type ReactNode, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { lambdaQuery } from '@/libs/trpc/client';
@@ -48,8 +48,31 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorPrimary};
   `,
   desc: css`
+    display: flex;
+    gap: 6px;
+    align-items: center;
+
     font-size: 11px;
     color: ${cssVar.colorTextDescription};
+  `,
+  dotOffline: css`
+    flex: none;
+
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+
+    background: ${cssVar.colorTextQuaternary};
+  `,
+  dotOnline: css`
+    flex: none;
+
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+
+    background: ${cssVar.colorSuccess};
+    box-shadow: 0 0 0 2px ${cssVar.colorSuccessBg};
   `,
   empty: css`
     padding-block: 8px;
@@ -117,21 +140,25 @@ const styles = createStaticStyles(({ css }) => ({
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
+  sectionDesc: css`
+    padding-block: 0 4px;
+    padding-inline: 8px;
+    font-size: 11px;
+    color: ${cssVar.colorTextDescription};
+  `,
   sectionTitle: css`
     padding-block: 6px 2px;
     padding-inline: 8px;
 
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 500;
-    color: ${cssVar.colorTextQuaternary};
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    color: ${cssVar.colorTextTertiary};
   `,
 }));
 
 interface OptionRowProps {
   active: boolean;
-  desc?: string;
+  desc?: ReactNode;
   disabled?: boolean;
   icon: LucideIcon;
   label: string;
@@ -243,6 +270,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
       />
 
       <div className={styles.sectionTitle}>{t('heteroAgent.executionTarget.deviceSection')}</div>
+      <div className={styles.sectionDesc}>{t('heteroAgent.executionTarget.deviceSectionDesc')}</div>
       {isLoading ? (
         <div className={styles.empty}>{t('heteroAgent.executionTarget.loading')}</div>
       ) : (devices?.length ?? 0) === 0 ? (
@@ -256,9 +284,14 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
             key={d.deviceId}
             label={d.hostname}
             desc={
-              d.online
-                ? t('heteroAgent.executionTarget.online')
-                : t('heteroAgent.executionTarget.offline')
+              <>
+                <span className={d.online ? styles.dotOnline : styles.dotOffline} />
+                <span>
+                  {d.online
+                    ? t('heteroAgent.executionTarget.online')
+                    : t('heteroAgent.executionTarget.offline')}
+                </span>
+              </>
             }
             onClick={() => void handleSelect('device', d.deviceId)}
           />
