@@ -36,6 +36,7 @@ const Header = memo(() => {
   const systemRole = useAgentStore(agentSelectors.currentAgentSystemRole);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
+  const canPublishToCommunity = useAgentStore(agentSelectors.canCurrentAgentPublishToCommunity);
   const [showAgentBuilderPanel, toggleAgentBuilderPanel, isStatusInit] = useGlobalStore((s) => [
     systemStatusSelectors.showAgentBuilderPanel(s),
     s.toggleAgentBuilderPanel,
@@ -148,13 +149,17 @@ const Header = memo(() => {
         onClick: () => useAgentStore.setState({ showAgentSetting: true }),
       },
       { type: 'divider' as const },
-      {
-        icon: <Icon icon={ShapesUploadIcon} />,
-        key: 'publish',
-        label: t('publishToCommunity', { ns: 'setting' }),
-        onClick: handlePublishClick,
-      },
-      { type: 'divider' as const },
+      ...(canPublishToCommunity
+        ? [
+            {
+              icon: <Icon icon={ShapesUploadIcon} />,
+              key: 'publish',
+              label: t('publishToCommunity', { ns: 'setting' }),
+              onClick: handlePublishClick,
+            },
+            { type: 'divider' as const },
+          ]
+        : []),
       {
         danger: true,
         icon: <Icon icon={Trash} />,
@@ -163,7 +168,7 @@ const Header = memo(() => {
         onClick: handleDelete,
       },
     ],
-    [handlePublishClick, handleDelete, t],
+    [canPublishToCommunity, handlePublishClick, handleDelete, t],
   );
 
   return (
@@ -182,7 +187,7 @@ const Header = memo(() => {
             <DropdownMenu items={menuItems}>
               <ActionIcon
                 icon={MoreHorizontal}
-                loading={isPublishing || isAuthLoading}
+                loading={canPublishToCommunity && (isPublishing || isAuthLoading)}
                 size={DESKTOP_HEADER_ICON_SMALL_SIZE}
               />
             </DropdownMenu>
