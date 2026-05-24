@@ -368,10 +368,6 @@ export class GatewayActionImpl {
           threadId: context.threadId,
           topicId: context.topicId,
         },
-        // Tell the server this caller is a desktop Electron client so it can
-        // enable `executor: 'client'` tools (local-system, stdio MCP) and
-        // dispatch them back over the Agent Gateway WS.
-        clientRuntime: isDesktop ? 'desktop' : 'web',
         fileIds,
         parentMessageId,
         projectSkills,

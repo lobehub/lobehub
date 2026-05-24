@@ -191,13 +191,12 @@ export interface BuiltinToolManifest {
 
   /**
    * Supported execution environments for this tool.
-   * - `'client'`: dispatched to the client via Agent Gateway WebSocket
-   *   (requires Electron / desktop runtime). For tools that depend on
-   *   local resources (filesystem, EditorRuntime, stdio MCP, etc.).
+   * - `'client'`: executed in-process by an embedded Electron runtime that
+   *   hosts both the server and the executor. Used only by standalone
+   *   builds without a device-gateway. Deployments with DEVICE_GATEWAY
+   *   route the same tools through the device-gateway proxy instead.
    * - `'server'`: executed server-side by ToolExecutionService.
    *
-   * When both are present, the server picks based on `clientRuntime`:
-   * desktop callers get `'client'` dispatch; web callers get `'server'`.
    * When omitted, defaults to server-only execution.
    */
   executors?: ('client' | 'server')[];
