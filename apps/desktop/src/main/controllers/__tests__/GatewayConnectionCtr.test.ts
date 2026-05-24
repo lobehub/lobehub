@@ -200,11 +200,13 @@ const mockShellCommandCtr = {
 
 const mockHeterogeneousAgentCtr = {
   sendPrompt: vi.fn().mockResolvedValue(undefined),
+  spawnLhHeteroExec: vi.fn(),
   startSession: vi.fn().mockResolvedValue({ sessionId: 'mock-session-id' }),
 } as unknown as HeterogeneousAgentCtr;
 
 const mockRemoteServerConfigCtr = {
   getAccessToken: vi.fn().mockResolvedValue('mock-access-token'),
+  getRemoteServerUrl: vi.fn().mockResolvedValue('https://server.example.com'),
   isRemoteServerConfigured: vi.fn().mockResolvedValue(true),
   refreshAccessToken: vi.fn().mockResolvedValue({ success: true }),
 } as unknown as RemoteServerConfigCtr;
@@ -631,26 +633,23 @@ describe('GatewayConnectionCtr', () => {
     }
 
     beforeEach(() => {
-      vi.mocked(mockHeterogeneousAgentCtr.startSession).mockClear();
-      vi.mocked(mockHeterogeneousAgentCtr.sendPrompt).mockClear();
+      vi.mocked(mockHeterogeneousAgentCtr.spawnLhHeteroExec).mockClear();
     });
 
-    it.each([
-      ['openclaw', 'openclaw'],
-      ['hermes', 'hermes'],
-      ['codex', 'codex'],
-      ['claude-code', 'claude'],
-    ] as const)('uses command "%s" for agentType "%s"', async (agentType, expectedCommand) => {
-      const client = await connectAndOpen();
-      client.simulateAgentRunRequest(agentType);
-      await vi.advanceTimersByTimeAsync(0);
+    it.each(['openclaw', 'hermes', 'codex', 'claude-code'] as const)(
+      'forwards agentType "%s" to spawnLhHeteroExec',
+      async (agentType) => {
+        const client = await connectAndOpen();
+        client.simulateAgentRunRequest(agentType);
+        await vi.advanceTimersByTimeAsync(0);
 
-      expect(mockHeterogeneousAgentCtr.startSession).toHaveBeenCalledWith(
-        expect.objectContaining({ agentType, command: expectedCommand }),
-      );
-    });
+        expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
+          expect.objectContaining({ agentType }),
+        );
+      },
+    );
 
-    it('sends accepted ack and fires sendPrompt', async () => {
+    it('sends accepted ack and spawns lh hetero exec', async () => {
       const client = await connectAndOpen();
       client.simulateAgentRunRequest('openclaw', 'op-xyz');
       await vi.advanceTimersByTimeAsync(0);
@@ -659,15 +658,37 @@ describe('GatewayConnectionCtr', () => {
         operationId: 'op-xyz',
         status: 'accepted',
       });
-      expect(mockHeterogeneousAgentCtr.sendPrompt).toHaveBeenCalledWith(
-        expect.objectContaining({ operationId: 'op-xyz', sessionId: 'mock-session-id' }),
+      expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentType: 'openclaw',
+          jwt: 'mock-jwt',
+          operationId: 'op-xyz',
+          prompt: 'hello',
+          serverUrl: 'https://server.example.com',
+          topicId: 'topic-1',
+        }),
       );
     });
 
-    it('sends rejected ack when startSession throws', async () => {
-      vi.mocked(mockHeterogeneousAgentCtr.startSession).mockRejectedValueOnce(
-        new Error('binary not found'),
-      );
+    it('sends rejected ack when remote server URL is not configured', async () => {
+      vi.mocked(mockRemoteServerConfigCtr.getRemoteServerUrl).mockResolvedValueOnce('');
+
+      const client = await connectAndOpen();
+      client.simulateAgentRunRequest('openclaw', 'op-fail');
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(client.sendAgentRunAck).toHaveBeenCalledWith({
+        operationId: 'op-fail',
+        reason: 'Remote server URL not configured',
+        status: 'rejected',
+      });
+      expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).not.toHaveBeenCalled();
+    });
+
+    it('sends rejected ack when spawnLhHeteroExec throws', async () => {
+      vi.mocked(mockHeterogeneousAgentCtr.spawnLhHeteroExec).mockImplementationOnce(() => {
+        throw new Error('binary not found');
+      });
 
       const client = await connectAndOpen();
       client.simulateAgentRunRequest('openclaw', 'op-fail');
