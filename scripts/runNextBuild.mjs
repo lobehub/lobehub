@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const nextBin = require.resolve('next/dist/bin/next');
+const VERCEL_NODE_MAX_OLD_SPACE_SIZE_MB = 6144;
 export function getNextBuildArgs(isVercel = Boolean(process.env.VERCEL_ENV)) {
   return isVercel ? ['build', '--webpack'] : ['build'];
 }
@@ -13,7 +14,9 @@ const args = getNextBuildArgs(isVercel);
 const child = spawn(process.execPath, [nextBin, ...args], {
   env: {
     ...process.env,
-    ...(isVercel ? { NODE_OPTIONS: '--max-old-space-size=5632' } : {}),
+    ...(isVercel
+      ? { NODE_OPTIONS: `--max-old-space-size=${VERCEL_NODE_MAX_OLD_SPACE_SIZE_MB}` }
+      : {}),
   },
   stdio: 'inherit',
 });
