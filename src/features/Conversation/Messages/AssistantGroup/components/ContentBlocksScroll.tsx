@@ -68,7 +68,7 @@ const ContentBlocksScroll = memo<ContentBlocksScrollProps>((props) => {
   }, [assistantIdFromProps, blocksFromProps, messagesList]);
 
   const list = (
-    <Flexbox>
+    <Flexbox gap={variant === 'workflow' ? 8 : undefined}>
       {blocks.map((block) => (
         <ContentBlock
           key={block.renderKey ?? block.id}
