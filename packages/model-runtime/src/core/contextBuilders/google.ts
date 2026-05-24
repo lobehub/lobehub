@@ -18,10 +18,8 @@ const GOOGLE_SUPPORTED_IMAGE_TYPES = new Set([
   'image/webp',
 ]);
 
-const isImageTypeSupported = (mimeType: string | null): boolean => {
-  if (!mimeType) return true;
-  return GOOGLE_SUPPORTED_IMAGE_TYPES.has(mimeType.toLowerCase());
-};
+const isImageTypeSupported = (mimeType: string | null | undefined): mimeType is string =>
+  !!mimeType && GOOGLE_SUPPORTED_IMAGE_TYPES.has(mimeType.toLowerCase());
 
 /**
  * Magic thoughtSignature to bypass Gemini thought signature validation.

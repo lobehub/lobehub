@@ -98,6 +98,18 @@ describe('imageUrlToBase64', () => {
     expect(result).toEqual({ base64: 'mockBase64String', mimeType: 'image/png' });
   });
 
+  it('should preserve detected non-image MIME types when response metadata is empty', async () => {
+    const pdfBytes = new TextEncoder().encode('%PDF-1.7\n');
+
+    mockFetch.mockResolvedValue({
+      blob: () => Promise.resolve(new Blob([pdfBytes], { type: '' })),
+    });
+
+    const result = await imageUrlToBase64('https://example.com/file');
+
+    expect(result).toEqual({ base64: 'mockBase64String', mimeType: 'application/pdf' });
+  });
+
   it('should throw an error when fetch fails', async () => {
     const mockError = new Error('Fetch failed');
     mockFetch.mockRejectedValue(mockError);

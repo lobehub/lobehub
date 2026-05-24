@@ -13,10 +13,8 @@ const ANTHROPIC_SUPPORTED_IMAGE_TYPES = new Set([
   'image/webp',
 ]);
 
-const isImageTypeSupported = (mimeType: string | null): boolean => {
-  if (!mimeType) return true;
-  return ANTHROPIC_SUPPORTED_IMAGE_TYPES.has(mimeType.toLowerCase());
-};
+const isImageTypeSupported = (mimeType: string | null | undefined): mimeType is string =>
+  !!mimeType && ANTHROPIC_SUPPORTED_IMAGE_TYPES.has(mimeType.toLowerCase());
 
 /**
  * Check if a text value contains visible (non-whitespace) characters.

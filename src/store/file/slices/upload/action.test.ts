@@ -693,7 +693,7 @@ describe('FileUploadAction', () => {
 
     describe('error handling', () => {
       it('should handle checkFileHash errors', async () => {
-        const { result } = renderHook(() => useStore());
+        const { uploadWithProgress } = useStore.getState();
 
         const mockFile = new File(['test content'], 'error.png', { type: 'image/png' });
 
@@ -702,7 +702,7 @@ describe('FileUploadAction', () => {
 
         await expect(
           act(async () => {
-            await result.current.uploadWithProgress({
+            await uploadWithProgress({
               file: mockFile,
             });
           }),
@@ -710,7 +710,7 @@ describe('FileUploadAction', () => {
       });
 
       it('should handle uploadFileToS3 errors', async () => {
-        const { result } = renderHook(() => useStore());
+        const { uploadWithProgress } = useStore.getState();
 
         const mockFile = new File(['test content'], 'error.png', { type: 'image/png' });
         const mockCheckResult = { isExist: false };
@@ -721,7 +721,7 @@ describe('FileUploadAction', () => {
 
         await expect(
           act(async () => {
-            await result.current.uploadWithProgress({
+            await uploadWithProgress({
               file: mockFile,
             });
           }),
@@ -729,7 +729,7 @@ describe('FileUploadAction', () => {
       });
 
       it('should handle createFile errors', async () => {
-        const { result } = renderHook(() => useStore());
+        const { uploadWithProgress } = useStore.getState();
 
         const mockFile = new File(['test content'], 'error.png', { type: 'image/png' });
         const mockMetadata = {
@@ -748,7 +748,7 @@ describe('FileUploadAction', () => {
 
         await expect(
           act(async () => {
-            await result.current.uploadWithProgress({
+            await uploadWithProgress({
               file: mockFile,
             });
           }),

@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
   inferImageMimeTypeFromBase64,
   inferImageMimeTypeFromBytes,
+  inferMimeTypeFromBytes,
   resolveImageMimeTypeFromBase64,
   resolveImageMimeTypeFromBytes,
+  resolveMimeTypeFromBytes,
 } from './imageMimeType';
 
 const PNG_BYTES = new Uint8Array([
@@ -18,6 +20,7 @@ const GIF_BYTES = new TextEncoder().encode('GIF89a');
 const WEBP_BYTES = new Uint8Array([
   0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50,
 ]);
+const PDF_BYTES = new TextEncoder().encode('%PDF-1.7\n');
 
 describe('imageMimeType', () => {
   it('should infer common image MIME types from bytes', async () => {
@@ -35,18 +38,30 @@ describe('imageMimeType', () => {
     expect(await inferImageMimeTypeFromBase64(PNG_BASE64)).toBe('image/png');
   });
 
+  it('should infer non-image MIME types from bytes', async () => {
+    expect(await inferMimeTypeFromBytes(PDF_BYTES)).toBe('application/pdf');
+  });
+
   it('should prefer detected bytes over a wrong declared MIME type', async () => {
     expect(await resolveImageMimeTypeFromBytes('image/jpeg', PNG_BYTES)).toBe('image/png');
     expect(await resolveImageMimeTypeFromBase64('image/jpeg', PNG_BASE64)).toBe('image/png');
   });
 
-  it('should fall back to declared MIME type when bytes are not recognized', async () => {
+  it('should fall back to declared image MIME type when bytes are not recognized', async () => {
     expect(
       await resolveImageMimeTypeFromBytes('image/jpeg; charset=utf-8', new Uint8Array([1])),
     ).toBe('image/jpeg');
   });
 
-  it('should fall back to image/png when no signal is available', async () => {
-    expect(await resolveImageMimeTypeFromBase64('', 'not-valid-base64')).toBe('image/png');
+  it('should not fabricate an image MIME type when no image signal is available', async () => {
+    expect(await resolveImageMimeTypeFromBase64('', 'not-valid-base64')).toBeUndefined();
+    expect(await resolveImageMimeTypeFromBytes('', PDF_BYTES)).toBeUndefined();
+  });
+
+  it('should resolve generic MIME types without defaulting unknown bytes to image/png', async () => {
+    expect(await resolveMimeTypeFromBytes('', PDF_BYTES)).toBe('application/pdf');
+    expect(await resolveMimeTypeFromBytes('', new Uint8Array([1]))).toBe(
+      'application/octet-stream',
+    );
   });
 });
