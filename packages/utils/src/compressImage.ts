@@ -1,3 +1,5 @@
+import { inferImageMimeTypeFromBytes } from './imageMimeType';
+
 export const MAX_IMAGE_SIZE = 1920;
 // Anthropic enforces a 5MB cap on the base64-encoded image payload. Base64
 // inflates binary by ~4/3, so a 3MB binary file maps to ~4MB base64 — gives
@@ -58,34 +60,52 @@ const dataUrlToFile = (dataUrl: string, name: string): File => {
   return new File([bytes], name, { type: mimeType });
 };
 
+const correctImageFileType = async (file: File): Promise<File> => {
+  const detectedMimeType = await inferImageMimeTypeFromBytes(await file.arrayBuffer());
+
+  if (!detectedMimeType || detectedMimeType === file.type) return file;
+
+  return new File([file], file.name, {
+    lastModified: file.lastModified,
+    type: detectedMimeType,
+  });
+};
+
 export const compressImageFile = (file: File): Promise<File> =>
   new Promise((resolve) => {
     const img = new Image();
     const objectUrl = URL.createObjectURL(file);
 
-    img.addEventListener('load', () => {
+    img.addEventListener('load', async () => {
       URL.revokeObjectURL(objectUrl);
 
-      // skip if image is small enough in both dimensions and file size
-      if (
-        img.width <= MAX_IMAGE_SIZE &&
-        img.height <= MAX_IMAGE_SIZE &&
-        file.size <= MAX_IMAGE_BYTES
-      ) {
+      try {
+        const normalizedFile = await correctImageFileType(file);
+        const outputType = normalizedFile.type;
+
+        // skip if image is small enough in both dimensions and file size
+        if (
+          img.width <= MAX_IMAGE_SIZE &&
+          img.height <= MAX_IMAGE_SIZE &&
+          normalizedFile.size <= MAX_IMAGE_BYTES
+        ) {
+          resolve(normalizedFile);
+          return;
+        }
+
+        // progressively shrink until under 5MB
+        let maxSize = MAX_IMAGE_SIZE;
+        let result: File;
+        do {
+          const dataUrl = compressImage({ img, maxSize, type: outputType });
+          result = dataUrlToFile(dataUrl, normalizedFile.name);
+          maxSize = Math.round(maxSize * 0.8);
+        } while (result.size > MAX_IMAGE_BYTES && maxSize > 100);
+
+        resolve(result);
+      } catch {
         resolve(file);
-        return;
       }
-
-      // progressively shrink until under 5MB
-      let maxSize = MAX_IMAGE_SIZE;
-      let result: File;
-      do {
-        const dataUrl = compressImage({ img, maxSize, type: file.type });
-        result = dataUrlToFile(dataUrl, file.name);
-        maxSize = Math.round(maxSize * 0.8);
-      } while (result.size > MAX_IMAGE_BYTES && maxSize > 100);
-
-      resolve(result);
     });
 
     img.addEventListener('error', () => {

@@ -25,6 +25,7 @@
     "debug": "^4.4.3",
     "dompurify": "^3.3.0",
     "fast-deep-equal": "^3.1.3",
+    "file-type": "^21.3.0",
     "mime": "^4.1.0",
     "model-bank": "workspace:*",
     "nanoid": "^5.1.6",

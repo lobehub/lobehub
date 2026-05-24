@@ -427,6 +427,59 @@ describe('FileUploadAction', () => {
         );
       });
 
+      it('should correct image file type from bytes when file.type is wrong', async () => {
+        const { result } = renderHook(() => useStore());
+
+        const pngBytes = new Uint8Array([
+          0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44,
+          0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f,
+          0x15, 0xc4, 0x89,
+        ]);
+        const mockFile = new File([pngBytes], 'mislabelled.jpg', { type: 'image/jpeg' });
+        const mockMetadata = {
+          date: '12345',
+          dirname: '/uploads',
+          filename: 'mislabelled.jpg',
+          path: '/uploads/mislabelled.jpg',
+        };
+        const mockCheckResult = { isExist: false };
+        const mockUploadResult = { data: mockMetadata, success: true };
+        const mockFileResponse = {
+          id: 'file-id-mislabelled',
+          url: 'https://example.com/mislabelled.jpg',
+        };
+        const { fileTypeFromBuffer } = await import('file-type');
+
+        vi.spyOn(mockFile, 'arrayBuffer').mockResolvedValue(pngBytes.buffer);
+        vi.mocked(fileTypeFromBuffer).mockResolvedValue({ ext: 'png', mime: 'image/png' } as any);
+        vi.mocked(getImageDimensions).mockResolvedValue(undefined);
+        vi.spyOn(fileService, 'checkFileHash').mockResolvedValue(mockCheckResult);
+        const uploadSpy = vi
+          .spyOn(uploadService, 'uploadFileToS3')
+          .mockResolvedValue(mockUploadResult);
+        vi.spyOn(fileService, 'createFile').mockResolvedValue(mockFileResponse);
+
+        await act(async () => {
+          await result.current.uploadWithProgress({
+            file: mockFile,
+          });
+        });
+
+        const uploadedFile = uploadSpy.mock.calls[0]?.[0];
+
+        expect(uploadedFile).toBeInstanceOf(File);
+        expect(uploadedFile).not.toBe(mockFile);
+        expect(uploadedFile?.name).toBe('mislabelled.jpg');
+        expect(uploadedFile?.type).toBe('image/png');
+        expect(fileService.createFile).toHaveBeenCalledWith(
+          expect.objectContaining({
+            fileType: 'image/png',
+            name: 'mislabelled.jpg',
+          }),
+          undefined,
+        );
+      });
+
       it('should detect file type from buffer when file.type is empty', async () => {
         const { result } = renderHook(() => useStore());
 
@@ -640,7 +693,7 @@ describe('FileUploadAction', () => {
 
     describe('error handling', () => {
       it('should handle checkFileHash errors', async () => {
-        const { result } = renderHook(() => useStore());
+        const { uploadWithProgress } = useStore.getState();
 
         const mockFile = new File(['test content'], 'error.png', { type: 'image/png' });
 
@@ -649,7 +702,7 @@ describe('FileUploadAction', () => {
 
         await expect(
           act(async () => {
-            await result.current.uploadWithProgress({
+            await uploadWithProgress({
               file: mockFile,
             });
           }),
@@ -657,7 +710,7 @@ describe('FileUploadAction', () => {
       });
 
       it('should handle uploadFileToS3 errors', async () => {
-        const { result } = renderHook(() => useStore());
+        const { uploadWithProgress } = useStore.getState();
 
         const mockFile = new File(['test content'], 'error.png', { type: 'image/png' });
         const mockCheckResult = { isExist: false };
@@ -668,7 +721,7 @@ describe('FileUploadAction', () => {
 
         await expect(
           act(async () => {
-            await result.current.uploadWithProgress({
+            await uploadWithProgress({
               file: mockFile,
             });
           }),
@@ -676,7 +729,7 @@ describe('FileUploadAction', () => {
       });
 
       it('should handle createFile errors', async () => {
-        const { result } = renderHook(() => useStore());
+        const { uploadWithProgress } = useStore.getState();
 
         const mockFile = new File(['test content'], 'error.png', { type: 'image/png' });
         const mockMetadata = {
@@ -695,7 +748,7 @@ describe('FileUploadAction', () => {
 
         await expect(
           act(async () => {
-            await result.current.uploadWithProgress({
+            await uploadWithProgress({
               file: mockFile,
             });
           }),

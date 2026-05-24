@@ -4,7 +4,7 @@ import type {
   Part,
   Tool as GoogleFunctionCallTool,
 } from '@google/genai';
-import { imageUrlToBase64 } from '@lobechat/utils';
+import { imageUrlToBase64, resolveImageMimeTypeFromBase64 } from '@lobechat/utils';
 
 import type { ChatCompletionTool, OpenAIChatMessage, UserMessageContentPart } from '../../types';
 import { safeParseJSON } from '../../utils/safeParseJSON';
@@ -18,10 +18,8 @@ const GOOGLE_SUPPORTED_IMAGE_TYPES = new Set([
   'image/webp',
 ]);
 
-const isImageTypeSupported = (mimeType: string | null): boolean => {
-  if (!mimeType) return true;
-  return GOOGLE_SUPPORTED_IMAGE_TYPES.has(mimeType.toLowerCase());
-};
+const isImageTypeSupported = (mimeType: string | null | undefined): mimeType is string =>
+  !!mimeType && GOOGLE_SUPPORTED_IMAGE_TYPES.has(mimeType.toLowerCase());
 
 /**
  * Magic thoughtSignature to bypass Gemini thought signature validation.
@@ -58,10 +56,12 @@ export const buildGooglePart = async (
           throw new TypeError("Image URL doesn't contain base64 data");
         }
 
-        if (!isImageTypeSupported(mimeType)) return undefined;
+        const resolvedMimeType = await resolveImageMimeTypeFromBase64(mimeType, base64);
+
+        if (!isImageTypeSupported(resolvedMimeType)) return undefined;
 
         return {
-          inlineData: { data: base64, mimeType: mimeType || 'image/png' },
+          inlineData: { data: base64, mimeType: resolvedMimeType },
           thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
         };
       }

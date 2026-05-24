@@ -22,6 +22,8 @@ vi.mock('../../utils/imageToBase64', () => ({
   imageUrlToBase64: vi.fn(),
 }));
 
+const PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ';
+
 describe('google contextBuilders', () => {
   describe('GEMINI_MAGIC_THOUGHT_SIGNATURE', () => {
     it('should use skip_thought_signature_validator for Vertex AI compatibility', () => {
@@ -76,6 +78,29 @@ describe('google contextBuilders', () => {
       expect(result).toEqual({
         inlineData: {
           data: 'iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==',
+          mimeType: 'image/png',
+        },
+        thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+      });
+    });
+
+    it('should correct base64 image MIME type when declared type does not match bytes', async () => {
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: PNG_BASE64,
+        mimeType: 'image/jpeg',
+        type: 'base64',
+      });
+
+      const content: UserMessageContentPart = {
+        image_url: { url: `data:image/jpeg;base64,${PNG_BASE64}` },
+        type: 'image_url',
+      };
+
+      const result = await buildGooglePart(content);
+
+      expect(result).toEqual({
+        inlineData: {
+          data: PNG_BASE64,
           mimeType: 'image/png',
         },
         thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
