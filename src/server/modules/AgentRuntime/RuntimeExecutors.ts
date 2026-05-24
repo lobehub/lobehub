@@ -277,7 +277,11 @@ export interface RuntimeExecutorContext {
    * AgentRuntimeService so the trace recorder can pick CE data up
    * out-of-band, keeping the heavy CE payload (agentDocuments, systemRole, …)
    * out of the `events` array and therefore out of the Redis state pipeline.
-   * See LOBE-9110.
+   *
+   * Context: agent-runtime state blob was hitting Upstash Redis 10MB limit
+   * because contextEngine.input (agentDocuments full inline) accounted for
+   * ~83% of each step. Routing CE through this callback keeps the heavy
+   * payload in trace only, reducing per-step Redis state from ~3.4MB to ~6KB.
    */
   tracingContextEngine?: (input: unknown, output: unknown) => void;
   userId?: string;

@@ -676,7 +676,10 @@ export class AgentRuntimeService {
       // consumed by traceRecorder.appendStep below. Routing CE this way keeps
       // its heavy payload (agentDocuments, systemRole, …) out of
       // `stepResult.events` and therefore out of the Redis state pipeline.
-      // See LOBE-9110.
+      //
+      // Context: contextEngine.input (agentDocuments) was ~2.7MB/step,
+      // hitting Upstash Redis 10MB limit. Bypassing events keeps the heavy
+      // payload in trace only, reducing per-step Redis state by ~500x.
       let contextEnginePayload: { input: unknown; output: unknown } | undefined;
 
       // Create Agent and Runtime instances
