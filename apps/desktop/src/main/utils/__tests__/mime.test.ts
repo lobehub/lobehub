@@ -57,4 +57,27 @@ describe('resolveLocalFileMimeType', () => {
     const binary = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x01, 0x02, 0x03]);
     expect(resolveLocalFileMimeType('/repo/strange.blob', binary)).toBe('application/octet-stream');
   });
+
+  it('forces known-binary extensions to octet-stream even when the prefix sniffs as text', () => {
+    // PDF header + xref + dictionary is pure ASCII for the first few KB —
+    // sniff would classify this as text without the extension short-circuit.
+    const pdfPrintablePrefix = Buffer.from(
+      '%PDF-1.7\n%\xC4\xE5\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n',
+    );
+    expect(resolveLocalFileMimeType('/repo/manual.pdf', pdfPrintablePrefix)).toBe(
+      'application/octet-stream',
+    );
+
+    // No null bytes in the first 8KB; without the short-circuit this would
+    // also be misclassified as text.
+    const fakeZipPrefix = Buffer.from('PK\x03\x04' + 'A'.repeat(64));
+    expect(resolveLocalFileMimeType('/repo/bundle.zip', fakeZipPrefix)).toBe(
+      'application/octet-stream',
+    );
+
+    const fakeMp3Prefix = Buffer.from('ID3' + 'A'.repeat(64));
+    expect(resolveLocalFileMimeType('/repo/song.mp3', fakeMp3Prefix)).toBe(
+      'application/octet-stream',
+    );
+  });
 });
