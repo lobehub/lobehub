@@ -175,6 +175,18 @@ export default {
   'heteroAgent.cloudRepo.notSet': 'No repo selected',
   'heteroAgent.cloudRepo.noRepos': 'No repositories configured. Add them in agent settings.',
   'heteroAgent.cloudRepo.multiSelected': '{{count}} repos selected',
+  'heteroAgent.executionTarget.deviceSection': 'Remote devices (lh connect)',
+  'heteroAgent.executionTarget.envSection': 'Execution environment',
+  'heteroAgent.executionTarget.loading': 'Loading devices…',
+  'heteroAgent.executionTarget.local': 'This device',
+  'heteroAgent.executionTarget.localDesc': 'Run as a local process on this desktop app',
+  'heteroAgent.executionTarget.noDevices':
+    'No devices yet. Run `lh connect` on a machine to add one.',
+  'heteroAgent.executionTarget.offline': 'Offline',
+  'heteroAgent.executionTarget.online': 'Online',
+  'heteroAgent.executionTarget.sandbox': 'Cloud sandbox',
+  'heteroAgent.executionTarget.sandboxDesc': 'Run in an ephemeral cloud sandbox',
+  'heteroAgent.executionTarget.unknownDevice': 'Unknown device',
   'hideForYou':
     "Direct message content is hidden. Please enable 'Show Direct Message Content' in settings to view.",
   'history.title': 'The Agent will keep only the latest {{count}} messages.',
