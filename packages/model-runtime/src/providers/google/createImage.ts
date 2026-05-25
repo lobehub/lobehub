@@ -19,25 +19,8 @@ const MAX_IMAGE_COUNT = 10;
 
 export const GOOGLE_IMAGE_TEXT_ONLY_RESPONSE_MESSAGE = [
   'The model returned text instead of an image.',
-  'Ask it to generate or edit an image instead of describing or analyzing one.',
+  'Ask it to generate or edit an image, or try a safer prompt if the request may have been blocked.',
 ].join(' ');
-
-const GOOGLE_IMAGE_TEXT_REFUSAL_MARKERS = [
-  "can't",
-  'cannot',
-  'harmful',
-  'inappropriate',
-  'not able',
-  'not allowed',
-  'policy',
-  'safety',
-  'sorry',
-  'unable',
-  'unsafe',
-  'violate',
-  'violates',
-  "won't",
-];
 
 interface ErrorWithRawProviderResponse extends Error {
   providerResponse?: GenerateContentResponse;
@@ -72,12 +55,6 @@ const getTextFromParts = (parts: Part[]) =>
     .map((part) => part.text?.trim())
     .filter(Boolean)
     .join('\n');
-
-const isTextOnlyImageRefusal = (parts: Part[]) => {
-  const text = getTextFromParts(parts).toLowerCase();
-
-  return GOOGLE_IMAGE_TEXT_REFUSAL_MARKERS.some((marker) => text.includes(marker));
-};
 
 /**
  * Process a single image URL and convert it to Google AI Part format
@@ -131,11 +108,7 @@ function extractImageFromResponse(response: GenerateContentResponse): CreateImag
     }
   }
 
-  if (
-    candidate.finishReason === 'STOP' &&
-    getTextFromParts(candidate.content.parts) &&
-    !isTextOnlyImageRefusal(candidate.content.parts)
-  ) {
+  if (candidate.finishReason === 'STOP' && getTextFromParts(candidate.content.parts)) {
     throw createGoogleImageNoImageError(GOOGLE_IMAGE_TEXT_ONLY_RESPONSE_MESSAGE, response);
   }
 

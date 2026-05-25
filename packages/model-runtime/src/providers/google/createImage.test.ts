@@ -1006,7 +1006,7 @@ describe('createGoogleImage', () => {
         expect(JSON.stringify(error)).not.toContain('cartoon portrait');
       });
 
-      it('should keep moderation wording for text-only safety refusals', async () => {
+      it('should keep text-only guidance safe for policy refusals', async () => {
         // Arrange
         const mockContentResponse = {
           candidates: [
@@ -1044,11 +1044,11 @@ describe('createGoogleImage', () => {
 
         // Assert
         expect(error).toMatchObject({
-          error: { message: 'No image data found in response' },
+          error: { message: GOOGLE_IMAGE_TEXT_ONLY_RESPONSE_MESSAGE },
           errorType: noImageErrorType,
           provider,
         });
-        expect(error.error.message).not.toBe(GOOGLE_IMAGE_TEXT_ONLY_RESPONSE_MESSAGE);
+        expect(error.error.message).toContain('try a safer prompt');
         expect(error.providerResponse).toMatchObject({
           candidates: [
             {
