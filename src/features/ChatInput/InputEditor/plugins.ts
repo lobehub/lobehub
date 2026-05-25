@@ -16,7 +16,7 @@ import { ReactReferTopicPlugin } from './ReferTopic';
 type EditorPlugins = NonNullable<Parameters<typeof Editor>[0]['plugins']>;
 
 interface CreateChatInputRichPluginsOptions {
-  linkPlugin?: EditorPlugins[number];
+  linkPlugin?: EditorPlugins[number] | false;
   mathPlugin?: EditorPlugins[number];
 }
 
@@ -34,7 +34,7 @@ export const createChatInputRichPlugins = ({
   ReactCodePlugin,
   ReactCodemirrorPlugin,
   ReactHRPlugin,
-  linkPlugin,
+  ...(linkPlugin ? [linkPlugin] : []),
   ReactVirtualBlockPlugin,
   mathPlugin,
   ...CHAT_INPUT_EMBED_PLUGINS,

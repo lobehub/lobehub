@@ -409,6 +409,7 @@ const InputEditor = memo<{
     const basePlugins = !enableRichRender
       ? CHAT_INPUT_EMBED_PLUGINS
       : createChatInputRichPlugins({
+          linkPlugin: false,
           mathPlugin: Editor.withProps(ReactMathPlugin, {
             renderComp: expand
               ? undefined
