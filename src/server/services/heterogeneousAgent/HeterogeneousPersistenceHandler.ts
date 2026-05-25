@@ -476,7 +476,13 @@ export class HeterogeneousPersistenceHandler {
     const topic = await this.deps.topicModel.findById(topicId);
     const running = topic?.metadata?.runningOperation;
 
-    if (running && running.operationId !== operationId) {
+    if (!running) {
+      throw new StaleHeteroOperationError(
+        `Stale hetero operation ${operationId} on topic ${topicId}; no active runningOperation`,
+      );
+    }
+
+    if (running.operationId !== operationId) {
       throw new StaleHeteroOperationError(
         `Stale hetero operation ${operationId} on topic ${topicId}; current operation is ${running.operationId}`,
       );
@@ -484,18 +490,29 @@ export class HeterogeneousPersistenceHandler {
 
     // Prefer the assistantMessageId forwarded in the ingest payload (sandbox path).
     // The orchestrator already has it in-memory and passes it through env → CLI → tRPC,
-    // so this path never blocks on the DB write of topic.metadata.runningOperation
-    // being visible on this replica — eliminating the cold-start race condition.
+    // so this path avoids depending on `runningOperation.assistantMessageId`
+    // itself being readable on this replica. We still require the topic's
+    // runningOperation binding to match `operationId`, otherwise late/retried
+    // batches after finish could keep mutating a completed turn.
     // Fall back to topic.metadata for desktop / old-CLI callers that lack the field.
-    const baseAssistantMessageId = seedAssistantMessageId ?? running?.assistantMessageId;
+    const baseAssistantMessageId = seedAssistantMessageId ?? running.assistantMessageId;
 
     if (!baseAssistantMessageId) {
-      if (!running || running.operationId !== operationId) {
+      throw new Error(`runningOperation on topic ${topicId} is missing assistantMessageId`);
+    }
+
+    if (seedAssistantMessageId) {
+      const seededMsg = await this.deps.messageModel.findById(seedAssistantMessageId);
+      if (!seededMsg) {
         throw new Error(
-          `No matching runningOperation on topic ${topicId} for operation ${operationId} — orchestrator must seed topic.metadata.runningOperation before ingest`,
+          `Seeded assistantMessageId ${seedAssistantMessageId} was not found for topic ${topicId}`,
         );
       }
-      throw new Error(`runningOperation on topic ${topicId} is missing assistantMessageId`);
+      if (seededMsg.topicId !== topicId) {
+        throw new Error(
+          `Seeded assistantMessageId ${seedAssistantMessageId} does not belong to topic ${topicId}`,
+        );
+      }
     }
 
     // Prefer the latest step's assistant message id (written by handleStepStart)

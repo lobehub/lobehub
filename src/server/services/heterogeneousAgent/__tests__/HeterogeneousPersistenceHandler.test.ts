@@ -237,6 +237,53 @@ describe('HeterogeneousPersistenceHandler', () => {
       ).rejects.toThrow(/Stale hetero operation/);
     });
 
+    it('rejects seeded assistant ids once runningOperation has been cleared', async () => {
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+      h.topicModel.findById.mockResolvedValueOnce({
+        agentId: null,
+        id: 'topic-1',
+        metadata: {} as any,
+      });
+
+      await expect(
+        h.handler.ingest({
+          assistantMessageId: 'asst-1',
+          events: [buildEvent('stream_chunk', 0, { chunkType: 'text', content: 'x' })],
+          operationId: 'op-1',
+          topicId: 'topic-1',
+        }),
+      ).rejects.toThrow(/no active runningOperation/);
+    });
+
+    it('validates seeded assistant ids belong to the current topic', async () => {
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      h.messages.set('asst-other-topic', {
+        agentId: null,
+        content: '',
+        id: 'asst-other-topic',
+        role: 'assistant',
+        topicId: 'topic-2',
+      });
+
+      await expect(
+        h.handler.ingest({
+          assistantMessageId: 'asst-other-topic',
+          events: [buildEvent('stream_chunk', 0, { chunkType: 'text', content: 'x' })],
+          operationId: 'op-1',
+          topicId: 'topic-1',
+        }),
+      ).rejects.toThrow(/does not belong to topic topic-1/);
+    });
+
     it('rejects mid-flight topic mismatch on the same operationId', async () => {
       const h = createHarness({
         assistantMessageId: 'asst-1',
