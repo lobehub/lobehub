@@ -6,6 +6,7 @@ import {
   getDefaultReasonDetail,
   type StreamChunkData,
   type StreamEvent,
+  stripFinalStateInEventData,
 } from './StreamEventManager';
 import type { IStreamEventManager, PublishAgentRuntimeEndParams } from './types';
 
@@ -147,7 +148,18 @@ export class GatewayStreamNotifier implements IStreamEventManager {
   // ─── Gateway HTTP helpers ───
 
   private pushEvent(operationId: string, event: Record<string, unknown>) {
-    this.httpPost('/api/operations/push-event', { event, operationId }).catch(() => {});
+    // Mirror the Redis publisher's chokepoint — strip
+    // `finalState.messages` + tool-set fields off the gateway WS push
+    // payload too. The gateway forwards events verbatim to clients, and
+    // downstream consumers don't read these fields, so carrying them
+    // would re-introduce the same multi-megabyte serialization that
+    // crashed the xadd path.
+    const sanitizedEvent =
+      event.data === undefined ? event : { ...event, data: stripFinalStateInEventData(event.data) };
+    this.httpPost('/api/operations/push-event', {
+      event: sanitizedEvent,
+      operationId,
+    }).catch(() => {});
   }
 
   /**

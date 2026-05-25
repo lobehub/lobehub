@@ -41,6 +41,61 @@ export const getDefaultReasonDetail = (finalState: any, reason?: string): string
 };
 
 /**
+ * Drop reconstructible / heavy fields from an `AgentState` before
+ * serializing it into a Redis stream event. `messages` is the size
+ * driver — long topics with `compressedGroup` envelopes can push a
+ * single `xadd` past Upstash's 10 MB request limit, manifesting on
+ * the gateway as a misleading watchdog "Operation idle" timeout.
+ *
+ * The dropped fields are all reconstructible:
+ *
+ * - `messages` — canonical copy lives in the DB (UIChatMessage rows)
+ *   and the runtime in-memory state; in-process consumers that need
+ *   it (e.g. `execSubAgentTask.onComplete`) receive the full state
+ *   via the local `HookContext` channel, not via the stream.
+ * - `operationToolSet`, `toolManifestMap`, `toolSourceMap`, `tools`
+ *   — operation-level snapshot; back-compat copies of one struct.
+ *
+ * Mirrors the `done`-event strip in `OperationTraceRecorder.appendStep`;
+ * keep the two lists in sync if either set changes.
+ */
+const stripStateForStream = <T extends Record<string, any>>(
+  state: T | undefined,
+): T | undefined => {
+  if (!state) return state;
+  const {
+    messages: _messages,
+    operationToolSet: _operationToolSet,
+    toolManifestMap: _toolManifestMap,
+    toolSourceMap: _toolSourceMap,
+    tools: _tools,
+    ...rest
+  } = state;
+  return rest as T;
+};
+
+/**
+ * Chokepoint helper applied inside every stream-event publish site.
+ * If the event `data` carries a `finalState`, strip `messages` + the
+ * tool-set group off it (see `stripStateForStream` for the rationale).
+ *
+ * Centralizing the strip here means new callers — including direct
+ * `publishStreamEvent` users (e.g. `RuntimeExecutors`, the per-step
+ * publish in `AgentRuntimeService.executeStep`) — get the size
+ * protection automatically, with no per-site bookkeeping.
+ *
+ * Returns the original reference when no stripping is needed so the
+ * common path stays allocation-free.
+ */
+export const stripFinalStateInEventData = (data: unknown): unknown => {
+  if (!data || typeof data !== 'object') return data;
+  const record = data as Record<string, unknown>;
+  const finalState = record.finalState;
+  if (!finalState || typeof finalState !== 'object') return data;
+  return { ...record, finalState: stripStateForStream(finalState as Record<string, any>) };
+};
+
+/**
  * Server-side stream event shape. Wire-compatible with `AgentStreamEvent` in
  * `@lobechat/agent-gateway-client` (the type union is the single source of
  * truth) — heterogeneous CLI agents that ingest via `aiAgent.heteroIngest`
@@ -103,6 +158,11 @@ export class StreamEventManager {
 
     const eventData: StreamEvent = {
       ...event,
+      // Chokepoint strip — every event passing through here gets its
+      // `data.finalState` trimmed (messages + tool-set fields) before
+      // serialization so a single xadd can't blow past Upstash's 10 MB
+      // request limit on long topics.
+      data: stripFinalStateInEventData(event.data),
       operationId,
       timestamp: Date.now(),
     };
@@ -191,6 +251,10 @@ export class StreamEventManager {
     reasonDetail,
     uiMessages,
   }: PublishAgentRuntimeEndParams): Promise<string> {
+    // `finalState.messages` + tool-set fields are stripped centrally
+    // inside `publishStreamEvent`; callers stay dumb. `reasonDetail`
+    // derivation below uses the un-stripped in-process `finalState`
+    // so the error message remains available.
     return this.publishStreamEvent(operationId, {
       data: {
         finalState,

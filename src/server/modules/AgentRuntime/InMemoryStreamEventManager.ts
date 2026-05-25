@@ -1,6 +1,10 @@
 import debug from 'debug';
 
-import { type StreamChunkData, type StreamEvent } from './StreamEventManager';
+import {
+  type StreamChunkData,
+  type StreamEvent,
+  stripFinalStateInEventData,
+} from './StreamEventManager';
 import { type IStreamEventManager, type PublishAgentRuntimeEndParams } from './types';
 
 const log = debug('lobe-server:agent-runtime:in-memory-stream-event-manager');
@@ -41,6 +45,11 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
 
     const eventData: StreamEvent = {
       ...event,
+      // Mirror the Redis-backed manager's chokepoint strip so in-memory
+      // event shape stays identical to the production wire format —
+      // tests run against this manager and would otherwise mask
+      // regressions in the strip behaviour.
+      data: stripFinalStateInEventData(event.data),
       id: eventId,
       operationId,
       timestamp: Date.now(),
@@ -105,6 +114,7 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
     reasonDetail,
     uiMessages,
   }: PublishAgentRuntimeEndParams): Promise<string> {
+    // Strip happens centrally inside `publishStreamEvent`.
     return this.publishStreamEvent(operationId, {
       data: {
         finalState,

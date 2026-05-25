@@ -2778,7 +2778,9 @@ export const createRuntimeExecutors = (
       }
     }
 
-    // Publish execution complete event
+    // Publish execution complete event. `finalState.messages` + tool-set
+    // fields are stripped centrally inside `publishStreamEvent` so this
+    // call site stays unaware.
     await streamManager.publishStreamEvent(operationId, {
       data: {
         finalState: { ...state, status: 'done' },
@@ -3087,7 +3089,8 @@ export const createRuntimeExecutors = (
     newState.lastModified = new Date().toISOString();
     newState.status = 'done';
 
-    // Publish completion event
+    // Publish completion event. finalState stripped centrally inside
+    // `publishStreamEvent`.
     await streamManager.publishStreamEvent(operationId, {
       data: {
         finalState: newState,
