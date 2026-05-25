@@ -1062,6 +1062,27 @@ describe('aiChatRouter', () => {
       expect(result.tracingId).toMatch(/^[0-9a-f-]{36}$/);
     });
 
+    it('rejects a caller-supplied tracing.tracingId that is not a UUID', async () => {
+      const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
+      const mockGenerateObject = vi.fn();
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+        generateObject: mockGenerateObject,
+      } as any);
+
+      const caller = aiChatRouter.createCaller({ ...mockCtx, serverDB: {} } as any);
+
+      await expect(
+        caller.outputJSON({
+          messages: [],
+          model: 'gpt-4o-mini',
+          provider: 'openai',
+          tracing: { tracingId: 'not-a-uuid' },
+        }),
+      ).rejects.toThrow();
+
+      expect(mockGenerateObject).not.toHaveBeenCalled();
+    });
+
     it('honours caller-supplied tracing.tracingId instead of generating a new one', async () => {
       const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
       const mockGenerateObject = vi.fn().mockResolvedValue({ completion: 'ok' });
