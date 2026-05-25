@@ -43,6 +43,11 @@ export const UserLabSchema = z.object({
    */
   enableAgentSelfIteration: z.boolean().optional(),
   /**
+   * surface the execution-device switcher for heterogeneous agents
+   * (lets users pick local / cloud sandbox / a bound device)
+   */
+  enableExecutionDeviceSwitcher: z.boolean().optional(),
+  /**
    * enable server-side agent execution via Gateway WebSocket
    */
   enableGatewayMode: z.boolean().optional(),

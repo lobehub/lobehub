@@ -904,49 +904,89 @@ export class AiAgentService {
             userMessageId: userMsg?.id ?? parentMessageId ?? '',
           };
         }
-      } else if (requestedDeviceId) {
-        // Local CLI (claude-code / codex) — dispatch to user's connected desktop.
-        const result = await deviceProxy.dispatchAgentRun({
-          ...heteroParams,
-          deviceId: requestedDeviceId,
-        });
-        if (!result.success) {
-          log('execAgent: hetero device dispatch failed: %s', result.error);
-          await this.messageModel.update(assistantMsg.id, {
-            content: '',
-            error: {
-              body: { detail: result.error },
-              message: result.error ?? 'Device dispatch failed',
-              type: 'ServerAgentRuntimeError',
-            },
-          });
-          return {
-            agentId: resolvedAgentId,
-            assistantMessageId: assistantMsg.id,
-            autoStarted: false,
-            createdAt: new Date().toISOString(),
-            error: result.error,
-            message: 'Hetero agent device dispatch failed',
-            operationId,
-            status: 'error',
-            success: false,
-            timestamp: new Date().toISOString(),
-            topicId,
-            userMessageId: userMsg?.id ?? parentMessageId ?? '',
-          };
-        }
       } else {
-        // Cloud sandbox path — only for local CLI agents (claude-code / codex).
-        // Remote agents (openclaw / hermes) always require a bound device.
-        const { spawnHeteroSandbox } =
-          await import('@/server/services/heterogeneousAgent/sandboxRunner');
-        spawnHeteroSandbox({
-          ...heteroParams,
-          agentType: heteroType as 'claude-code' | 'codex',
-          marketService: this.marketService,
-        }).catch((err) => {
-          log('execAgent: hetero sandbox spawn failed: %O', err);
-        });
+        // Local CLI hetero (claude-code / codex) — fork between device dispatch
+        // and cloud sandbox based on:
+        //   1. requestedDeviceId (topic-level override) — always wins
+        //   2. agencyConfig.executionTarget (agent-level default)
+        //        - 'device'  → dispatch to boundDeviceId (errors if unset/offline)
+        //        - 'sandbox' → cloud sandbox
+        //        - 'local' / undefined → cloud sandbox (server can't spawn locally)
+        const executionTarget = agentConfig.agencyConfig?.executionTarget;
+        const dispatchDeviceId = requestedDeviceId || agentConfig.agencyConfig?.boundDeviceId;
+        const useDevice = !!requestedDeviceId || executionTarget === 'device';
+
+        if (useDevice) {
+          if (!dispatchDeviceId) {
+            log('execAgent: hetero executionTarget=device but no boundDeviceId set');
+            await this.messageModel.update(assistantMsg.id, {
+              content: '',
+              error: {
+                body: {
+                  detail:
+                    'No device bound. Pick a device in the Execution Device switcher, or switch to Cloud sandbox.',
+                },
+                message: 'No bound device for hetero agent',
+                type: 'ServerAgentRuntimeError',
+              },
+            });
+            return {
+              agentId: resolvedAgentId,
+              assistantMessageId: assistantMsg.id,
+              autoStarted: false,
+              createdAt: new Date().toISOString(),
+              error: 'No bound device',
+              message: 'Hetero agent requires a bound device',
+              operationId,
+              status: 'error',
+              success: false,
+              timestamp: new Date().toISOString(),
+              topicId,
+              userMessageId: userMsg?.id ?? parentMessageId ?? '',
+            };
+          }
+          const result = await deviceProxy.dispatchAgentRun({
+            ...heteroParams,
+            deviceId: dispatchDeviceId,
+          });
+          if (!result.success) {
+            log('execAgent: hetero device dispatch failed: %s', result.error);
+            await this.messageModel.update(assistantMsg.id, {
+              content: '',
+              error: {
+                body: { detail: result.error },
+                message: result.error ?? 'Device dispatch failed',
+                type: 'ServerAgentRuntimeError',
+              },
+            });
+            return {
+              agentId: resolvedAgentId,
+              assistantMessageId: assistantMsg.id,
+              autoStarted: false,
+              createdAt: new Date().toISOString(),
+              error: result.error,
+              message: 'Hetero agent device dispatch failed',
+              operationId,
+              status: 'error',
+              success: false,
+              timestamp: new Date().toISOString(),
+              topicId,
+              userMessageId: userMsg?.id ?? parentMessageId ?? '',
+            };
+          }
+        } else {
+          // Cloud sandbox path — only for local CLI agents (claude-code / codex).
+          // Remote agents (openclaw / hermes) always require a bound device.
+          const { spawnHeteroSandbox } =
+            await import('@/server/services/heterogeneousAgent/sandboxRunner');
+          spawnHeteroSandbox({
+            ...heteroParams,
+            agentType: heteroType as 'claude-code' | 'codex',
+            marketService: this.marketService,
+          }).catch((err) => {
+            log('execAgent: hetero sandbox spawn failed: %O', err);
+          });
+        }
       }
 
       let gatewayToken: string | undefined;
