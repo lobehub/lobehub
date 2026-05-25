@@ -353,7 +353,8 @@ export default class GatewayConnectionCtr extends ControllerModule {
       do {
         previous = stripped;
         stripped = stripped
-          .replaceAll(/<!--[\s\S]*?-->/g, '') // strip HTML comments
+          .replaceAll(/<!--[\s\S]*?-->/g, '') // strip complete HTML comments
+          .replaceAll(/[<>]/g, '') // strip any remaining HTML delimiter chars
           .replaceAll(/^#+\s.*$/gm, ''); // strip Markdown headings
       } while (stripped !== previous);
       return (
