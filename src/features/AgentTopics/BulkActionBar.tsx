@@ -61,8 +61,10 @@ const BulkActionBar = memo(() => {
   }, [selectedIds, favoriteTopic, exitSelectMode]);
 
   const handleBatchArchive = useCallback(async () => {
+    // "Archive" in the UI is a friendlier name for marking topics as
+    // completed — the dedicated `archived` status isn't surfaced to users.
     await Promise.all(
-      selectedIds.map((id) => updateTopicStatus({ status: 'archived', topicId: id })),
+      selectedIds.map((id) => updateTopicStatus({ status: 'completed', topicId: id })),
     );
     exitSelectMode();
   }, [selectedIds, updateTopicStatus, exitSelectMode]);

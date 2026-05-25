@@ -51,6 +51,7 @@ export class TopicService {
       isInbox: params.isInbox,
       pageSize: params.pageSize,
       triggers: params.triggers,
+      withDetails: params.withDetails,
     }) as any;
   };
 

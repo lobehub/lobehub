@@ -73,6 +73,13 @@ interface QueryTopicParams {
    * Include only topics matching the given trigger types (positive filter)
    */
   triggers?: string[];
+  /**
+   * When true, the SELECT also returns the heavier card-detail columns used
+   * by the per-agent Topics management page: `firstUserMessage` (subquery),
+   * `messageCount` (subquery), `description`, `trigger`, plus mocked `cost`
+   * and `tokenUsage`. Defaults to false so sidebar paths stay cheap.
+   */
+  withDetails?: boolean;
 }
 
 export interface ModelTimingContext extends TimingSink {}
@@ -104,6 +111,7 @@ export class TopicModel {
     isInbox,
     timing,
     triggers,
+    withDetails = false,
   }: QueryTopicParams = {}) => {
     const queryStartedAt = Date.now();
     logTiming(timing, 'db.topic.query:start', {
@@ -113,8 +121,33 @@ export class TopicModel {
       hasGroupId: !!groupId,
       isInbox: !!isInbox,
       pageSize,
+      withDetails,
     });
     const offset = current * pageSize;
+
+    // Heavier columns gated behind `withDetails`: correlated subqueries for
+    // first-user-message + message count, plus mock cost/token stats and the
+    // `description` / `trigger` columns that sidebar paths don't consume.
+    const detailColumns = withDetails
+      ? {
+          cost: sql<number>`(round((abs(hashtext(${topics.id})) % 500) / 100.0, 2))::float8`.as(
+            'cost',
+          ),
+          description: topics.description,
+          firstUserMessage: sql<string | null>`(
+            SELECT ${messages.content}
+            FROM ${messages}
+            WHERE ${messages.topicId} = ${topics.id} AND ${messages.role} = 'user'
+            ORDER BY ${messages.createdAt} ASC
+            LIMIT 1
+          )`.as('first_user_message'),
+          messageCount: sql<number>`(
+            SELECT count(*)::int FROM ${messages} WHERE ${messages.topicId} = ${topics.id}
+          )`.as('message_count'),
+          tokenUsage: sql<number>`(abs(hashtext(${topics.id})) % 50000) + 1000`.as('token_usage'),
+          trigger: topics.trigger,
+        }
+      : {};
     const includeTriggerCondition =
       includeTriggers && includeTriggers.length > 0
         ? inArray(topics.trigger, includeTriggers)
@@ -151,33 +184,22 @@ export class TopicModel {
           'db.topic.query.group.items.select',
           () =>
             this.db
+              // Spread with `as any` because Drizzle's `.select` infers a strict
+              // SelectedFields shape and the conditional `detailColumns` widens
+              // to a union; the runtime shape is correct and the client casts
+              // back to `ChatTopic[]` after TRPC serialization.
               .select({
                 completedAt: topics.completedAt,
-                cost: sql<number>`round((abs(hashtext(${topics.id})) % 500) / 100.0, 2)`.as('cost'),
                 createdAt: topics.createdAt,
-                description: topics.description,
                 favorite: topics.favorite,
-                firstUserMessage: sql<string | null>`(
-                  SELECT ${messages.content}
-                  FROM ${messages}
-                  WHERE ${messages.topicId} = ${topics.id} AND ${messages.role} = 'user'
-                  ORDER BY ${messages.createdAt} ASC
-                  LIMIT 1
-                )`.as('first_user_message'),
                 historySummary: topics.historySummary,
                 id: topics.id,
-                messageCount: sql<number>`(
-                  SELECT count(*)::int FROM ${messages} WHERE ${messages.topicId} = ${topics.id}
-                )`.as('message_count'),
                 metadata: topics.metadata,
                 status: topics.status,
                 title: topics.title,
-                tokenUsage: sql<number>`(abs(hashtext(${topics.id})) % 50000) + 1000`.as(
-                  'token_usage',
-                ),
-                trigger: topics.trigger,
                 updatedAt: topics.updatedAt,
-              })
+                ...detailColumns,
+              } as any)
               .from(topics)
               .where(whereCondition)
               .orderBy(desc(topics.favorite), desc(topics.updatedAt))
@@ -262,33 +284,22 @@ export class TopicModel {
           'db.topic.query.agent.items.select',
           () =>
             this.db
+              // Spread with `as any` because Drizzle's `.select` infers a strict
+              // SelectedFields shape and the conditional `detailColumns` widens
+              // to a union; the runtime shape is correct and the client casts
+              // back to `ChatTopic[]` after TRPC serialization.
               .select({
                 completedAt: topics.completedAt,
-                cost: sql<number>`round((abs(hashtext(${topics.id})) % 500) / 100.0, 2)`.as('cost'),
                 createdAt: topics.createdAt,
-                description: topics.description,
                 favorite: topics.favorite,
-                firstUserMessage: sql<string | null>`(
-                  SELECT ${messages.content}
-                  FROM ${messages}
-                  WHERE ${messages.topicId} = ${topics.id} AND ${messages.role} = 'user'
-                  ORDER BY ${messages.createdAt} ASC
-                  LIMIT 1
-                )`.as('first_user_message'),
                 historySummary: topics.historySummary,
                 id: topics.id,
-                messageCount: sql<number>`(
-                  SELECT count(*)::int FROM ${messages} WHERE ${messages.topicId} = ${topics.id}
-                )`.as('message_count'),
                 metadata: topics.metadata,
                 status: topics.status,
                 title: topics.title,
-                tokenUsage: sql<number>`(abs(hashtext(${topics.id})) % 50000) + 1000`.as(
-                  'token_usage',
-                ),
-                trigger: topics.trigger,
                 updatedAt: topics.updatedAt,
-              })
+                ...detailColumns,
+              } as any)
               .from(topics)
               .where(agentWhere)
               .orderBy(desc(topics.favorite), desc(topics.updatedAt))
@@ -332,35 +343,21 @@ export class TopicModel {
         'db.topic.query.container.items.select',
         () =>
           this.db
+            // See note on the group-branch select above re: `as any` cast.
             .select({
               agentId: topics.agentId,
               completedAt: topics.completedAt,
-              cost: sql<number>`round((abs(hashtext(${topics.id})) % 500) / 100.0, 2)`.as('cost'),
               createdAt: topics.createdAt,
-              description: topics.description,
               favorite: topics.favorite,
-              firstUserMessage: sql<string | null>`(
-                SELECT ${messages.content}
-                FROM ${messages}
-                WHERE ${messages.topicId} = ${topics.id} AND ${messages.role} = 'user'
-                ORDER BY ${messages.createdAt} ASC
-                LIMIT 1
-              )`.as('first_user_message'),
               historySummary: topics.historySummary,
               id: topics.id,
-              messageCount: sql<number>`(
-                SELECT count(*)::int FROM ${messages} WHERE ${messages.topicId} = ${topics.id}
-              )`.as('message_count'),
               metadata: topics.metadata,
               sessionId: topics.sessionId,
               status: topics.status,
               title: topics.title,
-              tokenUsage: sql<number>`(abs(hashtext(${topics.id})) % 50000) + 1000`.as(
-                'token_usage',
-              ),
-              trigger: topics.trigger,
               updatedAt: topics.updatedAt,
-            })
+              ...detailColumns,
+            } as any)
             .from(topics)
             .where(whereCondition)
             // In boolean sorting, false is considered "smaller" than true.

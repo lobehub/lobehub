@@ -1,9 +1,9 @@
 'use client';
 
 import { formatPrice, formatTokenNumber } from '@lobechat/utils/format';
-import { Block, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { Block, Checkbox, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { Check, CircleDollarSign, FolderIcon, MessageSquare, Star, Zap } from 'lucide-react';
+import { CircleDollarSign, FolderIcon, MessageSquare, Star, Zap } from 'lucide-react';
 import { memo, type MouseEvent, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -29,6 +29,9 @@ const styles = createStaticStyles(({ css }) => ({
     display: flex;
     flex-direction: column;
 
+    /* min-height keeps short cards consistent without forcing tall empty
+       whitespace — preview + footer can still grow the card naturally. */
+    min-height: 140px;
     padding: 14px;
 
     transition:
@@ -50,38 +53,14 @@ const styles = createStaticStyles(({ css }) => ({
     box-shadow: 0 0 0 1px ${cssVar.colorPrimary};
   `,
   checkbox: css`
-    cursor: pointer;
-
     position: absolute;
     z-index: 1;
     inset-block-start: 10px;
     inset-inline-end: 10px;
 
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 20px;
-    height: 20px;
-    border: 1.5px solid ${cssVar.colorBorderSecondary};
-    border-radius: 4px;
-
     opacity: 0;
-    background: ${cssVar.colorBgContainer};
 
-    transition:
-      opacity 0.15s,
-      border-color 0.15s;
-
-    &:hover {
-      border-color: ${cssVar.colorPrimary};
-    }
-  `,
-  checkboxChecked: css`
-    border-color: ${cssVar.colorPrimary};
-    color: #fff;
-    opacity: 1 !important;
-    background: ${cssVar.colorPrimary};
+    transition: opacity 0.15s;
   `,
   checkboxVisible: css`
     opacity: 1;
@@ -93,6 +72,8 @@ const styles = createStaticStyles(({ css }) => ({
     -webkit-line-clamp: 2;
   `,
   footer: css`
+    /* push to bottom so cards with short content keep the stats row anchored */
+    margin-block-start: auto;
     padding-block-start: 10px;
     border-block-start: 1px solid ${cssVar.colorSplit};
   `,
@@ -131,16 +112,14 @@ const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
     [selectMode, topic.id, agentId, toggleSelected, navigate],
   );
 
-  const handleCheckboxClick = useCallback(
-    (e: MouseEvent) => {
-      // Stop the card's onClick from firing — checkbox owns its own behaviour:
-      // enters select-mode on first click and toggles this card's selection.
-      e.stopPropagation();
-      if (!selectMode) toggleSelectMode();
-      toggleSelected(topic.id);
-    },
-    [selectMode, topic.id, toggleSelected, toggleSelectMode],
-  );
+  const handleCheckboxChange = useCallback(() => {
+    if (!selectMode) toggleSelectMode();
+    toggleSelected(topic.id);
+  }, [selectMode, topic.id, toggleSelected, toggleSelectMode]);
+
+  const stopPropagation = useCallback((e: MouseEvent) => {
+    e.stopPropagation();
+  }, []);
 
   const projectLabel = getProjectLabel(topic);
   const status = topic.status ?? 'active';
@@ -149,9 +128,11 @@ const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
   const preview =
     topic.description?.trim() || topic.historySummary?.trim() || topic.firstUserMessage?.trim();
   const updatedAt = useActivityTime(topic.updatedAt);
-  const messageCount = topic.messageCount ?? 0;
-  const tokenUsage = topic.tokenUsage ?? 0;
-  const cost = topic.cost ?? 0;
+  // Postgres `numeric` / `int` round-trip through TRPC/JSON as strings in
+  // some shapes, so coerce defensively before any `.toFixed` / format call.
+  const messageCount = Number(topic.messageCount ?? 0);
+  const tokenUsage = Number(topic.tokenUsage ?? 0);
+  const cost = Number(topic.cost ?? 0);
 
   return (
     <Block
@@ -160,19 +141,18 @@ const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
       variant={'outlined'}
       onClick={handleClick}
     >
-      <span
+      <div
         className={[
           styles.checkbox,
           CHECKBOX_CLASS,
           (selectMode || selected) && styles.checkboxVisible,
-          selected && styles.checkboxChecked,
         ]
           .filter(Boolean)
           .join(' ')}
-        onClick={handleCheckboxClick}
+        onClick={stopPropagation}
       >
-        {selected && <Icon icon={Check} size={12} />}
-      </span>
+        <Checkbox checked={selected} onChange={handleCheckboxChange} />
+      </div>
 
       <Flexbox horizontal align={'center'} gap={6}>
         {topic.favorite && (

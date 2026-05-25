@@ -7,7 +7,7 @@ import { Loader2, PinIcon } from 'lucide-react';
 import { type CSSProperties, type DragEvent } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { usePrefetchAgent } from '@/hooks/usePrefetchAgent';
@@ -20,6 +20,10 @@ import { useAgentModal } from '../../ModalProvider';
 import Actions from '../Item/Actions';
 import Avatar from './Avatar';
 import { useAgentDropdownMenu } from './useDropdownMenu';
+
+// Sub-routes that are agent-scoped views (not tied to a specific topic/task id),
+// safe to carry over when switching between agents from the sidebar switcher.
+const PRESERVED_AGENT_SUB_PATHS = new Set(['topics', 'profile', 'channel']);
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   badge: css`
@@ -115,8 +119,19 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate }) 
     displayTitle
   );
 
-  // Get URL for this agent
-  const agentUrl = SESSION_CHAT_URL(id, false);
+  // Get URL for this agent — when switching from within an agent's sub-view
+  // (e.g. /agent/A/topics), preserve the sub-route on the new agent so users
+  // don't lose their place. Only safe for agent-scoped views; topic/task ids
+  // belong to the previous agent and must not be carried over.
+  const { pathname } = useLocation();
+  const agentUrl = useMemo(() => {
+    const match = pathname.match(/^\/agent\/[^/]+\/([^/]+)\/?$/);
+    const subPath = match?.[1];
+    if (subPath && PRESERVED_AGENT_SUB_PATHS.has(subPath)) {
+      return `/agent/${id}/${subPath}`;
+    }
+    return SESSION_CHAT_URL(id, false);
+  }, [id, pathname]);
 
   // Memoize event handlers
   const handleMouseEnter = useCallback(() => {

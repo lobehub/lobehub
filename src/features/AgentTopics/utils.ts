@@ -39,13 +39,7 @@ export const matchesGroup = (topic: ChatTopic, groupIds: string[]): boolean => {
 
 export const matchesTrigger = (topic: ChatTopic, triggers: TriggerFilter[]): boolean => {
   if (triggers.length === 0) return true;
-  // Existing rows can have `trigger=null` even when they were spawned by a
-  // cron job (the field was added later). Detect that case via
-  // `metadata.cronJobId` so Daily Brief style topics don't leak into the
-  // default Chat filter.
-  const effective: TriggerFilter =
-    (topic.trigger as TriggerFilter | null | undefined) ??
-    (topic.metadata?.cronJobId ? 'cron' : 'chat');
+  const effective: TriggerFilter = (topic.trigger as TriggerFilter | null | undefined) ?? 'chat';
   return triggers.includes(effective);
 };
 

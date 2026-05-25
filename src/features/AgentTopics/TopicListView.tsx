@@ -1,22 +1,24 @@
 'use client';
 
 import type { GroupedTopic } from '@lobechat/types';
-import { Flexbox, Icon, Tag, Text } from '@lobehub/ui';
-import { Checkbox } from 'antd';
+import { ActionIcon, Checkbox, DropdownMenu, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { FolderIcon, Star } from 'lucide-react';
+import { FolderIcon, MoreHorizontal, Star } from 'lucide-react';
 import { Fragment, memo, type MouseEvent, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import { SESSION_CHAT_TOPIC_URL } from '@/const/url';
 import { useActivityTime } from '@/hooks/useActivityTime';
+import { useTopicItemDropdownMenu } from '@/routes/(main)/agent/_layout/Sidebar/Topic/List/Item/useDropdownMenu';
 import type { ChatTopic } from '@/types/topic';
 
 import StatusDot from './StatusDot';
 import { useTopicsViewStore } from './store';
-import type { GroupBy } from './types';
+import type { GroupBy, TriggerFilter } from './types';
 import { getProjectGroupTitle, getProjectLabel, getTimeGroupTitle } from './utils';
+
+const KNOWN_TRIGGERS: readonly TriggerFilter[] = ['chat', 'api', 'task', 'eval'];
 
 const styles = createStaticStyles(({ css }) => ({
   cell: css`
@@ -24,6 +26,10 @@ const styles = createStaticStyles(({ css }) => ({
     min-width: 0;
   `,
   groupBar: css`
+    display: flex;
+    gap: 6px;
+    align-items: baseline;
+
     padding-block: 8px;
     padding-inline: 16px;
     border-block-end: 1px solid ${cssVar.colorSplit};
@@ -34,13 +40,18 @@ const styles = createStaticStyles(({ css }) => ({
 
     background: ${cssVar.colorFillQuaternary};
   `,
+  groupCount: css`
+    font-size: 11px;
+    font-weight: 400;
+    color: ${cssVar.colorTextQuaternary};
+  `,
   header: css`
     position: sticky;
     z-index: 2;
     inset-block-start: 0;
 
     display: grid;
-    grid-template-columns: 24px minmax(0, 1fr) 120px 100px 80px 100px;
+    grid-template-columns: 24px minmax(0, 1fr) 120px 100px 80px 100px 32px;
     gap: 12px;
     align-items: center;
 
@@ -48,11 +59,9 @@ const styles = createStaticStyles(({ css }) => ({
     padding-inline: 16px;
     border-block-end: 1px solid ${cssVar.colorSplit};
 
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 500;
-    color: ${cssVar.colorTextQuaternary};
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
+    color: ${cssVar.colorTextSecondary};
 
     /* opaque so scrolled rows don't bleed through */
     background: ${cssVar.colorBgElevated};
@@ -74,7 +83,7 @@ const styles = createStaticStyles(({ css }) => ({
     cursor: pointer;
 
     display: grid;
-    grid-template-columns: 24px minmax(0, 1fr) 120px 100px 80px 100px;
+    grid-template-columns: 24px minmax(0, 1fr) 120px 100px 80px 100px 32px;
     gap: 12px;
     align-items: center;
 
@@ -133,6 +142,13 @@ const Row = memo<RowProps>(({ topic, agentId }) => {
   const toggleSelected = useTopicsViewStore((s) => s.toggleSelected);
   const toggleSelectMode = useTopicsViewStore((s) => s.toggleSelectMode);
 
+  const { dropdownMenu } = useTopicItemDropdownMenu({
+    fav: topic.favorite,
+    id: topic.id,
+    status: topic.status,
+    title: topic.title,
+  });
+
   const handleClick = useCallback(
     (e: MouseEvent) => {
       if (selectMode || e.metaKey || e.ctrlKey) {
@@ -153,11 +169,10 @@ const Row = memo<RowProps>(({ topic, agentId }) => {
   const status = topic.status ?? 'active';
   const projectLabel = getProjectLabel(topic);
   const updatedAt = useActivityTime(topic.updatedAt);
-  // Derive a stable trigger key (falling back to cron when only metadata.cronJobId
-  // is set) so the column shows the localized label, not raw 'chat' / 'cron'.
-  const triggerKey =
-    (topic.trigger as 'chat' | 'api' | 'cron' | 'eval' | null | undefined) ??
-    (topic.metadata?.cronJobId ? 'cron' : 'chat');
+  const rawTrigger = topic.trigger ?? 'chat';
+  const triggerKey: TriggerFilter = (KNOWN_TRIGGERS as readonly string[]).includes(rawTrigger)
+    ? (rawTrigger as TriggerFilter)
+    : 'chat';
   const triggerLabel = t(`management.filters.trigger.${triggerKey}` as any) as string;
 
   return (
@@ -165,11 +180,9 @@ const Row = memo<RowProps>(({ topic, agentId }) => {
       className={[styles.row, selected && styles.rowSelected].filter(Boolean).join(' ')}
       onClick={handleClick}
     >
-      <Checkbox
-        checked={selected}
-        onChange={handleCheckboxChange}
-        onClick={(e) => e.stopPropagation()}
-      />
+      <div onClick={(e) => e.stopPropagation()}>
+        <Checkbox checked={selected} onChange={handleCheckboxChange} />
+      </div>
       <div className={styles.cell}>
         <Flexbox horizontal align={'center'} gap={6}>
           {topic.favorite && (
@@ -207,6 +220,9 @@ const Row = memo<RowProps>(({ topic, agentId }) => {
       >
         {updatedAt.text}
       </Text>
+      <DropdownMenu items={dropdownMenu}>
+        <ActionIcon icon={MoreHorizontal} size={'small'} onClick={(e) => e.stopPropagation()} />
+      </DropdownMenu>
     </div>
   );
 });
@@ -246,6 +262,7 @@ const TopicListView = memo<TopicListViewProps>(({ groups, agentId, showGroupTitl
         <span>{t('management.columns.status')}</span>
         <span>{t('management.columns.trigger')}</span>
         <span className={styles.headerCellEnd}>{t('management.columns.updated')}</span>
+        <span />
       </div>
       {groups.map((group) => {
         if (group.children.length === 0) return null;
@@ -255,7 +272,12 @@ const TopicListView = memo<TopicListViewProps>(({ groups, agentId, showGroupTitl
             : group.title || getTimeGroupTitle(group.id, t);
         return (
           <Fragment key={group.id}>
-            {showGroupTitles && <div className={styles.groupBar}>{title}</div>}
+            {showGroupTitles && (
+              <div className={styles.groupBar}>
+                <span>{title}</span>
+                <span className={styles.groupCount}>{group.children.length}</span>
+              </div>
+            )}
             {group.children.map((topic) => (
               <Row agentId={agentId} key={topic.id} topic={topic} />
             ))}

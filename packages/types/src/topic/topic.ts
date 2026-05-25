@@ -284,6 +284,13 @@ export interface QueryTopicParams {
    * Include only topics matching the given trigger types (positive filter)
    */
   triggers?: string[];
+  /**
+   * When true, the response includes heavier card-detail fields
+   * (`firstUserMessage`, `messageCount`, `description`, `trigger`, plus mock
+   * `cost` / `tokenUsage`). Only the per-agent Topics management page opts
+   * in — sidebar paths stay lean.
+   */
+  withDetails?: boolean;
 }
 
 /**

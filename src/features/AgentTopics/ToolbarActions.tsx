@@ -15,7 +15,9 @@ const ToolbarActions = memo(() => {
   const { t } = useTranslation('topic');
   const { modal, message } = App.useApp();
 
-  const topics = useChatStore(topicSelectors.currentTopics);
+  // Operate on the management page's own bucket — not the sidebar's — since
+  // the management view is the one the user is acting on here.
+  const topics = useChatStore(topicSelectors.agentTopicsViewTopics);
   const updateTopicStatus = useChatStore((s) => s.updateTopicStatus);
 
   const handleArchiveStale = useCallback(() => {

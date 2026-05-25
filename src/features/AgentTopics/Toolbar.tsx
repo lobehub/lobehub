@@ -1,10 +1,18 @@
 'use client';
 
-import { Button, type DropdownItem, DropdownMenu, Flexbox, Icon, Segmented } from '@lobehub/ui';
+import {
+  Button,
+  type DropdownItem,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Segmented,
+  Text,
+} from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
-  CalendarClock,
   ChevronDown,
+  ListTodoIcon,
   type LucideIcon,
   MessageCircle,
   TestTubeIcon,
@@ -33,13 +41,13 @@ const STATUS_OPTIONS: { key: StatusFilter; labelKey: string }[] = [
   { key: 'completed', labelKey: 'management.filters.status.completed' },
 ];
 
-const TRIGGER_OPTIONS: TriggerFilter[] = ['chat', 'api', 'cron', 'eval'];
+const TRIGGER_OPTIONS: TriggerFilter[] = ['chat', 'api', 'task', 'eval'];
 
 const TRIGGER_ICON: Record<TriggerFilter, LucideIcon> = {
   api: Webhook,
   chat: MessageCircle,
-  cron: CalendarClock,
   eval: TestTubeIcon,
+  task: ListTodoIcon,
 };
 
 const TIME_OPTIONS: TimeRangeFilter[] = ['all', 'today', 'week', 'month'];
@@ -50,13 +58,14 @@ const GROUP_OPTIONS: GroupBy[] = ['byTime', 'byProject', 'none'];
 
 interface ToolbarProps {
   projects: { label: string; value: string }[];
+  statusCounts: Record<StatusFilter, number>;
 }
 
 const CheckMark = ({ visible }: { visible: boolean }) => (
   <span style={{ display: 'inline-block', width: 12 }}>{visible ? '✓' : ''}</span>
 );
 
-const Toolbar = memo<ToolbarProps>(({ projects }) => {
+const Toolbar = memo<ToolbarProps>(({ projects, statusCounts }) => {
   const { t } = useTranslation('topic');
 
   const status = useTopicsViewStore((s) => s.status);
@@ -158,10 +167,27 @@ const Toolbar = memo<ToolbarProps>(({ projects }) => {
       <Flexbox horizontal align={'center'} gap={6} wrap={'wrap'}>
         <Segmented
           value={status}
-          options={STATUS_OPTIONS.map((opt) => ({
-            label: t(opt.labelKey as any) as string,
-            value: opt.key,
-          }))}
+          options={STATUS_OPTIONS.map((opt) => {
+            const count = statusCounts[opt.key] ?? 0;
+            return {
+              label: (
+                <Flexbox horizontal align={'center'} gap={6}>
+                  <span>{t(opt.labelKey as any) as string}</span>
+                  <Text
+                    style={{
+                      color: status === opt.key ? 'inherit' : cssVar.colorTextTertiary,
+                      fontSize: 12,
+                      fontVariantNumeric: 'tabular-nums',
+                      opacity: status === opt.key ? 0.7 : 1,
+                    }}
+                  >
+                    {count}
+                  </Text>
+                </Flexbox>
+              ),
+              value: opt.key,
+            };
+          })}
           onChange={(v) => setStatus(v as StatusFilter)}
         />
 
