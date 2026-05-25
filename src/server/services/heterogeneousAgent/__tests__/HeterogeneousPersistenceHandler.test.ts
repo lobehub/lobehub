@@ -234,7 +234,7 @@ describe('HeterogeneousPersistenceHandler', () => {
           operationId: 'op-1',
           topicId: 'topic-1',
         }),
-      ).rejects.toThrow(/No matching runningOperation/);
+      ).rejects.toThrow(/Stale hetero operation/);
     });
 
     it('rejects mid-flight topic mismatch on the same operationId', async () => {
@@ -261,6 +261,49 @@ describe('HeterogeneousPersistenceHandler', () => {
   });
 
   describe('idempotency', () => {
+    it('replaces text with the latest full snapshot and ignores older snapshot seq values', async () => {
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      await h.handler.ingest({
+        events: [
+          buildEvent('stream_chunk', 0, {
+            chunkType: 'text',
+            content: 'hello world',
+            snapshotMode: 'replace',
+            snapshotSeq: 2,
+          }),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      await h.handler.ingest({
+        events: [
+          buildEvent(
+            'stream_chunk',
+            0,
+            {
+              chunkType: 'text',
+              content: 'hello',
+              snapshotMode: 'replace',
+              snapshotSeq: 1,
+            },
+            1_700_000_000_999,
+          ),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const asst = h.messages.get('asst-1')!;
+      expect(asst.content).toBe('hello world');
+      expect(asst.metadata?.heteroTextSnapshotSeq).toBe(2);
+    });
+
     it('drops events with the same (stepIndex, type, timestamp, dataFingerprint) key', async () => {
       const h = createHarness({
         assistantMessageId: 'asst-1',

@@ -157,6 +157,8 @@ interface OperationState {
   lastModel: string | undefined;
   lastProvider: string | undefined;
   lastStepIndex: number;
+  lastTextSnapshotSeq: number;
+  messageMetadata: Record<string, any>;
   operationId: string;
   processedKeys: Set<string>;
   subagentRuns: Map<string, SubagentRunState>;
@@ -176,6 +178,13 @@ const operationStates = new Map<string, OperationState>();
 
 /** Test-only reset hook to clear the singleton between specs. */
 export const __resetOperationStatesForTesting = () => operationStates.clear();
+
+export class StaleHeteroOperationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'StaleHeteroOperationError';
+  }
+}
 
 export interface HeterogeneousPersistenceHandlerDeps {
   messageModel: MessageModel;
@@ -276,6 +285,11 @@ export class HeterogeneousPersistenceHandler {
     const refreshed = await this.deps.messageModel.findById(state.currentAssistantMessageId);
     const dbContent = (refreshed?.content ?? '') as string;
     const dbReasoning = (refreshed?.reasoning as { content?: string } | null)?.content ?? '';
+    const dbMetadata = ((refreshed?.metadata as Record<string, any> | null) ?? {}) as Record<
+      string,
+      any
+    >;
+    const dbTextSnapshotSeq = Number(dbMetadata.heteroTextSnapshotSeq ?? 0);
 
     // Adopt DB value only when it is LONGER than what this instance holds in memory.
     // This correctly handles two competing cases without introducing a dirty flag:
@@ -297,6 +311,15 @@ export class HeterogeneousPersistenceHandler {
     }
     if (dbReasoning.length > state.accumulatedReasoning.length) {
       state.accumulatedReasoning = dbReasoning;
+    }
+    if (Number.isFinite(dbTextSnapshotSeq) && dbTextSnapshotSeq > state.lastTextSnapshotSeq) {
+      state.lastTextSnapshotSeq = dbTextSnapshotSeq;
+      state.messageMetadata = dbMetadata;
+    } else if (
+      Object.keys(state.messageMetadata).length === 0 &&
+      Object.keys(dbMetadata).length > 0
+    ) {
+      state.messageMetadata = dbMetadata;
     }
 
     // Same multi-replica concern for `tools[]` and `lastModel`/`lastProvider`.
@@ -453,6 +476,12 @@ export class HeterogeneousPersistenceHandler {
     const topic = await this.deps.topicModel.findById(topicId);
     const running = topic?.metadata?.runningOperation;
 
+    if (running && running.operationId !== operationId) {
+      throw new StaleHeteroOperationError(
+        `Stale hetero operation ${operationId} on topic ${topicId}; current operation is ${running.operationId}`,
+      );
+    }
+
     // Prefer the assistantMessageId forwarded in the ingest payload (sandbox path).
     // The orchestrator already has it in-memory and passes it through env → CLI → tRPC,
     // so this path never blocks on the DB write of topic.metadata.runningOperation
@@ -502,7 +531,12 @@ export class HeterogeneousPersistenceHandler {
     const currentMsg = await this.deps.messageModel.findById(currentAssistantMessageId);
     const restoredContent = (currentMsg?.content ?? '') as string;
     const restoredReasoning = (currentMsg?.reasoning as { content?: string } | null)?.content ?? '';
+    const restoredMetadata = ((currentMsg?.metadata as Record<string, any> | null) ?? {}) as Record<
+      string,
+      any
+    >;
     const restoredTools = (currentMsg?.tools ?? []) as ChatToolPayload[];
+    const restoredTextSnapshotSeq = Number(restoredMetadata.heteroTextSnapshotSeq ?? 0);
     // Phase 1 of `persistToolBatch` writes `tools[]` BEFORE the tool message
     // row is created (Phase 2 sets `result_msg_id`). Only ids that already
     // carry a `result_msg_id` are truly persisted — restoring an unresolved
@@ -520,6 +554,8 @@ export class HeterogeneousPersistenceHandler {
       lastModel: undefined,
       lastProvider: undefined,
       lastStepIndex: 0,
+      lastTextSnapshotSeq: Number.isFinite(restoredTextSnapshotSeq) ? restoredTextSnapshotSeq : 0,
+      messageMetadata: restoredMetadata,
       operationId,
       processedKeys: new Set(),
       subagentRuns: new Map(),
@@ -544,17 +580,17 @@ export class HeterogeneousPersistenceHandler {
     const topic = await this.deps.topicModel.findById(state.topicId);
     const running = topic?.metadata?.runningOperation;
 
-    if (!running || running.operationId !== state.operationId) {
-      throw new Error(
-        `No matching runningOperation on topic ${state.topicId} for operation ${state.operationId} — orchestrator must seed topic.metadata.runningOperation before ingest`,
+    if (running && running.operationId !== state.operationId) {
+      throw new StaleHeteroOperationError(
+        `Stale hetero operation ${state.operationId} on topic ${state.topicId}; current operation is ${running.operationId}`,
       );
     }
 
     const stored = topic.metadata?.heteroCurrentMsgId;
     const authoritativeAssistantMessageId =
       stored?.operationId === state.operationId
-        ? (stored.msgId ?? running.assistantMessageId)
-        : running.assistantMessageId;
+        ? (stored.msgId ?? running?.assistantMessageId)
+        : running?.assistantMessageId;
 
     if (
       !authoritativeAssistantMessageId ||
@@ -566,11 +602,20 @@ export class HeterogeneousPersistenceHandler {
     const currentMsg = await this.deps.messageModel.findById(authoritativeAssistantMessageId);
     const restoredContent = (currentMsg?.content ?? '') as string;
     const restoredReasoning = (currentMsg?.reasoning as { content?: string } | null)?.content ?? '';
+    const restoredMetadata = ((currentMsg?.metadata as Record<string, any> | null) ?? {}) as Record<
+      string,
+      any
+    >;
     const restoredTools = (currentMsg?.tools ?? []) as ChatToolPayload[];
+    const restoredTextSnapshotSeq = Number(restoredMetadata.heteroTextSnapshotSeq ?? 0);
 
     state.currentAssistantMessageId = authoritativeAssistantMessageId;
     state.accumulatedContent = restoredContent;
     state.accumulatedReasoning = restoredReasoning;
+    state.lastTextSnapshotSeq = Number.isFinite(restoredTextSnapshotSeq)
+      ? restoredTextSnapshotSeq
+      : 0;
+    state.messageMetadata = restoredMetadata;
     state.toolState = {
       payloads: restoredTools,
       // Same `persistedIds` invariant as `loadOrCreateState`: only ids with a
@@ -645,7 +690,10 @@ export class HeterogeneousPersistenceHandler {
     // model/provider in-memory only — and the next step boundary on a
     // different replica created assistants with model=null/provider=null.
     const update: Record<string, any> = {};
-    if (usage) update.metadata = { usage };
+    if (usage) {
+      state.messageMetadata = { ...state.messageMetadata, usage };
+      update.metadata = state.messageMetadata;
+    }
     if (model) update.model = model;
     if (provider) update.provider = provider;
     if (Object.keys(update).length === 0) return;
@@ -703,6 +751,8 @@ export class HeterogeneousPersistenceHandler {
     state.currentAssistantMessageId = newMsg.id;
     state.accumulatedContent = '';
     state.accumulatedReasoning = '';
+    state.lastTextSnapshotSeq = 0;
+    state.messageMetadata = {};
     state.toolState = { payloads: [], persistedIds: new Set() };
   }
 
@@ -714,7 +764,29 @@ export class HeterogeneousPersistenceHandler {
       if (subagentCtx) {
         await this.persistSubagentText(state, subagentCtx, 'text', chunk.content);
       } else {
-        state.accumulatedContent += chunk.content;
+        const snapshotMode = chunk.snapshotMode;
+        const snapshotSeq =
+          typeof chunk.snapshotSeq === 'number' ? Number(chunk.snapshotSeq) : undefined;
+
+        if (snapshotMode === 'replace' && snapshotSeq !== undefined) {
+          if (snapshotSeq <= state.lastTextSnapshotSeq) {
+            log(
+              'skip stale text snapshot op=%s seq=%d current=%d',
+              state.operationId,
+              snapshotSeq,
+              state.lastTextSnapshotSeq,
+            );
+            return;
+          }
+          state.lastTextSnapshotSeq = snapshotSeq;
+          state.messageMetadata = {
+            ...state.messageMetadata,
+            heteroTextSnapshotSeq: snapshotSeq,
+          };
+          state.accumulatedContent = chunk.content;
+        } else {
+          state.accumulatedContent += chunk.content;
+        }
       }
       return;
     }
@@ -852,6 +924,7 @@ export class HeterogeneousPersistenceHandler {
     const update: Record<string, any> = {};
     if (state.accumulatedContent) update.content = state.accumulatedContent;
     if (state.accumulatedReasoning) update.reasoning = { content: state.accumulatedReasoning };
+    if (Object.keys(state.messageMetadata).length > 0) update.metadata = state.messageMetadata;
     await this.deps.messageModel.update(state.currentAssistantMessageId, update);
   }
 
