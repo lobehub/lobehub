@@ -5,7 +5,10 @@ import {
   getHeterogeneousAgentConfig,
   HETEROGENEOUS_AGENT_CONFIGS,
   type HeterogeneousAgentConfig,
+  isRemoteHeterogeneousType,
 } from '../config';
+
+export { isRemoteHeterogeneousType };
 
 export interface HeterogeneousAgentClientConfig extends HeterogeneousAgentConfig {
   avatar: string;
