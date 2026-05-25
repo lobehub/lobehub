@@ -3,11 +3,11 @@
 import { memo, Suspense } from 'react';
 
 import Loading from '@/components/Loading/BrandTextLoading';
-import AgentTopics from '@/features/AgentTopics';
+import AgentTopicManager from '@/features/AgentTopicManager';
 
 const AgentTopicsPage = memo(() => (
-  <Suspense fallback={<Loading debugId="AgentTopics" />}>
-    <AgentTopics />
+  <Suspense fallback={<Loading debugId="AgentTopicManager" />}>
+    <AgentTopicManager />
   </Suspense>
 ));
 

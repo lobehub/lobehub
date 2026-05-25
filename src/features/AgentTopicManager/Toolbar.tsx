@@ -246,6 +246,6 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts }) => {
   );
 });
 
-Toolbar.displayName = 'AgentTopicsToolbar';
+Toolbar.displayName = 'AgentTopicManagerToolbar';
 
 export default Toolbar;

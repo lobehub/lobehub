@@ -91,6 +91,6 @@ const Header = memo<HeaderProps>(({ agentId }) => {
   );
 });
 
-Header.displayName = 'AgentTopicsHeader';
+Header.displayName = 'AgentTopicManagerHeader';
 
 export default Header;

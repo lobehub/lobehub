@@ -80,6 +80,6 @@ const ToolbarActions = memo(() => {
   );
 });
 
-ToolbarActions.displayName = 'AgentTopicsToolbarActions';
+ToolbarActions.displayName = 'AgentTopicManagerToolbarActions';
 
 export default ToolbarActions;

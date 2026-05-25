@@ -25,6 +25,9 @@ const styles = createStaticStyles(({ css }) => ({
     overflow: hidden;
     min-width: 0;
   `,
+  checkboxBox: css`
+    border-color: ${cssVar.colorBorder};
+  `,
   groupBar: css`
     display: flex;
     gap: 6px;
@@ -181,7 +184,12 @@ const Row = memo<RowProps>(({ topic, agentId }) => {
       onClick={handleClick}
     >
       <div onClick={(e) => e.stopPropagation()}>
-        <Checkbox checked={selected} onChange={handleCheckboxChange} />
+        <Checkbox
+          checked={selected}
+          classNames={{ checkbox: styles.checkboxBox }}
+          size={18}
+          onChange={handleCheckboxChange}
+        />
       </div>
       <div className={styles.cell}>
         <Flexbox horizontal align={'center'} gap={6}>
@@ -227,7 +235,7 @@ const Row = memo<RowProps>(({ topic, agentId }) => {
   );
 });
 
-Row.displayName = 'AgentTopicsRow';
+Row.displayName = 'AgentTopicManagerRow';
 
 const TopicListView = memo<TopicListViewProps>(({ groups, agentId, showGroupTitles, groupBy }) => {
   const { t } = useTranslation('topic');
@@ -256,7 +264,13 @@ const TopicListView = memo<TopicListViewProps>(({ groups, agentId, showGroupTitl
   return (
     <div className={styles.list}>
       <div className={styles.header}>
-        <Checkbox checked={allSelected} indeterminate={someSelected} onChange={handleSelectAll} />
+        <Checkbox
+          checked={allSelected}
+          classNames={{ checkbox: styles.checkboxBox }}
+          indeterminate={someSelected}
+          size={18}
+          onChange={handleSelectAll}
+        />
         <span>{t('management.columns.title')}</span>
         <span>{t('management.columns.project')}</span>
         <span>{t('management.columns.status')}</span>
@@ -288,6 +302,6 @@ const TopicListView = memo<TopicListViewProps>(({ groups, agentId, showGroupTitl
   );
 });
 
-TopicListView.displayName = 'AgentTopicsListView';
+TopicListView.displayName = 'AgentTopicManagerListView';
 
 export default TopicListView;

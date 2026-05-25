@@ -41,6 +41,6 @@ const EmptyState = memo<EmptyStateProps>(({ agentId, hasFilters, onClearFilters 
   );
 });
 
-EmptyState.displayName = 'AgentTopicsEmptyState';
+EmptyState.displayName = 'AgentTopicManagerEmptyState';
 
 export default EmptyState;

@@ -31,7 +31,7 @@ import {
 // triggers `loadMoreTopics` which appends another page into `topicDataMap`.
 const PAGE_SIZE = 30;
 
-const AgentTopics = memo(() => {
+const AgentTopicManager = memo(() => {
   const { t } = useTranslation('topic');
   const activeAgentId = useChatStore((s) => s.activeAgentId);
   // Use the management page's dedicated SWR pipeline so the heavier
@@ -194,7 +194,7 @@ const AgentTopics = memo(() => {
     return () => observer.disconnect();
   }, [hasMore, isLoadingMore, isSearchMode, loadMoreAgentTopicsView]);
 
-  if (!activeAgentId) return <Loading debugId="AgentTopics" />;
+  if (!activeAgentId) return <Loading debugId="AgentTopicManager" />;
 
   return (
     <Flexbox flex={1} height={'100%'} style={{ overflow: 'hidden' }}>
@@ -263,6 +263,6 @@ const AgentTopics = memo(() => {
   );
 });
 
-AgentTopics.displayName = 'AgentTopics';
+AgentTopicManager.displayName = 'AgentTopicManager';
 
-export default AgentTopics;
+export default AgentTopicManager;

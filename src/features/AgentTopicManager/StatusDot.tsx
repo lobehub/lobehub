@@ -55,6 +55,6 @@ const StatusDot = memo<StatusDotProps>(({ status }) => {
   );
 });
 
-StatusDot.displayName = 'AgentTopicsStatusDot';
+StatusDot.displayName = 'AgentTopicManagerStatusDot';
 
 export default StatusDot;

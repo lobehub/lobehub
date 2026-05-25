@@ -11,7 +11,22 @@ import {
   runTimedSinkStage as runTimedStage,
 } from '@lobechat/utils';
 import type { SQL } from 'drizzle-orm';
-import { and, count, desc, eq, gt, gte, inArray, isNull, lte, ne, not, or, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gt,
+  gte,
+  inArray,
+  isNull,
+  lte,
+  ne,
+  not,
+  or,
+  sql,
+} from 'drizzle-orm';
 
 import type { TopicItem } from '../schemas';
 import { agents, agentsToSessions, messagePlugins, messages, topics } from '../schemas';
@@ -128,22 +143,35 @@ export class TopicModel {
     // Heavier columns gated behind `withDetails`: correlated subqueries for
     // first-user-message + message count, plus mock cost/token stats and the
     // `description` / `trigger` columns that sidebar paths don't consume.
+    //
+    // The two correlated subqueries are built with Drizzle's query builder
+    // (not a raw `sql` template) so the inner `eq(messages.topicId,
+    // topics.id)` renders as `"messages"."topic_id" = "topics"."id"` — both
+    // sides fully qualified. A bare `sql\`... ${topics.id} ...\`` template
+    // renders `topics.id` as an unqualified `"id"`, which PostgreSQL then
+    // resolves against the inner FROM (messages.id) and the WHERE silently
+    // matches nothing.
+    const firstUserMessageSubquery = this.db
+      .select({ value: messages.content })
+      .from(messages)
+      .where(and(eq(messages.topicId, topics.id), eq(messages.role, 'user')))
+      .orderBy(asc(messages.createdAt))
+      .limit(1);
+    const messageCountSubquery = this.db
+      .select({ value: sql<number>`count(*)::int` })
+      .from(messages)
+      .where(eq(messages.topicId, topics.id));
+
     const detailColumns = withDetails
       ? {
           cost: sql<number>`(round((abs(hashtext(${topics.id})) % 500) / 100.0, 2))::float8`.as(
             'cost',
           ),
           description: topics.description,
-          firstUserMessage: sql<string | null>`(
-            SELECT ${messages.content}
-            FROM ${messages}
-            WHERE ${messages.topicId} = ${topics.id} AND ${messages.role} = 'user'
-            ORDER BY ${messages.createdAt} ASC
-            LIMIT 1
-          )`.as('first_user_message'),
-          messageCount: sql<number>`(
-            SELECT count(*)::int FROM ${messages} WHERE ${messages.topicId} = ${topics.id}
-          )`.as('message_count'),
+          firstUserMessage: sql<string | null>`(${firstUserMessageSubquery})`.as(
+            'first_user_message',
+          ),
+          messageCount: sql<number>`(${messageCountSubquery})`.as('message_count'),
           tokenUsage: sql<number>`(abs(hashtext(${topics.id})) % 50000) + 1000`.as('token_usage'),
           trigger: topics.trigger,
         }

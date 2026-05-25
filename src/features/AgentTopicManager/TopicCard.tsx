@@ -16,10 +16,6 @@ import StatusDot from './StatusDot';
 import { useTopicsViewStore } from './store';
 import { getProjectLabel } from './utils';
 
-// Module-scoped class string so the card's `:hover` rule can target the
-// checkbox without a circular reference inside `createStaticStyles`.
-const CHECKBOX_CLASS = 'agent-topic-card__checkbox';
-
 const styles = createStaticStyles(({ css }) => ({
   card: css`
     cursor: pointer;
@@ -43,10 +39,6 @@ const styles = createStaticStyles(({ css }) => ({
       transform: translateY(-1px);
       box-shadow: 0 4px 12px rgb(0 0 0 / 6%);
     }
-
-    &:hover .${CHECKBOX_CLASS} {
-      opacity: 1;
-    }
   `,
   cardSelected: css`
     border-color: ${cssVar.colorPrimary};
@@ -57,13 +49,9 @@ const styles = createStaticStyles(({ css }) => ({
     z-index: 1;
     inset-block-start: 10px;
     inset-inline-end: 10px;
-
-    opacity: 0;
-
-    transition: opacity 0.15s;
   `,
-  checkboxVisible: css`
-    opacity: 1;
+  checkboxBox: css`
+    border-color: ${cssVar.colorBorder};
   `,
   description: css`
     overflow: hidden;
@@ -141,17 +129,13 @@ const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
       variant={'outlined'}
       onClick={handleClick}
     >
-      <div
-        className={[
-          styles.checkbox,
-          CHECKBOX_CLASS,
-          (selectMode || selected) && styles.checkboxVisible,
-        ]
-          .filter(Boolean)
-          .join(' ')}
-        onClick={stopPropagation}
-      >
-        <Checkbox checked={selected} onChange={handleCheckboxChange} />
+      <div className={styles.checkbox} onClick={stopPropagation}>
+        <Checkbox
+          checked={selected}
+          classNames={{ checkbox: styles.checkboxBox }}
+          size={18}
+          onChange={handleCheckboxChange}
+        />
       </div>
 
       <Flexbox horizontal align={'center'} gap={6}>

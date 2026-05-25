@@ -76,6 +76,6 @@ const TopicGrid = memo<TopicGridProps>(({ groups, agentId, showGroupTitles, grou
   );
 });
 
-TopicGrid.displayName = 'AgentTopicsGrid';
+TopicGrid.displayName = 'AgentTopicManagerGrid';
 
 export default TopicGrid;

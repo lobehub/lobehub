@@ -125,6 +125,6 @@ const BulkActionBar = memo(() => {
   );
 });
 
-BulkActionBar.displayName = 'AgentTopicsBulkActionBar';
+BulkActionBar.displayName = 'AgentTopicManagerBulkActionBar';
 
 export default BulkActionBar;
