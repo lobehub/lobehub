@@ -22,6 +22,7 @@ import { usePasteFile, useUploadFiles } from '@/components/DragUploadZone';
 import { useEnterToSend } from '@/hooks/useEnterToSend';
 import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
 import { aiChatService } from '@/services/aiChat';
+import { llmGenerationTracingService } from '@/services/llmGenerationTracing';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -198,17 +199,25 @@ const InputEditor = memo<{
     });
   }, [storeApi]);
 
+  // Map each in-flight suggestion to its tracing row so the Tab/Esc/typing
+  // callbacks below can report `recordFeedback` against the correct id.
+  // Keyed by editor-provided `suggestionId`; entries are dropped on
+  // accept/reject (the plugin guarantees one of those eventually fires).
+  const tracingIdBySuggestionRef = useRef<Map<string, string>>(new Map());
+
   const handleAutoComplete = useCallback(
     async ({
       abortSignal,
       afterText,
       input,
+      suggestionId,
     }: {
       abortSignal: AbortSignal;
       afterText: string;
       editor: any;
       input: string;
       selectionType: string;
+      suggestionId?: string;
     }): Promise<string | null> => {
       // Skip autocomplete during IME composition (e.g. Chinese input method)
       if (isComposingRef.current) return null;
@@ -256,14 +265,77 @@ const InputEditor = memo<{
 
       if (abortSignal.aborted) return null;
 
-      // envelope.tracingId is intentionally captured here — the feedback
-      // wiring (Tab=accept / Esc=reject / type-continue=cancel) will land
-      // in a follow-up commit (LOBE-9488 + companion cloud work) and use
-      // this id to call `llmGenerationTracing.recordFeedback`.
       const completion = envelope?.data?.completion?.trimEnd();
-      return completion || null;
+      if (!completion) return null;
+
+      if (suggestionId && envelope?.tracingId) {
+        tracingIdBySuggestionRef.current.set(suggestionId, envelope.tracingId);
+      }
+      return completion;
     },
     [isComposingRef, agentId],
+  );
+
+  const handleSuggestionAccepted = useCallback(
+    ({
+      acceptedText,
+      suggestionId,
+      visibleMs,
+    }: {
+      acceptedText: string;
+      suggestionId: string;
+      visibleMs: number;
+    }) => {
+      const tracingId = tracingIdBySuggestionRef.current.get(suggestionId);
+      if (!tracingId) return;
+      tracingIdBySuggestionRef.current.delete(suggestionId);
+      llmGenerationTracingService
+        .recordFeedback({
+          data: { acceptedText, visibleMs },
+          signal: 'positive',
+          source: 'autocomplete_tab',
+          tracingId,
+        })
+        .catch((err) => {
+          console.warn('[InputCompletion] recordFeedback (accepted) failed', err);
+        });
+    },
+    [],
+  );
+
+  const handleSuggestionRejected = useCallback(
+    ({
+      reason,
+      suggestionId,
+      visibleMs,
+    }: {
+      reason: 'cursor-move' | 'typing' | 'esc' | 'blur' | 'other';
+      suggestionId: string;
+      visibleMs: number;
+    }) => {
+      const tracingId = tracingIdBySuggestionRef.current.get(suggestionId);
+      if (!tracingId) return;
+      tracingIdBySuggestionRef.current.delete(suggestionId);
+      // IME composition starts by dispatching KEY_ESCAPE_COMMAND from this
+      // component (see onCompositionStart below); that arrives here with
+      // reason='esc' but it isn't a real reject — recode as neutral so the
+      // signal isn't poisoned for CJK input users.
+      const isImeClear = reason === 'esc' && isComposingRef.current;
+      const signal: 'positive' | 'negative' | 'neutral' =
+        !isImeClear && reason === 'esc' ? 'negative' : 'neutral';
+      const source = isImeClear ? 'autocomplete_ime' : `autocomplete_${reason}`;
+      llmGenerationTracingService
+        .recordFeedback({
+          data: { reason, visibleMs },
+          signal,
+          source,
+          tracingId,
+        })
+        .catch((err) => {
+          console.warn('[InputCompletion] recordFeedback (rejected) failed', err);
+        });
+    },
+    [isComposingRef],
   );
 
   const autoCompletePlugin = useMemo(
@@ -272,9 +344,11 @@ const InputEditor = memo<{
         ? Editor.withProps(ReactAutoCompletePlugin, {
             delay: 600,
             onAutoComplete: handleAutoComplete,
+            onSuggestionAccepted: handleSuggestionAccepted,
+            onSuggestionRejected: handleSuggestionRejected,
           })
         : null,
-    [isAutoCompleteEnabled, handleAutoComplete],
+    [isAutoCompleteEnabled, handleAutoComplete, handleSuggestionAccepted, handleSuggestionRejected],
   );
 
   // --- Stable mentionOption & slashOption to prevent infinite re-render on paste ---
