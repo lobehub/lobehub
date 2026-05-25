@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import type { ExplorerTreeNode } from '@/features/ExplorerTree';
-import { ExplorerTree, FOLDER_ICON_CSS } from '@/features/ExplorerTree';
+import { ExplorerTree, FOLDER_ICON_CSS, getExplorerTreeStyleVars } from '@/features/ExplorerTree';
 import type { ExplorerTreeHandle } from '@/features/ExplorerTree/types';
 import { localFileService } from '@/services/electron/localFileService';
 import { useChatStore } from '@/store/chat';
@@ -115,6 +115,10 @@ const Files = memo<FilesProps>(({ workingDirectory }) => {
   // paint without having to click through every folder.
   const defaultExpandedIds = useMemo(
     () => nodes.filter((node) => node.isFolder && node.parentId == null).map((node) => node.id),
+    [nodes],
+  );
+  const treeStyleVars = useMemo(
+    () => getExplorerTreeStyleVars({ reserveChevronSlot: nodes.some((node) => node.isFolder) }),
     [nodes],
   );
 
@@ -250,11 +254,10 @@ const Files = memo<FilesProps>(({ workingDirectory }) => {
           <Empty description={t('workingPanel.files.empty')} icon={FileIcon} />
         </Center>
       ) : (
-        <div className={styles.tree}>
+        <div className={styles.tree} style={treeStyleVars}>
           <ExplorerTree<ProjectFileIndexEntry>
             iconsColored
             defaultExpandedIds={defaultExpandedIds}
-            density="compact"
             getContextMenuItems={getContextMenuItems}
             gitStatus={gitStatus}
             iconSet="complete"

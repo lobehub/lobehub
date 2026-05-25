@@ -130,7 +130,11 @@ vi.mock('@/features/ExplorerTree', () => {
     );
   };
 
-  return { ExplorerTree, FOLDER_ICON_CSS: '' };
+  return {
+    ExplorerTree,
+    FOLDER_ICON_CSS: '',
+    getExplorerTreeStyleVars: () => ({}),
+  };
 });
 
 const createDocument = (overrides: Partial<AgentDocumentItem>): AgentDocumentItem =>
