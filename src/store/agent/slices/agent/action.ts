@@ -227,6 +227,13 @@ export class AgentSliceActionImpl {
 
     if (isDesktop && 'workingDirectory' in config) {
       setLocalAgentWorkingDirectory(agentId, config.workingDirectory);
+      const nextMap = { ...this.#get().localAgentWorkingDirectoryMap };
+      if (config.workingDirectory) {
+        nextMap[agentId] = config.workingDirectory;
+      } else {
+        delete nextMap[agentId];
+      }
+      this.#set({ localAgentWorkingDirectoryMap: nextMap }, false, 'updateAgentWorkingDirectory');
     }
 
     const restConfig = { ...config };
