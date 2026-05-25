@@ -1,6 +1,6 @@
 export type ViewMode = 'card' | 'list';
 
-export type StatusFilter = 'all' | 'favorite' | 'active' | 'completed' | 'archived';
+export type StatusFilter = 'all' | 'active' | 'running' | 'completed' | 'archived';
 
 export type TriggerFilter = 'chat' | 'api' | 'cron' | 'eval';
 

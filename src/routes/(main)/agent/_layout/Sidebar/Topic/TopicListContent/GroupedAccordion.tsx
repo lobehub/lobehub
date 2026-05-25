@@ -5,6 +5,8 @@ import isEqual from 'fast-deep-equal';
 import { MoreHorizontal } from 'lucide-react';
 import { type ComponentType, memo, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
+import urlJoin from 'url-join';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
@@ -30,14 +32,15 @@ interface GroupedAccordionProps {
 
 const GroupedAccordion = memo<GroupedAccordionProps>(({ GroupItem }) => {
   const { t } = useTranslation('topic');
+  const navigate = useNavigate();
   const topicPageSize = useGlobalStore(systemStatusSelectors.topicPageSize);
   const topicSortBy = useUserStore(preferenceSelectors.topicSortBy);
   const { topicGroupMode } = useAgentTopicGroupMode();
 
-  const [hasMore, isExpandingPageSize, openAllTopicsDrawer] = useChatStore((s) => [
+  const [hasMore, isExpandingPageSize, activeAgentId] = useChatStore((s) => [
     topicSelectors.hasMoreTopicsForSidebar(s),
     topicSelectors.isExpandingPageSize(s),
-    s.openAllTopicsDrawer,
+    s.activeAgentId,
   ]);
   const [activeTopicId, activeThreadId] = useChatStore((s) => [s.activeTopicId, s.activeThreadId]);
 
@@ -78,8 +81,12 @@ const GroupedAccordion = memo<GroupedAccordionProps>(({ GroupItem }) => {
         ))}
       </Accordion>
       {isExpandingPageSize && <SkeletonList rows={3} />}
-      {hasMore && !isExpandingPageSize && (
-        <NavItem icon={MoreHorizontal} title={t('loadMore')} onClick={openAllTopicsDrawer} />
+      {hasMore && !isExpandingPageSize && activeAgentId && (
+        <NavItem
+          icon={MoreHorizontal}
+          title={t('loadMore')}
+          onClick={() => navigate(urlJoin('/agent', activeAgentId, 'topics'))}
+        />
       )}
     </Flexbox>
   );

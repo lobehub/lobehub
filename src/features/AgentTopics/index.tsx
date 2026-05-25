@@ -124,28 +124,35 @@ const AgentTopics = memo(() => {
     trimmedSearch.length > 0;
 
   const clearFilters = () => {
-    setStatus('active');
+    // "Clear filters" jumps to All so users can confirm there really is no
+    // matching topic in the entire dataset; the default Active landing is
+    // only for first visits.
+    setStatus('all');
     setGroupIds([]);
     setTriggers([]);
     setTimeRange('all');
     setSearch('');
   };
 
-  // Infinite scroll — observe a sentinel near the end of the list and pull
-  // the next page when it enters the viewport. We intentionally skip this in
-  // search mode (server returns a fixed top-N result set).
+  // Infinite scroll — observe a sentinel near the end of the list. We pass
+  // the scroll container as the IntersectionObserver `root` so detection is
+  // tied to the in-page scroll position, not the window viewport (otherwise
+  // a tall window can leave the sentinel "always intersecting" or never
+  // intersecting, depending on layout).
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (isSearchMode) return;
+    const root = scrollContainerRef.current;
     const sentinel = sentinelRef.current;
-    if (!sentinel) return;
+    if (!root || !sentinel) return;
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting && hasMore && !isLoadingMore) {
           void loadMoreTopics();
         }
       },
-      { rootMargin: '200px' },
+      { root, rootMargin: '300px' },
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
@@ -156,11 +163,16 @@ const AgentTopics = memo(() => {
   return (
     <Flexbox flex={1} height={'100%'} style={{ overflow: 'hidden' }}>
       <Header agentId={activeAgentId} />
-      <Flexbox
-        flex={1}
-        paddingBlock={20}
-        paddingInline={24}
-        style={{ minWidth: 0, overflowY: 'auto' }}
+      <div
+        ref={scrollContainerRef}
+        style={{
+          display: 'flex',
+          flex: 1,
+          flexDirection: 'column',
+          minWidth: 0,
+          overflowY: 'auto',
+          padding: '20px 24px',
+        }}
       >
         <Flexbox
           gap={16}
@@ -180,31 +192,37 @@ const AgentTopics = memo(() => {
               hasFilters={hasActiveFilters}
               onClearFilters={clearFilters}
             />
-          ) : viewMode === 'card' ? (
-            <TopicGrid
-              agentId={activeAgentId}
-              groupBy={groupBy}
-              groups={renderGroups}
-              showGroupTitles={useGroups}
-            />
           ) : (
-            <TopicListView
-              agentId={activeAgentId}
-              groupBy={groupBy}
-              groups={renderGroups}
-              showGroupTitles={useGroups}
-            />
-          )}
-          {!isSearchMode && hasMore && <div aria-hidden ref={sentinelRef} style={{ height: 1 }} />}
-          {!isSearchMode && isLoadingMore && (
-            <Flexbox align={'center'} paddingBlock={12}>
-              <span className={shinyTextStyles.shinyText} style={{ fontSize: 12 }}>
-                {t('management.loadingMore')}
-              </span>
-            </Flexbox>
+            <>
+              {viewMode === 'card' ? (
+                <TopicGrid
+                  agentId={activeAgentId}
+                  groupBy={groupBy}
+                  groups={renderGroups}
+                  showGroupTitles={useGroups}
+                />
+              ) : (
+                <TopicListView
+                  agentId={activeAgentId}
+                  groupBy={groupBy}
+                  groups={renderGroups}
+                  showGroupTitles={useGroups}
+                />
+              )}
+              {!isSearchMode && hasMore && (
+                <div aria-hidden ref={sentinelRef} style={{ height: 1 }} />
+              )}
+              {!isSearchMode && isLoadingMore && (
+                <Flexbox align={'center'} paddingBlock={12}>
+                  <span className={shinyTextStyles.shinyText} style={{ fontSize: 12 }}>
+                    {t('management.loadingMore')}
+                  </span>
+                </Flexbox>
+              )}
+            </>
           )}
         </Flexbox>
-      </Flexbox>
+      </div>
     </Flexbox>
   );
 });

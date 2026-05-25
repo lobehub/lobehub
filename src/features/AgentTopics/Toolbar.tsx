@@ -7,7 +7,6 @@ import {
   ChevronDown,
   type LucideIcon,
   MessageCircle,
-  Star,
   TestTubeIcon,
   Webhook,
 } from 'lucide-react';
@@ -15,6 +14,7 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useTopicsViewStore } from './store';
+import ToolbarActions from './ToolbarActions';
 import type { GroupBy, SortBy, StatusFilter, TimeRangeFilter, TriggerFilter } from './types';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -28,10 +28,9 @@ const styles = createStaticStyles(({ css }) => ({
 
 const STATUS_OPTIONS: { key: StatusFilter; labelKey: string }[] = [
   { key: 'all', labelKey: 'management.filters.status.all' },
-  { key: 'favorite', labelKey: 'management.filters.status.favorite' },
   { key: 'active', labelKey: 'management.filters.status.active' },
+  { key: 'running', labelKey: 'management.filters.status.running' },
   { key: 'completed', labelKey: 'management.filters.status.completed' },
-  { key: 'archived', labelKey: 'management.filters.status.archived' },
 ];
 
 const TRIGGER_OPTIONS: TriggerFilter[] = ['chat', 'api', 'cron', 'eval'];
@@ -160,15 +159,7 @@ const Toolbar = memo<ToolbarProps>(({ projects }) => {
         <Segmented
           value={status}
           options={STATUS_OPTIONS.map((opt) => ({
-            label:
-              opt.key === 'favorite' ? (
-                <Flexbox horizontal align={'center'} gap={4}>
-                  <Icon icon={Star} size={12} />
-                  {t(opt.labelKey as any) as string}
-                </Flexbox>
-              ) : (
-                (t(opt.labelKey as any) as string)
-              ),
+            label: t(opt.labelKey as any) as string,
             value: opt.key,
           }))}
           onChange={(v) => setStatus(v as StatusFilter)}
@@ -222,6 +213,8 @@ const Toolbar = memo<ToolbarProps>(({ projects }) => {
             </Flexbox>
           </Button>
         </DropdownMenu>
+
+        <ToolbarActions />
       </Flexbox>
     </Flexbox>
   );

@@ -35,8 +35,12 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorFillQuaternary};
   `,
   header: css`
+    position: sticky;
+    z-index: 2;
+    inset-block-start: 0;
+
     display: grid;
-    grid-template-columns: 24px 20px minmax(0, 1fr) 120px 100px 80px 100px;
+    grid-template-columns: 24px minmax(0, 1fr) 120px 100px 80px 100px;
     gap: 12px;
     align-items: center;
 
@@ -50,19 +54,27 @@ const styles = createStaticStyles(({ css }) => ({
     text-transform: uppercase;
     letter-spacing: 0.04em;
 
-    background: ${cssVar.colorFillQuaternary};
+    /* opaque so scrolled rows don't bleed through */
+    background: ${cssVar.colorBgElevated};
+  `,
+  headerCellEnd: css`
+    text-align: end;
   `,
   list: css`
+    position: relative;
+
     overflow: hidden;
+
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 12px;
+
     background: ${cssVar.colorBgContainer};
   `,
   row: css`
     cursor: pointer;
 
     display: grid;
-    grid-template-columns: 24px 20px minmax(0, 1fr) 120px 100px 80px 100px;
+    grid-template-columns: 24px minmax(0, 1fr) 120px 100px 80px 100px;
     gap: 12px;
     align-items: center;
 
@@ -141,6 +153,12 @@ const Row = memo<RowProps>(({ topic, agentId }) => {
   const status = topic.status ?? 'active';
   const projectLabel = getProjectLabel(topic);
   const updatedAt = useActivityTime(topic.updatedAt);
+  // Derive a stable trigger key (falling back to cron when only metadata.cronJobId
+  // is set) so the column shows the localized label, not raw 'chat' / 'cron'.
+  const triggerKey =
+    (topic.trigger as 'chat' | 'api' | 'cron' | 'eval' | null | undefined) ??
+    (topic.metadata?.cronJobId ? 'cron' : 'chat');
+  const triggerLabel = t(`management.filters.trigger.${triggerKey}` as any) as string;
 
   return (
     <div
@@ -152,13 +170,15 @@ const Row = memo<RowProps>(({ topic, agentId }) => {
         onChange={handleCheckboxChange}
         onClick={(e) => e.stopPropagation()}
       />
-      <Flexbox align={'center'} justify={'center'}>
-        {topic.favorite && <Icon icon={Star} size={13} style={{ color: cssVar.colorWarning }} />}
-      </Flexbox>
       <div className={styles.cell}>
-        <Text className={styles.title} fontSize={13} weight={500}>
-          {topic.title || t('defaultTitle')}
-        </Text>
+        <Flexbox horizontal align={'center'} gap={6}>
+          {topic.favorite && (
+            <Icon icon={Star} size={12} style={{ color: cssVar.colorWarning, flexShrink: 0 }} />
+          )}
+          <Text className={styles.title} fontSize={13} weight={500}>
+            {topic.title || t('defaultTitle')}
+          </Text>
+        </Flexbox>
         {topic.historySummary && (
           <Text className={styles.sub} fontSize={11} type={'secondary'}>
             {topic.historySummary}
@@ -178,9 +198,13 @@ const Row = memo<RowProps>(({ topic, agentId }) => {
       </div>
       <StatusDot status={status} />
       <Text fontSize={12} type={'secondary'}>
-        {topic.trigger ?? 'chat'}
+        {triggerLabel}
       </Text>
-      <Text fontSize={12} style={{ color: cssVar.colorTextQuaternary }} title={updatedAt.title}>
+      <Text
+        fontSize={12}
+        style={{ color: cssVar.colorTextQuaternary, textAlign: 'end' }}
+        title={updatedAt.title}
+      >
         {updatedAt.text}
       </Text>
     </div>
@@ -192,16 +216,36 @@ Row.displayName = 'AgentTopicsRow';
 const TopicListView = memo<TopicListViewProps>(({ groups, agentId, showGroupTitles, groupBy }) => {
   const { t } = useTranslation('topic');
 
+  const selectedIds = useTopicsViewStore((s) => s.selectedIds);
+  const selectMode = useTopicsViewStore((s) => s.selectMode);
+  const selectAll = useTopicsViewStore((s) => s.selectAll);
+  const clearSelected = useTopicsViewStore((s) => s.clearSelected);
+  const toggleSelectMode = useTopicsViewStore((s) => s.toggleSelectMode);
+
+  const allIds = groups.flatMap((g) => g.children.map((c) => c.id));
+  const selectedSet = new Set(selectedIds);
+  const selectedInListCount = allIds.reduce((acc, id) => acc + (selectedSet.has(id) ? 1 : 0), 0);
+  const allSelected = allIds.length > 0 && selectedInListCount === allIds.length;
+  const someSelected = selectedInListCount > 0 && !allSelected;
+
+  const handleSelectAll = () => {
+    if (allSelected) {
+      clearSelected();
+    } else {
+      if (!selectMode) toggleSelectMode();
+      selectAll(allIds);
+    }
+  };
+
   return (
     <div className={styles.list}>
       <div className={styles.header}>
-        <span />
-        <span />
+        <Checkbox checked={allSelected} indeterminate={someSelected} onChange={handleSelectAll} />
         <span>{t('management.columns.title')}</span>
         <span>{t('management.columns.project')}</span>
         <span>{t('management.columns.status')}</span>
         <span>{t('management.columns.trigger')}</span>
-        <span>{t('management.columns.updated')}</span>
+        <span className={styles.headerCellEnd}>{t('management.columns.updated')}</span>
       </div>
       {groups.map((group) => {
         if (group.children.length === 0) return null;

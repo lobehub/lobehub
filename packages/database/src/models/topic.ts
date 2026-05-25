@@ -153,14 +153,29 @@ export class TopicModel {
             this.db
               .select({
                 completedAt: topics.completedAt,
+                cost: sql<number>`round((abs(hashtext(${topics.id})) % 500) / 100.0, 2)`.as('cost'),
                 createdAt: topics.createdAt,
                 description: topics.description,
                 favorite: topics.favorite,
+                firstUserMessage: sql<string | null>`(
+                  SELECT ${messages.content}
+                  FROM ${messages}
+                  WHERE ${messages.topicId} = ${topics.id} AND ${messages.role} = 'user'
+                  ORDER BY ${messages.createdAt} ASC
+                  LIMIT 1
+                )`.as('first_user_message'),
                 historySummary: topics.historySummary,
                 id: topics.id,
+                messageCount: sql<number>`(
+                  SELECT count(*)::int FROM ${messages} WHERE ${messages.topicId} = ${topics.id}
+                )`.as('message_count'),
                 metadata: topics.metadata,
                 status: topics.status,
                 title: topics.title,
+                tokenUsage: sql<number>`(abs(hashtext(${topics.id})) % 50000) + 1000`.as(
+                  'token_usage',
+                ),
+                trigger: topics.trigger,
                 updatedAt: topics.updatedAt,
               })
               .from(topics)
@@ -249,14 +264,29 @@ export class TopicModel {
             this.db
               .select({
                 completedAt: topics.completedAt,
+                cost: sql<number>`round((abs(hashtext(${topics.id})) % 500) / 100.0, 2)`.as('cost'),
                 createdAt: topics.createdAt,
                 description: topics.description,
                 favorite: topics.favorite,
+                firstUserMessage: sql<string | null>`(
+                  SELECT ${messages.content}
+                  FROM ${messages}
+                  WHERE ${messages.topicId} = ${topics.id} AND ${messages.role} = 'user'
+                  ORDER BY ${messages.createdAt} ASC
+                  LIMIT 1
+                )`.as('first_user_message'),
                 historySummary: topics.historySummary,
                 id: topics.id,
+                messageCount: sql<number>`(
+                  SELECT count(*)::int FROM ${messages} WHERE ${messages.topicId} = ${topics.id}
+                )`.as('message_count'),
                 metadata: topics.metadata,
                 status: topics.status,
                 title: topics.title,
+                tokenUsage: sql<number>`(abs(hashtext(${topics.id})) % 50000) + 1000`.as(
+                  'token_usage',
+                ),
+                trigger: topics.trigger,
                 updatedAt: topics.updatedAt,
               })
               .from(topics)
@@ -305,15 +335,30 @@ export class TopicModel {
             .select({
               agentId: topics.agentId,
               completedAt: topics.completedAt,
+              cost: sql<number>`round((abs(hashtext(${topics.id})) % 500) / 100.0, 2)`.as('cost'),
               createdAt: topics.createdAt,
               description: topics.description,
               favorite: topics.favorite,
+              firstUserMessage: sql<string | null>`(
+                SELECT ${messages.content}
+                FROM ${messages}
+                WHERE ${messages.topicId} = ${topics.id} AND ${messages.role} = 'user'
+                ORDER BY ${messages.createdAt} ASC
+                LIMIT 1
+              )`.as('first_user_message'),
               historySummary: topics.historySummary,
               id: topics.id,
+              messageCount: sql<number>`(
+                SELECT count(*)::int FROM ${messages} WHERE ${messages.topicId} = ${topics.id}
+              )`.as('message_count'),
               metadata: topics.metadata,
               sessionId: topics.sessionId,
               status: topics.status,
               title: topics.title,
+              tokenUsage: sql<number>`(abs(hashtext(${topics.id})) % 50000) + 1000`.as(
+                'token_usage',
+              ),
+              trigger: topics.trigger,
               updatedAt: topics.updatedAt,
             })
             .from(topics)

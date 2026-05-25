@@ -1,8 +1,9 @@
 'use client';
 
+import { formatPrice, formatTokenNumber } from '@lobechat/utils/format';
 import { Block, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { Check, FolderIcon, Star } from 'lucide-react';
+import { Check, CircleDollarSign, FolderIcon, MessageSquare, Star, Zap } from 'lucide-react';
 import { memo, type MouseEvent, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -143,8 +144,14 @@ const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
 
   const projectLabel = getProjectLabel(topic);
   const status = topic.status ?? 'active';
-  const preview = topic.description?.trim() || topic.historySummary?.trim();
+  // Preview priority: user-written description → AI history summary → first user
+  // message (sliced server-side when neither richer field exists).
+  const preview =
+    topic.description?.trim() || topic.historySummary?.trim() || topic.firstUserMessage?.trim();
   const updatedAt = useActivityTime(topic.updatedAt);
+  const messageCount = topic.messageCount ?? 0;
+  const tokenUsage = topic.tokenUsage ?? 0;
+  const cost = topic.cost ?? 0;
 
   return (
     <Block
@@ -189,9 +196,31 @@ const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
       )}
 
       <Flexbox horizontal align={'center'} className={styles.footer} justify={'space-between'}>
-        <Text fontSize={11} style={{ color: cssVar.colorTextQuaternary }} title={updatedAt.title}>
-          {updatedAt.text}
-        </Text>
+        <Flexbox
+          horizontal
+          align={'center'}
+          gap={10}
+          style={{ color: cssVar.colorTextQuaternary, fontSize: 11 }}
+        >
+          {messageCount > 0 && (
+            <Flexbox horizontal align={'center'} gap={3}>
+              <Icon icon={MessageSquare} size={11} />
+              {messageCount}
+            </Flexbox>
+          )}
+          {tokenUsage > 0 && (
+            <Flexbox horizontal align={'center'} gap={3} title={`${tokenUsage} tokens`}>
+              <Icon icon={Zap} size={11} />
+              {formatTokenNumber(tokenUsage)}
+            </Flexbox>
+          )}
+          {cost > 0 && (
+            <Flexbox horizontal align={'center'} gap={3} title={`$${cost.toFixed(4)}`}>
+              <Icon icon={CircleDollarSign} size={11} />${formatPrice(cost, 2)}
+            </Flexbox>
+          )}
+          <span title={updatedAt.title}>{updatedAt.text}</span>
+        </Flexbox>
         <StatusDot status={status} />
       </Flexbox>
     </Block>

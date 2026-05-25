@@ -11,17 +11,17 @@ export const matchesStatus = (topic: ChatTopic, status: StatusFilter): boolean =
     case 'all': {
       return true;
     }
-    case 'favorite': {
-      return !!topic.favorite;
-    }
     case 'archived': {
       return topic.status === 'archived';
     }
     case 'completed': {
       return topic.status === 'completed';
     }
+    case 'running': {
+      return topic.status === 'running';
+    }
     case 'active': {
-      return !topic.status || topic.status === 'active' || topic.status === 'running';
+      return !topic.status || topic.status === 'active';
     }
     default: {
       return true;
@@ -39,8 +39,14 @@ export const matchesGroup = (topic: ChatTopic, groupIds: string[]): boolean => {
 
 export const matchesTrigger = (topic: ChatTopic, triggers: TriggerFilter[]): boolean => {
   if (triggers.length === 0) return true;
-  const t = (topic.trigger ?? 'chat') as TriggerFilter;
-  return triggers.includes(t);
+  // Existing rows can have `trigger=null` even when they were spawned by a
+  // cron job (the field was added later). Detect that case via
+  // `metadata.cronJobId` so Daily Brief style topics don't leak into the
+  // default Chat filter.
+  const effective: TriggerFilter =
+    (topic.trigger as TriggerFilter | null | undefined) ??
+    (topic.metadata?.cronJobId ? 'cron' : 'chat');
+  return triggers.includes(effective);
 };
 
 export const matchesTimeRange = (topic: ChatTopic, range: TimeRangeFilter): boolean => {

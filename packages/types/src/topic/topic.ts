@@ -190,13 +190,21 @@ export type ChatTopicStatus =
 
 export interface ChatTopic extends Omit<BaseDataModel, 'meta'> {
   completedAt?: Date | null;
+  /** Server-side mock until real cost aggregation lands. */
+  cost?: number | null;
   description?: string | null;
   favorite?: boolean;
+  /** First user message (sliced server-side, used as preview fallback). */
+  firstUserMessage?: string | null;
   historySummary?: string;
+  /** Total message count for the topic. */
+  messageCount?: number | null;
   metadata?: ChatTopicMetadata;
   sessionId?: string;
   status?: ChatTopicStatus | null;
   title: string;
+  /** Server-side mock until real token aggregation lands. */
+  tokenUsage?: number | null;
   trigger?: string | null;
 }
 
