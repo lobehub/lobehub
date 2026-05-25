@@ -1,3 +1,4 @@
+import type { Pricing } from 'model-bank';
 import type OpenAI from 'openai';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -106,7 +107,6 @@ describe('SparkAIStream', () => {
     } as unknown as OpenAI.ChatCompletion;
 
     const stream = transformSparkResponseToStream(mockResponse);
-    const decoder = new TextDecoder();
     const chunks = [];
 
     // @ts-ignore
@@ -268,5 +268,53 @@ describe('SparkAIStream', () => {
     }
 
     expect(chunks).toEqual([]);
+  });
+
+  it('should enrich usage cost when pricing payload is provided', async () => {
+    const pricing = {
+      units: [
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    } satisfies Pricing;
+    const mockStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue({
+          choices: [],
+          created: 1734395014,
+          id: 'usage-cost-id',
+          model: 'spark-test-model',
+          object: 'chat.completion.chunk',
+          usage: {
+            completion_tokens: 500_000,
+            prompt_tokens: 1_000_000,
+            total_tokens: 1_500_000,
+          },
+        } as unknown as OpenAI.ChatCompletionChunk);
+        controller.close();
+      },
+    });
+    const onFinalMock = vi.fn();
+
+    const protocolStream = SparkAIStream(mockStream, {
+      callbacks: { onFinal: onFinalMock },
+      payload: { pricing },
+    });
+    const decoder = new TextDecoder();
+    const chunks = [];
+
+    // @ts-ignore
+    for await (const chunk of protocolStream) {
+      chunks.push(decoder.decode(chunk, { stream: true }));
+    }
+
+    expect(chunks.join('')).toContain('"cost":2');
+    expect(onFinalMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        usage: expect.objectContaining({
+          cost: 2,
+        }),
+      }),
+    );
   });
 });

@@ -3,7 +3,11 @@ import type { Stream } from 'openai/streaming';
 
 import type { ChatStreamCallbacks } from '../../types';
 import { convertOpenAIUsage } from '../usageConverters';
-import type { StreamProtocolChunk, StreamProtocolToolCallChunk } from './protocol';
+import type {
+  ChatPayloadForTransformStream,
+  StreamProtocolChunk,
+  StreamProtocolToolCallChunk,
+} from './protocol';
 import {
   convertIterableToStream,
   createCallbacksTransformer,
@@ -80,7 +84,14 @@ export function transformSparkResponseToStream(data: OpenAI.ChatCompletion) {
   });
 }
 
-export const transformSparkStream = (chunk: OpenAI.ChatCompletionChunk): StreamProtocolChunk => {
+export const transformSparkStream = (
+  chunk: OpenAI.ChatCompletionChunk,
+  payload?: ChatPayloadForTransformStream,
+): StreamProtocolChunk | StreamProtocolChunk[] => {
+  if (Array.isArray(chunk.choices) && chunk.choices.length === 0 && chunk.usage) {
+    return { data: convertOpenAIUsage(chunk.usage, payload), id: chunk.id, type: 'usage' };
+  }
+
   const item = chunk.choices[0];
 
   if (!item) {
@@ -134,8 +145,8 @@ export const transformSparkStream = (chunk: OpenAI.ChatCompletionChunk): StreamP
     if (chunk.usage) {
       return [
         { data: item.delta.content, id: chunk.id, type: 'text' },
-        { data: convertOpenAIUsage(chunk.usage), id: chunk.id, type: 'usage' },
-      ] as any;
+        { data: convertOpenAIUsage(chunk.usage, payload), id: chunk.id, type: 'usage' },
+      ];
     }
 
     return { data: item.delta.content, id: chunk.id, type: 'text' };
@@ -147,7 +158,7 @@ export const transformSparkStream = (chunk: OpenAI.ChatCompletionChunk): StreamP
 
   // Handle v2 endpoint usage
   if (chunk.usage) {
-    return { data: convertOpenAIUsage(chunk.usage), id: chunk.id, type: 'usage' };
+    return { data: convertOpenAIUsage(chunk.usage, payload), id: chunk.id, type: 'usage' };
   }
 
   return {
@@ -160,13 +171,21 @@ export const transformSparkStream = (chunk: OpenAI.ChatCompletionChunk): StreamP
 export const SparkAIStream = (
   stream: Stream<OpenAI.ChatCompletionChunk> | ReadableStream,
   // TODO: preserve for RFC 097
-  // eslint-disable-next-line unused-imports/no-unused-vars
-  { callbacks, inputStartAt }: { callbacks?: ChatStreamCallbacks; inputStartAt?: number } = {},
+  {
+    callbacks,
+    payload,
+  }: {
+    callbacks?: ChatStreamCallbacks;
+    inputStartAt?: number;
+    payload?: ChatPayloadForTransformStream;
+  } = {},
 ) => {
   const readableStream =
     stream instanceof ReadableStream ? stream : convertIterableToStream(stream);
+  const transformWithPayload = (chunk: OpenAI.ChatCompletionChunk) =>
+    transformSparkStream(chunk, payload);
 
   return readableStream
-    .pipeThrough(createSSEProtocolTransformer(transformSparkStream))
+    .pipeThrough(createSSEProtocolTransformer(transformWithPayload))
     .pipeThrough(createCallbacksTransformer(callbacks));
 };
