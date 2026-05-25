@@ -219,7 +219,7 @@ export const createGatewayEventHandler = (
   let accumulatedContent = '';
   let accumulatedReasoning = '';
 
-  // LOBE-9523: tracks whether any server-confirmed state has actually arrived
+  // Tracks whether any server-confirmed state has actually arrived
   // (server-assigned assistant id, streamed text/reasoning/tools, or a SoT
   // uiMessages snapshot). Used by `agent_runtime_end` to decide between
   // preserving in-memory streamed content (when interrupted MID-stream) vs.
@@ -298,7 +298,7 @@ export const createGatewayEventHandler = (
           // `step_start` already carried the SoT uiMessages snapshot, so
           // chunks have a valid target in `dbMessagesMap` already. Removing
           // the await here is what un-blocks the enqueue chain so live
-          // chunks can land mid-stream (LOBE-9501).
+          // chunks can land mid-stream.
           //
           // Hetero CLI adapters (Claude Code / Codex) never set
           // `assistantMessage.id` on stream_start, so the DB read stays
@@ -444,7 +444,7 @@ export const createGatewayEventHandler = (
         // step boundary (agent-runtime #15152). Use it as Source of Truth
         // instead of issuing a DB refetch — the refetch returns a stale
         // assistant placeholder while DB fan-out is still in flight, which
-        // clobbers the in-memory streamed assistantGroup (LOBE-9501).
+        // clobbers the in-memory streamed assistantGroup.
         if (Array.isArray(data?.uiMessages)) {
           get().replaceMessages(data.uiMessages, { action: 'gateway/step_start', context });
         }
@@ -552,7 +552,7 @@ export const createGatewayEventHandler = (
               context,
             });
           } else if (data?.reason === 'interrupted' && hasStreamedContent) {
-            // LOBE-9523: MID-stream cancel. The server's
+            // MID-stream cancel. The server's
             // `AgentRuntimeCoordinator.resolveUiMessages` omits uiMessages
             // for status='interrupted' precisely so we can preserve the
             // in-memory streamed content here. The executor's partial-

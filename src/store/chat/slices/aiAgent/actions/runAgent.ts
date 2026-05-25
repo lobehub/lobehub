@@ -326,7 +326,7 @@ export class AgentActionImpl {
           // Tool results are reconciled via the canonical uiMessages
           // snapshot the server pushes on the next step_start; no need
           // to refetch from DB here (the refetch was the source of the
-          // assistantGroup-clobber regression that LOBE-9501 fixes).
+          // assistantGroup-clobber regression.
         } else if (phase === 'execution_complete' && finalState) {
           // Agent execution complete
           log(`Agent execution completed for ${assistantId}:`, finalState);

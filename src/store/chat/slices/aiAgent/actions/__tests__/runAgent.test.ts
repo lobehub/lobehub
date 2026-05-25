@@ -490,7 +490,7 @@ describe('runAgent actions', () => {
 
     describe('step_complete event', () => {
       // The previous DB-refetch on tool_execution was the source of the
-      // assistantGroup-clobber regression (LOBE-9501) — tool results are
+      // assistantGroup-clobber regression — tool results are
       // now reconciled via the next step_start's uiMessages snapshot.
       it('does NOT refreshMessages on tool_execution phase', async () => {
         const { result } = renderHook(() => useChatStore());

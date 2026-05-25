@@ -506,12 +506,12 @@ describe('AgentRuntimeCoordinator', () => {
       });
     });
 
-    // LOBE-9523: cancel/interrupt path leaves the streaming assistant row
+    // Cancel/interrupt path leaves the streaming assistant row
     // at the LOADING_FLAT placeholder until the executor's partial-finalize
     // catch writes the accumulated content asynchronously. Publishing a
     // pre-finalize snapshot would clobber the client's in-memory streamed
     // content, so the resolver is skipped entirely for status='interrupted'.
-    it('skips uiMessages on saveAgentState when status=interrupted (LOBE-9523)', async () => {
+    it('skips uiMessages on saveAgentState when status=interrupted', async () => {
       const resolver = vi.fn().mockResolvedValue([{ id: 'placeholder', role: 'assistant' }]);
       const coordinatorWithResolver = new AgentRuntimeCoordinator({
         stateManager: mockStateManager,
@@ -537,7 +537,7 @@ describe('AgentRuntimeCoordinator', () => {
       });
     });
 
-    it('skips uiMessages on saveStepResult when stepResult.newState.status=interrupted (LOBE-9523)', async () => {
+    it('skips uiMessages on saveStepResult when stepResult.newState.status=interrupted', async () => {
       const resolver = vi.fn().mockResolvedValue([{ id: 'placeholder', role: 'assistant' }]);
       const coordinatorWithResolver = new AgentRuntimeCoordinator({
         stateManager: mockStateManager,

@@ -1378,14 +1378,14 @@ describe('RuntimeExecutors', () => {
       });
     });
 
-    // LOBE-9523: cancel/interrupt mid-stream — the model-runtime call is
+    // Cancel/interrupt mid-stream — the model-runtime call is
     // aborted before the post-stream finalize at line 1078, so the DB row
     // would normally stay at LOADING_FLAT placeholder. The executor's
     // inner catch must persist whatever partial content the streaming
     // callbacks already accumulated so (a) reload doesn't lose the user's
     // streamed answer and (b) any later uiMessages snapshot reflects real
     // content instead of placeholder.
-    describe('interrupted mid-stream partial finalize (LOBE-9523)', () => {
+    describe('interrupted mid-stream partial finalize', () => {
       it('persists accumulated content + reasoning when stream throws and operation is interrupted', async () => {
         const mockChat = vi.fn().mockImplementation(async (_payload, options) => {
           await options?.callback?.onText?.('Hello, this is a partial ');

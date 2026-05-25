@@ -140,7 +140,7 @@ export const createServerAgentToolsEngine = (
   // run on a device registered with the device-gateway. Desktop, CLI, and
   // bot/IM callers all converge on this single path; the previous Phase 6.4
   // `clientRuntime === 'desktop'` short-circuit (Agent Gateway WS dispatch
-  // back to the caller) is removed — see LOBE-9378.
+  // back to the caller) is removed.
   const hasDeviceProxy = !!deviceContext?.gatewayConfigured;
 
   // Platform key is used only to look up the user's per-platform
