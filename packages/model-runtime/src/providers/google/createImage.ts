@@ -22,6 +22,23 @@ export const GOOGLE_IMAGE_TEXT_ONLY_RESPONSE_MESSAGE = [
   'Ask it to generate or edit an image instead of describing or analyzing one.',
 ].join(' ');
 
+const GOOGLE_IMAGE_TEXT_REFUSAL_MARKERS = [
+  "can't",
+  'cannot',
+  'harmful',
+  'inappropriate',
+  'not able',
+  'not allowed',
+  'policy',
+  'safety',
+  'sorry',
+  'unable',
+  'unsafe',
+  'violate',
+  'violates',
+  "won't",
+];
+
 interface ErrorWithRawProviderResponse extends Error {
   providerResponse?: GenerateContentResponse;
 }
@@ -49,6 +66,18 @@ const createGoogleImageNoImageError = (
     new Error(message),
     response,
   ) as ErrorWithRawProviderResponse;
+
+const getTextFromParts = (parts: Part[]) =>
+  parts
+    .map((part) => part.text?.trim())
+    .filter(Boolean)
+    .join('\n');
+
+const isTextOnlyImageRefusal = (parts: Part[]) => {
+  const text = getTextFromParts(parts).toLowerCase();
+
+  return GOOGLE_IMAGE_TEXT_REFUSAL_MARKERS.some((marker) => text.includes(marker));
+};
 
 /**
  * Process a single image URL and convert it to Google AI Part format
@@ -104,7 +133,8 @@ function extractImageFromResponse(response: GenerateContentResponse): CreateImag
 
   if (
     candidate.finishReason === 'STOP' &&
-    candidate.content.parts.some((part) => Boolean(part.text?.trim()))
+    getTextFromParts(candidate.content.parts) &&
+    !isTextOnlyImageRefusal(candidate.content.parts)
   ) {
     throw createGoogleImageNoImageError(GOOGLE_IMAGE_TEXT_ONLY_RESPONSE_MESSAGE, response);
   }

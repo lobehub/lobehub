@@ -1006,6 +1006,59 @@ describe('createGoogleImage', () => {
         expect(JSON.stringify(error)).not.toContain('cartoon portrait');
       });
 
+      it('should keep moderation wording for text-only safety refusals', async () => {
+        // Arrange
+        const mockContentResponse = {
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    text: "Sorry, I can't generate that image because it may violate safety policies.",
+                  },
+                ],
+              },
+              finishReason: 'STOP',
+            },
+          ],
+          responseId: 'text-refusal-response',
+        };
+        vi.spyOn(mockClient.models, 'generateContent').mockResolvedValue(
+          mockContentResponse as any,
+        );
+
+        const payload: CreateImagePayload = {
+          model: 'gemini-3-pro-image-preview:image',
+          params: {
+            prompt: 'Generate unsafe content',
+          },
+        };
+
+        // Act
+        let error: any;
+        try {
+          await createGoogleImage(mockClient, provider, payload);
+        } catch (e) {
+          error = e;
+        }
+
+        // Assert
+        expect(error).toMatchObject({
+          error: { message: 'No image data found in response' },
+          errorType: noImageErrorType,
+          provider,
+        });
+        expect(error.error.message).not.toBe(GOOGLE_IMAGE_TEXT_ONLY_RESPONSE_MESSAGE);
+        expect(error.providerResponse).toMatchObject({
+          candidates: [
+            {
+              finishReason: 'STOP',
+            },
+          ],
+          responseId: 'text-refusal-response',
+        });
+      });
+
       it('should preserve Google image safety finish reasons without provider policy classification', async () => {
         // Arrange
         const mockContentResponse = {
