@@ -379,9 +379,15 @@ export class ModelRuntime {
           payload,
         });
       }
-      const err = error as Error & { code?: string };
+      // Providers either throw the structured ChatCompletionErrorPayload
+      // (has `errorType`) or rethrow the underlying error verbatim — AI SDK
+      // `AI_*Error` subclasses, Node Errors with `.code`, etc. Try the most
+      // descriptive identifier first so the tracing row gets a usable code
+      // instead of falling through to `unknown`.
+      const err = error as Error & { code?: string; errorType?: string };
+      const code = err?.errorType ?? err?.code ?? err?.name ?? err?.constructor?.name;
       await fireComplete({
-        error: { code: err?.code, message: err?.message, stack: err?.stack },
+        error: { code, message: err?.message, stack: err?.stack },
         success: false,
       });
       throw error;
