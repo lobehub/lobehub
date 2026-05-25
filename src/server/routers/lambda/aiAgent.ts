@@ -383,6 +383,10 @@ const AgentStreamEventSchema = z.object({
  */
 const HeteroIngestSchema = z.object({
   agentType: z.enum(['claude-code', 'codex']),
+  /** Initial assistant placeholder message id forwarded from the sandbox env var.
+   * When present, `loadOrCreateState` uses it directly and skips the DB read of
+   * topic.metadata.runningOperation, eliminating the replica-lag race condition. */
+  assistantMessageId: z.string().min(1).optional(),
   events: z.array(AgentStreamEventSchema).min(1),
   operationId: z.string().min(1),
   topicId: z.string().min(1),
@@ -1170,7 +1174,7 @@ export const aiAgentRouter = router({
    * unchanged. Phase 2a: pub/sub only — no DB persistence (phase 2b adds it).
    */
   heteroIngest: heteroAgentProcedure.input(HeteroIngestSchema).mutation(async ({ input, ctx }) => {
-    const { agentType, events, operationId, topicId } = input;
+    const { agentType, assistantMessageId, events, operationId, topicId } = input;
 
     log(
       'heteroIngest: topic=%s op=%s type=%s count=%d',
@@ -1186,6 +1190,7 @@ export const aiAgentRouter = router({
       // the shared `AgentStreamEvent` type or the service signature.
       await ctx.heterogeneousAgentService.heteroIngest({
         agentType,
+        assistantMessageId,
         events: events as AgentStreamEvent[],
         operationId,
         topicId,

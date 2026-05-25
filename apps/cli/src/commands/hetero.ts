@@ -246,7 +246,13 @@ const exec = async (options: ExecOptions): Promise<void> => {
   let sink: InstanceType<typeof TrpcIngestSink> | InstanceType<typeof NoopIngestSink>;
   if (serverIngest) {
     const client = await getTrpcClient();
-    sink = new TrpcIngestSink(client, agentType, operationId, options.topic!);
+    sink = new TrpcIngestSink(
+      client,
+      agentType,
+      operationId,
+      options.topic!,
+      process.env.LOBEHUB_ASSISTANT_MESSAGE_ID,
+    );
   } else {
     sink = new NoopIngestSink();
   }

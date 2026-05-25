@@ -234,11 +234,16 @@ export class HeterogeneousPersistenceHandler {
    * the dedupe map, so the retry only re-runs the failed event onward.
    */
   async ingest(params: {
+    assistantMessageId?: string;
     events: AgentStreamEvent[];
     operationId: string;
     topicId: string;
   }): Promise<void> {
-    const state = await this.loadOrCreateState(params.operationId, params.topicId);
+    const state = await this.loadOrCreateState(
+      params.operationId,
+      params.topicId,
+      params.assistantMessageId,
+    );
     const batchMaxStepIndex = Math.max(...params.events.map((event) => event.stepIndex));
 
     // A different Lambda may have already processed `stream_start { newStep }`
@@ -428,7 +433,11 @@ export class HeterogeneousPersistenceHandler {
 
   // ─── State management ────────────────────────────────────────────────────
 
-  private async loadOrCreateState(operationId: string, topicId: string): Promise<OperationState> {
+  private async loadOrCreateState(
+    operationId: string,
+    topicId: string,
+    seedAssistantMessageId?: string,
+  ): Promise<OperationState> {
     let state = operationStates.get(operationId);
     if (state) {
       // Defensive: caller mismatch on topicId would corrupt persistence —
@@ -443,12 +452,20 @@ export class HeterogeneousPersistenceHandler {
 
     const topic = await this.deps.topicModel.findById(topicId);
     const running = topic?.metadata?.runningOperation;
-    if (!running || running.operationId !== operationId) {
-      throw new Error(
-        `No matching runningOperation on topic ${topicId} for operation ${operationId} — orchestrator must seed topic.metadata.runningOperation before ingest`,
-      );
-    }
-    if (!running.assistantMessageId) {
+
+    // Prefer the assistantMessageId forwarded in the ingest payload (sandbox path).
+    // The orchestrator already has it in-memory and passes it through env → CLI → tRPC,
+    // so this path never blocks on the DB write of topic.metadata.runningOperation
+    // being visible on this replica — eliminating the cold-start race condition.
+    // Fall back to topic.metadata for desktop / old-CLI callers that lack the field.
+    const baseAssistantMessageId = seedAssistantMessageId ?? running?.assistantMessageId;
+
+    if (!baseAssistantMessageId) {
+      if (!running || running.operationId !== operationId) {
+        throw new Error(
+          `No matching runningOperation on topic ${topicId} for operation ${operationId} — orchestrator must seed topic.metadata.runningOperation before ingest`,
+        );
+      }
       throw new Error(`runningOperation on topic ${topicId} is missing assistantMessageId`);
     }
 
@@ -458,11 +475,11 @@ export class HeterogeneousPersistenceHandler {
     // Guard: only use heteroCurrentMsgId when it belongs to THIS operation.
     // A stale value from a previous run must not override the new operation's
     // seeded assistantMessageId (P1 fix).
-    const stored = topic.metadata?.heteroCurrentMsgId;
+    const stored = topic?.metadata?.heteroCurrentMsgId;
     const currentAssistantMessageId =
-      stored?.operationId === running.operationId
-        ? (stored.msgId ?? running.assistantMessageId)
-        : running.assistantMessageId;
+      stored?.operationId === operationId
+        ? (stored.msgId ?? baseAssistantMessageId)
+        : baseAssistantMessageId;
 
     // Restore toolMsgIdByCallId from the DB so tool_results that arrive on a
     // different replica than their tool_use can still be matched and persisted.
@@ -498,7 +515,7 @@ export class HeterogeneousPersistenceHandler {
     state = {
       accumulatedContent: restoredContent,
       accumulatedReasoning: restoredReasoning,
-      agentId: topic.agentId ?? null,
+      agentId: topic?.agentId ?? null,
       currentAssistantMessageId,
       lastModel: undefined,
       lastProvider: undefined,

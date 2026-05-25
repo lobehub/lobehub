@@ -774,6 +774,7 @@ export class AiAgentService {
 
       const heteroParams = {
         agentType: heteroType,
+        assistantMessageId: assistantMsg.id,
         githubToken,
         jwt: operationJwt,
         operationId,
