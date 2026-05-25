@@ -1,7 +1,5 @@
 import { execFileSync } from 'node:child_process';
 
-import { getHermesPort } from './heteroTask';
-
 export interface CheckPlatformCapabilityParams {
   platform: 'hermes' | 'openclaw';
 }
@@ -42,26 +40,19 @@ export async function checkPlatformCapability(
   }
 
   if (platform === 'hermes') {
-    const port = getHermesPort();
     try {
-      const res = await fetch(`http://localhost:${port}/health`, {
-        signal: AbortSignal.timeout(5000),
-      });
-      if (res.ok) {
-        let version: string | undefined;
-        try {
-          const body = (await res.json()) as { version?: string };
-          version = body.version;
-        } catch {
-          /* ignore parse errors */
-        }
-        return { available: true, version };
-      }
-      return { available: false, reason: `Hermes gateway returned HTTP ${res.status}` };
+      const output = execFileSync('hermes', ['--version'], {
+        encoding: 'utf8',
+        timeout: 5000,
+      }).trim();
+      // output is typically "Hermes Agent vX.Y.Z (...)"
+      const versionMatch = output.match(/v(\d+\.\d+\.\d+)/);
+      const version = versionMatch ? versionMatch[1] : output.split(/\s+/).at(-1);
+      return { available: true, version };
     } catch (err) {
       return {
         available: false,
-        reason: err instanceof Error ? err.message : `Hermes gateway not reachable on port ${port}`,
+        reason: err instanceof Error ? err.message : 'hermes not found or failed to run',
       };
     }
   }
