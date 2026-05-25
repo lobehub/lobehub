@@ -1,6 +1,6 @@
 ---
 name: react
-description: 'Use when writing or editing any `.tsx` under `src/**`. Triggers: createStaticStyles, createStyles, cssVar, antd-style, Flexbox, Center, Select, Modal, Drawer, Button, Tooltip, DropdownMenu, Popover, Switch, ScrollArea, Link, useNavigate, react-router-dom, next/link, desktopRouter, componentMap.desktop, .desktop.tsx, new component, new page, edit layout, add styles, zustand selector, @lobehub/ui, antd import.'
+description: "LobeHub React component conventions — styling via `antd-style` `createStaticStyles` + `cssVar.*` (zero-runtime preferred over `createStyles` + `token`), `@lobehub/ui` over antd when both exist, routing via `react-router-dom` (not `next/link`). Use when writing or editing any `.tsx` under `src/**`. Triggers on `createStaticStyles`, `createStyles`, `cssVar`, `antd-style`, `Flexbox`, `Center`, `Select`, `Modal`, `Drawer`, `Button`, `Tooltip`, `DropdownMenu`, `Popover`, `Switch`, `ScrollArea`, `Link`, `useNavigate`, `react-router-dom`, `next/link`, `desktopRouter`, `componentMap.desktop`, `.desktop.tsx`, 'new component', 'new page', 'edit layout', 'add styles', 'zustand selector', '@lobehub/ui', 'antd import'."
 user-invocable: false
 ---
 

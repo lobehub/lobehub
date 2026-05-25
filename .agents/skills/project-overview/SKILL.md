@@ -1,6 +1,6 @@
 ---
 name: project-overview
-description: Complete project architecture and structure guide. Use when exploring the codebase, understanding project organization, finding files, or needing comprehensive architectural context. Triggers on architecture questions, directory navigation, or project overview needs.
+description: "LobeHub monorepo architecture map — cloud root + `lobehub/` submodule layout, override mechanism, file-resolution order (`@/store/x` → cloud first, then submodule), per-layer location table. Use when exploring an unfamiliar part of the codebase, locating where a layer lives (store / service / router / schema / etc.), or onboarding to the monorepo. Triggers on 'where does X live', 'project structure', 'monorepo layout', 'cloud override', `lobehub/` submodule, 'architecture overview', '项目结构', '架构总览'."
 user-invocable: false
 ---
 

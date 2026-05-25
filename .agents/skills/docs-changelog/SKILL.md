@@ -1,6 +1,6 @@
 ---
 name: docs-changelog
-description: 'Writing guide for website changelog pages under docs/changelog/*.mdx. Use when creating or editing product update posts in EN/ZH. Not for GitHub Release notes.'
+description: "Writing guide for website changelog pages under `docs/changelog/*.mdx` (NOT GitHub Release notes — those live in the `version-release` skill). Use when creating or editing a product update post in EN/ZH. Triggers on `docs/changelog/*.mdx`, 'changelog post', 'product update post', 'add a changelog', '更新日志', 'changelog 文案'."
 ---
 
 # Docs Changelog Writing Guide

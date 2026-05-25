@@ -1,6 +1,6 @@
 ---
 name: store-data-structures
-description: Zustand store data structure patterns for LobeHub. Covers List vs Detail data structures, Map + Reducer patterns, type definitions, and when to use each pattern. Use when designing store state, choosing data structures, or implementing list/detail pages.
+description: "Zustand store data-shape patterns for LobeHub — List vs Detail split, Map + Reducer, type definitions sourced from `@lobechat/types` (not `@lobechat/database`). Use when designing store state, choosing between Array (list) and `Record<string, Detail>` (detail map), or implementing a list/detail page pair. Triggers on `messagesMap`, `topicsMap`, `Record<string, Detail>`, 'list vs detail', 'store data shape', 'normalize state', 'state structure'."
 user-invocable: false
 ---
 
@@ -310,5 +310,5 @@ export interface BenchmarkListItem {
 
 ## Related Skills
 
-- `data-fetching` — how to fetch and update this data
+- `data-fetching-architecture` — how to fetch and update this data
 - `zustand` — general Zustand patterns
