@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, Flexbox, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
 import { App } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Archive, Star, Trash2, X } from 'lucide-react';
@@ -13,19 +13,34 @@ import { useTopicsViewStore } from './store';
 
 const styles = createStaticStyles(({ css }) => ({
   bar: css`
-    position: sticky;
-    z-index: 10;
-    inset-block-start: 0;
+    pointer-events: auto;
 
-    margin-block-end: 16px;
-    padding-block: 10px;
+    padding-block: 8px;
     padding-inline: 16px;
-    border-radius: 10px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: 999px;
 
-    color: ${cssVar.colorWhite};
+    background: ${cssVar.colorBgElevated};
+    box-shadow:
+      0 12px 32px rgb(0 0 0 / 24%),
+      0 2px 6px rgb(0 0 0 / 16%);
+  `,
+  divider: css`
+    width: 1px;
+    height: 16px;
+    margin-inline: 2px;
+    background: ${cssVar.colorBorderSecondary};
+  `,
+  overlay: css`
+    pointer-events: none;
 
-    background: ${cssVar.colorText};
-    box-shadow: 0 4px 12px rgb(0 0 0 / 8%);
+    position: fixed;
+    z-index: 1000;
+    inset-block-end: 24px;
+    inset-inline: 0;
+
+    display: flex;
+    justify-content: center;
   `,
 }));
 
@@ -72,43 +87,39 @@ const BulkActionBar = memo(() => {
   if (selectedIds.length === 0) return null;
 
   return (
-    <Flexbox horizontal align={'center'} className={styles.bar} justify={'space-between'}>
-      <Text style={{ color: cssVar.colorWhite, fontWeight: 500 }}>
-        {t('management.bulk.selectedCount', { count: selectedIds.length })}
-      </Text>
-      <Flexbox horizontal align={'center'} gap={6}>
-        <Button
+    <div className={styles.overlay}>
+      <Flexbox horizontal align={'center'} className={styles.bar} gap={4}>
+        <Text style={{ marginInlineEnd: 8 }} weight={500}>
+          {t('management.bulk.selectedCount', { count: selectedIds.length })}
+        </Text>
+        <ActionIcon
           icon={Star}
           size={'small'}
-          style={{ color: cssVar.colorWhite }}
-          variant={'text'}
+          title={t('management.bulk.favorite')}
           onClick={handleBatchFavorite}
-        >
-          {t('management.bulk.favorite')}
-        </Button>
-        <Button
+        />
+        <ActionIcon
           icon={Archive}
           size={'small'}
-          style={{ color: cssVar.colorWhite }}
-          variant={'text'}
+          title={t('management.bulk.archive')}
           onClick={handleBatchArchive}
-        >
-          {t('management.bulk.archive')}
-        </Button>
-        <Button danger icon={Trash2} size={'small'} variant={'filled'} onClick={handleBatchDelete}>
-          {t('management.bulk.delete')}
-        </Button>
-        <Button
+        />
+        <ActionIcon
+          icon={Trash2}
+          size={'small'}
+          style={{ color: cssVar.colorError }}
+          title={t('management.bulk.delete')}
+          onClick={handleBatchDelete}
+        />
+        <span className={styles.divider} />
+        <ActionIcon
           icon={X}
           size={'small'}
-          style={{ color: cssVar.colorWhite }}
-          variant={'text'}
+          title={t('management.bulk.cancel')}
           onClick={exitSelectMode}
-        >
-          {t('management.bulk.cancel')}
-        </Button>
+        />
       </Flexbox>
-    </Flexbox>
+    </div>
   );
 });
 

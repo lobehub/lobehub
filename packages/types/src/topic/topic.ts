@@ -190,6 +190,7 @@ export type ChatTopicStatus =
 
 export interface ChatTopic extends Omit<BaseDataModel, 'meta'> {
   completedAt?: Date | null;
+  description?: string | null;
   favorite?: boolean;
   historySummary?: string;
   metadata?: ChatTopicMetadata;

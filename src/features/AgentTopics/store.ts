@@ -1,8 +1,16 @@
 import { create } from 'zustand';
 
-import type { SortBy, StatusFilter, TimeRangeFilter, TriggerFilter, ViewMode } from './types';
+import type {
+  GroupBy,
+  SortBy,
+  StatusFilter,
+  TimeRangeFilter,
+  TriggerFilter,
+  ViewMode,
+} from './types';
 
 interface TopicsViewState {
+  groupBy: GroupBy;
   groupIds: string[];
   search: string;
   selectedIds: string[];
@@ -19,6 +27,7 @@ interface TopicsViewActions {
   exitSelectMode: () => void;
   reset: () => void;
   selectAll: (ids: string[]) => void;
+  setGroupBy: (groupBy: GroupBy) => void;
   setGroupIds: (groupIds: string[]) => void;
   setSearch: (search: string) => void;
   setSortBy: (sortBy: SortBy) => void;
@@ -31,14 +40,15 @@ interface TopicsViewActions {
 }
 
 const initialState: TopicsViewState = {
+  groupBy: 'byTime',
   groupIds: [],
   search: '',
   selectMode: false,
   selectedIds: [],
   sortBy: 'updatedAt',
-  status: 'all',
+  status: 'active',
   timeRange: 'all',
-  triggers: [],
+  triggers: ['chat'],
   viewMode: 'card',
 };
 
@@ -48,6 +58,7 @@ export const useTopicsViewStore = create<TopicsViewState & TopicsViewActions>((s
   exitSelectMode: () => set({ selectMode: false, selectedIds: [] }),
   reset: () => set(initialState),
   selectAll: (ids) => set({ selectedIds: ids }),
+  setGroupBy: (groupBy) => set({ groupBy }),
   setGroupIds: (groupIds) => set({ groupIds }),
   setSearch: (search) => set({ search }),
   setSortBy: (sortBy) => set({ sortBy }),

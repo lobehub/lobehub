@@ -2,16 +2,22 @@
 
 import { Block, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { CheckCircle2, FolderIcon, MessageSquare, Star } from 'lucide-react';
+import { Check, FolderIcon, Star } from 'lucide-react';
 import { memo, type MouseEvent, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import { SESSION_CHAT_TOPIC_URL } from '@/const/url';
+import { useActivityTime } from '@/hooks/useActivityTime';
 import type { ChatTopic } from '@/types/topic';
 
+import StatusDot from './StatusDot';
 import { useTopicsViewStore } from './store';
-import { formatRelativeTime, getProjectLabel } from './utils';
+import { getProjectLabel } from './utils';
+
+// Module-scoped class string so the card's `:hover` rule can target the
+// checkbox without a circular reference inside `createStaticStyles`.
+const CHECKBOX_CLASS = 'agent-topic-card__checkbox';
 
 const styles = createStaticStyles(({ css }) => ({
   card: css`
@@ -22,8 +28,7 @@ const styles = createStaticStyles(({ css }) => ({
     display: flex;
     flex-direction: column;
 
-    min-height: 200px;
-    padding: 16px;
+    padding: 14px;
 
     transition:
       transform 0.18s,
@@ -32,7 +37,11 @@ const styles = createStaticStyles(({ css }) => ({
 
     &:hover {
       transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgb(0 0 0 / 4%);
+      box-shadow: 0 4px 12px rgb(0 0 0 / 6%);
+    }
+
+    &:hover .${CHECKBOX_CLASS} {
+      opacity: 1;
     }
   `,
   cardSelected: css`
@@ -40,24 +49,32 @@ const styles = createStaticStyles(({ css }) => ({
     box-shadow: 0 0 0 1px ${cssVar.colorPrimary};
   `,
   checkbox: css`
+    cursor: pointer;
+
     position: absolute;
     z-index: 1;
     inset-block-start: 10px;
-    inset-inline-start: 10px;
+    inset-inline-end: 10px;
 
     display: flex;
     align-items: center;
     justify-content: center;
 
-    width: 18px;
-    height: 18px;
+    width: 20px;
+    height: 20px;
     border: 1.5px solid ${cssVar.colorBorderSecondary};
     border-radius: 4px;
 
     opacity: 0;
     background: ${cssVar.colorBgContainer};
 
-    transition: opacity 0.15s;
+    transition:
+      opacity 0.15s,
+      border-color 0.15s;
+
+    &:hover {
+      border-color: ${cssVar.colorPrimary};
+    }
   `,
   checkboxChecked: css`
     border-color: ${cssVar.colorPrimary};
@@ -68,18 +85,15 @@ const styles = createStaticStyles(({ css }) => ({
   checkboxVisible: css`
     opacity: 1;
   `,
+  description: css`
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  `,
   footer: css`
     padding-block-start: 10px;
     border-block-start: 1px solid ${cssVar.colorSplit};
-  `,
-  preview: css`
-    overflow: hidden;
-    display: -webkit-box;
-    flex: 1;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 4;
-
-    margin-block-end: 12px;
   `,
   title: css`
     overflow: hidden;
@@ -89,16 +103,6 @@ const styles = createStaticStyles(({ css }) => ({
     -webkit-line-clamp: 1;
   `,
 }));
-
-const STATUS_COLOR_MAP: Record<string, string> = {
-  active: 'success',
-  archived: 'warning',
-  completed: 'default',
-  failed: 'error',
-  paused: 'processing',
-  running: 'processing',
-  waitingForHuman: 'processing',
-};
 
 interface TopicCardProps {
   agentId: string;
@@ -112,6 +116,7 @@ const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
   const selectMode = useTopicsViewStore((s) => s.selectMode);
   const selected = useTopicsViewStore((s) => s.selectedIds.includes(topic.id));
   const toggleSelected = useTopicsViewStore((s) => s.toggleSelected);
+  const toggleSelectMode = useTopicsViewStore((s) => s.toggleSelectMode);
 
   const handleClick = useCallback(
     (e: MouseEvent) => {
@@ -125,10 +130,21 @@ const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
     [selectMode, topic.id, agentId, toggleSelected, navigate],
   );
 
+  const handleCheckboxClick = useCallback(
+    (e: MouseEvent) => {
+      // Stop the card's onClick from firing — checkbox owns its own behaviour:
+      // enters select-mode on first click and toggles this card's selection.
+      e.stopPropagation();
+      if (!selectMode) toggleSelectMode();
+      toggleSelected(topic.id);
+    },
+    [selectMode, topic.id, toggleSelected, toggleSelectMode],
+  );
+
   const projectLabel = getProjectLabel(topic);
   const status = topic.status ?? 'active';
-  const statusColor = STATUS_COLOR_MAP[status] ?? 'default';
-  const statusLabelKey = `management.status.${status}` as const;
+  const preview = topic.description?.trim() || topic.historySummary?.trim();
+  const updatedAt = useActivityTime(topic.updatedAt);
 
   return (
     <Block
@@ -140,27 +156,31 @@ const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
       <span
         className={[
           styles.checkbox,
+          CHECKBOX_CLASS,
           (selectMode || selected) && styles.checkboxVisible,
           selected && styles.checkboxChecked,
         ]
           .filter(Boolean)
           .join(' ')}
+        onClick={handleCheckboxClick}
       >
-        {selected && <Icon icon={CheckCircle2} size={12} />}
+        {selected && <Icon icon={Check} size={12} />}
       </span>
 
-      <Flexbox horizontal align={'flex-start'} gap={8} justify={'space-between'}>
+      <Flexbox horizontal align={'center'} gap={6}>
+        {topic.favorite && (
+          <Icon icon={Star} size={13} style={{ color: cssVar.colorWarning, flexShrink: 0 }} />
+        )}
         <Text className={styles.title} fontSize={14} weight={600}>
           {topic.title || t('defaultTitle')}
         </Text>
-        {topic.favorite && (
-          <Icon icon={Star} size={14} style={{ color: cssVar.colorWarning, flexShrink: 0 }} />
-        )}
       </Flexbox>
 
-      <Text className={styles.preview} fontSize={12} type={'secondary'}>
-        {topic.historySummary || t('management.card.noPreview')}
-      </Text>
+      {preview && (
+        <Text className={styles.description} fontSize={12} type={'secondary'}>
+          {preview}
+        </Text>
+      )}
 
       {projectLabel && (
         <Tag bordered={false} icon={<Icon icon={FolderIcon} size={11} />} size={'small'}>
@@ -169,20 +189,10 @@ const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
       )}
 
       <Flexbox horizontal align={'center'} className={styles.footer} justify={'space-between'}>
-        <Flexbox
-          horizontal
-          align={'center'}
-          gap={10}
-          style={{ color: cssVar.colorTextQuaternary, fontSize: 11 }}
-        >
-          <Flexbox horizontal align={'center'} gap={3}>
-            <Icon icon={MessageSquare} size={11} />
-            {formatRelativeTime(topic.updatedAt)}
-          </Flexbox>
-        </Flexbox>
-        <Tag color={statusColor as any} size={'small'}>
-          {t(statusLabelKey as any)}
-        </Tag>
+        <Text fontSize={11} style={{ color: cssVar.colorTextQuaternary }} title={updatedAt.title}>
+          {updatedAt.text}
+        </Text>
+        <StatusDot status={status} />
       </Flexbox>
     </Block>
   );

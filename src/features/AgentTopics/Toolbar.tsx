@@ -1,38 +1,28 @@
 'use client';
 
-import { Button, type DropdownItem, DropdownMenu, Flexbox, Icon, Input, Tag } from '@lobehub/ui';
+import { Button, type DropdownItem, DropdownMenu, Flexbox, Icon, Segmented } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ChevronDown, Search, Star } from 'lucide-react';
+import {
+  CalendarClock,
+  ChevronDown,
+  type LucideIcon,
+  MessageCircle,
+  Star,
+  TestTubeIcon,
+  Webhook,
+} from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useTopicsViewStore } from './store';
-import type { SortBy, StatusFilter, TimeRangeFilter, TriggerFilter } from './types';
+import type { GroupBy, SortBy, StatusFilter, TimeRangeFilter, TriggerFilter } from './types';
 
 const styles = createStaticStyles(({ css }) => ({
-  chip: css`
-    cursor: pointer;
-    user-select: none;
-    transition: all 0.15s;
-
-    &:hover {
-      border-color: ${cssVar.colorBorderSecondary};
-    }
-  `,
-  chipActive: css`
-    cursor: pointer;
-    user-select: none;
-    border-color: transparent;
-    background: ${cssVar.colorFillSecondary};
-  `,
   divider: css`
     width: 1px;
     height: 16px;
     margin-inline: 4px;
     background: ${cssVar.colorBorderSecondary};
-  `,
-  search: css`
-    max-width: 480px;
   `,
 }));
 
@@ -46,9 +36,18 @@ const STATUS_OPTIONS: { key: StatusFilter; labelKey: string }[] = [
 
 const TRIGGER_OPTIONS: TriggerFilter[] = ['chat', 'api', 'cron', 'eval'];
 
+const TRIGGER_ICON: Record<TriggerFilter, LucideIcon> = {
+  api: Webhook,
+  chat: MessageCircle,
+  cron: CalendarClock,
+  eval: TestTubeIcon,
+};
+
 const TIME_OPTIONS: TimeRangeFilter[] = ['all', 'today', 'week', 'month'];
 
 const SORT_OPTIONS: SortBy[] = ['updatedAt', 'createdAt', 'title'];
+
+const GROUP_OPTIONS: GroupBy[] = ['byTime', 'byProject', 'none'];
 
 interface ToolbarProps {
   projects: { label: string; value: string }[];
@@ -61,8 +60,6 @@ const CheckMark = ({ visible }: { visible: boolean }) => (
 const Toolbar = memo<ToolbarProps>(({ projects }) => {
   const { t } = useTranslation('topic');
 
-  const search = useTopicsViewStore((s) => s.search);
-  const setSearch = useTopicsViewStore((s) => s.setSearch);
   const status = useTopicsViewStore((s) => s.status);
   const setStatus = useTopicsViewStore((s) => s.setStatus);
   const groupIds = useTopicsViewStore((s) => s.groupIds);
@@ -73,6 +70,8 @@ const Toolbar = memo<ToolbarProps>(({ projects }) => {
   const setTimeRange = useTopicsViewStore((s) => s.setTimeRange);
   const sortBy = useTopicsViewStore((s) => s.sortBy);
   const setSortBy = useTopicsViewStore((s) => s.setSortBy);
+  const groupBy = useTopicsViewStore((s) => s.groupBy);
+  const setGroupBy = useTopicsViewStore((s) => s.setGroupBy);
 
   const projectMenu: DropdownItem[] = useMemo(() => {
     if (projects.length === 0) {
@@ -94,7 +93,8 @@ const Toolbar = memo<ToolbarProps>(({ projects }) => {
   const triggerMenu: DropdownItem[] = useMemo(
     () =>
       TRIGGER_OPTIONS.map((tr) => ({
-        icon: <CheckMark visible={triggers.includes(tr)} />,
+        extra: <CheckMark visible={triggers.includes(tr)} />,
+        icon: <Icon icon={TRIGGER_ICON[tr]} size={14} />,
         key: tr,
         label: t(`management.filters.trigger.${tr}` as any) as string,
         onClick: () =>
@@ -125,6 +125,17 @@ const Toolbar = memo<ToolbarProps>(({ projects }) => {
     [sortBy, t, setSortBy],
   );
 
+  const groupMenu: DropdownItem[] = useMemo(
+    () =>
+      GROUP_OPTIONS.map((g) => ({
+        icon: <CheckMark visible={groupBy === g} />,
+        key: g,
+        label: t(`management.group.${g}` as any) as string,
+        onClick: () => setGroupBy(g),
+      })),
+    [groupBy, t, setGroupBy],
+  );
+
   const triggerLabel =
     triggers.length === 0
       ? (t('management.filters.trigger.label') as string)
@@ -141,46 +152,32 @@ const Toolbar = memo<ToolbarProps>(({ projects }) => {
       : (t(`management.filters.time.${timeRange}` as any) as string);
 
   const sortLabel = `${t('management.sort.label')}: ${t(`management.sort.${sortBy}` as any)}`;
+  const groupLabel = `${t('management.group.label')}: ${t(`management.group.${groupBy}` as any)}`;
 
   return (
     <Flexbox gap={12}>
-      <Input
-        className={styles.search}
-        placeholder={t('management.searchPlaceholder')}
-        prefix={<Icon icon={Search} size={'small'} />}
-        size={'large'}
-        value={search}
-        variant={'filled'}
-        onChange={(e) => setSearch(e.target.value)}
-      />
-
       <Flexbox horizontal align={'center'} gap={6} wrap={'wrap'}>
-        {STATUS_OPTIONS.map((opt) => {
-          const active = status === opt.key;
-          const labelText = t(opt.labelKey as any) as string;
-          return (
-            <Tag
-              bordered
-              className={active ? styles.chipActive : styles.chip}
-              key={opt.key}
-              onClick={() => setStatus(opt.key)}
-            >
-              {opt.key === 'favorite' ? (
+        <Segmented
+          value={status}
+          options={STATUS_OPTIONS.map((opt) => ({
+            label:
+              opt.key === 'favorite' ? (
                 <Flexbox horizontal align={'center'} gap={4}>
-                  <Icon icon={Star} size={11} />
-                  {labelText}
+                  <Icon icon={Star} size={12} />
+                  {t(opt.labelKey as any) as string}
                 </Flexbox>
               ) : (
-                labelText
-              )}
-            </Tag>
-          );
-        })}
+                (t(opt.labelKey as any) as string)
+              ),
+            value: opt.key,
+          }))}
+          onChange={(v) => setStatus(v as StatusFilter)}
+        />
 
         <span className={styles.divider} />
 
         <DropdownMenu items={projectMenu}>
-          <Button size={'small'} variant={'filled'}>
+          <Button variant={'filled'}>
             <Flexbox horizontal align={'center'} gap={4}>
               {projectLabel}
               <Icon icon={ChevronDown} size={11} />
@@ -189,7 +186,7 @@ const Toolbar = memo<ToolbarProps>(({ projects }) => {
         </DropdownMenu>
 
         <DropdownMenu items={triggerMenu}>
-          <Button size={'small'} variant={'filled'}>
+          <Button variant={'filled'}>
             <Flexbox horizontal align={'center'} gap={4}>
               {triggerLabel}
               <Icon icon={ChevronDown} size={11} />
@@ -198,7 +195,7 @@ const Toolbar = memo<ToolbarProps>(({ projects }) => {
         </DropdownMenu>
 
         <DropdownMenu items={timeMenu}>
-          <Button size={'small'} variant={'filled'}>
+          <Button variant={'filled'}>
             <Flexbox horizontal align={'center'} gap={4}>
               {timeLabel}
               <Icon icon={ChevronDown} size={11} />
@@ -208,8 +205,17 @@ const Toolbar = memo<ToolbarProps>(({ projects }) => {
 
         <Flexbox flex={1} />
 
+        <DropdownMenu items={groupMenu}>
+          <Button variant={'filled'}>
+            <Flexbox horizontal align={'center'} gap={4}>
+              {groupLabel}
+              <Icon icon={ChevronDown} size={11} />
+            </Flexbox>
+          </Button>
+        </DropdownMenu>
+
         <DropdownMenu items={sortMenu}>
-          <Button size={'small'} variant={'filled'}>
+          <Button variant={'filled'}>
             <Flexbox horizontal align={'center'} gap={4}>
               {sortLabel}
               <Icon icon={ChevronDown} size={11} />

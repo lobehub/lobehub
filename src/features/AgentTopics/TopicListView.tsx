@@ -1,24 +1,44 @@
 'use client';
 
+import type { GroupedTopic } from '@lobechat/types';
 import { Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { Checkbox } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { FolderIcon, Star } from 'lucide-react';
-import { memo, type MouseEvent, useCallback } from 'react';
+import { Fragment, memo, type MouseEvent, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import { SESSION_CHAT_TOPIC_URL } from '@/const/url';
+import { useActivityTime } from '@/hooks/useActivityTime';
 import type { ChatTopic } from '@/types/topic';
 
+import StatusDot from './StatusDot';
 import { useTopicsViewStore } from './store';
-import { formatRelativeTime, getProjectLabel } from './utils';
+import type { GroupBy } from './types';
+import { getProjectGroupTitle, getProjectLabel, getTimeGroupTitle } from './utils';
 
 const styles = createStaticStyles(({ css }) => ({
+  cell: css`
+    overflow: hidden;
+    min-width: 0;
+  `,
+  groupBar: css`
+    padding-block: 8px;
+    padding-inline: 16px;
+    border-block-end: 1px solid ${cssVar.colorSplit};
+
+    font-size: 12px;
+    font-weight: 500;
+    color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorFillQuaternary};
+  `,
   header: css`
     display: grid;
-    grid-template-columns: 28px 28px 1fr 140px 110px 70px 110px;
+    grid-template-columns: 24px 20px minmax(0, 1fr) 120px 100px 80px 100px;
     gap: 12px;
+    align-items: center;
 
     padding-block: 10px;
     padding-inline: 16px;
@@ -42,11 +62,11 @@ const styles = createStaticStyles(({ css }) => ({
     cursor: pointer;
 
     display: grid;
-    grid-template-columns: 28px 28px 1fr 140px 110px 70px 110px;
+    grid-template-columns: 24px 20px minmax(0, 1fr) 120px 100px 80px 100px;
     gap: 12px;
     align-items: center;
 
-    padding-block: 12px;
+    padding-block: 10px;
     padding-inline: 16px;
     border-block-end: 1px solid ${cssVar.colorSplit};
 
@@ -80,19 +100,11 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const STATUS_COLOR_MAP: Record<string, string> = {
-  active: 'success',
-  archived: 'warning',
-  completed: 'default',
-  failed: 'error',
-  paused: 'processing',
-  running: 'processing',
-  waitingForHuman: 'processing',
-};
-
 interface TopicListViewProps {
   agentId: string;
-  topics: ChatTopic[];
+  groupBy: GroupBy;
+  groups: GroupedTopic[];
+  showGroupTitles: boolean;
 }
 
 interface RowProps {
@@ -107,6 +119,7 @@ const Row = memo<RowProps>(({ topic, agentId }) => {
   const selectMode = useTopicsViewStore((s) => s.selectMode);
   const selected = useTopicsViewStore((s) => s.selectedIds.includes(topic.id));
   const toggleSelected = useTopicsViewStore((s) => s.toggleSelected);
+  const toggleSelectMode = useTopicsViewStore((s) => s.toggleSelectMode);
 
   const handleClick = useCallback(
     (e: MouseEvent) => {
@@ -120,9 +133,14 @@ const Row = memo<RowProps>(({ topic, agentId }) => {
     [selectMode, topic.id, agentId, toggleSelected, navigate],
   );
 
+  const handleCheckboxChange = useCallback(() => {
+    if (!selectMode) toggleSelectMode();
+    toggleSelected(topic.id);
+  }, [selectMode, topic.id, toggleSelected, toggleSelectMode]);
+
   const status = topic.status ?? 'active';
   const projectLabel = getProjectLabel(topic);
-  const statusLabelKey = `management.status.${status}` as const;
+  const updatedAt = useActivityTime(topic.updatedAt);
 
   return (
     <div
@@ -131,13 +149,13 @@ const Row = memo<RowProps>(({ topic, agentId }) => {
     >
       <Checkbox
         checked={selected}
-        onChange={() => toggleSelected(topic.id)}
+        onChange={handleCheckboxChange}
         onClick={(e) => e.stopPropagation()}
       />
       <Flexbox align={'center'} justify={'center'}>
         {topic.favorite && <Icon icon={Star} size={13} style={{ color: cssVar.colorWarning }} />}
       </Flexbox>
-      <div>
+      <div className={styles.cell}>
         <Text className={styles.title} fontSize={13} weight={500}>
           {topic.title || t('defaultTitle')}
         </Text>
@@ -147,7 +165,7 @@ const Row = memo<RowProps>(({ topic, agentId }) => {
           </Text>
         )}
       </div>
-      <div>
+      <div className={styles.cell}>
         {projectLabel ? (
           <Tag bordered={false} icon={<Icon icon={FolderIcon} size={11} />} size={'small'}>
             {projectLabel}
@@ -158,14 +176,12 @@ const Row = memo<RowProps>(({ topic, agentId }) => {
           </Text>
         )}
       </div>
-      <Tag color={(STATUS_COLOR_MAP[status] ?? 'default') as any} size={'small'}>
-        {t(statusLabelKey as any)}
-      </Tag>
+      <StatusDot status={status} />
       <Text fontSize={12} type={'secondary'}>
         {topic.trigger ?? 'chat'}
       </Text>
-      <Text fontSize={12} style={{ color: cssVar.colorTextQuaternary }}>
-        {formatRelativeTime(topic.updatedAt)}
+      <Text fontSize={12} style={{ color: cssVar.colorTextQuaternary }} title={updatedAt.title}>
+        {updatedAt.text}
       </Text>
     </div>
   );
@@ -173,7 +189,7 @@ const Row = memo<RowProps>(({ topic, agentId }) => {
 
 Row.displayName = 'AgentTopicsRow';
 
-const TopicListView = memo<TopicListViewProps>(({ topics, agentId }) => {
+const TopicListView = memo<TopicListViewProps>(({ groups, agentId, showGroupTitles, groupBy }) => {
   const { t } = useTranslation('topic');
 
   return (
@@ -187,9 +203,21 @@ const TopicListView = memo<TopicListViewProps>(({ topics, agentId }) => {
         <span>{t('management.columns.trigger')}</span>
         <span>{t('management.columns.updated')}</span>
       </div>
-      {topics.map((topic) => (
-        <Row agentId={agentId} key={topic.id} topic={topic} />
-      ))}
+      {groups.map((group) => {
+        if (group.children.length === 0) return null;
+        const title =
+          groupBy === 'byProject'
+            ? getProjectGroupTitle(group.id, group.title, t)
+            : group.title || getTimeGroupTitle(group.id, t);
+        return (
+          <Fragment key={group.id}>
+            {showGroupTitles && <div className={styles.groupBar}>{title}</div>}
+            {group.children.map((topic) => (
+              <Row agentId={agentId} key={topic.id} topic={topic} />
+            ))}
+          </Fragment>
+        );
+      })}
     </div>
   );
 });

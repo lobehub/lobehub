@@ -154,6 +154,7 @@ export class TopicModel {
               .select({
                 completedAt: topics.completedAt,
                 createdAt: topics.createdAt,
+                description: topics.description,
                 favorite: topics.favorite,
                 historySummary: topics.historySummary,
                 id: topics.id,
@@ -249,6 +250,7 @@ export class TopicModel {
               .select({
                 completedAt: topics.completedAt,
                 createdAt: topics.createdAt,
+                description: topics.description,
                 favorite: topics.favorite,
                 historySummary: topics.historySummary,
                 id: topics.id,
@@ -304,6 +306,7 @@ export class TopicModel {
               agentId: topics.agentId,
               completedAt: topics.completedAt,
               createdAt: topics.createdAt,
+              description: topics.description,
               favorite: topics.favorite,
               historySummary: topics.historySummary,
               id: topics.id,

@@ -1,3 +1,5 @@
+import dayjs from 'dayjs';
+
 import type { ChatTopic } from '@/types/topic';
 
 import type { SortBy, StatusFilter, TimeRangeFilter, TriggerFilter } from './types';
@@ -86,28 +88,42 @@ export const sortTopics = (topics: ChatTopic[], sortBy: SortBy): ChatTopic[] => 
   return sorted;
 };
 
-export const formatRelativeTime = (date: Date | number | string | undefined | null): string => {
-  if (!date) return '';
-  const time = typeof date === 'number' ? date : new Date(date).getTime();
-  if (Number.isNaN(time)) return '';
-  const diff = Date.now() - time;
-  const sec = Math.floor(diff / 1000);
-  const min = Math.floor(sec / 60);
-  const hour = Math.floor(min / 60);
-  const day = Math.floor(hour / 24);
-  if (sec < 60) return 'just now';
-  if (min < 60) return `${min}m ago`;
-  if (hour < 24) return `${hour}h ago`;
-  if (day < 7) return `${day}d ago`;
-  if (day < 30) return `${Math.floor(day / 7)}w ago`;
-  if (day < 365) return `${Math.floor(day / 30)}mo ago`;
-  return `${Math.floor(day / 365)}y ago`;
-};
-
 export const getProjectLabel = (topic: ChatTopic): string | undefined => {
   const wd = topic.metadata?.workingDirectory;
   if (!wd) return undefined;
   // Show last segment of path for readability
   const parts = wd.split('/').filter(Boolean);
   return parts.at(-1) ?? wd;
+};
+
+/**
+ * Resolve the human-readable title for a time-bucket group ID produced by
+ * `groupTopicsByUpdatedTime` (today / yesterday / week / month) or a dynamic
+ * year-month / year segment (e.g. `2025-04`, `2024`).
+ */
+// Accept any react-i18next TFunction shape — overloads make the strict type
+// finicky and we only need string → string here.
+type LooseT = (key: any) => any;
+
+export const getTimeGroupTitle = (id: string, t: LooseT): string => {
+  // Year-month like "2025-04" → localized month name; year-only like "2025" → as-is.
+  if (/^\d{4}/.test(id)) {
+    return id.includes('-') ? dayjs(id).format('MMMM') : id;
+  }
+  return t(`groupTitle.byTime.${id}`);
+};
+
+/**
+ * Resolve the human-readable title for a project-bucket group ID produced by
+ * `groupTopicsByProject` (`project:<workingDirectory>` or `no-project`).
+ */
+export const getProjectGroupTitle = (
+  id: string,
+  fallback: string | undefined,
+  t: LooseT,
+): string => {
+  if (id === 'no-project') return t('management.group.noProject');
+  // Project groups carry the trimmed working-directory name in `group.title`;
+  // fall back to the raw path segment if it isn't pre-populated.
+  return fallback ?? id.replace(/^project:/, '');
 };

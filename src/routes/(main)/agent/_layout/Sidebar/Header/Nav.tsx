@@ -2,7 +2,12 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { BotPromptIcon } from '@lobehub/ui/icons';
-import { MessageSquarePlusIcon, RadioTowerIcon, SearchIcon } from 'lucide-react';
+import {
+  MessageSquarePlusIcon,
+  MessagesSquareIcon,
+  RadioTowerIcon,
+  SearchIcon,
+} from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
@@ -26,6 +31,9 @@ const Nav = memo(() => {
   const pathname = usePathname();
   const isProfileActive = pathname.includes('/profile');
   const isChannelActive = pathname.includes('/channel');
+  // Topic IDs are prefixed `topics_`, so /agent/:aid/topics_abc would also match
+  // pathname.includes('/topics') — anchor to end to avoid that false positive.
+  const isTopicsActive = pathname.endsWith('/topics');
   const router = useQueryRoute();
   const { isAgentEditable } = useServerConfigStore(featureFlagsSelectors);
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
@@ -75,6 +83,15 @@ const Nav = memo(() => {
           }}
         />
       )}
+      <NavItem
+        active={isTopicsActive}
+        icon={MessagesSquareIcon}
+        title={tTopic('management.sidebarEntry')}
+        onClick={() => {
+          switchTopic(null, { skipRefreshMessage: true });
+          router.push(urlJoin('/agent', agentId!, 'topics'));
+        }}
+      />
       {!hideChannel && (
         <NavItem
           active={isChannelActive}
