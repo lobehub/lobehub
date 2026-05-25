@@ -22,7 +22,6 @@ import { usePasteFile, useUploadFiles } from '@/components/DragUploadZone';
 import { useEnterToSend } from '@/hooks/useEnterToSend';
 import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
 import { aiChatService } from '@/services/aiChat';
-import { llmGenerationTracingService } from '@/services/llmGenerationTracing';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -289,8 +288,8 @@ const InputEditor = memo<{
       const tracingId = tracingIdBySuggestionRef.current.get(suggestionId);
       if (!tracingId) return;
       tracingIdBySuggestionRef.current.delete(suggestionId);
-      llmGenerationTracingService
-        .recordFeedback({
+      aiChatService
+        .recordTracingFeedback({
           data: { acceptedText, visibleMs },
           signal: 'positive',
           source: 'autocomplete_tab',
@@ -324,8 +323,8 @@ const InputEditor = memo<{
       const signal: 'positive' | 'negative' | 'neutral' =
         !isImeClear && reason === 'esc' ? 'negative' : 'neutral';
       const source = isImeClear ? 'autocomplete_ime' : `autocomplete_${reason}`;
-      llmGenerationTracingService
-        .recordFeedback({
+      aiChatService
+        .recordTracingFeedback({
           data: { reason, visibleMs },
           signal,
           source,
