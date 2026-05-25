@@ -827,10 +827,10 @@ describe('TopicModel - Query', () => {
       expect(item.messageCount).toBe(4);
       expect(item.description).toBe('a short description');
       expect(item.trigger).toBe('cron');
-      // hash-mocked stats — assert numeric, not exact value
-      expect(typeof item.cost).toBe('number');
-      expect(typeof item.tokenUsage).toBe('number');
-      expect(item.tokenUsage as number).toBeGreaterThanOrEqual(1000);
+      // cost / tokenUsage are not yet returned — waiting on a schema
+      // migration to add real columns before they come back.
+      expect(item).not.toHaveProperty('cost');
+      expect(item).not.toHaveProperty('tokenUsage');
     });
 
     it('returns null firstUserMessage when no user message exists', async () => {
@@ -911,24 +911,6 @@ describe('TopicModel - Query', () => {
       const item = result.items[0] as Record<string, unknown>;
       expect(item.firstUserMessage).toBe('first user message');
       expect(item.messageCount).toBe(3);
-    });
-
-    it('produces stable cost / tokenUsage for the same topic id across calls', async () => {
-      await seedTopicWithMessages('stable-topic', 'msg', 1);
-
-      const first = await topicModel.query({
-        agentId: 'agt-stable-topic',
-        withDetails: true,
-      });
-      const second = await topicModel.query({
-        agentId: 'agt-stable-topic',
-        withDetails: true,
-      });
-
-      expect(first.items[0]).toMatchObject({
-        cost: (second.items[0] as Record<string, unknown>).cost,
-        tokenUsage: (second.items[0] as Record<string, unknown>).tokenUsage,
-      });
     });
 
     it('also returns detail columns when querying via groupId', async () => {

@@ -180,7 +180,8 @@ const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
           )}
           {cost > 0 && (
             <Flexbox horizontal align={'center'} gap={3} title={`$${cost.toFixed(4)}`}>
-              <Icon icon={CircleDollarSign} size={11} />${formatPrice(cost, 2)}
+              <Icon icon={CircleDollarSign} size={11} />
+              {formatPrice(cost, 2)}
             </Flexbox>
           )}
           <span title={updatedAt.title}>{updatedAt.text}</span>

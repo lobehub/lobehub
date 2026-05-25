@@ -91,8 +91,10 @@ interface QueryTopicParams {
   /**
    * When true, the SELECT also returns the heavier card-detail columns used
    * by the per-agent Topics management page: `firstUserMessage` (subquery),
-   * `messageCount` (subquery), `description`, `trigger`, plus mocked `cost`
-   * and `tokenUsage`. Defaults to false so sidebar paths stay cheap.
+   * `messageCount` (subquery), `description`, `trigger`. `cost` and
+   * `tokenUsage` are intentionally omitted until a dedicated schema migration
+   * adds real columns to back them. Defaults to false so sidebar paths stay
+   * cheap.
    */
   withDetails?: boolean;
 }
@@ -140,9 +142,12 @@ export class TopicModel {
     });
     const offset = current * pageSize;
 
-    // Heavier columns gated behind `withDetails`: correlated subqueries for
-    // first-user-message + message count, plus mock cost/token stats and the
-    // `description` / `trigger` columns that sidebar paths don't consume.
+    // Heavier columns gated behind `withDetails` and used by the per-agent
+    // Topics management page: real aggregates from the `messages` table
+    // (firstUserMessage + messageCount), plus the `description` / `trigger`
+    // columns that sidebar paths don't consume. `cost` and `tokenUsage`
+    // intentionally stay undefined here — they need their own schema
+    // migration before they can be backed by real numbers.
     //
     // The two correlated subqueries are built with Drizzle's query builder
     // (not a raw `sql` template) so the inner `eq(messages.topicId,
@@ -164,18 +169,15 @@ export class TopicModel {
 
     const detailColumns = withDetails
       ? {
-          cost: sql<number>`(round((abs(hashtext(${topics.id})) % 500) / 100.0, 2))::float8`.as(
-            'cost',
-          ),
           description: topics.description,
           firstUserMessage: sql<string | null>`(${firstUserMessageSubquery})`.as(
             'first_user_message',
           ),
           messageCount: sql<number>`(${messageCountSubquery})`.as('message_count'),
-          tokenUsage: sql<number>`(abs(hashtext(${topics.id})) % 50000) + 1000`.as('token_usage'),
           trigger: topics.trigger,
         }
       : {};
+
     const includeTriggerCondition =
       includeTriggers && includeTriggers.length > 0
         ? inArray(topics.trigger, includeTriggers)
@@ -212,7 +214,7 @@ export class TopicModel {
           'db.topic.query.group.items.select',
           () =>
             this.db
-              // Spread with `as any` because Drizzle's `.select` infers a strict
+              // Cast to `any` because Drizzle's `.select` infers a strict
               // SelectedFields shape and the conditional `detailColumns` widens
               // to a union; the runtime shape is correct and the client casts
               // back to `ChatTopic[]` after TRPC serialization.
@@ -312,10 +314,7 @@ export class TopicModel {
           'db.topic.query.agent.items.select',
           () =>
             this.db
-              // Spread with `as any` because Drizzle's `.select` infers a strict
-              // SelectedFields shape and the conditional `detailColumns` widens
-              // to a union; the runtime shape is correct and the client casts
-              // back to `ChatTopic[]` after TRPC serialization.
+              // See note on the group-branch select above re: `as any` cast.
               .select({
                 completedAt: topics.completedAt,
                 createdAt: topics.createdAt,
