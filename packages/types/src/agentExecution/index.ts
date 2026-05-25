@@ -23,6 +23,14 @@ export interface ExecAgentAppContext {
   scope?: string | null;
   /** Session ID */
   sessionId?: string;
+  /** Optional assistant message id that anchors the run (e.g. parent for an isolated thread). */
+  sourceMessageId?: string;
+  /**
+   * Suppresses AgentSignal `agent.user.message` re-emission when this run is itself driven by a
+   * background/builtin agent. Required for self-iteration / memory-writer / skill-manager runs to
+   * avoid recursion into the analyzeIntent pipeline.
+   */
+  suppressSignal?: boolean;
   /** Current task identifier when executing from a task detail surface */
   taskId?: string | null;
   /** Thread ID for threaded conversations */
