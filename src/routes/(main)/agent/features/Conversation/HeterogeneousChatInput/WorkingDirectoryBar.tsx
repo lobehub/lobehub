@@ -24,6 +24,8 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 const styles = createStaticStyles(({ css }) => ({
   bar: css`
@@ -79,6 +81,9 @@ const WorkingDirectoryBar = memo(() => {
   );
   const topicWorkingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
   const effectiveWorkingDirectory = topicWorkingDirectory || agentWorkingDirectory;
+  const enableExecutionDeviceSwitcher = useUserStore(
+    labPreferSelectors.enableExecutionDeviceSwitcher,
+  );
 
   const repoType = useRepoType(effectiveWorkingDirectory);
 
@@ -95,7 +100,7 @@ const WorkingDirectoryBar = memo(() => {
     return (
       <Flexbox horizontal align={'center'} className={styles.bar} justify={'space-between'}>
         <Flexbox horizontal align={'center'} gap={4}>
-          <HeteroDeviceSwitcher agentId={agentId} />
+          {enableExecutionDeviceSwitcher && <HeteroDeviceSwitcher agentId={agentId} />}
           <CloudRepoSwitcher agentId={agentId} />
         </Flexbox>
       </Flexbox>
@@ -133,7 +138,7 @@ const WorkingDirectoryBar = memo(() => {
   return (
     <Flexbox horizontal align={'center'} className={styles.bar} justify={'space-between'}>
       <Flexbox horizontal align={'center'} gap={4}>
-        <HeteroDeviceSwitcher agentId={agentId} />
+        {enableExecutionDeviceSwitcher && <HeteroDeviceSwitcher agentId={agentId} />}
         <Popover
           content={<WorkingDirectoryContent agentId={agentId} onClose={() => setOpen(false)} />}
           open={open}

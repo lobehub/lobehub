@@ -35,14 +35,21 @@ const Page = memo(() => {
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
   const [loading, setLoading] = useState(false);
 
-  const [isPreferenceInit, enableInputMarkdown, enableGatewayMode, enablePlatformAgent, updateLab] =
-    useUserStore((s) => [
-      preferenceSelectors.isPreferenceInit(s),
-      labPreferSelectors.enableInputMarkdown(s),
-      labPreferSelectors.enableGatewayMode(s),
-      labPreferSelectors.enablePlatformAgent(s),
-      s.updateLab,
-    ]);
+  const [
+    isPreferenceInit,
+    enableInputMarkdown,
+    enableGatewayMode,
+    enablePlatformAgent,
+    enableExecutionDeviceSwitcher,
+    updateLab,
+  ] = useUserStore((s) => [
+    preferenceSelectors.isPreferenceInit(s),
+    labPreferSelectors.enableInputMarkdown(s),
+    labPreferSelectors.enableGatewayMode(s),
+    labPreferSelectors.enablePlatformAgent(s),
+    labPreferSelectors.enableExecutionDeviceSwitcher(s),
+    s.updateLab,
+  ]);
 
   const hasGatewayUrl = useServerConfigStore((s) => !!s.serverConfig.agentGatewayUrl);
 
@@ -108,6 +115,19 @@ const Page = memo(() => {
       className: styles.labItem,
       desc: tLabs('features.inputMarkdown.desc'),
       label: tLabs('features.inputMarkdown.title'),
+      minWidth: undefined,
+    },
+    {
+      children: (
+        <Switch
+          checked={enableExecutionDeviceSwitcher}
+          loading={!isPreferenceInit}
+          onChange={(checked) => updateLab({ enableExecutionDeviceSwitcher: checked })}
+        />
+      ),
+      className: styles.labItem,
+      desc: tLabs('features.executionDeviceSwitcher.desc'),
+      label: tLabs('features.executionDeviceSwitcher.title'),
       minWidth: undefined,
     },
     ...(hasGatewayUrl
