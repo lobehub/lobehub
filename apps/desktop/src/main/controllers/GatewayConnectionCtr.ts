@@ -443,6 +443,18 @@ export default class GatewayConnectionCtr extends ControllerModule {
     const { agentId, agentType, cwd, operationId, prompt, taskId, topicId } = args;
     const workDir = cwd || process.cwd();
 
+    const [serverUrl, accessToken] = await Promise.all([
+      this.remoteServerConfigCtr.getRemoteServerUrl(),
+      this.remoteServerConfigCtr.getAccessToken(),
+    ]);
+
+    // Inject auth into child env so `lh notify` can authenticate without CLI config.
+    const childEnv: NodeJS.ProcessEnv = {
+      ...process.env,
+      ...(accessToken && { LOBEHUB_JWT: accessToken }),
+      ...(serverUrl && { LOBEHUB_SERVER: serverUrl }),
+    };
+
     if (agentType === 'openclaw') {
       const lhPath = this.resolveLhPath();
       const openclawAgent = process.env['OPENCLAW_AGENT_ID'] ?? 'main';
@@ -478,7 +490,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
           enrichedPrompt,
           '--local',
         ],
-        { cwd: workDir, detached: true, env: { ...process.env }, stdio: 'ignore' },
+        { cwd: workDir, detached: true, env: childEnv, stdio: 'ignore' },
       );
 
       const pid = child.pid;
@@ -528,7 +540,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
       const child = spawn('hermes', hermesArgs, {
         cwd: workDir,
         detached: true,
-        env: { ...process.env },
+        env: childEnv,
         stdio: ['ignore', 'pipe', 'ignore'],
       });
 
@@ -621,11 +633,11 @@ export default class GatewayConnectionCtr extends ControllerModule {
       ]);
       if (!serverUrl || !token) return;
 
-      await fetch(`${serverUrl}/trpc/agentNotify.notify`, {
+      await fetch(`${serverUrl}/trpc/lambda/agentNotify.notify`, {
         body: JSON.stringify({ json: params }),
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
+          'Oidc-Auth': token,
         },
         method: 'POST',
       });
