@@ -603,7 +603,7 @@ export class HeterogeneousPersistenceHandler {
       );
     }
 
-    const stored = topic.metadata?.heteroCurrentMsgId;
+    const stored = topic?.metadata?.heteroCurrentMsgId;
     const authoritativeAssistantMessageId =
       stored?.operationId === state.operationId
         ? (stored.msgId ?? running?.assistantMessageId)
