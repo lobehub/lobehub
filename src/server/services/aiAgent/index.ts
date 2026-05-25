@@ -74,6 +74,7 @@ import {
   isLobeAiAgentSlug,
   resolveAgentSelfIterationCapability,
 } from '@/server/services/agentSignal/featureGate';
+import { shouldSuppressSignal } from '@/server/services/agentSignal/suppressSignal';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
@@ -1843,26 +1844,33 @@ export class AiAgentService {
       // It must not block the primary agent execution path; local Workflow/QStash
       // stalls would otherwise leave the conversation with only the user message
       // persisted and no assistant placeholder or operation row.
-      void enqueueAgentSignalSourceEvent(
-        {
-          payload: {
-            agentId: resolvedAgentId,
-            message: prompt,
-            threadId: appContext?.threadId ?? undefined,
-            topicId,
-            trigger,
-            messageId: userMessageRecord.id,
+      //
+      // Skip when this execAgent invocation is itself an Agent Signal background run
+      // (e.g. memory writer, self-iteration reviewer). Otherwise the analyzeIntent
+      // policy would re-analyze the synthesised user prompt and recursively trigger
+      // another Agent Signal pass.
+      if (!shouldSuppressSignal({ appContext, slug: agentSlug ?? undefined })) {
+        void enqueueAgentSignalSourceEvent(
+          {
+            payload: {
+              agentId: resolvedAgentId,
+              message: prompt,
+              threadId: appContext?.threadId ?? undefined,
+              topicId,
+              trigger,
+              messageId: userMessageRecord.id,
+            },
+            sourceId: userMessageRecord.id,
+            sourceType: 'agent.user.message',
           },
-          sourceId: userMessageRecord.id,
-          sourceType: 'agent.user.message',
-        },
-        {
-          agentId: resolvedAgentId,
-          userId: this.userId,
-        },
-      ).catch((error) => {
-        log('execAgent: failed to enqueue user message Agent Signal source event: %O', error);
-      });
+          {
+            agentId: resolvedAgentId,
+            userId: this.userId,
+          },
+        ).catch((error) => {
+          log('execAgent: failed to enqueue user message Agent Signal source event: %O', error);
+        });
+      }
     }
 
     // 14. Create assistant message placeholder in database
