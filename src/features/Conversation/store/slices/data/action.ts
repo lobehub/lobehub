@@ -217,7 +217,7 @@ export const dataSlice: StateCreator<
           if (!data) return;
           if (!context.topicId) return;
 
-          // Defense-in-depth gate (LOBE-9501): drop any SWR onData while the
+          // Defense-in-depth gate: drop any SWR onData while the
           // topic is streaming. DB fan-out for chunk writes is async and lags
           // the WS push by anywhere from 100ms to several seconds; an SWR
           // refetch that lands inside that window returns the assistant row

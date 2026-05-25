@@ -1196,7 +1196,7 @@ export const createRuntimeExecutors = (
             continue;
           }
 
-          // LOBE-9523: cancel/interrupt path — the model-runtime stream was aborted
+          // Cancel/interrupt path — the model-runtime stream was aborted
           // before reaching the post-stream finalize at line 1078, so the DB row is
           // still the LOADING_FLAT placeholder. Persist whatever partial content the
           // `onText` / `onThinking` / `onToolsCalling` callbacks already accumulated

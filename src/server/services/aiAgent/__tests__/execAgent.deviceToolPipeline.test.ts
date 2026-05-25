@@ -358,7 +358,7 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
     it('keeps executor unset for local-system when DEVICE_GATEWAY is configured', async () => {
       // Desktop, web, and IM callers all share this path: tools route via the
       // Remote Device proxy to the device registered with the gateway, never
-      // back to the caller. (LOBE-9378: the Phase 6.4 clientRuntime=desktop
+      // back to the caller. (The Phase 6.4 clientRuntime=desktop
       // short-circuit that bypassed this gate was removed.)
       const { deviceProxy } = await import('@/server/services/toolExecution/deviceProxy');
       vi.spyOn(deviceProxy, 'isConfigured', 'get').mockReturnValue(true);

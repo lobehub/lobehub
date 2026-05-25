@@ -82,7 +82,7 @@ describe('createGatewayEventHandler', () => {
   });
 
   describe('stream_start', () => {
-    it('should associate new message with operation and skip the DB refetch (LOBE-9501)', async () => {
+    it('should associate new message with operation and skip the DB refetch', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
@@ -655,7 +655,7 @@ describe('createGatewayEventHandler', () => {
       );
     });
 
-    // LOBE-9523: MID-stream cancel. The server-side coordinator skips the
+    // MID-stream cancel. The server-side coordinator skips the
     // uiMessages snapshot when state.status='interrupted' to avoid pushing
     // a LOADING_FLAT placeholder. The client must mirror that intent: when
     // `reason='interrupted'` arrives without uiMessages AND we already have
@@ -663,7 +663,7 @@ describe('createGatewayEventHandler', () => {
     // the executor's partial-finalize catch is still racing to write the
     // real content, and a fetch here would return placeholder and clobber
     // in-memory streamed content.
-    it('should NOT refetch from DB when reason=interrupted AND stream had progressed (LOBE-9523)', async () => {
+    it('should NOT refetch from DB when reason=interrupted AND stream had progressed', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
@@ -689,7 +689,7 @@ describe('createGatewayEventHandler', () => {
     // state and they need the DB refetch to be reconciled with the
     // server-side rows. Skipping the fallback would leave the tmp_*
     // ids stuck in the store indefinitely.
-    it('should refetch from DB when reason=interrupted but stream never progressed (LOBE-9523 reviewer fix)', async () => {
+    it('should refetch from DB when reason=interrupted but stream never progressed', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
@@ -921,7 +921,7 @@ describe('createGatewayEventHandler', () => {
   describe('sequential processing', () => {
     it('should dispatch stream_chunk to the new assistant id after stream_start switches it', async () => {
       // Native gateway streams no longer await a DB fetch on stream_start
-      // (LOBE-9501) — but stream_chunk must still queue behind stream_start
+      // — but stream_chunk must still queue behind stream_start
       // so the chunk targets the NEW assistant id (from stream_start.data),
       // not the previous one.
       const store = createMockStore();
@@ -1007,7 +1007,7 @@ describe('createGatewayEventHandler', () => {
 
       // Step 2: Next LLM call with new assistant message — native stream_start
       // carries the id directly, so it must NOT trigger a DB refetch
-      // (LOBE-9501). Only the association switch happens.
+      // Only the association switch happens.
       vi.clearAllMocks();
       handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-2' } }));
       await flush();
