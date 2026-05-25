@@ -26,7 +26,6 @@ const styles = createStaticStyles(({ css }) => ({
 
     width: calc(100% + 8px);
     min-height: 32px;
-    margin-block-end: -4px;
     margin-inline-start: -4px;
     border: 0;
     border-radius: 6px;
