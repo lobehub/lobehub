@@ -47,6 +47,7 @@ vi.mock('@/features/ExplorerTree', () => {
   return {
     ExplorerTree: MockExplorerTree,
     FOLDER_ICON_CSS: '',
+    getExplorerTreeStyleVars: () => ({}),
   };
 });
 

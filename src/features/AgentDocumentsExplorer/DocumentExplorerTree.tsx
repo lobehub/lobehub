@@ -12,7 +12,7 @@ import type {
   ExplorerTreeHandle,
   ExplorerTreeNode,
 } from '@/features/ExplorerTree';
-import { ExplorerTree, FOLDER_ICON_CSS } from '@/features/ExplorerTree';
+import { ExplorerTree, FOLDER_ICON_CSS, getExplorerTreeStyleVars } from '@/features/ExplorerTree';
 import { useChatStore } from '@/store/chat';
 
 import DocumentExplorerToolbar from './DocumentExplorerToolbar';
@@ -101,6 +101,10 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
   );
   const defaultExpandedIds = useMemo(
     () => nodes.filter((node) => node.isFolder && node.parentId == null).map((node) => node.id),
+    [nodes],
+  );
+  const treeStyleVars = useMemo(
+    () => getExplorerTreeStyleVars({ reserveChevronSlot: nodes.some((node) => node.isFolder) }),
     [nodes],
   );
 
@@ -244,14 +248,13 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
   );
 
   return (
-    <div className={styles.tree} style={style}>
+    <div className={styles.tree} style={{ ...style, ...treeStyleVars }}>
       <ExplorerTree<AgentDocumentItem>
         iconsColored
         canDrag={canDrag}
         canDrop={canDrop}
         canRename={canRename}
         defaultExpandedIds={defaultExpandedIds}
-        density="compact"
         getContextMenuItems={getContextMenuItems}
         iconSet="complete"
         nodes={nodes}
