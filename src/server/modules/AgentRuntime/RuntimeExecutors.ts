@@ -884,6 +884,20 @@ export const createRuntimeExecutors = (
                   grounding: groundingData,
                 });
               },
+              onContentPart: async (data) => {
+                // Handle multimodal content_part events emitted by Gemini 3+ models.
+                // These carry the same text payload as onText but via a different callback.
+                if (data.partType === 'text' && data.content) {
+                  content += data.content;
+                  textBuffer += data.content;
+                  if (!textBufferTimer) {
+                    textBufferTimer = setTimeout(async () => {
+                      await flushTextBuffer();
+                      textBufferTimer = null;
+                    }, BUFFER_INTERVAL);
+                  }
+                }
+              },
               onText: async (text) => {
                 timing(
                   '[%s] onText received chunk at %d, length: %d',
