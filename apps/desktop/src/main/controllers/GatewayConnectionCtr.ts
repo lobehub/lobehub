@@ -1,5 +1,6 @@
 import { execFileSync, execSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 import type { AgentRunRequestMessage } from '@lobechat/device-gateway-client';
@@ -330,7 +331,8 @@ export default class GatewayConnectionCtr extends ControllerModule {
         encoding: 'utf8',
         timeout: 5000,
       });
-      profilePath = showOutput.match(/^Path:\s+(.+)/m)?.[1]?.trim();
+      const raw = showOutput.match(/^Path:\s+(.+)/m)?.[1]?.trim();
+      profilePath = raw?.replace(/^~(?=\/|$)/, os.homedir());
     } catch {
       // Profile path unavailable — still return name + avatar.
     }
@@ -345,9 +347,15 @@ export default class GatewayConnectionCtr extends ControllerModule {
   private readHermesSoulDescription(soulPath: string): string | undefined {
     try {
       const content = fs.readFileSync(soulPath, 'utf8');
-      const stripped = content
-        .replaceAll(/<!--[\s\S]*?-->/g, '') // strip HTML comments
-        .replaceAll(/^#+\s.*$/gm, ''); // strip Markdown headings
+      // Loop until stable to handle any malformed/nested comment sequences.
+      let stripped = content;
+      let previous: string;
+      do {
+        previous = stripped;
+        stripped = stripped
+          .replaceAll(/<!--[\s\S]*?-->/g, '') // strip HTML comments
+          .replaceAll(/^#+\s.*$/gm, ''); // strip Markdown headings
+      } while (stripped !== previous);
       return (
         stripped
           .split('\n')

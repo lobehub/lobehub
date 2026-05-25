@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 import type { RemoteHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
@@ -107,7 +108,9 @@ function getHermesProfilePath(profileName: string): string | undefined {
       timeout: 5000,
     });
     const match = output.match(/^Path:\s+(.+)/m);
-    return match?.[1]?.trim();
+    const raw = match?.[1]?.trim();
+    // Expand leading `~` — Node does not auto-expand home-dir shorthands.
+    return raw?.replace(/^~(?=\/|$)/, os.homedir());
   } catch {
     return undefined;
   }
@@ -121,9 +124,15 @@ function getHermesProfilePath(profileName: string): string | undefined {
 function readHermesSoulDescription(soulPath: string): string | undefined {
   try {
     const content = fs.readFileSync(soulPath, 'utf8');
-    const stripped = content
-      .replaceAll(/<!--[\s\S]*?-->/g, '') // strip HTML comments
-      .replaceAll(/^#+\s.*$/gm, ''); // strip Markdown headings
+    // Loop until stable to handle any malformed/nested comment sequences.
+    let stripped = content;
+    let previous: string;
+    do {
+      previous = stripped;
+      stripped = stripped
+        .replaceAll(/<!--[\s\S]*?-->/g, '') // strip HTML comments
+        .replaceAll(/^#+\s.*$/gm, ''); // strip Markdown headings
+    } while (stripped !== previous);
     const line = stripped
       .split('\n')
       .map((l) => l.trim())
