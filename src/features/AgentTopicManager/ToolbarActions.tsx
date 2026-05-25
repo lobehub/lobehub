@@ -2,7 +2,7 @@
 
 import { ActionIcon, type DropdownItem, DropdownMenu } from '@lobehub/ui';
 import { App } from 'antd';
-import { Archive, MoreHorizontal, Sparkles } from 'lucide-react';
+import { Archive, MoreHorizontal } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -49,12 +49,6 @@ const ToolbarActions = memo(() => {
     });
   }, [topics, updateTopicStatus, modal, message, t]);
 
-  const handleAutoSummarize = useCallback(() => {
-    // TODO: hook up to a topic-summary generation endpoint once we expose one;
-    // for now keep the menu item visible so the surface is consistent.
-    message.info(t('management.actionsMenu.autoSummarize.comingSoon'));
-  }, [message, t]);
-
   const items: DropdownItem[] = useMemo(
     () => [
       {
@@ -63,14 +57,8 @@ const ToolbarActions = memo(() => {
         label: t('management.actionsMenu.archiveStale.label'),
         onClick: handleArchiveStale,
       },
-      {
-        icon: <Sparkles size={14} />,
-        key: 'auto-summarize',
-        label: t('management.actionsMenu.autoSummarize.label'),
-        onClick: handleAutoSummarize,
-      },
     ],
-    [t, handleArchiveStale, handleAutoSummarize],
+    [t, handleArchiveStale],
   );
 
   return (
