@@ -15,6 +15,7 @@ import {
   LibraryBig,
   PlusIcon,
   SearchCheck,
+  Settings2Icon,
   Store,
   TypeIcon,
 } from 'lucide-react';
@@ -35,6 +36,8 @@ import {
 } from '@/store/agent/selectors';
 import { aiModelSelectors, aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useFileStore } from '@/store/file';
+import { useGlobalStore } from '@/store/global';
+import { systemStatusSelectors } from '@/store/global/selectors';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import { useAgentId } from '../../hooks/useAgentId';
@@ -57,7 +60,7 @@ const hotArea = css`
 
 const activeLabel = css`
   display: flex;
-  gap: 8px;
+  gap: 16px;
   align-items: center;
   justify-content: space-between;
 
@@ -256,6 +259,14 @@ const PlusAction = memo(() => {
   const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
   const provider = useAgentStore((s) => agentByIdSelectors.getAgentModelProviderById(agentId)(s));
   const isAgentModeEnabled = useAgentStore(agentSelectors.isAgentModeEnabled);
+  const [showRightPanel, workingSidebarTab, setWorkingSidebarTab, toggleRightPanel] =
+    useGlobalStore((s) => [
+      systemStatusSelectors.showRightPanel(s),
+      s.status.workingSidebarTab,
+      s.setWorkingSidebarTab,
+      s.toggleRightPanel,
+    ]);
+  const isParamsPanelActive = Boolean(showRightPanel) && workingSidebarTab === 'params';
   const skillActivateMode = useAgentStore((s) =>
     chatConfigByIdSelectors.getSkillActivateModeById(agentId)(s),
   );
@@ -323,6 +334,16 @@ const PlusAction = memo(() => {
     setDropdownOpen(false);
     createSkillStoreModal();
   }, []);
+
+  const handleToggleParams = useCallback(() => {
+    setDropdownOpen(false);
+    if (isParamsPanelActive) {
+      toggleRightPanel(false);
+      return;
+    }
+    setWorkingSidebarTab('params');
+    toggleRightPanel(true);
+  }, [isParamsPanelActive, setWorkingSidebarTab, toggleRightPanel]);
 
   const items: ActionDropdownMenuItems = useMemo(() => {
     const renderActive = (label: string, active: boolean) =>
@@ -443,11 +464,15 @@ const PlusAction = memo(() => {
       {
         icon: TypeIcon,
         key: 'typo',
-        label: renderActive(
-          tEditor(showTypoBar ? 'actions.typobar.off' : 'actions.typobar.on'),
-          Boolean(showTypoBar),
-        ),
+        label: renderActive(tEditor('actions.typobar.on'), Boolean(showTypoBar)),
         onClick: () => setShowTypoBar(!showTypoBar),
+      },
+      // Advanced parameter settings — mirrors ParamsPanelToggle in the agent header.
+      {
+        icon: Settings2Icon,
+        key: 'params',
+        label: renderActive(tSetting('settingModel.params.title'), isParamsPanelActive),
+        onClick: handleToggleParams,
       },
       { type: 'divider' },
       // Memory toggle
@@ -545,8 +570,10 @@ const PlusAction = memo(() => {
     handleOpenTools,
     handleSelectSearch,
     handleToggleMemory,
+    handleToggleParams,
     isAgentModeEnabled,
     isMemoryEnabled,
+    isParamsPanelActive,
     knowledgeEnabledCount,
     setShowTypoBar,
     showProviderSearch,
