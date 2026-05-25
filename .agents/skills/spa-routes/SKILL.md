@@ -1,6 +1,6 @@
 ---
 name: spa-routes
-description: MUST use when editing src/routes/ segments, src/spa/router/desktopRouter.config.tsx or desktopRouter.config.desktop.tsx (always change both together), mobileRouter.config.tsx, or when moving UI/logic between routes and src/features/.
+description: "SPA roots-vs-features split for LobeHub — thin route segments under `src/routes/` delegate to domain components under `src/features/`. Use when editing `src/routes/` segments, `src/spa/router/desktopRouter.config.tsx` or `desktopRouter.config.desktop.tsx` (MUST update both together — `desktopRouter.sync.test.tsx` enforces this), `mobileRouter.config.tsx`, `popupRouter.config.tsx`, or moving UI/logic between `routes/` and `features/`. Triggers on `desktopRouter.config`, `mobileRouter.config`, `popupRouter.config`, `src/routes/**`, `src/features/**`, 'add a route', 'new page', 'route segment', '路由'."
 user-invocable: false
 ---
 

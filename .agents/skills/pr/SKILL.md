@@ -1,6 +1,6 @@
 ---
 name: pr
-description: "Create a PR for the current branch. Use when the user asks to create a pull request, submit PR, or says 'pr'."
+description: "Create a PR for the current branch (targets `canary` by default). Use when the user asks to create a pull request, submit a PR, or says 'pr'. Triggers on 'pr', 'create pr', 'submit pr', 'open a PR', 'pull request', '提 PR', '提个 PR', '新建 PR'."
 user-invocable: true
 ---
 

@@ -1,13 +1,6 @@
 ---
 name: chat-sdk
-description: >
-  Build multi-platform chat bots with Chat SDK (`chat` npm package). Use when developers want to
-  (1) Build a Slack, Teams, Google Chat, Discord, GitHub, or Linear bot,
-  (2) Use the Chat SDK to handle mentions, messages, reactions, slash commands, cards, modals, or streaming,
-  (3) Set up webhook handlers for chat platforms,
-  (4) Send interactive cards or stream AI responses to chat platforms.
-  Triggers on "chat sdk", "chat bot", "slack bot", "teams bot", "discord bot", "@chat-adapter",
-  building bots that work across multiple chat platforms.
+description: "Build multi-platform chat bots with the Chat SDK (`chat` npm package) — Slack, Teams, Google Chat, Discord, GitHub, Linear. Use when building a chat bot, handling mentions / messages / reactions / slash commands / cards / modals / streaming, setting up a webhook handler, or sending interactive cards / streaming AI responses to a chat platform. Triggers on `@chat-adapter`, 'chat sdk', 'chat bot', 'slack bot', 'teams bot', 'discord bot', 'webhook handler', 'cross-platform bot'."
 user-invocable: false
 ---
 
