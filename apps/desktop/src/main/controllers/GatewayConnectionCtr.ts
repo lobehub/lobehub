@@ -1,5 +1,6 @@
 import { execFileSync, execSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 import type { AgentRunRequestMessage } from '@lobechat/device-gateway-client';
@@ -12,8 +13,6 @@ import { ControllerModule, IpcMethod } from './index';
 import LocalFileCtr from './LocalFileCtr';
 import RemoteServerConfigCtr from './RemoteServerConfigCtr';
 import ShellCommandCtr from './ShellCommandCtr';
-
-const DEFAULT_HERMES_PORT = 3456;
 
 /**
  * Inject the lh-notify protocol into the first turn of a new hetero-agent session.
@@ -65,6 +64,9 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
   /** In-memory registry for running platform agent tasks (openclaw / hermes). */
   private readonly platformTasks = new Map<string, PlatformTaskEntry>();
+
+  /** Maps topicId → hermes session_id for multi-turn conversation continuity. */
+  private readonly hermesSessionMap = new Map<string, string>();
 
   // ─── Service Accessor ───
 
@@ -301,8 +303,69 @@ export default class GatewayConnectionCtr extends ControllerModule {
       return this.getOpenClawProfile(agentId);
     }
 
-    // hermes and unknown platforms: not yet implemented
+    if (platform === 'hermes') {
+      return this.getHermesProfile();
+    }
+
     return {};
+  }
+
+  private getHermesProfile(): { avatar?: string; description?: string; title?: string } {
+    // Find the active profile (marked with ◆ in `hermes profile list`).
+    let profileName: string | undefined;
+    try {
+      const listOutput = execFileSync('hermes', ['profile', 'list'], {
+        encoding: 'utf8',
+        timeout: 5000,
+      });
+      profileName = listOutput.match(/◆(\S+)/)?.[1];
+    } catch {
+      return {};
+    }
+    if (!profileName) return {};
+
+    // Get the profile's filesystem path.
+    let profilePath: string | undefined;
+    try {
+      const showOutput = execFileSync('hermes', ['profile', 'show', profileName], {
+        encoding: 'utf8',
+        timeout: 5000,
+      });
+      const raw = showOutput.match(/^Path:\s+(.+)/m)?.[1]?.trim();
+      profilePath = raw?.replace(/^~(?=\/|$)/, os.homedir());
+    } catch {
+      // Profile path unavailable — still return name + avatar.
+    }
+
+    const description = profilePath
+      ? this.readHermesSoulDescription(path.join(profilePath, 'SOUL.md'))
+      : undefined;
+
+    return { avatar: '⚡', description, title: profileName };
+  }
+
+  private readHermesSoulDescription(soulPath: string): string | undefined {
+    try {
+      const content = fs.readFileSync(soulPath, 'utf8');
+      // Loop until stable to handle any malformed/nested comment sequences.
+      let stripped = content;
+      let previous: string;
+      do {
+        previous = stripped;
+        stripped = stripped
+          .replaceAll(/<!--[\s\S]*?-->/g, '') // strip complete HTML comments
+          .replaceAll(/[<>]/g, '') // strip any remaining HTML delimiter chars
+          .replaceAll(/^#+\s.*$/gm, ''); // strip Markdown headings
+      } while (stripped !== previous);
+      return (
+        stripped
+          .split('\n')
+          .map((l) => l.trim())
+          .find((l) => l.length > 0) || undefined
+      );
+    } catch {
+      return undefined;
+    }
   }
 
   private getOpenClawProfile(agentId?: string): {
@@ -380,6 +443,18 @@ export default class GatewayConnectionCtr extends ControllerModule {
     const { agentId, agentType, cwd, operationId, prompt, taskId, topicId } = args;
     const workDir = cwd || process.cwd();
 
+    const [serverUrl, accessToken] = await Promise.all([
+      this.remoteServerConfigCtr.getRemoteServerUrl(),
+      this.remoteServerConfigCtr.getAccessToken(),
+    ]);
+
+    // Inject auth into child env so `lh notify` can authenticate without CLI config.
+    const childEnv: NodeJS.ProcessEnv = {
+      ...process.env,
+      ...(accessToken && { LOBEHUB_JWT: accessToken }),
+      ...(serverUrl && { LOBEHUB_SERVER: serverUrl }),
+    };
+
     if (agentType === 'openclaw') {
       const lhPath = this.resolveLhPath();
       const openclawAgent = process.env['OPENCLAW_AGENT_ID'] ?? 'main';
@@ -415,7 +490,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
           enrichedPrompt,
           '--local',
         ],
-        { cwd: workDir, detached: true, env: { ...process.env }, stdio: 'ignore' },
+        { cwd: workDir, detached: true, env: childEnv, stdio: 'ignore' },
       );
 
       const pid = child.pid;
@@ -442,20 +517,74 @@ export default class GatewayConnectionCtr extends ControllerModule {
     }
 
     if (agentType === 'hermes') {
-      const port = this.getHermesPort();
-      if (!(await this.isHermesRunning(port))) {
-        await this.startHermesGateway(port);
+      // Kill any existing hermes process for this topicId before spawning a new one.
+      for (const [existingTaskId, entry] of this.platformTasks) {
+        if (entry.topicId === topicId && entry.agentType === 'hermes') {
+          try {
+            process.kill(entry.pid, 'SIGTERM');
+          } catch {
+            // Already exited — nothing to do.
+          }
+          this.platformTasks.delete(existingTaskId);
+        }
       }
 
-      const res = await fetch(`http://localhost:${port}/message`, {
-        body: JSON.stringify({ content: prompt, operationId }),
-        headers: { 'Content-Type': 'application/json' },
-        method: 'POST',
-      });
-      if (!res.ok) throw new Error(`Hermes gateway returned ${res.status}: ${await res.text()}`);
+      // Resume the previous session for this topic if one exists.
+      const existingSessionId = this.hermesSessionMap.get(topicId);
+      const hermesArgs: string[] = ['chat', '--query', prompt, '--quiet', '--accept-hooks'];
+      if (existingSessionId) {
+        hermesArgs.push('--resume', existingSessionId);
+      }
 
-      this.platformTasks.set(taskId, { agentId, agentType, operationId, pid: 0, topicId });
-      return JSON.stringify({ operationId, taskId });
+      // Hermes prints "session_id: <id>\n<response>" to stdout in --quiet mode.
+      const child = spawn('hermes', hermesArgs, {
+        cwd: workDir,
+        detached: true,
+        env: childEnv,
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+
+      const pid = child.pid;
+      if (pid === undefined) throw new Error('Failed to get PID for hermes process');
+      child.unref();
+
+      this.platformTasks.set(taskId, { agentId, agentType, operationId, pid, topicId });
+
+      let stdout = '';
+      child.stdout.on('data', (chunk: Buffer) => {
+        stdout += chunk.toString();
+      });
+
+      child.on('close', (code, signal) => {
+        this.platformTasks.delete(taskId);
+
+        if (code !== 0 || signal !== null) {
+          const text = signal
+            ? `Task cancelled (signal: ${signal})`
+            : `Task failed (exit code: ${code})`;
+          void this.sendNotify({ agentId, content: text, role: 'assistant', topicId }).finally(() =>
+            this.sendNotify({ agentId, content: '', done: true, role: 'assistant', topicId }),
+          );
+          return;
+        }
+
+        // Parse "session_id: <id>" from the first line, response from the rest.
+        const sessionIdMatch = stdout.match(/^session_id:\s*(\S+)/m);
+        const sessionId = sessionIdMatch?.[1];
+        const response = stdout.replace(/^session_id:[^\n]*\n?/, '').trim();
+
+        if (sessionId) this.hermesSessionMap.set(topicId, sessionId);
+
+        if (response) {
+          void this.sendNotify({ agentId, content: response, role: 'assistant', topicId }).finally(
+            () => this.sendNotify({ agentId, content: '', done: true, role: 'assistant', topicId }),
+          );
+        } else {
+          void this.sendNotify({ agentId, content: '', done: true, role: 'assistant', topicId });
+        }
+      });
+
+      return JSON.stringify({ pid, taskId });
     }
 
     throw new Error(`Unsupported agentType: ${agentType}`);
@@ -469,28 +598,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
       return JSON.stringify({ message: `No task found with taskId: ${taskId}`, success: false });
     }
 
-    if (entry.agentType === 'hermes') {
-      const port = this.getHermesPort();
-      try {
-        await fetch(`http://localhost:${port}/stop`, {
-          body: JSON.stringify({ operationId: entry.operationId }),
-          headers: { 'Content-Type': 'application/json' },
-          method: 'POST',
-        });
-      } catch {
-        // Hermes gateway may already have stopped; ignore
-      }
-      this.platformTasks.delete(taskId);
-      await this.sendNotify({
-        agentId: entry.agentId,
-        content: 'Task cancelled',
-        role: 'assistant',
-        topicId: entry.topicId,
-      });
-      return JSON.stringify({ taskId });
-    }
-
-    // openclaw: kill by PID; the close handler sends the done signal.
+    // Both openclaw and hermes: kill by PID; the close handler sends the done signal.
     try {
       process.kill(entry.pid, signal);
     } catch {
@@ -525,11 +633,11 @@ export default class GatewayConnectionCtr extends ControllerModule {
       ]);
       if (!serverUrl || !token) return;
 
-      await fetch(`${serverUrl}/trpc/agentNotify.notify`, {
+      await fetch(`${serverUrl}/trpc/lambda/agentNotify.notify`, {
         body: JSON.stringify({ json: params }),
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
+          'Oidc-Auth': token,
         },
         method: 'POST',
       });
@@ -546,38 +654,5 @@ export default class GatewayConnectionCtr extends ControllerModule {
     } catch {
       return 'lh';
     }
-  }
-
-  private getHermesPort(): number {
-    const env = process.env['HERMES_GATEWAY_PORT'];
-    if (env) {
-      const parsed = Number.parseInt(env, 10);
-      if (!Number.isNaN(parsed)) return parsed;
-    }
-    return DEFAULT_HERMES_PORT;
-  }
-
-  private async isHermesRunning(port: number): Promise<boolean> {
-    try {
-      return (await fetch(`http://localhost:${port}/health`)).ok;
-    } catch {
-      return false;
-    }
-  }
-
-  private async startHermesGateway(port: number): Promise<void> {
-    const child = spawn('hermes', ['gateway', 'start'], {
-      detached: true,
-      env: { ...process.env },
-      stdio: 'ignore',
-    });
-    child.unref();
-
-    const deadline = Date.now() + 10_000;
-    while (Date.now() < deadline) {
-      await new Promise<void>((r) => setTimeout(r, 500));
-      if (await this.isHermesRunning(port)) return;
-    }
-    throw new Error(`Hermes gateway did not start within 10s on port ${port}`);
   }
 }

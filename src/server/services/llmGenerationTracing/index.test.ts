@@ -116,6 +116,26 @@ describe('LLMGenerationTracingService.record', () => {
     });
   });
 
+  it('honours a caller-supplied tracingId as the row primary key', async () => {
+    const service = new LLMGenerationTracingService(stubStore);
+    const preAllocated = '00000000-0000-0000-0000-000000000abc';
+    const result = await service.record({
+      promptHash: 'ffffff',
+      promptVersion: 'v1.0',
+      scenario: 'input_completion',
+      success: true,
+      tracingId: preAllocated,
+      userId,
+    });
+
+    expect(result?.tracingId).toBe(preAllocated);
+    const [row] = await serverDB
+      .select()
+      .from(llmGenerationTracing)
+      .where(eq(llmGenerationTracing.id, preAllocated));
+    expect(row?.id).toBe(preAllocated);
+  });
+
   it('honours an explicit inputHint override instead of auto-extracting from the first user message', async () => {
     const service = new LLMGenerationTracingService(stubStore);
     const result = await service.record({
@@ -222,6 +242,40 @@ describe('LLMGenerationTracingService.recordFeedback', () => {
       feedbackScore: 1,
       feedbackSignal: 'positive',
       feedbackSource: 'explicit_thumbs',
+    });
+  });
+
+  it('throws LLMGenerationFeedbackError(not_found) when no row matches the tracingId', async () => {
+    const service = new LLMGenerationTracingService(stubStore);
+    await expect(
+      service.recordFeedback(userId, '00000000-0000-0000-0000-000000000abc', {
+        signal: 'positive',
+        source: 'explicit_thumbs',
+      }),
+    ).rejects.toMatchObject({
+      kind: 'not_found',
+      name: 'LLMGenerationFeedbackError',
+    });
+  });
+
+  it('throws LLMGenerationFeedbackError(not_found) when the row belongs to another user', async () => {
+    const service = new LLMGenerationTracingService(stubStore);
+    const { tracingId } = (await service.record({
+      promptHash: 'cafecafe',
+      promptVersion: 'v1.0',
+      scenario: 'agent_welcome',
+      success: true,
+      userId,
+    }))!;
+
+    await expect(
+      service.recordFeedback('some-other-user', tracingId, {
+        signal: 'negative',
+        source: 'manual_edit',
+      }),
+    ).rejects.toMatchObject({
+      kind: 'not_found',
+      name: 'LLMGenerationFeedbackError',
     });
   });
 });

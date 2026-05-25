@@ -11,7 +11,6 @@ import {
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
 
 import { type AgentStoreState } from '../initialState';
-import { getLocalAgentWorkingDirectory } from '../utils/localAgentWorkingDirectoryStorage';
 import { agentSelectors } from './selectors';
 
 /**
@@ -90,11 +89,11 @@ const getAgentRuntimeEnvConfigById =
  */
 const getAgentWorkingDirectoryById =
   (agentId: string) =>
-  (_s: AgentStoreState): string | undefined => {
+  (s: AgentStoreState): string | undefined => {
     if (!isDesktop) return;
 
     const ctx = globalAgentContextManager.getContext();
-    return getLocalAgentWorkingDirectory(agentId) ?? ctx.desktopPath ?? ctx.homePath;
+    return s.localAgentWorkingDirectoryMap[agentId] ?? ctx.desktopPath ?? ctx.homePath;
   };
 
 /**

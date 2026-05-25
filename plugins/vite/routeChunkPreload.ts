@@ -1,8 +1,8 @@
 import type { Plugin, ResolvedConfig } from 'vite';
 
 interface RouteChunkPreloadRoute {
-  includeDynamicImports?: boolean;
   id: string;
+  includeDynamicImports?: boolean;
   includeStaticImports?: boolean;
   modules: string[];
   patterns: string[];
@@ -78,6 +78,17 @@ const defaultRoutePreloadGroups = [
 
 const defaultIdleRoutePreloadGroups = [
   {
+    id: 'desktop-group-chat',
+    includeDynamicImports: true,
+    includeStaticImports: true,
+    modules: [
+      'src/routes/(main)/group/_layout',
+      'src/routes/(main)/group',
+      'src/routes/(main)/group/profile',
+    ],
+    patterns: ['^/group(/|$)'],
+  },
+  {
     id: 'desktop-agent-profile',
     includeDynamicImports: true,
     includeStaticImports: true,
@@ -111,6 +122,22 @@ const defaultIdleRoutePreloadGroups = [
       'src/routes/(main)/community/(list)/_layout',
       'src/routes/(main)/community/(detail)/_layout',
       'src/routes/(main)/community/(list)/(home)',
+      'src/routes/(main)/community/(list)/agent',
+      'src/routes/(main)/community/(list)/agent/_layout',
+      'src/routes/(main)/community/(list)/mcp',
+      'src/routes/(main)/community/(list)/mcp/_layout',
+      'src/routes/(main)/community/(list)/model',
+      'src/routes/(main)/community/(list)/model/_layout',
+      'src/routes/(main)/community/(list)/provider',
+      'src/routes/(main)/community/(list)/skill',
+      'src/routes/(main)/community/(list)/skill/_layout',
+      'src/routes/(main)/community/(detail)/agent',
+      'src/routes/(main)/community/(detail)/group_agent',
+      'src/routes/(main)/community/(detail)/mcp',
+      'src/routes/(main)/community/(detail)/model',
+      'src/routes/(main)/community/(detail)/provider',
+      'src/routes/(main)/community/(detail)/skill',
+      'src/routes/(main)/community/(detail)/user',
     ],
     patterns: ['^/community(/|$)'],
   },
@@ -143,6 +170,49 @@ const defaultIdleRoutePreloadGroups = [
     patterns: ['^/settings/provider(/|$)'],
   },
   {
+    id: 'desktop-memory',
+    includeDynamicImports: true,
+    includeStaticImports: true,
+    modules: [
+      'src/routes/(main)/memory/_layout',
+      'src/routes/(main)/memory/(home)',
+      'src/routes/(main)/memory/activities',
+      'src/routes/(main)/memory/contexts',
+      'src/routes/(main)/memory/experiences',
+      'src/routes/(main)/memory/identities',
+      'src/routes/(main)/memory/preferences',
+    ],
+    patterns: ['^/memory(/|$)'],
+  },
+  {
+    id: 'desktop-create',
+    includeDynamicImports: true,
+    includeStaticImports: true,
+    modules: [
+      'src/routes/(main)/(create)/image/_layout',
+      'src/routes/(main)/(create)/image',
+      'src/routes/(main)/(create)/video/_layout',
+      'src/routes/(main)/(create)/video',
+    ],
+    patterns: ['^/(image|video)(/|$)'],
+  },
+  {
+    id: 'desktop-eval',
+    includeDynamicImports: true,
+    includeStaticImports: true,
+    modules: [
+      'src/routes/(main)/eval/_layout',
+      'src/routes/(main)/eval/(home)/_layout',
+      'src/routes/(main)/eval',
+      'src/routes/(main)/eval/bench/[benchmarkId]/_layout',
+      'src/routes/(main)/eval/bench/[benchmarkId]',
+      'src/routes/(main)/eval/bench/[benchmarkId]/datasets/[datasetId]',
+      'src/routes/(main)/eval/bench/[benchmarkId]/runs/[runId]',
+      'src/routes/(main)/eval/bench/[benchmarkId]/runs/[runId]/cases/[caseId]',
+    ],
+    patterns: ['^/eval(/|$)'],
+  },
+  {
     id: 'desktop-tasks',
     includeDynamicImports: true,
     includeStaticImports: true,
@@ -158,7 +228,11 @@ const defaultIdleRoutePreloadGroups = [
     id: 'desktop-page',
     includeDynamicImports: true,
     includeStaticImports: true,
-    modules: ['src/routes/(main)/page/_layout', 'src/routes/(main)/page', 'src/routes/(main)/page/[id]'],
+    modules: [
+      'src/routes/(main)/page/_layout',
+      'src/routes/(main)/page',
+      'src/routes/(main)/page/[id]',
+    ],
     patterns: ['^/page(/|$)'],
   },
 ] as const satisfies RouteChunkPreloadRoute[];
@@ -346,7 +420,9 @@ function normalizeHtmlAssetHref(href: string, base: string) {
   const cleanHref = href.split('?')[0];
   const basePrefix = base === '' || base === './' ? '' : base.endsWith('/') ? base : `${base}/`;
 
-  return basePrefix && cleanHref.startsWith(basePrefix) ? cleanHref.slice(basePrefix.length) : cleanHref.replace(/^\//, '');
+  return basePrefix && cleanHref.startsWith(basePrefix)
+    ? cleanHref.slice(basePrefix.length)
+    : cleanHref.replaceAll(/^\//g, '');
 }
 
 function removeSmallModulepreloadsFromHtml(
@@ -354,11 +430,14 @@ function removeSmallModulepreloadsFromHtml(
   base: string,
   shouldKeepFile: (fileName: string) => boolean,
 ) {
-  return html.replace(/^[ \t]*<link\s+rel="modulepreload"[^>]*href="([^"]+)"[^>]*>\n?/gm, (match, href: string) => {
-    const fileName = normalizeHtmlAssetHref(href, base);
+  return html.replaceAll(
+    /^[ \t]*<link\s+rel="modulepreload"[^>]*href="([^"]+)"[^>]*>\n?/gm,
+    (match, href: string) => {
+      const fileName = normalizeHtmlAssetHref(href, base);
 
-    return shouldKeepFile(fileName) ? match : '';
-  });
+      return shouldKeepFile(fileName) ? match : '';
+    },
+  );
 }
 
 function injectRouteModulepreloadsIntoHtml(
@@ -373,12 +452,17 @@ function injectRouteModulepreloadsIntoHtml(
   const links = [...routeFiles]
     .filter(shouldInjectFile)
     .filter((fileName) => !existing.has(fileName))
-    .map((fileName) => `    <link rel="modulepreload" crossorigin href="${createAssetHref(fileName, base, deploymentId)}">`);
+    .map(
+      (fileName) =>
+        `    <link rel="modulepreload" crossorigin href="${createAssetHref(fileName, base, deploymentId)}">`,
+    );
 
   if (links.length === 0) return html;
 
   const injection = links.join('\n');
-  const lastModulepreloadMatch = [...html.matchAll(/^[ \t]*<link\s+rel="modulepreload"[^>]*>$/gm)].at(-1);
+  const lastModulepreloadMatch = [
+    ...html.matchAll(/^[ \t]*<link\s+rel="modulepreload"[^>]*>$/gm),
+  ].at(-1);
 
   if (lastModulepreloadMatch?.index !== undefined) {
     const insertAt = lastModulepreloadMatch.index + lastModulepreloadMatch[0].length;
@@ -394,8 +478,12 @@ function createIdleWarmupScript(manifest: IdleWarmupManifest, base: string, depl
       ? createAssetHref(manifest.allJsManifestFileName, base, deploymentId)
       : undefined,
     base,
-    idleRouteFetch: manifest.idleRouteFetch.map((fileName) => createAssetHref(fileName, base, deploymentId)),
-    idleRoutePreload: manifest.idleRoutePreload.map((fileName) => createAssetHref(fileName, base, deploymentId)),
+    idleRouteFetch: manifest.idleRouteFetch.map((fileName) =>
+      createAssetHref(fileName, base, deploymentId),
+    ),
+    idleRoutePreload: manifest.idleRoutePreload.map((fileName) =>
+      createAssetHref(fileName, base, deploymentId),
+    ),
   };
 
   return [
@@ -420,11 +508,23 @@ function createIdleWarmupScript(manifest: IdleWarmupManifest, base: string, depl
   ].join('\n');
 }
 
-function injectIdleWarmupScriptIntoHtml(html: string, manifest: IdleWarmupManifest, base: string, deploymentId?: string) {
-  if (manifest.idleRoutePreload.length === 0 && manifest.idleRouteFetch.length === 0 && !manifest.allJsManifestFileName)
+function injectIdleWarmupScriptIntoHtml(
+  html: string,
+  manifest: IdleWarmupManifest,
+  base: string,
+  deploymentId?: string,
+) {
+  if (
+    manifest.idleRoutePreload.length === 0 &&
+    manifest.idleRouteFetch.length === 0 &&
+    !manifest.allJsManifestFileName
+  )
     return html;
 
-  return html.replace('</body>', `${createIdleWarmupScript(manifest, base, deploymentId)}\n  </body>`);
+  return html.replace(
+    '</body>',
+    `${createIdleWarmupScript(manifest, base, deploymentId)}\n  </body>`,
+  );
 }
 
 interface RouteChunkPreloadOptions {
@@ -470,14 +570,18 @@ export function routeChunkPreload(options: RouteChunkPreloadOptions = {}): Plugi
         const htmlWithoutSmallPreloads = removeSmallModulepreloadsFromHtml(
           html,
           config.base,
-          (fileName) => (chunkSizeByFileName.get(fileName) ?? minInitialRoutePreloadSize) >= minInitialRoutePreloadSize,
+          (fileName) =>
+            (chunkSizeByFileName.get(fileName) ?? minInitialRoutePreloadSize) >=
+            minInitialRoutePreloadSize,
         );
         const htmlWithInitialPreloads = injectRouteModulepreloadsIntoHtml(
           htmlWithoutSmallPreloads,
           manifest,
           config.base,
           deploymentId,
-          (fileName) => (chunkSizeByFileName.get(fileName) ?? minInitialRoutePreloadSize) >= minInitialRoutePreloadSize,
+          (fileName) =>
+            (chunkSizeByFileName.get(fileName) ?? minInitialRoutePreloadSize) >=
+            minInitialRoutePreloadSize,
         );
 
         return injectIdleWarmupScriptIntoHtml(
@@ -492,13 +596,17 @@ export function routeChunkPreload(options: RouteChunkPreloadOptions = {}): Plugi
                   .filter((fileName) => {
                     const size = chunkSizeByFileName.get(fileName) ?? minInitialRoutePreloadSize;
 
-                    return size >= minInitialRoutePreloadSize || isCriticalRouteSmallChunkFileName(fileName);
+                    return (
+                      size >= minInitialRoutePreloadSize ||
+                      isCriticalRouteSmallChunkFileName(fileName)
+                    );
                   }),
                 ...idleManifest
                   .flatMap((entry) => entry.preload)
                   .filter(
                     (fileName) =>
-                      (chunkSizeByFileName.get(fileName) ?? minInitialRoutePreloadSize) >= minInitialRoutePreloadSize,
+                      (chunkSizeByFileName.get(fileName) ?? minInitialRoutePreloadSize) >=
+                      minInitialRoutePreloadSize,
                   ),
               ]),
             ],

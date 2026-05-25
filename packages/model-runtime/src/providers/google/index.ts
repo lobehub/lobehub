@@ -31,6 +31,8 @@ import { createGoogleVideo, pollGoogleVideoOperation } from './createVideo';
 import { createGoogleGenerateObject, createGoogleGenerateObjectWithTools } from './generateObject';
 import { resolveGoogleThinkingConfig } from './thinkingResolver';
 
+export { GOOGLE_IMAGE_TEXT_ONLY_RESPONSE_MESSAGE } from './createImage';
+
 const log = debug('model-runtime:google');
 
 const modelsOffSafetySettings = new Set(['gemini-2.0-flash-exp']);

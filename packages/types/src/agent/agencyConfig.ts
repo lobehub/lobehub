@@ -8,7 +8,7 @@
  * - **Local CLI** (`claude-code` | `codex`): spawned as a child process on the
  *   desktop; uses `command`, `args`, `env`, `systemContext`.
  *
- * - **Remote device** (`openclaw` | `hermes`): dispatched to a machine
+ * - **Remote device** (`openclaw` | `hermes` | `amp` | `opencode`): dispatched to a machine
  *   connected via `lh connect`; device is identified by `LobeAgentAgencyConfig.boundDeviceId`.
  *   `platformAgentId` selects the named agent on the remote platform (defaults to `'main'`).
  */
@@ -33,7 +33,7 @@ export interface HeterogeneousProviderConfig {
    */
   systemContext?: string;
   /** Agent runtime type. */
-  type: 'claude-code' | 'codex' | 'hermes' | 'openclaw';
+  type: 'amp' | 'claude-code' | 'codex' | 'hermes' | 'opencode' | 'openclaw';
 }
 
 /**

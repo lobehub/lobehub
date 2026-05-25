@@ -1,10 +1,18 @@
+import { TRACING_SCENARIOS } from '@lobechat/const';
+import type { TracingOptions } from '@lobechat/llm-generation-tracing';
 import {
   chainGenerateBrief,
   chainJudgeBriefEmit,
   chainTaskTopicHandoff,
+  GENERATE_BRIEF_PROMPT_VERSION,
   GENERATE_BRIEF_SCHEMA,
+  GENERATE_BRIEF_SCHEMA_NAME,
+  JUDGE_BRIEF_EMIT_PROMPT_VERSION,
   JUDGE_BRIEF_EMIT_SCHEMA,
+  JUDGE_BRIEF_EMIT_SCHEMA_NAME,
+  TASK_TOPIC_HANDOFF_PROMPT_VERSION,
   TASK_TOPIC_HANDOFF_SCHEMA,
+  TASK_TOPIC_HANDOFF_SCHEMA_NAME,
 } from '@lobechat/prompts';
 import type {
   BriefArtifacts,
@@ -351,9 +359,16 @@ export class TaskLifecycleService {
         {
           messages: payload.messages as any[],
           model,
-          schema: { name: 'task_topic_handoff', schema: TASK_TOPIC_HANDOFF_SCHEMA },
+          schema: { name: TASK_TOPIC_HANDOFF_SCHEMA_NAME, schema: TASK_TOPIC_HANDOFF_SCHEMA },
         },
-        { metadata: { trigger: 'task-handoff' } },
+        {
+          metadata: { trigger: 'task_handoff' },
+          tracing: {
+            promptVersion: TASK_TOPIC_HANDOFF_PROMPT_VERSION,
+            scenario: TRACING_SCENARIOS.TaskHandoff,
+            schemaName: TASK_TOPIC_HANDOFF_SCHEMA_NAME,
+          } satisfies TracingOptions,
+        },
       );
 
       const handoff = result as {
@@ -451,9 +466,16 @@ export class TaskLifecycleService {
           {
             messages: judgePayload.messages as any[],
             model,
-            schema: { name: 'task_topic_brief_judge', schema: JUDGE_BRIEF_EMIT_SCHEMA },
+            schema: { name: JUDGE_BRIEF_EMIT_SCHEMA_NAME, schema: JUDGE_BRIEF_EMIT_SCHEMA },
           },
-          { metadata: { trigger: 'task-brief-judge' } },
+          {
+            metadata: { trigger: 'task_brief_judge' },
+            tracing: {
+              promptVersion: JUDGE_BRIEF_EMIT_PROMPT_VERSION,
+              scenario: TRACING_SCENARIOS.TaskBriefJudge,
+              schemaName: JUDGE_BRIEF_EMIT_SCHEMA_NAME,
+            } satisfies TracingOptions,
+          },
         )) as { emit?: boolean; reason?: string };
 
         decision = {
@@ -504,9 +526,16 @@ export class TaskLifecycleService {
         {
           messages: payload.messages as any[],
           model,
-          schema: { name: 'task_topic_brief', schema: GENERATE_BRIEF_SCHEMA },
+          schema: { name: GENERATE_BRIEF_SCHEMA_NAME, schema: GENERATE_BRIEF_SCHEMA },
         },
-        { metadata: { trigger: 'task-brief' } },
+        {
+          metadata: { trigger: 'task_brief' },
+          tracing: {
+            promptVersion: GENERATE_BRIEF_PROMPT_VERSION,
+            scenario: TRACING_SCENARIOS.TaskBrief,
+            schemaName: GENERATE_BRIEF_SCHEMA_NAME,
+          } satisfies TracingOptions,
+        },
       );
 
       const generated = result as { summary?: string; title?: string };

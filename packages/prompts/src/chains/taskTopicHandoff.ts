@@ -1,6 +1,15 @@
 import type { ChatStreamPayload } from '@lobechat/types';
 
 /**
+ * Bump when editing the system prompt or schema below. Plumbed through
+ * `tracing.promptVersion` at the call site so per-call tracing groups runs
+ * by prompt iteration.
+ */
+export const TASK_TOPIC_HANDOFF_PROMPT_VERSION = 'v1.0';
+
+export const TASK_TOPIC_HANDOFF_SCHEMA_NAME = 'task_topic_handoff';
+
+/**
  * Generate a handoff summary for a completed task topic.
  * Returns both a title and structured handoff data for the next topic.
  *

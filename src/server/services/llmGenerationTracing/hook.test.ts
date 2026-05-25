@@ -86,6 +86,20 @@ describe('createLLMGenerationTracingHook', () => {
     expect(call.promptHash).toHaveLength(6);
   });
 
+  it('forwards caller-supplied tracingId through to the service', async () => {
+    const hooks = createLLMGenerationTracingHook('user-1', 'openai');
+    const preAllocated = '00000000-0000-0000-0000-000000000abc';
+    hooks.onGenerateObjectComplete!(
+      { latencyMs: 5, success: true },
+      {
+        options: { tracing: { scenario: 'input_completion', tracingId: preAllocated } },
+        payload: { messages: [], model: 'gpt-4o', schema: {} } as any,
+      },
+    );
+    await flushMicrotasks();
+    expect(record.mock.calls[0][0].tracingId).toBe(preAllocated);
+  });
+
   it('forwards caller-supplied inputHint through to the service', async () => {
     const hooks = createLLMGenerationTracingHook('user-1', 'openai');
     hooks.onGenerateObjectComplete!(

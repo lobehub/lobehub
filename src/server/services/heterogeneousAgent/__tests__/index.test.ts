@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
 
 import type { HeterogeneousPersistenceHandler } from '..';
-import { HeterogeneousAgentService } from '..';
+import { HeterogeneousAgentService, StaleHeteroOperationError } from '..';
 
 const createFakeStreamManager = () => {
   const published: Array<{ event: any; operationId: string }> = [];
@@ -175,6 +175,32 @@ describe('HeterogeneousAgentService', () => {
           topicId: 'topic-1',
         }),
       ).rejects.toThrow(/runningOperation/);
+      expect(manager.publishStreamEvent).not.toHaveBeenCalled();
+    });
+
+    it('ignores stale operation batches without publishing or throwing', async () => {
+      const manager: Partial<IStreamEventManager> = {
+        publishStreamEvent: vi.fn(),
+      };
+      const persistenceHandler = {
+        finish: vi.fn(async () => {}),
+        ingest: vi.fn(async () => {
+          throw new StaleHeteroOperationError('stale old batch');
+        }),
+      } as unknown as HeterogeneousPersistenceHandler;
+      const service = new HeterogeneousAgentService({} as any, 'user-test', {
+        persistenceHandler,
+        streamEventManager: manager as IStreamEventManager,
+      });
+
+      await expect(
+        service.heteroIngest({
+          agentType: 'claude-code',
+          events: [buildEvent('stream_chunk', 0)],
+          operationId: 'op-old',
+          topicId: 'topic-1',
+        }),
+      ).resolves.toBeUndefined();
       expect(manager.publishStreamEvent).not.toHaveBeenCalled();
     });
   });

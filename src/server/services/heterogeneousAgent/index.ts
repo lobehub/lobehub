@@ -10,7 +10,10 @@ import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
 import { deliverWebhook } from '@/server/services/agentRuntime/hooks/HookDispatcher';
 import type { AgentHookWebhook } from '@/server/services/agentRuntime/hooks/types';
 
-import { HeterogeneousPersistenceHandler } from './HeterogeneousPersistenceHandler';
+import {
+  HeterogeneousPersistenceHandler,
+  StaleHeteroOperationError,
+} from './HeterogeneousPersistenceHandler';
 
 const log = debug('lobe-server:hetero-agent-service');
 
@@ -20,6 +23,10 @@ export type HeterogeneousFinishResult = 'success' | 'error' | 'cancelled';
 
 export interface HeterogeneousIngestParams {
   agentType: HeterogeneousAgentType;
+  /** Forwarded from the sandbox LOBEHUB_ASSISTANT_MESSAGE_ID env var.
+   * Passed through to the persistence handler so loadOrCreateState can skip
+   * the topic.metadata DB read on cold Lambda instances. */
+  assistantMessageId?: string;
   events: AgentStreamEvent[];
   operationId: string;
   topicId: string;
@@ -87,7 +94,7 @@ export class HeterogeneousAgentService {
   }
 
   async heteroIngest(params: HeterogeneousIngestParams): Promise<void> {
-    const { agentType, events, operationId, topicId } = params;
+    const { agentType, assistantMessageId, events, operationId, topicId } = params;
 
     log(
       'heteroIngest: user=%s topic=%s op=%s type=%s count=%d',
@@ -104,7 +111,20 @@ export class HeterogeneousAgentService {
     // Persistence failures throw so the CLI BatchIngester retries the batch;
     // events that already landed are skipped via the handler's idempotency
     // map keyed on (stepIndex, type, timestamp).
-    await this.persistenceHandler.ingest({ events, operationId, topicId });
+    try {
+      await this.persistenceHandler.ingest({ assistantMessageId, events, operationId, topicId });
+    } catch (err) {
+      if (err instanceof StaleHeteroOperationError) {
+        log(
+          'heteroIngest: ignore stale batch topic=%s op=%s: %s',
+          topicId,
+          operationId,
+          err.message,
+        );
+        return;
+      }
+      throw err;
+    }
 
     // Sequential publish preserves stepIndex ordering — Redis XADD itself is
     // serialized but awaiting in-order avoids interleaving with concurrent
@@ -239,4 +259,7 @@ export class HeterogeneousAgentService {
   }
 }
 
-export { HeterogeneousPersistenceHandler } from './HeterogeneousPersistenceHandler';
+export {
+  HeterogeneousPersistenceHandler,
+  StaleHeteroOperationError,
+} from './HeterogeneousPersistenceHandler';

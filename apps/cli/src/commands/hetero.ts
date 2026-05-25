@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { once } from 'node:events';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -6,12 +7,12 @@ import type {
   AgentContentBlock,
   AgentImageSource,
   AgentPromptInput,
+  AgentStreamEvent,
 } from '@lobechat/heterogeneous-agents/spawn';
 import { spawnAgent } from '@lobechat/heterogeneous-agents/spawn';
 import type { Command } from 'commander';
 
 import { getTrpcClient } from '../api/client';
-import { BatchIngester, NoopIngestSink } from '../utils/BatchIngester';
 import { log } from '../utils/logger';
 import { TrpcIngestSink } from '../utils/TrpcIngestSink';
 
@@ -200,6 +201,85 @@ const resolvePrompt = async (options: ExecOptions): Promise<ResolvedPrompt> => {
   return buildPromptFromText(raw, images);
 };
 
+class SerialServerIngester {
+  private accumulatedText = '';
+  private fatalError: Error | null = null;
+  private inflight: Promise<void> = Promise.resolve();
+  private nextSnapshotSeq = 0;
+  private pendingTextEvent: AgentStreamEvent | undefined;
+  private timer: ReturnType<typeof setTimeout> | null = null;
+
+  constructor(
+    private readonly sink: TrpcIngestSink,
+    private readonly snapshotFlushMs = 200,
+  ) {}
+
+  push(event: AgentStreamEvent): void {
+    if (this.fatalError) return;
+
+    if (
+      event.type === 'stream_chunk' &&
+      event.data?.chunkType === 'text' &&
+      typeof event.data?.content === 'string'
+    ) {
+      this.accumulatedText += event.data.content;
+      this.pendingTextEvent = event;
+      if (this.timer) clearTimeout(this.timer);
+      this.timer = setTimeout(() => {
+        this.timer = null;
+        this.queuePendingTextSnapshot();
+      }, this.snapshotFlushMs);
+      return;
+    }
+
+    this.queuePendingTextSnapshot();
+    this.enqueue(async () => {
+      await this.sink.ingest([event]);
+    });
+  }
+
+  async drain(): Promise<void> {
+    this.queuePendingTextSnapshot();
+    try {
+      await this.inflight;
+    } catch {
+      // `fatalError` is re-thrown below.
+    }
+    if (this.fatalError) throw this.fatalError;
+  }
+
+  private enqueue(task: () => Promise<void>) {
+    this.inflight = this.inflight.then(task).catch((err) => {
+      this.fatalError = err instanceof Error ? err : new Error(String(err));
+      throw this.fatalError;
+    });
+  }
+
+  private queuePendingTextSnapshot() {
+    if (!this.pendingTextEvent || this.fatalError) return;
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+
+    const baseEvent = this.pendingTextEvent;
+    this.pendingTextEvent = undefined;
+    const snapshotEvent: AgentStreamEvent = {
+      ...baseEvent,
+      data: {
+        ...baseEvent.data,
+        content: this.accumulatedText,
+        snapshotMode: 'replace',
+        snapshotSeq: ++this.nextSnapshotSeq,
+      },
+    };
+
+    this.enqueue(async () => {
+      await this.sink.ingest([snapshotEvent]);
+    });
+  }
+}
+
 const exec = async (options: ExecOptions): Promise<void> => {
   if (!SUPPORTED_AGENT_TYPES.has(options.type)) {
     log.error(
@@ -243,17 +323,22 @@ const exec = async (options: ExecOptions): Promise<void> => {
   // server-ingest mode.  The tRPC client reads LOBEHUB_JWT (operation-scoped
   // JWT injected by the server) for authentication.
   const agentType = options.type as 'claude-code' | 'codex';
-  let sink: InstanceType<typeof TrpcIngestSink> | InstanceType<typeof NoopIngestSink>;
+  let sink: TrpcIngestSink | undefined;
+  let serverIngester: SerialServerIngester | undefined;
   if (serverIngest) {
     const client = await getTrpcClient();
-    sink = new TrpcIngestSink(client, agentType, operationId, options.topic!);
-  } else {
-    sink = new NoopIngestSink();
+    sink = new TrpcIngestSink(
+      client,
+      agentType,
+      operationId,
+      options.topic!,
+      process.env.LOBEHUB_ASSISTANT_MESSAGE_ID,
+    );
+    serverIngester = new SerialServerIngester(sink);
   }
-  const ingester = new BatchIngester(sink);
 
   /**
-   * Spawn one agent process and stream all its events into `ingester`.
+   * Spawn one agent process and stream all its events into the server ingester.
    *
    * When `interceptResumeErrors` is true, any `error`-type event whose
    * message matches `RESUME_RETRY_PATTERNS` is withheld from the
@@ -297,6 +382,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
     // Always pipe to process.stderr too so users see auth prompts / warnings.
     const STDERR_CAP = 8 * 1024;
     let stderrContent = '';
+    const stderrEnded = once(handle.stderr, 'end').then(() => undefined);
     handle.stderr.on('data', (chunk: Buffer) => {
       if (stderrContent.length < STDERR_CAP) {
         stderrContent += chunk.toString();
@@ -314,9 +400,9 @@ const exec = async (options: ExecOptions): Promise<void> => {
       }
       interrupted = true;
       handle.kill('SIGINT');
-      if (serverIngest) {
+      if (serverIngester && sink) {
         try {
-          await ingester.drain();
+          await serverIngester.drain();
           await sink.finish({ result: 'cancelled' });
         } catch {
           // best-effort; process is exiting anyway
@@ -325,9 +411,9 @@ const exec = async (options: ExecOptions): Promise<void> => {
     };
     const onSigterm = async () => {
       handle.kill('SIGTERM');
-      if (serverIngest) {
+      if (serverIngester && sink) {
         try {
-          await ingester.drain();
+          await serverIngester.drain();
           await sink.finish({ result: 'cancelled' });
         } catch {
           // best-effort
@@ -356,16 +442,16 @@ const exec = async (options: ExecOptions): Promise<void> => {
           }
         }
         if (emitJsonl) process.stdout.write(`${JSON.stringify(event)}\n`);
-        ingester.push(event);
+        serverIngester?.push(event);
       }
     } catch (err) {
       log.error(
         'Stream error from agent process:',
         err instanceof Error ? err.message : String(err),
       );
-      if (serverIngest) {
+      if (serverIngester && sink) {
         try {
-          await ingester.drain();
+          await serverIngester.drain();
           await sink.finish({
             error: { message: String(err), type: 'stream_error' },
             result: 'error',
@@ -381,6 +467,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
     }
 
     const { code, signal } = await handle.exit;
+    await stderrEnded;
 
     // Fallback stderr detection: CC may exit non-zero without emitting a
     // result event (e.g. it writes to stderr and quits immediately).
@@ -451,9 +538,9 @@ const exec = async (options: ExecOptions): Promise<void> => {
 
   const { code, signal, sessionId } = result;
 
-  if (serverIngest) {
+  if (serverIngester && sink) {
     try {
-      await ingester.drain();
+      await serverIngester.drain();
     } catch (err) {
       log.error(
         'Failed to flush events to server:',

@@ -234,7 +234,54 @@ describe('HeterogeneousPersistenceHandler', () => {
           operationId: 'op-1',
           topicId: 'topic-1',
         }),
-      ).rejects.toThrow(/No matching runningOperation/);
+      ).rejects.toThrow(/Stale hetero operation/);
+    });
+
+    it('rejects seeded assistant ids once runningOperation has been cleared', async () => {
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+      h.topicModel.findById.mockResolvedValueOnce({
+        agentId: null,
+        id: 'topic-1',
+        metadata: {} as any,
+      });
+
+      await expect(
+        h.handler.ingest({
+          assistantMessageId: 'asst-1',
+          events: [buildEvent('stream_chunk', 0, { chunkType: 'text', content: 'x' })],
+          operationId: 'op-1',
+          topicId: 'topic-1',
+        }),
+      ).rejects.toThrow(/no active runningOperation/);
+    });
+
+    it('validates seeded assistant ids belong to the current topic', async () => {
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      h.messages.set('asst-other-topic', {
+        agentId: null,
+        content: '',
+        id: 'asst-other-topic',
+        role: 'assistant',
+        topicId: 'topic-2',
+      });
+
+      await expect(
+        h.handler.ingest({
+          assistantMessageId: 'asst-other-topic',
+          events: [buildEvent('stream_chunk', 0, { chunkType: 'text', content: 'x' })],
+          operationId: 'op-1',
+          topicId: 'topic-1',
+        }),
+      ).rejects.toThrow(/does not belong to topic topic-1/);
     });
 
     it('rejects mid-flight topic mismatch on the same operationId', async () => {
@@ -261,6 +308,49 @@ describe('HeterogeneousPersistenceHandler', () => {
   });
 
   describe('idempotency', () => {
+    it('replaces text with the latest full snapshot and ignores older snapshot seq values', async () => {
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      await h.handler.ingest({
+        events: [
+          buildEvent('stream_chunk', 0, {
+            chunkType: 'text',
+            content: 'hello world',
+            snapshotMode: 'replace',
+            snapshotSeq: 2,
+          }),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      await h.handler.ingest({
+        events: [
+          buildEvent(
+            'stream_chunk',
+            0,
+            {
+              chunkType: 'text',
+              content: 'hello',
+              snapshotMode: 'replace',
+              snapshotSeq: 1,
+            },
+            1_700_000_000_999,
+          ),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const asst = h.messages.get('asst-1')!;
+      expect(asst.content).toBe('hello world');
+      expect(asst.metadata?.heteroTextSnapshotSeq).toBe(2);
+    });
+
     it('drops events with the same (stepIndex, type, timestamp, dataFingerprint) key', async () => {
       const h = createHarness({
         assistantMessageId: 'asst-1',

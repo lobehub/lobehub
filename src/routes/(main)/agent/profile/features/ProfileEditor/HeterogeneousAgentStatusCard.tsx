@@ -2,7 +2,10 @@
 
 import { isDesktop } from '@lobechat/const';
 import { type ClaudeAuthStatus, type ToolStatus } from '@lobechat/electron-client-ipc';
-import { getHeterogeneousAgentClientConfig } from '@lobechat/heterogeneous-agents/client';
+import {
+  getHeterogeneousAgentClientConfig,
+  isRemoteHeterogeneousType,
+} from '@lobechat/heterogeneous-agents/client';
 import type { HeterogeneousProviderConfig } from '@lobechat/types';
 import { ActionIcon, CopyButton, Flexbox, Icon, Input, Tag, Text, Tooltip } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
@@ -250,13 +253,8 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
     }, [provider.type, resolvedCommand]);
 
     const detect = useCallback(async () => {
-      // openclaw / hermes are remote device agents — no local CLI to detect.
-      if (
-        provider.type === 'openclaw' ||
-        provider.type === 'hermes' ||
-        !isDesktop ||
-        !resolvedCommand
-      ) {
+      // Remote platform agents (openclaw, hermes, amp, opencode, …) have no local CLI to detect.
+      if (isRemoteHeterogeneousType(provider.type) || !isDesktop || !resolvedCommand) {
         setDetecting(false);
         return;
       }

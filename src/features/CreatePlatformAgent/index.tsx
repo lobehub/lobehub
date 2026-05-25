@@ -124,7 +124,7 @@ const CreatePlatformAgentModal = memo<CreatePlatformAgentModalProps>(
 
     // Platforms that are not yet ready for production use.
     // Remove a type from this set when the platform is fully supported.
-    const COMING_SOON_PLATFORMS = new Set<RemoteHeterogeneousAgentType>(['hermes']);
+    const COMING_SOON_PLATFORMS = new Set<RemoteHeterogeneousAgentType>(['amp', 'opencode']);
 
     // Derive platform display list from the registry — adding a new platform to
     // REMOTE_HETEROGENEOUS_AGENT_CONFIGS automatically includes it here.

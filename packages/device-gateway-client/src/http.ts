@@ -74,7 +74,7 @@ export class GatewayHttpClient {
   }
 
   async dispatchAgentRun(params: {
-    agentType: 'claude-code' | 'codex' | 'hermes' | 'openclaw';
+    agentType: string;
     cwd?: string;
     deviceId?: string;
     jwt: string;

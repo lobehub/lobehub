@@ -38,6 +38,8 @@ export const getLocalAgentWorkingDirectory = (agentId: string): string | undefin
   return readMap()[agentId];
 };
 
+export const readAllLocalAgentWorkingDirectories = (): Record<string, string> => readMap();
+
 export const setLocalAgentWorkingDirectory = (agentId: string, workingDirectory?: string): void => {
   if (!agentId) return;
 

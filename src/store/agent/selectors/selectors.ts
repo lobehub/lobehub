@@ -24,7 +24,6 @@ import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
 import { filterToolIds } from '@/helpers/toolFilters';
 
 import { type AgentStoreState } from '../initialState';
-import { getLocalAgentWorkingDirectory } from '../utils/localAgentWorkingDirectoryStorage';
 import { builtinAgentSelectors } from './builtinAgentSelectors';
 
 // ==========   Meta   ============== //
@@ -271,7 +270,7 @@ const currentAgentWorkingDirectory = (s: AgentStoreState): string | undefined =>
     if (!activeAgentId) return globalAgentContextManager.getContext().homePath;
 
     return (
-      getLocalAgentWorkingDirectory(activeAgentId) ??
+      s.localAgentWorkingDirectoryMap[activeAgentId] ??
       globalAgentContextManager.getContext().homePath
     );
   })();

@@ -966,9 +966,13 @@ describe('aiChatRouter', () => {
           schema: input.schema,
           tools: undefined,
         },
-        { metadata: { trigger: 'chat' } },
+        {
+          metadata: { trigger: 'chat' },
+          tracing: { tracingId: expect.stringMatching(/^[0-9a-f-]{36}$/) },
+        },
       );
-      expect(result).toEqual(mockResult);
+      expect(result.data).toEqual(mockResult);
+      expect(result.tracingId).toMatch(/^[0-9a-f-]{36}$/);
     });
 
     it('should handle tools parameter when provided', async () => {
@@ -1010,11 +1014,14 @@ describe('aiChatRouter', () => {
           schema: undefined,
           tools: mockTools,
         },
-        { metadata: { trigger: 'chat' } },
+        {
+          metadata: { trigger: 'chat' },
+          tracing: { tracingId: expect.stringMatching(/^[0-9a-f-]{36}$/) },
+        },
       );
     });
 
-    it('merges caller metadata over the default trigger', async () => {
+    it('merges caller metadata over the default trigger and forwards tracing', async () => {
       const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
       const mockGenerateObject = vi.fn().mockResolvedValue({ completion: 'hi there' });
       vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
@@ -1022,13 +1029,9 @@ describe('aiChatRouter', () => {
       } as any);
 
       const caller = aiChatRouter.createCaller({ ...mockCtx, serverDB: {} } as any);
-      await caller.outputJSON({
+      const result = await caller.outputJSON({
         messages: [{ content: 'be helpful', role: 'system' }],
-        metadata: {
-          promptVersion: 'v2.0',
-          scenario: 'input_completion',
-          schemaName: 'InputCompletion',
-        },
+        metadata: { correlationId: 'cid-1' },
         model: 'gpt-4o-mini',
         provider: 'openai',
         schema: {
@@ -1040,16 +1043,64 @@ describe('aiChatRouter', () => {
             type: 'object' as const,
           },
         },
-      });
-
-      expect(mockGenerateObject.mock.calls[0][1]).toEqual({
-        metadata: {
+        tracing: {
           promptVersion: 'v2.0',
           scenario: 'input_completion',
           schemaName: 'InputCompletion',
-          trigger: 'chat',
         },
       });
+
+      expect(mockGenerateObject.mock.calls[0][1]).toEqual({
+        metadata: { correlationId: 'cid-1', trigger: 'chat' },
+        tracing: {
+          promptVersion: 'v2.0',
+          scenario: 'input_completion',
+          schemaName: 'InputCompletion',
+          tracingId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+        },
+      });
+      expect(result.tracingId).toMatch(/^[0-9a-f-]{36}$/);
+    });
+
+    it('rejects a caller-supplied tracing.tracingId that is not a UUID', async () => {
+      const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
+      const mockGenerateObject = vi.fn();
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+        generateObject: mockGenerateObject,
+      } as any);
+
+      const caller = aiChatRouter.createCaller({ ...mockCtx, serverDB: {} } as any);
+
+      await expect(
+        caller.outputJSON({
+          messages: [],
+          model: 'gpt-4o-mini',
+          provider: 'openai',
+          tracing: { tracingId: 'not-a-uuid' },
+        }),
+      ).rejects.toThrow();
+
+      expect(mockGenerateObject).not.toHaveBeenCalled();
+    });
+
+    it('honours caller-supplied tracing.tracingId instead of generating a new one', async () => {
+      const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
+      const mockGenerateObject = vi.fn().mockResolvedValue({ completion: 'ok' });
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+        generateObject: mockGenerateObject,
+      } as any);
+
+      const callerSuppliedId = '00000000-0000-0000-0000-000000000001';
+      const caller = aiChatRouter.createCaller({ ...mockCtx, serverDB: {} } as any);
+      const result = await caller.outputJSON({
+        messages: [],
+        model: 'gpt-4o-mini',
+        provider: 'openai',
+        tracing: { tracingId: callerSuppliedId },
+      });
+
+      expect(result.tracingId).toBe(callerSuppliedId);
+      expect(mockGenerateObject.mock.calls[0][1].tracing.tracingId).toBe(callerSuppliedId);
     });
   });
 });

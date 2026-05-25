@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 import type { RemoteHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
@@ -81,12 +82,91 @@ function getOpenClawProfile(agentId?: string): AgentProfileResult {
 }
 
 /**
+ * Read the active Hermes profile name from `hermes profile list` output.
+ * The active profile is marked with ◆ in the first column.
+ */
+function getActiveHermesProfileName(): string | undefined {
+  try {
+    const output = execFileSync('hermes', ['profile', 'list'], {
+      encoding: 'utf8',
+      timeout: 5000,
+    });
+    const match = output.match(/◆(\S+)/);
+    return match?.[1];
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Read the filesystem path of a Hermes profile from `hermes profile show <name>`.
+ */
+function getHermesProfilePath(profileName: string): string | undefined {
+  try {
+    const output = execFileSync('hermes', ['profile', 'show', profileName], {
+      encoding: 'utf8',
+      timeout: 5000,
+    });
+    const match = output.match(/^Path:\s+(.+)/m);
+    const raw = match?.[1]?.trim();
+    // Expand leading `~` — Node does not auto-expand home-dir shorthands.
+    return raw?.replace(/^~(?=\/|$)/, os.homedir());
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Extract a one-line description from a Hermes SOUL.md file.
+ * Strips HTML comments and Markdown headings, then returns the first
+ * non-empty line of actual content.
+ */
+function readHermesSoulDescription(soulPath: string): string | undefined {
+  try {
+    const content = fs.readFileSync(soulPath, 'utf8');
+    // Loop until stable to handle any malformed/nested comment sequences.
+    let stripped = content;
+    let previous: string;
+    do {
+      previous = stripped;
+      stripped = stripped
+        .replaceAll(/<!--[\s\S]*?-->/g, '') // strip complete HTML comments
+        .replaceAll(/[<>]/g, '') // strip any remaining HTML delimiter chars
+        .replaceAll(/^#+\s.*$/gm, ''); // strip Markdown headings
+    } while (stripped !== previous);
+    const line = stripped
+      .split('\n')
+      .map((l) => l.trim())
+      .find((l) => l.length > 0);
+    return line || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function getHermesProfile(): AgentProfileResult {
+  const profileName = getActiveHermesProfileName();
+  if (!profileName) return {};
+
+  const profilePath = getHermesProfilePath(profileName);
+  const description = profilePath
+    ? readHermesSoulDescription(path.join(profilePath, 'SOUL.md'))
+    : undefined;
+
+  return {
+    avatar: '⚡',
+    description,
+    title: profileName,
+  };
+}
+
+/**
  * Fetch the agent profile (title, avatar, description) from the platform
  * installed on this device. Dispatched by the server via `device.getAgentProfile`.
  *
  * - openclaw: `openclaw agents list --json` for name + emoji, workspace
  *             IDENTITY.md for description fallback
- * - hermes:   not yet implemented — returns empty profile
+ * - hermes:   active profile name + SOUL.md description
  */
 export async function getAgentProfile(params: GetAgentProfileParams): Promise<AgentProfileResult> {
   const { platform, agentId } = params;
@@ -96,8 +176,7 @@ export async function getAgentProfile(params: GetAgentProfileParams): Promise<Ag
   }
 
   if (platform === 'hermes') {
-    // Profile fetch not yet implemented for Hermes — return empty
-    return {};
+    return getHermesProfile();
   }
 
   return {};

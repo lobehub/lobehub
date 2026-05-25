@@ -374,6 +374,8 @@ export default {
   // Platform agent: per-platform descriptions shown in step 0 of the creation modal
   'platformAgent.create.desc.openclaw': 'Connect to OpenClaw running on one of your devices',
   'platformAgent.create.desc.hermes': 'Connect to Hermes running on one of your devices',
+  'platformAgent.create.desc.amp': 'Connect to Amp running on one of your devices',
+  'platformAgent.create.desc.opencode': 'Connect to OpenCode running on one of your devices',
 
   // Platform agent: shared device status label (used in Select option labels)
   'platformAgent.device.online': 'Online',

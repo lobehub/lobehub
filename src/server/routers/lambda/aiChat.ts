@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import type { CreateMessageParams, SendMessageServerResponse } from '@lobechat/types';
 import { AiSendMessageServerSchema, RequestTrigger, StructureOutputSchema } from '@lobechat/types';
 import { createTimingHelpers, createTimingRequestId } from '@lobechat/utils';
@@ -44,11 +46,18 @@ export const aiChatRouter = router({
     log('messages count: %d', input.messages.length);
     log('schema: %O', input.schema);
 
+    // Pre-allocate the tracing row id so we can return it to the client even
+    // though the actual `service.record()` call happens in Next's `after()`
+    // (after the response has been sent). Honour the caller-supplied id when
+    // one was passed via `tracing.tracingId` — the schema already validates
+    // it as UUID, so a malformed value never reaches here.
+    const tracingId = input.tracing?.tracingId ?? randomUUID();
+
     // Always stamp a trigger on metadata so cross-cutting hooks (timing,
     // routing) and the tracing registry have a fallback when the caller
     // forgets to set one. `tracing` carries the structured tracing config
     // (scenario / promptVersion / schemaName / inputHint / ...).
-    const result = await ctx.aiGenerationService.generateObject(
+    const data = await ctx.aiGenerationService.generateObject(
       {
         messages: input.messages,
         model: input.model,
@@ -58,12 +67,12 @@ export const aiChatRouter = router({
       },
       {
         metadata: { trigger: RequestTrigger.Chat, ...input.metadata },
-        tracing: input.tracing,
+        tracing: { ...input.tracing, tracingId },
       },
     );
 
-    log('generateObject completed, result: %O', result);
-    return result;
+    log('generateObject completed, result: %O', data);
+    return { data, tracingId };
   }),
 
   sendMessageInServer: aiChatProcedure
