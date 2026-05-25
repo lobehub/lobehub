@@ -120,11 +120,14 @@ export class FileTracingStore implements ITracingStore {
   }
 
   private bucketDir(record: TracingPayload): string {
-    // Compose the relative segment as a single string so Turbopack / Webpack
-    // static analyzers don't try to enumerate path.join's multi-arg pattern
-    // (which fans out into a glob match against the project).
-    const sub = `${safeSegment(record.scenario)}/${safeSegment(record.prompt_version)}-${safeSegment(record.prompt_hash)}`;
-    return path.join(this.root, sub);
+    // Hand-roll the join with `path.sep` so Turbopack / Webpack can't statically
+    // analyze it. `path.join(this.root, sub)` still triggers the static file
+    // pattern detector because `safeSegment`'s `|| 'unknown'` fallback gives the
+    // analyzer a finite alternation that fans out into a project-wide glob
+    // (the build warning enumerated 11k+ candidate files).
+    const scenario = safeSegment(record.scenario);
+    const bucket = `${safeSegment(record.prompt_version)}-${safeSegment(record.prompt_hash)}`;
+    return `${this.root}${path.sep}${scenario}${path.sep}${bucket}`;
   }
 
   private async updateLatestSymlink(filePath: string): Promise<void> {
