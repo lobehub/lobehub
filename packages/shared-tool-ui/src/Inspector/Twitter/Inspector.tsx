@@ -27,7 +27,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     flex-shrink: 0;
     padding-block: 2px;
     padding-inline: 10px;
-    color: ${cssVar.colorTextSecondary};
+    color: ${cssVar.colorText};
   `,
   chipDivider: css`
     flex-shrink: 0;
@@ -50,7 +50,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-inline: 10px;
 
     font-family: ${cssVar.fontFamilyCode};
-    color: ${cssVar.colorTextSecondary};
+    color: ${cssVar.colorText};
   `,
   chipValueText: css`
     overflow: hidden;
