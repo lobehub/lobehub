@@ -535,6 +535,9 @@ export default {
   'notification.email.title': 'Email Notifications',
   'notification.inbox.desc': 'Show notifications in the in-app inbox',
   'notification.inbox.title': 'Inbox Notifications',
+  'notification.push.desc':
+    'Send push notifications to your mobile devices (LobeHub mobile app required)',
+  'notification.push.title': 'Mobile Push Notifications',
   'notification.category.generation.title': 'Generation',
   'notification.category.schedule.title': 'Scheduled tasks',
   'notification.item.agent_cron_job_failed': 'Scheduled task failed',

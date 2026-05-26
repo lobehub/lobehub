@@ -7,4 +7,10 @@ export interface NotificationChannelSettings {
 export interface NotificationSettings {
   email?: NotificationChannelSettings;
   inbox?: NotificationChannelSettings;
+  /**
+   * Mobile push notifications (delivered via Expo Push Service → APNs/FCM).
+   * Only takes effect for users with a registered Expo push token —
+   * see `push_tokens` table.
+   */
+  push?: NotificationChannelSettings;
 }

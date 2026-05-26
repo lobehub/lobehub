@@ -504,6 +504,8 @@
   "notification.item.agent_cron_job_failed": "Scheduled task failed",
   "notification.item.image_generation_completed": "Image generation completed",
   "notification.item.video_generation_completed": "Video generation completed",
+  "notification.push.desc": "Send push notifications to your mobile devices (LobeHub mobile app required)",
+  "notification.push.title": "Mobile Push Notifications",
   "notification.title": "Notification Channels",
   "platformAgentConfig.availability.available": "Available",
   "platformAgentConfig.availability.checking": "Checking...",

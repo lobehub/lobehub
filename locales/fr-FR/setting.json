@@ -478,6 +478,8 @@
   "notification.item.agent_cron_job_failed": "La tâche planifiée a échoué",
   "notification.item.image_generation_completed": "Génération d’image terminée",
   "notification.item.video_generation_completed": "Génération de vidéo terminée",
+  "notification.push.desc": "Envoyez des notifications push à vos appareils mobiles (application mobile LobeHub requise)",
+  "notification.push.title": "Notifications Push Mobiles",
   "notification.title": "Canaux de notification",
   "platformAgentConfig.availability.available": "Disponible",
   "platformAgentConfig.availability.checking": "Vérification...",

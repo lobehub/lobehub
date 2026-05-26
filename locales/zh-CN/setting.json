@@ -504,6 +504,8 @@
   "notification.item.agent_cron_job_failed": "计划任务失败",
   "notification.item.image_generation_completed": "图片生成完成",
   "notification.item.video_generation_completed": "视频生成完成",
+  "notification.push.desc": "向您的移动设备发送推送通知（需要安装 LobeHub 移动应用）",
+  "notification.push.title": "移动推送通知",
   "notification.title": "通知渠道",
   "platformAgentConfig.availability.available": "可用",
   "platformAgentConfig.availability.checking": "检测中...",
