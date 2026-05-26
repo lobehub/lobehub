@@ -899,7 +899,7 @@ export default {
   'toolAuth.authorize': 'Authorize',
   'toolAuth.authorizing': 'Authorizing...',
   'toolAuth.hint':
-    'Without authorization or configuration, Skills may not work. This can limit the Agent or cause errors.',
+    "When Skills aren't authorized or configured, the related Skills won't work and the Agent's capabilities may be limited or run into errors.",
   'task.title': 'Tasks',
   'toolAuth.signIn': 'Sign In',
   'toolAuth.title': 'Authorize Skills for this Agent',

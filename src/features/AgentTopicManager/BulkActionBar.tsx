@@ -21,9 +21,7 @@ const styles = createStaticStyles(({ css }) => ({
     border-radius: 999px;
 
     background: ${cssVar.colorBgElevated};
-    box-shadow:
-      0 12px 32px rgb(0 0 0 / 24%),
-      0 2px 6px rgb(0 0 0 / 16%);
+    box-shadow: ${cssVar.boxShadowSecondary};
   `,
   divider: css`
     width: 1px;

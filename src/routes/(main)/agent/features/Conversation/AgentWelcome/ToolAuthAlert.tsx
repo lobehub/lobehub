@@ -317,7 +317,7 @@ const ToolAuthAlert = memo(() => {
   return (
     <Alert
       showIcon={false}
-      style={{ width: '100%' }}
+      style={{ background: 'transparent', width: '100%' }}
       type="secondary"
       description={
         <>

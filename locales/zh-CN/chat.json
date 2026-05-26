@@ -818,7 +818,7 @@
   "tool.intervention.viewParameters": "查看参数 ({{count}})",
   "toolAuth.authorize": "授权",
   "toolAuth.authorizing": "授权中…",
-  "toolAuth.hint": "未授权或未配置时，相关技能无法使用。这可能导致助理能力受限或报错",
+  "toolAuth.hint": "技能未授权或未配置时，相关技能无法使用，可能导致助理能力受限或报错",
   "toolAuth.signIn": "登录",
   "toolAuth.title": "为助理完成技能授权",
   "topic.checkOpenNewTopic": "要开启新话题吗？",
