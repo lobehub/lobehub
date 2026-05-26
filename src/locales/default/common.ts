@@ -436,6 +436,7 @@ export default {
   'mail.support': 'Email Support',
   'more': 'More',
   'navPanel.agent': 'Agents',
+  'navPanel.bottomDivider': 'Items below anchor to bottom',
   'navPanel.customizeSidebar': 'Customize Sidebar',
   'navPanel.displayItems': 'Display Items',
   'navPanel.resetDefault': 'Reset to Default',

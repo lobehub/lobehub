@@ -50,11 +50,16 @@ const hiddenSidebarSections = (s: GlobalState): string[] =>
 const sidebarExpandedKeys = (s: GlobalState): string[] =>
   s.status.sidebarExpandedKeys ?? DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS;
 
+/** Sentinel id representing the flex spacer slot. Its position in `sidebarItems`
+ * determines where the sidebar pushes items to the bottom. */
+export const SIDEBAR_SPACER_ID = '__spacer__';
+
 export const DEFAULT_SIDEBAR_ITEMS: string[] = [
   'tasks',
   'pages',
   'recents',
   'agent',
+  SIDEBAR_SPACER_ID,
   'image',
   'community',
   'resource',
@@ -64,11 +69,25 @@ export const DEFAULT_SIDEBAR_ITEMS: string[] = [
 /** Items that must stay contiguous in the sidebar list (accordion block). */
 export const SIDEBAR_ACCORDION_KEYS = new Set(['recents', 'agent']);
 
+const DEFAULT_BOTTOM_KEYS = new Set(
+  DEFAULT_SIDEBAR_ITEMS.slice(DEFAULT_SIDEBAR_ITEMS.indexOf(SIDEBAR_SPACER_ID) + 1),
+);
+
+/** Insert the spacer sentinel into `order` if missing — anchored before the first
+ * default "bottom" item (image/community/...), falling back to the end. */
+const ensureSpacer = (order: string[]): string[] => {
+  if (order.includes(SIDEBAR_SPACER_ID)) return order;
+  const insertAt = order.findIndex((k) => DEFAULT_BOTTOM_KEYS.has(k));
+  if (insertAt === -1) return [...order, SIDEBAR_SPACER_ID];
+  return [...order.slice(0, insertAt), SIDEBAR_SPACER_ID, ...order.slice(insertAt)];
+};
+
 /** Append any known keys missing from `order` so new items don't disappear on upgrade. */
 const withAllKnownKeys = (order: string[]): string[] => {
   const present = new Set(order);
-  const missing = DEFAULT_SIDEBAR_ITEMS.filter((k) => !present.has(k));
-  return missing.length === 0 ? order : [...order, ...missing];
+  const missing = DEFAULT_SIDEBAR_ITEMS.filter((k) => k !== SIDEBAR_SPACER_ID && !present.has(k));
+  const withMissing = missing.length === 0 ? order : [...order, ...missing];
+  return ensureSpacer(withMissing);
 };
 
 const accordionIndices = (items: string[]): number[] => {

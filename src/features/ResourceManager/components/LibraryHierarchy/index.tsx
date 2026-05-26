@@ -1,7 +1,10 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
+import { Center, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from 'antd-style';
+import { FolderPlusIcon } from 'lucide-react';
 import { memo, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { VList } from 'virtua';
 
 import { useFolderPath } from '@/routes/(main)/resource/features/hooks/useFolderPath';
@@ -9,6 +12,7 @@ import { useResourceManagerStore } from '@/routes/(main)/resource/features/store
 import type { TreeItem } from '@/store/tree';
 import { useTreeStore } from '@/store/tree';
 
+import AddButton from '../Header/AddButton';
 import { KnowledgeBaseListProvider } from '../KnowledgeBaseListProvider';
 import { HierarchyNode } from './HierarchyNode';
 import TreeSkeleton from './TreeSkeleton';
@@ -21,6 +25,7 @@ interface VisibleNode {
 }
 
 const LibraryHierarchy = memo(() => {
+  const { t } = useTranslation('file');
   const { currentFolderSlug } = useFolderPath();
   const [libraryId, currentViewItemId] = useResourceManagerStore((s) => [
     s.libraryId,
@@ -69,6 +74,24 @@ const LibraryHierarchy = memo(() => {
   }
 
   const selectedKey = currentFolderSlug ?? null;
+  const isRootEmpty = !isLoading && libraryId && visibleNodes.length === 0;
+
+  if (isRootEmpty) {
+    return (
+      <KnowledgeBaseListProvider>
+        <Center gap={16} padding={24} style={{ height: '100%', textAlign: 'center' }}>
+          <Icon color={cssVar.colorTextQuaternary} icon={FolderPlusIcon} size={36} />
+          <Flexbox align={'center'} gap={4}>
+            <Text strong>{t('library.hierarchy.empty.title')}</Text>
+            <Text style={{ fontSize: 12 }} type={'secondary'}>
+              {t('library.hierarchy.empty.desc')}
+            </Text>
+          </Flexbox>
+          <AddButton />
+        </Center>
+      </KnowledgeBaseListProvider>
+    );
+  }
 
   return (
     <KnowledgeBaseListProvider>

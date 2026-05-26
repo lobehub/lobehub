@@ -9,7 +9,12 @@ import {
   INITIAL_STATUS,
   initialState,
 } from '../initialState';
-import { DEFAULT_SIDEBAR_ITEMS, reorderSidebarItems, systemStatusSelectors } from './systemStatus';
+import {
+  DEFAULT_SIDEBAR_ITEMS,
+  reorderSidebarItems,
+  SIDEBAR_SPACER_ID,
+  systemStatusSelectors,
+} from './systemStatus';
 
 // Mock version constants
 vi.mock('@/const/version', () => ({
@@ -128,8 +133,8 @@ describe('systemStatusSelectors', () => {
       expect(systemStatusSelectors.sidebarItems(initialState)).toEqual(DEFAULT_SIDEBAR_ITEMS);
     });
 
-    it('should return stored items when set', () => {
-      const custom = [
+    it('should preserve stored order and inject the spacer before the first bottom item', () => {
+      const stored = [
         'agent',
         'recents',
         'pages',
@@ -140,12 +145,40 @@ describe('systemStatusSelectors', () => {
         'memory',
       ];
       const s: GlobalState = merge(initialState, {
-        status: { sidebarItems: custom },
+        status: { sidebarItems: stored },
       });
-      expect(systemStatusSelectors.sidebarItems(s)).toEqual(custom);
+      expect(systemStatusSelectors.sidebarItems(s)).toEqual([
+        'agent',
+        'recents',
+        'pages',
+        'tasks',
+        SIDEBAR_SPACER_ID,
+        'image',
+        'community',
+        'resource',
+        'memory',
+      ]);
     });
 
-    it('should append missing known keys to the end', () => {
+    it('should respect the stored spacer position', () => {
+      const stored = [
+        'pages',
+        'recents',
+        'agent',
+        SIDEBAR_SPACER_ID,
+        'image',
+        'tasks',
+        'community',
+        'resource',
+        'memory',
+      ];
+      const s: GlobalState = merge(initialState, {
+        status: { sidebarItems: stored },
+      });
+      expect(systemStatusSelectors.sidebarItems(s)).toEqual(stored);
+    });
+
+    it('should append missing known keys to the end and keep the spacer anchored', () => {
       const s: GlobalState = merge(initialState, {
         status: { sidebarItems: ['agent', 'recents'] },
       });
@@ -157,6 +190,11 @@ describe('systemStatusSelectors', () => {
       expect(items).toContain('community');
       expect(items).toContain('resource');
       expect(items).toContain('memory');
+      // spacer sits directly before the first bottom-class item
+      const firstBottomIdx = items.findIndex((k) =>
+        ['image', 'community', 'resource', 'memory'].includes(k),
+      );
+      expect(items[firstBottomIdx - 1]).toBe(SIDEBAR_SPACER_ID);
     });
 
     it('should migrate legacy `sidebarSectionOrder` accordion order into the default layout', () => {
@@ -170,6 +208,7 @@ describe('systemStatusSelectors', () => {
         'pages',
         'agent',
         'recents',
+        SIDEBAR_SPACER_ID,
         'image',
         'community',
         'resource',

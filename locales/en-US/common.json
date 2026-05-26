@@ -353,6 +353,7 @@
   "messengerBanner.title": "Talk to Lobe AI on your favorite messaging apps",
   "more": "More",
   "navPanel.agent": "Agents",
+  "navPanel.bottomDivider": "Items below anchor to bottom",
   "navPanel.customizeSidebar": "Customize Sidebar",
   "navPanel.displayItems": "Display Items",
   "navPanel.hidden": "Hidden",

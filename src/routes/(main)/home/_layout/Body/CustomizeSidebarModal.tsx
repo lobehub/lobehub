@@ -24,7 +24,7 @@ import { ActionIcon, Button, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { createModal, type ModalInstance } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { t } from 'i18next';
-import { Eye, EyeOff, GripVertical, PinIcon, RotateCcw } from 'lucide-react';
+import { ArrowDownToLine, Eye, EyeOff, GripVertical, PinIcon, RotateCcw } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
@@ -32,7 +32,7 @@ import { useTranslation } from 'react-i18next';
 import { getRouteById } from '@/config/routes';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { SIDEBAR_ACCORDION_KEYS } from '@/store/global/selectors/systemStatus';
+import { SIDEBAR_ACCORDION_KEYS, SIDEBAR_SPACER_ID } from '@/store/global/selectors/systemStatus';
 
 // ---------------------------------------------------------------------------
 // Types & constants
@@ -61,6 +61,7 @@ const ALL_SIDEBAR_ITEMS: SidebarItemConfig[] = [
 const ITEM_MAP = new Map(ALL_SIDEBAR_ITEMS.map((item) => [item.id, item]));
 
 const isAccordionKey = (id: string) => SIDEBAR_ACCORDION_KEYS.has(id);
+const isSpacer = (id: string) => id === SIDEBAR_SPACER_ID;
 
 // ---------------------------------------------------------------------------
 // Styles
@@ -93,6 +94,11 @@ const styles = createStaticStyles(({ css }) => ({
 
     background: ${cssVar.colorBgElevated};
     box-shadow: ${cssVar.boxShadowSecondary};
+  `,
+  spacerLine: css`
+    flex: 1;
+    block-size: 1px;
+    background: ${cssVar.colorBorderSecondary};
   `,
 }));
 
@@ -162,6 +168,53 @@ const SortableItem = memo<{
 });
 
 // ---------------------------------------------------------------------------
+// SpacerSortableItem — represents the flex spacer slot; draggable like any
+// other item but rendered as a divider with an "Anchor below to bottom" label.
+// ---------------------------------------------------------------------------
+
+const SpacerSortableItem = memo(() => {
+  const { t } = useTranslation('common');
+  const {
+    attributes,
+    isDragging,
+    listeners,
+    setActivatorNodeRef,
+    setNodeRef,
+    transform,
+    transition,
+  } = useSortable({ id: SIDEBAR_SPACER_ID });
+
+  return (
+    <Flexbox
+      horizontal
+      align={'center'}
+      className={isDragging ? cx(styles.item, styles.itemDragging) : styles.item}
+      gap={8}
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Translate.toString(transform),
+        transition,
+      }}
+      {...attributes}
+    >
+      <Flexbox
+        ref={setActivatorNodeRef}
+        style={{ cursor: isDragging ? 'grabbing' : 'grab', flexShrink: 0, touchAction: 'none' }}
+        {...listeners}
+      >
+        <Icon icon={GripVertical} size={14} style={{ color: cssVar.colorTextQuaternary }} />
+      </Flexbox>
+      <Icon icon={ArrowDownToLine} size={14} style={{ color: cssVar.colorTextQuaternary }} />
+      <div className={styles.spacerLine} />
+      <Text style={{ fontSize: 12 }} type={'secondary'}>
+        {t('navPanel.bottomDivider' as any)}
+      </Text>
+      <div className={styles.spacerLine} />
+    </Flexbox>
+  );
+});
+
+// ---------------------------------------------------------------------------
 // AccordionGroup — a non-draggable slot at the outer level that wraps a nested
 // SortableContext for accordion items. Registers with useSortable so other outer
 // items can reorder relative to its position, but has no drag activator of its own.
@@ -198,6 +251,18 @@ const OverlayItem = memo<{ id: string }>(({ id }) => {
         <Icon icon={GripVertical} size={14} style={{ color: cssVar.colorTextQuaternary }} />
         <Text>{t('navPanel.agent' as any)}</Text>
         <Text type={'secondary'}>+ {t('recents' as any)}</Text>
+      </Flexbox>
+    );
+  }
+
+  if (isSpacer(id)) {
+    return (
+      <Flexbox horizontal align={'center'} className={styles.overlay} gap={8}>
+        <Icon icon={GripVertical} size={14} style={{ color: cssVar.colorTextQuaternary }} />
+        <Icon icon={ArrowDownToLine} size={14} style={{ color: cssVar.colorTextQuaternary }} />
+        <Text style={{ fontSize: 12 }} type={'secondary'}>
+          {t('navPanel.bottomDivider' as any)}
+        </Text>
       </Flexbox>
     );
   }
@@ -329,9 +394,12 @@ const CustomizeSidebarContent = memo(() => {
     setItems(storeItems);
   }, [storeItems]);
 
-  const renderItem = (id: string) => (
-    <SortableItem hiddenSections={hiddenSections} id={id} key={id} onToggle={toggleSection} />
-  );
+  const renderItem = (id: string) =>
+    isSpacer(id) ? (
+      <SpacerSortableItem key={id} />
+    ) : (
+      <SortableItem hiddenSections={hiddenSections} id={id} key={id} onToggle={toggleSection} />
+    );
 
   return (
     <DndContext

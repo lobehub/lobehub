@@ -53,6 +53,8 @@
   "home.uploadEntries.folder.title": "上传文件夹",
   "home.uploadEntries.library.title": "新建资源库",
   "home.uploadEntries.newPage.title": "新建文稿",
+  "library.hierarchy.empty.desc": "上传文件或新建文件夹开始整理",
+  "library.hierarchy.empty.title": "这里还没有内容",
   "library.list.confirmRemoveLibrary": "将删除该资源库（其中的文件不会删除，会移入「全部文件」）。删除后不可恢复，建议确认无误再继续",
   "library.list.empty": "点击 <1>+</1> 创建第一个资源库",
   "library.new": "新建资源库",

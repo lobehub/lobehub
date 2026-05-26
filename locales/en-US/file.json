@@ -53,6 +53,8 @@
   "home.uploadEntries.folder.title": "Upload Folder",
   "home.uploadEntries.library.title": "Create New Library",
   "home.uploadEntries.newPage.title": "New Page",
+  "library.hierarchy.empty.desc": "Add files or create a folder to get started",
+  "library.hierarchy.empty.title": "Nothing here yet",
   "library.list.confirmRemoveLibrary": "You are about to delete this library. The files within it will not be deleted but moved to All Files. This action cannot be undone, so please proceed with caution.",
   "library.list.empty": "Click <1>+</1> to create a new library",
   "library.new": "New Library",
