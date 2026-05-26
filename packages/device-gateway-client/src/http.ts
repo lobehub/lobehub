@@ -85,8 +85,7 @@ export class GatewayHttpClient {
     topicId: string;
     userId: string;
   }): Promise<{ success: boolean; error?: string }> {
-    const { userId: _userId, ...body } = params;
-    const res = await this.post('/api/device/agent/run', body);
+    const res = await this.post('/api/device/agent/run', params);
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       return { error: text || `HTTP ${res.status}`, success: false };

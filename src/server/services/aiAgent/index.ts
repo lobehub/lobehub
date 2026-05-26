@@ -1223,7 +1223,11 @@ export class AiAgentService {
       // bypassing the engine's enabledToolIds exclusion. Skipping the
       // assignment here closes that bypass at the source.
       //
-      // Resolution order ():
+      // Resolution order:
+      // 0. executionTarget === 'sandbox': always skip — sandbox and device are
+      //    mutually exclusive. Without this gate a single online device would
+      //    be auto-activated and local-system tool calls would silently route
+      //    to that device instead of being suppressed for the sandbox session.
       // 1. boundDeviceId (topic-bound > agent-bound): use if online; if offline,
       //    respect the explicit choice and stay unrouted — don't silently fall
       //    back to a different device, that would surprise the user.
@@ -1235,15 +1239,17 @@ export class AiAgentService {
       //    behind (the local-system system prompt's
       //    `{{workingDirectory}}` reached the LLM as a literal, wasting the
       //    first N steps groping for cwd).
-      activeDeviceId = !canUseDevice
-        ? undefined
-        : boundDeviceId
-          ? onlineDevices.some((device) => device.deviceId === boundDeviceId)
-            ? boundDeviceId
-            : undefined
-          : onlineDevices.length === 1
-            ? onlineDevices[0].deviceId
-            : undefined;
+      const regularAgentExecutionTarget = agentConfig.agencyConfig?.executionTarget;
+      activeDeviceId =
+        !canUseDevice || regularAgentExecutionTarget === 'sandbox'
+          ? undefined
+          : boundDeviceId
+            ? onlineDevices.some((device) => device.deviceId === boundDeviceId)
+              ? boundDeviceId
+              : undefined
+            : onlineDevices.length === 1
+              ? onlineDevices[0].deviceId
+              : undefined;
 
       const toolsEngine = createServerAgentToolsEngine(toolsContext, {
         additionalManifests: [...lobehubSkillManifests, ...klavisManifests],
