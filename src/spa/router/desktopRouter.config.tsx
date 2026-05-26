@@ -106,6 +106,13 @@ export const desktopRoutes: RouteObject[] = [
               },
               {
                 element: dynamicElement(
+                  () => import('@/routes/(main)/agent/topics'),
+                  'Desktop > Chat > Topics',
+                ),
+                path: 'topics',
+              },
+              {
+                element: dynamicElement(
                   () => import('@/routes/(main)/agent/task/[taskId]'),
                   'Desktop > Chat > Task Detail',
                 ),

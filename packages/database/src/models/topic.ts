@@ -11,7 +11,22 @@ import {
   runTimedSinkStage as runTimedStage,
 } from '@lobechat/utils';
 import type { SQL } from 'drizzle-orm';
-import { and, count, desc, eq, gt, gte, inArray, isNull, lte, ne, not, or, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gt,
+  gte,
+  inArray,
+  isNull,
+  lte,
+  ne,
+  not,
+  or,
+  sql,
+} from 'drizzle-orm';
 
 import type { TopicItem } from '../schemas';
 import { agents, agentsToSessions, messagePlugins, messages, topics } from '../schemas';
@@ -73,6 +88,15 @@ interface QueryTopicParams {
    * Include only topics matching the given trigger types (positive filter)
    */
   triggers?: string[];
+  /**
+   * When true, the SELECT also returns the heavier card-detail columns used
+   * by the per-agent Topics management page: `firstUserMessage` (subquery),
+   * `messageCount` (subquery), `description`, `trigger`. `cost` and
+   * `tokenUsage` are intentionally omitted until a dedicated schema migration
+   * adds real columns to back them. Defaults to false so sidebar paths stay
+   * cheap.
+   */
+  withDetails?: boolean;
 }
 
 export interface ModelTimingContext extends TimingSink {}
@@ -104,6 +128,7 @@ export class TopicModel {
     isInbox,
     timing,
     triggers,
+    withDetails = false,
   }: QueryTopicParams = {}) => {
     const queryStartedAt = Date.now();
     logTiming(timing, 'db.topic.query:start', {
@@ -113,8 +138,46 @@ export class TopicModel {
       hasGroupId: !!groupId,
       isInbox: !!isInbox,
       pageSize,
+      withDetails,
     });
     const offset = current * pageSize;
+
+    // Heavier columns gated behind `withDetails` and used by the per-agent
+    // Topics management page: real aggregates from the `messages` table
+    // (firstUserMessage + messageCount), plus the `description` / `trigger`
+    // columns that sidebar paths don't consume. `cost` and `tokenUsage`
+    // intentionally stay undefined here — they need their own schema
+    // migration before they can be backed by real numbers.
+    //
+    // The two correlated subqueries are built with Drizzle's query builder
+    // (not a raw `sql` template) so the inner `eq(messages.topicId,
+    // topics.id)` renders as `"messages"."topic_id" = "topics"."id"` — both
+    // sides fully qualified. A bare `sql\`... ${topics.id} ...\`` template
+    // renders `topics.id` as an unqualified `"id"`, which PostgreSQL then
+    // resolves against the inner FROM (messages.id) and the WHERE silently
+    // matches nothing.
+    const firstUserMessageSubquery = this.db
+      .select({ value: messages.content })
+      .from(messages)
+      .where(and(eq(messages.topicId, topics.id), eq(messages.role, 'user')))
+      .orderBy(asc(messages.createdAt))
+      .limit(1);
+    const messageCountSubquery = this.db
+      .select({ value: sql<number>`count(*)::int` })
+      .from(messages)
+      .where(eq(messages.topicId, topics.id));
+
+    const detailColumns = withDetails
+      ? {
+          description: topics.description,
+          firstUserMessage: sql<string | null>`(${firstUserMessageSubquery})`.as(
+            'first_user_message',
+          ),
+          messageCount: sql<number>`(${messageCountSubquery})`.as('message_count'),
+          trigger: topics.trigger,
+        }
+      : {};
+
     const includeTriggerCondition =
       includeTriggers && includeTriggers.length > 0
         ? inArray(topics.trigger, includeTriggers)
@@ -151,6 +214,10 @@ export class TopicModel {
           'db.topic.query.group.items.select',
           () =>
             this.db
+              // Cast to `any` because Drizzle's `.select` infers a strict
+              // SelectedFields shape and the conditional `detailColumns` widens
+              // to a union; the runtime shape is correct and the client casts
+              // back to `ChatTopic[]` after TRPC serialization.
               .select({
                 completedAt: topics.completedAt,
                 createdAt: topics.createdAt,
@@ -161,7 +228,8 @@ export class TopicModel {
                 status: topics.status,
                 title: topics.title,
                 updatedAt: topics.updatedAt,
-              })
+                ...detailColumns,
+              } as any)
               .from(topics)
               .where(whereCondition)
               .orderBy(desc(topics.favorite), desc(topics.updatedAt))
@@ -246,6 +314,7 @@ export class TopicModel {
           'db.topic.query.agent.items.select',
           () =>
             this.db
+              // See note on the group-branch select above re: `as any` cast.
               .select({
                 completedAt: topics.completedAt,
                 createdAt: topics.createdAt,
@@ -256,7 +325,8 @@ export class TopicModel {
                 status: topics.status,
                 title: topics.title,
                 updatedAt: topics.updatedAt,
-              })
+                ...detailColumns,
+              } as any)
               .from(topics)
               .where(agentWhere)
               .orderBy(desc(topics.favorite), desc(topics.updatedAt))
@@ -300,6 +370,7 @@ export class TopicModel {
         'db.topic.query.container.items.select',
         () =>
           this.db
+            // See note on the group-branch select above re: `as any` cast.
             .select({
               agentId: topics.agentId,
               completedAt: topics.completedAt,
@@ -312,7 +383,8 @@ export class TopicModel {
               status: topics.status,
               title: topics.title,
               updatedAt: topics.updatedAt,
-            })
+              ...detailColumns,
+            } as any)
             .from(topics)
             .where(whereCondition)
             // In boolean sorting, false is considered "smaller" than true.

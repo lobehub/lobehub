@@ -37,6 +37,7 @@ import { agentTopicPageRouteMeta } from '@/routes/(main)/agent/features/topicPag
 import AgentPageRedirectPage from '@/routes/(main)/agent/page';
 import AgentProfilePage from '@/routes/(main)/agent/profile';
 import AgentTaskDetailRoute from '@/routes/(main)/agent/task/[taskId]';
+import AgentTopicsPage from '@/routes/(main)/agent/topics';
 import CommunityLayout from '@/routes/(main)/community/_layout';
 import CommunityDetailLayout from '@/routes/(main)/community/(detail)/_layout';
 import CommunityDetailAgentPage from '@/routes/(main)/community/(detail)/agent';
@@ -158,6 +159,10 @@ export const desktopRoutes: RouteObject[] = [
               {
                 element: <AgentChannelPage />,
                 path: 'channel',
+              },
+              {
+                element: <AgentTopicsPage />,
+                path: 'topics',
               },
               {
                 element: <AgentTaskDetailRoute />,

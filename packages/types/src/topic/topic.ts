@@ -190,12 +190,21 @@ export type ChatTopicStatus =
 
 export interface ChatTopic extends Omit<BaseDataModel, 'meta'> {
   completedAt?: Date | null;
+  /** Server-side mock until real cost aggregation lands. */
+  cost?: number | null;
+  description?: string | null;
   favorite?: boolean;
+  /** First user message (sliced server-side, used as preview fallback). */
+  firstUserMessage?: string | null;
   historySummary?: string;
+  /** Total message count for the topic. */
+  messageCount?: number | null;
   metadata?: ChatTopicMetadata;
   sessionId?: string;
   status?: ChatTopicStatus | null;
   title: string;
+  /** Server-side mock until real token aggregation lands. */
+  tokenUsage?: number | null;
   trigger?: string | null;
 }
 
@@ -275,6 +284,13 @@ export interface QueryTopicParams {
    * Include only topics matching the given trigger types (positive filter)
    */
   triggers?: string[];
+  /**
+   * When true, the response includes heavier card-detail fields
+   * (`firstUserMessage`, `messageCount`, `description`, `trigger`, plus mock
+   * `cost` / `tokenUsage`). Only the per-agent Topics management page opts
+   * in — sidebar paths stay lean.
+   */
+  withDetails?: boolean;
 }
 
 /**

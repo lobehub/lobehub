@@ -753,6 +753,281 @@ describe('TopicModel - Query', () => {
     });
   });
 
+  describe('query with withDetails option', () => {
+    const seedTopicWithMessages = async (
+      topicId: string,
+      userMessage: string,
+      messageCount: number,
+      description?: string,
+      trigger?: string,
+    ) => {
+      await serverDB.transaction(async (tx) => {
+        await tx.insert(agents).values({ id: `agt-${topicId}`, userId, title: `Agent ${topicId}` });
+        await tx.insert(topics).values({
+          id: topicId,
+          userId,
+          agentId: `agt-${topicId}`,
+          description: description ?? null,
+          trigger: trigger ?? null,
+          updatedAt: new Date('2024-01-01'),
+        });
+
+        const rows = [
+          { id: `${topicId}-m0`, role: 'user', content: userMessage },
+          ...Array.from({ length: messageCount - 1 }, (_, i) => ({
+            id: `${topicId}-m${i + 1}`,
+            role: i % 2 === 0 ? 'assistant' : 'user',
+            content: `reply ${i + 1}`,
+          })),
+        ].map((m, idx) => ({
+          ...m,
+          topicId,
+          userId,
+          createdAt: new Date(`2024-01-01T00:00:0${idx}Z`),
+        }));
+        if (rows.length > 0) await tx.insert(messages).values(rows);
+      });
+    };
+
+    it('omits detail columns by default (withDetails not set)', async () => {
+      await seedTopicWithMessages('plain-topic', 'first user msg', 3, 'desc-text', 'chat');
+
+      const result = await topicModel.query({ agentId: 'agt-plain-topic' });
+
+      expect(result.items).toHaveLength(1);
+      const item = result.items[0] as Record<string, unknown>;
+      expect(item.id).toBe('plain-topic');
+      // Sidebar-shape: detail columns must not exist on the payload
+      expect(item).not.toHaveProperty('firstUserMessage');
+      expect(item).not.toHaveProperty('messageCount');
+      expect(item).not.toHaveProperty('description');
+      expect(item).not.toHaveProperty('trigger');
+      expect(item).not.toHaveProperty('cost');
+      expect(item).not.toHaveProperty('tokenUsage');
+    });
+
+    it('returns detail columns when withDetails is true', async () => {
+      await seedTopicWithMessages(
+        'detailed-topic',
+        'hello first user message',
+        4,
+        'a short description',
+        'cron',
+      );
+
+      const result = await topicModel.query({
+        agentId: 'agt-detailed-topic',
+        withDetails: true,
+      });
+
+      expect(result.items).toHaveLength(1);
+      const item = result.items[0] as Record<string, unknown>;
+      expect(item.id).toBe('detailed-topic');
+      expect(item.firstUserMessage).toBe('hello first user message');
+      expect(item.messageCount).toBe(4);
+      expect(item.description).toBe('a short description');
+      expect(item.trigger).toBe('cron');
+      // cost / tokenUsage are not yet returned — waiting on a schema
+      // migration to add real columns before they come back.
+      expect(item).not.toHaveProperty('cost');
+      expect(item).not.toHaveProperty('tokenUsage');
+    });
+
+    it('returns null firstUserMessage when no user message exists', async () => {
+      await serverDB.transaction(async (tx) => {
+        await tx.insert(agents).values({ id: 'agt-no-user-msg', userId, title: 'No User Msg' });
+        await tx.insert(topics).values({
+          id: 'no-user-msg-topic',
+          userId,
+          agentId: 'agt-no-user-msg',
+          updatedAt: new Date('2024-01-01'),
+        });
+        // Only an assistant message — the `WHERE role = 'user'` subquery should
+        // skip it and return null.
+        await tx.insert(messages).values({
+          id: 'no-user-msg-topic-m0',
+          role: 'assistant',
+          content: 'assistant only reply',
+          topicId: 'no-user-msg-topic',
+          userId,
+        });
+      });
+
+      const result = await topicModel.query({
+        agentId: 'agt-no-user-msg',
+        withDetails: true,
+      });
+
+      expect(result.items).toHaveLength(1);
+      const item = result.items[0] as Record<string, unknown>;
+      expect(item.firstUserMessage).toBeNull();
+      expect(item.messageCount).toBe(1);
+    });
+
+    it('picks the earliest user message by createdAt for firstUserMessage', async () => {
+      await serverDB.transaction(async (tx) => {
+        await tx.insert(agents).values({ id: 'agt-order', userId, title: 'Order' });
+        await tx.insert(topics).values({
+          id: 'order-topic',
+          userId,
+          agentId: 'agt-order',
+          updatedAt: new Date('2024-01-01'),
+        });
+        // Insert in non-chronological order so we exercise the ORDER BY in
+        // the subquery rather than insertion order.
+        await tx.insert(messages).values([
+          {
+            id: 'order-topic-m2',
+            role: 'user',
+            content: 'second user message',
+            topicId: 'order-topic',
+            userId,
+            createdAt: new Date('2024-01-01T00:00:02Z'),
+          },
+          {
+            id: 'order-topic-m0',
+            role: 'user',
+            content: 'first user message',
+            topicId: 'order-topic',
+            userId,
+            createdAt: new Date('2024-01-01T00:00:00Z'),
+          },
+          {
+            id: 'order-topic-m1',
+            role: 'assistant',
+            content: 'an assistant reply in between',
+            topicId: 'order-topic',
+            userId,
+            createdAt: new Date('2024-01-01T00:00:01Z'),
+          },
+        ]);
+      });
+
+      const result = await topicModel.query({
+        agentId: 'agt-order',
+        withDetails: true,
+      });
+
+      const item = result.items[0] as Record<string, unknown>;
+      expect(item.firstUserMessage).toBe('first user message');
+      expect(item.messageCount).toBe(3);
+    });
+
+    it('also returns detail columns when querying via groupId', async () => {
+      await serverDB.transaction(async (tx) => {
+        await tx.insert(chatGroups).values({ id: 'detail-group', title: 'Detail Group', userId });
+        await tx.insert(topics).values({
+          id: 'detail-group-topic',
+          userId,
+          groupId: 'detail-group',
+          description: 'group topic desc',
+          trigger: 'chat',
+          updatedAt: new Date('2024-01-01'),
+        });
+        await tx.insert(messages).values({
+          id: 'detail-group-topic-m0',
+          role: 'user',
+          content: 'group user message',
+          topicId: 'detail-group-topic',
+          userId,
+        });
+      });
+
+      const result = await topicModel.query({
+        groupId: 'detail-group',
+        withDetails: true,
+      });
+
+      const item = result.items[0] as Record<string, unknown>;
+      expect(item.firstUserMessage).toBe('group user message');
+      expect(item.messageCount).toBe(1);
+      expect(item.description).toBe('group topic desc');
+      expect(item.trigger).toBe('chat');
+    });
+
+    it('measures payload size delta between basic and withDetails queries', async () => {
+      // Realistic-ish seed: 20 topics, each with ~5 messages — a first user
+      // message big enough to dominate the row (~600 chars), a long-ish
+      // description (~200 chars), plus a handful of assistant replies that
+      // don't show up in either payload but affect the messageCount subquery.
+      const TOPIC_COUNT = 20;
+      const MESSAGES_PER_TOPIC = 5;
+      const firstUserText = 'u'.repeat(600);
+      const descriptionText = 'd'.repeat(200);
+
+      await serverDB.transaction(async (tx) => {
+        await tx.insert(agents).values({ id: 'agt-size-bench', userId, title: 'Size Bench' });
+        await tx.insert(topics).values(
+          Array.from({ length: TOPIC_COUNT }, (_, i) => ({
+            id: `size-topic-${i}`,
+            userId,
+            agentId: 'agt-size-bench',
+            description: descriptionText,
+            trigger: i % 2 === 0 ? 'chat' : 'cron',
+            updatedAt: new Date(`2024-01-${String(i + 1).padStart(2, '0')}`),
+          })),
+        );
+
+        const messageRows = [] as {
+          id: string;
+          role: string;
+          content: string;
+          topicId: string;
+          userId: string;
+        }[];
+        for (let i = 0; i < TOPIC_COUNT; i++) {
+          messageRows.push({
+            id: `size-topic-${i}-m0`,
+            role: 'user',
+            content: firstUserText,
+            topicId: `size-topic-${i}`,
+            userId,
+          });
+          for (let j = 1; j < MESSAGES_PER_TOPIC; j++) {
+            messageRows.push({
+              id: `size-topic-${i}-m${j}`,
+              role: j % 2 === 1 ? 'assistant' : 'user',
+              content: 'short reply',
+              topicId: `size-topic-${i}`,
+              userId,
+            });
+          }
+        }
+        await tx.insert(messages).values(messageRows);
+      });
+
+      const basic = await topicModel.query({
+        agentId: 'agt-size-bench',
+        pageSize: TOPIC_COUNT,
+      });
+      const detailed = await topicModel.query({
+        agentId: 'agt-size-bench',
+        pageSize: TOPIC_COUNT,
+        withDetails: true,
+      });
+
+      const basicBytes = Buffer.byteLength(JSON.stringify(basic.items), 'utf8');
+      const detailedBytes = Buffer.byteLength(JSON.stringify(detailed.items), 'utf8');
+      const ratio = detailedBytes / basicBytes;
+
+      // Print so the developer running the test gets a real-world number to
+      // reason about — the actual size depends on text length seeded above.
+
+      console.log(
+        `[topic.query withDetails size] basic=${basicBytes}B  detailed=${detailedBytes}B  ` +
+          `ratio=${ratio.toFixed(2)}x  perRowDelta=${Math.round(
+            (detailedBytes - basicBytes) / TOPIC_COUNT,
+          )}B`,
+      );
+
+      // Detailed payload must be strictly larger and roughly proportional to
+      // the seeded user-message + description text — guard against the detail
+      // columns silently disappearing from the SELECT shape.
+      expect(detailedBytes).toBeGreaterThan(basicBytes);
+      expect(ratio).toBeGreaterThan(1.5);
+    });
+  });
+
   describe('isInbox parameter', () => {
     it('should query legacy inbox topics when isInbox is true', async () => {
       await serverDB.transaction(async (trx) => {
