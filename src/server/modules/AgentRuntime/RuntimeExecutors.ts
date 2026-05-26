@@ -65,7 +65,6 @@ import {
 } from '@lobechat/types';
 import { sanitizeToolCallArguments, serializePartsForStorage } from '@lobechat/utils';
 import debug from 'debug';
-import { LOBE_DEFAULT_MODEL_LIST } from 'model-bank';
 
 import { klavisEnv } from '@/config/klavis';
 import { type MessageModel, MessageModel as MessageModelClass } from '@/database/models/message';
@@ -1357,7 +1356,9 @@ export const createRuntimeExecutors = (
                 };
               }
 
-              const persistedReasoning = shouldPersistAssistantReasoning ? finalReasoning : undefined;
+              const persistedReasoning = shouldPersistAssistantReasoning
+                ? finalReasoning
+                : undefined;
 
               try {
                 // Build metadata object
