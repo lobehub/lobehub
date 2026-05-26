@@ -67,6 +67,7 @@ import {
 import { sanitizeToolCallArguments, serializePartsForStorage } from '@lobechat/utils';
 import debug from 'debug';
 
+import { klavisEnv } from '@/config/klavis';
 import { type MessageModel, MessageModel as MessageModelClass } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
@@ -673,7 +674,7 @@ export const createRuntimeExecutors = (
         // {{KLAVIS_SERVICES_LIST}} — used by lobe-creds system role (Klavis integrations section).
         // Mirrors client-side: klavisStoreSelectors.getServers() filtered by connection status.
         let klavisServicesListStr = '';
-        if (isCredsEnabled && ctx.serverDB && ctx.userId) {
+        if (isCredsEnabled && ctx.serverDB && ctx.userId && !!klavisEnv.KLAVIS_API_KEY) {
           try {
             const { PluginModel } = await import('@/database/models/plugin');
             const pluginModel = new PluginModel(ctx.serverDB, ctx.userId);
