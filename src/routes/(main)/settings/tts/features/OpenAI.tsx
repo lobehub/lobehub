@@ -1,7 +1,8 @@
 'use client';
 
 import { type FormGroupItemType } from '@lobehub/ui';
-import { Form, Icon, Select, Skeleton } from '@lobehub/ui';
+import { Form, Icon, Skeleton } from '@lobehub/ui';
+import { Select } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { Loader2Icon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -25,12 +26,16 @@ const OpenAI = memo(() => {
   const openai: FormGroupItemType = {
     children: [
       {
-        children: <Select options={opeanaiTTSOptions} />,
+        children: (
+          <Select options={opeanaiTTSOptions} style={{ width: 448 }} />
+        ),
         label: t('settingTTS.openai.ttsModel'),
         name: ['openAI', 'ttsModel'],
       },
       {
-        children: <Select options={opeanaiSTTOptions} />,
+        children: (
+          <Select options={opeanaiSTTOptions} style={{ width: 448 }} />
+        ),
         label: t('settingTTS.openai.sttModel'),
         name: ['openAI', 'sttModel'],
       },
@@ -55,6 +60,7 @@ const OpenAI = memo(() => {
         setLoading(false);
       }}
       {...FORM_STYLE}
+      itemMinWidth={undefined}
     />
   );
 });
