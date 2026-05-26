@@ -1,4 +1,5 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
+import { LOADING_FLAT } from '@lobechat/const';
 import {
   AgentRuntimeErrorType,
   type ChatMessageError,
@@ -546,7 +547,10 @@ export class HeterogeneousPersistenceHandler {
     //     persisted tool messages, and overwrites assistant.tools[] with only the
     //     current batch's tools (losing all previous ones).
     const currentMsg = await this.deps.messageModel.findById(currentAssistantMessageId);
-    const restoredContent = (currentMsg?.content ?? '') as string;
+    // Skip LOADING_FLAT placeholder — it is the initial DB value before any
+    // content arrives and must not be treated as real accumulated text.
+    const rawContent = (currentMsg?.content ?? '') as string;
+    const restoredContent = rawContent === LOADING_FLAT ? '' : rawContent;
     const restoredReasoning = (currentMsg?.reasoning as { content?: string } | null)?.content ?? '';
     const restoredMetadata = ((currentMsg?.metadata as Record<string, any> | null) ?? {}) as Record<
       string,
