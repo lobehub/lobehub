@@ -1,5 +1,4 @@
 import { type IdentifiersResponse } from '@lobechat/types';
-import { flatten } from 'es-toolkit/compat';
 import { type MetadataRoute } from 'next';
 import qs from 'query-string';
 import urlJoin from 'url-join';
@@ -84,11 +83,7 @@ async function withSitemapIdentifierTimeout(
   let timeout: ReturnType<typeof setTimeout> | undefined;
   const timeoutPromise = new Promise<never>((_, reject) => {
     timeout = setTimeout(() => {
-      reject(
-        new Error(
-          `Timed out fetching ${key} sitemap identifiers after ${timeoutMs}ms`,
-        ),
-      );
+      reject(new Error(`Timed out fetching ${key} sitemap identifiers after ${timeoutMs}ms`));
     }, timeoutMs);
   });
 
@@ -199,7 +194,8 @@ export class Sitemap {
     };
   };
 
-  private _genSitemap(
+  private _appendSitemapEntries(
+    target: MetadataRoute.Sitemap,
     url: string,
     {
       lastModified,
@@ -215,8 +211,8 @@ export class Sitemap {
       priority?: number;
     } = {},
   ) {
-    if (noLocales)
-      return [
+    if (noLocales) {
+      target.push(
         this._genSitemapItem(DEFAULT_LANG, url, {
           changeFrequency,
           lastModified,
@@ -224,183 +220,208 @@ export class Sitemap {
           noLocales,
           priority,
         }),
-      ];
-    return locales.map((lang) =>
-      this._genSitemapItem(lang, url, {
-        changeFrequency,
-        lastModified,
-        locales,
-        noLocales,
-        priority,
-      }),
-    );
+      );
+      return;
+    }
+
+    for (const lang of locales) {
+      target.push(
+        this._genSitemapItem(lang, url, {
+          changeFrequency,
+          lastModified,
+          locales,
+          noLocales,
+          priority,
+        }),
+      );
+    }
   }
 
   async getIndex(): Promise<string> {
-    const staticSitemaps = this.sitemapIndexs.map((item) =>
-      this._generateSitemapLink(
-        getCanonicalUrl(SITEMAP_BASE_URL, isDev ? item.id : `${item.id}.xml`),
-      ),
-    );
-
-    // Get page counts for types that need pagination
     const [pluginPages, assistantPages, modelPages] = await Promise.all([
       this.getPluginPageCount(),
       this.getAssistantPageCount(),
       this.getModelPageCount(),
     ]);
 
-    // Generate paginated sitemap links
-    const paginatedSitemaps = [
-      ...Array.from({ length: pluginPages }, (_, i) =>
+    const links = [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    ];
+
+    for (const item of this.sitemapIndexs) {
+      links.push(
+        this._generateSitemapLink(
+          getCanonicalUrl(SITEMAP_BASE_URL, isDev ? item.id : `${item.id}.xml`),
+        ),
+      );
+    }
+
+    for (let i = 0; i < pluginPages; i += 1) {
+      links.push(
         this._generateSitemapLink(
           getCanonicalUrl(SITEMAP_BASE_URL, isDev ? `plugins-${i + 1}` : `plugins-${i + 1}.xml`),
         ),
-      ),
-      ...Array.from({ length: assistantPages }, (_, i) =>
+      );
+    }
+
+    for (let i = 0; i < assistantPages; i += 1) {
+      links.push(
         this._generateSitemapLink(
           getCanonicalUrl(
             SITEMAP_BASE_URL,
             isDev ? `assistants-${i + 1}` : `assistants-${i + 1}.xml`,
           ),
         ),
-      ),
-      ...Array.from({ length: modelPages }, (_, i) =>
+      );
+    }
+
+    for (let i = 0; i < modelPages; i += 1) {
+      links.push(
         this._generateSitemapLink(
           getCanonicalUrl(SITEMAP_BASE_URL, isDev ? `models-${i + 1}` : `models-${i + 1}.xml`),
         ),
-      ),
-    ];
+      );
+    }
 
-    return [
-      '<?xml version="1.0" encoding="UTF-8"?>',
-      '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-      ...staticSitemaps,
-      ...paginatedSitemaps,
-      '</sitemapindex>',
-    ].join('\n');
+    links.push('</sitemapindex>');
+    return links.join('\n');
   }
 
   async getAssistants(page?: number): Promise<MetadataRoute.Sitemap> {
     const list = await getCachedIdentifiers('assistant', () =>
       this.discoverService.getAssistantIdentifiers(),
     );
+    const sitemap: MetadataRoute.Sitemap = [];
 
     if (page !== undefined) {
       const startIndex = (page - 1) * ITEMS_PER_PAGE;
       const endIndex = startIndex + ITEMS_PER_PAGE;
       const pageAssistants = list.slice(startIndex, endIndex);
 
-      const sitmap = pageAssistants
-        .filter((item) => item.identifier) // Filter out items with empty identifiers
-        .map((item) =>
-          this._genSitemap(urlJoin('/community/agent', item.identifier), {
-            lastModified: item?.lastModified || LAST_MODIFIED,
-          }),
-        );
-      return flatten(sitmap);
+      for (const item of pageAssistants) {
+        if (!item.identifier) continue;
+        this._appendSitemapEntries(sitemap, urlJoin('/community/agent', item.identifier), {
+          lastModified: item?.lastModified || LAST_MODIFIED,
+        });
+      }
+      return sitemap;
     }
 
     // If page number is not specified, return all (backward compatibility)
-    const sitmap = list
-      .filter((item) => item.identifier) // Filter out items with empty identifiers
-      .map((item) =>
-        this._genSitemap(urlJoin('/community/agent', item.identifier), {
-          lastModified: item?.lastModified || LAST_MODIFIED,
-        }),
-      );
-    return flatten(sitmap);
+    for (const item of list) {
+      if (!item.identifier) continue;
+      this._appendSitemapEntries(sitemap, urlJoin('/community/agent', item.identifier), {
+        lastModified: item?.lastModified || LAST_MODIFIED,
+      });
+    }
+    return sitemap;
   }
 
   async getPlugins(page?: number): Promise<MetadataRoute.Sitemap> {
     const list = await getCachedIdentifiers('plugin', () =>
       this.discoverService.getPluginIdentifiers(),
     );
+    const sitemap: MetadataRoute.Sitemap = [];
 
     if (page !== undefined) {
       const startIndex = (page - 1) * ITEMS_PER_PAGE;
       const endIndex = startIndex + ITEMS_PER_PAGE;
       const pagePlugins = list.slice(startIndex, endIndex);
 
-      const sitmap = pagePlugins
-        .filter((item) => item.identifier) // Filter out items with empty identifiers
-        .map((item) =>
-          this._genSitemap(urlJoin('/community/plugin', item.identifier), {
-            lastModified: item?.lastModified || LAST_MODIFIED,
-          }),
-        );
-      return flatten(sitmap);
+      for (const item of pagePlugins) {
+        if (!item.identifier) continue;
+        this._appendSitemapEntries(sitemap, urlJoin('/community/plugin', item.identifier), {
+          lastModified: item?.lastModified || LAST_MODIFIED,
+        });
+      }
+      return sitemap;
     }
 
     // If page number is not specified, return all (backward compatibility)
-    const sitmap = list
-      .filter((item) => item.identifier) // Filter out items with empty identifiers
-      .map((item) =>
-        this._genSitemap(urlJoin('/community/plugin', item.identifier), {
-          lastModified: item?.lastModified || LAST_MODIFIED,
-        }),
-      );
-    return flatten(sitmap);
+    for (const item of list) {
+      if (!item.identifier) continue;
+      this._appendSitemapEntries(sitemap, urlJoin('/community/plugin', item.identifier), {
+        lastModified: item?.lastModified || LAST_MODIFIED,
+      });
+    }
+    return sitemap;
   }
 
   async getModels(page?: number): Promise<MetadataRoute.Sitemap> {
     const list = await getCachedIdentifiers('model', () =>
       this.discoverService.getModelIdentifiers(),
     );
+    const sitemap: MetadataRoute.Sitemap = [];
 
     if (page !== undefined) {
       const startIndex = (page - 1) * ITEMS_PER_PAGE;
       const endIndex = startIndex + ITEMS_PER_PAGE;
       const pageModels = list.slice(startIndex, endIndex);
 
-      const sitmap = pageModels
-        .filter((item) => item.identifier) // Filter out items with empty identifiers
-        .map((item) =>
-          this._genSitemap(urlJoin('/community/model', item.identifier), {
-            lastModified: item?.lastModified || LAST_MODIFIED,
-          }),
-        );
-      return flatten(sitmap);
+      for (const item of pageModels) {
+        if (!item.identifier) continue;
+        this._appendSitemapEntries(sitemap, urlJoin('/community/model', item.identifier), {
+          lastModified: item?.lastModified || LAST_MODIFIED,
+        });
+      }
+      return sitemap;
     }
 
     // If page number is not specified, return all (backward compatibility)
-    const sitmap = list
-      .filter((item) => item.identifier) // Filter out items with empty identifiers
-      .map((item) =>
-        this._genSitemap(urlJoin('/community/model', item.identifier), {
-          lastModified: item?.lastModified || LAST_MODIFIED,
-        }),
-      );
-    return flatten(sitmap);
+    for (const item of list) {
+      if (!item.identifier) continue;
+      this._appendSitemapEntries(sitemap, urlJoin('/community/model', item.identifier), {
+        lastModified: item?.lastModified || LAST_MODIFIED,
+      });
+    }
+    return sitemap;
   }
 
   async getProviders(): Promise<MetadataRoute.Sitemap> {
     const list = await getCachedIdentifiers('provider', () =>
       this.discoverService.getProviderIdentifiers(),
     );
-    const sitmap = list
-      .filter((item) => item.identifier) // Filter out items with empty identifiers
-      .map((item) =>
-        this._genSitemap(urlJoin('/community/provider', item.identifier), {
-          lastModified: item?.lastModified || LAST_MODIFIED,
-        }),
-      );
-    return flatten(sitmap);
+    const sitemap: MetadataRoute.Sitemap = [];
+    for (const item of list) {
+      if (!item.identifier) continue;
+      this._appendSitemapEntries(sitemap, urlJoin('/community/provider', item.identifier), {
+        lastModified: item?.lastModified || LAST_MODIFIED,
+      });
+    }
+    return sitemap;
   }
 
   async getPage(): Promise<MetadataRoute.Sitemap> {
     const hideDocs = serverFeatureFlags().hideDocs;
-    return [
-      ...this._genSitemap('/', { noLocales: true }),
-      ...this._genSitemap('/agent', { noLocales: true }),
-      ...(!hideDocs ? this._genSitemap('/changelog', { noLocales: true }) : []),
-      ...this._genSitemap('/community', { changeFrequency: 'daily', priority: 0.7 }),
-      ...this._genSitemap('/community/agent', { changeFrequency: 'daily', priority: 0.7 }),
-      ...this._genSitemap('/community/mcp', { changeFrequency: 'daily', priority: 0.7 }),
-      ...this._genSitemap('/community/plugin', { changeFrequency: 'daily', priority: 0.7 }),
-      ...this._genSitemap('/community/model', { changeFrequency: 'daily', priority: 0.7 }),
-      ...this._genSitemap('/community/provider', { changeFrequency: 'daily', priority: 0.7 }),
-    ].filter(Boolean);
+    const sitemap: MetadataRoute.Sitemap = [];
+    this._appendSitemapEntries(sitemap, '/', { noLocales: true });
+    this._appendSitemapEntries(sitemap, '/agent', { noLocales: true });
+    if (!hideDocs) {
+      this._appendSitemapEntries(sitemap, '/changelog', { noLocales: true });
+    }
+    this._appendSitemapEntries(sitemap, '/community', { changeFrequency: 'daily', priority: 0.7 });
+    this._appendSitemapEntries(sitemap, '/community/agent', {
+      changeFrequency: 'daily',
+      priority: 0.7,
+    });
+    this._appendSitemapEntries(sitemap, '/community/mcp', {
+      changeFrequency: 'daily',
+      priority: 0.7,
+    });
+    this._appendSitemapEntries(sitemap, '/community/plugin', {
+      changeFrequency: 'daily',
+      priority: 0.7,
+    });
+    this._appendSitemapEntries(sitemap, '/community/model', {
+      changeFrequency: 'daily',
+      priority: 0.7,
+    });
+    this._appendSitemapEntries(sitemap, '/community/provider', {
+      changeFrequency: 'daily',
+      priority: 0.7,
+    });
+    return sitemap;
   }
   getRobots() {
     return [

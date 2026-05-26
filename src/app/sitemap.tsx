@@ -14,7 +14,7 @@ export const generateSitemapLink = (url: string) =>
 export async function generateSitemaps() {
   const sitemapModule = new Sitemap();
   // Generate dynamic sitemap list, including paginated sitemaps
-  const staticSitemaps = sitemapModule.sitemapIndexs;
+  const sitemapIds = [...sitemapModule.sitemapIndexs];
 
   // Get page counts for types that need pagination
   const [pluginPages, assistantPages, modelPages] = await Promise.all([
@@ -23,16 +23,19 @@ export async function generateSitemaps() {
     sitemapModule.getModelPageCount(),
   ]);
 
-  // Generate paginated sitemap ID list
-  const paginatedSitemaps = [
-    ...Array.from({ length: pluginPages }, (_, i) => ({ id: `plugins-${i + 1}` as SitemapType })),
-    ...Array.from({ length: assistantPages }, (_, i) => ({
-      id: `assistants-${i + 1}` as SitemapType,
-    })),
-    ...Array.from({ length: modelPages }, (_, i) => ({ id: `models-${i + 1}` as SitemapType })),
-  ];
+  for (let i = 0; i < pluginPages; i += 1) {
+    sitemapIds.push({ id: `plugins-${i + 1}` as SitemapType });
+  }
 
-  return [...staticSitemaps, ...paginatedSitemaps];
+  for (let i = 0; i < assistantPages; i += 1) {
+    sitemapIds.push({ id: `assistants-${i + 1}` as SitemapType });
+  }
+
+  for (let i = 0; i < modelPages; i += 1) {
+    sitemapIds.push({ id: `models-${i + 1}` as SitemapType });
+  }
+
+  return sitemapIds;
 }
 
 // Parse paginated ID

@@ -80,6 +80,25 @@ const loadBuiltinModels = async () => {
   return loadModels();
 };
 
+type BuiltinModels = Awaited<ReturnType<typeof loadBuiltinModels>>;
+
+let builtinModelsPromise: Promise<BuiltinModels> | undefined;
+
+const getBuiltinModels = async () => {
+  if (!builtinModelsPromise) {
+    builtinModelsPromise = loadBuiltinModels().catch((error) => {
+      builtinModelsPromise = undefined;
+      throw error;
+    });
+  }
+
+  return builtinModelsPromise;
+};
+
+export function clearBuiltinModelsCache() {
+  builtinModelsPromise = undefined;
+}
+
 export interface DiscoverServiceOptions {
   /** Access token from OIDC flow (legacy) */
   accessToken?: string;
@@ -1298,7 +1317,7 @@ export class DiscoverService {
   private _getProviderList = async (): Promise<DiscoverProviderItem[]> => {
     log('_getProviderList: fetching provider list');
     const [builtinModels, { DEFAULT_MODEL_PROVIDER_LIST }] = await Promise.all([
-      loadBuiltinModels(),
+      getBuiltinModels(),
       import('model-bank/modelProviders'),
     ]);
     const result = DEFAULT_MODEL_PROVIDER_LIST.map((item) => {
@@ -1462,26 +1481,46 @@ export class DiscoverService {
 
   private _getRawModelList = async (): Promise<DiscoverModelItem[]> => {
     log('_getRawModelList: fetching raw model list');
-    const builtinModels = await loadBuiltinModels();
+    const builtinModels = await getBuiltinModels();
     const visibleModels = builtinModels.filter(isAiModelVisible);
+
+    const providerIdsByIdentifier = new Map<string, Set<string>>();
+    const providerIdsByDisplayName = new Map<string, Set<string>>();
+
+    for (const item of visibleModels) {
+      const identifier = (item.id.split('/').at(-1) || item.id).toLowerCase();
+      const displayName = item.displayName?.toLowerCase();
+
+      if (!providerIdsByIdentifier.has(identifier)) {
+        providerIdsByIdentifier.set(identifier, new Set());
+      }
+      providerIdsByIdentifier.get(identifier)!.add(item.providerId);
+
+      if (displayName) {
+        if (!providerIdsByDisplayName.has(displayName)) {
+          providerIdsByDisplayName.set(displayName, new Set());
+        }
+        providerIdsByDisplayName.get(displayName)!.add(item.providerId);
+      }
+    }
+
     const result = visibleModels.map((item) => {
       const identifier = (item.id.split('/').at(-1) || item.id).toLowerCase();
-      const providers = uniq(
-        visibleModels
-          .filter(
-            (m) =>
-              m.id.toLowerCase() === identifier ||
-              m.id.includes(`/${identifier}`) ||
-              m.displayName?.toLowerCase() === item.displayName?.toLowerCase(),
-          )
-          .map((m) => m.providerId),
-      );
+      const displayName = item.displayName?.toLowerCase();
+      const providers = new Set<string>(providerIdsByIdentifier.get(identifier) ?? []);
+
+      if (displayName) {
+        for (const providerId of providerIdsByDisplayName.get(displayName) ?? []) {
+          providers.add(providerId);
+        }
+      }
+
       const model = {
         ...item,
         category: item.providerId,
         identifier,
-        providerCount: providers.length,
-        providers,
+        providerCount: providers.size,
+        providers: [...providers],
       };
       // Use simple merge instead of DEFAULT_DISCOVER_MODEL_ITEM to avoid type conflicts
       return {
@@ -1558,7 +1597,7 @@ export class DiscoverService {
   getModelCategories = async (params: CategoryListQuery = {}): Promise<CategoryItem[]> => {
     log('getModelCategories: params=%O', params);
     const { q } = params;
-    const builtinModels = await loadBuiltinModels();
+    const builtinModels = await getBuiltinModels();
     let list = builtinModels.filter(isAiModelVisible);
     if (q) {
       const originalCount = list.length;
@@ -1593,7 +1632,7 @@ export class DiscoverService {
   }): Promise<DiscoverModelDetail | undefined> => {
     log('getModelDetail: params=%O', params);
     const [builtinModels, { DEFAULT_MODEL_PROVIDER_LIST }] = await Promise.all([
-      loadBuiltinModels(),
+      getBuiltinModels(),
       import('model-bank/modelProviders'),
     ]);
     const { identifier } = params;
