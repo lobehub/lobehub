@@ -3,6 +3,8 @@ import {
   CommonPlugin,
   Kernel,
   ListPlugin,
+  LITEXML_APPLY_COMMAND,
+  LITEXML_MODIFY_COMMAND,
   LitexmlPlugin,
   MarkdownPlugin,
   moment,
@@ -27,6 +29,14 @@ describe('EditorRuntime - Real Cases', () => {
 
     runtime = new EditorRuntime();
     runtime.setEditor(editor);
+    runtime.setLiteXMLAdapter({
+      applyBatch: (target, operations) => {
+        target.dispatchCommand(LITEXML_MODIFY_COMMAND, operations);
+      },
+      applyReplace: (target, litexml) => {
+        target.dispatchCommand(LITEXML_APPLY_COMMAND, { litexml });
+      },
+    });
 
     mockTitleSetter = vi.fn();
     mockTitleGetter = vi.fn().mockReturnValue('Test Title');
