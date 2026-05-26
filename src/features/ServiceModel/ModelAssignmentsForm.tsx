@@ -165,6 +165,12 @@ const ModelAssignmentsForm = memo(() => {
     return {
       children: (
         <Flexbox align="center" direction="horizontal" gap={12}>
+          <Switch
+            aria-label={t(`systemAgent.${key}.title`)}
+            checked={value.enabled}
+            loading={loadingKey === key}
+            onChange={(enabled) => updateSystemAgentModel(key, { enabled })}
+          />
           <Flexbox style={{ width: 448 }}>
             <ModelSelect
               showAbility={false}
@@ -173,12 +179,6 @@ const ModelAssignmentsForm = memo(() => {
               onChange={(props) => updateSystemAgentModel(key, props)}
             />
           </Flexbox>
-          <Switch
-            aria-label={t(`systemAgent.${key}.title`)}
-            checked={value.enabled}
-            loading={loadingKey === key}
-            onChange={(enabled) => updateSystemAgentModel(key, { enabled })}
-          />
         </Flexbox>
       ),
       desc: t(`systemAgent.${key}.modelDesc`),
