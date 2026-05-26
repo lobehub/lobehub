@@ -284,7 +284,8 @@ export class HeterogeneousPersistenceHandler {
     // already read the message in `loadOrCreateState` — the second read is
     // redundant but harmless and keeps the logic uniform).
     const refreshed = await this.deps.messageModel.findById(state.currentAssistantMessageId);
-    const dbContent = (refreshed?.content ?? '') as string;
+    const rawDbContent = (refreshed?.content ?? '') as string;
+    const dbContent = rawDbContent === LOADING_FLAT ? '' : rawDbContent;
     const dbReasoning = (refreshed?.reasoning as { content?: string } | null)?.content ?? '';
     const dbMetadata = ((refreshed?.metadata as Record<string, any> | null) ?? {}) as Record<
       string,
