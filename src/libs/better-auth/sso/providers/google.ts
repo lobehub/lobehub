@@ -13,6 +13,7 @@ const provider: BuiltinProviderDefinition<
     return {
       clientId: env.AUTH_GOOGLE_ID,
       clientSecret: env.AUTH_GOOGLE_SECRET,
+      prompt: 'select_account',
     };
   },
   checkEnvs: () => {
