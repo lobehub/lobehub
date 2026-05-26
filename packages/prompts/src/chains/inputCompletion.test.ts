@@ -25,15 +25,33 @@ describe('chainInputCompletion', () => {
     expect(schema.schema.properties.completion.type).toBe('string');
   });
 
-  it('appends conversation context to the system prompt when provided', () => {
+  it('adds a separate user message for conversation context when provided', () => {
     const { messages } = chainInputCompletion('write ', '', [
       { content: 'previous response', role: 'assistant' },
       { content: 'previous question', role: 'user' },
     ]);
-    const sys = messages[0].content as string;
-    expect(sys).toContain('Current conversation context');
-    expect(sys).toContain('assistant: previous response');
-    expect(sys).toContain('user: previous question');
+    expect(messages).toHaveLength(3);
+    expect(messages[0].role).toBe('system');
+    expect(messages[1].role).toBe('user');
+    expect(messages[2].role).toBe('user');
+
+    const contextMsg = messages[1].content as string;
+    expect(contextMsg).toContain('Current conversation context');
+    expect(contextMsg).toContain('assistant: previous response');
+    expect(contextMsg).toContain('user: previous question');
+    expect(contextMsg).not.toContain('Before cursor');
+
+    const cursorMsg = messages[2].content as string;
+    expect(cursorMsg).toContain('Before cursor: "write "');
+  });
+
+  it('keeps the system prompt stable regardless of conversation context', () => {
+    const a = chainInputCompletion('hi', '');
+    const b = chainInputCompletion('hi', '', [
+      { content: 'previous response', role: 'assistant' },
+      { content: 'previous question', role: 'user' },
+    ]);
+    expect(a.messages[0].content).toBe(b.messages[0].content);
   });
 
   it('exports a version constant the call site can pin to metadata', () => {

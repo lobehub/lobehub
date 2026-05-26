@@ -6,7 +6,7 @@ import type { OpenAIChatMessage } from '@lobechat/types';
  * groups runs by prompt iteration. The 6-char prompt hash on the row catches
  * forgotten bumps.
  */
-export const INPUT_COMPLETION_PROMPT_VERSION = 'v1.0';
+export const INPUT_COMPLETION_PROMPT_VERSION = 'v1.1';
 
 /**
  * Symbolic schema name — also recorded on the tracing row's `schemaName`
@@ -83,15 +83,25 @@ export const chainInputCompletion = (
   afterCursor: string,
   context?: OpenAIChatMessage[],
 ): InputCompletionChainResult => {
-  let contextBlock = '';
-  if (context?.length) {
-    contextBlock = `\n\nCurrent conversation context:\n${context.map((m) => `${m.role}: ${m.content}`).join('\n')}`;
-  }
+  // Context is dynamic per conversation — keep it OUT of the system message so
+  // the system prompt (and thus the tracing `promptHash`) stays stable across
+  // invocations. Otherwise every keystroke in a longer conversation produces a
+  // distinct hash, defeating the per-prompt grouping.
+  const contextMessage: OpenAIChatMessage | null = context?.length
+    ? {
+        content: `Current conversation context:\n${context.map((m) => `${m.role}: ${m.content}`).join('\n')}`,
+        role: 'user',
+      }
+    : null;
 
   return {
     messages: [
-      { content: `${SYSTEM_PROMPT}${contextBlock}`, role: 'system' },
-      { content: `Before cursor: "${beforeCursor}"\nAfter cursor: "${afterCursor}"`, role: 'user' },
+      { content: SYSTEM_PROMPT, role: 'system' },
+      ...(contextMessage ? [contextMessage] : []),
+      {
+        content: `Before cursor: "${beforeCursor}"\nAfter cursor: "${afterCursor}"`,
+        role: 'user',
+      },
     ],
     schema: INPUT_COMPLETION_SCHEMA,
   };
