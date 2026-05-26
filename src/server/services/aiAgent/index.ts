@@ -1987,23 +1987,25 @@ export class AiAgentService {
       },
     };
 
-    if (appContext?.scope !== 'page' && appContext?.documentId && topicId) {
+    if (appContext?.scope !== 'page' && appContext?.documentId) {
+      // Server is authoritative — `(agentId, documentId)` is a unique binding
+      // so a single indexed lookup both validates any caller-supplied
+      // `agentDocumentId` hint and resolves the row id when one was not
+      // provided (covers docs opened outside the active topic, e.g. skills
+      // and web docs).
       try {
-        const topicDocuments = await this.agentDocumentsService.listDocumentsForTopic(
+        const row = await this.agentDocumentsService.findRowByDocumentId(
           resolvedAgentId,
-          topicId,
-        );
-        const activeTopicDocument = topicDocuments.find(
-          (document) => document.documentId === appContext.documentId,
+          appContext.documentId,
         );
 
         initialContext = {
           ...initialContext,
           initialContext: {
             activeTopicDocument: {
-              agentDocumentId: activeTopicDocument?.id,
+              ...(row?.id ? { agentDocumentId: row.id } : {}),
               documentId: appContext.documentId,
-              title: activeTopicDocument?.title,
+              ...(row?.title ? { title: row.title } : {}),
             },
           },
         };

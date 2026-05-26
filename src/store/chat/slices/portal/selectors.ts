@@ -117,6 +117,11 @@ const portalDocumentId = (s: ChatStoreState): string | undefined => {
   return view?.documentId;
 };
 
+const portalAgentDocumentId = (s: ChatStoreState): string | undefined => {
+  const view = getViewData(s, PortalViewType.Document);
+  return view?.agentDocumentId;
+};
+
 // File Preview selectors
 const currentFile = (s: ChatStoreState): PortalFile | undefined => {
   const view = getViewData(s, PortalViewType.FilePreview);
@@ -194,6 +199,7 @@ export const chatPortalSelectors = {
   isArtifactTagClosed,
 
   // Document data
+  portalAgentDocumentId,
   portalDocumentId,
 
   // File preview data

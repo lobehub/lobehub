@@ -29,12 +29,8 @@ import TaskWorkspaceLayout from '@/routes/(main)/(task-workspace)/_layout';
 import AgentPage from '@/routes/(main)/agent';
 import DesktopChatLayout from '@/routes/(main)/agent/_layout';
 import DesktopAgentChatLayout from '@/routes/(main)/agent/(chat)/_layout';
-import AgentTopicNotebookRedirectPage from '@/routes/(main)/agent/[topicId]/page';
-import AgentTopicNotebookDocPage from '@/routes/(main)/agent/[topicId]/page/[docId]';
 import AgentChannelPage from '@/routes/(main)/agent/channel';
 import { agentRouteMeta } from '@/routes/(main)/agent/features/routeMeta';
-import { agentTopicPageRouteMeta } from '@/routes/(main)/agent/features/topicPageRouteMeta';
-import AgentPageRedirectPage from '@/routes/(main)/agent/page';
 import AgentProfilePage from '@/routes/(main)/agent/profile';
 import AgentTaskDetailRoute from '@/routes/(main)/agent/task/[taskId]';
 import AgentTopicsPage from '@/routes/(main)/agent/topics';
@@ -121,36 +117,12 @@ export const desktopRoutes: RouteObject[] = [
                     index: true,
                   },
                   {
-                    children: [
-                      {
-                        element: <AgentPage />,
-                        handle: { meta: agentRouteMeta },
-                        index: true,
-                      },
-                      {
-                        children: [
-                          {
-                            element: <AgentTopicNotebookRedirectPage />,
-                            handle: { meta: agentTopicPageRouteMeta },
-                            index: true,
-                          },
-                          {
-                            element: <AgentTopicNotebookDocPage />,
-                            handle: { meta: agentTopicPageRouteMeta },
-                            path: ':docId',
-                          },
-                        ],
-                        path: 'page',
-                      },
-                    ],
+                    element: <AgentPage />,
+                    handle: { meta: agentRouteMeta },
                     path: ':topicId',
                   },
                 ],
                 element: <DesktopAgentChatLayout />,
-              },
-              {
-                element: <AgentPageRedirectPage />,
-                path: 'page',
               },
               {
                 element: <AgentProfilePage />,

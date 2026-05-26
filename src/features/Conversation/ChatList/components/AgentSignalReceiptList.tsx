@@ -15,7 +15,6 @@ import { useChatStore } from '@/store/chat';
 
 import type { AgentSignalReceiptView } from '../hooks/useAgentSignalReceipts';
 
-const PAGE_ROUTE_PATTERN = /^\/agent\/([^/]+)\/([^/]+)\/page(?:\/[^/?#]+)?/;
 const MEMORY_ROUTE_BY_LAYER = {
   [LayersEnum.Activity]: { idParam: 'activityId', path: '/memory/activities' },
   [LayersEnum.Context]: { idParam: 'contextId', path: '/memory/contexts' },
@@ -78,6 +77,10 @@ const AgentSignalReceiptItem = memo<AgentSignalReceiptItemProps>(({ receipt }) =
   const tooltip = `${fallbackTitle}: ${summary}`;
   const target = receipt.target;
   const documentId = target?.type === 'skill' ? (target.documentId ?? target.id) : undefined;
+  const agentDocumentId =
+    target?.type === 'skill' && typeof target.agentDocumentId === 'string'
+      ? target.agentDocumentId
+      : undefined;
   const memoryRoute = getMemoryRoute(target);
   const canOpen = Boolean(memoryRoute) || Boolean(documentId);
   const handleOpen = useCallback(() => {
@@ -89,16 +92,8 @@ const AgentSignalReceiptItem = memo<AgentSignalReceiptItemProps>(({ receipt }) =
     if (target?.type !== 'skill') return;
     if (!documentId) return;
 
-    const pathname = globalThis.location?.pathname ?? '';
-    const pageMatch = PAGE_ROUTE_PATTERN.exec(pathname);
-
-    if (pageMatch?.[1] && pageMatch[2]) {
-      navigate(`/agent/${pageMatch[1]}/${pageMatch[2]}/page/${documentId}`);
-      return;
-    }
-
-    openDocument(documentId);
-  }, [documentId, memoryRoute, navigate, openDocument, target]);
+    openDocument(documentId, agentDocumentId);
+  }, [agentDocumentId, documentId, memoryRoute, navigate, openDocument, target]);
 
   return (
     <PortalResourceCard

@@ -134,7 +134,7 @@ describe('AgentSignalReceiptList', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /GitHub PR review workflow/ }));
 
-    expect(mocks.openDocument).toHaveBeenCalledWith('document-1');
+    expect(mocks.openDocument).toHaveBeenCalledWith('document-1', undefined);
   });
 
   it('renders receipts without openable targets as non-clickable status cards', () => {
@@ -197,7 +197,7 @@ describe('AgentSignalReceiptList', () => {
 
     fireEvent.click(screen.getByText('GitHub PR review workflow'));
 
-    expect(mocks.openDocument).toHaveBeenCalledWith('document-1');
+    expect(mocks.openDocument).toHaveBeenCalledWith('document-1', undefined);
   });
 
   it('opens skill receipt document refs while keeping the bundle target id for display metadata', () => {
@@ -230,7 +230,7 @@ describe('AgentSignalReceiptList', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /GitHub PR review workflow/ }));
 
-    expect(mocks.openDocument).toHaveBeenCalledWith('index-document-1');
+    expect(mocks.openDocument).toHaveBeenCalledWith('index-document-1', 'index-agent-document-1');
   });
 
   it('navigates memory receipts to the memory surface', () => {

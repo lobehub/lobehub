@@ -103,6 +103,21 @@ export class ChatThreadActionImpl {
     });
   };
 
+  /**
+   * Sync the portal slice's thread state to a freshly-created thread *without*
+   * pushing a Thread view onto the portal stack. Use after `sendMessage`
+   * creates a thread from a panel-hosted ConversationProvider (e.g. the
+   * Document portal's FloatingChatPanel) so portal-bound selectors resolve to
+   * the persisted thread while the host view remains visible.
+   */
+  syncThreadInPortal = (threadId: string, sourceMessageId?: string | null): void => {
+    this.#set(
+      { portalThreadId: threadId, startToForkThread: false, threadStartMessageId: sourceMessageId },
+      false,
+      'syncThreadInPortal',
+    );
+  };
+
   closeThreadPortal = (): void => {
     this.#set(
       { threadStartMessageId: undefined, portalThreadId: undefined, startToForkThread: undefined },

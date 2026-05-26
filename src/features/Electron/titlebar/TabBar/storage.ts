@@ -34,12 +34,6 @@ const reconstructUrlFromV1 = (type: unknown, params: unknown): string | null => 
     case 'agent-topic': {
       return p.agentId && p.topicId ? `/agent/${p.agentId}/${p.topicId}` : null;
     }
-    case 'agent-topic-page': {
-      if (!p.agentId || !p.topicId) return null;
-      return p.docId
-        ? `/agent/${p.agentId}/${p.topicId}/page/${p.docId}`
-        : `/agent/${p.agentId}/${p.topicId}/page`;
-    }
     case 'group': {
       return p.groupId ? `/group/${p.groupId}` : null;
     }

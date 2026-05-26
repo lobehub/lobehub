@@ -359,6 +359,7 @@ export class GatewayActionImpl {
       {
         agentId: context.agentId,
         appContext: {
+          agentDocumentId: context.agentDocumentId,
           defaultTaskAssigneeAgentId: context.defaultTaskAssigneeAgentId,
           documentId: context.documentId,
           groupId: context.groupId,

@@ -42,6 +42,8 @@ import { agentGroupByIdSelectors, getChatGroupStoreState } from '@/store/agentGr
 import { selectRuntimeType } from '@/store/chat/slices/aiChat/actions/agentDispatcher';
 import { resolveHeteroResume } from '@/store/chat/slices/aiChat/actions/heteroResume';
 import { dispatchNonHeteroSubAgent } from '@/store/chat/slices/aiChat/actions/nonHeteroSubAgentDispatcher';
+import { PortalViewType } from '@/store/chat/slices/portal/initialState';
+import { chatPortalSelectors } from '@/store/chat/slices/portal/selectors';
 import { type ChatStore } from '@/store/chat/store';
 import {
   mergeAgentRuntimeInitialContexts,
@@ -816,9 +818,18 @@ export class ConversationLifecycleActionImpl {
       if (data.createdThreadId) {
         this.#get().updateOperationMetadata(operationId, { createdThreadId: data.createdThreadId });
 
-        // Update portalThreadId to switch from "new thread" mode to "existing thread" mode
-        // This ensures the Portal Thread UI displays correctly with the real thread ID
-        this.#get().openThreadInPortal(data.createdThreadId, context.sourceMessageId);
+        // When the active portal view is already the Thread surface (the
+        // main-page "create subtopic" flow staged it before sending), pivot it
+        // from `isNew` → persisted thread id. Otherwise the thread was started
+        // by a panel-hosted ConversationProvider (e.g. FloatingChatPanel inside
+        // the Document portal) and we must NOT push a Thread view — doing so
+        // would cover the host view the user is still reading.
+        const currentPortalViewType = chatPortalSelectors.currentViewType(this.#get());
+        if (currentPortalViewType === PortalViewType.Thread) {
+          this.#get().openThreadInPortal(data.createdThreadId, context.sourceMessageId);
+        } else {
+          this.#get().syncThreadInPortal(data.createdThreadId, context.sourceMessageId);
+        }
 
         // Refresh threads list to update the sidebar
         this.#get().refreshThreads();

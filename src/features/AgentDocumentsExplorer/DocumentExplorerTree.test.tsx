@@ -7,10 +7,8 @@ import type { ExplorerTreeNode } from '@/features/ExplorerTree';
 import DocumentExplorerTree from './DocumentExplorerTree';
 import type { AgentDocumentItem } from './types';
 
-const { navigate, openDocument, useMatchMock } = vi.hoisted(() => ({
-  navigate: vi.fn(),
+const { openDocument } = vi.hoisted(() => ({
   openDocument: vi.fn(),
-  useMatchMock: vi.fn(),
 }));
 const messageError = vi.hoisted(() => vi.fn());
 const messageSuccess = vi.hoisted(() => vi.fn());
@@ -51,11 +49,6 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) => key,
   }),
-}));
-
-vi.mock('react-router-dom', () => ({
-  useMatch: () => useMatchMock(),
-  useNavigate: () => navigate,
 }));
 
 vi.mock('@/store/chat', () => ({
@@ -178,7 +171,6 @@ const createDocument = (overrides: Partial<AgentDocumentItem>): AgentDocumentIte
 
 describe('DocumentExplorerTree', () => {
   beforeEach(() => {
-    navigate.mockReset();
     messageError.mockReset();
     messageSuccess.mockReset();
     messageWarning.mockReset();
@@ -186,8 +178,6 @@ describe('DocumentExplorerTree', () => {
     openDocument.mockReset();
     removeDocumentMock.mockReset();
     removeDocumentMock.mockResolvedValue({ deleted: true, id: 'skill-bundle-row' });
-    useMatchMock.mockReset();
-    useMatchMock.mockReturnValue(null);
   });
 
   it('renders managed skill bundle as a folder with SKILL.md underneath', () => {
@@ -270,7 +260,7 @@ describe('DocumentExplorerTree', () => {
     expect(openDocument).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByTestId('tree-node-button-skill-index-row'));
-    expect(openDocument).toHaveBeenCalledWith('skill-index-doc');
+    expect(openDocument).toHaveBeenCalledWith('skill-index-doc', 'skill-index-row');
   });
 
   it('shows delete recovery action for a managed skill bundle without SKILL.md', async () => {

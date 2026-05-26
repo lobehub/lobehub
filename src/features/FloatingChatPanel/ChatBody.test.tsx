@@ -36,11 +36,8 @@ vi.mock('@lobehub/ui', () => ({
 }));
 
 vi.mock('@/features/Conversation', () => ({
+  ChatInput: () => <div data-testid="floating-chat-input">chat input</div>,
   ChatList: () => <div data-testid="floating-chat-list">chat list</div>,
-}));
-
-vi.mock('@/routes/(main)/agent/features/Conversation/MainChatInput', () => ({
-  default: () => <div data-testid="floating-chat-input">chat input</div>,
 }));
 
 describe('FloatingChatPanel ChatBody', () => {

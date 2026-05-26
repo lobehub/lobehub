@@ -4,7 +4,6 @@ import { Trash2Icon } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { memo, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useMatch, useNavigate } from 'react-router-dom';
 import type { KeyedMutator } from 'swr';
 
 import type {
@@ -21,7 +20,6 @@ import type { AgentDocumentItem } from './types';
 import { isOrphanSkillBundleItem } from './types';
 import { canDropDocument } from './utils/canDrop';
 
-const PAGE_ROUTE_PATTERN = '/agent/:aid/:topicId/page/:docId?';
 const SKILL_INDEX_FILENAME = 'SKILL.md';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -53,8 +51,6 @@ interface Props {
 
 const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
   const { t } = useTranslation(['chat', 'common']);
-  const navigate = useNavigate();
-  const pageMatch = useMatch(PAGE_ROUTE_PATTERN);
   const openDocument = useChatStore((s) => s.openDocument);
   const treeRef = useRef<ExplorerTreeHandle | null>(null);
 
@@ -62,12 +58,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
     treeRef.current?.startRenaming(id);
   }, []);
 
-  const ops = useDocumentTreeOps({
-    agentId,
-    data,
-    mutate,
-    topicId: pageMatch?.params.topicId,
-  });
+  const ops = useDocumentTreeOps({ agentId, data, mutate });
 
   const documents = useMemo(() => data.filter((doc) => doc.category !== 'web'), [data]);
 
@@ -140,15 +131,9 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
     (node: ExplorerTreeNode<AgentDocumentItem>) => {
       const doc = node.data;
       if (!doc || node.isFolder) return;
-      if (pageMatch?.params.aid && pageMatch.params.topicId) {
-        navigate(
-          `/agent/${pageMatch.params.aid}/${pageMatch.params.topicId}/page/${doc.documentId}`,
-        );
-        return;
-      }
-      openDocument(doc.documentId);
+      openDocument(doc.documentId, doc.id);
     },
-    [navigate, openDocument, pageMatch?.params.aid, pageMatch?.params.topicId],
+    [openDocument],
   );
 
   const handleCommitRename = useCallback(

@@ -336,6 +336,16 @@ export class AgentDocumentsService {
     return this.getDocumentByIdInAgent(id, expectedAgentId);
   }
 
+  /**
+   * Resolve an `agent_documents` row from `(agentId, documentId)`. Use when the
+   * caller has a `documents.id` but needs the row id (e.g. when building the
+   * `<document agent_document_id ... />` injection from a portal payload).
+   * Returns undefined when the agent does not own this document binding.
+   */
+  async findRowByDocumentId(agentId: string, documentId: string) {
+    return this.agentDocumentModel.findByDocumentId(agentId, documentId);
+  }
+
   async getDocumentSnapshotById(id: string, expectedAgentId?: string) {
     const doc = await this.agentDocumentModel.findById(id);
 

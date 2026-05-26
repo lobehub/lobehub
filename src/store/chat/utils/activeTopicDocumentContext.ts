@@ -38,7 +38,20 @@ const resolveActiveTopicDocument = async (
   context: ConversationContext,
 ): Promise<RuntimeActiveTopicDocumentContext | undefined> => {
   if (context.scope === 'page') return;
-  if (!context.agentId || !context.topicId || !context.documentId) return;
+  if (!context.agentId || !context.documentId) return;
+
+  // When the caller already knows the agent_documents row id (e.g. portal
+  // openers pass it through), skip the listDocuments reverse lookup entirely —
+  // the lookup is scoped to currentTopic and would miss docs opened outside
+  // the active topic (skills, web docs).
+  if (context.agentDocumentId) {
+    return {
+      agentDocumentId: context.agentDocumentId,
+      documentId: context.documentId,
+    };
+  }
+
+  if (!context.topicId) return;
 
   try {
     const documents = await agentDocumentService.listDocuments({

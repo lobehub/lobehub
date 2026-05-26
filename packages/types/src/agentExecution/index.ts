@@ -5,6 +5,14 @@ import type { ChatTopic } from '../topic';
  * Application context for message storage
  */
 export interface ExecAgentAppContext {
+  /**
+   * Agent document row id (`agent_documents.id`) for the document the user is
+   * currently viewing. When supplied, the active document context is built
+   * directly without a `listDocumentsForTopic` reverse lookup, so docs opened
+   * outside the active topic (skills, web docs) still carry `agent_document_id`
+   * for downstream tool calls.
+   */
+  agentDocumentId?: string | null;
   /** Optional default assignee candidate for task manager prompts */
   defaultTaskAssigneeAgentId?: string;
   /** Current document ID for page-scoped conversations */
