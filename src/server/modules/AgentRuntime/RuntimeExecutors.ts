@@ -13,9 +13,16 @@ import {
   UsageCounter,
 } from '@lobechat/agent-runtime';
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
-import { CredsIdentifier, type CredSummary, generateCredsList } from '@lobechat/builtin-tool-creds';
+import {
+  CredsIdentifier,
+  type CredSummary,
+  generateCredsList,
+  generateKlavisServicesList,
+  type KlavisServiceSummary,
+} from '@lobechat/builtin-tool-creds';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
+import { KLAVIS_SERVER_TYPES } from '@lobechat/const';
 import {
   type AgentContextDocument,
   type BotPlatformContext,
@@ -60,6 +67,7 @@ import {
 import { sanitizeToolCallArguments, serializePartsForStorage } from '@lobechat/utils';
 import debug from 'debug';
 
+import { klavisEnv } from '@/config/klavis';
 import { type MessageModel, MessageModel as MessageModelClass } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
@@ -636,8 +644,10 @@ export const createRuntimeExecutors = (
         );
 
         // {{CREDS_LIST}} — used by lobe-creds system role.
-        // Mirrors client-side: lambdaClient.market.creds.list.query()
-        const isCredsEnabled = resolved.enabledToolIds.includes(CredsIdentifier);
+        // Gate on manifestMap presence, NOT enabledToolIds: in execAgent mode lobe-creds is
+        // added to manifestMap (for activator discovery) but never into enabledToolIds, so
+        // checking enabledToolIds would always be false while the system role IS injected.
+        const isCredsEnabled = !!resolved.manifestMap[CredsIdentifier];
         let credsListStr = '';
         if (isCredsEnabled && ctx.userId) {
           try {
@@ -661,6 +671,44 @@ export const createRuntimeExecutors = (
           }
         }
 
+        // {{KLAVIS_SERVICES_LIST}} — used by lobe-creds system role (Klavis integrations section).
+        // Mirrors client-side: klavisStoreSelectors.getServers() filtered by connection status.
+        let klavisServicesListStr = '';
+        if (isCredsEnabled && ctx.serverDB && ctx.userId && !!klavisEnv.KLAVIS_API_KEY) {
+          try {
+            const { PluginModel } = await import('@/database/models/plugin');
+            const pluginModel = new PluginModel(ctx.serverDB, ctx.userId);
+            const allPlugins = await pluginModel.query();
+            const validKlavisIds = new Set(KLAVIS_SERVER_TYPES.map((t) => t.identifier));
+            const connectedIds = new Set(
+              allPlugins
+                .filter(
+                  (p) =>
+                    validKlavisIds.has(p.identifier) &&
+                    (p.customParams as any)?.klavis?.isAuthenticated === true,
+                )
+                .map((p) => p.identifier),
+            );
+            const connected: KlavisServiceSummary[] = KLAVIS_SERVER_TYPES.filter((t) =>
+              connectedIds.has(t.identifier),
+            ).map((t) => ({ identifier: t.identifier, name: t.label }));
+            const available: KlavisServiceSummary[] = KLAVIS_SERVER_TYPES.filter(
+              (t) => !connectedIds.has(t.identifier),
+            ).map((t) => ({ identifier: t.identifier, name: t.label }));
+            klavisServicesListStr = generateKlavisServicesList(connected, available);
+            log(
+              'Fetched Klavis services for {{KLAVIS_SERVICES_LIST}}: connected=%d, available=%d',
+              connected.length,
+              available.length,
+            );
+          } catch (error) {
+            log(
+              'Failed to fetch Klavis services for {{KLAVIS_SERVICES_LIST}} substitution: %O',
+              error,
+            );
+          }
+        }
+
         const contextEngineInput = {
           agentDocuments,
           additionalVariables: {
@@ -672,6 +720,7 @@ export const createRuntimeExecutors = (
             // Creds tool variables
             sandbox_enabled: sandboxEnabled,
             ...(isCredsEnabled && { CREDS_LIST: credsListStr }),
+            ...(isCredsEnabled && { KLAVIS_SERVICES_LIST: klavisServicesListStr }),
             // Memory tool variables
             memory_effort: memoryEffort,
           },
