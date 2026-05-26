@@ -22,8 +22,8 @@ interface MatchedRouteMeta {
 }
 
 interface DynamicRouteMetaState {
-  matchKey: string | null;
   meta: DynamicRouteMeta;
+  routeId: string | null;
 }
 
 const useMatchedRouteMeta = (): MatchedRouteMeta | null => {
@@ -49,28 +49,37 @@ const RouteMetaBridge = memo(() => {
   const setCurrentRouteMeta = useElectronStore((s) => s.setCurrentRouteMeta);
   const matched = useMatchedRouteMeta();
   const currentUrl = location.pathname + location.search;
-  const matchedKey = matched ? `${matched.routeId}:${currentUrl}` : null;
-  const [dynamic, setDynamic] = useState<DynamicRouteMetaState>({ matchKey: null, meta: {} });
+  const matchedRouteId = matched?.routeId ?? null;
+  const [dynamic, setDynamic] = useState<DynamicRouteMetaState>({ meta: {}, routeId: null });
+
+  const publishRouteMeta = useCallback(
+    (resolved: DynamicRouteMeta, url: string) => setCurrentRouteMeta(resolved, url),
+    [setCurrentRouteMeta],
+  );
 
   const handleResolve = useCallback(
     (resolved: DynamicRouteMeta) => {
-      setDynamic({ matchKey: matchedKey, meta: resolved });
-      if (isDesktop) setCurrentRouteMeta(resolved, currentUrl);
+      setDynamic({ meta: resolved, routeId: matchedRouteId });
+      if (isDesktop) publishRouteMeta(resolved, currentUrl);
     },
-    [currentUrl, matchedKey, setCurrentRouteMeta],
+    [currentUrl, matchedRouteId, publishRouteMeta],
   );
 
   const translate = t as unknown as Translate;
   const titleKey = matched?.meta.titleKey;
-  const currentDynamic = dynamic.matchKey === matchedKey ? dynamic.meta : {};
+  // Keep the previously resolved meta while navigating within the same route family
+  // (e.g. switching topics) so the title doesn't briefly fall back to the static label.
+  const currentDynamic = matched && dynamic.routeId === matched.routeId ? dynamic.meta : {};
   const title = matched ? currentDynamic.title || (titleKey ? translate(titleKey) : '') : '';
 
   useEffect(() => {
-    if (matchedKey) return;
+    if (matchedRouteId) return;
 
-    setDynamic({ matchKey: null, meta: {} });
-    if (isDesktop) setCurrentRouteMeta(null);
-  }, [matchedKey, setCurrentRouteMeta]);
+    setDynamic({ meta: {}, routeId: null });
+    if (isDesktop) {
+      setCurrentRouteMeta(null);
+    }
+  }, [matchedRouteId, publishRouteMeta, setCurrentRouteMeta]);
 
   useEffect(() => {
     document.title = title ? `${title} · ${BRANDING_NAME}` : BRANDING_NAME;
