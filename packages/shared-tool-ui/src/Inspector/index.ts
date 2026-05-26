@@ -7,4 +7,5 @@ export { createMoveLocalFilesInspector } from './MoveLocalFiles';
 export { createReadLocalFileInspector } from './ReadLocalFile';
 export { createRunCommandInspector, RunCommandInspector } from './RunCommand';
 export { createSearchLocalFilesInspector } from './SearchLocalFiles';
+export { TwitterInspector } from './Twitter';
 export { createWriteLocalFileInspector } from './WriteLocalFile';
