@@ -283,9 +283,17 @@ const CreatePlatformAgentModal = memo<CreatePlatformAgentModalProps>(
       if (!capabilityResult) return null;
       if (capabilityResult.available) {
         return (
-          <Flexbox horizontal align="center" gap={4}>
-            <Icon color="var(--ant-color-success)" icon={CheckCircle2} size={14} />
-            <Tag color="success" style={{ marginInlineEnd: 0 }}>
+          <Flexbox horizontal align="flex-start" gap={4} style={{ flexWrap: 'wrap' }}>
+            <Icon
+              color="var(--ant-color-success)"
+              icon={CheckCircle2}
+              size={14}
+              style={{ marginTop: 2, flexShrink: 0 }}
+            />
+            <Tag
+              color="success"
+              style={{ marginInlineEnd: 0, whiteSpace: 'normal', wordBreak: 'break-word' }}
+            >
               {capabilityResult.version ?? t('platformAgent.create.available')}
             </Tag>
           </Flexbox>
