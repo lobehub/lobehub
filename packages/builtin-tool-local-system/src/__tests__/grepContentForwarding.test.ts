@@ -148,7 +148,7 @@ describe('localSystemExecutor.getCommandOutput — filter forwarding', () => {
     };
     const spy = vi.spyOn(runtime, 'getCommandOutput').mockResolvedValue({
       content: '',
-      state: { newOutput: '', running: false, success: true },
+      state: { exitCode: 0, newOutput: '', success: true },
       success: true,
     });
 
@@ -158,6 +158,33 @@ describe('localSystemExecutor.getCommandOutput — filter forwarding', () => {
       commandId: 'sh-1',
       filter: 'ERROR',
     });
+
+    spy.mockRestore();
+  });
+
+  it('preserves `exitCode` state from getCommandOutput', async () => {
+    const runtime = (localSystemExecutor as any).runtime as {
+      getCommandOutput: (args: any) => Promise<unknown>;
+    };
+    const spy = vi.spyOn(runtime, 'getCommandOutput');
+
+    spy.mockResolvedValueOnce({
+      content: '',
+      state: { exitCode: undefined, newOutput: '', success: true },
+      success: true,
+    });
+
+    const runningResult = await localSystemExecutor.getCommandOutput({ shell_id: 'sh-running' });
+    expect(runningResult.state).toMatchObject({ exitCode: undefined });
+
+    spy.mockResolvedValueOnce({
+      content: '',
+      state: { exitCode: 0, newOutput: 'done', success: true },
+      success: true,
+    });
+
+    const doneResult = await localSystemExecutor.getCommandOutput({ shell_id: 'sh-done' });
+    expect(doneResult.state).toMatchObject({ exitCode: 0 });
 
     spy.mockRestore();
   });

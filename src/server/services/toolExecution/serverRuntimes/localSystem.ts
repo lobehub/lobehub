@@ -23,6 +23,7 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
             arguments: JSON.stringify(args),
             identifier: LocalSystemIdentifier,
           },
+          context.executionTimeoutMs,
         );
       };
     }

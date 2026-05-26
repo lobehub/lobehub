@@ -188,8 +188,8 @@ export interface RunCommandState {
 
 export interface GetCommandOutputState {
   error?: string;
+  exitCode?: number;
   newOutput?: string;
-  running: boolean;
   success: boolean;
 }
 

@@ -1,5 +1,8 @@
 import type { DeviceAttachment, DeviceSystemInfo } from './types';
 
+const DEFAULT_GATEWAY_TOOL_CALL_TIMEOUT_MS = 30_000;
+const HTTP_CALL_TIMEOUT_PADDING_MS = 30_000;
+
 export interface DeviceStatusResult {
   deviceCount: number;
   online: boolean;
@@ -48,12 +51,20 @@ export class GatewayHttpClient {
     params: { deviceId?: string; timeout?: number; userId: string },
     toolCall: { apiName: string; arguments: string; identifier: string },
   ): Promise<DeviceToolCallResult> {
-    const res = await this.post('/api/device/tool-call', {
-      deviceId: params.deviceId,
-      timeout: params.timeout,
-      toolCall,
-      userId: params.userId,
-    });
+    const timeout =
+      typeof params.timeout === 'number' && Number.isFinite(params.timeout)
+        ? Math.max(Math.trunc(params.timeout), 0)
+        : DEFAULT_GATEWAY_TOOL_CALL_TIMEOUT_MS;
+    const res = await this.post(
+      '/api/device/tool-call',
+      {
+        deviceId: params.deviceId,
+        timeout: params.timeout,
+        toolCall,
+        userId: params.userId,
+      },
+      { timeout: timeout + HTTP_CALL_TIMEOUT_PADDING_MS },
+    );
 
     if (!res.ok) {
       const text = await res.text().catch(() => '');
@@ -109,7 +120,7 @@ export class GatewayHttpClient {
     };
   }
 
-  private post(path: string, body: unknown): Promise<Response> {
+  private post(path: string, body: unknown, options?: { timeout?: number }): Promise<Response> {
     return fetch(`${this.gatewayUrl}${path}`, {
       body: JSON.stringify(body),
       headers: {
@@ -117,6 +128,7 @@ export class GatewayHttpClient {
         'Content-Type': 'application/json',
       },
       method: 'POST',
+      ...(options?.timeout ? { signal: AbortSignal.timeout(options.timeout) } : {}),
     });
   }
 }

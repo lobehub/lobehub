@@ -1873,6 +1873,11 @@ export const createRuntimeExecutors = (
             chatToolPayload.source = toolSource;
           }
 
+          const timeoutMs = resolveToolTimeoutMs({
+            apiName: chatToolPayload.apiName,
+            args: parsedArgs,
+            manifest: effectiveManifestMap[chatToolPayload.identifier],
+          });
           // Execute tool using ToolExecutionService
           log(`[${operationLogId}] Executing tool ${toolName} ...`);
           execution = await executeToolWithRetry(
@@ -1881,6 +1886,7 @@ export const createRuntimeExecutors = (
                 activeDeviceId: state.metadata?.activeDeviceId,
                 agentId: state.metadata?.agentId,
                 documentId: state.metadata?.documentId,
+                executionTimeoutMs: timeoutMs,
                 groupId: state.metadata?.groupId,
                 memoryToolPermission: agentConfig?.chatConfig?.memory?.toolPermission,
                 messageId: state.metadata?.sourceMessageId,
@@ -2400,12 +2406,19 @@ export const createRuntimeExecutors = (
                 chatToolPayload.source = batchToolSource;
               }
 
+              const timeoutMs = resolveToolTimeoutMs({
+                apiName: chatToolPayload.apiName,
+                args: batchParsedArgs,
+                manifest: batchManifestMap[chatToolPayload.identifier],
+              });
+
               execution = await executeToolWithRetry(
                 () =>
                   toolExecutionService.executeTool(chatToolPayload, {
                     activeDeviceId: state.metadata?.activeDeviceId,
                     agentId: state.metadata?.agentId,
                     documentId: state.metadata?.documentId,
+                    executionTimeoutMs: timeoutMs,
                     groupId: state.metadata?.groupId,
                     memoryToolPermission: batchAgentConfig?.chatConfig?.memory?.toolPermission,
                     messageId: state.metadata?.sourceMessageId,

@@ -221,17 +221,41 @@ describe('GatewayHttpClient', () => {
         json: vi.fn().mockResolvedValue({ content: 'ok', success: true }),
         ok: true,
       });
+      const signal = AbortSignal.abort();
+      const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(signal);
 
       await client.executeToolCall(
         { deviceId: 'device-1', timeout: 5000, userId: 'user-1' },
         { apiName: 'readFile', arguments: '{}', identifier: 'test' },
       );
 
+      expect(timeoutSpy).toHaveBeenCalledWith(35_000);
       expect(fetch).toHaveBeenCalledWith(
         'https://gateway.test.com/api/device/tool-call',
         expect.objectContaining({
           body: expect.stringContaining('"deviceId":"device-1"'),
+          signal,
         }),
+      );
+    });
+
+    it('should use default gateway timeout plus HTTP caller padding when timeout is absent', async () => {
+      mockFetch({
+        json: vi.fn().mockResolvedValue({ content: 'ok', success: true }),
+        ok: true,
+      });
+      const signal = AbortSignal.abort();
+      const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(signal);
+
+      await client.executeToolCall(
+        { userId: 'user-1' },
+        { apiName: 'readFile', arguments: '{}', identifier: 'test' },
+      );
+
+      expect(timeoutSpy).toHaveBeenCalledWith(60_000);
+      expect(fetch).toHaveBeenCalledWith(
+        'https://gateway.test.com/api/device/tool-call',
+        expect.objectContaining({ signal }),
       );
     });
   });

@@ -41,6 +41,7 @@ const methodMap: Record<string, (args: any) => Promise<unknown>> = {
 export async function executeToolCall(
   apiName: string,
   argsStr: string,
+  timeout?: number,
 ): Promise<{
   content: string;
   error?: string;
@@ -53,8 +54,12 @@ export async function executeToolCall(
 
   try {
     const args = JSON.parse(argsStr);
+    const finalArgs =
+      typeof timeout === 'number' && Number.isFinite(timeout) && !('timeout' in args)
+        ? { ...args, timeout }
+        : args;
 
-    const result = await handler(args);
+    const result = await handler(finalArgs);
     const content = typeof result === 'string' ? result : JSON.stringify(result);
 
     return { content, success: true };

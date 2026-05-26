@@ -341,7 +341,6 @@ export abstract class ComputerRuntime {
       if (!result.success) {
         return this.errorOutput(result, {
           error: result.error?.message,
-          running: false,
           success: false,
         });
       }
@@ -350,15 +349,15 @@ export abstract class ComputerRuntime {
 
       const state: GetCommandOutputState = {
         error: r.error,
+        exitCode: r.exitCode ?? r.exit_code,
         newOutput: r.newOutput || r.output,
-        running: r.running ?? false,
         success: result.success,
       };
 
       const content = formatCommandOutput({
         error: r.error,
+        exitCode: r.exitCode ?? r.exit_code,
         output: r.newOutput || r.output,
-        running: r.running ?? false,
         success: result.success,
       });
 

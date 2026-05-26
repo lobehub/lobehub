@@ -234,12 +234,22 @@ export interface RunCommandResult {
 export interface GetCommandOutputParams {
   filter?: string;
   shell_id: string;
+  /**
+   * Maximum time to wait for this observation before returning.
+   * Does not kill the process when the timeout elapses.
+   */
+  timeout?: number;
 }
 
 export interface GetCommandOutputResult {
   error?: string;
+  /**
+   * Present only after the command has exited.
+   * `0` means success, non-zero means the command finished with an error.
+   * `undefined` means the command is still running.
+   */
+  exit_code?: number;
   output: string;
-  running: boolean;
   stderr: string;
   stdout: string;
   success: boolean;

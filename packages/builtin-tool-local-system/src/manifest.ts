@@ -263,9 +263,9 @@ export const LocalSystemManifest: BuiltinToolManifest = {
       },
     },
     {
-      defaultTimeoutMs: 120_000,
+      defaultTimeoutMs: 30_000,
       description:
-        'Execute a shell command and return its output. Supports both synchronous and background execution with timeout control.',
+        'Start a terminal session to execute a shell command and return console output collected during the wait window. If the command exits during that window, the result includes `exit_code`; if it is still running, the result includes `shell_id` for later output retrieval or termination.',
       humanIntervention: 'required',
       name: LocalSystemApiName.runCommand,
       parameters: {
@@ -286,13 +286,9 @@ export const LocalSystemManifest: BuiltinToolManifest = {
             type: 'object',
           },
           run_in_background: {
-            description: 'Set to true to run command in background and return shell_id',
-            type: 'boolean',
-          },
-          timeout: {
             description:
-              'Timeout in milliseconds for this command. Default 120000ms. Server clamps to [1000, 800000]; raise this for long-running tasks (builds, large searches) instead of letting them hit the default and fail.',
-            type: 'number',
+              'Set to true to return immediately after starting the terminal session. The result will include a `shell_id` for later observation or termination.',
+            type: 'boolean',
           },
         },
         required: ['description', 'command'],

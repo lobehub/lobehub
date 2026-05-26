@@ -18,6 +18,8 @@ export interface ToolExecutionContext {
   agentId?: string;
   /** Current page document ID for page-scoped conversations */
   documentId?: string | null;
+  /** Per-call execution timeout resolved by the agent runtime. */
+  executionTimeoutMs?: number;
   /** Current group ID for group chat context */
   groupId?: string | null;
   /**

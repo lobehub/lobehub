@@ -6,30 +6,61 @@ export interface RunCommandParams {
   description?: string;
   env?: Record<string, string>;
   run_in_background?: boolean;
+  /**
+   * Maximum time to wait for this observation before returning.
+   * Does not kill the process when the timeout elapses.
+   */
   timeout?: number;
 }
 
 export interface RunCommandResult {
   error?: string;
+  /**
+   * Present only after the command has exited.
+   * `0` means success, non-zero means the command finished with an error.
+   * `undefined` means the command is still running.
+   */
   exit_code?: number;
   output?: string;
+  /**
+   * Session identifier. Present for background commands and foreground commands
+   * that can be resumed with `getCommandOutput`.
+   */
   shell_id?: string;
   stderr?: string;
   stdout?: string;
+  /**
+   * True when the command/session request completed successfully.
+   * Use `exit_code` to determine whether the underlying command has exited.
+   */
   success: boolean;
 }
 
 export interface GetCommandOutputParams {
   filter?: string;
   shell_id: string;
+  /**
+   * Maximum time to wait for this observation before returning.
+   * Does not kill the process when the timeout elapses.
+   */
+  timeout?: number;
 }
 
 export interface GetCommandOutputResult {
   error?: string;
+  /**
+   * Present only after the command has exited.
+   * `0` means success, non-zero means the command finished with an error.
+   * `undefined` means the command is still running.
+   */
+  exit_code?: number;
   output: string;
-  running: boolean;
   stderr: string;
   stdout: string;
+  /**
+   * True when the output request completed successfully.
+   * Use `exit_code` to determine whether the underlying command has exited.
+   */
   success: boolean;
 }
 
