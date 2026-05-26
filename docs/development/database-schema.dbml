@@ -1724,6 +1724,7 @@ table tasks {
   name text
   description varchar(255)
   instruction text [not null]
+  editor_data jsonb
   status text [not null, default: 'backlog']
   priority integer [default: 0]
   sort_order integer [default: 0]

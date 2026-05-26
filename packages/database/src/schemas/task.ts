@@ -52,6 +52,10 @@ export const tasks = pgTable(
     name: text('name'),
     description: varchar255('description'),
     instruction: text('instruction').notNull(),
+    // Rich editor JSON state (Lexical). Mirrors the markdown `instruction`
+    // but preserves details that markdown drops — image sizes, custom nodes, etc.
+    // Optional: when null, callers fall back to parsing `instruction` markdown.
+    editorData: jsonb('editor_data'),
 
     // Lifecycle (same state machine for user and agent)
     // 'backlog' | 'running' | 'paused' | 'completed' | 'failed' | 'canceled'
