@@ -19,7 +19,7 @@ const args = getNextBuildArgs(isVercel);
 const child = spawn(process.execPath, [nextBin, ...args], {
   env: {
     ...process.env,
-    ...(isVercel ? { NODE_OPTIONS: '--max-old-space-size=5632' } : {}),
+    ...(isVercel ? { NODE_OPTIONS: '--max-old-space-size=6144' } : {}),
   },
   stdio: 'inherit',
 });
