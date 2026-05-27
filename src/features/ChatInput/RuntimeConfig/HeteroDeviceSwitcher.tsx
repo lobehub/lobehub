@@ -3,7 +3,7 @@
 import { SiApple, SiLinux } from '@icons-pack/react-simple-icons';
 import { isDesktop } from '@lobechat/const';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
-import type { HeteroExecutionTarget } from '@lobechat/types';
+import type { HeteroExecutionTarget, RuntimeEnvMode } from '@lobechat/types';
 import { Microsoft } from '@lobehub/icons';
 import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
@@ -227,6 +227,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
 
   const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
   const updateAgentConfig = useAgentStore((s) => s.updateAgentConfig);
+  const updateAgentChatConfigById = useAgentStore((s) => s.updateAgentChatConfigById);
 
   const heteroType = agencyConfig?.heterogeneousProvider?.type;
   const storedTarget = agencyConfig?.executionTarget;
@@ -242,15 +243,27 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const handleSelect = useCallback(
     async (target: HeteroExecutionTarget, deviceId?: string) => {
       setOpen(false);
-      await updateAgentConfig({
-        agencyConfig: {
-          ...agencyConfig,
-          executionTarget: target,
-          ...(target === 'device' && deviceId ? { boundDeviceId: deviceId } : {}),
-        },
-      });
+
+      // Keep runtimeMode in sync so the server-side tool gate (runtimeMode === 'cloud'
+      // enables CloudSandbox) reflects the user's chosen execution target.
+      const platform = isDesktop ? 'desktop' : 'web';
+      const runtimeMode: RuntimeEnvMode =
+        target === 'sandbox' ? 'cloud' : target === 'local' ? 'local' : 'none';
+
+      await Promise.all([
+        updateAgentConfig({
+          agencyConfig: {
+            ...agencyConfig,
+            executionTarget: target,
+            ...(target === 'device' && deviceId ? { boundDeviceId: deviceId } : {}),
+          },
+        }),
+        updateAgentChatConfigById(agentId, {
+          runtimeEnv: { runtimeMode: { [platform]: runtimeMode } },
+        }),
+      ]);
     },
-    [agencyConfig, updateAgentConfig],
+    [agentId, agencyConfig, updateAgentConfig, updateAgentChatConfigById],
   );
 
   // Don't render for remote hetero agents — they use RemoteAgentConfigCard in profile.
