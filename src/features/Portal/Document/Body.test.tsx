@@ -34,7 +34,12 @@ vi.mock('@lobehub/ui', () => ({
 }));
 
 const mockDocumentMeta = vi.hoisted(() => ({
-  current: { content: '', filename: 'doc.md' } as { content?: string; filename?: string },
+  current: { content: '', filename: 'doc.md' } as {
+    content?: string;
+    fileType?: string | null;
+    filename?: string | null;
+    title?: string | null;
+  },
 }));
 
 vi.mock('@/libs/swr', () => ({
@@ -144,6 +149,20 @@ describe('DocumentBody', () => {
 
   it('renders EditorCanvas for markdown files', () => {
     mockDocumentMeta.current = { content: '# hi', filename: 'note.md' };
+
+    render(<DocumentBody />);
+
+    expect(screen.getByTestId('editor-canvas')).toBeDefined();
+    expect(screen.queryByTestId('highlighter')).toBeNull();
+  });
+
+  it('renders EditorCanvas for notebook documents that have no filename', () => {
+    mockDocumentMeta.current = {
+      content: '# notes',
+      fileType: 'markdown',
+      filename: null,
+      title: 'Meeting notes',
+    };
 
     render(<DocumentBody />);
 

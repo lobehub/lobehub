@@ -12,7 +12,9 @@ export type DocumentRenderMode = { mode: 'editor' } | { language: string; mode: 
 export const getDocumentRenderMode = (document: DocumentRenderModeFields): DocumentRenderMode => {
   if (isSkillMarkdownDocument(document)) return { mode: 'editor' };
 
-  const language = getLanguageFromFilename(document.filename || document.title);
+  if (!document.filename) return { mode: 'editor' };
+
+  const language = getLanguageFromFilename(document.filename);
 
   if (language === 'markdown') return { mode: 'editor' };
 
