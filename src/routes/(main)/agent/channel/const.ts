@@ -21,6 +21,7 @@ const ICON_NAMES = [
 /** Alias map for platforms whose display name differs from the icon name. */
 const ICON_ALIASES: Record<string, string> = {
   feishu: 'Lark',
+  wati: 'WhatsApp',
 };
 
 /**

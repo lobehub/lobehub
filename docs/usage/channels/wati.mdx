@@ -1,0 +1,84 @@
+---
+title: Connect LobeHub to WhatsApp via Wati
+description: >-
+  Connect a Wati WhatsApp Business account to your LobeHub agent so customers can
+  text your number and receive AI replies within the 24-hour session window.
+tags:
+  - Wati
+  - WhatsApp
+  - Message Channels
+  - Bot Setup
+---
+
+# Connect LobeHub to WhatsApp via Wati
+
+[Wati](https://www.wati.io/) provides WhatsApp Business API access. LobeHub receives inbound messages through Wati webhooks and sends replies with Wati's **session message** API.
+
+## Prerequisites
+
+- A LobeHub account with an active subscription
+- A Wati account with an approved WhatsApp Business number
+- API access enabled (Bearer token and tenant ID from **API Docs** in the Wati dashboard)
+
+## Step 1: Collect API credentials
+
+<Steps>
+  ### Open Wati API Docs
+
+  In the Wati dashboard, open **API Docs** and note:
+
+  - **API endpoint** (base URL, e.g. `https://live-mt-server.wati.io`)
+  - **Bearer token**
+  - **Tenant ID** (path segment in API URLs)
+
+  ### Note your channel phone number
+
+  Use your connected WhatsApp business number in international format **without** the leading `+` (e.g. `85264318722`). This becomes the **Channel Phone Number** / Application ID in LobeHub.
+</Steps>
+
+## Step 2: Configure the channel in LobeHub
+
+<Steps>
+  ### Open Channels for your agent
+
+  Go to **Agent → Channels → Wati (WhatsApp)**.
+
+  ### Enter credentials
+
+  - **API Base URL**
+  - **Tenant ID**
+  - **Bearer Token**
+  - **Channel Phone Number**
+  - **Webhook Secret** (optional but recommended)
+
+  Save and enable the channel. LobeHub validates the token against the Wati API.
+</Steps>
+
+## Step 3: Register the webhook in Wati
+
+<Steps>
+  ### Copy the Webhook URL
+
+  From the channel detail page, copy the **Webhook URL** shown under credentials. It looks like:
+
+  `https://app.lobehub.com/api/agent/webhooks/wati/<channel-phone-number>`
+
+  ### Add the webhook in Wati
+
+  Wati dashboard → **Webhooks** → **Add Webhook** → paste the URL, set status to **Enabled**, and select **Message Received**.
+
+  If you configured a webhook secret in LobeHub, use the same value in Wati so inbound requests can be verified.
+</Steps>
+
+## Step 4: Test
+
+Send a WhatsApp message to your business number from a personal phone. Within an active **24-hour session**, the agent should reply. Outside the session window, WhatsApp requires [template messages](https://docs.wati.io/reference/post_api-ext-v3-messagetemplates-send) — not covered in this MVP integration.
+
+## Troubleshooting
+
+| Symptom                     | Check                                                                               |
+| --------------------------- | ----------------------------------------------------------------------------------- |
+| No inbound events           | Webhook URL, **Message Received** enabled, channel phone number matches Wati number |
+| 401 on webhook              | Webhook secret mismatch — align LobeHub and Wati, or clear secret on both sides     |
+| Replies not delivered       | Session window expired — user must message first or use an approved template        |
+| Credential validation fails | Tenant ID, base URL, and Bearer token from the same Wati environment                |

@@ -113,6 +113,26 @@ export default {
     'From the Basic settings tab. Required — used to verify X-Line-Signature on every inbound webhook.',
   'channel.line.webhookManualSetup':
     'LINE does not allow programmatic webhook registration. Copy this URL into the LINE Developers Console (Messaging API → Webhook URL), click "Verify", and enable "Use webhook".',
+  'channel.wati.description':
+    'Connect WhatsApp through Wati. Customers text your business number and receive replies from this agent within the 24-hour session window.',
+  'channel.wati.apiBaseUrl': 'API Base URL',
+  'channel.wati.apiBaseUrlHint':
+    'Your Wati API host from the API Docs page (e.g. https://live-mt-server.wati.io).',
+  'channel.wati.tenantId': 'Tenant ID',
+  'channel.wati.tenantIdHint':
+    'Tenant ID segment in Wati API paths, shown in your Wati API documentation.',
+  'channel.wati.bearerToken': 'Bearer Token',
+  'channel.wati.bearerTokenHint':
+    'API token from Wati → API Docs. Stored encrypted. Used for outbound messages and credential validation.',
+  'channel.wati.webhookSecret': 'Webhook Secret',
+  'channel.wati.webhookSecretHint':
+    'Optional. HMAC secret from Wati webhook settings — when set, inbound webhooks must include a valid signature.',
+  'channel.wati.channelPhoneNumber': 'Channel Phone Number',
+  'channel.wati.channelPhoneNumberHint':
+    'Your Wati WhatsApp business number in international format without + (e.g. 85264318722). Must match inbound webhook `channelPhoneNumber`.',
+  'channel.wati.channelPhoneNumberPlaceholder': 'e.g. 85264318722',
+  'channel.wati.webhookManualSetup':
+    'Copy the Webhook URL below into Wati (Webhooks → Add Webhook). Enable **Message Received**. Replies use session messages and require an active 24-hour customer service window.',
   'channel.openPlatform': 'Open Platform',
   'channel.platforms': 'Platforms',
   'channel.publicKey': 'Public Key',
@@ -278,6 +298,8 @@ export default {
   'channel.userIdHint.slack': 'Open your Slack profile → ⋮ More → Copy member ID (starts with U).',
   'channel.userIdHint.telegram':
     'Send any message to @userinfobot on Telegram — it replies with your numeric User ID.',
+  'channel.userIdHint.wati':
+    'Customer WhatsApp numbers appear as `waId` on inbound webhooks (country code, no +). Use your own number for pairing tests.',
   'channel.refreshStatus': 'Refresh status',
   'channel.runtimeDisconnected': 'Bot disconnected',
   'channel.statusConnected': 'Connected',
