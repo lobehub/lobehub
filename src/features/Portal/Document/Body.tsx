@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, Button, Flexbox, Text, TextArea } from '@lobehub/ui';
+import { ActionIcon, Button, Flexbox, Highlighter, Text, TextArea } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CheckIcon, PencilIcon, XIcon } from 'lucide-react';
 import type { ChangeEvent } from 'react';
@@ -8,12 +8,15 @@ import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import FloatingChatPanel from '@/features/FloatingChatPanel';
+import { useClientDataSWR } from '@/libs/swr';
+import { documentService } from '@/services/document';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { useDocumentStore } from '@/store/document';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
+import { getDocumentRenderMode } from '@/utils/documentRenderMode';
 import {
   getSkillMarkdownMetadataError,
   parseSkillMarkdownFrontmatterFields,
@@ -209,13 +212,27 @@ const DocumentBody = memo(() => {
   );
   const isSkillMarkdown = contentFormat === 'skillMarkdown';
 
+  const { data: documentMeta } = useClientDataSWR(
+    documentId ? ['portal-document-header', documentId] : null,
+    () => documentService.getDocumentById(documentId!),
+  );
+  const renderMode = documentMeta
+    ? getDocumentRenderMode(documentMeta)
+    : { mode: 'editor' as const };
+
   return (
     <Flexbox flex={1} height={'100%'} style={{ overflow: 'hidden' }}>
       <div className={styles.content}>
         {documentId && isSkillMarkdown && (
           <SkillFrontmatterBlock documentId={documentId} frontmatter={skillFrontmatter} />
         )}
-        <EditorCanvas />
+        {renderMode.mode === 'highlight' ? (
+          <Highlighter language={renderMode.language} showLanguage={false} variant="borderless">
+            {documentMeta?.content ?? ''}
+          </Highlighter>
+        ) : (
+          <EditorCanvas />
+        )}
       </div>
       <TodoList />
       {enableFloatingChatPanel && activeAgentId && (

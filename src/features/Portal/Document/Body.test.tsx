@@ -26,8 +26,23 @@ vi.mock('@lobehub/ui', () => ({
   ActionIcon: () => null,
   Button: ({ children }: { children: ReactNode }) => <button>{children}</button>,
   Flexbox: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  Highlighter: ({ children }: { children: ReactNode }) => (
+    <pre data-testid="highlighter">{children}</pre>
+  ),
   Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
   TextArea: () => <textarea />,
+}));
+
+const mockDocumentMeta = vi.hoisted(() => ({
+  current: { content: '', filename: 'doc.md' } as { content?: string; filename?: string },
+}));
+
+vi.mock('@/libs/swr', () => ({
+  useClientDataSWR: () => ({ data: mockDocumentMeta.current }),
+}));
+
+vi.mock('@/services/document', () => ({
+  documentService: { getDocumentById: vi.fn() },
 }));
 
 vi.mock('./EditorCanvas', () => ({
@@ -101,6 +116,7 @@ describe('DocumentBody', () => {
   beforeEach(() => {
     mockAgentState.current.activeAgentId = 'agent-1';
     mockUserState.current.preference.lab.enableAgentDocumentFloatingChatPanel = false;
+    mockDocumentMeta.current = { content: '', filename: 'doc.md' };
   });
 
   it('does not render FloatingChatPanel when the lab feature is disabled', () => {
@@ -115,5 +131,23 @@ describe('DocumentBody', () => {
     render(<DocumentBody />);
 
     expect(screen.getByTestId('floating-chat-panel')).toBeDefined();
+  });
+
+  it('renders Highlighter for non-markdown files', () => {
+    mockDocumentMeta.current = { content: 'raw log content', filename: 'topic_call.txt' };
+
+    render(<DocumentBody />);
+
+    expect(screen.getByTestId('highlighter')).toBeDefined();
+    expect(screen.queryByTestId('editor-canvas')).toBeNull();
+  });
+
+  it('renders EditorCanvas for markdown files', () => {
+    mockDocumentMeta.current = { content: '# hi', filename: 'note.md' };
+
+    render(<DocumentBody />);
+
+    expect(screen.getByTestId('editor-canvas')).toBeDefined();
+    expect(screen.queryByTestId('highlighter')).toBeNull();
   });
 });
