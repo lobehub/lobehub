@@ -43,7 +43,7 @@ type SpecMap = Partial<Record<ILobeAgentRuntimeErrorType, ErrorCodeSpec>>;
  *   4. (If user-side) add upstream message patterns in `./patterns.ts`.
  */
 export const ERROR_CODE_SPECS: SpecMap = {
-  // ─── Auth / Credentials ─────────────────────────────────────────────────────
+  // ─── 1xxx Auth / Credentials ──────────────────────────────────────────
   [AgentRuntimeErrorType.InvalidProviderAPIKey]: {
     code: AgentRuntimeErrorType.InvalidProviderAPIKey,
     numericId: 1001,
@@ -99,28 +99,6 @@ export const ERROR_CODE_SPECS: SpecMap = {
     countAsFailure: false,
     description: 'Google Vertex credentials are invalid or service-account misconfigured.',
   },
-  [AgentRuntimeErrorType.InvalidOllamaArgs]: {
-    code: AgentRuntimeErrorType.InvalidOllamaArgs,
-    numericId: 9001,
-    category: 'config',
-    severity: 'warning',
-    attribution: 'user',
-    httpStatus: 400,
-    retryable: false,
-    countAsFailure: false,
-    description: 'Ollama runtime arguments are invalid.',
-  },
-  [AgentRuntimeErrorType.InvalidComfyUIArgs]: {
-    code: AgentRuntimeErrorType.InvalidComfyUIArgs,
-    numericId: 9002,
-    category: 'config',
-    severity: 'warning',
-    attribution: 'user',
-    httpStatus: 400,
-    retryable: false,
-    countAsFailure: false,
-    description: 'ComfyUI runtime arguments are invalid.',
-  },
   [AgentRuntimeErrorType.PermissionDenied]: {
     code: AgentRuntimeErrorType.PermissionDenied,
     numericId: 1006,
@@ -155,7 +133,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
     description: 'Provider unavailable from the caller geographic region.',
   },
 
-  // ─── Quota / Billing ────────────────────────────────────────────────────────
+  // ─── 2xxx Quota / Billing ─────────────────────────────────────────────
   [AgentRuntimeErrorType.InsufficientQuota]: {
     code: AgentRuntimeErrorType.InsufficientQuota,
     numericId: 2001,
@@ -167,6 +145,8 @@ export const ERROR_CODE_SPECS: SpecMap = {
     countAsFailure: false,
     description: 'Account balance or billing quota exhausted.',
   },
+
+  // ─── 3xxx Capacity ────────────────────────────────────────────────────
   [AgentRuntimeErrorType.RateLimitExceeded]: {
     code: AgentRuntimeErrorType.RateLimitExceeded,
     numericId: 3001,
@@ -178,8 +158,6 @@ export const ERROR_CODE_SPECS: SpecMap = {
     countAsFailure: false,
     description: 'Short-window rate limit (RPM / TPM / concurrency) reached.',
   },
-
-  // ─── Capacity ───────────────────────────────────────────────────────────────
   [AgentRuntimeErrorType.ProviderServiceUnavailable]: {
     code: AgentRuntimeErrorType.ProviderServiceUnavailable,
     numericId: 3002,
@@ -202,19 +180,30 @@ export const ERROR_CODE_SPECS: SpecMap = {
     countAsFailure: false,
     description: 'Proxy / router has no available channel or key for the model.',
   },
-  [AgentRuntimeErrorType.ProviderNetworkError]: {
-    code: AgentRuntimeErrorType.ProviderNetworkError,
-    numericId: 6001,
-    category: 'network',
+  [AgentRuntimeErrorType.OllamaServiceUnavailable]: {
+    code: AgentRuntimeErrorType.OllamaServiceUnavailable,
+    numericId: 3004,
+    category: 'capacity',
     severity: 'warning',
-    attribution: 'system',
-    httpStatus: 504,
-    retryable: true,
+    attribution: 'user',
+    httpStatus: 472,
+    retryable: false,
     countAsFailure: false,
-    description: 'Connection timeout / network drop talking to the provider.',
+    description: 'Local Ollama service is not reachable.',
+  },
+  [AgentRuntimeErrorType.ComfyUIServiceUnavailable]: {
+    code: AgentRuntimeErrorType.ComfyUIServiceUnavailable,
+    numericId: 3005,
+    category: 'capacity',
+    severity: 'warning',
+    attribution: 'user',
+    httpStatus: 472,
+    retryable: false,
+    countAsFailure: false,
+    description: 'Local ComfyUI service is not reachable.',
   },
 
-  // ─── Request / Model ────────────────────────────────────────────────────────
+  // ─── 4xxx Request / Model ─────────────────────────────────────────────
   [AgentRuntimeErrorType.ModelNotFound]: {
     code: AgentRuntimeErrorType.ModelNotFound,
     numericId: 4001,
@@ -271,7 +260,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
     description: 'Upstream rejected the request as malformed (bad JSON / schema / parameters).',
   },
 
-  // ─── Safety ─────────────────────────────────────────────────────────────────
+  // ─── 5xxx Safety ──────────────────────────────────────────────────────
   [AgentRuntimeErrorType.ContentModeration]: {
     code: AgentRuntimeErrorType.ContentModeration,
     numericId: 5001,
@@ -284,43 +273,20 @@ export const ERROR_CODE_SPECS: SpecMap = {
     description: 'Upstream content-safety filter rejected the input or output.',
   },
 
-  // ─── Config ─────────────────────────────────────────────────────────────────
-  [AgentRuntimeErrorType.UserConfigError]: {
-    code: AgentRuntimeErrorType.UserConfigError,
-    numericId: 9003,
-    category: 'config',
+  // ─── 6xxx Network ─────────────────────────────────────────────────────
+  [AgentRuntimeErrorType.ProviderNetworkError]: {
+    code: AgentRuntimeErrorType.ProviderNetworkError,
+    numericId: 6001,
+    category: 'network',
     severity: 'warning',
-    attribution: 'user',
-    httpStatus: 400,
-    retryable: false,
+    attribution: 'system',
+    httpStatus: 504,
+    retryable: true,
     countAsFailure: false,
-    description:
-      'User-side misconfiguration (bad base URL, missing env var, virtual-key allowlist).',
-  },
-  [AgentRuntimeErrorType.NoAvailableProvider]: {
-    code: AgentRuntimeErrorType.NoAvailableProvider,
-    numericId: 9004,
-    category: 'config',
-    severity: 'warning',
-    attribution: 'user',
-    httpStatus: 400,
-    retryable: false,
-    countAsFailure: false,
-    description: 'No provider is configured / enabled for the requested model.',
-  },
-  [AgentRuntimeErrorType.ConnectionCheckFailed]: {
-    code: AgentRuntimeErrorType.ConnectionCheckFailed,
-    numericId: 9005,
-    category: 'config',
-    severity: 'warning',
-    attribution: 'user',
-    httpStatus: 400,
-    retryable: false,
-    countAsFailure: false,
-    description: 'Provider connection check failed during setup.',
+    description: 'Connection timeout / network drop talking to the provider.',
   },
 
-  // ─── Stream / Runtime ───────────────────────────────────────────────────────
+  // ─── 7xxx Stream / Runtime ────────────────────────────────────────────
   [AgentRuntimeErrorType.StreamChunkError]: {
     code: AgentRuntimeErrorType.StreamChunkError,
     numericId: 7001,
@@ -355,7 +321,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
     description: 'Conversation chain broken because an assistant/tool message lost its parent.',
   },
 
-  // ─── Provider (catch-all) ───────────────────────────────────────────────────
+  // ─── 8xxx Provider (catch-all) ────────────────────────────────────────
   [AgentRuntimeErrorType.AgentRuntimeError]: {
     code: AgentRuntimeErrorType.AgentRuntimeError,
     numericId: 8001,
@@ -389,19 +355,6 @@ export const ERROR_CODE_SPECS: SpecMap = {
     countAsFailure: true,
     description: 'Image-generation provider returned no image.',
   },
-
-  // ─── Ollama ─────────────────────────────────────────────────────────────────
-  [AgentRuntimeErrorType.OllamaServiceUnavailable]: {
-    code: AgentRuntimeErrorType.OllamaServiceUnavailable,
-    numericId: 3004,
-    category: 'capacity',
-    severity: 'warning',
-    attribution: 'user',
-    httpStatus: 472,
-    retryable: false,
-    countAsFailure: false,
-    description: 'Local Ollama service is not reachable.',
-  },
   [AgentRuntimeErrorType.OllamaBizError]: {
     code: AgentRuntimeErrorType.OllamaBizError,
     numericId: 8004,
@@ -412,19 +365,6 @@ export const ERROR_CODE_SPECS: SpecMap = {
     retryable: false,
     countAsFailure: true,
     description: 'Ollama returned a biz error.',
-  },
-
-  // ─── ComfyUI ────────────────────────────────────────────────────────────────
-  [AgentRuntimeErrorType.ComfyUIServiceUnavailable]: {
-    code: AgentRuntimeErrorType.ComfyUIServiceUnavailable,
-    numericId: 3005,
-    category: 'capacity',
-    severity: 'warning',
-    attribution: 'user',
-    httpStatus: 472,
-    retryable: false,
-    countAsFailure: false,
-    description: 'Local ComfyUI service is not reachable.',
   },
   [AgentRuntimeErrorType.ComfyUIBizError]: {
     code: AgentRuntimeErrorType.ComfyUIBizError,
@@ -480,6 +420,64 @@ export const ERROR_CODE_SPECS: SpecMap = {
     retryable: false,
     countAsFailure: false,
     description: 'ComfyUI model load / inference failed.',
+  },
+
+  // ─── 9xxx Config ──────────────────────────────────────────────────────
+  [AgentRuntimeErrorType.InvalidOllamaArgs]: {
+    code: AgentRuntimeErrorType.InvalidOllamaArgs,
+    numericId: 9001,
+    category: 'config',
+    severity: 'warning',
+    attribution: 'user',
+    httpStatus: 400,
+    retryable: false,
+    countAsFailure: false,
+    description: 'Ollama runtime arguments are invalid.',
+  },
+  [AgentRuntimeErrorType.InvalidComfyUIArgs]: {
+    code: AgentRuntimeErrorType.InvalidComfyUIArgs,
+    numericId: 9002,
+    category: 'config',
+    severity: 'warning',
+    attribution: 'user',
+    httpStatus: 400,
+    retryable: false,
+    countAsFailure: false,
+    description: 'ComfyUI runtime arguments are invalid.',
+  },
+  [AgentRuntimeErrorType.UserConfigError]: {
+    code: AgentRuntimeErrorType.UserConfigError,
+    numericId: 9003,
+    category: 'config',
+    severity: 'warning',
+    attribution: 'user',
+    httpStatus: 400,
+    retryable: false,
+    countAsFailure: false,
+    description:
+      'User-side misconfiguration (bad base URL, missing env var, virtual-key allowlist).',
+  },
+  [AgentRuntimeErrorType.NoAvailableProvider]: {
+    code: AgentRuntimeErrorType.NoAvailableProvider,
+    numericId: 9004,
+    category: 'config',
+    severity: 'warning',
+    attribution: 'user',
+    httpStatus: 400,
+    retryable: false,
+    countAsFailure: false,
+    description: 'No provider is configured / enabled for the requested model.',
+  },
+  [AgentRuntimeErrorType.ConnectionCheckFailed]: {
+    code: AgentRuntimeErrorType.ConnectionCheckFailed,
+    numericId: 9005,
+    category: 'config',
+    severity: 'warning',
+    attribution: 'user',
+    httpStatus: 400,
+    retryable: false,
+    countAsFailure: false,
+    description: 'Provider connection check failed during setup.',
   },
 };
 

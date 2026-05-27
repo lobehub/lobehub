@@ -120,6 +120,14 @@ describe('numericId contract', () => {
       ).toBe(expectedPrefix);
     }
   });
+
+  it('spec entries appear in source order sorted by numericId', () => {
+    // JS object keys preserve insertion order — this guard prevents future
+    // additions from being wedged into the wrong section.
+    const ids = specs.map((s) => s.numericId);
+    const sortedIds = [...ids].sort((a, b) => a - b);
+    expect(ids).toEqual(sortedIds);
+  });
 });
 
 describe('formatErrorRef / parseErrorRef', () => {

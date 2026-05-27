@@ -24,6 +24,7 @@ import {
   AWSBedrockLlamaStream,
   createBedrockStream,
 } from '../../core/streams';
+import { ErrorClassifier } from '../../errors';
 import type {
   ChatMethodOptions,
   ChatStreamPayload,
@@ -37,7 +38,6 @@ import { AgentRuntimeErrorType } from '../../types/error';
 import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
 import { getModelPricing } from '../../utils/getModelPricing';
-import { isExceededContextWindowError } from '../../utils/isExceededContextWindowError';
 import { StreamingResponse } from '../../utils/response';
 import { normalizeClaudeThinkingHistoryMessages } from '../anthropic/claudeThinkingHistory';
 
@@ -364,7 +364,7 @@ export class LobeBedrockAI implements LobeRuntimeAI {
       );
     } catch (e) {
       const err = e as Error & { $metadata: any };
-      const errorType = isExceededContextWindowError(err.message)
+      const errorType = ErrorClassifier.isExceededContextWindow(err.message)
         ? AgentRuntimeErrorType.ExceededContextWindow
         : AgentRuntimeErrorType.ProviderBizError;
 
