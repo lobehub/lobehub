@@ -19,8 +19,6 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 
 import ContextWindow from '../ActionBar/Token';
 import { useAgentId } from '../hooks/useAgentId';
@@ -29,7 +27,6 @@ import { useChatInputStore } from '../store';
 import ApprovalMode from './ApprovalMode';
 import CloudRepoSwitcher from './CloudRepoSwitcher';
 import GitStatus from './GitStatus';
-import HeteroDeviceSwitcher from './HeteroDeviceSwitcher';
 import ModeSelector from './ModeSelector';
 import { useRepoType } from './useRepoType';
 import WorkingDirectory from './WorkingDirectory';
@@ -120,15 +117,6 @@ const RuntimeConfig = memo(() => {
     agentId ? agentByIdSelectors.isAgentHeterogeneousById(agentId)(s) : false,
     agentByIdSelectors.getAgentEnableModeById(agentId)(s),
   ]);
-
-  const enableExecutionDeviceSwitcher = useUserStore(
-    labPreferSelectors.enableExecutionDeviceSwitcher,
-  );
-
-  // When the execution device switcher is visible, it takes over sandbox/runtime routing.
-  // Hide the runtimeMode selector to avoid two conflicting controls for the same decision.
-  const showDeviceSwitcher =
-    enableAgentMode && !isHeterogeneous && enableExecutionDeviceSwitcher && !!agentId;
 
   const topicWorkingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
   const agentWorkingDirectory = useAgentStore((s) =>
@@ -297,27 +285,24 @@ const RuntimeConfig = memo(() => {
       {/* Left: Chat mode switcher + (agent-only) runtime env + working directory */}
       <Flexbox horizontal align={'center'} gap={4}>
         <ModeSelector />
-        {showDeviceSwitcher && <HeteroDeviceSwitcher agentId={agentId} />}
         {enableAgentMode && (
           <>
-            {!showDeviceSwitcher && (
-              <Popover
-                content={modeContent}
-                open={modePopoverOpen}
-                placement="top"
-                styles={{ content: { padding: 4 } }}
-                trigger="click"
-                onOpenChange={setModePopoverOpen}
-              >
-                <div>
-                  {modePopoverOpen ? (
-                    modeButton
-                  ) : (
-                    <Tooltip title={t('runtimeEnv.selectMode')}>{modeButton}</Tooltip>
-                  )}
-                </div>
-              </Popover>
-            )}
+            <Popover
+              content={modeContent}
+              open={modePopoverOpen}
+              placement="top"
+              styles={{ content: { padding: 4 } }}
+              trigger="click"
+              onOpenChange={setModePopoverOpen}
+            >
+              <div>
+                {modePopoverOpen ? (
+                  modeButton
+                ) : (
+                  <Tooltip title={t('runtimeEnv.selectMode')}>{modeButton}</Tooltip>
+                )}
+              </div>
+            </Popover>
             {rightContent()}
           </>
         )}

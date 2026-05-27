@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import { defineConfig } from 'electron-vite';
 import type { PluginOption, ViteDevServer } from 'vite';
 import { loadEnv } from 'vite';
+import tsconfigPaths from 'vite-tsconfig-paths';
 
 import {
   sharedOptimizeDeps,
@@ -88,10 +89,112 @@ function electronDesktopHtmlPlugin(): PluginOption {
   };
 }
 
+const CLOUD_DESKTOP_BUSINESS_FEATURES_FLAG = '__LOBECLOUD_DESKTOP_BUSINESS_FEATURES__';
+const BUSINESS_CONST_MODULE_ID = '@lobechat/business-const';
+const CLOUD_BUSINESS_CONST_MODULE_ID = '@cloud/business-const';
+const DYNAMIC_BUSINESS_CONST_QUERY = '?lobe-cloud-desktop-business-const';
+
+const createBusinessFeaturesBootstrapScript = () =>
+  `globalThis[${JSON.stringify(CLOUD_DESKTOP_BUSINESS_FEATURES_FLAG)}] = true;`;
+
+const replaceBusinessFlagExport = (code: string, name: string, initializer: string) => {
+  const pattern = new RegExp(`export\\s+(?:const|let|var)\\s+${name}\\s*=\\s*[\\s\\S]*?;`);
+
+  return {
+    code: code.replace(pattern, `export let ${name} = ${initializer};`),
+    replaced: pattern.test(code),
+  };
+};
+
+const injectDynamicBusinessFeatureFlag = (code: string) => {
+  const businessFlag = replaceBusinessFlagExport(
+    code,
+    'ENABLE_BUSINESS_FEATURES',
+    `Boolean(globalThis['${CLOUD_DESKTOP_BUSINESS_FEATURES_FLAG}'])`,
+  );
+  const topicLinkFlag = replaceBusinessFlagExport(
+    businessFlag.code,
+    'ENABLE_TOPIC_LINK_SHARE',
+    'ENABLE_BUSINESS_FEATURES',
+  );
+
+  if (!businessFlag.replaced) {
+    throw new Error('Cannot find ENABLE_BUSINESS_FEATURES export in @cloud/business-const');
+  }
+
+  const topicLinkAssignment = topicLinkFlag.replaced
+    ? '\n  ENABLE_TOPIC_LINK_SHARE = enabled;'
+    : '';
+
+  return `${topicLinkFlag.code}
+
+const __lobeCloudDesktopBusinessFeaturesFlagKey = '${CLOUD_DESKTOP_BUSINESS_FEATURES_FLAG}';
+const __lobeCloudDesktopApplyBusinessFeaturesFlag = (value) => {
+  const enabled = Boolean(value);
+  ENABLE_BUSINESS_FEATURES = enabled;${topicLinkAssignment}
+  return enabled;
+};
+
+const __lobeCloudDesktopExistingDescriptor = Object.getOwnPropertyDescriptor(
+  globalThis,
+  __lobeCloudDesktopBusinessFeaturesFlagKey,
+);
+const __lobeCloudDesktopInitialValue = __lobeCloudDesktopExistingDescriptor?.get
+  ? __lobeCloudDesktopExistingDescriptor.get.call(globalThis)
+  : globalThis[__lobeCloudDesktopBusinessFeaturesFlagKey];
+
+Object.defineProperty(globalThis, __lobeCloudDesktopBusinessFeaturesFlagKey, {
+  configurable: true,
+  get() {
+    return ENABLE_BUSINESS_FEATURES;
+  },
+  set(value) {
+    __lobeCloudDesktopApplyBusinessFeaturesFlag(value);
+  },
+});
+
+__lobeCloudDesktopApplyBusinessFeaturesFlag(__lobeCloudDesktopInitialValue);
+`;
+};
+
+function cloudDesktopBusinessConstPlugin(): PluginOption {
+  return {
+    enforce: 'pre',
+    async resolveId(id, importer) {
+      if (id !== BUSINESS_CONST_MODULE_ID) return;
+
+      const resolved = await this.resolve(CLOUD_BUSINESS_CONST_MODULE_ID, importer, {
+        skipSelf: true,
+      });
+      if (!resolved) throw new Error(`Cannot resolve ${CLOUD_BUSINESS_CONST_MODULE_ID}`);
+
+      return `${resolved.id}${DYNAMIC_BUSINESS_CONST_QUERY}`;
+    },
+    load(id) {
+      if (!id.endsWith(DYNAMIC_BUSINESS_CONST_QUERY)) return;
+
+      const sourcePath = id.slice(0, -DYNAMIC_BUSINESS_CONST_QUERY.length);
+      return injectDynamicBusinessFeatureFlag(readFileSync(sourcePath, 'utf8'));
+    },
+    name: 'lobe-cloud-desktop-business-const',
+    transformIndexHtml() {
+      return [
+        {
+          children: createBusinessFeaturesBootstrapScript(),
+          injectTo: 'head-prepend',
+          tag: 'script',
+        },
+      ];
+    },
+  };
+}
+
 dotenv.config();
 
 const isDev = process.env.NODE_ENV === 'development';
 const ROOT_DIR = path.resolve(__dirname, '../..');
+const CLOUD_ROOT_DIR = path.resolve(__dirname, '../../..');
+const isCloudDesktopBuild = process.env.CLOUD_DESKTOP === '1';
 const mode = process.env.NODE_ENV === 'production' ? 'production' : 'development';
 
 Object.assign(process.env, loadEnv(mode, ROOT_DIR, ''));
@@ -105,8 +208,17 @@ const mainProcessRuntimeExternals = [
   ...externalRuntimeModules,
   'node-mac-permissions',
 ];
+const externalNavigationHosts =
+  process.env.DESKTOP_EXTERNAL_NAVIGATION_HOSTS ?? (isCloudDesktopBuild ? 'stripe.com' : '');
 
 console.info(`[electron-vite.config.ts] Detected UPDATE_CHANNEL: ${updateChannel}`);
+console.info(`[electron-vite.config.ts] Cloud desktop build: ${isCloudDesktopBuild}`);
+
+const cloudTsconfigPathsPlugin = () =>
+  ({
+    ...tsconfigPaths({ projects: [path.resolve(CLOUD_ROOT_DIR, 'tsconfig.json')] }),
+    name: 'lobe-cloud-desktop-tsconfig-paths',
+  }) satisfies PluginOption;
 
 export default defineConfig({
   main: {
@@ -169,6 +281,7 @@ export default defineConfig({
       sourcemap: isDev ? 'inline' : false,
     },
     define: {
+      'process.env.DESKTOP_EXTERNAL_NAVIGATION_HOSTS': JSON.stringify(externalNavigationHosts),
       'process.env.UPDATE_CHANNEL': JSON.stringify(process.env.UPDATE_CHANNEL),
       'process.env.UPDATE_SERVER_URL': JSON.stringify(process.env.UPDATE_SERVER_URL),
     },
@@ -214,6 +327,8 @@ export default defineConfig({
     },
     optimizeDeps: sharedOptimizeDeps,
     plugins: [
+      isCloudDesktopBuild && cloudTsconfigPathsPlugin(),
+      isCloudDesktopBuild && cloudDesktopBusinessConstPlugin(),
       forceAbsoluteBasePlugin(),
       electronDesktopHtmlPlugin(),
       vanillaExtractPlugin(),
@@ -221,7 +336,7 @@ export default defineConfig({
     ],
     resolve: {
       dedupe: ['react', 'react-dom'],
-      tsconfigPaths: true,
+      tsconfigPaths: !isCloudDesktopBuild,
     },
   },
 });

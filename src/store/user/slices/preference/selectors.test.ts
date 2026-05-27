@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { type UserStore } from '@/store/user';
 
 import { initialPreferenceState } from './initialState';
-import { preferenceSelectors } from './selectors';
+import { labPreferSelectors, preferenceSelectors } from './selectors';
 
 describe('preferenceSelectors', () => {
   let store: UserStore;
@@ -64,6 +64,20 @@ describe('preferenceSelectors', () => {
 
       store.isUserStateInit = false;
       expect(preferenceSelectors.isPreferenceInit(store)).toBe(false);
+    });
+  });
+
+  describe('labPreferSelectors', () => {
+    it('returns false for agent document floating chat panel by default', () => {
+      store.preference.lab = undefined;
+
+      expect(labPreferSelectors.enableAgentDocumentFloatingChatPanel(store)).toBe(false);
+    });
+
+    it('returns the configured agent document floating chat panel preference', () => {
+      store.preference.lab = { enableAgentDocumentFloatingChatPanel: true };
+
+      expect(labPreferSelectors.enableAgentDocumentFloatingChatPanel(store)).toBe(true);
     });
   });
 });

@@ -105,4 +105,16 @@ describe('Advanced settings page', () => {
     expect(screen.getByText('tab.advanced.toolsAndDiagnostics.title')).toBeDefined();
     expect(screen.getByText('tab.advanced.appUpdates.title')).toBeDefined();
   });
+
+  it('renders the agent document floating chat panel lab toggle', () => {
+    useUserStore.setState({
+      isUserStateInit: true,
+      setSettings: vi.fn(),
+      updateLab: vi.fn(),
+    });
+
+    render(<Page />, { wrapper: createWrapper() });
+
+    expect(screen.getByText('features.agentDocumentFloatingChatPanel.title')).toBeDefined();
+  });
 });
