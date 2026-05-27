@@ -4,6 +4,8 @@ import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { getRuntimeErrorMessage } from '@/utils/locale/runtimeErrorMessage';
+
 import PluginSettings from './PluginSettings';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -18,7 +20,7 @@ interface ErrorResponseProps extends ChatMessageError {
 }
 
 const ErrorResponse = memo<ErrorResponseProps>(({ id, type, body, message, plugin }) => {
-  const { t } = useTranslation('error');
+  const { t } = useTranslation(['error', 'modelRuntime']);
   if (type === 'PluginSettingsInvalid') {
     return <PluginSettings id={id} plugin={plugin} />;
   }
@@ -26,7 +28,7 @@ const ErrorResponse = memo<ErrorResponseProps>(({ id, type, body, message, plugi
   return (
     <Alert
       showIcon
-      title={t(`response.${type}` as any)}
+      title={getRuntimeErrorMessage(t, type)}
       type={'secondary'}
       extra={
         <Flexbox className={styles.errorResponseExtra}>

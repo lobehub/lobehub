@@ -1,6 +1,5 @@
 'use client';
 
-import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
 import { Block, Center, Icon, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { ImageOffIcon } from 'lucide-react';
@@ -9,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import defaultErrorLocale from '@/locales/default/error';
 import { AsyncTaskErrorType } from '@/types/asyncTask';
+import { getRuntimeErrorMessage } from '@/utils/locale/runtimeErrorMessage';
 
 import { ActionButtons } from './ActionButtons';
 import { styles } from './styles';
@@ -30,7 +30,7 @@ const providerContentModerationKeyByDefaultMessage = new Map<
 export const ErrorState = memo<ErrorStateProps>(
   ({ generation, generationBatch, aspectRatio, onDelete, onCopyError }) => {
     const { t } = useTranslation('image');
-    const { t: tError } = useTranslation('error');
+    const { t: tError } = useTranslation(['error', 'modelRuntime']);
 
     const errorMessage = useMemo(() => {
       if (!generation.task.error) return '';
@@ -64,16 +64,15 @@ export const ErrorState = memo<ErrorStateProps>(
           return translateErrorKey(defaultMessageTranslationKey) || errorBody;
         }
 
-        // Check if the error body is an AgentRuntimeErrorType that needs translation
-        const knownErrorTypes = Object.values(AgentRuntimeErrorType);
+        // Try the unified ERROR_CODE_SPECS-driven lookup (routes to either the
+        // new `modelRuntime` namespace or legacy `error.response.<X>`).
+        const runtimeMessage = getRuntimeErrorMessage(tError, errorBody);
         if (
-          knownErrorTypes.includes(
-            errorBody as (typeof AgentRuntimeErrorType)[keyof typeof AgentRuntimeErrorType],
-          )
+          runtimeMessage &&
+          runtimeMessage !== `modelRuntime:${errorBody}` &&
+          runtimeMessage !== `response.${errorBody}`
         ) {
-          // Use localized error message - ComfyUI errors are under 'response' namespace
-          const translationKey = `response.${errorBody}`;
-          return translateErrorKey(translationKey, errorBody) || errorBody;
+          return runtimeMessage;
         }
       }
 
