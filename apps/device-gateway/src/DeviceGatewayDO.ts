@@ -239,10 +239,15 @@ export class DeviceGatewayDO extends DurableObject<Env> {
       return Response.json({ error: 'DEVICE_OFFLINE', success: false }, { status: 503 });
     }
 
-    const { deviceId, timeout = 10_000 } = (await request.json()) as {
+    const { deviceId, timeout = 10_000, userId } = (await request.json()) as {
       deviceId?: string;
       timeout?: number;
+      userId?: string;
     };
+    const storedUserId = await this.ctx.storage.get<string>('_userId');
+    if (storedUserId && userId && userId !== storedUserId) {
+      return Response.json({ error: 'UNAUTHORIZED', success: false }, { status: 403 });
+    }
     const requestId = crypto.randomUUID();
 
     const targetWs = deviceId
@@ -354,11 +359,17 @@ export class DeviceGatewayDO extends DurableObject<Env> {
       deviceId,
       timeout = 30_000,
       toolCall,
+      userId,
     } = (await request.json()) as {
       deviceId?: string;
       timeout?: number;
       toolCall: unknown;
+      userId?: string;
     };
+    const storedUserId = await this.ctx.storage.get<string>('_userId');
+    if (storedUserId && userId && userId !== storedUserId) {
+      return Response.json({ error: 'UNAUTHORIZED', success: false }, { status: 403 });
+    }
     const requestId = crypto.randomUUID();
 
     // Select target device (specified > first available)
