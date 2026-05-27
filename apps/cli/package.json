@@ -44,7 +44,7 @@
     "picocolors": "^1.1.1",
     "superjson": "^2.2.6",
     "tsdown": "^0.21.4",
-    "typescript": "^5.9.3",
+    "typescript": "^6.0.3",
     "ws": "^8.18.1"
   },
   "publishConfig": {

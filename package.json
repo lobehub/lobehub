@@ -537,7 +537,7 @@
     "stylelint": "^16.12.0",
     "tsx": "^4.21.0",
     "type-fest": "^5.4.1",
-    "typescript": "^5.9.3",
+    "typescript": "^6.0.3",
     "unified": "^11.0.5",
     "unist-util-visit": "^5.1.0",
     "vite": "8.0.14",
@@ -568,7 +568,8 @@
       "pdfjs-dist": "5.4.530",
       "react": "19.2.5",
       "react-dom": "19.2.5",
-      "stylelint-config-clean-order": "7.0.0"
+      "stylelint-config-clean-order": "7.0.0",
+      "typescript": "6.0.3"
     },
     "patchedDependencies": {
       "@upstash/qstash": "patches/@upstash__qstash.patch"
