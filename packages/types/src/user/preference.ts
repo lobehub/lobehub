@@ -43,6 +43,10 @@ export const UserLabSchema = z.object({
    */
   enableAgentSelfIteration: z.boolean().optional(),
   /**
+   * enable the floating chat panel in agent document preview
+   */
+  enableAgentDocumentFloatingChatPanel: z.boolean().optional(),
+  /**
    * surface the execution-device switcher for heterogeneous agents
    * (lets users pick local / cloud sandbox / a bound device)
    */

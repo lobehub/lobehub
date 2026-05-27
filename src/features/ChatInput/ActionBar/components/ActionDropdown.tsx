@@ -65,7 +65,6 @@ const SubmenuScrollStyle = createGlobalStyle`
     overflow: hidden auto;
     overscroll-behavior: contain;
 
-    width: 360px;
     max-height: min(50vh, 640px);
     padding-block-end: 4px;
   }

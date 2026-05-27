@@ -9,6 +9,7 @@ const {
   mockBrowserWindow,
   mockNativeTheme,
   mockIpcMain,
+  mockShell,
   mockScreen,
   MockBrowserWindow,
   mockEnv,
@@ -64,6 +65,7 @@ const {
     MockBrowserWindow: vi.fn().mockImplementation(() => mockBrowserWindow),
     mockBrowserWindow,
     mockEnv: {
+      externalNavigationHosts: '',
       isDev: false,
       isLinux: false,
       isMac: false,
@@ -91,6 +93,9 @@ const {
         workArea: { height: 1080, width: 1920, x: 0, y: 0 },
       }),
     },
+    mockShell: {
+      openExternal: vi.fn().mockResolvedValue(undefined),
+    },
   };
 });
 
@@ -101,6 +106,7 @@ vi.mock('electron', () => ({
   ipcMain: mockIpcMain,
   nativeTheme: mockNativeTheme,
   screen: mockScreen,
+  shell: mockShell,
 }));
 
 // Mock logger
@@ -123,6 +129,9 @@ vi.mock('@/const/dir', () => ({
 vi.mock('@/const/env', () => ({
   get isDev() {
     return mockEnv.isDev;
+  },
+  get DESKTOP_EXTERNAL_NAVIGATION_HOSTS() {
+    return mockEnv.externalNavigationHosts;
   },
   get isLinux() {
     return mockEnv.isLinux;
@@ -182,6 +191,7 @@ describe('Browser', () => {
     mockEnv.isMac = false;
     mockEnv.isMacTahoe = false;
     mockEnv.isWindows = true;
+    mockEnv.externalNavigationHosts = '';
 
     // Create mock App
     mockStoreManagerGet = vi.fn().mockReturnValue(undefined);
@@ -728,6 +738,40 @@ describe('Browser', () => {
       willPreventUnloadHandler(mockEvent);
 
       expect(mockEvent.preventDefault).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('top-level navigation handling', () => {
+    let willNavigateHandler: (event: any, url: string) => void;
+
+    beforeEach(() => {
+      willNavigateHandler = mockBrowserWindow.webContents.on.mock.calls.find(
+        (call) => call[0] === 'will-navigate',
+      )?.[1];
+    });
+
+    it('should open configured external navigation hosts in system browser', () => {
+      mockEnv.externalNavigationHosts = 'stripe.com';
+      const mockEvent = { preventDefault: vi.fn() };
+
+      expect(willNavigateHandler).toBeDefined();
+      willNavigateHandler(mockEvent, 'https://checkout.stripe.com/c/pay/session_id');
+
+      expect(mockEvent.preventDefault).toHaveBeenCalled();
+      expect(mockShell.openExternal).toHaveBeenCalledWith(
+        'https://checkout.stripe.com/c/pay/session_id',
+      );
+    });
+
+    it('should allow internal result routes in the app window', () => {
+      mockEnv.externalNavigationHosts = 'stripe.com';
+      const mockEvent = { preventDefault: vi.fn() };
+
+      expect(willNavigateHandler).toBeDefined();
+      willNavigateHandler(mockEvent, 'http://localhost:3000/payment/upgrade-success');
+
+      expect(mockEvent.preventDefault).not.toHaveBeenCalled();
+      expect(mockShell.openExternal).not.toHaveBeenCalled();
     });
   });
 });

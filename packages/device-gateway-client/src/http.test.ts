@@ -260,6 +260,83 @@ describe('GatewayHttpClient', () => {
     });
   });
 
+  describe('executeMessageApi', () => {
+    it('should return message API result on success', async () => {
+      mockFetch({
+        json: vi.fn().mockResolvedValue({ content: '{"guid":"sent-1"}', success: true }),
+        ok: true,
+      });
+
+      const result = await client.executeMessageApi(
+        { userId: 'user-1' },
+        { apiName: 'sendText', payload: { chatGuid: 'chat-1' }, platform: 'imessage' },
+      );
+
+      expect(result).toEqual({ content: '{"guid":"sent-1"}', error: undefined, success: true });
+      expect(fetch).toHaveBeenCalledWith(
+        'https://gateway.test.com/api/device/message-api',
+        expect.objectContaining({
+          body: JSON.stringify({
+            api: { apiName: 'sendText', payload: { chatGuid: 'chat-1' }, platform: 'imessage' },
+            userId: 'user-1',
+          }),
+        }),
+      );
+    });
+
+    it('should handle non-string content', async () => {
+      mockFetch({
+        json: vi.fn().mockResolvedValue({ content: { ok: true }, success: true }),
+        ok: true,
+      });
+
+      const result = await client.executeMessageApi(
+        { userId: 'user-1' },
+        { apiName: 'ping', payload: {}, platform: 'imessage' },
+      );
+
+      expect(result.content).toBe(JSON.stringify({ ok: true }));
+    });
+
+    it('should handle non-ok response', async () => {
+      mockFetch({
+        ok: false,
+        status: 503,
+        text: vi.fn().mockResolvedValue('Desktop offline'),
+      });
+
+      const result = await client.executeMessageApi(
+        { userId: 'user-1' },
+        { apiName: 'ping', payload: {}, platform: 'imessage' },
+      );
+
+      expect(result).toEqual({
+        content: 'Device message API call failed (HTTP 503)',
+        error: 'Desktop offline',
+        success: false,
+      });
+    });
+
+    it('should pass optional deviceId and timeout', async () => {
+      mockFetch({
+        json: vi.fn().mockResolvedValue({ content: 'ok', success: true }),
+        ok: true,
+      });
+
+      await client.executeMessageApi(
+        { deviceId: 'device-1', timeout: 5000, userId: 'user-1' },
+        { apiName: 'ping', payload: {}, platform: 'imessage' },
+      );
+
+      expect(fetch).toHaveBeenCalledWith(
+        'https://gateway.test.com/api/device/message-api',
+        expect.objectContaining({
+          body: expect.stringContaining('"deviceId":"device-1"'),
+        }),
+      );
+    });
+  });
+
   describe('getDeviceSystemInfo', () => {
     it('should return system info on success', async () => {
       const systemInfo = {

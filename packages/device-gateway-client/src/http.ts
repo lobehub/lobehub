@@ -14,6 +14,12 @@ export interface DeviceToolCallResult {
   success: boolean;
 }
 
+export interface DeviceMessageApiResult {
+  content: string;
+  error?: string;
+  success: boolean;
+}
+
 export interface GatewayHttpClientOptions {
   gatewayUrl: string;
   serviceToken: string;
@@ -70,6 +76,35 @@ export class GatewayHttpClient {
       const text = await res.text().catch(() => '');
       return {
         content: `Device tool call failed (HTTP ${res.status})`,
+        error: text || `HTTP ${res.status}`,
+        success: false,
+      };
+    }
+
+    const data = await res.json();
+    return {
+      content:
+        typeof data.content === 'string' ? data.content : JSON.stringify(data.content ?? data),
+      error: data.error,
+      success: data.success ?? true,
+    };
+  }
+
+  async executeMessageApi(
+    params: { deviceId?: string; timeout?: number; userId: string },
+    api: { apiName: string; payload: Record<string, unknown>; platform: string },
+  ): Promise<DeviceMessageApiResult> {
+    const res = await this.post('/api/device/message-api', {
+      api,
+      deviceId: params.deviceId,
+      timeout: params.timeout,
+      userId: params.userId,
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      return {
+        content: `Device message API call failed (HTTP ${res.status})`,
         error: text || `HTTP ${res.status}`,
         success: false,
       };

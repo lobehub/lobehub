@@ -10,6 +10,8 @@ import type {
   ClientMessage,
   ConnectionStatus,
   GatewayClientEvents,
+  MessageApiRequestMessage,
+  MessageApiResponseMessage,
   ServerMessage,
   SystemInfoRequestMessage,
   SystemInfoResponseMessage,
@@ -146,6 +148,13 @@ export class GatewayClient extends EventEmitter {
     });
   }
 
+  sendMessageApiResponse(response: Omit<MessageApiResponseMessage, 'type'>): void {
+    this.sendMessage({
+      ...response,
+      type: 'message_api_response',
+    });
+  }
+
   sendSystemInfoResponse(response: Omit<SystemInfoResponseMessage, 'type'>): void {
     this.sendMessage({
       ...response,
@@ -253,6 +262,11 @@ export class GatewayClient extends EventEmitter {
 
         case 'tool_call_request': {
           this.emit('tool_call_request', message as ToolCallRequestMessage);
+          break;
+        }
+
+        case 'message_api_request': {
+          this.emit('message_api_request', message as MessageApiRequestMessage);
           break;
         }
 

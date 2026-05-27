@@ -9,6 +9,7 @@ const mockEnv = vi.hoisted(() => ({
 }));
 
 const mockClient = vi.hoisted(() => ({
+  executeMessageApi: vi.fn(),
   executeToolCall: vi.fn(),
   getDeviceSystemInfo: vi.fn(),
   queryDeviceList: vi.fn(),
@@ -251,6 +252,67 @@ describe('DeviceProxy', () => {
       expect(result).toEqual({
         content: 'Device tool call error: string error',
         error: 'string error',
+        success: false,
+      });
+    });
+  });
+
+  describe('executeMessageApi', () => {
+    const params = { deviceId: 'dev-1', userId: 'user-1' };
+    const api = { apiName: 'sendText', payload: { chatGuid: 'chat-1' }, platform: 'imessage' };
+
+    it('should return error when not configured', async () => {
+      const proxy = new DeviceProxy();
+      const result = await proxy.executeMessageApi(params, api);
+
+      expect(result).toEqual({
+        content: 'Device Gateway is not configured',
+        error: 'GATEWAY_NOT_CONFIGURED',
+        success: false,
+      });
+    });
+
+    it('should execute message API with default timeout', async () => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+      const expected = { content: '{"ok":true}', success: true };
+      mockClient.executeMessageApi.mockResolvedValue(expected);
+
+      const proxy = new DeviceProxy();
+      const result = await proxy.executeMessageApi(params, api);
+
+      expect(result).toEqual(expected);
+      expect(mockClient.executeMessageApi).toHaveBeenCalledWith(
+        { deviceId: 'dev-1', timeout: 30_000, userId: 'user-1' },
+        api,
+      );
+    });
+
+    it('should use custom timeout', async () => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+      mockClient.executeMessageApi.mockResolvedValue({ content: 'ok', success: true });
+
+      const proxy = new DeviceProxy();
+      await proxy.executeMessageApi(params, api, 60_000);
+
+      expect(mockClient.executeMessageApi).toHaveBeenCalledWith(
+        { deviceId: 'dev-1', timeout: 60_000, userId: 'user-1' },
+        api,
+      );
+    });
+
+    it('should return error result on exception', async () => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+      mockClient.executeMessageApi.mockRejectedValue(new Error('connection refused'));
+
+      const proxy = new DeviceProxy();
+      const result = await proxy.executeMessageApi(params, api);
+
+      expect(result).toEqual({
+        content: 'Device message API error: connection refused',
+        error: 'connection refused',
         success: false,
       });
     });

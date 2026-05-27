@@ -8,6 +8,13 @@ import { type GlobalRuntimeConfig } from '@/types/serverConfig';
 import { type ServerConfigStore } from './store';
 
 const FETCH_SERVER_CONFIG_KEY = 'FETCH_SERVER_CONFIG';
+const CLOUD_DESKTOP_BUSINESS_FEATURES_FLAG = '__LOBECLOUD_DESKTOP_BUSINESS_FEATURES__';
+
+const setDesktopBusinessFeaturesFlag = (enableBusinessFeatures: boolean | undefined) => {
+  (globalThis as unknown as Record<string, boolean | undefined>)[
+    CLOUD_DESKTOP_BUSINESS_FEATURES_FLAG
+  ] = Boolean(enableBusinessFeatures);
+};
 
 type Setter = StoreSetter<ServerConfigStore>;
 export const createServerConfigSlice = (
@@ -31,9 +38,11 @@ export class ServerConfigActionImpl {
       () => globalService.getGlobalConfig(),
       {
         onError: () => {
+          setDesktopBusinessFeaturesFlag(false);
           this.#set({ serverConfigInit: true }, false, 'initServerConfigFallback');
         },
         onSuccess: (data) => {
+          setDesktopBusinessFeaturesFlag(data.serverConfig.enableBusinessFeatures);
           this.#set(
             {
               billboard: data.billboard ?? null,

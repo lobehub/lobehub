@@ -1,7 +1,9 @@
 import { type DeviceAttachment } from '@lobechat/builtin-tool-remote-device';
 import {
+  type DeviceMessageApiResult,
   type DeviceStatusResult,
   type DeviceSystemInfo,
+  type DeviceToolCallResult,
   GatewayHttpClient,
 } from '@lobechat/device-gateway-client';
 import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
@@ -94,7 +96,7 @@ export class DeviceProxy {
     params: { deviceId: string; userId: string },
     toolCall: { apiName: string; arguments: string; identifier: string },
     timeout = 30_000,
-  ): Promise<{ content: string; error?: string; success: boolean }> {
+  ): Promise<DeviceToolCallResult> {
     const client = this.getClient();
     if (!client) {
       return {
@@ -121,6 +123,40 @@ export class DeviceProxy {
       const message = error instanceof Error ? error.message : String(error);
       log('executeToolCall: error — %s', message);
       return { content: `Device tool call error: ${message}`, error: message, success: false };
+    }
+  }
+
+  async executeMessageApi(
+    params: { deviceId: string; userId: string },
+    api: { apiName: string; payload: Record<string, unknown>; platform: string },
+    timeout = 30_000,
+  ): Promise<DeviceMessageApiResult> {
+    const client = this.getClient();
+    if (!client) {
+      return {
+        content: 'Device Gateway is not configured',
+        error: 'GATEWAY_NOT_CONFIGURED',
+        success: false,
+      };
+    }
+
+    log(
+      'executeMessageApi: userId=%s, deviceId=%s, api=%s/%s',
+      params.userId,
+      params.deviceId,
+      api.platform,
+      api.apiName,
+    );
+
+    try {
+      return await client.executeMessageApi(
+        { deviceId: params.deviceId, timeout, userId: params.userId },
+        api,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      log('executeMessageApi: error — %s', message);
+      return { content: `Device message API error: ${message}`, error: message, success: false };
     }
   }
 

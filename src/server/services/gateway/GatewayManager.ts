@@ -1,6 +1,7 @@
 import debug from 'debug';
 
 import { getServerDB } from '@/database/core/db-adaptor';
+import type { DecryptedBotProvider } from '@/database/models/agentBotProvider';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
@@ -186,14 +187,7 @@ export class GatewayManager {
   // Factory
   // ------------------------------------------------------------------
 
-  private createClient(
-    platform: string,
-    provider: {
-      applicationId: string;
-      credentials: Record<string, string>;
-      settings?: Record<string, unknown> | null;
-    },
-  ): PlatformClient | null {
+  private createClient(platform: string, provider: DecryptedBotProvider): PlatformClient | null {
     const def = this.definitionByPlatform.get(platform);
     if (!def) {
       log('No definition registered for platform: %s', platform);
@@ -205,6 +199,7 @@ export class GatewayManager {
     const context: BotPlatformRuntimeContext = {
       appUrl: process.env.APP_URL,
       redisClient: getAgentRuntimeRedisClient() as any,
+      userId: provider.userId,
     };
 
     return def.clientFactory.createClient(config, context);

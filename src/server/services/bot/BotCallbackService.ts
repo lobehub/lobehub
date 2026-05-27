@@ -227,6 +227,7 @@ export class BotCallbackService {
 
     const client = entry.clientFactory.createClient(config, {
       redisClient: getAgentRuntimeRedisClient() as any,
+      userId: row.userId ?? userId,
     });
     const messenger = client.getMessenger(platformThreadId);
 

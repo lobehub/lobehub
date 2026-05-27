@@ -355,6 +355,7 @@ export interface BotPlatformRuntimeContext {
   appUrl?: string;
   redisClient?: BotPlatformRedisClient;
   registerByToken?: (token: string) => void;
+  userId?: string;
 }
 
 // --------------- Validation ---------------

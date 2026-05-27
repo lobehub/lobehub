@@ -26,6 +26,7 @@ const USER_ID_TOOLTIP_BY_PLATFORM: Record<string, string> = {
   // Feishu and Lark share `sharedSchema`, which always passes 'feishu' — the
   // tooltip copy mentions both products so it reads naturally for either.
   feishu: 'channel.userIdHint.feishu',
+  imessage: 'channel.userIdHint.imessage',
   line: 'channel.userIdHint.line',
   qq: 'channel.userIdHint.qq',
   slack: 'channel.userIdHint.slack',
@@ -86,6 +87,7 @@ export type BotReplyLocale = Locales;
 const PLATFORM_REPLY_LOCALES: Record<string, BotReplyLocale> = {
   discord: 'en-US',
   feishu: 'zh-CN',
+  imessage: 'en-US',
   lark: 'en-US',
   qq: 'zh-CN',
   slack: 'en-US',

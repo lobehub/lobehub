@@ -27,6 +27,8 @@ import { platformRegistry } from '@/server/services/bot/platforms';
 import { DiscordApi } from '@/server/services/bot/platforms/discord/api';
 import { DiscordMessageService } from '@/server/services/bot/platforms/discord/service';
 import { FeishuMessageService } from '@/server/services/bot/platforms/feishu/service';
+import { ImessageDesktopBridgeApi } from '@/server/services/bot/platforms/imessage/desktopBridge';
+import { ImessageMessageService } from '@/server/services/bot/platforms/imessage/service';
 import { QQMessageService } from '@/server/services/bot/platforms/qq/service';
 import { SlackApi } from '@/server/services/bot/platforms/slack/api';
 import { SlackMessageService } from '@/server/services/bot/platforms/slack/service';
@@ -80,6 +82,16 @@ export const messageRuntime: ServerRuntimeRegistration = {
         return new FeishuMessageService(
           new LarkApiClient(applicationId, credentials.appSecret, 'feishu'),
           'feishu',
+        );
+      },
+      imessage: async () => {
+        const { applicationId, credentials } = await resolveCredentials(providerModel, 'imessage');
+        return new ImessageMessageService(
+          new ImessageDesktopBridgeApi({
+            applicationId,
+            deviceId: credentials.desktopDeviceId,
+            userId: context.userId!,
+          }),
         );
       },
       lark: async () => {

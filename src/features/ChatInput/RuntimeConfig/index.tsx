@@ -125,6 +125,11 @@ const RuntimeConfig = memo(() => {
     labPreferSelectors.enableExecutionDeviceSwitcher,
   );
 
+  // When the execution device switcher is visible, it takes over sandbox/runtime routing.
+  // Hide the runtimeMode selector to avoid two conflicting controls for the same decision.
+  const showDeviceSwitcher =
+    enableAgentMode && !isHeterogeneous && enableExecutionDeviceSwitcher && !!agentId;
+
   const topicWorkingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
   const agentWorkingDirectory = useAgentStore((s) =>
     agentId ? agentByIdSelectors.getAgentWorkingDirectoryById(agentId)(s) : undefined,
@@ -292,27 +297,27 @@ const RuntimeConfig = memo(() => {
       {/* Left: Chat mode switcher + (agent-only) runtime env + working directory */}
       <Flexbox horizontal align={'center'} gap={4}>
         <ModeSelector />
-        {enableAgentMode && !isHeterogeneous && enableExecutionDeviceSwitcher && agentId && (
-          <HeteroDeviceSwitcher agentId={agentId} />
-        )}
+        {showDeviceSwitcher && <HeteroDeviceSwitcher agentId={agentId} />}
         {enableAgentMode && (
           <>
-            <Popover
-              content={modeContent}
-              open={modePopoverOpen}
-              placement="top"
-              styles={{ content: { padding: 4 } }}
-              trigger="click"
-              onOpenChange={setModePopoverOpen}
-            >
-              <div>
-                {modePopoverOpen ? (
-                  modeButton
-                ) : (
-                  <Tooltip title={t('runtimeEnv.selectMode')}>{modeButton}</Tooltip>
-                )}
-              </div>
-            </Popover>
+            {!showDeviceSwitcher && (
+              <Popover
+                content={modeContent}
+                open={modePopoverOpen}
+                placement="top"
+                styles={{ content: { padding: 4 } }}
+                trigger="click"
+                onOpenChange={setModePopoverOpen}
+              >
+                <div>
+                  {modePopoverOpen ? (
+                    modeButton
+                  ) : (
+                    <Tooltip title={t('runtimeEnv.selectMode')}>{modeButton}</Tooltip>
+                  )}
+                </div>
+              </Popover>
+            )}
             {rightContent()}
           </>
         )}

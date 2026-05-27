@@ -322,6 +322,7 @@ export class BotMessageRouter {
     const runtimeContext: BotPlatformRuntimeContext = {
       appUrl: appEnv.APP_URL,
       redisClient: getAgentRuntimeRedisClient() as any,
+      userId,
     };
 
     const client = entry.clientFactory.createClient(providerConfig, runtimeContext);

@@ -206,6 +206,24 @@ describe('GatewayClient', () => {
       expect(toolCallCb).toHaveBeenCalledWith(msg);
     });
 
+    it('should handle message_api_request', () => {
+      const messageApiCb = vi.fn();
+      client.on('message_api_request', messageApiCb);
+
+      const msg = {
+        api: {
+          apiName: 'sendText',
+          payload: { chatGuid: 'chat-1', message: 'hello' },
+          platform: 'imessage',
+        },
+        requestId: 'req-message-1',
+        type: 'message_api_request',
+      };
+      handler(JSON.stringify(msg));
+
+      expect(messageApiCb).toHaveBeenCalledWith(msg);
+    });
+
     it('should handle system_info_request', () => {
       const sysInfoCb = vi.fn();
       client.on('system_info_request', sysInfoCb);
@@ -263,6 +281,27 @@ describe('GatewayClient', () => {
           requestId: 'req-1',
           result: { content: 'result', success: true },
           type: 'tool_call_response',
+        }),
+      );
+    });
+  });
+
+  describe('sendMessageApiResponse', () => {
+    it('should send message API response message', async () => {
+      client.connect();
+      await vi.advanceTimersByTimeAsync(1);
+
+      const ws = (client as any).ws;
+      client.sendMessageApiResponse({
+        requestId: 'req-message-1',
+        result: { content: '{"ok":true}', success: true },
+      });
+
+      expect(ws.send).toHaveBeenCalledWith(
+        JSON.stringify({
+          requestId: 'req-message-1',
+          result: { content: '{"ok":true}', success: true },
+          type: 'message_api_response',
         }),
       );
     });

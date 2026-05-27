@@ -227,6 +227,29 @@ describe('GatewayManager', () => {
       expect(mockBot.start).toHaveBeenCalled();
     });
 
+    it('should scope lookup by the requested user but build runtime context from the provider row', async () => {
+      const mockBot = createMockBot();
+      const factory = vi.fn().mockReturnValue(mockBot);
+      mockAgentBotProviderModel.findEnabledByApplicationId.mockResolvedValue({
+        applicationId: 'app-123',
+        credentials: { token: 'tok123' },
+        settings: {},
+        userId: 'provider-user',
+      });
+
+      const manager = new GatewayManager({ definitions: [createFakeDefinition('slack', factory)] });
+
+      await manager.startClient('slack', 'app-123', 'requested-user');
+
+      expect(vi.mocked(AgentBotProviderModel)).toHaveBeenCalledWith(
+        mockDb,
+        'requested-user',
+        mockGateKeeper,
+      );
+      expect(factory.mock.calls[0][1]).toMatchObject({ userId: 'provider-user' });
+      expect(mockBot.start).toHaveBeenCalled();
+    });
+
     it('should stop existing bot before starting a new one for the same key', async () => {
       const mockBot1 = createMockBot();
       const mockBot2 = createMockBot();

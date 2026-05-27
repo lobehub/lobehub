@@ -12,6 +12,8 @@ import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { useDocumentStore } from '@/store/document';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 import {
   getSkillMarkdownMetadataError,
   parseSkillMarkdownFrontmatterFields,
@@ -197,6 +199,9 @@ const DocumentBody = memo(() => {
   const agentDocumentId = useChatStore(chatPortalSelectors.portalAgentDocumentId);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const activeTopicId = useChatStore((s) => s.activeTopicId);
+  const enableFloatingChatPanel = useUserStore(
+    labPreferSelectors.enableAgentDocumentFloatingChatPanel,
+  );
   const [skillFrontmatter, contentFormat] = useDocumentStore((s) =>
     documentId
       ? [s.documents[documentId]?.skillFrontmatter ?? '', s.documents[documentId]?.contentFormat]
@@ -213,7 +218,7 @@ const DocumentBody = memo(() => {
         <EditorCanvas />
       </div>
       <TodoList />
-      {activeAgentId && (
+      {enableFloatingChatPanel && activeAgentId && (
         <FloatingChatPanel
           agentDocumentId={agentDocumentId}
           agentId={activeAgentId}

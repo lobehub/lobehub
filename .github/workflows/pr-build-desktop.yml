@@ -92,6 +92,7 @@ jobs:
       - name: Setup build environment
         uses: ./.github/actions/desktop-build-setup
         with:
+          cloud-token: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
           node-version: 24.11.1
 
       # 设置 package.json 的版本号

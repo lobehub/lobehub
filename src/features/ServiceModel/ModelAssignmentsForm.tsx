@@ -89,7 +89,7 @@ const ModelAssignmentsForm = memo(() => {
 
   const defaultAgentItem: FormItemProps = {
     children: (
-      <Flexbox align="center" direction="horizontal" gap={12} style={{ width: 'min(100%, 448px)' }}>
+      <Flexbox align="center" direction="horizontal" gap={12} style={{ width: 448 }}>
         <ModelSelect
           showAbility={false}
           style={{ minWidth: 0, width: '100%' }}
@@ -100,7 +100,6 @@ const ModelAssignmentsForm = memo(() => {
     ),
     desc: t('defaultAgent.model.desc'),
     label: t('defaultAgent.title'),
-    minWidth: undefined,
   };
 
   const systemModelItems: FormItemProps[] = SYSTEM_AGENT_MODEL_ITEMS.map(({ key }) => {
@@ -112,7 +111,7 @@ const ModelAssignmentsForm = memo(() => {
           align="center"
           direction="horizontal"
           gap={12}
-          style={{ width: 'min(100%, 448px)' }}
+          style={{ width: 448 }}
         >
           <ModelSelect
             showAbility={false}
@@ -124,7 +123,6 @@ const ModelAssignmentsForm = memo(() => {
       ),
       desc: t(`systemAgent.${key}.modelDesc`),
       label: t(`systemAgent.${key}.title`),
-      minWidth: undefined,
     } satisfies FormItemProps;
   });
 
@@ -133,7 +131,7 @@ const ModelAssignmentsForm = memo(() => {
 
     return {
       children: (
-        <Flexbox direction="vertical" gap={8} style={{ width: 'min(100%, 448px)' }}>
+        <Flexbox direction="vertical" gap={8} style={{ width: 448 }}>
           <ModelSelect
             showAbility={false}
             style={{ minWidth: 0, width: '100%' }}
@@ -157,7 +155,6 @@ const ModelAssignmentsForm = memo(() => {
       ),
       desc: t(`systemAgent.${key}.modelDesc`),
       label: t(`systemAgent.${key}.title`),
-      minWidth: undefined,
     } satisfies FormItemProps;
   });
 
@@ -167,24 +164,19 @@ const ModelAssignmentsForm = memo(() => {
 
     return {
       children: (
-        <Flexbox
-          align="center"
-          direction="horizontal"
-          gap={12}
-          style={{ width: 'min(100%, 448px)' }}
-        >
-          <ModelSelect
-            showAbility={false}
-            style={{ minWidth: 0, width: '100%' }}
-            value={value}
-            onChange={(props) => updateSystemAgentModel(key, props)}
+        <Flexbox align="center" direction="horizontal" gap={12}>
+          <Switch
+            aria-label={t(`systemAgent.${key}.title`)}
+            checked={value.enabled}
+            loading={loadingKey === key}
+            onChange={(enabled) => updateSystemAgentModel(key, { enabled })}
           />
-          <Flexbox align="center" direction="horizontal" gap={8}>
-            <Switch
-              aria-label={t(`systemAgent.${key}.title`)}
-              checked={value.enabled}
-              loading={loadingKey === key}
-              onChange={(enabled) => updateSystemAgentModel(key, { enabled })}
+          <Flexbox style={{ width: 448 }}>
+            <ModelSelect
+              showAbility={false}
+              style={{ minWidth: 0, width: '100%' }}
+              value={value}
+              onChange={(props) => updateSystemAgentModel(key, props)}
             />
           </Flexbox>
         </Flexbox>
@@ -199,7 +191,6 @@ const ModelAssignmentsForm = memo(() => {
           {t(`systemAgent.${key}.title`)}
         </span>
       ),
-      minWidth: undefined,
     } satisfies FormItemProps;
   });
 
@@ -241,6 +232,7 @@ const ModelAssignmentsForm = memo(() => {
       itemsType={'group'}
       variant={'filled'}
       {...FORM_STYLE}
+      itemMinWidth={undefined}
     />
   );
 });
