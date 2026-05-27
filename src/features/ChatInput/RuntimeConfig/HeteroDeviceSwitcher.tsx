@@ -226,8 +226,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const [open, setOpen] = useState(false);
 
   const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
-  const updateAgentConfig = useAgentStore((s) => s.updateAgentConfig);
-  const updateAgentChatConfigById = useAgentStore((s) => s.updateAgentChatConfigById);
+  const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
 
   const heteroType = agencyConfig?.heterogeneousProvider?.type;
   const storedTarget = agencyConfig?.executionTarget;
@@ -246,24 +245,22 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
 
       // Keep runtimeMode in sync so the server-side tool gate (runtimeMode === 'cloud'
       // enables CloudSandbox) reflects the user's chosen execution target.
+      // Use a single updateAgentConfigById to persist both fields atomically — parallel
+      // calls share the same abort signal name and the second would cancel the first.
       const platform = isDesktop ? 'desktop' : 'web';
       const runtimeMode: RuntimeEnvMode =
         target === 'sandbox' ? 'cloud' : target === 'local' ? 'local' : 'none';
 
-      await Promise.all([
-        updateAgentConfig({
-          agencyConfig: {
-            ...agencyConfig,
-            executionTarget: target,
-            ...(target === 'device' && deviceId ? { boundDeviceId: deviceId } : {}),
-          },
-        }),
-        updateAgentChatConfigById(agentId, {
-          runtimeEnv: { runtimeMode: { [platform]: runtimeMode } },
-        }),
-      ]);
+      await updateAgentConfigById(agentId, {
+        agencyConfig: {
+          ...agencyConfig,
+          executionTarget: target,
+          ...(target === 'device' && deviceId ? { boundDeviceId: deviceId } : {}),
+        },
+        chatConfig: { runtimeEnv: { runtimeMode: { [platform]: runtimeMode } } },
+      });
     },
-    [agentId, agencyConfig, updateAgentConfig, updateAgentChatConfigById],
+    [agentId, agencyConfig, updateAgentConfigById],
   );
 
   // Don't render for remote hetero agents — they use RemoteAgentConfigCard in profile.
