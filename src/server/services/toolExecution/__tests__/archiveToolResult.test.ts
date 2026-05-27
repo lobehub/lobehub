@@ -71,7 +71,7 @@ describe('archiveToolResultIfNeeded', () => {
       { recursive: true },
     );
     expect(mockVfsService.write).toHaveBeenCalledWith(
-      './.tool-results/topic-1_call_1.md',
+      './.tool-results/topic-1_call_1.txt',
       '0123456789',
       { agentId: 'agent-1', topicId: 'topic-1' },
     );
@@ -80,9 +80,9 @@ describe('archiveToolResultIfNeeded', () => {
       topicId: 'topic-1',
     });
     expect(result.archived).toBe(true);
-    expect(result.archivePath).toBe('./.tool-results/topic-1_call_1.md');
+    expect(result.archivePath).toBe('./.tool-results/topic-1_call_1.txt');
     expect(result.content).toContain('01234');
-    expect(result.content).toContain('./.tool-results/topic-1_call_1.md');
+    expect(result.content).toContain('./.tool-results/topic-1_call_1.txt');
     expect(result.content).toContain('lobe-agent-documents');
     expect(result.content).toContain('readDocument');
     expect(result.content).toContain('agent-doc-1');

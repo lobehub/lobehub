@@ -31,7 +31,7 @@ interface ArchiveToolResultParams {
 }
 
 const buildArchivePath = (topicId: string, toolCallId: string) =>
-  `${TOOL_RESULTS_DIR}/${topicId}_${toolCallId}.md`;
+  `${TOOL_RESULTS_DIR}/${topicId}_${toolCallId}.txt`;
 
 const getErrorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error || 'Unknown archive error');
