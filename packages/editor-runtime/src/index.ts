@@ -1,2 +1,1 @@
-export { EditorRuntime, type LiteXMLAdapter, type LiteXMLBatchOperation } from './EditorRuntime';
-export * from './types';
+export * from './client';

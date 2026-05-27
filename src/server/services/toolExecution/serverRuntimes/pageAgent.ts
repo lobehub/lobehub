@@ -4,7 +4,7 @@ import {
   type PageAgentInvocationContext,
   type PageAgentRuntimeService,
 } from '@lobechat/builtin-tool-page-agent/executionRuntime';
-import { EditorRuntime, type LiteXMLAdapter } from '@lobechat/editor-runtime';
+import { EditorRuntime, type LiteXMLAdapter } from '@lobechat/editor-runtime/server';
 import { createHeadlessEditor, type HeadlessEditor } from '@lobehub/editor/headless';
 import type { SerializedEditorState, SerializedLexicalNode } from 'lexical';
 

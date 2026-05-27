@@ -78,12 +78,6 @@ const StoreUpdater = memo<StoreUpdaterProps>(
 
       pageAgentRuntime.setCurrentDocId(pageId);
       pageAgentRuntime.setTitleHandlers(storeApi.getState().setTitle, titleGetter);
-      // Client-side LLM dispatch (chat-store `invokeBuiltinTool` →
-      // `PageAgentExecutor.modifyNodes` → runtime.modifyNodes) still goes
-      // through these hooks. The server-runtime path persists + appends history
-      // server-side via DocumentService.updateDocument(saveSource: 'llm_call'),
-      // so the two paths don't double-write — only one of them is active per
-      // tool call depending on which runtime the agent dispatched through.
       pageAgentRuntime.setBeforeMutateHandler(() => {
         const editor = storeApi.getState().editor;
         const editorData = editor?.getDocument('json');
