@@ -733,6 +733,15 @@ export class AgentRuntimeService {
         const startAt = Date.now();
         const stepResult = await runtime.step(currentState, currentContext);
 
+        // Inner runtime.step() catches model-runtime exceptions and stuffs the
+        // raw error into newState.error without re-throwing — so the outer
+        // catch at the bottom of this method never sees them. Normalize +
+        // classify here so the raw error doesn't reach Redis state, the
+        // success-path trace finalize, or `persistCompletion`'s JSONB write.
+        if (stepResult.newState.error) {
+          stepResult.newState.error = formatErrorForState(stepResult.newState.error);
+        }
+
         // Check if the operation was interrupted while the step was executing
         // (e.g., user clicked abort during a long LLM call)
         const latestState = await this.coordinator.loadAgentState(operationId);
@@ -957,19 +966,23 @@ export class AgentRuntimeService {
           // Finalize tracing snapshot. The error catch below uses the same
           // recorder so propagated failures still write the canonical S3
           // snapshot instead of orphaning the partial ().
+          const newStateError = stepResult.newState.error;
           await this.traceRecorder.finalize(operationId, {
             appendEventsToLastStep: completionSignalEvents,
             completionReason: reason,
-            error: stepResult.newState.error
+            error: newStateError
               ? {
+                  attribution: newStateError.attribution,
+                  category: newStateError.category,
+                  countAsFailure: newStateError.countAsFailure,
+                  httpStatus: newStateError.httpStatus,
                   message:
-                    this.completionLifecycle.extractErrorMessage(stepResult.newState.error) ??
-                    JSON.stringify(stepResult.newState.error),
-                  type: String(
-                    stepResult.newState.error.type ??
-                      stepResult.newState.error.errorType ??
-                      'unknown',
-                  ),
+                    this.completionLifecycle.extractErrorMessage(newStateError) ??
+                    JSON.stringify(newStateError),
+                  numericId: newStateError.numericId,
+                  retryable: newStateError.retryable,
+                  severity: newStateError.severity,
+                  type: String(newStateError.type ?? newStateError.errorType ?? 'unknown'),
                 }
               : undefined,
             state: stepResult.newState,

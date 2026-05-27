@@ -75,6 +75,34 @@ describe('formatErrorForState', () => {
       expect(result.category).toBe('capacity');
     });
 
+    it('is idempotent on an already-normalized ChatMessageError', () => {
+      const once = formatErrorForState({
+        errorType: AgentRuntimeErrorType.InvalidProviderAPIKey,
+        message: 'bad key',
+      });
+      const twice = formatErrorForState(once);
+
+      // Re-running the helper must not collapse to AgentRuntimeError or strip
+      // classification — both are real risks if the early-return branch is
+      // missing, because the success-path inner-step write can run through
+      // here a second time when the outer service touches state.error again.
+      expect(twice.type).toBe(AgentRuntimeErrorType.InvalidProviderAPIKey);
+      expect(twice.attribution).toBe('user');
+      expect(twice.category).toBe('auth');
+      expect(twice.message).toBe('bad key');
+    });
+
+    it('enriches a partial ChatMessageError that only carries type + message', () => {
+      const result = formatErrorForState({
+        message: 'balance exhausted',
+        type: AgentRuntimeErrorType.InsufficientQuota,
+      });
+
+      expect(result.attribution).toBe('user');
+      expect(result.category).toBe('quota');
+      expect(result.httpStatus).toBe(429);
+    });
+
     it('leaves classification fields unset for codes outside the spec table', () => {
       const result = formatErrorForState(new Error('infra blew up'));
 

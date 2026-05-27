@@ -35,12 +35,16 @@ const enrichWithSpec = (formatted: ChatMessageError): ChatMessageError => {
  * classification metadata from `ERROR_CODE_SPECS` so the resulting object
  * is self-describing for everything downstream of the runtime catch block.
  *
- * Handles three input shapes:
+ * Handles four input shapes:
  *
  * 1. `ChatCompletionErrorPayload` — what `model-runtime` throws on LLM
  *    failures: `{ errorType, error, provider?, message? }`.
- * 2. Standard `Error` instance — wrapped as `InternalServerError`.
- * 3. Anything else — stringified as `AgentRuntimeError`.
+ * 2. Already-normalized `ChatMessageError` (`{ type, message?, body? }`)
+ *    — re-enriched in place so the helper is safe to call twice (the inner
+ *    `runtime.step()` non-throwing error path and the outer `executeStep`
+ *    catch can both run through here without double-wrapping).
+ * 3. Standard `Error` instance — wrapped as `InternalServerError`.
+ * 4. Anything else — stringified as `AgentRuntimeError`.
  */
 export const formatErrorForState = (error: unknown): ChatMessageError => {
   if (error && typeof error === 'object' && 'errorType' in error) {
@@ -54,6 +58,21 @@ export const formatErrorForState = (error: unknown): ChatMessageError => {
       message: payload.message || String(payload.errorType),
       type: payload.errorType,
     });
+  }
+
+  // Path 2: already-normalized ChatMessageError shape — has `type` but not
+  // `errorType`, and isn't a thrown Error instance. Common when the inner
+  // runtime.step() catch has already stuffed a partial ChatMessageError into
+  // `newState.error` and the outer service is just topping it up.
+  if (
+    error &&
+    typeof error === 'object' &&
+    !(error instanceof Error) &&
+    'type' in error &&
+    (typeof (error as { type: unknown }).type === 'string' ||
+      typeof (error as { type: unknown }).type === 'number')
+  ) {
+    return enrichWithSpec(error as ChatMessageError);
   }
 
   if (error instanceof Error) {
