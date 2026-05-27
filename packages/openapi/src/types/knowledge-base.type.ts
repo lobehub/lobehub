@@ -37,7 +37,7 @@ export interface KnowledgeBaseFileBatchRequest {
 }
 
 export const KnowledgeBaseFileBatchSchema = z.object({
-  fileIds: z.array(z.string().min(1, '文件ID不能为空')).min(1, '文件ID列表不能为空'),
+  fileIds: z.array(z.string().min(1, 'File ID cannot be empty')).min(1, 'File ID list cannot be empty'),
 });
 
 /**
@@ -49,7 +49,7 @@ export interface MoveKnowledgeBaseFilesRequest extends KnowledgeBaseFileBatchReq
 }
 
 export const MoveKnowledgeBaseFilesSchema = KnowledgeBaseFileBatchSchema.extend({
-  targetKnowledgeBaseId: z.string().min(1, '目标知识库 ID 不能为空'),
+  targetKnowledgeBaseId: z.string().min(1, 'Target knowledge base ID cannot be empty'),
 });
 
 /**
@@ -99,7 +99,7 @@ export type KnowledgeBaseListResponse = PaginationQueryResponse<{
  * Knowledge base ID parameter
  */
 export const KnowledgeBaseIdParamSchema = z.object({
-  id: z.string().min(1, '知识库 ID 不能为空'),
+  id: z.string().min(1, 'Knowledge base ID cannot be empty'),
 });
 
 /**
@@ -115,9 +115,9 @@ export interface CreateKnowledgeBaseRequest {
 }
 
 export const CreateKnowledgeBaseSchema = z.object({
-  avatar: z.string().url('头像必须是有效的URL').optional(),
-  description: z.string().max(1000, '知识库描述过长').optional(),
-  name: z.string().min(1, '知识库名称不能为空').max(255, '知识库名称过长'),
+  avatar: z.string().url('Avatar must be a valid URL').optional(),
+  description: z.string().max(1000, 'Knowledge base description is too long').optional(),
+  name: z.string().min(1, 'Knowledge base name cannot be empty').max(255, 'Knowledge base name is too long'),
 });
 
 /**
@@ -141,9 +141,9 @@ export interface UpdateKnowledgeBaseRequest {
 }
 
 export const UpdateKnowledgeBaseSchema = z.object({
-  avatar: z.string().url('头像必须是有效的URL').optional(),
-  description: z.string().max(1000, '知识库描述过长').optional(),
-  name: z.string().min(1, '知识库名称不能为空').max(255, '知识库名称过长').optional(),
+  avatar: z.string().url('Avatar must be a valid URL').optional(),
+  description: z.string().max(1000, 'Knowledge base description is too long').optional(),
+  name: z.string().min(1, 'Knowledge base name cannot be empty').max(255, 'Knowledge base name is too long').optional(),
 });
 
 /**

@@ -13,7 +13,7 @@ export interface MessagesQueryByTopicRequest {
 }
 
 export const MessagesQueryByTopicRequestSchema = z.object({
-  topicId: z.string().min(1, '话题ID不能为空'),
+  topicId: z.string().min(1, 'Topic ID cannot be empty'),
 });
 
 /**
@@ -36,7 +36,7 @@ export interface CountByTopicsRequest {
 }
 
 export const CountByTopicsRequestSchema = z.object({
-  topicIds: z.array(z.string()).min(1, '话题ID数组不能为空'),
+  topicIds: z.array(z.string()).min(1, 'Topic ID array cannot be empty'),
 });
 
 export interface CountByUserRequest {
@@ -44,7 +44,7 @@ export interface CountByUserRequest {
 }
 
 export const CountByUserRequestSchema = z.object({
-  userId: z.string().min(1, '用户ID不能为空'),
+  userId: z.string().min(1, 'User ID cannot be empty'),
 });
 
 // ==================== Message List Query Types ====================
@@ -67,7 +67,7 @@ export const MessagesListQuerySchema = z
   })
   .extend(PaginationQuerySchema.shape)
   .refine((data) => Boolean(data.topicId || data.userId), {
-    message: '至少需要提供一个过滤参数：topicId 或 userId',
+    message: 'At least one filter parameter must be provided: topicId or userId',
   });
 
 // ==================== Message Search Types ====================
@@ -79,7 +79,7 @@ export interface SearchMessagesByKeywordRequest {
 }
 
 export const SearchMessagesByKeywordRequestSchema = z.object({
-  keyword: z.string().min(1, '搜索关键词不能为空'),
+  keyword: z.string().min(1, 'Search keyword cannot be empty'),
   limit: z.number().min(1).max(100).nullish().default(20),
   offset: z.number().min(0).nullish().default(0),
 });
@@ -122,8 +122,8 @@ export interface MessagesCreateRequest {
 }
 
 export const MessagesCreateRequestSchema = z.object({
-  content: z.string().min(1, '消息内容不能为空'),
-  role: z.enum(['user', 'system', 'assistant', 'tool'], { required_error: '角色类型无效' }),
+  content: z.string().min(1, 'Message content cannot be empty'),
+  role: z.enum(['user', 'system', 'assistant', 'tool'], { required_error: 'Invalid role type' }),
 
   // AI-related fields
   model: z.string().nullish(), // Model used
@@ -158,7 +158,7 @@ export const MessagesCreateRequestSchema = z.object({
 });
 
 export const MessagesCreateWithReplyRequestSchema = MessagesCreateRequestSchema.extend({
-  role: z.literal('user', { errorMap: () => ({ message: '创建 AI 回复时 role 必须为 user' }) }),
+  role: z.literal('user', { errorMap: () => ({ message: 'Role must be user when creating an AI reply' }) }),
 });
 
 export type MessagesCreateWithReplyRequest = z.infer<typeof MessagesCreateWithReplyRequestSchema>;
@@ -174,7 +174,7 @@ export interface MessagesUpdateRequest {
 }
 
 export const MessagesUpdateRequestSchema = z.object({
-  content: z.string().min(1, '消息内容不能为空').nullish(),
+  content: z.string().min(1, 'Message content cannot be empty').nullish(),
   favorite: z.boolean().nullish(),
   metadata: z.any().nullish(),
   reasoning: z.any().nullish(),
@@ -190,7 +190,7 @@ export interface MessagesDeleteBatchRequest {
 }
 
 export const MessagesDeleteBatchRequestSchema = z.object({
-  messageIds: z.array(z.string().min(1, '消息ID不能为空')).min(1, '消息ID数组不能为空'),
+  messageIds: z.array(z.string().min(1, 'Message ID cannot be empty')).min(1, 'Message ID array cannot be empty'),
 });
 
 // ==================== Message Response Types ====================
@@ -218,5 +218,5 @@ export type MessageListResponse = PaginationQueryResponse<{
 // ==================== Common Schemas ====================
 
 export const MessageIdParamSchema = z.object({
-  id: z.string().min(1, '消息ID不能为空'),
+  id: z.string().min(1, 'Message ID cannot be empty'),
 });

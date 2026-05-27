@@ -180,7 +180,7 @@ export interface BatchGetFilesRequest {
 }
 
 export const BatchGetFilesRequestSchema = z.object({
-  fileIds: z.array(z.string().min(1, '文件ID不能为空')).min(1, '文件ID列表不能为空'),
+  fileIds: z.array(z.string().min(1, 'File ID cannot be empty')).min(1, 'File ID list cannot be empty'),
 });
 
 /**
@@ -356,7 +356,7 @@ export interface FileChunkStatusResponse {
 // ==================== Common Schemas ====================
 
 export const FileIdParamSchema = z.object({
-  id: z.string().min(1, '文件 ID 不能为空'),
+  id: z.string().min(1, 'File ID cannot be empty'),
 });
 
 // ==================== File Update Types ====================

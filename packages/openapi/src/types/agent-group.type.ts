@@ -14,7 +14,7 @@ export interface CreateAgentGroupRequest {
 }
 
 export const CreateAgentGroupRequestSchema = z.object({
-  name: z.string().min(1, '助理分类名称不能为空'),
+  name: z.string().min(1, 'Agent category name cannot be empty'),
   sort: z.number().nullish(),
 });
 
@@ -28,7 +28,7 @@ export interface UpdateAgentGroupRequest {
 }
 
 export const UpdateAgentGroupRequestSchema = z.object({
-  name: z.string().min(1, '助理分类名称不能为空').nullish(),
+  name: z.string().min(1, 'Agent category name cannot be empty').nullish(),
   sort: z.number().nullish(),
 });
 
@@ -49,5 +49,5 @@ export type AgentGroupListResponse = SessionGroupItem[];
 // ==================== Common Schemas ====================
 
 export const AgentGroupIdParamSchema = z.object({
-  id: z.string().min(1, '助理分类 ID 不能为空'),
+  id: z.string().min(1, 'Agent category ID cannot be empty'),
 });

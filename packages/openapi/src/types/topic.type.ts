@@ -44,7 +44,7 @@ export const TopicCreateRequestSchema = z.object({
   clientId: z.string().optional(),
   favorite: z.boolean().optional(),
   groupId: z.string().nullish(),
-  title: z.string().min(1, '标题不能为空'),
+  title: z.string().min(1, 'Title cannot be empty'),
 });
 
 export interface TopicUpdateRequest {
@@ -65,7 +65,7 @@ export const TopicUpdateRequestSchema = z.object({
       workingDirectory: z.string().optional(),
     })
     .optional(),
-  title: z.string().min(1, '标题不能为空').optional(),
+  title: z.string().min(1, 'Title cannot be empty').optional(),
 });
 
 // ==================== Topic Response Types ====================
@@ -85,13 +85,13 @@ export type TopicListResponse = PaginationQueryResponse<{
 // ==================== Common Schemas ====================
 
 export const TopicGetParamSchema = z.object({
-  id: z.string().min(1, '话题ID不能为空'),
+  id: z.string().min(1, 'Topic ID cannot be empty'),
 });
 
 export const TopicDeleteParamSchema = z.object({
-  id: z.string().min(1, '话题ID不能为空'),
+  id: z.string().min(1, 'Topic ID cannot be empty'),
 });
 
 export const TopicUpdateParamSchema = z.object({
-  id: z.string().min(1, '话题ID不能为空'),
+  id: z.string().min(1, 'Topic ID cannot be empty'),
 });

@@ -212,7 +212,7 @@ export abstract class BaseController {
     const hasPermission = await this.hasPermission(c, permission);
     if (!hasPermission) {
       throw new HTTPException(403, {
-        message: errorMessage || `您没有权限执行此操作：${permission}`,
+        message: errorMessage || `You do not have permission to perform this operation: ${permission}`,
       });
     }
   }
@@ -250,7 +250,7 @@ export abstract class BaseController {
       throw new HTTPException(403, {
         message:
           errorMessage ||
-          `您没有权限执行此操作，需要以下权限之一：${permissionKeys
+          `You do not have permission to perform this operation. One of the following permissions is required: ${permissionKeys
             .map((key) => RBAC_PERMISSIONS[key])
             .join(', ')}`,
       });

@@ -20,7 +20,7 @@ export class TopicController extends BaseController {
 
       const topics = await topicService.getTopics(request);
 
-      return this.success(c, topics, '获取话题列表成功');
+      return this.success(c, topics, 'Topic list retrieved successfully');
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -40,7 +40,7 @@ export class TopicController extends BaseController {
       const topicService = new TopicService(db, userId);
       const topic = await topicService.getTopicById(id);
 
-      return this.success(c, topic, '获取话题成功');
+      return this.success(c, topic, 'Topic retrieved successfully');
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -60,7 +60,7 @@ export class TopicController extends BaseController {
       const topicService = new TopicService(db, userId);
       const newTopic = await topicService.createTopic(payload);
 
-      return this.success(c, newTopic, '创建话题成功');
+      return this.success(c, newTopic, 'Topic created successfully');
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -81,7 +81,7 @@ export class TopicController extends BaseController {
       const topicService = new TopicService(db, userId);
       const updatedTopic = await topicService.updateTopic(id, payload);
 
-      return this.success(c, updatedTopic, '更新话题成功');
+      return this.success(c, updatedTopic, 'Topic updated successfully');
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -101,7 +101,7 @@ export class TopicController extends BaseController {
       const topicService = new TopicService(db, userId);
       await topicService.deleteTopic(topicId);
 
-      return this.success(c, null, '删除话题成功');
+      return this.success(c, null, 'Topic deleted successfully');
     } catch (error) {
       return this.handleError(c, error);
     }

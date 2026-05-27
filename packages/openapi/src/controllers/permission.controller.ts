@@ -58,7 +58,7 @@ export class PermissionController extends BaseController {
       const body = await this.getBody<CreatePermissionRequest>(c);
 
       if (!body) {
-        return this.error(c, '请求体不能为空', 400);
+        return this.error(c, 'Request body cannot be empty', 400);
       }
 
       const db = await this.getDatabase();
@@ -80,7 +80,7 @@ export class PermissionController extends BaseController {
       const body = await this.getBody<UpdatePermissionRequest>(c);
 
       if (!body) {
-        return this.error(c, '请求体不能为空', 400);
+        return this.error(c, 'Request body cannot be empty', 400);
       }
 
       const db = await this.getDatabase();

@@ -28,7 +28,7 @@ export class AgentController extends BaseController {
       const agentService = new AgentService(db, this.getUserId(c));
       const agentsList = await agentService.queryAgents(request);
 
-      return this.success(c, agentsList, '获取 Agent 列表成功');
+      return this.success(c, agentsList, 'Agent list retrieved successfully');
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -48,7 +48,7 @@ export class AgentController extends BaseController {
       const agentService = new AgentService(db, this.getUserId(c));
       const createdAgent = await agentService.createAgent(body);
 
-      return this.success(c, createdAgent, 'Agent 创建成功');
+      return this.success(c, createdAgent, 'Agent created successfully');
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -74,7 +74,7 @@ export class AgentController extends BaseController {
       const agentService = new AgentService(db, this.getUserId(c));
       const updatedAgent = await agentService.updateAgent(updateRequest);
 
-      return this.success(c, updatedAgent, 'Agent 更新成功');
+      return this.success(c, updatedAgent, 'Agent updated successfully');
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -95,7 +95,7 @@ export class AgentController extends BaseController {
       const agentService = new AgentService(db, this.getUserId(c));
       await agentService.deleteAgent(request);
 
-      return this.success(c, null, 'Agent 删除成功');
+      return this.success(c, null, 'Agent deleted successfully');
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -115,10 +115,10 @@ export class AgentController extends BaseController {
       const agent = await agentService.getAgentById(agentId);
 
       if (!agent) {
-        return this.error(c, 'Agent 不存在', 404);
+        return this.error(c, 'Agent not found', 404);
       }
 
-      return this.success(c, agent, '获取 Agent 详情成功');
+      return this.success(c, agent, 'Agent details retrieved successfully');
     } catch (error) {
       return this.handleError(c, error);
     }

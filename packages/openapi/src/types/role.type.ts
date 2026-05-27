@@ -61,10 +61,10 @@ export type CreateRoleRequest = {
 
 export const CreateRoleRequestSchema = z.object({
   description: z.string().nullish(),
-  displayName: z.string().min(1, '显示名称不能为空'),
+  displayName: z.string().min(1, 'Display name cannot be empty'),
   isActive: z.boolean().nullish().default(true),
   isSystem: z.boolean().nullish().default(false),
-  name: z.string().min(1, '角色名称不能为空'),
+  name: z.string().min(1, 'Role name cannot be empty'),
 });
 
 /**
@@ -84,8 +84,8 @@ export type UpdateRolePermissionsRequest = {
 
 export const UpdateRolePermissionsRequestSchema = z
   .object({
-    grant: z.array(z.string().min(1, '权限 ID 不能为空')).nullish(),
-    revoke: z.array(z.string().min(1, '权限 ID 不能为空')).nullish(),
+    grant: z.array(z.string().min(1, 'Permission ID cannot be empty')).nullish(),
+    revoke: z.array(z.string().min(1, 'Permission ID cannot be empty')).nullish(),
   })
   .refine(
     (data) => {
@@ -94,14 +94,14 @@ export const UpdateRolePermissionsRequestSchema = z
       return grantLength > 0 || revokeLength > 0;
     },
     {
-      message: '至少需要提供一个要授予或撤销的权限 ID',
+      message: 'At least one permission ID to grant or revoke must be provided',
     },
   );
 
 // ==================== Common Schemas ====================
 
 export const RoleIdParamSchema = z.object({
-  id: z.string().min(1, '角色 ID 不正确'),
+  id: z.string().min(1, 'Invalid role ID'),
 });
 
 export { PaginationQuerySchema as RolePermissionsListQuerySchema } from './common.type';
