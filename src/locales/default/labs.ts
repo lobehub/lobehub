@@ -1,4 +1,7 @@
 export default {
+  'features.agentDocumentFloatingChatPanel.desc':
+    'Show the floating chat panel in agent document preview only when this lab feature is enabled.',
+  'features.agentDocumentFloatingChatPanel.title': 'Agent Document Floating Chat Panel',
   'features.agentSelfIteration.desc':
     'Allow the assistant to reflect, build self-awareness, and continuously iterate through ongoing attempts and interactions.',
   'features.agentSelfIteration.title': 'Agent Self-iteration',
