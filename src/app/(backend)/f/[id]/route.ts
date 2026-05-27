@@ -68,9 +68,11 @@ export const GET = async (_req: Request, segmentData: { params: Params }) => {
     // Create file service with file owner's userId
     const fileService = new FileService(db, file.userId);
 
-    // Web: Generate S3 presigned URL (5 minutes expiry)
-    const redirectUrl = await fileService.createPreSignedUrlForPreview(file.url, 300);
-    log('Web S3 presigned URL generated (expires in 5 min)');
+    // Web: Generate file URL — uses public domain URL when S3_PUBLIC_DOMAIN + S3_SET_ACL are
+    // configured (avoids browser CORS issues with raw S3 endpoints), falls back to a 5-minute
+    // pre-signed URL otherwise.
+    const redirectUrl = await fileService.getFullFileUrl(file.url, 300);
+    log('File URL resolved for: %s', id);
 
     // Cache the presigned URL in Redis
     if (redisClient) {

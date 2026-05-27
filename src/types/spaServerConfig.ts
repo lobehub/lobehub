@@ -22,6 +22,7 @@ export interface SPAClientEnv {
   pyodideIndexUrl?: string;
   pyodidePipIndexUrl?: string;
   s3FilePath?: string;
+  s3PublicDomain?: string;
 }
 
 export interface SPAServerConfig {

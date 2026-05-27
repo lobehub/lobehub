@@ -172,6 +172,7 @@ function buildClientEnv(): SPAClientEnv {
     pyodideIndexUrl: pythonEnv.NEXT_PUBLIC_PYODIDE_INDEX_URL,
     pyodidePipIndexUrl: pythonEnv.NEXT_PUBLIC_PYODIDE_PIP_INDEX_URL,
     s3FilePath: fileEnv.NEXT_PUBLIC_S3_FILE_PATH,
+    s3PublicDomain: fileEnv.S3_PUBLIC_DOMAIN,
   };
 }
 
