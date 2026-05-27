@@ -127,9 +127,9 @@ export default {
   'channel.wati.webhookSecret': 'Webhook Secret',
   'channel.wati.webhookSecretHint':
     'Optional. HMAC secret from Wati webhook settings — when set, inbound webhooks must include a valid signature.',
-  'channel.wati.channelPhoneNumber': 'Channel Phone Number',
+  'channel.wati.channelPhoneNumber': 'WhatsApp Business Number',
   'channel.wati.channelPhoneNumberHint':
-    'Your Wati WhatsApp business number in international format without + (e.g. 85264318722). Must match inbound webhook `channelPhoneNumber`.',
+    'Your Wati-connected WhatsApp business number in international format without + (e.g. 85264318722). This is the number customers message — not a separate "channel" product. Must match a number on your Wati account.',
   'channel.wati.channelPhoneNumberPlaceholder': 'e.g. 85264318722',
   'channel.wati.webhookManualSetup':
     'On connect, LobeHub registers this Webhook URL with Wati via API (message events). You can still copy it for verification. Replies use session messages within the 24-hour window.',

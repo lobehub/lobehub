@@ -1,5 +1,12 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
+import {
+  extractPhoneListFromResponse,
+  normalizePhoneDigits,
+  resolveWebhookPhoneNumber,
+  type WatiWhatsAppPhoneEntry,
+} from './phone';
+
 export const DEFAULT_WATI_API_BASE_URL = 'https://live-mt-server.wati.io';
 
 const stripTrailingSlashes = (url: string) => url.replace(/\/+$/, '');
@@ -73,6 +80,30 @@ export class WatiApiClient {
     }
   }
 
+  /**
+   * List WhatsApp business numbers on the tenant (for webhook phoneNumber resolution).
+   * Tries v2 then v1 list endpoints — not all tenants expose both.
+   */
+  async listWhatsAppPhoneNumbers(): Promise<WatiWhatsAppPhoneEntry[]> {
+    const suffixes = ['/api/v2/whatsapp/phonenumbers', '/api/v1/whatsapp/phonenumbers'];
+
+    for (const suffix of suffixes) {
+      const url = this.path(suffix);
+      const response = await fetch(url, { headers: this.authHeaders, method: 'GET' });
+      if (!response.ok) continue;
+
+      try {
+        const json: unknown = await response.json();
+        const list = extractPhoneListFromResponse(json);
+        if (list.length > 0) return list;
+      } catch {
+        continue;
+      }
+    }
+
+    return [];
+  }
+
   /** Lightweight auth check — list one contact page. */
   async ping(): Promise<void> {
     const url = `${this.path('/api/v1/getContacts')}?pageSize=1&pageNumber=1`;
@@ -90,6 +121,62 @@ export class WatiApiClient {
    * Create or update webhook endpoints for one or more channel numbers.
    * @see POST /{tenantId}/api/v2/webhookEndpoints
    */
+  /**
+   * Resolve the webhook `phoneNumber` field against Wati's channel list, then register.
+   */
+  async registerWebhookForPhone(
+    configuredDigits: string,
+    webhookUrl: string,
+    eventTypes: string[] = ['message'],
+  ): Promise<WatiWebhookEndpointsResponse> {
+    const entries = await this.listWhatsAppPhoneNumbers();
+    const candidates = new Set<string>();
+
+    try {
+      candidates.add(resolveWebhookPhoneNumber(configuredDigits, entries));
+    } catch (resolveError) {
+      const message = resolveError instanceof Error ? resolveError.message : String(resolveError);
+      if (entries.length > 0) {
+        throw new WatiApiError(message, 400);
+      }
+    }
+
+    candidates.add(normalizePhoneDigits(configuredDigits));
+    if (
+      configuredDigits.startsWith('852') &&
+      normalizePhoneDigits(configuredDigits).length === 11
+    ) {
+      const d = normalizePhoneDigits(configuredDigits);
+      candidates.add(`852-${d.slice(3, 7)}-${d.slice(7)}`);
+    }
+
+    let lastError: WatiApiError | undefined;
+    for (const phoneNumber of candidates) {
+      if (!phoneNumber.trim()) continue;
+      try {
+        return await this.upsertWebhookEndpoints([
+          { eventTypes, phoneNumber, status: 1, url: webhookUrl },
+        ]);
+      } catch (error) {
+        if (error instanceof WatiApiError) {
+          lastError = error;
+          if (!error.message.includes('Channel not found')) throw error;
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    throw (
+      lastError ??
+      new WatiApiError(
+        `Could not register webhook for ${configuredDigits}. ` +
+          'Confirm the number is connected in Wati (Connectors → WhatsApp accounts).',
+        400,
+      )
+    );
+  }
+
   async upsertWebhookEndpoints(
     entries: Array<{
       eventTypes?: string[];

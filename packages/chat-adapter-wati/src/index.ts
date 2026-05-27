@@ -8,4 +8,11 @@ export {
   type WatiWebhookEndpointsResponse,
   type WatiWebhookEndpointStatus,
 } from './api';
+export {
+  extractPhoneListFromResponse,
+  normalizePhoneDigits,
+  pickWebhookPhoneValue,
+  resolveWebhookPhoneNumber,
+  type WatiWhatsAppPhoneEntry,
+} from './phone';
 export type { WatiAdapterConfig, WatiInboundMessage, WatiRawMessage, WatiThreadId } from './types';

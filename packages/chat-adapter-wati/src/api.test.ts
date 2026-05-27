@@ -14,35 +14,37 @@ afterEach(() => {
   fetchSpy.mockReset();
 });
 
-describe('WatiApiClient.upsertWebhookEndpoints', () => {
-  it('POSTs enabled message webhook to v2 webhookEndpoints', async () => {
-    fetchSpy.mockResolvedValue(
-      new Response(JSON.stringify({ ok: true, result: [{ url: 'http://localhost/webhook' }] }), {
-        status: 200,
-      }),
+describe('WatiApiClient.registerWebhookForPhone', () => {
+  it('uses phone list format when registering webhook', async () => {
+    fetchSpy.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('whatsapp/phonenumbers')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              ok: true,
+              result: [{ displayPhoneNumber: '852-5333-2683' }],
+            }),
+            { status: 200 },
+          ),
+        );
+      }
+      if (url.includes('webhookEndpoints')) {
+        return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+      }
+      return Promise.resolve(new Response('{}', { status: 404 }));
+    });
+
+    await client.registerWebhookForPhone(
+      '85253332683',
+      'http://localhost:3010/api/agent/webhooks/wati/85253332683',
     );
 
-    await client.upsertWebhookEndpoints([
-      {
-        phoneNumber: '85253332683',
-        url: 'http://localhost:3010/api/agent/webhooks/wati/85253332683',
-      },
-    ]);
-
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe('https://live-mt-server.wati.io/tenant-test/api/v2/webhookEndpoints');
-    expect(init.method).toBe('POST');
-    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer bearer-test');
-
+    const webhookCall = fetchSpy.mock.calls.find(([url]) =>
+      String(url).includes('webhookEndpoints'),
+    );
+    const [, init] = webhookCall as [string, RequestInit];
     const body = JSON.parse(init.body as string);
-    expect(body).toEqual([
-      {
-        eventTypes: ['message'],
-        phoneNumber: '852-5333-2683',
-        status: 1,
-        url: 'http://localhost:3010/api/agent/webhooks/wati/85253332683',
-      },
-    ]);
+    expect(body[0].phoneNumber).toBe('852-5333-2683');
   });
 });

@@ -23,15 +23,6 @@ import { WatiApiClient } from './api';
 
 const log = debug('bot-platform:wati:bot');
 
-/** Format digits for Wati webhookEndpoints API (often shown with grouping dashes in docs). */
-export function formatWatiPhoneNumber(digits: string): string {
-  const normalized = digits.replaceAll(/\D/g, '');
-  if (normalized.startsWith('852') && normalized.length === 11) {
-    return `852-${normalized.slice(3, 7)}-${normalized.slice(7)}`;
-  }
-  return normalized;
-}
-
 export function buildWatiWebhookUrl(
   config: BotProviderConfig,
   context: BotPlatformRuntimeContext,
@@ -56,14 +47,7 @@ export async function registerWatiWebhook(
     tenantId: config.credentials.tenantId,
   });
   const url = buildWatiWebhookUrl(config, context, applicationId);
-  const response = await api.upsertWebhookEndpoints([
-    {
-      eventTypes: ['message'],
-      phoneNumber: formatWatiPhoneNumber(applicationId),
-      status: 1,
-      url,
-    },
-  ]);
+  const response = await api.registerWebhookForPhone(applicationId, url);
   log('Registered Wati webhook appId=%s url=%s response=%O', applicationId, url, response);
   return { response, url };
 }

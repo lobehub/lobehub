@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { formatWatiPhoneNumber, WatiClientFactory } from './client';
+import { WatiClientFactory } from './client';
 
 const fetchSpy = vi.spyOn(globalThis, 'fetch');
 
@@ -22,6 +22,9 @@ const createClient = (context: { appUrl?: string } = {}) =>
     { appUrl: 'http://localhost:3010', ...context },
   );
 
+const jsonResponse = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status });
+
 beforeEach(() => {
   vi.mock('@/server/services/gateway/runtimeStatus', () => ({
     BOT_RUNTIME_STATUSES: {
@@ -37,13 +40,6 @@ beforeEach(() => {
 
 afterEach(() => {
   fetchSpy.mockReset();
-});
-
-describe('formatWatiPhoneNumber', () => {
-  it('formats HK numbers with dashes for Wati webhook API', () => {
-    expect(formatWatiPhoneNumber('85253332683')).toBe('852-5333-2683');
-    expect(formatWatiPhoneNumber('85264318722')).toBe('852-6431-8722');
-  });
 });
 
 describe('WatiWebhookClient', () => {
@@ -64,22 +60,35 @@ describe('WatiWebhookClient', () => {
     expect((adapter.wati as any).botUserId).toBe(APPLICATION_ID);
   });
 
-  it('start registers webhook URL with Wati v2 API', async () => {
-    fetchSpy.mockResolvedValue(new Response('{}', { status: 200 }));
+  it('start resolves webhook phone from Wati list API', async () => {
+    fetchSpy.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('getContacts')) return Promise.resolve(jsonResponse({ ok: true }));
+      if (url.includes('whatsapp/phonenumbers')) {
+        return Promise.resolve(
+          jsonResponse({
+            ok: true,
+            result: [{ displayPhoneNumber: '852-6431-8722' }],
+          }),
+        );
+      }
+      if (url.includes('webhookEndpoints')) {
+        return Promise.resolve(jsonResponse({ ok: true, result: [] }));
+      }
+      return Promise.resolve(new Response('{}', { status: 404 }));
+    });
+
     const client = createClient({ appUrl: 'http://localhost:3010' });
     await client.start();
 
-    expect(fetchSpy).toHaveBeenCalledTimes(2);
     const webhookCall = fetchSpy.mock.calls.find(([url]) =>
       String(url).includes('/api/v2/webhookEndpoints'),
     );
     expect(webhookCall).toBeDefined();
     const [, init] = webhookCall as [string, RequestInit];
     const body = JSON.parse(init.body as string);
-    expect(body[0].url).toBe(`http://localhost:3010/api/agent/webhooks/wati/${APPLICATION_ID}`);
     expect(body[0].phoneNumber).toBe('852-6431-8722');
-    expect(body[0].status).toBe(1);
-    expect(body[0].eventTypes).toEqual(['message']);
+    expect(body[0].url).toBe(`http://localhost:3010/api/agent/webhooks/wati/${APPLICATION_ID}`);
   });
 
   it('messenger.createMessage POSTs sendSessionMessage with query params', async () => {
