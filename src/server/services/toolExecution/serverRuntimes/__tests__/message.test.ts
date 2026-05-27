@@ -33,10 +33,12 @@ vi.mock('@/database/models/messengerInstallation', () => ({
 const mockLinkList = vi.fn();
 const mockLinkSetActiveAgent = vi.fn();
 const mockLinkDeleteByPlatform = vi.fn();
+const mockLinkFindByPlatform = vi.fn();
 
 vi.mock('@/database/models/messengerAccountLink', () => ({
   MessengerAccountLinkModel: vi.fn().mockImplementation(() => ({
     deleteByPlatform: mockLinkDeleteByPlatform,
+    findByPlatform: mockLinkFindByPlatform,
     list: mockLinkList,
     setActiveAgent: mockLinkSetActiveAgent,
   })),
@@ -443,6 +445,7 @@ describe('messageRuntime', () => {
       mockLinkList,
       mockLinkSetActiveAgent,
       mockLinkDeleteByPlatform,
+      mockLinkFindByPlatform,
       mockGetEnabledMessengerPlatforms,
       mockGetMessengerSlackConfig,
       mockGetMessengerDiscordConfig,
@@ -498,6 +501,103 @@ describe('messageRuntime', () => {
       expect(result.content).toContain('No System Bot installations connected');
       expect(result.content).toContain('Settings → Messenger');
     });
+
+    // Telegram is env-backed (no installation row); the runtime synthesizes a
+    // virtual entry so the agent's two-step outbound discovery doesn't falsely
+    // conclude Telegram is unconfigured while replying inside a Telegram chat.
+    it('synthesizes a virtual telegram singleton when env+link both present', async () => {
+      mockListByInstallerUserId.mockResolvedValueOnce([]);
+      mockGetMessengerTelegramConfig.mockResolvedValueOnce({
+        botToken: 'tg-env-token',
+        botUsername: 'lobehub_bot',
+      });
+      mockLinkFindByPlatform.mockResolvedValueOnce({
+        createdAt: new Date('2026-03-01T00:00:00Z'),
+        platform: 'telegram',
+        tenantId: '',
+        userId: 'user-1',
+      });
+
+      const runtime = await messageRuntime.factory(validContext);
+      const result = await runtime.listMessengers({});
+
+      expect(result.success).toBe(true);
+      expect(result.state.installations).toHaveLength(1);
+      expect(result.state.installations[0]).toMatchObject({
+        applicationId: 'telegram:singleton',
+        id: 'telegram:singleton',
+        installedAt: '2026-03-01T00:00:00.000Z',
+        platform: 'telegram',
+        tenantId: '',
+        tenantName: 'Telegram',
+      });
+      expect(mockLinkFindByPlatform).toHaveBeenCalledWith('telegram');
+    });
+
+    it('omits the telegram singleton when env config is missing', async () => {
+      mockListByInstallerUserId.mockResolvedValueOnce([]);
+      mockGetMessengerTelegramConfig.mockResolvedValueOnce(null);
+      mockLinkFindByPlatform.mockResolvedValueOnce({
+        createdAt: new Date('2026-03-01T00:00:00Z'),
+        platform: 'telegram',
+        tenantId: '',
+        userId: 'user-1',
+      });
+
+      const runtime = await messageRuntime.factory(validContext);
+      const result = await runtime.listMessengers({});
+
+      expect(result.success).toBe(true);
+      expect(result.state.installations).toHaveLength(0);
+    });
+
+    it('omits the telegram singleton when the user has no telegram link', async () => {
+      mockListByInstallerUserId.mockResolvedValueOnce([]);
+      mockGetMessengerTelegramConfig.mockResolvedValueOnce({
+        botToken: 'tg-env-token',
+        botUsername: 'lobehub_bot',
+      });
+      mockLinkFindByPlatform.mockResolvedValueOnce(undefined);
+
+      const runtime = await messageRuntime.factory(validContext);
+      const result = await runtime.listMessengers({});
+
+      expect(result.success).toBe(true);
+      expect(result.state.installations).toHaveLength(0);
+    });
+
+    it('appends the telegram singleton alongside real installs', async () => {
+      mockListByInstallerUserId.mockResolvedValueOnce([
+        {
+          applicationId: 'app-slack',
+          createdAt: new Date('2026-01-15T00:00:00Z'),
+          id: 'inst_slack',
+          metadata: { tenantName: 'Acme' },
+          platform: 'slack',
+          revokedAt: null,
+          tenantId: 'T1',
+        },
+      ]);
+      mockGetMessengerTelegramConfig.mockResolvedValueOnce({
+        botToken: 'tg-env-token',
+        botUsername: 'lobehub_bot',
+      });
+      mockLinkFindByPlatform.mockResolvedValueOnce({
+        createdAt: new Date('2026-03-01T00:00:00Z'),
+        platform: 'telegram',
+        tenantId: '',
+        userId: 'user-1',
+      });
+
+      const runtime = await messageRuntime.factory(validContext);
+      const result = await runtime.listMessengers({});
+
+      expect(result.success).toBe(true);
+      expect(result.state.installations.map((i: { id: string }) => i.id)).toEqual([
+        'inst_slack',
+        'telegram:singleton',
+      ]);
+    });
   });
 
   describe('System Bot — getMessengerDetail', () => {
@@ -546,6 +646,43 @@ describe('messageRuntime', () => {
       const runtime = await messageRuntime.factory(validContext);
       const result = await runtime.getMessengerDetail({ installationId: 'inst_missing' });
 
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('not found');
+    });
+
+    it('synthesizes detail for the telegram singleton id', async () => {
+      mockGetMessengerTelegramConfig.mockResolvedValueOnce({
+        botToken: 'tg-env-token',
+        botUsername: 'lobehub_bot',
+      });
+      mockLinkFindByPlatform.mockResolvedValueOnce({
+        createdAt: new Date('2026-03-01T00:00:00Z'),
+        platform: 'telegram',
+        tenantId: '',
+        userId: 'user-1',
+      });
+
+      const runtime = await messageRuntime.factory(validContext);
+      const result = await runtime.getMessengerDetail({ installationId: 'telegram:singleton' });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('telegram:singleton');
+      expect(result.content).toContain('Telegram');
+      // Never hits the installations table for the singleton id.
+      expect(mockFindInstallationById).not.toHaveBeenCalled();
+    });
+
+    it('returns null for telegram singleton when user has no link', async () => {
+      mockGetMessengerTelegramConfig.mockResolvedValueOnce({
+        botToken: 'tg-env-token',
+        botUsername: 'lobehub_bot',
+      });
+      mockLinkFindByPlatform.mockResolvedValueOnce(undefined);
+
+      const runtime = await messageRuntime.factory(validContext);
+      const result = await runtime.getMessengerDetail({ installationId: 'telegram:singleton' });
+
+      // Same null-shaped response shape as a missing real install.
       expect(result.success).toBe(false);
       expect(result.content).toContain('not found');
     });
@@ -600,6 +737,18 @@ describe('messageRuntime', () => {
 
       expect(result.success).toBe(false);
       expect(result.content).toContain('not found');
+    });
+
+    it('rejects uninstall for the telegram singleton and steers caller to unlink', async () => {
+      const runtime = await messageRuntime.factory(validContext);
+      const result = await runtime.uninstallMessenger({ installationId: 'telegram:singleton' });
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('Telegram is a global env-backed bot');
+      expect(result.content).toContain('unlinkMessenger');
+      // Must not have touched the installations table.
+      expect(mockFindInstallationById).not.toHaveBeenCalled();
+      expect(mockMarkRevoked).not.toHaveBeenCalled();
     });
   });
 

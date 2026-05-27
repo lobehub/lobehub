@@ -38,9 +38,65 @@ import { WechatMessageService } from '@/server/services/bot/platforms/wechat/ser
 import { GatewayService } from '@/server/services/gateway';
 import { getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
 import { messengerPlatformRegistry } from '@/server/services/messenger';
+import { TELEGRAM_INSTALLATION_KEY } from '@/server/services/messenger/installations/telegram';
 
 import type { ServerRuntimeRegistration } from '../types';
 import { MessageDispatcherService } from './MessageDispatcherService';
+
+/**
+ * Shape returned by `listMessengers` / `getMessengerDetail` to the tool runtime.
+ * Mirrors the public Z schema in builtin-tool-message; declared here so the
+ * Telegram synthesis path produces an entry shape-identical to the DB-backed
+ * rows without duplicating the column-mapping logic in three places.
+ */
+type MessengerInstallationView = {
+  applicationId: string;
+  enterpriseId: string | null;
+  id: string;
+  installedAt: string;
+  isEnterpriseInstall: boolean;
+  platform: string;
+  scope: string;
+  tenantId: string;
+  tenantName: string;
+};
+
+/**
+ * Telegram bots are env-backed singletons — they never get a row in
+ * `messenger_installations` (see `installations/telegram.ts`). Without this
+ * synthesis the agent's two-step outbound discovery (`listBots` → fallback
+ * `listMessengers`) sees Telegram nowhere and falsely concludes the platform
+ * is unconfigured, even while it is actively replying inside a Telegram chat.
+ *
+ * Returns a virtual install entry when both gates pass:
+ *   1. Env has Telegram config (otherwise the singleton genuinely isn't set up)
+ *   2. The current user has an account link for `platform='telegram'`
+ *      (otherwise the install exists globally but isn't routed to this user —
+ *      surfacing it would let any user send through a bot they haven't linked)
+ */
+const maybeSynthesizeTelegramInstall = async (
+  serverDB: NonNullable<Parameters<typeof MessengerInstallationModel.listByInstallerUserId>[0]>,
+  userId: string,
+): Promise<MessengerInstallationView | undefined> => {
+  const telegramConfig = await getMessengerTelegramConfig();
+  if (!telegramConfig) return undefined;
+
+  const link = await new MessengerAccountLinkModel(serverDB, userId).findByPlatform('telegram');
+  if (!link) return undefined;
+
+  return {
+    applicationId: TELEGRAM_INSTALLATION_KEY,
+    enterpriseId: null,
+    id: TELEGRAM_INSTALLATION_KEY,
+    installedAt:
+      link.createdAt instanceof Date ? link.createdAt.toISOString() : String(link.createdAt),
+    isEnterpriseInstall: false,
+    platform: 'telegram',
+    scope: '',
+    tenantId: '',
+    tenantName: 'Telegram',
+  };
+};
 
 /**
  * Resolves credentials for the given platform from the user's configured bot providers.
@@ -256,7 +312,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
         // `messenger.listMyInstallations` TRPC procedure runs. A stale Slack
         // install will still appear here; the actual send/uninstall call will
         // surface the underlying token error if and when it matters.
-        return rows
+        const installations: MessengerInstallationView[] = rows
           .filter((row) => !row.revokedAt)
           .map((row) => ({
             applicationId: row.applicationId,
@@ -276,11 +332,30 @@ export const messageRuntime: ServerRuntimeRegistration = {
             tenantName:
               ((row.metadata as Record<string, unknown> | null)?.tenantName as string) ?? '',
           }));
+
+        const telegramView = await maybeSynthesizeTelegramInstall(
+          context.serverDB,
+          context.userId,
+        );
+        if (telegramView) installations.push(telegramView);
+
+        return installations;
       },
 
       getMessengerDetail: async (installationId) => {
         if (!context.userId || !context.serverDB) {
           throw new Error('userId and serverDB are required to load installation');
+        }
+        // Telegram singleton has no DB row — synthesize the detail view from
+        // env config + the caller's account link. Without this branch the
+        // synthetic install id returned by `listMessengers` would 404 here.
+        if (installationId === TELEGRAM_INSTALLATION_KEY) {
+          const telegramView = await maybeSynthesizeTelegramInstall(
+            context.serverDB,
+            context.userId,
+          );
+          if (!telegramView) return null;
+          return { ...telegramView, revokedAt: null };
         }
         const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey().catch(() => undefined);
         const row = await MessengerInstallationModel.findById(
@@ -319,6 +394,17 @@ export const messageRuntime: ServerRuntimeRegistration = {
       uninstallMessenger: async (installationId) => {
         if (!context.userId || !context.serverDB) {
           throw new Error('userId and serverDB are required to uninstall');
+        }
+        // Telegram is env-backed and shared across all users — there is no
+        // installation row to revoke. Direct callers to `unlinkMessenger`,
+        // which removes only this user's routing without affecting anyone else.
+        if (installationId === TELEGRAM_INSTALLATION_KEY) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message:
+              'Telegram is a global env-backed bot and cannot be uninstalled here. ' +
+              "Use unlinkMessenger({ platform: 'telegram' }) to remove your own routing.",
+          });
         }
         const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey().catch(() => undefined);
         const row = await MessengerInstallationModel.findById(
