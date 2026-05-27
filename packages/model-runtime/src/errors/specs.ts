@@ -167,8 +167,8 @@ export const ERROR_CODE_SPECS: SpecMap = {
     countAsFailure: false,
     description: 'Account balance or billing quota exhausted.',
   },
-  [AgentRuntimeErrorType.QuotaLimitReached]: {
-    code: AgentRuntimeErrorType.QuotaLimitReached,
+  [AgentRuntimeErrorType.RateLimitExceeded]: {
+    code: AgentRuntimeErrorType.RateLimitExceeded,
     numericId: 3001,
     category: 'capacity',
     severity: 'warning',
@@ -483,12 +483,22 @@ export const ERROR_CODE_SPECS: SpecMap = {
   },
 };
 
+/**
+ * Aliases from deprecated string codes to their canonical replacements. Lets
+ * `getErrorCodeSpec('QuotaLimitReached')` still resolve to the spec for
+ * `RateLimitExceeded` so older callers and stored error records keep working.
+ */
+const CODE_ALIASES: Record<string, ILobeAgentRuntimeErrorType> = {
+  [AgentRuntimeErrorType.QuotaLimitReached]: AgentRuntimeErrorType.RateLimitExceeded,
+};
+
 /** Look up the spec for an error code; falls back to `undefined` when unknown. */
 export const getErrorCodeSpec = (
   code: ILobeAgentRuntimeErrorType | string | undefined,
 ): ErrorCodeSpec | undefined => {
   if (!code) return undefined;
-  return ERROR_CODE_SPECS[code as ILobeAgentRuntimeErrorType];
+  const canonical = CODE_ALIASES[code] ?? code;
+  return ERROR_CODE_SPECS[canonical as ILobeAgentRuntimeErrorType];
 };
 
 /**

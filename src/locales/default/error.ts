@@ -207,6 +207,8 @@ export default {
     'Repeated image safety rejections detected. Similar prompts may temporarily pause image generation.',
   'response.QuotaLimitReached':
     "Sorry, the token usage or request count has reached the quota limit for this key. Please increase the key's quota or try again later.",
+  'response.RateLimitExceeded':
+    "Sorry, the token usage or request count has reached the rate limit for this key. Please try again later or increase the key's quota.",
   'response.ServerAgentRuntimeError':
     'Sorry, the Agent service is currently unavailable. Please try again later or contact us via email for support.',
   'response.StreamChunkError':

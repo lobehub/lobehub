@@ -47,6 +47,18 @@ export const AgentRuntimeErrorType = {
   NoAvailableProvider: 'NoAvailableProvider',
 
   AccountDeactivated: 'AccountDeactivated',
+  /**
+   * Short-window rate limit (RPM / TPM / concurrency) hit on the provider side.
+   * Transient and retryable — distinct from `InsufficientQuota` which means
+   * the account-level balance is exhausted.
+   */
+  RateLimitExceeded: 'RateLimitExceeded',
+  /**
+   * @deprecated Use `RateLimitExceeded` instead. The legacy name conflated
+   * short-window rate limits with long-term quota exhaustion. Kept as an
+   * alias so older callers and stored data continue to resolve via
+   * `getErrorCodeSpec` / `isUserSideError`.
+   */
   QuotaLimitReached: 'QuotaLimitReached',
   InsufficientQuota: 'InsufficientQuota',
 

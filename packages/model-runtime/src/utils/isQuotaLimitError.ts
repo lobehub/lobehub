@@ -13,5 +13,5 @@ import { matchErrorPattern } from '../errors';
  */
 export const isQuotaLimitError = (message?: string): boolean => {
   if (!message) return false;
-  return matchErrorPattern({ message })?.code === AgentRuntimeErrorType.QuotaLimitReached;
+  return matchErrorPattern({ message })?.code === AgentRuntimeErrorType.RateLimitExceeded;
 };

@@ -342,69 +342,69 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   },
 
   // ─────────────────────────────────────────────────────────────────────────
-  // QuotaLimitReached — short-window rate limit (transient, retryable)
+  // RateLimitExceeded — short-window rate limit (transient, retryable)
   // ─────────────────────────────────────────────────────────────────────────
   {
-    code: AgentRuntimeErrorType.QuotaLimitReached,
+    code: AgentRuntimeErrorType.RateLimitExceeded,
     match: sub('resource exhausted', { caseInsensitive: true }),
   },
   {
-    code: AgentRuntimeErrorType.QuotaLimitReached,
+    code: AgentRuntimeErrorType.RateLimitExceeded,
     match: sub('resource has been exhausted', { caseInsensitive: true }),
   },
   {
-    code: AgentRuntimeErrorType.QuotaLimitReached,
+    code: AgentRuntimeErrorType.RateLimitExceeded,
     match: sub('rate limit reached', { caseInsensitive: true }),
   },
-  { code: AgentRuntimeErrorType.QuotaLimitReached, match: sub('rate_limit_exceeded') },
+  { code: AgentRuntimeErrorType.RateLimitExceeded, match: sub('rate_limit_exceeded') },
   {
-    code: AgentRuntimeErrorType.QuotaLimitReached,
+    code: AgentRuntimeErrorType.RateLimitExceeded,
     match: sub('quota exceeded', { caseInsensitive: true }),
   },
   {
-    code: AgentRuntimeErrorType.QuotaLimitReached,
+    code: AgentRuntimeErrorType.RateLimitExceeded,
     match: sub('too many requests', { caseInsensitive: true }),
   },
   {
-    code: AgentRuntimeErrorType.QuotaLimitReached,
+    code: AgentRuntimeErrorType.RateLimitExceeded,
     match: sub('too many tokens', { caseInsensitive: true }),
   },
-  { code: AgentRuntimeErrorType.QuotaLimitReached, match: sub('429 status code') },
-  { code: AgentRuntimeErrorType.QuotaLimitReached, match: sub('Concurrency limit exceeded') },
+  { code: AgentRuntimeErrorType.RateLimitExceeded, match: sub('429 status code') },
+  { code: AgentRuntimeErrorType.RateLimitExceeded, match: sub('Concurrency limit exceeded') },
   {
-    code: AgentRuntimeErrorType.QuotaLimitReached,
+    code: AgentRuntimeErrorType.RateLimitExceeded,
     match: sub('reached organization TPD rate limit'),
   },
   {
-    code: AgentRuntimeErrorType.QuotaLimitReached,
+    code: AgentRuntimeErrorType.RateLimitExceeded,
     match: sub("exceed your organization's rate limit"),
   },
-  { code: AgentRuntimeErrorType.QuotaLimitReached, match: sub('tokens per minute (TPM)') },
+  { code: AgentRuntimeErrorType.RateLimitExceeded, match: sub('tokens per minute (TPM)') },
   {
-    code: AgentRuntimeErrorType.QuotaLimitReached,
+    code: AgentRuntimeErrorType.RateLimitExceeded,
     match: sub('Rate limit exceeded: free-models-'),
   },
-  { code: AgentRuntimeErrorType.QuotaLimitReached, match: sub('Rate limit exceeded: limit_rpm/') },
+  { code: AgentRuntimeErrorType.RateLimitExceeded, match: sub('Rate limit exceeded: limit_rpm/') },
   {
-    code: AgentRuntimeErrorType.QuotaLimitReached,
+    code: AgentRuntimeErrorType.RateLimitExceeded,
     match: sub('Key limit exceeded (weekly limit)'),
   },
-  { code: AgentRuntimeErrorType.QuotaLimitReached, match: sub('BYOK access to') },
-  { code: AgentRuntimeErrorType.QuotaLimitReached, match: sub('您的账户已达到速率限制') },
-  { code: AgentRuntimeErrorType.QuotaLimitReached, match: sub('AppChatReverse: Chat failed, 429') },
+  { code: AgentRuntimeErrorType.RateLimitExceeded, match: sub('BYOK access to') },
+  { code: AgentRuntimeErrorType.RateLimitExceeded, match: sub('您的账户已达到速率限制') },
+  { code: AgentRuntimeErrorType.RateLimitExceeded, match: sub('AppChatReverse: Chat failed, 429') },
   {
-    code: AgentRuntimeErrorType.QuotaLimitReached,
+    code: AgentRuntimeErrorType.RateLimitExceeded,
     match: sub('Your plan allows 1 concurrent request'),
   },
-  { code: AgentRuntimeErrorType.QuotaLimitReached, match: sub('并发请求已达上限') },
-  { code: AgentRuntimeErrorType.QuotaLimitReached, match: sub('TPM limit reached') },
-  { code: AgentRuntimeErrorType.QuotaLimitReached, match: sub('您已达到默认总请求数限制') },
+  { code: AgentRuntimeErrorType.RateLimitExceeded, match: sub('并发请求已达上限') },
+  { code: AgentRuntimeErrorType.RateLimitExceeded, match: sub('TPM limit reached') },
+  { code: AgentRuntimeErrorType.RateLimitExceeded, match: sub('您已达到默认总请求数限制') },
   {
-    code: AgentRuntimeErrorType.QuotaLimitReached,
+    code: AgentRuntimeErrorType.RateLimitExceeded,
     match: sub('concurrency limit exceeded; wait for an active request to finish'),
   },
   {
-    code: AgentRuntimeErrorType.QuotaLimitReached,
+    code: AgentRuntimeErrorType.RateLimitExceeded,
     match: sub('Request rate increased too quickly'),
   },
 

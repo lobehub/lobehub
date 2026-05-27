@@ -1,7 +1,7 @@
 import type { ILobeAgentRuntimeErrorType } from '@lobechat/types';
 
 import { ERROR_PATTERNS, type ErrorPattern } from './patterns';
-import { ERROR_CODE_SPECS } from './specs';
+import { getErrorCodeSpec } from './specs';
 
 export interface MatchInput {
   errorType?: string;
@@ -65,14 +65,14 @@ export const matchErrorPattern = (input: MatchInput): MatchResult | undefined =>
  */
 export const isUserSideError = (errorType?: string, message?: string): boolean => {
   if (errorType) {
-    const spec = ERROR_CODE_SPECS[errorType as ILobeAgentRuntimeErrorType];
+    const spec = getErrorCodeSpec(errorType);
     if (spec && !spec.countAsFailure) return true;
   }
 
   if (message) {
     const match = matchErrorPattern({ errorType, message });
     if (match) {
-      const spec = ERROR_CODE_SPECS[match.code];
+      const spec = getErrorCodeSpec(match.code);
       if (spec && !spec.countAsFailure) return true;
     }
   }

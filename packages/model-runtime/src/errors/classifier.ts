@@ -30,8 +30,12 @@ export const ErrorClassifier = {
     matches(message, AgentRuntimeErrorType.InsufficientQuota),
 
   /** Short-window rate limit (RPM / TPM / concurrency). Transient, retryable. */
+  isRateLimitExceeded: (message?: string): boolean =>
+    matches(message, AgentRuntimeErrorType.RateLimitExceeded),
+
+  /** @deprecated Renamed to `isRateLimitExceeded`. */
   isQuotaLimitReached: (message?: string): boolean =>
-    matches(message, AgentRuntimeErrorType.QuotaLimitReached),
+    matches(message, AgentRuntimeErrorType.RateLimitExceeded),
 
   /** Prompt + tool payload exceeds the model context window. */
   isExceededContextWindow: (message?: string): boolean =>

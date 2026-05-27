@@ -19,7 +19,7 @@ describe('matchErrorPattern', () => {
 
   it('disambiguates 429-class rate limit from balance-class quota', () => {
     expect(matchErrorPattern({ message: 'rate_limit_exceeded' })?.code).toBe(
-      AgentRuntimeErrorType.QuotaLimitReached,
+      AgentRuntimeErrorType.RateLimitExceeded,
     );
     expect(matchErrorPattern({ message: 'Insufficient Balance: recharge' })?.code).toBe(
       AgentRuntimeErrorType.InsufficientQuota,
@@ -59,8 +59,12 @@ describe('matchErrorPattern', () => {
 describe('isUserSideError', () => {
   it('returns true when errorType has a non-failure spec', () => {
     expect(isUserSideError(AgentRuntimeErrorType.InvalidProviderAPIKey)).toBe(true);
-    expect(isUserSideError(AgentRuntimeErrorType.QuotaLimitReached)).toBe(true);
+    expect(isUserSideError(AgentRuntimeErrorType.RateLimitExceeded)).toBe(true);
     expect(isUserSideError(AgentRuntimeErrorType.ExceededContextWindow)).toBe(true);
+  });
+
+  it('resolves the deprecated QuotaLimitReached alias to RateLimitExceeded spec', () => {
+    expect(isUserSideError(AgentRuntimeErrorType.QuotaLimitReached)).toBe(true);
   });
 
   it('returns false for harness-attributed errors', () => {
@@ -121,8 +125,12 @@ describe('numericId contract', () => {
 describe('formatErrorRef / parseErrorRef', () => {
   it('formats known code as Exxxx', () => {
     expect(formatErrorRef(AgentRuntimeErrorType.InvalidProviderAPIKey)).toBe('E1001');
-    expect(formatErrorRef(AgentRuntimeErrorType.QuotaLimitReached)).toBe('E3001');
+    expect(formatErrorRef(AgentRuntimeErrorType.RateLimitExceeded)).toBe('E3001');
     expect(formatErrorRef(AgentRuntimeErrorType.OperationInactivityTimeout)).toBe('E7002');
+  });
+
+  it('resolves the deprecated QuotaLimitReached alias via the spec', () => {
+    expect(formatErrorRef(AgentRuntimeErrorType.QuotaLimitReached)).toBe('E3001');
   });
 
   it('returns undefined for unknown / empty code', () => {
@@ -132,7 +140,7 @@ describe('formatErrorRef / parseErrorRef', () => {
 
   it('parseErrorRef inverts formatErrorRef', () => {
     expect(parseErrorRef('E1001')).toBe(AgentRuntimeErrorType.InvalidProviderAPIKey);
-    expect(parseErrorRef('E3001')).toBe(AgentRuntimeErrorType.QuotaLimitReached);
+    expect(parseErrorRef('E3001')).toBe(AgentRuntimeErrorType.RateLimitExceeded);
   });
 
   it('parseErrorRef rejects malformed input', () => {
