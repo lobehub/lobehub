@@ -13,6 +13,32 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576,
     description:
+      'DeepSeek-V4-Pro is the flagship MoE language model in the DeepSeek-V4 series, with 1.6T total parameters and 49B active parameters, natively supporting an ultra-long context of 1 million tokens. The model adopts an innovative hybrid attention architecture combining Compressed Sparse Attention (CSA) and Highly Compressed Attention (HCA), requiring only 27% of DeepSeek-V3.2 per-token inference FLOPs and 10% KV cache at 1M context. It also introduces Manifold-Constrained Hyper Connections (mHC) to enhance inter-layer signal propagation stability, and employs the Muon optimizer to accelerate convergence. DeepSeek-V4-Pro is pretrained on over 32T high-quality diverse tokens, with post-training using a two-stage paradigm of independent domain expert cultivation plus online policy distillation for unified integration. Its maximum reasoning intensity mode DeepSeek-V4-Pro-Max achieves top performance on coding benchmarks and significantly narrows the gap with leading closed-source models on reasoning and agentic tasks, making it one of the strongest open-source models today, supporting Non-think, Think High, and Think Max reasoning intensity modes.',
+    displayName: 'DeepSeek V4 Pro',
+    enabled: true,
+    id: 'deepseek-ai/DeepSeek-V4-Pro',
+    organization: 'DeepSeek',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.025, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 6, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-24',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 1_048_576,
+    description:
       'DeepSeek-V4-Flash is a preview version of the MoE language model in the DeepSeek-V4 series. The total parameter size is 284B, the activation parameter size is 13B, and it supports 1M tokens ultra-long context.The model uses a hybrid attention architecture that combines CSA and HCA, and introduces mHC and Muon Optimizer to improve long-context reasoning efficiency, training stability, and overall performance.',
     displayName: 'DeepSeek V4 Flash',
     enabled: true,
