@@ -1,10 +1,14 @@
-import {
-  type SidebarAgentItem,
-  type SidebarAgentListResponse,
-  type SidebarGroup,
+import type {
+  SidebarAgentItem,
+  SidebarAgentListResponse,
+  SidebarGroup,
 } from '@/database/repositories/home';
 
 export interface AgentListState {
+  /**
+   * Search keyword for agent list surfaces
+   */
+  agentSearchKeywords?: string;
   /**
    * Agent groups (user-defined folders)
    */
@@ -13,6 +17,10 @@ export interface AgentListState {
    * Whether all agents drawer is open
    */
   allAgentsDrawerOpen: boolean;
+  /**
+   * Whether agent list is in searching mode
+   */
+  isAgentSearching: boolean;
   /**
    * Whether the agent list has been initialized
    */
@@ -29,7 +37,9 @@ export interface AgentListState {
 
 export const initialAgentListState: AgentListState = {
   agentGroups: [],
+  agentSearchKeywords: undefined,
   allAgentsDrawerOpen: false,
+  isAgentSearching: false,
   isAgentListInit: false,
   pinnedAgents: [],
   ungroupedAgents: [],

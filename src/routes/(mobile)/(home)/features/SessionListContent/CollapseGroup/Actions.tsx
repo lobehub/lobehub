@@ -1,4 +1,4 @@
-import { type DropdownMenuProps, type MenuProps } from '@lobehub/ui';
+import type { DropdownMenuProps, MenuProps } from '@lobehub/ui';
 import { ActionIcon, DropdownMenu, Icon } from '@lobehub/ui';
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
@@ -8,8 +8,9 @@ import { useTranslation } from 'react-i18next';
 
 import { MemberSelectionModal } from '@/components/MemberSelectionModal';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { useAgentStore } from '@/store/agent';
 import { useAgentGroupStore } from '@/store/agentGroup';
-import { useSessionStore } from '@/store/session';
+import { useHomeStore } from '@/store/home';
 
 const styles = createStaticStyles(({ css }) => ({
   modalRoot: css`
@@ -26,6 +27,7 @@ interface ActionsProps extends Pick<DropdownMenuProps, 'onOpenChange'> {
 
 type ItemOfType<T> = T extends (infer Item)[] ? Item : never;
 type MenuItemType = ItemOfType<MenuProps['items']>;
+type MenuItems = MenuItemType[];
 
 const Actions = memo<ActionsProps>(
   ({ id, openRenameModal, openConfigModal, onOpenChange, isCustomGroup, isPinned }) => {
@@ -36,48 +38,61 @@ const Actions = memo<ActionsProps>(
     const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
     const [isCreatingGroup, setIsCreatingGroup] = useState(false);
 
-    const [createSession, removeSessionGroup] = useSessionStore((s) => [
-      s.createSession,
-      s.removeSessionGroup,
+    const createAgent = useAgentStore((s) => s.createAgent);
+    const [pinAgent, refreshAgentList, removeGroup] = useHomeStore((s) => [
+      s.pinAgent,
+      s.refreshAgentList,
+      s.removeGroup,
     ]);
 
     const [createGroup] = useAgentGroupStore((s) => [s.createGroup]);
 
-    const sessionGroupConfigPublicItem: MenuItemType = {
-      icon: <Icon icon={Settings2} />,
-      key: 'config',
-      label: t('sessionGroup.config'),
-      onClick: ({ domEvent }) => {
-        domEvent.stopPropagation();
-        openConfigModal();
-      },
-    };
+    const sessionGroupConfigPublicItem = useMemo<MenuItemType>(
+      () => ({
+        icon: <Icon icon={Settings2} />,
+        key: 'config',
+        label: t('sessionGroup.config'),
+        onClick: ({ domEvent }) => {
+          domEvent.stopPropagation();
+          openConfigModal();
+        },
+      }),
+      [openConfigModal, t],
+    );
 
-    const newAgentPublicItem: MenuItemType = {
-      icon: <Icon icon={Plus} />,
-      key: 'newAgent',
-      label: t('newAgent'),
-      onClick: async ({ domEvent }) => {
-        domEvent.stopPropagation();
-        const key = 'createNewAgentInGroup';
-        message.loading({ content: t('sessionGroup.creatingAgent'), duration: 0, key });
+    const newAgentPublicItem = useMemo<MenuItemType>(
+      () => ({
+        icon: <Icon icon={Plus} />,
+        key: 'newAgent',
+        label: t('newAgent'),
+        onClick: async ({ domEvent }) => {
+          domEvent.stopPropagation();
+          const key = 'createNewAgentInGroup';
+          message.loading({ content: t('sessionGroup.creatingAgent'), duration: 0, key });
 
-        await createSession({ group: id, pinned: isPinned });
+          const result = await createAgent({ groupId: id });
+          if (isPinned) await pinAgent(result.agentId, true);
+          else await refreshAgentList();
 
-        message.destroy(key);
-        message.success({ content: t('sessionGroup.createAgentSuccess') });
-      },
-    };
+          message.destroy(key);
+          message.success({ content: t('sessionGroup.createAgentSuccess') });
+        },
+      }),
+      [createAgent, id, isPinned, message, pinAgent, refreshAgentList, t],
+    );
 
-    const newGroupChatItem: MenuItemType = {
-      icon: <Icon icon={UsersRound} />,
-      key: 'newGroupChat',
-      label: t('newGroupChat'),
-      onClick: ({ domEvent }) => {
-        domEvent.stopPropagation();
-        setIsGroupModalOpen(true);
-      },
-    };
+    const newGroupChatItem = useMemo<MenuItemType>(
+      () => ({
+        icon: <Icon icon={UsersRound} />,
+        key: 'newGroupChat',
+        label: t('newGroupChat'),
+        onClick: ({ domEvent }) => {
+          domEvent.stopPropagation();
+          setIsGroupModalOpen(true);
+        },
+      }),
+      [t],
+    );
 
     const handleCreateGroupWithMembers = async (
       selectedAgents: string[],
@@ -87,7 +102,11 @@ const Actions = memo<ActionsProps>(
       try {
         setIsCreatingGroup(true);
 
-        const config: any = {};
+        const config: {
+          enableSupervisor?: boolean;
+          orchestratorModel?: string;
+          orchestratorProvider?: string;
+        } = {};
 
         if (enableSupervisor !== undefined) {
           config.enableSupervisor = enableSupervisor;
@@ -105,6 +124,7 @@ const Actions = memo<ActionsProps>(
           },
           selectedAgents,
         );
+        await refreshAgentList();
         setIsGroupModalOpen(false);
       } catch (error) {
         console.error('Failed to create group:', error);
@@ -118,7 +138,7 @@ const Actions = memo<ActionsProps>(
       setIsGroupModalOpen(false);
     };
 
-    const customGroupItems: MenuProps['items'] = useMemo(
+    const customGroupItems = useMemo<MenuItems>(
       () => [
         {
           icon: <Icon icon={PencilLine} />,
@@ -148,17 +168,20 @@ const Actions = memo<ActionsProps>(
               okButtonProps: { danger: true },
               onOk: async () => {
                 if (!id) return;
-                await removeSessionGroup(id);
+                await removeGroup(id);
               },
               title: t('sessionGroup.confirmRemoveGroupAlert'),
             });
           },
         },
       ],
-      [],
+      [id, modal, openRenameModal, removeGroup, sessionGroupConfigPublicItem, t],
     );
 
-    const defaultItems: MenuProps['items'] = useMemo(() => [sessionGroupConfigPublicItem], []);
+    const defaultItems = useMemo<MenuItems>(
+      () => [sessionGroupConfigPublicItem],
+      [sessionGroupConfigPublicItem],
+    );
 
     const tailItems = useMemo(
       () => (isCustomGroup ? customGroupItems : defaultItems),

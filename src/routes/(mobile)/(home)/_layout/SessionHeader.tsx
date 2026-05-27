@@ -8,15 +8,26 @@ import { useNavigate } from 'react-router-dom';
 
 import { ProductLogo } from '@/components/Branding';
 import { MOBILE_HEADER_ICON_SIZE } from '@/const/layoutTokens';
+import { SESSION_CHAT_URL } from '@/const/url';
 import UserAvatar from '@/features/User/UserAvatar';
-import { useSessionStore } from '@/store/session';
+import { useQueryRoute } from '@/hooks/useQueryRoute';
+import { useAgentStore } from '@/store/agent';
+import { useHomeStore } from '@/store/home';
 import { mobileHeaderSticky } from '@/styles/mobileHeader';
 
 import { styles } from './SessionHeader/style';
 
 const Header = memo(() => {
-  const [createSession] = useSessionStore((s) => [s.createSession]);
+  const createAgent = useAgentStore((s) => s.createAgent);
+  const refreshAgentList = useHomeStore((s) => s.refreshAgentList);
   const navigate = useNavigate();
+  const router = useQueryRoute();
+
+  const handleCreateAgent = async () => {
+    const result = await createAgent({});
+    await refreshAgentList();
+    router.push(SESSION_CHAT_URL(result.agentId, true));
+  };
 
   return (
     <ChatHeader
@@ -31,7 +42,7 @@ const Header = memo(() => {
         <ActionIcon
           icon={MessageSquarePlus}
           size={MOBILE_HEADER_ICON_SIZE}
-          onClick={() => createSession()}
+          onClick={handleCreateAgent}
         />
       }
     />

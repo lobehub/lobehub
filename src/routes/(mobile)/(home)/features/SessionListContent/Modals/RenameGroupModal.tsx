@@ -1,12 +1,12 @@
-import { type ModalProps } from '@lobehub/ui';
+import type { ModalProps } from '@lobehub/ui';
 import { Input, Modal } from '@lobehub/ui';
 import { App } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useSessionStore } from '@/store/session';
-import { sessionGroupSelectors } from '@/store/session/selectors';
+import { useHomeStore } from '@/store/home';
+import { homeAgentListSelectors } from '@/store/home/selectors';
 
 interface RenameGroupModalProps extends ModalProps {
   id: string;
@@ -15,8 +15,11 @@ interface RenameGroupModalProps extends ModalProps {
 const RenameGroupModal = memo<RenameGroupModalProps>(({ id, open, onCancel }) => {
   const { t } = useTranslation('chat');
 
-  const updateSessionGroupName = useSessionStore((s) => s.updateSessionGroupName);
-  const group = useSessionStore((s) => sessionGroupSelectors.getGroupById(id)(s), isEqual);
+  const updateGroupName = useHomeStore((s) => s.updateGroupName);
+  const group = useHomeStore(
+    (s) => homeAgentListSelectors.agentGroups(s).find((g) => g.id === id),
+    isEqual,
+  );
 
   const [input, setInput] = useState<string>('');
   const [loading, setLoading] = useState(false);
@@ -43,7 +46,7 @@ const RenameGroupModal = memo<RenameGroupModalProps>(({ id, open, onCancel }) =>
         if (input.length === 0 || input.length > 20)
           return message.warning(t('sessionGroup.tooLong'));
         setLoading(true);
-        await updateSessionGroupName(id, input);
+        await updateGroupName(id, input);
         message.success(t('sessionGroup.renameSuccess'));
         setLoading(false);
 

@@ -5,8 +5,8 @@ import { PencilLine, Trash } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useSessionStore } from '@/store/session';
-import { type SessionGroupItem } from '@/types/session';
+import { useHomeStore } from '@/store/home';
+import type { SessionGroupItemBase } from '@/types/session';
 
 const styles = createStaticStyles(({ css }) => ({
   content: css`
@@ -22,14 +22,14 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const GroupItem = memo<SessionGroupItem>(({ id, name }) => {
+const GroupItem = memo<SessionGroupItemBase>(({ id, name }) => {
   const { t } = useTranslation('chat');
   const { message, modal } = App.useApp();
 
   const [editing, setEditing] = useState(false);
-  const [updateSessionGroupName, removeSessionGroup] = useSessionStore((s) => [
-    s.updateSessionGroupName,
-    s.removeSessionGroup,
+  const [updateGroupName, removeGroup] = useHomeStore((s) => [
+    s.updateGroupName,
+    s.removeGroup,
   ]);
 
   return (
@@ -50,7 +50,7 @@ const GroupItem = memo<SessionGroupItem>(({ id, name }) => {
                   type: 'primary',
                 },
                 onOk: async () => {
-                  await removeSessionGroup(id);
+                  await removeGroup(id);
                 },
                 title: t('sessionGroup.confirmRemoveGroupAlert'),
               });
@@ -70,7 +70,7 @@ const GroupItem = memo<SessionGroupItem>(({ id, name }) => {
               if (input.length === 0 || input.length > 20 || input.trim() === '')
                 return message.warning(t('sessionGroup.tooLong'));
 
-              await updateSessionGroupName(id, input);
+              await updateGroupName(id, input);
               message.success(t('sessionGroup.renameSuccess'));
             }
             setEditing(false);

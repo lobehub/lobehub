@@ -1,11 +1,11 @@
 import isEqual from 'fast-deep-equal';
-import { type SWRResponse } from 'swr';
+import type { SWRResponse } from 'swr';
 
-import { type SidebarAgentItem, type SidebarAgentListResponse } from '@/database/repositories/home';
+import type { SidebarAgentItem, SidebarAgentListResponse } from '@/database/repositories/home';
 import { mutate, useClientDataSWR, useClientDataSWRWithSync } from '@/libs/swr';
 import { homeService } from '@/services/home';
-import { type HomeStore } from '@/store/home/store';
-import { type StoreSetter } from '@/store/types';
+import type { HomeStore } from '@/store/home/store';
+import type { StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { mapResponseToState } from './initialState';
@@ -39,6 +39,17 @@ export class AgentListActionImpl {
 
   refreshAgentList = async (): Promise<void> => {
     await mutate([FETCH_AGENT_LIST_KEY, true]);
+  };
+
+  updateAgentSearchKeywords = (keyword: string): void => {
+    this.#set(
+      {
+        agentSearchKeywords: keyword,
+        isAgentSearching: Boolean(keyword.trim()),
+      },
+      false,
+      n('updateAgentSearchKeywords'),
+    );
   };
 
   useFetchAgentList = (isLogin: boolean | undefined): SWRResponse<SidebarAgentListResponse> => {
@@ -75,9 +86,10 @@ export class AgentListActionImpl {
 
   useSearchAgents = (keyword?: string): SWRResponse<SidebarAgentItem[]> => {
     return useClientDataSWR<SidebarAgentItem[]>([SEARCH_AGENTS_KEY, keyword], async () => {
-      if (!keyword) return [];
+      const trimmedKeyword = keyword?.trim();
+      if (!trimmedKeyword) return [];
 
-      return homeService.searchAgents(keyword);
+      return homeService.searchAgents(trimmedKeyword);
     });
   };
 }
