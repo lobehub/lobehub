@@ -6,8 +6,9 @@ import {
 } from '@lobechat/heterogeneous-agents';
 import type { HeterogeneousProviderConfig } from '@lobechat/types';
 import { ActionIcon, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
-import { Button, Modal, Select, Tag } from 'antd';
-import { createStyles } from 'antd-style';
+import { Select } from '@lobehub/ui/base-ui';
+import { Button, Modal, Tag } from 'antd';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { BotIcon, CheckCircle2, MonitorSmartphone, RefreshCw, XCircle } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,14 +16,14 @@ import { useTranslation } from 'react-i18next';
 import { lambdaClient, lambdaQuery } from '@/libs/trpc/client';
 import { useAgentStore } from '@/store/agent';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css }) => ({
   card: css`
     padding-block: 16px 4px;
     padding-inline: 16px;
-    border: 1px solid ${token.colorBorderSecondary};
-    border-radius: ${token.borderRadiusLG}px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
 
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
   `,
   cardHeader: css`
     display: flex;
@@ -37,7 +38,7 @@ const useStyles = createStyles(({ css, token }) => ({
     font-weight: 500;
   `,
   detailList: css`
-    border-block-start: 1px solid ${token.colorBorderSecondary};
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   detailRow: css`
     display: flex;
@@ -48,7 +49,7 @@ const useStyles = createStyles(({ css, token }) => ({
     padding-block: 6px;
 
     & + & {
-      border-block-start: 1px solid ${token.colorBorderSecondary};
+      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
     }
   `,
   detailLabel: css`
@@ -57,7 +58,7 @@ const useStyles = createStyles(({ css, token }) => ({
     width: 96px;
 
     font-size: 12px;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
     text-transform: uppercase;
     letter-spacing: 0.04em;
   `,
@@ -85,7 +86,6 @@ interface RemoteAgentConfigCardProps {
 const RemoteAgentConfigCard = memo<RemoteAgentConfigCardProps>(
   ({ provider, onBoundDeviceChange }) => {
     const { t } = useTranslation('setting');
-    const { styles } = useStyles();
 
     const agentId = useAgentStore((s) => s.activeAgentId);
     const boundDeviceId = useAgentStore((s) =>

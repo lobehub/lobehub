@@ -8,7 +8,7 @@ import {
 } from '@lobechat/heterogeneous-agents/client';
 import type { HeterogeneousProviderConfig } from '@lobechat/types';
 import { ActionIcon, CopyButton, Flexbox, Icon, Input, Tag, Text, Tooltip } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { Loader2Icon, PencilLine, RefreshCw, XCircle } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,14 +19,14 @@ import { toolDetectorService } from '@/services/electron/toolDetector';
 
 const COMMAND_LINE_HEIGHT = 28;
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css }) => ({
   card: css`
     padding-block: 16px 4px;
     padding-inline: 16px;
-    border: 1px solid ${token.colorBorderSecondary};
-    border-radius: ${token.borderRadiusLG}px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
 
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
   `,
   cardHeader: css`
     display: flex;
@@ -57,7 +57,7 @@ const useStyles = createStyles(({ css, token }) => ({
   `,
   metaText: css`
     font-size: 13px;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   pathWrap: css`
     display: flex;
@@ -69,7 +69,7 @@ const useStyles = createStyles(({ css, token }) => ({
   `,
   detailList: css`
     margin-block-start: 4px;
-    border-block-start: 1px solid ${token.colorBorderSecondary};
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   detailRow: css`
     display: flex;
@@ -80,7 +80,7 @@ const useStyles = createStyles(({ css, token }) => ({
     padding-block: 8px;
 
     & + & {
-      border-block-start: 1px solid ${token.colorBorderSecondary};
+      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
     }
   `,
   detailLabel: css`
@@ -89,7 +89,7 @@ const useStyles = createStyles(({ css, token }) => ({
     width: 96px;
 
     font-size: 12px;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
     text-transform: uppercase;
     letter-spacing: 0.04em;
   `,
@@ -111,7 +111,7 @@ const useStyles = createStyles(({ css, token }) => ({
   `,
   commandInput: css`
     width: 100%;
-    font-family: ${token.fontFamilyCode};
+    font-family: ${cssVar.fontFamilyCode};
 
     &,
     &.ant-input,
@@ -127,7 +127,7 @@ const useStyles = createStyles(({ css, token }) => ({
       max-height: ${COMMAND_LINE_HEIGHT}px;
       border-radius: 999px !important;
 
-      font-family: ${token.fontFamilyCode};
+      font-family: ${cssVar.fontFamilyCode};
       font-size: 14px;
       line-height: ${COMMAND_LINE_HEIGHT - 2}px;
     }
@@ -174,10 +174,10 @@ const useStyles = createStyles(({ css, token }) => ({
     height: ${COMMAND_LINE_HEIGHT}px;
     padding-block: 0;
     padding-inline: 12px;
-    border: 1px solid ${token.colorBorderSecondary};
+    border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 999px;
 
-    background: ${token.colorFillSecondary};
+    background: ${cssVar.colorFillSecondary};
   `,
   commandEditButton: css`
     pointer-events: none;
@@ -187,23 +187,23 @@ const useStyles = createStyles(({ css, token }) => ({
   commandText: css`
     min-width: 0;
 
-    font-family: ${token.fontFamilyCode};
+    font-family: ${cssVar.fontFamilyCode};
     font-size: 14px;
     line-height: 20px;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
   `,
   accountValue: css`
     font-size: 15px;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
   `,
   path: css`
-    font-family: ${token.fontFamilyCode};
+    font-family: ${cssVar.fontFamilyCode};
     font-size: 12px;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
   `,
   unavailableText: css`
     font-size: 13px;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
 }));
 
@@ -215,7 +215,6 @@ interface HeterogeneousAgentStatusCardProps {
 const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
   ({ provider, onCommandChange }) => {
     const { t } = useTranslation('setting');
-    const { styles } = useStyles();
     const navigate = useNavigate();
     const providerConfig = getHeterogeneousAgentClientConfig(provider.type);
     const defaultCommand = providerConfig?.command || '';

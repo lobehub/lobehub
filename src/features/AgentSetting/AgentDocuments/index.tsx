@@ -1,8 +1,8 @@
 'use client';
 
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { confirmModal, Select } from '@lobehub/ui/base-ui';
 import type { TableColumnsType } from 'antd';
-import { App, Button, Popconfirm, Select, Space, Table, Tag, Typography } from 'antd';
+import { App, Button, Popconfirm, Space, Table, Tag, Typography } from 'antd';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

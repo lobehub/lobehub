@@ -1,4 +1,4 @@
-import { Select } from 'antd';
+import { Select } from '@lobehub/ui/base-ui';
 import { memo, useMemo } from 'react';
 
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';

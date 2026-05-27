@@ -1,7 +1,8 @@
 'use client';
 
 import { Center, Flexbox, Icon, Modal, Text } from '@lobehub/ui';
-import { App, Form, Input, Select } from 'antd';
+import { Select } from '@lobehub/ui/base-ui';
+import { App, Form, Input } from 'antd';
 import { cssVar } from 'antd-style';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, Tag, Text } from '@lobehub/ui';
-import { createStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,7 +13,7 @@ import type {
 
 import { formatHistoryRowTime } from '../formatHistoryDate';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css }) => ({
   container: css`
     overflow-y: auto;
     flex-shrink: 0;
@@ -21,9 +21,9 @@ const useStyles = createStyles(({ css, token }) => ({
     width: 232px;
     padding-block: 4px 12px;
     padding-inline: 8px;
-    border-inline-start: 1px solid ${token.colorBorderSecondary};
+    border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
 
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
   `,
   dot: css`
     position: absolute;
@@ -32,19 +32,19 @@ const useStyles = createStyles(({ css, token }) => ({
 
     width: 8px;
     height: 8px;
-    border: 1px solid ${token.colorBorder};
+    border: 1px solid ${cssVar.colorBorder};
     border-radius: 999px;
 
-    background: ${token.colorBgContainer};
-    box-shadow: 0 0 0 2px ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
+    box-shadow: 0 0 0 2px ${cssVar.colorBgContainer};
   `,
   dotCurrent: css`
-    border-color: ${token.colorSuccess};
-    background: ${token.colorSuccess};
+    border-color: ${cssVar.colorSuccess};
+    background: ${cssVar.colorSuccess};
   `,
   dotSelected: css`
-    border-color: ${token.colorPrimary};
-    background: ${token.colorPrimary};
+    border-color: ${cssVar.colorPrimary};
+    background: ${cssVar.colorPrimary};
   `,
   group: css`
     position: relative;
@@ -61,7 +61,7 @@ const useStyles = createStyles(({ css, token }) => ({
     font-weight: 500;
     line-height: 1.2;
 
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
   `,
   item: css`
     cursor: pointer;
@@ -73,17 +73,17 @@ const useStyles = createStyles(({ css, token }) => ({
     transition: background ${cssVar.motionDurationMid} ${cssVar.motionEaseInOut};
 
     &:hover {
-      background: ${token.colorFillQuaternary};
+      background: ${cssVar.colorFillQuaternary};
     }
   `,
   itemCurrent: css`
     cursor: default;
   `,
   itemSelected: css`
-    background: ${token.colorFillSecondary};
+    background: ${cssVar.colorFillSecondary};
 
     &:hover {
-      background: ${token.colorFillSecondary};
+      background: ${cssVar.colorFillSecondary};
     }
   `,
   meta: css`
@@ -101,7 +101,7 @@ const useStyles = createStyles(({ css, token }) => ({
 
     width: 1px;
 
-    background: ${token.colorFillTertiary};
+    background: ${cssVar.colorFillTertiary};
   `,
   row: css`
     position: relative;
@@ -160,7 +160,6 @@ interface HistorySidebarProps {
 const HistorySidebar = memo<HistorySidebarProps>(
   ({ items, onSelect, saveSourceLabels, selectedHistoryId }) => {
     const { t } = useTranslation('file');
-    const { styles } = useStyles();
 
     const formatLabel = useCallback(
       (savedAt: string) => {

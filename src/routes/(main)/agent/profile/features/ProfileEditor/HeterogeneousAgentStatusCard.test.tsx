@@ -83,13 +83,12 @@ vi.mock('@lobehub/ui', () => ({
 }));
 
 vi.mock('antd-style', () => ({
-  createStyles: () => () => ({
-    styles: {
-      card: 'card',
-      label: 'label',
-      path: 'path',
-    },
+  createStaticStyles: () => ({
+    card: 'card',
+    label: 'label',
+    path: 'path',
   }),
+  cssVar: new Proxy({}, { get: (_, key) => `var(--${String(key)})` }),
 }));
 
 vi.mock('lucide-react', () => ({

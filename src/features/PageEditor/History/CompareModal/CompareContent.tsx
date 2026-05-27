@@ -1,7 +1,7 @@
 'use client';
 
 import { Button, Flexbox, Text } from '@lobehub/ui';
-import { createStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import { RotateCcwIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
@@ -16,10 +16,10 @@ import DocumentHistoryDiff from '../DocumentHistoryDiff';
 import { formatHistoryAbsoluteTime } from '../formatHistoryDate';
 import HistorySidebar from './HistorySidebar';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css }) => ({
   arrow: css`
     font-size: 12px;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
   `,
   badgeNew: css`
     display: inline-flex;
@@ -33,9 +33,9 @@ const useStyles = createStyles(({ css, token }) => ({
     font-size: 11px;
     font-weight: 600;
     line-height: 1.2;
-    color: ${token.colorSuccess};
+    color: ${cssVar.colorSuccess};
 
-    background: ${token.colorSuccessBg};
+    background: ${cssVar.colorSuccessBg};
   `,
   badgeOld: css`
     display: inline-flex;
@@ -48,9 +48,9 @@ const useStyles = createStyles(({ css, token }) => ({
     font-size: 11px;
     font-weight: 600;
     line-height: 1.2;
-    color: ${token.colorError};
+    color: ${cssVar.colorError};
 
-    background: ${token.colorErrorBg};
+    background: ${cssVar.colorErrorBg};
   `,
   cmpbar: css`
     display: flex;
@@ -59,9 +59,9 @@ const useStyles = createStyles(({ css, token }) => ({
 
     padding-block: 10px;
     padding-inline: 16px;
-    border-block-end: 1px solid ${token.colorBorderSecondary};
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 
-    background: ${token.colorBgLayout};
+    background: ${cssVar.colorBgLayout};
   `,
   diffArea: css`
     overflow: hidden;
@@ -104,7 +104,6 @@ export interface CompareContentProps {
 const CompareContent = memo<CompareContentProps>(
   ({ documentId, initialHistoryId, items, onRestore, saveSourceLabels }) => {
     const { t } = useTranslation('file');
-    const { styles } = useStyles();
 
     const [selectedHistoryId, setSelectedHistoryId] = useState<string>(initialHistoryId);
 

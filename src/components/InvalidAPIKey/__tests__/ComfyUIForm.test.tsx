@@ -30,7 +30,6 @@ vi.mock('antd-style', async (importOriginal) => {
         cssVar: {},
       }),
     ),
-    createStyles: vi.fn(() => () => ({ styles: {} })),
     useTheme: () => ({
       colorTextSecondary: '#999',
     }),

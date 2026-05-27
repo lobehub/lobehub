@@ -2,7 +2,7 @@
 
 import type { AgentEvalRunListItem } from '@lobechat/types';
 import { Button, Flexbox } from '@lobehub/ui';
-import { Select } from 'antd';
+import { Select } from '@lobehub/ui/base-ui';
 import { Plus } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
