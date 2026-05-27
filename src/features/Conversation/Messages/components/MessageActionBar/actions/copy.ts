@@ -5,11 +5,9 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { cleanSpeakerTag } from '@/store/chat/utils/cleanSpeakerTag';
+import { unescapeMarkdown } from '@/store/chat/utils/unescapeMarkdown';
 
 import { defineAction } from '../defineAction';
-
-// mdast-util-to-markdown escapes markdown special chars (e.g. _ → \_) when serializing user input
-const unescapeMarkdown = (str: string) => str.replaceAll(/\\([\\`*_{}[\]()#+\-.!])/g, '$1');
 
 export const copyAction = defineAction({
   key: 'copy',
