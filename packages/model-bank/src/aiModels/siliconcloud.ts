@@ -47,6 +47,7 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     pricing: {
       currency: 'CNY',
       units: [
+        { name: 'textInput_cacheRead', rate: 0.02, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
       ],
@@ -1282,7 +1283,7 @@ const siliconcloudChatModels: AIChatModelCard[] = [
       extendParams: ['reasoningBudgetToken'],
     },
     type: 'chat',
-  },  
+  },
   {
     abilities: {
       functionCall: true,
@@ -1348,8 +1349,7 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     releasedAt: '2025-07-28',
     type: 'chat',
   },
-  
-  
+
   {
     abilities: {
       functionCall: true,
@@ -1410,7 +1410,7 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     },
     type: 'chat',
   },
-  
+
   {
     abilities: {
       functionCall: true,
@@ -1570,7 +1570,7 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     releasedAt: '2025-07-02',
     type: 'chat',
   },
-  
+
   {
     abilities: {
       functionCall: true,
