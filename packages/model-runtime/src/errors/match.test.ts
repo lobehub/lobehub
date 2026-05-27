@@ -2,7 +2,8 @@ import { AgentRuntimeErrorType } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import { isUserSideError, matchErrorPattern } from './match';
-import { ERROR_CODE_SPECS } from './specs';
+import { ERROR_CODE_SPECS, formatErrorRef, parseErrorRef } from './specs';
+import { CATEGORY_NUMERIC_PREFIX } from './taxonomy';
 
 describe('matchErrorPattern', () => {
   it('returns undefined for empty input', () => {
@@ -87,5 +88,59 @@ describe('isUserSideError', () => {
     for (const code of Object.keys(ERROR_CODE_SPECS)) {
       expect(ERROR_CODE_SPECS[code as keyof typeof ERROR_CODE_SPECS]?.code).toBe(code);
     }
+  });
+});
+
+describe('numericId contract', () => {
+  const specs = Object.values(ERROR_CODE_SPECS).filter((spec) => spec !== undefined);
+
+  it('every spec has a 4-digit numericId', () => {
+    for (const spec of specs) {
+      expect(spec.numericId).toBeGreaterThanOrEqual(1000);
+      expect(spec.numericId).toBeLessThanOrEqual(9999);
+    }
+  });
+
+  it('numericIds are globally unique', () => {
+    const ids = specs.map((s) => s.numericId);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('leading digit matches category prefix', () => {
+    for (const spec of specs) {
+      const expectedPrefix = CATEGORY_NUMERIC_PREFIX[spec.category];
+      const actualPrefix = Math.floor(spec.numericId / 1000);
+      expect(
+        actualPrefix,
+        `${spec.code} (category=${spec.category}) has numericId ${spec.numericId} — expected prefix ${expectedPrefix}`,
+      ).toBe(expectedPrefix);
+    }
+  });
+});
+
+describe('formatErrorRef / parseErrorRef', () => {
+  it('formats known code as Exxxx', () => {
+    expect(formatErrorRef(AgentRuntimeErrorType.InvalidProviderAPIKey)).toBe('E1001');
+    expect(formatErrorRef(AgentRuntimeErrorType.QuotaLimitReached)).toBe('E3001');
+    expect(formatErrorRef(AgentRuntimeErrorType.OperationInactivityTimeout)).toBe('E7002');
+  });
+
+  it('returns undefined for unknown / empty code', () => {
+    expect(formatErrorRef(undefined)).toBeUndefined();
+    expect(formatErrorRef('NotARealCode')).toBeUndefined();
+  });
+
+  it('parseErrorRef inverts formatErrorRef', () => {
+    expect(parseErrorRef('E1001')).toBe(AgentRuntimeErrorType.InvalidProviderAPIKey);
+    expect(parseErrorRef('E3001')).toBe(AgentRuntimeErrorType.QuotaLimitReached);
+  });
+
+  it('parseErrorRef rejects malformed input', () => {
+    expect(parseErrorRef(undefined)).toBeUndefined();
+    expect(parseErrorRef('')).toBeUndefined();
+    expect(parseErrorRef('1001')).toBeUndefined();
+    expect(parseErrorRef('E10')).toBeUndefined();
+    expect(parseErrorRef('E99999')).toBeUndefined();
+    expect(parseErrorRef('E9999')).toBeUndefined();
   });
 });

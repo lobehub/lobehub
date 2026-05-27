@@ -14,6 +14,17 @@ export interface ErrorCodeSpec {
   description: string;
   /** HTTP status code returned to the client. */
   httpStatus: number;
+
+  /**
+   * Stable numeric identifier surfaced as `E<numericId>` (e.g. `E1001`).
+   *
+   * Append-only: once assigned, a (code, numericId) pair must never change so
+   * that external docs / support tickets / SDKs can reference it long-term.
+   * The leading digit must match `CATEGORY_NUMERIC_PREFIX[category]`; the
+   * remaining digits are assigned sequentially within the category bucket.
+   */
+  numericId: number;
+
   /** Whether transport-level retry is allowed. */
   retryable: boolean;
 
@@ -35,6 +46,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   // ─── Auth / Credentials ─────────────────────────────────────────────────────
   [AgentRuntimeErrorType.InvalidProviderAPIKey]: {
     code: AgentRuntimeErrorType.InvalidProviderAPIKey,
+    numericId: 1001,
     category: 'auth',
     severity: 'warning',
     attribution: 'user',
@@ -45,6 +57,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   },
   [AgentRuntimeErrorType.InvalidGithubToken]: {
     code: AgentRuntimeErrorType.InvalidGithubToken,
+    numericId: 1002,
     category: 'auth',
     severity: 'warning',
     attribution: 'user',
@@ -55,6 +68,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   },
   [AgentRuntimeErrorType.InvalidGithubCopilotToken]: {
     code: AgentRuntimeErrorType.InvalidGithubCopilotToken,
+    numericId: 1003,
     category: 'auth',
     severity: 'warning',
     attribution: 'user',
@@ -65,6 +79,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   },
   [AgentRuntimeErrorType.InvalidBedrockCredentials]: {
     code: AgentRuntimeErrorType.InvalidBedrockCredentials,
+    numericId: 1004,
     category: 'auth',
     severity: 'warning',
     attribution: 'user',
@@ -75,6 +90,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   },
   [AgentRuntimeErrorType.InvalidVertexCredentials]: {
     code: AgentRuntimeErrorType.InvalidVertexCredentials,
+    numericId: 1005,
     category: 'auth',
     severity: 'warning',
     attribution: 'user',
@@ -85,6 +101,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   },
   [AgentRuntimeErrorType.InvalidOllamaArgs]: {
     code: AgentRuntimeErrorType.InvalidOllamaArgs,
+    numericId: 9001,
     category: 'config',
     severity: 'warning',
     attribution: 'user',
@@ -95,6 +112,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   },
   [AgentRuntimeErrorType.InvalidComfyUIArgs]: {
     code: AgentRuntimeErrorType.InvalidComfyUIArgs,
+    numericId: 9002,
     category: 'config',
     severity: 'warning',
     attribution: 'user',
@@ -105,6 +123,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   },
   [AgentRuntimeErrorType.PermissionDenied]: {
     code: AgentRuntimeErrorType.PermissionDenied,
+    numericId: 1006,
     category: 'auth',
     severity: 'warning',
     attribution: 'user',
@@ -115,6 +134,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   },
   [AgentRuntimeErrorType.AccountDeactivated]: {
     code: AgentRuntimeErrorType.AccountDeactivated,
+    numericId: 1007,
     category: 'auth',
     severity: 'warning',
     attribution: 'user',
@@ -125,6 +145,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   },
   [AgentRuntimeErrorType.LocationNotSupportError]: {
     code: AgentRuntimeErrorType.LocationNotSupportError,
+    numericId: 1008,
     category: 'auth',
     severity: 'warning',
     attribution: 'user',
@@ -137,6 +158,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   // ─── Quota / Billing ────────────────────────────────────────────────────────
   [AgentRuntimeErrorType.InsufficientQuota]: {
     code: AgentRuntimeErrorType.InsufficientQuota,
+    numericId: 2001,
     category: 'quota',
     severity: 'warning',
     attribution: 'user',
@@ -147,6 +169,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   },
   [AgentRuntimeErrorType.QuotaLimitReached]: {
     code: AgentRuntimeErrorType.QuotaLimitReached,
+    numericId: 3001,
     category: 'capacity',
     severity: 'warning',
     attribution: 'provider',
@@ -159,6 +182,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   // ─── Capacity ───────────────────────────────────────────────────────────────
   [AgentRuntimeErrorType.ProviderServiceUnavailable]: {
     code: AgentRuntimeErrorType.ProviderServiceUnavailable,
+    numericId: 3002,
     category: 'capacity',
     severity: 'warning',
     attribution: 'provider',
@@ -169,6 +193,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   },
   [AgentRuntimeErrorType.NoAvailableChannel]: {
     code: AgentRuntimeErrorType.NoAvailableChannel,
+    numericId: 3003,
     category: 'capacity',
     severity: 'warning',
     attribution: 'provider',
@@ -179,6 +204,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   },
   [AgentRuntimeErrorType.ProviderNetworkError]: {
     code: AgentRuntimeErrorType.ProviderNetworkError,
+    numericId: 6001,
     category: 'network',
     severity: 'warning',
     attribution: 'system',
@@ -191,6 +217,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   // ─── Request / Model ────────────────────────────────────────────────────────
   [AgentRuntimeErrorType.ModelNotFound]: {
     code: AgentRuntimeErrorType.ModelNotFound,
+    numericId: 4001,
     category: 'request',
     severity: 'warning',
     attribution: 'user',
@@ -201,6 +228,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   },
   [AgentRuntimeErrorType.ExceededContextWindow]: {
     code: AgentRuntimeErrorType.ExceededContextWindow,
+    numericId: 4002,
     category: 'request',
     severity: 'info',
     attribution: 'user',
@@ -211,6 +239,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   },
   [AgentRuntimeErrorType.ExceededToolLimit]: {
     code: AgentRuntimeErrorType.ExceededToolLimit,
+    numericId: 4003,
     category: 'request',
     severity: 'info',
     attribution: 'user',
@@ -221,6 +250,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   },
   [AgentRuntimeErrorType.CapabilityNotSupported]: {
     code: AgentRuntimeErrorType.CapabilityNotSupported,
+    numericId: 4004,
     category: 'request',
     severity: 'info',
     attribution: 'user',
@@ -231,6 +261,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   },
   [AgentRuntimeErrorType.InvalidRequestFormat]: {
     code: AgentRuntimeErrorType.InvalidRequestFormat,
+    numericId: 4005,
     category: 'request',
     severity: 'warning',
     attribution: 'user',
@@ -243,6 +274,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   // ─── Safety ─────────────────────────────────────────────────────────────────
   [AgentRuntimeErrorType.ContentModeration]: {
     code: AgentRuntimeErrorType.ContentModeration,
+    numericId: 5001,
     category: 'safety',
     severity: 'info',
     attribution: 'user',
@@ -255,6 +287,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   // ─── Config ─────────────────────────────────────────────────────────────────
   [AgentRuntimeErrorType.UserConfigError]: {
     code: AgentRuntimeErrorType.UserConfigError,
+    numericId: 9003,
     category: 'config',
     severity: 'warning',
     attribution: 'user',
@@ -266,6 +299,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   },
   [AgentRuntimeErrorType.NoAvailableProvider]: {
     code: AgentRuntimeErrorType.NoAvailableProvider,
+    numericId: 9004,
     category: 'config',
     severity: 'warning',
     attribution: 'user',
@@ -276,6 +310,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   },
   [AgentRuntimeErrorType.ConnectionCheckFailed]: {
     code: AgentRuntimeErrorType.ConnectionCheckFailed,
+    numericId: 9005,
     category: 'config',
     severity: 'warning',
     attribution: 'user',
@@ -288,6 +323,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   // ─── Stream / Runtime ───────────────────────────────────────────────────────
   [AgentRuntimeErrorType.StreamChunkError]: {
     code: AgentRuntimeErrorType.StreamChunkError,
+    numericId: 7001,
     category: 'stream',
     severity: 'error',
     attribution: 'harness',
@@ -298,6 +334,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   },
   [AgentRuntimeErrorType.OperationInactivityTimeout]: {
     code: AgentRuntimeErrorType.OperationInactivityTimeout,
+    numericId: 7002,
     category: 'stream',
     severity: 'error',
     attribution: 'harness',
@@ -308,6 +345,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   },
   [AgentRuntimeErrorType.ConversationParentMissing]: {
     code: AgentRuntimeErrorType.ConversationParentMissing,
+    numericId: 7003,
     category: 'stream',
     severity: 'error',
     attribution: 'harness',
@@ -320,6 +358,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   // ─── Provider (catch-all) ───────────────────────────────────────────────────
   [AgentRuntimeErrorType.AgentRuntimeError]: {
     code: AgentRuntimeErrorType.AgentRuntimeError,
+    numericId: 8001,
     category: 'provider',
     severity: 'error',
     attribution: 'harness',
@@ -330,6 +369,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   },
   [AgentRuntimeErrorType.ProviderBizError]: {
     code: AgentRuntimeErrorType.ProviderBizError,
+    numericId: 8002,
     category: 'provider',
     severity: 'error',
     attribution: 'provider',
@@ -340,6 +380,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   },
   [AgentRuntimeErrorType.ProviderNoImageGenerated]: {
     code: AgentRuntimeErrorType.ProviderNoImageGenerated,
+    numericId: 8003,
     category: 'provider',
     severity: 'warning',
     attribution: 'provider',
@@ -352,6 +393,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   // ─── Ollama ─────────────────────────────────────────────────────────────────
   [AgentRuntimeErrorType.OllamaServiceUnavailable]: {
     code: AgentRuntimeErrorType.OllamaServiceUnavailable,
+    numericId: 3004,
     category: 'capacity',
     severity: 'warning',
     attribution: 'user',
@@ -362,6 +404,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   },
   [AgentRuntimeErrorType.OllamaBizError]: {
     code: AgentRuntimeErrorType.OllamaBizError,
+    numericId: 8004,
     category: 'provider',
     severity: 'error',
     attribution: 'provider',
@@ -374,6 +417,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   // ─── ComfyUI ────────────────────────────────────────────────────────────────
   [AgentRuntimeErrorType.ComfyUIServiceUnavailable]: {
     code: AgentRuntimeErrorType.ComfyUIServiceUnavailable,
+    numericId: 3005,
     category: 'capacity',
     severity: 'warning',
     attribution: 'user',
@@ -384,6 +428,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   },
   [AgentRuntimeErrorType.ComfyUIBizError]: {
     code: AgentRuntimeErrorType.ComfyUIBizError,
+    numericId: 8005,
     category: 'provider',
     severity: 'error',
     attribution: 'provider',
@@ -394,6 +439,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   },
   [AgentRuntimeErrorType.ComfyUIEmptyResult]: {
     code: AgentRuntimeErrorType.ComfyUIEmptyResult,
+    numericId: 8006,
     category: 'provider',
     severity: 'warning',
     attribution: 'provider',
@@ -404,6 +450,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   },
   [AgentRuntimeErrorType.ComfyUIUploadFailed]: {
     code: AgentRuntimeErrorType.ComfyUIUploadFailed,
+    numericId: 8007,
     category: 'provider',
     severity: 'warning',
     attribution: 'user',
@@ -414,6 +461,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   },
   [AgentRuntimeErrorType.ComfyUIWorkflowError]: {
     code: AgentRuntimeErrorType.ComfyUIWorkflowError,
+    numericId: 8008,
     category: 'provider',
     severity: 'warning',
     attribution: 'user',
@@ -424,6 +472,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
   },
   [AgentRuntimeErrorType.ComfyUIModelError]: {
     code: AgentRuntimeErrorType.ComfyUIModelError,
+    numericId: 8009,
     category: 'provider',
     severity: 'warning',
     attribution: 'user',
@@ -440,4 +489,37 @@ export const getErrorCodeSpec = (
 ): ErrorCodeSpec | undefined => {
   if (!code) return undefined;
   return ERROR_CODE_SPECS[code as ILobeAgentRuntimeErrorType];
+};
+
+/**
+ * Format an error code as its stable numeric reference, e.g. `E1001`.
+ * Returns `undefined` for codes that are not in the spec table.
+ *
+ * Use this when surfacing the error in places that need a stable, language-
+ * independent identifier — support tickets, public docs anchors, external SDK
+ * error mapping, etc.
+ */
+export const formatErrorRef = (
+  code: ILobeAgentRuntimeErrorType | string | undefined,
+): string | undefined => {
+  const spec = getErrorCodeSpec(code);
+  if (!spec) return undefined;
+  return `E${spec.numericId}`;
+};
+
+const ERROR_REF_PATTERN = /^E(\d{4})$/;
+
+/**
+ * Inverse of `formatErrorRef`: parse `E1001` back into the matching error
+ * code. Returns `undefined` if the ref doesn't correspond to a known spec.
+ */
+export const parseErrorRef = (ref: string | undefined): ILobeAgentRuntimeErrorType | undefined => {
+  if (!ref) return undefined;
+  const match = ERROR_REF_PATTERN.exec(ref);
+  if (!match) return undefined;
+  const id = Number.parseInt(match[1], 10);
+  for (const spec of Object.values(ERROR_CODE_SPECS)) {
+    if (spec?.numericId === id) return spec.code;
+  }
+  return undefined;
 };

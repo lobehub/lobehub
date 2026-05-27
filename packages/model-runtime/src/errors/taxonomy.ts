@@ -30,3 +30,28 @@ export type ErrorCategory =
 export type ErrorSeverity = 'info' | 'warning' | 'error' | 'critical';
 
 export type ErrorAttribution = 'user' | 'provider' | 'harness' | 'system';
+
+/**
+ * Mapping of category → leading digit of the `numericId`.
+ *
+ * Used to assign and validate stable numeric error references like `E1001`
+ * (auth) / `E3001` (capacity) / `E8002` (provider). The first digit is the
+ * category bucket; the remaining three digits are assigned sequentially as
+ * codes are added.
+ *
+ * The `numericId` is **append-only**: once published, a (code, id) pair never
+ * changes, even if the string `code` is later renamed. This is the contract
+ * that lets `E1001` show up in support tickets / docs / external SDKs as a
+ * stable reference.
+ */
+export const CATEGORY_NUMERIC_PREFIX: Record<ErrorCategory, number> = {
+  auth: 1,
+  quota: 2,
+  capacity: 3,
+  request: 4,
+  safety: 5,
+  network: 6,
+  stream: 7,
+  provider: 8,
+  config: 9,
+};
