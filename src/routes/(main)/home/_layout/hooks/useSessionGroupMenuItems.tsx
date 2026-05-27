@@ -1,4 +1,5 @@
 import { Icon } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { type ItemType } from 'antd/es/menu/interface';
 import { createStaticStyles } from 'antd-style';
@@ -25,7 +26,7 @@ const styles = createStaticStyles(({ css }) => ({
  */
 export const useSessionGroupMenuItems = () => {
   const { t } = useTranslation('chat');
-  const { modal, message } = App.useApp();
+  const { message } = App.useApp();
   const groupTemplates = useGroupTemplates();
 
   const [storeCreateAgent] = useAgentStore((s) => [s.createAgent]);
@@ -88,11 +89,7 @@ export const useSessionGroupMenuItems = () => {
         label: t('delete', { ns: 'common' }),
         onClick: (info: any) => {
           info.domEvent?.stopPropagation();
-          modal.confirm({
-            centered: true,
-            classNames: {
-              root: styles.modalRoot,
-            },
+          confirmModal({
             okButtonProps: { danger: true },
             onOk: async () => {
               await removeGroup(groupId);
@@ -102,7 +99,7 @@ export const useSessionGroupMenuItems = () => {
         },
       };
     },
-    [t, modal, removeGroup, styles.modalRoot],
+    [t, removeGroup],
   );
 
   /**

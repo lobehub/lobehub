@@ -1,6 +1,6 @@
 import { type ActionIconProps } from '@lobehub/ui';
 import { ActionIcon, DropdownMenu } from '@lobehub/ui';
-import { App } from 'antd';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { type KeyboardEvent, type MouseEvent } from 'react';
 import { memo } from 'react';
@@ -15,7 +15,6 @@ interface ContextDropdownProps {
 
 const ContextDropdown = memo<ContextDropdownProps>(({ id, size = 'small' }) => {
   const { t } = useTranslation(['memory', 'common']);
-  const { modal } = App.useApp();
 
   const contexts = useUserMemoryStore((s) => s.contexts);
   const deleteContext = useUserMemoryStore((s) => s.deleteContext);
@@ -30,7 +29,7 @@ const ContextDropdown = memo<ContextDropdownProps>(({ id, size = 'small' }) => {
         setEditingMemory(id, context.description || '', 'context');
       }
     } else if (info.key === 'delete') {
-      modal.confirm({
+      confirmModal({
         cancelText: t('cancel', { ns: 'common' }),
         content: t('context.deleteConfirm'),
         okButtonProps: { danger: true },
@@ -39,7 +38,6 @@ const ContextDropdown = memo<ContextDropdownProps>(({ id, size = 'small' }) => {
           await deleteContext(id);
         },
         title: t('context.deleteTitle'),
-        type: 'warning',
       });
     }
   };

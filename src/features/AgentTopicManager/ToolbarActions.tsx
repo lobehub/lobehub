@@ -1,6 +1,7 @@
 'use client';
 
 import { ActionIcon, type DropdownItem, DropdownMenu } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { Archive, MoreHorizontal } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
@@ -13,7 +14,7 @@ const THREE_MONTHS_MS = 90 * 24 * 60 * 60 * 1000;
 
 const ToolbarActions = memo(() => {
   const { t } = useTranslation('topic');
-  const { modal, message } = App.useApp();
+  const { message } = App.useApp();
 
   // Operate on the management page's own bucket — not the sidebar's — since
   // the management view is the one the user is acting on here.
@@ -34,7 +35,7 @@ const ToolbarActions = memo(() => {
       return;
     }
 
-    modal.confirm({
+    confirmModal({
       content: t('management.actionsMenu.archiveStale.confirm', { count: stale.length }),
       okText: t('management.actionsMenu.archiveStale.confirmOk'),
       onOk: async () => {
@@ -47,7 +48,7 @@ const ToolbarActions = memo(() => {
       },
       title: t('management.actionsMenu.archiveStale.title'),
     });
-  }, [topics, updateTopicStatus, modal, message, t]);
+  }, [topics, updateTopicStatus, message, t]);
 
   const items: DropdownItem[] = useMemo(
     () => [

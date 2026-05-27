@@ -9,7 +9,8 @@ import {
   Modal,
   stopPropagation,
 } from '@lobehub/ui';
-import { App, Button } from 'antd';
+import { confirmModal } from '@lobehub/ui/base-ui';
+import { Button } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { MoreVerticalIcon, Plus, Trash2 } from 'lucide-react';
 import React, { memo, Suspense, useState } from 'react';
@@ -32,7 +33,6 @@ import { itemStyles } from '../style';
 const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => {
   const styles = itemStyles;
   const { t } = useTranslation('plugin');
-  const { modal } = App.useApp();
   const [detailOpen, setDetailOpen] = useState(false);
 
   const [installed, installing, installMCPPlugin, cancelInstallMCPPlugin, unInstallPlugin, plugin] =
@@ -91,8 +91,7 @@ const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => 
               key: 'uninstall',
               label: t('store.actions.uninstall'),
               onClick: () => {
-                modal.confirm({
-                  centered: true,
+                confirmModal({
                   okButtonProps: { danger: true },
                   onOk: async () => {
                     if (isPluginEnabledInAgent) {
@@ -101,7 +100,6 @@ const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => 
                     await unInstallPlugin(identifier);
                   },
                   title: t('store.actions.confirmUninstall'),
-                  type: 'error',
                 });
               },
             },

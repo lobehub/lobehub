@@ -3,7 +3,8 @@
 import type { AgentEvalRunListItem } from '@lobechat/types';
 import { formatCost } from '@lobechat/utils';
 import { Button, Flexbox, Icon } from '@lobehub/ui';
-import { App, Badge, Dropdown } from 'antd';
+import { confirmModal } from '@lobehub/ui/base-ui';
+import { Badge, Dropdown } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   CircleDollarSign,
@@ -97,7 +98,6 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
     totalCases,
   }) => {
     const { t } = useTranslation('eval');
-    const { modal } = App.useApp();
     const navigate = useNavigate();
     const deleteBenchmark = useEvalStore((s) => s.deleteBenchmark);
     const refreshBenchmarkDetail = useEvalStore((s) => s.refreshBenchmarkDetail);
@@ -109,7 +109,7 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
     };
 
     const handleDelete = () => {
-      modal.confirm({
+      confirmModal({
         content: t('benchmark.actions.delete.confirm'),
         okButtonProps: { danger: true },
         okText: t('benchmark.actions.delete'),

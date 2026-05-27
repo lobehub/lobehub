@@ -1,7 +1,7 @@
 'use client';
 
 import { Avatar, Button, DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
-import { App } from 'antd';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { MoreHorizontalIcon, Plus, Trash2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -21,7 +21,6 @@ interface BuiltinSkillItemProps {
 
 const BuiltinSkillItem = memo<BuiltinSkillItemProps>(({ identifier, title, avatar }) => {
   const { t } = useTranslation(['setting', 'plugin']);
-  const { modal } = App.useApp();
 
   const [installBuiltinTool, uninstallBuiltinTool, isInstalled] = useToolStore((s) => [
     s.installBuiltinTool,
@@ -34,14 +33,12 @@ const BuiltinSkillItem = memo<BuiltinSkillItemProps>(({ identifier, title, avata
   };
 
   const handleUninstall = () => {
-    modal.confirm({
-      centered: true,
+    confirmModal({
       okButtonProps: { danger: true },
       onOk: async () => {
         await uninstallBuiltinTool(identifier);
       },
       title: t('store.actions.confirmUninstall', { ns: 'plugin' }),
-      type: 'error',
     });
   };
 

@@ -2,7 +2,8 @@
 
 import { type LobehubSkillProviderType } from '@lobechat/const';
 import { Avatar, Button as LobeButton, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { App, Button } from 'antd';
+import { confirmModal } from '@lobehub/ui/base-ui';
+import { Button } from 'antd';
 import { cssVar } from 'antd-style';
 import { Loader2, MoreHorizontalIcon, SquareArrowOutUpRight, Unplug } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
@@ -26,7 +27,6 @@ interface LobehubSkillItemProps {
 
 const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
   const { t } = useTranslation('setting');
-  const { modal } = App.useApp();
   const [isConnecting, setIsConnecting] = useState(false);
   const [isWaitingAuth, setIsWaitingAuth] = useState(false);
 
@@ -167,9 +167,8 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
 
   const handleDisconnect = () => {
     if (!server) return;
-    modal.confirm({
+    confirmModal({
       cancelText: t('cancel', { ns: 'common' }),
-      centered: true,
       content: t('tools.lobehubSkill.disconnectConfirm.desc', { name: provider.label }),
       okButtonProps: { danger: true },
       okText: t('tools.lobehubSkill.disconnect'),

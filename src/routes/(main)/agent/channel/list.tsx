@@ -2,6 +2,7 @@
 
 import { exportJSONFile } from '@lobechat/utils/client';
 import { Icon, Tag } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App, Dropdown, type MenuProps } from 'antd';
 import { createStaticStyles, cx, useTheme } from 'antd-style';
 import { Book, Download, MoreHorizontal, Trash2, Upload } from 'lucide-react';
@@ -88,7 +89,7 @@ const PlatformList = memo<PlatformListProps>(
   ({ platforms, activeId, agentId, onSelect, providers, runtimeStatuses }) => {
     const { t } = useTranslation('agent');
     const theme = useTheme();
-    const { modal, message } = App.useApp();
+    const { message } = App.useApp();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const deleteAllBotProviders = useAgentStore((s) => s.deleteAllBotProviders);
     const createBotProvider = useAgentStore((s) => s.createBotProvider);
@@ -154,7 +155,7 @@ const PlatformList = memo<PlatformListProps>(
 
     const handleDeleteAll = useCallback(() => {
       if (!providers?.length) return;
-      modal.confirm({
+      confirmModal({
         content: t('channel.deleteAllConfirmDesc'),
         okButtonProps: { danger: true },
         okText: t('channel.deleteAllChannels'),
@@ -167,9 +168,8 @@ const PlatformList = memo<PlatformListProps>(
           }
         },
         title: t('channel.deleteAllConfirm'),
-        type: 'warning',
       });
-    }, [agentId, deleteAllBotProviders, message, modal, providers, t]);
+    }, [agentId, deleteAllBotProviders, message, providers, t]);
 
     const hasProviders = !!providers?.length;
     const menuItems: MenuProps['items'] = [

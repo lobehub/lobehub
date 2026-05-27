@@ -1,6 +1,7 @@
 import type { ChatTopicStatus } from '@lobechat/types';
 import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import {
   CheckCircle2,
@@ -37,7 +38,7 @@ export const useTopicItemDropdownMenu = ({
   toggleEditing,
 }: TopicItemDropdownMenuProps): (() => MenuProps['items']) => {
   const { t } = useTranslation(['topic', 'common']);
-  const { modal, message } = App.useApp();
+  const { message } = App.useApp();
   const navigate = useNavigate();
 
   const openGroupTopicInNewWindow = useGlobalStore((s) => s.openGroupTopicInNewWindow);
@@ -162,8 +163,7 @@ export const useTopicItemDropdownMenu = ({
         key: 'delete',
         label: t('delete', { ns: 'common' }),
         onClick: () => {
-          modal.confirm({
-            centered: true,
+          confirmModal({
             okButtonProps: { danger: true },
             onOk: async () => {
               await removeTopic(id);
@@ -188,7 +188,6 @@ export const useTopicItemDropdownMenu = ({
     navigate,
     toggleEditing,
     t,
-    modal,
     message,
   ]);
 };

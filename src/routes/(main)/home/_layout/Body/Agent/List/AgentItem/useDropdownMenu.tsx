@@ -1,6 +1,7 @@
 import { SessionDefaultGroup } from '@lobechat/types';
 import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import isEqual from 'fast-deep-equal';
 import {
@@ -42,7 +43,7 @@ export const useAgentDropdownMenu = ({
   title,
 }: UseAgentDropdownMenuParams): (() => MenuProps['items']) => {
   const { t } = useTranslation('chat');
-  const { modal, message } = App.useApp();
+  const { message } = App.useApp();
 
   const openAgentInNewWindow = useGlobalStore((s) => s.openAgentInNewWindow);
   const sessionCustomGroups = useHomeStore(homeAgentListSelectors.agentGroups, isEqual);
@@ -131,8 +132,7 @@ export const useAgentDropdownMenu = ({
           label: t('delete', { ns: 'common' }),
           onClick: ({ domEvent }: any) => {
             domEvent.stopPropagation();
-            modal.confirm({
-              centered: true,
+            confirmModal({
               okButtonProps: { danger: true },
               onOk: async () => {
                 await removeAgent(id);

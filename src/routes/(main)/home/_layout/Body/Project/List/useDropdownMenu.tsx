@@ -1,6 +1,6 @@
 import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
-import { App } from 'antd';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { PencilLine, Trash } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -18,7 +18,6 @@ export const useProjectItemDropdownMenu = ({
 }: ProjectItemDropdownMenuProps): (() => MenuProps['items']) => {
   const { t } = useTranslation(['home', 'common']);
   const [removeKnowledgeBase] = useKnowledgeBaseStore((s) => [s.removeKnowledgeBase]);
-  const { modal } = App.useApp();
 
   return useCallback(
     () => [
@@ -40,8 +39,7 @@ export const useProjectItemDropdownMenu = ({
         label: t('delete', { ns: 'common' }),
         onClick: () => {
           if (!id) return;
-          modal.confirm({
-            centered: true,
+          confirmModal({
             okButtonProps: { danger: true },
             onOk: async () => {
               await removeKnowledgeBase(id);
@@ -51,6 +49,6 @@ export const useProjectItemDropdownMenu = ({
         },
       },
     ],
-    [t, id, modal, removeKnowledgeBase, toggleEditing],
+    [t, id, removeKnowledgeBase, toggleEditing],
   );
 };

@@ -1,9 +1,9 @@
 'use client';
 
 import { Center, Flexbox, Icon, Input, Text, TextArea, Tooltip } from '@lobehub/ui';
-import { Modal } from '@lobehub/ui/base-ui';
+import { confirmModal, Modal } from '@lobehub/ui/base-ui';
 import { type UploadProps } from 'antd';
-import { App, Form, Modal as AntModal, Upload } from 'antd';
+import { App, Form, Upload } from 'antd';
 import { cssVar } from 'antd-style';
 import { CircleHelp, Globe, ImagePlus, Trash2 } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
@@ -332,7 +332,7 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
 
         // If userName changed and it's not first-time setup, show confirmation
         if (!isFirstTimeSetup && oldUserName && values.userName !== oldUserName) {
-          AntModal.confirm({
+          confirmModal({
             cancelText: t('profileSetup.confirmChangeUserId.cancel'),
             content: t('profileSetup.confirmChangeUserId.description', {
               newId: values.userName,

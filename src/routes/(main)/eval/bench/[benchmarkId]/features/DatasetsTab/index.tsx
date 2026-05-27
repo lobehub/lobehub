@@ -1,6 +1,7 @@
 'use client';
 
 import { Button, Flexbox } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App, Card, Skeleton } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { Plus } from 'lucide-react';
@@ -52,7 +53,7 @@ interface DatasetsTabProps {
 const DatasetsTab = memo<DatasetsTabProps>(
   ({ benchmarkId, datasets, loading: datasetsLoading, onImport, onRefresh }) => {
     const { t } = useTranslation('eval');
-    const { modal, message } = App.useApp();
+    const { message } = App.useApp();
     const [expandedDs, setExpandedDs] = useState<string | null>(null);
     const [pagination, setPagination] = useState({ current: 1, pageSize: 5 });
     const [search, setSearch] = useState('');
@@ -115,7 +116,7 @@ const DatasetsTab = memo<DatasetsTabProps>(
 
     const handleDeleteCase = useCallback(
       (testCase: any) => {
-        modal.confirm({
+        confirmModal({
           content: t('testCase.delete.confirm'),
           okButtonProps: { danger: true },
           okText: t('common.delete'),
@@ -132,7 +133,7 @@ const DatasetsTab = memo<DatasetsTabProps>(
           title: t('common.delete'),
         });
       },
-      [expandedDs, message, modal, onRefresh, refreshTestCases, t],
+      [expandedDs, message, onRefresh, refreshTestCases, t],
     );
 
     return (
@@ -218,10 +219,9 @@ const DatasetsTab = memo<DatasetsTabProps>(
           onSuccess={(dataset) => {
             onRefresh();
             // Ask if user wants to import data immediately
-            modal.success({
+            confirmModal({
               cancelText: t('common.later'),
               content: t('dataset.create.importNow'),
-              okCancel: true,
               okText: t('dataset.actions.import'),
               onOk: () => {
                 setImportDatasetId(dataset.id);

@@ -1,6 +1,7 @@
 import { ProviderIcon } from '@lobehub/icons';
 import { type FormItemProps } from '@lobehub/ui';
 import { Button, Flexbox, FormModal, Icon, Input, Select, TextArea } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { BrainIcon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -28,7 +29,7 @@ const CreateNewProvider = memo<CreateNewProviderProps>(({ onClose, open, initial
     s.deleteAiProvider,
   ]);
 
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
   const navigate = useNavigate();
 
   const onFinish = async (values: UpdateAiProviderParams) => {
@@ -140,7 +141,7 @@ const CreateNewProvider = memo<CreateNewProviderProps>(({ onClose, open, initial
             disabled={loading}
             type={'primary'}
             onClick={() => {
-              modal.confirm({
+              confirmModal({
                 okButtonProps: {
                   danger: true,
                 },

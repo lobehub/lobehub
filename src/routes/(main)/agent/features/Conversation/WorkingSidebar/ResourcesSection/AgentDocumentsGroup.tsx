@@ -1,5 +1,6 @@
 import { buildAgentSkillIdentifier } from '@lobechat/const';
 import { ActionIcon, Center, Empty, Flexbox, Text } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { App } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
@@ -112,7 +113,7 @@ interface DocumentItemProps {
 const DocumentItem = memo<DocumentItemProps>(
   ({ agentId, document, hideDelete = false, mutate }) => {
     const { t } = useTranslation(['chat', 'common']);
-    const { message, modal } = App.useApp();
+    const { message } = App.useApp();
     const [deleting, setDeleting] = useState(false);
     const openDocument = useChatStore((s) => s.openDocument);
     const closeDocument = useChatStore((s) => s.closeDocument);
@@ -138,11 +139,10 @@ const DocumentItem = memo<DocumentItemProps>(
 
     const handleDelete = (e: MouseEvent) => {
       e.stopPropagation();
-      modal.confirm({
+      confirmModal({
         cancelText: t('cancel', { ns: 'common' }),
-        centered: true,
         content: t('workingPanel.resources.deleteConfirm', { ns: 'chat' }),
-        okButtonProps: { danger: true, type: 'primary' },
+        okButtonProps: { danger: true },
         okText: t('delete', { ns: 'common' }),
         onOk: async () => {
           setDeleting(true);

@@ -1,6 +1,7 @@
 'use client';
 
 import { Button, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { ChevronDownIcon } from 'lucide-react';
@@ -42,7 +43,7 @@ const AddGroupAgent = memo<{ mobile?: boolean }>(() => {
     memberAgents = [],
   } = useDetailContext();
   const [isLoading, setIsLoading] = useState(false);
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
   const { t } = useTranslation('discover');
   const navigate = useNavigate();
   const loadGroups = useAgentGroupStore((s) => s.loadGroups);
@@ -67,7 +68,7 @@ const AddGroupAgent = memo<{ mobile?: boolean }>(() => {
   };
 
   const showDuplicateConfirmation = (callback: () => void) => {
-    modal.confirm({
+    confirmModal({
       cancelText: t('cancel', { ns: 'common' }),
       content: t('groupAgents.duplicateAdd.content', {
         defaultValue: 'This group agent has already been added. Do you want to add it again?',

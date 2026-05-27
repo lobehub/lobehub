@@ -1,6 +1,7 @@
 'use client';
 
 import { Button, Flexbox } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App, Typography } from 'antd';
 import { ArrowLeft, Database, Pencil, Plus, Trash2 } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -24,7 +25,7 @@ const DatasetDetail = memo(() => {
   const { t } = useTranslation('eval');
   const { benchmarkId, datasetId } = useParams<{ benchmarkId: string; datasetId: string }>();
   const navigate = useNavigate();
-  const { modal, message } = App.useApp();
+  const { message } = App.useApp();
 
   const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
   const [search, setSearch] = useState('');
@@ -78,7 +79,7 @@ const DatasetDetail = memo(() => {
 
   const handleDeleteCase = useCallback(
     (testCase: any) => {
-      modal.confirm({
+      confirmModal({
         content: t('testCase.delete.confirm'),
         okButtonProps: { danger: true },
         okText: t('common.delete'),
@@ -94,11 +95,11 @@ const DatasetDetail = memo(() => {
         title: t('common.delete'),
       });
     },
-    [handleRefresh, message, modal, t],
+    [handleRefresh, message, t],
   );
 
   const handleDelete = useCallback(() => {
-    modal.confirm({
+    confirmModal({
       content: t('dataset.delete.confirm'),
       okButtonProps: { danger: true },
       okText: t('common.delete'),
@@ -113,7 +114,7 @@ const DatasetDetail = memo(() => {
       },
       title: t('common.delete'),
     });
-  }, [benchmarkId, datasetId, message, modal, navigate, t]);
+  }, [benchmarkId, datasetId, message, navigate, t]);
 
   if (!dataset) return null;
 

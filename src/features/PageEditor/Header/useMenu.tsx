@@ -21,7 +21,7 @@ import { usePageEditorStore, useStoreApi } from '../store';
  */
 export const useMenu = (): { menuItems: any[] } => {
   const { t } = useTranslation(['file', 'common', 'chat']);
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
   const storeApi = useStoreApi();
   const { lg = true } = useResponsive();
 
@@ -137,7 +137,7 @@ export const useMenu = (): { menuItems: any[] } => {
         label: t('delete', { ns: 'common' }),
         onClick: async () => {
           const state = storeApi.getState();
-          await state.handleDelete(t as any, message, modal, state.onDelete);
+          await state.handleDelete(t as any, message, state.onDelete);
         },
       },
       {
@@ -185,7 +185,6 @@ export const useMenu = (): { menuItems: any[] } => {
     storeApi,
     t,
     message,
-    modal,
     setRightPanelMode,
     wideScreen,
     toggleWideScreen,

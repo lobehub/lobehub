@@ -1,6 +1,6 @@
 import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
-import { App } from 'antd';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { Trash2 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -20,13 +20,11 @@ export const useDropdownMenu = ({
   onClose,
 }: UseDropdownMenuProps): MenuProps['items'] => {
   const { t } = useTranslation(['common', 'chat']);
-  const { modal } = App.useApp();
   const removeAgent = useHomeStore((s) => s.removeAgent);
 
   const handleDelete = () => {
-    modal.confirm({
+    confirmModal({
       cancelText: t('cancel'),
-      centered: true,
       okButtonProps: { danger: true },
       okText: t('delete'),
       onOk: async () => {

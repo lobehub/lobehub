@@ -1,5 +1,6 @@
 import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { LucideCopy, Pen, PictureInPicture2Icon, Pin, PinOff, Trash } from 'lucide-react';
 import { useMemo } from 'react';
@@ -29,7 +30,7 @@ export const useGroupDropdownMenu = ({
   title,
 }: UseGroupDropdownMenuParams): (() => MenuProps['items']) => {
   const { t } = useTranslation('chat');
-  const { modal, message } = App.useApp();
+  const { message } = App.useApp();
 
   const openAgentInNewWindow = useGlobalStore((s) => s.openAgentInNewWindow);
   const [pinAgentGroup, duplicateAgentGroup, removeAgentGroup] = useHomeStore((s) => [
@@ -92,8 +93,7 @@ export const useGroupDropdownMenu = ({
           label: t('delete', { ns: 'common' }),
           onClick: ({ domEvent }: any) => {
             domEvent.stopPropagation();
-            modal.confirm({
-              centered: true,
+            confirmModal({
               okButtonProps: { danger: true },
               onOk: async () => {
                 await removeAgentGroup(id);
@@ -116,7 +116,6 @@ export const useGroupDropdownMenu = ({
       title,
       duplicateAgentGroup,
       openAgentInNewWindow,
-      modal,
       removeAgentGroup,
       message,
     ],

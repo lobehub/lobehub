@@ -1,6 +1,6 @@
 import { ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { ShapesUploadIcon } from '@lobehub/ui/icons';
-import { App, Modal } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { BotMessageSquareIcon, MoreHorizontal, Settings2Icon, Trash } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -29,7 +29,6 @@ import AutoSaveHint from './AutoSaveHint';
 
 const Header = memo(() => {
   const { t } = useTranslation(['setting', 'marketAuth', 'chat']);
-  const { modal } = App.useApp();
   const navigate = useNavigate();
 
   const meta = useAgentStore(agentSelectors.currentAgentMeta, isEqual);
@@ -97,8 +96,7 @@ const Header = memo(() => {
       return;
     }
 
-    Modal.confirm({
-      okButtonProps: { type: 'primary' },
+    confirmModal({
       onOk: async () => {
         if (!isAuthenticated) {
           try {
@@ -128,8 +126,7 @@ const Header = memo(() => {
 
   const handleDelete = useCallback(() => {
     if (!activeAgentId) return;
-    modal.confirm({
-      centered: true,
+    confirmModal({
       okButtonProps: { danger: true },
       onOk: async () => {
         await removeAgent(activeAgentId);
@@ -138,7 +135,7 @@ const Header = memo(() => {
       },
       title: t('confirmRemoveSessionItemAlert', { ns: 'chat' }),
     });
-  }, [activeAgentId, modal, navigate, removeAgent, t]);
+  }, [activeAgentId, navigate, removeAgent, t]);
 
   const menuItems = useMemo(
     () => [

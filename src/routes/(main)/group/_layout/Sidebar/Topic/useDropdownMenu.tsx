@@ -1,5 +1,6 @@
 import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App, Upload } from 'antd';
 import { css, cx } from 'antd-style';
 import { Hash, Import, LucideCheck, Trash } from 'lucide-react';
@@ -100,9 +101,8 @@ export const useTopicActionsDropdownMenu = (
         key: 'deleteUnstarred',
         label: t('actions.removeUnstarred'),
         onClick: () => {
-          modal.confirm({
+          confirmModal({
             cancelText: t('cancel', { ns: 'common' }),
-            centered: true,
             okButtonProps: { danger: true },
             okText: t('ok', { ns: 'common' }),
             onOk: removeUnstarredTopic,
@@ -116,9 +116,8 @@ export const useTopicActionsDropdownMenu = (
         key: 'deleteAll',
         label: t('actions.removeAll'),
         onClick: () => {
-          modal.confirm({
+          confirmModal({
             cancelText: t('cancel', { ns: 'common' }),
-            centered: true,
             okButtonProps: { danger: true },
             okText: t('ok', { ns: 'common' }),
             onOk: removeAllTopic,

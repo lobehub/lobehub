@@ -1,8 +1,8 @@
 'use client';
 
 import { ActionIcon, Block, DropdownMenu, Flexbox, Icon, Modal, Tag } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { App } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { DownloadIcon, MoreVerticalIcon, PackageSearch, Trash2 } from 'lucide-react';
 import { lazy, memo, Suspense, useState } from 'react';
@@ -44,7 +44,6 @@ interface AgentSkillItemProps {
 const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
   const { t } = useTranslation('plugin');
   const { t: tc } = useTranslation('common');
-  const { modal } = App.useApp();
   const [detailOpen, setDetailOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -65,14 +64,12 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
   };
 
   const handleDelete = () => {
-    modal.confirm({
-      centered: true,
+    confirmModal({
       okButtonProps: { danger: true },
       onOk: async () => {
         await deleteAgentSkill(skill.id);
       },
       title: t('store.actions.confirmUninstall'),
-      type: 'error',
     });
   };
 

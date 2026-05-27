@@ -2,7 +2,7 @@
 
 import { Icon } from '@lobehub/ui';
 import { type MenuProps } from '@lobehub/ui';
-import { App } from 'antd';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { Trash } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { memo, useState } from 'react';
@@ -23,7 +23,6 @@ interface TopicItemProps {
 const TopicItem = memo<TopicItemProps>(({ topic, showMoreInfo, style }) => {
   const { useStore, namespace } = useGenerationTopicContext();
   const { t } = useTranslation(namespace);
-  const { modal } = App.useApp();
   const [isUpdating, setIsUpdating] = useState(false);
   const isLoading = useStore((s) => s.loadingGenerationTopicIds.includes(topic.id));
   const removeGenerationTopic = useStore((s) => s.removeGenerationTopic);
@@ -40,7 +39,7 @@ const TopicItem = memo<TopicItemProps>(({ topic, showMoreInfo, style }) => {
     e.stopPropagation();
     e.preventDefault();
 
-    modal.confirm({
+    confirmModal({
       cancelText: t('cancel', { ns: 'common' }),
       content: t('topic.deleteConfirmDesc'),
       okButtonProps: { danger: true },
@@ -65,7 +64,7 @@ const TopicItem = memo<TopicItemProps>(({ topic, showMoreInfo, style }) => {
       key: 'delete',
       label: t('delete', { ns: 'common' }),
       onClick: () => {
-        modal.confirm({
+        confirmModal({
           cancelText: t('cancel', { ns: 'common' }),
           content: t('topic.deleteConfirmDesc'),
           okButtonProps: { danger: true },

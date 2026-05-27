@@ -1,4 +1,5 @@
 import { Button, Checkbox, Flexbox, Icon, Skeleton } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { BookMinusIcon, BookPlusIcon, FileBoxIcon, Trash2Icon } from 'lucide-react';
@@ -34,7 +35,7 @@ const MultiSelectActions = memo<MultiSelectActionsProps>(
     const { t } = useTranslation(['components', 'common']);
 
     const isSelectedFiles = selectCount > 0;
-    const { modal, message } = App.useApp();
+    const { message } = App.useApp();
 
     const libraryId = useResourceManagerStore((s) => s.libraryId);
 
@@ -83,7 +84,7 @@ const MultiSelectActions = memo<MultiSelectActionsProps>(
                   icon={BookMinusIcon}
                   size={'small'}
                   onClick={() => {
-                    modal.confirm({
+                    confirmModal({
                       okButtonProps: {
                         danger: true,
                       },
@@ -142,7 +143,7 @@ const MultiSelectActions = memo<MultiSelectActionsProps>(
               size={'small'}
               variant={'filled'}
               onClick={async () => {
-                modal.confirm({
+                confirmModal({
                   okButtonProps: {
                     danger: true,
                   },

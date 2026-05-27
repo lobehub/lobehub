@@ -3,6 +3,7 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { type FormGroupItemType } from '@lobehub/ui';
 import { Button, Form, Icon } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App, Switch } from 'antd';
 import { HardDriveDownload, HardDriveUpload } from 'lucide-react';
 import { useCallback } from 'react';
@@ -23,7 +24,7 @@ import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 const AdvancedActions = () => {
   const { t } = useTranslation('setting');
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
   const { hideDocs } = useServerConfigStore(featureFlagsSelectors);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const checked = useUserStore(userGeneralSettingsSelectors.telemetry);
@@ -41,8 +42,7 @@ const AdvancedActions = () => {
   const updateGeneralConfig = useUserStore((s) => s.updateGeneralConfig);
 
   const handleClear = useCallback(() => {
-    modal.confirm({
-      centered: true,
+    confirmModal({
       okButtonProps: {
         danger: true,
       },
@@ -64,15 +64,13 @@ const AdvancedActions = () => {
     clearSessions,
     clearTopics,
     message,
-    modal,
     removeAllFiles,
     removeAllPlugins,
     t,
   ]);
 
   const handleReset = useCallback(() => {
-    modal.confirm({
-      centered: true,
+    confirmModal({
       okButtonProps: { danger: true },
       onOk: () => {
         resetSettings();
@@ -80,7 +78,7 @@ const AdvancedActions = () => {
       },
       title: t('danger.reset.confirm'),
     });
-  }, [message, modal, resetSettings, t]);
+  }, [message, resetSettings, t]);
 
   const renderExportButtonFormItem = () => {
     return {

@@ -1,7 +1,7 @@
 'use client';
 
 import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
-import { App } from 'antd';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Archive, Star, Trash2, X } from 'lucide-react';
 import { memo, useCallback } from 'react';
@@ -44,7 +44,6 @@ const styles = createStaticStyles(({ css }) => ({
 
 const BulkActionBar = memo(() => {
   const { t } = useTranslation('topic');
-  const { modal } = App.useApp();
 
   const selectedIds = useTopicsViewStore((s) => s.selectedIds);
   const exitSelectMode = useTopicsViewStore((s) => s.exitSelectMode);
@@ -68,7 +67,7 @@ const BulkActionBar = memo(() => {
   }, [selectedIds, updateTopicStatus, exitSelectMode]);
 
   const handleBatchDelete = useCallback(() => {
-    modal.confirm({
+    confirmModal({
       content: t('management.bulk.deleteConfirm', { count: selectedIds.length }),
       okButtonProps: { danger: true },
       okText: t('management.bulk.delete'),
@@ -82,7 +81,7 @@ const BulkActionBar = memo(() => {
       },
       title: t('management.bulk.deleteTitle'),
     });
-  }, [selectedIds, modal, t, removeTopic, exitSelectMode]);
+  }, [selectedIds, t, removeTopic, exitSelectMode]);
 
   if (selectedIds.length === 0) return null;
 

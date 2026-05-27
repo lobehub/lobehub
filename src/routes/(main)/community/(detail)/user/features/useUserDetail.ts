@@ -1,5 +1,6 @@
 'use client';
 
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,7 +18,7 @@ interface UseUserDetailOptions {
 
 export const useUserDetail = ({ onMutate }: UseUserDetailOptions = {}) => {
   const { t } = useTranslation('setting');
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
   const { session } = useMarketAuth();
   const enableMarketTrustedClient = useServerConfigStore(
     serverConfigSelectors.enableMarketTrustedClient,
@@ -88,7 +89,7 @@ export const useUserDetail = ({ onMutate }: UseUserDetailOptions = {}) => {
       }
 
       if (action === 'deprecate') {
-        modal.confirm({
+        confirmModal({
           cancelText: t('myAgents.actions.cancel'),
           content: t('myAgents.actions.deprecateConfirmContent'),
           okButtonProps: { danger: true },
@@ -103,7 +104,7 @@ export const useUserDetail = ({ onMutate }: UseUserDetailOptions = {}) => {
 
       await executeStatusChange(identifier, action, type);
     },
-    [enableMarketTrustedClient, session?.accessToken, message, modal, t, onMutate],
+    [enableMarketTrustedClient, session?.accessToken, message, t, onMutate],
   );
 
   return {

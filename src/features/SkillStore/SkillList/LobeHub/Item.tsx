@@ -1,7 +1,7 @@
 'use client';
 
 import { ActionIcon, Block, DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
-import { App } from 'antd';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import type { Klavis } from 'klavis';
 import { Loader2, MoreVerticalIcon, Plus, Unplug } from 'lucide-react';
@@ -26,7 +26,6 @@ const Item = memo<ItemProps>(
   ({ description, icon, identifier, label, onOpenDetail, serverName, type }) => {
     const { t } = useTranslation('setting');
     const styles = itemStyles;
-    const { modal } = App.useApp();
 
     const { handleConnect, handleDisconnect, isConnected, isConnecting } = useSkillConnect({
       identifier,
@@ -42,9 +41,8 @@ const Item = memo<ItemProps>(
     });
 
     const confirmDisconnect = () => {
-      modal.confirm({
+      confirmModal({
         cancelText: t('cancel', { ns: 'common' }),
-        centered: true,
         content: t('tools.lobehubSkill.disconnectConfirm.desc', { name: label }),
         okButtonProps: { danger: true },
         okText: t('tools.lobehubSkill.disconnect'),

@@ -1,4 +1,5 @@
 import { copyToClipboard, createRawModal, Icon } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { type ItemType } from 'antd/es/menu/interface';
 import {
@@ -54,7 +55,7 @@ export const useFileItemDropdown = ({
   onRenameStart,
 }: UseFileItemDropdownParams): UseFileItemDropdownReturn => {
   const { t } = useTranslation(['components', 'common', 'knowledgeBase']);
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
   const appOrigin = useAppOrigin();
 
   const { deleteResource, moveResource, refreshFileList } = useFileStore(
@@ -168,7 +169,7 @@ export const useFileItemDropdown = ({
               onClick: async ({ domEvent }) => {
                 domEvent.stopPropagation();
 
-                modal.confirm({
+                confirmModal({
                   okButtonProps: {
                     danger: true,
                   },
@@ -301,7 +302,7 @@ export const useFileItemDropdown = ({
           label: t('delete', { ns: 'common' }),
           onClick: async ({ domEvent }) => {
             domEvent.stopPropagation();
-            modal.confirm({
+            confirmModal({
               content: isFolder
                 ? t('FileManager.actions.confirmDeleteFolder')
                 : t('FileManager.actions.confirmDelete'),
@@ -335,7 +336,6 @@ export const useFileItemDropdown = ({
     libraries,
     libraryId,
     message,
-    modal,
     moveResource,
     onRenameStart,
     refreshFileList,

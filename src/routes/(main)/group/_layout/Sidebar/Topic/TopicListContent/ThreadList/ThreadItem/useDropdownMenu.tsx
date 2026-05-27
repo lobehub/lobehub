@@ -1,6 +1,6 @@
 import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
-import { App } from 'antd';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { PencilLine, Trash } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,7 +17,6 @@ export const useThreadItemDropdownMenu = ({
   toggleEditing,
 }: ThreadItemDropdownMenuProps): (() => MenuProps['items']) => {
   const { t } = useTranslation(['thread', 'common']);
-  const { modal } = App.useApp();
 
   const [removeThread] = useChatStore((s) => [s.removeThread]);
 
@@ -40,8 +39,7 @@ export const useThreadItemDropdownMenu = ({
         key: 'delete',
         label: t('delete', { ns: 'common' }),
         onClick: () => {
-          modal.confirm({
-            centered: true,
+          confirmModal({
             okButtonProps: { danger: true },
             onOk: async () => {
               await removeThread(id);
@@ -51,5 +49,5 @@ export const useThreadItemDropdownMenu = ({
         },
       },
     ].filter(Boolean) as MenuProps['items'];
-  }, [id, removeThread, toggleEditing, t, modal]);
+  }, [id, removeThread, toggleEditing, t]);
 };

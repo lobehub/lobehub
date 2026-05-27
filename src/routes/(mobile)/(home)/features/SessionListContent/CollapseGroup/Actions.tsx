@@ -1,5 +1,6 @@
 import { type DropdownMenuProps, type MenuProps } from '@lobehub/ui';
 import { ActionIcon, DropdownMenu, Icon } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { MoreVertical, PencilLine, Plus, Settings2, Trash, UsersRound } from 'lucide-react';
@@ -30,7 +31,7 @@ type MenuItemType = ItemOfType<MenuProps['items']>;
 const Actions = memo<ActionsProps>(
   ({ id, openRenameModal, openConfigModal, onOpenChange, isCustomGroup, isPinned }) => {
     const { t } = useTranslation('chat');
-    const { modal, message } = App.useApp();
+    const { message } = App.useApp();
 
     const isMobile = useIsMobile();
     const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
@@ -140,11 +141,7 @@ const Actions = memo<ActionsProps>(
           label: t('delete', { ns: 'common' }),
           onClick: ({ domEvent }) => {
             domEvent.stopPropagation();
-            modal.confirm({
-              centered: true,
-              classNames: {
-                root: styles.modalRoot,
-              },
+            confirmModal({
               okButtonProps: { danger: true },
               onOk: async () => {
                 if (!id) return;

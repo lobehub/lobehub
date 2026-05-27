@@ -3,7 +3,8 @@
 import { CheckCircleFilled } from '@ant-design/icons';
 import { ProviderIcon } from '@lobehub/icons';
 import { CopyButton, Flexbox, Icon } from '@lobehub/ui';
-import { App, Avatar, Button, Typography } from 'antd';
+import { confirmModal } from '@lobehub/ui/base-ui';
+import { Avatar, Button, Typography } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ExternalLinkIcon, Loader2Icon, LogOutIcon, UnplugIcon } from 'lucide-react';
 import { type ReactNode } from 'react';
@@ -130,7 +131,6 @@ export interface OAuthDeviceFlowAuthProps {
 const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
   ({ providerId, name, onAuthChange, title, extra }) => {
     const { t } = useTranslation('modelProvider');
-    const { modal } = App.useApp();
     const [isAuthenticating, setIsAuthenticating] = useState(false);
     const hasAutoClosedRef = useRef(false);
 
@@ -165,8 +165,7 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
     });
 
     const handleDisconnect = useCallback(() => {
-      modal.confirm({
-        centered: true,
+      confirmModal({
         content: t('providerModels.config.oauth.disconnectConfirm'),
         okButtonProps: { danger: true },
         okText: t('providerModels.config.oauth.disconnect'),
@@ -175,7 +174,7 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
         },
         title: t('providerModels.config.oauth.disconnect'),
       });
-    }, [modal, providerId, revokeAuth, t]);
+    }, [providerId, revokeAuth, t]);
 
     const handleStartAuth = useCallback(async () => {
       hasAutoClosedRef.current = false;

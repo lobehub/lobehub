@@ -10,7 +10,7 @@ import {
   Text,
   usePopoverContext,
 } from '@lobehub/ui';
-import { Select } from '@lobehub/ui/base-ui';
+import { confirmModal, Select } from '@lobehub/ui/base-ui';
 import { App, Divider } from 'antd';
 import { ExternalLinkIcon, LinkIcon, LockIcon } from 'lucide-react';
 import { type ReactNode } from 'react';
@@ -36,7 +36,7 @@ interface SharePopoverContentProps {
 
 const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal, topicId }) => {
   const { t } = useTranslation('chat');
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
   const [updating, setUpdating] = useState(false);
   const { close } = usePopoverContext();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -97,9 +97,8 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal, topic
       ) {
         let doNotShowAgain = false;
 
-        modal.confirm({
+        confirmModal({
           cancelText: t('cancel', { ns: 'common' }),
-          centered: true,
           content: (
             <div>
               <p>{t('shareModal.popover.privacyWarning.content')}</p>
@@ -122,7 +121,6 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal, topic
             updateVisibility(visibility);
           },
           title: t('shareModal.popover.privacyWarning.title'),
-          type: 'warning',
         });
       } else {
         updateVisibility(visibility);
@@ -131,7 +129,6 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal, topic
     [
       currentVisibility,
       hideTopicSharePrivacyWarning,
-      modal,
       t,
       updateSystemStatus,
       updateVisibility,

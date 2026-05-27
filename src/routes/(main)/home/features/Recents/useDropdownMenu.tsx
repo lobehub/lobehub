@@ -1,6 +1,6 @@
 import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
-import { App } from 'antd';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { PencilLineIcon, Trash } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,7 +16,6 @@ export const useRecentItemDropdownMenu = (
   toggleEditing: (visible?: boolean) => void,
 ) => {
   const { t } = useTranslation(['common', 'topic', 'components']);
-  const { modal } = App.useApp();
   const [updateRecentTitle, refreshRecents] = useHomeStore((s) => [
     s.updateRecentTitle,
     s.refreshRecents,
@@ -52,8 +51,7 @@ export const useRecentItemDropdownMenu = (
       topic: t('actions.confirmRemoveTopic', { ns: 'topic' }),
     };
 
-    modal.confirm({
-      centered: true,
+    confirmModal({
       okButtonProps: { danger: true },
       onOk: async () => {
         switch (item.type) {
@@ -75,7 +73,7 @@ export const useRecentItemDropdownMenu = (
       },
       title: confirmMessages[item.type] || t('delete', { ns: 'common' }),
     });
-  }, [item, modal, t, refreshRecents]);
+  }, [item, t, refreshRecents]);
 
   const dropdownMenu = useCallback((): MenuProps['items'] => {
     const canRename = true;

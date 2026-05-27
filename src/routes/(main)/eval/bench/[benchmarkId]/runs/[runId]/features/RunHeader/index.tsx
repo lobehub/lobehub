@@ -3,6 +3,7 @@
 import { AGENT_PROFILE_URL } from '@lobechat/const';
 import type { AgentEvalRunDetail } from '@lobechat/types';
 import { ActionIcon, Avatar, copyToClipboard, Flexbox, Highlighter, Markdown } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App, Button, Card, Tag, Typography } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import {
@@ -115,7 +116,7 @@ interface RunHeaderProps {
 
 const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
   const { t } = useTranslation('eval');
-  const { modal, message } = App.useApp();
+  const { message } = App.useApp();
   const navigate = useNavigate();
   const abortRun = useEvalStore((s) => s.abortRun);
   const deleteRun = useEvalStore((s) => s.deleteRun);
@@ -133,7 +134,7 @@ const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
   const agentProvider = snapshot?.provider || run.targetAgent?.provider;
 
   const handleAbort = () => {
-    modal.confirm({
+    confirmModal({
       content: t('run.actions.abort.confirm'),
       okButtonProps: { danger: true },
       okText: t('run.actions.abort'),
@@ -143,7 +144,7 @@ const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
   };
 
   const handleDelete = () => {
-    modal.confirm({
+    confirmModal({
       content: t('run.actions.delete.confirm'),
       okButtonProps: { danger: true },
       okText: t('run.actions.delete'),
@@ -156,7 +157,7 @@ const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
   };
 
   const handleStart = () => {
-    modal.confirm({
+    confirmModal({
       content: t('run.actions.start.confirm'),
       okText: t('run.actions.start'),
       onOk: async () => {

@@ -1,4 +1,5 @@
 import { ActionIcon, DropdownMenu, Icon } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { type ItemType } from 'antd/es/menu/interface';
 import { createStaticStyles } from 'antd-style';
@@ -63,7 +64,7 @@ const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType
     s.removeAgentGroup,
   ]);
 
-  const { modal, message } = App.useApp();
+  const { message } = App.useApp();
 
   const isDefault = group === SessionDefaultGroup.Default;
 
@@ -154,11 +155,7 @@ const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType
             label: t('delete', { ns: 'common' }),
             onClick: ({ domEvent }) => {
               domEvent.stopPropagation();
-              modal.confirm({
-                centered: true,
-                classNames: {
-                  root: styles.modalRoot,
-                },
+              confirmModal({
                 okButtonProps: { danger: true },
                 onOk: async () => {
                   if (parentType === 'group') {

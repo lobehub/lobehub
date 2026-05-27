@@ -1,5 +1,6 @@
 'use client';
 
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App, Form } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
@@ -69,7 +70,7 @@ interface PlatformDetailProps {
 const PlatformDetail = memo<PlatformDetailProps>(
   ({ platformDef, agentId, currentConfig, runtimeStatus }) => {
     const { t } = useTranslation('agent');
-    const { message: msg, modal } = App.useApp();
+    const { message: msg } = App.useApp();
     const [form] = Form.useForm<ChannelFormValues>();
 
     const [
@@ -402,7 +403,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
     const handleDelete = useCallback(async () => {
       if (!currentConfig) return;
 
-      modal.confirm({
+      confirmModal({
         content: t('channel.deleteConfirmDesc'),
         okButtonProps: { danger: true },
         onOk: async () => {
@@ -416,7 +417,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
         },
         title: t('channel.deleteConfirm'),
       });
-    }, [currentConfig, agentId, deleteBotProvider, msg, t, modal, form]);
+    }, [currentConfig, agentId, deleteBotProvider, msg, t, form]);
 
     const handleToggleEnable = useCallback(
       async (enabled: boolean) => {

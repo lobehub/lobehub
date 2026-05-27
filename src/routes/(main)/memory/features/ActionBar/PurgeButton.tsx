@@ -1,6 +1,7 @@
 'use client';
 
 import { ActionIcon, Button, Icon, Tooltip } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { Trash2Icon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -23,7 +24,7 @@ interface Props {
 }
 
 const PurgeButton = memo<Props>(({ iconOnly }) => {
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
   const { t } = useTranslation(['common', 'memory']);
   const translate = t as (key: string, options?: Record<string, unknown>) => string;
   const purgeAllMemories = useUserMemoryStore((s) => s.purgeAllMemories);
@@ -31,10 +32,10 @@ const PurgeButton = memo<Props>(({ iconOnly }) => {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const handleClick = () => {
-    modal.confirm({
+    confirmModal({
       cancelText: translate('cancel', { ns: 'common' }),
       content: translate('purge.confirm', { ns: 'memory' }),
-      okButtonProps: { danger: true, loading },
+      okButtonProps: { danger: true },
       okText: translate('confirm', { ns: 'common' }),
       onOk: async () => {
         try {
@@ -56,7 +57,6 @@ const PurgeButton = memo<Props>(({ iconOnly }) => {
         }
       },
       title: translate('purge.title', { ns: 'memory' }),
-      type: 'warning',
     });
   };
 

@@ -12,7 +12,7 @@ import {
   Markdown,
   Text,
 } from '@lobehub/ui';
-import { App } from 'antd';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { MessageCircle, MoreHorizontal, Pencil, Trash } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -29,7 +29,6 @@ interface CommentCardProps {
 
 const CommentCard = memo<CommentCardProps>(({ activity }) => {
   const { t } = useTranslation('chat');
-  const { modal } = App.useApp();
   const deleteComment = useTaskStore((s) => s.deleteComment);
   const updateComment = useTaskStore((s) => s.updateComment);
 
@@ -64,16 +63,14 @@ const CommentCard = memo<CommentCardProps>(({ activity }) => {
 
   const handleDelete = useCallback(() => {
     if (!commentId) return;
-    modal.confirm({
-      centered: true,
+    confirmModal({
       content: t('taskDetail.comment.deleteConfirm.content'),
       okButtonProps: { danger: true },
       okText: t('taskDetail.comment.deleteConfirm.ok'),
       onOk: () => deleteComment(commentId),
       title: t('taskDetail.comment.deleteConfirm.title'),
-      type: 'error',
     });
-  }, [commentId, deleteComment, modal, t]);
+  }, [commentId, deleteComment, t]);
 
   const menuItems = useMemo<DropdownItem[]>(
     () => [

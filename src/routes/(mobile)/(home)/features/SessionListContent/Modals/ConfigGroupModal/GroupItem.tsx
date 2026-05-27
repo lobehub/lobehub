@@ -1,4 +1,5 @@
 import { ActionIcon, EditableText, SortableList } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { PencilLine, Trash } from 'lucide-react';
@@ -24,7 +25,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 const GroupItem = memo<SessionGroupItem>(({ id, name }) => {
   const { t } = useTranslation('chat');
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
 
   const [editing, setEditing] = useState(false);
   const [updateSessionGroupName, removeSessionGroup] = useSessionStore((s) => [
@@ -43,11 +44,9 @@ const GroupItem = memo<SessionGroupItem>(({ id, name }) => {
             icon={Trash}
             size={'small'}
             onClick={() => {
-              modal.confirm({
-                centered: true,
+              confirmModal({
                 okButtonProps: {
                   danger: true,
-                  type: 'primary',
                 },
                 onOk: async () => {
                   await removeSessionGroup(id);

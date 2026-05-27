@@ -9,7 +9,7 @@ import {
   Icon,
   stopPropagation,
 } from '@lobehub/ui';
-import { App } from 'antd';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { MoreVerticalIcon, Plus, Trash2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -30,7 +30,6 @@ interface ItemProps {
 const Item = memo<ItemProps>(({ avatar, description, identifier, onOpenDetail, title }) => {
   const { t } = useTranslation(['setting', 'plugin']);
   const styles = itemStyles;
-  const { modal } = App.useApp();
 
   const [installBuiltinTool, uninstallBuiltinTool, isInstalled] = useToolStore((s) => [
     s.installBuiltinTool,
@@ -43,14 +42,12 @@ const Item = memo<ItemProps>(({ avatar, description, identifier, onOpenDetail, t
   };
 
   const handleUninstall = () => {
-    modal.confirm({
-      centered: true,
+    confirmModal({
       okButtonProps: { danger: true },
       onOk: async () => {
         await uninstallBuiltinTool(identifier);
       },
       title: t('store.actions.confirmUninstall', { ns: 'plugin' }),
-      type: 'error',
     });
   };
 

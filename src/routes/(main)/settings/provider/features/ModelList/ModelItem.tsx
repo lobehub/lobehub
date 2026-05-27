@@ -1,5 +1,6 @@
 import { ModelIcon } from '@lobehub/icons';
 import { ActionIcon, copyToClipboard, Flexbox, Tag, Text } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App, Switch } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { LucidePencil, TrashIcon } from 'lucide-react';
@@ -154,7 +155,7 @@ const ModelItem = memo<ModelItemProps>(
       ...formatPricing(),
     ].filter(Boolean) as string[];
 
-    const { message, modal } = App.useApp();
+    const { message } = App.useApp();
     const copyModelId = async () => {
       await copyToClipboard(id);
       message.success({ content: t('copySuccess', { ns: 'common' }) });
@@ -203,11 +204,9 @@ const ModelItem = memo<ModelItemProps>(
               size={'small'}
               title={t('providerModels.item.delete.title')}
               onClick={() => {
-                modal.confirm({
-                  centered: true,
+                confirmModal({
                   okButtonProps: {
                     danger: true,
-                    type: 'primary',
                   },
                   onOk: async () => {
                     await removeAiModel(id, activeAiProvider!);

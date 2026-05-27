@@ -1,7 +1,8 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { App, Button, Card, Progress, Typography } from 'antd';
+import { confirmModal } from '@lobehub/ui/base-ui';
+import { Button, Card, Progress, Typography } from 'antd';
 import { Play, RotateCcw } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,7 +24,6 @@ const POLLING_INTERVAL = 3000;
 
 const RunDetail = memo(() => {
   const { t } = useTranslation('eval');
-  const { modal } = App.useApp();
   const { benchmarkId, runId } = useParams<{ benchmarkId: string; runId: string }>();
   const useFetchRunDetail = useEvalStore((s) => s.useFetchRunDetail);
   const useFetchRunResults = useEvalStore((s) => s.useFetchRunResults);
@@ -165,7 +165,7 @@ const RunDetail = memo(() => {
                     loading={retrying}
                     size="small"
                     onClick={() => {
-                      modal.confirm({
+                      confirmModal({
                         content: t('run.actions.retryErrors.confirm'),
                         onOk: async () => {
                           setRetrying(true);

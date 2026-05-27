@@ -1,5 +1,6 @@
 import { type DropdownItem } from '@lobehub/ui';
 import { DropdownMenu, Icon } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import {
   BookMinusIcon,
@@ -33,7 +34,7 @@ interface BatchActionsDropdownProps {
 
 const BatchActionsDropdown = memo<BatchActionsDropdownProps>(({ selectCount, onActionClick }) => {
   const { t } = useTranslation(['components', 'common', 'file', 'knowledgeBase']);
-  const { modal, message } = App.useApp();
+  const { message } = App.useApp();
 
   const libraryId = useResourceManagerStore((s) => s.libraryId);
   const [resolveSelectedResourceIds, selectAllState] = useResourceManagerStore((s) => [
@@ -54,7 +55,7 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(({ selectCount, onA
         key: 'deleteLibrary',
         label: t('header.actions.deleteLibrary', { ns: 'file' }),
         onClick: async () => {
-          modal.confirm({
+          confirmModal({
             okButtonProps: {
               danger: true,
             },
@@ -100,7 +101,7 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(({ selectCount, onA
         key: 'removeFromKnowledgeBase',
         label: t('FileManager.actions.removeFromLibrary'),
         onClick: () => {
-          modal.confirm({
+          confirmModal({
             okButtonProps: {
               danger: true,
             },
@@ -154,7 +155,7 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(({ selectCount, onA
         key: 'delete',
         label: t('delete', { ns: 'common' }),
         onClick: async () => {
-          modal.confirm({
+          confirmModal({
             okButtonProps: {
               danger: true,
             },
@@ -177,7 +178,6 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(({ selectCount, onA
     addFilesToKnowledgeBase,
     resolveSelectedResourceIds,
     t,
-    modal,
     message,
     knowledgeBases,
   ]);

@@ -1,6 +1,7 @@
 'use client';
 
 import { ActionIcon, Flexbox } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { cssVar } from 'antd-style';
 import { BookMinusIcon, FileBoxIcon, Trash2Icon } from 'lucide-react';
@@ -25,7 +26,7 @@ import SearchInput from './SearchInput';
  */
 const Header = memo(() => {
   const { t } = useTranslation(['components', 'common', 'file', 'knowledgeBase']);
-  const { modal, message } = App.useApp();
+  const { message } = App.useApp();
 
   // Get state and actions from store
   const [libraryId, category, onActionClick, selectAllState, selectFileIds] =
@@ -52,7 +53,7 @@ const Header = memo(() => {
           icon={BookMinusIcon}
           title={t('FileManager.actions.removeFromLibrary')}
           onClick={() => {
-            modal.confirm({
+            confirmModal({
               okButtonProps: {
                 danger: true,
               },
@@ -80,7 +81,7 @@ const Header = memo(() => {
         icon={Trash2Icon}
         title={t('delete', { ns: 'common' })}
         onClick={() => {
-          modal.confirm({
+          confirmModal({
             okButtonProps: {
               danger: true,
             },
