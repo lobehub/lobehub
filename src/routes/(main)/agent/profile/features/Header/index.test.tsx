@@ -67,6 +67,10 @@ vi.mock('@lobehub/ui/icons', () => ({
   ShapesUploadIcon: () => null,
 }));
 
+vi.mock('@lobehub/ui/base-ui', () => ({
+  confirmModal: vi.fn(),
+}));
+
 vi.mock('antd', () => ({
   App: {
     useApp: () => ({

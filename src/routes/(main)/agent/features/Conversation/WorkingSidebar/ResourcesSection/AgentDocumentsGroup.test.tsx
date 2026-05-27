@@ -10,6 +10,10 @@ const messageError = vi.hoisted(() => vi.fn());
 const messageSuccess = vi.hoisted(() => vi.fn());
 const removeDocumentMock = vi.hoisted(() => vi.fn());
 
+vi.mock('@lobehub/ui/base-ui', () => ({
+  confirmModal: modalConfirm,
+}));
+
 vi.mock('@lobehub/ui', () => ({
   Accordion: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   AccordionItem: ({ children, title }: { children?: ReactNode; title?: ReactNode }) => (
@@ -45,7 +49,6 @@ vi.mock('antd', () => ({
   App: {
     useApp: () => ({
       message: { error: messageError, success: messageSuccess },
-      modal: { confirm: modalConfirm },
     }),
   },
 }));
