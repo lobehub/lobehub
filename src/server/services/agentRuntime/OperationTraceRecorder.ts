@@ -1,4 +1,5 @@
 import type { ISnapshotStore, StepSnapshot } from '@lobechat/agent-tracing';
+import type { ChatMessageErrorAttribution, ChatMessageErrorSeverity } from '@lobechat/types';
 import debug from 'debug';
 
 import type { StepCompletionReason, StepPresentationData } from './types';
@@ -46,7 +47,23 @@ export interface FinalizeParams {
    */
   appendEventsToLastStep?: SignalEvent[];
   completionReason: StepCompletionReason;
-  error?: { message: string; type: string };
+  /**
+   * Top-level error on the persisted snapshot. The classification fields
+   * (`attribution`, `category`, `severity`, …) mirror `ChatMessageError` and
+   * are sourced from `ERROR_CODE_SPECS` at the runtime catch site; unknown
+   * codes simply omit them.
+   */
+  error?: {
+    attribution?: ChatMessageErrorAttribution;
+    category?: string;
+    countAsFailure?: boolean;
+    httpStatus?: number;
+    message: string;
+    numericId?: number;
+    retryable?: boolean;
+    severity?: ChatMessageErrorSeverity;
+    type: string;
+  };
   /**
    * Synthetic step record for the error path. The real failing step never
    * reached `appendStep` because the executor threw before the partial push,
