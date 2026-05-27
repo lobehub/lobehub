@@ -4,6 +4,7 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
+import { appEnv } from '@/envs/app';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
@@ -14,6 +15,7 @@ import {
 } from '@/server/services/bot/agentBotProviderSettings';
 import { getBotMessageRouter } from '@/server/services/bot/BotMessageRouter';
 import { mergeWithDefaults, platformRegistry } from '@/server/services/bot/platforms';
+import { registerWatiWebhook } from '@/server/services/bot/platforms/wati/client';
 import { GatewayService } from '@/server/services/gateway';
 import { getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
 
@@ -204,6 +206,19 @@ export const agentBotProviderRouter = router({
           message:
             result.errors?.map((e) => `${e.field}: ${e.message}`).join('; ') || 'Validation failed',
         });
+      }
+
+      if (platform === 'wati') {
+        const { url: webhookUrl } = await registerWatiWebhook(
+          {
+            applicationId: provider.applicationId,
+            credentials: provider.credentials as Record<string, string>,
+            platform,
+            settings,
+          },
+          { appUrl: appEnv.APP_URL },
+        );
+        return { valid: true, webhookUrl };
       }
 
       return { valid: true };

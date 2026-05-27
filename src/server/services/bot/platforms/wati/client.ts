@@ -23,6 +23,51 @@ import { WatiApiClient } from './api';
 
 const log = debug('bot-platform:wati:bot');
 
+/** Format digits for Wati webhookEndpoints API (often shown with grouping dashes in docs). */
+export function formatWatiPhoneNumber(digits: string): string {
+  const normalized = digits.replaceAll(/\D/g, '');
+  if (normalized.startsWith('852') && normalized.length === 11) {
+    return `852-${normalized.slice(3, 7)}-${normalized.slice(7)}`;
+  }
+  return normalized;
+}
+
+export function buildWatiWebhookUrl(
+  config: BotProviderConfig,
+  context: BotPlatformRuntimeContext,
+  applicationId?: string,
+): string {
+  const channelPhone = (applicationId ?? config.applicationId).replaceAll(/\D/g, '');
+  const baseUrl = (config.credentials.webhookProxyUrl || context.appUrl || '')
+    .trim()
+    .replace(/\/$/, '');
+  return `${baseUrl}/api/agent/webhooks/wati/${channelPhone}`;
+}
+
+/** Register (or update) the LobeHub webhook URL in Wati via API v2. */
+export async function registerWatiWebhook(
+  config: BotProviderConfig,
+  context: BotPlatformRuntimeContext,
+): Promise<{ url: string; response: unknown }> {
+  const applicationId = config.applicationId.replaceAll(/\D/g, '');
+  const api = new WatiApiClient({
+    apiBaseUrl: config.credentials.apiBaseUrl,
+    bearerToken: config.credentials.bearerToken,
+    tenantId: config.credentials.tenantId,
+  });
+  const url = buildWatiWebhookUrl(config, context, applicationId);
+  const response = await api.upsertWebhookEndpoints([
+    {
+      eventTypes: ['message'],
+      phoneNumber: formatWatiPhoneNumber(applicationId),
+      status: 1,
+      url,
+    },
+  ]);
+  log('Registered Wati webhook appId=%s url=%s response=%O', applicationId, url, response);
+  return { response, url };
+}
+
 function decodeThread(platformThreadId: string): { waId: string } {
   const parts = platformThreadId.split(':');
   if (parts.length >= 3 && parts[0] === 'wati' && parts[1] === 'user') {
@@ -50,13 +95,6 @@ class WatiWebhookClient implements PlatformClient {
     });
   }
 
-  private buildWebhookUrl(): string {
-    const baseUrl = (this.config.credentials.webhookProxyUrl || this.context.appUrl || '')
-      .trim()
-      .replace(/\/$/, '');
-    return `${baseUrl}/api/agent/webhooks/wati/${this.applicationId}`;
-  }
-
   async start(): Promise<void> {
     log('Starting WatiBot appId=%s', this.applicationId);
     await updateBotRuntimeStatus({
@@ -66,16 +104,8 @@ class WatiWebhookClient implements PlatformClient {
     });
 
     try {
-      const webhookUrl = this.buildWebhookUrl();
       await this.api.ping();
-      await this.api.upsertWebhookEndpoints([
-        {
-          eventTypes: ['message'],
-          phoneNumber: this.applicationId,
-          status: 1,
-          url: webhookUrl,
-        },
-      ]);
+      const { url: webhookUrl } = await registerWatiWebhook(this.config, this.context);
 
       await updateBotRuntimeStatus({
         applicationId: this.applicationId,

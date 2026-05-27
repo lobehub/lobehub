@@ -8,6 +8,13 @@ onlyBuiltDependencies:
   - '@google/genai'
   - '@lobehub/editor'
   - '@vercel/speed-insights'
+  - core-js
+  - electron
+  - es5-ext
+  - esbuild
+  - protobufjs
+  - sharp
+  - unrs-resolver
 
 overrides:
   jose: ^6.1.3

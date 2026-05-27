@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { WatiClientFactory } from './client';
+import { formatWatiPhoneNumber, WatiClientFactory } from './client';
 
 const fetchSpy = vi.spyOn(globalThis, 'fetch');
 
@@ -39,6 +39,13 @@ afterEach(() => {
   fetchSpy.mockReset();
 });
 
+describe('formatWatiPhoneNumber', () => {
+  it('formats HK numbers with dashes for Wati webhook API', () => {
+    expect(formatWatiPhoneNumber('85253332683')).toBe('852-5333-2683');
+    expect(formatWatiPhoneNumber('85264318722')).toBe('852-6431-8722');
+  });
+});
+
 describe('WatiWebhookClient', () => {
   it('formatMarkdown strips Markdown to plain text', () => {
     const client = createClient();
@@ -70,6 +77,7 @@ describe('WatiWebhookClient', () => {
     const [, init] = webhookCall as [string, RequestInit];
     const body = JSON.parse(init.body as string);
     expect(body[0].url).toBe(`http://localhost:3010/api/agent/webhooks/wati/${APPLICATION_ID}`);
+    expect(body[0].phoneNumber).toBe('852-6431-8722');
     expect(body[0].status).toBe(1);
     expect(body[0].eventTypes).toEqual(['message']);
   });

@@ -466,11 +466,17 @@ const PlatformDetail = memo<PlatformDetailProps>(
       setTesting(true);
       setTestResult(undefined);
       try {
-        await testConnection({
+        const result = await testConnection({
           applicationId: currentConfig.applicationId,
           platform: platformDef.id,
         });
-        setTestResult({ type: 'success' });
+        setTestResult({
+          title:
+            platformDef.id === 'wati' && (result as { webhookUrl?: string })?.webhookUrl
+              ? t('channel.wati.testSuccess')
+              : undefined,
+          type: 'success',
+        });
       } catch (e: any) {
         setTestResult({
           errorDetail: e?.message || String(e),

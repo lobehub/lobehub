@@ -185,6 +185,8 @@ export default {
   'channel.secretTokenPlaceholder': 'Optional secret for webhook verification',
   'channel.telegram.description': 'Connect this assistant to Telegram for private and group chats.',
   'channel.testConnection': 'Test Connection',
+  'channel.wati.testSuccess':
+    'Connection test passed. Webhook URL was registered with Wati — check Connectors → Webhooks in your Wati dashboard.',
   'channel.testFailed': 'Connection test failed',
   'channel.testSuccess': 'Connection test passed',
   'channel.updateFailed': 'Failed to update status',

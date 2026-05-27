@@ -39,7 +39,7 @@ describe('WatiApiClient.upsertWebhookEndpoints', () => {
     expect(body).toEqual([
       {
         eventTypes: ['message'],
-        phoneNumber: '85253332683',
+        phoneNumber: '852-5333-2683',
         status: 1,
         url: 'http://localhost:3010/api/agent/webhooks/wati/85253332683',
       },

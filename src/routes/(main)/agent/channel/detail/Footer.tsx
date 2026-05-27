@@ -257,12 +257,16 @@ const Footer = memo<FooterProps>(
               showIcon
               type="info"
               message={
-                <Trans
-                  components={{ bold: <strong /> }}
-                  i18nKey="channel.endpointUrlHint"
-                  ns="agent"
-                  values={{ fieldName: 'Event Subscription URL', name: platformDef.name }}
-                />
+                platformId === 'wati' ? (
+                  t('channel.wati.webhookManualSetup')
+                ) : (
+                  <Trans
+                    components={{ bold: <strong /> }}
+                    i18nKey="channel.endpointUrlHint"
+                    ns="agent"
+                    values={{ fieldName: 'Event Subscription URL', name: platformDef.name }}
+                  />
+                )
               }
             />
           </Flexbox>
