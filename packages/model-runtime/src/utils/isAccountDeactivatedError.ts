@@ -1,12 +1,13 @@
-const ACCOUNT_DEACTIVATED_PATTERNS = [
-  'account has been deactivated', // OpenAI
-  'account has been suspended', // generic
-  'account has been disabled', // generic
-  'account is disabled', // generic
-];
+import { AgentRuntimeErrorType } from '@lobechat/types';
 
+import { matchErrorPattern } from '../errors';
+
+/**
+ * Returns true when `message` looks like an account-deactivated / suspended
+ * error. The substring registry lives in `errors/patterns.ts` (search for
+ * `AccountDeactivated`).
+ */
 export const isAccountDeactivatedError = (message?: string): boolean => {
   if (!message) return false;
-  const lower = message.toLowerCase();
-  return ACCOUNT_DEACTIVATED_PATTERNS.some((p) => lower.includes(p));
+  return matchErrorPattern({ message })?.code === AgentRuntimeErrorType.AccountDeactivated;
 };

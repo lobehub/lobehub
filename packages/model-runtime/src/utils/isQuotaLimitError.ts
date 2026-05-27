@@ -1,15 +1,13 @@
-const QUOTA_LIMIT_PATTERNS = [
-  'resource exhausted', // Google / VertexAI
-  'resource has been exhausted', // Google
-  'rate limit reached', // OpenAI
-  'rate_limit_exceeded', // OpenAI (code in message)
-  'quota exceeded', // generic
-  'too many requests', // generic
-  'too many tokens', // Moonshot / generic (e.g. "Too many tokens per day")
-];
+import { AgentRuntimeErrorType } from '@lobechat/types';
 
+import { matchErrorPattern } from '../errors';
+
+/**
+ * Returns true when `message` looks like a short-window rate-limit / quota
+ * error (429-class). The substring registry lives in `errors/patterns.ts`
+ * (search for `QuotaLimitReached`).
+ */
 export const isQuotaLimitError = (message?: string): boolean => {
   if (!message) return false;
-  const lower = message.toLowerCase();
-  return QUOTA_LIMIT_PATTERNS.some((p) => lower.includes(p));
+  return matchErrorPattern({ message })?.code === AgentRuntimeErrorType.QuotaLimitReached;
 };

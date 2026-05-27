@@ -58,6 +58,24 @@ export const AgentRuntimeErrorType = {
   InvalidProviderAPIKey: 'InvalidProviderAPIKey',
   ProviderBizError: 'ProviderBizError',
 
+  // —— Added by unified error scheme (additive, all attribution-tagged in spec table) ——
+  /** Provider returned 503 / overloaded / "high demand" — transient, retryable. */
+  ProviderServiceUnavailable: 'ProviderServiceUnavailable',
+  /** Network timeout / connection drop talking to the provider. */
+  ProviderNetworkError: 'ProviderNetworkError',
+  /** Proxy/router has no channel for the requested model (key pool exhausted, no upstream). */
+  NoAvailableChannel: 'NoAvailableChannel',
+  /** Upstream content-moderation / safety filter rejected the input or output. */
+  ContentModeration: 'ContentModeration',
+  /** Model lacks the requested capability (VLM / tool calling / prefill). */
+  CapabilityNotSupported: 'CapabilityNotSupported',
+  /** Provider rejected the request as malformed (bad JSON, schema validation, etc.). */
+  InvalidRequestFormat: 'InvalidRequestFormat',
+  /** User-side misconfiguration (wrong base URL, missing env var, virtual-key allowlist, etc.). */
+  UserConfigError: 'UserConfigError',
+  /** Gateway watchdog killed an idle agent operation — harness-side. */
+  OperationInactivityTimeout: 'OperationInactivityTimeout',
+
   InvalidOllamaArgs: 'InvalidOllamaArgs',
   OllamaBizError: 'OllamaBizError',
   OllamaServiceUnavailable: 'OllamaServiceUnavailable',

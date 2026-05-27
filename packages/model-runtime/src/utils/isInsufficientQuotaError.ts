@@ -1,14 +1,13 @@
-const INSUFFICIENT_QUOTA_PATTERNS = [
-  'insufficient balance', // Moonshot / generic
-  'insufficient quota', // OpenAI
-  'account is suspended due to insufficient balance', // Moonshot
-  'balance is not enough', // generic
-  'billing hard limit has been reached', // OpenAI
-  'exceeded your current quota', // OpenAI
-];
+import { AgentRuntimeErrorType } from '@lobechat/types';
 
+import { matchErrorPattern } from '../errors';
+
+/**
+ * Returns true when `message` looks like an account-level insufficient-balance
+ * / billing-quota-exhausted error. The substring registry lives in
+ * `errors/patterns.ts` (search for `InsufficientQuota`).
+ */
 export const isInsufficientQuotaError = (message?: string): boolean => {
   if (!message) return false;
-  const lower = message.toLowerCase();
-  return INSUFFICIENT_QUOTA_PATTERNS.some((p) => lower.includes(p));
+  return matchErrorPattern({ message })?.code === AgentRuntimeErrorType.InsufficientQuota;
 };
