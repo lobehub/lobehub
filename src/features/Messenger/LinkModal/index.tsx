@@ -1,47 +1,14 @@
 'use client';
 
-import { Flexbox, Modal } from '@lobehub/ui';
-import { memo } from 'react';
+import { createModal, type ModalInstance } from '@lobehub/ui/base-ui';
 
-import type { MessengerPlatform } from '../constants';
-import DiscordLinkBody from './Discord';
-import SlackLinkBody from './Slack';
-import TelegramLinkBody from './Telegram';
+import LinkModalContent, { type LinkModalContentProps } from './Content';
 
-interface LinkModalProps {
-  appId?: string;
-  botUsername?: string;
-  /** Brand-name label (e.g. `"Slack"`) sourced from the registry. */
-  name: string;
-  onClose: () => void;
-  open: boolean;
-  platform: MessengerPlatform;
-}
-
-const LinkModal = memo<LinkModalProps>(({ appId, botUsername, name, onClose, open, platform }) => {
-  const renderBody = () => {
-    switch (platform) {
-      case 'slack': {
-        return <SlackLinkBody />;
-      }
-      case 'discord': {
-        return <DiscordLinkBody appId={appId} name={name} />;
-      }
-      case 'telegram': {
-        return <TelegramLinkBody botUsername={botUsername} name={name} />;
-      }
-    }
-  };
-
-  return (
-    <Modal footer={null} open={open} title={null} width={480} onCancel={onClose}>
-      <Flexbox align="center" gap={20} style={{ paddingBlockEnd: 16, paddingBlockStart: 40 }}>
-        {renderBody()}
-      </Flexbox>
-    </Modal>
-  );
-});
-
-LinkModal.displayName = 'MessengerLinkModal';
-
-export default LinkModal;
+export const createMessengerLinkModal = (props: LinkModalContentProps): ModalInstance =>
+  createModal({
+    content: <LinkModalContent {...props} />,
+    footer: null,
+    maskClosable: true,
+    title: null,
+    width: 'min(90vw, 480px)',
+  });

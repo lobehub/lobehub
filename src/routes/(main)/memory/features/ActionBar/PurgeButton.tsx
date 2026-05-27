@@ -8,7 +8,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 
-import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
+import { DESKTOP_HEADER_ICON_SIZE, DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { useUserMemoryStore } from '@/store/userMemory';
 
 export const MEMORY_DETAIL_QUERY_KEYS = [
@@ -67,7 +67,7 @@ const PurgeButton = memo<Props>(({ iconOnly }) => {
           danger
           icon={Trash2Icon}
           loading={loading}
-          size={DESKTOP_HEADER_ICON_SIZE}
+          size={DESKTOP_HEADER_ICON_SMALL_SIZE}
           tooltipProps={{ placement: 'bottom' }}
           onClick={handleClick}
         />

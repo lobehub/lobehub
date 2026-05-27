@@ -1,12 +1,11 @@
 import { useEditor } from '@lobehub/editor/react';
-import { type ModalProps } from '@lobehub/ui';
-import { createRawModal, Modal } from '@lobehub/ui';
+import { Modal, type ModalComponentProps } from '@lobehub/ui/base-ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import EditorCanvas from './EditorCanvas';
 
-interface EditorModalProps extends ModalProps {
+interface EditorModalProps extends ModalComponentProps {
   editorData?: unknown;
   onConfirm?: (value: string, editorData?: unknown) => Promise<void>;
   value?: string;
@@ -47,5 +46,3 @@ export const EditorModal = memo<EditorModalProps>(
     );
   },
 );
-
-export const createEditorModal = (props: EditorModalProps) => createRawModal(EditorModal, props);

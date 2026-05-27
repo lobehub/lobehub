@@ -307,6 +307,7 @@ export const useFileItemDropdown = ({
                 ? t('FileManager.actions.confirmDeleteFolder')
                 : t('FileManager.actions.confirmDelete'),
               okButtonProps: { danger: true },
+              title: t('delete', { ns: 'common' }),
               onOk: async () => {
                 // Use optimistic delete - instant UI update, sync in background
                 await deleteResource(id);

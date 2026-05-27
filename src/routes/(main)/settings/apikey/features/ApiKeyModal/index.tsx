@@ -1,58 +1,18 @@
-import { FormModal, Input } from '@lobehub/ui';
-import { type Dayjs } from 'dayjs';
-import { type FC } from 'react';
-import { useTranslation } from 'react-i18next';
+'use client';
 
-import { type CreateApiKeyParams } from '@/types/apiKey';
+import { createModal, type ModalInstance } from '@lobehub/ui/base-ui';
+import { t } from 'i18next';
 
-import ApiKeyDatePicker from '../ApiKeyDatePicker';
+import ApiKeyModalContent, { type ApiKeyModalContentProps } from './Content';
 
-interface ApiKeyModalProps {
-  onCancel: () => void;
-  onOk: (values: CreateApiKeyParams) => void;
-  open: boolean;
-  submitLoading?: boolean;
-}
-
-type FormValues = Omit<CreateApiKeyParams, 'expiresAt'> & {
-  expiresAt: Dayjs | null;
-};
-
-const ApiKeyModal: FC<ApiKeyModalProps> = ({ open, onCancel, onOk, submitLoading }) => {
-  const { t } = useTranslation('auth');
-
-  return (
-    <FormModal
-      destroyOnHidden
-      height={'90%'}
-      itemMinWidth={'max(30%,240px)'}
-      itemsType={'flat'}
-      open={open}
-      submitLoading={submitLoading}
-      submitText={t('apikey.form.submit')}
-      title={t('apikey.form.title')}
-      items={[
-        {
-          children: <Input placeholder={t('apikey.form.fields.name.placeholder')} />,
-          label: t('apikey.form.fields.name.label'),
-          name: 'name',
-          rules: [{ required: true }],
-        },
-        {
-          children: <ApiKeyDatePicker style={{ width: '100%' }} />,
-          label: t('apikey.form.fields.expiresAt.label'),
-          name: 'expiresAt',
-        },
-      ]}
-      onCancel={onCancel}
-      onFinish={(values: FormValues) => {
-        onOk({
-          ...values,
-          expiresAt: values.expiresAt ? values.expiresAt.toDate() : null,
-        } satisfies CreateApiKeyParams);
-      }}
-    />
-  );
-};
-
-export default ApiKeyModal;
+export const createApiKeyModal = (props: ApiKeyModalContentProps): ModalInstance =>
+  createModal({
+    content: <ApiKeyModalContent {...props} />,
+    footer: null,
+    maskClosable: true,
+    styles: {
+      content: { paddingBlock: 16, paddingInline: 24 },
+    },
+    title: t('apikey.form.title', { ns: 'auth' }),
+    width: 'min(90vw, 560px)',
+  });

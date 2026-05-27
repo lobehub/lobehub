@@ -50,6 +50,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     margin-block-start: -4px;
     padding-block-end: 8px;
     padding-inline: 16px;
+
     font-size: ${cssVar.fontSizeSM};
     line-height: 1.45;
     color: ${cssVar.colorTextSecondary};
