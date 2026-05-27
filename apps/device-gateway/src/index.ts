@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 
+import { verifyDesktopToken } from './auth';
 import { DeviceGatewayDO } from './DeviceGatewayDO';
 import type { Env } from './types';
 
@@ -25,6 +26,14 @@ const serviceAuth = (): ((c: any, next: () => Promise<void>) => Promise<Response
 app.get('/ws', async (c) => {
   const userId = c.req.query('userId');
   if (!userId) return c.text('Missing userId', 400);
+
+  const token = c.req.query('token') || c.req.header('Authorization')?.replace('Bearer ', '');
+  if (!token) return c.text('Unauthorized', 401);
+  try {
+    await verifyDesktopToken(c.env, token);
+  } catch {
+    return c.text('Unauthorized', 401);
+  }
 
   const id = c.env.DEVICE_GATEWAY.idFromName(`user:${userId}`);
   const stub = c.env.DEVICE_GATEWAY.get(id);
