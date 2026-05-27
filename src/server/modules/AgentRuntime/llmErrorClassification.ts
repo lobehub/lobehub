@@ -1,3 +1,5 @@
+import { ERROR_CODE_SPECS, getErrorCodeSpec } from '@lobechat/model-runtime';
+
 type LLMErrorKind = 'retry' | 'stop';
 
 interface ClassifiedLLMError {
@@ -13,27 +15,42 @@ interface LLMErrorSignal {
   status?: number;
 }
 
-const RETRY_ERROR_TYPES = new Set([
+/**
+ * Error codes the runtime should retry **despite** the spec table marking them
+ * non-retryable. These are catch-all / harness-level errors that are often
+ * transient in practice (a retried call frequently succeeds), so the operational
+ * retry loop is more aggressive than the spec's intrinsic retryability.
+ *
+ * Keep this set tight — every entry is a conscious deviation from the spec.
+ */
+const RETRY_OVERRIDES = new Set([
   'AgentRuntimeError',
   'OllamaServiceUnavailable',
   'ProviderBizError',
-  'QuotaLimitReached',
   'StreamChunkError',
 ]);
-const STOP_ERROR_TYPES = new Set([
-  'AccountDeactivated',
-  'ExceededContextWindow',
-  'InsufficientQuota',
-  'InvalidBedrockCredentials',
-  'InvalidGithubCopilotToken',
-  'InvalidGithubToken',
-  'InvalidOllamaArgs',
-  'InvalidProviderAPIKey',
-  'InvalidVertexCredentials',
-  'ModelNotFound',
-  'PermissionDenied',
-  'Unauthorized',
-]);
+
+/**
+ * Legacy `ChatErrorType` codes that aren't (yet) in `ERROR_CODE_SPECS` but need
+ * to map to `stop`. The numeric HTTP status `Unauthorized` (401) shows up as a
+ * string `errorType` in some code paths.
+ */
+const LEGACY_STOP_ERROR_TYPES = new Set(['Unauthorized']);
+
+const buildErrorTypeSets = () => {
+  const stop = new Set<string>();
+  const retry = new Set<string>(RETRY_OVERRIDES);
+  for (const spec of Object.values(ERROR_CODE_SPECS)) {
+    if (!spec) continue;
+    if (RETRY_OVERRIDES.has(spec.code)) continue;
+    if (spec.retryable) retry.add(spec.code);
+    else stop.add(spec.code);
+  }
+  for (const code of LEGACY_STOP_ERROR_TYPES) stop.add(code);
+  return { retry, stop };
+};
+
+const { retry: RETRY_ERROR_TYPES, stop: STOP_ERROR_TYPES } = buildErrorTypeSets();
 
 const RETRY_KEYWORDS = [
   '429',
@@ -192,8 +209,12 @@ const classifyKind = ({ code, errorType, message, status }: LLMErrorSignal): LLM
   }
 
   if (errorType) {
-    if (STOP_ERROR_TYPES.has(errorType)) return 'stop';
-    if (RETRY_ERROR_TYPES.has(errorType)) return 'retry';
+    // Resolve through the spec table so deprecated aliases (e.g. the legacy
+    // `QuotaLimitReached` → `RateLimitExceeded`) classify the same as their
+    // canonical replacement.
+    const canonical = getErrorCodeSpec(errorType)?.code ?? errorType;
+    if (STOP_ERROR_TYPES.has(canonical)) return 'stop';
+    if (RETRY_ERROR_TYPES.has(canonical)) return 'retry';
   }
 
   if (code) {

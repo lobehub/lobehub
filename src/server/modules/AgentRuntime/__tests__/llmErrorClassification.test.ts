@@ -5,6 +5,12 @@ import { classifyLLMError } from '../llmErrorClassification';
 describe('classifyLLMError', () => {
   it('should classify rate limit errors as retry', () => {
     expect(
+      classifyLLMError({ errorType: 'RateLimitExceeded', message: '429 rate limit' }).kind,
+    ).toBe('retry');
+  });
+
+  it('resolves the deprecated QuotaLimitReached alias the same as RateLimitExceeded', () => {
+    expect(
       classifyLLMError({ errorType: 'QuotaLimitReached', message: '429 rate limit' }).kind,
     ).toBe('retry');
   });
@@ -48,6 +54,50 @@ describe('classifyLLMError', () => {
 
   it('should default unknown errors to retry', () => {
     expect(classifyLLMError(new Error('unexpected upstream issue')).kind).toBe('retry');
+  });
+
+  describe('spec-driven non-retryable codes', () => {
+    // These all carry `retryable: false` in `ERROR_CODE_SPECS`. Before the
+    // classifier was spec-driven, an errorType without an HTTP status would
+    // fall through to the default `retry` branch — causing pointless retry
+    // storms for requests the spec says should stop. Now the classifier reads
+    // straight from the spec table.
+    it.each([
+      ['ContentModeration', 'Content Exists Risk'],
+      ['InvalidRequestFormat', 'Range of input length should be 1 to 8192'],
+      ['UserConfigError', 'Invalid URL (POST /v1/v1beta'],
+      ['NoAvailableChannel', 'No available keys in pool'],
+      ['OperationInactivityTimeout', 'Operation idle for 1800s'],
+      ['CapabilityNotSupported', 'The model is not a VLM'],
+      ['LocationNotSupportError', 'service unavailable in this region'],
+      ['ExceededToolLimit', 'tools array exceeds limit'],
+    ])('classifies %s as stop (no HTTP status)', (errorType, message) => {
+      expect(classifyLLMError({ errorType, message }).kind).toBe('stop');
+    });
+  });
+
+  describe('spec-driven retryable codes', () => {
+    it.each([
+      ['ProviderServiceUnavailable', 'upstream temporarily overloaded'],
+      ['ProviderNetworkError', 'connection timed out'],
+      ['RateLimitExceeded', 'tokens per minute (TPM)'],
+    ])('classifies %s as retry (no HTTP status)', (errorType, message) => {
+      expect(classifyLLMError({ errorType, message }).kind).toBe('retry');
+    });
+  });
+
+  describe('legacy retry overrides', () => {
+    // These four codes are `retryable: false` in the spec but the runtime
+    // intentionally retries them because they're catch-alls / harness-level
+    // errors that often succeed on retry.
+    it.each([
+      'AgentRuntimeError',
+      'OllamaServiceUnavailable',
+      'ProviderBizError',
+      'StreamChunkError',
+    ])('classifies %s as retry despite spec saying non-retryable', (errorType) => {
+      expect(classifyLLMError({ errorType, message: 'something happened' }).kind).toBe('retry');
+    });
   });
 
   describe('non-string code / errorType defensive handling', () => {
