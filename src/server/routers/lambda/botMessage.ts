@@ -20,7 +20,6 @@ import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { mergeWithDefaults, platformRegistry } from '@/server/services/bot/platforms';
-import { TELEGRAM_INSTALLATION_KEY } from '@/server/services/messenger/installations/telegram';
 import { DiscordApi } from '@/server/services/bot/platforms/discord/api';
 import { DiscordMessageService } from '@/server/services/bot/platforms/discord/service';
 import { FeishuMessageService } from '@/server/services/bot/platforms/feishu/service';
@@ -30,6 +29,7 @@ import { SlackMessageService } from '@/server/services/bot/platforms/slack/servi
 import { TelegramApi } from '@/server/services/bot/platforms/telegram/api';
 import { TelegramMessageService } from '@/server/services/bot/platforms/telegram/service';
 import { WechatMessageService } from '@/server/services/bot/platforms/wechat/service';
+import { TELEGRAM_INSTALLATION_KEY } from '@/server/services/messenger/installations/telegram';
 
 // ── Middleware ────────────────────────────────────────────
 
