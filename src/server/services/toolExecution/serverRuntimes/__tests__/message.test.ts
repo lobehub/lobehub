@@ -398,6 +398,47 @@ describe('messageRuntime', () => {
     });
   });
 
+  describe('Telegram env-config fallback', () => {
+    it('should fall back to env-backed config when no per-agent provider exists', async () => {
+      mockQuery.mockResolvedValue([]);
+      mockGetMessengerTelegramConfig.mockResolvedValueOnce({
+        botToken: 'tg-env-token',
+        botUsername: 'lobehub_bot',
+      });
+      mockTelegramSendMessage.mockResolvedValue({ message_id: 99 });
+
+      const runtime = await messageRuntime.factory(validContext);
+      const result = await runtime.sendMessage({
+        channelId: '-100999',
+        content: 'Hello via env config!',
+        platform: 'telegram',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.state).toMatchObject({
+        channelId: '-100999',
+        messageId: '99',
+        platform: 'telegram',
+      });
+    });
+
+    it('should fail with descriptive error when neither per-agent nor env config exists', async () => {
+      mockQuery.mockResolvedValue([]);
+      mockGetMessengerTelegramConfig.mockResolvedValueOnce(null);
+
+      const runtime = await messageRuntime.factory(validContext);
+      const result = await runtime.sendMessage({
+        channelId: '-100999',
+        content: 'Should fail',
+        platform: 'telegram',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('No enabled telegram bot provider found');
+      expect(result.content).toContain('no env-backed Telegram config');
+    });
+  });
+
   describe('dispatcher error handling', () => {
     it('should return error for unconfigured platform', async () => {
       mockQuery.mockResolvedValue([]);

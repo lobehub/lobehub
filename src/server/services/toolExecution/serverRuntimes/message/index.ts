@@ -166,8 +166,21 @@ export const messageRuntime: ServerRuntimeRegistration = {
         return new SlackMessageService(new SlackApi(credentials.botToken));
       },
       telegram: async () => {
-        const { credentials } = await resolveCredentials(providerModel, 'telegram');
-        return new TelegramMessageService(new TelegramApi(credentials.botToken));
+        // Per-agent provider takes precedence; fall back to the env-backed
+        // singleton so the synthetic telegram:singleton install actually works.
+        try {
+          const { credentials } = await resolveCredentials(providerModel, 'telegram');
+          return new TelegramMessageService(new TelegramApi(credentials.botToken));
+        } catch {
+          const envConfig = await getMessengerTelegramConfig();
+          if (!envConfig) {
+            throw new Error(
+              'No enabled telegram bot provider found and no env-backed Telegram config available. ' +
+                'Please configure a telegram integration in your bot settings.',
+            );
+          }
+          return new TelegramMessageService(new TelegramApi(envConfig.botToken));
+        }
       },
       wechat: async () => {
         const { applicationId, credentials } = await resolveCredentials(providerModel, 'wechat');
