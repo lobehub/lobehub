@@ -20,9 +20,14 @@ export const useDesktopUserStateRedirect = () => {
 
 export const useWebUserStateRedirect = () =>
   useCallback((state: UserInitializationState) => {
-    const { pathname } = window.location;
+    const { pathname, search } = window.location;
 
     if (!onboardingSelectors.needsOnboarding(state)) return;
+
+    // Skip onboarding when the user lands on /agent/inbox with a message param
+    // (e.g. "Try in LobeHub" links from Skills Marketplace). Sending the message
+    // is more important than walking through onboarding steps.
+    if (pathname.startsWith('/agent/inbox') && new URLSearchParams(search).has('message')) return;
 
     redirectIfNotOn(pathname, '/onboarding');
   }, []);
