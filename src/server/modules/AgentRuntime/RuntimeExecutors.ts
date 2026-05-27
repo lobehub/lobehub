@@ -1355,11 +1355,13 @@ export const createRuntimeExecutors = (
                 continue;
               }
 
-              // LOBE-9523: cancel/interrupt path — the model-runtime stream was aborted
-              // before reaching the post-stream finalize, so the DB row is still the
-              // LOADING_FLAT placeholder. Persist whatever partial content the stream
-              // callbacks already accumulated so reload/end snapshots do not clobber
-              // the client's in-memory streamed content.
+              // Cancel/interrupt path: when the user stops mid-stream, the model-runtime
+              // stream is aborted before reaching the post-stream finalize (line ~1078),
+              // so the DB row remains a LOADING_FLAT placeholder. Without this fix,
+              // agent_runtime_end would push the placeholder as the source-of-truth
+              // to the client, clobbering the streamed content accumulated in memory.
+              // We persist whatever partial content the stream callbacks already
+              // accumulated so that reload/end snapshots reflect actual progress.
               if (interrupted && (content || thinkingContent || toolsCalling.length > 0)) {
                 try {
                   const persistedTools =
