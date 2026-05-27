@@ -5,5 +5,7 @@ export {
   verifyWebhookSignature,
   WatiApiClient,
   WatiApiError,
+  type WatiWebhookEndpointsResponse,
+  type WatiWebhookEndpointStatus,
 } from './api';
 export type { WatiAdapterConfig, WatiInboundMessage, WatiRawMessage, WatiThreadId } from './types';

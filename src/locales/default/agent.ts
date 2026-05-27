@@ -132,7 +132,7 @@ export default {
     'Your Wati WhatsApp business number in international format without + (e.g. 85264318722). Must match inbound webhook `channelPhoneNumber`.',
   'channel.wati.channelPhoneNumberPlaceholder': 'e.g. 85264318722',
   'channel.wati.webhookManualSetup':
-    'Copy the Webhook URL below into Wati (Webhooks → Add Webhook). Enable **Message Received**. Replies use session messages and require an active 24-hour customer service window.',
+    'On connect, LobeHub registers this Webhook URL with Wati via API (message events). You can still copy it for verification. Replies use session messages within the 24-hour window.',
   'channel.openPlatform': 'Open Platform',
   'channel.platforms': 'Platforms',
   'channel.publicKey': 'Public Key',

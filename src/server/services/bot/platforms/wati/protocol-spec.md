@@ -20,8 +20,9 @@ LobeHub replies with the Wati `sendSessionMessage` REST API inside the 24-hour s
 
 `POST {appUrl}/api/agent/webhooks/wati/{applicationId}`
 
-Configure this URL in the Wati dashboard under **Webhooks**, enable **Message Received**,
-and optionally set the same secret as `webhookSecret`.
+On bot **start**, LobeHub calls `POST /{tenantId}/api/v2/webhookEndpoints` to register this URL
+(enabled, `eventTypes: ["message"]`). You can still verify or edit it in the Wati dashboard.
+Optionally set the same secret as `webhookSecret` for inbound HMAC verification.
 
 ## Inbound filter
 

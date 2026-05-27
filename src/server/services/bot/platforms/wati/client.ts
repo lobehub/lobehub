@@ -36,16 +36,25 @@ class WatiWebhookClient implements PlatformClient {
   readonly applicationId: string;
 
   private config: BotProviderConfig;
+  private context: BotPlatformRuntimeContext;
   private api: WatiApiClient;
 
-  constructor(config: BotProviderConfig, _context: BotPlatformRuntimeContext) {
+  constructor(config: BotProviderConfig, context: BotPlatformRuntimeContext) {
     this.config = config;
+    this.context = context;
     this.applicationId = config.applicationId.replaceAll(/\D/g, '');
     this.api = new WatiApiClient({
       apiBaseUrl: config.credentials.apiBaseUrl,
       bearerToken: config.credentials.bearerToken,
       tenantId: config.credentials.tenantId,
     });
+  }
+
+  private buildWebhookUrl(): string {
+    const baseUrl = (this.config.credentials.webhookProxyUrl || this.context.appUrl || '')
+      .trim()
+      .replace(/\/$/, '');
+    return `${baseUrl}/api/agent/webhooks/wati/${this.applicationId}`;
   }
 
   async start(): Promise<void> {
@@ -57,13 +66,23 @@ class WatiWebhookClient implements PlatformClient {
     });
 
     try {
+      const webhookUrl = this.buildWebhookUrl();
       await this.api.ping();
+      await this.api.upsertWebhookEndpoints([
+        {
+          eventTypes: ['message'],
+          phoneNumber: this.applicationId,
+          status: 1,
+          url: webhookUrl,
+        },
+      ]);
+
       await updateBotRuntimeStatus({
         applicationId: this.applicationId,
         platform: this.id,
         status: BOT_RUNTIME_STATUSES.connected,
       });
-      log('WatiBot appId=%s ready (configure webhook URL in Wati dashboard)', this.applicationId);
+      log('WatiBot appId=%s started, webhook=%s', this.applicationId, webhookUrl);
     } catch (error) {
       await updateBotRuntimeStatus({
         applicationId: this.applicationId,

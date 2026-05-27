@@ -6,7 +6,7 @@ const fetchSpy = vi.spyOn(globalThis, 'fetch');
 
 const APPLICATION_ID = '85264318722';
 
-const createClient = () =>
+const createClient = (context: { appUrl?: string } = {}) =>
   new WatiClientFactory().createClient(
     {
       applicationId: APPLICATION_ID,
@@ -19,7 +19,7 @@ const createClient = () =>
       platform: 'wati',
       settings: {},
     },
-    {},
+    { appUrl: 'http://localhost:3010', ...context },
   );
 
 beforeEach(() => {
@@ -55,6 +55,23 @@ describe('WatiWebhookClient', () => {
     const adapter = client.createAdapter();
     expect(adapter.wati).toBeDefined();
     expect((adapter.wati as any).botUserId).toBe(APPLICATION_ID);
+  });
+
+  it('start registers webhook URL with Wati v2 API', async () => {
+    fetchSpy.mockResolvedValue(new Response('{}', { status: 200 }));
+    const client = createClient({ appUrl: 'http://localhost:3010' });
+    await client.start();
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    const webhookCall = fetchSpy.mock.calls.find(([url]) =>
+      String(url).includes('/api/v2/webhookEndpoints'),
+    );
+    expect(webhookCall).toBeDefined();
+    const [, init] = webhookCall as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body[0].url).toBe(`http://localhost:3010/api/agent/webhooks/wati/${APPLICATION_ID}`);
+    expect(body[0].status).toBe(1);
+    expect(body[0].eventTypes).toEqual(['message']);
   });
 
   it('messenger.createMessage POSTs sendSessionMessage with query params', async () => {

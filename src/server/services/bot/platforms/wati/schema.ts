@@ -37,6 +37,13 @@ export const schema: FieldSchema[] = [
         label: 'channel.wati.webhookSecret',
         type: 'password',
       },
+      {
+        devOnly: true,
+        key: 'webhookProxyUrl',
+        description: 'channel.devWebhookProxyUrlHint',
+        label: 'channel.devWebhookProxyUrl',
+        type: 'string',
+      },
     ],
     type: 'object',
   },

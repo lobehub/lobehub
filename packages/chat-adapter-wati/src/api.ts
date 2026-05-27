@@ -85,6 +85,63 @@ export class WatiApiClient {
       );
     }
   }
+
+  /**
+   * Create or update webhook endpoints for one or more channel numbers.
+   * @see POST /{tenantId}/api/v2/webhookEndpoints
+   */
+  async upsertWebhookEndpoints(
+    entries: Array<{
+      eventTypes?: string[];
+      phoneNumber: string;
+      status?: 0 | 1 | 2;
+      url: string;
+    }>,
+  ): Promise<WatiWebhookEndpointsResponse> {
+    const url = `${this.apiBaseUrl}/${this.tenantId}/api/v2/webhookEndpoints`;
+    const body = entries.map((entry) => ({
+      eventTypes: entry.eventTypes ?? ['message'],
+      phoneNumber: entry.phoneNumber,
+      status: entry.status ?? 1,
+      url: entry.url,
+    }));
+
+    const response = await fetch(url, {
+      body: JSON.stringify(body),
+      headers: {
+        ...this.authHeaders,
+        'Content-Type': 'application/json',
+      },
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      const detail = await safeResponseText(response);
+      throw new WatiApiError(
+        detail || `Wati webhookEndpoints failed (${response.status})`,
+        response.status,
+      );
+    }
+
+    try {
+      return (await response.json()) as WatiWebhookEndpointsResponse;
+    } catch {
+      return { ok: true };
+    }
+  }
+}
+
+/** Wati status for webhookEndpoints request body: 0 disabled, 1 enabled, 2 defective. */
+export type WatiWebhookEndpointStatus = 0 | 1 | 2;
+
+export interface WatiWebhookEndpointsResponse {
+  ok?: boolean;
+  result?: Array<{
+    channelPhoneNumber?: string;
+    eventTypes?: string[];
+    id?: string;
+    url?: string;
+  }>;
 }
 
 const safeResponseText = async (response: Response): Promise<string> => {
