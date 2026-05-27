@@ -24,7 +24,6 @@ import {
   type PanelPlacement,
   resolvePanelPlacement,
 } from './panelPlacement';
-import { perfMark } from './perfMark';
 import { computeDockPosition, connectorPoint, type DockResult, type Rect } from './useDockPosition';
 
 export interface ChatPanelSelection {
@@ -147,10 +146,6 @@ const ChatPanel = memo<ChatPanelProps>(
     const lastSelectionPlacementRef = useRef<PanelPlacement | null>(null);
     const lastPlacementResetKeyRef = useRef(placementResetKey);
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-
-    useEffect(() => {
-      perfMark('overlay:chatpanel-mount');
-    }, []);
 
     const selectionCount = selections.length;
     const activeSelection = selectionCount > 0 ? selections[selectionCount - 1]! : null;
@@ -363,14 +358,6 @@ const ChatPanel = memo<ChatPanelProps>(
     const hasAgents = !!agents && agents.length > 0;
     const hasModels = !!models && models.length > 0;
 
-    const handleAgentOpenChange = useCallback((open: boolean) => {
-      if (open) perfMark('select:agent-open');
-    }, []);
-
-    const handleModelOpenChange = useCallback((open: boolean) => {
-      if (open) perfMark('select:model-open');
-    }, []);
-
     return (
       <>
         {connector && (
@@ -498,7 +485,6 @@ const ChatPanel = memo<ChatPanelProps>(
               <Select.Root
                 disabled={!hasAgents}
                 value={agentId ?? ''}
-                onOpenChange={handleAgentOpenChange}
                 onValueChange={handleAgentChange}
               >
                 <Select.Trigger
@@ -546,7 +532,6 @@ const ChatPanel = memo<ChatPanelProps>(
                 <Select.Root
                   disabled={!hasModels}
                   value={modelId ?? ''}
-                  onOpenChange={handleModelOpenChange}
                   onValueChange={handleModelChange}
                 >
                   <Select.Trigger

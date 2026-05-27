@@ -537,7 +537,7 @@ globalStyle(`.${textarea}::selection`, {
 
 export const popupPositioner = style({
   outline: 'none',
-  zIndex: 2_147_483_647,
+  zIndex: 114_514,
 });
 
 export const popup = style({
