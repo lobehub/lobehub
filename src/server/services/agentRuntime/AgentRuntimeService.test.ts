@@ -15,6 +15,11 @@ import {
 
 vi.mock('@lobechat/model-runtime', () => ({
   getModelPropertyWithFallback: vi.fn(),
+  // `llmErrorClassification.ts` reads these at module-load time; an empty
+  // spec map is fine here because this suite never exercises the runtime
+  // retry classifier path.
+  ERROR_CODE_SPECS: {},
+  getErrorCodeSpec: () => undefined,
 }));
 
 // Mock trusted client to avoid server-side env access

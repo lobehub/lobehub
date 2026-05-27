@@ -45,6 +45,11 @@ vi.mock('@/server/services/message', () => ({
 // cloud-specific dependencies that are unavailable in the test environment
 vi.mock('@lobechat/model-runtime', () => ({
   consumeStreamUntilDone: vi.fn().mockResolvedValue(undefined),
+  // `llmErrorClassification.ts` reads these at module-load time; an empty
+  // spec map is fine here because this suite never exercises the runtime
+  // retry classifier path.
+  ERROR_CODE_SPECS: {},
+  getErrorCodeSpec: () => undefined,
 }));
 
 vi.mock('@/business/client/model-bank/loadModels', () => ({
