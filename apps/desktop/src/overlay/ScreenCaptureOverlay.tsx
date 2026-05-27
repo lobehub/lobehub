@@ -10,6 +10,7 @@ import ChatPanel, { type ChatPanelSelection, type ChatPanelSubmitPayload } from 
 import { OVERLAY_COPY, OVERLAY_LAYOUT, OVERLAY_SHORTCUTS } from './constants';
 import * as styles from './overlay.css.ts';
 import { resolveCommittedSelectionRect, shouldHideChatPanel } from './overlaySelectionState';
+import { perfMark } from './perfMark';
 import { useDragSelection } from './useDragSelection';
 import { getTopmostWindowAtPoint, useWindowHighlight } from './useWindowHighlight';
 import WindowTag from './WindowTag';
@@ -18,6 +19,13 @@ const clipLabel = (text: string, max = OVERLAY_LAYOUT.labelClipLength): string =
   text.length > max ? `${text.slice(0, max)}…` : text;
 
 const ScreenCaptureOverlay = memo(() => {
+  useEffect(() => {
+    perfMark('overlay:root-commit');
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => perfMark('overlay:first-paint'));
+    });
+  }, []);
+
   const [isPanelHidden, setIsPanelHidden] = useState(false);
   const [pendingSelectionRect, setPendingSelectionRect] = useState<
     ChatPanelSelection['rect'] | null
