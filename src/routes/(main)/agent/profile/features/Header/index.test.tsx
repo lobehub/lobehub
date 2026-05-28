@@ -40,6 +40,9 @@ const mocks = vi.hoisted(() => ({
     publish: vi.fn(),
   },
   navigate: vi.fn(),
+  profileState: {
+    editor: undefined as { getDocument: (format: string) => string | undefined } | undefined,
+  },
   versionReviewStatus: {
     isUnderReview: false,
   },
@@ -192,8 +195,8 @@ vi.mock('@/store/home', () => ({
 }));
 
 vi.mock('../store', () => ({
-  useProfileStore: (selector: (state: { editor: undefined }) => unknown) =>
-    selector({ editor: undefined }),
+  useProfileStore: (selector: (state: typeof mocks.profileState) => unknown) =>
+    selector(mocks.profileState),
 }));
 
 vi.mock('./AgentForkTag', () => ({
@@ -232,6 +235,7 @@ describe('Agent profile Header', () => {
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
     mocks.agentState.canCurrentAgentPublishToCommunity = true;
     mocks.agentState.isCurrentAgentHeterogeneous = false;
+    mocks.profileState.editor = undefined;
   });
 
   it('should show the community publish action for normal agents', () => {
@@ -261,6 +265,25 @@ describe('Agent profile Header', () => {
     await expect(exportedBlob.text()).resolves.toContain('You are helpful.');
     expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled();
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:agent-profile');
+  });
+
+  it('should preserve an empty prompt from the mounted editor when exporting markdown', async () => {
+    mocks.profileState.editor = {
+      getDocument: vi.fn().mockReturnValue(''),
+    };
+
+    render(<Header />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'pageEditor.menu.export.markdown' }));
+
+    await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled());
+
+    const exportedBlob = vi.mocked(URL.createObjectURL).mock.calls[0][0] as Blob;
+    const exportedMarkdown = await exportedBlob.text();
+
+    expect(exportedMarkdown).toContain('# Test Agent');
+    expect(exportedMarkdown).not.toContain('You are helpful.');
+    expect(exportedMarkdown).not.toContain('settingAgent.prompt.title');
   });
 
   it('should hide the community publish action for heterogeneous and platform agents', () => {

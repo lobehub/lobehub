@@ -199,13 +199,13 @@ const Header = memo(() => {
 
   const handleExportMarkdown = useCallback(async () => {
     try {
-      const editorMarkdown = editor?.getDocument('markdown') as string | undefined;
+      const editorMarkdown = editor?.getDocument('markdown') as string | null | undefined;
       const profileMarkdown = buildAgentProfileMarkdown({
         description: meta?.description,
         model: config.model,
         plugins: config.plugins,
         provider: config.provider,
-        systemRole: editorMarkdown || systemRole,
+        systemRole: editorMarkdown ?? systemRole,
         t,
         tags: meta?.tags,
         title: meta?.title,
