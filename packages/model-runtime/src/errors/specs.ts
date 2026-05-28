@@ -312,13 +312,18 @@ export const ERROR_CODE_SPECS: SpecMap = {
   [AgentRuntimeErrorType.ConversationParentMissing]: {
     code: AgentRuntimeErrorType.ConversationParentMissing,
     numericId: 7003,
+    // Usually the user deleted the topic / parent message mid-operation, so
+    // attribution is `user` and it does not count as an operational failure.
+    // (category stays `stream` — numericId 7003 is append-only — even though
+    // attribution is user-side; the two dimensions are orthogonal.)
     category: 'stream',
-    severity: 'error',
-    attribution: 'harness',
+    severity: 'warning',
+    attribution: 'user',
     httpStatus: 500,
     retryable: false,
-    countAsFailure: true,
-    description: 'Conversation chain broken because an assistant/tool message lost its parent.',
+    countAsFailure: false,
+    description:
+      'Conversation chain broken — the referenced parent message no longer exists, usually because the user deleted the topic mid-operation.',
   },
   [AgentRuntimeErrorType.DatabasePersistError]: {
     code: AgentRuntimeErrorType.DatabasePersistError,
