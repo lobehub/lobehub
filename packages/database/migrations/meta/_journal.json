@@ -735,6 +735,13 @@
       "when": 1779943832837,
       "tag": "0104_topic_usage_push_tokens_tasks_doc_shares",
       "breakpoints": true
+    },
+    {
+      "idx": 105,
+      "version": "7",
+      "when": 1779945324624,
+      "tag": "0105_user_connectors_and_connector_tools",
+      "breakpoints": true
     }
   ],
   "version": "6"

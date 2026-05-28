@@ -598,6 +598,57 @@ table chat_groups_agents {
   }
 }
 
+table user_connectors {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text [not null]
+  identifier varchar(255) [not null]
+  name varchar(255) [not null]
+  source_type text [not null]
+  mcp_server_url text
+  mcp_connection_type text
+  mcp_stdio_config jsonb
+  status text [not null]
+  is_enabled boolean [not null, default: true]
+  oidc_config jsonb
+  credentials text
+  token_expires_at "timestamp with time zone"
+  metadata jsonb
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (user_id, identifier) [name: 'user_connectors_user_identifier_unique', unique]
+    user_id [name: 'user_connectors_user_id_idx']
+    token_expires_at [name: 'user_connectors_token_expires_at_idx']
+  }
+}
+
+table user_connector_tools {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_connector_id uuid [not null]
+  user_id text [not null]
+  tool_name varchar(255) [not null]
+  display_name varchar(255)
+  description text
+  input_schema jsonb
+  output_schema jsonb
+  category text [not null]
+  permission text [not null]
+  is_work_artifact boolean [not null, default: false]
+  work_artifact_config jsonb
+  metadata jsonb
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (user_connector_id, tool_name) [name: 'user_connector_tools_connector_tool_unique', unique]
+    user_id [name: 'user_connector_tools_user_id_idx']
+    user_connector_id [name: 'user_connector_tools_connector_id_idx']
+  }
+}
+
 table document_histories {
   id varchar(255) [pk, not null]
   document_id varchar(255) [not null]
