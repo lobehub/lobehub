@@ -7,6 +7,7 @@ import type { AgentRunRequestMessage } from '@lobechat/device-gateway-client';
 import type { GatewayConnectionStatus } from '@lobechat/electron-client-ipc';
 
 import GatewayConnectionService from '@/services/gatewayConnectionSrv';
+import ImessageBridgeService from '@/services/imessageBridgeSrv';
 
 import HeterogeneousAgentCtr from './HeterogeneousAgentCtr';
 import { ControllerModule, IpcMethod } from './index';
@@ -54,6 +55,9 @@ interface PlatformTaskEntry {
   topicId: string;
 }
 
+type ToolCallHandler = () => Promise<unknown>;
+type ToolCallHandlerMap = Record<string, ToolCallHandler>;
+
 /**
  * GatewayConnectionCtr
  *
@@ -86,6 +90,10 @@ export default class GatewayConnectionCtr extends ControllerModule {
     return this.app.getController(ShellCommandCtr);
   }
 
+  private get imessageBridgeSrv() {
+    return this.app.getService(ImessageBridgeService);
+  }
+
   private get heterogeneousAgentCtr() {
     return this.app.getController(HeterogeneousAgentCtr);
   }
@@ -103,6 +111,11 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
     // Wire up tool call handler
     srv.setToolCallHandler((apiName, args) => this.executeToolCall(apiName, args));
+
+    // Wire up message API handler
+    srv.setMessageApiHandler((platform, apiName, payload) =>
+      this.executeMessageApi(platform, apiName, payload),
+    );
 
     // Wire up agent run handler
     srv.setAgentRunHandler((request) => this.executeAgentRun(request));
@@ -203,6 +216,37 @@ export default class GatewayConnectionCtr extends ControllerModule {
   // ─── Tool Call Routing ───
 
   private async executeToolCall(apiName: string, args: any): Promise<unknown> {
+    const methodMap = {
+      ...this.getLocalFileToolHandlers(args),
+      ...this.getShellCommandToolHandlers(args),
+      ...this.getPlatformAgentToolHandlers(args),
+    } satisfies ToolCallHandlerMap;
+
+    const handler = methodMap[apiName];
+    if (!handler) {
+      throw new Error(
+        `Tool "${apiName}" is not available on this device. It may not be supported in the current desktop version. Please skip this tool and try alternative approaches.`,
+      );
+    }
+
+    return handler();
+  }
+
+  private async executeMessageApi(
+    platform: string,
+    apiName: string,
+    payload: Record<string, unknown>,
+  ): Promise<unknown> {
+    if (platform === 'imessage') {
+      return this.imessageBridgeSrv.handleGatewayMessageApi(apiName, payload);
+    }
+
+    throw new Error(
+      `Message API "${platform}/${apiName}" is not available on this device. It may not be supported in the current desktop version.`,
+    );
+  }
+
+  private getLocalFileToolHandlers(args: any): ToolCallHandlerMap {
     const editFile = () => this.localFileCtr.handleEditFile(args);
     const globFiles = () => this.localFileCtr.handleGlobFiles(args);
     const listFiles = () => this.localFileCtr.listLocalFiles(args);
@@ -211,7 +255,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
     const searchFiles = () => this.localFileCtr.handleLocalFilesSearch(args);
     const writeFile = () => this.localFileCtr.handleWriteFile(args);
 
-    const methodMap: Record<string, () => Promise<unknown>> = {
+    return {
       editFile,
       globFiles,
       grepContent: () => this.localFileCtr.handleGrepContent(args),
@@ -220,10 +264,6 @@ export default class GatewayConnectionCtr extends ControllerModule {
       readFile,
       searchFiles,
       writeFile,
-
-      getCommandOutput: () => this.shellCommandCtr.handleGetCommandOutput(args),
-      killCommand: () => this.shellCommandCtr.handleKillCommand(args),
-      runCommand: () => this.shellCommandCtr.handleRunCommand(args),
 
       // Legacy aliases — keep these so older Gateway versions sending the long
       // names continue to route correctly. `renameLocalFile` is also kept even
@@ -236,7 +276,19 @@ export default class GatewayConnectionCtr extends ControllerModule {
       renameLocalFile: () => this.localFileCtr.handleRenameFile(args),
       searchLocalFiles: searchFiles,
       writeLocalFile: writeFile,
+    };
+  }
 
+  private getShellCommandToolHandlers(args: any): ToolCallHandlerMap {
+    return {
+      getCommandOutput: () => this.shellCommandCtr.handleGetCommandOutput(args),
+      killCommand: () => this.shellCommandCtr.handleKillCommand(args),
+      runCommand: () => this.shellCommandCtr.handleRunCommand(args),
+    };
+  }
+
+  private getPlatformAgentToolHandlers(args: any): ToolCallHandlerMap {
+    return {
       // Platform agent capability probing
       checkPlatformCapability: () => this.checkPlatformCapability(args),
       getAgentProfile: () => this.getAgentProfile(args),
@@ -245,15 +297,6 @@ export default class GatewayConnectionCtr extends ControllerModule {
       cancelHeteroTask: () => this.cancelHeteroTask(args),
       runHeteroTask: () => this.runHeteroTask(args),
     };
-
-    const handler = methodMap[apiName];
-    if (!handler) {
-      throw new Error(
-        `Tool "${apiName}" is not available on this device. It may not be supported in the current desktop version. Please skip this tool and try alternative approaches.`,
-      );
-    }
-
-    return handler();
   }
 
   // ─── Platform Capability Probing ───

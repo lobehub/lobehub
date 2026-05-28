@@ -2,7 +2,7 @@
 
 **App name:** `Slack` | **Process name:** `Slack`
 
-See [osascript-common.md](./osascript-common.md) for shared patterns.
+See [osascript-common.md](../osascript-common.md) for shared patterns.
 
 ## Activate & Navigate
 
@@ -68,6 +68,6 @@ screencapture /tmp/slack-bot-response.png
 ## Script
 
 ```bash
-./.agents/skills/local-testing/scripts/test-slack-bot.sh "bot-testing" "@mybot hello"
-./.agents/skills/local-testing/scripts/test-slack-bot.sh "bot-testing" "/ask What is 2+2?" 20
+./.agents/skills/local-testing/bot/slack/test-slack-bot.sh "bot-testing" "@mybot hello"
+./.agents/skills/local-testing/bot/slack/test-slack-bot.sh "bot-testing" "/ask What is 2+2?" 20
 ```

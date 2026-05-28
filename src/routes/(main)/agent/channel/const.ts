@@ -58,6 +58,8 @@ export const COMING_SOON_PLATFORMS: ChannelPlatformDefinition[] = [
     name: 'WhatsApp',
     schema: [],
   },
+  // iMessage is registered server-side but lab-gated: shown as a placeholder
+  // unless the `imessage` feature flag is on (see channel/index.tsx).
   {
     comingSoon: true,
     connectionMode: 'webhook',

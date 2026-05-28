@@ -8,6 +8,8 @@ import { useParams } from 'react-router-dom';
 import Loading from '@/components/Loading/BrandTextLoading';
 import NavHeader from '@/features/NavHeader';
 import { useAgentStore } from '@/store/agent';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 import { BOT_RUNTIME_STATUSES, type BotRuntimeStatus } from '../../../../types/botRuntimeStatus';
 import { type ChannelPlatformDefinition, COMING_SOON_PLATFORMS } from './const';
@@ -37,6 +39,7 @@ const ChannelPage = memo(() => {
     s.useFetchBotProviders(aid),
   );
   const triggerRefreshAllBotStatuses = useAgentStore((s) => s.triggerRefreshAllBotStatuses);
+  const enableImessage = useUserStore(labPreferSelectors.enableImessage);
 
   // Fire-and-forget a live gateway status refresh on entry. The list renders
   // from cached statuses immediately; SWR revalidates once Redis is updated.
@@ -48,14 +51,18 @@ const ChannelPage = memo(() => {
   const isLoading = platformsLoading || providersLoading;
 
   // Merge server-side platforms with frontend-only coming-soon entries.
-  // Coming-soon wins over a server-registered platform with the same id: this
-  // lets the server roll out a platform safely (registering it on the server
-  // first) while the frontend keeps the placeholder until it's ready to ship —
-  // dropping the entry from COMING_SOON_PLATFORMS reveals the real platform.
+  // Coming-soon entries shadow a server-registered platform of the same id, so a
+  // platform can be registered server-side first and stay a placeholder until
+  // the frontend reveals it. iMessage additionally honors the Labs
+  // `enableImessage` preference: off keeps the placeholder, on drops it so the
+  // real platform shows.
   const allPlatforms = useMemo<ChannelPlatformDefinition[]>(() => {
-    const comingSoonIds = new Set(COMING_SOON_PLATFORMS.map((p) => p.id));
-    return [...(platforms ?? []).filter((p) => !comingSoonIds.has(p.id)), ...COMING_SOON_PLATFORMS];
-  }, [platforms]);
+    const comingSoon = enableImessage
+      ? COMING_SOON_PLATFORMS.filter((p) => p.id !== 'imessage')
+      : COMING_SOON_PLATFORMS;
+    const comingSoonIds = new Set(comingSoon.map((p) => p.id));
+    return [...(platforms ?? []).filter((p) => !comingSoonIds.has(p.id)), ...comingSoon];
+  }, [platforms, enableImessage]);
 
   // Default to first platform once loaded
   const effectiveActiveId = activeProviderId || allPlatforms[0]?.id || '';

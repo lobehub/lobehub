@@ -2,7 +2,7 @@
 
 **App name:** `Lark` or `飞书` | **Process name:** `Lark` or `飞书`
 
-See [osascript-common.md](./osascript-common.md) for shared patterns.
+See [osascript-common.md](../osascript-common.md) for shared patterns.
 
 ## Activate & Navigate
 
@@ -56,6 +56,6 @@ screencapture /tmp/lark-bot-response.png
 ## Script
 
 ```bash
-./.agents/skills/local-testing/scripts/test-lark-bot.sh "bot-testing" "@MyBot hello"
-./.agents/skills/local-testing/scripts/test-lark-bot.sh "bot-testing" "Help me with this" 30
+./.agents/skills/local-testing/bot/lark/test-lark-bot.sh "bot-testing" "@MyBot hello"
+./.agents/skills/local-testing/bot/lark/test-lark-bot.sh "bot-testing" "Help me with this" 30
 ```

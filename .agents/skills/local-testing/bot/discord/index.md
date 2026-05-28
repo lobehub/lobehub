@@ -2,7 +2,7 @@
 
 **App name:** `Discord` | **Process name:** `Discord`
 
-See [osascript-common.md](./osascript-common.md) for shared patterns.
+See [osascript-common.md](../osascript-common.md) for shared patterns.
 
 ## Activate & Navigate
 
@@ -92,6 +92,6 @@ echo "Screenshot saved to /tmp/discord-test-result.png"
 ## Script
 
 ```bash
-./.agents/skills/local-testing/scripts/test-discord-bot.sh "bot-testing" "!ping"
-./.agents/skills/local-testing/scripts/test-discord-bot.sh "bot-testing" "/ask Tell me a joke" 30
+./.agents/skills/local-testing/bot/discord/test-discord-bot.sh "bot-testing" "!ping"
+./.agents/skills/local-testing/bot/discord/test-discord-bot.sh "bot-testing" "/ask Tell me a joke" 30
 ```
