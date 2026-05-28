@@ -95,6 +95,12 @@ export const AgentRuntimeErrorType = {
   InvalidBedrockCredentials: 'InvalidBedrockCredentials',
   InvalidVertexCredentials: 'InvalidVertexCredentials',
   StreamChunkError: 'StreamChunkError',
+  /**
+   * A persistence-layer query / transaction failed (Drizzle "Failed query:
+   * …"). Harness-side: the DB write/read or txn could not complete and
+   * surfaced as an unhandled error instead of being retried / degraded.
+   */
+  DatabasePersistError: 'DatabasePersistError',
 
   InvalidGithubToken: 'InvalidGithubToken',
   InvalidGithubCopilotToken: 'InvalidGithubCopilotToken',

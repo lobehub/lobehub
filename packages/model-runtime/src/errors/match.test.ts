@@ -54,6 +54,23 @@ describe('matchErrorPattern', () => {
   it('returns undefined for genuinely unknown errors', () => {
     expect(matchErrorPattern({ message: 'something we have never seen before' })).toBeUndefined();
   });
+
+  it('classifies Drizzle "Failed query:" wraps as DatabasePersistError', () => {
+    expect(matchErrorPattern({ message: 'Failed query: rollback params:' })?.code).toBe(
+      AgentRuntimeErrorType.DatabasePersistError,
+    );
+  });
+
+  it('does not let a Failed-query SQL blob trip an unrelated provider pattern', () => {
+    // The SQL text embeds parameter values (model names, error_log rows) that
+    // contain substrings matching other patterns. DatabasePersistError sits
+    // first in the registry, so it must win regardless of the embedded blob.
+    const msg =
+      'Failed query: insert into "error_logs" ("type") values ($1) -- InsufficientQuota / context length exceeded';
+    expect(matchErrorPattern({ message: msg })?.code).toBe(
+      AgentRuntimeErrorType.DatabasePersistError,
+    );
+  });
 });
 
 describe('isUserSideError', () => {

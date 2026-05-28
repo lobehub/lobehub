@@ -320,6 +320,17 @@ export const ERROR_CODE_SPECS: SpecMap = {
     countAsFailure: true,
     description: 'Conversation chain broken because an assistant/tool message lost its parent.',
   },
+  [AgentRuntimeErrorType.DatabasePersistError]: {
+    code: AgentRuntimeErrorType.DatabasePersistError,
+    numericId: 7004,
+    category: 'stream',
+    severity: 'error',
+    attribution: 'harness',
+    httpStatus: 500,
+    retryable: false,
+    countAsFailure: true,
+    description: 'Persistence-layer query / transaction failed (Drizzle "Failed query: …").',
+  },
 
   // ─── 8xxx Provider (catch-all) ────────────────────────────────────────
   [AgentRuntimeErrorType.AgentRuntimeError]: {

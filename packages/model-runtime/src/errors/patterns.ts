@@ -48,6 +48,18 @@ const sub = (value: string, opts?: { caseInsensitive?: boolean }): ErrorPattern[
  */
 export const ERROR_PATTERNS: ErrorPattern[] = [
   // ─────────────────────────────────────────────────────────────────────────
+  // DatabasePersistError — MUST stay first. Drizzle stringifies failed queries
+  // as `Failed query: <sql> params: <values>`, embedding arbitrary parameter
+  // text (model names, user messages, error_log rows) that otherwise trips
+  // unrelated provider patterns below. First-match-wins, so claim it up front.
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    code: AgentRuntimeErrorType.DatabasePersistError,
+    match: sub('Failed query:'),
+    note: 'Drizzle wrapper around a failed Postgres query / transaction.',
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
   // ExceededContextWindow
   // ─────────────────────────────────────────────────────────────────────────
   {

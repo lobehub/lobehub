@@ -20,6 +20,8 @@ export default {
     'The request returned empty. Please check if the API proxy address does not end with `/v1`.',
   ContentModeration:
     'Sorry, the content was rejected by the upstream safety filter. Please revise your prompt and try again.',
+  DatabasePersistError:
+    'A database operation failed while saving or loading this conversation. Please try again; if it persists, contact support.',
   ExceededContextWindow:
     'The current request content exceeds the length that the model can handle. Please reduce the amount of content and try again.',
   InsufficientQuota:
