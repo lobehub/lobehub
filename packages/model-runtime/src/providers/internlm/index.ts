@@ -12,9 +12,14 @@ export const params = {
   baseURL: 'https://chat.intern-ai.org.cn/api/v1',
   chatCompletion: {
     handlePayload: (payload) => {
+      const { thinking, ...rest } = payload as any;
+
       return {
-        ...payload,
+        ...rest,
         stream: !payload.tools,
+        ...(thinking.type !== undefined && {
+          thinking_mode: thinking.type === 'enabled',
+        }),
       } as any;
     },
   },
@@ -24,9 +29,9 @@ export const params = {
   models: async ({ client }) => {
     const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
 
-    const functionCallKeywords = ['internlm'];
+    const functionCallKeywords = ['internlm', 'intern-s'];
 
-    const visionKeywords = ['internvl'];
+    const visionKeywords = ['internvl', 'intern-s'];
 
     const modelsPage = (await client.models.list()) as any;
     const modelList: InternLMModelCard[] = modelsPage.data;
