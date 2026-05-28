@@ -53,6 +53,8 @@
   "home.uploadEntries.folder.title": "Загрузить папку",
   "home.uploadEntries.library.title": "Создать новую библиотеку",
   "home.uploadEntries.newPage.title": "Новая страница",
+  "library.hierarchy.empty.desc": "Добавьте файлы или создайте папку, чтобы начать",
+  "library.hierarchy.empty.title": "Здесь пока ничего нет",
   "library.list.confirmRemoveLibrary": "Вы собираетесь удалить эту библиотеку. Файлы из неё не будут удалены, а перемещены в раздел «Все файлы». Это действие необратимо, пожалуйста, будьте осторожны.",
   "library.list.empty": "Нажмите <1>+</1>, чтобы создать новую библиотеку",
   "library.new": "Новая библиотека",

@@ -26,6 +26,7 @@
   "table.columns.trigger.enums.onboarding": "Введение",
   "table.columns.trigger.enums.openapi": "OpenAPI",
   "table.columns.trigger.enums.semantic_search": "Поиск знаний",
+  "table.columns.trigger.enums.signup_email_llm_review": "Обзор регистрационного письма",
   "table.columns.trigger.enums.topic": "Резюме темы",
   "table.columns.trigger.enums.video": "Генерация видео",
   "table.columns.trigger.enums.visual_analysis": "Визуальный анализ",

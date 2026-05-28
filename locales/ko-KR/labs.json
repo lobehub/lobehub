@@ -1,15 +1,21 @@
 {
+  "features.agentDocumentFloatingChatPanel.desc": "이 실험실 기능이 활성화된 경우에만 에이전트 문서 미리보기에서 떠 있는 채팅 패널을 표시합니다.",
+  "features.agentDocumentFloatingChatPanel.title": "에이전트 문서 떠 있는 채팅 패널",
   "features.agentSelfIteration.desc": "어시스턴트가 스스로를 성찰하고 자기 인식을 구축하며, 지속적인 시도와 상호작용을 통해 계속해서 발전할 수 있도록 합니다.",
   "features.agentSelfIteration.title": "에이전트 자기 반복",
   "features.assistantMessageGroup.desc": "도우미 메시지와 해당 도구 호출 결과를 그룹으로 묶어 표시합니다",
   "features.assistantMessageGroup.title": "도우미 메시지 그룹화",
+  "features.executionDeviceSwitcher.desc": "이종 에이전트 툴바에서 실행 장치 전환기를 표시하여 실행을 이 장치, 클라우드 샌드박스 또는 연결된 원격 장치로 라우팅할 수 있습니다.",
+  "features.executionDeviceSwitcher.title": "실행 장치 전환기",
   "features.gatewayMode.desc": "로컬에서 실행하는 대신 Gateway WebSocket을 통해 서버에서 에이전트 작업을 실행합니다. 더 빠른 처리 속도를 제공하고 클라이언트 리소스 사용을 줄여줍니다.",
   "features.gatewayMode.title": "서버 사이드 에이전트 실행(Gateway)",
   "features.groupChat.desc": "다중 도우미 그룹 채팅 조정 기능을 활성화합니다.",
   "features.groupChat.title": "그룹 채팅 (다중 도우미)",
+  "features.imessage.desc": "로컬 LobeHub Desktop BlueBubbles 브리지를 통해 에이전트를 iMessage에 연결합니다.",
+  "features.imessage.title": "iMessage 채널",
   "features.inputMarkdown.desc": "입력 영역에서 실시간으로 Markdown을 렌더링합니다 (굵은 글씨, 코드 블록, 표 등).",
   "features.inputMarkdown.title": "입력창 Markdown 렌더링",
-  "features.messenger.desc": "Telegram(및 기타 메신저)을 통해 공유된 LobeHub 봇으로 에이전트와 대화하세요. 계정을 연결하고 메시지를 받을 에이전트를 선택할 수 있는 설정의 메신저 탭이 추가됩니다.",
-  "features.messenger.title": "메신저",
+  "features.platformAgent.desc": "생성 메뉴에서 \"플랫폼 에이전트 추가\" 항목을 표시합니다. 플랫폼 에이전트(예: OpenClaw, Hermes)는 연결된 장치에서 실행되며 lh connect를 통해 다시 통신합니다.",
+  "features.platformAgent.title": "플랫폼 에이전트 생성",
   "title": "실험실"
 }

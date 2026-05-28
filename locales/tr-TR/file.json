@@ -53,6 +53,8 @@
   "home.uploadEntries.folder.title": "Klasör Yükle",
   "home.uploadEntries.library.title": "Yeni Kütüphane Oluştur",
   "home.uploadEntries.newPage.title": "Yeni Sayfa",
+  "library.hierarchy.empty.desc": "Başlamak için dosya ekleyin veya bir klasör oluşturun",
+  "library.hierarchy.empty.title": "Henüz burada bir şey yok",
   "library.list.confirmRemoveLibrary": "Bu kütüphaneyi silmek üzeresiniz. İçindeki dosyalar silinmeyecek, Tüm Dosyalar'a taşınacaktır. Bu işlem geri alınamaz, lütfen dikkatli olun.",
   "library.list.empty": "Yeni bir kütüphane oluşturmak için <1>+</1> simgesine tıklayın",
   "library.new": "Yeni Kütüphane",

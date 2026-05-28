@@ -53,6 +53,8 @@
   "home.uploadEntries.folder.title": "Importer un dossier",
   "home.uploadEntries.library.title": "Créer une nouvelle bibliothèque",
   "home.uploadEntries.newPage.title": "Nouvelle page",
+  "library.hierarchy.empty.desc": "Ajoutez des fichiers ou créez un dossier pour commencer",
+  "library.hierarchy.empty.title": "Rien ici pour le moment",
   "library.list.confirmRemoveLibrary": "Vous êtes sur le point de supprimer cette bibliothèque. Les fichiers qu’elle contient ne seront pas supprimés mais déplacés vers Tous les fichiers. Cette action est irréversible, veuillez procéder avec prudence.",
   "library.list.empty": "Cliquez sur <1>+</1> pour créer une nouvelle bibliothèque",
   "library.new": "Nouvelle bibliothèque",

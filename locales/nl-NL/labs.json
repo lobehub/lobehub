@@ -1,15 +1,21 @@
 {
+  "features.agentDocumentFloatingChatPanel.desc": "Toon het zwevende chatpaneel in de documentvoorvertoning van de agent alleen wanneer deze labfunctie is ingeschakeld.",
+  "features.agentDocumentFloatingChatPanel.title": "Zwevend Chatpaneel voor Agentdocumenten",
   "features.agentSelfIteration.desc": "De assistent kan hierdoor reflecteren, zelfinzicht opbouwen en zich continu blijven verbeteren via aanhoudende pogingen en interacties.",
   "features.agentSelfIteration.title": "Agent-zelfiteratie",
   "features.assistantMessageGroup.desc": "Groepeer berichten van de agent en de resultaten van hun tool-aanroepen samen voor weergave",
   "features.assistantMessageGroup.title": "Agentberichtengroepering",
+  "features.executionDeviceSwitcher.desc": "Toon de uitvoerapparaat-schakelaar in de heterogene agentwerkbalk, zodat je runs kunt routeren naar dit apparaat, een cloud-sandbox of een gekoppeld extern apparaat.",
+  "features.executionDeviceSwitcher.title": "Uitvoerapparaat-schakelaar",
   "features.gatewayMode.desc": "Voer agenttaken op de server uit via de Gateway‑WebSocket in plaats van ze lokaal uit te voeren. Zorgt voor snellere uitvoering en vermindert het gebruik van clientbronnen.",
   "features.gatewayMode.title": "Server-side uitvoering van agenten (Gateway)",
   "features.groupChat.desc": "Schakel coördinatie van groepschats met meerdere agenten in.",
   "features.groupChat.title": "Groepschat (Meerdere Agenten)",
+  "features.imessage.desc": "Verbind agents met iMessage via de lokale LobeHub Desktop BlueBubbles-bridge.",
+  "features.imessage.title": "iMessage-kanaal",
   "features.inputMarkdown.desc": "Toon Markdown in het invoerveld in realtime (vette tekst, codeblokken, tabellen, enz.).",
   "features.inputMarkdown.title": "Markdown-weergave bij Invoer",
-  "features.messenger.desc": "Praat met je agents via Telegram (en andere messengers) via de gedeelde LobeHub-bot. Voegt een Messenger-tabblad toe in Instellingen om je account te koppelen en te kiezen welke agent berichten ontvangt.",
-  "features.messenger.title": "Messenger",
+  "features.platformAgent.desc": "Toon de optie \"Platformagent toevoegen\" in het aanmaakmenu. Platformagents (bijv. OpenClaw, Hermes) draaien op een verbonden apparaat en communiceren terug via lh connect.",
+  "features.platformAgent.title": "Platformagent Aanmaken",
   "title": "Labs"
 }

@@ -53,6 +53,8 @@
   "home.uploadEntries.folder.title": "Map uploaden",
   "home.uploadEntries.library.title": "Nieuwe bibliotheek aanmaken",
   "home.uploadEntries.newPage.title": "Nieuwe pagina",
+  "library.hierarchy.empty.desc": "Voeg bestanden toe of maak een map aan om te beginnen",
+  "library.hierarchy.empty.title": "Hier is nog niets",
   "library.list.confirmRemoveLibrary": "Je staat op het punt deze bibliotheek te verwijderen. De bestanden worden niet verwijderd, maar verplaatst naar Alle bestanden. Deze actie kan niet ongedaan worden gemaakt, wees voorzichtig.",
   "library.list.empty": "Klik op <1>+</1> om een nieuwe bibliotheek aan te maken",
   "library.new": "Nieuwe bibliotheek",

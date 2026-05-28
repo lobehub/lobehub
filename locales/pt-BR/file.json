@@ -53,6 +53,8 @@
   "home.uploadEntries.folder.title": "Enviar Pasta",
   "home.uploadEntries.library.title": "Criar Nova Biblioteca",
   "home.uploadEntries.newPage.title": "Nova Página",
+  "library.hierarchy.empty.desc": "Adicione arquivos ou crie uma pasta para começar",
+  "library.hierarchy.empty.title": "Ainda não há nada aqui",
   "library.list.confirmRemoveLibrary": "Você está prestes a excluir esta biblioteca. Os arquivos dentro dela não serão excluídos, mas movidos para Todos os Arquivos. Esta ação não pode ser desfeita, portanto, prossiga com cautela.",
   "library.list.empty": "Clique em <1>+</1> para criar uma nova biblioteca",
   "library.new": "Nova Biblioteca",

@@ -1,15 +1,21 @@
 {
+  "features.agentDocumentFloatingChatPanel.desc": "このラボ機能が有効になっている場合にのみ、エージェントドキュメントプレビューで浮動チャットパネルを表示します。",
+  "features.agentDocumentFloatingChatPanel.title": "エージェントドキュメント浮動チャットパネル",
   "features.agentSelfIteration.desc": "アシスタントが振り返りを行い、自己認識を深め、継続的な試行と対話を通じて自律的に改善を重ねられるようにします。",
   "features.agentSelfIteration.title": "エージェントの自己反復",
   "features.assistantMessageGroup.desc": "アシスタントのメッセージとそのツール呼び出し結果をグループ化して表示します",
   "features.assistantMessageGroup.title": "アシスタントメッセージのグループ化表示",
+  "features.executionDeviceSwitcher.desc": "異種エージェントツールバーに実行デバイススイッチャーを表示し、このデバイス、クラウドサンドボックス、またはバインドされたリモートデバイスに実行をルーティングできます。",
+  "features.executionDeviceSwitcher.title": "実行デバイススイッチャー",
   "features.gatewayMode.desc": "エージェントのタスクをローカルではなく Gateway WebSocket を介してサーバー上で実行します。これにより、より高速な処理が可能になり、クライアント側のリソース消費を削減できます。",
   "features.gatewayMode.title": "サーバーサイドエージェント実行（Gateway）",
   "features.groupChat.desc": "複数のAIアシスタントによるグループチャット機能を有効にします。",
   "features.groupChat.title": "グループチャット（マルチアシスタント）",
+  "features.imessage.desc": "LobeHub Desktop BlueBubblesブリッジを介してエージェントをiMessageに接続します。",
+  "features.imessage.title": "iMessageチャンネル",
   "features.inputMarkdown.desc": "入力エリアでMarkdown（太字、コードブロック、表など）をリアルタイムでレンダリングします。",
   "features.inputMarkdown.title": "入力欄のMarkdownレンダリング",
-  "features.messenger.desc": "Telegram（およびその他のメッセンジャー）を通じて、共有のLobeHubボットを使用してエージェントと会話できます。設定にMessengerタブを追加し、アカウントを紐付けてメッセージを受信するエージェントを選択できます。",
-  "features.messenger.title": "メッセンジャー",
+  "features.platformAgent.desc": "作成メニューに「プラットフォームエージェントを追加」エントリを表示します。プラットフォームエージェント（例: OpenClaw、Hermes）は接続されたデバイス上で動作し、lh connectを介して通信します。",
+  "features.platformAgent.title": "プラットフォームエージェント作成",
   "title": "ラボ"
 }

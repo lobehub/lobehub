@@ -353,6 +353,7 @@
   "messengerBanner.title": "在您喜愛的通訊應用程式上與 Lobe AI 對話",
   "more": "更多",
   "navPanel.agent": "助理",
+  "navPanel.bottomDivider": "以下項目固定於底部",
   "navPanel.customizeSidebar": "自訂側邊欄",
   "navPanel.displayItems": "顯示項目",
   "navPanel.hidden": "已隱藏",
@@ -479,5 +480,6 @@
   "userPanel.setting": "應用設定",
   "userPanel.upgradePlan": "升級方案",
   "userPanel.usages": "用量統計",
-  "version": "版本"
+  "version": "版本",
+  "zoom": "縮放"
 }
