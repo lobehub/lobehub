@@ -113,7 +113,8 @@ export type StepCompletionReason =
   | 'interrupted'
   | 'max_steps'
   | 'cost_limit'
-  | 'waiting_for_human';
+  | 'waiting_for_human'
+  | 'waiting_for_async_tool';
 
 // ==================== Execution Params ====================
 

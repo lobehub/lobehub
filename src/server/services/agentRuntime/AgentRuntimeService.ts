@@ -1187,7 +1187,9 @@ export class AgentRuntimeService {
         },
         executionHistory: executionHistory?.slice(0, historyLimit),
         hasError: currentState.status === 'error',
-        isActive: ['running', 'waiting_for_human'].includes(currentState.status),
+        isActive: ['running', 'waiting_for_human', 'waiting_for_async_tool'].includes(
+          currentState.status,
+        ),
         isCompleted: currentState.status === 'done',
         metadata: operationMetadata,
         needsHumanInput: currentState.status === 'waiting_for_human',
@@ -1589,6 +1591,9 @@ export class AgentRuntimeService {
     // Needs human intervention
     if (state.status === 'waiting_for_human') return false;
 
+    // Parked waiting for an async tool result (client tool / sub-agent)
+    if (state.status === 'waiting_for_async_tool') return false;
+
     // Error occurred
     if (state.status === 'error') return false;
 
@@ -1653,6 +1658,7 @@ export class AgentRuntimeService {
     if (state.status === 'error') return 'error';
     if (state.status === 'interrupted') return 'interrupted';
     if (state.status === 'waiting_for_human') return 'waiting_for_human';
+    if (state.status === 'waiting_for_async_tool') return 'waiting_for_async_tool';
     if (state.maxSteps && state.stepCount >= state.maxSteps) return 'max_steps';
     if (state.costLimit && state.cost?.total >= state.costLimit.maxTotalCost) return 'cost_limit';
     return 'done';
@@ -1729,6 +1735,13 @@ export class AgentRuntimeService {
       // Check if human intervention is needed
       if (state.status === 'waiting_for_human') {
         log('[%s] Sync execution paused: waiting for human intervention', operationId);
+        break;
+      }
+
+      // Parked waiting for an async tool result (client tool / sub-agent) —
+      // the result is delivered out-of-band, so sync execution can't resume it
+      if (state.status === 'waiting_for_async_tool') {
+        log('[%s] Sync execution paused: waiting for async tool result', operationId);
         break;
       }
 

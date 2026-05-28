@@ -23,12 +23,18 @@ const STREAM_END_STATUSES = new Set<AgentState['status']>([
   'error',
   'interrupted',
   'waiting_for_human',
+  'waiting_for_async_tool',
 ]);
 
 const hasEnteredStreamEndState = (
   previousStatus?: AgentState['status'],
   nextStatus?: AgentState['status'],
-): nextStatus is 'done' | 'error' | 'interrupted' | 'waiting_for_human' => {
+): nextStatus is
+  | 'done'
+  | 'error'
+  | 'interrupted'
+  | 'waiting_for_human'
+  | 'waiting_for_async_tool' => {
   const wasStreamEnd = previousStatus ? STREAM_END_STATUSES.has(previousStatus) : false;
   return Boolean(nextStatus && STREAM_END_STATUSES.has(nextStatus) && !wasStreamEnd);
 };
@@ -127,7 +133,11 @@ export class AgentRuntimeCoordinator {
    */
   private async resolveUiMessages(state: AgentState): Promise<UIChatMessage[] | undefined> {
     if (!this.uiMessagesResolver) return undefined;
-    if (state.status === 'interrupted') return undefined;
+    // `waiting_for_async_tool` is the deferred-tool pause (client tool or
+    // sub-agent): the result message is written back later, so don't push a
+    // premature SoT snapshot that would clobber the client's in-memory state.
+    if (state.status === 'interrupted' || state.status === 'waiting_for_async_tool')
+      return undefined;
     try {
       return await this.uiMessagesResolver(state);
     } catch (error) {

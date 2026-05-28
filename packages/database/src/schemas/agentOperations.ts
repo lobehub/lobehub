@@ -11,6 +11,7 @@ const operationStatuses = [
   'idle',
   'running',
   'waiting_for_human',
+  'waiting_for_async_tool',
   'done',
   'error',
   'interrupted',
@@ -23,6 +24,7 @@ const completionReasons = [
   'max_steps',
   'cost_limit',
   'waiting_for_human',
+  'waiting_for_async_tool',
 ] as const;
 
 export interface AgentOperationInterruption {

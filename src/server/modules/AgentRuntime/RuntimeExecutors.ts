@@ -1923,7 +1923,7 @@ export const createRuntimeExecutors = (
 
           const newState = structuredClone(state);
           newState.lastModified = new Date().toISOString();
-          newState.status = 'interrupted';
+          newState.status = 'waiting_for_async_tool';
           newState.interruption = {
             canResume: true,
             interruptedAt: new Date().toISOString(),
@@ -2417,7 +2417,7 @@ export const createRuntimeExecutors = (
 
       const newState = structuredClone(state);
       newState.lastModified = new Date().toISOString();
-      newState.status = 'interrupted';
+      newState.status = 'waiting_for_async_tool';
       newState.interruption = {
         canResume: true,
         interruptedAt: new Date().toISOString(),
@@ -2883,7 +2883,7 @@ export const createRuntimeExecutors = (
         toolsCalling: clientTools as any,
       });
 
-      newState.status = 'interrupted';
+      newState.status = 'waiting_for_async_tool';
       newState.interruption = {
         canResume: true,
         interruptedAt: new Date().toISOString(),

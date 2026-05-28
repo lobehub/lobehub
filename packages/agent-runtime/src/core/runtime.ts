@@ -199,7 +199,11 @@ export class AgentRuntime {
         }
 
         // Stop execution if blocked
-        if (currentState.status === 'waiting_for_human' || currentState.status === 'interrupted') {
+        if (
+          currentState.status === 'waiting_for_human' ||
+          currentState.status === 'waiting_for_async_tool' ||
+          currentState.status === 'interrupted'
+        ) {
           break;
         }
       }
@@ -216,10 +220,13 @@ export class AgentRuntime {
       return {
         events: allEvents,
         newState: currentState,
-        // When execution is blocked (waiting for human or interrupted),
-        // clear nextContext so the outer loop stops instead of continuing
+        // When execution is blocked (waiting for human, waiting for an async
+        // tool result, or interrupted), clear nextContext so the outer loop
+        // stops instead of continuing
         nextContext:
-          currentState.status === 'waiting_for_human' || currentState.status === 'interrupted'
+          currentState.status === 'waiting_for_human' ||
+          currentState.status === 'waiting_for_async_tool' ||
+          currentState.status === 'interrupted'
             ? undefined
             : finalNextContext,
       };
