@@ -500,11 +500,25 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   { code: AgentRuntimeErrorType.ProviderNetworkError, match: sub('request to http://') },
   { code: AgentRuntimeErrorType.ProviderNetworkError, match: sub('request to https://') },
   { code: AgentRuntimeErrorType.ProviderNetworkError, match: sub('self-signed certificate') },
-  {
-    code: AgentRuntimeErrorType.ProviderNetworkError,
-    match: sub('Command aborted due to connection close'),
-  },
   { code: AgentRuntimeErrorType.ProviderNetworkError, match: sub('Network connection lost') },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // StateStorePersistError — Redis / Upstash agent-state store (NOT the LLM
+  // provider). ioredis aborts, request-size cap, suspended DB.
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    code: AgentRuntimeErrorType.StateStorePersistError,
+    match: sub('Command aborted due to connection close'),
+    note: 'ioredis aborts queued commands when the Upstash connection drops.',
+  },
+  {
+    code: AgentRuntimeErrorType.StateStorePersistError,
+    match: sub('max request size exceeded'),
+  },
+  {
+    code: AgentRuntimeErrorType.StateStorePersistError,
+    match: sub('database has been suspended'),
+  },
 
   // ─────────────────────────────────────────────────────────────────────────
   // NoAvailableChannel — router / proxy has no upstream

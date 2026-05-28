@@ -101,6 +101,12 @@ export const AgentRuntimeErrorType = {
    * surfaced as an unhandled error instead of being retried / degraded.
    */
   DatabasePersistError: 'DatabasePersistError',
+  /**
+   * The Redis / Upstash state store dropped a command mid-flight (ioredis
+   * "Command aborted due to connection close", request-size limit, suspended
+   * DB, …). Harness-side infra — the agent state layer, not the LLM provider.
+   */
+  StateStorePersistError: 'StateStorePersistError',
 
   InvalidGithubToken: 'InvalidGithubToken',
   InvalidGithubCopilotToken: 'InvalidGithubCopilotToken',

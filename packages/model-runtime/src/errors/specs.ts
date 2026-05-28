@@ -331,6 +331,17 @@ export const ERROR_CODE_SPECS: SpecMap = {
     countAsFailure: true,
     description: 'Persistence-layer query / transaction failed (Drizzle "Failed query: …").',
   },
+  [AgentRuntimeErrorType.StateStorePersistError]: {
+    code: AgentRuntimeErrorType.StateStorePersistError,
+    numericId: 7005,
+    category: 'stream',
+    severity: 'error',
+    attribution: 'harness',
+    httpStatus: 500,
+    retryable: false,
+    countAsFailure: true,
+    description: 'State-store (Redis / Upstash) connection dropped or command aborted mid-flight.',
+  },
 
   // ─── 8xxx Provider (catch-all) ────────────────────────────────────────
   [AgentRuntimeErrorType.AgentRuntimeError]: {

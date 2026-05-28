@@ -71,6 +71,15 @@ describe('matchErrorPattern', () => {
       AgentRuntimeErrorType.DatabasePersistError,
     );
   });
+
+  it('classifies Redis/Upstash state-store aborts as StateStorePersistError (not provider network)', () => {
+    expect(matchErrorPattern({ message: 'Command aborted due to connection close' })?.code).toBe(
+      AgentRuntimeErrorType.StateStorePersistError,
+    );
+    expect(
+      matchErrorPattern({ message: 'ERR max request size exceeded. Limit: 10485760 bytes' })?.code,
+    ).toBe(AgentRuntimeErrorType.StateStorePersistError);
+  });
 });
 
 describe('isUserSideError', () => {
