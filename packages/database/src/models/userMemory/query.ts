@@ -1655,6 +1655,11 @@ export class UserMemoryQueryModel {
     // for this table in some environments (see getTestDB.ts where pg_search
     // migrations are skipped). Runs a plain recency-ordered query without
     // BM25 conditions; scoreHybridCandidates still applies fuzzy text scoring.
+    //
+    // IMPORTANT: feed fallback items as a lexical list so that
+    // registerRankedList in scoreHybridCandidates populates the candidate map.
+    // Passing lexicalLists: [] would be a no-op — scoreHybridCandidates does
+    // not use items directly, only lexicalLists and semanticLists.
     if (candidates.length === 0 && params.queries.length > 0) {
       const fallbackItems = await this.searchContextsLexical(
         undefined,
@@ -1666,7 +1671,7 @@ export class UserMemoryQueryModel {
         return scoreHybridCandidates({
           baseSignals: await this.loadBaseSignals(fallbackItems),
           items: fallbackItems,
-          lexicalLists: [],
+          lexicalLists: [fallbackItems],
           queries: params.queries,
           queryParams: params.params,
           semanticLists: [],
@@ -1717,6 +1722,11 @@ export class UserMemoryQueryModel {
     // for this table in some environments (see getTestDB.ts where pg_search
     // migrations are skipped). Runs a plain recency-ordered query without
     // BM25 conditions; scoreHybridCandidates still applies fuzzy text scoring.
+    //
+    // IMPORTANT: feed fallback items as a lexical list so that
+    // registerRankedList in scoreHybridCandidates populates the candidate map.
+    // Passing lexicalLists: [] would be a no-op — scoreHybridCandidates does
+    // not use items directly, only lexicalLists and semanticLists.
     if (candidates.length === 0 && params.queries.length > 0) {
       const fallbackItems = await this.searchExperiencesLexical(
         undefined,
@@ -1728,7 +1738,7 @@ export class UserMemoryQueryModel {
         return scoreHybridCandidates({
           baseSignals: await this.loadBaseSignals(fallbackItems),
           items: fallbackItems,
-          lexicalLists: [],
+          lexicalLists: [fallbackItems],
           queries: params.queries,
           queryParams: params.params,
           semanticLists: [],
