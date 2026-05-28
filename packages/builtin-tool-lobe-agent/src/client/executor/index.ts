@@ -378,19 +378,24 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
       return { content: 'Sub-agent execution is not available in this runtime.', success: false };
     }
 
-    const { result, threadId, success, error } = await ctx.subAgent.run({
-      description,
-      inheritMessages,
-      instruction,
-      timeout,
-      toolMessageId: ctx.messageId,
-    });
+    const { result, threadId, success, error, model, totalToolCalls, totalTokens } =
+      await ctx.subAgent.run({
+        description,
+        inheritMessages,
+        instruction,
+        timeout,
+        toolMessageId: ctx.messageId,
+      });
 
     if (!success) {
       return { content: error ?? 'Sub-agent execution failed.', success: false };
     }
 
-    return { content: result, state: { threadId }, success: true };
+    return {
+      content: result,
+      state: { model, threadId, totalToolCalls, totalTokens },
+      success: true,
+    };
   };
 
   callSubAgents = async (
@@ -429,7 +434,10 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
       state: {
         subAgents: results.map((r, i) => ({
           description: tasks[i].description,
+          model: r.model,
           threadId: r.threadId,
+          totalToolCalls: r.totalToolCalls,
+          totalTokens: r.totalTokens,
         })),
       },
       success: true,

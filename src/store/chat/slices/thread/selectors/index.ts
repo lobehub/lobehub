@@ -1,4 +1,4 @@
-import { type ThreadItem, type UIChatMessage } from '@lobechat/types';
+import { type ThreadItem, ThreadType, type UIChatMessage } from '@lobechat/types';
 
 import { useAgentStore } from '@/store/agent';
 import { agentChatConfigSelectors } from '@/store/agent/selectors';
@@ -34,7 +34,9 @@ const currentActiveThread = (s: ChatStoreState): ThreadItem | undefined => {
 
 const isActiveThreadSubagent = (s: ChatStoreState): boolean => {
   const thread = currentActiveThread(s);
-  return !!thread?.metadata?.subagentType;
+  // Isolation threads (CC subagents + lobe-agent sub-agents) are driven by the
+  // parent agent, so the thread view is read-only regardless of origin.
+  return thread?.type === ThreadType.Isolation;
 };
 
 const getThreadsByTopic = (topicId?: string) => (s: ChatStoreState) => {

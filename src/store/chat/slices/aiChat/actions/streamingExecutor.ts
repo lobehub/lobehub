@@ -484,7 +484,7 @@ export class StreamingExecutorActionImpl {
     parentOperationId?: string;
     skipCreateFirstMessage?: boolean;
     isSubAgent?: boolean;
-  }): Promise<{ cost?: Cost; usage?: Usage } | void> => {
+  }): Promise<{ cost?: Cost; model?: string; provider?: string; usage?: Usage } | void> => {
     const {
       disableTools,
       messages: originalMessages,
@@ -979,7 +979,7 @@ export class StreamingExecutorActionImpl {
     }
 
     // Return usage and cost data for caller to use
-    return { cost: state.cost, usage: state.usage };
+    return { cost: state.cost, model, provider: provider ?? undefined, usage: state.usage };
   };
 
   /**
@@ -1034,6 +1034,11 @@ export class StreamingExecutorActionImpl {
       const { threadId, userMessageId, threadMessages } = threadResult;
       log('[%s] Created thread %s, userMessage %s', logId, threadId, userMessageId);
 
+      // Register the freshly-created isolation thread in the client thread list
+      // so the tool Render can locate it (the "View Detail" button) and it shows
+      // in the sidebar without waiting for a topic switch to re-fetch threads.
+      void this.#get().refreshThreads();
+
       // 2. Build the sub-agent ConversationContext (threadId provides isolation)
       const subContext: ConversationContext = { agentId, scope: 'thread', threadId, topicId };
 
@@ -1075,7 +1080,8 @@ export class StreamingExecutorActionImpl {
       const lastAssistant = subTaskMessages.findLast((m) => m.role === 'assistant');
       const resultContent = lastAssistant?.content || 'Task completed';
       const totalToolCalls = subTaskMessages.filter((m) => m.role === 'tool').length;
-      const { usage, cost } = runtimeResult || {};
+      const { usage, cost, model } = runtimeResult || {};
+      const totalTokens = usage?.llm?.tokens?.total;
 
       // 8. Persist final Thread status + metadata
       await aiAgentService.updateClientTaskThreadStatus({
@@ -1083,7 +1089,7 @@ export class StreamingExecutorActionImpl {
         metadata: {
           totalCost: cost?.total,
           totalMessages: subTaskMessages.length,
-          totalTokens: usage?.llm?.tokens?.total,
+          totalTokens,
           totalToolCalls,
         },
         resultContent,
@@ -1093,7 +1099,7 @@ export class StreamingExecutorActionImpl {
       this.#get().completeOperation(taskOperationId);
 
       log('[%s] Completed, result %d chars', logId, resultContent.length);
-      return { result: resultContent, success: true, threadId };
+      return { model, result: resultContent, success: true, threadId, totalToolCalls, totalTokens };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       log('[%s] Error: %O', logId, error);

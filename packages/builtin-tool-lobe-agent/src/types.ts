@@ -82,19 +82,30 @@ export interface CallSubAgentsParams {
   tasks: SubAgentTask[];
 }
 
+/** Execution stats reported back by a finished sub-agent run. */
+export interface SubAgentRunStats {
+  /** Model the sub-agent ran on */
+  model?: string;
+  /** Total tokens consumed by the sub-agent run */
+  totalTokens?: number;
+  /** Number of tool calls the sub-agent made */
+  totalToolCalls?: number;
+}
+
 /**
  * State persisted on the callSubAgent tool message.
  *
  * The sub-agent runs in an isolated Thread via the current runtime; the Render
- * uses `threadId` to open that Thread in the portal.
+ * uses `threadId` to open that Thread in the portal, and the stats feed the
+ * Inspector row.
  */
-export interface CallSubAgentState {
+export interface CallSubAgentState extends SubAgentRunStats {
   threadId: string;
 }
 
 /** State persisted on the callSubAgents tool message (one entry per sub-agent). */
 export interface CallSubAgentsState {
-  subAgents: { description: string; threadId: string }[];
+  subAgents: ({ description: string; threadId: string } & SubAgentRunStats)[];
 }
 
 // ==================== Todo Item ====================

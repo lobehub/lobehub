@@ -839,9 +839,9 @@ export default {
   'taskList.view.board': 'Board',
   'taskList.view.list': 'List',
   'taskList.viewAll': 'View all',
-  'thread.closeSubagentThread': 'Collapse SubAgent conversation',
+  'thread.closeSubagentThread': 'Hide Detail',
   'thread.divider': 'Subtopic',
-  'thread.openSubagentThread': 'View full SubAgent conversation',
+  'thread.openSubagentThread': 'View Detail',
   'thread.subagentReadOnlyHint':
     'SubAgent conversations are read-only — execution is driven by the parent agent.',
   'thread.threadMessageCount': '{{messageCount}} messages',

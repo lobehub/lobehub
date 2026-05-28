@@ -714,12 +714,18 @@ export interface RunSubAgentParams {
 export interface RunSubAgentResult {
   /** Error message when the sub-agent failed */
   error?: string;
+  /** Model the sub-agent ran on (e.g. "deepseek-v4-pro") */
+  model?: string;
   /** Final assistant output of the sub-agent run */
   result: string;
   /** Whether the run succeeded */
   success: boolean;
   /** The isolation thread holding the sub-agent's full message trace */
   threadId: string;
+  /** Total tokens consumed by the sub-agent run */
+  totalTokens?: number;
+  /** Number of tool calls the sub-agent made */
+  totalToolCalls?: number;
 }
 
 /**
