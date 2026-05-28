@@ -110,7 +110,7 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
   imageResolution2?: '512' | '1K' | '2K' | '4K';
   inputTemplate?: string;
   /**
-   * Effort level for Claude Opus 4.7 (adds xhigh tier between high and max)
+   * Effort level for Claude Opus 4.7 and later (adds xhigh tier between high and max)
    */
   opus47Effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   reasoningBudgetToken?: number;

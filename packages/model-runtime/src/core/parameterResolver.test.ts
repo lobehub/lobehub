@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { hasTemperatureTopPConflict, shouldOmitSamplingParams } from '../const/models';
+import {
+  hasTemperatureTopPConflict,
+  shouldDropUnsupportedClaudeAssistantPrefill,
+  shouldOmitSamplingParams,
+} from '../const/models';
 import {
   createParameterResolver,
   resolveModelSamplingParameters,
@@ -289,6 +293,16 @@ describe('resolveModelSamplingParameters', () => {
     expect(result).toEqual({ temperature: undefined, top_p: undefined });
   });
 
+  it('should omit temperature and top_p for Claude Opus 4.8', () => {
+    const result = resolveModelSamplingParameters(
+      'claude-opus-4-8',
+      { temperature: 0.7, top_p: 0.9 },
+      { normalizeTemperature: false, preferTemperature: true },
+    );
+
+    expect(result).toEqual({ temperature: undefined, top_p: undefined });
+  });
+
   it('should omit temperature and top_p for Bedrock Opus 4.7 id', () => {
     const result = resolveModelSamplingParameters(
       'us.anthropic.claude-opus-4-7-v1',
@@ -380,14 +394,28 @@ describe('shouldOmitSamplingParams', () => {
     expect(shouldOmitSamplingParams('claude-opus-4-7')).toBe(true);
   });
 
+  it('should return true for Claude Opus 4.8 (Anthropic API id)', () => {
+    expect(shouldOmitSamplingParams('claude-opus-4-8')).toBe(true);
+  });
+
   it('should return true for Claude Opus 4.7 on Bedrock (with and without region prefix)', () => {
     expect(shouldOmitSamplingParams('anthropic.claude-opus-4-7')).toBe(true);
     expect(shouldOmitSamplingParams('us.anthropic.claude-opus-4-7-v1')).toBe(true);
   });
 
+  it('should return true for Claude Opus 4.8 on Bedrock (with and without region prefix)', () => {
+    expect(shouldOmitSamplingParams('anthropic.claude-opus-4-8')).toBe(true);
+    expect(shouldOmitSamplingParams('us.anthropic.claude-opus-4-8')).toBe(true);
+  });
+
   it('should return true for Claude Opus 4.7 on OpenRouter (dot notation)', () => {
     expect(shouldOmitSamplingParams('anthropic/claude-opus-4.7')).toBe(true);
     expect(shouldOmitSamplingParams('anthropic/claude-4.7-opus')).toBe(true);
+  });
+
+  it('should return true for Claude Opus 4.8 on OpenRouter (dot notation)', () => {
+    expect(shouldOmitSamplingParams('anthropic/claude-opus-4.8')).toBe(true);
+    expect(shouldOmitSamplingParams('anthropic/claude-4.8-opus')).toBe(true);
   });
 
   it('should return false for hypothetical dash-form OpenRouter id', () => {
@@ -405,5 +433,13 @@ describe('shouldOmitSamplingParams', () => {
   it('should return false for non-Claude models', () => {
     expect(shouldOmitSamplingParams('gpt-4o')).toBe(false);
     expect(shouldOmitSamplingParams('gemini-2.5-pro')).toBe(false);
+  });
+});
+
+describe('shouldDropUnsupportedClaudeAssistantPrefill', () => {
+  it('should return true for Claude Opus 4.8 API and Bedrock ids', () => {
+    expect(shouldDropUnsupportedClaudeAssistantPrefill('claude-opus-4-8')).toBe(true);
+    expect(shouldDropUnsupportedClaudeAssistantPrefill('anthropic.claude-opus-4-8')).toBe(true);
+    expect(shouldDropUnsupportedClaudeAssistantPrefill('us.anthropic.claude-opus-4-8')).toBe(true);
   });
 });

@@ -234,7 +234,7 @@ const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
   imageAspectRatio2: { labelSuffix: ' (Nano Banana 2)', previewWidth: 350, tag: 'aspect_ratio' },
   imageResolution: { labelSuffix: '', previewWidth: 250, tag: 'resolution' },
   imageResolution2: { labelSuffix: ' (512px+)', previewWidth: 280, tag: 'resolution' },
-  opus47Effort: { labelSuffix: ' (Opus 4.7)', previewWidth: 280, tag: 'output_config.effort' },
+  opus47Effort: { labelSuffix: ' (Opus 4.7+)', previewWidth: 280, tag: 'output_config.effort' },
   reasoningBudgetToken: { previewWidth: 350, tag: 'thinking.budget_tokens' },
   reasoningBudgetToken32k: {
     labelSuffix: ' (32k)',
