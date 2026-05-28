@@ -4,6 +4,85 @@ import { snapdom } from '@zumer/snapdom';
 import dayjs from 'dayjs';
 import { useCallback, useState } from 'react';
 
+/**
+ * Walk the DOM tree and resolve CSS custom properties by inlining computed values.
+ * When snapDOM serializes the DOM through SVG foreignObject → canvas, CSS custom
+ * properties (e.g. `--prism-background`) are not resolved in the canvas context.
+ * This function ensures all critical computed values are set as inline styles,
+ * fixing code block backgrounds and other variable-dependent styles.
+ */
+const resolveCSSVariables = (root: HTMLElement) => {
+  const treeWalker = document.createTreeWalker(
+    root,
+    NodeFilter.SHOW_ELEMENT,
+  );
+  const relevantProperties = [
+    'background',
+    'background-color',
+    'background-image',
+    'color',
+    'opacity',
+    'border-color',
+    'border-top-color',
+    'border-right-color',
+    'border-bottom-color',
+    'border-left-color',
+    'fill',
+    'stroke',
+    'stroke-width',
+    'stop-color',
+    'box-shadow',
+    'text-decoration-color',
+    'text-shadow',
+    'outline-color',
+  ];
+
+  let node: Node | null;
+  /* eslint-disable-next-line no-cond-assign */
+  while ((node = treeWalker.nextNode())) {
+    const el = node as HTMLElement;
+    const computed = getComputedStyle(el);
+
+    for (const prop of relevantProperties) {
+      const resolvedValue = computed.getPropertyValue(prop);
+      if (
+        resolvedValue &&
+        resolvedValue !== '' &&
+        resolvedValue !== 'initial' &&
+        resolvedValue !== 'inherit' &&
+        resolvedValue !== 'unset'
+      ) {
+        el.style.setProperty(prop, resolvedValue, 'important');
+      }
+    }
+  }
+};
+
+/**
+ * Ensure all inline SVG elements have proper xmlns attributes.
+ * When snapDOM serializes the DOM through XMLSerializer into a canvas context,
+ * inline SVGs without explicit `xmlns` attributes may fail to render. This
+ * adds `xmlns="http://www.w3.org/2000/svg"` to all <svg> elements and
+ * `xmlns:xlink` where xlink:href attributes are present.
+ */
+const ensureSVGNamespaces = (root: HTMLElement) => {
+  root.querySelectorAll('svg').forEach((svg) => {
+    if (!svg.getAttribute('xmlns')) {
+      svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    }
+  });
+
+  root.querySelectorAll('[xlink\\:href]').forEach((el) => {
+    const svgRoot = el.closest('svg');
+    if (svgRoot && !svgRoot.getAttribute('xmlns:xlink')) {
+      svgRoot.setAttribute(
+        'xmlns:xlink',
+        'http://www.w3.org/1999/xlink',
+      );
+    }
+  });
+};
+
 export enum ImageType {
   JPG = 'jpg',
   PNG = 'png',
@@ -40,13 +119,19 @@ export const getImageUrl = async ({
   width?: number;
 }) => {
   const dom: HTMLDivElement = document.querySelector(id) as HTMLDivElement;
-  let copy: HTMLDivElement = dom;
+
+  // Always clone to avoid modifying the original DOM with inline style mutations
+  const copy = dom.cloneNode(true) as HTMLDivElement;
 
   if (width) {
-    copy = dom.cloneNode(true) as HTMLDivElement;
     copy.style.width = `${width}px`;
-    document.body.append(copy);
   }
+
+  document.body.append(copy);
+
+  // Resolve CSS custom properties and ensure SVG namespaces before serialization
+  resolveCSSVariables(copy);
+  ensureSVGNamespaces(copy);
 
   const baseOptions = {
     scale: 2,
@@ -57,13 +142,13 @@ export const getImageUrl = async ({
 
   if (imageType === ImageType.SVG) {
     // For SVG, we need to use the full snapdom API to get the raw SVG string
-    const result = await snapdom(width ? copy : dom, baseOptions);
+    const result = await snapdom(copy, baseOptions);
     const svgString = result.toRaw();
     blob = new Blob([svgString], { type: 'image/svg+xml' });
   } else {
     // For raster formats, use toBlob directly with type option
     const blobType = (imageType === ImageType.JPG ? 'jpg' : imageType) as 'png' | 'jpg' | 'webp';
-    const blobResult = await snapdom.toBlob(width ? copy : dom, {
+    const blobResult = await snapdom.toBlob(copy, {
       type: blobType,
       useProxy: 'https://proxy.corsfix.com/?',
     });
@@ -75,7 +160,7 @@ export const getImageUrl = async ({
     blob = blobResult;
   }
 
-  if (width && copy) copy?.remove();
+  copy?.remove();
 
   if (!blob) {
     throw new Error('Blob is undefined');
