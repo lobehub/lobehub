@@ -13,7 +13,7 @@ import {
 import { createInsertSchema } from 'drizzle-zod';
 
 import { createNanoId, idGenerator } from '../utils/idGenerator';
-import { createdAt, timestamps, timestamptz } from './_helpers';
+import { amountNumeric, createdAt, timestamps, timestamptz } from './_helpers';
 import { agents } from './agent';
 import { chatGroups } from './chatGroup';
 import { documents } from './file';
@@ -46,6 +46,20 @@ export const topics = pgTable(
       enum: ['active', 'running', 'paused', 'waitingForHuman', 'failed', 'completed', 'archived'],
     }),
     completedAt: timestamptz('completed_at'),
+
+    // ---- Usage & cost aggregates (denormalized roll-up of the topic's operations) ----
+    // Kept nullable: NULL means "not measured yet" so in-flight / legacy topics
+    // don't pollute SUM/AVG aggregates as if they were $0 / 0-token topics.
+    totalCost: amountNumeric('total_cost'),
+    totalInputTokens: integer('total_input_tokens'),
+    totalOutputTokens: integer('total_output_tokens'),
+    totalTokens: integer('total_tokens'),
+    // Full per-model cost / usage breakdowns for slice-and-dice analytics.
+    cost: jsonb('cost').$type<Record<string, unknown>>(),
+    usage: jsonb('usage').$type<Record<string, unknown>>(),
+    // Primary model / provider snapshot, promoted from metadata so it is indexable for GROUP BY.
+    model: text('model'),
+    provider: text('provider'),
     ...timestamps,
   },
   (t) => [
@@ -57,6 +71,8 @@ export const topics = pgTable(
     index('topics_agent_id_idx').on(t.agentId),
     index('topics_trigger_idx').on(t.trigger),
     index('topics_status_idx').on(t.status),
+    index('topics_model_idx').on(t.model),
+    index('topics_provider_idx').on(t.provider),
     index('topics_user_id_completed_at_idx').on(t.userId, t.completedAt),
     index('topics_extract_status_gin_idx').using(
       'gin',

@@ -1,0 +1,37 @@
+import { index, integer, pgTable, text, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
+
+import { createNanoId } from '../utils/idGenerator';
+import { timestamps } from './_helpers';
+import { documents } from './file';
+import { users } from './user';
+
+export const documentShares = pgTable(
+  'document_shares',
+  {
+    id: text('id')
+      .$defaultFn(() => createNanoId(8)())
+      .primaryKey(),
+
+    documentId: varchar('document_id', { length: 255 })
+      .notNull()
+      .references(() => documents.id, { onDelete: 'cascade' }),
+
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    visibility: text('visibility').default('private').notNull(),
+    permission: text('permission').default('read').notNull(),
+
+    pageViewCount: integer('page_view_count').default(0).notNull(),
+
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex('document_shares_document_id_unique').on(t.documentId),
+    index('document_shares_user_id_idx').on(t.userId),
+  ],
+);
+
+export type NewDocumentShare = typeof documentShares.$inferInsert;
+export type DocumentShareItem = typeof documentShares.$inferSelect;

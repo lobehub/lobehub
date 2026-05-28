@@ -728,6 +728,34 @@
       "when": 1779464293586,
       "tag": "0103_add_llm_tracing_and_eval_experiments",
       "breakpoints": true
+    },
+    {
+      "idx": 104,
+      "version": "7",
+      "when": 1779941035793,
+      "tag": "0104_add_topic_usage_stats",
+      "breakpoints": true
+    },
+    {
+      "idx": 105,
+      "version": "7",
+      "when": 1779941895311,
+      "tag": "0105_add_push_tokens",
+      "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "7",
+      "when": 1779941937783,
+      "tag": "0106_add_tasks_editor_data",
+      "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "7",
+      "when": 1779942025040,
+      "tag": "0107_add_document_shares",
+      "breakpoints": true
     }
   ],
   "version": "6"
