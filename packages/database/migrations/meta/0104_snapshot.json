@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "5f1cbd70-1e4f-49e1-a105-14b3e8ce1628",
+  "id": "85341c05-67d1-43f7-8550-790e8d025225",
   "policies": {},
   "prevId": "e8bb3ce2-fead-4b3d-810e-307c98e891b7",
   "roles": {},
@@ -5254,9 +5254,10 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": true,
-          "notNull": true
+          "notNull": true,
+          "default": "gen_random_uuid()"
         },
         "document_id": {
           "name": "document_id",

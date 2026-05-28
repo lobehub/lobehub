@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS "devices" (
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "document_shares" (
-	"id" text PRIMARY KEY NOT NULL,
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"document_id" varchar(255) NOT NULL,
 	"user_id" text NOT NULL,
 	"visibility" text DEFAULT 'private' NOT NULL,

@@ -1,6 +1,5 @@
-import { index, integer, pgTable, text, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
+import { index, integer, pgTable, text, uniqueIndex, uuid, varchar } from 'drizzle-orm/pg-core';
 
-import { createNanoId } from '../utils/idGenerator';
 import { timestamps } from './_helpers';
 import { documents } from './file';
 import { users } from './user';
@@ -8,9 +7,7 @@ import { users } from './user';
 export const documentShares = pgTable(
   'document_shares',
   {
-    id: text('id')
-      .$defaultFn(() => createNanoId(8)())
-      .primaryKey(),
+    id: uuid('id').defaultRandom().primaryKey().notNull(),
 
     documentId: varchar('document_id', { length: 255 })
       .notNull()

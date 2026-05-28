@@ -689,7 +689,7 @@ table document_histories {
 }
 
 table document_shares {
-  id text [pk, not null]
+  id uuid [pk, not null, default: `gen_random_uuid()`]
   document_id varchar(255) [not null]
   user_id text [not null]
   visibility text [not null, default: 'private']
