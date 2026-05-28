@@ -44,6 +44,9 @@ export interface ChatPortalState {
   /** Path of the currently active tab; undefined when no tabs open. */
   activeLocalFilePath?: string;
 
+  /** Unsaved edit buffers keyed by file path. Presence implies the file is dirty. */
+  dirtyLocalFileContents: Record<string, string>;
+
   // Legacy fields (kept for backward compatibility during migration)
   // TODO: Remove after Phase 3 migration complete
   /** Open file tabs in the LocalFile portal. */
@@ -69,6 +72,7 @@ export interface ChatPortalState {
 }
 
 export const initialChatPortalState: ChatPortalState = {
+  dirtyLocalFileContents: {},
   openLocalFiles: [],
   portalArtifactDisplayMode: ArtifactDisplayMode.Preview,
   portalStack: [],

@@ -1,10 +1,11 @@
 import { isDesktop } from '@lobechat/const';
-import { Center, Empty, Flexbox, Highlighter, Icon, Markdown, Segmented, Text } from '@lobehub/ui';
+import { Center, Empty, Flexbox, Icon, Markdown, Segmented, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CodeIcon, EyeIcon } from 'lucide-react';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import CodeEditorPane from '@/components/CodeEditorPane';
 import Loading from '@/components/Loading/CircleLoading';
 import { useClientDataSWR } from '@/libs/swr';
 import { localFileService } from '@/services/electron/localFileService';
@@ -169,18 +170,50 @@ type TextPreviewMode = 'render' | 'raw';
 interface TextPreviewPaneProps {
   content: string;
   ext: string;
+  filePath: string;
+  onSaved?: (savedContent: string) => void;
   truncated: boolean;
   truncatedLabel: string;
 }
 
 const TextPreviewPane = memo<TextPreviewPaneProps>(
-  ({ content, ext, truncated, truncatedLabel }) => {
+  ({ content, ext, filePath, onSaved, truncated, truncatedLabel }) => {
     const { t } = useTranslation('chat');
     const isMarkdown = useMemo(() => MARKDOWN_EXTS.has(ext.toLowerCase()), [ext]);
+    const buffer = useChatStore(chatPortalSelectors.localFileBuffer(filePath));
+    const setLocalFileBuffer = useChatStore((s) => s.setLocalFileBuffer);
+    const saveLocalFile = useChatStore((s) => s.saveLocalFile);
+
+    const editingValue = buffer ?? content;
+
+    const handleCodeChange = useCallback(
+      (next: string) => {
+        if (next === content) {
+          setLocalFileBuffer(filePath, undefined);
+        } else {
+          setLocalFileBuffer(filePath, next);
+        }
+      },
+      [content, filePath, setLocalFileBuffer],
+    );
+
+    const handleSave = useCallback(async () => {
+      try {
+        const saved = await saveLocalFile(filePath);
+        if (saved === undefined) return;
+        // Update SWR cache BEFORE clearing the buffer, otherwise React will
+        // briefly render with buffer cleared but content still stale, causing
+        // CodeMirror to setValue and reset the cursor.
+        onSaved?.(saved);
+        setLocalFileBuffer(filePath, undefined);
+      } catch {
+        /* swallow — surfacing handled elsewhere if needed */
+      }
+    }, [filePath, onSaved, saveLocalFile, setLocalFileBuffer]);
 
     const { body, frontmatter } = useMemo(
-      () => (isMarkdown ? parseSkillMarkdownFrontmatter(content) : { body: content }),
-      [isMarkdown, content],
+      () => (isMarkdown ? parseSkillMarkdownFrontmatter(editingValue) : { body: editingValue }),
+      [isMarkdown, editingValue],
     );
     const frontmatterFields = useMemo(
       () => (frontmatter ? parseSkillMarkdownFrontmatterFields(frontmatter) : {}),
@@ -242,12 +275,13 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
               <Markdown style={{ paddingBlock: 8, paddingInline: 12 }}>{body}</Markdown>
             </>
           ) : (
-            <Highlighter
+            <CodeEditorPane
               language={extensionToLanguage(ext)}
               style={{ fontSize: 12, minHeight: '100%' }}
-            >
-              {content}
-            </Highlighter>
+              value={editingValue}
+              onChange={handleCodeChange}
+              onSave={handleSave}
+            />
           )}
         </div>
       </Flexbox>
@@ -272,7 +306,8 @@ const ActiveFileView = memo<ActiveFileViewProps>(({ filePath, workingDirectory }
     data: preview,
     error,
     isLoading,
-  } = useClientDataSWR(
+    mutate,
+  } = useClientDataSWR<LocalFilePreview>(
     isDesktop && workingDirectory ? ['local-file-preview', filePath, workingDirectory] : null,
     async () => {
       const result = await localFileService.getLocalFilePreviewUrl({
@@ -287,6 +322,15 @@ const ActiveFileView = memo<ActiveFileViewProps>(({ filePath, workingDirectory }
       return fetchLocalFilePreview(result.url);
     },
     { revalidateOnFocus: false },
+  );
+
+  const handleSavedContent = useCallback(
+    (saved: string) => {
+      mutate((prev) => (prev && prev.type === 'text' ? { ...prev, content: saved } : prev), {
+        revalidate: false,
+      });
+    },
+    [mutate],
   );
 
   // Chromium blocks `file://` from a non-file origin. The desktop main process
@@ -329,10 +373,12 @@ const ActiveFileView = memo<ActiveFileViewProps>(({ filePath, workingDirectory }
     <TextPreviewPane
       content={displayContent}
       ext={ext}
+      filePath={filePath}
       truncated={truncated}
       truncatedLabel={t('workingPanel.localFile.truncated', {
         limit: MAX_PREVIEW_CHARS.toLocaleString(),
       })}
+      onSaved={handleSavedContent}
     />
   );
 });
