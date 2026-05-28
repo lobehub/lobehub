@@ -1,4 +1,3 @@
-import { Freeze } from '@lobehub/ui';
 import { isEqual } from 'es-toolkit/compat';
 import { type FC, type PropsWithChildren } from 'react';
 import { memo, useEffect, useRef, useState } from 'react';
@@ -66,34 +65,79 @@ const AssistantGroupActionsRenderer: FC<SingletonPortalProps> = ({ id }) => {
   );
 };
 
-interface ActionBarBodyProps {
-  actionType: MessageActionType | null;
-  hostEl: HTMLDivElement;
-  portalElement: HTMLDivElement | null;
-}
+const SingletonMessageActionsBar = memo(() => {
+  const livePortalElement = useMessageItemActionElementPortialContext();
+  const liveActionType = useMessageItemActionTypeContext();
 
-const ActionBarBody: FC<ActionBarBodyProps> = ({ actionType, hostEl, portalElement }) => {
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  if (!hostRef.current && typeof document !== 'undefined') {
+    hostRef.current = document.createElement('div');
+    hostRef.current.dataset.singletonMessageActionBarHost = 'true';
+  }
+
+  // Freeze both the host placement target AND the rendered actionType while a popup
+  // is open inside the host: otherwise the trigger gets DOM-moved or React-unmounted
+  // and the popup loses its anchor / closes. popupCloseTick re-runs the sync effect
+  // once the popup closes, committing the latest live values.
+  const [popupCloseTick, setPopupCloseTick] = useState(0);
+  const [committedPortalElement, setCommittedPortalElement] = useState<HTMLDivElement | null>(null);
+  const [committedActionType, setCommittedActionType] = useState<MessageActionType | null>(null);
+
   useEffect(() => {
-    if (typeof document === 'undefined') return;
+    const hostEl = hostRef.current;
+    if (!hostEl) return;
 
+    const observer = new MutationObserver(() => {
+      if (!hostEl.querySelector('[data-popup-open]')) {
+        setPopupCloseTick((t) => t + 1);
+      }
+    });
+    observer.observe(hostEl, {
+      attributeFilter: ['data-popup-open'],
+      attributes: true,
+      subtree: true,
+    });
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const hostEl = hostRef.current;
+    if (!hostEl) return;
+    if (hostEl.querySelector('[data-popup-open]')) return;
+    setCommittedPortalElement(livePortalElement);
+    setCommittedActionType(liveActionType);
+  }, [
+    livePortalElement,
+    liveActionType?.id,
+    liveActionType?.index,
+    liveActionType?.type,
+    popupCloseTick,
+  ]);
+
+  // Keep the React tree mounted in a stable host element, and only move the host via DOM.
+  useEffect(() => {
+    const hostEl = hostRef.current;
+    if (!hostEl || typeof document === 'undefined') return;
+
+    // By default, keep it hidden but mounted.
     let placeholderEl: HTMLDivElement | null = null;
 
-    if (portalElement && actionType) {
-      switch (actionType.type) {
+    if (committedPortalElement && committedActionType) {
+      switch (committedActionType.type) {
         case 'assistant': {
-          placeholderEl = portalElement.querySelector<HTMLDivElement>(
+          placeholderEl = committedPortalElement.querySelector<HTMLDivElement>(
             MESSAGE_ACTION_BAR_PORTAL_SELECTORS.assistant,
           );
           break;
         }
         case 'user': {
-          placeholderEl = portalElement.querySelector<HTMLDivElement>(
+          placeholderEl = committedPortalElement.querySelector<HTMLDivElement>(
             MESSAGE_ACTION_BAR_PORTAL_SELECTORS.user,
           );
           break;
         }
         case 'assistantGroup': {
-          placeholderEl = portalElement.querySelector<HTMLDivElement>(
+          placeholderEl = committedPortalElement.querySelector<HTMLDivElement>(
             MESSAGE_ACTION_BAR_PORTAL_SELECTORS.assistantGroup,
           );
           break;
@@ -107,82 +151,53 @@ const ActionBarBody: FC<ActionBarBodyProps> = ({ actionType, hostEl, portalEleme
       return;
     }
 
+    // No valid placeholder: attach to body to keep DOM owned, but hidden.
     if (document.body && hostEl.parentElement !== document.body) document.body.append(hostEl);
     hostEl.style.display = 'none';
-  }, [hostEl, portalElement, actionType?.id, actionType?.index, actionType?.type]);
-
-  if (!actionType) return null;
-
-  switch (actionType.type) {
-    case 'assistant': {
-      return createPortal(
-        <AssistantActionsRenderer id={actionType.id} index={actionType.index} />,
-        hostEl,
-      );
-    }
-    case 'user': {
-      return createPortal(
-        <UserActionsRenderer id={actionType.id} index={actionType.index} />,
-        hostEl,
-      );
-    }
-    case 'assistantGroup': {
-      return createPortal(
-        <AssistantGroupActionsRenderer id={actionType.id} index={actionType.index} />,
-        hostEl,
-      );
-    }
-  }
-
-  return null;
-};
-
-const SingletonMessageActionsBar = memo(() => {
-  const portalElement = useMessageItemActionElementPortialContext();
-  const actionType = useMessageItemActionTypeContext();
-
-  const hostRef = useRef<HTMLDivElement | null>(null);
-  if (!hostRef.current && typeof document !== 'undefined') {
-    hostRef.current = document.createElement('div');
-    hostRef.current.dataset.singletonMessageActionBarHost = 'true';
-  }
-
-  // Pause host migration + body re-render while an open popup (base-ui triggers
-  // emit `data-popup-open`) lives inside the host: moving or unmounting its
-  // trigger would unanchor or close the popup.
-  const [isPopupOpen, setIsPopupOpen] = useState(false);
+  }, [
+    committedPortalElement,
+    committedActionType?.id,
+    committedActionType?.index,
+    committedActionType?.type,
+  ]);
 
   useEffect(() => {
     const hostEl = hostRef.current;
     if (!hostEl) return;
 
-    const sync = () => setIsPopupOpen(!!hostEl.querySelector('[data-popup-open]'));
-    const observer = new MutationObserver(sync);
-    observer.observe(hostEl, {
-      attributeFilter: ['data-popup-open'],
-      attributes: true,
-      subtree: true,
-    });
-    sync();
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    const hostEl = hostRef.current;
-    if (!hostEl) return;
     return () => {
       hostEl.remove();
     };
   }, []);
 
   const hostEl = hostRef.current;
-  if (!hostEl) return null;
+  if (!hostEl || !committedActionType) return null;
 
-  return (
-    <Freeze frozen={isPopupOpen}>
-      <ActionBarBody actionType={actionType} hostEl={hostEl} portalElement={portalElement} />
-    </Freeze>
-  );
+  switch (committedActionType.type) {
+    case 'assistant': {
+      return createPortal(
+        <AssistantActionsRenderer id={committedActionType.id} index={committedActionType.index} />,
+        hostEl,
+      );
+    }
+    case 'user': {
+      return createPortal(
+        <UserActionsRenderer id={committedActionType.id} index={committedActionType.index} />,
+        hostEl,
+      );
+    }
+    case 'assistantGroup': {
+      return createPortal(
+        <AssistantGroupActionsRenderer
+          id={committedActionType.id}
+          index={committedActionType.index}
+        />,
+        hostEl,
+      );
+    }
+  }
+
+  return null;
 });
 
 interface MessageActionProviderProps extends PropsWithChildren {
