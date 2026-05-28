@@ -6,6 +6,7 @@ import type {
   PolicyLoad,
 } from '@lobechat/agent-templates';
 import { DocumentLoadPosition, getDocumentTemplate } from '@lobechat/agent-templates';
+import { buildAgentSkillIdentifier } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { DOCUMENT_FOLDER_TYPE } from '@lobechat/database/schemas';
 
@@ -17,6 +18,7 @@ import type {
 import {
   AgentDocumentModel,
   buildDocumentFilename,
+  deriveAgentDocumentFields,
   extractMarkdownH1Title,
 } from '@/database/models/agentDocuments';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
@@ -24,6 +26,7 @@ import { TopicDocumentModel } from '@/database/models/topicDocument';
 import { AgentDocumentVfsError } from '../agentDocumentVfs/errors';
 import { isManagedSkillDocument } from '../agentDocumentVfs/mounts/skills/providers/providerSkillsAgentDocumentUtils';
 import { DocumentService } from '../document';
+import { TOOL_RESULTS_DIR_NAME } from '../toolExecution/constants';
 import {
   type AgentDocumentLiteXMLOperation,
   applyLiteXMLOperations,
@@ -52,6 +55,34 @@ interface CreateAgentDocumentOptions {
 }
 
 type AgentDocumentWithLiteXML = AgentDocument & { litexml?: string };
+
+/**
+ * Hide the auto-created `.tool-results/` archive (root folder + its children)
+ * from user-facing document lists. Agents still discover archived entries via
+ * the tool-oriented `listDocuments` / `listDocumentsForTopic` paths, which hit
+ * the model directly.
+ */
+const excludeArchivedToolResults = <
+  T extends Pick<AgentDocument, 'documentId' | 'parentId' | 'filename' | 'fileType'>,
+>(
+  docs: T[],
+): T[] => {
+  const archiveFolderIds = new Set(
+    docs
+      .filter(
+        (d) =>
+          d.filename === TOOL_RESULTS_DIR_NAME &&
+          !d.parentId &&
+          d.fileType === DOCUMENT_FOLDER_TYPE,
+      )
+      .map((d) => d.documentId),
+  );
+  if (archiveFolderIds.size === 0) return docs;
+  return docs.filter(
+    (d) =>
+      !archiveFolderIds.has(d.documentId) && (!d.parentId || !archiveFolderIds.has(d.parentId)),
+  );
+};
 
 /**
  * Service for managing agent documents with reusable template sets.
@@ -102,7 +133,12 @@ export class AgentDocumentsService {
   private async projectDocuments<T extends AgentDocument | AgentDocumentWithRules>(
     docs: T[],
   ): Promise<T[]> {
-    return Promise.all(docs.map((doc) => this.projectDocumentContent(doc)));
+    return Promise.all(
+      docs.map(async (doc) => {
+        const projected = await this.projectDocumentContent(doc);
+        return { ...projected, ...deriveAgentDocumentFields(projected) };
+      }),
+    );
   }
 
   private async attachLiteXML(doc: AgentDocument): Promise<AgentDocumentWithLiteXML> {
@@ -227,7 +263,56 @@ export class AgentDocumentsService {
 
   async getAgentDocuments(agentId: string): Promise<AgentDocumentWithRules[]> {
     const docs = await this.agentDocumentModel.findByAgent(agentId);
-    return this.projectDocuments(docs);
+    return this.projectDocuments(excludeArchivedToolResults(docs));
+  }
+
+  /**
+   * Return this agent's skill-bundle documents in a shape ready for the
+   * homogeneous skill runtime: identifier is prefixed
+   * (`agent-skills:<filename>`) and the body is resolved from the bundle's
+   * `SKILL.md` index child (falling back to the bundle row for orphans).
+   *
+   * Single source of truth for the agent-document skill registry: both the
+   * SkillEngine assembly (`<available_skills>` for the model) and the skills
+   * `activateSkill` runtime call this; neither re-implements the prefix or the
+   * bundle → index child mapping.
+   */
+  async getAgentSkills(agentId: string): Promise<
+    Array<{
+      content: string;
+      description: string;
+      filename: string;
+      identifier: string;
+      name: string;
+      title: string | null;
+    }>
+  > {
+    const docs = await this.getAgentDocuments(agentId);
+
+    const childrenByParent = new Map<string, AgentDocumentWithRules[]>();
+    for (const doc of docs) {
+      if (!doc.parentId) continue;
+      const list = childrenByParent.get(doc.parentId) ?? [];
+      list.push(doc);
+      childrenByParent.set(doc.parentId, list);
+    }
+
+    return docs
+      .filter((doc) => doc.isSkillBundle)
+      .map((bundle) => {
+        const indexChild = (childrenByParent.get(bundle.documentId) ?? []).find(
+          (child) => child.isSkillIndex,
+        );
+        const identifier = buildAgentSkillIdentifier(bundle.filename);
+        return {
+          content: indexChild?.content ?? bundle.content ?? '',
+          description: bundle.description ?? '',
+          filename: bundle.filename,
+          identifier,
+          name: identifier,
+          title: bundle.title,
+        };
+      });
   }
 
   async getDocumentsByTemplate(
@@ -249,6 +334,16 @@ export class AgentDocumentsService {
 
   async getDocumentById(id: string, expectedAgentId?: string) {
     return this.getDocumentByIdInAgent(id, expectedAgentId);
+  }
+
+  /**
+   * Resolve an `agent_documents` row from `(agentId, documentId)`. Use when the
+   * caller has a `documents.id` but needs the row id (e.g. when building the
+   * `<document agent_document_id ... />` injection from a portal payload).
+   * Returns undefined when the agent does not own this document binding.
+   */
+  async findRowByDocumentId(agentId: string, documentId: string) {
+    return this.agentDocumentModel.findByDocumentId(agentId, documentId);
   }
 
   async getDocumentSnapshotById(id: string, expectedAgentId?: string) {
@@ -410,7 +505,8 @@ export class AgentDocumentsService {
       }
     }
 
-    return contextParts.join('\n').trim();
+    return contextParts.join('
+').trim();
   }
 
   async getDocumentsMap(agentId: string) {
@@ -480,6 +576,7 @@ export class AgentDocumentsService {
       loadPosition: d.policy?.context?.position,
       parentId: d.parentId,
       sourceType: d.sourceType,
+      templateId: d.templateId,
       title: d.title,
     }));
   }
