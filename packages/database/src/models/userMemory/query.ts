@@ -1641,7 +1641,7 @@ export class UserMemoryQueryModel {
       ).values(),
     ];
 
-    return scoreHybridCandidates({
+    const candidates = scoreHybridCandidates({
       baseSignals: await this.loadBaseSignals(items),
       items,
       lexicalLists,
@@ -1649,6 +1649,32 @@ export class UserMemoryQueryModel {
       queryParams: params.params,
       semanticLists,
     });
+
+    // NOTICE: Fallback when BM25 + vector search both return empty but
+    // data exists (confirmed by taxonomy queries). BM25 indexes may not exist
+    // for this table in some environments (see getTestDB.ts where pg_search
+    // migrations are skipped). Runs a plain recency-ordered query without
+    // BM25 conditions; scoreHybridCandidates still applies fuzzy text scoring.
+    if (candidates.length === 0 && params.queries.length > 0) {
+      const fallbackItems = await this.searchContextsLexical(
+        undefined,
+        limit,
+        params.params,
+      );
+
+      if (fallbackItems.length > 0) {
+        return scoreHybridCandidates({
+          baseSignals: await this.loadBaseSignals(fallbackItems),
+          items: fallbackItems,
+          lexicalLists: [],
+          queries: params.queries,
+          queryParams: params.params,
+          semanticLists: [],
+        });
+      }
+    }
+
+    return candidates;
   }
 
   private async searchHybridExperiences(params: {
@@ -1677,7 +1703,7 @@ export class UserMemoryQueryModel {
       ).values(),
     ];
 
-    return scoreHybridCandidates({
+    const candidates = scoreHybridCandidates({
       baseSignals: await this.loadBaseSignals(items),
       items,
       lexicalLists,
@@ -1685,6 +1711,32 @@ export class UserMemoryQueryModel {
       queryParams: params.params,
       semanticLists,
     });
+
+    // NOTICE: Fallback when BM25 + vector search both return empty but
+    // data exists (confirmed by taxonomy queries). BM25 indexes may not exist
+    // for this table in some environments (see getTestDB.ts where pg_search
+    // migrations are skipped). Runs a plain recency-ordered query without
+    // BM25 conditions; scoreHybridCandidates still applies fuzzy text scoring.
+    if (candidates.length === 0 && params.queries.length > 0) {
+      const fallbackItems = await this.searchExperiencesLexical(
+        undefined,
+        limit,
+        params.params,
+      );
+
+      if (fallbackItems.length > 0) {
+        return scoreHybridCandidates({
+          baseSignals: await this.loadBaseSignals(fallbackItems),
+          items: fallbackItems,
+          lexicalLists: [],
+          queries: params.queries,
+          queryParams: params.params,
+          semanticLists: [],
+        });
+      }
+    }
+
+    return candidates;
   }
 
   private async searchHybridIdentities(params: {
