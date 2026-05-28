@@ -741,11 +741,16 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       reasoningParts.join(''),
       this.streamedThinkingByMessageId,
     );
-    if (textCompletion) {
-      events.push(this.makeChunkEvent({ chunkType: 'text', content: textCompletion }));
-    }
+    // Emit reasoning before text so the gateway event handler starts the
+    // reasoning operation first — matching Claude's natural output order
+    // (thinking → response). Without this, batch-mode runs (CLI / sandbox
+    // without --include-partial-messages) emit text first, causing the
+    // brain icon to appear below the already-rendered text content.
     if (thinkingCompletion) {
       events.push(this.makeChunkEvent({ chunkType: 'reasoning', reasoning: thinkingCompletion }));
+    }
+    if (textCompletion) {
+      events.push(this.makeChunkEvent({ chunkType: 'text', content: textCompletion }));
     }
     if (messageId) {
       this.clearStreamedBuffers(messageId, {
@@ -838,20 +843,21 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     // `messagesWithStreamedText` (unlike the main-agent path) because
     // subagent events don't arrive via `stream_event` partial-messages
     // deltas; the full block IS the only emission.
-    if (textParts.length > 0) {
-      events.push(
-        this.makeChunkEvent({
-          chunkType: 'text',
-          content: textParts.join(''),
-          subagent: subagentCtx,
-        }),
-      );
-    }
+    // Reasoning before text — same ordering fix as the main-agent batch path.
     if (reasoningParts.length > 0) {
       events.push(
         this.makeChunkEvent({
           chunkType: 'reasoning',
           reasoning: reasoningParts.join(''),
+          subagent: subagentCtx,
+        }),
+      );
+    }
+    if (textParts.length > 0) {
+      events.push(
+        this.makeChunkEvent({
+          chunkType: 'text',
+          content: textParts.join(''),
           subagent: subagentCtx,
         }),
       );
