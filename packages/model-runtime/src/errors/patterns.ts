@@ -961,4 +961,26 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
     match: sub('codewhisperer#ValidationException'),
     note: 'kiro / AWS CodeWhisperer proxy malformed payload',
   },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // ContextEnginePipelineError — a context-engine pipeline processor crashed.
+  // Sits before the generic JS-crash fallbacks so "Processor [X] execution
+  // failed: Cannot read properties …" is attributed to the pipeline, not the
+  // raw TypeError below.
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    code: AgentRuntimeErrorType.ContextEnginePipelineError,
+    match: sub('Processor ['),
+    note: 'context-engine PipelineError: `Processor [<name>] execution failed`.',
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // AgentRuntimeError — harness-side JS runtime crashes (V8 TypeError /
+  // RangeError). Our bugs, not upstream provider errors, so they stay LAST: a
+  // more specific provider/harness pattern above wins first, and only genuine
+  // bare crashes fall through to here.
+  // ─────────────────────────────────────────────────────────────────────────
+  { code: AgentRuntimeErrorType.AgentRuntimeError, match: sub('is not a function') },
+  { code: AgentRuntimeErrorType.AgentRuntimeError, match: sub('Cannot read properties of') },
+  { code: AgentRuntimeErrorType.AgentRuntimeError, match: sub('Maximum call stack size exceeded') },
 ];

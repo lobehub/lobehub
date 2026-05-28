@@ -342,6 +342,18 @@ export const ERROR_CODE_SPECS: SpecMap = {
     countAsFailure: true,
     description: 'State-store (Redis / Upstash) connection dropped or command aborted mid-flight.',
   },
+  [AgentRuntimeErrorType.ContextEnginePipelineError]: {
+    code: AgentRuntimeErrorType.ContextEnginePipelineError,
+    numericId: 7006,
+    category: 'stream',
+    severity: 'error',
+    attribution: 'harness',
+    httpStatus: 500,
+    retryable: false,
+    countAsFailure: true,
+    description:
+      'Context-engine pipeline processor crashed ("Processor [<name>] execution failed").',
+  },
 
   // ─── 8xxx Provider (catch-all) ────────────────────────────────────────
   [AgentRuntimeErrorType.AgentRuntimeError]: {
@@ -510,6 +522,10 @@ export const ERROR_CODE_SPECS: SpecMap = {
  */
 const CODE_ALIASES: Record<string, ILobeAgentRuntimeErrorType> = {
   [AgentRuntimeErrorType.QuotaLimitReached]: AgentRuntimeErrorType.RateLimitExceeded,
+  // The context-engine throws `PipelineError` (its `error.name`), which lands
+  // in stored error records as `errorType: 'PipelineError'`. Resolve it to the
+  // disambiguated runtime code.
+  PipelineError: AgentRuntimeErrorType.ContextEnginePipelineError,
 };
 
 /** Look up the spec for an error code; falls back to `undefined` when unknown. */

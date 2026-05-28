@@ -107,6 +107,14 @@ export const AgentRuntimeErrorType = {
    * DB, …). Harness-side infra — the agent state layer, not the LLM provider.
    */
   StateStorePersistError: 'StateStorePersistError',
+  /**
+   * A context-engine pipeline processor threw while building the prompt
+   * context ("Processor [<name>] execution failed"). Harness-side bug in the
+   * context assembly stage — the `PipelineError` thrown by
+   * `packages/context-engine` (its `error.name` is `PipelineError`, aliased
+   * to this code in the spec table).
+   */
+  ContextEnginePipelineError: 'ContextEnginePipelineError',
 
   InvalidGithubToken: 'InvalidGithubToken',
   InvalidGithubCopilotToken: 'InvalidGithubCopilotToken',

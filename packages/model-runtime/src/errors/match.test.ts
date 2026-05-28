@@ -80,6 +80,33 @@ describe('matchErrorPattern', () => {
       matchErrorPattern({ message: 'ERR max request size exceeded. Limit: 10485760 bytes' })?.code,
     ).toBe(AgentRuntimeErrorType.StateStorePersistError);
   });
+
+  it('classifies harness JS runtime crashes as AgentRuntimeError', () => {
+    for (const message of [
+      'e.trim is not a function',
+      "Cannot read properties of undefined (reading '0')",
+      'Maximum call stack size exceeded',
+    ]) {
+      expect(matchErrorPattern({ message })?.code, message).toBe(
+        AgentRuntimeErrorType.AgentRuntimeError,
+      );
+    }
+  });
+
+  it('routes context-engine processor crashes to ContextEnginePipelineError', () => {
+    expect(
+      matchErrorPattern({ message: 'Processor [PlaceholderVariablesProcessor] execution failed' })
+        ?.code,
+    ).toBe(AgentRuntimeErrorType.ContextEnginePipelineError);
+    // …even when the nested cause is a bare TypeError (pipeline wins, not the
+    // generic "Cannot read properties" fallback).
+    expect(
+      matchErrorPattern({
+        message:
+          "Processor [X] execution failed: Cannot read properties of undefined (reading 'y')",
+      })?.code,
+    ).toBe(AgentRuntimeErrorType.ContextEnginePipelineError);
+  });
 });
 
 describe('isUserSideError', () => {

@@ -20,6 +20,8 @@ export default {
     'The request returned empty. Please check if the API proxy address does not end with `/v1`.',
   ContentModeration:
     'Sorry, the content was rejected by the upstream safety filter. Please revise your prompt and try again.',
+  ContextEnginePipelineError:
+    'Failed to assemble the conversation context for this request. Please try again; if it persists, contact support.',
   DatabasePersistError:
     'A database operation failed while saving or loading this conversation. Please try again; if it persists, contact support.',
   ExceededContextWindow:
