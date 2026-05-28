@@ -1,3 +1,4 @@
+import { Freeze } from '@lobehub/ui';
 import { isEqual } from 'es-toolkit/compat';
 import { type FC, type PropsWithChildren } from 'react';
 import { memo, useEffect, useRef, useState } from 'react';
@@ -65,79 +66,34 @@ const AssistantGroupActionsRenderer: FC<SingletonPortalProps> = ({ id }) => {
   );
 };
 
-const SingletonMessageActionsBar = memo(() => {
-  const livePortalElement = useMessageItemActionElementPortialContext();
-  const liveActionType = useMessageItemActionTypeContext();
+interface ActionBarBodyProps {
+  actionType: MessageActionType | null;
+  hostEl: HTMLDivElement;
+  portalElement: HTMLDivElement | null;
+}
 
-  const hostRef = useRef<HTMLDivElement | null>(null);
-  if (!hostRef.current && typeof document !== 'undefined') {
-    hostRef.current = document.createElement('div');
-    hostRef.current.dataset.singletonMessageActionBarHost = 'true';
-  }
-
-  // Freeze both the host placement target AND the rendered actionType while a popup
-  // is open inside the host: otherwise the trigger gets DOM-moved or React-unmounted
-  // and the popup loses its anchor / closes. popupCloseTick re-runs the sync effect
-  // once the popup closes, committing the latest live values.
-  const [popupCloseTick, setPopupCloseTick] = useState(0);
-  const [committedPortalElement, setCommittedPortalElement] = useState<HTMLDivElement | null>(null);
-  const [committedActionType, setCommittedActionType] = useState<MessageActionType | null>(null);
-
+const ActionBarBody: FC<ActionBarBodyProps> = ({ actionType, hostEl, portalElement }) => {
   useEffect(() => {
-    const hostEl = hostRef.current;
-    if (!hostEl) return;
+    if (typeof document === 'undefined') return;
 
-    const observer = new MutationObserver(() => {
-      if (!hostEl.querySelector('[data-popup-open]')) {
-        setPopupCloseTick((t) => t + 1);
-      }
-    });
-    observer.observe(hostEl, {
-      attributeFilter: ['data-popup-open'],
-      attributes: true,
-      subtree: true,
-    });
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    const hostEl = hostRef.current;
-    if (!hostEl) return;
-    if (hostEl.querySelector('[data-popup-open]')) return;
-    setCommittedPortalElement(livePortalElement);
-    setCommittedActionType(liveActionType);
-  }, [
-    livePortalElement,
-    liveActionType?.id,
-    liveActionType?.index,
-    liveActionType?.type,
-    popupCloseTick,
-  ]);
-
-  // Keep the React tree mounted in a stable host element, and only move the host via DOM.
-  useEffect(() => {
-    const hostEl = hostRef.current;
-    if (!hostEl || typeof document === 'undefined') return;
-
-    // By default, keep it hidden but mounted.
     let placeholderEl: HTMLDivElement | null = null;
 
-    if (committedPortalElement && committedActionType) {
-      switch (committedActionType.type) {
+    if (portalElement && actionType) {
+      switch (actionType.type) {
         case 'assistant': {
-          placeholderEl = committedPortalElement.querySelector<HTMLDivElement>(
+          placeholderEl = portalElement.querySelector<HTMLDivElement>(
             MESSAGE_ACTION_BAR_PORTAL_SELECTORS.assistant,
           );
           break;
         }
         case 'user': {
-          placeholderEl = committedPortalElement.querySelector<HTMLDivElement>(
+          placeholderEl = portalElement.querySelector<HTMLDivElement>(
             MESSAGE_ACTION_BAR_PORTAL_SELECTORS.user,
           );
           break;
         }
         case 'assistantGroup': {
-          placeholderEl = committedPortalElement.querySelector<HTMLDivElement>(
+          placeholderEl = portalElement.querySelector<HTMLDivElement>(
             MESSAGE_ACTION_BAR_PORTAL_SELECTORS.assistantGroup,
           );
           break;
@@ -151,53 +107,82 @@ const SingletonMessageActionsBar = memo(() => {
       return;
     }
 
-    // No valid placeholder: attach to body to keep DOM owned, but hidden.
     if (document.body && hostEl.parentElement !== document.body) document.body.append(hostEl);
     hostEl.style.display = 'none';
-  }, [
-    committedPortalElement,
-    committedActionType?.id,
-    committedActionType?.index,
-    committedActionType?.type,
-  ]);
+  }, [hostEl, portalElement, actionType?.id, actionType?.index, actionType?.type]);
 
-  useEffect(() => {
-    const hostEl = hostRef.current;
-    if (!hostEl) return;
+  if (!actionType) return null;
 
-    return () => {
-      hostEl.remove();
-    };
-  }, []);
-
-  const hostEl = hostRef.current;
-  if (!hostEl || !committedActionType) return null;
-
-  switch (committedActionType.type) {
+  switch (actionType.type) {
     case 'assistant': {
       return createPortal(
-        <AssistantActionsRenderer id={committedActionType.id} index={committedActionType.index} />,
+        <AssistantActionsRenderer id={actionType.id} index={actionType.index} />,
         hostEl,
       );
     }
     case 'user': {
       return createPortal(
-        <UserActionsRenderer id={committedActionType.id} index={committedActionType.index} />,
+        <UserActionsRenderer id={actionType.id} index={actionType.index} />,
         hostEl,
       );
     }
     case 'assistantGroup': {
       return createPortal(
-        <AssistantGroupActionsRenderer
-          id={committedActionType.id}
-          index={committedActionType.index}
-        />,
+        <AssistantGroupActionsRenderer id={actionType.id} index={actionType.index} />,
         hostEl,
       );
     }
   }
 
   return null;
+};
+
+const SingletonMessageActionsBar = memo(() => {
+  const portalElement = useMessageItemActionElementPortialContext();
+  const actionType = useMessageItemActionTypeContext();
+
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  if (!hostRef.current && typeof document !== 'undefined') {
+    hostRef.current = document.createElement('div');
+    hostRef.current.dataset.singletonMessageActionBarHost = 'true';
+  }
+
+  // Pause host migration + body re-render while an open popup (base-ui triggers
+  // emit `data-popup-open`) lives inside the host: moving or unmounting its
+  // trigger would unanchor or close the popup.
+  const [isPopupOpen, setIsPopupOpen] = useState(false);
+
+  useEffect(() => {
+    const hostEl = hostRef.current;
+    if (!hostEl) return;
+
+    const sync = () => setIsPopupOpen(!!hostEl.querySelector('[data-popup-open]'));
+    const observer = new MutationObserver(sync);
+    observer.observe(hostEl, {
+      attributeFilter: ['data-popup-open'],
+      attributes: true,
+      subtree: true,
+    });
+    sync();
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const hostEl = hostRef.current;
+    if (!hostEl) return;
+    return () => {
+      hostEl.remove();
+    };
+  }, []);
+
+  const hostEl = hostRef.current;
+  if (!hostEl) return null;
+
+  return (
+    <Freeze frozen={isPopupOpen}>
+      <ActionBarBody actionType={actionType} hostEl={hostEl} portalElement={portalElement} />
+    </Freeze>
+  );
 });
 
 interface MessageActionProviderProps extends PropsWithChildren {
