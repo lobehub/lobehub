@@ -2,7 +2,7 @@
 
 **App name:** `微信` or `WeChat` | **Process name:** `WeChat`
 
-See [osascript-common.md](./osascript-common.md) for shared patterns.
+See [osascript-common.md](../osascript-common.md) for shared patterns.
 
 ## Activate & Navigate
 
@@ -76,6 +76,6 @@ screencapture /tmp/wechat-bot-response.png
 ## Script
 
 ```bash
-./.agents/skills/local-testing/scripts/test-wechat-bot.sh "文件传输助手" "test message" 5
-./.agents/skills/local-testing/scripts/test-wechat-bot.sh "MyBot" "Tell me a joke" 30
+./.agents/skills/local-testing/bot/wechat/test-wechat-bot.sh "文件传输助手" "test message" 5
+./.agents/skills/local-testing/bot/wechat/test-wechat-bot.sh "MyBot" "Tell me a joke" 30
 ```

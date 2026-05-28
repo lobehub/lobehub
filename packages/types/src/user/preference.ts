@@ -60,6 +60,10 @@ export const UserLabSchema = z.object({
    */
   enableGroupChat: z.boolean().optional(),
   /**
+   * enable the iMessage channel (BlueBubbles Desktop bridge)
+   */
+  enableImessage: z.boolean().optional(),
+  /**
    * enable markdown rendering in chat input editor
    */
   enableInputMarkdown: z.boolean().optional(),

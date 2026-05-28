@@ -63,7 +63,8 @@ export class MessageService {
    * Unified URL processing function
    */
   private get postProcessUrl() {
-    return (path: string | null) => this.fileService.getFullFileUrl(path);
+    return (path: string | null, file: { fileType: string; id?: string | null }) =>
+      this.fileService.getFileAccessUrl({ id: file.id, url: path });
   }
 
   /**

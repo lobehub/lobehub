@@ -14,6 +14,9 @@ export default {
   'features.gatewayMode.desc':
     'Execute agent tasks on the server via Gateway WebSocket instead of running locally. Enables faster execution and reduces client resource usage.',
   'features.gatewayMode.title': 'Server-Side Agent Execution (Gateway)',
+  'features.imessage.desc':
+    'Connect agents to iMessage through the local LobeHub Desktop BlueBubbles bridge.',
+  'features.imessage.title': 'iMessage Channel',
   'features.groupChat.desc': 'Enable multi-agent group chat coordination.',
   'features.groupChat.title': 'Group Chat (Multi-Agent)',
   'features.inputMarkdown.desc':

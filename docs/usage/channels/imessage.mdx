@@ -1,0 +1,106 @@
+---
+title: Connect LobeHub to iMessage
+description: >-
+  Learn how to connect iMessage to your LobeHub agent through the local LobeHub Desktop BlueBubbles bridge.
+
+tags:
+  - iMessage
+  - BlueBubbles
+  - Message Channels
+  - Bot Setup
+  - Integration
+---
+
+# Connect LobeHub to iMessage
+
+LobeHub connects to iMessage through [BlueBubbles](https://bluebubbles.app/) running on a Mac signed into Messages. The LobeHub Desktop app runs a local bridge on that same Mac: it receives BlueBubbles webhooks on `127.0.0.1`, forwards them to LobeHub Cloud, and relays the agent's replies back to the local BlueBubbles REST API. BlueBubbles never needs to be exposed to the public internet.
+
+```text
+iMessage user -> macOS Messages -> BlueBubbles -> LobeHub Desktop bridge -> LobeHub Cloud
+LobeHub agent -> Device Gateway -> LobeHub Desktop bridge -> BlueBubbles -> iMessage user
+```
+
+> **Labs feature:** iMessage is gated behind a Labs toggle. The channel stays a "Coming Soon" placeholder until you enable it in **Settings → Advanced → Labs**.
+
+## Prerequisites
+
+- A Mac signed into the Apple ID you want the bot to use
+- [BlueBubbles Server](https://bluebubbles.app/) installed on that Mac, with a server password set
+- LobeHub Desktop signed in and connected to the Device Gateway (Settings shows the gateway as connected)
+
+> **Private API note:** BlueBubbles sends basic text and attachments through AppleScript out of the box. Advanced features such as typing indicators require the BlueBubbles Private API, which needs SIP disabled / a jailbroken Mac. LobeHub only depends on basic text and attachment send/receive — typing-indicator failures are logged and ignored.
+
+## Step 1: Set Up BlueBubbles
+
+<Steps>
+  ### Install BlueBubbles Server
+
+  Install [BlueBubbles Server](https://bluebubbles.app/) on the Mac that hosts the iMessage account. Keep the Mac awake and on the network.
+
+  ### Set a server password
+
+  In BlueBubbles Server, set a strong password. The LobeHub Desktop bridge uses it locally to call the BlueBubbles REST API.
+
+  ### Keep it local
+
+  A local address such as `http://127.0.0.1:1234` (or a private LAN address) is all you need — no public HTTPS URL required.
+</Steps>
+
+## Step 2: Enable the iMessage Lab
+
+<Steps>
+  ### Open Labs
+
+  In LobeHub, go to **Settings → Advanced** and find the **Labs** section.
+
+  ### Turn on "iMessage Channel"
+
+  Toggle it on. The iMessage entry in your agent's channel list switches from a "Coming Soon" placeholder to a configurable channel.
+</Steps>
+
+## Step 3: Configure iMessage in Your Agent
+
+<Steps>
+  ### Open the channel
+
+  Go to your agent's settings → **Channels** → **iMessage**.
+
+  ### Fill in the three fields
+
+  1. **Application ID** — a stable identifier for this connection, e.g. `home-mac-mini`.
+  2. **BlueBubbles Server URL** — your local BlueBubbles address, e.g. `http://127.0.0.1:1234`.
+  3. **BlueBubbles Password** — the server password from Step 1.
+
+  The Desktop Device ID and webhook secret are filled in and generated automatically — you don't need to manage them.
+
+  ### Test the connection (optional)
+
+  Click **Test BlueBubbles** to verify the URL and password reach your local BlueBubbles server.
+
+  ### Save
+
+  Click **Save Configuration**. A single save persists the cloud channel **and** the local Desktop bridge: it starts the loopback listener, registers the BlueBubbles `new-message` webhook, and connects the bot.
+</Steps>
+
+## Step 4: Test the Bot
+
+Have **another person or a second Apple ID** send an iMessage to the Apple ID / phone number signed into the BlueBubbles Mac. BlueBubbles fires a local `new-message` webhook, the Desktop bridge forwards it to LobeHub, and the agent replies in the same conversation.
+
+> **Why a different sender?** Messages the hosted account sends itself are ignored by the `isFromMe` loop guard (so the bot never replies to its own messages). Testing from your own number won't trigger a reply — use a different sender.
+
+## Feature Notes
+
+- **Markdown** — iMessage receives plain text; LobeHub strips Markdown before sending.
+- **Attachments** — inbound and outbound attachments are relayed through the bridge and the BlueBubbles attachment APIs.
+- **Typing indicators** — attempted only when the BlueBubbles Private API is available; otherwise they fail silently and don't affect replies.
+- **Group chats** — supported when BlueBubbles includes the `chatGuid` in events; use the `chatGuid` as the allowed-channel ID when scoping group access.
+- **Loop prevention** — messages from the hosted account itself are dropped before dispatch.
+
+## Troubleshooting
+
+- **iMessage still shows "Coming Soon".** The iMessage Channel lab isn't enabled — turn it on in Settings → Advanced → Labs.
+- **Connect fails with `DEVICE_NOT_FOUND`.** LobeHub Desktop isn't reachable through the Device Gateway. Make sure Desktop is open, signed in, and the gateway shows as connected, then save again.
+- **Test / save fails with a BlueBubbles error.** Recheck the local BlueBubbles URL and password.
+- **Bot never replies.** Confirm the BlueBubbles `new-message` webhook points at `127.0.0.1` and that the sender is not the hosted account itself.
+- **Typing indicator fails but text works.** Expected without the BlueBubbles Private API — safe to ignore.
+- **Attachments fail.** Confirm the attachment finished downloading on the Mac and that BlueBubbles can serve it locally.

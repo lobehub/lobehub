@@ -1,0 +1,106 @@
+---
+title: 将 LobeHub 连接到 iMessage
+description: >-
+  了解如何通过 LobeHub Desktop 本地 BlueBubbles 桥接，将 iMessage 连接到你的 LobeHub 智能体。
+
+tags:
+  - iMessage
+  - BlueBubbles
+  - 消息渠道
+  - Bot 设置
+  - 集成
+---
+
+# 将 LobeHub 连接到 iMessage
+
+LobeHub 通过运行在已登录 Messages 的 Mac 上的 [BlueBubbles](https://bluebubbles.app/) 连接 iMessage。LobeHub Desktop 在同一台 Mac 上运行一个本地桥接：它在 `127.0.0.1` 接收 BlueBubbles 的 webhook，转发到 LobeHub 云端，并把智能体的回复经本地 BlueBubbles REST API 发回。BlueBubbles 无需暴露到公网。
+
+```text
+iMessage 用户 -> macOS Messages -> BlueBubbles -> LobeHub Desktop 桥接 -> LobeHub 云端
+LobeHub 智能体 -> Device Gateway -> LobeHub Desktop 桥接 -> BlueBubbles -> iMessage 用户
+```
+
+> **Labs 功能：** iMessage 由 Labs 开关控制。在你于 **设置 → 高级 → Labs** 中开启之前，该渠道会一直显示为 “即将推出” 占位。
+
+## 前置条件
+
+- 一台已登录目标 Apple ID 的 Mac
+- 该 Mac 上安装了 [BlueBubbles Server](https://bluebubbles.app/) 并设置了服务器密码
+- LobeHub Desktop 已登录，且已连接 Device Gateway（设置中显示网关已连接）
+
+> **Private API 说明：** BlueBubbles 默认通过 AppleScript 发送基础文本和附件。打字指示等高级功能需要 BlueBubbles Private API（需关闭 SIP / 越狱的 Mac）。LobeHub 只依赖基础的文本与附件收发 —— 打字指示失败会被记录并忽略，不影响回复。
+
+## 第 1 步：配置 BlueBubbles
+
+<Steps>
+  ### 安装 BlueBubbles Server
+
+  在用于托管 iMessage 账号的 Mac 上安装 [BlueBubbles Server](https://bluebubbles.app/)。保持 Mac 唤醒并联网。
+
+  ### 设置服务器密码
+
+  在 BlueBubbles Server 中设置一个强密码。LobeHub Desktop 桥接会在本地用它调用 BlueBubbles REST API。
+
+  ### 保持本地访问
+
+  使用 `http://127.0.0.1:1234` 这样的本地地址（或私有局域网地址）即可，无需公网 HTTPS 地址。
+</Steps>
+
+## 第 2 步：开启 iMessage Lab
+
+<Steps>
+  ### 打开 Labs
+
+  在 LobeHub 中进入 **设置 → 高级**，找到 **Labs** 区域。
+
+  ### 打开 “iMessage Channel”
+
+  开启后，智能体渠道列表里的 iMessage 会从 “即将推出” 占位切换为可配置的渠道。
+</Steps>
+
+## 第 3 步：在智能体中配置 iMessage
+
+<Steps>
+  ### 打开渠道
+
+  进入智能体设置 → **渠道** → **iMessage**。
+
+  ### 填写三个字段
+
+  1. **Application ID** —— 本次连接的稳定标识，例如 `home-mac-mini`。
+  2. **BlueBubbles Server URL** —— 你的本地 BlueBubbles 地址，例如 `http://127.0.0.1:1234`。
+  3. **BlueBubbles Password** —— 第 1 步设置的服务器密码。
+
+  Desktop Device ID 和 webhook secret 会自动填充与生成，无需手动管理。
+
+  ### 测试连接（可选）
+
+  点击 **Test BlueBubbles**，验证 URL 和密码能否连上你的本地 BlueBubbles 服务。
+
+  ### 保存
+
+  点击 **Save Configuration**。一次保存会同时落地云端渠道**和**本地 Desktop 桥接：启动本地回环监听、注册 BlueBubbles 的 `new-message` webhook，并连接 Bot。
+</Steps>
+
+## 第 4 步：测试 Bot
+
+让**另一个人或第二个 Apple ID** 给托管在 BlueBubbles Mac 上的 Apple ID / 手机号发一条 iMessage。BlueBubbles 触发本地 `new-message` webhook，Desktop 桥接转发到 LobeHub，智能体在同一会话里回复。
+
+> **为什么要用其他发送方？** 托管账号自己发的消息会被 `isFromMe` 防循环逻辑忽略（这样 Bot 不会回复自己发的消息）。用你自己的号码测试不会触发回复 —— 请用其他发送方。
+
+## 功能说明
+
+- **Markdown** —— iMessage 接收纯文本；LobeHub 在发送前会去除 Markdown 标记。
+- **附件** —— 入站和出站附件通过桥接与 BlueBubbles 附件 API 中转。
+- **打字指示** —— 仅在 BlueBubbles Private API 可用时尝试；否则静默失败，不影响回复。
+- **群聊** —— 当 BlueBubbles 在事件中包含 `chatGuid` 时支持群聊；限定群组访问时用 `chatGuid` 作为允许渠道 ID。
+- **防循环** —— 托管账号自身发出的消息在分发前被丢弃。
+
+## 故障排查
+
+- **iMessage 仍显示 “即将推出”。** iMessage Channel lab 未开启 —— 在 设置 → 高级 → Labs 中打开。
+- **连接报 `DEVICE_NOT_FOUND`。** LobeHub Desktop 未通过 Device Gateway 可达。确认 Desktop 已打开、已登录、网关显示已连接，然后重新保存。
+- **测试 / 保存报 BlueBubbles 错误。** 重新检查本地 BlueBubbles URL 和密码。
+- **Bot 始终不回复。** 确认 BlueBubbles 的 `new-message` webhook 指向 `127.0.0.1`，且发送方不是托管账号本身。
+- **打字指示失败但文本正常。** 没有 BlueBubbles Private API 时属预期 —— 可忽略。
+- **附件失败。** 确认附件已在 Mac 上下载完成，且 BlueBubbles 能在本地提供该文件。

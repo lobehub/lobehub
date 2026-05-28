@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 
+import ImessageCredentialExtras from './imessage/CredentialExtras';
 import LineCredentialExtras from './line/CredentialExtras';
 import type { PlatformCredentialBodyProps } from './types';
 import WechatCredentialBody from './wechat/CredentialBody';
@@ -19,5 +20,6 @@ export const platformCredentialBodyMap: Record<
  * without replacing it wholesale.
  */
 export const platformCredentialExtrasMap: Record<string, ComponentType> = {
+  imessage: ImessageCredentialExtras,
   line: LineCredentialExtras,
 };

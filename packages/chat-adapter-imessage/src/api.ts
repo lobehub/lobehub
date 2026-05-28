@@ -112,10 +112,11 @@ export class BlueBubblesApiClient {
     });
   }
 
-  async listWebhooks(url?: string): Promise<BlueBubblesWebhook[]> {
-    const response = await this.request<BlueBubblesWebhook[]>('webhook', {
-      query: { url },
-    });
+  // Always lists all webhooks: BlueBubbles' `GET /webhook?url=<value>` throws a
+  // server-side 500 when the URL isn't already registered, so callers must
+  // match client-side instead of relying on the url query filter.
+  async listWebhooks(): Promise<BlueBubblesWebhook[]> {
+    const response = await this.request<BlueBubblesWebhook[]>('webhook');
     return response.data ?? [];
   }
 

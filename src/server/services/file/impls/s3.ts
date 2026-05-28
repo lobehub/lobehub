@@ -72,6 +72,17 @@ export class S3StaticFileImpl implements FileServiceImpl {
     return this.s3.createPreSignedUrlForPreview(key, expiresIn);
   }
 
+  private async getStorageKeyFromUrl(url: string): Promise<string> {
+    if (!url.startsWith('http://') && !url.startsWith('https://')) return url;
+
+    const extractedKey = await this.getKeyFromFullUrl(url);
+    if (!extractedKey) {
+      throw new Error('Key not found from url: ' + url);
+    }
+
+    return extractedKey;
+  }
+
   private async getCachedPreSignedUrlForPreview(key: string, expiresIn?: number): Promise<string> {
     const expiresInSeconds = expiresIn ?? fileEnv.S3_PREVIEW_URL_EXPIRE_IN;
     const cacheKey = createPresignedPreviewCacheKey(key, expiresInSeconds);
@@ -122,6 +133,17 @@ export class S3StaticFileImpl implements FileServiceImpl {
     return url;
   }
 
+  async createCachedPreSignedUrlForPreview(
+    url?: string | null,
+    expiresIn?: number,
+  ): Promise<string> {
+    if (!url) return '';
+
+    const key = await this.getStorageKeyFromUrl(url);
+
+    return await this.getCachedPreSignedUrlForPreview(key, expiresIn);
+  }
+
   async uploadContent(path: string, content: string) {
     return this.s3.uploadContent(path, content);
   }
@@ -129,29 +151,21 @@ export class S3StaticFileImpl implements FileServiceImpl {
   async getFullFileUrl(url?: string | null, expiresIn?: number): Promise<string> {
     if (!url) return '';
 
-    // Handle legacy data compatibility - extract key from full URL if needed
-    // Related issue: https://github.com/lobehub/lobe-chat/issues/8994
-    let key = url;
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      const extractedKey = await this.getKeyFromFullUrl(url);
-      if (!extractedKey) {
-        throw new Error('Key not found from url: ' + url);
-      }
-      key = extractedKey;
-    }
+    const key = await this.getStorageKeyFromUrl(url);
 
     // If bucket is not set public read, or S3_PUBLIC_DOMAIN is not configured,
     // reuse the same presigned preview URL briefly so repeated chat turns keep
     // stable media URLs and can reuse provider-side prefix caches.
-    if (!fileEnv.S3_SET_ACL || !fileEnv.S3_PUBLIC_DOMAIN) {
+    const publicUrlBase = fileEnv.S3_SET_ACL ? fileEnv.S3_PUBLIC_DOMAIN : undefined;
+    if (!publicUrlBase) {
       return await this.getCachedPreSignedUrlForPreview(key, expiresIn);
     }
 
     if (fileEnv.S3_ENABLE_PATH_STYLE) {
-      return urlJoin(fileEnv.S3_PUBLIC_DOMAIN, fileEnv.S3_BUCKET!, key);
+      return urlJoin(publicUrlBase, fileEnv.S3_BUCKET!, key);
     }
 
-    return urlJoin(fileEnv.S3_PUBLIC_DOMAIN, key);
+    return urlJoin(publicUrlBase, key);
   }
 
   async getKeyFromFullUrl(url: string): Promise<string | null> {

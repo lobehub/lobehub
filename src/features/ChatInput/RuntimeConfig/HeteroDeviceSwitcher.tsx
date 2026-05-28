@@ -200,7 +200,7 @@ const OptionRow = memo<OptionRowProps>(({ active, desc, disabled, icon, label, o
 
 OptionRow.displayName = 'HeteroDeviceSwitcher.OptionRow';
 
-const getDeviceIcon = (platform: string | undefined, size = 14): ReactNode => {
+const getDeviceIcon = (platform: string | null | undefined, size = 14): ReactNode => {
   switch (platform) {
     case 'darwin': {
       return <SiApple color="currentColor" size={size} />;
@@ -278,7 +278,10 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     chipLabel = t('heteroAgent.executionTarget.local');
   } else if (executionTarget === 'device') {
     chipIcon = getDeviceIcon(boundDevice?.platform);
-    chipLabel = boundDevice?.hostname ?? t('heteroAgent.executionTarget.unknownDevice');
+    chipLabel =
+      boundDevice?.friendlyName ??
+      boundDevice?.hostname ??
+      t('heteroAgent.executionTarget.unknownDevice');
   }
 
   const isActive = (target: HeteroExecutionTarget, deviceId?: string) => {
@@ -318,7 +321,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           disabled={!d.online}
           icon={getDeviceIcon(d.platform)}
           key={d.deviceId}
-          label={d.hostname}
+          label={d.friendlyName || d.hostname || d.deviceId}
           desc={
             <>
               <span className={d.online ? styles.dotOnline : styles.dotOffline} />

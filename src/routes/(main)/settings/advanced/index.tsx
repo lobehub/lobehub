@@ -42,6 +42,7 @@ const Page = memo(() => {
     enableGatewayMode,
     enablePlatformAgent,
     enableExecutionDeviceSwitcher,
+    enableImessage,
     updateLab,
   ] = useUserStore((s) => [
     preferenceSelectors.isPreferenceInit(s),
@@ -50,6 +51,7 @@ const Page = memo(() => {
     labPreferSelectors.enableGatewayMode(s),
     labPreferSelectors.enablePlatformAgent(s),
     labPreferSelectors.enableExecutionDeviceSwitcher(s),
+    labPreferSelectors.enableImessage(s),
     s.updateLab,
   ]);
 
@@ -145,6 +147,23 @@ const Page = memo(() => {
       label: tLabs('features.executionDeviceSwitcher.title'),
       minWidth: undefined,
     },
+    ...(isDesktop
+      ? [
+          {
+            children: (
+              <Switch
+                checked={enableImessage}
+                loading={!isPreferenceInit}
+                onChange={(checked: boolean) => updateLab({ enableImessage: checked })}
+              />
+            ),
+            className: styles.labItem,
+            desc: tLabs('features.imessage.desc'),
+            label: tLabs('features.imessage.title'),
+            minWidth: undefined,
+          } satisfies FormItemProps,
+        ]
+      : []),
     ...(hasGatewayUrl
       ? [
           {
