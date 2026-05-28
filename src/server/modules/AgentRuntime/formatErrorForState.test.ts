@@ -134,14 +134,14 @@ describe('formatErrorForState', () => {
       expect(result.message).toBe('429 status code (no body)');
     });
 
-    it('reclassifies gateway HTML into UpstreamGatewayError (E8010)', () => {
+    it('reclassifies gateway HTML into UpstreamGatewayError (E8011)', () => {
       const result = formatErrorForState({
         errorType: AgentRuntimeErrorType.ProviderBizError,
         message: '<center>openresty</center>',
       });
 
       expect(result.type).toBe(AgentRuntimeErrorType.UpstreamGatewayError);
-      expect(result.numericId).toBe(8010);
+      expect(result.numericId).toBe(8011);
       expect(result.retryable).toBe(true);
     });
 
