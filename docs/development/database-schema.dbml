@@ -598,6 +598,33 @@ table chat_groups_agents {
   }
 }
 
+table user_connector_tools {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_connector_id uuid [not null]
+  user_id text [not null]
+  tool_name varchar(255) [not null]
+  display_name varchar(255)
+  description text
+  input_schema jsonb
+  output_schema jsonb
+  crud_type text [not null]
+  render_config jsonb
+  permission text [not null]
+  is_work_artifact boolean [not null, default: false]
+  work_artifact_config jsonb
+  limit_config jsonb
+  metadata jsonb
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (user_connector_id, tool_name) [name: 'user_connector_tools_connector_tool_unique', unique]
+    user_id [name: 'user_connector_tools_user_id_idx']
+    user_connector_id [name: 'user_connector_tools_connector_id_idx']
+  }
+}
+
 table user_connectors {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   user_id text [not null]
@@ -624,30 +651,25 @@ table user_connectors {
   }
 }
 
-table user_connector_tools {
+table devices {
   id uuid [pk, not null, default: `gen_random_uuid()`]
-  user_connector_id uuid [not null]
   user_id text [not null]
-  tool_name varchar(255) [not null]
-  display_name varchar(255)
-  description text
-  input_schema jsonb
-  output_schema jsonb
-  crud_type text [not null]
-  render_config jsonb
-  permission text [not null]
-  is_work_artifact boolean [not null, default: false]
-  work_artifact_config jsonb
-  limit_config jsonb
-  metadata jsonb
+  device_id varchar(64) [not null]
+  identity_source varchar(20) [not null]
+  hostname text
+  platform varchar(20)
+  friendly_name text
+  default_cwd text
+  recent_cwds text[] [not null, default: `[]`]
+  first_seen_at "timestamp with time zone" [not null, default: `now()`]
+  last_seen_at "timestamp with time zone" [not null, default: `now()`]
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
-    (user_connector_id, tool_name) [name: 'user_connector_tools_connector_tool_unique', unique]
-    user_id [name: 'user_connector_tools_user_id_idx']
-    user_connector_id [name: 'user_connector_tools_connector_id_idx']
+    (user_id, device_id) [name: 'devices_user_id_device_id_unique', unique]
+    user_id [name: 'devices_user_id_idx']
   }
 }
 
