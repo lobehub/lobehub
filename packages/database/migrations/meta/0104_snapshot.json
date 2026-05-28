@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "fe7c1962-3f6f-4c00-b2dd-7ce035fecb9f",
+  "id": "07e041f5-28d5-443a-b5c5-59aa6122ba48",
   "policies": {},
   "prevId": "e8bb3ce2-fead-4b3d-810e-307c98e891b7",
   "roles": {},
@@ -10001,15 +10001,9 @@
         }
       },
       "indexes": {
-        "idx_push_tokens_user_device": {
-          "name": "idx_push_tokens_user_device",
+        "idx_push_tokens_device": {
+          "name": "idx_push_tokens_device",
           "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
             {
               "expression": "device_id",
               "isExpression": false,

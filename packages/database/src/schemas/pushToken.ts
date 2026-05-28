@@ -6,8 +6,8 @@ import { users } from './user';
 /**
  * Stores Expo push notification tokens registered by mobile clients.
  *
- * One row per (userId, deviceId) — a single user may have multiple devices
- * (e.g. iPhone + Android tablet), each receiving its own notifications.
+ * One row per device — on user switch the row is reassigned to the new user
+ * (re-registration upserts by deviceId).
  *
  * Tokens are validated at registration time but may become invalid over time
  * (app uninstall, OS reinstall). Cleanup happens via the Expo receipt cron
@@ -38,8 +38,8 @@ export const pushTokens = pgTable(
     lastSeenAt: timestamptz('last_seen_at').defaultNow().notNull(),
   },
   (table) => [
-    /** Same user + device = one row; re-registration upserts in place */
-    uniqueIndex('idx_push_tokens_user_device').on(table.userId, table.deviceId),
+    /** One row per device; re-registration upserts in place */
+    uniqueIndex('idx_push_tokens_device').on(table.deviceId),
     /** PushChannel.deliver fans out by userId */
     index('idx_push_tokens_user').on(table.userId),
     /** Future: cleanup long-inactive tokens by lastSeenAt */
