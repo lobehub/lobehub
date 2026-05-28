@@ -11,7 +11,12 @@ import { MESSAGE_CANCEL_FLAT } from '@/const/message';
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import type { AvailableAgentItem, CreateAgentParams, CreateAgentResult } from '@/services/agent';
 import { agentService, AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT } from '@/services/agent';
-import { agentDocumentSWRKeys, resolveAgentDocumentsContext } from '@/services/agentDocument';
+import {
+  type AgentDocumentListItem,
+  agentDocumentService,
+  agentDocumentSWRKeys,
+  resolveAgentDocumentsContext,
+} from '@/services/agentDocument';
 import type { StoreSetter } from '@/store/types';
 import { getUserStoreState } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -371,16 +376,11 @@ export class AgentSliceActionImpl {
     );
   };
 
-  useFetchAgentDocuments = (agentId?: string | null): SWRResponse<AgentContextDocument[]> => {
-    return useClientDataSWRWithSync<AgentContextDocument[]>(
-      agentId ? agentDocumentSWRKeys.documents(agentId) : null,
-      async () => (await resolveAgentDocumentsContext({ agentId: agentId! })) ?? [],
+  useFetchAgentDocuments = (agentId?: string | null): SWRResponse<AgentDocumentListItem[]> => {
+    return useClientDataSWRWithSync<AgentDocumentListItem[]>(
+      agentId ? agentDocumentSWRKeys.documentsList(agentId) : null,
+      async () => agentDocumentService.listDocuments({ agentId: agentId! }),
       {
-        onData: (data) => {
-          if (!agentId) return;
-
-          this.#syncAgentDocuments(agentId, data);
-        },
         revalidateOnFocus: false,
       },
     );
