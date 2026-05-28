@@ -169,7 +169,7 @@ describe('LobeInternLMAI - custom features', () => {
 
       expect(model.id).toBe('custom-model');
       expect(model.contextWindowTokens).toBeUndefined();
-      expect(model.displayName).toBeUndefined();
+      expect(model.displayName).toBe('custom-model');
       expect(model.enabled).toBe(false);
       expect(model.functionCall).toBe(false);
       expect(model.vision).toBe(false);
