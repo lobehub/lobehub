@@ -11,7 +11,6 @@ export * from './asyncTask';
 export * from './betterAuth';
 export * from './chatGroup';
 export * from './connector';
-export * from './connectorTool';
 export * from './documentHistory';
 export * from './documentShare';
 export * from './file';
