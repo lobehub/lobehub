@@ -616,6 +616,7 @@ export class AgentDocumentsService {
     const filtered =
       sourceType && sourceType !== 'all' ? docs.filter((d) => d.sourceType === sourceType) : docs;
     return filtered.map((d) => ({
+      ...deriveAgentDocumentFields(d),
       documentId: d.documentId,
       fileType: d.fileType,
       filename: d.filename,
@@ -623,6 +624,7 @@ export class AgentDocumentsService {
       loadPosition: d.policy?.context?.position,
       parentId: d.parentId,
       sourceType: d.sourceType,
+      templateId: d.templateId,
       title: d.title,
     }));
   }
