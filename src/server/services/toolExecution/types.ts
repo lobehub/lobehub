@@ -1,6 +1,10 @@
 import { type LobeToolManifest } from '@lobechat/context-engine';
 import { type LobeChatDatabase } from '@lobechat/database';
-import { type ChatToolPayload, type ClientSecretPayload } from '@lobechat/types';
+import {
+  type ChatToolPayload,
+  type ClientSecretPayload,
+  type ExecSubAgentTaskParams,
+} from '@lobechat/types';
 
 export interface ToolExecutionMemoryEmbeddingRuntime {
   /** Embedding model id used by the memory search runtime. */
@@ -18,6 +22,12 @@ export interface ToolExecutionContext {
   agentId?: string;
   /** Current page document ID for page-scoped conversations */
   documentId?: string | null;
+  /**
+   * Spawn a sub-agent as an independent async operation. Injected by the agent
+   * runtime (forwarded from `RuntimeExecutorContext.execSubAgentTask`) so the
+   * `callSubAgent` server tool can fork a child op without a circular import.
+   */
+  execSubAgentTask?: (params: ExecSubAgentTaskParams) => Promise<unknown>;
   /** Per-call execution timeout resolved by the agent runtime. */
   executionTimeoutMs?: number;
   /** Current group ID for group chat context */
@@ -65,6 +75,12 @@ export interface ToolExecutionContext {
 
 export interface ToolExecutionResult {
   content: string;
+  /**
+   * When true, the result is delivered out-of-band later (e.g. an async
+   * sub-agent). The agent runtime parks the operation instead of writing a
+   * tool_result. Mirrors the client-tool pause path.
+   */
+  deferred?: boolean;
   error?: any;
   state?: Record<string, any>;
   success: boolean;

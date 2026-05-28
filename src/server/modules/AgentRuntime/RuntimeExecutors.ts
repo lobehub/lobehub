@@ -2061,6 +2061,7 @@ export const createRuntimeExecutors = (
                 activeDeviceId: state.metadata?.activeDeviceId,
                 agentId: state.metadata?.agentId,
                 documentId: state.metadata?.documentId,
+                execSubAgentTask: ctx.execSubAgentTask,
                 executionTimeoutMs: timeoutMs,
                 groupId: state.metadata?.groupId,
                 memoryToolPermission: agentConfig?.chatConfig?.memory?.toolPermission,
@@ -2093,6 +2094,42 @@ export const createRuntimeExecutors = (
               toolName,
             },
           );
+        }
+
+        // Deferred tool (e.g. async sub-agent): the executor performed its
+        // side-effect and created a pending placeholder; the real result is
+        // delivered out-of-band later by a completion bridge. Park like a
+        // client tool — surface the pending call, hold it in pendingToolsCalling,
+        // and do not write a tool_result now.
+        if (execution.result.deferred) {
+          log(`[${operationLogId}] Tool ${toolName} deferred; parking for async result`);
+          await streamManager.publishStreamChunk(operationId, stepIndex, {
+            chunkType: 'tools_calling',
+            toolsCalling: [chatToolPayload] as any,
+          });
+          executeToolSpan.setAttributes(
+            buildExecuteToolResultAttributes({ attempts: execution.attempts, success: true }),
+          );
+          const newState = structuredClone(state);
+          newState.lastModified = new Date().toISOString();
+          newState.status = 'waiting_for_async_tool';
+          newState.interruption = {
+            canResume: true,
+            interruptedAt: new Date().toISOString(),
+            reason: 'async_tool',
+          };
+          newState.pendingToolsCalling = [chatToolPayload];
+          return {
+            events: [
+              {
+                canResume: true,
+                interruptedAt: new Date().toISOString(),
+                reason: 'async_tool',
+                type: 'interrupted',
+              },
+            ],
+            newState,
+          };
         }
 
         const executionResult = await archiveRuntimeToolResult(execution.result, {
