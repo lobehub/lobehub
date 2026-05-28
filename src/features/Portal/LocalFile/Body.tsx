@@ -20,8 +20,6 @@ import {
 
 import { extensionToLanguage, getFileExtension } from './Body.helpers';
 
-const MAX_PREVIEW_CHARS = 500_000;
-
 const TEXT_PREVIEW_MIME_TYPES = new Set([
   'application/graphql',
   'application/javascript',
@@ -172,127 +170,113 @@ interface TextPreviewPaneProps {
   ext: string;
   filePath: string;
   onSaved?: (savedContent: string) => void;
-  truncated: boolean;
-  truncatedLabel: string;
 }
 
-const TextPreviewPane = memo<TextPreviewPaneProps>(
-  ({ content, ext, filePath, onSaved, truncated, truncatedLabel }) => {
-    const { t } = useTranslation('chat');
-    const isMarkdown = useMemo(() => MARKDOWN_EXTS.has(ext.toLowerCase()), [ext]);
-    const buffer = useChatStore(chatPortalSelectors.localFileBuffer(filePath));
-    const setLocalFileBuffer = useChatStore((s) => s.setLocalFileBuffer);
-    const saveLocalFile = useChatStore((s) => s.saveLocalFile);
+const TextPreviewPane = memo<TextPreviewPaneProps>(({ content, ext, filePath, onSaved }) => {
+  const { t } = useTranslation('chat');
+  const isMarkdown = useMemo(() => MARKDOWN_EXTS.has(ext.toLowerCase()), [ext]);
+  const buffer = useChatStore(chatPortalSelectors.localFileBuffer(filePath));
+  const setLocalFileBuffer = useChatStore((s) => s.setLocalFileBuffer);
+  const saveLocalFile = useChatStore((s) => s.saveLocalFile);
 
-    // When the previewed content is truncated we only have the prefix in
-    // memory; allowing edits + save would silently destroy the rest of the
-    // file. Force read-only in that case.
-    const editingValue = truncated ? content : (buffer ?? content);
+  const editingValue = buffer ?? content;
 
-    const handleCodeChange = useCallback(
-      (next: string) => {
-        if (next === content) {
-          setLocalFileBuffer(filePath, undefined);
-        } else {
-          setLocalFileBuffer(filePath, next);
-        }
-      },
-      [content, filePath, setLocalFileBuffer],
-    );
-
-    const handleSave = useCallback(async () => {
-      if (truncated) return;
-      try {
-        const saved = await saveLocalFile(filePath);
-        if (saved === undefined) return;
-        // Update SWR cache BEFORE clearing the buffer, otherwise React will
-        // briefly render with buffer cleared but content still stale, causing
-        // CodeMirror to setValue and reset the cursor.
-        onSaved?.(saved);
+  const handleCodeChange = useCallback(
+    (next: string) => {
+      if (next === content) {
         setLocalFileBuffer(filePath, undefined);
-      } catch {
-        /* swallow — surfacing handled elsewhere if needed */
+      } else {
+        setLocalFileBuffer(filePath, next);
       }
-    }, [filePath, onSaved, saveLocalFile, setLocalFileBuffer, truncated]);
+    },
+    [content, filePath, setLocalFileBuffer],
+  );
 
-    const { body, frontmatter } = useMemo(
-      () => (isMarkdown ? parseSkillMarkdownFrontmatter(editingValue) : { body: editingValue }),
-      [isMarkdown, editingValue],
-    );
-    const frontmatterFields = useMemo(
-      () => (frontmatter ? parseSkillMarkdownFrontmatterFields(frontmatter) : {}),
-      [frontmatter],
-    );
-    const frontmatterMetadata = useMemo(
-      () => (frontmatter ? parseSkillMarkdownMetadata(frontmatter) : []),
-      [frontmatter],
-    );
+  const handleSave = useCallback(async () => {
+    try {
+      const saved = await saveLocalFile(filePath);
+      if (saved === undefined) return;
+      // Update SWR cache BEFORE clearing the buffer, otherwise React will
+      // briefly render with buffer cleared but content still stale, causing
+      // CodeMirror to setValue and reset the cursor.
+      onSaved?.(saved);
+      setLocalFileBuffer(filePath, undefined);
+    } catch {
+      /* swallow — surfacing handled elsewhere if needed */
+    }
+  }, [filePath, onSaved, saveLocalFile, setLocalFileBuffer]);
 
-    const [mode, setMode] = useState<TextPreviewMode>(isMarkdown ? 'render' : 'raw');
+  const { body, frontmatter } = useMemo(
+    () => (isMarkdown ? parseSkillMarkdownFrontmatter(editingValue) : { body: editingValue }),
+    [isMarkdown, editingValue],
+  );
+  const frontmatterFields = useMemo(
+    () => (frontmatter ? parseSkillMarkdownFrontmatterFields(frontmatter) : {}),
+    [frontmatter],
+  );
+  const frontmatterMetadata = useMemo(
+    () => (frontmatter ? parseSkillMarkdownMetadata(frontmatter) : []),
+    [frontmatter],
+  );
 
-    useEffect(() => {
-      setMode(isMarkdown ? 'render' : 'raw');
-    }, [isMarkdown]);
+  const [mode, setMode] = useState<TextPreviewMode>(isMarkdown ? 'render' : 'raw');
 
-    return (
-      <Flexbox flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
-        {isMarkdown && (
-          <Flexbox
-            horizontal
-            align={'center'}
-            gap={8}
-            paddingBlock={6}
-            paddingInline={12}
-            style={{ flexShrink: 0 }}
-          >
-            <Text ellipsis style={{ flex: 1, fontSize: 13, fontWeight: 500, minWidth: 0 }}>
-              {frontmatterFields.name ?? ''}
-            </Text>
-            <Segmented
-              size={'small'}
-              value={mode}
-              options={[
-                {
-                  icon: <Icon icon={EyeIcon} />,
-                  label: t('workingPanel.localFile.preview.render'),
-                  value: 'render',
-                },
-                {
-                  icon: <Icon icon={CodeIcon} />,
-                  label: t('workingPanel.localFile.preview.raw'),
-                  value: 'raw',
-                },
-              ]}
-              onChange={(v) => setMode(v as TextPreviewMode)}
-            />
-          </Flexbox>
+  useEffect(() => {
+    setMode(isMarkdown ? 'render' : 'raw');
+  }, [isMarkdown]);
+
+  return (
+    <Flexbox flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
+      {isMarkdown && (
+        <Flexbox
+          horizontal
+          align={'center'}
+          gap={8}
+          paddingBlock={6}
+          paddingInline={12}
+          style={{ flexShrink: 0 }}
+        >
+          <Text ellipsis style={{ flex: 1, fontSize: 13, fontWeight: 500, minWidth: 0 }}>
+            {frontmatterFields.name ?? ''}
+          </Text>
+          <Segmented
+            size={'small'}
+            value={mode}
+            options={[
+              {
+                icon: <Icon icon={EyeIcon} />,
+                label: t('workingPanel.localFile.preview.render'),
+                value: 'render',
+              },
+              {
+                icon: <Icon icon={CodeIcon} />,
+                label: t('workingPanel.localFile.preview.raw'),
+                value: 'raw',
+              },
+            ]}
+            onChange={(v) => setMode(v as TextPreviewMode)}
+          />
+        </Flexbox>
+      )}
+      <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+        {isMarkdown && mode === 'render' ? (
+          <>
+            <SkillFrontmatterPreviewCard metadata={frontmatterMetadata} />
+            <Markdown style={{ paddingBlock: 8, paddingInline: 12 }}>{body}</Markdown>
+          </>
+        ) : (
+          <CodeEditorPane
+            language={extensionToLanguage(ext)}
+            style={{ fontSize: 12, minHeight: '100%' }}
+            value={editingValue}
+            onChange={handleCodeChange}
+            onSave={handleSave}
+          />
         )}
-        {truncated && (
-          <Center paddingBlock={4} style={{ flexShrink: 0 }}>
-            <span style={{ fontSize: 12, opacity: 0.65 }}>{truncatedLabel}</span>
-          </Center>
-        )}
-        <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-          {isMarkdown && mode === 'render' ? (
-            <>
-              <SkillFrontmatterPreviewCard metadata={frontmatterMetadata} />
-              <Markdown style={{ paddingBlock: 8, paddingInline: 12 }}>{body}</Markdown>
-            </>
-          ) : (
-            <CodeEditorPane
-              language={extensionToLanguage(ext)}
-              readOnly={truncated}
-              style={{ fontSize: 12, minHeight: '100%' }}
-              value={editingValue}
-              onChange={handleCodeChange}
-              onSave={handleSave}
-            />
-          )}
-        </div>
-      </Flexbox>
-    );
-  },
-);
+      </div>
+    </Flexbox>
+  );
+});
 
 TextPreviewPane.displayName = 'TextPreviewPane';
 
@@ -371,18 +355,12 @@ const ActiveFileView = memo<ActiveFileViewProps>(({ filePath, workingDirectory }
   }
 
   const ext = getFileExtension(filename);
-  const truncated = preview.content.length > MAX_PREVIEW_CHARS;
-  const displayContent = truncated ? preview.content.slice(0, MAX_PREVIEW_CHARS) : preview.content;
 
   return (
     <TextPreviewPane
-      content={displayContent}
+      content={preview.content}
       ext={ext}
       filePath={filePath}
-      truncated={truncated}
-      truncatedLabel={t('workingPanel.localFile.truncated', {
-        limit: MAX_PREVIEW_CHARS.toLocaleString(),
-      })}
       onSaved={handleSavedContent}
     />
   );
