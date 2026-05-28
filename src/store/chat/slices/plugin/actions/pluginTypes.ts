@@ -1,4 +1,8 @@
-import { type ChatToolPayload, type RuntimeStepContext } from '@lobechat/types';
+import {
+  type ChatToolPayload,
+  type RuntimeStepContext,
+  type SubAgentCallbacks,
+} from '@lobechat/types';
 import debug from 'debug';
 
 import { type MCPToolCallResult } from '@/libs/mcp';
@@ -111,6 +115,29 @@ export class PluginTypesActionImpl {
       // Get group orchestration callbacks if available (for group management tools)
       const groupOrchestration = this.#get().getGroupOrchestrationCallbacks?.();
 
+      // Sub-agent runner injected for sub-agent-spawning tools (lobe-agent.callSubAgent).
+      // Runs the sub-agent in an isolated thread using the current client runtime
+      // and resolves with its output, so the tool returns a normal tool result.
+      const subAgentParentOperationId = rootRuntimeOperationId ?? operationId;
+      const subAgent: SubAgentCallbacks = {
+        run: (runParams) => {
+          if (!agentId || !topicId) {
+            return Promise.resolve({
+              error: 'No agent context available for sub-agent execution',
+              result: 'No agent context available for sub-agent execution',
+              success: false,
+              threadId: '',
+            });
+          }
+          return this.#get().runClientSubAgent({
+            ...runParams,
+            agentId,
+            parentOperationId: subAgentParentOperationId,
+            topicId,
+          });
+        },
+      };
+
       // Create registerAfterCompletion function that registers callback to root runtime operation
       const registerAfterCompletion = rootRuntimeOperationId
         ? (callback: Parameters<typeof registerAfterCompletionCallback>[1]) => {
@@ -161,6 +188,7 @@ export class PluginTypesActionImpl {
             rootRuntimeOperationContext?.sourceMessageId ??
             rootRuntimeOperationContext?.messageId,
           stepContext,
+          subAgent,
           taskId,
           toolCallId: payload.id,
           topicId,

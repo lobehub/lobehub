@@ -486,6 +486,14 @@ export interface BuiltinToolContext {
   stepContext?: RuntimeStepContext;
 
   /**
+   * Sub-agent execution callback injected by the client runtime.
+   * Lets a tool (e.g. lobe-agent.callSubAgent) recursively run a sub-agent in
+   * an isolated thread using the *current* runtime, then resume as a normal
+   * tool result. Only present during client-mode tool execution.
+   */
+  subAgent?: SubAgentCallbacks;
+
+  /**
    * Current task identifier or database id when the conversation is scoped to a task detail page.
    */
   taskId?: string | null;
@@ -682,6 +690,45 @@ export interface GroupOrchestrationCallbacks {
    * Trigger speak to a specific agent
    */
   triggerSpeak: (params: TriggerSpeakParams) => Promise<void>;
+}
+
+/**
+ * Params for running a single sub-agent via the injected runtime callback.
+ */
+export interface RunSubAgentParams {
+  /** Brief description of what this sub-agent does (used as thread title / UI) */
+  description: string;
+  /** Whether to inherit context messages from the parent conversation */
+  inheritMessages?: boolean;
+  /** Detailed instruction/prompt for the sub-agent execution */
+  instruction: string;
+  /** Optional timeout in milliseconds */
+  timeout?: number;
+  /** The tool message ID that spawned this sub-agent (anchors the isolation thread) */
+  toolMessageId: string;
+}
+
+/**
+ * Result of a sub-agent run, fed back to the caller as a normal tool result.
+ */
+export interface RunSubAgentResult {
+  /** Error message when the sub-agent failed */
+  error?: string;
+  /** Final assistant output of the sub-agent run */
+  result: string;
+  /** Whether the run succeeded */
+  success: boolean;
+  /** The isolation thread holding the sub-agent's full message trace */
+  threadId: string;
+}
+
+/**
+ * Sub-agent execution callback injected by the runtime into tool context.
+ * Runs the sub-agent in an isolated thread using the current runtime and
+ * resolves once it finishes, so the calling tool can return a normal result.
+ */
+export interface SubAgentCallbacks {
+  run: (params: RunSubAgentParams) => Promise<RunSubAgentResult>;
 }
 
 /**

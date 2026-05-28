@@ -1,9 +1,14 @@
 'use client';
 
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Block, Text } from '@lobehub/ui';
+import { Block, Button, Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { memo } from 'react';
+import { ListTree } from 'lucide-react';
+import { memo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { useChatStore } from '@/store/chat';
+import { portalThreadSelectors, threadSelectors } from '@/store/chat/selectors';
 
 import type { CallSubAgentsParams, CallSubAgentsState } from '../../../types';
 
@@ -13,13 +18,18 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 12px;
     color: ${cssVar.colorTextQuaternary};
   `,
-
-  taskItem: css`
+  openThread: css`
+    height: 22px;
+    padding-inline: 6px;
+    font-size: 12px;
+  `,
+  row: css`
     display: flex;
     gap: 8px;
-    align-items: flex-start;
+    align-items: center;
+    justify-content: space-between;
 
-    padding-block: 12px;
+    padding-block: 10px;
     padding-inline: 12px;
     border-block-end: 1px dashed ${cssVar.colorBorderSecondary};
 
@@ -27,33 +37,85 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       border-block-end: none;
     }
   `,
+  title: css`
+    overflow: hidden;
+
+    font-size: 13px;
+    color: ${cssVar.colorText};
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
 }));
+
+interface SubAgentRowProps {
+  description: string;
+  index: number;
+  threadId: string;
+}
+
+const SubAgentRow = memo<SubAgentRowProps>(({ description, index, threadId }) => {
+  const { t: tChat } = useTranslation('chat');
+
+  const subagentThread = useChatStore((s) =>
+    threadId
+      ? (threadSelectors.currentTopicThreads(s) ?? []).find((thread) => thread.id === threadId)
+      : undefined,
+  );
+  const openThreadInPortal = useChatStore((s) => s.openThreadInPortal);
+  const closeThreadPortal = useChatStore((s) => s.closeThreadPortal);
+  const portalThreadId = useChatStore(portalThreadSelectors.portalThreadId);
+  const isOpenInPortal = !!subagentThread && portalThreadId === subagentThread.id;
+
+  const handleToggleThread = useCallback(() => {
+    if (!subagentThread) return;
+    if (isOpenInPortal) {
+      closeThreadPortal();
+    } else {
+      openThreadInPortal(subagentThread.id, subagentThread.sourceMessageId);
+    }
+  }, [subagentThread, isOpenInPortal, openThreadInPortal, closeThreadPortal]);
+
+  return (
+    <div className={styles.row}>
+      <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
+        <span className={styles.index}>{index + 1}.</span>
+        <span className={styles.title}>{description}</span>
+      </Flexbox>
+      {subagentThread && (
+        <Button
+          className={styles.openThread}
+          icon={ListTree}
+          size={'small'}
+          type={'text'}
+          onClick={handleToggleThread}
+        >
+          {isOpenInPortal
+            ? tChat('thread.closeSubagentThread')
+            : tChat('thread.openSubagentThread')}
+        </Button>
+      )}
+    </div>
+  );
+});
+
+SubAgentRow.displayName = 'CallSubAgentsRow';
 
 export const CallSubAgentsRender = memo<
   BuiltinRenderProps<CallSubAgentsParams, CallSubAgentsState>
 >(({ pluginState }) => {
-  const { tasks } = pluginState || {};
+  const subAgents = pluginState?.subAgents;
 
-  if (!tasks || tasks.length === 0) return null;
+  if (!subAgents || subAgents.length === 0) return null;
 
   return (
     <Block variant={'outlined'} width="100%">
-      {tasks.map((task, index) => (
-        <div className={styles.taskItem} key={index}>
-          <div className={styles.index}>{index + 1}.</div>
-          <div>
-            {task.description && (
-              <Text as={'h4'} fontSize={14} weight={500}>
-                {task.description}
-              </Text>
-            )}
-            {task.instruction && (
-              <Text as={'p'} ellipsis={{ rows: 2 }} fontSize={12} type={'secondary'}>
-                {task.instruction}
-              </Text>
-            )}
-          </div>
-        </div>
+      {subAgents.map((subAgent, index) => (
+        <SubAgentRow
+          description={subAgent.description}
+          index={index}
+          key={subAgent.threadId || index}
+          threadId={subAgent.threadId}
+        />
       ))}
     </Block>
   );
