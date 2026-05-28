@@ -16,7 +16,6 @@ export const params = {
 
       return {
         ...rest,
-        stream: !payload.tools,
         ...(thinking.type !== undefined && {
           thinking_mode: thinking.type === 'enabled',
         }),
