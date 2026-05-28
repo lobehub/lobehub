@@ -88,6 +88,10 @@ export class MessageCollector {
   ): void {
     if (processedIds.has(currentAssistant.id)) return;
 
+    // Mark visited up front so duplicated tool_call_ids (the same tool result
+    // reachable from multiple assistants) can't recurse forever.
+    processedIds.add(currentAssistant.id);
+
     // Add current assistant to chain
     assistantChain.push(currentAssistant);
 
