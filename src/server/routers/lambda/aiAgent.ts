@@ -248,10 +248,10 @@ const ExecAgentsSchema = z.object({
 });
 
 /**
- * Schema for execSubAgent - execute SubAgent task
+ * Schema for execSubAgentTask - execute SubAgent task
  * Supports both Group mode (with groupId) and Single Agent mode (without groupId)
  */
-const ExecSubAgentSchema = z.object({
+const ExecSubAgentTaskSchema = z.object({
   /** The SubAgent ID to execute the task */
   agentId: z.string(),
   /** The Group ID (optional, only for Group mode) */
@@ -837,35 +837,37 @@ export const aiAgentRouter = router({
    * - Group mode: pass groupId, Thread will be associated with the Group
    * - Single Agent mode: omit groupId, Thread will only be associated with the Agent
    */
-  execSubAgent: aiAgentProcedure.input(ExecSubAgentSchema).mutation(async ({ input, ctx }) => {
-    const { agentId, groupId, instruction, parentMessageId, title, topicId, timeout } = input;
+  execSubAgentTask: aiAgentProcedure
+    .input(ExecSubAgentTaskSchema)
+    .mutation(async ({ input, ctx }) => {
+      const { agentId, groupId, instruction, parentMessageId, title, topicId, timeout } = input;
 
-    log('execSubAgent: agentId=%s, groupId=%s', agentId, groupId);
+      log('execSubAgentTask: agentId=%s, groupId=%s', agentId, groupId);
 
-    try {
-      return await ctx.aiAgentService.execSubAgent({
-        agentId,
-        groupId,
-        instruction,
-        parentMessageId,
-        timeout,
-        title,
-        topicId,
-      });
-    } catch (error: any) {
-      log('execSubAgent failed: %O', error);
+      try {
+        return await ctx.aiAgentService.execSubAgentTask({
+          agentId,
+          groupId,
+          instruction,
+          parentMessageId,
+          timeout,
+          title,
+          topicId,
+        });
+      } catch (error: any) {
+        log('execSubAgentTask failed: %O', error);
 
-      if (error instanceof TRPCError) {
-        throw error;
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Failed to execute sub-agent task: ${error.message}`,
+        });
       }
-
-      throw new TRPCError({
-        cause: error,
-        code: 'INTERNAL_SERVER_ERROR',
-        message: `Failed to execute sub-agent task: ${error.message}`,
-      });
-    }
-  }),
+    }),
 
   getOperationStatus: aiAgentProcedure
     .input(GetOperationStatusSchema)

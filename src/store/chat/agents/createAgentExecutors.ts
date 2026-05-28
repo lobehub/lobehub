@@ -1306,7 +1306,7 @@ export const createAgentExecutors = (context: {
      *
      * Flow:
      * 1. Create a task message (role: 'task') as placeholder
-     * 2. Call execSubAgent API (backend creates thread)
+     * 2. Call execSubAgentTask API (backend creates thread)
      * 3. Poll for sub-agent completion
      * 4. Update task message content with result on completion
      * 5. Return sub_agent_result phase with result
@@ -1418,7 +1418,7 @@ export const createAgentExecutors = (context: {
         // IMPORTANT: Use executionAgentId here (targetAgentId if in callAgent mode)
         // This ensures the task executes with the correct agent's config
         log('[%s] Using server-side execution with agentId: %s', taskLogId, executionAgentId);
-        const createResult = await aiAgentService.execSubAgent({
+        const createResult = await aiAgentService.execSubAgentTask({
           agentId: executionAgentId, // Use targetAgentId for callAgent, or current agentId for sub-agent dispatch
           instruction: task.instruction,
           parentMessageId: taskMessageId,
@@ -1718,7 +1718,7 @@ export const createAgentExecutors = (context: {
      *
      * Flow:
      * 1. For each sub-agent, create a task message (role: 'task') as placeholder
-     * 2. Call execSubAgent API (backend creates thread)
+     * 2. Call execSubAgentTask API (backend creates thread)
      * 3. Poll for sub-agent completion
      * 4. Update task message content with result on completion
      * 5. Return sub_agents_batch_result phase with all results
@@ -1798,7 +1798,7 @@ export const createAgentExecutors = (context: {
 
             // 2. Create and execute task on server
             log('[%s] Using server-side execution', taskLogId);
-            const createResult = await aiAgentService.execSubAgent({
+            const createResult = await aiAgentService.execSubAgentTask({
               agentId,
               instruction: task.instruction,
               parentMessageId: taskMessageId,

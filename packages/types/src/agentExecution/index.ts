@@ -271,13 +271,13 @@ export interface ExecGroupAgentResponse {
 // ============ SubAgent Task Execution Types ============
 
 /**
- * Parameters for execSubAgent - execute SubAgent task
+ * Parameters for execSubAgentTask - execute SubAgent task
  * Supports both Group mode and Single Agent mode
  *
  * - Group mode: pass groupId, Thread will be associated with the Group
  * - Single Agent mode: omit groupId, Thread will only be associated with the Agent
  */
-export interface ExecSubAgentParams {
+export interface ExecSubAgentTaskParams {
   /** The SubAgent ID to execute the task */
   agentId: string;
   /** The Group ID (optional, only for Group mode) */
@@ -297,9 +297,9 @@ export interface ExecSubAgentParams {
 }
 
 /**
- * Result from execSubAgent
+ * Result from execSubAgentTask
  */
-export interface ExecSubAgentResult {
+export interface ExecSubAgentTaskResult {
   /** The assistant message ID created for this task */
   assistantMessageId: string;
   /** Error message if task failed to start */
@@ -313,14 +313,14 @@ export interface ExecSubAgentResult {
 }
 
 /**
- * @deprecated Use ExecSubAgentParams instead
+ * @deprecated Use ExecSubAgentTaskParams instead
  */
-export type ExecGroupSubAgentTaskParams = ExecSubAgentParams;
+export type ExecGroupSubAgentTaskParams = ExecSubAgentTaskParams;
 
 /**
- * @deprecated Use ExecSubAgentResult instead
+ * @deprecated Use ExecSubAgentTaskResult instead
  */
-export type ExecGroupSubAgentTaskResult = ExecSubAgentResult;
+export type ExecGroupSubAgentTaskResult = ExecSubAgentTaskResult;
 
 /**
  * Current activity for real-time progress display

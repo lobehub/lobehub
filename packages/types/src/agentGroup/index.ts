@@ -140,8 +140,8 @@ export type {
   ExecGroupAgentResult,
   ExecGroupSubAgentTaskParams,
   ExecGroupSubAgentTaskResult,
-  ExecSubAgentParams,
-  ExecSubAgentResult,
+  ExecSubAgentTaskParams,
+  ExecSubAgentTaskResult,
   TaskCurrentActivity,
   TaskStatusResult,
 } from '../agentExecution';

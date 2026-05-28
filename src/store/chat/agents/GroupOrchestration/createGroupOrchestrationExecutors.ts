@@ -425,7 +425,7 @@ export const createGroupOrchestrationExecutors = (
         log(`[${sessionLogId}] Created task message: ${taskMessageId}`);
 
         // 2. Create task via backend API (backend creates thread with sourceMessageId)
-        const createResult = await aiAgentService.execSubAgent({
+        const createResult = await aiAgentService.execSubAgentTask({
           agentId,
           groupId,
           instruction,
@@ -825,7 +825,7 @@ export const createGroupOrchestrationExecutors = (
      *
      * Flow:
      * 1. Create task messages (role: 'task') for each task as placeholders
-     * 2. Call execSubAgent API for each task in parallel
+     * 2. Call execSubAgentTask API for each task in parallel
      * 3. Poll for all tasks completion
      * 4. Update task messages with results on completion
      *
@@ -924,7 +924,7 @@ export const createGroupOrchestrationExecutors = (
 
           const taskLogId = `${sessionLogId}:task-${index}`;
           try {
-            const createResult = await aiAgentService.execSubAgent({
+            const createResult = await aiAgentService.execSubAgentTask({
               agentId: tracker.agentId,
               groupId,
               instruction: tracker.instruction,
