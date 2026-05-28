@@ -18,7 +18,7 @@ vi.mock('@/database/core/db-adaptor', () => ({
 const mockExecGroupSubAgentTask = vi.fn();
 vi.mock('@/server/services/aiAgent', () => ({
   AiAgentService: vi.fn().mockImplementation(() => ({
-    execSubAgentTask: mockExecGroupSubAgentTask,
+    execSubAgent: mockExecGroupSubAgentTask,
   })),
 }));
 
@@ -32,7 +32,7 @@ vi.mock('@/server/services/aiChat', () => ({
   AiChatService: vi.fn().mockImplementation(() => ({})),
 }));
 
-describe('aiAgentRouter.execSubAgentTask', () => {
+describe('aiAgentRouter.execSubAgent', () => {
   let serverDB: LobeChatDatabase;
   let userId: string;
   let testAgentId: string;
@@ -108,7 +108,7 @@ describe('aiAgentRouter.execSubAgentTask', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      await caller.execSubAgentTask({
+      await caller.execSubAgent({
         agentId: testAgentId,
         groupId: testGroupId,
         instruction: 'Test instruction',
@@ -136,7 +136,7 @@ describe('aiAgentRouter.execSubAgentTask', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.execSubAgentTask({
+      const result = await caller.execSubAgent({
         agentId: testAgentId,
         groupId: testGroupId,
         instruction: 'Test instruction',
@@ -162,7 +162,7 @@ describe('aiAgentRouter.execSubAgentTask', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      await caller.execSubAgentTask({
+      await caller.execSubAgent({
         agentId: testAgentId,
         groupId: testGroupId,
         instruction: 'Test instruction',
@@ -184,7 +184,7 @@ describe('aiAgentRouter.execSubAgentTask', () => {
       const caller = aiAgentRouter.createCaller(createTestContext());
 
       await expect(
-        caller.execSubAgentTask({
+        caller.execSubAgent({
           agentId: undefined,
           groupId: testGroupId,
           instruction: 'Test instruction',
@@ -198,7 +198,7 @@ describe('aiAgentRouter.execSubAgentTask', () => {
       const caller = aiAgentRouter.createCaller(createTestContext());
 
       await expect(
-        caller.execSubAgentTask({
+        caller.execSubAgent({
           agentId: testAgentId,
           groupId: testGroupId,
           instruction: undefined,
@@ -212,7 +212,7 @@ describe('aiAgentRouter.execSubAgentTask', () => {
       const caller = aiAgentRouter.createCaller(createTestContext());
 
       await expect(
-        caller.execSubAgentTask({
+        caller.execSubAgent({
           agentId: testAgentId,
           groupId: testGroupId,
           instruction: 'Test instruction',
@@ -226,7 +226,7 @@ describe('aiAgentRouter.execSubAgentTask', () => {
       const caller = aiAgentRouter.createCaller(createTestContext());
 
       await expect(
-        caller.execSubAgentTask({
+        caller.execSubAgent({
           agentId: testAgentId,
           groupId: testGroupId,
           instruction: 'Test instruction',
@@ -248,7 +248,7 @@ describe('aiAgentRouter.execSubAgentTask', () => {
       const caller = aiAgentRouter.createCaller(createTestContext());
 
       await expect(
-        caller.execSubAgentTask({
+        caller.execSubAgent({
           agentId: testAgentId,
           groupId: testGroupId,
           instruction: 'Test instruction',
@@ -264,7 +264,7 @@ describe('aiAgentRouter.execSubAgentTask', () => {
       const caller = aiAgentRouter.createCaller(createTestContext());
 
       await expect(
-        caller.execSubAgentTask({
+        caller.execSubAgent({
           agentId: testAgentId,
           groupId: testGroupId,
           instruction: 'Test instruction',

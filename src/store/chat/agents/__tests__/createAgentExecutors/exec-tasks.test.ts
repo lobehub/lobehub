@@ -14,13 +14,13 @@ import { createInitialState, createTestContext, executeWithMockContext } from '.
 // Mock aiAgentService
 vi.mock('@/services/aiAgent', () => ({
   aiAgentService: {
-    execSubAgentTask: vi.fn(),
+    execSubAgent: vi.fn(),
     getSubAgentTaskStatus: vi.fn(),
   },
 }));
 
 // Helper to get typed mocks
-const mockExecSubAgentTask = aiAgentService.execSubAgentTask as Mock;
+const mockExecSubAgent = aiAgentService.execSubAgent as Mock;
 const mockGetSubAgentTaskStatus = aiAgentService.getSubAgentTaskStatus as Mock;
 
 describe('exec_sub_agents executor', () => {
@@ -43,7 +43,7 @@ describe('exec_sub_agents executor', () => {
       (mockStore.optimisticCreateMessage as Mock).mockResolvedValueOnce({ id: 'task_msg_1' });
 
       // Mock task execution
-      mockExecSubAgentTask.mockResolvedValueOnce({
+      mockExecSubAgent.mockResolvedValueOnce({
         assistantMessageId: 'asst_1',
         operationId: 'op_1',
         success: true,
@@ -98,7 +98,7 @@ describe('exec_sub_agents executor', () => {
         .mockResolvedValueOnce({ id: 'task_msg_3' });
 
       // Mock task execution for each task
-      mockExecSubAgentTask
+      mockExecSubAgent
         .mockResolvedValueOnce({
           assistantMessageId: 'asst_1',
           operationId: 'op_1',
@@ -217,7 +217,7 @@ describe('exec_sub_agents executor', () => {
 
       (mockStore.optimisticCreateMessage as Mock).mockResolvedValueOnce({ id: 'task_msg_1' });
 
-      mockExecSubAgentTask.mockResolvedValueOnce({
+      mockExecSubAgent.mockResolvedValueOnce({
         assistantMessageId: '',
         error: 'API error',
         operationId: '',
@@ -256,7 +256,7 @@ describe('exec_sub_agents executor', () => {
 
       (mockStore.optimisticCreateMessage as Mock).mockResolvedValueOnce({ id: 'task_msg_1' });
 
-      mockExecSubAgentTask.mockResolvedValueOnce({
+      mockExecSubAgent.mockResolvedValueOnce({
         assistantMessageId: 'asst_1',
         operationId: 'op_1',
         success: true,
@@ -295,7 +295,7 @@ describe('exec_sub_agents executor', () => {
 
       (mockStore.optimisticCreateMessage as Mock).mockResolvedValueOnce({ id: 'task_msg_1' });
 
-      mockExecSubAgentTask.mockResolvedValueOnce({
+      mockExecSubAgent.mockResolvedValueOnce({
         assistantMessageId: 'asst_1',
         operationId: 'op_1',
         success: true,
@@ -341,7 +341,7 @@ describe('exec_sub_agents executor', () => {
 
       (mockStore.optimisticCreateMessage as Mock).mockResolvedValueOnce({ id: 'task_msg_1' });
 
-      mockExecSubAgentTask.mockResolvedValueOnce({
+      mockExecSubAgent.mockResolvedValueOnce({
         assistantMessageId: 'asst_1',
         operationId: 'op_1',
         success: true,
@@ -388,9 +388,9 @@ describe('exec_sub_agents executor', () => {
 
       (mockStore.optimisticCreateMessage as Mock).mockResolvedValueOnce({ id: 'task_msg_1' });
 
-      // Mock execSubAgentTask to mark operation as cancelled after it's called
+      // Mock execSubAgent to mark operation as cancelled after it's called
       // This simulates cancellation happening right after task creation but before polling
-      mockExecSubAgentTask.mockImplementation(async () => {
+      mockExecSubAgent.mockImplementation(async () => {
         // After task creation API is called, mark operation as cancelled
         // This simulates cancellation happening right after task creation
         // Note: state.operationId is used in the polling loop for cancellation check
@@ -435,7 +435,7 @@ describe('exec_sub_agents executor', () => {
 
       (mockStore.optimisticCreateMessage as Mock).mockResolvedValueOnce({ id: 'task_msg_1' });
 
-      mockExecSubAgentTask.mockResolvedValueOnce({
+      mockExecSubAgent.mockResolvedValueOnce({
         assistantMessageId: 'asst_1',
         operationId: 'op_1',
         success: true,
@@ -479,7 +479,7 @@ describe('exec_sub_agents executor', () => {
 
       (mockStore.optimisticCreateMessage as Mock).mockResolvedValueOnce({ id: 'task_msg_1' });
 
-      mockExecSubAgentTask.mockResolvedValueOnce({
+      mockExecSubAgent.mockResolvedValueOnce({
         assistantMessageId: 'asst_1',
         operationId: 'op_1',
         success: true,
@@ -518,7 +518,7 @@ describe('exec_sub_agents executor', () => {
 
       (mockStore.optimisticCreateMessage as Mock).mockResolvedValueOnce({ id: 'task_msg_1' });
 
-      mockExecSubAgentTask.mockResolvedValueOnce({
+      mockExecSubAgent.mockResolvedValueOnce({
         assistantMessageId: 'asst_1',
         operationId: 'op_1',
         success: true,
@@ -573,7 +573,7 @@ describe('exec_sub_agents executor', () => {
         .mockResolvedValueOnce({ id: 'task_msg_1' })
         .mockResolvedValueOnce({ id: 'task_msg_2' });
 
-      mockExecSubAgentTask
+      mockExecSubAgent
         .mockResolvedValueOnce({
           assistantMessageId: 'asst_1',
           operationId: 'op_1',

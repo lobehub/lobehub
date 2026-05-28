@@ -20,7 +20,7 @@ const mockExecGroupSubAgentTask = vi.fn();
 const mockInterruptTask = vi.fn();
 vi.mock('@/server/services/aiAgent', () => ({
   AiAgentService: vi.fn().mockImplementation(() => ({
-    execSubAgentTask: mockExecGroupSubAgentTask,
+    execSubAgent: mockExecGroupSubAgentTask,
     interruptTask: mockInterruptTask,
   })),
 }));
@@ -146,7 +146,7 @@ describe('Agent Task Integration', () => {
       const caller = aiAgentRouter.createCaller(createTestContext());
 
       // Create task
-      const createResult = await caller.execSubAgentTask({
+      const createResult = await caller.execSubAgent({
         agentId: testAgentId,
         groupId: testGroupId,
         instruction: 'Test instruction',
@@ -254,7 +254,7 @@ describe('Agent Task Integration', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const createResult = await caller.execSubAgentTask({
+      const createResult = await caller.execSubAgent({
         agentId: testAgentId,
         groupId: testGroupId,
         instruction: 'Long running task',
@@ -325,7 +325,7 @@ describe('Agent Task Integration', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const createResult = await caller.execSubAgentTask({
+      const createResult = await caller.execSubAgent({
         agentId: testAgentId,
         groupId: testGroupId,
         instruction: 'Failing task',
@@ -435,14 +435,14 @@ describe('Agent Task Integration', () => {
 
       // Execute tasks concurrently
       const [task1, task2] = await Promise.all([
-        caller.execSubAgentTask({
+        caller.execSubAgent({
           agentId: testAgentId,
           groupId: testGroupId,
           instruction: 'Task 1',
           parentMessageId: 'parent-msg-5',
           topicId: testTopicId,
         }),
-        caller.execSubAgentTask({
+        caller.execSubAgent({
           agentId: testAgent2Id,
           groupId: testGroupId,
           instruction: 'Task 2',

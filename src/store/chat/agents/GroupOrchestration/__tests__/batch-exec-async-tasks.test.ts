@@ -10,13 +10,13 @@ import { createGroupOrchestrationExecutors } from '../createGroupOrchestrationEx
 
 vi.mock('@/services/aiAgent', () => ({
   aiAgentService: {
-    execSubAgentTask: vi.fn(),
+    execSubAgent: vi.fn(),
     getSubAgentTaskStatus: vi.fn(),
   },
 }));
 
 /**
- * Helper to create a mock ExecSubAgentTaskResult
+ * Helper to create a mock ExecSubAgentResult
  */
 const createMockExecResult = (overrides: Record<string, any> = {}) => ({
   assistantMessageId: `assistant_${nanoid()}`,
@@ -158,8 +158,8 @@ describe('createGroupOrchestrationExecutors', () => {
     it('should create task messages for all tasks in parallel', async () => {
       const mockStore = createMockStore();
 
-      // Mock execSubAgentTask to return success
-      vi.mocked(aiAgentService.execSubAgentTask).mockResolvedValue(
+      // Mock execSubAgent to return success
+      vi.mocked(aiAgentService.execSubAgent).mockResolvedValue(
         createMockExecResult({ threadId: 'thread-1' }),
       );
 
@@ -227,7 +227,7 @@ describe('createGroupOrchestrationExecutors', () => {
       );
     });
 
-    it('should call execSubAgentTask for each task', async () => {
+    it('should call execSubAgent for each task', async () => {
       const mockStore = createMockStore();
       let messageIdCounter = 0;
 
@@ -236,7 +236,7 @@ describe('createGroupOrchestrationExecutors', () => {
         messages: [],
       }));
 
-      vi.mocked(aiAgentService.execSubAgentTask).mockResolvedValue(
+      vi.mocked(aiAgentService.execSubAgent).mockResolvedValue(
         createMockExecResult({ threadId: 'thread-1' }),
       );
 
@@ -273,10 +273,10 @@ describe('createGroupOrchestrationExecutors', () => {
         createInitialState(),
       );
 
-      // Should call execSubAgentTask for both tasks
-      expect(aiAgentService.execSubAgentTask).toHaveBeenCalledTimes(2);
+      // Should call execSubAgent for both tasks
+      expect(aiAgentService.execSubAgent).toHaveBeenCalledTimes(2);
 
-      expect(aiAgentService.execSubAgentTask).toHaveBeenCalledWith(
+      expect(aiAgentService.execSubAgent).toHaveBeenCalledWith(
         expect.objectContaining({
           agentId: TEST_IDS.AGENT_1_ID,
           groupId: TEST_IDS.GROUP_ID,
@@ -286,7 +286,7 @@ describe('createGroupOrchestrationExecutors', () => {
         }),
       );
 
-      expect(aiAgentService.execSubAgentTask).toHaveBeenCalledWith(
+      expect(aiAgentService.execSubAgent).toHaveBeenCalledWith(
         expect.objectContaining({
           agentId: TEST_IDS.AGENT_2_ID,
           groupId: TEST_IDS.GROUP_ID,
@@ -300,7 +300,7 @@ describe('createGroupOrchestrationExecutors', () => {
     it('should return tasks_completed result with all task results', async () => {
       const mockStore = createMockStore();
 
-      vi.mocked(aiAgentService.execSubAgentTask).mockResolvedValue(
+      vi.mocked(aiAgentService.execSubAgent).mockResolvedValue(
         createMockExecResult({ threadId: 'thread-1' }),
       );
 
@@ -359,7 +359,7 @@ describe('createGroupOrchestrationExecutors', () => {
         .mockResolvedValueOnce(undefined) // First task fails
         .mockResolvedValueOnce({ id: 'msg_2', messages: [] }); // Second task succeeds
 
-      vi.mocked(aiAgentService.execSubAgentTask).mockResolvedValue(
+      vi.mocked(aiAgentService.execSubAgent).mockResolvedValue(
         createMockExecResult({ threadId: 'thread-2' }),
       );
 
@@ -410,10 +410,10 @@ describe('createGroupOrchestrationExecutors', () => {
       });
     });
 
-    it('should handle execSubAgentTask failure', async () => {
+    it('should handle execSubAgent failure', async () => {
       const mockStore = createMockStore();
 
-      vi.mocked(aiAgentService.execSubAgentTask)
+      vi.mocked(aiAgentService.execSubAgent)
         .mockResolvedValueOnce(
           createMockExecResult({
             error: 'Backend error',
@@ -472,7 +472,7 @@ describe('createGroupOrchestrationExecutors', () => {
     it('should handle task failure status', async () => {
       const mockStore = createMockStore();
 
-      vi.mocked(aiAgentService.execSubAgentTask).mockResolvedValue(
+      vi.mocked(aiAgentService.execSubAgent).mockResolvedValue(
         createMockExecResult({ threadId: 'thread-1' }),
       );
 
@@ -520,7 +520,7 @@ describe('createGroupOrchestrationExecutors', () => {
       // Set operation to cancelled
       mockStore.operations[TEST_IDS.OPERATION_ID].status = 'cancelled';
 
-      vi.mocked(aiAgentService.execSubAgentTask).mockResolvedValue(
+      vi.mocked(aiAgentService.execSubAgent).mockResolvedValue(
         createMockExecResult({ threadId: 'thread-1' }),
       );
 
@@ -571,7 +571,7 @@ describe('createGroupOrchestrationExecutors', () => {
         messages: [],
       });
 
-      vi.mocked(aiAgentService.execSubAgentTask).mockResolvedValue(
+      vi.mocked(aiAgentService.execSubAgent).mockResolvedValue(
         createMockExecResult({ threadId: 'thread-1' }),
       );
 

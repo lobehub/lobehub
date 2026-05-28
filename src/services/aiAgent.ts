@@ -53,10 +53,10 @@ export interface ExecAgentTaskParams {
 }
 
 /**
- * Parameters for execSubAgentTask
+ * Parameters for execSubAgent
  * Supports both Group mode (with groupId) and Single Agent mode (without groupId)
  */
-export interface ExecSubAgentTaskParams {
+export interface ExecSubAgentParams {
   agentId: string;
   /** Optional for Single Agent mode, required for Group mode */
   groupId?: string;
@@ -153,8 +153,8 @@ class AiAgentService {
     return await lambdaClient.aiAgent.refreshGatewayToken.query({ topicId });
   }
 
-  async execSubAgentTask(params: ExecSubAgentTaskParams) {
-    return await lambdaClient.aiAgent.execSubAgentTask.mutate(params);
+  async execSubAgent(params: ExecSubAgentParams) {
+    return await lambdaClient.aiAgent.execSubAgent.mutate(params);
   }
 
   /**
