@@ -1,3 +1,4 @@
+import { isParkedStatus } from '@lobechat/agent-runtime';
 import debug from 'debug';
 
 import {
@@ -116,14 +117,10 @@ export class CompletionLifecycle {
       : null;
 
     const status = this.statusForReason(reason);
-    // `waiting_for_human` / `waiting_for_async_tool` are pauses, not true
-    // terminal states — leave completedAt null so analytics doesn't read a
-    // paused op as completed. The next dispatchHooks call (when the op
-    // resumes and truly ends) will overwrite both fields.
-    const completedAt =
-      status === 'waiting_for_human' || status === 'waiting_for_async_tool'
-        ? undefined
-        : new Date();
+    // Parked statuses are pauses, not true terminal states — leave completedAt
+    // null so analytics doesn't read a paused op as completed. The next
+    // dispatchHooks call (when the op resumes and truly ends) overwrites both.
+    const completedAt = isParkedStatus(status) ? undefined : new Date();
 
     try {
       await this.agentOperationModel.recordCompletion(operationId, {

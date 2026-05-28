@@ -4,7 +4,12 @@ import type {
   AgentState,
   GeneralAgentConfig,
 } from '@lobechat/agent-runtime';
-import { AgentRuntime, findInMessages, GeneralChatAgent } from '@lobechat/agent-runtime';
+import {
+  AgentRuntime,
+  findInMessages,
+  GeneralChatAgent,
+  isParkedStatus,
+} from '@lobechat/agent-runtime';
 import type { ISnapshotStore } from '@lobechat/agent-tracing';
 import { dynamicInterventionAudits } from '@lobechat/builtin-tools/dynamicInterventionAudits';
 import { getModelPropertyWithFallback } from '@lobechat/model-runtime';
@@ -1187,9 +1192,7 @@ export class AgentRuntimeService {
         },
         executionHistory: executionHistory?.slice(0, historyLimit),
         hasError: currentState.status === 'error',
-        isActive: ['running', 'waiting_for_human', 'waiting_for_async_tool'].includes(
-          currentState.status,
-        ),
+        isActive: currentState.status === 'running' || isParkedStatus(currentState.status),
         isCompleted: currentState.status === 'done',
         metadata: operationMetadata,
         needsHumanInput: currentState.status === 'waiting_for_human',
@@ -1732,16 +1735,11 @@ export class AgentRuntimeService {
         break;
       }
 
-      // Check if human intervention is needed
-      if (state.status === 'waiting_for_human') {
-        log('[%s] Sync execution paused: waiting for human intervention', operationId);
-        break;
-      }
-
-      // Parked waiting for an async tool result (client tool / sub-agent) —
-      // the result is delivered out-of-band, so sync execution can't resume it
-      if (state.status === 'waiting_for_async_tool') {
-        log('[%s] Sync execution paused: waiting for async tool result', operationId);
+      // Parked on a pause (human intervention or an async tool / sub-agent
+      // result) — the result is delivered out-of-band, so sync execution
+      // can't resume it
+      if (isParkedStatus(state.status)) {
+        log('[%s] Sync execution paused: %s', operationId, state.status);
         break;
       }
 
