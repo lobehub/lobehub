@@ -4,28 +4,9 @@ import { displayToolCallsField, makeUserIdField, watchKeywordsField } from '../c
 import type { FieldSchema } from '../types';
 
 export const schema: FieldSchema[] = [
-  {
-    key: 'credentials',
-    label: 'channel.credentials',
-    properties: [
-      {
-        key: 'desktopDeviceId',
-        description: 'channel.imessage.desktopDeviceIdHint',
-        label: 'channel.imessage.desktopDeviceId',
-        placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
-        required: true,
-        type: 'string',
-      },
-      {
-        key: 'webhookSecret',
-        description: 'channel.imessage.webhookSecretHint',
-        label: 'channel.imessage.webhookSecret',
-        required: true,
-        type: 'password',
-      },
-    ],
-    type: 'object',
-  },
+  // `credentials.desktopDeviceId` and `credentials.webhookSecret` are not user
+  // fields: the Desktop client fills the device id from the local gateway and
+  // generates the webhook secret on first save (see imessage/CredentialExtras).
   {
     key: 'applicationId',
     description: 'channel.imessage.applicationIdHint',
