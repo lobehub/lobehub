@@ -698,5 +698,26 @@ describe('MessageCollector', () => {
       expect(assistantChain.map((m) => m.id)).toEqual(['ast-A', 'ast-B', 'ast-final']);
       expect(allToolMessages.map((m) => m.id)).toEqual(['tool-1', 'tool-2']);
     });
+
+    it('continues past a duplicate edge to the current turn own tool result', () => {
+      // A → tool(x) → B; B re-declares the SAME tool_call_id x and has its real
+      // continuation C under B's own tool result. collectToolMessages(B) resolves
+      // A's tool result (tool-xa) before B's own (tool-xb), and its child is the
+      // already-visited B. The walk must skip that duplicate edge and continue to
+      // tool-xb → C instead of stopping at B and dropping C.
+      const astA = mkAssistant('ast-A', { parentId: 'user-1', tools: [bashTool('tc-x')] });
+      const toolXA = mkTool('tool-xa', { parentId: 'ast-A', tool_call_id: 'tc-x' });
+      const astB = mkAssistant('ast-B', { parentId: 'tool-xa', tools: [bashTool('tc-x')] });
+      const toolXB = mkTool('tool-xb', { parentId: 'ast-B', tool_call_id: 'tc-x' });
+      const astC = mkAssistant('ast-C', { parentId: 'tool-xb' });
+
+      const allMessages: Message[] = [astA, toolXA, astB, toolXB, astC];
+      const collector = new MessageCollector(new Map(), new Map());
+
+      const assistantChain: Message[] = [];
+      collector.collectAssistantChain(astA, allMessages, assistantChain, [], new Set());
+
+      expect(assistantChain.map((m) => m.id)).toEqual(['ast-A', 'ast-B', 'ast-C']);
+    });
   });
 });

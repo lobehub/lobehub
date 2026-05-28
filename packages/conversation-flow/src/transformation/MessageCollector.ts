@@ -119,6 +119,11 @@ export class MessageCollector {
       }
 
       for (const nextMsg of nextMessages) {
+        // Skip an already-collected follower: a duplicated tool_call_id can make
+        // collectToolMessages surface an earlier turn's tool result first, and
+        // returning after that no-op recursion would drop this assistant's real
+        // continuation under a later tool.
+        if (processedIds.has(nextMsg.id)) continue;
         // Only continue if the next assistant has the SAME agentId
         // Different agentId means it's a different agent responding (e.g., via speak tool)
         const isSameAgent = nextMsg.agentId === groupAgentId;
