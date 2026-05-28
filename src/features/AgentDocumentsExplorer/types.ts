@@ -1,7 +1,7 @@
 import type { agentDocumentService } from '@/services/agentDocument';
 
 export type AgentDocumentItem = Awaited<
-  ReturnType<typeof agentDocumentService.getDocuments>
+  ReturnType<typeof agentDocumentService.listDocuments>
 >[number];
 
 export const PENDING_ID_PREFIX = 'pending:';
