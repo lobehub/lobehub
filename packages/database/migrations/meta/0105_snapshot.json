@@ -1,5 +1,5 @@
 {
-  "id": "b1d6501e-2388-4c32-856f-52b8d5859c88",
+  "id": "4d8be929-e5ee-4345-9ea6-f067dce176db",
   "prevId": "07e041f5-28d5-443a-b5c5-59aa6122ba48",
   "version": "7",
   "dialect": "postgresql",
@@ -5091,11 +5091,17 @@
           "primaryKey": false,
           "notNull": false
         },
-        "category": {
-          "name": "category",
+        "crud_type": {
+          "name": "crud_type",
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "render_config": {
+          "name": "render_config",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
         },
         "permission": {
           "name": "permission",
@@ -5112,6 +5118,12 @@
         },
         "work_artifact_config": {
           "name": "work_artifact_config",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "limit_config": {
+          "name": "limit_config",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": false

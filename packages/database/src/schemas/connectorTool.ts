@@ -4,15 +4,14 @@ import { timestamps } from './_helpers';
 import { userConnectors } from './connector';
 import { users } from './user';
 
-export const ConnectorToolCategory = {
+export const ToolCRUDType = {
   delete: 'delete',
   read: 'read',
   update: 'update',
   write: 'write',
 } as const;
 
-export type ConnectorToolCategory =
-  (typeof ConnectorToolCategory)[keyof typeof ConnectorToolCategory];
+export type ToolCRUDType = (typeof ToolCRUDType)[keyof typeof ToolCRUDType];
 
 export const ConnectorToolPermission = {
   auto: 'auto',
@@ -27,10 +26,11 @@ export type ConnectorToolPermission =
  * Complete tool list for a user's connector — the single source of truth.
  *
  * Rows are batch-upserted when a connector is connected or its manifest is
- * refreshed. On upsert, only metadata fields (displayName, description,
- * inputSchema, outputSchema, category) are overwritten; user-controlled fields
- * (permission, isWorkArtifact, workArtifactConfig) are never overwritten by
- * the sync so that user preferences survive manifest refreshes.
+ * refreshed. On upsert, only manifest-derived fields (displayName, description,
+ * inputSchema, outputSchema, crudType, renderConfig) are overwritten;
+ * user-controlled fields (permission, isWorkArtifact, workArtifactConfig,
+ * limitConfig) are never overwritten so that user preferences survive
+ * manifest refreshes.
  *
  * `userId` is denormalised from `userConnectors` to avoid a join on the
  * hot path that builds the tool list for an agent session.
@@ -58,9 +58,17 @@ export const userConnectorTools = pgTable(
     /** JSON Schema describing the tool's output shape — not all servers provide this */
     outputSchema: jsonb('output_schema'),
 
-    // ── Classification ────────────────────────────────────────────────────
-    /** 'read' | 'write' | 'update' | 'delete' — inferred from manifest or server annotation */
-    category: text('category').notNull(),
+    // ── CRUD type ─────────────────────────────────────────────────────────
+    /** Operation type: 'read' | 'write' | 'update' | 'delete' */
+    crudType: text('crud_type').notNull(),
+
+    // ── Render config (synced from manifest) ─────────────────────────────
+    /**
+     * UI rendering configuration for this tool.
+     * e.g. { streaming: true, expandDuringStreaming: true, render: {...} }
+     * Supports future dynamic render injection.
+     */
+    renderConfig: jsonb('render_config').$type<Record<string, unknown>>(),
 
     // ── Permission control (user-configured) ──────────────────────────────
     /**
@@ -80,6 +88,18 @@ export const userConnectorTools = pgTable(
      * { type: 'document', ... } so downstream can link the artifact.
      */
     workArtifactConfig: jsonb('work_artifact_config').$type<Record<string, unknown>>(),
+
+    // ── Limit config (user-configured) ────────────────────────────────────
+    /**
+     * Parameter-level input/output constraints.
+     * Structure: { inputAllowlist, inputLimit, outputLimit }
+     * e.g. {
+     *   inputAllowlist: { command: ["ls", "cat", "grep"] },
+     *   inputLimit: { path: { deny: ["/etc/**"] } },
+     *   outputLimit: { maxLength: 10000, errorPatterns: ["secret:"] }
+     * }
+     */
+    limitConfig: jsonb('limit_config').$type<Record<string, unknown>>(),
 
     /** Safe non-sensitive metadata for display and future extensibility */
     metadata: jsonb('metadata').$type<Record<string, unknown>>(),
