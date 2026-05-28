@@ -50,6 +50,7 @@ vi.mock('@lobechat/model-runtime', () => ({
   // retry classifier path.
   ERROR_CODE_SPECS: {},
   getErrorCodeSpec: () => undefined,
+  refineErrorCode: () => undefined,
 }));
 
 vi.mock('@/business/client/model-bank/loadModels', () => ({

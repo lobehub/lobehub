@@ -20,6 +20,7 @@ vi.mock('@lobechat/model-runtime', () => ({
   // retry classifier path.
   ERROR_CODE_SPECS: {},
   getErrorCodeSpec: () => undefined,
+  refineErrorCode: () => undefined,
 }));
 
 // Mock trusted client to avoid server-side env access
