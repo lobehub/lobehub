@@ -8,9 +8,18 @@ import { FileModel } from '@/database/models/file';
 import { type FileItem } from '@/database/schemas';
 import { appEnv } from '@/envs/app';
 import { TempFileManager } from '@/server/utils/tempFileManager';
+import { isDev } from '@/utils/env';
 
 import { createFileServiceModule } from './impls';
 import { type FileServiceImpl } from './impls/type';
+
+export const getFileProxyUrl = (fileId: string): string => `${appEnv.APP_URL}/f/${fileId}`;
+
+export interface FileAccessUrlItem {
+  fileId?: string | null;
+  id?: string | null;
+  url?: string | null;
+}
 
 /**
  * File service class
@@ -81,6 +90,16 @@ export class FileService {
   }
 
   /**
+   * Create cached pre-signed preview URL
+   */
+  public async createCachedPreSignedUrlForPreview(
+    url?: string | null,
+    expiresIn?: number,
+  ): Promise<string> {
+    return this.impl.createCachedPreSignedUrlForPreview(url, expiresIn);
+  }
+
+  /**
    * Upload content
    */
   public async uploadContent(path: string, content: string) {
@@ -92,6 +111,21 @@ export class FileService {
    */
   public async getFullFileUrl(url?: string | null, expiresIn?: number): Promise<string> {
     return this.impl.getFullFileUrl(url, expiresIn);
+  }
+
+  /**
+   * Resolve a file URL for consumers that need to read the file.
+   * Production uses the stable file proxy URL; local development falls back to
+   * the storage URL so remote model providers can download local test files.
+   */
+  public async getFileAccessUrl(file: FileAccessUrlItem): Promise<string> {
+    const fileId = file.fileId || file.id;
+
+    if (!isDev && fileId) {
+      return getFileProxyUrl(fileId);
+    }
+
+    return this.getFullFileUrl(file.url);
   }
 
   /**
@@ -179,10 +213,9 @@ export class FileService {
       !isExist, // insertToGlobalFiles
     );
 
-    // Return unified proxy URL: ${APP_URL}/f/:id
     return {
       fileId: id,
-      url: `${appEnv.APP_URL}/f/${id}`,
+      url: await this.getFileAccessUrl({ id, url: params.url }),
     };
   }
 

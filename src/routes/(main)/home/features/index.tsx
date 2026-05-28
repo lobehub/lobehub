@@ -24,11 +24,7 @@ const Home = memo(() => {
         <InputArea />
       </Flexbox>
 
-      {isLogin && (
-        <Flexbox gap={40}>
-          <DailyBrief />
-        </Flexbox>
-      )}
+      {isLogin && <DailyBrief />}
     </Flexbox>
   );
 });

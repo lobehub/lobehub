@@ -222,6 +222,30 @@ describe('S3StaticFileImpl', () => {
     });
   });
 
+  describe('createCachedPreSignedUrlForPreview', () => {
+    it('should return empty string for null or undefined input', async () => {
+      expect(await fileService.createCachedPreSignedUrlForPreview(null)).toBe('');
+      expect(await fileService.createCachedPreSignedUrlForPreview(undefined)).toBe('');
+    });
+
+    it('should always return a cached presigned preview URL even when public URLs are available', async () => {
+      const fullUrl = 'https://s3.example.com/bucket/path/to/proxy-only-file.jpg';
+      const createPreSignedUrlForPreview = fileService['s3'].createPreSignedUrlForPreview;
+
+      vi.spyOn(fileService, 'getKeyFromFullUrl').mockResolvedValue('path/to/proxy-only-file.jpg');
+
+      await expect(fileService.createCachedPreSignedUrlForPreview(fullUrl, 300)).resolves.toBe(
+        'https://presigned.example.com/test.jpg',
+      );
+      await expect(fileService.createCachedPreSignedUrlForPreview(fullUrl, 300)).resolves.toBe(
+        'https://presigned.example.com/test.jpg',
+      );
+
+      expect(fileService.getKeyFromFullUrl).toHaveBeenCalledWith(fullUrl);
+      expect(createPreSignedUrlForPreview).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('getFileContent', () => {
     it('应该返回文件内容', async () => {
       expect(await fileService.getFileContent('test.txt')).toBe('file content');

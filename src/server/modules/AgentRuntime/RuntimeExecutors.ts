@@ -166,11 +166,11 @@ const archiveRuntimeToolResult = async (
   return archive.content === result.content ? result : { ...result, content: archive.content };
 };
 
-// Builds a postProcessUrl callback that resolves S3 keys in file-backed fields
-// (imageList, videoList, fileList) to absolute URLs. Must be passed to every
-// messageModel.query() call whose output is later fed to the LLM — otherwise
-// the provider layer receives raw keys like `files/user_xxx/icon.png` and
-// rejects them (see anthropic contextBuilder `Invalid image URL`).
+// Builds a postProcessUrl callback that resolves keys in file-backed fields
+// (imageList, videoList, fileList) to externally accessible URLs. Must be
+// passed to every messageModel.query() call whose output is later fed to the
+// LLM — otherwise the provider layer receives raw keys like
+// `files/user_xxx/icon.png` and rejects them.
 //
 // FileService is constructed lazily so environments without S3 config (unit
 // tests) don't fail at context-build time; failure returns undefined, which
@@ -183,7 +183,8 @@ const buildPostProcessUrl = (ctx: Pick<RuntimeExecutorContext, 'serverDB' | 'use
   } catch {
     return undefined;
   }
-  return (path: string | null) => fileService!.getFullFileUrl(path);
+  return (path: string | null, file: { id?: string | null }) =>
+    fileService!.getFileAccessUrl({ id: file.id, url: path });
 };
 
 const shouldRetryLLM = (kind: LLMErrorKind, attempt: number, maxRetries: number) =>
@@ -2725,7 +2726,7 @@ export const createRuntimeExecutors = (
     // Must pass agentId to ensure correct query scope, otherwise when topicId is undefined,
     // the query will use isNull(topicId) condition which won't find messages with actual topicId
     //
-    // postProcessUrl resolves S3 keys in imageList/videoList/fileList to absolute URLs;
+    // postProcessUrl resolves keys in imageList/videoList/fileList to external URLs;
     // without it the next LLM call sees raw keys and providers reject them.
     const latestMessages = await ctx.messageModel.query(
       {

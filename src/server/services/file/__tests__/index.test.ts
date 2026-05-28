@@ -27,6 +27,7 @@ vi.mock('../impls', () => ({
     getFileMetadata: vi.fn(),
     createPreSignedUrl: vi.fn(),
     createPreSignedUrlForPreview: vi.fn(),
+    createCachedPreSignedUrlForPreview: vi.fn(),
     uploadContent: vi.fn(),
     getFullFileUrl: vi.fn(),
     getKeyFromFullUrl: vi.fn(),
@@ -215,6 +216,21 @@ describe('FileService', () => {
     const result = await service.createPreSignedUrlForPreview(testKey, expiresIn);
 
     expect(service['impl'].createPreSignedUrlForPreview).toHaveBeenCalledWith(testKey, expiresIn);
+    expect(result).toBe(expectedUrl);
+  });
+
+  it('should delegate createCachedPreSignedUrlForPreview to implementation', async () => {
+    const testUrl = 'https://example.com/path/to/file.jpg';
+    const expiresIn = 300;
+    const expectedUrl = 'https://example.com/presigned-preview-url';
+    vi.mocked(service['impl'].createCachedPreSignedUrlForPreview).mockResolvedValue(expectedUrl);
+
+    const result = await service.createCachedPreSignedUrlForPreview(testUrl, expiresIn);
+
+    expect(service['impl'].createCachedPreSignedUrlForPreview).toHaveBeenCalledWith(
+      testUrl,
+      expiresIn,
+    );
     expect(result).toBe(expectedUrl);
   });
 

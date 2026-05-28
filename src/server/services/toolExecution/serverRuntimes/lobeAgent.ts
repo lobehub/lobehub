@@ -108,7 +108,10 @@ class LobeAgentExecutionRuntime {
   private queryScopeMessages = (
     messageModel: MessageModel,
     sourceMessage: ServerVisualSourceMessage,
-    postProcessUrl: (path: string | null, file: { fileType: string }) => Promise<string>,
+    postProcessUrl: (
+      path: string | null,
+      file: { fileType: string; id?: string | null },
+    ) => Promise<string>,
   ) => {
     const topicId = this.topicId ?? sourceMessage.topicId ?? undefined;
     const threadId = sourceMessage.threadId ?? this.threadId ?? undefined;
@@ -178,7 +181,10 @@ class LobeAgentExecutionRuntime {
     if (requestedRefs.length > 0) {
       const fileService = new FileService(this.db, this.userId);
       const messageModel = new MessageModel(this.db, this.userId);
-      const postProcessUrl = (path: string | null) => fileService.getFullFileUrl(path);
+      const postProcessUrl = (
+        path: string | null,
+        file: { fileType: string; id?: string | null },
+      ) => fileService.getFileAccessUrl({ id: file.id, url: path });
       const [sourceMessage] = await messageModel.queryByIds([this.messageId], {
         postProcessUrl,
       });
