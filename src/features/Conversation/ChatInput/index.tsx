@@ -290,47 +290,46 @@ const ChatInput = memo<ChatInputProps>(
       <WideScreenContainer
         style={{ position: 'relative', ...(skipScrollMarginWithList ? { marginTop: -12 } : null) }}
       >
-        {hasPendingInterventions ? (
-          <InterventionBar interventions={pendingInterventions} />
-        ) : (
-          <>
-            {sendMessageErrorMsg && (
-              <Flexbox paddingBlock={'0 6px'} paddingInline={12}>
-                <Alert
-                  closable
-                  title={t('input.errorMsg', { errorMsg: sendMessageErrorMsg })}
-                  type={'secondary'}
-                  onClose={clearSendMessageError}
-                />
-              </Flexbox>
-            )}
-            <Flexbox
-              paddingInline={12}
-              ref={overlayRef}
-              style={{
-                bottom: '100%',
-                left: 12,
-                position: 'absolute',
-                right: 12,
-                zIndex: 10,
-              }}
-            >
-              {!disableQueue && hasQueuedMessages && <QueueTray />}
-              <TodoProgress topAttached={!disableQueue && hasQueuedMessages} />
+        {hasPendingInterventions && <InterventionBar interventions={pendingInterventions} />}
+        {/* Keep the chat input mounted while an intervention panel is showing —
+            unmounting would wipe the Lexical editor's in-memory document. */}
+        <div style={{ display: hasPendingInterventions ? 'none' : 'contents' }}>
+          {sendMessageErrorMsg && (
+            <Flexbox paddingBlock={'0 6px'} paddingInline={12}>
+              <Alert
+                closable
+                title={t('input.errorMsg', { errorMsg: sendMessageErrorMsg })}
+                type={'secondary'}
+                onClose={clearSendMessageError}
+              />
             </Flexbox>
-            <DesktopChatInput
-              actionBarStyle={actionBarStyle}
-              borderRadius={12}
-              extraActionItems={extraActionItems}
-              isConfigLoading={isConfigLoading}
-              leftContent={leftContent}
-              placeholderVariant={placeholderVariant}
-              runtimeConfigSlot={runtimeConfigSlot}
-              sendAreaPrefix={businessSendAreaPrefix}
-              showRuntimeConfig={showRuntimeConfig}
-            />
-          </>
-        )}
+          )}
+          <Flexbox
+            paddingInline={12}
+            ref={overlayRef}
+            style={{
+              bottom: '100%',
+              left: 12,
+              position: 'absolute',
+              right: 12,
+              zIndex: 10,
+            }}
+          >
+            {!disableQueue && hasQueuedMessages && <QueueTray />}
+            <TodoProgress topAttached={!disableQueue && hasQueuedMessages} />
+          </Flexbox>
+          <DesktopChatInput
+            actionBarStyle={actionBarStyle}
+            borderRadius={12}
+            extraActionItems={extraActionItems}
+            isConfigLoading={isConfigLoading}
+            leftContent={leftContent}
+            placeholderVariant={placeholderVariant}
+            runtimeConfigSlot={runtimeConfigSlot}
+            sendAreaPrefix={businessSendAreaPrefix}
+            showRuntimeConfig={showRuntimeConfig}
+          />
+        </div>
       </WideScreenContainer>
     );
 
