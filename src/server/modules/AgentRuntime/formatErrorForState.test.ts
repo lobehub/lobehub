@@ -116,4 +116,53 @@ describe('formatErrorForState', () => {
       expect(result.numericId).toBeUndefined();
     });
   });
+
+  describe('ProviderBizError refinement', () => {
+    it('reclassifies a 429 ProviderBizError into RateLimitExceeded (retryable, not a failure)', () => {
+      const result = formatErrorForState({
+        error: { status: 429 },
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        message: '429 status code (no body)',
+      });
+
+      expect(result.type).toBe(AgentRuntimeErrorType.RateLimitExceeded);
+      expect(result.numericId).toBe(3001);
+      expect(result.retryable).toBe(true);
+      expect(result.countAsFailure).toBe(false);
+      // Original message is preserved for debugging.
+      expect(result.message).toBe('429 status code (no body)');
+    });
+
+    it('reclassifies gateway HTML into UpstreamGatewayError (E8010)', () => {
+      const result = formatErrorForState({
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        message: '<center>openresty</center>',
+      });
+
+      expect(result.type).toBe(AgentRuntimeErrorType.UpstreamGatewayError);
+      expect(result.numericId).toBe(8010);
+      expect(result.retryable).toBe(true);
+    });
+
+    it('uses the HTTP-status fallback for an opaque 402 body', () => {
+      const result = formatErrorForState({
+        error: { status: 402 },
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        message: 'opaque upstream message',
+      });
+
+      expect(result.type).toBe(AgentRuntimeErrorType.InsufficientQuota);
+      expect(result.category).toBe('quota');
+    });
+
+    it('keeps a genuine residual as ProviderBizError (E8002)', () => {
+      const result = formatErrorForState({
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        message: 'Upstream request failed',
+      });
+
+      expect(result.type).toBe(AgentRuntimeErrorType.ProviderBizError);
+      expect(result.numericId).toBe(8002);
+    });
+  });
 });

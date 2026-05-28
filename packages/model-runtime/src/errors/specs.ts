@@ -521,6 +521,43 @@ export const ERROR_CODE_SPECS: SpecMap = {
     countAsFailure: false,
     description: 'Image-generation provider blocked the request due to content policy.',
   },
+  [AgentRuntimeErrorType.UpstreamGatewayError]: {
+    code: AgentRuntimeErrorType.UpstreamGatewayError,
+    numericId: 8011,
+    category: 'provider',
+    severity: 'error',
+    attribution: 'provider',
+    httpStatus: 471,
+    // Gateway hiccups (502/525/HTML bodies) are usually transient.
+    retryable: true,
+    countAsFailure: true,
+    description:
+      'Upstream proxy / gateway layer failed (openresty, litellm, HTML 5xx, Cloudflare 525).',
+  },
+  [AgentRuntimeErrorType.UpstreamMalformedResponse]: {
+    code: AgentRuntimeErrorType.UpstreamMalformedResponse,
+    numericId: 8012,
+    category: 'provider',
+    severity: 'error',
+    attribution: 'provider',
+    httpStatus: 471,
+    // Deterministic payload corruption — retrying the same request reproduces it.
+    retryable: false,
+    countAsFailure: true,
+    description:
+      'Provider returned a malformed / unparseable payload (marshal failure, bad tool-call JSON, upstream TypeError).',
+  },
+  [AgentRuntimeErrorType.UpstreamHttpError]: {
+    code: AgentRuntimeErrorType.UpstreamHttpError,
+    numericId: 8013,
+    category: 'provider',
+    severity: 'error',
+    attribution: 'provider',
+    httpStatus: 471,
+    retryable: false,
+    countAsFailure: true,
+    description: 'Bare upstream HTTP error with no further context (e.g. "400 status code").',
+  },
 
   // ─── 9xxx Config ──────────────────────────────────────────────────────
   [AgentRuntimeErrorType.InvalidOllamaArgs]: {

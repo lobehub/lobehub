@@ -27,6 +27,8 @@ export {
   type MatchInput,
   type MatchResult,
   parseErrorRef,
+  refineErrorCode,
+  type RefineErrorInput,
   type SpecErrorCode,
 } from './errors';
 export * from './helpers';

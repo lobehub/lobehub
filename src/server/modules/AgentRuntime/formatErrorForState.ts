@@ -1,5 +1,23 @@
-import { getErrorCodeSpec } from '@lobechat/model-runtime';
+import { getErrorCodeSpec, refineErrorCode } from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType, ChatErrorType, type ChatMessageError } from '@lobechat/types';
+
+/** Pull a usable HTTP status out of the nested upstream error object. */
+const extractHttpStatus = (body: unknown): number | undefined => {
+  if (!body || typeof body !== 'object') return undefined;
+  const b = body as { error?: { status?: unknown }; status?: unknown; statusCode?: unknown };
+  if (typeof b.status === 'number') return b.status;
+  if (typeof b.statusCode === 'number') return b.statusCode;
+  if (b.error && typeof b.error === 'object' && typeof b.error.status === 'number') {
+    return b.error.status;
+  }
+  return undefined;
+};
+
+const extractProvider = (body: unknown): string | undefined => {
+  if (!body || typeof body !== 'object') return undefined;
+  const p = (body as { provider?: unknown }).provider;
+  return typeof p === 'string' ? p : undefined;
+};
 
 /**
  * Merge classification metadata from `ERROR_CODE_SPECS` onto a normalized
@@ -12,10 +30,21 @@ import { AgentRuntimeErrorType, ChatErrorType, type ChatMessageError } from '@lo
  * same shape without re-running pattern matching themselves.
  */
 const enrichWithSpec = (formatted: ChatMessageError): ChatMessageError => {
+  // Generic `ProviderBizError` is re-derived from the message / HTTP status into
+  // a more specific code before enrichment, so the catch-all doesn't swallow
+  // rate-limits, network drops, quota, etc. Specific codes pass through.
+  const refined = refineErrorCode({
+    errorType: String(formatted.type),
+    httpStatus: extractHttpStatus(formatted.body),
+    message: formatted.message,
+    provider: extractProvider(formatted.body),
+  });
+  const type = (refined ?? formatted.type) as ChatMessageError['type'];
+
   // `getErrorCodeSpec` is keyed by `ILobeAgentRuntimeErrorType` strings; coerce
   // because `ChatMessageError['type']` widens to include numeric `ChatErrorType`
   // values, which simply miss the lookup and pass through unenriched.
-  const spec = getErrorCodeSpec(String(formatted.type));
+  const spec = getErrorCodeSpec(String(type));
   if (!spec) return formatted;
 
   return {
@@ -27,6 +56,7 @@ const enrichWithSpec = (formatted: ChatMessageError): ChatMessageError => {
     numericId: spec.numericId,
     retryable: spec.retryable,
     severity: spec.severity,
+    type,
   };
 };
 

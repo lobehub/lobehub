@@ -69,6 +69,12 @@ export default {
     'A temporary issue with the conversation state store interrupted this operation. Please try again; if it persists, contact support.',
   StreamChunkError:
     'Error parsing the message chunk of the streaming request. Please check if the current API interface complies with the standard specifications, or contact your API provider for assistance.',
+  UpstreamGatewayError:
+    'The upstream gateway or proxy returned an error. Please try again shortly; if it persists, check your proxy / endpoint configuration.',
+  UpstreamHttpError:
+    'The provider returned an HTTP error without further detail. Please try again, or check your request and model configuration.',
+  UpstreamMalformedResponse:
+    'The provider returned a malformed response that could not be parsed. Please retry; if it persists, try a different model or provider.',
   UserConfigError:
     'Provider configuration is invalid (incorrect base URL, missing environment variable, virtual-key restriction, etc.). Please review the provider settings.',
 };

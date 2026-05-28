@@ -85,6 +85,23 @@ export const AgentRuntimeErrorType = {
   CapabilityNotSupported: 'CapabilityNotSupported',
   /** Provider rejected the request as malformed (bad JSON, schema validation, etc.). */
   InvalidRequestFormat: 'InvalidRequestFormat',
+  /**
+   * Upstream proxy / gateway layer failed (openresty, litellm, HTML 5xx,
+   * Cloudflare 525) — distinct from the provider's own service. Split out of
+   * the `ProviderBizError` catch-all.
+   */
+  UpstreamGatewayError: 'UpstreamGatewayError',
+  /**
+   * Provider returned a malformed / unparseable payload (Go re-marshal failure,
+   * bad tool-call JSON, upstream Python TypeError). Not retryable. Split out of
+   * `ProviderBizError`.
+   */
+  UpstreamMalformedResponse: 'UpstreamMalformedResponse',
+  /**
+   * Bare upstream HTTP error with no further context (e.g. "400 status code").
+   * The residual provider bucket once the richer codes have had their pass.
+   */
+  UpstreamHttpError: 'UpstreamHttpError',
   /** User-side misconfiguration (wrong base URL, missing env var, virtual-key allowlist, etc.). */
   UserConfigError: 'UserConfigError',
   /** Gateway watchdog killed an idle agent operation — harness-side. */
