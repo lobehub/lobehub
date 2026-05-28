@@ -34,10 +34,17 @@ export type ErrorAttribution = 'user' | 'provider' | 'harness' | 'system';
 /**
  * Mapping of category → leading digit of the `numericId`.
  *
- * Used to assign and validate stable numeric error references like `E1001`
- * (auth) / `E3001` (capacity) / `E8002` (provider). The first digit is the
- * category bucket; the remaining three digits are assigned sequentially as
- * codes are added.
+ * The 4-digit `numericId` (surfaced as `E1001`, `E2902`, …) is structured:
+ *
+ *   digit 1  — category bucket (this map; 1 = auth … 9 = config)
+ *   digit 2  — **tier**: `0` = open-source / self-host runtime,
+ *              `9` = LobeHub Cloud-only (see `CLOUD_TIER_DIGIT`)
+ *   digits 3-4 — sequence within the (category, tier) bucket
+ *
+ * So `E2001` is the OSS quota code `InsufficientQuota`, while `E2902` is the
+ * Cloud-only quota code `InsufficientBudgetForModel`. The tier digit lets a
+ * dashboard slice "Cloud platform errors" without a separate category, and
+ * keeps the category leading-digit invariant intact.
  *
  * The `numericId` is **append-only**: once published, a (code, id) pair never
  * changes, even if the string `code` is later renamed. This is the contract
@@ -55,3 +62,10 @@ export const CATEGORY_NUMERIC_PREFIX: Record<ErrorCategory, number> = {
   provider: 8,
   config: 9,
 };
+
+/**
+ * The `numericId`'s second digit marks the tier. Cloud-only codes (emitted
+ * solely by the managed LobeHub Cloud gateway, e.g. `InsufficientBudgetForModel`)
+ * use `9`; everything in the open-source runtime uses `0`.
+ */
+export const CLOUD_TIER_DIGIT = 9;

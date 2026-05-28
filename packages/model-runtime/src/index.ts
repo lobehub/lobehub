@@ -9,6 +9,8 @@ export * from './core/RouterRuntime';
 export * from './core/usageConverters';
 export {
   CATEGORY_NUMERIC_PREFIX,
+  CLOUD_TIER_DIGIT,
+  type CloudErrorCode,
   ERROR_CODE_SPECS,
   ERROR_PATTERNS,
   type ErrorAttribution,
@@ -25,6 +27,7 @@ export {
   type MatchInput,
   type MatchResult,
   parseErrorRef,
+  type SpecErrorCode,
 } from './errors';
 export * from './helpers';
 export { LobeAkashChatAI } from './providers/akashchat';

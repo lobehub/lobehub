@@ -1,9 +1,9 @@
-import { AgentRuntimeErrorType } from '@lobechat/types';
+import { AgentRuntimeErrorType, ChatErrorType } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import { isUserSideError, matchErrorPattern } from './match';
 import { ERROR_CODE_SPECS, formatErrorRef, parseErrorRef } from './specs';
-import { CATEGORY_NUMERIC_PREFIX } from './taxonomy';
+import { CATEGORY_NUMERIC_PREFIX, CLOUD_TIER_DIGIT } from './taxonomy';
 
 describe('matchErrorPattern', () => {
   it('returns undefined for empty input', () => {
@@ -127,6 +127,25 @@ describe('numericId contract', () => {
     const ids = specs.map((s) => s.numericId);
     const sortedIds = [...ids].sort((a, b) => a - b);
     expect(ids).toEqual(sortedIds);
+  });
+
+  it('tier digit is 0 (OSS) or the cloud digit', () => {
+    for (const spec of specs) {
+      const tier = Math.floor(spec.numericId / 100) % 10;
+      expect([0, CLOUD_TIER_DIGIT], `${spec.code} numericId ${spec.numericId}`).toContain(tier);
+    }
+  });
+
+  it('classifies the Cloud-only ChatErrorType codes under the cloud tier', () => {
+    for (const code of [
+      ChatErrorType.FreePlanLimit,
+      ChatErrorType.InsufficientBudgetForModel,
+      ChatErrorType.LobeHubModelDeprecated,
+    ]) {
+      const spec = ERROR_CODE_SPECS[code];
+      expect(spec, code).toBeDefined();
+      expect(Math.floor(spec!.numericId / 100) % 10, code).toBe(CLOUD_TIER_DIGIT);
+    }
   });
 });
 

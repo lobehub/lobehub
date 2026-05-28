@@ -1,12 +1,26 @@
 import type { ILobeAgentRuntimeErrorType } from '@lobechat/types';
-import { AgentRuntimeErrorType } from '@lobechat/types';
+import { AgentRuntimeErrorType, ChatErrorType } from '@lobechat/types';
 
 import type { ErrorAttribution, ErrorCategory, ErrorSeverity } from './taxonomy';
+
+/**
+ * Cloud-only business codes live in `ChatErrorType` (not `AgentRuntimeErrorType`)
+ * because they're emitted solely by the managed LobeHub Cloud gateway. They're
+ * still classified here, distinguished by the `9` tier digit of their
+ * `numericId` (e.g. `E2902`). See `CLOUD_TIER_DIGIT` in `./taxonomy`.
+ */
+export type CloudErrorCode =
+  | typeof ChatErrorType.FreePlanLimit
+  | typeof ChatErrorType.InsufficientBudgetForModel
+  | typeof ChatErrorType.LobeHubModelDeprecated;
+
+/** Every code the spec table can classify. */
+export type SpecErrorCode = CloudErrorCode | ILobeAgentRuntimeErrorType;
 
 export interface ErrorCodeSpec {
   attribution: ErrorAttribution;
   category: ErrorCategory;
-  code: ILobeAgentRuntimeErrorType;
+  code: SpecErrorCode;
   /** Whether this error counts toward operational failure metrics. */
   countAsFailure: boolean;
 
@@ -20,8 +34,8 @@ export interface ErrorCodeSpec {
    *
    * Append-only: once assigned, a (code, numericId) pair must never change so
    * that external docs / support tickets / SDKs can reference it long-term.
-   * The leading digit must match `CATEGORY_NUMERIC_PREFIX[category]`; the
-   * remaining digits are assigned sequentially within the category bucket.
+   * Structure: digit 1 = category (`CATEGORY_NUMERIC_PREFIX`); digit 2 = tier
+   * (`0` OSS / `9` Cloud-only, see `CLOUD_TIER_DIGIT`); digits 3-4 = sequence.
    */
   numericId: number;
 
@@ -31,14 +45,15 @@ export interface ErrorCodeSpec {
   severity: ErrorSeverity;
 }
 
-type SpecMap = Partial<Record<ILobeAgentRuntimeErrorType, ErrorCodeSpec>>;
+type SpecMap = Partial<Record<SpecErrorCode, ErrorCodeSpec>>;
 
 /**
  * Single source of truth for every runtime error code.
  *
  * To add a new code:
- *   1. Add it to `AgentRuntimeErrorType` in `@lobechat/types/agentRuntime.ts`.
- *   2. Add a spec entry here.
+ *   1. Add it to `AgentRuntimeErrorType` in `@lobechat/types/agentRuntime.ts`
+ *      (or `ChatErrorType` + `CloudErrorCode` above for Cloud-only codes).
+ *   2. Add a spec entry here (Cloud-only codes use the `9` tier digit).
  *   3. Add a locale key `response.<code>` in `src/locales/default/error.ts`.
  *   4. (If user-side) add upstream message patterns in `./patterns.ts`.
  */
@@ -144,6 +159,29 @@ export const ERROR_CODE_SPECS: SpecMap = {
     retryable: false,
     countAsFailure: false,
     description: 'Account balance or billing quota exhausted.',
+  },
+  // —— Cloud-only (tier 9) ——
+  [ChatErrorType.FreePlanLimit]: {
+    code: ChatErrorType.FreePlanLimit,
+    numericId: 2901,
+    category: 'quota',
+    severity: 'warning',
+    attribution: 'user',
+    httpStatus: 402,
+    retryable: false,
+    countAsFailure: false,
+    description: 'LobeHub Cloud free-plan usage limit reached.',
+  },
+  [ChatErrorType.InsufficientBudgetForModel]: {
+    code: ChatErrorType.InsufficientBudgetForModel,
+    numericId: 2902,
+    category: 'quota',
+    severity: 'warning',
+    attribution: 'user',
+    httpStatus: 402,
+    retryable: false,
+    countAsFailure: false,
+    description: 'LobeHub Cloud balance is positive but below the model’s estimated cost.',
   },
 
   // ─── 3xxx Capacity ────────────────────────────────────────────────────
@@ -258,6 +296,18 @@ export const ERROR_CODE_SPECS: SpecMap = {
     retryable: false,
     countAsFailure: false,
     description: 'Upstream rejected the request as malformed (bad JSON / schema / parameters).',
+  },
+  // —— Cloud-only (tier 9) ——
+  [ChatErrorType.LobeHubModelDeprecated]: {
+    code: ChatErrorType.LobeHubModelDeprecated,
+    numericId: 4901,
+    category: 'request',
+    severity: 'warning',
+    attribution: 'user',
+    httpStatus: 404,
+    retryable: false,
+    countAsFailure: false,
+    description: 'Requested LobeHub Cloud model has been deprecated / removed.',
   },
 
   // ─── 5xxx Safety ──────────────────────────────────────────────────────
@@ -492,11 +542,11 @@ const CODE_ALIASES: Record<string, ILobeAgentRuntimeErrorType> = {
 
 /** Look up the spec for an error code; falls back to `undefined` when unknown. */
 export const getErrorCodeSpec = (
-  code: ILobeAgentRuntimeErrorType | string | undefined,
+  code: SpecErrorCode | string | undefined,
 ): ErrorCodeSpec | undefined => {
   if (!code) return undefined;
   const canonical = CODE_ALIASES[code] ?? code;
-  return ERROR_CODE_SPECS[canonical as ILobeAgentRuntimeErrorType];
+  return ERROR_CODE_SPECS[canonical as SpecErrorCode];
 };
 
 /**
@@ -507,9 +557,7 @@ export const getErrorCodeSpec = (
  * independent identifier — support tickets, public docs anchors, external SDK
  * error mapping, etc.
  */
-export const formatErrorRef = (
-  code: ILobeAgentRuntimeErrorType | string | undefined,
-): string | undefined => {
+export const formatErrorRef = (code: SpecErrorCode | string | undefined): string | undefined => {
   const spec = getErrorCodeSpec(code);
   if (!spec) return undefined;
   return `E${spec.numericId}`;
@@ -521,7 +569,7 @@ const ERROR_REF_PATTERN = /^E(\d{4})$/;
  * Inverse of `formatErrorRef`: parse `E1001` back into the matching error
  * code. Returns `undefined` if the ref doesn't correspond to a known spec.
  */
-export const parseErrorRef = (ref: string | undefined): ILobeAgentRuntimeErrorType | undefined => {
+export const parseErrorRef = (ref: string | undefined): SpecErrorCode | undefined => {
   if (!ref) return undefined;
   const match = ERROR_REF_PATTERN.exec(ref);
   if (!match) return undefined;
