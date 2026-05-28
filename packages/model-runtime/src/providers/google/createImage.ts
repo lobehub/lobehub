@@ -8,6 +8,7 @@ import type {
 import { imageUrlToBase64 } from '@lobechat/utils';
 
 import { convertGoogleAIUsage } from '../../core/usageConverters/google-ai';
+import { AgentRuntimeErrorType } from '../../types/error';
 import type { CreateImagePayload, CreateImageResponse } from '../../types/image';
 import { AgentRuntimeError } from '../../utils/createError';
 import { getModelPricing } from '../../utils/getModelPricing';
@@ -16,14 +17,70 @@ import { parseDataUri } from '../../utils/uriParser';
 
 // Maximum number of images allowed for processing
 const MAX_IMAGE_COUNT = 10;
+const GOOGLE_IMAGE_CONTENT_POLICY_TEXT_SIGNAL = '1';
 
-export const GOOGLE_IMAGE_TEXT_ONLY_RESPONSE_MESSAGE = [
-  'The model returned text instead of an image.',
-  'Ask it to generate or edit an image, or try a safer prompt if the request may have been blocked.',
-].join(' ');
+export const GOOGLE_IMAGE_GENERATION_SYSTEM_PROMPT = [
+  '<image_generation_contract>',
+  'You are an image generation API endpoint, not a conversational assistant.',
+  '',
+  'Use the wrapped <user_request> as the image prompt.',
+  'Return an image whenever possible. Do not answer conversationally.',
+  '',
+  'If the user request is conversational, ambiguous, or not a direct image prompt:',
+  '- Do not answer the question in text.',
+  '- Create a relevant visual interpretation of the request instead.',
+  '- For model identity or capability questions, generate a simple visual metaphor for an AI image model.',
+  '',
+  'If no image can be returned:',
+  '- If policy, moderation, or safety prevents generation, return text only: 1',
+  '- If another concrete reason prevents generation, return that reason as concise user-safe text.',
+  '',
+  'Output rules:',
+  '- Return the image.',
+  '- If an image is returned, do not include captions or explanatory text.',
+  '- Do not explain, apologize, ask follow-up questions, or wrap anything in Markdown.',
+  '</image_generation_contract>',
+].join('\n');
+
+export const GOOGLE_IMAGE_GENERATION_USER_PROMPT_CONTRACT = [
+  '<image_generation_request>',
+  '<instruction>Generate an image whenever possible. If policy or safety blocks generation, return text only: 1.</instruction>',
+].join('\n');
+
+// Google enum values from GenerateContentResponse.FinishReason and
+// PromptFeedback.BlockedReason that should be surfaced as provider moderation.
+// Reference: https://cloud.google.com/vertex-ai/generative-ai/docs/reference/rest/v1beta1/GenerateContentResponse
+const GOOGLE_IMAGE_CONTENT_POLICY_FINISH_REASONS = new Set([
+  'BLOCKLIST',
+  'IMAGE_PROHIBITED_CONTENT',
+  'IMAGE_RECITATION',
+  'IMAGE_SAFETY',
+  'MODEL_ARMOR',
+  'PROHIBITED_CONTENT',
+  'RECITATION',
+  'SAFETY',
+  'SPII',
+]);
+
+const GOOGLE_IMAGE_CONTENT_POLICY_BLOCK_REASONS = new Set([
+  'BLOCKLIST',
+  'IMAGE_SAFETY',
+  'JAILBREAK',
+  'MODEL_ARMOR',
+  'PROHIBITED_CONTENT',
+  'SAFETY',
+]);
 
 interface ErrorWithRawProviderResponse extends Error {
+  isGoogleImageNoImageError?: boolean;
+  providerReason?: string;
   providerResponse?: GenerateContentResponse;
+  reasonCode?: string;
+}
+
+interface GoogleImageErrorMetadata {
+  providerReason?: string;
+  reasonCode?: string;
 }
 
 // Keep raw provider responses available to upstream error handlers without
@@ -44,17 +101,75 @@ const attachNonSerializableProviderResponse = <T extends object>(
 const createGoogleImageNoImageError = (
   message: string,
   response: GenerateContentResponse,
-): ErrorWithRawProviderResponse =>
-  attachNonSerializableProviderResponse(
-    new Error(message),
-    response,
-  ) as ErrorWithRawProviderResponse;
+  metadata?: GoogleImageErrorMetadata,
+): ErrorWithRawProviderResponse => {
+  const error = new Error(message) as ErrorWithRawProviderResponse;
+  error.isGoogleImageNoImageError = true;
+
+  if (metadata?.providerReason) {
+    error.providerReason = metadata.providerReason;
+  }
+  if (metadata?.reasonCode) {
+    error.reasonCode = metadata.reasonCode;
+  }
+
+  return attachNonSerializableProviderResponse(error, response) as ErrorWithRawProviderResponse;
+};
+
+const createGoogleImageContentPolicyError = (
+  response: GenerateContentResponse,
+  reason: string,
+  message = 'Google image generation was blocked by content policy.',
+  metadata?: Pick<GoogleImageErrorMetadata, 'reasonCode'>,
+): ErrorWithRawProviderResponse => {
+  const error = new Error(message) as ErrorWithRawProviderResponse;
+  error.providerReason = reason;
+  if (metadata?.reasonCode) {
+    error.reasonCode = metadata.reasonCode;
+  }
+
+  return attachNonSerializableProviderResponse(error, response) as ErrorWithRawProviderResponse;
+};
 
 const getTextFromParts = (parts: Part[]) =>
   parts
     .map((part) => part.text?.trim())
     .filter(Boolean)
     .join('\n');
+
+const escapeGoogleImageXmlText = (value: string) =>
+  value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+
+// Some image gateways ignore systemInstruction-only fallback guidance and answer
+// prompts like "can you generate images?" conversationally, so keep the API
+// contract in the user part as well.
+const buildGoogleImageUserPrompt = (prompt: string) =>
+  [
+    GOOGLE_IMAGE_GENERATION_USER_PROMPT_CONTRACT,
+    '<user_request>',
+    escapeGoogleImageXmlText(prompt),
+    '</user_request>',
+    '</image_generation_request>',
+  ].join('\n');
+
+const getGoogleImageContentPolicyReason = (response: GenerateContentResponse) => {
+  const candidate = response.candidates?.[0];
+  const finishReason = candidate?.finishReason;
+  const blockReason = response.promptFeedback?.blockReason;
+
+  if (
+    typeof finishReason === 'string' &&
+    GOOGLE_IMAGE_CONTENT_POLICY_FINISH_REASONS.has(finishReason)
+  ) {
+    return finishReason;
+  }
+  if (
+    typeof blockReason === 'string' &&
+    GOOGLE_IMAGE_CONTENT_POLICY_BLOCK_REASONS.has(blockReason)
+  ) {
+    return blockReason;
+  }
+};
 
 /**
  * Process a single image URL and convert it to Google AI Part format
@@ -92,6 +207,11 @@ async function processImageForParts(imageUrl: string): Promise<Part> {
  */
 function extractImageFromResponse(response: GenerateContentResponse): CreateImageResponse {
   const candidate = response.candidates?.[0];
+  const contentPolicyReason = getGoogleImageContentPolicyReason(response);
+
+  if (contentPolicyReason) {
+    throw createGoogleImageContentPolicyError(response, contentPolicyReason);
+  }
 
   if (candidate?.finishReason === 'NO_IMAGE') {
     throw createGoogleImageNoImageError('No image generated', response);
@@ -108,8 +228,20 @@ function extractImageFromResponse(response: GenerateContentResponse): CreateImag
     }
   }
 
-  if (candidate.finishReason === 'STOP' && getTextFromParts(candidate.content.parts)) {
-    throw createGoogleImageNoImageError(GOOGLE_IMAGE_TEXT_ONLY_RESPONSE_MESSAGE, response);
+  const textFromParts = getTextFromParts(candidate.content.parts);
+  if (textFromParts) {
+    if (textFromParts.trim() === GOOGLE_IMAGE_CONTENT_POLICY_TEXT_SIGNAL) {
+      throw createGoogleImageContentPolicyError(
+        response,
+        'TEXT_POLICY_REFUSAL',
+        'Google image generation was blocked by text policy refusal.',
+        { reasonCode: 'google_image_content_policy_violation' },
+      );
+    }
+
+    throw createGoogleImageNoImageError(textFromParts, response, {
+      reasonCode: 'google_image_text_only_response',
+    });
   }
 
   // Fallback when no inlineData is present (commonly moderation or policy blocks)
@@ -164,7 +296,7 @@ async function generateImageByChatModel(
   }
 
   // Build content parts
-  const parts: Part[] = [{ text: params.prompt }];
+  const parts: Part[] = [{ text: buildGoogleImageUserPrompt(params.prompt) }];
 
   // Add image for editing if provided
   if (params.imageUrl && params.imageUrl !== null) {
@@ -205,6 +337,7 @@ async function generateImageByChatModel(
 
   const config: GenerateContentConfig = {
     responseModalities: ['TEXT', 'IMAGE'],
+    systemInstruction: GOOGLE_IMAGE_GENERATION_SYSTEM_PROMPT,
     ...(Object.keys(imageConfig).length > 0 ? { imageConfig } : {}),
   };
 
@@ -250,9 +383,28 @@ export async function createGoogleImage(
 
     const { errorType, error: parsedError } = parseGoogleErrorMessage(err.message);
     const providerResponse = (err as ErrorWithRawProviderResponse).providerResponse;
+    const providerReason =
+      (err as ErrorWithRawProviderResponse).providerReason ??
+      (providerResponse ? getGoogleImageContentPolicyReason(providerResponse) : undefined);
+    const isContentPolicyViolation = Boolean(providerReason);
+    const isGoogleImageNoImageError = Boolean(
+      (err as ErrorWithRawProviderResponse).isGoogleImageNoImageError,
+    );
+    const reasonCode =
+      (err as ErrorWithRawProviderResponse).reasonCode ??
+      (isContentPolicyViolation ? 'google_image_content_policy_violation' : undefined);
     const agentError = AgentRuntimeError.createImage({
-      error: parsedError,
-      errorType,
+      error: {
+        ...parsedError,
+        providerReason,
+        reasonCode,
+        responseId: providerResponse?.responseId,
+      },
+      errorType: isContentPolicyViolation
+        ? AgentRuntimeErrorType.ProviderContentPolicyViolation
+        : isGoogleImageNoImageError
+          ? AgentRuntimeErrorType.ProviderNoImageGenerated
+          : errorType,
       provider,
     });
 

@@ -4,16 +4,7 @@ import {
   buildMappedBusinessModelFields,
   resolveBusinessModelMapping,
 } from '@lobechat/business-model-runtime';
-import {
-  AgentRuntimeErrorType,
-  GOOGLE_IMAGE_TEXT_ONLY_RESPONSE_MESSAGE,
-} from '@lobechat/model-runtime';
-import {
-  AsyncTaskError,
-  AsyncTaskErrorType,
-  AsyncTaskStatus,
-  RequestTrigger,
-} from '@lobechat/types';
+import { AsyncTaskError, AsyncTaskStatus, RequestTrigger } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { type RuntimeImageGenParams } from 'model-bank';
@@ -32,21 +23,11 @@ import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { GenerationService } from '@/server/services/generation';
 import { sanitizeFileName } from '@/utils/sanitizeFileName';
 
-import { getContentPolicyErrorMessage } from './contentPolicyError';
+import { categorizeImageGenerationError } from './imageError';
 
 const log = debug('lobe-image:async');
 
 const IMAGE_URL_PREVIEW_LENGTH = 100;
-const IMAGE_EDITING_NO_IMAGE_MESSAGE = [
-  'The provider did not return an image.',
-  'This may be due to content review.',
-  'Try a safer source image or a milder prompt.',
-].join(' ');
-const IMAGE_GENERATION_NO_IMAGE_MESSAGE = [
-  'The provider did not return an image.',
-  'This may be due to content review.',
-  'Try a milder prompt or another model.',
-].join(' ');
 
 const imageProcedure = asyncAuthedProcedure.use(async (opts) => {
   const { ctx } = opts;
@@ -89,158 +70,6 @@ const checkAbortSignal = (signal: AbortSignal) => {
   if (signal.aborted) {
     throw new Error('Operation was aborted');
   }
-};
-
-/**
- * Categorizes errors into appropriate AsyncTaskErrorType
- * Returns the original error message if available, otherwise returns the error type as message
- * Client should handle localization based on errorType
- */
-const categorizeError = (
-  error: any,
-  isAborted: boolean,
-  isEditingImage: boolean,
-  providerContentPolicyMessage?: string,
-): { errorMessage: string; errorType: AsyncTaskErrorType } => {
-  log('🔥🔥🔥 [ASYNC] categorizeError called:', {
-    errorMessage: error?.message,
-    errorName: error?.name,
-    errorStatus: error?.status,
-    errorType: error?.errorType,
-    fullError: JSON.stringify(error, null, 2),
-    isAborted,
-    isEditingImage,
-  });
-  // Handle Comfy UI errors
-  if (error.errorType === AgentRuntimeErrorType.ComfyUIServiceUnavailable) {
-    return {
-      errorMessage:
-        error.error?.message || error.message || AgentRuntimeErrorType.ComfyUIServiceUnavailable,
-      errorType: AsyncTaskErrorType.InvalidProviderAPIKey,
-    };
-  }
-
-  if (error.errorType === AgentRuntimeErrorType.ComfyUIBizError) {
-    return {
-      errorMessage: error.error?.message || error.message || AgentRuntimeErrorType.ComfyUIBizError,
-      errorType: AsyncTaskErrorType.ServerError,
-    };
-  }
-
-  if (error.errorType === AgentRuntimeErrorType.ComfyUIWorkflowError) {
-    return {
-      errorMessage:
-        error.error?.message || error.message || AgentRuntimeErrorType.ComfyUIWorkflowError,
-      errorType: AsyncTaskErrorType.ServerError,
-    };
-  }
-
-  if (error.errorType === AgentRuntimeErrorType.ComfyUIModelError) {
-    return {
-      errorMessage:
-        error.error?.message || error.message || AgentRuntimeErrorType.ComfyUIModelError,
-      errorType: AsyncTaskErrorType.ModelNotFound,
-    };
-  }
-
-  if (error.errorType === AgentRuntimeErrorType.ConnectionCheckFailed) {
-    return {
-      errorMessage: error.message || AgentRuntimeErrorType.ConnectionCheckFailed,
-      errorType: AsyncTaskErrorType.ServerError,
-    };
-  }
-
-  if (error.errorType === AgentRuntimeErrorType.PermissionDenied) {
-    return {
-      errorMessage: error.error?.message || error.message || AgentRuntimeErrorType.PermissionDenied,
-      errorType: AsyncTaskErrorType.InvalidProviderAPIKey,
-    };
-  }
-
-  if (error.errorType === AgentRuntimeErrorType.ModelNotFound) {
-    return {
-      errorMessage: error.error?.message || error.message || AgentRuntimeErrorType.ModelNotFound,
-      errorType: AsyncTaskErrorType.ModelNotFound,
-    };
-  }
-
-  if (providerContentPolicyMessage) {
-    return {
-      errorMessage: providerContentPolicyMessage,
-      errorType: AsyncTaskErrorType.ProviderContentModeration,
-    };
-  }
-
-  if (error.errorType === AgentRuntimeErrorType.ProviderNoImageGenerated) {
-    const providerErrorMessage = error.error?.message || error.message;
-
-    if (
-      typeof providerErrorMessage === 'string' &&
-      providerErrorMessage.includes(GOOGLE_IMAGE_TEXT_ONLY_RESPONSE_MESSAGE)
-    ) {
-      return {
-        errorMessage: providerErrorMessage,
-        errorType: AsyncTaskErrorType.ServerError,
-      };
-    }
-
-    return {
-      errorMessage: isEditingImage
-        ? IMAGE_EDITING_NO_IMAGE_MESSAGE
-        : IMAGE_GENERATION_NO_IMAGE_MESSAGE,
-      errorType: AsyncTaskErrorType.ServerError,
-    };
-  }
-
-  // FIXME: 401 errors should be handled in agentRuntime for better practice
-  if (error.errorType === AgentRuntimeErrorType.InvalidProviderAPIKey || error?.status === 401) {
-    return {
-      errorMessage:
-        error.error?.message || error.message || AgentRuntimeErrorType.InvalidProviderAPIKey,
-      errorType: AsyncTaskErrorType.InvalidProviderAPIKey,
-    };
-  }
-
-  const fallbackContentPolicyMessage = getContentPolicyErrorMessage(error);
-  if (fallbackContentPolicyMessage) {
-    return {
-      errorMessage: fallbackContentPolicyMessage,
-      errorType: AsyncTaskErrorType.ProviderContentModeration,
-    };
-  }
-
-  if (error instanceof AsyncTaskError) {
-    return {
-      errorMessage: typeof error.body === 'string' ? error.body : error.body.detail,
-      errorType: error.name as AsyncTaskErrorType,
-    };
-  }
-
-  if (isAborted || error.message?.includes('aborted')) {
-    return {
-      errorMessage: AsyncTaskErrorType.Timeout,
-      errorType: AsyncTaskErrorType.Timeout,
-    };
-  }
-
-  if (error.message?.includes('timeout') || error.name === 'TimeoutError') {
-    return {
-      errorMessage: AsyncTaskErrorType.Timeout,
-      errorType: AsyncTaskErrorType.Timeout,
-    };
-  }
-
-  if (error.message?.includes('network') || error.name === 'NetworkError') {
-    return {
-      errorMessage: error.message || AsyncTaskErrorType.ServerError,
-      errorType: AsyncTaskErrorType.ServerError,
-    };
-  }
-
-  return {
-    errorMessage: error.message || error.error?.message || AsyncTaskErrorType.ServerError,
-    errorType: AsyncTaskErrorType.ServerError,
-  };
 };
 
 export const imageRouter = router({
@@ -480,12 +309,12 @@ export const imageRouter = router({
           trigger: RequestTrigger.Image,
           userId: ctx.userId,
         });
-        const { errorType, errorMessage } = categorizeError(
+        const { errorType, errorMessage } = categorizeImageGenerationError({
           error,
-          abortController.signal.aborted,
           isEditingImage,
+          isAborted: abortController.signal.aborted,
           providerContentPolicyMessage,
-        );
+        });
 
         await ctx.asyncTaskModel.update(taskId, {
           error: new AsyncTaskError(errorType, errorMessage),

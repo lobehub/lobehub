@@ -444,6 +444,17 @@ export const ERROR_CODE_SPECS: SpecMap = {
     countAsFailure: true,
     description: 'Image-generation provider returned no image.',
   },
+  [AgentRuntimeErrorType.ProviderContentPolicyViolation]: {
+    code: AgentRuntimeErrorType.ProviderContentPolicyViolation,
+    numericId: 8010,
+    category: 'provider',
+    severity: 'warning',
+    attribution: 'user',
+    httpStatus: 471,
+    retryable: false,
+    countAsFailure: false,
+    description: 'Image-generation provider blocked the request due to content policy.',
+  },
   [AgentRuntimeErrorType.OllamaBizError]: {
     code: AgentRuntimeErrorType.OllamaBizError,
     numericId: 8004,

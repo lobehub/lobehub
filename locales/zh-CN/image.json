@@ -48,7 +48,7 @@
   "generation.actions.seedCopied": "种子已复制到剪贴板",
   "generation.actions.seedCopyFailed": "复制遇到了问题。你可以再试一次",
   "generation.metadata.count": "{{count}} 张图片",
-  "generation.status.failed": "生成遇到了问题。你可以重试，或调整描述后再试",
+  "generation.status.failed": "生成遇到了问题，建议调整描述后重试",
   "generation.status.generating": "生成中…",
   "notSupportGuide.desc": "当前部署模式不支持 AI 图像生成功能。请切换到<1>服务端数据库部署模式</1>，或直接使用 <3>LobeHub Cloud</3>",
   "notSupportGuide.features.fileIntegration.desc": "与文件管理深度整合。生成的图片自动保存到文件系统，统一管理和组织",

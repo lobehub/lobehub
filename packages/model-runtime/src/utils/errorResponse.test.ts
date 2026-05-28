@@ -49,6 +49,12 @@ describe('createErrorResponse', () => {
       expect(response.status).toBe(471);
     });
 
+    it('returns a 471 status for ProviderContentPolicyViolation error type', () => {
+      const errorType = AgentRuntimeErrorType.ProviderContentPolicyViolation;
+      const response = createErrorResponse(errorType);
+      expect(response.status).toBe(471);
+    });
+
     it('returns a 470 status for AgentRuntimeError error type', () => {
       const errorType = AgentRuntimeErrorType.AgentRuntimeError;
       const response = createErrorResponse(errorType);

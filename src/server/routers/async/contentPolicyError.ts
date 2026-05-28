@@ -1,4 +1,4 @@
-const CONTENT_POLICY_ERROR_MESSAGE =
+export const CONTENT_POLICY_ERROR_MESSAGE =
   'Content policy check failed. Revise your prompt and try again.';
 
 const getErrorCode = (error: any) => error?.code || error?.error?.code;

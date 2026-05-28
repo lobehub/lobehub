@@ -124,6 +124,7 @@ export const AgentRuntimeErrorType = {
   ConnectionCheckFailed: 'ConnectionCheckFailed',
 
   // ******* Image Generation Error ******* //
+  ProviderContentPolicyViolation: 'ProviderContentPolicyViolation',
   ProviderNoImageGenerated: 'ProviderNoImageGenerated',
 
   InvalidComfyUIArgs: 'InvalidComfyUIArgs',
