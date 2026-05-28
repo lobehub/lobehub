@@ -322,6 +322,7 @@ const ChatInput = memo<ChatInputProps>(
             actionBarStyle={actionBarStyle}
             borderRadius={12}
             extraActionItems={extraActionItems}
+            hidden={hasPendingInterventions}
             isConfigLoading={isConfigLoading}
             leftContent={leftContent}
             placeholderVariant={placeholderVariant}
