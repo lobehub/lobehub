@@ -48,10 +48,14 @@ const ChannelPage = memo(() => {
   const isLoading = platformsLoading || providersLoading;
 
   // Merge server-side platforms with frontend-only coming-soon entries.
-  const allPlatforms = useMemo<ChannelPlatformDefinition[]>(
-    () => [...(platforms ?? []), ...COMING_SOON_PLATFORMS],
-    [platforms],
-  );
+  // Coming-soon wins over a server-registered platform with the same id: this
+  // lets the server roll out a platform safely (registering it on the server
+  // first) while the frontend keeps the placeholder until it's ready to ship —
+  // dropping the entry from COMING_SOON_PLATFORMS reveals the real platform.
+  const allPlatforms = useMemo<ChannelPlatformDefinition[]>(() => {
+    const comingSoonIds = new Set(COMING_SOON_PLATFORMS.map((p) => p.id));
+    return [...(platforms ?? []).filter((p) => !comingSoonIds.has(p.id)), ...COMING_SOON_PLATFORMS];
+  }, [platforms]);
 
   // Default to first platform once loaded
   const effectiveActiveId = activeProviderId || allPlatforms[0]?.id || '';
