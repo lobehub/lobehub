@@ -22,15 +22,15 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { AiChatService } from '@/server/services/aiChat';
-import { FileService } from '@/server/services/file';
+import { getFileProxyUrl } from '@/server/services/file';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
 import { TaskLifecycleService } from '@/server/services/taskLifecycle';
 
 const log = debug('lobe-server:ai-agent-router');
 
-const createUiMessageFileUrlResolver = (fileService: FileService) => {
-  return (path: string | null, file: { fileType: string; id?: string | null }) =>
-    fileService.getFileAccessUrl({ id: file.id, url: path });
+const createUiMessageFileUrlResolver = () => {
+  return async (path: string | null, file: { fileType: string; id?: string | null }) =>
+    file.id ? getFileProxyUrl(file.id) : (path ?? '');
 };
 
 const extractTaskErrorMessage = (error: unknown): string | undefined => {
@@ -503,7 +503,7 @@ export const aiAgentRouter = router({
 
         // 3. Query thread messages and main chat messages in parallel
         const messageQueryOptions = {
-          postProcessUrl: createUiMessageFileUrlResolver(new FileService(ctx.serverDB, ctx.userId)),
+          postProcessUrl: createUiMessageFileUrlResolver(),
         };
         const [threadMessages, messages] = await Promise.all([
           // Thread messages (messages within this thread)
@@ -596,7 +596,7 @@ export const aiAgentRouter = router({
 
         // 3. Query thread messages and main chat messages in parallel
         const messageQueryOptions = {
-          postProcessUrl: createUiMessageFileUrlResolver(new FileService(ctx.serverDB, ctx.userId)),
+          postProcessUrl: createUiMessageFileUrlResolver(),
         };
         const [threadMessages, messages] = await Promise.all([
           // Thread messages (messages within this thread)
@@ -1068,7 +1068,7 @@ export const aiAgentRouter = router({
       const threadMessages = await ctx.messageModel.query(
         { threadId },
         {
-          postProcessUrl: createUiMessageFileUrlResolver(new FileService(ctx.serverDB, ctx.userId)),
+          postProcessUrl: createUiMessageFileUrlResolver(),
         },
       );
       const sortedMessages = threadMessages.sort(
