@@ -154,9 +154,9 @@ export class LinuxMenu extends BaseMenuPlatform implements IMenuPlatform {
         submenu: [
           { accelerator: 'F12', label: t('dev.devTools'), role: 'toggleDevTools' },
           { type: 'separator' },
-          { label: t('view.resetZoom'), role: 'resetZoom' },
-          { label: t('view.zoomIn'), role: 'zoomIn' },
-          { label: t('view.zoomOut'), role: 'zoomOut' },
+          this.buildZoomMenuItem('reset', t('view.resetZoom'), 'CmdOrCtrl+0'),
+          this.buildZoomMenuItem('in', t('view.zoomIn'), 'CmdOrCtrl+='),
+          this.buildZoomMenuItem('out', t('view.zoomOut'), 'CmdOrCtrl+-'),
           { type: 'separator' },
           { label: t('view.toggleFullscreen'), role: 'togglefullscreen' },
         ],

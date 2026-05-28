@@ -563,4 +563,5 @@ export default {
   'userPanel.upgradePlan': 'Upgrade Plan',
   'userPanel.usages': 'Usage',
   'version': 'Version',
+  'zoom': 'Zoom',
 };
