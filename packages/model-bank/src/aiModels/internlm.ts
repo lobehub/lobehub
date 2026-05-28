@@ -54,6 +54,7 @@ const internlmChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
+      search: true,
       vision: true,
     },
     contextWindowTokens: 262_144,
@@ -71,6 +72,7 @@ const internlmChatModels: AIChatModelCard[] = [
     releasedAt: '2026-02-04',
     settings: {
       extendParams: ['enableReasoning'],
+      searchImpl: 'internal',
     },
     type: 'chat',
   },
