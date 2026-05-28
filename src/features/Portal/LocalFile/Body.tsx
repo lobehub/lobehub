@@ -184,7 +184,10 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
     const setLocalFileBuffer = useChatStore((s) => s.setLocalFileBuffer);
     const saveLocalFile = useChatStore((s) => s.saveLocalFile);
 
-    const editingValue = buffer ?? content;
+    // When the previewed content is truncated we only have the prefix in
+    // memory; allowing edits + save would silently destroy the rest of the
+    // file. Force read-only in that case.
+    const editingValue = truncated ? content : (buffer ?? content);
 
     const handleCodeChange = useCallback(
       (next: string) => {
@@ -198,6 +201,7 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
     );
 
     const handleSave = useCallback(async () => {
+      if (truncated) return;
       try {
         const saved = await saveLocalFile(filePath);
         if (saved === undefined) return;
@@ -209,7 +213,7 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
       } catch {
         /* swallow — surfacing handled elsewhere if needed */
       }
-    }, [filePath, onSaved, saveLocalFile, setLocalFileBuffer]);
+    }, [filePath, onSaved, saveLocalFile, setLocalFileBuffer, truncated]);
 
     const { body, frontmatter } = useMemo(
       () => (isMarkdown ? parseSkillMarkdownFrontmatter(editingValue) : { body: editingValue }),
@@ -277,6 +281,7 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
           ) : (
             <CodeEditorPane
               language={extensionToLanguage(ext)}
+              readOnly={truncated}
               style={{ fontSize: 12, minHeight: '100%' }}
               value={editingValue}
               onChange={handleCodeChange}
