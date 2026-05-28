@@ -18,6 +18,13 @@ const remotePlatformEnum = z.enum(
 const CAPABILITY_TIMEOUT_MS = 5_000;
 const PROFILE_TIMEOUT_MS = 5_000;
 
+/** A single live gateway WebSocket connection belonging to a device. */
+interface DeviceChannel {
+  connectedAt: string;
+  hostname: string | null;
+  platform: string | null;
+}
+
 const deviceProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
 
@@ -108,8 +115,11 @@ export const deviceRouter = router({
     }),
 
   /**
-   * All devices the user has ever registered (incl. offline), each enriched
-   * with a live `online` flag from the gateway's in-memory WS sessions.
+   * All devices the user has ever registered (incl. offline). A device is keyed
+   * by its `deviceId`; the gateway's live WS sessions are NOT separate devices —
+   * each session is surfaced as a `channel` nested under its device. A single
+   * device may therefore hold multiple channels (e.g. desktop app + CLI both
+   * connected at once), and `online` is simply "has at least one live channel".
    *
    * A union, not just the DB rows: a device may be connected but not yet in
    * the DB (old client that predates auto-register, or registration still in
@@ -122,20 +132,33 @@ export const deviceRouter = router({
       deviceProxy.queryDeviceList(ctx.userId),
     ]);
 
-    const onlineMap = new Map(onlineList.map((d) => [d.deviceId, d]));
+    // Group live gateway connections (channels) by the device they belong to.
+    const channelsByDevice = new Map<string, DeviceChannel[]>();
+    for (const conn of onlineList) {
+      const list = channelsByDevice.get(conn.deviceId) ?? [];
+      list.push({
+        connectedAt: conn.lastSeen,
+        hostname: conn.hostname ?? null,
+        platform: conn.platform ?? null,
+      });
+      channelsByDevice.set(conn.deviceId, list);
+    }
+
     const seen = new Set<string>();
 
     const fromDb = registered.map((d) => {
       seen.add(d.deviceId);
-      const live = onlineMap.get(d.deviceId);
+      const channels = channelsByDevice.get(d.deviceId) ?? [];
+      const live = channels[0];
       return {
+        channels,
         defaultCwd: d.defaultCwd,
         deviceId: d.deviceId,
         friendlyName: d.friendlyName,
         hostname: d.hostname ?? live?.hostname ?? null,
         identitySource: d.identitySource,
         lastSeen: d.lastSeenAt.toISOString(),
-        online: onlineMap.has(d.deviceId),
+        online: channels.length > 0,
         platform: d.platform ?? live?.platform ?? null,
         recentCwds: d.recentCwds,
         registered: true,
@@ -143,17 +166,18 @@ export const deviceRouter = router({
     });
 
     // Online but not yet persisted — transient until the client auto-registers.
-    const ghosts = onlineList
-      .filter((d) => !seen.has(d.deviceId))
-      .map((d) => ({
+    const ghosts = [...channelsByDevice.entries()]
+      .filter(([deviceId]) => !seen.has(deviceId))
+      .map(([deviceId, channels]) => ({
+        channels,
         defaultCwd: null,
-        deviceId: d.deviceId,
+        deviceId,
         friendlyName: null,
-        hostname: d.hostname ?? null,
+        hostname: channels[0]?.hostname ?? null,
         identitySource: null,
-        lastSeen: d.lastSeen,
+        lastSeen: channels[0]?.connectedAt ?? new Date().toISOString(),
         online: true,
-        platform: d.platform ?? null,
+        platform: channels[0]?.platform ?? null,
         recentCwds: [] as string[],
         registered: false,
       }));
