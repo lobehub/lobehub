@@ -1,4 +1,4 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 
-export const DEEPSEEK_V4_PRO_MODEL = 'deepseek-v4-pro';
-export const DEEPSEEK_V4_PRO_PROVIDER = ENABLE_BUSINESS_FEATURES ? 'lobehub' : 'deepseek';
+export const CLAUDE_OPUS_4_8_MODEL = 'claude-opus-4-8';
+export const CLAUDE_OPUS_4_8_PROVIDER = ENABLE_BUSINESS_FEATURES ? 'lobehub' : 'anthropic';

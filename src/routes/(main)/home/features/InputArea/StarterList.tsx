@@ -1,4 +1,4 @@
-import { DeepSeek, Jimeng, OpenAI } from '@lobehub/icons';
+import { Claude, Jimeng, OpenAI } from '@lobehub/icons';
 import { type ButtonProps } from '@lobehub/ui';
 import { Button, Center, Tag, Tooltip } from '@lobehub/ui';
 import { App } from 'antd';
@@ -12,9 +12,9 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
 import { useResolvedHomeAgentId } from '../AgentSelect/useResolvedHomeAgentId';
-import { DEEPSEEK_V4_PRO_MODEL, DEEPSEEK_V4_PRO_PROVIDER } from './starterModels';
+import { CLAUDE_OPUS_4_8_MODEL, CLAUDE_OPUS_4_8_PROVIDER } from './starterModels';
 
-type StarterKey = 'image' | 'video' | 'deepseek-v4-pro';
+type StarterKey = 'claude-opus-4-8' | 'image' | 'video';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   button: css`
@@ -35,9 +35,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 type StarterTitleKey =
+  | 'starter.claudeOpus48'
   | 'starter.imageGeneration'
-  | 'starter.videoGeneration'
-  | 'starter.deepseekV4Pro';
+  | 'starter.videoGeneration';
 
 interface StarterItem {
   disabled?: boolean;
@@ -57,9 +57,9 @@ const StarterList = memo(() => {
   const items: StarterItem[] = useMemo(
     () => [
       {
-        icon: DeepSeek.Avatar,
-        key: 'deepseek-v4-pro',
-        titleKey: 'starter.deepseekV4Pro',
+        icon: Claude.Avatar,
+        key: 'claude-opus-4-8',
+        titleKey: 'starter.claudeOpus48',
       },
       {
         icon: OpenAI.Avatar,
@@ -87,7 +87,7 @@ const StarterList = memo(() => {
         return;
       }
 
-      if (key === 'deepseek-v4-pro') {
+      if (key === 'claude-opus-4-8') {
         if (!activeAgentId || switchingKey) return;
         setSwitchingKey(key);
         try {
@@ -104,18 +104,18 @@ const StarterList = memo(() => {
           const currentProvider =
             agentByIdSelectors.getAgentModelProviderById(activeAgentId)(agentState);
           if (
-            currentModel === DEEPSEEK_V4_PRO_MODEL &&
-            currentProvider === DEEPSEEK_V4_PRO_PROVIDER
+            currentModel === CLAUDE_OPUS_4_8_MODEL &&
+            currentProvider === CLAUDE_OPUS_4_8_PROVIDER
           ) {
-            message.info(t('starter.deepseekV4ProAlready'));
+            message.info(t('starter.claudeOpus48Already'));
             return;
           }
 
           await updateAgentConfigById(activeAgentId, {
-            model: DEEPSEEK_V4_PRO_MODEL,
-            provider: DEEPSEEK_V4_PRO_PROVIDER,
+            model: CLAUDE_OPUS_4_8_MODEL,
+            provider: CLAUDE_OPUS_4_8_PROVIDER,
           });
-          message.success(t('starter.deepseekV4ProSwitched'));
+          message.success(t('starter.claudeOpus48Switched'));
         } finally {
           setSwitchingKey(null);
         }

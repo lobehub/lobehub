@@ -10,8 +10,6 @@ LOBE_DEFAULT_MODEL_LIST.forEach((model) => {
 
 // #region LobeHub online model descriptions
 const lobeHubOnlineModelLocales = {
-  'claude-opus-4-8.description':
-    "Claude Opus 4.8 is Anthropic's most capable model, building on Opus 4.7 with improvements across reasoning, agentic coding, and tool use.",
   'grok-4.20-beta-0309-reasoning.description':
     'Intelligent, blazing-fast model that reasons before responding',
   'grok-4.20-beta-0309-non-reasoning.description': 'A non-reasoning variant for simple use cases',
