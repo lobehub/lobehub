@@ -1379,7 +1379,7 @@ table push_tokens {
   last_seen_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
-    device_id [name: 'idx_push_tokens_device', unique]
+    (user_id, device_id) [name: 'idx_push_tokens_user_device', unique]
     user_id [name: 'idx_push_tokens_user']
     last_seen_at [name: 'idx_push_tokens_last_seen']
   }
