@@ -140,7 +140,7 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
           { accelerator: 'F12', label: t('dev.devTools'), role: 'toggleDevTools' },
           { type: 'separator' },
           this.buildZoomMenuItem('reset', t('view.resetZoom'), 'CmdOrCtrl+0'),
-          this.buildZoomMenuItem('in', t('view.zoomIn'), 'CmdOrCtrl+='),
+          ...this.buildZoomMenuItems('in', t('view.zoomIn'), 'CmdOrCtrl+=', ['CmdOrCtrl+Plus']),
           this.buildZoomMenuItem('out', t('view.zoomOut'), 'CmdOrCtrl+-'),
           { type: 'separator' },
           { label: t('view.toggleFullscreen'), role: 'togglefullscreen' },

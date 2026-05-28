@@ -17,6 +17,29 @@ export abstract class BaseMenuPlatform {
     label: string,
     accelerator: string,
   ): MenuItemConstructorOptions {
+    return this.buildZoomMenuItemOption(action, label, accelerator);
+  }
+
+  protected buildZoomMenuItems(
+    action: ZoomAction,
+    label: string,
+    accelerator: string,
+    alternateAccelerators: string[],
+  ): MenuItemConstructorOptions[] {
+    return [
+      this.buildZoomMenuItemOption(action, label, accelerator),
+      ...alternateAccelerators.map((alternateAccelerator) =>
+        this.buildZoomMenuItemOption(action, label, alternateAccelerator, false),
+      ),
+    ];
+  }
+
+  private buildZoomMenuItemOption(
+    action: ZoomAction,
+    label: string,
+    accelerator: string,
+    visible = true,
+  ): MenuItemConstructorOptions {
     return {
       accelerator,
       click: (_item, win) => {
@@ -25,6 +48,7 @@ export abstract class BaseMenuPlatform {
         this.app.getService(ZoomService).apply(action, target.webContents);
       },
       label,
+      visible,
     };
   }
 }
