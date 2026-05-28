@@ -983,4 +983,9 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   { code: AgentRuntimeErrorType.AgentRuntimeError, match: sub('is not a function') },
   { code: AgentRuntimeErrorType.AgentRuntimeError, match: sub('Cannot read properties of') },
   { code: AgentRuntimeErrorType.AgentRuntimeError, match: sub('Maximum call stack size exceeded') },
+  {
+    code: AgentRuntimeErrorType.AgentRuntimeError,
+    match: sub('[object Object]'),
+    note: 'harness stringified an error object instead of extracting its message',
+  },
 ];

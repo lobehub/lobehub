@@ -86,6 +86,7 @@ describe('matchErrorPattern', () => {
       'e.trim is not a function',
       "Cannot read properties of undefined (reading '0')",
       'Maximum call stack size exceeded',
+      '[object Object]',
     ]) {
       expect(matchErrorPattern({ message })?.code, message).toBe(
         AgentRuntimeErrorType.AgentRuntimeError,
