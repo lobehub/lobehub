@@ -46,6 +46,7 @@ describe('formatErrorForState', () => {
         category: 'quota',
         countAsFailure: false,
         httpStatus: 429,
+        isFallback: false,
         numericId: 2001,
         retryable: false,
         severity: 'warning',
@@ -163,6 +164,9 @@ describe('formatErrorForState', () => {
 
       expect(result.type).toBe(AgentRuntimeErrorType.ProviderBizError);
       expect(result.numericId).toBe(8002);
+      // ProviderBizError is a catch-all — flagged so monitoring can track
+      // how much volume still lands in fallback buckets.
+      expect(result.isFallback).toBe(true);
     });
   });
 });

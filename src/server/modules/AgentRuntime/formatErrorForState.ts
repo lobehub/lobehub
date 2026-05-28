@@ -53,6 +53,7 @@ const enrichWithSpec = (formatted: ChatMessageError): ChatMessageError => {
     category: spec.category,
     countAsFailure: spec.countAsFailure,
     httpStatus: spec.httpStatus,
+    isFallback: spec.isFallback ?? false,
     numericId: spec.numericId,
     retryable: spec.retryable,
     severity: spec.severity,

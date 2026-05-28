@@ -30,6 +30,13 @@ export interface ChatMessageError {
   countAsFailure?: boolean;
   /** HTTP status the runtime returned (or would return) for this error. */
   httpStatus?: number;
+  /**
+   * Whether this code is a catch-all / under-classified bucket (e.g.
+   * ProviderBizError, UpstreamHttpError, AgentRuntimeError, DatabasePersistError).
+   * Monitoring tracks fallback-bucket volume to decide where finer codes are
+   * still needed.
+   */
+  isFallback?: boolean;
   message?: string;
   /** Stable `E<numericId>` reference for docs / support tickets. */
   numericId?: number;
@@ -45,6 +52,7 @@ export const ChatMessageErrorSchema = z.object({
   category: z.string().optional(),
   countAsFailure: z.boolean().optional(),
   httpStatus: z.number().optional(),
+  isFallback: z.boolean().optional(),
   message: z.string().optional(),
   numericId: z.number().optional(),
   retryable: z.boolean().optional(),

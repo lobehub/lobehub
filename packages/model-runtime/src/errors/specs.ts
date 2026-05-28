@@ -30,6 +30,14 @@ export interface ErrorCodeSpec {
   httpStatus: number;
 
   /**
+   * Marks a catch-all / under-classified bucket (ProviderBizError,
+   * UpstreamHttpError, AgentRuntimeError, DatabasePersistError, …). Orthogonal
+   * to `category`: monitoring tracks total fallback volume to decide where
+   * finer codes are still worth carving out. Omitted (falsy) for terminal codes.
+   */
+  isFallback?: boolean;
+
+  /**
    * Stable numeric identifier surfaced as `E<numericId>` (e.g. `E1001`).
    *
    * Append-only: once assigned, a (code, numericId) pair must never change so
@@ -384,6 +392,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
     httpStatus: 500,
     retryable: false,
     countAsFailure: true,
+    isFallback: true,
     description: 'Persistence-layer query / transaction failed (Drizzle "Failed query: …").',
   },
   [AgentRuntimeErrorType.StateStorePersistError]: {
@@ -420,6 +429,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
     httpStatus: 470,
     retryable: false,
     countAsFailure: true,
+    isFallback: true,
     description: 'Generic Agent Runtime module error.',
   },
   [AgentRuntimeErrorType.ProviderBizError]: {
@@ -431,6 +441,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
     httpStatus: 471,
     retryable: false,
     countAsFailure: true,
+    isFallback: true,
     description: 'Generic provider biz error (unclassified upstream failure).',
   },
   [AgentRuntimeErrorType.ProviderNoImageGenerated]: {
@@ -556,6 +567,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
     httpStatus: 471,
     retryable: false,
     countAsFailure: true,
+    isFallback: true,
     description: 'Bare upstream HTTP error with no further context (e.g. "400 status code").',
   },
 
