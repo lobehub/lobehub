@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { PropsWithChildren, ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,8 +8,15 @@ const mocks = vi.hoisted(() => ({
   agentState: {
     activeAgentId: 'agent-1',
     canCurrentAgentPublishToCommunity: true,
+    config: {
+      model: 'gpt-4o',
+      plugins: ['lobe-web-browsing'],
+      provider: 'openai',
+    },
     isCurrentAgentHeterogeneous: false,
     meta: {
+      description: 'Test description',
+      tags: ['test'],
       title: 'Test Agent',
     },
     systemRole: 'You are helpful.',
@@ -38,25 +45,41 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
+vi.mock('@lobechat/const', () => ({
+  isDesktop: false,
+}));
+
+interface MockDropdownItem {
+  children?: MockDropdownItem[];
+  key?: string;
+  label?: ReactNode;
+  onClick?: () => void;
+  type?: string;
+}
+
+const renderMenuItems = (items: MockDropdownItem[]) =>
+  items
+    .filter((item) => item.type !== 'divider')
+    .map((item) => (
+      <div key={item.key}>
+        <button type="button" onClick={item.onClick}>
+          {item.label}
+        </button>
+        {item.children && <div>{renderMenuItems(item.children)}</div>}
+      </div>
+    ));
+
 vi.mock('@lobehub/ui', () => ({
   ActionIcon: () => <button aria-label="more" type="button" />,
   DropdownMenu: ({
     children,
     items = [],
   }: PropsWithChildren<{
-    items?: Array<{ key?: string; label?: ReactNode; type?: string }>;
+    items?: MockDropdownItem[];
   }>) => (
     <div>
       {children}
-      <div data-testid="agent-profile-menu">
-        {items
-          .filter((item) => item.type !== 'divider')
-          .map((item) => (
-            <button key={item.key} type="button">
-              {item.label}
-            </button>
-          ))}
-      </div>
+      <div data-testid="agent-profile-menu">{renderMenuItems(items)}</div>
     </div>
   ),
   Flexbox: ({ children }: PropsWithChildren) => <div>{children}</div>,
@@ -86,6 +109,7 @@ vi.mock('antd', () => ({
 
 vi.mock('lucide-react', () => ({
   BotMessageSquareIcon: () => null,
+  Download: () => null,
   MoreHorizontal: () => null,
   Settings2Icon: () => null,
   Trash: () => null,
@@ -143,6 +167,7 @@ vi.mock('@/store/agent/selectors', () => ({
   agentSelectors: {
     canCurrentAgentPublishToCommunity: (state: typeof mocks.agentState) =>
       state.canCurrentAgentPublishToCommunity,
+    currentAgentConfig: (state: typeof mocks.agentState) => state.config,
     currentAgentMeta: (state: typeof mocks.agentState) => state.meta,
     currentAgentSystemRole: (state: typeof mocks.agentState) => state.systemRole,
     isCurrentAgentHeterogeneous: (state: typeof mocks.agentState) =>
@@ -164,6 +189,11 @@ vi.mock('@/store/global/selectors', () => ({
 
 vi.mock('@/store/home', () => ({
   useHomeStore: (selector: (state: typeof mocks.homeState) => unknown) => selector(mocks.homeState),
+}));
+
+vi.mock('../store', () => ({
+  useProfileStore: (selector: (state: { editor: undefined }) => unknown) =>
+    selector({ editor: undefined }),
 }));
 
 vi.mock('./AgentForkTag', () => ({
@@ -197,6 +227,9 @@ vi.mock('./AgentVersionReviewTag', () => ({
 
 describe('Agent profile Header', () => {
   beforeEach(() => {
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:agent-profile');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
     mocks.agentState.canCurrentAgentPublishToCommunity = true;
     mocks.agentState.isCurrentAgentHeterogeneous = false;
   });
@@ -205,6 +238,29 @@ describe('Agent profile Header', () => {
     render(<Header />);
 
     expect(screen.getByRole('button', { name: 'publishToCommunity' })).toBeInTheDocument();
+  });
+
+  it('should show the markdown export action', () => {
+    render(<Header />);
+
+    expect(screen.getByRole('button', { name: 'pageEditor.menu.export' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'pageEditor.menu.export.markdown' }),
+    ).toBeInTheDocument();
+  });
+
+  it('should export the current agent profile as markdown', async () => {
+    render(<Header />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'pageEditor.menu.export.markdown' }));
+
+    await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled());
+
+    const exportedBlob = vi.mocked(URL.createObjectURL).mock.calls[0][0] as Blob;
+    await expect(exportedBlob.text()).resolves.toContain('# Test Agent');
+    await expect(exportedBlob.text()).resolves.toContain('You are helpful.');
+    expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:agent-profile');
   });
 
   it('should hide the community publish action for heterogeneous and platform agents', () => {
