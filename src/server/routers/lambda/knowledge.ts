@@ -65,7 +65,7 @@ export const knowledgeRouter = router({
           embeddingError: embeddingTask?.error ?? null,
           embeddingStatus: embeddingTask?.status as AsyncTaskStatus,
           finishEmbedding: embeddingTask?.status === AsyncTaskStatus.Success,
-          url: item.url ? await ctx.fileService.getFullFileUrl(item.url) : undefined,
+          url: item.url ? await ctx.fileService.getFileAccessUrl(item) : undefined,
         } as FileListItem);
       } else {
         // Document item - no chunk processing needed, includes editorData
