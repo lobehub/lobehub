@@ -1,6 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { extractFileIdsFromEditorData } from './extractFileIdsFromEditorData';
+import {
+  collectAttachmentUrlsFromEditorData,
+  extractFileIdsFromEditorData,
+} from './extractFileIdsFromEditorData';
 
 const image = (src: string, status?: string) => ({
   altText: '',
@@ -17,39 +20,23 @@ const file = (fileUrl: string, name = 'file', status?: string) => ({
   type: 'file',
 });
 
-describe('extractFileIdsFromEditorData', () => {
+// Stub a Drizzle chain. `rows` is what the final `.where(...)` resolves to.
+const mockDb = (rows: { id: string }[]) => {
+  const where = vi.fn().mockResolvedValue(rows);
+  const from = vi.fn().mockReturnValue({ where });
+  const select = vi.fn().mockReturnValue({ from });
+  return { select, _where: where } as any;
+};
+
+describe('collectAttachmentUrlsFromEditorData', () => {
   it('returns [] for null / undefined / empty inputs', () => {
-    expect(extractFileIdsFromEditorData(null)).toEqual([]);
-    expect(extractFileIdsFromEditorData(undefined)).toEqual([]);
-    expect(extractFileIdsFromEditorData({})).toEqual([]);
-    expect(extractFileIdsFromEditorData({ root: { children: [] } })).toEqual([]);
+    expect(collectAttachmentUrlsFromEditorData(null)).toEqual([]);
+    expect(collectAttachmentUrlsFromEditorData(undefined)).toEqual([]);
+    expect(collectAttachmentUrlsFromEditorData({})).toEqual([]);
+    expect(collectAttachmentUrlsFromEditorData({ root: { children: [] } })).toEqual([]);
   });
 
-  it('extracts fileId from a block-image src with the proxy URL form', () => {
-    const json = {
-      root: {
-        children: [
-          { children: [], type: 'paragraph' },
-          image('http://localhost:3010/f/file_abc123'),
-        ],
-      },
-    };
-    expect(extractFileIdsFromEditorData(json)).toEqual(['file_abc123']);
-  });
-
-  it('extracts fileId from image and file nodes', () => {
-    const json = {
-      root: {
-        children: [
-          image('https://app.lobehub.com/f/file_image_1'),
-          file('https://app.lobehub.com/f/file_pdf_2', 'report.pdf'),
-        ],
-      },
-    };
-    expect(extractFileIdsFromEditorData(json).sort()).toEqual(['file_image_1', 'file_pdf_2']);
-  });
-
-  it('recurses into nested children', () => {
+  it('collects src from images and fileUrl from files, recursively', () => {
     const json = {
       root: {
         children: [
@@ -57,73 +44,108 @@ describe('extractFileIdsFromEditorData', () => {
             children: [image('https://app.lobehub.com/f/file_nested')],
             type: 'paragraph',
           },
+          file('https://app.lobehub.com/f/file_pdf', 'doc.pdf'),
         ],
       },
     };
-    expect(extractFileIdsFromEditorData(json)).toEqual(['file_nested']);
+    expect(collectAttachmentUrlsFromEditorData(json)).toEqual([
+      'https://app.lobehub.com/f/file_nested',
+      'https://app.lobehub.com/f/file_pdf',
+    ]);
   });
 
-  it('deduplicates repeated fileIds', () => {
+  it('treats missing status as uploaded; skips loading / error', () => {
     const json = {
       root: {
         children: [
-          image('https://app.lobehub.com/f/file_x'),
-          image('https://app.lobehub.com/f/file_x'),
-          file('https://app.lobehub.com/f/file_x'),
-        ],
-      },
-    };
-    expect(extractFileIdsFromEditorData(json)).toEqual(['file_x']);
-  });
-
-  it('treats a missing status field as uploaded (covers historical data + cloud uploads)', () => {
-    const json = {
-      root: {
-        children: [
-          // No `status` field at all — should still count.
-          image('http://localhost:3010/f/file_no_status'),
-        ],
-      },
-    };
-    expect(extractFileIdsFromEditorData(json)).toEqual(['file_no_status']);
-  });
-
-  it('explicit status: "uploaded" also counts', () => {
-    const json = {
-      root: {
-        children: [image('http://localhost:3010/f/file_done', 'uploaded')],
-      },
-    };
-    expect(extractFileIdsFromEditorData(json)).toEqual(['file_done']);
-  });
-
-  it('skips entries that are still in-progress / failed', () => {
-    const json = {
-      root: {
-        children: [
+          image('http://localhost:3010/f/file_ok'),
           image('http://localhost:3010/f/file_loading', 'loading'),
           image('http://localhost:3010/f/file_failed', 'error'),
-          image('http://localhost:3010/f/file_ok'),
         ],
       },
     };
-    expect(extractFileIdsFromEditorData(json)).toEqual(['file_ok']);
+    expect(collectAttachmentUrlsFromEditorData(json)).toEqual(['http://localhost:3010/f/file_ok']);
+  });
+});
+
+describe('extractFileIdsFromEditorData', () => {
+  const ctx = { db: mockDb([]), userId: 'usr_1' };
+
+  it('returns [] for empty input without touching the DB', async () => {
+    const db = mockDb([]);
+    await expect(extractFileIdsFromEditorData(null, { db, userId: 'u' })).resolves.toEqual([]);
+    expect(db.select).not.toHaveBeenCalled();
   });
 
-  it('ignores URLs that do not match the proxy pattern (e.g. raw R2 signed URLs)', () => {
+  it('extracts fileIds from proxy URLs without DB query', async () => {
+    const db = mockDb([]);
     const json = {
       root: {
         children: [
-          // Cloud-style raw R2 signed URL — does not contain `/f/{fileId}`.
-          // Tracked as a follow-up: extract via files.url lookup or align
-          // cloud's createFile to return the proxy URL.
-          image('https://use-for-dev.r2.cloudflarestorage.com/ppp/494457/a3f895d3.png?X-Amz-...'),
-          image('https://cdn.example.com/random.png'),
-          // Valid mixed in
-          image('http://localhost:3010/f/file_valid'),
+          image('http://localhost:3010/f/file_a'),
+          file('http://localhost:3010/f/file_b', 'b.pdf'),
         ],
       },
     };
-    expect(extractFileIdsFromEditorData(json)).toEqual(['file_valid']);
+    const result = await extractFileIdsFromEditorData(json, { db, userId: 'u' });
+    expect(result.sort()).toEqual(['file_a', 'file_b']);
+    expect(db.select).not.toHaveBeenCalled();
   });
+
+  it('falls back to DB lookup by storage key for pre-signed URLs', async () => {
+    const db = mockDb([{ id: 'file_resolved' }]);
+    const json = {
+      root: {
+        children: [
+          image(
+            'https://use-for-dev.r2.cloudflarestorage.com/ppp/494360/03378b6c.jpg?X-Amz-Date=…',
+          ),
+        ],
+      },
+    };
+    const result = await extractFileIdsFromEditorData(json, { db, userId: 'u' });
+    expect(result).toEqual(['file_resolved']);
+    expect(db.select).toHaveBeenCalledOnce();
+  });
+
+  it('mixes proxy + signed URLs and dedupes', async () => {
+    const db = mockDb([{ id: 'file_signed_one' }]);
+    const json = {
+      root: {
+        children: [
+          image('http://localhost:3010/f/file_a'),
+          image('http://localhost:3010/f/file_a'), // dup
+          image('https://r2.example.com/users/u/files/abc.jpg?X-Amz-Date=…'),
+        ],
+      },
+    };
+    const result = await extractFileIdsFromEditorData(json, { db, userId: 'u' });
+    expect(result.sort()).toEqual(['file_a', 'file_signed_one']);
+  });
+
+  it('skips unparseable URLs without crashing', async () => {
+    const db = mockDb([]);
+    const json = {
+      root: {
+        children: [image('not-a-real-url')],
+      },
+    };
+    await expect(extractFileIdsFromEditorData(json, { db, userId: 'u' })).resolves.toEqual([]);
+  });
+
+  it('skips non-uploaded entries', async () => {
+    const db = mockDb([]);
+    const json = {
+      root: {
+        children: [
+          image('http://localhost:3010/f/file_skip', 'loading'),
+          image('http://localhost:3010/f/file_keep'),
+        ],
+      },
+    };
+    const result = await extractFileIdsFromEditorData(json, { db, userId: 'u' });
+    expect(result).toEqual(['file_keep']);
+  });
+
+  void ctx; // silence unused
 });

@@ -416,12 +416,16 @@ export class TaskService {
     ]);
 
     // Derive fileIds from persisted editor_data (single source of truth).
-    const taskFileIds = extractFileIdsFromEditorData(task.editorData);
+    const extractCtx = { db: this.db, userId: this.userId };
+    const [taskFileIds, ...commentFileIdLists] = await Promise.all([
+      extractFileIdsFromEditorData(task.editorData, extractCtx),
+      ...comments.map((c) => extractFileIdsFromEditorData(c.editorData, extractCtx)),
+    ]);
     const commentFileIdsMap: Record<string, string[]> = {};
-    for (const c of comments) {
-      const ids = extractFileIdsFromEditorData(c.editorData);
+    comments.forEach((c, i) => {
+      const ids = commentFileIdLists[i];
       if (ids.length > 0) commentFileIdsMap[c.id] = ids;
-    }
+    });
 
     const allFileIds = [...taskFileIds, ...Object.values(commentFileIdsMap).flat()];
     const allFileMetadata = await resolveAttachmentMetadata({

@@ -51,14 +51,18 @@ export async function buildTaskPrompt(
   ]);
 
   // Derive fileIds from the persisted Lexical state. editor_data is the
-  // single source of truth — fileId is recoverable from each image/file
-  // node's URL (proxy URL `/f/{fileId}` contract from file router).
-  const taskFileIds = extractFileIdsFromEditorData(task.editorData);
+  // single source of truth — fileId is recovered from the URL in each node
+  // (proxy URL form via regex; pre-signed dev URLs via files.url lookup).
+  const extractCtx = { db, userId };
+  const [taskFileIds, ...commentFileIdLists] = await Promise.all([
+    extractFileIdsFromEditorData(task.editorData, extractCtx),
+    ...comments.map((c) => extractFileIdsFromEditorData(c.editorData, extractCtx)),
+  ]);
   const commentFileIdsMap: Record<string, string[]> = {};
-  for (const c of comments) {
-    const ids = extractFileIdsFromEditorData(c.editorData);
+  comments.forEach((c, i) => {
+    const ids = commentFileIdLists[i];
     if (ids.length > 0) commentFileIdsMap[c.id] = ids;
-  }
+  });
 
   // Metadata-only lookup (name + fileType) for prompt rendering. Full content
   // for the agent comes via `execAgent.fileIds` → `resolveAttachmentsByFileIds`.
