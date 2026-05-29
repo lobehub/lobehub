@@ -21,6 +21,8 @@ import type { LobeChatDatabase } from '@/database/type';
 
 import { AiAgentService } from '../aiAgent';
 import { BriefService } from '../brief';
+import { extractFileIdsFromEditorData } from '../file/extractFileIdsFromEditorData';
+import { resolveAttachmentMetadata } from '../file/resolveAttachments';
 import { type SubtaskGraphPlan, TaskGraphService } from '../taskGraph';
 import { type ReviewResult, TaskReviewService } from '../taskReview';
 import { TaskRunnerService } from '../taskRunner';
@@ -34,6 +36,8 @@ export interface CreateTaskInput {
   automationMode?: 'heartbeat' | 'schedule';
   createdByAgentId?: string;
   description?: string;
+  editorData?: unknown;
+  fileIds?: string[];
   identifierPrefix?: string;
   instruction: string;
   name?: string;
@@ -411,6 +415,23 @@ export class TaskService {
       this.taskModel.getTreePinnedDocuments(task.id).catch(() => emptyWorkspace),
     ]);
 
+    // Derive fileIds from persisted editor_data (single source of truth).
+    const taskFileIds = extractFileIdsFromEditorData(task.editorData);
+    const commentFileIdsMap: Record<string, string[]> = {};
+    for (const c of comments) {
+      const ids = extractFileIdsFromEditorData(c.editorData);
+      if (ids.length > 0) commentFileIdsMap[c.id] = ids;
+    }
+
+    const allFileIds = [...taskFileIds, ...Object.values(commentFileIdsMap).flat()];
+    const allFileMetadata = await resolveAttachmentMetadata({
+      db: this.db,
+      fileIds: allFileIds,
+      userId: this.userId,
+    });
+    const fileById = new Map(allFileMetadata.map((f) => [f.id, f]));
+    const taskFiles = taskFileIds.map((id) => fileById.get(id)).filter((f) => !!f);
+
     // Build dependency map for all descendants
     const allDescendantIds = allDescendants.map((s) => s.id);
     const allDescendantDeps =
@@ -598,18 +619,24 @@ export class TaskService {
         type: 'brief' as const,
         userId: b.userId,
       })),
-      ...comments.map((c) => ({
-        agentId: c.authorAgentId,
-        author: c.authorAgentId
-          ? authorMap.get(c.authorAgentId)
-          : c.authorUserId
-            ? authorMap.get(c.authorUserId)
-            : undefined,
-        content: c.content,
-        id: c.id,
-        time: toISO(c.createdAt),
-        type: 'comment' as const,
-      })),
+      ...comments.map((c) => {
+        const ids = commentFileIdsMap[c.id] ?? [];
+        const files = ids.map((id) => fileById.get(id)).filter((f) => !!f);
+        return {
+          agentId: c.authorAgentId,
+          author: c.authorAgentId
+            ? authorMap.get(c.authorAgentId)
+            : c.authorUserId
+              ? authorMap.get(c.authorUserId)
+              : undefined,
+          content: c.content,
+          editorData: c.editorData ?? undefined,
+          files: files.length > 0 ? files : undefined,
+          id: c.id,
+          time: toISO(c.createdAt),
+          type: 'comment' as const,
+        };
+      }),
     ].sort((a, b) => {
       if (!a.time) return 1;
       if (!b.time) return -1;
@@ -634,7 +661,9 @@ export class TaskService {
         };
       }),
       description: task.description,
+      editorData: task.editorData ?? undefined,
       error: task.error,
+      files: taskFiles.length > 0 ? taskFiles : undefined,
       heartbeat:
         task.heartbeatInterval || task.heartbeatTimeout || task.lastHeartbeatAt
           ? {

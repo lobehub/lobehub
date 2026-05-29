@@ -37,7 +37,6 @@ export class TaskModel {
     const maxRetries = 5;
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
-        // Get next seq for this user
         const seqResult = await this.db
           .select({ maxSeq: sql<number>`COALESCE(MAX(${tasks.seq}), 0)` })
           .from(tasks)
@@ -46,7 +45,7 @@ export class TaskModel {
         const nextSeq = Number(seqResult[0].maxSeq) + 1;
         const identifier = `${identifierPrefix}-${nextSeq}`;
 
-        const result = await this.db
+        const [task] = await this.db
           .insert(tasks)
           .values({
             ...rest,
@@ -56,7 +55,7 @@ export class TaskModel {
           } as NewTask)
           .returning();
 
-        return result[0];
+        return task;
       } catch (error: any) {
         // Retry on unique constraint violation (concurrent seq conflict)
         // Check error itself, cause, and stringified message for PG error code 23505
@@ -114,13 +113,14 @@ export class TaskModel {
     id: string,
     data: Partial<Omit<NewTask, 'id' | 'identifier' | 'seq' | 'createdByUserId'>>,
   ): Promise<TaskItem | null> {
-    const result = await this.db
+    if (Object.keys(data).length === 0) return this.findById(id);
+
+    const updated = await this.db
       .update(tasks)
       .set({ ...data, updatedAt: new Date() })
       .where(and(eq(tasks.id, id), eq(tasks.createdByUserId, this.userId)))
       .returning();
-
-    return result[0] || null;
+    return updated[0] || null;
   }
 
   async delete(id: string): Promise<boolean> {
@@ -742,8 +742,6 @@ export class TaskModel {
     return comment;
   }
 
-  // ========== Comments ==========
-
   async getComments(taskId: string): Promise<TaskCommentItem[]> {
     return this.db
       .select()
@@ -756,15 +754,22 @@ export class TaskModel {
     const result = await this.db
       .delete(taskComments)
       .where(and(eq(taskComments.id, id), eq(taskComments.userId, this.userId)))
-
       .returning();
     return result.length > 0;
   }
 
-  async updateComment(id: string, content: string): Promise<TaskCommentItem | undefined> {
+  async updateComment(
+    id: string,
+    content: string,
+    opts?: { editorData?: unknown },
+  ): Promise<TaskCommentItem | undefined> {
     const [comment] = await this.db
       .update(taskComments)
-      .set({ content, updatedAt: new Date() })
+      .set({
+        content,
+        ...(opts?.editorData !== undefined ? { editorData: opts.editorData as never } : {}),
+        updatedAt: new Date(),
+      })
       .where(and(eq(taskComments.id, id), eq(taskComments.userId, this.userId)))
       .returning();
     return comment;

@@ -1,4 +1,5 @@
 import type { BriefArtifacts } from '../brief';
+import type { ChatFileItem } from '../message/ui/chat';
 
 // ── Task type aliases ──
 
@@ -128,6 +129,7 @@ export interface TaskItem {
   createdByUserId: string;
   currentTopicId: string | null;
   description: string | null;
+  editorData: unknown;
   error: string | null;
   heartbeatInterval: number | null;
   heartbeatTimeout: number | null;
@@ -166,6 +168,7 @@ export interface NewTask {
   createdByUserId: string;
   currentTopicId?: string | null;
   description?: string | null;
+  editorData?: unknown;
   error?: string | null;
   heartbeatInterval?: number | null;
   heartbeatTimeout?: number | null;
@@ -251,6 +254,10 @@ export interface TaskDetailActivity {
   content?: string;
   createdAt?: string;
   cronJobId?: string | null;
+  /** Comment-only: rich Lexical JSON state. When present, supersedes `content` for rendering. */
+  editorData?: unknown;
+  /** Comment-only: files attached to this comment for rendering in the UI. */
+  files?: ChatFileItem[];
   id?: string;
   /**
    * Topic-only: persisted Gateway operation ID for the task topic, sourced
@@ -296,7 +303,11 @@ export interface TaskDetailData {
   createdAt?: string;
   dependencies?: Array<{ dependsOn: string; type: string }>;
   description?: string | null;
+  /** Rich-editor JSON state for the instruction; preserves details markdown drops (image size, etc.). */
+  editorData?: unknown;
   error?: string | null;
+  /** Files attached to the task instruction (persistent context for every run). */
+  files?: ChatFileItem[];
   // heartbeat.interval: periodic execution interval | heartbeat.timeout+lastAt: watchdog monitoring (detects stuck tasks)
   heartbeat?: {
     interval?: number | null;

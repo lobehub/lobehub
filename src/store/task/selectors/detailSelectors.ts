@@ -20,11 +20,15 @@ const activeTaskPriority = (s: TaskStoreState) => activeTaskDetail(s)?.priority 
 
 const activeTaskInstruction = (s: TaskStoreState) => activeTaskDetail(s)?.instruction;
 
+const activeTaskEditorData = (s: TaskStoreState) => activeTaskDetail(s)?.editorData;
+
+const activeTaskFiles = (s: TaskStoreState) => activeTaskDetail(s)?.files;
+
 const activeTaskDescription = (s: TaskStoreState) => activeTaskDetail(s)?.description;
 
 const activeTaskAgentId = (s: TaskStoreState) => activeTaskDetail(s)?.agentId;
 
-// TODO []: Once the backend getTaskDetail returns model/provider, read from detail.model / detail.provider instead
+// TODO [LOBE-6634]: Once the backend getTaskDetail returns model/provider, read from detail.model / detail.provider instead
 const activeTaskModel = (s: TaskStoreState) =>
   activeTaskDetail(s)?.config?.model as string | undefined;
 
@@ -93,7 +97,9 @@ export const taskDetailSelectors = {
   activeTaskDependencies,
   activeTaskDescription,
   activeTaskDetail,
+  activeTaskEditorData,
   activeTaskError,
+  activeTaskFiles,
   activeTaskId,
   activeTaskInstruction,
   activeTaskName,
