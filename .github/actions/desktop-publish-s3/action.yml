@@ -75,7 +75,7 @@ runs:
 
         # 1. 上传安装包到版本目录
         echo "📦 Uploading release files to s3://$S3_BUCKET/$CHANNEL/$VERSION/"
-        for file in release/*.dmg release/*.zip release/*.exe release/*.AppImage release/*.deb release/*.rpm release/*.snap release/*.tar.gz; do
+        for file in release/*.dmg release/*.zip release/*.exe release/*.AppImage release/*.deb release/*.rpm release/*.snap release/*.tar.gz release/*.blockmap; do
           if [ -f "$file" ]; then
             filename=$(basename "$file")
             echo "   ↗️ $filename"
