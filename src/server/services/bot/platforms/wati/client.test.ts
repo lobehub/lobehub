@@ -14,7 +14,6 @@ const createClient = (context: { appUrl?: string } = {}) =>
         apiBaseUrl: 'https://live-mt-server.wati.io',
         bearerToken: 'bearer-test',
         tenantId: 'tenant-test',
-        webhookSecret: 'secret',
       },
       platform: 'wati',
       settings: {},
@@ -61,7 +60,7 @@ describe('WatiWebhookClient', () => {
   });
 
   it('start resolves webhook phone from Wati list API', async () => {
-    fetchSpy.mockImplementation((input: RequestInfo | URL) => {
+    fetchSpy.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.includes('getContacts')) return Promise.resolve(jsonResponse({ ok: true }));
       if (url.includes('whatsapp/phonenumbers')) {
@@ -72,7 +71,10 @@ describe('WatiWebhookClient', () => {
           }),
         );
       }
-      if (url.includes('webhookEndpoints')) {
+      if (url.includes('webhookEndpoints') && init?.method === 'GET') {
+        return Promise.resolve(jsonResponse({ ok: true, result: [] }));
+      }
+      if (url.includes('webhookEndpoints') && init?.method === 'POST') {
         return Promise.resolve(jsonResponse({ ok: true, result: [] }));
       }
       return Promise.resolve(new Response('{}', { status: 404 }));
@@ -81,8 +83,8 @@ describe('WatiWebhookClient', () => {
     const client = createClient({ appUrl: 'http://localhost:3010' });
     await client.start();
 
-    const webhookCall = fetchSpy.mock.calls.find(([url]) =>
-      String(url).includes('/api/v2/webhookEndpoints'),
+    const webhookCall = fetchSpy.mock.calls.find(
+      ([url, init]) => String(url).includes('/api/v2/webhookEndpoints') && init?.method === 'POST',
     );
     expect(webhookCall).toBeDefined();
     const [, init] = webhookCall as [string, RequestInit];

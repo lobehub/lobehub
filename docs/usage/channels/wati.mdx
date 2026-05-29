@@ -49,12 +49,11 @@ tags:
   - **Tenant ID**
   - **Bearer Token**
   - **Channel Phone Number**
-  - **Webhook Secret** (optional but recommended)
 
-  Save and enable the channel. LobeHub validates the token against the Wati API.
+  Save and enable the channel. LobeHub validates the token against the Wati API and registers the webhook URL with Wati automatically.
 </Steps>
 
-## Step 3: Register the webhook in Wati
+## Step 3: Verify the webhook in Wati
 
 <Steps>
   ### Copy the Webhook URL
@@ -63,11 +62,9 @@ tags:
 
   `https://app.lobehub.com/api/agent/webhooks/wati/<channel-phone-number>`
 
-  ### Add the webhook in Wati
+  ### Confirm in Wati
 
-  Wati dashboard → **Webhooks** → **Add Webhook** → paste the URL, set status to **Enabled**, and select **Message Received**.
-
-  If you configured a webhook secret in LobeHub, use the same value in Wati so inbound requests can be verified.
+  Wati dashboard → **Webhooks** — LobeHub should have registered this URL with **Message Received** enabled. You can verify or edit it there if needed.
 </Steps>
 
 ## Step 4: Test
@@ -79,6 +76,5 @@ Send a WhatsApp message to your business number from a personal phone. Within an
 | Symptom                     | Check                                                                               |
 | --------------------------- | ----------------------------------------------------------------------------------- |
 | No inbound events           | Webhook URL, **Message Received** enabled, channel phone number matches Wati number |
-| 401 on webhook              | Webhook secret mismatch — align LobeHub and Wati, or clear secret on both sides     |
 | Replies not delivered       | Session window expired — user must message first or use an approved template        |
 | Credential validation fails | Tenant ID, base URL, and Bearer token from the same Wati environment                |

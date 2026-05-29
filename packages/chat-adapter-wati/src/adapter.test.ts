@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { createWatiAdapter } from './adapter';
-import { computeSignature } from './api';
+import { WatiApiClient } from './api';
 import type { WatiInboundMessage } from './types';
 
 const baseConfig = {
@@ -9,7 +9,6 @@ const baseConfig = {
   bearerToken: 'bearer-test',
   channelPhoneNumber: '85264318722',
   tenantId: 'tenant-test',
-  webhookSecret: 'webhook-secret-test',
 };
 
 function makeAdapter(overrides: Partial<typeof baseConfig> = {}) {
@@ -46,31 +45,20 @@ function buildInbound(overrides: Partial<WatiInboundMessage> = {}): WatiInboundM
   };
 }
 
-function makeRequest(method: string, body: string, headers: Record<string, string> = {}): Request {
+function makeRequest(method: string, body: string): Request {
   return new Request('https://example.com/api/agent/webhooks/wati/test', {
     body: method === 'GET' ? undefined : body,
-    headers,
     method,
   });
 }
 
-describe('WatiAdapter (signature verification)', () => {
-  it('rejects POST with missing signature when webhookSecret is set', async () => {
-    const { adapter, chat } = makeAdapter();
-    await adapter.initialize(chat);
-
-    const body = JSON.stringify(buildInbound());
-    const res = await adapter.handleWebhook(makeRequest('POST', body));
-    expect(res.status).toBe(401);
-  });
-
-  it('accepts POST with valid signature and dispatches customer messages', async () => {
+describe('WatiAdapter (inbound webhooks)', () => {
+  it('dispatches customer messages', async () => {
     const { adapter, chat, processMessage } = makeAdapter();
     await adapter.initialize(chat);
 
     const body = JSON.stringify(buildInbound());
-    const sig = computeSignature(body, baseConfig.webhookSecret);
-    const res = await adapter.handleWebhook(makeRequest('POST', body, { 'x-wati-signature': sig }));
+    const res = await adapter.handleWebhook(makeRequest('POST', body));
 
     expect(res.status).toBe(200);
     expect(processMessage).toHaveBeenCalledTimes(1);
@@ -83,28 +71,54 @@ describe('WatiAdapter (signature verification)', () => {
     await adapter.initialize(chat);
 
     const body = JSON.stringify(buildInbound({ owner: true }));
-    const sig = computeSignature(body, baseConfig.webhookSecret);
-    const res = await adapter.handleWebhook(makeRequest('POST', body, { 'x-wati-signature': sig }));
+    const res = await adapter.handleWebhook(makeRequest('POST', body));
 
     expect(res.status).toBe(200);
     expect(processMessage).not.toHaveBeenCalled();
   });
 
-  it('allows unsigned webhooks when webhookSecret is omitted', async () => {
-    const { adapter, chat, processMessage } = makeAdapter({ webhookSecret: undefined });
+  it('ignores duplicate webhook deliveries for the same message id', async () => {
+    const { adapter, chat, processMessage } = makeAdapter();
     await adapter.initialize(chat);
 
-    const body = JSON.stringify(buildInbound());
-    const res = await adapter.handleWebhook(makeRequest('POST', body));
+    const body = JSON.stringify(
+      buildInbound({ id: 'msg-dedupe-1', whatsappMessageId: 'wamid.dedupe-only' }),
+    );
 
-    expect(res.status).toBe(200);
+    const first = await adapter.handleWebhook(makeRequest('POST', body));
+    const second = await adapter.handleWebhook(makeRequest('POST', body));
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
     expect(processMessage).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('WatiAdapter (outbound)', () => {
+  it('sends markdown postables as plain text (not empty)', async () => {
+    const sendSpy = vi
+      .spyOn(WatiApiClient.prototype, 'sendSessionMessage')
+      .mockResolvedValue(undefined);
+
+    const { adapter, chat } = makeAdapter();
+    await adapter.initialize(chat);
+
+    await adapter.postMessage('wati:user:85264318721', {
+      markdown: '**你好**，而家係 *測試*。',
+    });
+
+    expect(sendSpy).toHaveBeenCalledTimes(1);
+    const [, text] = sendSpy.mock.calls[0];
+    expect(text).toContain('你好');
+    expect(text).not.toContain('**');
+
+    sendSpy.mockRestore();
   });
 });
 
 describe('WatiAdapter (parsing)', () => {
   it('parses inbound text into a Message', async () => {
-    const { adapter, chat } = makeAdapter({ webhookSecret: undefined });
+    const { adapter, chat } = makeAdapter();
     await adapter.initialize(chat);
 
     const payload = buildInbound();

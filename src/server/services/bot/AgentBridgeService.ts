@@ -802,11 +802,15 @@ export class AgentBridgeService {
       // ack here without tracking it as `progressMessage` — afterStep/onComplete
       // will see `progressMessage === undefined` and correctly post the final
       // reply as its own message instead of editing.
+      // WhatsApp/Wati sets `skipStartupAck` because those extra English ack
+      // lines are easily mistaken for the agent's answer.
       await safeSideEffect(() => thread.startTyping(), 'startTyping (executeWithWebhooks)');
-      await safeSideEffect(
-        () => thread.post(renderStart(userMessage.text, { lng: replyLocale, timezone })),
-        'post ack (no-edit platform)',
-      );
+      if (platformDef?.skipStartupAck !== true) {
+        await safeSideEffect(
+          () => thread.post(renderStart(userMessage.text, { lng: replyLocale, timezone })),
+          'post ack (no-edit platform)',
+        );
+      }
     } else {
       await safeSideEffect(() => thread.startTyping(), 'startTyping (executeWithWebhooks)');
       try {

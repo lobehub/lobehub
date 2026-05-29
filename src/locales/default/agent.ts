@@ -124,9 +124,6 @@ export default {
   'channel.wati.bearerToken': 'Bearer Token',
   'channel.wati.bearerTokenHint':
     'API token from Wati → API Docs. Stored encrypted. Used for outbound messages and credential validation.',
-  'channel.wati.webhookSecret': 'Webhook Secret',
-  'channel.wati.webhookSecretHint':
-    'Optional. HMAC secret from Wati webhook settings — when set, inbound webhooks must include a valid signature.',
   'channel.wati.channelPhoneNumber': 'WhatsApp Business Number',
   'channel.wati.channelPhoneNumberHint':
     'Your Wati-connected WhatsApp business number in international format without + (e.g. 85264318722). This is the number customers message — not a separate "channel" product. Must match a number on your Wati account.',

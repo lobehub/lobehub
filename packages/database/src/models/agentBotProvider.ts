@@ -98,7 +98,12 @@ export class AgentBotProviderModel {
     const updateValue: Partial<AgentBotProviderItem> = { ...rest };
 
     if (credentials) {
-      updateValue.credentials = await this.encrypt(credentials);
+      const existing = await this.findById(id);
+      const merged = {
+        ...existing?.credentials,
+        ...credentials,
+      };
+      updateValue.credentials = await this.encrypt(merged);
     }
 
     return this.db

@@ -93,6 +93,7 @@ const PLATFORM_REPLY_LOCALES: Record<string, BotReplyLocale> = {
   qq: 'zh-CN',
   slack: 'en-US',
   telegram: 'en-US',
+  wati: 'zh-CN',
   wechat: 'zh-CN',
 };
 

@@ -13,7 +13,6 @@ LobeHub replies with the Wati `sendSessionMessage` REST API inside the 24-hour s
 | `apiBaseUrl`    | Wati API host (e.g. `https://live-mt-server.wati.io`)        |
 | `tenantId`      | Tenant segment in API paths (`/{tenantId}/api/v1/...`)       |
 | `bearerToken`   | `Authorization: Bearer` token from Wati API docs             |
-| `webhookSecret` | Optional HMAC secret for inbound webhook verification        |
 | `applicationId` | Business channel phone number (digits, country code, no `+`) |
 
 ## Webhook URL
@@ -22,7 +21,6 @@ LobeHub replies with the Wati `sendSessionMessage` REST API inside the 24-hour s
 
 On bot **start**, LobeHub calls `POST /{tenantId}/api/v2/webhookEndpoints` to register this URL
 (enabled, `eventTypes: ["message"]`). You can still verify or edit it in the Wati dashboard.
-Optionally set the same secret as `webhookSecret` for inbound HMAC verification.
 
 ## Inbound filter
 

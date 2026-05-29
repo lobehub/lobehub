@@ -32,12 +32,6 @@ export const schema: FieldSchema[] = [
         type: 'password',
       },
       {
-        key: 'webhookSecret',
-        description: 'channel.wati.webhookSecretHint',
-        label: 'channel.wati.webhookSecret',
-        type: 'password',
-      },
-      {
         devOnly: true,
         key: 'webhookProxyUrl',
         description: 'channel.devWebhookProxyUrlHint',

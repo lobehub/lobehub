@@ -15,5 +15,7 @@ export const wati: PlatformDefinition = {
   showWebhookUrl: true,
   supportsMarkdown: false,
   supportsMessageEdit: false,
+  /** WhatsApp has no edit — acks surface as extra messages and read like wrong answers. */
+  skipStartupAck: true,
   clientFactory: new WatiClientFactory(),
 };

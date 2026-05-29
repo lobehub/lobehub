@@ -456,6 +456,14 @@ export interface PlatformDefinition {
   showWebhookUrl?: boolean;
 
   /**
+   * When true, skip the random "ack" placeholder on inbound messages.
+   * Use on channels where edits are unsupported (each ack becomes a separate
+   * message) and a misleading English phrase is worse than silence — e.g.
+   * WhatsApp via Wati.
+   */
+  skipStartupAck?: boolean;
+
+  /**
    * Whether the platform supports rendering Markdown in messages.
    * When false, outbound markdown is converted to plain text before sending,
    * and the AI is instructed to avoid markdown formatting.

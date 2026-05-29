@@ -13,10 +13,36 @@ import type {
 } from 'chat';
 import { Message, parseMarkdown } from 'chat';
 
-import { verifyWebhookSignature, WatiApiClient } from './api';
+import { WatiApiClient } from './api';
+import { WatiFormatConverter } from './format-converter';
 import type { WatiAdapterConfig, WatiInboundMessage, WatiRawMessage, WatiThreadId } from './types';
 
 const INBOUND_MESSAGE_EVENT = 'message';
+/** Drop duplicate Wati webhook deliveries for the same inbound message id. */
+const INBOUND_DEDUPE_TTL_MS = 5 * 60 * 1000;
+const recentInboundMessageIds = new Map<string, number>();
+
+function shouldProcessInboundMessage(messageId: string | undefined): boolean {
+  if (!messageId?.trim()) return true;
+
+  const key = messageId.trim();
+  const now = Date.now();
+  const seenAt = recentInboundMessageIds.get(key);
+  if (seenAt !== undefined && now - seenAt < INBOUND_DEDUPE_TTL_MS) {
+    return false;
+  }
+
+  recentInboundMessageIds.set(key, now);
+
+  // Best-effort prune so the map does not grow without bound.
+  if (recentInboundMessageIds.size > 500) {
+    for (const [id, ts] of recentInboundMessageIds) {
+      if (now - ts >= INBOUND_DEDUPE_TTL_MS) recentInboundMessageIds.delete(id);
+    }
+  }
+
+  return true;
+}
 
 function extractInboundText(payload: WatiInboundMessage): string {
   if (payload.type === 'text' && payload.text?.trim()) {
@@ -71,7 +97,7 @@ export class WatiAdapter implements Adapter<WatiThreadId, WatiRawMessage> {
 
   private readonly api: WatiApiClient;
   private readonly channelPhoneNumber: string;
-  private readonly webhookSecret?: string;
+  private readonly formatConverter = new WatiFormatConverter();
 
   private _userName: string;
   private chat!: ChatInstance;
@@ -89,7 +115,6 @@ export class WatiAdapter implements Adapter<WatiThreadId, WatiRawMessage> {
       tenantId: config.tenantId,
     });
     this.channelPhoneNumber = config.channelPhoneNumber.replaceAll(/\D/g, '');
-    this.webhookSecret = config.webhookSecret?.trim() || undefined;
     this._userName = config.userName || 'wati-bot';
   }
 
@@ -119,17 +144,6 @@ export class WatiAdapter implements Adapter<WatiThreadId, WatiRawMessage> {
 
     const bodyText = await request.text();
 
-    if (this.webhookSecret) {
-      const signature =
-        request.headers.get('x-wati-signature') ??
-        request.headers.get('x-hub-signature-256') ??
-        request.headers.get('x-hub-signature');
-      if (!verifyWebhookSignature(bodyText, signature, this.webhookSecret)) {
-        this.logger.warn('Rejected Wati webhook with invalid signature');
-        return new Response('Invalid signature', { status: 401 });
-      }
-    }
-
     let payload: WatiInboundMessage;
     try {
       payload = JSON.parse(bodyText);
@@ -151,6 +165,12 @@ export class WatiAdapter implements Adapter<WatiThreadId, WatiRawMessage> {
       return Response.json({ ok: true });
     }
 
+    const inboundId = payload.whatsappMessageId || payload.id;
+    if (!shouldProcessInboundMessage(inboundId)) {
+      this.logger.debug('Ignoring duplicate Wati inbound message id=%s', inboundId);
+      return Response.json({ ok: true, duplicate: true });
+    }
+
     await this.dispatchInbound(payload, options);
     return Response.json({ ok: true });
   }
@@ -170,7 +190,7 @@ export class WatiAdapter implements Adapter<WatiThreadId, WatiRawMessage> {
     message: AdapterPostableMessage,
   ): Promise<RawMessage<WatiRawMessage>> {
     const { id: whatsappNumber } = this.decodeThreadId(threadId);
-    const text = typeof message === 'string' ? message : (message.text ?? '');
+    const text = this.formatConverter.renderPostable(message);
     if (text.trim()) {
       await this.api.sendSessionMessage(whatsappNumber, text, {
         channelPhoneNumber: this.channelPhoneNumber,

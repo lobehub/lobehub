@@ -32,8 +32,6 @@ export interface WatiAdapterConfig {
   /** Business WhatsApp channel number (digits, country code, no +). Matches inbound `channelPhoneNumber`. */
   channelPhoneNumber: string;
   tenantId: string;
-  /** Optional HMAC secret configured in the Wati webhook settings. */
-  webhookSecret?: string;
 }
 
 export interface WatiThreadId {

@@ -1,11 +1,17 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
-
 import {
   extractPhoneListFromResponse,
   normalizePhoneDigits,
   resolveWebhookPhoneNumber,
   type WatiWhatsAppPhoneEntry,
 } from './phone';
+import {
+  extractWebhookListFromResponse,
+  findWebhookForPhoneAndUrl,
+  isOverWebhookLimitResponse,
+  isWebhookAlreadyExistsResponse,
+  parseWatiJsonBody,
+  type WatiWebhookEndpoint,
+} from './webhooks';
 
 export const DEFAULT_WATI_API_BASE_URL = 'https://live-mt-server.wati.io';
 
@@ -117,12 +123,29 @@ export class WatiApiClient {
     }
   }
 
-  /**
-   * Create or update webhook endpoints for one or more channel numbers.
-   * @see POST /{tenantId}/api/v2/webhookEndpoints
-   */
+  /** List configured webhook endpoints (best-effort; unsupported on some tenants). */
+  async listWebhookEndpoints(): Promise<WatiWebhookEndpoint[]> {
+    const suffixes = ['/api/v2/webhookEndpoints', '/api/v1/webhookEndpoints'];
+
+    for (const suffix of suffixes) {
+      const url = this.path(suffix);
+      try {
+        const response = await fetch(url, { headers: this.authHeaders, method: 'GET' });
+        if (!response.ok) continue;
+
+        const json: unknown = await response.json();
+        return extractWebhookListFromResponse(json);
+      } catch {
+        continue;
+      }
+    }
+
+    return [];
+  }
+
   /**
    * Resolve the webhook `phoneNumber` field against Wati's channel list, then register.
+   * Skips POST when the same phone + URL is already configured (idempotent).
    */
   async registerWebhookForPhone(
     configuredDigits: string,
@@ -185,6 +208,23 @@ export class WatiApiClient {
       url: string;
     }>,
   ): Promise<WatiWebhookEndpointsResponse> {
+    if (entries.length === 0) {
+      return { ok: true };
+    }
+
+    const existing = await this.listWebhookEndpoints();
+    const allAlreadyRegistered = entries.every((entry) =>
+      findWebhookForPhoneAndUrl(existing, entry.phoneNumber, entry.url),
+    );
+    if (allAlreadyRegistered) {
+      return {
+        ok: true,
+        result: entries
+          .map((entry) => findWebhookForPhoneAndUrl(existing, entry.phoneNumber, entry.url))
+          .filter((item): item is WatiWebhookEndpoint => !!item),
+      };
+    }
+
     const url = `${this.apiBaseUrl}/${this.tenantId}/api/v2/webhookEndpoints`;
     const body = entries.map((entry) => ({
       eventTypes: entry.eventTypes ?? ['message'],
@@ -204,6 +244,16 @@ export class WatiApiClient {
 
     if (!response.ok) {
       const detail = await safeResponseText(response);
+      const parsed = parseWatiJsonBody(detail);
+
+      if (isOverWebhookLimitResponse(parsed)) {
+        return this.resolveWebhookLimit(entries);
+      }
+
+      if (isWebhookAlreadyExistsResponse(parsed)) {
+        return this.resolveWebhookAlreadyExists(entries);
+      }
+
       throw new WatiApiError(
         detail || `Wati webhookEndpoints failed (${response.status})`,
         response.status,
@@ -211,10 +261,76 @@ export class WatiApiClient {
     }
 
     try {
-      return (await response.json()) as WatiWebhookEndpointsResponse;
-    } catch {
+      const payload = (await response.json()) as WatiWebhookEndpointsResponse;
+      const parsed =
+        payload && typeof payload === 'object'
+          ? (payload as unknown as Record<string, unknown>)
+          : undefined;
+
+      if (isOverWebhookLimitResponse(parsed)) {
+        return this.resolveWebhookLimit(entries);
+      }
+
+      if (isWebhookAlreadyExistsResponse(parsed)) {
+        return this.resolveWebhookAlreadyExists(entries);
+      }
+
+      if (parsed && parsed.ok === false) {
+        throw new WatiApiError(JSON.stringify(payload), response.status);
+      }
+
+      return payload;
+    } catch (error) {
+      if (error instanceof WatiApiError) throw error;
       return { ok: true };
     }
+  }
+
+  private async resolveWebhookLimit(
+    entries: Array<{
+      eventTypes?: string[];
+      phoneNumber: string;
+      url: string;
+    }>,
+  ): Promise<WatiWebhookEndpointsResponse> {
+    return this.resolveWebhookConflict(entries);
+  }
+
+  private async resolveWebhookAlreadyExists(
+    entries: Array<{
+      eventTypes?: string[];
+      phoneNumber: string;
+      url: string;
+    }>,
+  ): Promise<WatiWebhookEndpointsResponse> {
+    return this.resolveWebhookConflict(entries);
+  }
+
+  /** Treat duplicate/limit webhook responses as idempotent success. */
+  private async resolveWebhookConflict(
+    entries: Array<{
+      eventTypes?: string[];
+      phoneNumber: string;
+      url: string;
+    }>,
+  ): Promise<WatiWebhookEndpointsResponse> {
+    const refreshed = await this.listWebhookEndpoints();
+    const matched = entries
+      .map((entry) => findWebhookForPhoneAndUrl(refreshed, entry.phoneNumber, entry.url))
+      .filter((item): item is WatiWebhookEndpoint => !!item);
+
+    if (matched.length === entries.length) {
+      return { ok: true, result: matched };
+    }
+
+    return {
+      ok: true,
+      result: entries.map((entry) => ({
+        channelPhoneNumber: entry.phoneNumber,
+        eventTypes: entry.eventTypes ?? ['message'],
+        url: entry.url,
+      })),
+    };
   }
 }
 
@@ -237,41 +353,4 @@ const safeResponseText = async (response: Response): Promise<string> => {
   } catch {
     return '';
   }
-};
-
-/** HMAC-SHA256 hex digest of `body` using `secret`. */
-export const computeSignature = (body: string, secret: string): string =>
-  createHmac('sha256', secret).update(body, 'utf8').digest('hex');
-
-/**
- * Verify an inbound Wati webhook signature when a secret is configured.
- * Accepts raw hex or `sha256=<hex>` forms on common header names.
- */
-export const verifyWebhookSignature = (
-  body: string,
-  signatureHeader: string | null,
-  secret: string,
-): boolean => {
-  if (!signatureHeader?.trim()) return false;
-
-  const expected = computeSignature(body, secret);
-  const candidates = [signatureHeader.trim()];
-
-  for (const prefix of ['sha256=', 'SHA256=']) {
-    if (signatureHeader.startsWith(prefix)) {
-      candidates.push(signatureHeader.slice(prefix.length).trim());
-    }
-  }
-
-  for (const candidate of candidates) {
-    try {
-      const a = Buffer.from(candidate, 'utf8');
-      const b = Buffer.from(expected, 'utf8');
-      if (a.length === b.length && timingSafeEqual(a, b)) return true;
-    } catch {
-      // try next candidate
-    }
-  }
-
-  return false;
 };

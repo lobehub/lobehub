@@ -124,7 +124,6 @@ class WatiWebhookClient implements PlatformClient {
         bearerToken: this.config.credentials.bearerToken,
         channelPhoneNumber: this.applicationId,
         tenantId: this.config.credentials.tenantId,
-        webhookSecret: this.config.credentials.webhookSecret,
       }),
     };
   }

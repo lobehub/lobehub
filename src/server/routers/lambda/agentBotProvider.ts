@@ -4,7 +4,6 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
-import { appEnv } from '@/envs/app';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
@@ -14,6 +13,7 @@ import {
   mergeBotSettingsForPersist,
 } from '@/server/services/bot/agentBotProviderSettings';
 import { getBotMessageRouter } from '@/server/services/bot/BotMessageRouter';
+import { buildBotPlatformRuntimeContext } from '@/server/services/bot/buildBotPlatformContext';
 import { mergeWithDefaults, platformRegistry } from '@/server/services/bot/platforms';
 import { registerWatiWebhook } from '@/server/services/bot/platforms/wati/client';
 import { GatewayService } from '@/server/services/gateway';
@@ -216,7 +216,7 @@ export const agentBotProviderRouter = router({
             platform,
             settings,
           },
-          { appUrl: appEnv.APP_URL },
+          buildBotPlatformRuntimeContext(ctx.userId),
         );
         return { valid: true, webhookUrl };
       }

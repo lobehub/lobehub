@@ -85,10 +85,19 @@ const Footer = memo<FooterProps>(
     const origin = useAppOrigin();
     const platformId = platformDef.id;
     const applicationId = AntdForm.useWatch('applicationId', form);
+    const webhookProxyUrl = AntdForm.useWatch(['credentials', 'webhookProxyUrl'], form);
 
     const settingsConnectionMode = AntdForm.useWatch(['settings', 'connectionMode'], form);
 
     const showWebhookUrl = platformDef.showWebhookUrl || settingsConnectionMode === 'webhook';
+
+    const webhookBase = useMemo(() => {
+      const proxy = (webhookProxyUrl ?? currentConfig?.credentials?.webhookProxyUrl)?.trim();
+      const base = (proxy || origin).replace(/\/$/, '');
+      return base;
+    }, [currentConfig?.credentials?.webhookProxyUrl, origin, webhookProxyUrl]);
+
+    const webhookPhone = applicationId?.replaceAll(/\D/g, '') || applicationId;
 
     // Strong reminder when an already-saved bot is missing the operator's
     // User ID. Without it, AI tools can't push notifications back to the
@@ -117,9 +126,9 @@ const Footer = memo<FooterProps>(
       hasUserIdField &&
       !(typeof effectiveUserId === 'string' && effectiveUserId.trim());
 
-    const webhookUrl = applicationId
-      ? `${origin}/api/agent/webhooks/${platformId}/${applicationId}`
-      : `${origin}/api/agent/webhooks/${platformId}`;
+    const webhookUrl = webhookPhone
+      ? `${webhookBase}/api/agent/webhooks/${platformId}/${webhookPhone}`
+      : `${webhookBase}/api/agent/webhooks/${platformId}`;
 
     return (
       <div className={styles.bottom}>
