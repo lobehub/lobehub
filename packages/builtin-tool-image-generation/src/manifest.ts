@@ -113,7 +113,7 @@ export const ImageGenerationManifest: BuiltinToolManifest = {
         required: ['prompt'],
         type: 'object',
       },
-      renderDisplayControl: 'expand',
+      renderDisplayControl: 'alwaysExpand',
     },
     {
       description:

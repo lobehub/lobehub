@@ -197,6 +197,14 @@ const formatGenerationLines = (generations: GeneratedImageTask[]) =>
     return `${index + 1}. generationId=${item.generationId}${status}${suffix}`;
   });
 
+const formatMarkdownImageLines = (generations: GeneratedImageTask[]) =>
+  generations
+    .map((item, index) => {
+      const url = getTaskAssetUrl(item);
+      return url ? `![Generated image ${index + 1}](${url})` : undefined;
+    })
+    .filter((line): line is string => Boolean(line));
+
 const formatStartedContent = (state: GenerateImageState) =>
   [
     `Image generation started with ${state.provider}/${state.model}.`,
@@ -214,6 +222,7 @@ const formatCompletedContent = (state: GenerateImageState) =>
     state.batchId ? `Batch ID: ${state.batchId}` : undefined,
     'Images:',
     ...formatGenerationLines(state.generations),
+    ...formatMarkdownImageLines(state.generations),
   ]
     .filter((line): line is string => Boolean(line))
     .join('\n');

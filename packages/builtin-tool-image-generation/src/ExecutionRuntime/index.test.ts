@@ -135,6 +135,7 @@ describe('ImageGenerationExecutionRuntime', () => {
       ],
     });
     expect(result.content).toContain('https://cdn.example.com/image.png');
+    expect(result.content).toContain('![Generated image 1](https://cdn.example.com/image.png)');
   });
 
   it('can return task ids immediately when waiting is disabled', async () => {
