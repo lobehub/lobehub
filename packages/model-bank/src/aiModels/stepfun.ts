@@ -52,7 +52,7 @@ const stepfunChatModels: AIChatModelCard[] = [
       ],
     },
     settings: {
-      extendParams: ['reasoningEffort'],
+      extendParams: ['step3_5ReasoningEffort'],
       searchImpl: 'params',
     },
     type: 'chat',
