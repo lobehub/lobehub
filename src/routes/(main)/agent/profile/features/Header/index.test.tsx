@@ -72,6 +72,8 @@ const renderMenuItems = (items: MockDropdownItem[]) =>
       </div>
     ));
 
+const getLatestExportedBlob = () => vi.mocked(URL.createObjectURL).mock.calls.at(-1)?.[0] as Blob;
+
 vi.mock('@lobehub/ui', () => ({
   ActionIcon: () => <button aria-label="more" type="button" />,
   DropdownMenu: ({
@@ -260,7 +262,7 @@ describe('Agent profile Header', () => {
 
     await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled());
 
-    const exportedBlob = vi.mocked(URL.createObjectURL).mock.calls[0][0] as Blob;
+    const exportedBlob = getLatestExportedBlob();
     await expect(exportedBlob.text()).resolves.toContain('# Test Agent');
     await expect(exportedBlob.text()).resolves.toContain('You are helpful.');
     expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled();
@@ -278,7 +280,7 @@ describe('Agent profile Header', () => {
 
     await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled());
 
-    const exportedBlob = vi.mocked(URL.createObjectURL).mock.calls[0][0] as Blob;
+    const exportedBlob = getLatestExportedBlob();
     const exportedMarkdown = await exportedBlob.text();
 
     expect(exportedMarkdown).toContain('# Test Agent');
