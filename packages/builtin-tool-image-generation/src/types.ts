@@ -73,11 +73,20 @@ export interface GenerateImageParams {
   parameters?: Partial<RuntimeImageGenParams> & Record<string, unknown>;
   prompt: string;
   provider?: string;
+  /**
+   * Maximum time to wait for final image URLs when waitUntilComplete is enabled.
+   */
+  waitTimeoutMs?: number;
+  /**
+   * Wait for generated image URLs before returning. Defaults to true.
+   */
+  waitUntilComplete?: boolean;
 }
 
 export interface GeneratedImageTask {
   asset?: Generation['asset'] | null;
   asyncTaskId: string;
+  error?: AsyncTaskError | null;
   generationId: string;
   status?: AsyncTaskStatus;
 }
@@ -90,6 +99,8 @@ export interface GenerateImageState {
   model: string;
   prompt: string;
   provider: string;
+  waitTimedOut?: boolean;
+  waitUntilComplete?: boolean;
 }
 
 export interface GetImageGenerationStatusParams {

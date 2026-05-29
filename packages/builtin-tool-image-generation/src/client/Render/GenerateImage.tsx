@@ -112,6 +112,9 @@ const getAssetUrl = (state?: GetImageGenerationStatusState) => {
   return asset?.url || asset?.thumbnailUrl || asset?.originalUrl;
 };
 
+const getTaskAssetUrl = (task: GeneratedImageTask) =>
+  task.asset?.url || task.asset?.thumbnailUrl || task.asset?.originalUrl;
+
 const getErrorDetail = (state?: GetImageGenerationStatusState) => {
   const error = state?.error;
   if (!error) return;
@@ -120,9 +123,17 @@ const getErrorDetail = (state?: GetImageGenerationStatusState) => {
   return body.detail;
 };
 
-const useGenerationStatus = (params: GetImageGenerationStatusParams) => {
+const getTaskErrorDetail = (task: GeneratedImageTask) => {
+  const error = task.error;
+  if (!error) return;
+  const body = error.body;
+  if (typeof body === 'string') return body;
+  return body.detail;
+};
+
+const useGenerationStatus = (params: GetImageGenerationStatusParams, enabled: boolean) => {
   return useClientDataSWR<GetImageGenerationStatusState>(
-    params.asyncTaskId
+    enabled && params.asyncTaskId
       ? ['builtin-image-generation-status', params.generationId, params.asyncTaskId]
       : null,
     async () => {
@@ -145,14 +156,19 @@ const useGenerationStatus = (params: GetImageGenerationStatusParams) => {
 
 const GenerationTile = memo<{ index: number; task: GeneratedImageTask }>(({ index, task }) => {
   const { t } = useTranslation('plugin');
-  const { data, error, isLoading } = useGenerationStatus({
-    asyncTaskId: task.asyncTaskId,
-    generationId: task.generationId,
-  });
+  const shouldFetchStatus = !isTerminalStatus(task.status);
+  const { data, error, isLoading } = useGenerationStatus(
+    {
+      asyncTaskId: task.asyncTaskId,
+      generationId: task.generationId,
+    },
+    shouldFetchStatus,
+  );
 
   const status = data?.status || task.status || (isLoading ? 'processing' : 'pending');
-  const url = getAssetUrl(data);
-  const errorDetail = error instanceof Error ? error.message : getErrorDetail(data);
+  const url = getTaskAssetUrl(task) || getAssetUrl(data);
+  const errorDetail =
+    error instanceof Error ? error.message : getTaskErrorDetail(task) || getErrorDetail(data);
 
   return (
     <div className={styles.tile}>

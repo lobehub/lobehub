@@ -46,7 +46,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const stringValue = (value: unknown) => (typeof value === 'string' && value ? value : undefined);
 
-const ImageGenerationInspector = memo<BuiltinInspectorProps<Record<string, unknown>, unknown>>(
+interface ImageGenerationInspectorArgs {
+  generationId?: unknown;
+  model?: unknown;
+  prompt?: unknown;
+  provider?: unknown;
+}
+
+const ImageGenerationInspector = memo<BuiltinInspectorProps<ImageGenerationInspectorArgs, unknown>>(
   ({ apiName, args, partialArgs, isArgumentsStreaming, isLoading }) => {
     const { t } = useTranslation('plugin');
     const currentArgs = { ...partialArgs, ...args };
@@ -80,7 +87,7 @@ const ImageGenerationInspector = memo<BuiltinInspectorProps<Record<string, unkno
 
 ImageGenerationInspector.displayName = 'ImageGenerationInspector';
 
-export const ImageGenerationInspectors: Record<string, BuiltinInspector> = {
+export const ImageGenerationInspectors: { [key: string]: BuiltinInspector } = {
   [ImageGenerationApiName.generateImage]: ImageGenerationInspector as BuiltinInspector,
   [ImageGenerationApiName.getImageGenerationStatus]: ImageGenerationInspector as BuiltinInspector,
   [ImageGenerationApiName.getImageModelParameters]: ImageGenerationInspector as BuiltinInspector,

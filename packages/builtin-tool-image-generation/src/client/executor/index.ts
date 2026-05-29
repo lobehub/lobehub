@@ -1,4 +1,8 @@
-import type { BuiltinServerRuntimeOutput, BuiltinToolResult } from '@lobechat/types';
+import type {
+  BuiltinServerRuntimeOutput,
+  BuiltinToolContext,
+  BuiltinToolResult,
+} from '@lobechat/types';
 import { BaseExecutor } from '@lobechat/types';
 import type { AiProviderModelListItem } from 'model-bank';
 
@@ -143,8 +147,11 @@ class ImageGenerationExecutor extends BaseExecutor<typeof ImageGenerationApiName
   ): Promise<BuiltinToolResult> =>
     this.toResult(await this.runtime.getImageModelParameters(params));
 
-  generateImage = async (params: GenerateImageParams): Promise<BuiltinToolResult> =>
-    this.toResult(await this.runtime.generateImage(params));
+  generateImage = async (
+    params: GenerateImageParams,
+    ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> =>
+    this.toResult(await this.runtime.generateImage(params, { signal: ctx?.signal }));
 
   getImageGenerationStatus = async (
     params: GetImageGenerationStatusParams,

@@ -1,9 +1,14 @@
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
-import type { AsyncTaskError, BuiltinServerRuntimeOutput } from '@lobechat/types';
+import {
+  type AsyncTaskError,
+  AsyncTaskStatus,
+  type BuiltinServerRuntimeOutput,
+} from '@lobechat/types';
 import type { RuntimeImageGenParams } from 'model-bank';
 import { extractDefaultValues } from 'model-bank';
 
 import type {
+  GeneratedImageTask,
   GenerateImageParams,
   GenerateImageState,
   GetImageGenerationStatusParams,
@@ -23,6 +28,16 @@ const MAX_LIST_LIMIT = 50;
 const MAX_PARAMETER_LOOKUP_LIMIT = 200;
 const DEFAULT_IMAGE_NUM = 1;
 const MAX_IMAGE_NUM = 8;
+const DEFAULT_WAIT_TIMEOUT_MS = 120_000;
+const MAX_WAIT_TIMEOUT_MS = 175_000;
+const MIN_WAIT_TIMEOUT_MS = 1000;
+const WAIT_TIMEOUT_BUFFER_MS = 5000;
+const WAIT_POLL_INTERVAL_MS = 3000;
+
+export interface GenerateImageRuntimeContext {
+  executionTimeoutMs?: number;
+  signal?: AbortSignal;
+}
 
 export interface ImageGenerationRuntimeService {
   createGenerationTopic: (type: 'image') => Promise<string>;
@@ -109,6 +124,53 @@ const getAssetUrl = (state: GetImageGenerationStatusState) => {
   return asset?.url || asset?.thumbnailUrl || asset?.originalUrl;
 };
 
+const getTaskAssetUrl = (task: GeneratedImageTask) =>
+  task.asset?.url || task.asset?.thumbnailUrl || task.asset?.originalUrl;
+
+const isTerminalStatus = (status: AsyncTaskStatus) =>
+  status === AsyncTaskStatus.Success || status === AsyncTaskStatus.Error;
+
+const resolveWaitTimeoutMs = (waitTimeoutMs: number | undefined, executionTimeoutMs?: number) => {
+  const requested =
+    typeof waitTimeoutMs === 'number' && Number.isFinite(waitTimeoutMs) && waitTimeoutMs > 0
+      ? Math.trunc(waitTimeoutMs)
+      : DEFAULT_WAIT_TIMEOUT_MS;
+  const runtimeBudget =
+    typeof executionTimeoutMs === 'number' && Number.isFinite(executionTimeoutMs)
+      ? Math.max(MIN_WAIT_TIMEOUT_MS, Math.trunc(executionTimeoutMs) - WAIT_TIMEOUT_BUFFER_MS)
+      : MAX_WAIT_TIMEOUT_MS;
+
+  return Math.min(
+    Math.max(requested, MIN_WAIT_TIMEOUT_MS),
+    Math.min(runtimeBudget, MAX_WAIT_TIMEOUT_MS),
+  );
+};
+
+const sleep = (ms: number, signal?: AbortSignal) =>
+  new Promise<void>((resolve, reject) => {
+    if (ms <= 0) {
+      resolve();
+      return;
+    }
+
+    if (signal?.aborted) {
+      reject(new Error('Image generation wait was aborted.'));
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+
+    function onAbort() {
+      clearTimeout(timeout);
+      reject(new Error('Image generation wait was aborted.'));
+    }
+
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+
 const formatStatusContent = (state: GetImageGenerationStatusState) => {
   if (state.status === 'success') {
     const url = getAssetUrl(state);
@@ -123,6 +185,49 @@ const formatStatusContent = (state: GetImageGenerationStatusState) => {
 
   return `Image generation ${state.generationId} is ${state.status}. Check again later with getImageGenerationStatus.`;
 };
+
+const formatGenerationLines = (generations: GeneratedImageTask[]) =>
+  generations.map((item, index) => {
+    const url = getTaskAssetUrl(item);
+    const status = item.status ? `, status=${item.status}` : '';
+    const error =
+      item.status === AsyncTaskStatus.Error ? `, error=${asyncTaskErrorMessage(item.error)}` : '';
+    const suffix = url ? `, imageUrl=${url}` : `, asyncTaskId=${item.asyncTaskId}${error}`;
+
+    return `${index + 1}. generationId=${item.generationId}${status}${suffix}`;
+  });
+
+const formatStartedContent = (state: GenerateImageState) =>
+  [
+    `Image generation started with ${state.provider}/${state.model}.`,
+    state.batchId ? `Batch ID: ${state.batchId}` : undefined,
+    'Generations:',
+    ...formatGenerationLines(state.generations),
+    'Use getImageGenerationStatus for each generation until status is success or error.',
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join('\n');
+
+const formatCompletedContent = (state: GenerateImageState) =>
+  [
+    `Image generation completed with ${state.provider}/${state.model}.`,
+    state.batchId ? `Batch ID: ${state.batchId}` : undefined,
+    'Images:',
+    ...formatGenerationLines(state.generations),
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join('\n');
+
+const formatTimedOutContent = (state: GenerateImageState, waitTimeoutMs: number) =>
+  [
+    `Image generation started with ${state.provider}/${state.model} and is still processing after ${waitTimeoutMs}ms.`,
+    state.batchId ? `Batch ID: ${state.batchId}` : undefined,
+    'Current generations:',
+    ...formatGenerationLines(state.generations),
+    'Use getImageGenerationStatus later only for generations that are not success or error.',
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join('\n');
 
 const normalizeReferenceUrls = ({
   imageUrl,
@@ -218,7 +323,52 @@ export class ImageGenerationExecutionRuntime {
     }
   }
 
-  async generateImage(args: GenerateImageParams): Promise<BuiltinServerRuntimeOutput> {
+  private async waitForGenerations(
+    generations: GeneratedImageTask[],
+    waitTimeoutMs: number,
+    signal?: AbortSignal,
+  ): Promise<{ generations: GeneratedImageTask[]; timedOut: boolean }> {
+    const deadline = Date.now() + waitTimeoutMs;
+    let current = generations;
+
+    while (true) {
+      const statuses = await Promise.all(
+        current.map((item) =>
+          this.service.getGenerationStatus({
+            asyncTaskId: item.asyncTaskId,
+            generationId: item.generationId,
+          }),
+        ),
+      );
+
+      current = current.map((item, index) => {
+        const state = statuses[index]!;
+
+        return {
+          ...item,
+          asset: state.generation?.asset ?? item.asset,
+          error: state.error,
+          status: state.status,
+        };
+      });
+
+      if (statuses.every((item) => isTerminalStatus(item.status))) {
+        return { generations: current, timedOut: false };
+      }
+
+      const remainingMs = deadline - Date.now();
+      if (remainingMs <= 0) {
+        return { generations: current, timedOut: true };
+      }
+
+      await sleep(Math.min(WAIT_POLL_INTERVAL_MS, remainingMs), signal);
+    }
+  }
+
+  async generateImage(
+    args: GenerateImageParams,
+    context: GenerateImageRuntimeContext = {},
+  ): Promise<BuiltinServerRuntimeOutput> {
     const prompt = args.prompt?.trim();
     if (!prompt) {
       return errorOutput('InvalidToolArguments', '`prompt` is required.');
@@ -234,6 +384,7 @@ export class ImageGenerationExecutionRuntime {
 
     const provider = args.provider?.trim() || BRANDING_PROVIDER;
     const model = args.model?.trim() || DEFAULT_IMAGE_GENERATION_MODEL;
+    const waitUntilComplete = args.waitUntilComplete !== false;
     const referenceUrls = normalizeReferenceUrls(args);
     const params = {
       ...args.parameters,
@@ -284,22 +435,46 @@ export class ImageGenerationExecutionRuntime {
         model,
         prompt,
         provider,
+        waitUntilComplete,
       };
 
-      const lines = [
-        `Image generation started with ${provider}/${model}.`,
-        result.data.batch?.id ? `Batch ID: ${result.data.batch.id}` : undefined,
-        'Generations:',
-        ...generations.map(
-          (item, index) =>
-            `${index + 1}. generationId=${item.generationId}, asyncTaskId=${item.asyncTaskId}`,
-        ),
-        'Use getImageGenerationStatus for each generation until status is success or error.',
-      ].filter((line): line is string => Boolean(line));
+      if (!waitUntilComplete) {
+        return {
+          content: formatStartedContent(state),
+          state,
+          success: true,
+        };
+      }
+
+      const waitTimeoutMs = resolveWaitTimeoutMs(args.waitTimeoutMs, context.executionTimeoutMs);
+      const waitResult = await this.waitForGenerations(generations, waitTimeoutMs, context.signal);
+      const waitedState: GenerateImageState = {
+        ...state,
+        generations: waitResult.generations,
+        waitTimedOut: waitResult.timedOut,
+      };
+
+      if (waitResult.timedOut) {
+        return {
+          content: formatTimedOutContent(waitedState, waitTimeoutMs),
+          state: waitedState,
+          success: true,
+        };
+      }
+
+      if (waitResult.generations.some((item) => item.status === AsyncTaskStatus.Error)) {
+        const message = 'One or more image generations failed.';
+        return {
+          content: formatCompletedContent(waitedState),
+          error: { message, type: 'ImageGenerationFailed' },
+          state: waitedState,
+          success: false,
+        };
+      }
 
       return {
-        content: lines.join('\n'),
-        state,
+        content: formatCompletedContent(waitedState),
+        state: waitedState,
         success: true,
       };
     } catch (error) {

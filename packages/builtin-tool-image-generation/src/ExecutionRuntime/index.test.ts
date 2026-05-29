@@ -13,6 +13,27 @@ const modelParameters = {
   },
 };
 
+const successStatus = {
+  asyncTaskId: 'task-1',
+  error: null,
+  generation: {
+    asset: {
+      type: 'image',
+      url: 'https://cdn.example.com/image.png',
+    },
+    asyncTaskId: 'task-1',
+    createdAt: new Date(),
+    id: 'generation-1',
+    seed: null,
+    task: {
+      id: 'task-1',
+      status: AsyncTaskStatus.Success,
+    },
+  },
+  generationId: 'generation-1',
+  status: AsyncTaskStatus.Success,
+};
+
 const createService = (
   overrides: Partial<ImageGenerationRuntimeService> = {},
 ): ImageGenerationRuntimeService => ({
@@ -29,13 +50,7 @@ const createService = (
     },
     success: true,
   }),
-  getGenerationStatus: vi.fn().mockResolvedValue({
-    asyncTaskId: 'task-1',
-    error: null,
-    generation: null,
-    generationId: 'generation-1',
-    status: AsyncTaskStatus.Pending,
-  }),
+  getGenerationStatus: vi.fn().mockResolvedValue(successStatus),
   listImageModels: vi.fn().mockResolvedValue({
     providers: [
       {
@@ -85,7 +100,7 @@ describe('ImageGenerationExecutionRuntime', () => {
     });
   });
 
-  it('starts image generation with the default provider and model', async () => {
+  it('generates an image with the default provider and model and waits for the URL', async () => {
     const service = createService();
     const runtime = new ImageGenerationExecutionRuntime(service);
 
@@ -102,10 +117,81 @@ describe('ImageGenerationExecutionRuntime', () => {
       },
       provider: BRANDING_PROVIDER,
     });
+    expect(service.getGenerationStatus).toHaveBeenCalledWith({
+      asyncTaskId: 'task-1',
+      generationId: 'generation-1',
+    });
     expect(result.state).toMatchObject({
       batchId: 'batch-1',
-      generations: [{ asyncTaskId: 'task-1', generationId: 'generation-1' }],
+      generations: [
+        {
+          asset: {
+            url: 'https://cdn.example.com/image.png',
+          },
+          asyncTaskId: 'task-1',
+          generationId: 'generation-1',
+          status: AsyncTaskStatus.Success,
+        },
+      ],
     });
+    expect(result.content).toContain('https://cdn.example.com/image.png');
+  });
+
+  it('can return task ids immediately when waiting is disabled', async () => {
+    const service = createService();
+    const runtime = new ImageGenerationExecutionRuntime(service);
+
+    const result = await runtime.generateImage({
+      prompt: 'A compact workbench UI',
+      waitUntilComplete: false,
+    });
+
+    expect(result.success).toBe(true);
+    expect(service.getGenerationStatus).not.toHaveBeenCalled();
+    expect(result.content).toContain('Use getImageGenerationStatus');
+    expect(result.state).toMatchObject({
+      generations: [{ asyncTaskId: 'task-1', generationId: 'generation-1' }],
+      waitUntilComplete: false,
+    });
+  });
+
+  it('returns processing state when blocking wait times out', async () => {
+    vi.useFakeTimers();
+    try {
+      const service = createService({
+        getGenerationStatus: vi.fn().mockResolvedValue({
+          asyncTaskId: 'task-1',
+          error: null,
+          generation: null,
+          generationId: 'generation-1',
+          status: AsyncTaskStatus.Processing,
+        }),
+      });
+      const runtime = new ImageGenerationExecutionRuntime(service);
+
+      const promise = runtime.generateImage({
+        prompt: 'A compact workbench UI',
+        waitTimeoutMs: 1000,
+      });
+
+      await vi.advanceTimersByTimeAsync(1000);
+      const result = await promise;
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('still processing');
+      expect(result.state).toMatchObject({
+        generations: [
+          {
+            asyncTaskId: 'task-1',
+            generationId: 'generation-1',
+            status: AsyncTaskStatus.Processing,
+          },
+        ],
+        waitTimedOut: true,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('rejects invalid image counts before creating tasks', async () => {
@@ -122,26 +208,7 @@ describe('ImageGenerationExecutionRuntime', () => {
   it('returns image URL when status succeeds', async () => {
     const runtime = new ImageGenerationExecutionRuntime(
       createService({
-        getGenerationStatus: vi.fn().mockResolvedValue({
-          asyncTaskId: 'task-1',
-          error: null,
-          generation: {
-            asset: {
-              type: 'image',
-              url: 'https://cdn.example.com/image.png',
-            },
-            asyncTaskId: 'task-1',
-            createdAt: new Date(),
-            id: 'generation-1',
-            seed: null,
-            task: {
-              id: 'task-1',
-              status: AsyncTaskStatus.Success,
-            },
-          },
-          generationId: 'generation-1',
-          status: AsyncTaskStatus.Success,
-        }),
+        getGenerationStatus: vi.fn().mockResolvedValue(successStatus),
       }),
     );
 

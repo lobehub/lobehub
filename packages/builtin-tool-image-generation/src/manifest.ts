@@ -50,8 +50,9 @@ export const ImageGenerationManifest: BuiltinToolManifest = {
       },
     },
     {
+      defaultTimeoutMs: 180_000,
       description:
-        'Start an image generation task. Returns batch and async task ids immediately; use getImageGenerationStatus to retrieve final image URLs.',
+        'Generate images and wait by default until final image URLs are available. Only use getImageGenerationStatus if this returns a still-processing result or if waitUntilComplete is false.',
       name: ImageGenerationApiName.generateImage,
       parameters: {
         additionalProperties: false,
@@ -94,6 +95,20 @@ export const ImageGenerationManifest: BuiltinToolManifest = {
               'Image provider id. Defaults to the current LobeHub default image provider when omitted.',
             type: 'string',
           },
+          waitTimeoutMs: {
+            default: 120_000,
+            description:
+              'Maximum time in milliseconds to wait for final image URLs when waitUntilComplete is enabled. Defaults to 120000; max is 175000.',
+            maximum: 175_000,
+            minimum: 1000,
+            type: 'number',
+          },
+          waitUntilComplete: {
+            default: true,
+            description:
+              'Whether to wait for final image URLs before returning. Defaults to true. Set false only when explicitly starting a background image task.',
+            type: 'boolean',
+          },
         },
         required: ['prompt'],
         type: 'object',
@@ -102,7 +117,7 @@ export const ImageGenerationManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Check the status of one image generation item returned by generateImage. Use until status is success or error.',
+        'Check one image generation item returned by generateImage. Use only after generateImage says the item is still pending/processing, or after calling generateImage with waitUntilComplete=false.',
       name: ImageGenerationApiName.getImageGenerationStatus,
       parameters: {
         additionalProperties: false,
