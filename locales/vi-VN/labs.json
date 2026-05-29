@@ -1,15 +1,21 @@
 {
+  "features.agentDocumentFloatingChatPanel.desc": "Hiển thị bảng trò chuyện nổi trong chế độ xem trước tài liệu của đại lý chỉ khi tính năng thử nghiệm này được bật.",
+  "features.agentDocumentFloatingChatPanel.title": "Bảng Trò Chuyện Nổi Tài Liệu Đại Lý",
   "features.agentSelfIteration.desc": "Cho phép trợ lý tự phản tư, xây dựng khả năng tự nhận thức và liên tục cải thiện thông qua các nỗ lực và tương tác đang diễn ra.",
   "features.agentSelfIteration.title": "Tự lặp của tác nhân",
   "features.assistantMessageGroup.desc": "Nhóm các tin nhắn của tác nhân và kết quả gọi công cụ lại với nhau để hiển thị",
   "features.assistantMessageGroup.title": "Nhóm Tin Nhắn Tác Nhân",
+  "features.executionDeviceSwitcher.desc": "Hiển thị công cụ chuyển đổi thiết bị thực thi trong thanh công cụ đại lý không đồng nhất để bạn có thể định tuyến các lần chạy đến thiết bị này, một sandbox đám mây hoặc một thiết bị từ xa được liên kết.",
+  "features.executionDeviceSwitcher.title": "Công Cụ Chuyển Đổi Thiết Bị Thực Thi",
   "features.gatewayMode.desc": "Thực thi các tác vụ của tác nhân trên máy chủ thông qua Gateway WebSocket thay vì chạy cục bộ. Giúp tăng tốc độ xử lý và giảm mức sử dụng tài nguyên trên thiết bị của người dùng.",
   "features.gatewayMode.title": "Thực thi tác nhân phía máy chủ (Gateway)",
   "features.groupChat.desc": "Kích hoạt phối hợp trò chuyện nhóm với nhiều tác nhân.",
   "features.groupChat.title": "Trò Chuyện Nhóm (Đa Tác Nhân)",
+  "features.imessage.desc": "Kết nối các đại lý với iMessage thông qua cầu nối BlueBubbles LobeHub Desktop cục bộ.",
+  "features.imessage.title": "Kênh iMessage",
   "features.inputMarkdown.desc": "Hiển thị Markdown trong khu vực nhập liệu theo thời gian thực (văn bản in đậm, khối mã, bảng, v.v.).",
   "features.inputMarkdown.title": "Hiển Thị Markdown Trong Ô Nhập",
-  "features.messenger.desc": "Trò chuyện với các đại lý của bạn từ Telegram (và các ứng dụng nhắn tin khác) thông qua bot LobeHub được chia sẻ. Thêm một tab Messenger trong Cài đặt để liên kết tài khoản của bạn và chọn đại lý nhận tin nhắn.",
-  "features.messenger.title": "Nhắn tin",
+  "features.platformAgent.desc": "Hiển thị mục \"Thêm Đại Lý Nền Tảng\" trong menu tạo. Các đại lý nền tảng (ví dụ: OpenClaw, Hermes) chạy trên một thiết bị được kết nối và giao tiếp lại thông qua lh connect.",
+  "features.platformAgent.title": "Tạo Đại Lý Nền Tảng",
   "title": "Phòng Thí Nghiệm"
 }

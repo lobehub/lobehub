@@ -33,7 +33,6 @@
   "exclude": [
     "node_modules",
     "apps/desktop/**",
-    "apps/device-gateway/**",
     "apps/mobile/**",
     "tmp",
     "temp",

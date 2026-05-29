@@ -705,14 +705,12 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
   useEffect(() => {
     const unsubscribe = marketAuthEvents.on('market-unauthorized', async (event) => {
       console.info('[MarketAuth] Received unauthorized event for path:', event.path);
-      // Desktop: do not open community auth / profile modals from background API 401s.
-      // Only attempt a silent token refresh; Lobe cloud re-auth is handled separately (AuthRequiredModal).
       if (isDesktop) {
         const refreshed = await refreshToken();
         if (!refreshed) {
-          console.info(
-            '[MarketAuth] Desktop: market 401 — refresh failed, skipping community sign-in UI',
-          );
+          // Silent refresh failed — the Market OAuth token is genuinely expired.
+          // Show the Market auth modal so the user can re-authorize.
+          await handleUnauthorized();
         }
         return;
       }

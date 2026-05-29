@@ -133,6 +133,32 @@ describe('GatewayClient', () => {
       expect(ws.url).toContain('userId=test-user');
     });
 
+    it('should include connectionId and channel in the URL when provided', () => {
+      const c = new GatewayClient({
+        autoReconnect: false,
+        channel: 'cli',
+        connectionId: 'conn-123',
+        deviceId: 'dev-1',
+        gatewayUrl: 'https://gateway.test.com',
+        token: 'tok',
+      });
+      c.connect();
+      const ws = (c as any).ws;
+      expect(ws.url).toContain('connectionId=conn-123');
+      expect(ws.url).toContain('channel=cli');
+      expect(c.currentConnectionId).toBe('conn-123');
+      c.disconnect();
+    });
+
+    it('should default connectionId to a generated UUID when omitted', () => {
+      const c = new GatewayClient({ autoReconnect: false, token: 'tok' });
+      c.connect();
+      const ws = (c as any).ws;
+      expect(ws.url).toContain(`connectionId=${c.currentConnectionId}`);
+      expect(ws.url).not.toContain('channel=');
+      c.disconnect();
+    });
+
     it('should build ws URL for http gateway', () => {
       const c = new GatewayClient({
         autoReconnect: false,

@@ -225,6 +225,22 @@ describe('formatSearchResults', () => {
     expect(result).toMatchSnapshot();
   });
 
+  it('should expose fileId attribute on file-backed documents', () => {
+    const documents: DocumentSearchResult[] = [
+      {
+        documentId: 'docs_pdf_xyz',
+        fileId: 'file_pdf_xyz',
+        knowledgeBaseId: 'kb_research',
+        relevance: 1.4,
+        snippet: 'Attention is all you need...',
+        title: 'Attention Paper',
+      },
+    ];
+    const result = formatSearchResults([], 'attention', documents);
+    expect(result).toContain('fileId="file_pdf_xyz"');
+    expect(result).toContain('id="docs_pdf_xyz"');
+  });
+
   it('should annotate when vector search fails but BM25 succeeds', () => {
     const documents: DocumentSearchResult[] = [
       {

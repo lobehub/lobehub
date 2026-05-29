@@ -39,9 +39,17 @@ export class DeviceProxy {
 
     try {
       const devices = await client.queryDeviceList(userId);
-      // Transform gateway format to runtime-expected format
-      // All devices from gateway have active WebSocket connections, so they're online
+      // The gateway already dedupes to one entry per physical device, with its
+      // live connections nested as `channels`. Map to the runtime shape; every
+      // returned device has at least one channel, so it's online.
       return devices.map((d) => ({
+        // `channels` may be absent if the gateway worker deploy lags behind the
+        // server (separate Cloudflare deploy); tolerate the legacy flat shape.
+        channels: (d.channels ?? []).map((c) => ({
+          channel: c.channel,
+          connectedAt: new Date(c.connectedAt).toISOString(),
+          connectionId: c.connectionId,
+        })),
         deviceId: d.deviceId,
         hostname: d.hostname,
         lastSeen: new Date(d.connectedAt).toISOString(),

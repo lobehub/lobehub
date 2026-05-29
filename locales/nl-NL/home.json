@@ -48,13 +48,10 @@
   "starter.createAgent": "Agent aanmaken",
   "starter.createGroup": "Groep aanmaken",
   "starter.deepResearch": "Diepgaand onderzoek",
-  "starter.deepseekV4Pro": "DeepSeek V4 Pro",
-  "starter.deepseekV4ProAlready": "Gebruikt al DeepSeek V4 Pro",
-  "starter.deepseekV4ProSwitched": "Overgeschakeld naar DeepSeek V4 Pro",
   "starter.developing": "Binnenkort beschikbaar",
   "starter.image": "Afbeelding",
-  "starter.imageGeneration": "Afbeelding Generatie",
+  "starter.modelInUse": "Reeds in gebruik: {{name}}",
+  "starter.modelSwitched": "Overgeschakeld naar {{name}}",
   "starter.newLabel": "Nieuw",
-  "starter.videoGeneration": "Seedance 2.0",
   "starter.write": "Schrijven"
 }

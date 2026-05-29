@@ -1,3 +1,4 @@
+import { MARKET_AUTH_REQUIRED_MESSAGE } from '@lobechat/desktop-bridge';
 import { type CodeInterpreterToolName } from '@lobehub/market-sdk';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
@@ -229,8 +230,7 @@ const execInSandboxHandler = async ({
       ) {
         throw new TRPCError({
           code: 'UNAUTHORIZED',
-          message:
-            'Market authorization expired. An authorization dialog has been shown to the user. Please wait for the user to complete authorization and then retry the current task.',
+          message: MARKET_AUTH_REQUIRED_MESSAGE,
         });
       }
 
@@ -268,8 +268,7 @@ const execInSandboxHandler = async ({
     ) {
       throw new TRPCError({
         code: 'UNAUTHORIZED',
-        message:
-          'Market authorization expired. An authorization dialog has been shown to the user. Please wait for the user to complete authorization and then retry the current task.',
+        message: MARKET_AUTH_REQUIRED_MESSAGE,
       });
     }
 

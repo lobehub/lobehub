@@ -1,0 +1,29 @@
+// Cloud-only feature; namespace kept here so locale dictionary stays centralized.
+export default {
+  'banner.copy':
+    'Like this page? <strong>Create your own with {{appName}}</strong> — free workspace for AI-native docs.',
+  'banner.signIn': 'Sign in',
+  'banner.signUp': 'Sign up free',
+  'error.notFound.desc': 'This page no longer exists or has been removed.',
+  'error.notFound.title': 'Page not found',
+  'error.private.action': 'Sign in',
+  'error.private.desc':
+    'Sign in if you are the owner, or ask for access from the person who shared the page.',
+  'error.private.title': 'Page is private',
+  'popover.copyLink': 'Copy Link',
+  'popover.copyLinkSuccess': 'Link copied',
+  'popover.linkHint': 'Anyone with the link can view this page',
+  'popover.permissionLink': 'Anyone with the link',
+  'popover.permissionPrivate': 'Private',
+  'popover.privateHint': 'Only you can access this page',
+  'popover.sectionViews_one': '{{count}} view',
+  'popover.sectionViews_other': '{{count}} views',
+  'popover.title': 'Share Page',
+  'popover.updateError': 'Failed to update sharing settings',
+  'popover.visibility': 'Visibility',
+  'popover.visibilityUpdated': 'Visibility updated',
+  'shareButton.label': 'Share',
+  'shell.footer': 'Published on {{appName}}',
+  'shell.sharedBy': 'Shared by {{name}}',
+  'shell.updatedAt': 'Updated {{relative}}',
+};

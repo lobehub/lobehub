@@ -85,18 +85,24 @@ describe('DeviceProxy', () => {
       expect(result).toEqual([]);
     });
 
-    it('should transform connectedAt to lastSeen and set online: true', async () => {
+    it('should map device-centric channels to lastSeen + online and flatten channels', async () => {
       mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
       mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
-      const connectedAt = '2025-01-15T10:30:00Z';
+      const connectedAt = Date.parse('2025-01-15T10:30:00Z');
+      const iso = new Date(connectedAt).toISOString();
       mockClient.queryDeviceList.mockResolvedValue([
         {
+          channels: [
+            { channel: 'desktop', connectedAt, connectionId: 'conn-a' },
+            { channel: 'cli', connectedAt, connectionId: 'conn-b' },
+          ],
           connectedAt,
           deviceId: 'dev-1',
           hostname: 'my-laptop',
           platform: 'darwin',
         },
         {
+          channels: [{ channel: 'desktop', connectedAt, connectionId: 'conn-c' }],
           connectedAt,
           deviceId: 'dev-2',
           hostname: 'my-desktop',
@@ -109,21 +115,49 @@ describe('DeviceProxy', () => {
 
       expect(result).toEqual([
         {
+          channels: [
+            { channel: 'desktop', connectedAt: iso, connectionId: 'conn-a' },
+            { channel: 'cli', connectedAt: iso, connectionId: 'conn-b' },
+          ],
+          deviceId: 'dev-1',
+          hostname: 'my-laptop',
+          lastSeen: iso,
+          online: true,
+          platform: 'darwin',
+        },
+        {
+          channels: [{ channel: 'desktop', connectedAt: iso, connectionId: 'conn-c' }],
+          deviceId: 'dev-2',
+          hostname: 'my-desktop',
+          lastSeen: iso,
+          online: true,
+          platform: 'win32',
+        },
+      ]);
+      expect(mockClient.queryDeviceList).toHaveBeenCalledWith('user-1');
+    });
+
+    it('tolerates a legacy gateway response without channels', async () => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+      const connectedAt = Date.parse('2025-01-15T10:30:00Z');
+      mockClient.queryDeviceList.mockResolvedValue([
+        { connectedAt, deviceId: 'dev-1', hostname: 'my-laptop', platform: 'darwin' },
+      ]);
+
+      const proxy = new DeviceProxy();
+      const result = await proxy.queryDeviceList('user-1');
+
+      expect(result).toEqual([
+        {
+          channels: [],
           deviceId: 'dev-1',
           hostname: 'my-laptop',
           lastSeen: new Date(connectedAt).toISOString(),
           online: true,
           platform: 'darwin',
         },
-        {
-          deviceId: 'dev-2',
-          hostname: 'my-desktop',
-          lastSeen: new Date(connectedAt).toISOString(),
-          online: true,
-          platform: 'win32',
-        },
       ]);
-      expect(mockClient.queryDeviceList).toHaveBeenCalledWith('user-1');
     });
 
     it('should return empty array on error', async () => {

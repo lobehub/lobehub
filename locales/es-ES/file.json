@@ -53,6 +53,8 @@
   "home.uploadEntries.folder.title": "Subir carpeta",
   "home.uploadEntries.library.title": "Crear nueva biblioteca",
   "home.uploadEntries.newPage.title": "Nueva página",
+  "library.hierarchy.empty.desc": "Agrega archivos o crea una carpeta para comenzar",
+  "library.hierarchy.empty.title": "Aún no hay nada aquí",
   "library.list.confirmRemoveLibrary": "Estás a punto de eliminar esta biblioteca. Los archivos que contiene no se eliminarán, sino que se moverán a Todos los archivos. Esta acción no se puede deshacer, así que procede con precaución.",
   "library.list.empty": "Haz clic en <1>+</1> para crear una nueva biblioteca",
   "library.new": "Nueva biblioteca",

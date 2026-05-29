@@ -1,3 +1,5 @@
+export * from './share';
+
 /**
  * Document object in LobeChat
  */

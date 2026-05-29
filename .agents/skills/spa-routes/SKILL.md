@@ -1,6 +1,6 @@
 ---
 name: spa-routes
-description: "SPA roots-vs-features split for LobeHub — thin route segments under `src/routes/` delegate to domain components under `src/features/`. Use when editing `src/routes/` segments, `src/spa/router/desktopRouter.config.tsx` or `desktopRouter.config.desktop.tsx` (MUST update both together — `desktopRouter.sync.test.tsx` enforces this), `mobileRouter.config.tsx`, `popupRouter.config.tsx`, or moving UI/logic between `routes/` and `features/`. Triggers on `desktopRouter.config`, `mobileRouter.config`, `popupRouter.config`, `src/routes/**`, `src/features/**`, 'add a route', 'new page', 'route segment', '路由'."
+description: "SPA roots-vs-features split for LobeHub — thin route segments under `src/routes/` delegate to domain components under `src/features/`. Use when editing `src/routes/` segments, `src/spa/router/desktopRouter.config.tsx` or `desktopRouter.config.desktop.tsx` (MUST update both together — `desktopRouter.sync.test.tsx` enforces this), `mobileRouter.config.tsx`, `popupRouter.config.tsx`, any colocated `<name>.desktop.{ts,tsx}` variant (e.g. settings `componentMap.ts` × `componentMap.desktop.ts`, page-level `index.tsx` × `index.desktop.tsx`), or moving UI/logic between `routes/` and `features/`. Triggers on `desktopRouter.config`, `mobileRouter.config`, `popupRouter.config`, `componentMap.desktop`, `index.desktop.tsx`, `.desktop.tsx` variant, `src/routes/**`, `src/features/**`, 'add a route', 'new page', 'route segment', '路由'."
 user-invocable: false
 ---
 
@@ -91,6 +91,27 @@ Each feature should:
 | `desktopRouter.config.desktop.tsx` | Same route tree with **synchronous** imports — kept for Electron / local parity and predictable bundling.                 |
 
 Anything that changes the tree (new segment, renamed `path`, moved layout, new child route) must be reflected in **both** files in one PR or commit. Remove routes from both when deleting.
+
+---
+
+## 3b. Other `.desktop.{ts,tsx}` variants inside `src/routes/`
+
+The router pair is **not** the only `.desktop` variant pattern in this repo. Some route trees colocate a `<name>.desktop.{ts,tsx}` next to its base `<name>.{ts,tsx}` — Vite's resolver swaps in the `.desktop` file for Electron builds. Same drift risk as the router pair: editing only one side can break Electron silently.
+
+Known variants today:
+
+| Base file (web)                                       | Desktop file (Electron)                                       | Purpose                                                                                                                                    |
+| ----------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/routes/(main)/settings/features/componentMap.ts` | `src/routes/(main)/settings/features/componentMap.desktop.ts` | Settings tab → component map. Web uses dynamic `import()`; desktop uses sync imports. `componentMap.sync.test.ts` enforces identical keys. |
+| `src/routes/(main)/agent/index.tsx`                   | `src/routes/(main)/agent/index.desktop.tsx`                   | Page entry. Desktop variant overrides the web page wholesale (e.g. extra popup guards).                                                    |
+| `src/routes/(main)/group/index.tsx`                   | `src/routes/(main)/group/index.desktop.tsx`                   | Same pattern as agent.                                                                                                                     |
+
+**Rules:**
+
+1. After editing **any** `.ts`/`.tsx` under `src/routes/`, glob the same directory for a `<filename>.desktop.{ts,tsx}` sibling. If one exists, apply the equivalent change there in the same commit.
+2. When adding a new SettingsTab, register it in **both** `componentMap.ts` (with `dynamic(...)`) and `componentMap.desktop.ts` (with a sync `import`). `componentMap.sync.test.ts` will fail the build otherwise.
+3. When adding a new desktop-only page wholesale-override, prefer a single base file with platform-aware code over introducing a new `.desktop.tsx` variant — only add a new variant when the two trees genuinely diverge (different store wiring, different popup guards, etc.).
+4. When deleting, remove **both** files together.
 
 ---
 

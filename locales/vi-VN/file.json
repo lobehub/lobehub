@@ -53,6 +53,8 @@
   "home.uploadEntries.folder.title": "Tải Lên Thư Mục",
   "home.uploadEntries.library.title": "Tạo Thư Viện Mới",
   "home.uploadEntries.newPage.title": "Trang Mới",
+  "library.hierarchy.empty.desc": "Thêm tệp hoặc tạo thư mục để bắt đầu",
+  "library.hierarchy.empty.title": "Chưa có gì ở đây",
   "library.list.confirmRemoveLibrary": "Bạn sắp xóa thư viện này. Các tệp bên trong sẽ không bị xóa mà sẽ được chuyển đến Tất Cả Tệp. Hành động này không thể hoàn tác, vui lòng cẩn thận.",
   "library.list.empty": "Nhấn <1>+</1> để tạo thư viện mới",
   "library.new": "Thư Viện Mới",

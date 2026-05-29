@@ -53,6 +53,8 @@
   "home.uploadEntries.folder.title": "Ordner hochladen",
   "home.uploadEntries.library.title": "Neue Bibliothek erstellen",
   "home.uploadEntries.newPage.title": "Neue Seite",
+  "library.hierarchy.empty.desc": "Fügen Sie Dateien hinzu oder erstellen Sie einen Ordner, um loszulegen",
+  "library.hierarchy.empty.title": "Hier ist noch nichts",
   "library.list.confirmRemoveLibrary": "Sie sind dabei, diese Bibliothek zu löschen. Die darin enthaltenen Dateien werden nicht gelöscht, sondern in 'Alle Dateien' verschoben. Diese Aktion kann nicht rückgängig gemacht werden. Bitte seien Sie vorsichtig.",
   "library.list.empty": "Klicken Sie auf <1>+</1>, um eine neue Bibliothek zu erstellen",
   "library.new": "Neue Bibliothek",

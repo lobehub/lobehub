@@ -353,6 +353,7 @@
   "messengerBanner.title": "Porozmawiaj z Lobe AI na swoich ulubionych aplikacjach do przesyłania wiadomości",
   "more": "Więcej",
   "navPanel.agent": "Agent",
+  "navPanel.bottomDivider": "Elementy poniżej zakotwiczają się na dole",
   "navPanel.customizeSidebar": "Dostosuj pasek boczny",
   "navPanel.displayItems": "Wyświetlane elementy",
   "navPanel.hidden": "Ukryte",
@@ -479,5 +480,6 @@
   "userPanel.setting": "Ustawienia",
   "userPanel.upgradePlan": "Ulepsz plan",
   "userPanel.usages": "Statystyki użycia",
-  "version": "Wersja"
+  "version": "Wersja",
+  "zoom": "Powiększenie"
 }

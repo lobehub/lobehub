@@ -1,4 +1,6 @@
 {
+  "features.agentDocumentFloatingChatPanel.desc": "仅当启用此实验功能时，在代理文档预览中显示浮动聊天面板。",
+  "features.agentDocumentFloatingChatPanel.title": "代理文档浮动聊天面板",
   "features.agentSelfIteration.desc": "允许助理自我反思、自我感知，并在持续的尝试与交互中不断自我迭代。",
   "features.agentSelfIteration.title": "Agent 自我迭代",
   "features.assistantMessageGroup.desc": "将代理消息及其工具调用结果组合在一起显示",
@@ -9,6 +11,8 @@
   "features.gatewayMode.title": "服务端代理执行（Gateway）",
   "features.groupChat.desc": "启用多代理协同群聊功能。",
   "features.groupChat.title": "群聊（多代理）",
+  "features.imessage.desc": "通过本地 LobeHub 桌面 BlueBubbles 桥接器将代理连接到 iMessage。",
+  "features.imessage.title": "iMessage 渠道",
   "features.inputMarkdown.desc": "在输入区域实时渲染 Markdown（粗体、代码块、表格等）",
   "features.inputMarkdown.title": "输入框 Markdown 渲染",
   "features.platformAgent.desc": "在创建菜单中显示「添加平台 Agent」入口。平台 Agent（如 OpenClaw、Hermes）运行在已连接的设备上，通过 lh connect 与 LobeHub 通信。",

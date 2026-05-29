@@ -48,13 +48,10 @@
   "starter.createAgent": "建立助理",
   "starter.createGroup": "建立群組",
   "starter.deepResearch": "深入研究",
-  "starter.deepseekV4Pro": "DeepSeek V4 Pro",
-  "starter.deepseekV4ProAlready": "已在使用 DeepSeek V4 Pro",
-  "starter.deepseekV4ProSwitched": "已切換至 DeepSeek V4 Pro",
   "starter.developing": "開發中",
   "starter.image": "繪圖",
-  "starter.imageGeneration": "影像生成",
+  "starter.modelInUse": "已在使用 {{name}}",
+  "starter.modelSwitched": "已切換至 {{name}}",
   "starter.newLabel": "全新",
-  "starter.videoGeneration": "Seedance 2.0",
   "starter.write": "寫作"
 }

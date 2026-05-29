@@ -48,13 +48,10 @@
   "starter.createAgent": "Ajan Oluştur",
   "starter.createGroup": "Grup Oluştur",
   "starter.deepResearch": "Derin Araştırma",
-  "starter.deepseekV4Pro": "DeepSeek V4 Pro",
-  "starter.deepseekV4ProAlready": "Zaten DeepSeek V4 Pro kullanılıyor",
-  "starter.deepseekV4ProSwitched": "DeepSeek V4 Pro'ya geçildi",
   "starter.developing": "Yakında geliyor",
   "starter.image": "Görsel",
-  "starter.imageGeneration": "Görüntü Oluşturma",
+  "starter.modelInUse": "{{name}} zaten kullanılıyor",
+  "starter.modelSwitched": "{{name}}'e geçildi",
   "starter.newLabel": "Yeni",
-  "starter.videoGeneration": "Seedance 2.0",
   "starter.write": "Yaz"
 }
