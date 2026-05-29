@@ -5,7 +5,13 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { log } from '../utils/logger';
-import { loadSettings, normalizeUrl, resolveServerUrl, saveSettings } from './index';
+import {
+  loadOrCreateConnectionId,
+  loadSettings,
+  normalizeUrl,
+  resolveServerUrl,
+  saveSettings,
+} from './index';
 
 const tmpDir = path.join(os.tmpdir(), 'lobehub-cli-test-settings');
 const settingsDir = path.join(tmpDir, '.lobehub');
@@ -90,5 +96,23 @@ describe('settings', () => {
     fs.unlinkSync(settingsFile);
 
     expect(resolveServerUrl()).toBe('https://app.lobehub.com');
+  });
+
+  it('should create a connectionId once and reuse it across calls', () => {
+    const first = loadOrCreateConnectionId();
+    expect(first).toMatch(/[\da-f-]{36}/);
+
+    // Persisted in its own file, independent of settings.json.
+    expect(fs.existsSync(path.join(settingsDir, 'connection-id'))).toBe(true);
+    expect(loadOrCreateConnectionId()).toBe(first);
+  });
+
+  it('should keep the connectionId even when settings.json is cleared', () => {
+    const id = loadOrCreateConnectionId();
+    // Clearing official-server settings unlinks settings.json — connectionId must survive.
+    saveSettings({ serverUrl: 'https://app.lobehub.com/' });
+
+    expect(fs.existsSync(settingsFile)).toBe(false);
+    expect(loadOrCreateConnectionId()).toBe(id);
   });
 });

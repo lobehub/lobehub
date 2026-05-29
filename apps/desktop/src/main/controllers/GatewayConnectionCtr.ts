@@ -120,6 +120,9 @@ export default class GatewayConnectionCtr extends ControllerModule {
     // Wire up agent run handler
     srv.setAgentRunHandler((request) => this.executeAgentRun(request));
 
+    // Wire up device registrar (persists this device to the server registry)
+    srv.setDeviceRegistrar((info) => this.registerDevice(info));
+
     // Auto-connect if already logged in
     this.tryAutoConnect();
   }
@@ -687,6 +690,34 @@ export default class GatewayConnectionCtr extends ControllerModule {
     } catch {
       // Fire-and-forget: openclaw's own `lh notify` calls are the primary channel.
     }
+  }
+
+  /**
+   * Persist this device to the server registry via `device.register`.
+   * Fire-and-forget from the connect path: a failure must not block the WS
+   * connection, the device just won't appear in the offline list until the
+   * next successful connect.
+   */
+  private async registerDevice(info: {
+    deviceId: string;
+    hostname: string;
+    identitySource: string;
+    platform: string;
+  }): Promise<void> {
+    const [serverUrl, token] = await Promise.all([
+      this.remoteServerConfigCtr.getRemoteServerUrl(),
+      this.remoteServerConfigCtr.getAccessToken(),
+    ]);
+    if (!serverUrl || !token) return;
+
+    await fetch(`${serverUrl}/trpc/lambda/device.register`, {
+      body: JSON.stringify({ json: info }),
+      headers: {
+        'Content-Type': 'application/json',
+        'Oidc-Auth': token,
+      },
+      method: 'POST',
+    });
   }
 
   // ─── Platform Agent Helpers ───

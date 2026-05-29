@@ -8,9 +8,12 @@ import type {
   ToolCallRequestMessage,
 } from '@lobechat/device-gateway-client';
 import { GatewayClient } from '@lobechat/device-gateway-client';
+import type { IdentitySource } from '@lobechat/device-identity';
+import { deriveDeviceId } from '@lobechat/device-identity';
 import type { GatewayConnectionStatus } from '@lobechat/electron-client-ipc';
 import { app, powerSaveBlocker } from 'electron';
 
+import { isDev } from '@/const/env';
 import { createLogger } from '@/utils/logger';
 
 import { ServiceModule } from './index';
@@ -31,6 +34,15 @@ interface AgentRunHandler {
   (request: AgentRunRequestMessage): Promise<{ reason?: string; status: 'accepted' | 'rejected' }>;
 }
 
+interface DeviceRegistrar {
+  (info: {
+    deviceId: string;
+    hostname: string;
+    identitySource: IdentitySource;
+    platform: string;
+  }): Promise<void>;
+}
+
 /**
  * GatewayConnectionService
  *
@@ -43,11 +55,14 @@ export default class GatewayConnectionService extends ServiceModule {
   private deviceId: string | null = null;
   private powerSaveBlockerId: number | null = null;
 
+  private identitySource: IdentitySource | null = null;
+
   private tokenProvider: (() => Promise<string | null>) | null = null;
   private tokenRefresher: (() => Promise<{ error?: string; success: boolean }>) | null = null;
   private toolCallHandler: ToolCallHandler | null = null;
   private messageApiHandler: MessageApiHandler | null = null;
   private agentRunHandler: AgentRunHandler | null = null;
+  private deviceRegistrar: DeviceRegistrar | null = null;
 
   // ─── Configuration ───
 
@@ -80,8 +95,22 @@ export default class GatewayConnectionService extends ServiceModule {
     this.agentRunHandler = handler;
   }
 
+  /**
+   * Persist this device to the server's device registry. Called on every
+   * connect once the userId is known (deviceId is user-scoped). Injected by the
+   * controller, which owns the authed server URL + token.
+   */
+  setDeviceRegistrar(registrar: DeviceRegistrar) {
+    this.deviceRegistrar = registrar;
+  }
+
   // ─── Device ID ───
 
+  /**
+   * Ensure a stored fallback id exists. Pre-login this doubles as the device id
+   * shown by `getDeviceInfo`; once a userId is available `resolveDeviceIdentity`
+   * replaces it with a stable machine-derived id.
+   */
   loadOrCreateDeviceId() {
     const stored = this.app.storeManager.get('gatewayDeviceId') as string | undefined;
     if (stored) {
@@ -93,8 +122,38 @@ export default class GatewayConnectionService extends ServiceModule {
     logger.debug(`Device ID: ${this.deviceId}`);
   }
 
+  /**
+   * Derive the stable, user-scoped device id. Survives LobeHub reinstalls
+   * because it hashes the OS machine id; falls back to the stored random UUID
+   * when the machine id is unavailable. Caches the result for this session.
+   */
+  resolveDeviceIdentity(userId: string): { deviceId: string; identitySource: IdentitySource } {
+    const fallbackId = this.app.storeManager.get('gatewayDeviceId') as string | undefined;
+    const identity = deriveDeviceId(userId, { fallbackId });
+    this.deviceId = identity.deviceId;
+    this.identitySource = identity.identitySource;
+    return identity;
+  }
+
   getDeviceId(): string {
     return this.deviceId || 'unknown';
+  }
+
+  /**
+   * Connection routing key — the gateway's stale-socket dedupe key, decoupled
+   * from the stable `deviceId`. Reuses the persisted random UUID (historically
+   * `gatewayDeviceId`, now used purely as the connectionId) so a reconnect of
+   * this install replaces only its own previous socket, while a co-running
+   * `lh connect` on the same machine (same deviceId, different connectionId)
+   * stays connected.
+   */
+  getConnectionId(): string {
+    let id = this.app.storeManager.get('gatewayDeviceId') as string | undefined;
+    if (!id) {
+      id = randomUUID();
+      this.app.storeManager.set('gatewayDeviceId', id);
+    }
+    return id;
   }
 
   // ─── Connection Status ───
@@ -171,7 +230,24 @@ export default class GatewayConnectionService extends ServiceModule {
     const userId = this.extractUserIdFromToken(token);
     logger.info(`Connecting to device gateway: ${gatewayUrl}, userId: ${userId || 'unknown'}`);
 
+    // Resolve the stable, user-scoped device id and register with the server
+    // registry before opening the WS, so the device row exists by the time the
+    // gateway reports it online.
+    if (userId) {
+      const identity = this.resolveDeviceIdentity(userId);
+      await this.deviceRegistrar?.({
+        deviceId: identity.deviceId,
+        hostname: os.hostname(),
+        identitySource: identity.identitySource,
+        platform: process.platform,
+      }).catch((err) => {
+        logger.warn(`Device registration failed (non-fatal): ${(err as Error).message}`);
+      });
+    }
+
     const client = new GatewayClient({
+      channel: isDev ? 'desktop-dev' : 'desktop',
+      connectionId: this.getConnectionId(),
       deviceId: this.getDeviceId(),
       gatewayUrl,
       logger,

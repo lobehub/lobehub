@@ -8,8 +8,11 @@ import type {
   ToolCallRequestMessage,
 } from '@lobechat/device-gateway-client';
 import { GatewayClient } from '@lobechat/device-gateway-client';
+import type { IdentitySource } from '@lobechat/device-identity';
+import { deriveDeviceId } from '@lobechat/device-identity';
 import type { Command } from 'commander';
 
+import { createLambdaClient } from '../api/client';
 import { getValidToken } from '../auth/refresh';
 import { resolveToken } from '../auth/resolveToken';
 import { CLI_API_KEY_ENV } from '../constants/auth';
@@ -25,7 +28,7 @@ import {
   stopDaemon,
   writeStatus,
 } from '../daemon/manager';
-import { loadSettings, normalizeUrl, saveSettings } from '../settings';
+import { loadOrCreateConnectionId, loadSettings, normalizeUrl, saveSettings } from '../settings';
 import { executeToolCall } from '../tools';
 import { cleanupAllProcesses } from '../tools/shell';
 import { log, setVerbose } from '../utils/logger';
@@ -192,8 +195,24 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
 
   const resolvedGatewayUrl = gatewayUrl || OFFICIAL_GATEWAY_URL;
 
+  // Resolve a stable device identity. An explicit `--device-id` wins (lets a
+  // user pin a VM to a fixed identity); otherwise derive from the machine id so
+  // the same machine + user maps to one device across reconnects.
+  const identity: { deviceId: string; identitySource: IdentitySource } | undefined =
+    options.deviceId
+      ? { deviceId: options.deviceId, identitySource: 'fallback' }
+      : auth.userId
+        ? deriveDeviceId(auth.userId)
+        : undefined;
+
+  // Freeform channel label (`cli` by default); `LOBEHUB_CLI_CHANNEL` lets a
+  // dev build tag itself `cli-dev` so the gateway can prioritise / display it.
+  const channel = process.env.LOBEHUB_CLI_CHANNEL || 'cli';
+
   const client = new GatewayClient({
-    deviceId: options.deviceId,
+    channel,
+    connectionId: loadOrCreateConnectionId(),
+    deviceId: identity?.deviceId ?? options.deviceId,
     gatewayUrl: resolvedGatewayUrl,
     logger: isDaemonChild ? createDaemonLogger() : log,
     serverUrl: auth.serverUrl,
@@ -385,6 +404,25 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     cleanup();
     process.exit(0);
   });
+
+  // Register this device in the server registry before opening the WS, so the
+  // row exists by the time the gateway reports it online. Best-effort: a
+  // failure must not block the connection.
+  if (identity) {
+    try {
+      // Reuse the already-resolved auth (respects `--token` mode) instead of
+      // getTrpcClient(), which re-discovers creds and exits when none are found.
+      const trpc = createLambdaClient(auth);
+      await trpc.device.register.mutate({
+        deviceId: identity.deviceId,
+        hostname: os.hostname(),
+        identitySource: identity.identitySource,
+        platform: process.platform,
+      });
+    } catch (err) {
+      error(`Device registration failed (non-fatal): ${(err as Error).message}`);
+    }
+  }
 
   // Connect
   await client.connect();

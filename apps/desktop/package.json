@@ -57,6 +57,7 @@
     "@lobechat/chat-adapter-imessage": "workspace:*",
     "@lobechat/desktop-bridge": "workspace:*",
     "@lobechat/device-gateway-client": "workspace:*",
+    "@lobechat/device-identity": "workspace:*",
     "@lobechat/electron-client-ipc": "workspace:*",
     "@lobechat/electron-server-ipc": "workspace:*",
     "@lobechat/file-loaders": "workspace:*",
