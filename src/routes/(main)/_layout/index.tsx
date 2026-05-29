@@ -7,9 +7,8 @@ import { cx } from 'antd-style';
 import { type FC } from 'react';
 import { lazy, Suspense } from 'react';
 import { HotkeysProvider } from 'react-hotkeys-hook';
-import { Outlet, useLocation, useParams } from 'react-router-dom';
+import { Outlet } from 'react-router-dom';
 
-import PageShareLayout from '@/business/client/features/PageShare/PageShareLayout';
 import Loading from '@/components/Loading/BrandTextLoading';
 import { isDesktop } from '@/const/version';
 import { BANNER_HEIGHT } from '@/features/AlertBanner/CloudBanner';
@@ -32,7 +31,6 @@ import CmdkLazy from '@/layout/GlobalProvider/CmdkLazy';
 import dynamic from '@/libs/next/dynamic';
 import { DndContextWrapper } from '@/routes/(main)/resource/features/DndContextWrapper';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
-import { getIdFromIdentifier } from '@/utils/identifier';
 
 import DesktopHome from '../home';
 import DesktopHomeLayout from '../home/_layout';
@@ -45,9 +43,6 @@ const FeedbackModal = lazy(() => import('@/components/FeedbackModal'));
 
 const CloudBanner = dynamic(() => import('@/features/AlertBanner/CloudBanner'));
 
-const isPageRoute = (pathname: string) =>
-  pathname.startsWith('/page/') && pathname.length > '/page/'.length;
-
 const Layout: FC = () => {
   const { isPWA } = usePlatform();
   const { showCloudPromotion } = useServerConfigStore(featureFlagsSelectors);
@@ -57,71 +52,64 @@ const Layout: FC = () => {
     close: closeFeedbackModal,
   } = useFeedbackModal();
 
-  const location = useLocation();
-  const params = useParams<{ id?: string }>();
-  const onPageRoute = isPageRoute(location.pathname);
-  const pageId = onPageRoute && params.id ? getIdFromIdentifier(params.id, 'docs') : undefined;
-
   return (
-    <PageShareLayout pageId={pageId}>
-      <HotkeysProvider initiallyActiveScopes={[HotkeyScopeEnum.Global]}>
-        <RouteMetaBridge />
-        {isDesktop && <TabCacheBridges />}
-        <Suspense fallback={null}>
-          {isDesktop && <DesktopAutoOidcOnFirstOpen />}
-          {isDesktop && <DesktopNavigationBridge />}
-          {isDesktop && <DesktopFileMenuBridge />}
-          {isDesktop && <OverlaySnapshotPublisher />}
-          {isDesktop && <OverlayCaptureUploader />}
-          {isDesktop && <OverlayMessageDispatcher />}
-          {showCloudPromotion && <CloudBanner />}
-        </Suspense>
-        {isDesktop && <AuthRequiredModal />}
-        {isDesktop && <ZoomHUD />}
+    <HotkeysProvider initiallyActiveScopes={[HotkeyScopeEnum.Global]}>
+      <RouteMetaBridge />
+      {isDesktop && <TabCacheBridges />}
+      <Suspense fallback={null}>
+        {isDesktop && <DesktopAutoOidcOnFirstOpen />}
+        {isDesktop && <DesktopNavigationBridge />}
+        {isDesktop && <DesktopFileMenuBridge />}
+        {isDesktop && <OverlaySnapshotPublisher />}
+        {isDesktop && <OverlayCaptureUploader />}
+        {isDesktop && <OverlayMessageDispatcher />}
+        {showCloudPromotion && <CloudBanner />}
+      </Suspense>
+      {isDesktop && <AuthRequiredModal />}
+      {isDesktop && <ZoomHUD />}
 
-        <Suspense fallback={null}>{isDesktop && <TitleBar />}</Suspense>
-        <DndContextWrapper>
-          <Flexbox
-            horizontal
-            className={cx(isPWA ? styles.mainContainerPWA : styles.mainContainer)}
-            width={'100%'}
-            height={
-              isDesktop
-                ? `calc(100% - ${TITLE_BAR_HEIGHT}px)`
-                : showCloudPromotion
-                  ? `calc(100% - ${BANNER_HEIGHT}px)`
-                  : '100%'
-            }
-          >
-            <NavPanel />
-            <DesktopLayoutContainer>
-              <MarketAuthProvider isDesktop={isDesktop}>
-                <DesktopHomeLayout>
-                  <DesktopHome />
-                </DesktopHomeLayout>
-                <Suspense fallback={<Loading debugId="DesktopMainLayout > Outlet" />}>
-                  <Outlet />
-                </Suspense>
-              </MarketAuthProvider>
-            </DesktopLayoutContainer>
-          </Flexbox>
-        </DndContextWrapper>
-        <Suspense fallback={null}>
-          <HotkeyHelperPanel />
-          <RegisterHotkeys />
-          <CmdkLazy />
-          {isFeedbackModalOpen && (
-            <Suspense fallback={null}>
-              <FeedbackModal
-                initialValues={feedbackInitialValues}
-                open={isFeedbackModalOpen}
-                onClose={closeFeedbackModal}
-              />
-            </Suspense>
-          )}
-        </Suspense>
-      </HotkeysProvider>
-    </PageShareLayout>
+      <Suspense fallback={null}>{isDesktop && <TitleBar />}</Suspense>
+      <DndContextWrapper>
+        <Flexbox
+          horizontal
+          className={cx(isPWA ? styles.mainContainerPWA : styles.mainContainer)}
+          width={'100%'}
+          height={
+            isDesktop
+              ? `calc(100% - ${TITLE_BAR_HEIGHT}px)`
+              : showCloudPromotion
+                ? `calc(100% - ${BANNER_HEIGHT}px)`
+                : '100%'
+          }
+        >
+          <NavPanel />
+          <DesktopLayoutContainer>
+            <MarketAuthProvider isDesktop={isDesktop}>
+              <DesktopHomeLayout>
+                <DesktopHome />
+              </DesktopHomeLayout>
+              <Suspense fallback={<Loading debugId="DesktopMainLayout > Outlet" />}>
+                <Outlet />
+              </Suspense>
+            </MarketAuthProvider>
+          </DesktopLayoutContainer>
+        </Flexbox>
+      </DndContextWrapper>
+      <Suspense fallback={null}>
+        <HotkeyHelperPanel />
+        <RegisterHotkeys />
+        <CmdkLazy />
+        {isFeedbackModalOpen && (
+          <Suspense fallback={null}>
+            <FeedbackModal
+              initialValues={feedbackInitialValues}
+              open={isFeedbackModalOpen}
+              onClose={closeFeedbackModal}
+            />
+          </Suspense>
+        )}
+      </Suspense>
+    </HotkeysProvider>
   );
 };
 

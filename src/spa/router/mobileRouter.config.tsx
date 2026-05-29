@@ -397,4 +397,15 @@ export const mobileRoutes: RouteObject[] = [
     ),
     path: '/share/t',
   },
+
+  // Share page route (outside main layout)
+  {
+    children: [
+      {
+        element: dynamicElement(() => import('@/routes/share/page/[id]'), 'Mobile > Share > Page'),
+        path: ':id',
+      },
+    ],
+    path: '/share/page',
+  },
 ];

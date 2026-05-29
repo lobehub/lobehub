@@ -195,11 +195,6 @@ export function defineConfig() {
     '/market-auth-callback',
     // public share pages
     '/share(.*)',
-    // shared pages — anonymous access is allowed at the middleware layer; the SPA
-    // probes `pageShare.getSharedDocument` and renders either the published viewer or
-    // a 403/private CTA. Note the trailing slash — `/page` (the list landing) stays
-    // protected, only `/page/:id` is public.
-    '/page/(.*)',
     // messenger verify-im — page itself handles unauth (in-page sign-in CTA)
     // and the random_id token is the actual capability check; no need for
     // session-protected access at the middleware layer.

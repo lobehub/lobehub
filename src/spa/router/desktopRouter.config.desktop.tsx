@@ -91,6 +91,7 @@ import { settingsRouteMeta } from '@/routes/(main)/settings/features/routeMeta';
 import { ProviderDetailPage, ProviderLayout } from '@/routes/(main)/settings/provider';
 import TaskDetailRoute from '@/routes/(main)/task/[taskId]';
 import AllTasksPage from '@/routes/(main)/tasks';
+import SharePagePage from '@/routes/share/page/[id]';
 import ShareTopicPage from '@/routes/share/t/[id]';
 import ShareTopicLayout from '@/routes/share/t/[id]/_layout';
 import { routeMeta } from '@/spa/router/routeMeta';
@@ -594,6 +595,17 @@ export const desktopRoutes: RouteObject[] = [
     ],
     element: <ShareTopicLayout />,
     path: '/share/t',
+  },
+
+  // Share page route (outside main layout)
+  {
+    children: [
+      {
+        element: <SharePagePage />,
+        path: ':id',
+      },
+    ],
+    path: '/share/page',
   },
 
   // Devtools route (outside main layout, dev-only)
