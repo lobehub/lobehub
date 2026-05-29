@@ -2,6 +2,7 @@
 
 import type { BuiltinInspector, BuiltinInspectorProps } from '@lobechat/types';
 import { createStaticStyles, cx } from 'antd-style';
+import { ImageIcon, ListTree, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -16,7 +17,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     flex-shrink: 0;
     align-items: center;
 
-    max-width: 180px;
+    max-width: 132px;
     padding-block: 2px;
     padding-inline: 7px;
     border-radius: 999px;
@@ -29,11 +30,19 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     background: ${cssVar.colorFillTertiary};
   `,
+  icon: css`
+    flex-shrink: 0;
+    color: ${cssVar.colorTextDescription};
+  `,
+  label: css`
+    flex-shrink: 0;
+    color: ${cssVar.colorText};
+  `,
   prompt: css`
     overflow: hidden;
     display: inline-block;
 
-    max-width: 280px;
+    max-width: 320px;
 
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -46,12 +55,34 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const stringValue = (value: unknown) => (typeof value === 'string' && value ? value : undefined);
 
+const compactId = (id: string) => (id.length > 14 ? `${id.slice(0, 7)}…${id.slice(-4)}` : id);
+
 interface ImageGenerationInspectorArgs {
   generationId?: unknown;
+  imageNum?: unknown;
   model?: unknown;
   prompt?: unknown;
   provider?: unknown;
 }
+
+const apiMeta = {
+  [ImageGenerationApiName.generateImage]: {
+    defaultLabel: 'Generate image',
+    Icon: ImageIcon,
+  },
+  [ImageGenerationApiName.getImageGenerationStatus]: {
+    defaultLabel: 'Check image status',
+    Icon: RefreshCw,
+  },
+  [ImageGenerationApiName.getImageModelParameters]: {
+    defaultLabel: 'Inspect model parameters',
+    Icon: SlidersHorizontal,
+  },
+  [ImageGenerationApiName.listImageModels]: {
+    defaultLabel: 'List image models',
+    Icon: ListTree,
+  },
+};
 
 const ImageGenerationInspector = memo<BuiltinInspectorProps<ImageGenerationInspectorArgs, unknown>>(
   ({ apiName, args, partialArgs, isArgumentsStreaming, isLoading }) => {
@@ -61,7 +92,12 @@ const ImageGenerationInspector = memo<BuiltinInspectorProps<ImageGenerationInspe
     const model = stringValue(currentArgs.model);
     const prompt = stringValue(currentArgs.prompt);
     const generationId = stringValue(currentArgs.generationId);
-    const label = t(`builtins.lobe-image-generation.apiName.${apiName}`);
+    const meta = apiMeta[apiName as ImageGenerationApiName] ?? apiMeta.generateImage;
+    const imageNum = typeof currentArgs.imageNum === 'number' ? currentArgs.imageNum : undefined;
+    const label = t(`builtins.lobe-image-generation.apiName.${apiName}`, {
+      defaultValue: meta.defaultLabel,
+    });
+    const Icon = meta.Icon;
 
     return (
       <div
@@ -71,14 +107,23 @@ const ImageGenerationInspector = memo<BuiltinInspectorProps<ImageGenerationInspe
           (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
         )}
       >
-        <span>{label}</span>
+        <Icon className={styles.icon} size={14} />
+        <span className={styles.label}>{label}</span>
         {apiName === ImageGenerationApiName.generateImage && prompt && (
           <span className={cx(highlightTextStyles.primary, styles.prompt)}>{prompt}</span>
+        )}
+        {apiName === ImageGenerationApiName.generateImage && imageNum && imageNum > 1 && (
+          <span className={styles.chip}>
+            {t('builtins.lobe-image-generation.render.generatedCount', {
+              count: imageNum,
+              defaultValue: '{{count}} images',
+            })}
+          </span>
         )}
         {provider && <span className={styles.chip}>{provider}</span>}
         {model && <span className={styles.chip}>{model}</span>}
         {apiName === ImageGenerationApiName.getImageGenerationStatus && generationId && (
-          <span className={styles.chip}>{generationId}</span>
+          <span className={styles.chip}>{compactId(generationId)}</span>
         )}
       </div>
     );
