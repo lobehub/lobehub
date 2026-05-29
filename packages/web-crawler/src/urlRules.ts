@@ -11,26 +11,9 @@ export const crawUrlRules: CrawlUrlRule[] = [
     impls: ['search1api'],
     urlPattern: 'https://www.youtube.com/watch(.*)',
   },
-  // Reddit listing pages (top/hot/new/rising/controversial) — rewrite to JSON API to bypass bot detection
-  // e.g. /r/Entrepreneur/top/?t=year → /r/Entrepreneur/top.json?t=year
+  // Reddit links, use search1api, formatted as markdown, includes title, author, interaction count, specific comment content, etc.
   {
-    filterOptions: { enableReadability: false },
-    impls: ['naive'],
-    urlPattern:
-      'https://www.reddit.com/r/([^/?#]+)/(top|hot|new|rising|controversial)(?:/)?([?][^#]*)?$',
-    urlTransform: 'https://www.reddit.com/r/$1/$2.json$3',
-  },
-  // Bare subreddit URL — rewrite to hot.json
-  // e.g. /r/Entrepreneur/ → /r/Entrepreneur/hot.json
-  {
-    filterOptions: { enableReadability: false },
-    impls: ['naive'],
-    urlPattern: 'https://www.reddit.com/r/([^/?#]+)/?([?][^#]*)?$',
-    urlTransform: 'https://www.reddit.com/r/$1/hot.json$2',
-  },
-  // Reddit individual post/comments — use search1api for rich markdown with comment thread
-  {
-    impls: ['search1api', 'jina'],
+    impls: ['search1api'],
     urlPattern: 'https://www.reddit.com/r/(.*)/comments/(.*)',
   },
   // GitHub source code parsing

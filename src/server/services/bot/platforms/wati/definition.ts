@@ -9,7 +9,7 @@ export const wati: PlatformDefinition = {
   description: 'Connect WhatsApp via Wati — customers text your number and receive agent replies.',
   documentation: {
     portalUrl: 'https://app.wati.io',
-    setupGuideUrl: 'https://lobehub.com/docs/usage/channels/wati',
+    setupGuideUrl: 'https://docs.wati.io',
   },
   schema,
   showWebhookUrl: true,

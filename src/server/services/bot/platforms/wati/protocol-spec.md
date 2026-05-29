@@ -36,4 +36,4 @@ On bot **start**, LobeHub calls `POST /{tenantId}/api/v2/webhookEndpoints` to re
 
 `POST /{tenantId}/api/v1/sendSessionMessage/{whatsappNumber}?messageText=...&channelPhoneNumber=...`
 
-See `src/wati-api.json` (OpenAPI v1) for the full REST surface.
+See [Wati API reference](https://docs.wati.io) for the full REST surface.
