@@ -45,16 +45,13 @@
   "recommendations.heteroAgent.tag": "Агент за кодиране",
   "recommendations.heteroAgent.title": "Добавяне на агент {{name}}",
   "recommendations.subtitle": "Някои препоръки за вашата настройка",
-  "starter.claudeOpus48": "Клод Опус 4.8",
-  "starter.claudeOpus48Already": "Вече използвате Клод Опус 4.8",
-  "starter.claudeOpus48Switched": "Превключихте на Клод Опус 4.8",
   "starter.createAgent": "Създай агент",
   "starter.createGroup": "Създай група",
   "starter.deepResearch": "Задълбочено проучване",
   "starter.developing": "Очаквайте скоро",
   "starter.image": "Изображение",
-  "starter.imageGeneration": "Генериране на изображения",
+  "starter.modelInUse": "Вече използвате {{name}}",
+  "starter.modelSwitched": "Превключено към {{name}}",
   "starter.newLabel": "Ново",
-  "starter.videoGeneration": "Seedance 2.0",
   "starter.write": "Писане"
 }

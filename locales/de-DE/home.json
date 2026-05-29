@@ -45,16 +45,13 @@
   "recommendations.heteroAgent.tag": "Coding-Agent",
   "recommendations.heteroAgent.title": "{{name}} Agent hinzufügen",
   "recommendations.subtitle": "Einige Empfehlungen für Ihre Einrichtung",
-  "starter.claudeOpus48": "Claude Opus 4.8",
-  "starter.claudeOpus48Already": "Bereits Claude Opus 4.8 verwenden",
-  "starter.claudeOpus48Switched": "Zu Claude Opus 4.8 gewechselt",
   "starter.createAgent": "Agent erstellen",
   "starter.createGroup": "Gruppe erstellen",
   "starter.deepResearch": "Tiefgehende Recherche",
   "starter.developing": "Demnächst verfügbar",
   "starter.image": "Bild",
-  "starter.imageGeneration": "Bildgenerierung",
+  "starter.modelInUse": "Bereits in Verwendung: {{name}}",
+  "starter.modelSwitched": "Gewechselt zu {{name}}",
   "starter.newLabel": "Neu",
-  "starter.videoGeneration": "Seedance 2.0",
   "starter.write": "Schreiben"
 }

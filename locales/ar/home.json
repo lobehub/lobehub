@@ -45,16 +45,13 @@
   "recommendations.heteroAgent.tag": "وكيل البرمجة",
   "recommendations.heteroAgent.title": "أضف وكيل {{name}}",
   "recommendations.subtitle": "بعض التوصيات لإعدادك",
-  "starter.claudeOpus48": "كلود أوبوس 4.8",
-  "starter.claudeOpus48Already": "تستخدم بالفعل كلود أوبوس 4.8",
-  "starter.claudeOpus48Switched": "تم التبديل إلى كلود أوبوس 4.8",
   "starter.createAgent": "إنشاء وكيل",
   "starter.createGroup": "إنشاء مجموعة",
   "starter.deepResearch": "بحث معمق",
   "starter.developing": "قريبًا",
   "starter.image": "صورة",
-  "starter.imageGeneration": "توليد الصور",
+  "starter.modelInUse": "تستخدم بالفعل {{name}}",
+  "starter.modelSwitched": "تم التبديل إلى {{name}}",
   "starter.newLabel": "جديد",
-  "starter.videoGeneration": "Seedance 2.0",
   "starter.write": "كتابة"
 }

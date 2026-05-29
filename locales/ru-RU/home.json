@@ -45,16 +45,13 @@
   "recommendations.heteroAgent.tag": "Агент программирования",
   "recommendations.heteroAgent.title": "Добавить агента {{name}}",
   "recommendations.subtitle": "Некоторые рекомендации для вашей настройки",
-  "starter.claudeOpus48": "Клод Опус 4.8",
-  "starter.claudeOpus48Already": "Уже используется Клод Опус 4.8",
-  "starter.claudeOpus48Switched": "Переключено на Клод Опус 4.8",
   "starter.createAgent": "Создать агента",
   "starter.createGroup": "Создать группу",
   "starter.deepResearch": "Глубокое исследование",
   "starter.developing": "Скоро появится",
   "starter.image": "Изображение",
-  "starter.imageGeneration": "Генерация изображений",
+  "starter.modelInUse": "Уже используется {{name}}",
+  "starter.modelSwitched": "Переключено на {{name}}",
   "starter.newLabel": "Новое",
-  "starter.videoGeneration": "Seedance 2.0",
   "starter.write": "Написать"
 }

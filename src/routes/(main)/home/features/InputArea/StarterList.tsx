@@ -12,9 +12,17 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
 import { useResolvedHomeAgentId } from '../AgentSelect/useResolvedHomeAgentId';
-import { CLAUDE_OPUS_4_8_MODEL, CLAUDE_OPUS_4_8_PROVIDER } from './starterModels';
+import {
+  NEW_CHAT_MODEL,
+  NEW_CHAT_MODEL_NAME,
+  NEW_CHAT_PROVIDER,
+  NEW_IMAGE_MODEL,
+  NEW_IMAGE_MODEL_NAME,
+  NEW_VIDEO_MODEL,
+  NEW_VIDEO_MODEL_NAME,
+} from './starterModels';
 
-type StarterKey = 'claude-opus-4-8' | 'image' | 'video';
+type StarterKey = 'chat' | 'image' | 'video';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   button: css`
@@ -34,16 +42,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-type StarterTitleKey =
-  | 'starter.claudeOpus48'
-  | 'starter.imageGeneration'
-  | 'starter.videoGeneration';
-
 interface StarterItem {
   disabled?: boolean;
   icon?: ButtonProps['icon'];
   key: StarterKey;
-  titleKey: StarterTitleKey;
+  /** Fixed product name — not translated, see starterModels.ts */
+  title: string;
 }
 
 const StarterList = memo(() => {
@@ -58,18 +62,18 @@ const StarterList = memo(() => {
     () => [
       {
         icon: Claude.Avatar,
-        key: 'claude-opus-4-8',
-        titleKey: 'starter.claudeOpus48',
+        key: 'chat',
+        title: NEW_CHAT_MODEL_NAME,
       },
       {
         icon: OpenAI.Avatar,
         key: 'image',
-        titleKey: 'starter.imageGeneration',
+        title: NEW_IMAGE_MODEL_NAME,
       },
       {
         icon: Jimeng.Avatar,
         key: 'video',
-        titleKey: 'starter.videoGeneration',
+        title: NEW_VIDEO_MODEL_NAME,
       },
     ],
     [],
@@ -78,16 +82,16 @@ const StarterList = memo(() => {
   const handleClick = useCallback(
     async (key: StarterKey) => {
       if (key === 'video') {
-        navigate('/video?model=dreamina-seedance-2-0-260128');
+        navigate(`/video?model=${NEW_VIDEO_MODEL}`);
         return;
       }
 
       if (key === 'image') {
-        navigate('/image?model=gpt-image-2');
+        navigate(`/image?model=${NEW_IMAGE_MODEL}`);
         return;
       }
 
-      if (key === 'claude-opus-4-8') {
+      if (key === 'chat') {
         if (!activeAgentId || switchingKey) return;
         setSwitchingKey(key);
         try {
@@ -103,19 +107,16 @@ const StarterList = memo(() => {
           const currentModel = agentByIdSelectors.getAgentModelById(activeAgentId)(agentState);
           const currentProvider =
             agentByIdSelectors.getAgentModelProviderById(activeAgentId)(agentState);
-          if (
-            currentModel === CLAUDE_OPUS_4_8_MODEL &&
-            currentProvider === CLAUDE_OPUS_4_8_PROVIDER
-          ) {
-            message.info(t('starter.claudeOpus48Already'));
+          if (currentModel === NEW_CHAT_MODEL && currentProvider === NEW_CHAT_PROVIDER) {
+            message.info(t('starter.modelInUse', { name: NEW_CHAT_MODEL_NAME }));
             return;
           }
 
           await updateAgentConfigById(activeAgentId, {
-            model: CLAUDE_OPUS_4_8_MODEL,
-            provider: CLAUDE_OPUS_4_8_PROVIDER,
+            model: NEW_CHAT_MODEL,
+            provider: NEW_CHAT_PROVIDER,
           });
-          message.success(t('starter.claudeOpus48Switched'));
+          message.success(t('starter.modelSwitched', { name: NEW_CHAT_MODEL_NAME }));
         } finally {
           setSwitchingKey(null);
         }
@@ -146,7 +147,7 @@ const StarterList = memo(() => {
             }}
             onClick={() => handleClick(item.key)}
           >
-            {t(item.titleKey)}
+            {item.title}
           </Button>
         );
 

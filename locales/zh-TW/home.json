@@ -45,16 +45,13 @@
   "recommendations.heteroAgent.tag": "編程代理",
   "recommendations.heteroAgent.title": "新增 {{name}} 代理",
   "recommendations.subtitle": "為您的設置提供一些建議",
-  "starter.claudeOpus48": "Claude Opus 4.8",
-  "starter.claudeOpus48Already": "已使用 Claude Opus 4.8",
-  "starter.claudeOpus48Switched": "已切換至 Claude Opus 4.8",
   "starter.createAgent": "建立助理",
   "starter.createGroup": "建立群組",
   "starter.deepResearch": "深入研究",
   "starter.developing": "開發中",
   "starter.image": "繪圖",
-  "starter.imageGeneration": "影像生成",
+  "starter.modelInUse": "已在使用 {{name}}",
+  "starter.modelSwitched": "已切換至 {{name}}",
   "starter.newLabel": "全新",
-  "starter.videoGeneration": "Seedance 2.0",
   "starter.write": "寫作"
 }

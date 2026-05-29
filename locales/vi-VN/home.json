@@ -45,16 +45,13 @@
   "recommendations.heteroAgent.tag": "Agent Lập Trình",
   "recommendations.heteroAgent.title": "Thêm agent {{name}}",
   "recommendations.subtitle": "Một số gợi ý cho thiết lập của bạn",
-  "starter.claudeOpus48": "Claude Opus 4.8",
-  "starter.claudeOpus48Already": "Đã sử dụng Claude Opus 4.8",
-  "starter.claudeOpus48Switched": "Đã chuyển sang Claude Opus 4.8",
   "starter.createAgent": "Tạo Tác Nhân",
   "starter.createGroup": "Tạo Nhóm",
   "starter.deepResearch": "Nghiên cứu chuyên sâu",
   "starter.developing": "Sắp ra mắt",
   "starter.image": "Hình ảnh",
-  "starter.imageGeneration": "Tạo hình ảnh",
+  "starter.modelInUse": "Đang sử dụng {{name}}",
+  "starter.modelSwitched": "Đã chuyển sang {{name}}",
   "starter.newLabel": "Mới",
-  "starter.videoGeneration": "Seedance 2.0",
   "starter.write": "Viết"
 }

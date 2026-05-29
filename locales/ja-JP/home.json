@@ -45,16 +45,13 @@
   "recommendations.heteroAgent.tag": "コーディングエージェント",
   "recommendations.heteroAgent.title": "{{name}}エージェントを追加",
   "recommendations.subtitle": "セットアップのためのいくつかのおすすめ",
-  "starter.claudeOpus48": "クロード オーパス 4.8",
-  "starter.claudeOpus48Already": "すでにクロード オーパス 4.8を使用中",
-  "starter.claudeOpus48Switched": "クロード オーパス 4.8に切り替えました",
   "starter.createAgent": "アシスタントを作成",
   "starter.createGroup": "グループを作成",
   "starter.deepResearch": "リサーチ",
   "starter.developing": "開発中",
   "starter.image": "イラスト作成",
-  "starter.imageGeneration": "画像生成",
+  "starter.modelInUse": "{{name}}を既に使用中です",
+  "starter.modelSwitched": "{{name}}に切り替えました",
   "starter.newLabel": "新規",
-  "starter.videoGeneration": "シーダンス 2.0",
   "starter.write": "執筆"
 }

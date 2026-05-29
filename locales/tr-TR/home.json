@@ -45,16 +45,13 @@
   "recommendations.heteroAgent.tag": "Kodlama Aracı",
   "recommendations.heteroAgent.title": "{{name}} aracını ekle",
   "recommendations.subtitle": "Kurulumunuz için bazı öneriler",
-  "starter.claudeOpus48": "Claude Opus 4.8",
-  "starter.claudeOpus48Already": "Zaten Claude Opus 4.8 kullanıyorsunuz",
-  "starter.claudeOpus48Switched": "Claude Opus 4.8'e geçildi",
   "starter.createAgent": "Ajan Oluştur",
   "starter.createGroup": "Grup Oluştur",
   "starter.deepResearch": "Derin Araştırma",
   "starter.developing": "Yakında geliyor",
   "starter.image": "Görsel",
-  "starter.imageGeneration": "Görüntü Oluşturma",
+  "starter.modelInUse": "{{name}} zaten kullanılıyor",
+  "starter.modelSwitched": "{{name}}'e geçildi",
   "starter.newLabel": "Yeni",
-  "starter.videoGeneration": "Seedance 2.0",
   "starter.write": "Yaz"
 }
