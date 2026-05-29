@@ -155,6 +155,3 @@ docs/superpowers/
 
 # Kagura agent runtime
 .kagura/
-
-# Local Wati OpenAPI export (reference only; do not commit)
-src/wati-api.json
