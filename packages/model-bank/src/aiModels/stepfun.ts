@@ -41,7 +41,6 @@ const stepfunChatModels: AIChatModelCard[] = [
     description:
       'Built on Step 3.5 Flash and optimized for high-frequency agent scenarios, it further improves token efficiency and inference speed while retaining flagship-level reasoning and tool-calling capabilities. It also supports switching to a low-reasoning mode to reduce resource consumption. Additionally, targeted optimizations have been made to enhance compatibility with coding tasks and agent frameworks.',
     displayName: 'Step 3.5 Flash 2603',
-    enabled: true,
     id: 'step-3.5-flash-2603',
     pricing: {
       currency: 'CNY',
