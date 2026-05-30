@@ -34,9 +34,6 @@ export interface DeviceListItem {
 }
 
 const styles = createStaticStyles(({ css }) => ({
-  channels: css`
-    margin-block-start: 2px;
-  `,
   cwd: css`
     overflow: hidden;
     font-family: ${cssVar.fontFamilyCode};
@@ -98,9 +95,14 @@ const DeviceItem = memo<DeviceItemProps>(({ device, isCurrent, onSelect, selecte
 
   const displayName = device.friendlyName || device.hostname || device.deviceId;
   const isFallback = device.identitySource === 'fallback';
-  // Render the device's live connections straight from `device.channels` — one
-  // row per connection; an empty array means offline.
+  // Online when the device has at least one live connection in `device.channels`.
   const channels = device.channels ?? [];
+  const online = channels.length > 0;
+  const statusTooltip = online
+    ? t('devices.channel.connected', {
+        time: dayjs(channels[0]?.connectedAt ?? device.lastSeen).fromNow(),
+      })
+    : t('devices.lastSeen', { time: dayjs(device.lastSeen).fromNow() });
 
   const handleRemove = () =>
     confirmModal({
@@ -135,6 +137,9 @@ const DeviceItem = memo<DeviceItemProps>(({ device, isCurrent, onSelect, selecte
               <Tag icon={<Icon icon={TriangleAlertIcon} />}>{t('devices.fallbackBadge')}</Tag>
             </Tooltip>
           )}
+          <Tooltip title={statusTooltip}>
+            <span className={online ? styles.dotOnline : styles.dotOffline} />
+          </Tooltip>
         </Flexbox>
         {device.defaultCwd && (
           <Flexbox horizontal align={'center'} gap={6}>
@@ -144,27 +149,6 @@ const DeviceItem = memo<DeviceItemProps>(({ device, isCurrent, onSelect, selecte
             </Text>
           </Flexbox>
         )}
-        <Flexbox className={styles.channels} gap={6}>
-          {channels.length > 0 ? (
-            channels.map((channel, index) => (
-              <Flexbox horizontal align={'center'} gap={6} key={`${channel.connectedAt}-${index}`}>
-                <span className={styles.dotOnline} />
-                {channel.channel && <Tag size={'small'}>{channel.channel}</Tag>}
-                <Text style={{ fontSize: 12 }} type={'secondary'}>
-                  {t('devices.channel.connected', { time: dayjs(channel.connectedAt).fromNow() })}
-                </Text>
-              </Flexbox>
-            ))
-          ) : (
-            <Flexbox horizontal align={'center'} gap={6}>
-              <span className={styles.dotOffline} />
-              <Text style={{ fontSize: 12 }} type={'secondary'}>
-                {t('devices.status.offline')} ·{' '}
-                {t('devices.lastSeen', { time: dayjs(device.lastSeen).fromNow() })}
-              </Text>
-            </Flexbox>
-          )}
-        </Flexbox>
       </Flexbox>
       <span onClick={(e) => e.stopPropagation()}>
         <DropdownMenu
