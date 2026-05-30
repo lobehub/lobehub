@@ -164,7 +164,7 @@ const DeviceItem = memo<{ device: DeviceListItem; isCurrent?: boolean }>(
               <Text ellipsis weight={500}>
                 {displayName}
               </Text>
-              {isCurrent && <Tag color={'success'}>{t('devices.currentBadge')}</Tag>}
+              {isCurrent && <Tag>{t('devices.currentBadge')}</Tag>}
               {isFallback && (
                 <Tooltip title={t('devices.fallbackTooltip')}>
                   <Tag icon={<Icon icon={TriangleAlertIcon} />}>{t('devices.fallbackBadge')}</Tag>
@@ -189,8 +189,8 @@ const DeviceItem = memo<{ device: DeviceListItem; isCurrent?: boolean }>(
                     key={`${channel.connectedAt}-${index}`}
                   >
                     <span className={styles.dotOnline} />
+                    {channel.channel && <Tag size={'small'}>{channel.channel}</Tag>}
                     <Text style={{ fontSize: 12 }} type={'secondary'}>
-                      {channel.channel ? `${channel.channel} · ` : ''}
                       {t('devices.channel.connected', {
                         time: dayjs(channel.connectedAt).fromNow(),
                       })}
