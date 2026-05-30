@@ -41,12 +41,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     overflow: hidden;
     flex-shrink: 0;
-    gap: 7px;
+    gap: 8px;
     align-items: center;
 
-    height: 22px;
+    height: 30px;
     padding-inline: 10px;
-    border-radius: 5px;
+    border-radius: 6px;
 
     color: ${cssVar.colorTextSecondary};
 
@@ -87,7 +87,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     min-width: 0;
 
     font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
+    font-size: 13px;
   `,
   /** Trailing action segment — always kept visible. */
   labelTail: css`
@@ -97,10 +97,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   list: css`
     overflow: auto;
     flex: 1;
-    gap: 0;
+    gap: 2px;
 
     min-height: 0;
-    padding-block: 6px;
+    padding-block: 8px;
     padding-inline: 8px;
   `,
 }));
