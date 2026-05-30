@@ -1,6 +1,6 @@
 'use client';
 
-import type { ChatToolPayloadWithResult, UIChatMessage } from '@lobechat/types';
+import type { ChatToolPayload, UIChatMessage } from '@lobechat/types';
 import { Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, useMemo } from 'react';
@@ -31,8 +31,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const coerceContent = (value: unknown): string | null => {
-  if (value === null || value === undefined) return null;
+const coerceContent = (value: unknown): string => {
+  if (value === null || value === undefined) return '';
   if (typeof value === 'string') return value;
   try {
     return JSON.stringify(value);
@@ -42,73 +42,81 @@ const coerceContent = (value: unknown): string | null => {
 };
 
 /**
- * Translate a fixture + lifecycle mode into the real tool payload shape the
- * conversation renderer reads. The `Tool` component derives its state purely
- * from this shape (no live operation needed):
- *  - success  → a finished `result` (content + state)
- *  - error    → `result.error`
- *  - intervention → `intervention.status = 'pending'`, no result
- *  - streaming   → intentionally-unterminated `arguments` JSON (the renderer
- *                  flags `isArgumentsStreaming` when args fail to parse)
- *  - loading / placeholder → valid args, no result yet
+ * Build the **flat** DB-shaped messages a real conversation produces, then let
+ * `parse()` (conversation-flow, via `ConversationProvider.replaceMessages`)
+ * synthesize the `assistantGroup` / tool grouping exactly as it does in chat —
+ * instead of hand-rolling the grouped shape. Each render-bearing API becomes:
+ *
+ *   assistant { content, tools: [tool_use] }  →  tool { tool_call_id, result… }
+ *
+ * The whole sequence is one parentId chain so it reads as a single conversation.
+ * Lifecycle state is carried on the tool result message the same way the real
+ * pipeline carries it:
+ *  - success  → tool message `content` + `pluginState`
+ *  - error    → tool message `pluginError`
+ *  - intervention → tool message `pluginIntervention.status = 'pending'`
+ *  - streaming   → no tool message, unterminated `arguments` JSON on the tool_use
+ *  - loading / placeholder → no tool message yet
  */
-const buildTool = (api: ApiEntry, mode: LifecycleMode): ChatToolPayloadWithResult => {
-  const variant = api.fixture.variants[0];
-  const derived = deriveFixtureProps(variant, mode);
-  const id = `devtools-tool-${api.identifier}-${api.apiName}`;
-
-  const argumentsJson =
-    mode === 'streaming'
-      ? JSON.stringify(derived.partialArgs ?? {}).replace(/\}$/, '') // drop the closing brace → "still typing"
-      : JSON.stringify(derived.args);
-
-  const result =
-    mode === 'success'
-      ? { content: coerceContent(derived.content), id, state: derived.pluginState }
-      : mode === 'error'
-        ? { content: null, error: derived.pluginError, id }
-        : undefined;
-
-  return {
-    apiName: api.apiName,
-    arguments: argumentsJson,
-    id,
-    identifier: api.identifier,
-    intervention: mode === 'intervention' ? { status: 'pending' } : undefined,
-    result,
-    source: api.apiName.startsWith('mcp__') ? 'mcp' : 'builtin',
-    type: 'builtin',
-  };
-};
-
 const buildMessages = (apis: ApiEntry[], mode: LifecycleMode, now: number): UIChatMessage[] => {
   const renderable = apis.filter(
     (api) => api.render || api.streaming || api.placeholder || api.intervention,
   );
 
-  // Thread every turn onto the previous one via `parentId` so the renderer reads
-  // them as a single conversation chain, not a handful of orphaned messages.
+  const messages: UIChatMessage[] = [];
   let parentId: string | undefined;
-  return renderable.map((api) => {
-    const id = `devtools-msg-${api.identifier}-${api.apiName}`;
-    const message: UIChatMessage = {
-      children: [
-        {
-          content: api.description || api.fixture.variants[0]?.description || '',
-          id: `devtools-block-${api.identifier}-${api.apiName}`,
-          tools: [buildTool(api, mode)],
-        },
-      ],
-      content: '',
-      createdAt: now,
-      id,
-      parentId,
-      role: 'assistantGroup',
-      updatedAt: now,
+
+  for (const api of renderable) {
+    const variant = api.fixture.variants[0];
+    const derived = deriveFixtureProps(variant, mode);
+    const key = `${api.identifier}-${api.apiName}`;
+    const assistantId = `devtools-asst-${key}`;
+    const toolCallId = `devtools-tool-${key}`;
+
+    const toolUse: ChatToolPayload = {
+      apiName: api.apiName,
+      // Streaming: drop the closing brace so args fail to parse → "still typing".
+      arguments:
+        mode === 'streaming'
+          ? JSON.stringify(derived.partialArgs ?? {}).replace(/\}$/, '')
+          : JSON.stringify(derived.args),
+      id: toolCallId,
+      identifier: api.identifier,
+      source: api.apiName.startsWith('mcp__') ? 'mcp' : 'builtin',
+      type: 'builtin',
     };
-    parentId = id;
-    return message;
-  });
+
+    messages.push({
+      content: api.description || variant.description || '',
+      createdAt: now,
+      id: assistantId,
+      parentId,
+      role: 'assistant',
+      tools: [toolUse],
+      updatedAt: now,
+    });
+    parentId = assistantId;
+
+    // Resolved states get a tool result message the grouper merges back in.
+    if (mode === 'success' || mode === 'error' || mode === 'intervention') {
+      const toolMsgId = `devtools-toolmsg-${key}`;
+      messages.push({
+        content: mode === 'success' ? coerceContent(derived.content) : '',
+        createdAt: now,
+        id: toolMsgId,
+        parentId: assistantId,
+        pluginError: mode === 'error' ? derived.pluginError : undefined,
+        pluginIntervention: mode === 'intervention' ? { status: 'pending' } : undefined,
+        pluginState: mode === 'success' ? derived.pluginState : undefined,
+        role: 'tool',
+        tool_call_id: toolCallId,
+        updatedAt: now,
+      });
+      parentId = toolMsgId;
+    }
+  }
+
+  return messages;
 };
 
 const InnerList = memo(() => {
@@ -139,10 +147,11 @@ interface MessageListProps {
 
 /**
  * Aggregate preview tab: renders every render-bearing API as a tool call inside
- * the **real** `Conversation` message renderer (seeded via `ConversationProvider`
- * with fixture messages, `skipFetch`), so the preview is byte-for-byte what
- * ships in chat instead of a hand-rolled approximation. Inspector-only tools
- * (most MCP entries) are dropped to keep the thread about the renders.
+ * the **real** `Conversation` renderer. Flat fixture messages are seeded through
+ * `ConversationProvider` (`skipFetch`) so conversation-flow's `parse()` performs
+ * the real `assistantGroup` grouping — the preview is byte-for-byte what ships
+ * in chat. Inspector-only tools (most MCP entries) are dropped to keep the
+ * thread about the renders.
  */
 const MessageList = memo<MessageListProps>(({ apis, mode }) => {
   // One stable timestamp per (apis, mode) render so message identity is steady.
