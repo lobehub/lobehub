@@ -5,9 +5,15 @@ import { createStaticStyles } from 'antd-style';
 import { useEffect } from 'react';
 import { Outlet, useNavigate, useParams } from 'react-router-dom';
 
+import { useAgentStore } from '@/store/agent';
 import { useAgentGroupStore } from '@/store/agentGroup';
 
-import { DEVTOOLS_GROUP_DETAIL, DEVTOOLS_GROUP_ID } from './fixtures';
+import {
+  DEVTOOLS_AGENT_ID,
+  DEVTOOLS_AGENT_META,
+  DEVTOOLS_GROUP_DETAIL,
+  DEVTOOLS_GROUP_ID,
+} from './fixtures';
 import Sidebar from './Sidebar';
 import { toToolsetPath, useDevtoolsEntries } from './useDevtoolsEntries';
 
@@ -49,11 +55,19 @@ const DevtoolsLayout = () => {
       },
     });
 
+    // Seed the Aggregate-preview agent meta so its turns read as "Lobe AI"
+    // (avatar + name) instead of the unresolved-agent fallback.
+    const previousAgentMap = useAgentStore.getState().agentMap;
+    useAgentStore.setState({
+      agentMap: { ...previousAgentMap, [DEVTOOLS_AGENT_ID]: DEVTOOLS_AGENT_META as any },
+    });
+
     return () => {
       useAgentGroupStore.setState({
         activeGroupId: previousGroupState.activeGroupId,
         groupMap: previousGroupState.groupMap,
       });
+      useAgentStore.setState({ agentMap: previousAgentMap });
     };
   }, []);
 

@@ -13,6 +13,7 @@ import {
 import { MessageActionProvider } from '@/features/Conversation/Messages/Contexts/MessageActionProvider';
 import { dataSelectors, useConversationStore } from '@/features/Conversation/store';
 
+import { DEVTOOLS_AGENT_ID } from './fixtures';
 import { deriveFixtureProps, type LifecycleMode } from './lifecycleMode';
 import type { ApiEntry } from './useDevtoolsEntries';
 
@@ -157,7 +158,7 @@ const MessageList = memo<MessageListProps>(({ apis, mode }) => {
   // One stable timestamp per (apis, mode) render so message identity is steady.
   const messages = useMemo(() => buildMessages(apis, mode, Date.now()), [apis, mode]);
   const context = useMemo<ConversationContext>(
-    () => ({ agentId: 'devtools-render-gallery', topicId: 'devtools-aggregate' }),
+    () => ({ agentId: DEVTOOLS_AGENT_ID, topicId: 'devtools-aggregate' }),
     [],
   );
 
