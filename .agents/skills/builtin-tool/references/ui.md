@@ -103,6 +103,38 @@ Every Inspector should default to `t('builtins.<identifier>.apiName.<api>')` so 
 
 Tool surfaces sometimes need cross-cutting state (loading, streaming buffer). Read it inside the component via Zustand selectors, not from props — props only carry args/state/messageId.
 
+### 0.8 Stay single-layer — don't nest filled cards
+
+The framework already wraps every Render / Intervention in a tool card, so that card **is** your surface. A Render that opens with its own `background: ${cssVar.colorFillQuaternary}` container is already one card deep; put another filled box inside it (`colorBgContainer` / `colorFillTertiary`) and you get the card-in-card look that reads as "complex" — two or three stacked fills for what is really a flat list of fields.
+
+Rules:
+
+- **The outermost wrapper carries no fill.** Use a flat container with only `padding-block: 4px` for breathing room; let the tool card provide the card. (See `Agent/index.tsx`'s `container`.)
+- **At most one filled box, and only to delineate real content** — a Markdown preview, a diff, a code/result block. Labels, key–value fields, question/answer text, chips: render flat on the surface, separated by spacing or a hairline divider (`height: 1px; background: ${cssVar.colorFillSecondary}`), not by wrapping each in its own box.
+- **A box on a flat surface needs a visible fill.** Once the outer fill is gone, an inner `colorBgContainer` box can vanish against the tool card (same color). Use `colorFillTertiary` for the one content box so it still reads as delineated.
+- Don't wrap a single value in a box just to give it padding — that's the redundant-nesting smell (a `detailCard` around a `value` box around one string).
+
+```tsx
+// ❌ card-in-card: filled container wrapping a filled preview box
+container: css`
+  padding: 12px;
+  background: ${cssVar.colorFillQuaternary};
+`,
+previewBox: css`
+  background: ${cssVar.colorBgContainer};
+`,
+
+// ✅ single-layer: flat container, one visible content box
+container: css`
+  padding-block: 4px;
+`,
+previewBox: css`
+  background: ${cssVar.colorFillTertiary};
+`,
+```
+
+The exception is a deliberate **panel** pattern — an `<Block variant="outlined">` with a header bar + list rows (CC `TodoWrite` / `Task`). There the single outlined block is the panel and the header fill is a header bar, not a nested card. One structured panel is fine; stacked decorative fills are not.
+
 ---
 
 ## 1. Inspector — Header Chip (required)
@@ -302,6 +334,7 @@ if (pluginError) {
 - **Return `null`** if there's nothing useful to draw yet (avoids empty cards during stream).
 - Use `pluginState` for server-truth (ids, counts, server-assigned status) and `args` for what the LLM asked. **Combine — neither alone is enough.**
 - For lists, summarize with a header line and show top N items with a "+N more" tail rather than rendering everything.
+- **Keep the Render single-layer** — the tool card is already your surface, so don't open with your own filled container and then nest more filled boxes inside it. See §0.8.
 - For modals from a Render, use `@lobehub/ui/base-ui` (`createModal`, `useModalContext`, `confirmModal`) — see the **modal** skill.
 
 ### Render registry — `client/Render/index.ts`
@@ -736,6 +769,7 @@ export * from '../types';
 | Header shows the API name but no chips          | Inspector missing \`args?.X                                                                                       |     | partialArgs?.X\` fallback |
 | Header doesn't pulse during loading             | Missing `shinyTextStyles.shinyText` on `isArgumentsStreaming \|\| isLoading`                                      |     |                           |
 | Empty result card under header                  | Render returned `<div />` instead of `null` when no data                                                          |     |                           |
+| Render looks "complex" / card-in-card           | Filled container (`colorFillQuaternary`) wrapping more filled boxes — flatten to single-layer, see §0.8           |     |                           |
 | Layout jump when result arrives                 | Placeholder dimensions don't match Render dimensions                                                              |     |                           |
 | Approval dialog never appears                   | Manifest missing `humanIntervention`, or Intervention not in registry                                             |     |                           |
 | Approval click doesn't wait for inline edit     | Missing `registerBeforeApprove(id, flushFn)`                                                                      |     |                           |
