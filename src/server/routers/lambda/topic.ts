@@ -39,6 +39,14 @@ const topicProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
 });
 
 export const topicRouter = router({
+  getTopicDetail: topicProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ input, ctx }) => {
+      const topic = await ctx.topicModel.findById(input.id);
+      if (!topic) return null;
+      return topic;
+    }),
+
   getTopicContext: topicProcedure
     .input(z.object({ topicId: z.string() }))
     .query(async ({ input, ctx }) => {
