@@ -21,8 +21,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   dot: css`
     flex-shrink: 0;
 
-    width: 6px;
-    height: 6px;
+    width: 5px;
+    height: 5px;
     border-radius: 999px;
 
     background: ${cssVar.colorTextQuaternary};
@@ -32,7 +32,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   header: css`
     flex-shrink: 0;
-    padding-block: 16px 12px;
+    padding-block: 14px 10px;
     padding-inline: 16px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
@@ -40,12 +40,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     cursor: pointer;
 
     overflow: hidden;
-    gap: 8px;
+    flex-shrink: 0;
+    gap: 7px;
     align-items: center;
 
-    padding-block: 6px;
+    height: 22px;
     padding-inline: 10px;
-    border-radius: 6px;
+    border-radius: 5px;
 
     color: ${cssVar.colorTextSecondary};
 
@@ -68,24 +69,52 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       background: ${cssVar.colorFillSecondary};
     }
   `,
-  label: css`
+  /** Namespace prefix of an mcp__ name — muted, and the part that elides. */
+  labelHead: css`
     overflow: hidden;
+    flex: 0 1 auto;
+
+    color: ${cssVar.colorTextQuaternary};
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+  labelRow: css`
+    overflow: hidden;
+    display: flex;
     flex: 1;
+    align-items: baseline;
+
+    min-width: 0;
 
     font-family: ${cssVar.fontFamilyCode};
     font-size: 12px;
-    text-overflow: ellipsis;
+  `,
+  /** Trailing action segment — always kept visible. */
+  labelTail: css`
+    flex-shrink: 0;
     white-space: nowrap;
   `,
   list: css`
     overflow: auto;
     flex: 1;
-    gap: 1px;
+    gap: 0;
 
-    padding-block: 8px;
+    padding-block: 6px;
     padding-inline: 8px;
   `,
 }));
+
+/**
+ * Split a name at its last `__` so the long `mcp__<server>__` namespace can
+ * elide from the middle (`mcp__claude_ai_Li…get_diff`) — keeping both the
+ * `mcp` signal up front and the distinguishing action at the end, instead of
+ * truncating one or the other away. Non-namespaced names are all tail.
+ */
+const splitName = (name: string): { head: string; tail: string } => {
+  const cut = name.lastIndexOf('__');
+  if (cut === -1) return { head: '', tail: name };
+  return { head: name.slice(0, cut + 2), tail: name.slice(cut + 2) };
+};
 
 interface ApiListProps {
   activeApiName?: string;
@@ -94,22 +123,11 @@ interface ApiListProps {
 }
 
 /**
- * MCP tools carry a long `mcp__<server>__<action>` identifier that truncates to
- * an indistinguishable `mcp__claude_ai_Linear__…` in a narrow column. Show just
- * the trailing action so siblings are scannable; the full id stays in the
- * `title` tooltip and the preview card header.
- */
-const shortApiName = (name: string) =>
-  name.startsWith('mcp__') ? (name.split('__').at(-1) ?? name) : name;
-
-/**
- * Middle column for the render gallery: a jump-list of the current toolset's
- * APIs. Clicking scrolls the matching `ToolPreview` card into view and pins a
- * URL hash (`#api-<name>`) so a specific render is deep-linkable; the active
- * item is driven by the scrollspy in `ToolPage`. The leading dot lights up
- * when the API ships a Render — the gallery's primary subject — so a
- * render-less API reads as muted. Long MCP names truncate with a `title`
- * tooltip carrying the full identifier.
+ * Middle column for the render gallery: a dense jump-list of the current
+ * toolset's APIs. Clicking scrolls the matching `ToolPreview` card into view
+ * and pins a URL hash (`#api-<name>`) so a specific render is deep-linkable;
+ * the active item is driven by the scrollspy in `ToolPage`. The leading dot
+ * lights up when the API ships a Render.
  */
 const ApiList = memo<ApiListProps>(({ apis, activeApiName, onSelect }) => {
   const listRef = useRef<HTMLDivElement>(null);
@@ -132,6 +150,7 @@ const ApiList = memo<ApiListProps>(({ apis, activeApiName, onSelect }) => {
       <Flexbox className={styles.list} ref={listRef}>
         {apis.map((api) => {
           const active = api.apiName === activeApiName;
+          const { head, tail } = splitName(api.apiName);
           return (
             <Flexbox
               horizontal
@@ -142,7 +161,10 @@ const ApiList = memo<ApiListProps>(({ apis, activeApiName, onSelect }) => {
               onClick={() => onSelect(api.apiName)}
             >
               <span className={cx(styles.dot, api.render && styles.dotActive)} />
-              <span className={styles.label}>{shortApiName(api.apiName)}</span>
+              <span className={styles.labelRow}>
+                {head && <span className={styles.labelHead}>{head}</span>}
+                <span className={styles.labelTail}>{tail}</span>
+              </span>
             </Flexbox>
           );
         })}

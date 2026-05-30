@@ -46,9 +46,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const shortApiName = (name: string) =>
-  name.startsWith('mcp__') ? (name.split('__').at(-1) ?? name) : name;
-
 interface MessageItemProps {
   api: ApiEntry;
   mode: LifecycleMode;
@@ -70,7 +67,7 @@ const MessageItem = memo<MessageItemProps>(({ api, mode }) => {
   return (
     <Flexbox className={styles.item}>
       <Flexbox horizontal align={'center'} gap={8} style={{ marginBlockEnd: 6 }}>
-        <span className={styles.name}>{shortApiName(api.apiName)}</span>
+        <span className={styles.name}>{api.apiName}</span>
         <Tag size={'small'}>{mode}</Tag>
       </Flexbox>
       {content && <div className={styles.content}>{content}</div>}
