@@ -39,6 +39,12 @@ module.exports = defineConfig({
     entryLocale: 'en-US',
     outputLocales: ['zh-CN', 'ja-JP'],
     includeMatter: true,
+    // `exclude` keeps the localized files from being picked up as translation
+    // sources. The hand-maintained `README.zh-CN.md` / `README.ja-JP.md` are
+    // additionally protected by lobe-i18n's `existsSync(targetFilename)` check
+    // (TranslateMarkdown#genFilesQuery) — existing translations are never
+    // overwritten by a regeneration. Delete the file first if you intentionally
+    // want lobe-i18n to re-translate it.
     exclude: [
       './README.zh-CN.md',
       './README.ja-JP.md',
