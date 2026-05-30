@@ -44,13 +44,41 @@ The two reference tools to read end-to-end:
 
 These apply across every surface.
 
-### 0.1 Use `'use client'` at the top of every component file
+### 0.1 The component skeleton
 
-Tool surfaces are leaves in the chat tree and must not block server rendering.
+Every surface file is the same shape, so internalize it once instead of re-deriving it per rule. The skeleton below bakes in five mechanical conventions — copy it and fill the body:
 
-### 0.2 Prefer `createStaticStyles + cssVar.*`
+```tsx
+'use client'; // (a) leaves of the chat tree must not block server rendering
 
-Zero-runtime CSS-in-JS — the styles compile once and read CSS variables at runtime.
+import type { BuiltinInspectorProps, SearchQuery, UniformSearchResponse } from '@lobechat/types';
+import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
+
+// (b) type with BuiltinXProps<Args, State> — never widen to `any`.
+//     Args = the JSON Schema params, State = the executor's `state` field;
+//     they should match <Name>Params / <Name>State from types.ts.
+export const SearchInspector = memo<BuiltinInspectorProps<SearchQuery, UniformSearchResponse>>(
+  ({ args, pluginState }) => {
+    const { t } = useTranslation('plugin'); // (c) all strings from the `plugin` namespace
+
+    // (d) cross-cutting state (loading, streaming buffer) comes from the store,
+    //     not props — props only carry args/state/messageId.
+    // const buffer = useChatStore((s) => chatToolSelectors.streamingBuffer(messageId)(s));
+
+    return <span>{t('builtins.<identifier>.apiName.search')}</span>;
+  },
+);
+SearchInspector.displayName = 'SearchInspector'; // (e) always memo + displayName
+export default SearchInspector;
+```
+
+- **(c)** Default an Inspector to `t('builtins.<identifier>.apiName.<api>')` so the row is non-empty while args stream in.
+- **(d)** Read the store via Zustand selectors inside the component; see §4 Streaming for the buffer selector.
+
+### 0.2 Styling: `createStaticStyles + cssVar.*`, `@lobehub/ui` over `antd`
+
+Zero-runtime CSS-in-JS — styles compile once and read CSS variables at runtime:
 
 ```tsx
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -66,48 +94,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 ```
 
-Fall back to `createStyles + token` only when you need runtime token computation (rare). Inline `style={{ color: cssVar.colorTextSecondary }}` is fine for one-off dynamic values.
+- Fall back to `createStyles + token` only when you need runtime token computation (rare). Inline `style={{ color: cssVar.colorTextSecondary }}` is fine for one-off dynamic values.
+- Components come from `@lobehub/ui` (`Block`, `Text`, `Flexbox`, `Highlighter`, `Alert`, `Tooltip`, `Skeleton`), not raw `antd`. Modals come from `@lobehub/ui/base-ui` (`createModal`, `useModalContext`, `confirmModal`) — see the **modal** skill.
+- Note: `<Text type='secondary'>` is a lighter shade than `colorTextSecondary`. For that exact token color, write `<Text style={{ color: cssVar.colorTextSecondary }}>`.
 
-### 0.3 Use `@lobehub/ui`, not raw `antd`
-
-`Block`, `Text`, `Flexbox`, `Highlighter`, `Alert`, `Tooltip`, `Skeleton` all come from `@lobehub/ui`. Modals come from `@lobehub/ui/base-ui` (`createModal`, `useModalContext`, `confirmModal`) — see the **modal** skill.
-
-Memory note: `@lobehub/ui`'s `<Text type='secondary'>` is a lighter shade than `colorTextSecondary`. If you need that exact token color, write `<Text style={{ color: cssVar.colorTextSecondary }}>`.
-
-### 0.4 Always `memo` and set `displayName`
-
-```tsx
-export const SearchInspector = memo<BuiltinInspectorProps<SearchQuery, UniformSearchResponse>>(
-  ({ args /* … */ }) => {
-    /* … */
-  },
-);
-SearchInspector.displayName = 'SearchInspector';
-export default SearchInspector;
-```
-
-### 0.5 Always type with `BuiltinXProps<Args, State>` generics
-
-Don't widen to `any`. The Args generic is the JSON Schema params, the State generic is the executor's `state` field. The two should match `<Name>Params` and `<Name>State` from `types.ts`.
-
-### 0.6 Pull strings from `t('plugin')`
-
-```tsx
-const { t } = useTranslation('plugin');
-t('builtins.<identifier>.apiName.<api>');
-```
-
-Every Inspector should default to `t('builtins.<identifier>.apiName.<api>')` so it shows something while args stream in.
-
-### 0.7 Read store state from `@/store/chat`, not props
-
-Tool surfaces sometimes need cross-cutting state (loading, streaming buffer). Read it inside the component via Zustand selectors, not from props — props only carry args/state/messageId.
-
-### 0.8 Stay single-layer — don't nest filled cards
+### 0.3 Stay single-layer — don't nest filled cards
 
 The framework already wraps every Render / Intervention in a tool card, so that card **is** your surface. A Render that opens with its own `background: ${cssVar.colorFillQuaternary}` container is already one card deep; put another filled box inside it (`colorBgContainer` / `colorFillTertiary`) and you get the card-in-card look that reads as "complex" — two or three stacked fills for what is really a flat list of fields.
-
-Rules:
 
 - **The outermost wrapper carries no fill.** Use a flat container with only `padding-block: 4px` for breathing room; let the tool card provide the card. (See `Agent/index.tsx`'s `container`.)
 - **At most one filled box, and only to delineate real content** — a Markdown preview, a diff, a code/result block. Labels, key–value fields, question/answer text, chips: render flat on the surface, separated by spacing or a hairline divider (`height: 1px; background: ${cssVar.colorFillSecondary}`), not by wrapping each in its own box.
@@ -334,7 +327,7 @@ if (pluginError) {
 - **Return `null`** if there's nothing useful to draw yet (avoids empty cards during stream).
 - Use `pluginState` for server-truth (ids, counts, server-assigned status) and `args` for what the LLM asked. **Combine — neither alone is enough.**
 - For lists, summarize with a header line and show top N items with a "+N more" tail rather than rendering everything.
-- **Keep the Render single-layer** — the tool card is already your surface, so don't open with your own filled container and then nest more filled boxes inside it. See §0.8.
+- **Keep the Render single-layer** — the tool card is already your surface, so don't open with your own filled container and then nest more filled boxes inside it. See §0.3.
 - For modals from a Render, use `@lobehub/ui/base-ui` (`createModal`, `useModalContext`, `confirmModal`) — see the **modal** skill.
 
 ### Render registry — `client/Render/index.ts`
@@ -769,7 +762,7 @@ export * from '../types';
 | Header shows the API name but no chips          | Inspector missing \`args?.X                                                                                       |     | partialArgs?.X\` fallback |
 | Header doesn't pulse during loading             | Missing `shinyTextStyles.shinyText` on `isArgumentsStreaming \|\| isLoading`                                      |     |                           |
 | Empty result card under header                  | Render returned `<div />` instead of `null` when no data                                                          |     |                           |
-| Render looks "complex" / card-in-card           | Filled container (`colorFillQuaternary`) wrapping more filled boxes — flatten to single-layer, see §0.8           |     |                           |
+| Render looks "complex" / card-in-card           | Filled container (`colorFillQuaternary`) wrapping more filled boxes — flatten to single-layer, see §0.3           |     |                           |
 | Layout jump when result arrives                 | Placeholder dimensions don't match Render dimensions                                                              |     |                           |
 | Approval dialog never appears                   | Manifest missing `humanIntervention`, or Intervention not in registry                                             |     |                           |
 | Approval click doesn't wait for inline edit     | Missing `registerBeforeApprove(id, flushFn)`                                                                      |     |                           |
