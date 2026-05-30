@@ -74,9 +74,9 @@ export default {
   'channel.imessage.bridgeEnabledHint':
     'When enabled, LobeHub Desktop receives local BlueBubbles webhooks and forwards them to LobeHub.',
   'channel.imessage.bridgeRunningDesc':
-    'The bridge service is running. You can now test the BlueBubbles connection.',
+    'This local relay forwards iMessage messages to LobeHub. You can now test the BlueBubbles connection.',
   'channel.imessage.bridgeRunningDescListening':
-    'Listening on {url}. You can now test the BlueBubbles connection.',
+    'Listening on {url}, relaying iMessage messages to LobeHub. You can now test the BlueBubbles connection.',
   'channel.imessage.bridgeRunningTitle': 'Bridge service running',
   'channel.imessage.bridgeSectionDesc':
     'Confirm the Server URL and password first, then enable the bridge and test the connection.',
@@ -84,7 +84,8 @@ export default {
   'channel.imessage.bridgeStatusConnected': 'Connected',
   'channel.imessage.bridgeStatusFailed': 'Connection Failed',
   'channel.imessage.bridgeStatusPending': 'Pending Test',
-  'channel.imessage.bridgeStoppedDesc': 'Enable the bridge to test the BlueBubbles connection.',
+  'channel.imessage.bridgeStoppedDesc':
+    'Enable the bridge to relay iMessage messages to LobeHub, then test the connection.',
   'channel.imessage.bridgeStoppedTitle': 'Bridge service stopped',
   'channel.imessage.bridgeTestDisabledHint': 'Enable the bridge service first.',
   'channel.imessage.bridgeMissingApplicationId': 'Enter the Application ID first.',

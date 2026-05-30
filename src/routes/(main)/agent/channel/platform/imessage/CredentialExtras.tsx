@@ -29,11 +29,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   headerIcon: css`
     overflow: hidden;
+    flex: none;
 
-    width: 22px;
-    height: 22px;
+    width: 44px;
+    height: 44px;
     border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
+    border-radius: ${cssVar.borderRadiusLG};
 
     img {
       width: 100%;
@@ -226,10 +227,16 @@ const CredentialExtras = memo(() => {
     success: { color: 'green', text: t('channel.imessage.bridgeStatusConnected') },
   }[testStatus];
 
+  // The loopback server is shared across all bot configs, but this card is
+  // scoped to one bot — fold in this config's enable toggle so flipping it off
+  // reflects immediately, instead of waiting for the next save to tear the
+  // server down (which is what `running` alone reports).
+  const bridgeActive = running && bridgeForm.enabled;
+
   // `{url}` is a single-brace placeholder (react-i18next only parses `{{ }}`),
   // so it never registers as a namespace interpolation variable — keeping the
   // typed `t`/`Trans` inference for the whole `agent` namespace untouched.
-  const bridgeDesc = running
+  const bridgeDesc = bridgeActive
     ? serverUrl
       ? t('channel.imessage.bridgeRunningDescListening').replace('{url}', serverUrl)
       : t('channel.imessage.bridgeRunningDesc')
@@ -237,17 +244,19 @@ const CredentialExtras = memo(() => {
 
   return (
     <Flexbox className={styles.card}>
-      {/* Top: connection title + overall test status. Reserve breathing room
-          below so the header doesn't crowd the first form field. */}
-      <Flexbox gap={6} style={{ marginBlockEnd: 24 }}>
-        <Flexbox horizontal align="center" gap={8}>
-          <Flexbox align="center" className={styles.headerIcon} justify="center">
-            <img alt="BlueBubbles" src={BLUEBUBBLES_ICON_URL} />
-          </Flexbox>
-          <Text className={styles.title}>{t('channel.imessage.bridgeSectionTitle')}</Text>
-          <Tag color={statusBadge.color}>{statusBadge.text}</Tag>
+      {/* Top: logo spanning both lines, then title + status and the subtitle.
+          Reserve breathing room below so the header doesn't crowd the form. */}
+      <Flexbox horizontal align="center" gap={12} style={{ marginBlockEnd: 24 }}>
+        <Flexbox align="center" className={styles.headerIcon} justify="center">
+          <img alt="BlueBubbles" src={BLUEBUBBLES_ICON_URL} />
         </Flexbox>
-        <Text type="secondary">{t('channel.imessage.bridgeSectionDesc')}</Text>
+        <Flexbox gap={4}>
+          <Flexbox horizontal align="center" gap={8}>
+            <Text className={styles.title}>{t('channel.imessage.bridgeSectionTitle')}</Text>
+            <Tag color={statusBadge.color}>{statusBadge.text}</Tag>
+          </Flexbox>
+          <Text type="secondary">{t('channel.imessage.bridgeSectionDesc')}</Text>
+        </Flexbox>
       </Flexbox>
 
       {/* Middle: the form fields the operator fills in. */}
@@ -293,12 +302,12 @@ const CredentialExtras = memo(() => {
           <Flexbox gap={2}>
             <Flexbox horizontal align="center" gap={8}>
               <Text style={{ fontWeight: 500 }}>
-                {running
+                {bridgeActive
                   ? t('channel.imessage.bridgeRunningTitle')
                   : t('channel.imessage.bridgeStoppedTitle')}
               </Text>
-              <Tag color={running ? 'green' : 'default'}>
-                {running
+              <Tag color={bridgeActive ? 'green' : 'default'}>
+                {bridgeActive
                   ? t('channel.imessage.bridgeRunning')
                   : t('channel.imessage.bridgeStopped')}
               </Tag>
@@ -320,7 +329,7 @@ const CredentialExtras = memo(() => {
             {t('channel.imessage.bridgeRefresh')}
           </Button>
           <Button
-            disabled={!running}
+            disabled={!bridgeActive}
             icon={<Wrench size={14} />}
             loading={testing}
             onClick={handleTest}
