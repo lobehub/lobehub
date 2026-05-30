@@ -338,64 +338,160 @@ export function registerTopicCommand(program: Command) {
   topic
     .command('view <id>')
     .description('View topic details and its messages')
-    .option('-L, --limit <n>', 'Max messages to show', '50')
+    .option('-L, --limit <n>', 'Max messages to fetch per page', '50')
+    .option('--from <n>', 'Show messages starting from this index (1-based)', '1')
+    .option('--to <n>', 'Show messages up to this index (inclusive)')
     .option('--no-messages', 'Skip messages, show topic metadata only')
     .option('--json', 'Output JSON')
     .action(
       async (
         id: string,
-        options: { json?: boolean; limit?: string; messages?: boolean },
+        options: {
+          from?: string;
+          json?: boolean;
+          limit?: string;
+          messages?: boolean;
+          to?: string;
+        },
       ) => {
         const client = await getTrpcClient();
 
-        // Fetch topic metadata via getTopics filtered by id, then find the match.
-        // (No getTopic-by-id endpoint exists yet; we search the list and match.)
-        const topicsResult = await client.topic.getTopics.query({} as any);
-        const allTopics = Array.isArray(topicsResult)
-          ? topicsResult
-          : ((topicsResult as any).items ?? []);
-        const topicMeta = allTopics.find((t: any) => t.id === id) as any | undefined;
+        // ── 1. Fetch topic metadata via getTopicContext (single query, has permission check) ──
+        const ctxResult = await client.topic.getTopicContext.query({ topicId: id } as any);
 
-        // Fetch messages for this topic
+        // ── 2. Fetch messages only when needed ──
+        if (options.messages === false) {
+          // --no-messages: skip message query entirely
+          if (options.json) {
+            console.log(JSON.stringify({ messages: [], topic: { id } }, null, 2));
+            return;
+          }
+          console.log('');
+          console.log(`${pc.bold('Topic:')}   ${pc.cyan(id)}`);
+          console.log('');
+          return;
+        }
+
         const msgLimit = Number.parseInt(options.limit || '50', 10);
         const msgResult = await client.message.getMessages.query({
           pageSize: msgLimit,
           topicId: id,
         } as any);
-        const messages = Array.isArray(msgResult) ? msgResult : ((msgResult as any).items ?? []);
+        const allMessages: any[] = Array.isArray(msgResult)
+          ? msgResult
+          : ((msgResult as any).items ?? []);
+
+        // Apply --from / --to slicing (1-based)
+        const fromIdx = Math.max(1, Number.parseInt(options.from || '1', 10)) - 1;
+        const toIdx = options.to ? Number.parseInt(options.to, 10) : allMessages.length;
+        const messages = allMessages.slice(fromIdx, toIdx);
 
         if (options.json) {
-          console.log(JSON.stringify({ messages, topic: topicMeta ?? { id } }, null, 2));
+          console.log(
+            JSON.stringify(
+              {
+                messages: messages.map((m: any) => ({
+                  content: m.content ?? null,
+                  createdAt: m.createdAt ?? null,
+                  id: m.id,
+                  parentId: m.parentId ?? null,
+                  role: m.role,
+                  threadId: m.threadId ?? null,
+                  tools: m.tools ?? null,
+                })),
+                topic: { id },
+              },
+              null,
+              2,
+            ),
+          );
           return;
         }
 
-        // ── Header ──
+        // ── Header (extract title from getTopicContext result) ──
+        const ctxContent = (ctxResult as any)?.content ?? '';
+        const titleMatch = ctxContent.match(/^#\s+Topic:\s+(.+)/m);
+        const title = titleMatch ? titleMatch[1].trim() : id;
+
         console.log('');
-        console.log(
-          `${pc.bold('Topic:')}   ${pc.cyan(topicMeta?.title ?? id)}  ${pc.dim(`(${id})`)}`,
-        );
-        if (topicMeta?.favorite) console.log(`${pc.bold('Favorite:')} ★`);
-        if (topicMeta?.updatedAt)
-          console.log(`${pc.bold('Updated:')}  ${timeAgo(topicMeta.updatedAt)}`);
+        console.log(`${pc.bold('Topic:')}   ${pc.cyan(title)}  ${pc.dim(`(${id})`)}`);
         console.log('');
 
         // ── Messages ──
-        if (options.messages === false) return;
-
         if (messages.length === 0) {
           console.log(pc.dim('  (no messages)'));
           return;
         }
 
-        for (const m of messages as any[]) {
-          const role = m.role === 'user' ? pc.green('user      ') : pc.blue('assistant ');
-          const preview = truncate(m.content || '', 120);
-          console.log(`  ${role}  ${preview}`);
+        // Build parentId → children map for thread display
+        const childrenOf = new Map<string | null, any[]>();
+        for (const m of messages) {
+          const key = m.parentId ?? null;
+          if (!childrenOf.has(key)) childrenOf.set(key, []);
+          childrenOf.get(key)!.push(m);
         }
 
-        if (messages.length === msgLimit) {
+        const printMessage = (m: any, depth: number) => {
+          const indent = '  '.repeat(depth + 1);
+          const roleLabel =
+            m.role === 'user'
+              ? pc.green('user     ')
+              : m.role === 'tool'
+                ? pc.yellow('tool     ')
+                : pc.blue('assistant');
+          const threadMark = depth > 0 ? pc.dim('↳ ') : '';
+
+          // Full content (no truncation)
+          const content = (m.content || '').trim();
+          if (content) {
+            console.log(`${indent}${threadMark}${roleLabel}  ${content}`);
+          }
+
+          // Tool calls (assistant requesting tools)
+          if (m.tools && Array.isArray(m.tools) && m.tools.length > 0) {
+            for (const tool of m.tools) {
+              const toolName = tool.function?.name ?? tool.id ?? 'unknown';
+              const toolArgs = tool.function?.arguments
+                ? (() => {
+                    try {
+                      return JSON.stringify(JSON.parse(tool.function.arguments), null, 2)
+                        .split('\n')
+                        .map((l: string) => `${indent}    ${l}`)
+                        .join('\n');
+                    } catch {
+                      return `${indent}    ${tool.function.arguments}`;
+                    }
+                  })()
+                : '';
+              console.log(`${indent}  ${pc.yellow('⚙')} ${pc.bold(toolName)}`);
+              if (toolArgs) console.log(toolArgs);
+            }
+          }
+
+          // Render thread children recursively
+          const children = childrenOf.get(m.id) ?? [];
+          for (const child of children) {
+            printMessage(child, depth + 1);
+          }
+        };
+
+        // Print only top-level messages (parentId === null/undefined, or parentId not in current page)
+        const msgIds = new Set(messages.map((m: any) => m.id));
+        const topLevel = messages.filter(
+          (m: any) => !m.parentId || !msgIds.has(m.parentId),
+        );
+
+        for (const m of topLevel) {
+          printMessage(m, 0);
+        }
+
+        if (allMessages.length > msgLimit) {
           console.log('');
-          console.log(pc.dim(`  … showing first ${msgLimit} messages. Use -L to show more.`));
+          console.log(
+            pc.dim(
+              `  … total ${allMessages.length} messages, showing ${fromIdx + 1}–${Math.min(toIdx, allMessages.length)}. Use -L / --from / --to to paginate.`,
+            ),
+          );
         }
       },
     );
