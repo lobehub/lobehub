@@ -11,6 +11,7 @@ import {
   ReactToolbarPlugin,
 } from '@lobehub/editor';
 import { Editor, useEditorState } from '@lobehub/editor/react';
+import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { memo, type RefObject, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -25,6 +26,45 @@ import { useFileUpload, useImageUpload } from './useImageUpload';
 const IMAGE_FILTERS = [
   { extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'avif'], name: 'Images' },
 ];
+
+// Override @lobehub/editor's default inline-pill file styling with a
+// full-width, block-level card — matching the Linear attachment row look.
+const fileNodeStyles = createStaticStyles(({ css, cssVar }) => ({
+  fileNode: css`
+    cursor: pointer;
+
+    display: flex !important;
+    gap: 10px;
+    align-items: center;
+
+    box-sizing: border-box;
+    width: 100%;
+    margin-block: 6px !important;
+    margin-inline: 0 !important;
+    padding-block: 10px !important;
+    padding-inline: 14px !important;
+    border: 1px solid ${cssVar.colorBorderSecondary} !important;
+    border-radius: ${cssVar.borderRadiusLG} !important;
+
+    font-family: inherit !important;
+    font-size: ${cssVar.fontSize} !important;
+    line-height: 1.4 !important;
+    color: ${cssVar.colorText};
+    word-break: break-word;
+
+    background: ${cssVar.colorBgContainer};
+
+    transition: background ${cssVar.motionDurationMid};
+
+    &:hover {
+      background: ${cssVar.colorFillTertiary};
+    }
+
+    &.selected {
+      background: ${cssVar.colorPrimaryBg};
+    }
+  `,
+}));
 
 /**
  * Base plugins for the editor (without image and toolbar, which need dynamic config)
@@ -130,6 +170,7 @@ const InternalEditor = memo<InternalEditorProps>(
       });
 
       const filePlugin = Editor.withProps(ReactFilePlugin, {
+        className: fileNodeStyles.fileNode as unknown as string,
         handleUpload: handleFileUpload,
       });
 
