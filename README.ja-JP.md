@@ -4,13 +4,13 @@
 
 # LobeHub
 
-LobeHub organizes your agents into 7×24 operation.
+LobeHub は、あなたの Agent を 7×24 体制で稼働させます。
 
-It hires, schedules, reports on your entire AI team.
+AI チーム全体の採用、スケジューリング、レポート作成を自動で支援します。
 
-You stay in charge — without staying online.
+常時オンラインでなくても、主導権はあなたの手に。
 
-**English** · [简体中文](./README.zh-CN.md) · [日本語](./README.ja-JP.md) · [Official Site][official-site] · [Changelog][changelog] · [Documents][docs] · [Blog][blog] · [Feedback][github-issues-link]
+[English](./README.md) · [简体中文](./README.zh-CN.md) · **日本語** · [公式サイト][official-site] · [更新履歴][changelog] · [ドキュメント][docs] · [ブログ][blog] · [フィードバック][github-issues-link]
 
 <!-- SHIELD GROUP -->
 
@@ -28,7 +28,7 @@ You stay in charge — without staying online.
 [![][github-issues-shield]][github-issues-link]
 [![][github-license-shield]][github-license-link]<br>
 
-**Share LobeHub Repository**
+**LobeHub リポジトリを共有**
 
 [![][share-x-shield]][share-x-link]
 [![][share-telegram-shield]][share-telegram-link]
@@ -38,7 +38,7 @@ You stay in charge — without staying online.
 [![][share-mastodon-shield]][share-mastodon-link]
 [![][share-linkedin-shield]][share-linkedin-link]
 
-<sup>Your Chief Agent Operator</sup>
+<sup>あなたの Chief Agent Operator</sup>
 
 <a href="https://www.producthunt.com/products/lobehub?embed=true&amp;utm_source=badge-top-post-badge&amp;utm_medium=badge&amp;utm_campaign=badge-lobehub-2" target="_blank" rel="noopener noreferrer"><img alt="LobeHub - Your Chief Agent Operator for multi-agent work | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/top-post-badge.svg?post_id=1147569&amp;theme=light&amp;period=daily&amp;t=1779247564355"></a> <a href="https://trendshift.io/repositories/19224" target="_blank"><img src="https://trendshift.io/api/badge/repositories/19224" alt="lobehub%2Flobehub | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 
@@ -47,26 +47,26 @@ You stay in charge — without staying online.
 </div>
 
 <details>
-<summary><kbd>Table of contents</kbd></summary>
+<summary><kbd>目次</kbd></summary>
 
 #### TOC
 
-- [👋🏻 Getting Started & Join Our Community](#-getting-started--join-our-community)
-- [✨ Features](#-features)
-  - [Operator: Agents as the Unit of Work](#operator-agents-as-the-unit-of-work)
-  - [Create: Agents as the Unit of Work](#create-agents-as-the-unit-of-work)
-  - [Collaborate: Scale New Forms of Collaboration Networks](#collaborate-scale-new-forms-of-collaboration-networks)
-  - [Evolve: Co-evolution of Humans and Agents](#evolve-co-evolution-of-humans-and-agents)
-- [🛳 Self Hosting](#-self-hosting)
-  - [`A` Deploying with Vercel, Zeabur , Sealos or Alibaba Cloud](#a-deploying-with-vercel-zeabur--sealos-or-alibaba-cloud)
-  - [`B` Deploying with Docker](#b-deploying-with-docker)
-  - [Environment Variable](#environment-variable)
-- [📦 Ecosystem](#-ecosystem)
-- [🧩 Plugins](#-plugins)
-- [⌨️ Local Development](#️-local-development)
-- [🤝 Contributing](#-contributing)
-- [❤️ Sponsor](#️-sponsor)
-- [🔗 More Products](#-more-products)
+- [👋🏻 はじめに & コミュニティ](#-はじめに--コミュニティ)
+- [✨ 機能](#-機能)
+  - [Operator: Agent を作業単位に](#operator-agent-を作業単位に)
+  - [Create: Agent を作業単位に](#create-agent-を作業単位に)
+  - [Collaborate: 新しいコラボレーションネットワークを拡張](#collaborate-新しいコラボレーションネットワークを拡張)
+  - [Evolve: 人と Agent の共進化](#evolve-人と-agent-の共進化)
+- [🛳 セルフホスティング](#-セルフホスティング)
+  - [`A` Vercel、Zeabur、Sealos、Alibaba Cloud でデプロイ](#a-vercelzeabursealosalibaba-cloud-でデプロイ)
+  - [`B` Docker でデプロイ](#b-docker-でデプロイ)
+  - [環境変数](#環境変数)
+- [📦 エコシステム](#-エコシステム)
+- [🧩 プラグイン](#-プラグイン)
+- [⌨️ ローカル開発](#️-ローカル開発)
+- [🤝 コントリビューション](#-コントリビューション)
+- [❤️ スポンサー](#️-スポンサー)
+- [🔗 その他のプロダクト](#-その他のプロダクト)
 
 ####
 
@@ -78,47 +78,47 @@ You stay in charge — without staying online.
 
 <https://github.com/user-attachments/assets/0a33365f-b786-48b5-9ed6-f8af7927bccb>
 
-## 👋🏻 Getting Started & Join Our Community
+## 👋🏻 はじめに & コミュニティ
 
-We are a group of e/acc design-engineers, hoping to provide modern design components and tools for AIGC.
-By adopting the Bootstrapping approach, we aim to provide developers and users with a more open, transparent, and user-friendly product ecosystem.
+私たちは e/acc なデザインエンジニアのチームです。AIGC のためのモダンなデザインコンポーネントとツールを提供したいと考えています。
+Bootstrapping のアプローチを採用し、開発者とユーザーにとってよりオープンで透明性が高く、使いやすいプロダクトエコシステムを目指しています。
 
-Whether for users or professional developers, LobeHub will be your AI Agent playground. Please be aware that LobeHub is currently under active development, and feedback is welcome for any [issues][issues-link] encountered.
+一般ユーザーにもプロの開発者にも、LobeHub は AI Agent の実験場になります。LobeHub は現在活発に開発中です。利用中に見つけた問題や要望は、ぜひ [issues][issues-link] でお知らせください。
 
-| [![](https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1065874&theme=light&t=1769347414733)](https://www.producthunt.com/products/lobehub?launch=lobehub-2&embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-lobehub) | We are live on Product Hunt! We are thrilled to bring LobeHub to the world. If you believe in a future where humans and agents co-evolve, please support our journey. |
+| [![](https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1065874&theme=light&t=1769347414733)](https://www.producthunt.com/products/lobehub?launch=lobehub-2&embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-lobehub) | Product Hunt で公開されました！LobeHub を世界へ届けられることを嬉しく思います。人と Agent が共に進化する未来を信じているなら、ぜひ私たちの挑戦を応援してください。 |
 | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [![][discord-shield-badge]][discord-link]                                                                                                                                                                                                                          | Join our Discord community! This is where you can connect with developers and other enthusiastic users of LobeHub.                                                    |
+| [![][discord-shield-badge]][discord-link]                                                                                                                                                                                                                          | Discord コミュニティに参加しましょう！開発者や LobeHub に熱心なユーザーとつながれる場所です。                                                    |
 
 > \[!IMPORTANT]
 >
-> **Star Us**, You will receive all release notifications from GitHub without any delay \~ ⭐️
+> **Star をお願いします**。GitHub からリリース通知をすぐに受け取れます \~ ⭐️
 
 [![][image-star]][github-stars-link]
 
 <details>
-  <summary><kbd>Star History</kbd></summary>
+  <summary><kbd>Star 履歴</kbd></summary>
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=lobehub%2Flobehub&theme=dark&type=Date">
     <img width="100%" src="https://api.star-history.com/svg?repos=lobehub%2Flobehub&type=Date">
   </picture>
 </details>
 
-## ✨ Features
+## ✨ 機能
 
-Today’s agents are one-off, task-driven tools. They lack context, live in isolation, and require manual hand-offs between different windows and models. While some maintain memory, it is often global, shallow, and impersonal. In this mode, users are forced to toggle between fragmented conversations, making it difficult to form structured productivity.
+今日の多くの Agent は、一度きりのタスク駆動型ツールです。文脈が不足し、孤立して動作し、異なるウィンドウやモデル間で手作業の引き継ぎが必要になります。メモリを持つものもありますが、多くはグローバルで浅く、無機質です。この状態では、ユーザーは断片化された会話を行き来することになり、構造化された生産性を築きにくくなります。
 
-**LobeHub changes everything.**
+**LobeHub はそのすべてを変えます。**
 
-LobeHub is a work-and-lifestyle space to find, build, and collaborate with agent teammates that grow with you. In LobeHub, we treat **Agents as the unit of work**, providing an infrastructure where humans and agents co-evolve.
+LobeHub は、あなたと共に成長する Agent チームメイトを見つけ、構築し、協働するための仕事と生活の空間です。LobeHub では **Agent を作業単位** として扱い、人と Agent が共進化するためのインフラを提供します。
 
 ![](https://github.com/user-attachments/assets/89d1c402-a62b-4794-82ea-17e5ee1a6165)
 
-### Operator: Agents as the Unit of Work
+### Operator: Agent を作業単位に
 
-Hires, schedules, and reports on your entire AI team.
+AI チーム全体の採用、スケジューリング、レポート作成を担います。
 
-- **More productivity. Fewer tools**: Bring all your agents under one roof.
-- **IM Gateway**: Agents where you already chat.
+- **より高い生産性、より少ないツール**: すべての Agent をひとつの場所に集約します。
+- **IM Gateway**: いつも会話している場所で Agent を使えます。
 
 ![](https://github.com/user-attachments/assets/7b08d6d9-9dff-4b06-a919-324630554509)
 
@@ -132,12 +132,12 @@ Hires, schedules, and reports on your entire AI team.
 
 ![](https://github.com/user-attachments/assets/81e89324-fc66-4024-99a3-aa8e16ec8184)
 
-### Create: Agents as the Unit of Work
+### Create: Agent を作業単位に
 
-Building a personalized AI team starts with the **Agent Builder**. You can describe what you need once, and the agent setup starts right away, applying auto-configurations so you can use it instantly.
+パーソナライズされた AI チームの構築は **Agent Builder** から始まります。必要なことを一度説明するだけで Agent のセットアップがすぐに始まり、自動設定が適用され、その場で使い始められます。
 
-- **Unified Intelligence**: Seamlessly access any model and any modality—all under your control.
-- **10,000+ Skills**: Connect your agents to the skills you use every day with a library of over 10,000 tools and MCP-compatible plugins.
+- **統合された知能**: あらゆるモデルとモダリティへシームレスにアクセスできます。すべてはあなたの管理下にあります。
+- **10,000+ Skills**: 10,000 を超えるツールと MCP 互換プラグインのライブラリで、日々使うスキルに Agent を接続できます。
 
 ![](https://github.com/user-attachments/assets/949b8166-486d-4750-ad7a-cfe7bfcb84e3)
 
@@ -151,14 +151,14 @@ Building a personalized AI team starts with the **Agent Builder**. You can descr
 
 ![](https://hub-apac-1.lobeobjects.space/blog/assets/771ff3d30b9ef93e65e55021cc43d356.webp)
 
-### Collaborate: Scale New Forms of Collaboration Networks
+### Collaborate: 新しいコラボレーションネットワークを拡張
 
-LobeHub introduces **Agent Groups**, allowing you to work with agents like real teammates. The system assembles the right agents for the task, enabling parallel collaboration and iterative improvement.
+LobeHub は **Agent Groups** を導入し、Agent を本物のチームメイトのように扱えるようにします。システムがタスクに適した Agent を組み合わせ、並列的なコラボレーションと反復的な改善を可能にします。
 
-- **Pages**: Write and refine content with multiple agents in one place with a shared context.
-- **Schedule**: Schedule runs and let agents do the work at the right time, even while you are away.
-- **Project**: Organize work by project to keep everything structured and easy to track.
-- **Workspace**: A shared space for teams to collaborate with agents, ensuring clear ownership and visibility across the organization.
+- **Pages**: 共有コンテキストを使い、ひとつの場所で複数の Agent と文章を作成・改善できます。
+- **Schedule**: 実行予定を設定し、不在時でも適切なタイミングで Agent に作業を任せられます。
+- **Project**: 作業をプロジェクト単位で整理し、構造化された追跡しやすい状態を保ちます。
+- **Workspace**: チームが Agent と協働するための共有空間です。組織内で明確な所有権と可視性を確保します。
 
 ![](https://github.com/user-attachments/assets/e51526c6-e09c-4a5a-9cec-dcd3fd68a3a8)
 
@@ -172,12 +172,12 @@ LobeHub introduces **Agent Groups**, allowing you to work with agents like real 
 
 ![](https://hub-apac-1.lobeobjects.space/blog/assets/fe98eae9fcb6acc47c8e1fb69bdb4b50.webp)
 
-### Evolve: Co-evolution of Humans and Agents
+### Evolve: 人と Agent の共進化
 
-The best AI is one that understands you deeply. LobeHub features **Personal Memory** that builds a clear understanding of your needs.
+最高の AI とは、あなたを深く理解してくれる AI です。LobeHub は、あなたのニーズを明確に理解するための **Personal Memory** を備えています。
 
-- **Continual Learning**: Your agents learn from how you work, adapting their behavior to act at the right moment.
-- **White-Box Memory**: We believe in transparency. Your agents use structured, editable memory, giving you full control over what they remember.
+- **継続学習**: Agent はあなたの働き方から学び、適切なタイミングで行動できるよう振る舞いを適応させます。
+- **ホワイトボックスメモリ**: 私たちは透明性を重視します。Agent は構造化され編集可能なメモリを使うため、何を記憶するかをあなたが完全に管理できます。
 
 ![](https://github.com/user-attachments/assets/5c6e16f0-7f47-4baf-9aeb-3a00deb8ff5b)
 
@@ -187,7 +187,7 @@ The best AI is one that understands you deeply. LobeHub features **Personal Memo
 
 </div>
 
-> ✨ more features will be added when LobeHub evolve.
+> ✨ LobeHub の進化に合わせて、さらに多くの機能が追加されます。
 
 <div align="right">
 
@@ -195,66 +195,66 @@ The best AI is one that understands you deeply. LobeHub features **Personal Memo
 
 </div>
 
-## 🛳 Self Hosting
+## 🛳 セルフホスティング
 
-LobeHub provides Self-Hosted Version with Vercel, Alibaba Cloud, and [Docker Image][docker-release-link]. This allows you to deploy your own chatbot within a few minutes without any prior knowledge.
+LobeHub は Vercel、Alibaba Cloud、[Docker Image][docker-release-link] を使ったセルフホスティング版を提供しています。事前知識がなくても、数分で自分専用のチャットボットをデプロイできます。
 
 > \[!TIP]
 >
-> Learn more about [📘 Build your own LobeHub][docs-self-hosting] by checking it out.
+> [📘 自分だけの LobeHub を構築][docs-self-hosting] で詳しい手順を確認できます。
 
-### `A` Deploying with Vercel, Zeabur , Sealos or Alibaba Cloud
+### `A` Vercel、Zeabur、Sealos、Alibaba Cloud でデプロイ
 
-"If you want to deploy this service yourself on Vercel, Zeabur or Alibaba Cloud, you can follow these steps:
+Vercel、Zeabur、Alibaba Cloud でこのサービスを自分でデプロイしたい場合は、次の手順に従ってください。
 
-- Prepare your [OpenAI API Key](https://platform.openai.com/account/api-keys).
-- Click the button below to start deployment: Log in directly with your GitHub account, and remember to fill in the `OPENAI_API_KEY`(required) on the environment variable section.
-- After deployment, you can start using it.
-- Bind a custom domain (optional): The DNS of the domain assigned by Vercel is polluted in some areas; binding a custom domain can connect directly.
+- [OpenAI API Key](https://platform.openai.com/account/api-keys) を準備します。
+- 下のボタンをクリックしてデプロイを開始します。GitHub アカウントで直接ログインし、環境変数の欄に必須項目の `OPENAI_API_KEY` を入力してください。
+- デプロイ完了後、すぐに利用を開始できます。
+- カスタムドメインを紐づけます（任意）。一部地域では Vercel が割り当てるドメインの DNS が不安定な場合があるため、カスタムドメインを使うと直接接続できます。
 
 <div align="center">
 
-|           Deploy with Vercel            |                     Deploy with Zeabur                      |                     Deploy with Sealos                      |                       Deploy with RepoCloud                       |                         Deploy with Alibaba Cloud                         |
+|          Vercel にデプロイ           |                     Zeabur にデプロイ                      |                     Sealos にデプロイ                      |                       RepoCloud にデプロイ                       |                         Alibaba Cloud にデプロイ                         |
 | :-------------------------------------: | :---------------------------------------------------------: | :---------------------------------------------------------: | :---------------------------------------------------------------: | :-----------------------------------------------------------------------: |
 | [![][deploy-button-image]][deploy-link] | [![][deploy-on-zeabur-button-image]][deploy-on-zeabur-link] | [![][deploy-on-sealos-button-image]][deploy-on-sealos-link] | [![][deploy-on-repocloud-button-image]][deploy-on-repocloud-link] | [![][deploy-on-alibaba-cloud-button-image]][deploy-on-alibaba-cloud-link] |
 
 </div>
 
-#### After Fork
+#### Fork 後
 
-After fork, only retain the upstream sync action and disable other actions in your repository on GitHub.
+Fork 後は upstream sync action だけを残し、GitHub 上のリポジトリで他の Actions を無効化してください。
 
-#### Keep Updated
+#### 最新状態を保つ
 
-If you have deployed your own project following the one-click deployment steps in the README, you might encounter constant prompts indicating "updates available." This is because Vercel defaults to creating a new project instead of forking this one, resulting in an inability to detect updates accurately.
+README のワンクリックデプロイ手順に従って自分のプロジェクトをデプロイした場合、「更新があります」という通知が繰り返し表示されることがあります。これは Vercel が既定でこのリポジトリを fork せず、新しいプロジェクトを作成するため、更新を正確に検出できないことが原因です。
 
 > \[!TIP]
 >
-> We suggest you redeploy using the following steps, [📘 Auto Sync With Latest][docs-upstream-sync]
+> [📘 最新版との自動同期][docs-upstream-sync] の手順に従って再デプロイすることをおすすめします。
 
 <br/>
 
-### `B` Deploying with Docker
+### `B` Docker でデプロイ
 
 [![][docker-release-shield]][docker-release-link]
 [![][docker-size-shield]][docker-size-link]
 [![][docker-pulls-shield]][docker-pulls-link]
 
-We provide a Docker image for deploying the LobeHub service on your own private device. Use the following command to start the LobeHub service:
+自分のプライベート環境に LobeHub サービスをデプロイするための Docker イメージを提供しています。次のコマンドで LobeHub サービスを起動します。
 
-1. create a folder to for storage files
+1. ストレージファイル用のフォルダを作成します
 
 ```fish
 $ mkdir lobehub-db && cd lobehub-db
 ```
 
-2. init the LobeHub infrastructure
+2. LobeHub のインフラを初期化します
 
 ```fish
 bash <(curl -fsSL https://lobe.li/setup.sh)
 ```
 
-3. Start the LobeHub service
+3. LobeHub サービスを起動します
 
 ```fish
 docker compose up -d
@@ -262,23 +262,23 @@ docker compose up -d
 
 > \[!NOTE]
 >
-> For detailed instructions on deploying with Docker, please refer to the [📘 Docker Deployment Guide][docs-docker]
+> Docker でのデプロイに関する詳細は [📘 Docker デプロイガイド][docs-docker] を参照してください。
 
 <br/>
 
-### Environment Variable
+### 環境変数
 
-This project provides some additional configuration items set with environment variables:
+このプロジェクトでは、環境変数で設定できる追加の設定項目を提供しています。
 
-| Environment Variable | Required | Description                                                                                                                                                               | Example                                                                                                              |
+| 環境変数 | 必須 | 説明 | 例 |
 | -------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `OPENAI_API_KEY`     | Yes      | This is the API key you apply on the OpenAI account page                                                                                                                  | `sk-xxxxxx...xxxxxx`                                                                                                 |
-| `OPENAI_PROXY_URL`   | No       | If you manually configure the OpenAI interface proxy, you can use this configuration item to override the default OpenAI API request base URL                             | `https://api.chatanywhere.cn` or `https://aihubmix.com/v1` <br/>The default value is<br/>`https://api.openai.com/v1` |
-| `OPENAI_MODEL_LIST`  | No       | Used to control the model list. Use `+` to add a model, `-` to hide a model, and `model_name=display_name` to customize the display name of a model, separated by commas. | `qwen-7b-chat,+glm-6b,-gpt-3.5-turbo`                                                                                |
+| `OPENAI_API_KEY`     | はい      | OpenAI アカウントページで発行する API キーです。 | `sk-xxxxxx...xxxxxx` |
+| `OPENAI_PROXY_URL`   | いいえ       | OpenAI API のプロキシを手動で設定する場合、この項目で既定の OpenAI API リクエストベース URL を上書きできます。 | `https://api.chatanywhere.cn` または `https://aihubmix.com/v1` <br/>既定値:<br/>`https://api.openai.com/v1` |
+| `OPENAI_MODEL_LIST`  | いいえ       | モデル一覧を制御します。`+` でモデルを追加し、`-` でモデルを非表示にし、`model_name=display_name` で表示名をカスタマイズします。カンマ区切りで指定します。 | `qwen-7b-chat,+glm-6b,-gpt-3.5-turbo` |
 
 > \[!NOTE]
 >
-> The complete list of environment variables can be found in the [📘 Environment Variables][docs-env-var]
+> 環境変数の完全な一覧は [📘 環境変数][docs-env-var] で確認できます。
 
 <div align="right">
 
@@ -286,14 +286,14 @@ This project provides some additional configuration items set with environment v
 
 </div>
 
-## 📦 Ecosystem
+## 📦 エコシステム
 
-| NPM                               | Repository                              | Description                                                                                           | Version                                   |
+| NPM                               | リポジトリ                              | 説明                                                                                           | バージョン                                   |
 | --------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| [@lobehub/ui][lobe-ui-link]       | [lobehub/lobe-ui][lobe-ui-github]       | Open-source UI component library dedicated to building AIGC web applications.                         | [![][lobe-ui-shield]][lobe-ui-link]       |
-| [@lobehub/icons][lobe-icons-link] | [lobehub/lobe-icons][lobe-icons-github] | Popular AI / LLM Model Brand SVG Logo and Icon Collection.                                            | [![][lobe-icons-shield]][lobe-icons-link] |
-| [@lobehub/tts][lobe-tts-link]     | [lobehub/lobe-tts][lobe-tts-github]     | High-quality & reliable TTS/STT React Hooks library                                                   | [![][lobe-tts-shield]][lobe-tts-link]     |
-| [@lobehub/lint][lobe-lint-link]   | [lobehub/lobe-lint][lobe-lint-github]   | Configurations for ESlint, Stylelint, Commitlint, Prettier, Remark, and Semantic Release for LobeHub. | [![][lobe-lint-shield]][lobe-lint-link]   |
+| [@lobehub/ui][lobe-ui-link]       | [lobehub/lobe-ui][lobe-ui-github]       | AIGC Web アプリケーション構築のためのオープンソース UI コンポーネントライブラリです。                         | [![][lobe-ui-shield]][lobe-ui-link]       |
+| [@lobehub/icons][lobe-icons-link] | [lobehub/lobe-icons][lobe-icons-github] | 主要な AI / LLM モデルブランドの SVG ロゴとアイコン集です。                                            | [![][lobe-icons-shield]][lobe-icons-link] |
+| [@lobehub/tts][lobe-tts-link]     | [lobehub/lobe-tts][lobe-tts-github]     | 高品質で信頼性の高い TTS/STT React Hooks ライブラリです。                                                   | [![][lobe-tts-shield]][lobe-tts-link]     |
+| [@lobehub/lint][lobe-lint-link]   | [lobehub/lobe-lint][lobe-lint-github]   | LobeHub 向けの ESLint、Stylelint、Commitlint、Prettier、Remark、Semantic Release 設定です。 | [![][lobe-lint-shield]][lobe-lint-link]   |
 
 <div align="right">
 
@@ -301,22 +301,22 @@ This project provides some additional configuration items set with environment v
 
 </div>
 
-## 🧩 Plugins
+## 🧩 プラグイン
 
-Plugins provide a means to extend the [Function Calling][docs-function-call] capabilities of LobeHub. They can be used to introduce new function calls and even new ways to render message results. If you are interested in plugin development, please refer to our [📘 Plugin Development Guide][docs-plugin-dev] in the Wiki.
+プラグインは、LobeHub の [Function Calling][docs-function-call] 機能を拡張する手段です。新しい Function Calling や、メッセージ結果の新しいレンダリング方法を導入できます。プラグイン開発に興味がある場合は、Wiki の [📘 プラグイン開発ガイド][docs-plugin-dev] を参照してください。
 
-- [lobe-chat-plugins][lobe-chat-plugins]: This is the plugin index for LobeHub. It accesses index.json from this repository to display a list of available plugins for LobeHub to the user.
-- [chat-plugin-template][chat-plugin-template]: This is the plugin template for LobeHub plugin development.
-- [@lobehub/chat-plugin-sdk][chat-plugin-sdk]: The LobeHub Plugin SDK assists you in creating exceptional chat plugins for LobeHub.
-- [@lobehub/chat-plugins-gateway][chat-plugins-gateway]: The LobeHub Plugins Gateway is a backend service that provides a gateway for LobeHub plugins. We deploy this service using Vercel. The primary API POST /api/v1/runner is deployed as an Edge Function.
+- [lobe-chat-plugins][lobe-chat-plugins]: LobeHub のプラグインインデックスです。このリポジトリの index.json を参照し、利用可能なプラグイン一覧をユーザーに表示します。
+- [chat-plugin-template][chat-plugin-template]: LobeHub プラグイン開発用のテンプレートです。
+- [@lobehub/chat-plugin-sdk][chat-plugin-sdk]: LobeHub Plugin SDK は、優れた LobeHub プラグインの作成を支援します。
+- [@lobehub/chat-plugins-gateway][chat-plugins-gateway]: LobeHub Plugins Gateway は、LobeHub プラグイン向けのゲートウェイを提供するバックエンドサービスです。このサービスは Vercel でデプロイしています。主要 API の POST /api/v1/runner は Edge Function としてデプロイされています。
 
 > \[!NOTE]
 >
-> The plugin system is currently undergoing major development. You can learn more in the following issues:
+> プラグインシステムは現在大きく開発が進められています。詳しくは以下の Issue を参照してください。
 >
-> - [x] [**Plugin Phase 1**](https://github.com/lobehub/lobehub/issues/73): Implement separation of the plugin from the main body, split the plugin into an independent repository for maintenance, and realize dynamic loading of the plugin.
-> - [x] [**Plugin Phase 2**](https://github.com/lobehub/lobehub/issues/97): The security and stability of the plugin's use, more accurately presenting abnormal states, the maintainability of the plugin architecture, and developer-friendly.
-> - [x] [**Plugin Phase 3**](https://github.com/lobehub/lobehub/issues/149): Higher-level and more comprehensive customization capabilities, support for plugin authentication, and examples.
+> - [x] [**Plugin Phase 1**](https://github.com/lobehub/lobehub/issues/73): プラグインを本体から分離し、独立したリポジトリで管理できるようにし、プラグインの動的読み込みを実現します。
+> - [x] [**Plugin Phase 2**](https://github.com/lobehub/lobehub/issues/97): プラグイン利用時の安全性と安定性、異常状態のより正確な表示、プラグインアーキテクチャの保守性、開発者体験を改善します。
+> - [x] [**Plugin Phase 3**](https://github.com/lobehub/lobehub/issues/149): より高度で包括的なカスタマイズ機能、プラグイン認証、サンプルをサポートします。
 
 <div align="right">
 
@@ -324,27 +324,27 @@ Plugins provide a means to extend the [Function Calling][docs-function-call] cap
 
 </div>
 
-## ⌨️ Local Development
+## ⌨️ ローカル開発
 
-You can use GitHub Codespaces for online development:
+オンライン開発には GitHub Codespaces を利用できます。
 
 [![][codespaces-shield]][codespaces-link]
 
-Or clone it for local development:
+または、クローンしてローカルで開発できます。
 
 ```fish
 $ git clone https://github.com/lobehub/lobehub.git
 $ cd lobehub
 $ pnpm install
-$ pnpm dev          # Full-stack (Next.js + Vite SPA)
-$ bun run dev:spa   # SPA frontend only (port 9876)
+$ pnpm dev          # フルスタック (Next.js + Vite SPA)
+$ bun run dev:spa   # SPA フロントエンドのみ (port 9876)
 ```
 
-> **Debug Proxy**: After running `dev:spa`, the terminal prints a proxy URL like
-> `https://app.lobehub.com/_dangerous_local_dev_proxy?debug-host=http%3A%2F%2Flocalhost%3A9876`.
-> Open it to develop locally against the production backend with HMR.
+> **Debug Proxy**: `dev:spa` を実行すると、ターミナルに次のようなプロキシ URL が表示されます。
+> `https://app.lobehub.com/_dangerous_local_dev_proxy?debug-host=http%3A%2F%2Flocalhost%3A9876`。
+> この URL を開くと、本番バックエンドに接続しながら HMR 付きでローカル開発できます。
 
-If you would like to learn more details, please feel free to look at our [📘 Development Guide][docs-dev-guide].
+詳しくは [📘 開発ガイド][docs-dev-guide] を参照してください。
 
 <div align="right">
 
@@ -352,17 +352,17 @@ If you would like to learn more details, please feel free to look at our [📘 D
 
 </div>
 
-## 🤝 Contributing
+## 🤝 コントリビューション
 
-Contributions of all types are more than welcome; if you are interested in contributing code, feel free to check out our GitHub [Issues][github-issues-link] and [Projects][github-project-link] to get stuck in to show us what you're made of.
+あらゆる形のコントリビューションを歓迎します。コードで貢献したい場合は、GitHub の [Issues][github-issues-link] や [Projects][github-project-link] を確認し、ぜひ参加してください。
 
 > \[!TIP]
 >
-> We are creating a technology-driven forum, fostering knowledge interaction and the exchange of ideas that may culminate in mutual inspiration and collaborative innovation.
+> 私たちは技術を軸にしたフォーラムを作り、知識の相互作用やアイデア交換を促進し、相互の刺激と協働的なイノベーションにつなげたいと考えています。
 >
-> Help us make LobeHub better. Welcome to provide product design feedback, user experience discussions directly to us.
+> LobeHub をより良くするため、プロダクトデザインやユーザー体験に関するフィードバックをぜひお寄せください。
 >
-> **Principal Maintainers:** [@arvinxx](https://github.com/arvinxx) [@canisminor1990](https://github.com/canisminor1990)
+> **主要メンテナー:** [@arvinxx](https://github.com/arvinxx) [@canisminor1990](https://github.com/canisminor1990)
 
 [![][pr-welcome-shield]][pr-welcome-link]
 [![][submit-agents-shield]][submit-agents-link]
@@ -406,9 +406,9 @@ Contributions of all types are more than welcome; if you are interested in contr
 
 </div>
 
-## ❤️ Sponsor
+## ❤️ スポンサー
 
-Every bit counts and your one-time donation sparkles in our galaxy of support! You're a shooting star, making a swift and bright impact on our journey. Thank you for believing in us – your generosity guides us toward our mission, one brilliant flash at a time.
+どんな支援も大切です。単発の寄付も、私たちの支援の輪の中で輝きます。私たちを信じてくださりありがとうございます。あなたの寛大な支援は、私たちがミッションへ進むための力になります。
 
 <a href="https://opencollective.com/lobehub" target="_blank">
   <picture>
@@ -423,12 +423,12 @@ Every bit counts and your one-time donation sparkles in our galaxy of support! Y
 
 </div>
 
-## 🔗 More Products
+## 🔗 その他のプロダクト
 
-- **[🅰️ Lobe SD Theme][lobe-theme]:** Modern theme for Stable Diffusion WebUI, exquisite interface design, highly customizable UI, and efficiency-boosting features.
-- **[⛵️ Lobe Midjourney WebUI][lobe-midjourney-webui]:** WebUI for Midjourney, leverages AI to quickly generate a wide array of rich and diverse images from text prompts, sparking creativity and enhancing conversations.
-- **[🌏 Lobe i18n][lobe-i18n] :** Lobe i18n is an automation tool for the i18n (internationalization) translation process, powered by ChatGPT. It supports features such as automatic splitting of large files, incremental updates, and customization options for the OpenAI model, API proxy, and temperature.
-- **[💌 Lobe Commit][lobe-commit]:** Lobe Commit is a CLI tool that leverages Langchain/ChatGPT to generate Gitmoji-based commit messages.
+- **[🅰️ Lobe SD Theme][lobe-theme]:** Stable Diffusion WebUI 向けのモダンテーマです。洗練されたインターフェース、高いカスタマイズ性、生産性を高める機能を備えています。
+- **[⛵️ Lobe Midjourney WebUI][lobe-midjourney-webui]:** Midjourney 向け WebUI です。テキストプロンプトから多様で豊かな画像をすばやく生成し、創造性と会話体験を高めます。
+- **[🌏 Lobe i18n][lobe-i18n] :** Lobe i18n は ChatGPT を活用した i18n（国際化）翻訳プロセスの自動化ツールです。大きなファイルの自動分割、差分更新、OpenAI モデル・API プロキシ・temperature のカスタマイズに対応します。
+- **[💌 Lobe Commit][lobe-commit]:** Lobe Commit は Langchain/ChatGPT を活用し、Gitmoji ベースのコミットメッセージを生成する CLI ツールです。
 
 <div align="right">
 
@@ -450,7 +450,7 @@ This project is [LobeHub Community License](./LICENSE) licensed.
 <!-- LINK GROUP -->
 
 [back-to-top]: https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square
-[blog]: https://lobehub.com/blog
+[blog]: https://lobehub.com/ja/blog
 [changelog]: https://lobehub.com/changelog
 [chat-plugin-sdk]: https://github.com/lobehub/chat-plugin-sdk
 [chat-plugin-template]: https://github.com/lobehub/chat-plugin-template
@@ -478,13 +478,13 @@ This project is [LobeHub Community License](./LICENSE) licensed.
 [docker-release-shield]: https://img.shields.io/docker/v/lobehub/lobehub?color=369eff&label=docker&labelColor=black&logo=docker&logoColor=white&style=flat-square&sort=semver
 [docker-size-link]: https://hub.docker.com/r/lobehub/lobehub
 [docker-size-shield]: https://img.shields.io/docker/image-size/lobehub/lobehub?color=369eff&labelColor=black&style=flat-square&sort=semver
-[docs]: https://lobehub.com/docs/usage/start
+[docs]: https://lobehub.com/ja/docs/usage/start
 [docs-dev-guide]: https://lobehub.com/docs/development/start
-[docs-docker]: https://lobehub.com/docs/self-hosting/server-database/docker-compose
+[docs-docker]: https://lobehub.com/ja/docs/self-hosting/server-database/docker-compose
 [docs-env-var]: https://lobehub.com/docs/self-hosting/environment-variables
-[docs-function-call]: https://lobehub.com/blog/openai-function-call
+[docs-function-call]: https://lobehub.com/ja/blog/openai-function-call
 [docs-plugin-dev]: https://lobehub.com/docs/usage/plugins/development
-[docs-self-hosting]: https://lobehub.com/docs/self-hosting/start
+[docs-self-hosting]: https://lobehub.com/ja/docs/self-hosting/start
 [docs-upstream-sync]: https://lobehub.com/docs/self-hosting/advanced/upstream-sync
 [fossa-license-link]: https://app.fossa.com/projects/git%2Bgithub.com%2Flobehub%2Flobehub
 [fossa-license-shield]: https://app.fossa.com/api/projects/git%2Bgithub.com%2Flobehub%2Flobehub.svg?type=large

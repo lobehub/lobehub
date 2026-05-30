@@ -37,9 +37,16 @@ module.exports = defineConfig({
       fs.readFileSync(path.join(__dirname, 'docs/glossary.md'), 'utf8'),
     entry: ['./README.md', './docs/**/*.md', './docs/**/*.mdx'],
     entryLocale: 'en-US',
-    outputLocales: ['zh-CN'],
+    outputLocales: ['zh-CN', 'ja-JP'],
     includeMatter: true,
-    exclude: ['./README.zh-CN.md', './docs/**/*.zh-CN.md', './docs/**/*.zh-CN.mdx'],
+    exclude: [
+      './README.zh-CN.md',
+      './README.ja-JP.md',
+      './docs/**/*.zh-CN.md',
+      './docs/**/*.zh-CN.mdx',
+      './docs/**/*.ja-JP.md',
+      './docs/**/*.ja-JP.mdx',
+    ],
     outputExtensions: (locale, { filePath }) => {
       if (filePath.includes('.mdx')) {
         if (locale === 'en-US') return '.mdx';
