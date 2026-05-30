@@ -92,4 +92,10 @@ export {
   resolveDefaultThinkingLevelForModel,
 } from './utils/modelExtendParams';
 export { isDeepSeekThinkingEligibleModel, isDeepSeekV4FamilyModel } from './utils/modelParse';
+export {
+  type RateLimiterOptions,
+  RateLimiter,
+  clearRateLimiters,
+  getRateLimiter,
+} from './utils/rateLimiter';
 export { parseDataUri } from './utils/uriParser';

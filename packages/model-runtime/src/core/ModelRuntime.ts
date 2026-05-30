@@ -6,6 +6,7 @@ import type { LobeBedrockAIParams } from '../providers/bedrock';
 import type { LobeCloudflareParams } from '../providers/cloudflare';
 import { LobeOpenAI } from '../providers/openai';
 import { providerRuntimeMap } from '../runtimeMap';
+import type { RateLimiter } from '../utils/rateLimiter';
 import type {
   ASROptions,
   ASRPayload,
@@ -141,10 +142,19 @@ export interface ModelRuntimeHooks {
 export class ModelRuntime {
   private _hooks?: ModelRuntimeHooks;
   private _runtime: LobeRuntimeAI;
+  private _rateLimiter?: RateLimiter;
 
-  constructor(runtime: LobeRuntimeAI, hooks?: ModelRuntimeHooks) {
+  constructor(runtime: LobeRuntimeAI, hooks?: ModelRuntimeHooks, rateLimiter?: RateLimiter) {
     this._runtime = runtime;
     this._hooks = hooks;
+    this._rateLimiter = rateLimiter;
+  }
+
+  /**
+   * Set a rate limiter for this runtime instance.
+   */
+  setRateLimiter(rateLimiter: RateLimiter): void {
+    this._rateLimiter = rateLimiter;
   }
 
   /**
@@ -207,6 +217,21 @@ export class ModelRuntime {
           metadata.traceId,
         );
       }
+
+      // Apply rate limiting after hooks (avoid wasting slot on budget rejection)
+      if (this._rateLimiter) {
+        const acquireStartedAt = Date.now();
+        await this._rateLimiter.acquire();
+        if (metadata) {
+          timing(
+            'ModelRuntime.chat rate-limiter acquired model=%s waitMs=%d traceId=%s',
+            payload.model,
+            getDurationMs(acquireStartedAt),
+            metadata.traceId,
+          );
+        }
+      }
+
       const runtimeStartedAt = Date.now();
       const response = await this._runtime.chat(payload, finalOptions);
       if (metadata) {
@@ -333,6 +358,11 @@ export class ModelRuntime {
     const startedAt = Date.now();
     let usageCapture: ModelUsage | undefined;
 
+    // Apply rate limiting before making the request
+    if (this._rateLimiter) {
+      await this._rateLimiter.acquire();
+    }
+
     const fireComplete = async (data: {
       error?: { code?: string; message?: string; stack?: string };
       output?: unknown;
@@ -434,6 +464,11 @@ export class ModelRuntime {
 
   async embeddings(payload: EmbeddingsPayload, options?: EmbeddingsOptions) {
     try {
+      // Apply rate limiting before making the request
+      if (this._rateLimiter) {
+        await this._rateLimiter.acquire();
+      }
+
       const hookOptions = this._hooks?.beforeEmbeddings && !options ? {} : options;
       await this._hooks?.beforeEmbeddings?.(payload, hookOptions);
 
@@ -512,12 +547,13 @@ export class ModelRuntime {
         }
     >,
     hooks?: ModelRuntimeHooks,
+    rateLimiter?: RateLimiter,
   ) {
     // @ts-expect-error runtime map not include vertex so it will be undefined
     const providerAI = providerRuntimeMap[provider] ?? LobeOpenAI;
 
     const runtimeModel: LobeRuntimeAI = new providerAI(params);
 
-    return new ModelRuntime(runtimeModel, hooks);
+    return new ModelRuntime(runtimeModel, hooks, rateLimiter);
   }
 }
