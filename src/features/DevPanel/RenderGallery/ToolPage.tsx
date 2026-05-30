@@ -7,13 +7,20 @@ import { useParams } from 'react-router-dom';
 
 import ApiList from './ApiList';
 import { LIFECYCLE_MODE_LABEL, LIFECYCLE_MODES, type LifecycleMode } from './lifecycleMode';
+import MessageList from './MessageList';
 import ToolPreview from './ToolPreview';
 import { toApiAnchor, useDevtoolsEntries } from './useDevtoolsEntries';
 
-const STORAGE_KEY = 'devtools-render-gallery:lifecycle-mode';
+const MODE_STORAGE_KEY = 'devtools-render-gallery:lifecycle-mode';
+const VIEW_STORAGE_KEY = 'devtools-render-gallery:view';
+
+type GalleryView = 'api' | 'aggregate';
 
 const isLifecycleMode = (value: string | null): value is LifecycleMode =>
   !!value && (LIFECYCLE_MODES as string[]).includes(value);
+
+const isGalleryView = (value: string | null): value is GalleryView =>
+  value === 'api' || value === 'aggregate';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   body: css`
@@ -30,6 +37,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     & [id^='api-'] {
       scroll-margin-block-start: 80px;
     }
+  `,
+  controlGroup: css`
+    gap: 8px;
+    align-items: center;
   `,
   empty: css`
     flex: 1;
@@ -48,7 +59,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     z-index: 2;
     inset-block-start: 0;
 
-    gap: 12px;
+    gap: 16px;
     align-items: center;
 
     padding-block: 10px;
@@ -67,30 +78,38 @@ const DevtoolsToolPage = () => {
   const toolset = identifier ? toolsetMap.get(identifier) : undefined;
 
   const [mode, setMode] = useState<LifecycleMode>('success');
+  const [view, setView] = useState<GalleryView>('api');
   const [activeApi, setActiveApi] = useState<string>();
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Hydrate from localStorage so the choice survives navigation between toolsets.
+  // Hydrate from localStorage so the choices survive navigation between toolsets.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (isLifecycleMode(stored)) setMode(stored);
+    const storedMode = window.localStorage.getItem(MODE_STORAGE_KEY);
+    if (isLifecycleMode(storedMode)) setMode(storedMode);
+    const storedView = window.localStorage.getItem(VIEW_STORAGE_KEY);
+    if (isGalleryView(storedView)) setView(storedView);
   }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    window.localStorage.setItem(STORAGE_KEY, mode);
+    window.localStorage.setItem(MODE_STORAGE_KEY, mode);
   }, [mode]);
 
-  // Scrollspy: highlight the API-list item for the card the reader is on —
-  // the last card whose top has crossed a trigger line just under the sticky
-  // bar. A plain scroll listener (rAF-throttled) is used instead of an
-  // IntersectionObserver so the boundary cases stay exact: at the very bottom
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(VIEW_STORAGE_KEY, view);
+  }, [view]);
+
+  // Scrollspy (per-API view only): highlight the API-list item for the card the
+  // reader is on — the last card whose top has crossed a trigger line just under
+  // the sticky bar. A plain scroll listener (rAF-throttled) is used instead of
+  // an IntersectionObserver so the boundary cases stay exact: at the very bottom
   // the last card can't reach the trigger line, and at the very top the first
   // card sits above it, so both ends are pinned explicitly.
   useEffect(() => {
     const root = scrollRef.current;
-    if (!root || !toolset) return;
+    if (!root || !toolset || view !== 'api') return;
 
     const apiNames = toolset.apis.map((api) => api.apiName);
 
@@ -136,7 +155,7 @@ const DevtoolsToolPage = () => {
       root.removeEventListener('scroll', onScroll);
       if (frame) cancelAnimationFrame(frame);
     };
-  }, [toolset]);
+  }, [toolset, view]);
 
   const handleSelect = (apiName: string) => {
     setActiveApi(apiName);
@@ -162,7 +181,9 @@ const DevtoolsToolPage = () => {
 
   return (
     <Flexbox horizontal height={'100%'} style={{ overflow: 'hidden' }} width={'100%'}>
-      <ApiList activeApiName={activeApi} apis={toolset.apis} onSelect={handleSelect} />
+      {view === 'api' && (
+        <ApiList activeApiName={activeApi} apis={toolset.apis} onSelect={handleSelect} />
+      )}
       <div className={styles.content} ref={scrollRef}>
         <Flexbox className={styles.body}>
           <Flexbox className={styles.header}>
@@ -182,25 +203,44 @@ const DevtoolsToolPage = () => {
             )}
           </Flexbox>
 
-          <Flexbox horizontal className={styles.modeBar}>
-            <Text fontSize={12} type={'secondary'} weight={600}>
-              Lifecycle
-            </Text>
-            <Segmented
-              size={'small'}
-              value={mode}
-              options={LIFECYCLE_MODES.map((value) => ({
-                label: LIFECYCLE_MODE_LABEL[value],
-                value,
-              }))}
-              onChange={(value) => setMode(value as LifecycleMode)}
-            />
+          <Flexbox horizontal className={styles.modeBar} wrap={'wrap'}>
+            <Flexbox horizontal className={styles.controlGroup}>
+              <Text fontSize={12} type={'secondary'} weight={600}>
+                View
+              </Text>
+              <Segmented
+                size={'small'}
+                value={view}
+                options={[
+                  { label: 'By API', value: 'api' },
+                  { label: 'Aggregate', value: 'aggregate' },
+                ]}
+                onChange={(value) => setView(value as GalleryView)}
+              />
+            </Flexbox>
+            <Flexbox horizontal className={styles.controlGroup}>
+              <Text fontSize={12} type={'secondary'} weight={600}>
+                Lifecycle
+              </Text>
+              <Segmented
+                size={'small'}
+                value={mode}
+                options={LIFECYCLE_MODES.map((value) => ({
+                  label: LIFECYCLE_MODE_LABEL[value],
+                  value,
+                }))}
+                onChange={(value) => setMode(value as LifecycleMode)}
+              />
+            </Flexbox>
           </Flexbox>
 
-          {toolset.apis.map((api) => (
-            <ToolPreview api={api} key={`${api.identifier}:${api.apiName}`} mode={mode} />
-          ))}
+          {view === 'api' &&
+            toolset.apis.map((api) => (
+              <ToolPreview api={api} key={`${api.identifier}:${api.apiName}`} mode={mode} />
+            ))}
         </Flexbox>
+
+        {view === 'aggregate' && <MessageList apis={toolset.apis} mode={mode} />}
       </div>
     </Flexbox>
   );
