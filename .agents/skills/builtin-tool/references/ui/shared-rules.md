@@ -84,4 +84,6 @@ previewBox: css`
 `,
 ```
 
+For the common "icon + file/title header, then one content box" shape, reuse `ToolResultCard` from `@lobechat/shared-tool-ui/components` instead of rebuilding it — it's already single-layer (flat wrapper, one `colorFillTertiary` content box) and is what CC `Read` / `Grep` / `Glob` / `Write` / `WebSearch` / `WebFetch` render through.
+
 The exception is a deliberate **panel** pattern — an `<Block variant="outlined">` with a header bar + list rows (CC `TodoWrite` / `Task`). There the single outlined block is the panel and the header fill is a header bar, not a nested card. One structured panel is fine; stacked decorative fills are not.
