@@ -114,7 +114,7 @@ export default {
   'channel.line.webhookManualSetup':
     'LINE does not allow programmatic webhook registration. Copy this URL into the LINE Developers Console (Messaging API → Webhook URL), click "Verify", and enable "Use webhook".',
   'channel.wati.description':
-    'Connect WhatsApp through Wati. Customers text your business number and receive replies from this agent within the 24-hour session window.',
+    'Connect WhatsApp Business via the Official API (Wati). Customers text your business number and receive replies from this agent within the 24-hour session window.',
   'channel.wati.apiBaseUrl': 'API Base URL',
   'channel.wati.apiBaseUrlHint':
     'Your Wati API host from the API Docs page (e.g. https://live-mt-server.wati.io).',

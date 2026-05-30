@@ -4,9 +4,10 @@ import { schema } from './schema';
 
 export const wati: PlatformDefinition = {
   id: 'wati',
-  name: 'Wati (WhatsApp)',
+  name: 'WhatsApp API (Wati)',
   connectionMode: 'webhook',
-  description: 'Connect WhatsApp via Wati — customers text your number and receive agent replies.',
+  description:
+    'Connect WhatsApp Business via the Official API (Wati) — customers text your number and receive agent replies.',
   documentation: {
     portalUrl: 'https://app.wati.io',
     setupGuideUrl: 'https://docs.wati.io',
