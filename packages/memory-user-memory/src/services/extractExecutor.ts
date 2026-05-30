@@ -396,28 +396,30 @@ export class MemoryExtractionService<RO> {
       }
     };
 
-    await Promise.all(
-      (
-        [
-          LayersEnum.Activity,
-          LayersEnum.Context,
-          LayersEnum.Experience,
-          LayersEnum.Preference,
-          LayersEnum.Identity,
-        ] as LayersEnum[]
-      ).map(async (layer) => {
-        if (!layers.includes(layer)) {
-          return;
-        }
+    // Run layers with optional delay between them to avoid rate limiting
+    const layerOrder = [
+      LayersEnum.Activity,
+      LayersEnum.Context,
+      LayersEnum.Experience,
+      LayersEnum.Preference,
+      LayersEnum.Identity,
+    ] as LayersEnum[];
 
-        try {
-          const result = await this.runLayer(job, layer, options);
-          setLayerOutput(layer, { data: result });
-        } catch (error) {
-          setLayerOutput(layer, { error });
-        }
-      }),
-    );
+    let layerIndex = 0;
+    for (const layer of layerOrder) {
+      if (!layers.includes(layer)) {
+        continue;
+      }
+
+      try {
+        const result = await this.runLayer(job, layer, options);
+        setLayerOutput(layer, { data: result });
+      } catch (error) {
+        setLayerOutput(layer, { error });
+      }
+
+      layerIndex++;
+    }
 
     return outputs as MemoryExtractionLayerOutputs;
   }

@@ -467,6 +467,7 @@
     "@lobehub/lint": "2.1.5",
     "@lobehub/market-types": "^1.17.1",
     "@lobehub/seo-cli": "^1.7.0",
+    "@opentelemetry/context-async-hooks": "^2.7.1",
     "@peculiar/webcrypto": "^1.7.1",
     "@playwright/test": "^1.61.1",
     "@prettier/sync": "^0.6.1",

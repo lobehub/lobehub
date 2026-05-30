@@ -20,6 +20,14 @@ export async function register() {
     service.ensureRunning().catch((err) => {
       console.error('[Instrumentation] Failed to auto-start GatewayManager:', err);
     });
+
+    // Recover pending memory extraction tasks when using in-process scheduler
+    if (process.env.MEMORY_USER_MEMORY_USE_IN_PROCESS_SCHEDULER === 'true') {
+      const { MemoryExtractionWorkflowService } = await import('@/server/services/memory/userMemory/extract');
+      MemoryExtractionWorkflowService.recoverPendingTasks().catch((err) => {
+        console.error('[Instrumentation] Failed to recover pending memory tasks:', err);
+      });
+    }
   }
 
   // Note: messenger system bot connections (Discord/Telegram) are managed
