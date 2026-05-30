@@ -81,13 +81,9 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
   // Only the machine you're on can browse its own filesystem natively.
   const canBrowse = !!isCurrent && isDesktop;
 
-  // Per-channel connection rows — fall back to one synthetic channel for a
-  // legacy gateway that doesn't expose the field.
-  const channels =
-    device.channels ??
-    (device.online
-      ? [{ channel: null, connectedAt: device.lastSeen, hostname: null, platform: null }]
-      : []);
+  // Render the device's live connections straight from `device.channels` — one
+  // row per connection; an empty array means offline.
+  const channels = device.channels ?? [];
 
   const isDirty = name !== (device.friendlyName ?? '') || cwd !== (device.defaultCwd ?? '');
 

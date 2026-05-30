@@ -99,13 +99,9 @@ const DeviceItem = memo<DeviceItemProps>(({ device, isCurrent, onSelect, selecte
 
   const displayName = device.friendlyName || device.hostname || device.deviceId;
   const isFallback = device.identitySource === 'fallback';
-  // `channels` may be absent when the backend predates the channel-aware
-  // `listDevices` shape; fall back to a single synthetic channel when online.
-  const channels =
-    device.channels ??
-    (device.online
-      ? [{ channel: null, connectedAt: device.lastSeen, hostname: null, platform: null }]
-      : []);
+  // Render the device's live connections straight from `device.channels` — one
+  // row per connection; an empty array means offline.
+  const channels = device.channels ?? [];
 
   const handleRemove = () =>
     confirmModal({
