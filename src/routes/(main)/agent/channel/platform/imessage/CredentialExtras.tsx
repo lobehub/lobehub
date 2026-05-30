@@ -7,8 +7,8 @@ import type {
 } from '@lobechat/electron-client-ipc';
 import { Flexbox, FormItem, Tag, Text } from '@lobehub/ui';
 import { App, Button, Form as AntdForm, Switch } from 'antd';
-import { createStaticStyles, cx } from 'antd-style';
-import { Info, PlugZap, RefreshCw, Wrench } from 'lucide-react';
+import { createStaticStyles } from 'antd-style';
+import { Info, RefreshCw, Wrench } from 'lucide-react';
 import { memo, use, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -48,17 +48,20 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorFillQuaternary};
   `,
   statusIcon: css`
+    overflow: hidden;
+
     width: 32px;
     height: 32px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius};
 
-    color: ${cssVar.colorTextTertiary};
+    background: ${cssVar.colorBgContainer};
 
-    background: ${cssVar.colorFillSecondary};
-  `,
-  statusIconRunning: css`
-    color: ${cssVar.colorSuccess};
-    background: ${cssVar.colorSuccessBg};
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
   `,
   title: css`
     font-size: 15px;
@@ -73,6 +76,8 @@ interface BridgeFormState {
 }
 
 type TestStatus = 'idle' | 'success' | 'failed';
+
+const BLUEBUBBLES_ICON_URL = 'https://bluebubbles.app/web/splash/img/light-2x.png';
 
 const DEFAULT_BRIDGE_FORM: BridgeFormState = {
   blueBubblesPassword: '',
@@ -291,12 +296,8 @@ const CredentialExtras = memo(() => {
       <Flexbox className={styles.statusCard} gap={12} style={{ marginBlockStart: 16 }}>
         <Flexbox horizontal align="center" gap={16} justify="space-between">
           <Flexbox horizontal align="center" gap={12}>
-            <Flexbox
-              align="center"
-              className={cx(styles.statusIcon, running && styles.statusIconRunning)}
-              justify="center"
-            >
-              <PlugZap size={16} />
+            <Flexbox align="center" className={styles.statusIcon} justify="center">
+              <img alt="BlueBubbles" src={BLUEBUBBLES_ICON_URL} />
             </Flexbox>
             <Flexbox gap={2}>
               <Flexbox horizontal align="center" gap={8}>
