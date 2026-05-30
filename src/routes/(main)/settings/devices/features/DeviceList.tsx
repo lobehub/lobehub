@@ -25,8 +25,7 @@ const styles = createStaticStyles(({ css }) => ({
     text-align: center;
   `,
   listCol: css`
-    flex: none;
-    width: 320px;
+    min-width: 0;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
   `,
@@ -46,6 +45,8 @@ const DeviceList = memo(() => {
   useFetchDeviceInfo();
   const currentDeviceId = isDesktop ? gatewayDeviceInfo?.deviceId : undefined;
 
+  // No device is selected by default — the detail panel only appears once the
+  // user clicks a row.
   const [selectedId, setSelectedId] = useState<string>();
 
   if (isLoading) return <Skeleton active paragraph={{ rows: 4 }} title={false} />;
@@ -57,30 +58,35 @@ const DeviceList = memo(() => {
       </Flexbox>
     );
 
-  const selected = devices.find((d) => d.deviceId === selectedId) ?? devices[0];
+  const selected = selectedId ? devices.find((d) => d.deviceId === selectedId) : undefined;
   const isCurrent = (id: string) => !!currentDeviceId && id === currentDeviceId;
 
   return (
     <Flexbox horizontal align={'flex-start'} gap={16}>
-      <Flexbox className={styles.listCol} padding={4}>
+      <Flexbox className={styles.listCol} flex={1} padding={4}>
         {devices.map((device) => (
           <DeviceItem
             device={device}
             isCurrent={isCurrent(device.deviceId)}
             key={device.deviceId}
-            selected={device.deviceId === selected.deviceId}
-            onSelect={() => setSelectedId(device.deviceId)}
+            selected={device.deviceId === selectedId}
+            onSelect={() =>
+              setSelectedId((prev) => (prev === device.deviceId ? undefined : device.deviceId))
+            }
           />
         ))}
       </Flexbox>
-      <Flexbox className={styles.detailCol} flex={1}>
-        {/* keyed on deviceId so the form state resets when the selection changes */}
-        <DeviceDetailPanel
-          device={selected}
-          isCurrent={isCurrent(selected.deviceId)}
-          key={selected.deviceId}
-        />
-      </Flexbox>
+      {selected && (
+        <Flexbox className={styles.detailCol} flex={1}>
+          {/* keyed on deviceId so the form state resets when the selection changes */}
+          <DeviceDetailPanel
+            device={selected}
+            isCurrent={isCurrent(selected.deviceId)}
+            key={selected.deviceId}
+            onClose={() => setSelectedId(undefined)}
+          />
+        </Flexbox>
+      )}
     </Flexbox>
   );
 });

@@ -1,7 +1,7 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { Button, Flexbox, Icon, Input, Tag, Text } from '@lobehub/ui';
+import { ActionIcon, Button, Flexbox, Icon, Input, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import { FolderOpenIcon, XIcon } from 'lucide-react';
@@ -64,9 +64,10 @@ const styles = createStaticStyles(({ css }) => ({
 interface DeviceDetailPanelProps {
   device: DeviceListItem;
   isCurrent?: boolean;
+  onClose: () => void;
 }
 
-const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent }) => {
+const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onClose }) => {
   const { t } = useTranslation('setting');
   const utils = lambdaQuery.useUtils();
 
@@ -121,10 +122,11 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent }) =
       {/* ─── Header ─── */}
       <Flexbox horizontal align={'center'} className={styles.header} gap={8}>
         {getDeviceIcon(device.platform)}
-        <Text ellipsis weight={600}>
+        <Text ellipsis style={{ flex: 1, minWidth: 0 }} weight={600}>
           {device.friendlyName || device.hostname || device.deviceId}
         </Text>
         {isCurrent && <Tag>{t('devices.currentBadge')}</Tag>}
+        <ActionIcon icon={XIcon} size={'small'} onClick={onClose} />
       </Flexbox>
 
       {/* ─── Connections ─── */}
