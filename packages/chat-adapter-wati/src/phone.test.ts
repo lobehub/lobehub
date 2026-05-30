@@ -4,17 +4,17 @@ import { resolveWebhookPhoneNumber } from './phone';
 
 describe('resolveWebhookPhoneNumber', () => {
   it('matches by digits and returns Wati display format', () => {
-    const result = resolveWebhookPhoneNumber('85253332683', [
-      { displayPhoneNumber: '852-5333-2683', phoneId: 'abc' },
+    const result = resolveWebhookPhoneNumber('85290000001', [
+      { displayPhoneNumber: '852-9000-0001', phoneId: 'abc' },
     ]);
-    expect(result).toBe('852-5333-2683');
+    expect(result).toBe('852-9000-0001');
   });
 
   it('uses the only number on the account when digits match loosely', () => {
-    const result = resolveWebhookPhoneNumber('85253332683', [
-      { displayPhoneNumber: '852-5333-2683' },
+    const result = resolveWebhookPhoneNumber('85290000001', [
+      { displayPhoneNumber: '852-9000-0001' },
     ]);
-    expect(result).toBe('852-5333-2683');
+    expect(result).toBe('852-9000-0001');
   });
 
   it('throws when multiple numbers and no match', () => {

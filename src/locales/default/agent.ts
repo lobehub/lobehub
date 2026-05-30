@@ -126,8 +126,8 @@ export default {
     'API token from Wati → API Docs. Stored encrypted. Used for outbound messages and credential validation.',
   'channel.wati.channelPhoneNumber': 'WhatsApp Business Number',
   'channel.wati.channelPhoneNumberHint':
-    'Your Wati-connected WhatsApp business number in international format without + (e.g. 85264318722). This is the number customers message — not a separate "channel" product. Must match a number on your Wati account.',
-  'channel.wati.channelPhoneNumberPlaceholder': 'e.g. 85264318722',
+    'Your Wati-connected WhatsApp business number in international format without + (e.g. 85290000001). This is the number customers message — not a separate "channel" product. Must match a number on your Wati account.',
+  'channel.wati.channelPhoneNumberPlaceholder': 'e.g. 85290000001',
   'channel.wati.webhookManualSetup':
     'On connect, LobeHub registers this Webhook URL with Wati via API (message events). You can still copy it for verification. Replies use session messages within the 24-hour window.',
   'channel.openPlatform': 'Open Platform',

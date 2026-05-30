@@ -7,7 +7,7 @@ import type { WatiInboundMessage } from './types';
 const baseConfig = {
   apiBaseUrl: 'https://live-mt-server.wati.io',
   bearerToken: 'bearer-test',
-  channelPhoneNumber: '85264318722',
+  channelPhoneNumber: '85290000001',
   tenantId: 'tenant-test',
 };
 

@@ -4,7 +4,7 @@ import { WatiClientFactory } from './client';
 
 const fetchSpy = vi.spyOn(globalThis, 'fetch');
 
-const APPLICATION_ID = '85264318722';
+const APPLICATION_ID = '85290000001';
 
 const createClient = (context: { appUrl?: string } = {}) =>
   new WatiClientFactory().createClient(
@@ -49,7 +49,7 @@ describe('WatiWebhookClient', () => {
 
   it('extractChatId pulls waId from thread id', () => {
     const client = createClient();
-    expect(client.extractChatId('wati:user:85264318721')).toBe('85264318721');
+    expect(client.extractChatId('wati:user:85291112233')).toBe('85291112233');
   });
 
   it('createAdapter wires credentials into the SDK adapter', () => {
@@ -67,7 +67,7 @@ describe('WatiWebhookClient', () => {
         return Promise.resolve(
           jsonResponse({
             ok: true,
-            result: [{ displayPhoneNumber: '852-6431-8722' }],
+            result: [{ displayPhoneNumber: '852-9000-0001' }],
           }),
         );
       }
@@ -89,19 +89,19 @@ describe('WatiWebhookClient', () => {
     expect(webhookCall).toBeDefined();
     const [, init] = webhookCall as [string, RequestInit];
     const body = JSON.parse(init.body as string);
-    expect(body[0].phoneNumber).toBe('852-6431-8722');
+    expect(body[0].phoneNumber).toBe('852-9000-0001');
     expect(body[0].url).toBe(`http://localhost:3010/api/agent/webhooks/wati/${APPLICATION_ID}`);
   });
 
   it('messenger.createMessage POSTs sendSessionMessage with query params', async () => {
     fetchSpy.mockResolvedValue(new Response('{}', { status: 200 }));
     const client = createClient();
-    const messenger = client.getMessenger('wati:user:85264318721');
+    const messenger = client.getMessenger('wati:user:85291112233');
     await messenger.createMessage('hi back');
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
-    expect(url).toContain('/tenant-test/api/v1/sendSessionMessage/85264318721');
+    expect(url).toContain('/tenant-test/api/v1/sendSessionMessage/85291112233');
     expect(url).toContain('messageText=hi+back');
     expect(url).toContain(`channelPhoneNumber=${APPLICATION_ID}`);
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer bearer-test');

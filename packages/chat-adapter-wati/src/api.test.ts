@@ -23,7 +23,7 @@ describe('WatiApiClient.registerWebhookForPhone', () => {
           new Response(
             JSON.stringify({
               ok: true,
-              result: [{ displayPhoneNumber: '852-5333-2683' }],
+              result: [{ displayPhoneNumber: '852-9000-0001' }],
             }),
             { status: 200 },
           ),
@@ -41,8 +41,8 @@ describe('WatiApiClient.registerWebhookForPhone', () => {
     });
 
     await client.registerWebhookForPhone(
-      '85253332683',
-      'http://localhost:3010/api/agent/webhooks/wati/85253332683',
+      '85290000001',
+      'http://localhost:3010/api/agent/webhooks/wati/85290000001',
     );
 
     const webhookCall = fetchSpy.mock.calls.find(
@@ -50,11 +50,11 @@ describe('WatiApiClient.registerWebhookForPhone', () => {
     );
     const [, init] = webhookCall as [string, RequestInit];
     const body = JSON.parse(init.body as string);
-    expect(body[0].phoneNumber).toBe('852-5333-2683');
+    expect(body[0].phoneNumber).toBe('852-9000-0001');
   });
 
   it('skips POST when webhook is already registered for the same URL', async () => {
-    const webhookUrl = 'http://localhost:3010/api/agent/webhooks/wati/85253332683';
+    const webhookUrl = 'http://localhost:3010/api/agent/webhooks/wati/85290000001';
 
     fetchSpy.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -63,7 +63,7 @@ describe('WatiApiClient.registerWebhookForPhone', () => {
           new Response(
             JSON.stringify({
               ok: true,
-              result: [{ displayPhoneNumber: '852-5333-2683' }],
+              result: [{ displayPhoneNumber: '852-9000-0001' }],
             }),
             { status: 200 },
           ),
@@ -76,7 +76,7 @@ describe('WatiApiClient.registerWebhookForPhone', () => {
               ok: true,
               result: [
                 {
-                  channelPhoneNumber: '852-5333-2683',
+                  channelPhoneNumber: '852-9000-0001',
                   url: webhookUrl,
                 },
               ],
@@ -100,7 +100,7 @@ describe('WatiApiClient.registerWebhookForPhone', () => {
       return Promise.resolve(new Response('{}', { status: 404 }));
     });
 
-    const result = await client.registerWebhookForPhone('85253332683', webhookUrl);
+    const result = await client.registerWebhookForPhone('85290000001', webhookUrl);
 
     expect(result.ok).toBe(true);
     const postCalls = fetchSpy.mock.calls.filter(
@@ -110,7 +110,7 @@ describe('WatiApiClient.registerWebhookForPhone', () => {
   });
 
   it('throws when webhook limit response does not match a registered endpoint', async () => {
-    const webhookUrl = 'http://localhost:3010/api/agent/webhooks/wati/85253332683';
+    const webhookUrl = 'http://localhost:3010/api/agent/webhooks/wati/85290000001';
 
     fetchSpy.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -119,7 +119,7 @@ describe('WatiApiClient.registerWebhookForPhone', () => {
           new Response(
             JSON.stringify({
               ok: true,
-              result: [{ displayPhoneNumber: '852-5333-2683' }],
+              result: [{ displayPhoneNumber: '852-9000-0001' }],
             }),
             { status: 200 },
           ),
@@ -145,14 +145,14 @@ describe('WatiApiClient.registerWebhookForPhone', () => {
       return Promise.resolve(new Response('{}', { status: 404 }));
     });
 
-    await expect(client.registerWebhookForPhone('85253332683', webhookUrl)).rejects.toMatchObject({
+    await expect(client.registerWebhookForPhone('85290000001', webhookUrl)).rejects.toMatchObject({
       name: 'WatiApiError',
       status: 409,
     });
   });
 
   it('succeeds when webhook limit response matches an existing endpoint', async () => {
-    const webhookUrl = 'http://localhost:3010/api/agent/webhooks/wati/85253332683';
+    const webhookUrl = 'http://localhost:3010/api/agent/webhooks/wati/85290000001';
 
     fetchSpy.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -161,7 +161,7 @@ describe('WatiApiClient.registerWebhookForPhone', () => {
           new Response(
             JSON.stringify({
               ok: true,
-              result: [{ displayPhoneNumber: '852-5333-2683' }],
+              result: [{ displayPhoneNumber: '852-9000-0001' }],
             }),
             { status: 200 },
           ),
@@ -174,7 +174,7 @@ describe('WatiApiClient.registerWebhookForPhone', () => {
               ok: true,
               result: [
                 {
-                  channelPhoneNumber: '852-5333-2683',
+                  channelPhoneNumber: '852-9000-0001',
                   url: webhookUrl,
                 },
               ],
@@ -198,14 +198,14 @@ describe('WatiApiClient.registerWebhookForPhone', () => {
       return Promise.resolve(new Response('{}', { status: 404 }));
     });
 
-    const result = await client.registerWebhookForPhone('85253332683', webhookUrl);
+    const result = await client.registerWebhookForPhone('85290000001', webhookUrl);
 
     expect(result.ok).toBe(true);
     expect(result.result?.[0]?.url).toBe(webhookUrl);
   });
 
   it('throws when webhook limit in HTTP 200 body does not match a registered endpoint', async () => {
-    const webhookUrl = 'http://localhost:3010/api/agent/webhooks/wati/85253332683';
+    const webhookUrl = 'http://localhost:3010/api/agent/webhooks/wati/85290000001';
 
     fetchSpy.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -214,7 +214,7 @@ describe('WatiApiClient.registerWebhookForPhone', () => {
           new Response(
             JSON.stringify({
               ok: true,
-              result: [{ displayPhoneNumber: '852-5333-2683' }],
+              result: [{ displayPhoneNumber: '852-9000-0001' }],
             }),
             { status: 200 },
           ),
@@ -240,14 +240,14 @@ describe('WatiApiClient.registerWebhookForPhone', () => {
       return Promise.resolve(new Response('{}', { status: 404 }));
     });
 
-    await expect(client.registerWebhookForPhone('85253332683', webhookUrl)).rejects.toMatchObject({
+    await expect(client.registerWebhookForPhone('85290000001', webhookUrl)).rejects.toMatchObject({
       name: 'WatiApiError',
       status: 409,
     });
   });
 
   it('throws when webhook already exists response does not match a registered endpoint', async () => {
-    const webhookUrl = 'https://7d35bdb1609a.ngrok.app/api/agent/webhooks/wati/13203481016';
+    const webhookUrl = 'https://tunnel.example.test/api/agent/webhooks/wati/15550001234';
 
     fetchSpy.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -256,7 +256,7 @@ describe('WatiApiClient.registerWebhookForPhone', () => {
           new Response(
             JSON.stringify({
               ok: true,
-              result: [{ displayPhoneNumber: '13203481016' }],
+              result: [{ displayPhoneNumber: '15550001234' }],
             }),
             { status: 200 },
           ),
@@ -274,7 +274,7 @@ describe('WatiApiClient.registerWebhookForPhone', () => {
               error: 'Webhook URL already exists',
               isWebhookExist: true,
               ok: false,
-              phoneNumbers: ['13203481016'],
+              phoneNumbers: ['15550001234'],
             }),
             { status: 200 },
           ),
@@ -283,7 +283,7 @@ describe('WatiApiClient.registerWebhookForPhone', () => {
       return Promise.resolve(new Response('{}', { status: 404 }));
     });
 
-    await expect(client.registerWebhookForPhone('13203481016', webhookUrl)).rejects.toMatchObject({
+    await expect(client.registerWebhookForPhone('15550001234', webhookUrl)).rejects.toMatchObject({
       name: 'WatiApiError',
       status: 409,
     });

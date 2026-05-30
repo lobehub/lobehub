@@ -14,15 +14,15 @@ describe('findWebhookForPhoneAndUrl', () => {
     const match = findWebhookForPhoneAndUrl(
       [
         {
-          channelPhoneNumber: '852-5333-2683',
-          url: 'https://abc.ngrok.app/api/agent/webhooks/wati/85253332683/',
+          channelPhoneNumber: '852-9000-0001',
+          url: 'https://tunnel.example.test/api/agent/webhooks/wati/85290000001/',
         },
       ],
-      '85253332683',
-      'https://abc.ngrok.app/api/agent/webhooks/wati/85253332683',
+      '85290000001',
+      'https://tunnel.example.test/api/agent/webhooks/wati/85290000001',
     );
 
-    expect(match?.channelPhoneNumber).toBe('852-5333-2683');
+    expect(match?.channelPhoneNumber).toBe('852-9000-0001');
   });
 });
 
