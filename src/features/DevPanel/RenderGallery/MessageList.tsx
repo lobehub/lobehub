@@ -1,92 +1,124 @@
 'use client';
 
-import { Flexbox, Tag, Text } from '@lobehub/ui';
+import type { ChatToolPayloadWithResult, UIChatMessage } from '@lobechat/types';
+import { Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, useMemo } from 'react';
 
+import {
+  type ConversationContext,
+  ConversationProvider,
+  MessageItem,
+} from '@/features/Conversation';
+import { MessageActionProvider } from '@/features/Conversation/Messages/Contexts/MessageActionProvider';
+import { dataSelectors, useConversationStore } from '@/features/Conversation/store';
+
 import { deriveFixtureProps, type LifecycleMode } from './lifecycleMode';
-import { ToolBodySlot, ToolInspectorSlot } from './toolSurfaces';
 import type { ApiEntry } from './useDevtoolsEntries';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  content: css`
-    font-size: 14px;
-    line-height: 1.7;
-    color: ${cssVar.colorText};
-  `,
   empty: css`
     padding-block: 48px;
     color: ${cssVar.colorTextTertiary};
     text-align: center;
   `,
-  item: css`
-    padding-block: 20px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    &:last-child {
-      border-block-end: none;
-    }
-  `,
-  name: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
   thread: css`
     width: 100%;
     max-width: 820px;
     margin-inline: auto;
-    padding-block: 12px 48px;
-    padding-inline: 28px;
-  `,
-  tool: css`
-    margin-block-start: 10px;
-    padding-inline-start: 16px;
-    border-inline-start: 2px solid ${cssVar.colorBorderSecondary};
+    padding-block: 8px 48px;
+    padding-inline: 12px;
   `,
 }));
 
-interface MessageItemProps {
-  api: ApiEntry;
-  mode: LifecycleMode;
-}
+const coerceContent = (value: unknown): string | null => {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+};
 
 /**
- * One assistant turn in the aggregate preview: a line of content followed by
- * the tool call (Inspector chip + body), reusing the same lifecycle-derived
- * slots as the per-API view so the two tabs never drift.
+ * Translate a fixture + lifecycle mode into the real tool payload shape the
+ * conversation renderer reads. The `Tool` component derives its state purely
+ * from this shape (no live operation needed):
+ *  - success  → a finished `result` (content + state)
+ *  - error    → `result.error`
+ *  - intervention → `intervention.status = 'pending'`, no result
+ *  - streaming   → intentionally-unterminated `arguments` JSON (the renderer
+ *                  flags `isArgumentsStreaming` when args fail to parse)
+ *  - loading / placeholder → valid args, no result yet
  */
-const MessageItem = memo<MessageItemProps>(({ api, mode }) => {
-  const messageId = `devtools-msg-${api.identifier}-${api.apiName}`;
-  const toolCallId = `${messageId}-tool`;
+const buildTool = (api: ApiEntry, mode: LifecycleMode): ChatToolPayloadWithResult => {
   const variant = api.fixture.variants[0];
-  const derived = useMemo(() => deriveFixtureProps(variant, mode), [variant, mode]);
+  const derived = deriveFixtureProps(variant, mode);
+  const id = `devtools-tool-${api.identifier}-${api.apiName}`;
 
-  const content = api.description || variant.description;
+  const argumentsJson =
+    mode === 'streaming'
+      ? JSON.stringify(derived.partialArgs ?? {}).replace(/\}$/, '') // drop the closing brace → "still typing"
+      : JSON.stringify(derived.args);
 
+  const result =
+    mode === 'success'
+      ? { content: coerceContent(derived.content), id, state: derived.pluginState }
+      : mode === 'error'
+        ? { content: null, error: derived.pluginError, id }
+        : undefined;
+
+  return {
+    apiName: api.apiName,
+    arguments: argumentsJson,
+    id,
+    identifier: api.identifier,
+    intervention: mode === 'intervention' ? { status: 'pending' } : undefined,
+    result,
+    source: api.apiName.startsWith('mcp__') ? 'mcp' : 'builtin',
+    type: 'builtin',
+  };
+};
+
+const buildMessages = (apis: ApiEntry[], mode: LifecycleMode, now: number): UIChatMessage[] =>
+  apis
+    .filter((api) => api.render || api.streaming || api.placeholder || api.intervention)
+    .map((api) => ({
+      children: [
+        {
+          content: api.description || api.fixture.variants[0]?.description || '',
+          id: `devtools-block-${api.identifier}-${api.apiName}`,
+          tools: [buildTool(api, mode)],
+        },
+      ],
+      content: '',
+      createdAt: now,
+      id: `devtools-msg-${api.identifier}-${api.apiName}`,
+      role: 'assistantGroup',
+      updatedAt: now,
+    }));
+
+const InnerList = memo(() => {
+  const ids = useConversationStore(dataSelectors.displayMessageIds);
   return (
-    <Flexbox className={styles.item}>
-      <Flexbox horizontal align={'center'} gap={8} style={{ marginBlockEnd: 6 }}>
-        <span className={styles.name}>{api.apiName}</span>
-        <Tag size={'small'}>{mode}</Tag>
-      </Flexbox>
-      {content && <div className={styles.content}>{content}</div>}
-      <Flexbox className={styles.tool} gap={8}>
-        <ToolInspectorSlot api={api} derived={derived} variant={variant} />
-        <ToolBodySlot
-          hideMissing
-          api={api}
-          derived={derived}
-          messageId={messageId}
-          mode={mode}
-          toolCallId={toolCallId}
-        />
-      </Flexbox>
-    </Flexbox>
+    <MessageActionProvider withSingletonActionsBar={false}>
+      <div className={styles.thread}>
+        {ids.map((id, index) => (
+          <MessageItem
+            disableEditing
+            defaultWorkflowExpandLevel={'full'}
+            id={id}
+            index={index}
+            key={id}
+          />
+        ))}
+      </div>
+    </MessageActionProvider>
   );
 });
 
-MessageItem.displayName = 'DevtoolsMessageItem';
+InnerList.displayName = 'DevtoolsAggregateInnerList';
 
 interface MessageListProps {
   apis: ApiEntry[];
@@ -94,24 +126,28 @@ interface MessageListProps {
 }
 
 /**
- * Aggregate preview tab: stitches every API that ships a body surface into one
- * compact content + tool message flow, so renders can be judged in context
- * instead of in isolation. Inspector-only tools (most MCP entries) are dropped
- * to keep the thread about the renders.
+ * Aggregate preview tab: renders every render-bearing API as a tool call inside
+ * the **real** `Conversation` message renderer (seeded via `ConversationProvider`
+ * with fixture messages, `skipFetch`), so the preview is byte-for-byte what
+ * ships in chat instead of a hand-rolled approximation. Inspector-only tools
+ * (most MCP entries) are dropped to keep the thread about the renders.
  */
 const MessageList = memo<MessageListProps>(({ apis, mode }) => {
-  const items = apis.filter(
-    (api) => api.render || api.streaming || api.placeholder || api.intervention,
+  // One stable timestamp per (apis, mode) render so message identity is steady.
+  const messages = useMemo(() => buildMessages(apis, mode, Date.now()), [apis, mode]);
+  const context = useMemo<ConversationContext>(
+    () => ({ agentId: 'devtools-render-gallery', topicId: 'devtools-aggregate' }),
+    [],
   );
 
+  if (messages.length === 0) {
+    return <Text className={styles.empty}>No renderable APIs in this toolset.</Text>;
+  }
+
   return (
-    <div className={styles.thread}>
-      {items.length === 0 ? (
-        <Text className={styles.empty}>No renderable APIs in this toolset.</Text>
-      ) : (
-        items.map((api) => <MessageItem api={api} key={api.apiName} mode={mode} />)
-      )}
-    </div>
+    <ConversationProvider hasInitMessages skipFetch context={context} messages={messages}>
+      <InnerList />
+    </ConversationProvider>
   );
 });
 
