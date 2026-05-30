@@ -13,7 +13,7 @@ import { toToolsetPath, useDevtoolsEntries } from './useDevtoolsEntries';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   main: css`
-    overflow: auto;
+    overflow: hidden;
     flex: 1;
     background:
       radial-gradient(circle at top, ${cssVar.colorFillTertiary} 0%, transparent 35%),

@@ -2,12 +2,13 @@
 
 import { Flexbox, Segmented, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
+import ApiList from './ApiList';
 import { LIFECYCLE_MODE_LABEL, LIFECYCLE_MODES, type LifecycleMode } from './lifecycleMode';
 import ToolPreview from './ToolPreview';
-import { useDevtoolsEntries } from './useDevtoolsEntries';
+import { toApiAnchor, useDevtoolsEntries } from './useDevtoolsEntries';
 
 const STORAGE_KEY = 'devtools-render-gallery:lifecycle-mode';
 
@@ -19,6 +20,16 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 24px;
     max-width: 1200px;
     padding: 28px;
+  `,
+  content: css`
+    position: relative;
+    overflow: auto;
+    flex: 1;
+
+    /* keep a jumped-to card clear of the sticky lifecycle bar */
+    & [id^='api-'] {
+      scroll-margin-block-start: 80px;
+    }
   `,
   empty: css`
     flex: 1;
@@ -56,6 +67,8 @@ const DevtoolsToolPage = () => {
   const toolset = identifier ? toolsetMap.get(identifier) : undefined;
 
   const [mode, setMode] = useState<LifecycleMode>('success');
+  const [activeApi, setActiveApi] = useState<string>();
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   // Hydrate from localStorage so the choice survives navigation between toolsets.
   useEffect(() => {
@@ -68,6 +81,59 @@ const DevtoolsToolPage = () => {
     if (typeof window === 'undefined') return;
     window.localStorage.setItem(STORAGE_KEY, mode);
   }, [mode]);
+
+  // Scrollspy: highlight the API-list item for the card the reader is on —
+  // the last card whose top has crossed a trigger line just under the sticky
+  // bar. A plain scroll listener (rAF-throttled) is used instead of an
+  // IntersectionObserver so the boundary cases stay exact: at the very bottom
+  // the last card can't reach the trigger line, and at the very top the first
+  // card sits above it, so both ends are pinned explicitly.
+  useEffect(() => {
+    const root = scrollRef.current;
+    if (!root || !toolset) return;
+
+    const apiNames = toolset.apis.map((api) => api.apiName);
+    setActiveApi(apiNames[0]);
+    root.scrollTo({ top: 0 });
+
+    const TRIGGER = 96; // px below the scroll-area top — clears the sticky bar
+    let frame = 0;
+
+    const compute = () => {
+      frame = 0;
+      if (root.scrollTop <= 0) return setActiveApi(apiNames[0]);
+      if (root.scrollTop + root.clientHeight >= root.scrollHeight - 2)
+        return setActiveApi(apiNames.at(-1));
+
+      const rootTop = root.getBoundingClientRect().top;
+      let current = apiNames[0];
+      for (const name of apiNames) {
+        const el = document.getElementById(toApiAnchor(name));
+        if (!el) continue;
+        if (el.getBoundingClientRect().top - rootTop <= TRIGGER) current = name;
+        else break;
+      }
+      setActiveApi(current);
+    };
+
+    const onScroll = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(compute);
+    };
+
+    root.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      root.removeEventListener('scroll', onScroll);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [toolset]);
+
+  const handleSelect = (apiName: string) => {
+    setActiveApi(apiName);
+    const root = scrollRef.current;
+    const card = root?.querySelector(`#${CSS.escape(toApiAnchor(apiName))}`);
+    card?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   if (!toolset) {
     return (
@@ -83,42 +149,47 @@ const DevtoolsToolPage = () => {
   }
 
   return (
-    <Flexbox className={styles.body}>
-      <Flexbox className={styles.header}>
-        <Flexbox horizontal align={'center'} gap={10} wrap={'wrap'}>
-          <Text fontSize={22} weight={700}>
-            {toolset.toolsetName}
-          </Text>
-          <Tag>{toolset.identifier}</Tag>
-          <Text fontSize={12} type={'secondary'}>
-            {toolset.apis.length} API{toolset.apis.length === 1 ? '' : 's'}
-          </Text>
+    <Flexbox horizontal height={'100%'} style={{ overflow: 'hidden' }} width={'100%'}>
+      <ApiList activeApiName={activeApi} apis={toolset.apis} onSelect={handleSelect} />
+      <div className={styles.content} ref={scrollRef}>
+        <Flexbox className={styles.body}>
+          <Flexbox className={styles.header}>
+            <Flexbox horizontal align={'center'} gap={10} wrap={'wrap'}>
+              <Text fontSize={22} weight={700}>
+                {toolset.toolsetName}
+              </Text>
+              <Tag>{toolset.identifier}</Tag>
+              <Text fontSize={12} type={'secondary'}>
+                {toolset.apis.length} API{toolset.apis.length === 1 ? '' : 's'}
+              </Text>
+            </Flexbox>
+            {toolset.toolsetDescription && (
+              <Text fontSize={13} type={'secondary'}>
+                {toolset.toolsetDescription}
+              </Text>
+            )}
+          </Flexbox>
+
+          <Flexbox horizontal className={styles.modeBar}>
+            <Text fontSize={12} type={'secondary'} weight={600}>
+              Lifecycle
+            </Text>
+            <Segmented
+              size={'small'}
+              value={mode}
+              options={LIFECYCLE_MODES.map((value) => ({
+                label: LIFECYCLE_MODE_LABEL[value],
+                value,
+              }))}
+              onChange={(value) => setMode(value as LifecycleMode)}
+            />
+          </Flexbox>
+
+          {toolset.apis.map((api) => (
+            <ToolPreview api={api} key={`${api.identifier}:${api.apiName}`} mode={mode} />
+          ))}
         </Flexbox>
-        {toolset.toolsetDescription && (
-          <Text fontSize={13} type={'secondary'}>
-            {toolset.toolsetDescription}
-          </Text>
-        )}
-      </Flexbox>
-
-      <Flexbox horizontal className={styles.modeBar}>
-        <Text fontSize={12} type={'secondary'} weight={600}>
-          Lifecycle
-        </Text>
-        <Segmented
-          size={'small'}
-          value={mode}
-          options={LIFECYCLE_MODES.map((value) => ({
-            label: LIFECYCLE_MODE_LABEL[value],
-            value,
-          }))}
-          onChange={(value) => setMode(value as LifecycleMode)}
-        />
-      </Flexbox>
-
-      {toolset.apis.map((api) => (
-        <ToolPreview api={api} key={`${api.identifier}:${api.apiName}`} mode={mode} />
-      ))}
+      </div>
     </Flexbox>
   );
 };
