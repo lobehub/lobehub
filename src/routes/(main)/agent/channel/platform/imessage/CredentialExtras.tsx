@@ -27,10 +27,19 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     background: ${cssVar.colorBgContainer};
   `,
-  dot: css`
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
+  headerIcon: css`
+    overflow: hidden;
+
+    width: 22px;
+    height: 22px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadius};
+
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
   `,
   infoBox: css`
     padding-block: 8px;
@@ -46,22 +55,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding: 12px;
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorFillQuaternary};
-  `,
-  statusIcon: css`
-    overflow: hidden;
-
-    width: 32px;
-    height: 32px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-
-    background: ${cssVar.colorBgContainer};
-
-    img {
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-    }
   `,
   title: css`
     font-size: 15px;
@@ -228,9 +221,9 @@ const CredentialExtras = memo(() => {
   };
 
   const statusBadge = {
-    failed: { color: 'red', dot: '#ff4d4f', text: t('channel.imessage.bridgeStatusFailed') },
-    idle: { color: 'gold', dot: '#faad14', text: t('channel.imessage.bridgeStatusPending') },
-    success: { color: 'green', dot: '#52c41a', text: t('channel.imessage.bridgeStatusConnected') },
+    failed: { color: 'red', text: t('channel.imessage.bridgeStatusFailed') },
+    idle: { color: 'gold', text: t('channel.imessage.bridgeStatusPending') },
+    success: { color: 'green', text: t('channel.imessage.bridgeStatusConnected') },
   }[testStatus];
 
   // `{url}` is a single-brace placeholder (react-i18next only parses `{{ }}`),
@@ -248,7 +241,9 @@ const CredentialExtras = memo(() => {
           below so the header doesn't crowd the first form field. */}
       <Flexbox gap={6} style={{ marginBlockEnd: 24 }}>
         <Flexbox horizontal align="center" gap={8}>
-          <span className={styles.dot} style={{ background: statusBadge.dot }} />
+          <Flexbox align="center" className={styles.headerIcon} justify="center">
+            <img alt="BlueBubbles" src={BLUEBUBBLES_ICON_URL} />
+          </Flexbox>
           <Text className={styles.title}>{t('channel.imessage.bridgeSectionTitle')}</Text>
           <Tag color={statusBadge.color}>{statusBadge.text}</Tag>
         </Flexbox>
@@ -295,27 +290,22 @@ const CredentialExtras = memo(() => {
           the less-frequent Refresh / Test actions. */}
       <Flexbox className={styles.statusCard} gap={12} style={{ marginBlockStart: 16 }}>
         <Flexbox horizontal align="center" gap={16} justify="space-between">
-          <Flexbox horizontal align="center" gap={12}>
-            <Flexbox align="center" className={styles.statusIcon} justify="center">
-              <img alt="BlueBubbles" src={BLUEBUBBLES_ICON_URL} />
-            </Flexbox>
-            <Flexbox gap={2}>
-              <Flexbox horizontal align="center" gap={8}>
-                <Text style={{ fontWeight: 500 }}>
-                  {running
-                    ? t('channel.imessage.bridgeRunningTitle')
-                    : t('channel.imessage.bridgeStoppedTitle')}
-                </Text>
-                <Tag color={running ? 'green' : 'default'}>
-                  {running
-                    ? t('channel.imessage.bridgeRunning')
-                    : t('channel.imessage.bridgeStopped')}
-                </Tag>
-              </Flexbox>
-              <Text fontSize={12} type="secondary">
-                {bridgeDesc}
+          <Flexbox gap={2}>
+            <Flexbox horizontal align="center" gap={8}>
+              <Text style={{ fontWeight: 500 }}>
+                {running
+                  ? t('channel.imessage.bridgeRunningTitle')
+                  : t('channel.imessage.bridgeStoppedTitle')}
               </Text>
+              <Tag color={running ? 'green' : 'default'}>
+                {running
+                  ? t('channel.imessage.bridgeRunning')
+                  : t('channel.imessage.bridgeStopped')}
+              </Tag>
             </Flexbox>
+            <Text fontSize={12} type="secondary">
+              {bridgeDesc}
+            </Text>
           </Flexbox>
           <Flexbox horizontal align="center" gap={8} style={{ flex: 'none' }}>
             <Text style={{ fontWeight: 500 }}>{t('channel.imessage.bridgeEnabled')}</Text>
