@@ -104,17 +104,24 @@ export async function extractFileIdsFromEditorData(
     }
   }
 
-  // Pass 2: look up the remaining URLs by storage key in `files`.
+  // Pass 2: look up the remaining URLs by storage key in `files`. Same bytes
+  // re-uploaded by the same user produce multiple rows with identical
+  // `url` + `file_hash`; dedupe per key so the agent doesn't receive the
+  // same asset N times.
   if (unresolved.length > 0) {
     const keys = unresolved.map(extractStorageKeyFromUrl).filter((key): key is string => !!key);
 
     if (keys.length > 0) {
       const rows = await ctx.db
-        .select({ id: files.id })
+        .select({ id: files.id, url: files.url })
         .from(files)
         .where(and(eq(files.userId, ctx.userId), inArray(files.url, keys)));
 
-      for (const row of rows) seen.add(row.id);
+      const firstIdPerUrl = new Map<string, string>();
+      for (const row of rows) {
+        if (!firstIdPerUrl.has(row.url)) firstIdPerUrl.set(row.url, row.id);
+      }
+      for (const id of firstIdPerUrl.values()) seen.add(id);
     }
   }
 

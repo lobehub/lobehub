@@ -123,6 +123,22 @@ describe('extractFileIdsFromEditorData', () => {
     expect(result.sort()).toEqual(['file_a', 'file_signed_one']);
   });
 
+  it('dedupes when the same storage key resolves to multiple file rows', async () => {
+    // Same image re-uploaded by the user → 3 file rows, identical `url`.
+    const db = mockDb([
+      { id: 'file_a', url: 'ppp/494/abc.jpg' },
+      { id: 'file_b', url: 'ppp/494/abc.jpg' },
+      { id: 'file_c', url: 'ppp/494/abc.jpg' },
+    ]);
+    const json = {
+      root: {
+        children: [image('https://r2.example.com/ppp/494/abc.jpg?X-Amz-Date=…')],
+      },
+    };
+    const result = await extractFileIdsFromEditorData(json, { db, userId: 'u' });
+    expect(result).toEqual(['file_a']); // one per unique storage key
+  });
+
   it('skips unparseable URLs without crashing', async () => {
     const db = mockDb([]);
     const json = {
