@@ -332,4 +332,71 @@ export function registerTopicCommand(program: Command) {
 
       printTable(rows, ['ID', 'TITLE', 'UPDATED']);
     });
+
+  // ── view ──────────────────────────────────────────────
+
+  topic
+    .command('view <id>')
+    .description('View topic details and its messages')
+    .option('-L, --limit <n>', 'Max messages to show', '50')
+    .option('--no-messages', 'Skip messages, show topic metadata only')
+    .option('--json', 'Output JSON')
+    .action(
+      async (
+        id: string,
+        options: { json?: boolean; limit?: string; messages?: boolean },
+      ) => {
+        const client = await getTrpcClient();
+
+        // Fetch topic metadata via getTopics filtered by id, then find the match.
+        // (No getTopic-by-id endpoint exists yet; we search the list and match.)
+        const topicsResult = await client.topic.getTopics.query({} as any);
+        const allTopics = Array.isArray(topicsResult)
+          ? topicsResult
+          : ((topicsResult as any).items ?? []);
+        const topicMeta = allTopics.find((t: any) => t.id === id) as any | undefined;
+
+        // Fetch messages for this topic
+        const msgLimit = Number.parseInt(options.limit || '50', 10);
+        const msgResult = await client.message.getMessages.query({
+          pageSize: msgLimit,
+          topicId: id,
+        } as any);
+        const messages = Array.isArray(msgResult) ? msgResult : ((msgResult as any).items ?? []);
+
+        if (options.json) {
+          console.log(JSON.stringify({ messages, topic: topicMeta ?? { id } }, null, 2));
+          return;
+        }
+
+        // ── Header ──
+        console.log('');
+        console.log(
+          `${pc.bold('Topic:')}   ${pc.cyan(topicMeta?.title ?? id)}  ${pc.dim(`(${id})`)}`,
+        );
+        if (topicMeta?.favorite) console.log(`${pc.bold('Favorite:')} ★`);
+        if (topicMeta?.updatedAt)
+          console.log(`${pc.bold('Updated:')}  ${timeAgo(topicMeta.updatedAt)}`);
+        console.log('');
+
+        // ── Messages ──
+        if (options.messages === false) return;
+
+        if (messages.length === 0) {
+          console.log(pc.dim('  (no messages)'));
+          return;
+        }
+
+        for (const m of messages as any[]) {
+          const role = m.role === 'user' ? pc.green('user      ') : pc.blue('assistant ');
+          const preview = truncate(m.content || '', 120);
+          console.log(`  ${role}  ${preview}`);
+        }
+
+        if (messages.length === msgLimit) {
+          console.log('');
+          console.log(pc.dim(`  … showing first ${msgLimit} messages. Use -L to show more.`));
+        }
+      },
+    );
 }
