@@ -12,7 +12,7 @@ const { mockTrpcClient } = vi.hoisted(() => ({
     topic: {
       batchDelete: { mutate: vi.fn() },
       createTopic: { mutate: vi.fn() },
-      getTopicContext: { query: vi.fn() },
+      getTopicDetail: { query: vi.fn() },
       getTopics: { query: vi.fn() },
       recentTopics: { query: vi.fn() },
       removeTopic: { mutate: vi.fn() },
@@ -50,10 +50,12 @@ describe('topic command', () => {
         (fn as ReturnType<typeof vi.fn>).mockReset();
       }
     }
-    // Default stub for getTopicContext
-    mockTrpcClient.topic.getTopicContext.query.mockResolvedValue({
-      content: '# Topic: Test Topic\n\n## Recent Messages\n',
-      success: true,
+    // Default stub for getTopicDetail
+    mockTrpcClient.topic.getTopicDetail.query.mockResolvedValue({
+      favorite: false,
+      id: 't1',
+      title: 'Test Topic',
+      updatedAt: new Date().toISOString(),
     });
   });
 
@@ -228,8 +230,8 @@ describe('topic command', () => {
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'topic', 'view', 't1']);
 
-      expect(mockTrpcClient.topic.getTopicContext.query).toHaveBeenCalledWith(
-        expect.objectContaining({ topicId: 't1' }),
+      expect(mockTrpcClient.topic.getTopicDetail.query).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 't1' }),
       );
       expect(mockTrpcClient.message.getMessages.query).toHaveBeenCalledWith(
         expect.objectContaining({ topicId: 't1' }),
@@ -241,8 +243,8 @@ describe('topic command', () => {
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'topic', 'view', 't1', '--no-messages']);
 
-      // getTopicContext is still called (for metadata)
-      expect(mockTrpcClient.topic.getTopicContext.query).toHaveBeenCalled();
+      // getTopicDetail is still called (for metadata)
+      expect(mockTrpcClient.topic.getTopicDetail.query).toHaveBeenCalled();
       // but getMessages must NOT be called
       expect(mockTrpcClient.message.getMessages.query).not.toHaveBeenCalled();
     });
