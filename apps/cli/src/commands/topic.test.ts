@@ -6,6 +6,9 @@ import { registerTopicCommand } from './topic';
 
 const { mockTrpcClient } = vi.hoisted(() => ({
   mockTrpcClient: {
+    message: {
+      getMessages: { query: vi.fn() },
+    },
     topic: {
       batchDelete: { mutate: vi.fn() },
       createTopic: { mutate: vi.fn() },
@@ -37,6 +40,11 @@ describe('topic command', () => {
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
     for (const method of Object.values(mockTrpcClient.topic)) {
+      for (const fn of Object.values(method)) {
+        (fn as ReturnType<typeof vi.fn>).mockReset();
+      }
+    }
+    for (const method of Object.values(mockTrpcClient.message)) {
       for (const fn of Object.values(method)) {
         (fn as ReturnType<typeof vi.fn>).mockReset();
       }
@@ -201,6 +209,69 @@ describe('topic command', () => {
       await program.parseAsync(['node', 'test', 'topic', 'recent']);
 
       expect(mockTrpcClient.topic.recentTopics.query).toHaveBeenCalledWith({ limit: 10 });
+    });
+  });
+
+  describe('view', () => {
+    it('should display topic metadata and messages', async () => {
+      mockTrpcClient.topic.getTopics.query.mockResolvedValue([
+        { id: 't1', favorite: true, title: 'My Topic', updatedAt: new Date().toISOString() },
+      ]);
+      mockTrpcClient.message.getMessages.query.mockResolvedValue([
+        { content: 'Hello world', id: 'm1', role: 'user' },
+        { content: 'Hi there', id: 'm2', role: 'assistant' },
+      ]);
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'topic', 'view', 't1']);
+
+      expect(mockTrpcClient.topic.getTopics.query).toHaveBeenCalled();
+      expect(mockTrpcClient.message.getMessages.query).toHaveBeenCalledWith(
+        expect.objectContaining({ topicId: 't1' }),
+      );
+      // Should print header + messages
+      expect(consoleSpy).toHaveBeenCalled();
+    });
+
+    it('should output json when --json flag is set', async () => {
+      mockTrpcClient.topic.getTopics.query.mockResolvedValue([
+        { id: 't1', title: 'My Topic' },
+      ]);
+      mockTrpcClient.message.getMessages.query.mockResolvedValue([
+        { content: 'Hello', id: 'm1', role: 'user' },
+      ]);
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'topic', 'view', 't1', '--json']);
+
+      const calls = consoleSpy.mock.calls.flat().join('');
+      const parsed = JSON.parse(calls);
+      expect(parsed.topic.id).toBe('t1');
+      expect(parsed.messages).toHaveLength(1);
+    });
+
+    it('should skip messages when --no-messages flag is set', async () => {
+      mockTrpcClient.topic.getTopics.query.mockResolvedValue([
+        { id: 't1', title: 'My Topic', updatedAt: new Date().toISOString() },
+      ]);
+      mockTrpcClient.message.getMessages.query.mockResolvedValue([]);
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'topic', 'view', 't1', '--no-messages']);
+
+      expect(mockTrpcClient.message.getMessages.query).not.toHaveBeenCalled();
+    });
+
+    it('should respect --limit for messages', async () => {
+      mockTrpcClient.topic.getTopics.query.mockResolvedValue([]);
+      mockTrpcClient.message.getMessages.query.mockResolvedValue([]);
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'topic', 'view', 't1', '-L', '10']);
+
+      expect(mockTrpcClient.message.getMessages.query).toHaveBeenCalledWith(
+        expect.objectContaining({ pageSize: 10, topicId: 't1' }),
+      );
     });
   });
 });
