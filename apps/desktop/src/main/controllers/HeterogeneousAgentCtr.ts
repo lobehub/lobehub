@@ -1266,10 +1266,20 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     prompt: string;
     resumeSessionId?: string;
     serverUrl: string;
+    systemContext?: string;
     topicId: string;
   }): void {
-    const { agentType, cwd, jwt, operationId, prompt, resumeSessionId, serverUrl, topicId } =
-      params;
+    const {
+      agentType,
+      cwd,
+      jwt,
+      operationId,
+      prompt,
+      resumeSessionId,
+      serverUrl,
+      systemContext,
+      topicId,
+    } = params;
     const workDir = cwd ?? process.cwd();
 
     const args = [
@@ -1305,7 +1315,17 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       stdio: ['pipe', 'inherit', 'inherit'],
     });
 
-    child.stdin.write(JSON.stringify(prompt));
+    // When systemContext is provided, send a content-block array so CC sees the
+    // context block first, then the user's actual message — mirrors
+    // spawnHeteroSandbox. lh handles JSON arrays via coerceJsonPrompt, so no lh
+    // changes are required.
+    const stdinPayload = systemContext
+      ? JSON.stringify([
+          { text: systemContext, type: 'text' },
+          { text: prompt, type: 'text' },
+        ])
+      : JSON.stringify(prompt);
+    child.stdin.write(stdinPayload);
     child.stdin.end();
 
     child.on('error', (err) => {

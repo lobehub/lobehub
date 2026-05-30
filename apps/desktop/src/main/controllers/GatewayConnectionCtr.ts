@@ -206,6 +206,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
         prompt: request.prompt,
         resumeSessionId: request.resumeSessionId,
         serverUrl,
+        systemContext: request.systemContext,
         topicId: request.topicId,
       });
 

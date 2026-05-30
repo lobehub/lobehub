@@ -127,6 +127,7 @@ export class GatewayHttpClient {
     operationId: string;
     prompt: string;
     resumeSessionId?: string;
+    systemContext?: string;
     timeout?: number;
     topicId: string;
     userId: string;

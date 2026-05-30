@@ -95,6 +95,7 @@ const { ipcMainHandleMock, MockGatewayClient } = vi.hoisted(() => {
       operationId = 'op-1',
       prompt = 'hello',
       jwt = 'mock-jwt',
+      extra: Record<string, unknown> = {},
     ) {
       this.emit('agent_run_request', {
         agentType,
@@ -103,6 +104,7 @@ const { ipcMainHandleMock, MockGatewayClient } = vi.hoisted(() => {
         prompt,
         topicId: 'topic-1',
         type: 'agent_run_request',
+        ...extra,
       });
     }
 
@@ -732,6 +734,22 @@ describe('GatewayConnectionCtr', () => {
         );
       },
     );
+
+    it('forwards cwd and systemContext from the request to spawnLhHeteroExec', async () => {
+      const client = await connectAndOpen();
+      client.simulateAgentRunRequest('claude-code', 'op-ctx', 'hi', 'mock-jwt', {
+        cwd: '/Users/alice/repo',
+        systemContext: 'WORKSPACE CONTEXT',
+      });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cwd: '/Users/alice/repo',
+          systemContext: 'WORKSPACE CONTEXT',
+        }),
+      );
+    });
 
     it('sends accepted ack and spawns lh hetero exec', async () => {
       const client = await connectAndOpen();
