@@ -7,7 +7,8 @@ import type {
 } from '@lobechat/electron-client-ipc';
 import { Flexbox, FormItem, Tag, Text } from '@lobehub/ui';
 import { App, Button, Form as AntdForm, Switch } from 'antd';
-import { RefreshCw, TestTube2 } from 'lucide-react';
+import { createStaticStyles, cx } from 'antd-style';
+import { Info, PlugZap, RefreshCw, Wrench } from 'lucide-react';
 import { memo, use, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -17,11 +18,61 @@ import { imessageBridgeService } from '@/services/electron/imessageBridge';
 
 import { ChannelPostSaveContext } from '../../detail/postSaveContext';
 
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  card: css`
+    margin-block: 8px;
+    padding: 20px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+
+    background: ${cssVar.colorBgContainer};
+  `,
+  dot: css`
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  `,
+  infoBox: css`
+    padding-block: 8px;
+    padding-inline: 12px;
+    border-radius: ${cssVar.borderRadius};
+
+    line-height: 1.6;
+    color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorFillQuaternary};
+  `,
+  statusCard: css`
+    padding: 12px;
+    border-radius: ${cssVar.borderRadiusLG};
+    background: ${cssVar.colorFillQuaternary};
+  `,
+  statusIcon: css`
+    width: 32px;
+    height: 32px;
+    border-radius: ${cssVar.borderRadius};
+
+    color: ${cssVar.colorTextTertiary};
+
+    background: ${cssVar.colorFillSecondary};
+  `,
+  statusIconRunning: css`
+    color: ${cssVar.colorSuccess};
+    background: ${cssVar.colorSuccessBg};
+  `,
+  title: css`
+    font-size: 15px;
+    font-weight: 600;
+  `,
+}));
+
 interface BridgeFormState {
   blueBubblesPassword: string;
   blueBubblesServerUrl: string;
   enabled: boolean;
 }
+
+type TestStatus = 'idle' | 'success' | 'failed';
 
 const DEFAULT_BRIDGE_FORM: BridgeFormState = {
   blueBubblesPassword: '',
@@ -46,6 +97,15 @@ const CredentialExtras = memo(() => {
   const [running, setRunning] = useState(false);
   const [serverUrl, setServerUrl] = useState<string>();
   const [testing, setTesting] = useState(false);
+  // Tracks whether the current config has passed a connection test. Reset to
+  // `idle` whenever a field changes so the header badge never claims a stale pass.
+  const [testStatus, setTestStatus] = useState<TestStatus>('idle');
+
+  // Editing any field invalidates the previous test result.
+  const patchBridgeForm = useCallback((patch: Partial<BridgeFormState>) => {
+    setBridgeForm((previous) => ({ ...previous, ...patch }));
+    setTestStatus('idle');
+  }, []);
 
   const fillDesktopDeviceId = useCallback(async () => {
     const deviceInfo = await gatewayConnectionService.getDeviceInfo();
@@ -152,84 +212,133 @@ const CredentialExtras = memo(() => {
     try {
       const config = buildBridgeConfig();
       await imessageBridgeService.testConfig(config);
+      setTestStatus('success');
       message.success(t('channel.imessage.bridgeTestSuccess'));
     } catch (error) {
+      setTestStatus('failed');
       message.error(`${t('channel.imessage.bridgeTestFailed')}: ${getErrorMessage(error)}`);
     } finally {
       setTesting(false);
     }
   };
 
+  const statusBadge = {
+    failed: { color: 'red', dot: '#ff4d4f', text: t('channel.imessage.bridgeStatusFailed') },
+    idle: { color: 'gold', dot: '#faad14', text: t('channel.imessage.bridgeStatusPending') },
+    success: { color: 'green', dot: '#52c41a', text: t('channel.imessage.bridgeStatusConnected') },
+  }[testStatus];
+
+  // `{url}` is a single-brace placeholder (react-i18next only parses `{{ }}`),
+  // so it never registers as a namespace interpolation variable — keeping the
+  // typed `t`/`Trans` inference for the whole `agent` namespace untouched.
+  const bridgeDesc = running
+    ? serverUrl
+      ? t('channel.imessage.bridgeRunningDescListening').replace('{url}', serverUrl)
+      : t('channel.imessage.bridgeRunningDesc')
+    : t('channel.imessage.bridgeStoppedDesc');
+
   return (
-    <>
+    <Flexbox className={styles.card}>
+      {/* Top: connection title + overall test status. Reserve breathing room
+          below so the header doesn't crowd the first form field. */}
+      <Flexbox gap={6} style={{ marginBlockEnd: 24 }}>
+        <Flexbox horizontal align="center" gap={8}>
+          <span className={styles.dot} style={{ background: statusBadge.dot }} />
+          <Text className={styles.title}>{t('channel.imessage.bridgeSectionTitle')}</Text>
+          <Tag color={statusBadge.color}>{statusBadge.text}</Tag>
+        </Flexbox>
+        <Text type="secondary">{t('channel.imessage.bridgeSectionDesc')}</Text>
+      </Flexbox>
+
+      {/* Middle: the form fields the operator fills in. */}
       <FormItem
-        divider
         desc={t('channel.imessage.blueBubblesServerUrlHint')}
         label={t('channel.imessage.blueBubblesServerUrl')}
-        minWidth={'max(50%, 400px)'}
+        minWidth={'max(50%, 360px)'}
         variant="borderless"
       >
-        <FormInput
-          placeholder="http://127.0.0.1:1234"
-          value={bridgeForm.blueBubblesServerUrl}
-          onChange={(value) =>
-            setBridgeForm((previous) => ({ ...previous, blueBubblesServerUrl: value }))
-          }
-        />
+        <Flexbox gap={8}>
+          <FormInput
+            placeholder="http://127.0.0.1:1234"
+            value={bridgeForm.blueBubblesServerUrl}
+            onChange={(value) => patchBridgeForm({ blueBubblesServerUrl: value })}
+          />
+          <Flexbox horizontal align="flex-start" className={styles.infoBox} gap={8}>
+            <Info size={14} style={{ flex: 'none', marginBlockStart: 3 }} />
+            <Text fontSize={12} type="secondary">
+              {t('channel.imessage.blueBubblesServerUrlTip')}
+            </Text>
+          </Flexbox>
+        </Flexbox>
       </FormItem>
       <FormItem
         divider
         desc={t('channel.imessage.blueBubblesPasswordHint')}
         label={t('channel.imessage.blueBubblesPassword')}
-        minWidth={'max(50%, 400px)'}
+        minWidth={'max(50%, 360px)'}
         variant="borderless"
       >
         <FormPassword
           autoComplete="new-password"
           placeholder={passwordSet ? t('channel.imessage.bridgePasswordSavedPlaceholder') : ''}
           value={bridgeForm.blueBubblesPassword}
-          onChange={(value) =>
-            setBridgeForm((previous) => ({ ...previous, blueBubblesPassword: value }))
-          }
+          onChange={(value) => patchBridgeForm({ blueBubblesPassword: value })}
         />
       </FormItem>
-      <FormItem
-        divider
-        desc={t('channel.imessage.bridgeEnabledHint')}
-        label={t('channel.imessage.bridgeEnabled')}
-        minWidth={'max(50%, 400px)'}
-        variant="borderless"
-      >
-        <Switch
-          checked={bridgeForm.enabled}
-          onChange={(enabled) => setBridgeForm((previous) => ({ ...previous, enabled }))}
-        />
-      </FormItem>
-      <Flexbox horizontal align="center" gap={8} style={{ marginBlockStart: 8 }}>
-        <Tag color={running ? 'green' : 'default'}>
-          {running ? t('channel.imessage.bridgeRunning') : t('channel.imessage.bridgeStopped')}
-        </Tag>
-        {serverUrl && (
-          <Text fontSize={12} type="secondary">
-            {serverUrl}
-          </Text>
-        )}
-        <Button
-          icon={<RefreshCw size={14} />}
-          loading={loading}
-          size="small"
-          type="text"
-          onClick={refreshStatus}
-        >
-          {t('channel.imessage.bridgeRefresh')}
-        </Button>
+
+      {/* Bottom: row 1 — service status + the primary Enable toggle; row 2 —
+          the less-frequent Refresh / Test actions. */}
+      <Flexbox className={styles.statusCard} gap={12} style={{ marginBlockStart: 16 }}>
+        <Flexbox horizontal align="center" gap={16} justify="space-between">
+          <Flexbox horizontal align="center" gap={12}>
+            <Flexbox
+              align="center"
+              className={cx(styles.statusIcon, running && styles.statusIconRunning)}
+              justify="center"
+            >
+              <PlugZap size={16} />
+            </Flexbox>
+            <Flexbox gap={2}>
+              <Flexbox horizontal align="center" gap={8}>
+                <Text style={{ fontWeight: 500 }}>
+                  {running
+                    ? t('channel.imessage.bridgeRunningTitle')
+                    : t('channel.imessage.bridgeStoppedTitle')}
+                </Text>
+                <Tag color={running ? 'green' : 'default'}>
+                  {running
+                    ? t('channel.imessage.bridgeRunning')
+                    : t('channel.imessage.bridgeStopped')}
+                </Tag>
+              </Flexbox>
+              <Text fontSize={12} type="secondary">
+                {bridgeDesc}
+              </Text>
+            </Flexbox>
+          </Flexbox>
+          <Flexbox horizontal align="center" gap={8} style={{ flex: 'none' }}>
+            <Text style={{ fontWeight: 500 }}>{t('channel.imessage.bridgeEnabled')}</Text>
+            <Switch
+              checked={bridgeForm.enabled}
+              onChange={(enabled) => patchBridgeForm({ enabled })}
+            />
+          </Flexbox>
+        </Flexbox>
+        <Flexbox horizontal align="center" gap={12} justify="flex-end">
+          <Button icon={<RefreshCw size={14} />} loading={loading} onClick={refreshStatus}>
+            {t('channel.imessage.bridgeRefresh')}
+          </Button>
+          <Button
+            disabled={!running}
+            icon={<Wrench size={14} />}
+            loading={testing}
+            onClick={handleTest}
+          >
+            {t('channel.imessage.bridgeTest')}
+          </Button>
+        </Flexbox>
       </Flexbox>
-      <Flexbox horizontal gap={8} style={{ marginBlockStart: 12 }}>
-        <Button icon={<TestTube2 size={14} />} loading={testing} onClick={handleTest}>
-          {t('channel.imessage.bridgeTest')}
-        </Button>
-      </Flexbox>
-    </>
+    </Flexbox>
   );
 });
 
