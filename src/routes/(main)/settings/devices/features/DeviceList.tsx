@@ -3,16 +3,19 @@
 import { isDesktop } from '@lobechat/const';
 import { Flexbox, Skeleton, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { lambdaQuery } from '@/libs/trpc/client';
 import { useElectronStore } from '@/store/electron';
 
+import DeviceDetailPanel from './DeviceDetailPanel';
 import DeviceItem from './DeviceItem';
 
 const styles = createStaticStyles(({ css }) => ({
-  container: css`
+  detailCol: css`
+    align-self: stretch;
+    min-width: 0;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
   `,
@@ -20,6 +23,12 @@ const styles = createStaticStyles(({ css }) => ({
     padding-block: 48px;
     color: ${cssVar.colorTextTertiary};
     text-align: center;
+  `,
+  listCol: css`
+    flex: none;
+    width: 320px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
   `,
 }));
 
@@ -37,6 +46,8 @@ const DeviceList = memo(() => {
   useFetchDeviceInfo();
   const currentDeviceId = isDesktop ? gatewayDeviceInfo?.deviceId : undefined;
 
+  const [selectedId, setSelectedId] = useState<string>();
+
   if (isLoading) return <Skeleton active paragraph={{ rows: 4 }} title={false} />;
 
   if (!devices || devices.length === 0)
@@ -46,15 +57,30 @@ const DeviceList = memo(() => {
       </Flexbox>
     );
 
+  const selected = devices.find((d) => d.deviceId === selectedId) ?? devices[0];
+  const isCurrent = (id: string) => !!currentDeviceId && id === currentDeviceId;
+
   return (
-    <Flexbox className={styles.container} padding={4}>
-      {devices.map((device) => (
-        <DeviceItem
-          device={device}
-          isCurrent={!!currentDeviceId && device.deviceId === currentDeviceId}
-          key={device.deviceId}
+    <Flexbox horizontal align={'flex-start'} gap={16}>
+      <Flexbox className={styles.listCol} padding={4}>
+        {devices.map((device) => (
+          <DeviceItem
+            device={device}
+            isCurrent={isCurrent(device.deviceId)}
+            key={device.deviceId}
+            selected={device.deviceId === selected.deviceId}
+            onSelect={() => setSelectedId(device.deviceId)}
+          />
+        ))}
+      </Flexbox>
+      <Flexbox className={styles.detailCol} flex={1}>
+        {/* keyed on deviceId so the form state resets when the selection changes */}
+        <DeviceDetailPanel
+          device={selected}
+          isCurrent={isCurrent(selected.deviceId)}
+          key={selected.deviceId}
         />
-      ))}
+      </Flexbox>
     </Flexbox>
   );
 });
