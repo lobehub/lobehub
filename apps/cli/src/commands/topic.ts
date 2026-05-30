@@ -356,18 +356,20 @@ export function registerTopicCommand(program: Command) {
       ) => {
         const client = await getTrpcClient();
 
-        // ── 1. Fetch topic metadata via getTopicContext (single query, has permission check) ──
-        const ctxResult = await client.topic.getTopicContext.query({ topicId: id } as any);
+        // ── 1. Fetch topic detail (single query by id) ──
+        const topicDetail = await client.topic.getTopicDetail.query({ id } as any);
 
         // ── 2. Fetch messages only when needed ──
         if (options.messages === false) {
           // --no-messages: skip message query entirely
           if (options.json) {
-            console.log(JSON.stringify({ messages: [], topic: { id } }, null, 2));
+            console.log(JSON.stringify({ messages: [], topic: topicDetail ?? { id } }, null, 2));
             return;
           }
           console.log('');
-          console.log(`${pc.bold('Topic:')}   ${pc.cyan(id)}`);
+          console.log(
+            `${pc.bold('Topic:')}   ${pc.cyan((topicDetail as any)?.title ?? id)}  ${pc.dim(`(${id})`)}`,
+          );
           console.log('');
           return;
         }
@@ -408,13 +410,14 @@ export function registerTopicCommand(program: Command) {
           return;
         }
 
-        // ── Header (extract title from getTopicContext result) ──
-        const ctxContent = (ctxResult as any)?.content ?? '';
-        const titleMatch = ctxContent.match(/^#\s+Topic:\s+(.+)/m);
-        const title = titleMatch ? titleMatch[1].trim() : id;
-
+        // ── Header ──
+        const t = topicDetail as any;
         console.log('');
-        console.log(`${pc.bold('Topic:')}   ${pc.cyan(title)}  ${pc.dim(`(${id})`)}`);
+        console.log(`${pc.bold('Topic:')}   ${pc.cyan(t?.title ?? id)}  ${pc.dim(`(${id})`)}`);
+        if (t?.favorite) console.log(`${pc.bold('Favorite:')} ★`);
+        if (t?.updatedAt) console.log(`${pc.bold('Updated:')}  ${timeAgo(t.updatedAt)}`);
+        if (t?.status) console.log(`${pc.bold('Status:')}   ${t.status}`);
+        if (t?.model) console.log(`${pc.bold('Model:')}    ${t.model}${t.provider ? ` (${t.provider})` : ''}`);
         console.log('');
 
         // ── Messages ──
