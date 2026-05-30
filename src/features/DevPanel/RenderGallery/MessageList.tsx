@@ -81,10 +81,17 @@ const buildTool = (api: ApiEntry, mode: LifecycleMode): ChatToolPayloadWithResul
   };
 };
 
-const buildMessages = (apis: ApiEntry[], mode: LifecycleMode, now: number): UIChatMessage[] =>
-  apis
-    .filter((api) => api.render || api.streaming || api.placeholder || api.intervention)
-    .map((api) => ({
+const buildMessages = (apis: ApiEntry[], mode: LifecycleMode, now: number): UIChatMessage[] => {
+  const renderable = apis.filter(
+    (api) => api.render || api.streaming || api.placeholder || api.intervention,
+  );
+
+  // Thread every turn onto the previous one via `parentId` so the renderer reads
+  // them as a single conversation chain, not a handful of orphaned messages.
+  let parentId: string | undefined;
+  return renderable.map((api) => {
+    const id = `devtools-msg-${api.identifier}-${api.apiName}`;
+    const message: UIChatMessage = {
       children: [
         {
           content: api.description || api.fixture.variants[0]?.description || '',
@@ -94,10 +101,15 @@ const buildMessages = (apis: ApiEntry[], mode: LifecycleMode, now: number): UICh
       ],
       content: '',
       createdAt: now,
-      id: `devtools-msg-${api.identifier}-${api.apiName}`,
+      id,
+      parentId,
       role: 'assistantGroup',
       updatedAt: now,
-    }));
+    };
+    parentId = id;
+    return message;
+  });
+};
 
 const InnerList = memo(() => {
   const ids = useConversationStore(dataSelectors.displayMessageIds);
