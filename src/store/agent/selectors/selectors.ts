@@ -291,11 +291,15 @@ const canCurrentAgentPublishToCommunity = (s: AgentStoreState): boolean =>
 const currentAgentHeterogeneousProviderType = (s: AgentStoreState) =>
   currentAgentConfig(s)?.agencyConfig?.heterogeneousProvider?.type;
 
+const currentAgentExecutionTarget = (s: AgentStoreState) =>
+  currentAgentConfig(s)?.agencyConfig?.executionTarget;
+
 const getAgentDocumentsById = (agentId: string) => (s: AgentStoreState) =>
   s.agentDocumentsMap[agentId];
 
 export const agentSelectors = {
   canCurrentAgentPublishToCommunity,
+  currentAgentExecutionTarget,
   currentAgentHeterogeneousProviderType,
   currentAgentAvatar,
   currentAgentBackgroundColor,
