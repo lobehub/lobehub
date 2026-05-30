@@ -35,8 +35,7 @@ export interface DeviceListItem {
 
 const styles = createStaticStyles(({ css }) => ({
   channels: css`
-    margin-block-start: 4px;
-    padding-inline-start: 30px;
+    margin-block-start: 2px;
   `,
   cwd: css`
     overflow: hidden;
