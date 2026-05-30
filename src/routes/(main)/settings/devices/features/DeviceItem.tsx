@@ -1,23 +1,11 @@
 'use client';
 
-import { isDesktop } from '@lobechat/const';
-import {
-  ActionIcon,
-  Button,
-  DropdownMenu,
-  Flexbox,
-  Icon,
-  Input,
-  Tag,
-  Text,
-  Tooltip,
-} from '@lobehub/ui';
-import { confirmModal, Modal } from '@lobehub/ui/base-ui';
+import { ActionIcon, DropdownMenu, Flexbox, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import {
   FolderIcon,
-  FolderOpenIcon,
   MoreVerticalIcon,
   PencilLineIcon,
   Trash2Icon,
@@ -27,8 +15,8 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { lambdaQuery } from '@/libs/trpc/client';
-import { electronSystemService } from '@/services/electron/system';
 
+import DeviceDetailDrawer from './DeviceDetailDrawer';
 import { getDeviceIcon } from './getDeviceIcon';
 
 export interface DeviceChannel {
@@ -95,16 +83,8 @@ const DeviceItem = memo<{ device: DeviceListItem; isCurrent?: boolean }>(
     const { t } = useTranslation('setting');
     const utils = lambdaQuery.useUtils();
 
-    // Only the machine you're on can browse its own filesystem natively.
-    const canBrowse = !!isCurrent && isDesktop;
+    const [detailOpen, setDetailOpen] = useState(false);
 
-    const [editOpen, setEditOpen] = useState(false);
-    const [name, setName] = useState('');
-    const [cwd, setCwd] = useState('');
-
-    const updateDevice = lambdaQuery.device.updateDevice.useMutation({
-      onSuccess: () => utils.device.listDevices.invalidate(),
-    });
     const removeDevice = lambdaQuery.device.removeDevice.useMutation({
       onSuccess: () => utils.device.listDevices.invalidate(),
     });
@@ -119,29 +99,6 @@ const DeviceItem = memo<{ device: DeviceListItem; isCurrent?: boolean }>(
         ? [{ channel: null, connectedAt: device.lastSeen, hostname: null, platform: null }]
         : []);
 
-    const openEdit = () => {
-      setName(device.friendlyName ?? '');
-      setCwd(device.defaultCwd ?? '');
-      setEditOpen(true);
-    };
-
-    const handleSave = async () => {
-      await updateDevice.mutateAsync({
-        defaultCwd: cwd.trim() || null,
-        deviceId: device.deviceId,
-        friendlyName: name.trim() || null,
-      });
-      setEditOpen(false);
-    };
-
-    const handleBrowse = async () => {
-      const result = await electronSystemService.selectFolder({
-        defaultPath: cwd.trim() || undefined,
-        title: t('devices.edit.defaultCwd'),
-      });
-      if (result?.path) setCwd(result.path);
-    };
-
     const handleRemove = () =>
       confirmModal({
         content: t('devices.remove.confirmDesc'),
@@ -155,7 +112,14 @@ const DeviceItem = memo<{ device: DeviceListItem; isCurrent?: boolean }>(
 
     return (
       <>
-        <Flexbox horizontal align={'flex-start'} className={styles.row} gap={12}>
+        <Flexbox
+          horizontal
+          align={'flex-start'}
+          className={styles.row}
+          gap={12}
+          style={{ cursor: 'pointer' }}
+          onClick={() => setDetailOpen(true)}
+        >
           <span className={styles.icon} style={{ marginBlockStart: 2 }}>
             {getDeviceIcon(device.platform)}
           </span>
@@ -208,67 +172,35 @@ const DeviceItem = memo<{ device: DeviceListItem; isCurrent?: boolean }>(
               )}
             </Flexbox>
           </Flexbox>
-          <DropdownMenu
-            items={[
-              {
-                icon: <Icon icon={PencilLineIcon} />,
-                key: 'edit',
-                label: t('devices.actions.edit'),
-                onClick: openEdit,
-              },
-              { type: 'divider' },
-              {
-                danger: true,
-                icon: <Icon icon={Trash2Icon} />,
-                key: 'remove',
-                label: t('devices.actions.remove'),
-                onClick: handleRemove,
-              },
-            ]}
-          >
-            <ActionIcon icon={MoreVerticalIcon} />
-          </DropdownMenu>
+          <span onClick={(e) => e.stopPropagation()}>
+            <DropdownMenu
+              items={[
+                {
+                  icon: <Icon icon={PencilLineIcon} />,
+                  key: 'edit',
+                  label: t('devices.actions.edit'),
+                  onClick: () => setDetailOpen(true),
+                },
+                { type: 'divider' },
+                {
+                  danger: true,
+                  icon: <Icon icon={Trash2Icon} />,
+                  key: 'remove',
+                  label: t('devices.actions.remove'),
+                  onClick: handleRemove,
+                },
+              ]}
+            >
+              <ActionIcon icon={MoreVerticalIcon} />
+            </DropdownMenu>
+          </span>
         </Flexbox>
-        <Modal
-          open={editOpen}
-          title={t('devices.edit.title')}
-          width={440}
-          footer={
-            <Flexbox horizontal gap={8} justify={'flex-end'}>
-              <Button onClick={() => setEditOpen(false)}>{t('devices.edit.cancel')}</Button>
-              <Button loading={updateDevice.isPending} type={'primary'} onClick={handleSave}>
-                {t('devices.edit.save')}
-              </Button>
-            </Flexbox>
-          }
-          onCancel={() => setEditOpen(false)}
-        >
-          <Flexbox gap={16} paddingBlock={8}>
-            <Flexbox gap={6}>
-              <Text weight={500}>{t('devices.edit.friendlyName')}</Text>
-              <Input
-                placeholder={t('devices.edit.friendlyNamePlaceholder')}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </Flexbox>
-            <Flexbox gap={6}>
-              <Text weight={500}>{t('devices.edit.defaultCwd')}</Text>
-              <Flexbox horizontal gap={8}>
-                <Input
-                  placeholder={t('devices.edit.defaultCwdPlaceholder')}
-                  value={cwd}
-                  onChange={(e) => setCwd(e.target.value)}
-                />
-                {canBrowse && (
-                  <Button icon={<Icon icon={FolderOpenIcon} />} onClick={handleBrowse}>
-                    {t('devices.edit.browse')}
-                  </Button>
-                )}
-              </Flexbox>
-            </Flexbox>
-          </Flexbox>
-        </Modal>
+        <DeviceDetailDrawer
+          device={device}
+          isCurrent={isCurrent}
+          open={detailOpen}
+          onClose={() => setDetailOpen(false)}
+        />
       </>
     );
   },
