@@ -93,8 +93,18 @@ const DevtoolsToolPage = () => {
     if (!root || !toolset) return;
 
     const apiNames = toolset.apis.map((api) => api.apiName);
-    setActiveApi(apiNames[0]);
-    root.scrollTo({ top: 0 });
+
+    // Honor a deep-link hash (#api-<name>) on load; otherwise start at the top.
+    const hash = window.location.hash.replace(/^#/, '');
+    const linked = apiNames.find((name) => toApiAnchor(name) === hash);
+    if (linked) {
+      setActiveApi(linked);
+      const card = root.querySelector(`#${CSS.escape(toApiAnchor(linked))}`);
+      requestAnimationFrame(() => card?.scrollIntoView({ block: 'start' }));
+    } else {
+      setActiveApi(apiNames[0]);
+      root.scrollTo({ top: 0 });
+    }
 
     const TRIGGER = 96; // px below the scroll-area top — clears the sticky bar
     let frame = 0;
@@ -133,6 +143,8 @@ const DevtoolsToolPage = () => {
     const root = scrollRef.current;
     const card = root?.querySelector(`#${CSS.escape(toApiAnchor(apiName))}`);
     card?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Pin a shareable anchor without spamming browser history.
+    window.history.replaceState(null, '', `#${toApiAnchor(apiName)}`);
   };
 
   if (!toolset) {

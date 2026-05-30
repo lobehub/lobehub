@@ -12,7 +12,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     flex-direction: column;
     flex-shrink: 0;
 
-    width: 220px;
+    width: 240px;
     height: 100%;
     border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
 
@@ -43,24 +43,26 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 8px;
     align-items: center;
 
-    padding-block: 7px;
+    padding-block: 6px;
     padding-inline: 10px;
-    border-radius: 8px;
+    border-radius: 6px;
 
     color: ${cssVar.colorTextSecondary};
 
     transition:
       background 0.15s,
-      color 0.15s;
+      color 0.15s,
+      box-shadow 0.15s;
 
     &:hover {
       color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
+      background: ${cssVar.colorFillQuaternary};
     }
   `,
   itemActive: css`
     color: ${cssVar.colorText};
     background: ${cssVar.colorFillSecondary};
+    box-shadow: inset 2px 0 0 ${cssVar.colorPrimary};
 
     &:hover {
       background: ${cssVar.colorFillSecondary};
@@ -70,14 +72,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     overflow: hidden;
     flex: 1;
 
-    font-size: 13px;
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: 12px;
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
   list: css`
     overflow: auto;
     flex: 1;
-    gap: 2px;
+    gap: 1px;
 
     padding-block: 8px;
     padding-inline: 8px;
@@ -91,11 +94,22 @@ interface ApiListProps {
 }
 
 /**
+ * MCP tools carry a long `mcp__<server>__<action>` identifier that truncates to
+ * an indistinguishable `mcp__claude_ai_Linear__…` in a narrow column. Show just
+ * the trailing action so siblings are scannable; the full id stays in the
+ * `title` tooltip and the preview card header.
+ */
+const shortApiName = (name: string) =>
+  name.startsWith('mcp__') ? (name.split('__').at(-1) ?? name) : name;
+
+/**
  * Middle column for the render gallery: a jump-list of the current toolset's
- * APIs. Clicking scrolls the matching `ToolPreview` card into view (the card
- * carries `id={toApiAnchor(apiName)}`); the active item is driven by the
- * scrollspy in `ToolPage`. The leading dot lights up when the API ships a
- * Render — the gallery's primary subject — so a render-less API reads as muted.
+ * APIs. Clicking scrolls the matching `ToolPreview` card into view and pins a
+ * URL hash (`#api-<name>`) so a specific render is deep-linkable; the active
+ * item is driven by the scrollspy in `ToolPage`. The leading dot lights up
+ * when the API ships a Render — the gallery's primary subject — so a
+ * render-less API reads as muted. Long MCP names truncate with a `title`
+ * tooltip carrying the full identifier.
  */
 const ApiList = memo<ApiListProps>(({ apis, activeApiName, onSelect }) => {
   const listRef = useRef<HTMLDivElement>(null);
@@ -124,10 +138,11 @@ const ApiList = memo<ApiListProps>(({ apis, activeApiName, onSelect }) => {
               className={cx(styles.item, active && styles.itemActive)}
               data-api={api.apiName}
               key={api.apiName}
+              title={api.apiName}
               onClick={() => onSelect(api.apiName)}
             >
               <span className={cx(styles.dot, api.render && styles.dotActive)} />
-              <span className={styles.label}>{api.apiName}</span>
+              <span className={styles.label}>{shortApiName(api.apiName)}</span>
             </Flexbox>
           );
         })}
