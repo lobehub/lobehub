@@ -261,6 +261,46 @@ describe('AgentBotProviderModel', () => {
       expect(found!.credentials).toEqual({ botToken: 'new-token', signingSecret: 'new-secret' });
     });
 
+    it('should merge partial credential updates', async () => {
+      const model = new AgentBotProviderModel(serverDB, userId);
+      const created = await model.create({
+        agentId,
+        applicationId: 'app-merge',
+        credentials: { apiBaseUrl: 'https://live-mt-server.wati.io', bearerToken: 'old-token' },
+        platform: 'wati',
+      });
+
+      await model.update(created.id, {
+        credentials: { bearerToken: 'new-token' },
+      });
+
+      const found = await model.findById(created.id);
+      expect(found!.credentials).toEqual({
+        apiBaseUrl: 'https://live-mt-server.wati.io',
+        bearerToken: 'new-token',
+      });
+    });
+
+    it('should clear optional credentials when an empty string is sent', async () => {
+      const model = new AgentBotProviderModel(serverDB, userId);
+      const created = await model.create({
+        agentId,
+        applicationId: 'app-clear',
+        credentials: {
+          bearerToken: 'token',
+          webhookProxyUrl: 'https://example.ngrok.app',
+        },
+        platform: 'telegram',
+      });
+
+      await model.update(created.id, {
+        credentials: { webhookProxyUrl: '' },
+      });
+
+      const found = await model.findById(created.id);
+      expect(found!.credentials).toEqual({ bearerToken: 'token' });
+    });
+
     it('should not update a provider owned by another user', async () => {
       const model1 = new AgentBotProviderModel(serverDB, userId);
       const model2 = new AgentBotProviderModel(serverDB, userId2);

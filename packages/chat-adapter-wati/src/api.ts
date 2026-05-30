@@ -323,14 +323,15 @@ export class WatiApiClient {
       return { ok: true, result: matched };
     }
 
-    return {
-      ok: true,
-      result: entries.map((entry) => ({
-        channelPhoneNumber: entry.phoneNumber,
-        eventTypes: entry.eventTypes ?? ['message'],
-        url: entry.url,
-      })),
-    };
+    const requested = entries.map((entry) => `${entry.phoneNumber} → ${entry.url}`).join('; ');
+
+    throw new WatiApiError(
+      'Webhook could not be confirmed on your Wati account. ' +
+        `Wati reported a limit or duplicate conflict for ${requested}, ` +
+        'but the webhook list does not contain that phone number and URL. ' +
+        'Remove or replace an existing webhook in Wati (Connectors → Webhooks), then try again.',
+      409,
+    );
   }
 }
 

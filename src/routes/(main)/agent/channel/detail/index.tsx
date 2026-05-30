@@ -306,9 +306,9 @@ const PlatformDetail = memo<PlatformDetailProps>(
           settings: rawSettings = {},
         } = values as ChannelFormValues;
 
-        // Strip undefined values from credentials (optional fields left empty by antd form)
+        // Keep empty strings so optional credentials can be cleared on update.
         const credentials = Object.fromEntries(
-          Object.entries(rawCredentials).filter(([, v]) => v !== undefined && v !== ''),
+          Object.entries(rawCredentials).filter(([, v]) => v !== undefined),
         );
         const settings = mergeSettingsWithDefaults(
           platformDef.schema,

@@ -103,6 +103,11 @@ export class AgentBotProviderModel {
         ...existing?.credentials,
         ...credentials,
       };
+
+      for (const [key, value] of Object.entries(credentials)) {
+        if (value === '') delete merged[key];
+      }
+
       updateValue.credentials = await this.encrypt(merged);
     }
 
