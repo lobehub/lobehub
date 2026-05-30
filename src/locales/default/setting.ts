@@ -328,6 +328,8 @@ export default {
   'devices.actions.edit': 'Edit',
   'devices.actions.remove': 'Remove',
   'devices.channel.connected': 'Connected {{time}}',
+  'devices.currentBadge': 'This device',
+  'devices.edit.browse': 'Browse…',
   'devices.edit.cancel': 'Cancel',
   'devices.edit.defaultCwd': 'Default working directory',
   'devices.edit.defaultCwdPlaceholder': 'e.g. /Users/me/projects',
