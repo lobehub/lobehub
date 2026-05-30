@@ -15,6 +15,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   main: css`
     overflow: hidden;
     flex: 1;
+
+    min-width: 0;
+    min-height: 0;
+
     background:
       radial-gradient(circle at top, ${cssVar.colorFillTertiary} 0%, transparent 35%),
       ${cssVar.colorBgLayout};
@@ -22,7 +26,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   page: css`
     overflow: hidden;
     width: 100%;
-    height: 100%;
+
+    /* Bind to the viewport directly so the columns scroll internally regardless
+       of whether the mounting route provides a bounded height. */
+    height: 100dvh;
   `,
 }));
 

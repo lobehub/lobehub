@@ -99,6 +99,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     flex: 1;
     gap: 0;
 
+    min-height: 0;
     padding-block: 6px;
     padding-inline: 8px;
   `,
