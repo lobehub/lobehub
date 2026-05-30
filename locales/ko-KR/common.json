@@ -353,6 +353,7 @@
   "messengerBanner.title": "선호하는 메시징 앱에서 Lobe AI와 대화하세요",
   "more": "더보기",
   "navPanel.agent": "도우미",
+  "navPanel.bottomDivider": "아래 항목은 하단에 고정됩니다",
   "navPanel.customizeSidebar": "사이드바 사용자 지정",
   "navPanel.displayItems": "항목 표시",
   "navPanel.hidden": "숨김",
@@ -479,5 +480,6 @@
   "userPanel.setting": "앱 설정",
   "userPanel.upgradePlan": "플랜 업그레이드",
   "userPanel.usages": "사용량 통계",
-  "version": "버전"
+  "version": "버전",
+  "zoom": "확대"
 }

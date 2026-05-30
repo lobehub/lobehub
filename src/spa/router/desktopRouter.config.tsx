@@ -720,6 +720,17 @@ export const desktopRoutes: RouteObject[] = [
     path: '/share/t',
   },
 
+  // Share page route (outside main layout)
+  {
+    children: [
+      {
+        element: dynamicElement(() => import('@/routes/share/page/[id]'), 'Desktop > Share > Page'),
+        path: ':id',
+      },
+    ],
+    path: '/share/page',
+  },
+
   // Devtools route (outside main layout, dev-only)
   ...(__DEV__
     ? [

@@ -1,8 +1,10 @@
 {
+  "actionTag.category.agentSkill": "Competenza dell'agente",
   "actionTag.category.command": "Comando",
   "actionTag.category.projectSkill": "Competenza di progetto",
   "actionTag.category.skill": "Abilità",
   "actionTag.category.tool": "Strumento",
+  "actionTag.tooltip.agentSkill": "Carica un pacchetto di competenze dai documenti di questo agente per la richiesta.",
   "actionTag.tooltip.command": "Esegue un comando slash lato client prima dell'invio.",
   "actionTag.tooltip.projectSkill": "Inviato come un'istruzione slash affinché la CLI dell'agente esegua la competenza di progetto corrispondente.",
   "actionTag.tooltip.skill": "Carica un pacchetto di abilità riutilizzabile per questa richiesta.",

@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Grid, Tag, Text } from '@lobehub/ui';
-import { Input, Pagination } from 'antd';
+import { Flexbox, Grid, SearchBar, Tag, Text } from '@lobehub/ui';
+import { Pagination } from 'antd';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -82,10 +82,10 @@ const UserGroupList = memo<UserGroupListProps>(({ rows = 4, pageSize = 8 }) => {
         </Flexbox>
         {isOwner && (
           <Flexbox horizontal align={'center'} gap={8}>
-            <Input.Search
+            <SearchBar
               allowClear
               placeholder={t('user.searchPlaceholder')}
-              style={{ width: 200 }}
+              styles={{ input: { height: 31, width: 320 } }}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />

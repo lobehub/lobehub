@@ -1,3 +1,4 @@
+import { localFileService } from '@/services/electron/localFileService';
 import { type ChatStore } from '@/store/chat/store';
 import { type StoreSetter } from '@/store/types';
 import { type PortalArtifact } from '@/types/artifact';
@@ -58,7 +59,7 @@ export class ChatPortalActionImpl {
   };
 
   closeLocalFileTab = (filePath: string): void => {
-    const { openLocalFiles, activeLocalFilePath } = this.#get();
+    const { openLocalFiles, activeLocalFilePath, dirtyLocalFileContents } = this.#get();
     const idx = openLocalFiles.findIndex((f) => f.filePath === filePath);
     if (idx === -1) return;
 
@@ -72,8 +73,18 @@ export class ChatPortalActionImpl {
       nextActive = activeLocalFilePath;
     }
 
+    let nextDirty = dirtyLocalFileContents;
+    if (filePath in dirtyLocalFileContents) {
+      const { [filePath]: _, ...rest } = dirtyLocalFileContents;
+      nextDirty = rest;
+    }
+
     this.#set(
-      { activeLocalFilePath: nextActive, openLocalFiles: nextFiles },
+      {
+        activeLocalFilePath: nextActive,
+        dirtyLocalFileContents: nextDirty,
+        openLocalFiles: nextFiles,
+      },
       false,
       'closeLocalFileTab',
     );
@@ -193,6 +204,31 @@ export class ChatPortalActionImpl {
 
   setActiveLocalFile = (filePath: string): void => {
     this.#set({ activeLocalFilePath: filePath }, false, 'setActiveLocalFile');
+  };
+
+  setLocalFileBuffer = (filePath: string, content: string | undefined): void => {
+    const { dirtyLocalFileContents } = this.#get();
+    if (content === undefined) {
+      if (!(filePath in dirtyLocalFileContents)) return;
+
+      const { [filePath]: _, ...rest } = dirtyLocalFileContents;
+      this.#set({ dirtyLocalFileContents: rest }, false, 'setLocalFileBuffer/clear');
+      return;
+    }
+    if (dirtyLocalFileContents[filePath] === content) return;
+    this.#set(
+      { dirtyLocalFileContents: { ...dirtyLocalFileContents, [filePath]: content } },
+      false,
+      'setLocalFileBuffer',
+    );
+  };
+
+  saveLocalFile = async (filePath: string): Promise<string | undefined> => {
+    const { dirtyLocalFileContents } = this.#get();
+    const buffer = dirtyLocalFileContents[filePath];
+    if (buffer === undefined) return undefined;
+    await localFileService.writeFile({ content: buffer, path: filePath });
+    return buffer;
   };
 
   openMessageDetail = (messageId: string): void => {

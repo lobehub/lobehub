@@ -48,13 +48,10 @@
   "starter.createAgent": "Criar Agente",
   "starter.createGroup": "Criar Grupo",
   "starter.deepResearch": "Pesquisa Aprofundada",
-  "starter.deepseekV4Pro": "DeepSeek V4 Pro",
-  "starter.deepseekV4ProAlready": "Já utilizando o DeepSeek V4 Pro",
-  "starter.deepseekV4ProSwitched": "Trocado para o DeepSeek V4 Pro",
   "starter.developing": "Em breve",
   "starter.image": "Imagem",
-  "starter.imageGeneration": "Geração de Imagem",
+  "starter.modelInUse": "Já está usando {{name}}",
+  "starter.modelSwitched": "Trocado para {{name}}",
   "starter.newLabel": "Novo",
-  "starter.videoGeneration": "Seedance 2.0",
   "starter.write": "Escrever"
 }

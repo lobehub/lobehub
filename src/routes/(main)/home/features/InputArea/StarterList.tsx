@@ -1,4 +1,4 @@
-import { DeepSeek, Jimeng, OpenAI } from '@lobehub/icons';
+import { Claude, Jimeng, OpenAI } from '@lobehub/icons';
 import { type ButtonProps } from '@lobehub/ui';
 import { Button, Center, Tag, Tooltip } from '@lobehub/ui';
 import { App } from 'antd';
@@ -12,9 +12,17 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
 import { useResolvedHomeAgentId } from '../AgentSelect/useResolvedHomeAgentId';
-import { DEEPSEEK_V4_PRO_MODEL, DEEPSEEK_V4_PRO_PROVIDER } from './starterModels';
+import {
+  NEW_CHAT_MODEL,
+  NEW_CHAT_MODEL_NAME,
+  NEW_CHAT_PROVIDER,
+  NEW_IMAGE_MODEL,
+  NEW_IMAGE_MODEL_NAME,
+  NEW_VIDEO_MODEL,
+  NEW_VIDEO_MODEL_NAME,
+} from './starterModels';
 
-type StarterKey = 'image' | 'video' | 'deepseek-v4-pro';
+type StarterKey = 'chat' | 'image' | 'video';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   button: css`
@@ -34,16 +42,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-type StarterTitleKey =
-  | 'starter.imageGeneration'
-  | 'starter.videoGeneration'
-  | 'starter.deepseekV4Pro';
-
 interface StarterItem {
   disabled?: boolean;
   icon?: ButtonProps['icon'];
   key: StarterKey;
-  titleKey: StarterTitleKey;
+  /** Fixed product name — not translated, see starterModels.ts */
+  title: string;
 }
 
 const StarterList = memo(() => {
@@ -57,19 +61,19 @@ const StarterList = memo(() => {
   const items: StarterItem[] = useMemo(
     () => [
       {
-        icon: DeepSeek.Avatar,
-        key: 'deepseek-v4-pro',
-        titleKey: 'starter.deepseekV4Pro',
+        icon: Claude.Avatar,
+        key: 'chat',
+        title: NEW_CHAT_MODEL_NAME,
       },
       {
         icon: OpenAI.Avatar,
         key: 'image',
-        titleKey: 'starter.imageGeneration',
+        title: NEW_IMAGE_MODEL_NAME,
       },
       {
         icon: Jimeng.Avatar,
         key: 'video',
-        titleKey: 'starter.videoGeneration',
+        title: NEW_VIDEO_MODEL_NAME,
       },
     ],
     [],
@@ -78,16 +82,16 @@ const StarterList = memo(() => {
   const handleClick = useCallback(
     async (key: StarterKey) => {
       if (key === 'video') {
-        navigate('/video?model=dreamina-seedance-2-0-260128');
+        navigate(`/video?model=${NEW_VIDEO_MODEL}`);
         return;
       }
 
       if (key === 'image') {
-        navigate('/image?model=gpt-image-2');
+        navigate(`/image?model=${NEW_IMAGE_MODEL}`);
         return;
       }
 
-      if (key === 'deepseek-v4-pro') {
+      if (key === 'chat') {
         if (!activeAgentId || switchingKey) return;
         setSwitchingKey(key);
         try {
@@ -103,19 +107,16 @@ const StarterList = memo(() => {
           const currentModel = agentByIdSelectors.getAgentModelById(activeAgentId)(agentState);
           const currentProvider =
             agentByIdSelectors.getAgentModelProviderById(activeAgentId)(agentState);
-          if (
-            currentModel === DEEPSEEK_V4_PRO_MODEL &&
-            currentProvider === DEEPSEEK_V4_PRO_PROVIDER
-          ) {
-            message.info(t('starter.deepseekV4ProAlready'));
+          if (currentModel === NEW_CHAT_MODEL && currentProvider === NEW_CHAT_PROVIDER) {
+            message.info(t('starter.modelInUse', { name: NEW_CHAT_MODEL_NAME }));
             return;
           }
 
           await updateAgentConfigById(activeAgentId, {
-            model: DEEPSEEK_V4_PRO_MODEL,
-            provider: DEEPSEEK_V4_PRO_PROVIDER,
+            model: NEW_CHAT_MODEL,
+            provider: NEW_CHAT_PROVIDER,
           });
-          message.success(t('starter.deepseekV4ProSwitched'));
+          message.success(t('starter.modelSwitched', { name: NEW_CHAT_MODEL_NAME }));
         } finally {
           setSwitchingKey(null);
         }
@@ -146,7 +147,7 @@ const StarterList = memo(() => {
             }}
             onClick={() => handleClick(item.key)}
           >
-            {t(item.titleKey)}
+            {item.title}
           </Button>
         );
 

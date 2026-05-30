@@ -148,6 +148,19 @@ const currentLocalFile = (
 const localFilePath = (s: ChatStoreState) => currentLocalFile(s)?.filePath;
 const localFileWorkingDirectory = (s: ChatStoreState) => currentLocalFile(s)?.workingDirectory;
 
+const localFileBuffer =
+  (filePath: string | undefined) =>
+  (s: ChatStoreState): string | undefined =>
+    filePath ? s.dirtyLocalFileContents[filePath] : undefined;
+
+const isLocalFileDirty =
+  (filePath: string | undefined) =>
+  (s: ChatStoreState): boolean =>
+    !!filePath && filePath in s.dirtyLocalFileContents;
+
+const dirtyLocalFileContents = (s: ChatStoreState): Record<string, string> =>
+  s.dirtyLocalFileContents;
+
 // Message Detail selectors
 const messageDetailId = (s: ChatStoreState): string | undefined => {
   const view = getViewData(s, PortalViewType.MessageDetail);
@@ -210,6 +223,9 @@ export const chatPortalSelectors = {
   // Local file data
   activeLocalFilePath,
   currentLocalFile,
+  dirtyLocalFileContents,
+  isLocalFileDirty,
+  localFileBuffer,
   localFilePath,
   localFileWorkingDirectory,
   openLocalFiles,

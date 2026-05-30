@@ -1,6 +1,6 @@
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import { eq } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { uuid } from '@/utils/uuid';
 
@@ -290,22 +290,73 @@ describe('MessageModel Query Tests', () => {
       });
 
       const domain = 'http://abc.com';
-      // Call query method
-      const result = await messageModel.query(
-        {},
-        { postProcessUrl: async (path) => `${domain}/${path}` },
+      const postProcessUrl = vi.fn(
+        async (path: string | null, file: { id?: string | null }) => `${domain}/${file.id}/${path}`,
       );
+      // Call query method
+      const result = await messageModel.query({}, { postProcessUrl });
 
       // Assert result
       expect(result).toHaveLength(2);
       expect(result[0].id).toBe('1');
       expect(result[0].imageList).toEqual([
-        { alt: 'file-1', id: 'f-0', url: `${domain}/abc` },
-        { alt: 'file-3', id: 'f-3', url: `${domain}/abc` },
+        { alt: 'file-1', id: 'f-0', url: `${domain}/f-0/abc` },
+        { alt: 'file-3', id: 'f-3', url: `${domain}/f-3/abc` },
       ]);
+      expect(postProcessUrl).toHaveBeenCalledWith(
+        'abc',
+        expect.objectContaining({ fileType: 'image/png', id: 'f-0' }),
+      );
+      expect(postProcessUrl).toHaveBeenCalledWith(
+        'abc',
+        expect.objectContaining({ fileType: 'image/png', id: 'f-3' }),
+      );
 
       expect(result[1].id).toBe('2');
       expect(result[1].imageList).toEqual([]);
+    });
+
+    it('should pass file id to postProcessUrl when querying messages by ids', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(messages).values({
+          id: 'query-by-id-message',
+          userId,
+          role: 'user',
+          content: 'message with file',
+          createdAt: new Date('2023-01-01'),
+        });
+        await trx.insert(files).values({
+          id: 'query-by-id-file',
+          url: 'files/query-by-id.png',
+          name: 'query-by-id.png',
+          userId,
+          fileType: 'image/png',
+          size: 1000,
+        });
+        await trx.insert(messagesFiles).values({
+          fileId: 'query-by-id-file',
+          messageId: 'query-by-id-message',
+          userId,
+        });
+      });
+
+      const postProcessUrl = vi.fn(
+        async (path: string | null, file: { id?: string | null }) => `/f/${file.id}/${path}`,
+      );
+
+      const result = await messageModel.queryByIds(['query-by-id-message'], { postProcessUrl });
+
+      expect(result[0].imageList).toEqual([
+        {
+          alt: 'query-by-id.png',
+          id: 'query-by-id-file',
+          url: '/f/query-by-id-file/files/query-by-id.png',
+        },
+      ]);
+      expect(postProcessUrl).toHaveBeenCalledWith(
+        'files/query-by-id.png',
+        expect.objectContaining({ fileType: 'image/png', id: 'query-by-id-file' }),
+      );
     });
 
     it('should include translate, tts and other extra fields in query result', async () => {

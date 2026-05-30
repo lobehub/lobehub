@@ -353,6 +353,7 @@
   "messengerBanner.title": "Общайтесь с Lobe AI в ваших любимых мессенджерах",
   "more": "Ещё",
   "navPanel.agent": "Агент",
+  "navPanel.bottomDivider": "Элементы ниже привязываются к нижней части",
   "navPanel.customizeSidebar": "Настроить боковую панель",
   "navPanel.displayItems": "Отображаемые элементы",
   "navPanel.hidden": "Скрыто",
@@ -479,5 +480,6 @@
   "userPanel.setting": "Настройки",
   "userPanel.upgradePlan": "Обновить план",
   "userPanel.usages": "Статистика использования",
-  "version": "Версия"
+  "version": "Версия",
+  "zoom": "Масштаб"
 }

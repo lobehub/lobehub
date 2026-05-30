@@ -24,12 +24,14 @@ export interface SearchKnowledgeBaseArgs {
 }
 
 /**
- * BM25 hit on a custom/document inside a knowledge base.
+ * BM25 hit on a document inside a knowledge base. Covers both inline
+ * `custom/document` pages and file-backed documents (parsed PDFs and the like).
  * Mirrors database/repositories/search KnowledgeBaseDocumentHit; redeclared
  * here to keep this package decoupled from server-only types.
  */
 export interface KnowledgeBaseDocumentResult {
   documentId: string;
+  fileId?: string;
   knowledgeBaseId: string;
   relevance: number;
   snippet: string;

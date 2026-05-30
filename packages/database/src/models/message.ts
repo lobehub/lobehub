@@ -89,7 +89,10 @@ export interface QueryMessagesOptions {
   /**
    * Post-process function for file URLs
    */
-  postProcessUrl?: (path: string | null, file: { fileType: string }) => Promise<string>;
+  postProcessUrl?: (
+    path: string | null,
+    file: { fileType: string; id?: string | null },
+  ) => Promise<string>;
   timing?: ModelTimingContext;
   /**
    * Topic ID for MessageGroup aggregation queries
@@ -226,7 +229,10 @@ export class MessageModel {
       threadId,
     }: QueryMessageParams = {},
     options: {
-      postProcessUrl?: (path: string | null, file: { fileType: string }) => Promise<string>;
+      postProcessUrl?: (
+        path: string | null,
+        file: { fileType: string; id?: string | null },
+      ) => Promise<string>;
       timing?: ModelTimingContext;
     } = {},
   ) => {
@@ -564,7 +570,10 @@ export class MessageModel {
     topicId,
   }: {
     current: number;
-    postProcessUrl?: (path: string | null, file: { fileType: string }) => Promise<string>;
+    postProcessUrl?: (
+      path: string | null,
+      file: { fileType: string; id?: string | null },
+    ) => Promise<string>;
     result: { createdAt: Date }[];
     timing?: ModelTimingContext;
     topicId?: string;
@@ -648,7 +657,10 @@ export class MessageModel {
           rawRelatedFileList.map(async (file) => ({
             ...file,
             url: postProcessUrl
-              ? await postProcessUrl(file.url, file as unknown as { fileType: string })
+              ? await postProcessUrl(
+                  file.url,
+                  file as unknown as { fileType: string; id?: string | null },
+                )
               : (file.url as string),
           })),
         ),
@@ -807,7 +819,10 @@ export class MessageModel {
   queryByIds = async (
     messageIds: string[],
     options: {
-      postProcessUrl?: (path: string | null, file: { fileType: string }) => Promise<string>;
+      postProcessUrl?: (
+        path: string | null,
+        file: { fileType: string; id?: string | null },
+      ) => Promise<string>;
     } = {},
   ): Promise<UIChatMessage[]> => {
     if (messageIds.length === 0) return [];
@@ -946,7 +961,12 @@ export class MessageModel {
     const relatedFileList = await Promise.all(
       rawRelatedFileList.map(async (file) => ({
         ...file,
-        url: postProcessUrl ? await postProcessUrl(file.url, file as any) : (file.url as string),
+        url: postProcessUrl
+          ? await postProcessUrl(
+              file.url,
+              file as unknown as { fileType: string; id?: string | null },
+            )
+          : (file.url as string),
       })),
     );
 
@@ -1066,7 +1086,10 @@ export class MessageModel {
   private queryMessageGroupNodes = async (
     topicId: string,
     timeRange?: { endTime: Date; startTime: Date },
-    postProcessUrl?: (path: string | null, file: { fileType: string }) => Promise<string>,
+    postProcessUrl?: (
+      path: string | null,
+      file: { fileType: string; id?: string | null },
+    ) => Promise<string>,
     timing?: ModelTimingContext,
   ): Promise<UIChatMessage[]> => {
     // 1. Query MessageGroups for this topic, optionally filtered by time range

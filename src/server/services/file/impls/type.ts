@@ -3,9 +3,14 @@
  */
 export interface FileServiceImpl {
   /**
+   * Create cached pre-signed preview URL
+   */
+  createCachedPreSignedUrlForPreview: (url?: string | null, expiresIn?: number) => Promise<string>;
+  /**
    * Create pre-signed upload URL
    */
   createPreSignedUrl: (key: string) => Promise<string>;
+
   /**
    * Create pre-signed preview URL
    */

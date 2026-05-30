@@ -127,13 +127,13 @@ export const hasTemperatureTopPConflict = (model: string): boolean => {
  * Ref: https://platform.claude.com/docs/en/about-claude/models/migration-guide
  */
 export const omitSamplingParamsModelPatterns: RegExp[] = [
-  // Claude Opus 4.7 - Anthropic API (also LobeHub provider pass-through)
-  /^claude-opus-4-7/,
+  // Claude Opus 4.7+ - Anthropic API (also LobeHub provider pass-through)
+  /^claude-opus-4-[78]/,
   // OpenRouter formats use dot notation (e.g. anthropic/claude-opus-4.7)
-  /^anthropic\/claude-opus-4\.7/,
-  /^anthropic\/claude-4\.7-opus/,
+  /^anthropic\/claude-opus-4\.[78]/,
+  /^anthropic\/claude-4\.[78]-opus/,
   // AWS Bedrock formats (e.g. anthropic.claude-opus-4-7, us.anthropic.claude-opus-4-7-v1)
-  /anthropic\.claude-opus-4-7/,
+  /anthropic\.claude-opus-4-[78]/,
 ];
 
 export const shouldOmitSamplingParams = (model: string): boolean => {
@@ -141,8 +141,8 @@ export const shouldOmitSamplingParams = (model: string): boolean => {
 };
 
 export const assistantPrefillUnsupportedModelPatterns: RegExp[] = [
-  /^claude-(opus|sonnet)-4-(6|7)(\b|-)/,
-  /anthropic\.claude-(opus|sonnet)-4-(6|7)(\b|-)/,
+  /^claude-(opus|sonnet)-4-[678](\b|-)/,
+  /anthropic\.claude-(opus|sonnet)-4-[678](\b|-)/,
 ];
 
 export const shouldDropUnsupportedClaudeAssistantPrefill = (model: string): boolean => {

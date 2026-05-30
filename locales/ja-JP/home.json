@@ -48,13 +48,10 @@
   "starter.createAgent": "アシスタントを作成",
   "starter.createGroup": "グループを作成",
   "starter.deepResearch": "リサーチ",
-  "starter.deepseekV4Pro": "DeepSeek V4 Pro",
-  "starter.deepseekV4ProAlready": "すでに DeepSeek V4 Pro を使用しています",
-  "starter.deepseekV4ProSwitched": "DeepSeek V4 Pro に切り替えました",
   "starter.developing": "開発中",
   "starter.image": "イラスト作成",
-  "starter.imageGeneration": "画像生成",
+  "starter.modelInUse": "{{name}}を既に使用中です",
+  "starter.modelSwitched": "{{name}}に切り替えました",
   "starter.newLabel": "新規",
-  "starter.videoGeneration": "シーダンス 2.0",
   "starter.write": "執筆"
 }

@@ -12,6 +12,8 @@ declare module '../types' {
 
 const log = debug('context-engine:provider:AgentBuilderContextInjector');
 
+const SYSTEM_ROLE_CONTEXT_PREVIEW_LENGTH = 10_000;
+
 /**
  * Official tool item for Agent Builder context
  */
@@ -112,13 +114,13 @@ const defaultFormatAgentContext = (context: AgentBuilderContext): string => {
       configFields.push(`  <openingQuestions>\n${questions}\n  </openingQuestions>`);
     }
     if (context.config.systemRole) {
-      // For system role, show preview (first 500 chars) to avoid too long context
-      const preview =
-        context.config.systemRole.length > 500
-          ? context.config.systemRole.slice(0, 500) + '...'
+      const systemRole =
+        context.config.systemRole.length > SYSTEM_ROLE_CONTEXT_PREVIEW_LENGTH
+          ? `${context.config.systemRole.slice(0, SYSTEM_ROLE_CONTEXT_PREVIEW_LENGTH)}...`
           : context.config.systemRole;
+
       configFields.push(
-        `  <systemRole length="${context.config.systemRole.length}">${escapeXml(preview)}</systemRole>`,
+        `  <systemRole length="${context.config.systemRole.length}">${escapeXml(systemRole)}</systemRole>`,
       );
     }
 

@@ -26,11 +26,14 @@ vi.mock('@lobehub/ui', () => ({
   ActionIcon: () => null,
   Button: ({ children }: { children: ReactNode }) => <button>{children}</button>,
   Flexbox: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  Highlighter: ({ children }: { children: ReactNode }) => (
-    <pre data-testid="highlighter">{children}</pre>
-  ),
   Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
   TextArea: () => <textarea />,
+}));
+
+vi.mock('@/components/CodeEditorPane', () => ({
+  default: ({ value }: { value: string }) => (
+    <textarea readOnly data-testid="highlight-editor" value={value} />
+  ),
 }));
 
 const mockDocumentMeta = vi.hoisted(() => ({
@@ -138,12 +141,12 @@ describe('DocumentBody', () => {
     expect(screen.getByTestId('floating-chat-panel')).toBeDefined();
   });
 
-  it('renders Highlighter for non-markdown files', () => {
+  it('renders highlight editor for non-markdown files', () => {
     mockDocumentMeta.current = { content: 'raw log content', filename: 'topic_call.txt' };
 
     render(<DocumentBody />);
 
-    expect(screen.getByTestId('highlighter')).toBeDefined();
+    expect(screen.getByTestId('highlight-editor')).toHaveValue('raw log content');
     expect(screen.queryByTestId('editor-canvas')).toBeNull();
   });
 
@@ -153,7 +156,7 @@ describe('DocumentBody', () => {
     render(<DocumentBody />);
 
     expect(screen.getByTestId('editor-canvas')).toBeDefined();
-    expect(screen.queryByTestId('highlighter')).toBeNull();
+    expect(screen.queryByTestId('highlight-editor')).toBeNull();
   });
 
   it('renders EditorCanvas for notebook documents that have no filename', () => {
@@ -167,6 +170,6 @@ describe('DocumentBody', () => {
     render(<DocumentBody />);
 
     expect(screen.getByTestId('editor-canvas')).toBeDefined();
-    expect(screen.queryByTestId('highlighter')).toBeNull();
+    expect(screen.queryByTestId('highlight-editor')).toBeNull();
   });
 });

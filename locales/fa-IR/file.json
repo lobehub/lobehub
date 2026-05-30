@@ -53,6 +53,8 @@
   "home.uploadEntries.folder.title": "بارگذاری پوشه",
   "home.uploadEntries.library.title": "ایجاد کتابخانه جدید",
   "home.uploadEntries.newPage.title": "صفحه جدید",
+  "library.hierarchy.empty.desc": "برای شروع فایل‌ها را اضافه کنید یا یک پوشه ایجاد کنید",
+  "library.hierarchy.empty.title": "هنوز چیزی اینجا نیست",
   "library.list.confirmRemoveLibrary": "در حال حذف این کتابخانه هستید. فایل‌های داخل آن حذف نمی‌شوند بلکه به بخش همه فایل‌ها منتقل می‌شوند. این عملیات قابل بازگشت نیست، لطفاً با احتیاط ادامه دهید.",
   "library.list.empty": "برای ایجاد کتابخانه جدید روی <1>+</1> کلیک کنید",
   "library.new": "کتابخانه جدید",

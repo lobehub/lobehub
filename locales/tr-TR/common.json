@@ -353,6 +353,7 @@
   "messengerBanner.title": "Lobe AI ile favori mesajlaşma uygulamalarınızda konuşun",
   "more": "Daha Fazla",
   "navPanel.agent": "Temsilci",
+  "navPanel.bottomDivider": "Aşağıdaki öğeler alta sabitlenir",
   "navPanel.customizeSidebar": "Kenar çubuğunu özelleştir",
   "navPanel.displayItems": "Görüntülenen Öğeler",
   "navPanel.hidden": "Gizli",
@@ -479,5 +480,6 @@
   "userPanel.setting": "Ayarlar",
   "userPanel.upgradePlan": "Planı Yükselt",
   "userPanel.usages": "Kullanım İstatistikleri",
-  "version": "Sürüm"
+  "version": "Sürüm",
+  "zoom": "Yakınlaştır"
 }

@@ -53,6 +53,8 @@
   "home.uploadEntries.folder.title": "Carica cartella",
   "home.uploadEntries.library.title": "Crea nuova libreria",
   "home.uploadEntries.newPage.title": "Nuova pagina",
+  "library.hierarchy.empty.desc": "Aggiungi file o crea una cartella per iniziare",
+  "library.hierarchy.empty.title": "Non c'è ancora nulla qui",
   "library.list.confirmRemoveLibrary": "Stai per eliminare questa libreria. I file al suo interno non verranno eliminati ma spostati in Tutti i file. Questa azione è irreversibile, procedi con cautela.",
   "library.list.empty": "Clicca <1>+</1> per creare una nuova libreria",
   "library.new": "Nuova libreria",

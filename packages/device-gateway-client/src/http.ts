@@ -1,4 +1,4 @@
-import type { DeviceAttachment, DeviceSystemInfo } from './types';
+import type { DeviceSystemInfo, GatewayDevice } from './types';
 
 const DEFAULT_GATEWAY_TOOL_CALL_TIMEOUT_MS = 30_000;
 const HTTP_CALL_TIMEOUT_PADDING_MS = 30_000;
@@ -45,7 +45,7 @@ export class GatewayHttpClient {
     };
   }
 
-  async queryDeviceList(userId: string): Promise<DeviceAttachment[]> {
+  async queryDeviceList(userId: string): Promise<GatewayDevice[]> {
     const res = await this.post('/api/device/devices', { userId });
     if (!res.ok) return [];
 

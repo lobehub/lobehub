@@ -48,13 +48,10 @@
   "starter.createAgent": "Create Agent",
   "starter.createGroup": "Create Group",
   "starter.deepResearch": "Deep Research",
-  "starter.deepseekV4Pro": "DeepSeek V4 Pro",
-  "starter.deepseekV4ProAlready": "Already using DeepSeek V4 Pro",
-  "starter.deepseekV4ProSwitched": "Switched to DeepSeek V4 Pro",
   "starter.developing": "Coming soon",
   "starter.image": "Image",
-  "starter.imageGeneration": "GPT Image 2",
+  "starter.modelInUse": "Already using {{name}}",
+  "starter.modelSwitched": "Switched to {{name}}",
   "starter.newLabel": "New",
-  "starter.videoGeneration": "Seedance 2.0",
   "starter.write": "Write"
 }

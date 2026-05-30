@@ -1,4 +1,8 @@
-import { AUTH_REQUIRED_HEADER, TRPC_ERROR_CODE_UNAUTHORIZED } from '@lobechat/desktop-bridge';
+import {
+  AUTH_REQUIRED_HEADER,
+  MARKET_AUTH_REQUIRED_MESSAGE,
+  TRPC_ERROR_CODE_UNAUTHORIZED,
+} from '@lobechat/desktop-bridge';
 import { TRPCError } from '@trpc/server';
 import { describe, expect, it } from 'vitest';
 
@@ -64,6 +68,19 @@ describe('createResponseMeta', () => {
 
     expect(result.headers).toBeInstanceOf(Headers);
     expect(result.headers?.get(AUTH_REQUIRED_HEADER)).toBe('true');
+  });
+
+  it('should NOT set AUTH_REQUIRED_HEADER for Market OAuth UNAUTHORIZED errors', () => {
+    const error = new TRPCError({
+      code: TRPC_ERROR_CODE_UNAUTHORIZED,
+      message: MARKET_AUTH_REQUIRED_MESSAGE,
+    });
+    const result = createResponseMeta({
+      ctx: undefined,
+      errors: [error],
+    });
+
+    expect(result.headers).toBeUndefined();
   });
 
   it('should handle multiple errors where one is UNAUTHORIZED', () => {
