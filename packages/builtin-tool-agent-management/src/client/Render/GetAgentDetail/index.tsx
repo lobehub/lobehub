@@ -10,9 +10,7 @@ import type { GetAgentDetailParams, GetAgentDetailState } from '../../../types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
-    padding: 12px;
-    border-radius: 8px;
-    background: ${cssVar.colorFillQuaternary};
+    padding-block: 4px;
   `,
   field: css`
     margin-block-end: 8px;

@@ -42,9 +42,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextTertiary};
   `,
   container: css`
-    padding: 12px;
-    border-radius: 8px;
-    background: ${cssVar.colorFillQuaternary};
+    padding-block: 4px;
   `,
   field: css`
     margin-block-end: 8px;
@@ -80,9 +78,9 @@ export const CreateAgentRender = memo<BuiltinRenderProps<CreateAgentParams, Crea
     if (pluginState?.success && (pluginState.agentId || pluginState.sessionId)) {
       return (
         <Flexbox
+          horizontal
           align={'center'}
           className={styles.agentCard}
-          horizontal
           gap={12}
           onClick={handleNavigateToSession}
         >

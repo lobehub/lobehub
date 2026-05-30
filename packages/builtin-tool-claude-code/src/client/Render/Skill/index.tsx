@@ -10,9 +10,7 @@ import type { SkillArgs } from '../../../types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
-    padding: 8px;
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
+    padding-block: 4px;
   `,
   header: css`
     padding-inline: 4px;
@@ -25,7 +23,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-inline: 8px;
     border-radius: 8px;
 
-    background: ${cssVar.colorBgContainer};
+    background: ${cssVar.colorFillTertiary};
   `,
 }));
 
