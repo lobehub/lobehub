@@ -41,11 +41,19 @@ export const useUpdateDeviceCwd = () => {
   });
 
   return useCallback(
-    (deviceId: string, cwd: string, currentRecentCwds: readonly string[] = []) => {
+    (
+      deviceId: string,
+      cwd: string,
+      currentRecentCwds: readonly string[] = [],
+      // Local-mode runs only want to record the dir in the recent list, not
+      // repoint the device's default working directory.
+      options: { setDefault?: boolean } = {},
+    ) => {
       const trimmed = cwd.trim();
       if (!trimmed) return;
+      const setDefault = options.setDefault ?? true;
       return mutation.mutateAsync({
-        defaultCwd: trimmed,
+        ...(setDefault ? { defaultCwd: trimmed } : {}),
         deviceId,
         recentCwds: nextRecentCwds(trimmed, currentRecentCwds),
       });

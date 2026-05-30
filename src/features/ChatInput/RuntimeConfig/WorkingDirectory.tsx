@@ -7,14 +7,17 @@ import { CheckIcon, FolderIcon, FolderOpenIcon, GitBranchIcon, XIcon } from 'luc
 import { memo, type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { lambdaQuery } from '@/libs/trpc/client';
 import { electronSystemService } from '@/services/electron/system';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
+import { useElectronStore } from '@/store/electron';
 
 import { addRecentDir, getRecentDirs, type RecentDirEntry, removeRecentDir } from './recentDirs';
 import { useRepoType } from './useRepoType';
+import { useUpdateDeviceCwd } from './useUpdateDeviceCwd';
 
 const styles = createStaticStyles(({ css }) => ({
   chooseFolderItem: css`
@@ -154,6 +157,20 @@ const WorkingDirectoryContent = memo<WorkingDirectoryContentProps>(({ agentId, o
   const updateAgentRuntimeEnvConfig = useAgentStore((s) => s.updateAgentRuntimeEnvConfigById);
   const updateTopicMetadata = useChatStore((s) => s.updateTopicMetadata);
 
+  // Local runs execute on this very machine, so also record the chosen dir in
+  // its device-registry `recentCwds` — keeps the settings detail view + future
+  // device-mode picker in sync. recentCwds only; the device default is untouched.
+  const useFetchDeviceInfo = useElectronStore((s) => s.useFetchGatewayDeviceInfo);
+  const gatewayDeviceInfo = useElectronStore((s) => s.gatewayDeviceInfo);
+  useFetchDeviceInfo();
+  const currentDeviceId = gatewayDeviceInfo?.deviceId;
+  const { data: allDevices } = lambdaQuery.device.listDevices.useQuery(undefined, {
+    staleTime: 30_000,
+  });
+  const deviceRecentCwds =
+    allDevices?.find((d) => d.deviceId === currentDeviceId)?.recentCwds ?? [];
+  const updateDeviceCwd = useUpdateDeviceCwd();
+
   const [recentDirs, setRecentDirs] = useState(getRecentDirs);
 
   const displayDirs = useMemo(() => {
@@ -178,6 +195,10 @@ const WorkingDirectoryContent = memo<WorkingDirectoryContentProps>(({ agentId, o
           await updateAgentRuntimeEnvConfig(agentId, { workingDirectory: newPath });
         }
         setRecentDirs(addRecentDir(entry));
+        // Record on this machine's device registry (recentCwds only).
+        if (currentDeviceId) {
+          void updateDeviceCwd(currentDeviceId, newPath, deviceRecentCwds, { setDefault: false });
+        }
         onClose?.();
       };
 
@@ -205,8 +226,11 @@ const WorkingDirectoryContent = memo<WorkingDirectoryContentProps>(({ agentId, o
       activeTopicId,
       activeTopic,
       agentId,
+      currentDeviceId,
+      deviceRecentCwds,
       t,
       updateAgentRuntimeEnvConfig,
+      updateDeviceCwd,
       updateTopicMetadata,
       onClose,
     ],
