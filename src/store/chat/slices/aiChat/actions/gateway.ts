@@ -452,6 +452,31 @@ export class GatewayActionImpl {
     // the caller's op (e.g. `sendMessage`) to the child without a gap.
     if (parentOperationId) this.#get().completeOperation(parentOperationId);
 
+    // Optimistically update the local store's runningOperation for this topic so
+    // useGatewayReconnect doesn't fire for a stale previous operation while the new
+    // gateway connection is being established. Also disconnect any live reconnect
+    // connection that was already established for the old operation.
+    if (result.topicId) {
+      const existingTopic = topicSelectors.getTopicById(result.topicId)(this.#get());
+      const staleOpId = existingTopic?.metadata?.runningOperation?.operationId;
+      if (staleOpId && staleOpId !== result.operationId) {
+        this.#get().internal_dispatchTopic({
+          id: result.topicId,
+          type: 'updateTopic',
+          value: {
+            metadata: {
+              ...existingTopic?.metadata,
+              runningOperation: {
+                assistantMessageId: result.assistantMessageId,
+                operationId: result.operationId,
+              },
+            },
+          },
+        });
+        this.disconnectFromGateway(staleOpId);
+      }
+    }
+
     // When the local operation is cancelled (e.g. user clicks stop), forward
     // the interrupt directly to the server via the existing tRPC endpoint.
     // Closure captures `result.operationId` (the server-side id) so we don't
@@ -529,6 +554,14 @@ export class GatewayActionImpl {
     // overwriting the fresh non-resume connect with resumeOnConnect:true.
     const existingStatus = this.#get().gatewayConnections[operationId]?.status;
     if (existingStatus && existingStatus !== 'disconnected') return;
+
+    // Skip reconnect if the topic already has a newer running operation. This
+    // happens when executeGatewayAgent was called (creating a new op) while this
+    // stale reconnect was still queued — connecting to the old op would produce
+    // duplicate streaming events alongside the new connection.
+    const topicCurrentOpId = topicSelectors.getTopicById(topicId)(this.#get())?.metadata
+      ?.runningOperation?.operationId;
+    if (topicCurrentOpId && topicCurrentOpId !== operationId) return;
 
     // Get a fresh JWT token (original expired after 5 min)
     const { token } = await aiAgentService.refreshGatewayToken(topicId);
