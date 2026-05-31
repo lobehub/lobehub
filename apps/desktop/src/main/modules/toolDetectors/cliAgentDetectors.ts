@@ -86,32 +86,46 @@ const detectValidatedCommand = async (
   const resolvedPath = await resolveCommandPath(trimmedCommand);
   if (!resolvedPath) return { available: false };
 
-  try {
-    const needsShell = isWindows() && /\.(?:cmd|bat)$/i.test(resolvedPath);
-    const { stderr, stdout } = needsShell
-      ? await execPromise(`"${resolvedPath}" ${validateFlag}`, {
-          timeout: 5000,
-          windowsHide: true,
-        })
-      : await execFilePromise(resolvedPath, [validateFlag], {
-          timeout: 5000,
-          windowsHide: true,
-        });
-    const output = `${stdout}\n${stderr}`.trim();
-    const loweredOutput = output.toLowerCase();
-
-    if (!validateKeywords.some((keyword) => loweredOutput.includes(keyword.toLowerCase()))) {
-      return { available: false };
+  const runValidationFlag = async (flag: string): Promise<string | undefined> => {
+    try {
+      const needsShell = isWindows() && /\.(?:cmd|bat)$/i.test(resolvedPath);
+      const { stderr, stdout } = needsShell
+        ? await execPromise(`"${resolvedPath}" ${flag}`, {
+            timeout: 5000,
+            windowsHide: true,
+          })
+        : await execFilePromise(resolvedPath, [flag], {
+            timeout: 5000,
+            windowsHide: true,
+          });
+      return `${stdout}\n${stderr}`.trim();
+    } catch {
+      return undefined;
     }
+  };
 
-    return {
-      available: true,
-      path: resolvedPath,
-      version: output.split(/\r?\n/)[0],
-    };
-  } catch {
-    return { available: false };
+  const versionOutput = await runValidationFlag(validateFlag);
+  if (versionOutput === undefined) return { available: false };
+
+  const matchesKeyword = (text: string) =>
+    validateKeywords.some((keyword) => text.toLowerCase().includes(keyword.toLowerCase()));
+
+  // Some CLIs print only a bare version number for `--version` (e.g. gemini-cli
+  // prints "0.44.1") with no identifying name, which would fail the keyword
+  // guard. Fall back to `--help` output (which carries the tool name) before
+  // giving up, so a correctly-installed tool isn't reported as unavailable.
+  let keywordMatched = matchesKeyword(versionOutput);
+  if (!keywordMatched && validateFlag !== '--help') {
+    const helpOutput = await runValidationFlag('--help');
+    keywordMatched = helpOutput !== undefined && matchesKeyword(helpOutput);
   }
+  if (!keywordMatched) return { available: false };
+
+  return {
+    available: true,
+    path: resolvedPath,
+    version: versionOutput.split(/\r?\n/)[0],
+  };
 };
 
 const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
