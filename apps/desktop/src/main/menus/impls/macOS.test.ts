@@ -94,7 +94,9 @@ const createMockApp = () => {
       rebuildAppMenu: vi.fn(),
     },
     storeManager: {
+      get: vi.fn(),
       openInEditor: vi.fn(),
+      set: vi.fn(),
     },
   } as unknown as App;
 };

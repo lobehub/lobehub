@@ -3,8 +3,8 @@ import path from 'node:path';
 import type { MenuItemConstructorOptions } from 'electron';
 import { app, BrowserWindow, clipboard, Menu, shell } from 'electron';
 
-import { HETERO_AGENT_DIR } from '@/const/dir';
 import { isDev } from '@/const/env';
+import { HETERO_AGENT_DIR } from '@/const/heteroAgent';
 import NotificationCtr from '@/controllers/NotificationCtr';
 import SystemController from '@/controllers/SystemCtr';
 

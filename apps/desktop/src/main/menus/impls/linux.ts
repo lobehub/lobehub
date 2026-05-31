@@ -3,8 +3,8 @@ import path from 'node:path';
 import type { MenuItemConstructorOptions } from 'electron';
 import { app, BrowserWindow, clipboard, dialog, Menu, shell } from 'electron';
 
-import { HETERO_AGENT_DIR } from '@/const/dir';
 import { isDev } from '@/const/env';
+import { HETERO_AGENT_DIR } from '@/const/heteroAgent';
 
 import type { ContextMenuData, IMenuPlatform, MenuOptions } from '../types';
 import { BaseMenuPlatform } from './BaseMenuPlatform';

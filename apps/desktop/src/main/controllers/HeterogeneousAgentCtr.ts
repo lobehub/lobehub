@@ -28,7 +28,7 @@ import {
 } from '@lobechat/heterogeneous-agents/spawn';
 import { app as electronApp, BrowserWindow } from 'electron';
 
-import { HETERO_AGENT_FILES_DIR, HETERO_AGENT_TRACING_DIR } from '@/const/dir';
+import { HETERO_AGENT_FILES_DIR, HETERO_AGENT_TRACING_DIR } from '@/const/heteroAgent';
 import { getHeterogeneousAgentDriver } from '@/modules/heterogeneousAgent';
 import type {
   HeterogeneousAgentBuildPlan,
