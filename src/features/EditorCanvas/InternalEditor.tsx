@@ -3,7 +3,6 @@
 import { isDesktop } from '@lobechat/const';
 import type { IEditor } from '@lobehub/editor';
 import {
-  ReactFilePlugin,
   ReactImagePlugin,
   ReactLinkPlugin,
   ReactLiteXmlPlugin,
@@ -20,6 +19,7 @@ import { createChatInputRichPlugins } from '@/features/ChatInput/InputEditor/plu
 
 import { type EditorCanvasProps } from './EditorCanvas';
 import InlineToolbar from './InlineToolbar';
+import LinearFilePlugin from './LinearFilePlugin';
 import { registerAttachmentClickOpen } from './registerAttachmentClickOpen';
 import { useFileUpload, useImageUpload } from './useImageUpload';
 
@@ -27,42 +27,14 @@ const IMAGE_FILTERS = [
   { extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'avif'], name: 'Images' },
 ];
 
-// Override @lobehub/editor's default inline-pill file styling with a
-// full-width, block-level card — matching the Linear attachment row look.
-const fileNodeStyles = createStaticStyles(({ css, cssVar }) => ({
-  fileNode: css`
-    cursor: pointer;
-
-    display: flex !important;
-    gap: 10px;
-    align-items: center;
-
-    box-sizing: border-box;
-    width: 100%;
-    margin-block: 6px !important;
-    margin-inline: 0 !important;
-    padding-block: 10px !important;
-    padding-inline: 14px !important;
-    border: 1px solid ${cssVar.colorBorderSecondary} !important;
-    border-radius: ${cssVar.borderRadiusLG} !important;
-
-    font-family: inherit !important;
-    font-size: ${cssVar.fontSize} !important;
-    line-height: 1.4 !important;
-    color: ${cssVar.colorText};
-    word-break: break-word;
-
-    background: ${cssVar.colorBgContainer};
-
-    transition: background ${cssVar.motionDurationMid};
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    &.selected {
-      background: ${cssVar.colorPrimaryBg};
-    }
+// Force the Lexical FileNode's outer `<span>` to render as its own block-
+// level row inside the paragraph. The inner card visuals (icon + name + size
+// + download button) live in `LinearFilePlugin`.
+const fileNodeStyles = createStaticStyles(({ css }) => ({
+  fileWrapper: css`
+    display: block !important;
+    width: 100% !important;
+    margin-block: 8px !important;
   `,
 }));
 
@@ -169,9 +141,9 @@ const InternalEditor = memo<InternalEditorProps>(
         onPickFile: isDesktop ? handlePickFile : undefined,
       });
 
-      const filePlugin = Editor.withProps(ReactFilePlugin, {
-        className: fileNodeStyles.fileNode as unknown as string,
+      const filePlugin = Editor.withProps(LinearFilePlugin, {
         handleUpload: handleFileUpload,
+        theme: { file: fileNodeStyles.fileWrapper as unknown as string },
       });
 
       // Build base plugins with optional extra plugins prepended

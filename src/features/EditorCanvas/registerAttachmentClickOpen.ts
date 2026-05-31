@@ -26,6 +26,8 @@ export const registerAttachmentClickOpen = (editor: IEditor): (() => void) | und
     // which is the overwhelming majority while typing. Decorator nodes carry
     // `data-lexical-decorator="true"` on their wrapper.
     if (!target.closest('[data-lexical-decorator="true"]')) return;
+    // Explicit download button has its own handler; don't also open in a new tab.
+    if (target.closest('[data-lobehub-file-download]')) return;
 
     let url: string | undefined;
     lexicalEditor.read(() => {

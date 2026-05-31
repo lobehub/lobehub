@@ -21,7 +21,7 @@ const file = (fileUrl: string, name = 'file', status?: string) => ({
 });
 
 // Stub a Drizzle chain. `rows` is what the final `.where(...)` resolves to.
-const mockDb = (rows: { id: string }[]) => {
+const mockDb = (rows: { id: string; url?: string }[]) => {
   const where = vi.fn().mockResolvedValue(rows);
   const from = vi.fn().mockReturnValue({ where });
   const select = vi.fn().mockReturnValue({ from });

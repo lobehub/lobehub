@@ -26,10 +26,22 @@ import {
   getAttachmentFileIdsFromEditor,
   insertFilesIntoEditor,
 } from '@/features/EditorCanvas/editorAttachments';
+import { LinearFileCard } from '@/features/EditorCanvas/LinearFilePlugin';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { useTaskStore } from '@/store/task';
 
 import { styles } from '../shared/style';
+
+// Keep saved comments visually consistent with the editor: render FileNodes
+// as the Linear-style card on its own row instead of the default inline pill.
+const FILE_WRAPPER_STYLE = { marginBlock: 8 };
+const rendererOverrides = {
+  file: (node: Record<string, any>) => (
+    <div style={FILE_WRAPPER_STYLE}>
+      <LinearFileCard node={node as Parameters<typeof LinearFileCard>[0]['node']} />
+    </div>
+  ),
+};
 
 interface CommentCardProps {
   activity: TaskDetailActivity;
@@ -174,6 +186,7 @@ const CommentCard = memo<CommentCardProps>(({ activity }) => {
       )}
       {!isEditing && Boolean(activity.editorData) && (
         <LexicalRenderer
+          overrides={rendererOverrides}
           value={activity.editorData as Parameters<typeof LexicalRenderer>[0]['value']}
           variant={'chat'}
         />
