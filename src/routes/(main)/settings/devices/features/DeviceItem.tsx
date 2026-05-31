@@ -131,15 +131,15 @@ const DeviceItem = memo<DeviceItemProps>(({ device, isCurrent, onSelect, selecte
           <Text ellipsis weight={500}>
             {displayName}
           </Text>
+          <Tooltip title={statusTooltip}>
+            <span className={online ? styles.dotOnline : styles.dotOffline} />
+          </Tooltip>
           {isCurrent && <Tag>{t('devices.currentBadge')}</Tag>}
           {isFallback && (
             <Tooltip title={t('devices.fallbackTooltip')}>
               <Tag icon={<Icon icon={TriangleAlertIcon} />}>{t('devices.fallbackBadge')}</Tag>
             </Tooltip>
           )}
-          <Tooltip title={statusTooltip}>
-            <span className={online ? styles.dotOnline : styles.dotOffline} />
-          </Tooltip>
         </Flexbox>
         {device.defaultCwd && (
           <Flexbox horizontal align={'center'} gap={6}>

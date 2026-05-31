@@ -954,7 +954,11 @@ export class AiAgentService {
           const boundDevice = await new DeviceModel(this.db, this.userId).findByDeviceId(
             dispatchDeviceId,
           );
+          // Prefer the topic's own pinned cwd — an existing topic carries it in
+          // `metadata.workingDirectory`, whereas `initialTopicMetadata` is only
+          // populated for a brand-new topic. Fall back to the device default.
           const deviceCwd =
+            topic?.metadata?.workingDirectory ||
             appContext?.initialTopicMetadata?.workingDirectory ||
             boundDevice?.defaultCwd ||
             undefined;
