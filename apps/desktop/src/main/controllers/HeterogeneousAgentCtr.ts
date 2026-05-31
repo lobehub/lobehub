@@ -446,14 +446,18 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   /**
    * Root directory for CLI trace sessions.
    *
-   * Dev keeps writing into the working directory (`cwd/.heerogeneous-tracing`)
-   * — devs expect traces to show up alongside the repo they're running in.
-   * Packaged builds instead centralize traces under the app storage dir
-   * (`<appStoragePath>/heteroAgent/tracing`) so they don't pollute the user's
-   * real project directory and can be opened from one stable Help-menu entry.
+   * When the user has explicitly opted in via the `heteroTracingEnabled`
+   * Help-menu toggle, centralize traces under the app storage dir
+   * (`<appStoragePath>/heteroAgent/tracing`) — this is the only path packaged
+   * builds ever trace through, and it keeps traces out of the user's real
+   * project directory while staying reachable from one stable Help-menu entry.
+   *
+   * Otherwise (a plain dev run with the toggle off) keep writing into the
+   * working directory (`cwd/.heerogeneous-tracing`) — devs expect traces to
+   * show up alongside the repo they're running in.
    */
   private resolveTraceRootDir(cwd: string): string {
-    if (electronApp.isPackaged) {
+    if (this.app.storeManager.get('heteroTracingEnabled', false)) {
       return path.join(this.app.appStoragePath, HETERO_AGENT_TRACING_DIR);
     }
     return path.join(cwd, CLI_TRACE_DIR);

@@ -625,6 +625,32 @@ describe('HeterogeneousAgentCtr', () => {
       }
     });
 
+    it('centralizes to heteroAgent/tracing in dev too when the toggle is on', async () => {
+      const originalNodeEnv = process.env.NODE_ENV;
+      // Dev (isPackaged stays false), but the user opted in via the toggle.
+      process.env.NODE_ENV = 'development';
+
+      try {
+        const prompt = 'trace this opted-in dev run';
+        const rawLine = `${JSON.stringify({
+          thread_id: 'thread_codex_dev_optin',
+          type: 'thread.started',
+        })}\n`;
+        await runSendPrompt(prompt, { cwd: appStoragePath }, [rawLine], {}, (key: string) =>
+          key === 'heteroTracingEnabled' ? true : undefined,
+        );
+
+        const agentTraceRoot = path.join(appStoragePath, 'heteroAgent', 'tracing', 'codex');
+        const traceDirs = await readdir(agentTraceRoot);
+        expect(traceDirs).toHaveLength(1);
+
+        // Toggle wins over the dev cwd default.
+        await expect(readdir(path.join(appStoragePath, '.heerogeneous-tracing'))).rejects.toThrow();
+      } finally {
+        process.env.NODE_ENV = originalNodeEnv;
+      }
+    });
+
     it('traces to the centralized heteroAgent/tracing dir in packaged builds when the toggle is on', async () => {
       const originalNodeEnv = process.env.NODE_ENV;
       // The gate short-circuits to `false` under NODE_ENV=test, so simulate a
