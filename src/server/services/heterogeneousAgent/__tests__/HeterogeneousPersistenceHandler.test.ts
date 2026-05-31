@@ -133,6 +133,7 @@ const createHarness = (params: {
       threads.set(thread.id, thread);
       return thread;
     }),
+    findById: vi.fn(async (id: string) => threads.get(id) ?? null),
     update: vi.fn(async (id: string, patch: Partial<FakeThread>) => {
       const existing = threads.get(id);
       if (!existing) return;

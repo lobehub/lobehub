@@ -1515,9 +1515,43 @@ export const executeHeterogeneousAgent = async (
       // of all prior steps. Sum of turn_metadata equals result_usage for
       // a healthy run.
       if (event.type === 'step_complete' && event.data?.phase === 'turn_metadata') {
+        const subagentCtx = event.data.subagent as SubagentEventContext | undefined;
+        const turnUsage = event.data.usage;
+
+        if (subagentCtx) {
+          // Subagent-tagged usage: route the write onto the subagent's
+          // in-thread assistant rather than the main agent's. The Inspector
+          // chip derives its token total live from these per-message
+          // `metadata.usage` snapshots, so no running sum on `run` is
+          // needed. Don't touch `lastModel` / `lastProvider` — those are
+          // main-agent step state and would contaminate the next main
+          // turn's create.
+          if (turnUsage) {
+            persistQueue = persistQueue.then(async () => {
+              const run = subagentRuns.get(subagentCtx.parentToolCallId);
+              if (!run) return;
+              // Mirror the DB write into the thread's local message bucket
+              // so the inspector chip's live aggregation sees the usage as
+              // it lands. Without this `run.stream.update`, dbMessagesMap
+              // only learns the new metadata.usage after the next thread
+              // refresh — i.e. the chip stays at 0 tokens during streaming.
+              run.stream.update(run.currentAssistantMsgId, {
+                metadata: { usage: turnUsage },
+              } as Partial<UIChatMessage>);
+              await messageService
+                .updateMessage(
+                  run.currentAssistantMsgId,
+                  { metadata: { usage: turnUsage } },
+                  { agentId: context.agentId, topicId: context.topicId },
+                )
+                .catch(console.error);
+            });
+          }
+          return;
+        }
+
         if (event.data.model) lastModel = event.data.model;
         if (event.data.provider) lastProvider = event.data.provider;
-        const turnUsage = event.data.usage;
         if (turnUsage) {
           persistQueue = persistQueue.then(async () => {
             await messageService

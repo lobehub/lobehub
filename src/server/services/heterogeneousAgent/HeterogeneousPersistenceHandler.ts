@@ -703,6 +703,24 @@ export class HeterogeneousPersistenceHandler {
 
   private async handleTurnMetadata(state: OperationState, event: AgentStreamEvent) {
     const { model, provider, usage } = event.data ?? {};
+    const subagentCtx = (event.data as any)?.subagent as SubagentEventContext | undefined;
+
+    if (subagentCtx) {
+      // Subagent-tagged usage: write to the subagent's in-thread assistant.
+      // The finalize step reads the last assistant's `metadata.usage` back
+      // to roll up totals onto `thread.metadata`, so no running sum on the
+      // run is needed. Do NOT touch `state.lastModel` / `state.lastProvider`
+      // — those carry main-agent step boundary state and would contaminate
+      // the next main-agent assistant create.
+      if (!usage) return;
+      const run = state.subagentRuns.get(subagentCtx.parentToolCallId);
+      if (!run) return;
+      await this.deps.messageModel.update(run.currentAssistantMsgId, {
+        metadata: { usage },
+      });
+      return;
+    }
+
     if (model) state.lastModel = model;
     if (provider) state.lastProvider = provider;
 
@@ -1236,9 +1254,37 @@ export class HeterogeneousPersistenceHandler {
       run.lastChainParentId = terminal.id;
     }
 
-    // Mark the thread completed. Idempotent — re-running on a retry just
-    // re-writes the same status; downstream UI badges are derived state.
-    await this.deps.threadModel.update(run.threadId, { status: ThreadStatus.Active });
+    // Roll up subagent stats onto `thread.metadata` so historical viewers can
+    // surface counts without re-walking the message list. Tool count comes
+    // from `lifetimeToolCallIds` (dedup'd across turns). `totalTokens` reads
+    // the LAST subagent assistant's `metadata.usage.totalTokens` — CC's
+    // per-turn `message.usage` already includes the full prior context, so
+    // summing across turns would double-count overlap; the final turn's
+    // value is what the user expects to see (same convention as the main
+    // agent message footer). `duration` is derived off the `startedAt` set
+    // in `ensureSubagentRun`.
+    //
+    // Read-merge-write the metadata in one update() so peer fields set at
+    // create time (`sourceToolCallId` / `subagentType` / `startedAt`) stay
+    // intact alongside the new totals.
+    const existingThread = await this.deps.threadModel.findById(run.threadId);
+    const startedAtIso = existingThread?.metadata?.startedAt;
+    const completedAt = new Date().toISOString();
+    const duration = startedAtIso ? Date.now() - new Date(startedAtIso).getTime() : undefined;
+    const lastAsst = await this.deps.messageModel.findById(run.currentAssistantMsgId);
+    const lastAsstMeta = lastAsst?.metadata as { usage?: { totalTokens?: number } } | null;
+    const totalTokens = lastAsstMeta?.usage?.totalTokens;
+
+    await this.deps.threadModel.update(run.threadId, {
+      metadata: {
+        ...existingThread?.metadata,
+        completedAt,
+        duration,
+        totalToolCalls: run.lifetimeToolCallIds.size,
+        ...(totalTokens !== undefined && { totalTokens }),
+      },
+      status: ThreadStatus.Active,
+    });
 
     state.subagentRuns.delete(parentToolCallId);
   }

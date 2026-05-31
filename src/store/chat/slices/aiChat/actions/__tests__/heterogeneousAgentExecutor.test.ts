@@ -43,7 +43,7 @@ vi.mock('@/services/message', () => ({
 const mockCreateThread = vi.fn();
 vi.mock('@/services/thread', () => ({
   threadService: {
-    createThread: (...args: any[]) => mockCreateThread(...args),
+    createThread: (...args: unknown[]) => mockCreateThread(...args),
   },
 }));
 

@@ -303,6 +303,12 @@ export interface BuiltinInspectorProps<Arguments = any, State = any> {
   partialArgs?: Arguments;
   pluginState?: State;
   result?: { content: string | null; error?: any; state?: any };
+  /**
+   * Stable id of this tool call. Required for inspectors that need to correlate
+   * with side data — e.g. CC's `Agent` inspector joining to the subagent Thread
+   * via `metadata.sourceToolCallId`.
+   */
+  toolCallId?: string;
 }
 
 export type BuiltinInspector = <A = any, S = any>(props: BuiltinInspectorProps<A, S>) => ReactNode;
