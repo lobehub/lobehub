@@ -30,6 +30,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     margin-inline: auto;
     padding-block: 8px 48px;
     padding-inline: 12px;
+    border-radius: 14px;
+
+    background: ${cssVar.colorBgContainer};
   `,
 }));
 

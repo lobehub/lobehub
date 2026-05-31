@@ -24,7 +24,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     border-radius: 20px;
 
     background: ${cssVar.colorBgContainer};
-    box-shadow: ${cssVar.boxShadowSecondary};
   `,
   cardBody: css`
     padding: 20px;

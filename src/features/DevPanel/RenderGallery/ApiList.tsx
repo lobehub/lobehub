@@ -52,8 +52,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     transition:
       background 0.15s,
-      color 0.15s,
-      box-shadow 0.15s;
+      color 0.15s;
 
     &:hover {
       color: ${cssVar.colorText};
@@ -63,7 +62,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   itemActive: css`
     color: ${cssVar.colorText};
     background: ${cssVar.colorFillSecondary};
-    box-shadow: inset 2px 0 0 ${cssVar.colorPrimary};
 
     &:hover {
       background: ${cssVar.colorFillSecondary};
