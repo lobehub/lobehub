@@ -85,6 +85,10 @@ const createMockApp = () => {
       getUpdaterState: vi.fn(() => ({ stage: 'idle' })),
       installNow: vi.fn(),
     },
+    storeManager: {
+      get: vi.fn(),
+      set: vi.fn(),
+    },
   } as unknown as App;
 };
 

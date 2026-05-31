@@ -1,7 +1,10 @@
+import path from 'node:path';
+
 import type { MenuItemConstructorOptions } from 'electron';
 import { app, BrowserWindow, clipboard, dialog, Menu, shell } from 'electron';
 
 import { isDev } from '@/const/env';
+import { HETERO_AGENT_DIR } from '@/const/heteroAgent';
 
 import type { ContextMenuData, IMenuPlatform, MenuOptions } from '../types';
 import { BaseMenuPlatform } from './BaseMenuPlatform';
@@ -212,6 +215,25 @@ export class LinuxMenu extends BaseMenuPlatform implements IMenuPlatform {
               await shell.openExternal('https://github.com/lobehub/lobe-chat');
             },
             label: t('help.githubRepo'),
+          },
+          { type: 'separator' },
+          {
+            click: () => {
+              const heteroAgentPath = path.join(this.app.appStoragePath, HETERO_AGENT_DIR);
+              console.info(`[Menu] Opening HeteroAgent directory: ${heteroAgentPath}`);
+              shell.openPath(heteroAgentPath).catch((err) => {
+                console.error(`[Menu] Error opening path ${heteroAgentPath}:`, err);
+              });
+            },
+            label: t('help.openHeteroAgentDir'),
+          },
+          {
+            checked: this.app.storeManager.get('heteroTracingEnabled', false),
+            click: (item) => {
+              this.app.storeManager.set('heteroTracingEnabled', item.checked);
+            },
+            label: t('help.toggleHeteroTracing'),
+            type: 'checkbox',
           },
           { type: 'separator' },
           {

@@ -85,6 +85,7 @@ export class DeviceProxy {
     operationId: string;
     prompt: string;
     resumeSessionId?: string;
+    systemContext?: string;
     topicId: string;
     userId: string;
   }): Promise<{ error?: string; success: boolean }> {

@@ -46,6 +46,7 @@ import { AgentModel } from '@/database/models/agent';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import { AiModelModel } from '@/database/models/aiModel';
+import { DeviceModel } from '@/database/models/device';
 import { FileModel } from '@/database/models/file';
 import { MessageModel } from '@/database/models/message';
 import { PluginModel } from '@/database/models/plugin';
@@ -946,9 +947,39 @@ export class AiAgentService {
               userMessageId: userMsg?.id ?? parentMessageId ?? '',
             };
           }
+          // Resolve the working directory for the run: a topic-level override
+          // wins, else the device's user-configured defaultCwd. The device row
+          // lives in the DB (the gateway only knows live connections), so read
+          // it directly rather than via deviceProxy.
+          const boundDevice = await new DeviceModel(this.db, this.userId).findByDeviceId(
+            dispatchDeviceId,
+          );
+          // Prefer the topic's own pinned cwd — an existing topic carries it in
+          // `metadata.workingDirectory`, whereas `initialTopicMetadata` is only
+          // populated for a brand-new topic. Fall back to the device default.
+          const deviceCwd =
+            topic?.metadata?.workingDirectory ||
+            appContext?.initialTopicMetadata?.workingDirectory ||
+            boundDevice?.defaultCwd ||
+            undefined;
+
+          // A device is the user's own persistent machine — build a
+          // device-specific context instead of reusing the cloud-sandbox one
+          // (which describes an ephemeral /workspace + pre-cloned repos and
+          // would mislead the agent).
+          const { buildRemoteDeviceHeteroContext } =
+            await import('@/server/services/heterogeneousAgent/remoteDeviceHeteroContext');
+          const deviceSystemContext = buildRemoteDeviceHeteroContext({
+            agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
+            conversationHistory,
+            cwd: deviceCwd,
+          });
+
           const result = await deviceProxy.dispatchAgentRun({
             ...heteroParams,
+            cwd: deviceCwd,
             deviceId: dispatchDeviceId,
+            systemContext: deviceSystemContext,
           });
           if (!result.success) {
             log('execAgent: hetero device dispatch failed: %s', result.error);

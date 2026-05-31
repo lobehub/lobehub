@@ -183,13 +183,53 @@ const CLI_AUTH_REQUIRED_PATTERNS = [
   /\b401\b/,
 ] as const;
 
-const CLI_RATE_LIMIT_PATTERNS = [/you'?ve hit your limit/i, /rate limit/i] as const;
+/**
+ * Genuinely user-side limit wording. Used only as the text fallback for
+ * batch CLI / sandbox runs that don't emit a structured `rate_limit_event`
+ * (so {@link isUserQuotaRateLimit} can't fire). The ambiguous bare
+ * `rate limit` / `rate limited` substring is deliberately NOT here — it also
+ * appears in Anthropic's transient server throttle, so leaning on it would
+ * reintroduce the very misclassification this set exists to avoid.
+ */
+const CLI_USER_RATE_LIMIT_PATTERNS = [
+  /you'?ve hit your limit/i,
+  /usage limit reached/i,
+  /\blimit reached\b/i,
+] as const;
+
+/**
+ * Anthropic's server-side transient throttle. CC surfaces this as a 429 with
+ * a message that explicitly disclaims the user's plan limit ("not your usage
+ * limit") — e.g. `API Error: Server is temporarily limiting requests (not your
+ * usage limit) · Rate limited`. It clears on its own in moments, so it must be
+ * classified as `overloaded` (retry UX), NOT `rate_limit` (which renders a
+ * misleading "usage limit reached" reset-time guide).
+ */
+const CLI_SERVER_THROTTLE_PATTERNS = [
+  /not your usage limit/i,
+  /server is temporarily limiting requests/i,
+] as const;
 
 const CLI_OVERLOADED_PATTERNS = [
   /overloaded_error/i,
   /\boverloaded\b/i,
   /api error:\s*529\b/i,
+  ...CLI_SERVER_THROTTLE_PATTERNS,
 ] as const;
+
+/**
+ * The one reliable discriminator between a user-side plan/quota limit and a
+ * transient server throttle: only the genuine user limit carries a concrete
+ * reset window in the structured `rate_limit_event` — `resetsAt` (epoch
+ * seconds) and/or a named `rateLimitType` (e.g. `seven_day`). Anthropic's
+ * transient throttle emits a rate_limit_event too, but with just
+ * `status: 'rejected'` and no reset info. Status codes (429 / 529) alone are
+ * ambiguous, so this structured signal — not the HTTP status, not the message
+ * text — is what decides whether we show the "usage limit reached, resets at
+ * X" guide vs the "temporarily overloaded, retry" guide.
+ */
+const isUserQuotaRateLimit = (info?: HeterogeneousRateLimitInfo): boolean =>
+  !!info && (info.resetsAt != null || info.rateLimitType != null);
 
 const getCliResultMessage = (result: unknown): string | undefined => {
   if (typeof result === 'string') return result;
@@ -248,10 +288,18 @@ const toRateLimitInfo = (value: unknown): HeterogeneousRateLimitInfo | undefined
 const getOverloadedTerminalError = (
   result: unknown,
   apiErrorStatus?: unknown,
+  rateLimitInfo?: HeterogeneousRateLimitInfo,
 ): HeterogeneousTerminalErrorData | undefined => {
   const rawMessage = getCliResultMessage(result);
+  // A real user-quota limit is the rate-limit classifier's job — never steal
+  // it here, even if it happened to ride in on a 429/529.
+  if (isUserQuotaRateLimit(rateLimitInfo)) return;
+
   const looksOverloaded =
+    // Both 529 (upstream overloaded) and a 429 with no quota signal (transient
+    // server throttle) are momentary server-side conditions — same retry UX.
     apiErrorStatus === 529 ||
+    apiErrorStatus === 429 ||
     (!!rawMessage && CLI_OVERLOADED_PATTERNS.some((pattern) => pattern.test(rawMessage)));
 
   if (!looksOverloaded || !rawMessage) return;
@@ -269,15 +317,24 @@ const getOverloadedTerminalError = (
 const getRateLimitTerminalError = (
   result: unknown,
   rateLimitInfo?: HeterogeneousRateLimitInfo,
-  apiErrorStatus?: unknown,
 ): HeterogeneousTerminalErrorData | undefined => {
   const rawMessage = getCliResultMessage(result);
-  const looksLikeRateLimit =
-    apiErrorStatus === 429 ||
-    !!rateLimitInfo ||
-    (!!rawMessage && CLI_RATE_LIMIT_PATTERNS.some((pattern) => pattern.test(rawMessage)));
 
-  if (!looksLikeRateLimit || !rawMessage) return;
+  // Primary signal: the structured rate_limit_event carries a concrete reset
+  // window → this is the user's plan/quota limit. Fallback (batch runs with no
+  // rate_limit_event): clearly user-side wording that doesn't disclaim the
+  // limit. Everything else — bare 429, "rate limited", server throttle — is
+  // left to the overloaded classifier so it gets the retry UX, not a
+  // misleading "usage limit reached, resets at X" guide.
+  const looksLikeServerThrottle =
+    !!rawMessage && CLI_SERVER_THROTTLE_PATTERNS.some((pattern) => pattern.test(rawMessage));
+  const looksLikeUserLimit =
+    isUserQuotaRateLimit(rateLimitInfo) ||
+    (!!rawMessage &&
+      !looksLikeServerThrottle &&
+      CLI_USER_RATE_LIMIT_PATTERNS.some((pattern) => pattern.test(rawMessage)));
+
+  if (!looksLikeUserLimit || !rawMessage) return;
 
   return {
     agentType: 'claude-code',
@@ -1166,16 +1223,16 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     }
 
     const resultMessage = getCliResultMessage(raw.result) || 'Agent execution failed';
-    const rateLimitError = getRateLimitTerminalError(
-      raw.result,
-      this.pendingRateLimitInfo,
-      raw.api_error_status,
-    );
+    const rateLimitError = getRateLimitTerminalError(raw.result, this.pendingRateLimitInfo);
     const finalEvent: HeterogeneousAgentEvent = raw.is_error
       ? this.makeEvent(
           'error',
           rateLimitError ||
-            getOverloadedTerminalError(raw.result, raw.api_error_status) ||
+            getOverloadedTerminalError(
+              raw.result,
+              raw.api_error_status,
+              this.pendingRateLimitInfo,
+            ) ||
             getAuthRequiredTerminalError(raw.result) || {
               error: resultMessage,
               message: resultMessage,

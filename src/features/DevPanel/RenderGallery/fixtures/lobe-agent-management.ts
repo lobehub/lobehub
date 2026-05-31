@@ -7,6 +7,7 @@ export default defineFixtures({
   fixtures: {
     callAgent: single({
       args: {
+        agentId: 'agent_workspace_helper',
         instruction:
           'Review the `/devtools` route and list any preview cards that still need richer fixtures.',
       },
@@ -22,6 +23,10 @@ export default defineFixtures({
       },
     }),
     duplicateAgent: single({
+      args: {
+        agentId: 'agent_workspace_helper',
+        newTitle: 'Workspace Helper Copy',
+      },
       pluginState: {
         newAgentId: 'agent_preview_clone',
         sourceAgentId: 'agent_workspace_helper',
@@ -29,6 +34,9 @@ export default defineFixtures({
       },
     }),
     getAgentDetail: single({
+      args: {
+        agentId: 'agent_preview_specialist',
+      },
       pluginState: {
         config: {
           model: 'gpt-5.4',
@@ -46,6 +54,11 @@ export default defineFixtures({
       },
     }),
     installPlugin: single({
+      args: {
+        agentId: 'agent_preview_specialist',
+        identifier: 'lobe-cloud-sandbox',
+        source: 'official',
+      },
       pluginState: {
         installed: true,
         pluginId: 'lobe-cloud-sandbox',
@@ -53,6 +66,10 @@ export default defineFixtures({
       },
     }),
     searchAgent: single({
+      args: {
+        keyword: 'preview',
+        source: 'all',
+      },
       pluginState: {
         agents: [
           {
@@ -76,6 +93,7 @@ export default defineFixtures({
     }),
     updateAgent: single({
       args: {
+        agentId: 'agent_preview_specialist',
         config: JSON.stringify({
           model: 'gpt-5.4',
           systemRole: 'Prioritize maintainable developer tooling and preview coverage.',
@@ -88,6 +106,7 @@ export default defineFixtures({
     }),
     updatePrompt: single({
       args: {
+        agentId: 'agent_preview_specialist',
         prompt:
           'When asked for a visual check, prefer building a reusable preview harness before taking a screenshot.',
       },

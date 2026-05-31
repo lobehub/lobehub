@@ -2,7 +2,7 @@
 
 This doc covers everything that **isn't UI**: the tool's identifier, API surface, manifest, types, system prompt, ExecutionRuntime, and the executor that wires it into the frontend.
 
-For UI surfaces (Inspector / Render / Placeholder / Streaming / Intervention / Portal), see [ui.md](ui.md).
+For UI surfaces (Inspector / Render / Placeholder / Streaming / Intervention / Portal), see [ui/](ui/README.md).
 For where files live and how registries work, see [architecture.md](architecture.md).
 
 ---
@@ -156,7 +156,7 @@ export const TaskManifest: BuiltinToolManifest = {
   executors: ['client', 'server'],
 
   /* Default human intervention policy for all APIs that don't specify one.
-     Pair with an Intervention component (see ui.md). */
+     Pair with an Intervention component (see ui/intervention.md). */
   humanIntervention: 'never' | 'always' | { /* extended config */ },
 }
 ```

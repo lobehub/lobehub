@@ -33,6 +33,7 @@ import ReasoningEffortSlider from './ReasoningEffortSlider';
 import ReasoningTokenSlider from './ReasoningTokenSlider';
 import ReasoningTokenSlider32k from './ReasoningTokenSlider32k';
 import ReasoningTokenSlider80k from './ReasoningTokenSlider80k';
+import Step3_5ReasoningEffortSlider from './Step3_5ReasoningEffortSlider';
 import TextVerbositySlider from './TextVerbositySlider';
 import ThinkingBudgetSlider from './ThinkingBudgetSlider';
 import ThinkingLevel2Slider from './ThinkingLevel2Slider';
@@ -322,6 +323,17 @@ const ControlsForm = memo<ControlsFormProps>(
         layout: 'vertical',
         minWidth: undefined,
         name: 'codexMaxReasoningEffort',
+        style: {
+          paddingBottom: 0,
+        },
+      },
+      {
+        children: <Step3_5ReasoningEffortSlider />,
+        desc: 'reasoning_effort',
+        label: t('extendParams.reasoningEffort.title'),
+        layout: 'vertical',
+        minWidth: undefined,
+        name: 'step3_5ReasoningEffort',
         style: {
           paddingBottom: 0,
         },

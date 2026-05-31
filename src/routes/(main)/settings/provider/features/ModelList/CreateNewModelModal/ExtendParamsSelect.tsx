@@ -24,6 +24,7 @@ import ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/Contro
 import ReasoningTokenSlider from '@/features/ModelSwitchPanel/components/ControlsForm/ReasoningTokenSlider';
 import ReasoningTokenSlider32k from '@/features/ModelSwitchPanel/components/ControlsForm/ReasoningTokenSlider32k';
 import ReasoningTokenSlider80k from '@/features/ModelSwitchPanel/components/ControlsForm/ReasoningTokenSlider80k';
+import Step3_5ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Step3_5ReasoningEffortSlider';
 import TextVerbositySlider from '@/features/ModelSwitchPanel/components/ControlsForm/TextVerbositySlider';
 import ThinkingBudgetSlider from '@/features/ModelSwitchPanel/components/ControlsForm/ThinkingBudgetSlider';
 import ThinkingLevel2Slider from '@/features/ModelSwitchPanel/components/ControlsForm/ThinkingLevel2Slider';
@@ -111,6 +112,10 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
     key: 'codexMaxReasoningEffort',
   },
   {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.step3_5ReasoningEffort.hint',
+    key: 'step3_5ReasoningEffort',
+  },
+  {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.textVerbosity.hint',
     key: 'textVerbosity',
   },
@@ -176,6 +181,7 @@ const TITLE_KEY_ALIASES: Partial<Record<ExtendParamsType, ExtendParamsType>> = {
   opus47Effort: 'effort',
   reasoningBudgetToken32k: 'reasoningBudgetToken',
   reasoningBudgetToken80k: 'reasoningBudgetToken',
+  step3_5ReasoningEffort: 'reasoningEffort',
   thinkingLevel2: 'thinkingLevel',
   thinkingLevel3: 'thinkingLevel',
   thinkingLevel4: 'thinkingLevel',
@@ -247,6 +253,11 @@ const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
     tag: 'thinking.budget_tokens',
   },
   reasoningEffort: { previewWidth: 250, tag: 'reasoning_effort' },
+  step3_5ReasoningEffort: {
+    labelSuffix: ' (Step 3.5)',
+    previewWidth: 300,
+    tag: 'reasoning_effort',
+  },
   textVerbosity: { labelSuffix: '', previewWidth: 250, tag: 'text_verbosity' },
   thinking: { labelSuffix: ' (Doubao)', previewWidth: 300, tag: 'thinking.type' },
   thinkingBudget: { labelSuffix: ' (Gemini)', previewWidth: 500, tag: 'thinkingBudget' },
@@ -370,6 +381,7 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
       reasoningBudgetToken32k: <ReasoningTokenSlider32k defaultValue={1 * 1024} />,
       reasoningBudgetToken80k: <ReasoningTokenSlider80k defaultValue={1 * 1024} />,
       reasoningEffort: <ReasoningEffortSlider value="medium" />,
+      step3_5ReasoningEffort: <Step3_5ReasoningEffortSlider value="low" />,
       textVerbosity: <TextVerbositySlider value="medium" />,
       thinking: <ThinkingSlider value="auto" />,
       thinkingBudget: <ThinkingBudgetSlider defaultValue={2 * 1024} />,

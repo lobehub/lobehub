@@ -1,17 +1,11 @@
 'use client';
 
-import { ActionIcon, DropdownMenu, Flexbox, Icon, Input, Tag, Text, Tooltip } from '@lobehub/ui';
-import { confirmModal, Modal } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { ActionIcon, DropdownMenu, Flexbox, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
-import {
-  FolderIcon,
-  MoreVerticalIcon,
-  PencilLineIcon,
-  Trash2Icon,
-  TriangleAlertIcon,
-} from 'lucide-react';
-import { memo, useState } from 'react';
+import { FolderIcon, MoreVerticalIcon, Trash2Icon, TriangleAlertIcon } from 'lucide-react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { lambdaQuery } from '@/libs/trpc/client';
@@ -40,10 +34,6 @@ export interface DeviceListItem {
 }
 
 const styles = createStaticStyles(({ css }) => ({
-  channels: css`
-    margin-block-start: 4px;
-    padding-inline-start: 30px;
-  `,
   cwd: css`
     overflow: hidden;
     font-family: ${cssVar.fontFamilyCode};
@@ -67,55 +57,52 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextSecondary};
   `,
   row: css`
+    cursor: pointer;
+
     padding-block: 12px;
     padding-inline: 12px;
     border-radius: ${cssVar.borderRadiusLG};
+
+    transition: background 0.2s;
 
     &:hover {
       background: ${cssVar.colorFillTertiary};
     }
   `,
+  rowActive: css`
+    background: ${cssVar.colorFillSecondary};
+
+    &:hover {
+      background: ${cssVar.colorFillSecondary};
+    }
+  `,
 }));
 
-const DeviceItem = memo<{ device: DeviceListItem }>(({ device }) => {
+interface DeviceItemProps {
+  device: DeviceListItem;
+  isCurrent?: boolean;
+  onSelect: () => void;
+  selected?: boolean;
+}
+
+const DeviceItem = memo<DeviceItemProps>(({ device, isCurrent, onSelect, selected }) => {
   const { t } = useTranslation('setting');
   const utils = lambdaQuery.useUtils();
 
-  const [editOpen, setEditOpen] = useState(false);
-  const [name, setName] = useState('');
-  const [cwd, setCwd] = useState('');
-
-  const updateDevice = lambdaQuery.device.updateDevice.useMutation({
-    onSuccess: () => utils.device.listDevices.invalidate(),
-  });
   const removeDevice = lambdaQuery.device.removeDevice.useMutation({
     onSuccess: () => utils.device.listDevices.invalidate(),
   });
 
   const displayName = device.friendlyName || device.hostname || device.deviceId;
   const isFallback = device.identitySource === 'fallback';
-  // `channels` may be absent when the backend predates the channel-aware
-  // `listDevices` shape; fall back to a single synthetic channel when online.
-  const channels =
-    device.channels ??
-    (device.online
-      ? [{ channel: null, connectedAt: device.lastSeen, hostname: null, platform: null }]
-      : []);
-
-  const openEdit = () => {
-    setName(device.friendlyName ?? '');
-    setCwd(device.defaultCwd ?? '');
-    setEditOpen(true);
-  };
-
-  const handleSave = async () => {
-    await updateDevice.mutateAsync({
-      defaultCwd: cwd.trim() || null,
-      deviceId: device.deviceId,
-      friendlyName: name.trim() || null,
-    });
-    setEditOpen(false);
-  };
+  // Online when the device has at least one live connection in `device.channels`.
+  const channels = device.channels ?? [];
+  const online = channels.length > 0;
+  const statusTooltip = online
+    ? t('devices.channel.connected', {
+        time: dayjs(channels[0]?.connectedAt ?? device.lastSeen).fromNow(),
+      })
+    : t('devices.lastSeen', { time: dayjs(device.lastSeen).fromNow() });
 
   const handleRemove = () =>
     confirmModal({
@@ -129,66 +116,43 @@ const DeviceItem = memo<{ device: DeviceListItem }>(({ device }) => {
     });
 
   return (
-    <>
-      <Flexbox horizontal align={'flex-start'} className={styles.row} gap={12}>
-        <span className={styles.icon} style={{ marginBlockStart: 2 }}>
-          {getDeviceIcon(device.platform)}
-        </span>
-        <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
-          <Flexbox horizontal align={'center'} gap={8}>
-            <Text ellipsis weight={500}>
-              {displayName}
-            </Text>
-            {isFallback && (
-              <Tooltip title={t('devices.fallbackTooltip')}>
-                <Tag icon={<Icon icon={TriangleAlertIcon} />}>{t('devices.fallbackBadge')}</Tag>
-              </Tooltip>
-            )}
-          </Flexbox>
-          {device.defaultCwd && (
-            <Flexbox horizontal align={'center'} gap={6}>
-              <Icon icon={FolderIcon} size={12} style={{ color: cssVar.colorTextQuaternary }} />
-              <Text className={styles.cwd} style={{ fontSize: 12 }} type={'secondary'}>
-                {device.defaultCwd}
-              </Text>
-            </Flexbox>
+    <Flexbox
+      horizontal
+      align={'flex-start'}
+      className={cx(styles.row, selected && styles.rowActive)}
+      gap={12}
+      onClick={onSelect}
+    >
+      <span className={styles.icon} style={{ marginBlockStart: 2 }}>
+        {getDeviceIcon(device.platform)}
+      </span>
+      <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
+        <Flexbox horizontal align={'center'} gap={8}>
+          <Text ellipsis weight={500}>
+            {displayName}
+          </Text>
+          <Tooltip title={statusTooltip}>
+            <span className={online ? styles.dotOnline : styles.dotOffline} />
+          </Tooltip>
+          {isCurrent && <Tag>{t('devices.currentBadge')}</Tag>}
+          {isFallback && (
+            <Tooltip title={t('devices.fallbackTooltip')}>
+              <Tag icon={<Icon icon={TriangleAlertIcon} />}>{t('devices.fallbackBadge')}</Tag>
+            </Tooltip>
           )}
-          <Flexbox className={styles.channels} gap={6}>
-            {channels.length > 0 ? (
-              channels.map((channel, index) => (
-                <Flexbox
-                  horizontal
-                  align={'center'}
-                  gap={6}
-                  key={`${channel.connectedAt}-${index}`}
-                >
-                  <span className={styles.dotOnline} />
-                  <Text style={{ fontSize: 12 }} type={'secondary'}>
-                    {channel.channel ? `${channel.channel} · ` : ''}
-                    {t('devices.channel.connected', { time: dayjs(channel.connectedAt).fromNow() })}
-                  </Text>
-                </Flexbox>
-              ))
-            ) : (
-              <Flexbox horizontal align={'center'} gap={6}>
-                <span className={styles.dotOffline} />
-                <Text style={{ fontSize: 12 }} type={'secondary'}>
-                  {t('devices.status.offline')} ·{' '}
-                  {t('devices.lastSeen', { time: dayjs(device.lastSeen).fromNow() })}
-                </Text>
-              </Flexbox>
-            )}
-          </Flexbox>
         </Flexbox>
+        {device.defaultCwd && (
+          <Flexbox horizontal align={'center'} gap={6}>
+            <Icon icon={FolderIcon} size={12} style={{ color: cssVar.colorTextQuaternary }} />
+            <Text className={styles.cwd} style={{ fontSize: 12 }} type={'secondary'}>
+              {device.defaultCwd}
+            </Text>
+          </Flexbox>
+        )}
+      </Flexbox>
+      <span onClick={(e) => e.stopPropagation()}>
         <DropdownMenu
           items={[
-            {
-              icon: <Icon icon={PencilLineIcon} />,
-              key: 'edit',
-              label: t('devices.actions.edit'),
-              onClick: openEdit,
-            },
-            { type: 'divider' },
             {
               danger: true,
               icon: <Icon icon={Trash2Icon} />,
@@ -200,37 +164,8 @@ const DeviceItem = memo<{ device: DeviceListItem }>(({ device }) => {
         >
           <ActionIcon icon={MoreVerticalIcon} />
         </DropdownMenu>
-      </Flexbox>
-      <Modal
-        cancelText={t('devices.edit.cancel')}
-        confirmLoading={updateDevice.isPending}
-        okText={t('devices.edit.save')}
-        open={editOpen}
-        title={t('devices.edit.title')}
-        width={440}
-        onCancel={() => setEditOpen(false)}
-        onOk={handleSave}
-      >
-        <Flexbox gap={16} paddingBlock={8}>
-          <Flexbox gap={6}>
-            <Text weight={500}>{t('devices.edit.friendlyName')}</Text>
-            <Input
-              placeholder={t('devices.edit.friendlyNamePlaceholder')}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </Flexbox>
-          <Flexbox gap={6}>
-            <Text weight={500}>{t('devices.edit.defaultCwd')}</Text>
-            <Input
-              placeholder={t('devices.edit.defaultCwdPlaceholder')}
-              value={cwd}
-              onChange={(e) => setCwd(e.target.value)}
-            />
-          </Flexbox>
-        </Flexbox>
-      </Modal>
-    </>
+      </span>
+    </Flexbox>
   );
 });
 
