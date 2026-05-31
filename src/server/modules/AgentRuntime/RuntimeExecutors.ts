@@ -1031,6 +1031,7 @@ export const createRuntimeExecutors = (
             const imageList: any[] = [];
             let grounding: any = null;
             let currentStepUsage: any = undefined;
+            let currentStepSpeed: any = undefined;
             let currentStepFinishReason: string | undefined = undefined;
             let streamError: any = undefined;
             const contentParts: ContentPart[] = [];
@@ -1072,6 +1073,10 @@ export const createRuntimeExecutors = (
                     // Capture usage (may or may not include cost)
                     if (data.usage) {
                       currentStepUsage = data.usage;
+                    }
+                    // Capture performance metrics (tps / ttft / duration / latency)
+                    if (data.speed) {
+                      currentStepSpeed = data.speed;
                     }
                     // Capture provider's terminal finishReason so soft interrupts
                     // (e.g. Gemini RECITATION / MAX_TOKENS with empty content)
@@ -1306,7 +1311,14 @@ export const createRuntimeExecutors = (
                 // Build metadata object
                 const metadata: Record<string, any> = {};
                 if (currentStepUsage && typeof currentStepUsage === 'object') {
+                  // Flat fields are kept for backward-compatible readers; `usage`
+                  // is the canonical nested shape new readers should consume.
                   Object.assign(metadata, currentStepUsage);
+                  metadata.usage = currentStepUsage;
+                }
+                if (currentStepSpeed && typeof currentStepSpeed === 'object') {
+                  Object.assign(metadata, currentStepSpeed);
+                  metadata.performance = currentStepSpeed;
                 }
                 if (hasContentImages) {
                   metadata.isMultimodal = true;
@@ -1484,6 +1496,11 @@ export const createRuntimeExecutors = (
                   const interruptedMetadata: Record<string, any> = { interruptedMidStream: true };
                   if (currentStepUsage && typeof currentStepUsage === 'object') {
                     Object.assign(interruptedMetadata, currentStepUsage);
+                    interruptedMetadata.usage = currentStepUsage;
+                  }
+                  if (currentStepSpeed && typeof currentStepSpeed === 'object') {
+                    Object.assign(interruptedMetadata, currentStepSpeed);
+                    interruptedMetadata.performance = currentStepSpeed;
                   }
                   await ctx.messageModel.update(assistantMessageItem.id, {
                     content,

@@ -45,18 +45,24 @@ export class UsageRecordService {
       .orderBy(desc(messages.createdAt));
     return spends.map((spend) => {
       const metadata = spend.metadata as MessageMetadata;
+      // Prefer the canonical nested `usage` / `performance` shapes, falling back
+      // to the deprecated flat fields for messages written before the migration.
+      const usage = metadata?.usage;
+      const performance = metadata?.performance;
+      const totalInputTokens = usage?.totalInputTokens ?? metadata?.totalInputTokens ?? 0;
+      const totalOutputTokens = usage?.totalOutputTokens ?? metadata?.totalOutputTokens ?? 0;
       return {
         createdAt: spend.createdAt,
         id: spend.id,
         metadata: spend.metadata,
         model: spend.model,
         provider: spend.provider,
-        spend: metadata?.cost || 0,
-        totalInputTokens: metadata?.totalInputTokens || 0,
-        totalOutputTokens: metadata?.totalOutputTokens || 0,
-        totalTokens: (metadata?.totalInputTokens || 0) + (metadata?.totalOutputTokens || 0),
-        tps: metadata?.tps || 0,
-        ttft: metadata?.ttft || 0,
+        spend: usage?.cost ?? metadata?.cost ?? 0,
+        totalInputTokens,
+        totalOutputTokens,
+        totalTokens: totalInputTokens + totalOutputTokens,
+        tps: performance?.tps ?? metadata?.tps ?? 0,
+        ttft: performance?.ttft ?? metadata?.ttft ?? 0,
         type: 'chat',
         updatedAt: spend.createdAt,
         userId: spend.userId,
