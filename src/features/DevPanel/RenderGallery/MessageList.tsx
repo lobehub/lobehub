@@ -1,5 +1,6 @@
 'use client';
 
+import { LOADING_FLAT } from '@lobechat/const';
 import type { ChatToolPayload, UIChatMessage } from '@lobechat/types';
 import { Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
@@ -56,8 +57,13 @@ const coerceContent = (value: unknown): string => {
  *  - success  → tool message `content` + `pluginState`
  *  - error    → tool message `pluginError`
  *  - intervention → tool message `pluginIntervention.status = 'pending'`
- *  - streaming   → no tool message, unterminated `arguments` JSON on the tool_use
- *  - loading / placeholder → no tool message yet
+ *  - streaming   → `LOADING_FLAT` content + unterminated `arguments` JSON on the tool_use
+ *  - loading / placeholder → `LOADING_FLAT` content
+ *
+ * Every API emits a tool message even for the unfinished states (content
+ * `LOADING_FLAT`) — the tool_use → tool_result link is what lets
+ * conversation-flow chain the turns into ONE assistantGroup; without it the
+ * unfinished modes fall back to one orphaned group per tool.
  */
 const buildMessages = (apis: ApiEntry[], mode: LifecycleMode, now: number): UIChatMessage[] => {
   const renderable = apis.filter(
@@ -65,7 +71,6 @@ const buildMessages = (apis: ApiEntry[], mode: LifecycleMode, now: number): UICh
   );
 
   const messages: UIChatMessage[] = [];
-  let parentId: string | undefined;
 
   for (const api of renderable) {
     const variant = api.fixture.variants[0];
@@ -87,34 +92,33 @@ const buildMessages = (apis: ApiEntry[], mode: LifecycleMode, now: number): UICh
       type: 'builtin',
     };
 
+    // Chain onto the previous turn's last message so the whole thread is one
+    // conversation; the first assistant has no parent (conversation root).
     messages.push({
       content: api.description || variant.description || '',
       createdAt: now,
       id: assistantId,
-      parentId,
+      parentId: messages.at(-1)?.id,
       role: 'assistant',
       tools: [toolUse],
       updatedAt: now,
     });
-    parentId = assistantId;
 
-    // Resolved states get a tool result message the grouper merges back in.
-    if (mode === 'success' || mode === 'error' || mode === 'intervention') {
-      const toolMsgId = `devtools-toolmsg-${key}`;
-      messages.push({
-        content: mode === 'success' ? coerceContent(derived.content) : '',
-        createdAt: now,
-        id: toolMsgId,
-        parentId: assistantId,
-        pluginError: mode === 'error' ? derived.pluginError : undefined,
-        pluginIntervention: mode === 'intervention' ? { status: 'pending' } : undefined,
-        pluginState: mode === 'success' ? derived.pluginState : undefined,
-        role: 'tool',
-        tool_call_id: toolCallId,
-        updatedAt: now,
-      });
-      parentId = toolMsgId;
-    }
+    // Always emit the paired tool result — it's the tool_use → tool_result link
+    // that lets conversation-flow chain every turn into ONE assistantGroup.
+    // Unfinished states use LOADING_FLAT so the tool still reads as in-flight.
+    messages.push({
+      content: mode === 'success' ? coerceContent(derived.content) : LOADING_FLAT,
+      createdAt: now,
+      id: `devtools-toolmsg-${key}`,
+      parentId: assistantId,
+      pluginError: mode === 'error' ? derived.pluginError : undefined,
+      pluginIntervention: mode === 'intervention' ? { status: 'pending' } : undefined,
+      pluginState: mode === 'success' ? derived.pluginState : undefined,
+      role: 'tool',
+      tool_call_id: toolCallId,
+      updatedAt: now,
+    });
   }
 
   return messages;
