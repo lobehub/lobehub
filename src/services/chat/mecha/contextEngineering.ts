@@ -719,6 +719,15 @@ export const contextEngineering = async ({
       CREDS_LIST: () => (credsList ? generateCredsList(credsList) : ''),
       // NOTICE: required by builtin-tool-creds/src/systemRole.ts (Klavis integrations)
       KLAVIS_SERVICES_LIST: () => klavisServicesList,
+      // NOTICE: required by builtin-tool-creds/src/systemRole.ts (session_context)
+      session_date: () =>
+        new Intl.DateTimeFormat('en-US', {
+          day: 'numeric',
+          month: 'long',
+          weekday: 'long',
+          year: 'numeric',
+        }).format(new Date()),
+      sandbox_enabled: () => String(tools?.includes('lobe-cloud-sandbox') ?? false),
       // NOTICE(@nekomeowww): required by builtin-tool-memory/src/systemRole.ts
       memory_effort: () => (userMemoryConfig ? (memoryContext?.effort ?? '') : ''),
       // Current agent + topic identity — referenced by the LobeHub builtin

@@ -653,10 +653,13 @@ export const createRuntimeExecutors = (
         );
 
         // {{CREDS_LIST}} — used by lobe-creds system role.
-        // Always fetched when userId is available so substitution works regardless of which
-        // execution path (execAgent / client-side activator) injected the system role.
+        // Check both enabledToolIds (normal client path) and manifestMap (execAgent path where
+        // lobe-creds is added to manifestMap for activator discovery but not enabledToolIds).
+        const isCredsEnabled =
+          resolved.enabledToolIds.includes(CredsIdentifier) ||
+          !!resolved.manifestMap[CredsIdentifier];
         let credsListStr = '';
-        if (ctx.userId) {
+        if (isCredsEnabled && ctx.userId) {
           try {
             const { MarketService } = await import('@/server/services/market');
             const marketService = new MarketService({ userInfo: { userId: ctx.userId } });
@@ -681,7 +684,7 @@ export const createRuntimeExecutors = (
         // {{KLAVIS_SERVICES_LIST}} — used by lobe-creds system role (Klavis integrations section).
         // Mirrors client-side: klavisStoreSelectors.getServers() filtered by connection status.
         let klavisServicesListStr = '';
-        if (ctx.serverDB && ctx.userId && !!klavisEnv.KLAVIS_API_KEY) {
+        if (isCredsEnabled && ctx.serverDB && ctx.userId && !!klavisEnv.KLAVIS_API_KEY) {
           try {
             const { PluginModel } = await import('@/database/models/plugin');
             const pluginModel = new PluginModel(ctx.serverDB, ctx.userId);
@@ -727,8 +730,8 @@ export const createRuntimeExecutors = (
             session_date: sessionDate,
             // Creds tool variables
             sandbox_enabled: sandboxEnabled,
-            CREDS_LIST: credsListStr,
-            KLAVIS_SERVICES_LIST: klavisServicesListStr,
+            ...(isCredsEnabled && { CREDS_LIST: credsListStr }),
+            ...(isCredsEnabled && { KLAVIS_SERVICES_LIST: klavisServicesListStr }),
             // Memory tool variables
             memory_effort: memoryEffort,
           },
