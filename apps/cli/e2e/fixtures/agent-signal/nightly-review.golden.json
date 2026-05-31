@@ -1,0 +1,61 @@
+{
+  "description": "Desensitized golden snapshot of one nightly-review self-iteration run. Used as a structural regression baseline by the execAgent migration (LOBE-9434). Assert structure, never byte-for-byte: the LLM output is non-deterministic.",
+  "finalState": {
+    "messages": [
+      {
+        "content": "Run the nightly self-review for the local window.",
+        "role": "user"
+      },
+      {
+        "apiName": "getEvidenceDigest",
+        "content": "{\"kind\":\"read\",\"topicCount\":3,\"messageCount\":42,\"window\":\"2026-05-30/2026-05-31\"}",
+        "role": "tool",
+        "tool_call_id": "call_read_1"
+      },
+      {
+        "apiName": "recordSelfReviewIdea",
+        "content": "{\"kind\":\"artifact\",\"idempotencyKey\":\"idea:pref:tone\",\"title\":\"Prefer concise replies\",\"rationale\":\"User repeatedly asked to shorten answers in topic tpc_demo\",\"risk\":\"low\"}",
+        "role": "tool",
+        "tool_call_id": "call_idea_1"
+      },
+      {
+        "apiName": "recordSelfReviewIdea",
+        "content": "{\"kind\":\"artifact\",\"idempotencyKey\":\"idea:skill:drizzle\",\"title\":\"Document Drizzle join helper\",\"rationale\":\"Recurring question about leftJoin usage\",\"risk\":\"medium\"}",
+        "role": "tool",
+        "tool_call_id": "call_idea_2"
+      },
+      {
+        "apiName": "writeMemory",
+        "content": "{\"kind\":\"mutation\",\"status\":\"applied\",\"resourceId\":\"mem_001\",\"summary\":\"Stored tone preference: prefer concise replies\"}",
+        "pluginState": { "kind": "mutation" },
+        "role": "tool",
+        "tool_call_id": "call_mut_1"
+      },
+      {
+        "apiName": "createSelfReviewBrief",
+        "content": "{\"kind\":\"mutation\",\"briefId\":\"brief_001\",\"summary\":\"Nightly review captured 2 ideas and wrote 1 memory.\",\"body\":\"## Highlights\\n- Prefer concise replies\\n- Document Drizzle join helper\"}",
+        "role": "tool",
+        "tool_call_id": "call_brief_1"
+      },
+      {
+        "content": "Nightly review complete. Captured 2 ideas and wrote 1 memory.",
+        "role": "assistant"
+      }
+    ]
+  },
+  "source": {
+    "payload": {
+      "agentId": "agent_demo",
+      "localDate": "2026-05-30",
+      "requestedAt": "2026-05-31T04:00:00.000Z",
+      "reviewWindowEnd": "2026-05-31T04:00:00.000Z",
+      "reviewWindowStart": "2026-05-30T04:00:00.000Z",
+      "timezone": "UTC",
+      "userId": "user_demo"
+    },
+    "scopeKey": "agent:agent_demo:user:user_demo",
+    "sourceId": "nightly-review:user_demo:agent_demo:2026-05-30",
+    "sourceType": "agent.nightly_review.requested",
+    "timestamp": 1748664000000
+  }
+}
