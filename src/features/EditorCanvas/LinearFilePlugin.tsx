@@ -101,18 +101,11 @@ export const LinearFileCard = memo<LinearFileCardProps>(({ node }) => {
   const { fileUrl, message, name, size, status } = node;
 
   if (status === 'pending') {
-    return (
-      <div className={styles.state}>{t('file.uploading', { defaultValue: 'Uploading…' })}</div>
-    );
+    return <div className={styles.state}>{t('file.uploading')}</div>;
   }
   if (status === 'error') {
     return (
-      <div className={styles.state}>
-        {t('file.error', {
-          defaultValue: 'Upload failed: {{message}}',
-          message: message || 'Unknown error',
-        })}
-      </div>
+      <div className={styles.state}>{t('file.error', { message: message || 'Unknown error' })}</div>
     );
   }
 
