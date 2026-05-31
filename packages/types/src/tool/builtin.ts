@@ -302,7 +302,7 @@ export interface BuiltinInspectorProps<Arguments = any, State = any> {
   isLoading?: boolean;
   partialArgs?: Arguments;
   pluginState?: State;
-  result?: { content: string | null; error?: any };
+  result?: { content: string | null; error?: any; state?: any };
 }
 
 export type BuiltinInspector = <A = any, S = any>(props: BuiltinInspectorProps<A, S>) => ReactNode;
