@@ -28,6 +28,7 @@ import {
 } from '@lobechat/heterogeneous-agents/spawn';
 import { app as electronApp, BrowserWindow } from 'electron';
 
+import { HETERO_AGENT_FILES_DIR, HETERO_AGENT_TRACING_DIR } from '@/const/dir';
 import { getHeterogeneousAgentDriver } from '@/modules/heterogeneousAgent';
 import type {
   HeterogeneousAgentBuildPlan,
@@ -62,7 +63,7 @@ const CODEX_RESUME_CWD_MISMATCH_PATTERNS = [
 ] as const;
 
 /** Directory under appStoragePath for caching downloaded files */
-const FILE_CACHE_DIR = 'heteroAgent/files';
+const FILE_CACHE_DIR = HETERO_AGENT_FILES_DIR;
 const CLI_TRACE_DIR = '.heerogeneous-tracing';
 const CODEX_STDERR_STATUS_LINE = 'Reading prompt from stdin...';
 const CODEX_WARN_LOG_PATTERN = /^\d{4}-\d{2}-\d{2}T\S+\s+WARN\s+/;
@@ -434,7 +435,28 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   }
 
   private get shouldTraceCliOutput(): boolean {
-    return process.env.NODE_ENV !== 'test' && !electronApp.isPackaged;
+    if (process.env.NODE_ENV === 'test') return false;
+    // Dev builds always trace. Packaged builds trace only when the user has
+    // flipped the Help-menu developer toggle — so production issues can be
+    // captured on demand without polluting normal runs.
+    if (!electronApp.isPackaged) return true;
+    return this.app.storeManager.get('heteroTracingEnabled', false);
+  }
+
+  /**
+   * Root directory for CLI trace sessions.
+   *
+   * Dev keeps writing into the working directory (`cwd/.heerogeneous-tracing`)
+   * — devs expect traces to show up alongside the repo they're running in.
+   * Packaged builds instead centralize traces under the app storage dir
+   * (`<appStoragePath>/heteroAgent/tracing`) so they don't pollute the user's
+   * real project directory and can be opened from one stable Help-menu entry.
+   */
+  private resolveTraceRootDir(cwd: string): string {
+    if (electronApp.isPackaged) {
+      return path.join(this.app.appStoragePath, HETERO_AGENT_TRACING_DIR);
+    }
+    return path.join(cwd, CLI_TRACE_DIR);
   }
 
   private formatTraceTimestamp(date: Date): string {
@@ -501,7 +523,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     }
 
     const createdAt = new Date();
-    const rootDir = path.join(cwd, CLI_TRACE_DIR);
+    const rootDir = this.resolveTraceRootDir(cwd);
     const agentDir = path.join(rootDir, this.sanitizeTracePathSegment(session.agentType));
     const traceId = `${this.formatTraceTimestamp(createdAt)}-${this.sanitizeTracePathSegment(
       session.sessionId,
