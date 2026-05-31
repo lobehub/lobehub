@@ -14,7 +14,6 @@ import {
 } from '@lobechat/agent-runtime';
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import {
-  CredsIdentifier,
   type CredSummary,
   generateCredsList,
   generateKlavisServicesList,
@@ -639,18 +638,25 @@ export const createRuntimeExecutors = (
         // {{sandbox_enabled}} — mirrors client-side check for lobe-cloud-sandbox.
         const sandboxEnabled = String(resolved.enabledToolIds.includes('lobe-cloud-sandbox'));
 
+        // {{session_date}} — current date formatted for user's timezone.
+        const sessionDate = new Intl.DateTimeFormat('en-US', {
+          day: 'numeric',
+          month: 'long',
+          timeZone: ctx.userTimezone || 'UTC',
+          weekday: 'long',
+          year: 'numeric',
+        }).format(new Date());
+
         // {{memory_effort}} — read from agentConfig chatConfig; no extra query needed.
         const memoryEffort = String(
           (state.metadata?.agentConfig as any)?.chatConfig?.memory?.effort ?? '',
         );
 
         // {{CREDS_LIST}} — used by lobe-creds system role.
-        // Gate on manifestMap presence, NOT enabledToolIds: in execAgent mode lobe-creds is
-        // added to manifestMap (for activator discovery) but never into enabledToolIds, so
-        // checking enabledToolIds would always be false while the system role IS injected.
-        const isCredsEnabled = !!resolved.manifestMap[CredsIdentifier];
+        // Always fetched when userId is available so substitution works regardless of which
+        // execution path (execAgent / client-side activator) injected the system role.
         let credsListStr = '';
-        if (isCredsEnabled && ctx.userId) {
+        if (ctx.userId) {
           try {
             const { MarketService } = await import('@/server/services/market');
             const marketService = new MarketService({ userInfo: { userId: ctx.userId } });
@@ -675,7 +681,7 @@ export const createRuntimeExecutors = (
         // {{KLAVIS_SERVICES_LIST}} — used by lobe-creds system role (Klavis integrations section).
         // Mirrors client-side: klavisStoreSelectors.getServers() filtered by connection status.
         let klavisServicesListStr = '';
-        if (isCredsEnabled && ctx.serverDB && ctx.userId && !!klavisEnv.KLAVIS_API_KEY) {
+        if (ctx.serverDB && ctx.userId && !!klavisEnv.KLAVIS_API_KEY) {
           try {
             const { PluginModel } = await import('@/database/models/plugin');
             const pluginModel = new PluginModel(ctx.serverDB, ctx.userId);
@@ -718,10 +724,11 @@ export const createRuntimeExecutors = (
             // User identity variables
             username: serverUsername,
             language: serverLanguage,
+            session_date: sessionDate,
             // Creds tool variables
             sandbox_enabled: sandboxEnabled,
-            ...(isCredsEnabled && { CREDS_LIST: credsListStr }),
-            ...(isCredsEnabled && { KLAVIS_SERVICES_LIST: klavisServicesListStr }),
+            CREDS_LIST: credsListStr,
+            KLAVIS_SERVICES_LIST: klavisServicesListStr,
             // Memory tool variables
             memory_effort: memoryEffort,
           },
