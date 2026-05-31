@@ -2,6 +2,7 @@ import { AgentRuntimeErrorType, ChatErrorType } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import { formatErrorForState } from './formatErrorForState';
+import { ModelEmptyError } from './ModelEmptyError';
 
 describe('formatErrorForState', () => {
   describe('input normalization', () => {
@@ -51,6 +52,21 @@ describe('formatErrorForState', () => {
         retryable: false,
         severity: 'warning',
       });
+    });
+
+    it('enriches a thrown ModelEmptyError into a readable retryable terminal error (LOBE-9834)', () => {
+      const result = formatErrorForState(new ModelEmptyError());
+
+      // The `errorType` field must win over the generic Error → InternalServerError
+      // path so the terminal state is classified and dashboard-visible instead of
+      // a silent `done`.
+      expect(result.type).toBe(AgentRuntimeErrorType.ModelEmptyCompletion);
+      expect(result.category).toBe('provider');
+      expect(result.attribution).toBe('provider');
+      expect(result.retryable).toBe(true);
+      expect(result.countAsFailure).toBe(true);
+      expect(result.numericId).toBe(8014);
+      expect(result.message).toContain('empty completion');
     });
 
     it('marks provider-side rate limits as retryable with provider attribution', () => {

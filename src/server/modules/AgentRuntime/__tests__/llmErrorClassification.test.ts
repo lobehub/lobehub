@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { classifyLLMError } from '../llmErrorClassification';
+import { ModelEmptyError } from '../ModelEmptyError';
 
 describe('classifyLLMError', () => {
   it('should classify rate limit errors as retry', () => {
@@ -81,8 +82,13 @@ describe('classifyLLMError', () => {
       ['ProviderServiceUnavailable', 'upstream temporarily overloaded'],
       ['ProviderNetworkError', 'connection timed out'],
       ['RateLimitExceeded', 'tokens per minute (TPM)'],
+      ['ModelEmptyCompletion', 'model returned an empty completion'],
     ])('classifies %s as retry (no HTTP status)', (errorType, message) => {
       expect(classifyLLMError({ errorType, message }).kind).toBe('retry');
+    });
+
+    it('classifies a thrown ModelEmptyError instance as retry (LOBE-9834)', () => {
+      expect(classifyLLMError(new ModelEmptyError()).kind).toBe('retry');
     });
   });
 
