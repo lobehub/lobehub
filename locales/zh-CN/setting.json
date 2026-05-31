@@ -272,6 +272,7 @@
   "devices.actions.remove": "移除",
   "devices.channel.connected": "已连接 {{time}}",
   "devices.currentBadge": "当前设备",
+  "devices.detail.addDir": "添加目录",
   "devices.detail.connections": "连接通道",
   "devices.detail.noRecent": "暂无最近目录",
   "devices.detail.recentDirs": "最近目录",

@@ -329,6 +329,7 @@ export default {
   'devices.actions.remove': 'Remove',
   'devices.channel.connected': 'Connected {{time}}',
   'devices.currentBadge': 'This device',
+  'devices.detail.addDir': 'Add directory',
   'devices.detail.connections': 'Connections',
   'devices.detail.noRecent': 'No recent directories',
   'devices.detail.recentDirs': 'Recent directories',
