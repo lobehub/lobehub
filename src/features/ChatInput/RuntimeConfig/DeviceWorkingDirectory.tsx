@@ -13,6 +13,8 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 
+import type { WorkingDirEntry } from './deviceCwd';
+import { renderDirIcon } from './dirIcon';
 import { useUpdateDeviceCwd } from './useUpdateDeviceCwd';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -91,9 +93,9 @@ interface DeviceWorkingDirectoryProps {
  * Working-directory picker for runs dispatched to a remote device
  * (`executionTarget='device'`). Unlike the desktop picker, the device's
  * filesystem isn't browsable from here, so the cwd comes from the device's
- * `recentCwds` (persisted via the registry) plus a manual path field. A pick is
+ * `workingDirs` (persisted via the registry) plus a manual path field. A pick is
  * pinned to the active topic (override) and persisted back to the device
- * (`defaultCwd` + `recentCwds`) so it seeds future topics and the recent list.
+ * (`defaultCwd` + `workingDirs`) so it seeds future topics and the recent list.
  */
 const DeviceWorkingDirectory = memo<DeviceWorkingDirectoryProps>(({ agentId }) => {
   const { t } = useTranslation(['plugin', 'chat']);
@@ -110,7 +112,7 @@ const DeviceWorkingDirectory = memo<DeviceWorkingDirectoryProps>(({ agentId }) =
     () => devices?.find((d) => d.deviceId === boundDeviceId),
     [devices, boundDeviceId],
   );
-  const recentCwds = device?.recentCwds ?? [];
+  const workingDirs = device?.workingDirs ?? [];
 
   const topicWorkingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
   // Mirror the server's resolution (topic override > device.defaultCwd).
@@ -124,15 +126,15 @@ const DeviceWorkingDirectory = memo<DeviceWorkingDirectoryProps>(({ agentId }) =
   const updateDeviceCwd = useUpdateDeviceCwd();
 
   const commitDir = useCallback(
-    async (path: string) => {
-      const newPath = path.trim();
+    async (entry: WorkingDirEntry) => {
+      const newPath = entry.path.trim();
       if (!newPath || !boundDeviceId) return;
 
       const commit = async () => {
         // Pin this topic to the chosen cwd (override wins server-side), and
-        // persist to the device so defaultCwd + recentCwds stay in sync.
+        // persist to the device so defaultCwd + workingDirs stay in sync.
         if (activeTopicId) await updateTopicMetadata(activeTopicId, { workingDirectory: newPath });
-        await updateDeviceCwd(boundDeviceId, newPath, recentCwds);
+        await updateDeviceCwd(boundDeviceId, { ...entry, path: newPath }, workingDirs);
         setInput('');
         setOpen(false);
       };
@@ -158,7 +160,7 @@ const DeviceWorkingDirectory = memo<DeviceWorkingDirectoryProps>(({ agentId }) =
       activeTopicId,
       activeTopic,
       boundDeviceId,
-      recentCwds,
+      workingDirs,
       t,
       updateDeviceCwd,
       updateTopicMetadata,
@@ -169,7 +171,7 @@ const DeviceWorkingDirectory = memo<DeviceWorkingDirectoryProps>(({ agentId }) =
     <Flexbox gap={4} style={{ minWidth: 280 }}>
       <div className={styles.sectionTitle}>{t('localSystem.workingDirectory.recent')}</div>
       <div className={styles.scrollContainer}>
-        {recentCwds.length === 0 ? (
+        {workingDirs.length === 0 ? (
           <Flexbox
             align={'center'}
             justify={'center'}
@@ -178,25 +180,21 @@ const DeviceWorkingDirectory = memo<DeviceWorkingDirectoryProps>(({ agentId }) =
             {t('localSystem.workingDirectory.noRecent')}
           </Flexbox>
         ) : (
-          recentCwds.map((path) => {
-            const isActive = path === effectiveDir;
+          workingDirs.map((entry) => {
+            const isActive = entry.path === effectiveDir;
             return (
               <Flexbox
                 horizontal
                 align={'center'}
                 className={cx(styles.dirItem, isActive && styles.dirItemActive)}
                 gap={8}
-                key={path}
-                onClick={() => void commitDir(path)}
+                key={entry.path}
+                onClick={() => void commitDir(entry)}
               >
-                <Icon
-                  icon={FolderIcon}
-                  size={16}
-                  style={{ color: cssVar.colorTextTertiary, flex: 'none' }}
-                />
+                {renderDirIcon(entry.repoType)}
                 <Flexbox flex={1} style={{ minWidth: 0 }}>
-                  <div className={styles.dirName}>{getDirName(path)}</div>
-                  <div className={styles.dirPath}>{path}</div>
+                  <div className={styles.dirName}>{getDirName(entry.path)}</div>
+                  <div className={styles.dirPath}>{entry.path}</div>
                 </Flexbox>
                 {isActive ? (
                   <Icon
@@ -214,7 +212,7 @@ const DeviceWorkingDirectory = memo<DeviceWorkingDirectoryProps>(({ agentId }) =
         placeholder={t('localSystem.workingDirectory.placeholder')}
         value={input}
         onChange={(e) => setInput(e.target.value)}
-        onPressEnter={() => void commitDir(input)}
+        onPressEnter={() => void commitDir({ path: input })}
       />
     </Flexbox>
   );

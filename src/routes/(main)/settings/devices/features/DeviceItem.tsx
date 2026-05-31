@@ -8,6 +8,7 @@ import { FolderIcon, MoreVerticalIcon, Trash2Icon, TriangleAlertIcon } from 'luc
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import type { WorkingDirEntry } from '@/features/ChatInput/RuntimeConfig/deviceCwd';
 import { lambdaQuery } from '@/libs/trpc/client';
 
 import { getDeviceIcon } from './getDeviceIcon';
@@ -29,8 +30,8 @@ export interface DeviceListItem {
   lastSeen: string;
   online: boolean;
   platform: string | null;
-  recentCwds: string[];
   registered: boolean;
+  workingDirs: WorkingDirEntry[];
 }
 
 const styles = createStaticStyles(({ css }) => ({
