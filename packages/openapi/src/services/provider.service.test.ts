@@ -7,6 +7,35 @@ import type { LobeChatDatabase } from '@/database/type';
 
 import { ProviderService } from './provider.service';
 
+vi.mock('@/const/rbac', () => ({
+  ALL_SCOPE: 'all',
+}));
+
+vi.mock('@/database/models/rbac', () => ({
+  RbacModel: class {},
+}));
+
+vi.mock('@/database/schemas', () => ({
+  agents: {},
+  aiModels: {},
+  aiProviders: {},
+  files: {},
+  knowledgeBases: {},
+  messages: {},
+  sessions: {},
+  topics: {},
+}));
+
+vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
+  KeyVaultsGateKeeper: {
+    initWithEnvKey: vi.fn(),
+  },
+}));
+
+vi.mock('@/utils/rbac', () => ({
+  getScopePermissions: vi.fn(() => []),
+}));
+
 vi.mock('@lobechat/business-const', async () => {
   const actual = await vi.importActual<typeof BusinessConst>('@lobechat/business-const');
 
