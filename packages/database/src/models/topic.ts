@@ -29,7 +29,7 @@ import {
 } from 'drizzle-orm';
 
 import type { TopicItem } from '../schemas';
-import { agents, agentsToSessions, messagePlugins, messages, topics } from '../schemas';
+import { agents, messagePlugins, messages, topics } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { sanitizeBm25Query } from '../utils/bm25';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
@@ -254,52 +254,17 @@ export class TopicModel {
       return { items, total: totalResult[0].count };
     }
 
-    // If agentId is provided, query topics that match either:
-    // 1. topics.agentId = agentId (new data with agentId stored directly)
-    // 2. topics.sessionId = associated sessionId (legacy data via agentsToSessions lookup)
-    // 3. For inbox: sessionId IS NULL AND groupId IS NULL AND agentId IS NULL (legacy inbox data)
+    // If agentId is provided, match topics by `topics.agentId` directly. The
+    // inbox agent additionally adopts very old orphan rows where every owner
+    // column (session / group / agent) is null.
     if (agentId) {
-      // Get the associated sessionId for backward compatibility with legacy data
-      const agentSession = await runTimedStage(
-        timing,
-        'db.topic.query.agentSession.select',
-        () =>
-          this.db
-            .select({ sessionId: agentsToSessions.sessionId })
-            .from(agentsToSessions)
-            .where(
-              and(eq(agentsToSessions.agentId, agentId), eq(agentsToSessions.userId, this.userId)),
-            )
-            .limit(1),
-        { hasAgentId: true },
-      );
+      const agentCondition = isInbox
+        ? or(
+            eq(topics.agentId, agentId),
+            and(isNull(topics.sessionId), isNull(topics.groupId), isNull(topics.agentId)),
+          )
+        : eq(topics.agentId, agentId);
 
-      const associatedSessionId = agentSession[0]?.sessionId;
-
-      // Build condition to match both new (agentId) and legacy (sessionId) data
-      let agentCondition;
-      if (isInbox) {
-        // For inbox agent: query topics that match:
-        // 1. topics.agentId = agentId (new data)
-        // 2. topics.sessionId = associatedSessionId (legacy data with session relation)
-        // 3. sessionId IS NULL AND groupId IS NULL AND agentId IS NULL (very old legacy inbox data)
-        const conditions = [
-          eq(topics.agentId, agentId),
-          and(isNull(topics.sessionId), isNull(topics.groupId), isNull(topics.agentId)),
-        ];
-        // Also include topics linked via legacy session relation
-        if (associatedSessionId) {
-          conditions.push(eq(topics.sessionId, associatedSessionId));
-        }
-        agentCondition = or(...conditions);
-      } else if (associatedSessionId) {
-        agentCondition = or(eq(topics.agentId, agentId), eq(topics.sessionId, associatedSessionId));
-      } else {
-        agentCondition = eq(topics.agentId, agentId);
-      }
-
-      // Fetch items and total count in parallel
-      // Include sessionId and agentId for migration detection
       const agentWhere = and(
         eq(topics.userId, this.userId),
         agentCondition,
@@ -333,7 +298,7 @@ export class TopicModel {
               .orderBy(desc(topics.favorite), desc(topics.updatedAt))
               .limit(pageSize)
               .offset(offset),
-          { current, hasAssociatedSessionId: !!associatedSessionId, isInbox: !!isInbox, pageSize },
+          { current, isInbox: !!isInbox, pageSize },
         ),
         runTimedStage(
           timing,
@@ -343,7 +308,7 @@ export class TopicModel {
               .select({ count: count(topics.id) })
               .from(topics)
               .where(agentWhere),
-          { hasAssociatedSessionId: !!associatedSessionId, isInbox: !!isInbox },
+          { isInbox: !!isInbox },
         ),
       ]);
 
@@ -502,27 +467,9 @@ export class TopicModel {
     startDate?: string;
   }): Promise<number> => {
     // Build agent-specific condition if agentId is provided
-    let agentCondition: SQL | undefined;
-    if (params?.agentId) {
-      // Get the associated sessionId for backward compatibility with legacy data
-      const agentSession = await this.db
-        .select({ sessionId: agentsToSessions.sessionId })
-        .from(agentsToSessions)
-        .where(
-          and(
-            eq(agentsToSessions.agentId, params.agentId),
-            eq(agentsToSessions.userId, this.userId),
-          ),
-        )
-        .limit(1);
-
-      const associatedSessionId = agentSession[0]?.sessionId;
-
-      // Build condition to match both new (agentId) and legacy (sessionId) data
-      agentCondition = associatedSessionId
-        ? or(eq(topics.agentId, params.agentId), eq(topics.sessionId, associatedSessionId))
-        : eq(topics.agentId, params.agentId);
-    }
+    const agentCondition: SQL | undefined = params?.agentId
+      ? eq(topics.agentId, params.agentId)
+      : undefined;
 
     const result = await this.db
       .select({
@@ -843,27 +790,12 @@ export class TopicModel {
   };
 
   /**
-   * Deletes multiple topics based on the agentId.
-   * This will delete topics that have either:
-   * 1. Direct agentId match (new data)
-   * 2. SessionId match via agentsToSessions lookup (legacy data)
+   * Deletes all topics matching the given agentId (`topics.agentId`).
    */
   batchDeleteByAgentId = async (agentId: string) => {
-    // Get the associated sessionId for backward compatibility with legacy data
-    const agentSession = await this.db
-      .select({ sessionId: agentsToSessions.sessionId })
-      .from(agentsToSessions)
-      .where(and(eq(agentsToSessions.agentId, agentId), eq(agentsToSessions.userId, this.userId)))
-      .limit(1);
-
-    const associatedSessionId = agentSession[0]?.sessionId;
-
-    // Build condition to match both new (agentId) and legacy (sessionId) data
-    const agentCondition = associatedSessionId
-      ? or(eq(topics.agentId, agentId), eq(topics.sessionId, associatedSessionId))
-      : eq(topics.agentId, agentId);
-
-    return this.db.delete(topics).where(and(eq(topics.userId, this.userId), agentCondition));
+    return this.db
+      .delete(topics)
+      .where(and(eq(topics.userId, this.userId), eq(topics.agentId, agentId)));
   };
 
   /**
