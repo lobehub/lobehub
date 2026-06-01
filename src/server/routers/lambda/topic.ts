@@ -18,7 +18,11 @@ import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { type BatchTaskResult } from '@/types/service';
 
-import { resolveAgentIdFromSession, resolveContext } from './_helpers/resolveContext';
+import {
+  batchResolveAgentIdFromSessions,
+  resolveAgentIdFromSession,
+  resolveContext,
+} from './_helpers/resolveContext';
 import { basicContextSchema } from './_schema/context';
 
 const topicProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
@@ -360,10 +364,30 @@ export const topicRouter = router({
       const agentTopics = recentTopics.filter((t) => t.type === 'agent');
       const groupTopics = recentTopics.filter((t) => t.type === 'group');
 
-      // Map each agent topic to its agentId
+      // Find legacy topics: no agentId but has sessionId
+      const legacyTopics = agentTopics.filter(
+        (topic) => topic.agentId === null && topic.sessionId !== null,
+      );
+
+      // Batch resolve agentId for legacy topics
+      const sessionIds = [...new Set(legacyTopics.map((t) => t.sessionId!))];
+      const sessionAgentMap = await batchResolveAgentIdFromSessions(
+        sessionIds,
+        ctx.serverDB,
+        ctx.userId,
+      );
+
+      // Build agentId map: merge existing agentId with resolved ones
       const topicAgentIdMap = new Map<string, string>();
       for (const topic of agentTopics) {
-        if (topic.agentId) topicAgentIdMap.set(topic.id, topic.agentId);
+        if (topic.agentId) {
+          topicAgentIdMap.set(topic.id, topic.agentId);
+        } else if (topic.sessionId) {
+          const resolvedAgentId = sessionAgentMap.get(topic.sessionId);
+          if (resolvedAgentId) {
+            topicAgentIdMap.set(topic.id, resolvedAgentId);
+          }
+        }
       }
 
       // Collect all agentIds to fetch agent info
@@ -437,6 +461,20 @@ export const topicRouter = router({
           });
         }
       }
+
+      // Runtime migration: backfill agentId for legacy topics surfaced here
+      const runMigration = async () => {
+        for (const [sessionId, agentId] of sessionAgentMap) {
+          try {
+            await ctx.agentMigrationRepo.migrateAgentId({ agentId, sessionId });
+          } catch (error) {
+            console.error('[AgentMigration] Failed to migrate agentId for recentTopics:', error);
+          }
+        }
+      };
+
+      // Use Next.js after() for non-blocking execution
+      after(runMigration);
 
       // Assemble final result
       return recentTopics.map((topic) => {
