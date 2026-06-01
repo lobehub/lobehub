@@ -145,10 +145,11 @@ describe('TopicModel - Stats', () => {
   describe('rank', () => {
     it('should return ranked topics based on message count', async () => {
       await serverDB.transaction(async (tx) => {
+        await tx.insert(agents).values([{ id: 'rank-agent', userId, title: 'Rank Agent' }]);
         await tx.insert(topics).values([
-          { id: 'topic1', title: 'Topic 1', sessionId, userId },
-          { id: 'topic2', title: 'Topic 2', sessionId, userId },
-          { id: 'topic3', title: 'Topic 3', sessionId, userId },
+          { id: 'topic1', title: 'Topic 1', agentId: 'rank-agent', userId },
+          { id: 'topic2', title: 'Topic 2', agentId: 'rank-agent', userId },
+          { id: 'topic3', title: 'Topic 3', agentId: 'rank-agent', userId },
         ]);
 
         await tx.insert(messages).values([
@@ -172,13 +173,13 @@ describe('TopicModel - Stats', () => {
         id: 'topic1',
         title: 'Topic 1',
         count: 3,
-        sessionId,
+        agentId: 'rank-agent',
       });
       expect(result[1]).toMatchObject({
         id: 'topic2',
         title: 'Topic 2',
         count: 2,
-        sessionId,
+        agentId: 'rank-agent',
       });
     });
 

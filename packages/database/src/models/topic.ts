@@ -499,9 +499,9 @@ export class TopicModel {
   rank = async (limit: number = 10): Promise<TopicRankItem[]> => {
     return this.db
       .select({
+        agentId: topics.agentId,
         count: count(messages.id).as('count'),
         id: topics.id,
-        sessionId: topics.sessionId,
         title: topics.title,
       })
       .from(topics)
@@ -526,7 +526,6 @@ export class TopicModel {
         agentId: topics.agentId,
         groupId: topics.groupId,
         id: topics.id,
-        sessionId: topics.sessionId,
         title: topics.title,
         updatedAt: topics.updatedAt,
       })

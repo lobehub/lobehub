@@ -211,9 +211,9 @@ export interface ChatTopic extends Omit<BaseDataModel, 'meta'> {
 export type ChatTopicMap = Record<string, ChatTopic>;
 
 export interface TopicRankItem {
+  agentId: string | null;
   count: number;
   id: string;
-  sessionId: string | null;
   title: string | null;
 }
 

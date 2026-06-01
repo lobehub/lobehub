@@ -1395,7 +1395,7 @@ describe('TopicModel - Query', () => {
   });
 
   describe('queryRecent', () => {
-    it('should return recent topics with agentId and sessionId', async () => {
+    it('should return recent topics with agentId', async () => {
       await serverDB.transaction(async (tx) => {
         await tx.insert(agents).values([
           {
