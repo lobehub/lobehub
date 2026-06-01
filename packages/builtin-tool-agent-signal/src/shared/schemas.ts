@@ -14,7 +14,6 @@ interface ToolApiSpec {
 }
 
 const str = { type: 'string' } as const;
-const strArr = { items: { type: 'string' }, type: 'array' } as const;
 const freeObj = { additionalProperties: true, type: 'object' } as const;
 const freeArr = { items: { additionalProperties: true, type: 'object' }, type: 'array' } as const;
 
@@ -92,16 +91,6 @@ export const RESOURCE_TOOL_APIS: ToolApiSpec[] = [
     description: 'Read one managed skill by skill document id in the reviewed agent scope.',
     name: 'getManagedSkill',
     parameters: obj({ skillDocumentId: str }, ['skillDocumentId']),
-  },
-  {
-    description:
-      'Read bounded evidence details for cited topic, message, tool_call, or agent_document ids in the review window. Use this for evidenceRefs; do not pass evidence ids to proposal tools.',
-    name: 'getEvidenceDigest',
-    parameters: obj({
-      evidenceIds: strArr,
-      reviewWindowEnd: str,
-      reviewWindowStart: str,
-    }),
   },
   {
     description:

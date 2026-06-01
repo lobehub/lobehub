@@ -14,11 +14,11 @@ export {
   type AgentSignalToolApiName,
 } from './shared/apiNames';
 export {
+  type AgentSignalRuntimePrimitive,
+  type AgentSignalRuntimeService,
   type AgentSignalToolContext,
   AgentSignalToolExecutionRuntime,
   type AgentSignalToolExecutionRuntimeOptions,
-  type AgentSignalToolInvocationResult,
-  type AgentSignalToolService,
   type ToolResultKind,
 } from './shared/ExecutionRuntime';
 export {

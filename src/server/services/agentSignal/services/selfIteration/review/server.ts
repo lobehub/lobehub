@@ -1,3 +1,4 @@
+import type { AgentSignalRuntimeService } from '@lobechat/builtin-tool-agent-signal';
 import { DEFAULT_MINI_SYSTEM_AGENT_ITEM } from '@lobechat/const';
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import { tracer } from '@lobechat/observability-otel/modules/agent-signal';
@@ -543,6 +544,319 @@ const updateSelfReviewProposalBrief = async ({
   return {
     resourceId: updatedBrief?.id ?? brief.id,
     summary: `Updated self-review proposal ${updatedProposal.proposalKey}.`,
+  };
+};
+
+export interface ReviewRuntimePrimitiveDeps {
+  agentId: string;
+  briefModel: BriefModel;
+  briefTextTranslator?: SelfReviewBriefTextTranslator;
+  db: LobeChatDatabase;
+  localDate: string;
+  proposalBriefWriter: ReturnType<typeof createServerSelfReviewBriefWriter>;
+  reviewWindowEnd: string;
+  reviewWindowStart: string;
+  skillDocumentService: SkillManagementDocumentService;
+  sourceId: string;
+  userId: string;
+}
+
+/**
+ * Builds the nightly-review tool primitives for the execAgent path — pure live
+ * DB reads + durable writes, keyed to match the advertised api names.
+ *
+ * Unlike {@link createServerToolSet}, these carry no `reserveOperation` /
+ * receipt / `completeOperation` side channel: idempotency and receipt
+ * projection live on the execAgent completion path, so a tool call only reads
+ * or mutates. The evidence corpus is embedded in the agent's prompt, so there
+ * is deliberately no `getEvidenceDigest` primitive — the agent reads evidence
+ * from its own context, and these tools only touch live state.
+ */
+export const createReviewRuntimePrimitives = (
+  deps: ReviewRuntimePrimitiveDeps,
+): AgentSignalRuntimeService => {
+  const {
+    agentId,
+    briefModel,
+    briefTextTranslator,
+    db,
+    localDate,
+    proposalBriefWriter,
+    reviewWindowEnd,
+    reviewWindowStart,
+    skillDocumentService,
+    sourceId,
+    userId,
+  } = deps;
+
+  const isSkillNameAvailable = async ({
+    agentId: targetAgentId,
+    name,
+  }: {
+    agentId?: string;
+    name: string;
+  }) => {
+    const skills = await skillDocumentService.listSkills({ agentId: targetAgentId ?? agentId });
+
+    return !skills.some((skill) => skill.name === name);
+  };
+  const readSkillTargetSnapshot = (skillDocumentId: string) =>
+    skillDocumentService.readSkillTargetSnapshot({ agentDocumentId: skillDocumentId, agentId });
+
+  const proposalPreflight = createSelfReviewProposalPreflightService({
+    isSkillNameAvailable,
+    readSkillTargetSnapshot,
+  });
+  const proposalSnapshot = createSelfReviewProposalSnapshotService({
+    isSkillNameAvailable,
+    readSkillTargetSnapshot,
+  });
+
+  return {
+    closeSelfReviewProposal: async (rawInput) => {
+      const input = rawInput as unknown as CloseSelfReviewProposalInput;
+
+      return updateSelfReviewProposalBrief({
+        agentId,
+        briefModel,
+        proposalId: input.proposalId,
+        proposalKey: input.proposalKey,
+        updateProposal: (proposal) => ({
+          ...proposal,
+          status: 'dismissed',
+          updatedAt: new Date().toISOString(),
+        }),
+      });
+    },
+    createSelfReviewProposal: async (rawInput) => {
+      const input = rawInput as unknown as CreateSelfReviewProposalInput;
+      const projectionInput = await withCompleteProposalSnapshots({
+        agentId,
+        input,
+        snapshotService: proposalSnapshot,
+        userId,
+      });
+      const projection = createProposalProjectionFromToolInput({
+        input: projectionInput,
+        localDate,
+        sourceId,
+        toolName: 'createSelfReviewProposal',
+        userId,
+      });
+      const brief = createBriefSelfReviewService().projectNightlyReviewBrief({
+        agentId,
+        evidenceRefs: collectPlanEvidenceRefs(projection.projectionPlan),
+        ideas: projection.ideas,
+        localDate,
+        plan: projection.projectionPlan,
+        result: projection.execution,
+        reviewWindowEnd,
+        reviewWindowStart,
+        t: briefTextTranslator,
+        timezone: 'UTC',
+        userId,
+      });
+
+      if (!brief) throw new Error('Self-review proposal projection produced no brief');
+
+      const result = await proposalBriefWriter.writeDailyBrief(brief);
+
+      return {
+        proposalId: result?.id,
+        resourceId: result?.id,
+        summary: input.summary ?? 'Created self-review proposal.',
+      };
+    },
+    createSkillIfAbsent: async (rawInput) => {
+      const input = rawInput as unknown as CreateSkillIfAbsentInput;
+
+      if (!pickTrimmedString(input.name) || !pickTrimmedString(input.bodyMarkdown)) {
+        return {
+          status: 'skipped_unsupported',
+          summary: 'Skill creation requires a non-empty name and body.',
+        };
+      }
+
+      const preflight = await proposalPreflight.checkAction(createSkillProposalAction(input));
+      if (!preflight.allowed) {
+        return {
+          status: 'skipped_stale',
+          summary: `Skill creation preflight failed: ${preflight.reason}`,
+        };
+      }
+
+      const result = await skillDocumentService.createSkill({
+        agentId,
+        bodyMarkdown: input.bodyMarkdown,
+        description: input.description ?? 'Agent Signal managed skill.',
+        name: input.name,
+        title: input.title ?? input.name,
+      });
+
+      return {
+        resourceId: result.bundle.agentDocumentId,
+        summary: `Created managed skill ${result.name}.`,
+      };
+    },
+    getManagedSkill: async (rawInput) => {
+      const { agentId: targetAgentId, skillDocumentId } = rawInput as {
+        agentId?: string;
+        skillDocumentId: string;
+      };
+
+      return skillDocumentService.getSkill({
+        agentDocumentId: skillDocumentId,
+        agentId: targetAgentId ?? agentId,
+        includeContent: true,
+      });
+    },
+    listManagedSkills: async (rawInput) => {
+      const { agentId: targetAgentId } = rawInput as { agentId?: string };
+
+      return skillDocumentService.listSkills({ agentId: targetAgentId ?? agentId });
+    },
+    listSelfReviewProposals: async (rawInput) => {
+      const { agentId: targetAgentId } = rawInput as { agentId?: string };
+      const digest = await listServerSelfReviewProposalActivity({
+        agentId: targetAgentId ?? agentId,
+        briefModel,
+        userId,
+      });
+
+      return [digest];
+    },
+    readSelfReviewProposal: async (rawInput) => {
+      const { proposalId, proposalKey } = rawInput as {
+        proposalId?: string;
+        proposalKey?: string;
+      };
+      const digest = await listServerSelfReviewProposalActivity({ agentId, briefModel, userId });
+
+      return digest.active.find(
+        (proposal) =>
+          (proposalId && proposal.proposalId === proposalId) ||
+          (proposalKey && proposal.proposalKey === proposalKey),
+      );
+    },
+    refreshSelfReviewProposal: async (rawInput) => {
+      const input = rawInput as unknown as RefreshSelfReviewProposalInput;
+
+      return updateSelfReviewProposalBrief({
+        agentId,
+        briefModel,
+        proposalId: input.proposalId,
+        proposalKey: input.proposalKey,
+        updateProposal: (proposal) =>
+          refreshSelfReviewProposal({
+            existing: proposal,
+            incoming: proposal,
+            now: new Date().toISOString(),
+          }),
+      });
+    },
+    replaceSkillContentCAS: async (rawInput) => {
+      const input = rawInput as unknown as ReplaceSkillContentCASInput;
+      const enriched = await withCompleteReplaceSkillSnapshot({
+        agentId,
+        input,
+        snapshotService: proposalSnapshot,
+        userId,
+      });
+
+      if (!pickTrimmedString(enriched.bodyMarkdown)) {
+        return {
+          resourceId: enriched.skillDocumentId,
+          status: 'skipped_unsupported',
+          summary: 'Skill replacement requires a non-empty body.',
+        };
+      }
+
+      if (!isCompleteRefineToolSnapshot(enriched.baseSnapshot)) {
+        return {
+          resourceId: enriched.skillDocumentId,
+          status: 'skipped_unsupported',
+          summary: 'Skill replacement requires a complete base snapshot.',
+        };
+      }
+
+      const preflight = await proposalPreflight.checkAction(createRefineProposalAction(enriched));
+      if (!preflight.allowed) {
+        return {
+          resourceId: enriched.skillDocumentId,
+          status: 'skipped_stale',
+          summary: preflight.reason || input.summary,
+        };
+      }
+
+      const result = await skillDocumentService.replaceSkillIndex({
+        agentDocumentId: enriched.skillDocumentId,
+        agentId,
+        bodyMarkdown: enriched.bodyMarkdown,
+        description: enriched.description,
+      });
+
+      if (!result) throw new Error('Skill target not found');
+
+      return {
+        resourceId: result.bundle.agentDocumentId,
+        summary: `Refined managed skill ${result.name}.`,
+      };
+    },
+    supersedeSelfReviewProposal: async (rawInput) => {
+      const input = rawInput as unknown as SupersedeSelfReviewProposalInput;
+
+      return updateSelfReviewProposalBrief({
+        agentId,
+        briefModel,
+        proposalId: input.proposalId,
+        proposalKey: input.proposalKey,
+        updateProposal: (proposal) =>
+          supersedeSelfReviewProposal({
+            existing: proposal,
+            now: new Date().toISOString(),
+            supersededBy: input.supersededBy,
+          }),
+      });
+    },
+    writeMemory: async (rawInput) => {
+      const input = rawInput as unknown as WriteMemoryInput;
+      const memoryService = createMemoryService({
+        writeMemory: async ({ content, evidenceRefs, idempotencyKey }) => {
+          const result = await runMemoryActionAgent(
+            {
+              agentId,
+              message: content,
+              reason: `Agent Signal self-review memory candidate from ${evidenceRefs.length} evidence refs.`,
+            },
+            { db, userId },
+          );
+
+          if (result.status !== 'applied') {
+            throw new Error(
+              result.detail ?? 'Memory action agent did not apply a durable memory write.',
+            );
+          }
+
+          return {
+            memoryId: idempotencyKey,
+            summary: result.detail ?? content,
+          };
+        },
+      });
+      const result = await memoryService.writeMemory({
+        evidenceRefs: input.evidenceRefs,
+        idempotencyKey: input.idempotencyKey,
+        input: {
+          content: input.content,
+          userId: input.userId,
+        },
+      });
+
+      return {
+        resourceId: result.memoryId,
+        summary: result.summary,
+      };
+    },
   };
 };
 

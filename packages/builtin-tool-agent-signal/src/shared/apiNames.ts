@@ -1,13 +1,17 @@
 import type { ToolResultKind } from './ExecutionRuntime';
 
 /**
- * Resource tools shared by every self-iteration mode (read evidence + apply safe
- * memory/skill writes).
+ * Resource tools shared by every self-iteration mode: live-DB skill reads + safe
+ * memory/skill writes.
+ *
+ * Note: there is intentionally no `getEvidenceDigest` tool — the evidence corpus
+ * is collected once at dispatch and embedded in the agent's prompt
+ * (`<nightly_review_context_json>` etc.), so the agent already has it in context.
+ * A tool re-serving that same blob would be redundant.
  */
 export const AGENT_SIGNAL_RESOURCE_API_NAMES = [
   'listManagedSkills',
   'getManagedSkill',
-  'getEvidenceDigest',
   'writeMemory',
   'createSkillIfAbsent',
   'replaceSkillContentCAS',
@@ -53,7 +57,6 @@ export const AGENT_SIGNAL_TOOL_RESULT_KIND: Record<AgentSignalToolApiName, ToolR
   closeSelfReviewProposal: 'mutation',
   createSelfReviewProposal: 'mutation',
   createSkillIfAbsent: 'mutation',
-  getEvidenceDigest: 'read',
   getManagedSkill: 'read',
   listManagedSkills: 'read',
   listSelfReviewProposals: 'read',

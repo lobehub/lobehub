@@ -1,17 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { AGENT_SIGNAL_REVIEW_TOOL_API_NAMES } from './apiNames';
-import { AgentSignalToolExecutionRuntime, type AgentSignalToolService } from './ExecutionRuntime';
-
-const makeService = (
-  impl: AgentSignalToolService['invoke'] = vi.fn(async () => ({ data: { ok: true } })),
-): AgentSignalToolService => ({ invoke: impl });
+import {
+  type AgentSignalRuntimeService,
+  AgentSignalToolExecutionRuntime,
+} from './ExecutionRuntime';
 
 describe('AgentSignalToolExecutionRuntime', () => {
   it('exposes one bound method per advertised api name', () => {
     const runtime = new AgentSignalToolExecutionRuntime({
       apiNames: AGENT_SIGNAL_REVIEW_TOOL_API_NAMES,
-      service: makeService(),
+      service: {},
     });
 
     for (const apiName of AGENT_SIGNAL_REVIEW_TOOL_API_NAMES) {
@@ -19,50 +18,63 @@ describe('AgentSignalToolExecutionRuntime', () => {
     }
   });
 
-  it('dispatches to the service and stamps a mutation kind onto the result', async () => {
-    const invoke = vi.fn(async () => ({ data: { memoryId: 'mem_1', summary: 'stored' } }));
+  it('routes a mutation to its primitive and stamps a mutation kind', async () => {
+    const writeMemory = vi.fn(async () => ({ memoryId: 'mem_1', summary: 'stored' }));
     const runtime = new AgentSignalToolExecutionRuntime({
       apiNames: AGENT_SIGNAL_REVIEW_TOOL_API_NAMES,
-      service: makeService(invoke),
+      service: { writeMemory },
     });
 
-    const writeMemory = runtime.writeMemory as (i: unknown, c: unknown) => Promise<any>;
-    const result = await writeMemory({ content: 'x' }, { userId: 'u', agentId: 'a' });
-
-    expect(invoke).toHaveBeenCalledWith(
-      'writeMemory',
+    const result = await (runtime.writeMemory as any)(
       { content: 'x' },
-      { userId: 'u', agentId: 'a' },
+      { agentId: 'a', userId: 'u' },
     );
+
+    expect(writeMemory).toHaveBeenCalledWith({ content: 'x' }, { agentId: 'a', userId: 'u' });
     expect(result.success).toBe(true);
     expect(result.state).toEqual({ kind: 'mutation', memoryId: 'mem_1', summary: 'stored' });
     expect(JSON.parse(result.content)).toEqual(result.state);
   });
 
   it('stamps read / artifact kinds correctly', async () => {
+    const service: AgentSignalRuntimeService = { getManagedSkill: async () => ({ items: [] }) };
     const runtime = new AgentSignalToolExecutionRuntime({
       apiNames: AGENT_SIGNAL_REVIEW_TOOL_API_NAMES,
-      service: makeService(async () => ({ data: { items: [] } })),
+      service,
     });
 
-    const digest = await (runtime.getEvidenceDigest as any)({}, {});
-    expect(digest.state.kind).toBe('read');
+    const skill = await (runtime.getManagedSkill as any)({}, {});
+    expect(skill.state.kind).toBe('read');
 
-    const idea = await (runtime.recordSelfReviewIdea as any)({}, {});
-    expect(idea.state.kind).toBe('artifact');
+    // Artifact recorders have no primitive — the runtime echoes the input.
+    const idea = await (runtime.recordSelfReviewIdea as any)({ idea: 'do x' }, {});
+    expect(idea.state).toEqual({ kind: 'artifact', idea: 'do x' });
   });
 
-  it('surfaces service errors without throwing, preserving the kind', async () => {
+  it('surfaces primitive errors without throwing, preserving the kind', async () => {
     const runtime = new AgentSignalToolExecutionRuntime({
       apiNames: AGENT_SIGNAL_REVIEW_TOOL_API_NAMES,
-      service: makeService(async () => {
-        throw new Error('db unavailable');
-      }),
+      service: {
+        writeMemory: async () => {
+          throw new Error('db unavailable');
+        },
+      },
     });
 
     const result = await (runtime.writeMemory as any)({}, {});
     expect(result.success).toBe(false);
     expect(result.error?.message).toBe('db unavailable');
     expect(result.state).toEqual({ kind: 'mutation' });
+  });
+
+  it('fails a mutation whose primitive is not implemented', async () => {
+    const runtime = new AgentSignalToolExecutionRuntime({
+      apiNames: AGENT_SIGNAL_REVIEW_TOOL_API_NAMES,
+      service: {},
+    });
+
+    const result = await (runtime.createSelfReviewProposal as any)({}, {});
+    expect(result.success).toBe(false);
+    expect(result.error?.message).toMatch(/Unsupported/);
   });
 });
