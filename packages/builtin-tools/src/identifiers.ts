@@ -2,6 +2,11 @@ import { LobeActivatorManifest } from '@lobechat/builtin-tool-activator';
 import { AgentBuilderManifest } from '@lobechat/builtin-tool-agent-builder';
 import { AgentDocumentsManifest } from '@lobechat/builtin-tool-agent-documents';
 import { AgentManagementManifest } from '@lobechat/builtin-tool-agent-management';
+import {
+  agentSignalFeedbackIntentManifest,
+  agentSignalReflectionManifest,
+  agentSignalReviewManifest,
+} from '@lobechat/builtin-tool-agent-signal';
 import { CalculatorManifest } from '@lobechat/builtin-tool-calculator';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { CredsManifest } from '@lobechat/builtin-tool-creds';
@@ -36,6 +41,9 @@ export const builtinToolIdentifiers: string[] = [
   NotebookManifest.identifier,
   PageAgentManifest.identifier,
   selfFeedbackIntentManifest.identifier,
+  agentSignalReviewManifest.identifier,
+  agentSignalReflectionManifest.identifier,
+  agentSignalFeedbackIntentManifest.identifier,
   SkillsManifest.identifier,
   SkillStoreManifest.identifier,
   TopicReferenceManifest.identifier,
