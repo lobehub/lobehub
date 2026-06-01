@@ -160,7 +160,7 @@ describe('TopicModel - Delete', () => {
       expect(remainingTopics[0].id).toBe('topic-agent-2');
     });
 
-    it('should delete legacy topics via sessionId lookup', async () => {
+    it('should not delete legacy session-only topics', async () => {
       await serverDB.transaction(async (trx) => {
         await trx.insert(sessions).values([
           { id: 'legacy-session-1', userId },
@@ -179,12 +179,12 @@ describe('TopicModel - Delete', () => {
 
       await topicModel.batchDeleteByAgentId('legacy-agent');
 
+      // Topics carrying only a legacy sessionId are not matched by agentId, so none are deleted.
       const remainingTopics = await serverDB.select().from(topics).where(eq(topics.userId, userId));
-      expect(remainingTopics).toHaveLength(1);
-      expect(remainingTopics[0].id).toBe('other-session-topic');
+      expect(remainingTopics).toHaveLength(3);
     });
 
-    it('should delete both new and legacy topics', async () => {
+    it('should delete only topics carrying the agentId, keeping session-only ones', async () => {
       await serverDB.transaction(async (trx) => {
         await trx.insert(sessions).values([{ id: 'mixed-del-session', userId }]);
         await trx
@@ -202,8 +202,10 @@ describe('TopicModel - Delete', () => {
 
       await topicModel.batchDeleteByAgentId('mixed-del-agent');
 
+      // Only `mixed-legacy` (sessionId only, no agentId) survives.
       const remainingTopics = await serverDB.select().from(topics).where(eq(topics.userId, userId));
-      expect(remainingTopics).toHaveLength(0);
+      expect(remainingTopics).toHaveLength(1);
+      expect(remainingTopics[0].id).toBe('mixed-legacy');
     });
 
     it('should not delete topics from other users', async () => {
