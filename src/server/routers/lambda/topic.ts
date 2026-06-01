@@ -294,10 +294,7 @@ export const topicRouter = router({
         triggers,
       });
 
-      // Runtime migration: backfill agentId for legacy topics (sessionId-only)
-      // under this agent so they become queryable by agentId. The read paths no
-      // longer resolve sessionId, so this backfill is the bridge that keeps
-      // migrating straggler legacy rows during the transition window.
+      // Runtime migration: backfill agentId for ALL legacy topics and messages under this agent
       const runMigration = async () => {
         if (!effectiveAgentId) return;
 
@@ -462,7 +459,7 @@ export const topicRouter = router({
         }
       }
 
-      // Runtime migration: backfill agentId for legacy topics surfaced here
+      // Runtime migration: backfill agentId for legacy topics
       const runMigration = async () => {
         for (const [sessionId, agentId] of sessionAgentMap) {
           try {

@@ -526,8 +526,6 @@ export class TopicModel {
         agentId: topics.agentId,
         groupId: topics.groupId,
         id: topics.id,
-        // sessionId is selected for the recentTopics runtime agentId backfill
-        // (legacy session-only rows); it is not exposed in the API response.
         sessionId: topics.sessionId,
         title: topics.title,
         updatedAt: topics.updatedAt,
