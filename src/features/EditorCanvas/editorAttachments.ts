@@ -46,6 +46,9 @@ export const insertFilesIntoEditor = (editor: IEditor | undefined, files: File[]
       lexicalEditor.dispatchCommand(INSERT_FILE_COMMAND, { file });
     }
   }
+  // File picker / Upload dropdown steals focus; restore it so the cursor
+  // remains visible and the user can keep typing.
+  editor.focus?.();
 };
 
 export const pickAndInsertAttachments = (editor: IEditor | undefined, accept?: string): void => {
