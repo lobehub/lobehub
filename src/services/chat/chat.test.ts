@@ -1,8 +1,9 @@
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { REQUEST_TRIGGER_HEADER } from '@lobechat/const';
+import { createVisualFileRef } from '@lobechat/const/visualRef';
 import type { ChatStreamPayload, LobeTool, UIChatMessage } from '@lobechat/types';
-import { ChatErrorType, createVisualFileRef, RequestTrigger } from '@lobechat/types';
+import { ChatErrorType, RequestTrigger } from '@lobechat/types';
 import { act } from '@testing-library/react';
 import { type EnabledAiModel, ModelProvider } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
