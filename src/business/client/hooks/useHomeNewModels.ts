@@ -7,5 +7,12 @@ export interface HomeNewModelItem {
   type: HomeNewModelType;
 }
 
-export const useHomeNewModels = (fallbackItems: HomeNewModelItem[]): HomeNewModelItem[] =>
-  fallbackItems;
+export interface HomeNewModelsState {
+  isLoading: boolean;
+  items: HomeNewModelItem[];
+}
+
+export const useHomeNewModels = (fallbackItems: HomeNewModelItem[]): HomeNewModelsState => ({
+  isLoading: false,
+  items: fallbackItems,
+});

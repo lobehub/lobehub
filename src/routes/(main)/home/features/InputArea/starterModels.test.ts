@@ -12,6 +12,11 @@ describe('starter models', () => {
   it('keeps the fallback home new model entries in the current product order', () => {
     expect(DEFAULT_HOME_NEW_MODELS).toEqual([
       {
+        model: 'MiniMax-M3',
+        title: 'MiniMax M3',
+        type: 'chat',
+      },
+      {
         model: 'claude-opus-4-8',
         title: 'Claude Opus 4.8',
         type: 'chat',
