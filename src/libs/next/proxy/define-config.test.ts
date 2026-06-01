@@ -77,6 +77,30 @@ describe('defineConfig middleware', () => {
     expect(authMock.getSession).not.toHaveBeenCalled();
   });
 
+  it('does not canonicalize the dev proxy bypass route', async () => {
+    const { middleware } = defineConfig();
+
+    const response = await middleware(
+      createRequest('https://other.example.com/_dangerous_local_dev_proxy/path?debug-host=local'),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('location')).toBeNull();
+    expect(authMock.getSession).not.toHaveBeenCalled();
+  });
+
+  it('does not canonicalize backend endpoints from other hosts', async () => {
+    const { middleware } = defineConfig();
+
+    const response = await middleware(
+      createRequest('https://other.example.com/api/auth/get-session'),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('location')).toBeNull();
+    expect(authMock.getSession).not.toHaveBeenCalled();
+  });
+
   it('allows canonical-host protected requests when the user is signed in', async () => {
     authMock.getSession.mockResolvedValue({ user: { id: 'user_1' } });
     const { middleware } = defineConfig();

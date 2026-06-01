@@ -185,6 +185,8 @@ export function defineConfig() {
   };
 
   const isPublicRoute = createRouteMatcher([
+    dangerousLocalDevProxyRoute,
+    `${dangerousLocalDevProxyRoute}(.*)`,
     // backend api
     '/api/v1(.*)', // OpenAPI routes should use OpenAPI auth (API Key/OIDC), not BetterAuth session
     '/api/auth(.*)',
@@ -222,15 +224,17 @@ export function defineConfig() {
   const betterAuthMiddleware = async (req: NextRequest) => {
     logBetterAuth('BetterAuth middleware processing request: %s %s', req.method, req.url);
 
-    const canonicalRedirect = getCanonicalAppRedirect(req);
-    if (canonicalRedirect) return canonicalRedirect;
-
     const response = defaultMiddleware(req);
 
     // when enable auth protection, only public route is not protected, others are all protected
     const isProtected = !isPublicRoute(req);
 
     logBetterAuth('Route protection status: %s, %s', req.url, isProtected ? 'protected' : 'public');
+
+    if (isProtected) {
+      const canonicalRedirect = getCanonicalAppRedirect(req);
+      if (canonicalRedirect) return canonicalRedirect;
+    }
 
     // Skip session lookup for public routes to reduce latency
     if (!isProtected) return response;
