@@ -8,11 +8,8 @@ import type {
   ToolCallRequestMessage,
 } from '@lobechat/device-gateway-client';
 import { GatewayClient } from '@lobechat/device-gateway-client';
-import type { IdentitySource } from '@lobechat/device-identity';
-import { deriveDeviceId } from '@lobechat/device-identity';
 import type { Command } from 'commander';
 
-import { createLambdaClient } from '../api/client';
 import { getValidToken } from '../auth/refresh';
 import { resolveToken } from '../auth/resolveToken';
 import { CLI_API_KEY_ENV } from '../constants/auth';
@@ -28,6 +25,7 @@ import {
   stopDaemon,
   writeStatus,
 } from '../daemon/manager';
+import { registerDevice, resolveDeviceIdentity } from '../device/register';
 import { loadOrCreateConnectionId, loadSettings, normalizeUrl, saveSettings } from '../settings';
 import { executeToolCall } from '../tools';
 import { cleanupAllProcesses } from '../tools/shell';
@@ -198,12 +196,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   // Resolve a stable device identity. An explicit `--device-id` wins (lets a
   // user pin a VM to a fixed identity); otherwise derive from the machine id so
   // the same machine + user maps to one device across reconnects.
-  const identity: { deviceId: string; identitySource: IdentitySource } | undefined =
-    options.deviceId
-      ? { deviceId: options.deviceId, identitySource: 'fallback' }
-      : auth.userId
-        ? deriveDeviceId(auth.userId)
-        : undefined;
+  const identity = resolveDeviceIdentity(auth.userId, options.deviceId);
 
   // Freeform channel label (`cli` by default); `LOBEHUB_CLI_CHANNEL` lets a
   // dev build tag itself `cli-dev` so the gateway can prioritise / display it.
@@ -406,19 +399,15 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   });
 
   // Register this device in the server registry before opening the WS, so the
-  // row exists by the time the gateway reports it online. Best-effort: a
-  // failure must not block the connection.
+  // row exists by the time the gateway reports it online. `lh login` already
+  // registers, but re-running here is cheap (idempotent upsert) and covers
+  // `--token` sessions that never went through login. Best-effort: a failure
+  // must not block the connection.
   if (identity) {
     try {
-      // Reuse the already-resolved auth (respects `--token` mode) instead of
-      // getTrpcClient(), which re-discovers creds and exits when none are found.
-      const trpc = createLambdaClient(auth);
-      await trpc.device.register.mutate({
-        deviceId: identity.deviceId,
-        hostname: os.hostname(),
-        identitySource: identity.identitySource,
-        platform: process.platform,
-      });
+      // Reuse the already-resolved auth (respects `--token` mode) so we don't
+      // re-discover creds and exit when none are found.
+      await registerDevice(auth, identity);
     } catch (err) {
       error(`Device registration failed (non-fatal): ${(err as Error).message}`);
     }
