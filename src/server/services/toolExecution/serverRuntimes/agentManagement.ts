@@ -61,17 +61,29 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
 
       createAgent: async (params: CreateAgentParams): Promise<ToolExecutionResult> => {
         try {
+          // Guard against LLM double-encoding: if array fields are JSON strings, parse them.
+          const parseArrayParam = (v: any): string[] | undefined => {
+            if (typeof v === 'string') {
+              try {
+                return JSON.parse(v);
+              } catch {
+                return undefined;
+              }
+            }
+            return v;
+          };
+
           const agent = await agentModel.create({
             avatar: params.avatar,
             backgroundColor: params.backgroundColor,
             description: params.description,
             model: params.model,
             openingMessage: params.openingMessage,
-            openingQuestions: params.openingQuestions,
-            plugins: params.plugins,
+            openingQuestions: parseArrayParam(params.openingQuestions),
+            plugins: parseArrayParam(params.plugins),
             provider: params.provider,
             systemRole: params.systemRole,
-            tags: params.tags,
+            tags: parseArrayParam(params.tags),
             title: params.title,
           });
 
