@@ -1,6 +1,6 @@
 ---
 name: agent-runtime-hooks
-description: "Agent runtime lifecycle hooks for observing and intercepting agent execution. Use when adding hooks to agent operations, mocking tool calls, logging step events, handling human intervention, sub-agent calls, context compression, or building eval/tracing integrations. Triggers on 'hooks', 'beforeToolCall', 'afterToolCall', 'beforeStep', 'afterStep', 'onComplete', 'onError', 'tool mock', 'agent lifecycle', 'human intervention', 'callAgent', 'compact'."
+description: 'Agent runtime lifecycle hooks. Use for before/after tool or step hooks, tool mocks, human intervention, sub-agent calls, context compression, evals, tracing, callAgent, or lifecycle events.'
 user-invocable: false
 ---
 

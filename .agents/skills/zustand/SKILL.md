@@ -1,6 +1,6 @@
 ---
 name: zustand
-description: "LobeHub Zustand store conventions: public/internal/dispatch action layers, optimistic update pattern, slice composition via `flattenActions`, and class-based action migration. Use whenever working under `src/store/**`, adding a `createXxxSlice`, writing `internal_*` or `internal_dispatch*` actions, designing `messagesMap`/`topicsMap` reducers, refactoring a `StateCreator` object slice into a `XxxActionImpl` class, or debugging stale store reads. Triggers on `useChatStore`/`useUserStore`/`useGlobalStore`, `createStore`, `flattenActions`, `StoreSetter`, `internal_dispatch`, 'add an action', 'zustand selector', 'store slice', 'class action', 'optimistic update'."
+description: 'LobeHub Zustand store conventions. Use when editing src/store, store slices, public/internal actions, dispatch actions, flattenActions, optimistic updates, selectors, maps, or class action migration.'
 user-invocable: false
 ---
 

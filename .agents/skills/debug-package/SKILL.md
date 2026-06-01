@@ -1,6 +1,6 @@
 ---
 name: debug-package
-description: "Guide for the `debug` npm package and LobeHub log namespaces (lobe-server:*, lobe-desktop:*, lobe-client:*, lobe-*-router:*). Use whenever adding a `debug(...)` logger, picking a namespace for new server/desktop/client/router code, troubleshooting why DEBUG=lobe-* logs don't show up, or when the user asks to 'add logging', 'add a logger', 'instrument this', 'trace this call', 'why isn't my log printing', or mentions `debug(`, `DEBUG=`, `localStorage.debug`, or log format specifiers like %O / %o / %s / %d in a LobeHub codebase."
+description: 'LobeHub debug package and log namespace guide. Use when adding debug() logging, choosing lobe-* namespaces, troubleshooting DEBUG output, localStorage.debug, or log format specifiers.'
 user-invocable: false
 ---
 

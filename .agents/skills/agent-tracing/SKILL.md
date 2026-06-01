@@ -1,6 +1,6 @@
 ---
 name: agent-tracing
-description: "Agent tracing CLI for inspecting agent execution snapshots. Use when user mentions 'agent-tracing', 'trace', 'snapshot', wants to debug agent execution, inspect LLM calls, view context engine data, or analyze agent steps. Triggers on agent debugging, trace inspection, or execution analysis tasks."
+description: 'Agent tracing CLI for execution snapshots. Use for agent-tracing, traces, snapshots, LLM call inspection, context engine data, agent step analysis, or execution debugging.'
 user-invocable: false
 ---
 

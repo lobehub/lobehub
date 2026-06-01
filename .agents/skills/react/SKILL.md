@@ -1,6 +1,6 @@
 ---
 name: react
-description: "LobeHub React component conventions — base-ui (`@lobehub/ui/base-ui`) first for headless primitives (Select, Modal, DropdownMenu, ContextMenu, Popover, ScrollArea, Switch, Toast, FloatingSheet), then `@lobehub/ui` root, antd as last resort; styling via `antd-style` `createStaticStyles` + `cssVar.*` (zero-runtime preferred over `createStyles` + `token`); routing via `react-router-dom` (not `next/link`). Use when writing or editing any `.tsx` under `src/**`. Triggers on `createStaticStyles`, `createStyles`, `cssVar`, `antd-style`, `Flexbox`, `Center`, `Select`, `Modal`, `Drawer`, `Button`, `Tooltip`, `DropdownMenu`, `ContextMenu`, `Popover`, `Switch`, `ScrollArea`, `Toast`, `FloatingSheet`, `Link`, `useNavigate`, `react-router-dom`, `next/link`, `desktopRouter`, `componentMap.desktop`, `.desktop.tsx`, `base-ui`, `@lobehub/ui/base-ui`, 'new component', 'new page', 'edit layout', 'add styles', 'zustand selector', '@lobehub/ui', 'antd import'."
+description: 'LobeHub React component conventions. Use when editing TSX UI, choosing base-ui vs @lobehub/ui vs antd, styling with antd-style, routing, desktop variants, layouts, or component state.'
 user-invocable: false
 ---
 

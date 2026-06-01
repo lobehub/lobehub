@@ -1,6 +1,6 @@
 ---
 name: db-migrations
-description: 'Use when generating or regenerating Drizzle migration files, changing database schema tables or columns, resolving migration sequence conflicts after rebase, reviewing migration SQL for idempotent patterns, or renaming migration files.'
+description: 'Use for Drizzle migrations: schema/table/column changes, migration generation or regeneration, sequence conflicts after rebase, idempotent SQL review, or migration renames.'
 user-invocable: false
 ---
 

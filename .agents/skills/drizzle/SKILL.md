@@ -1,6 +1,6 @@
 ---
 name: drizzle
-description: "Drizzle ORM schema authoring and query style for LobeHub (postgres, strict mode). Use when editing anything under `src/database/schemas/`, defining `pgTable` columns/indexes/junction tables, spreading `...timestamps`, generating `createInsertSchema`/`$inferSelect`/`$inferInsert` types, writing `db.select().from(...).leftJoin(...)` queries, or deciding when to split a relational `with:` into two queries. Triggers on `pgTable`, `db.select`, `db.query`, `eq()`/`and()`/`inArray()`, `uniqueIndex`, `primaryKey`, `references({ onDelete })`, 'add a column', 'new table', 'foreign key', 'junction table', 'schema field'. For migration files specifically, see the `db-migrations` skill."
+description: 'LobeHub Drizzle ORM schema and query style. Use for pgTable schemas, indexes, joins, inferred types, db.select/db.query, schema fields, foreign keys, junction tables, or postgres query patterns.'
 user-invocable: false
 ---
 
