@@ -10,7 +10,9 @@ interface CapturedProviderConfig {
 }
 
 const mocks = vi.hoisted(() => ({
-  genServerAiProvidersConfig: vi.fn(async () => ({})),
+  genServerAiProvidersConfig: vi.fn(
+    async (_specificConfig: Record<string, CapturedProviderConfig>) => ({}),
+  ),
 }));
 
 const mockGlobalConfigDependencies = (enableBusinessFeatures: boolean) => {
