@@ -277,4 +277,22 @@ describe('groupTopicsByStatus', () => {
 
     expect(result[0].children.map((t) => t.id)).toEqual(['new', 'mid', 'old']);
   });
+
+  it('should bucket a topic that is streaming on this client (loadingTopicIds) as running', () => {
+    const topics = [createTopic('loading', 'active'), createTopic('idle', 'active')];
+
+    const result = groupTopicsByStatus(topics, 'updatedAt', new Set(['loading']));
+
+    expect(result.map((g) => g.id)).toEqual(['running', 'active']);
+    expect(result[0].children.map((t) => t.id)).toEqual(['loading']);
+    expect(result[1].children.map((t) => t.id)).toEqual(['idle']);
+  });
+
+  it('should keep a loading topic in waitingForHuman (it outranks the running overlay)', () => {
+    const topics = [createTopic('waiting', 'waitingForHuman')];
+
+    const result = groupTopicsByStatus(topics, 'updatedAt', new Set(['waiting']));
+
+    expect(result.map((g) => g.id)).toEqual(['waitingForHuman']);
+  });
 });

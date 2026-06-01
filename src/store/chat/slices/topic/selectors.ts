@@ -118,7 +118,11 @@ const displayTopicsForSidebar =
     return [...sortTopics(favTopics, sortBy), ...sortTopics(rest, sortBy)].slice(0, pageSize);
   };
 
-const getGroupFn = (groupMode: TopicGroupMode, sortBy: TopicSortBy) => {
+const getGroupFn = (
+  groupMode: TopicGroupMode,
+  sortBy: TopicSortBy,
+  loadingTopicIds?: ReadonlySet<string>,
+) => {
   const field: 'createdAt' | 'updatedAt' = sortBy === 'createdAt' ? 'createdAt' : 'updatedAt';
   if (groupMode === 'byProject') {
     return (topics: ChatTopic[]) =>
@@ -130,7 +134,7 @@ const getGroupFn = (groupMode: TopicGroupMode, sortBy: TopicSortBy) => {
   }
   if (groupMode === 'byStatus') {
     return (topics: ChatTopic[]) =>
-      groupTopicsByStatus(topics, field).map((group) => ({
+      groupTopicsByStatus(topics, field, loadingTopicIds).map((group) => ({
         ...group,
         title: t(`groupTitle.byStatus.${group.id}` as any, { ns: 'topic' }),
       }));
@@ -173,7 +177,10 @@ const groupedTopicsForSidebar =
   (s: ChatStoreState): GroupedTopic[] => {
     const limitedTopics = displayTopicsForSidebar(pageSize, sortBy)(s);
     if (!limitedTopics) return [];
-    return buildGroupedTopics(limitedTopics, getGroupFn(groupMode, sortBy));
+    // Topics actively streaming on this client surface under "running" even
+    // though their persisted status is still active — see resolveStatusBucket.
+    const loadingTopicIds = groupMode === 'byStatus' ? new Set(s.topicLoadingIds) : undefined;
+    return buildGroupedTopics(limitedTopics, getGroupFn(groupMode, sortBy, loadingTopicIds));
   };
 
 const hasMoreTopics = (s: ChatStoreState): boolean => {

@@ -158,7 +158,9 @@ export const groupTopicsByProject = (
 //
 // The server orders the query by the same priority (see `STATUS_SORT_RANK` in
 // `@lobechat/database` topic model) so the right page is fetched; this only
-// re-buckets that already-ordered page for display. Keep the two in sync.
+// re-buckets that already-ordered page for display. Keep the two in sync. The
+// one client-only nuance is `loadingTopicIds` (a topic streaming right now),
+// which the server can't know about — see `resolveStatusBucket`.
 export const STATUS_GROUP_ORDER: ChatTopicStatus[] = [
   'waitingForHuman',
   'running',
@@ -169,17 +171,34 @@ export const STATUS_GROUP_ORDER: ChatTopicStatus[] = [
   'archived',
 ];
 
+/**
+ * Resolve the bucket a topic belongs to. Mirrors the icon precedence in the
+ * sidebar `TopicItem`: `waitingForHuman` wins, then a topic that is actively
+ * streaming on this client (`loadingTopicIds`, a transient client-only state
+ * the server can't see) or persisted as `running` lands in `running`, then the
+ * persisted status, defaulting to `active`.
+ */
+const resolveStatusBucket = (
+  topic: ChatTopic,
+  loadingTopicIds?: ReadonlySet<string>,
+): ChatTopicStatus => {
+  if (topic.status === 'waitingForHuman') return 'waitingForHuman';
+  if (loadingTopicIds?.has(topic.id) || topic.status === 'running') return 'running';
+  const status = topic.status ?? 'active';
+  return STATUS_GROUP_ORDER.includes(status) ? status : 'active';
+};
+
 export const groupTopicsByStatus = (
   topics: ChatTopic[],
   field: 'createdAt' | 'updatedAt',
+  loadingTopicIds?: ReadonlySet<string>,
 ): GroupedTopic[] => {
   if (!topics.length) return [];
 
   const groupsMap = new Map<ChatTopicStatus, ChatTopic[]>();
 
   for (const topic of topics) {
-    const status = topic.status ?? 'active';
-    const id: ChatTopicStatus = STATUS_GROUP_ORDER.includes(status) ? status : 'active';
+    const id = resolveStatusBucket(topic, loadingTopicIds);
     const existing = groupsMap.get(id);
     if (existing) {
       existing.push(topic);
