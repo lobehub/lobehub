@@ -1,42 +1,26 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 
 import { useQuery } from '@/hooks/useQuery';
-import { useDiscoverStore } from '@/store/discover';
 import { type SkillQueryParams } from '@/types/discover';
-import { DiscoverTab, SkillSorts } from '@/types/discover';
 
-import Pagination from '../features/Pagination';
-import List from './features/List';
-import Loading from './loading';
+import DiscoverView from './features/DiscoverView';
+import FilteredListView from './features/FilteredListView';
+import TabNavigation from './features/TabNavigation';
 
 const SkillPage = memo(() => {
-  const { q, page, category, sort, order } = useQuery() as SkillQueryParams;
-  const useSkillList = useDiscoverStore((s) => s.useFetchSkillList);
-  const { data, isLoading } = useSkillList({
-    category,
-    order,
-    page,
-    pageSize: 21,
-    q,
-    sort: sort ?? SkillSorts.InstallCount,
-  });
+  const { category, sort, q } = useQuery() as SkillQueryParams;
 
-  if (isLoading || !data) return <Loading />;
-
-  const { items, currentPage, pageSize, totalCount } = data;
+  const isDiscoverView = useMemo(() => {
+    return !category && !sort && !q;
+  }, [category, sort, q]);
 
   return (
-    <Flexbox gap={32} width={'100%'}>
-      <List data={items} />
-      <Pagination
-        currentPage={currentPage}
-        pageSize={pageSize}
-        tab={DiscoverTab.Skills}
-        total={totalCount}
-      />
+    <Flexbox gap={24} width={'100%'}>
+      <TabNavigation />
+      {isDiscoverView ? <DiscoverView /> : <FilteredListView />}
     </Flexbox>
   );
 });

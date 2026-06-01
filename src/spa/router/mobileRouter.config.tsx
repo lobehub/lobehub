@@ -162,6 +162,16 @@ export const mobileRoutes: RouteObject[] = [
               {
                 element: dynamicElement(
                   () =>
+                    import('@/routes/(main)/community/(detail)/collection').then(
+                      (m) => m.MobileCollectionPage,
+                    ),
+                  'Mobile > Discover > Detail > Collection',
+                ),
+                path: 'collection/:slug',
+              },
+              {
+                element: dynamicElement(
+                  () =>
                     import('@/routes/(main)/community/(detail)/user').then(
                       (m) => m.MobileUserDetailPage,
                     ),

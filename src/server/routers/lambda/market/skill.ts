@@ -25,6 +25,53 @@ const marketProcedure = publicProcedure
   });
 
 export const skillRouter = router({
+  getSkillCollectionDetail: marketProcedure
+    .input(
+      z.object({
+        locale: z.string().optional(),
+        slug: z.string(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      log('getSkillCollectionDetail input: %O', input);
+
+      try {
+        return await ctx.marketService.getSkillCollectionDetail(input.slug, {
+          locale: input.locale,
+        });
+      } catch (error) {
+        log('Error fetching skill collection detail: %O', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch skill collection detail',
+        });
+      }
+    }),
+
+  getSkillCollections: marketProcedure
+    .input(
+      z
+        .object({
+          locale: z.string().optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ input, ctx }) => {
+      log('getSkillCollections input: %O', input);
+
+      try {
+        return await ctx.marketService.getSkillCollections({
+          locale: input?.locale,
+        });
+      } catch (error) {
+        log('Error fetching skill collections: %O', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch skill collections',
+        });
+      }
+    }),
+
   getSkillCategories: marketProcedure
     .input(
       z

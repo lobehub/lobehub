@@ -9,6 +9,8 @@ import { type StoreSetter } from '@/store/types';
 import {
   type DiscoverSkillDetail,
   type SkillCategoryItem,
+  type SkillCollectionDetail,
+  type SkillCollectionListResponse,
   type SkillListResponse,
   type SkillQueryParams,
 } from '@/types/discover';
@@ -61,6 +63,30 @@ export class SkillActionImpl {
       {
         revalidateOnFocus: false,
       },
+    );
+  };
+
+  useFetchSkillCollections = (): SWRResponse<SkillCollectionListResponse> => {
+    const locale = globalHelpers.getCurrentLanguage();
+    return useClientDataSWR(
+      ['skill-collections', locale].join('-'),
+      async () => discoverService.getSkillCollections(),
+      {
+        revalidateOnFocus: false,
+      },
+    );
+  };
+
+  useFetchSkillCollectionDetail = ({
+    slug,
+  }: {
+    slug?: string;
+  }): SWRResponse<SkillCollectionDetail> => {
+    const locale = globalHelpers.getCurrentLanguage();
+
+    return useClientDataSWR(
+      !slug ? null : ['skill-collection-detail', locale, slug].filter(Boolean).join('-'),
+      async () => discoverService.getSkillCollectionDetail({ slug: slug! }),
     );
   };
 }

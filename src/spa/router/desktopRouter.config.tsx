@@ -284,6 +284,13 @@ export const desktopRoutes: RouteObject[] = [
               },
               {
                 element: dynamicElement(
+                  () => import('@/routes/(main)/community/(detail)/collection'),
+                  'Desktop > Discover > Detail > Collection',
+                ),
+                path: 'collection/:slug',
+              },
+              {
+                element: dynamicElement(
                   () => import('@/routes/(main)/community/(detail)/mcp'),
                   'Desktop > Discover > Detail > MCP',
                 ),

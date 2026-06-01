@@ -1089,6 +1089,60 @@ export default {
 
   'skills.hero.guide.human': 'I am Human',
 
+  'skills.sections.collection': 'Collection',
+
+  'skills.sections.collection1Desc':
+    'A curated starter pack for developers building their first end-to-end coding agent workflow.',
+
+  'skills.sections.collection1Title': 'Get started: your first autonomous coding agent',
+
+  'skills.sections.collection2Desc':
+    '5 must-have skills to guard your agents against injection, leakage, and runaway permissions.',
+
+  'skills.sections.collection2Title': 'Essential security skills for production agents',
+
+  'skills.sections.collections': "Editor's collections",
+
+  'skills.sections.editorsPick': "EDITOR'S PICK",
+
+  'skills.sections.editorsPickDesc':
+    'Security-first vetting for every skill before it touches your agent. Checks permission scope, red flags, and injection risks automatically.',
+
+  'skills.sections.editorsPickTitle': 'Build safer agents with skill-vetter',
+
+  'skills.sections.featured': 'Featured',
+
+  'skills.sections.getSkill': 'Get skill',
+
+  'skills.sections.learnMore': 'Learn more',
+
+  'skills.sections.seeAll': 'See all →',
+
+  'skills.sections.trending': 'Trending this week',
+
+  'skills.tabs.discover': 'Discover',
+
+  'skills.tabs.new': 'New',
+
+  'skills.tabs.trending': 'Trending',
+
+  'skills.collection.editorCollection': "EDITOR'S COLLECTION",
+
+  'skills.collection.get': 'Get',
+
+  'skills.collection.installAll': 'Install all skills',
+
+  'skills.collection.installDesc':
+    'Get all {{count}} skills installed at once. Your agent will walk you through each one.',
+
+  'skills.collection.installTitle': 'Install the full collection',
+
+  'skills.collection.moreCollections': 'More collections',
+
+  'skills.collection.skillCount': '{{count}} skills',
+
+  'skills.collection.skillsInCollection': 'Skills in this collection',
+
   'skills.sorts.createdAt': 'Recently Published',
 
   'skills.sorts.installCount': 'Downloads',

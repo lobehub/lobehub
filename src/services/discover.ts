@@ -564,6 +564,21 @@ class DiscoverService {
     });
   };
 
+  getSkillCollections = async (): Promise<any> => {
+    const locale = globalHelpers.getCurrentLanguage();
+    return lambdaClient.market.skill.getSkillCollections.query({
+      locale,
+    });
+  };
+
+  getSkillCollectionDetail = async (params: { slug: string }): Promise<any> => {
+    const locale = globalHelpers.getCurrentLanguage();
+    return lambdaClient.market.skill.getSkillCollectionDetail.query({
+      ...params,
+      locale,
+    });
+  };
+
   reportSkillEvent = async (eventData: { event: string; identifier: string; source?: string }) => {
     const allow = userGeneralSettingsSelectors.telemetry(useUserStore.getState());
     if (!allow) return;

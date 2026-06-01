@@ -458,6 +458,61 @@ export class MarketService {
   }
 
   /**
+   * Get skill collections list
+   */
+  async getSkillCollections(options?: { locale?: string }) {
+    log('getSkillCollections: %O', options);
+
+    const url = new URL(`${MARKET_BASE_URL}/api/v1/skills/collections/`);
+    if (options?.locale) {
+      url.searchParams.set('locale', options.locale);
+    }
+
+    const response = await fetch(url.toString(), {
+      // @ts-ignore
+      headers: this.market.headers,
+      method: 'GET',
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch skill collections: ${response.status}`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Get skill collection detail by slug
+   */
+  async getSkillCollectionDetail(slug: string, options?: { locale?: string }) {
+    log('getSkillCollectionDetail: slug=%s, options=%O', slug, options);
+
+    const url = new URL(`${MARKET_BASE_URL}/api/v1/skills/collections/${slug}`);
+    if (options?.locale) {
+      url.searchParams.set('locale', options.locale);
+    }
+
+    const response = await fetch(url.toString(), {
+      // @ts-ignore
+      headers: this.market.headers,
+      method: 'GET',
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch skill collection detail: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    // Map items to skills for compatibility
+    if (data.items && !data.skills) {
+      data.skills = data.items;
+    }
+
+    return data;
+  }
+
+  /**
    * Execute a LobeHub Skill tool
    * @param params - The skill execution parameters (provider, toolName, args)
    * @returns Execution result with content and success status
