@@ -1440,7 +1440,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
           name: 'textInput_cacheRead',
           strategy: 'tiered',
           tiers: [
-            { rate: 0.2, upTo: 0.2 },
+            { rate: 0.2, upTo: 200_000 },
             { rate: 0.4, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -1449,7 +1449,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
           name: 'textInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 2, upTo: 0.2 },
+            { rate: 2, upTo: 200_000 },
             { rate: 4, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -1458,7 +1458,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
           name: 'textOutput',
           strategy: 'tiered',
           tiers: [
-            { rate: 12, upTo: 0.2 },
+            { rate: 12, upTo: 200_000 },
             { rate: 18, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -1529,7 +1529,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
           name: 'textInput_cacheRead',
           strategy: 'tiered',
           tiers: [
-            { rate: 0.2, upTo: 0.2 },
+            { rate: 0.2, upTo: 200_000 },
             { rate: 0.4, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -1538,7 +1538,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
           name: 'textInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 2, upTo: 0.2 },
+            { rate: 2, upTo: 200_000 },
             { rate: 4, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -1547,7 +1547,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
           name: 'textOutput',
           strategy: 'tiered',
           tiers: [
-            { rate: 12, upTo: 0.2 },
+            { rate: 12, upTo: 200_000 },
             { rate: 18, upTo: 'infinity' },
           ],
           unit: 'millionTokens',

@@ -94,7 +94,7 @@ const stepfunChatModels: AIChatModelCard[] = [
           name: 'textInput_cacheRead',
           strategy: 'tiered',
           tiers: [
-            { rate: 0.3, upTo: 0.004 },
+            { rate: 0.3, upTo: 4_000 },
             { rate: 0.8, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -103,7 +103,7 @@ const stepfunChatModels: AIChatModelCard[] = [
           name: 'textInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 1.5, upTo: 0.004 },
+            { rate: 1.5, upTo: 4_000 },
             { rate: 4, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -112,7 +112,7 @@ const stepfunChatModels: AIChatModelCard[] = [
           name: 'textOutput',
           strategy: 'tiered',
           tiers: [
-            { rate: 4, upTo: 0.004 },
+            { rate: 4, upTo: 4_000 },
             { rate: 8, upTo: 'infinity' }, // Still differs from documentation
           ],
           unit: 'millionTokens',

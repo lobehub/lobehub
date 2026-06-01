@@ -1559,7 +1559,7 @@ const qwenChatModels: AIChatModelCard[] = [
           name: 'textInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 1.2, upTo: 0.256 },
+            { rate: 1.2, upTo: 256_000 },
             { rate: 4.8, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -1568,7 +1568,7 @@ const qwenChatModels: AIChatModelCard[] = [
           name: 'textOutput',
           strategy: 'tiered',
           tiers: [
-            { rate: 7.2, upTo: 0.256 },
+            { rate: 7.2, upTo: 256_000 },
             { rate: 28.8, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -1577,7 +1577,7 @@ const qwenChatModels: AIChatModelCard[] = [
           name: 'textInput_cacheRead',
           strategy: 'tiered',
           tiers: [
-            { rate: 1.2 * 0.2, upTo: 0.256 },
+            { rate: 1.2 * 0.2, upTo: 256_000 },
             { rate: 4.8 * 0.2, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -1616,8 +1616,8 @@ const qwenChatModels: AIChatModelCard[] = [
           name: 'textInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 0.2, upTo: 0.128 },
-            { rate: 0.8, upTo: 0.256 },
+            { rate: 0.2, upTo: 128_000 },
+            { rate: 0.8, upTo: 256_000 },
             { rate: 1.2, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -1626,8 +1626,8 @@ const qwenChatModels: AIChatModelCard[] = [
           name: 'textOutput',
           strategy: 'tiered',
           tiers: [
-            { rate: 2, upTo: 0.128 },
-            { rate: 8, upTo: 0.256 },
+            { rate: 2, upTo: 128_000 },
+            { rate: 8, upTo: 256_000 },
             { rate: 12, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -1636,8 +1636,8 @@ const qwenChatModels: AIChatModelCard[] = [
           name: 'textInput_cacheRead',
           strategy: 'tiered',
           tiers: [
-            { rate: 0.2 * 0.2, upTo: 0.128 },
-            { rate: 0.8 * 0.2, upTo: 0.256 },
+            { rate: 0.2 * 0.2, upTo: 128_000 },
+            { rate: 0.8 * 0.2, upTo: 256_000 },
             { rate: 1.2 * 0.2, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -1673,8 +1673,8 @@ const qwenChatModels: AIChatModelCard[] = [
           name: 'textInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 0.15, upTo: 0.128 },
-            { rate: 0.6, upTo: 0.256 },
+            { rate: 0.15, upTo: 128_000 },
+            { rate: 0.6, upTo: 256_000 },
             { rate: 1.2, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -1683,8 +1683,8 @@ const qwenChatModels: AIChatModelCard[] = [
           name: 'textOutput',
           strategy: 'tiered',
           tiers: [
-            { rate: 1.5, upTo: 0.128 },
-            { rate: 6, upTo: 0.256 },
+            { rate: 1.5, upTo: 128_000 },
+            { rate: 6, upTo: 256_000 },
             { rate: 12, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -1693,8 +1693,8 @@ const qwenChatModels: AIChatModelCard[] = [
           name: 'textInput_cacheRead',
           strategy: 'tiered',
           tiers: [
-            { rate: 0.15 * 0.2, upTo: 0.128 },
-            { rate: 0.6 * 0.2, upTo: 0.256 },
+            { rate: 0.15 * 0.2, upTo: 128_000 },
+            { rate: 0.6 * 0.2, upTo: 256_000 },
             { rate: 1.2 * 0.2, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
