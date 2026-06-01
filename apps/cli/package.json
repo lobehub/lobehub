@@ -1,6 +1,6 @@
 {
   "name": "@lobehub/cli",
-  "version": "0.0.22",
+  "version": "0.0.24",
   "type": "module",
   "bin": {
     "lh": "./dist/index.js",
