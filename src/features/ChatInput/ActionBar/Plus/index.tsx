@@ -288,6 +288,7 @@ const PlusAction = memo(() => {
     footer: knowledgeFooter,
     items: knowledgeItems,
   } = useKnowledgeControls({ openAttachKnowledgeModal: handleOpenKnowledge });
+  const closeDropdown = useCallback(() => setDropdownOpen(false), []);
   const {
     autoCount: skillAutoCount,
     editPluginDrawer: skillEditPluginDrawer,
@@ -295,7 +296,7 @@ const PlusAction = memo(() => {
     marketHeader: skillMarketHeader,
     marketItems: skillItems,
     pinnedCount: skillPinnedCount,
-  } = useToolsControls();
+  } = useToolsControls({ closeDropdown });
 
   const isModelBuiltinSearchInternal = useAiInfraStore(
     aiModelSelectors.isModelBuiltinSearchInternal(model, provider),

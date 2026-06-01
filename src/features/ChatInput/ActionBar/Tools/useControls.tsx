@@ -332,7 +332,10 @@ const styles = createStaticStyles(({ css }) => ({
     display: flex;
     gap: 14px;
     align-items: center;
-    width: 100%;
+
+    margin-block-end: -4px;
+    margin-inline: -8px;
+    padding-inline: 8px;
   `,
   statsSettingsButton: css`
     cursor: pointer;
@@ -373,7 +376,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-export const useControls = () => {
+export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = {}) => {
   const { t } = useTranslation('setting');
   const agentId = useAgentId();
   const navigate = useNavigate();
@@ -1283,6 +1286,7 @@ export const useControls = () => {
             type="button"
             onClick={(event) => {
               event.stopPropagation();
+              closeDropdown?.();
               navigate('/settings/skill');
             }}
           >
