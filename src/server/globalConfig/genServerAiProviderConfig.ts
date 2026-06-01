@@ -6,7 +6,7 @@ import { loadModels } from '@/business/client/model-bank/loadModels';
 import { getLLMConfig } from '@/envs/llm';
 import { extractEnabledModels, transformToAiModelList } from '@/utils/server/parseModels';
 
-interface ProviderSpecificConfig {
+export interface ProviderSpecificConfig {
   enabled?: boolean;
   enabledKey?: string;
   fetchOnClient?: boolean;
