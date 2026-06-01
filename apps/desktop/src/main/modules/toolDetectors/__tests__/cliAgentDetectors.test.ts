@@ -181,5 +181,33 @@ describe('cliAgentDetectors', () => {
       expect(execMock).not.toHaveBeenCalled();
       expect(execFileMock).toHaveBeenCalledTimes(2);
     });
+
+    it('falls back to `--help` when `--version` is a bare number (gemini-cli case)', async () => {
+      // gemini-cli prints just "0.44.1" for `--version` (no "gemini" keyword),
+      // so the keyword guard must fall back to `--help`, which says "Gemini CLI".
+      callExecFile('/opt/homebrew/bin/gemini\n'); // which gemini
+      callExecFile('0.44.1'); // gemini --version → no keyword match
+      callExecFile('Usage: gemini [options] [command]\n\nGemini CLI - Google agentic coding CLI'); // gemini --help
+
+      const { geminiCliDetector } = await import('../cliAgentDetectors');
+      const status = await geminiCliDetector.detect();
+
+      expect(status.available).toBe(true);
+      expect(status.path).toBe('/opt/homebrew/bin/gemini');
+      // Displayed version still comes from `--version`, not `--help`.
+      expect(status.version).toBe('0.44.1');
+      expect(execFileMock).toHaveBeenCalledTimes(3); // which + --version + --help
+    });
+
+    it('does not invoke `--help` when `--version` already matches the keyword', async () => {
+      callExecFile('/usr/local/bin/claude\n');
+      callExecFile('1.2.3 (Claude Code)');
+
+      const { claudeCodeDetector } = await import('../cliAgentDetectors');
+      const status = await claudeCodeDetector.detect();
+
+      expect(status.available).toBe(true);
+      expect(execFileMock).toHaveBeenCalledTimes(2); // which + --version only (no --help)
+    });
   });
 });
