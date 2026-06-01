@@ -1,5 +1,5 @@
 import { type LobeChatDatabase } from '@lobechat/database';
-import { inferContentTypeFromImageUrl, nanoid, uuid } from '@lobechat/utils';
+import { getMimeType, inferContentTypeFromImageUrl, nanoid, uuid } from '@lobechat/utils';
 import { TRPCError } from '@trpc/server';
 import { sha256 } from 'js-sha256';
 
@@ -325,7 +325,7 @@ export class FileService {
 
     // Calculate file metadata
     const size = buffer.length;
-    const fileType = inferContentTypeFromImageUrl(pathname) || 'application/octet-stream';
+    const fileType = getMimeType(pathname);
     const hash = sha256(buffer);
 
     // Generate UUID for cleaner URLs
