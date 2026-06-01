@@ -9,6 +9,7 @@ import { type LobeChatDatabase } from '@/database/type';
 import { buildFinalSnapshotKey } from '@/server/modules/AgentTracing';
 import { emitAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { toAgentSignalTraceEvents } from '@/server/services/agentSignal/observability/traceEvents';
+import { extractSelfIterationCompletionPayload } from '@/server/services/agentSignal/services/selfIteration/completion';
 
 import { hookDispatcher } from './hooks';
 
@@ -204,6 +205,10 @@ export class CompletionLifecycle {
                 payload: {
                   agentId: metadata?.agentId,
                   operationId,
+                  // Self-iteration runs carry their finalState tool outcomes here
+                  // (the one point finalState is in hand) so the completion policy
+                  // can project receipts. Undefined for every other agent.
+                  selfIteration: extractSelfIterationCompletionPayload(state),
                   serializedContext: undefined,
                   steps: state?.stepCount || 0,
                   topicId: metadata?.topicId,

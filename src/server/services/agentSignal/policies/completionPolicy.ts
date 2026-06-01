@@ -3,6 +3,7 @@ import type { BuiltinAgentSlug } from '@lobechat/builtin-agents';
 import { SELF_ITERATION_AGENT_SLUGS } from '@lobechat/builtin-agents';
 
 import { defineAgentSignalHandlers, defineSourceHandler } from '../runtime/middleware';
+import type { SelfIterationCompletionPayload } from '../services/selfIteration/completion';
 
 /**
  * Handles `agent.execution.completed` source events emitted after every execAgent run
@@ -26,6 +27,12 @@ export interface CompletionCallbackParams {
   /** Self-iteration agent slug — caller dispatches mode-specific behaviour from this. */
   agentId: BuiltinAgentSlug;
   operationId: string;
+  /**
+   * Compact self-iteration tool outcomes + run marker, extracted from the run's
+   * finalState by the executor and carried on the completion payload. Absent for
+   * runs that did not stamp an agent-signal marker.
+   */
+  selfIteration?: SelfIterationCompletionPayload;
   /** Optional topic id forwarded from the source payload. */
   topicId?: string;
 }
@@ -44,7 +51,7 @@ export const createCompletionPolicy = (options: CreateCompletionPolicyOptions = 
       AGENT_SIGNAL_SOURCE_TYPES.agentExecutionCompleted,
       'agent.execution.completed:completion-fanout',
       async (source) => {
-        const { agentId, operationId, topicId } = source.payload;
+        const { agentId, operationId, selfIteration, topicId } = source.payload;
 
         if (!agentId || !operationId) return;
         if (!SELF_ITERATION_AGENT_SLUGS.has(agentId as BuiltinAgentSlug)) return;
@@ -53,6 +60,9 @@ export const createCompletionPolicy = (options: CreateCompletionPolicyOptions = 
         const params: CompletionCallbackParams = {
           agentId: agentId as BuiltinAgentSlug,
           operationId,
+          ...(selfIteration
+            ? { selfIteration: selfIteration as SelfIterationCompletionPayload }
+            : {}),
           ...(topicId ? { topicId } : {}),
         };
 

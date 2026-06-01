@@ -23,6 +23,7 @@ import { createProcedurePolicyOptions } from './procedure';
 import type { RuntimeGuardBackend } from './runtime/AgentSignalRuntime';
 import { createAgentSignalRuntime } from './runtime/AgentSignalRuntime';
 import { persistAgentSignalReceipts, projectAgentSignalReceipts } from './services/receiptService';
+import { createSelfIterationCompletionHandler } from './services/selfIteration/completion';
 import { createServerSelfReviewBriefWriter } from './services/selfIteration/review/brief';
 import { emitSourceEvent } from './sources';
 import { redisPolicyStateStore } from './store/adapters/redis/policyStateStore';
@@ -131,6 +132,11 @@ const createPolicyOptions = (
   const policyOptions = withServerAgentSignalPolicyDefaults(options.policyOptions, context);
 
   return {
+    completion: {
+      onSelfIterationCompleted: createSelfIterationCompletionHandler(
+        options.receiptStore ? { receiptStore: options.receiptStore } : {},
+      ),
+    },
     feedbackDomainJudge: {
       db: context.db,
       ...policyOptions?.feedbackDomainJudge,
