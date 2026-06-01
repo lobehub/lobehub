@@ -217,6 +217,7 @@
   "heteroAgent.executionTarget.online": "在线",
   "heteroAgent.executionTarget.sandbox": "云端沙箱",
   "heteroAgent.executionTarget.sandboxDesc": "在临时云端沙箱中运行",
+  "heteroAgent.executionTarget.downloadDesktop": "下载桌面端",
   "heteroAgent.executionTarget.title": "执行设备",
   "heteroAgent.executionTarget.unknownDevice": "未知设备",
   "heteroAgent.fullAccess.label": "完全访问权限",
