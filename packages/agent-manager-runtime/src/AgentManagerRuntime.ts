@@ -78,17 +78,30 @@ export class AgentManagerRuntime {
    */
   async createAgent(params: CreateAgentParams): Promise<BuiltinToolResult> {
     try {
+      // Guard against LLM double-encoding: if array fields are JSON strings, parse them.
+      // Use `as any` to bypass TS narrowing — at runtime LLMs can send strings for typed array params.
+      const parseArrayParam = (v: any): string[] | undefined => {
+        if (typeof v === 'string') {
+          try {
+            return JSON.parse(v);
+          } catch {
+            return undefined;
+          }
+        }
+        return v;
+      };
+
       const config = {
         avatar: params.avatar,
         backgroundColor: params.backgroundColor,
         description: params.description,
         model: params.model,
         openingMessage: params.openingMessage,
-        openingQuestions: params.openingQuestions,
-        plugins: params.plugins,
+        openingQuestions: parseArrayParam(params.openingQuestions),
+        plugins: parseArrayParam(params.plugins),
         provider: params.provider,
         systemRole: params.systemRole,
-        tags: params.tags,
+        tags: parseArrayParam(params.tags),
         title: params.title,
       };
 
