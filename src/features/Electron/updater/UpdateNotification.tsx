@@ -1,5 +1,6 @@
 import { type UpdateInfo } from '@lobechat/electron-client-ipc';
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
+import { sanitizeHTML } from '@lobechat/utils/client';
 import { Button, Flexbox, Icon } from '@lobehub/ui';
 import { Modal } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -137,7 +138,7 @@ export const UpdateNotification: React.FC = () => {
             {updateInfo?.releaseNotes && (
               <div
                 className={styles.releaseNote}
-                dangerouslySetInnerHTML={{ __html: updateInfo.releaseNotes }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHTML(updateInfo.releaseNotes) }}
               />
             )}
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>

@@ -21,6 +21,11 @@ const FORBID_EVENT_HANDLERS = [
 ];
 
 /**
+ * Sanitizes arbitrary HTML to prevent XSS via dangerouslySetInnerHTML.
+ */
+export const sanitizeHTML = (html: string): string => DOMPurify.sanitize(html);
+
+/**
  * Sanitizes SVG content to prevent XSS attacks while preserving safe SVG elements and attributes
  * @param content - The SVG content to sanitize
  * @returns Sanitized SVG content safe for rendering
