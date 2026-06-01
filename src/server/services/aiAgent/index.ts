@@ -82,6 +82,7 @@ import type { ConversationHistoryEntry } from '@/server/services/heterogeneousAg
 import { KlavisService } from '@/server/services/klavis';
 import { MarketService } from '@/server/services/market';
 import { deviceProxy } from '@/server/services/toolExecution/deviceProxy';
+import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { resolveDeviceAccessPolicy } from './deviceAccessPolicy';
 import { buildAllowedBuiltinTools, isDeviceToolIdentifier } from './deviceToolRegistry';
@@ -628,11 +629,14 @@ export class AiAgentService {
             }
           : undefined;
 
+      const fallbackTitleSource = markdownToTxt(prompt);
       const newTopic = await this.topicModel.create({
         agentId: resolvedAgentId,
         metadata,
         title:
-          title !== undefined ? title : prompt.slice(0, 50) + (prompt.length > 50 ? '...' : ''),
+          title !== undefined
+            ? title
+            : fallbackTitleSource.slice(0, 50) + (fallbackTitleSource.length > 50 ? '...' : ''),
         trigger,
       });
       topicId = newTopic.id;
@@ -2358,8 +2362,10 @@ export class AiAgentService {
     // - newTopic is explicitly provided, OR
     // - no topicId is provided (default behavior for group chat)
     if (newTopic || !inputTopicId) {
+      const fallbackTitleSource = markdownToTxt(message);
       const topicTitle =
-        newTopic?.title || message.slice(0, 50) + (message.length > 50 ? '...' : '');
+        newTopic?.title ||
+        fallbackTitleSource.slice(0, 50) + (fallbackTitleSource.length > 50 ? '...' : '');
       const topicItem = await this.topicModel.create({
         agentId,
         groupId,

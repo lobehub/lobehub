@@ -10,6 +10,7 @@ import { useGlobalStore } from '@/store/global';
 import { useGroupProfileStore } from '@/store/groupProfile';
 import { type HomeStore } from '@/store/home/store';
 import { type StoreSetter } from '@/store/types';
+import { markdownToTxt } from '@/utils/markdownToTxt';
 import { getStableNavigate } from '@/utils/stableNavigate';
 import { setNamespace } from '@/utils/storeDebug';
 
@@ -83,7 +84,7 @@ export class HomeInputActionImpl {
           model,
           provider,
           systemRole: message,
-          title: message?.slice(0, 50) || 'New Agent',
+          title: markdownToTxt(message ?? '').slice(0, 50) || 'New Agent',
         },
         groupId,
       });
@@ -153,7 +154,7 @@ export class HomeInputActionImpl {
           systemPrompt: message,
         },
         groupId,
-        title: message?.slice(0, 50) || 'New Group',
+        title: markdownToTxt(message ?? '').slice(0, 50) || 'New Group',
       });
 
       // 3. Load groups and refresh
@@ -225,7 +226,7 @@ export class HomeInputActionImpl {
       const newDoc = await documentService.createDocument({
         editorData: '{}',
         fileType: 'custom/document',
-        title: message?.slice(0, 50) || 'Untitled',
+        title: markdownToTxt(message ?? '').slice(0, 50) || 'Untitled',
       });
 
       // 3. Navigate to Page

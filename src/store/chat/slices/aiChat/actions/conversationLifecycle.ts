@@ -58,6 +58,7 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { type StoreSetter } from '@/store/types';
 import { useUserMemoryStore } from '@/store/userMemory';
+import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { dbMessageSelectors, displayMessageSelectors, topicSelectors } from '../../../selectors';
 import { messageMapKey } from '../../../utils/messageMapKey';
@@ -516,7 +517,7 @@ export class ConversationLifecycleActionImpl {
             newTopic: !operationContext.topicId
               ? {
                   metadata: workingDirectory ? { workingDirectory } : undefined,
-                  title: message.slice(0, 80) || t('defaultTitle', { ns: 'topic' }),
+                  title: markdownToTxt(message).slice(0, 80) || t('defaultTitle', { ns: 'topic' }),
                   topicMessageIds: messages.map((m) => m.id),
                 }
               : undefined,
@@ -920,7 +921,7 @@ export class ConversationLifecycleActionImpl {
       }
 
       const firstUserText = messages.find((m) => m.role === 'user')?.content?.trim() ?? '';
-      const title = firstUserText.slice(0, 80) || 'New Topic';
+      const title = markdownToTxt(firstUserText).slice(0, 80) || 'New Topic';
       await this.#get().internal_updateTopic(topicId, { title });
       // summaryTopicTitle would normally clear loading via onLoadingChange; do it manually.
       this.#get().internal_updateTopicLoading(topicId, false);
