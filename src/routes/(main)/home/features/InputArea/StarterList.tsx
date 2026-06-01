@@ -37,6 +37,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 const getStarterItemKey = (item: HomeNewModelItem) => `${item.type}:${item.model}`;
+const getStarterItemProvider = (item: HomeNewModelItem) => item.provider ?? NEW_CHAT_PROVIDER;
 const skeletonWidths = [112, 150, 126, 138];
 
 const StarterList = memo(() => {
@@ -65,6 +66,7 @@ const StarterList = memo(() => {
       if (item.type === 'chat') {
         if (!activeAgentId || switchingKey) return;
         setSwitchingKey(key);
+        const provider = getStarterItemProvider(item);
         try {
           // Hydrate the agent's config before mutating so the optimistic update
           // doesn't drop pre-existing fields the home input never loaded.
@@ -78,14 +80,14 @@ const StarterList = memo(() => {
           const currentModel = agentByIdSelectors.getAgentModelById(activeAgentId)(agentState);
           const currentProvider =
             agentByIdSelectors.getAgentModelProviderById(activeAgentId)(agentState);
-          if (currentModel === item.model && currentProvider === NEW_CHAT_PROVIDER) {
+          if (currentModel === item.model && currentProvider === provider) {
             message.info(t('starter.modelInUse', { name: item.title }));
             return;
           }
 
           await updateAgentConfigById(activeAgentId, {
             model: item.model,
-            provider: NEW_CHAT_PROVIDER,
+            provider,
           });
           message.success(t('starter.modelSwitched', { name: item.title }));
         } finally {

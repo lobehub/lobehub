@@ -4,6 +4,7 @@ import type { HomeNewModelItem } from '@/business/client/hooks/useHomeNewModels'
 
 // Chat
 export const NEW_MINIMAX_MODEL = 'MiniMax-M3';
+export const NEW_MINIMAX_PROVIDER = ENABLE_BUSINESS_FEATURES ? 'lobehub' : 'minimax';
 export const NEW_MINIMAX_MODEL_NAME = 'MiniMax M3';
 export const NEW_CHAT_MODEL = 'claude-opus-4-8';
 export const NEW_CHAT_PROVIDER = ENABLE_BUSINESS_FEATURES ? 'lobehub' : 'anthropic';
@@ -20,11 +21,13 @@ export const NEW_VIDEO_MODEL_NAME = 'Seedance 2.0';
 export const DEFAULT_HOME_NEW_MODELS = [
   {
     model: NEW_MINIMAX_MODEL,
+    provider: NEW_MINIMAX_PROVIDER,
     title: NEW_MINIMAX_MODEL_NAME,
     type: 'chat',
   },
   {
     model: NEW_CHAT_MODEL,
+    provider: NEW_CHAT_PROVIDER,
     title: NEW_CHAT_MODEL_NAME,
     type: 'chat',
   },

@@ -3,6 +3,7 @@ export type HomeNewModelType = 'chat' | 'image' | 'video';
 export interface HomeNewModelItem {
   iconModel?: string;
   model: string;
+  provider?: string;
   title: string;
   type: HomeNewModelType;
 }
