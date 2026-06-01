@@ -20,6 +20,7 @@ interface ValidatedDetectorOptions {
 }
 
 const isWindows = () => platform() === 'win32';
+let shellPathPromise: Promise<string | undefined> | undefined;
 
 // Reject anything that could break out of the `cmd /c "<path>" --version`
 // shell line we build for Windows .cmd shims (see `detectValidatedCommand`).
@@ -40,6 +41,69 @@ const pickWindowsRunnable = (lines: string[]): string | undefined => {
   return undefined;
 };
 
+const getLoginShellPath = async (): Promise<string | undefined> => {
+  if (isWindows()) return undefined;
+
+  const shell = process.env.SHELL;
+  if (!shell || !path.isAbsolute(shell)) return undefined;
+
+  try {
+    const { stdout } = await execFilePromise(shell, ['-ilc', 'printf "%s" "$PATH"'], {
+      timeout: 3000,
+      windowsHide: true,
+    });
+
+    return stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .reverse()
+      .find((line) => line.includes(path.delimiter));
+  } catch {
+    return undefined;
+  }
+};
+
+const getCachedLoginShellPath = async (): Promise<string | undefined> => {
+  shellPathPromise ??= getLoginShellPath();
+  return shellPathPromise;
+};
+
+const mergePathValues = (...values: Array<string | undefined>): string | undefined => {
+  const seen = new Set<string>();
+  const segments = values
+    .flatMap((value) => value?.split(path.delimiter) ?? [])
+    .map((segment) => segment.trim())
+    .filter((segment) => {
+      if (!segment || seen.has(segment)) return false;
+      seen.add(segment);
+      return true;
+    });
+
+  return segments.length > 0 ? segments.join(path.delimiter) : undefined;
+};
+
+const getCommandPathLines = async (
+  whichCommand: 'where' | 'which',
+  command: string,
+  env?: NodeJS.ProcessEnv,
+): Promise<string[] | undefined> => {
+  try {
+    const { stdout } = await execFilePromise(whichCommand, [command], {
+      env,
+      timeout: 3000,
+      windowsHide: true,
+    });
+    const lines = stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    return lines.length > 0 ? lines : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 const resolveCommandPath = async (command: string): Promise<string | undefined> => {
   const trimmedCommand = command.trim();
   if (!trimmedCommand) return;
@@ -49,25 +113,29 @@ const resolveCommandPath = async (command: string): Promise<string | undefined> 
   }
 
   const whichCommand = isWindows() ? 'where' : 'which';
+  let lines = await getCommandPathLines(whichCommand, trimmedCommand);
 
-  try {
-    const { stdout } = await execFilePromise(whichCommand, [trimmedCommand], { timeout: 3000 });
-    const lines = stdout
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean);
-    if (lines.length === 0) return undefined;
+  if (!lines && !isWindows()) {
+    const shellPath = await getCachedLoginShellPath();
+    const lookupPath = mergePathValues(shellPath, process.env.PATH);
 
-    // Windows `where` lists every PATHEXT match (e.g. for `codex` npm ships
-    // a Unix shell wrapper alongside `codex.cmd` and `codex.ps1`). Picking
-    // the first line can land us on something we can't execute, so prefer a
-    // runnable extension and bail otherwise.
-    if (isWindows()) return pickWindowsRunnable(lines);
-
-    return lines[0];
-  } catch {
-    return undefined;
+    if (lookupPath && lookupPath !== process.env.PATH) {
+      lines = await getCommandPathLines(whichCommand, trimmedCommand, {
+        ...process.env,
+        PATH: lookupPath,
+      });
+    }
   }
+
+  if (!lines) return undefined;
+
+  // Windows `where` lists every PATHEXT match (e.g. for `codex` npm ships
+  // a Unix shell wrapper alongside `codex.cmd` and `codex.ps1`). Picking
+  // the first line can land us on something we can't execute, so prefer a
+  // runnable extension and bail otherwise.
+  if (isWindows()) return pickWindowsRunnable(lines);
+
+  return lines[0];
 };
 
 const detectValidatedCommand = async (
