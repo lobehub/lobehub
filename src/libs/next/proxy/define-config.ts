@@ -22,6 +22,24 @@ const logBetterAuth = debug('middleware:better-auth');
 // Dev-only debug proxy route should bypass all middleware rewrites.
 const dangerousLocalDevProxyRoute = '/_dangerous_local_dev_proxy';
 
+const getCanonicalAppRedirect = (request: NextRequest) => {
+  if (!appEnv.APP_URL) return;
+
+  try {
+    const appUrl = new URL(appEnv.APP_URL);
+    const requestUrl = new URL(request.url);
+
+    if (requestUrl.origin === appUrl.origin) return;
+
+    requestUrl.protocol = appUrl.protocol;
+    requestUrl.host = appUrl.host;
+
+    return NextResponse.redirect(requestUrl, 307);
+  } catch {
+    return;
+  }
+};
+
 export function defineConfig() {
   const backendApiEndpoints = ['/api', '/trpc', '/webapi', '/oidc'];
 
@@ -203,6 +221,9 @@ export function defineConfig() {
 
   const betterAuthMiddleware = async (req: NextRequest) => {
     logBetterAuth('BetterAuth middleware processing request: %s %s', req.method, req.url);
+
+    const canonicalRedirect = getCanonicalAppRedirect(req);
+    if (canonicalRedirect) return canonicalRedirect;
 
     const response = defaultMiddleware(req);
 
