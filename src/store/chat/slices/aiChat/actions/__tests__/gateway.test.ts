@@ -385,7 +385,7 @@ describe('GatewayActionImpl', () => {
   describe('executeGatewayAgent', () => {
     function createExecuteTestAction() {
       const mockClient = createMockClient();
-      const state: Record<string, any> = { gatewayConnections: {} };
+      const state: Record<string, any> = { gatewayConnections: {}, topicDataMap: {} };
       const set = vi.fn((updater: any) => {
         if (typeof updater === 'function') {
           Object.assign(state, updater(state));
@@ -396,12 +396,13 @@ describe('GatewayActionImpl', () => {
 
       const get = vi.fn(() => ({
         ...state,
-        startOperation: vi.fn(() => ({ operationId: 'gw-op-1' })),
         associateMessageWithOperation: vi.fn(),
         connectToGateway: vi.fn(),
+        internal_dispatchTopic: vi.fn(),
         internal_updateTopicLoading: vi.fn(),
         onOperationCancel: vi.fn(),
         replaceMessages: vi.fn(),
+        startOperation: vi.fn(() => ({ operationId: 'gw-op-1' })),
         switchTopic: vi.fn(),
       })) as any;
 
@@ -688,7 +689,7 @@ describe('GatewayActionImpl', () => {
       const startOperation = vi.fn(() => ({ operationId: 'gw-op-local' }));
 
       const mockClient = createMockClient();
-      const state: Record<string, any> = { gatewayConnections: {} };
+      const state: Record<string, any> = { gatewayConnections: {}, topicDataMap: {} };
       const set = vi.fn((updater: any) => {
         if (typeof updater === 'function') Object.assign(state, updater(state));
         else Object.assign(state, updater);
@@ -697,6 +698,7 @@ describe('GatewayActionImpl', () => {
         ...state,
         associateMessageWithOperation: vi.fn(),
         connectToGateway: vi.fn(),
+        internal_dispatchTopic: vi.fn(),
         internal_updateTopicLoading: vi.fn(),
         onOperationCancel,
         replaceMessages: vi.fn(),

@@ -566,6 +566,13 @@ export class GatewayActionImpl {
     // Get a fresh JWT token (original expired after 5 min)
     const { token } = await aiAgentService.refreshGatewayToken(topicId);
 
+    // Re-check after the async token refresh: a newer executeGatewayAgent call may have
+    // taken over for this topic while we were waiting. If so, bail to avoid a duplicate stream.
+    // (disconnectFromGateway on the stale op is a no-op here because we haven't connected yet.)
+    const topicOpIdAfterRefresh = topicSelectors.getTopicById(topicId)(this.#get())?.metadata
+      ?.runningOperation?.operationId;
+    if (topicOpIdAfterRefresh && topicOpIdAfterRefresh !== operationId) return;
+
     const agentId = this.#get().activeAgentId;
     const context = {
       agentId,
