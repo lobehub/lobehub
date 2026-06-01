@@ -409,6 +409,80 @@ describe('Topic Router Integration Tests', () => {
     });
   });
 
+  describe('runtime migration - agentId backfill', () => {
+    it('should backfill agentId for legacy session-only topics on query', async () => {
+      const caller = topicRouter.createCaller(createTestContext(userId));
+
+      // Legacy topic: sessionId set, agentId still null (pre-migration data)
+      const [legacyTopic] = await serverDB
+        .insert(topics)
+        .values({ title: 'Legacy Topic', sessionId: testSessionId, agentId: null, userId })
+        .returning();
+
+      // Querying the agent triggers the background backfill via after().
+      await caller.getTopics({ agentId: testAgentId });
+
+      // Wait for the after() callback to run
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      const [migrated] = await serverDB.select().from(topics).where(eq(topics.id, legacyTopic.id));
+      expect(migrated.agentId).toBe(testAgentId);
+    });
+
+    it('should not change topics that already have agentId', async () => {
+      const caller = topicRouter.createCaller(createTestContext(userId));
+
+      const [topicWithAgentId] = await serverDB
+        .insert(topics)
+        .values({ title: 'New Topic', sessionId: testSessionId, agentId: testAgentId, userId })
+        .returning();
+
+      await caller.getTopics({ agentId: testAgentId });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      const [afterQuery] = await serverDB
+        .select()
+        .from(topics)
+        .where(eq(topics.id, topicWithAgentId.id));
+      expect(afterQuery.agentId).toBe(testAgentId);
+    });
+
+    it('should only backfill topics under the queried agent session', async () => {
+      const { agents, agentsToSessions } = await import('@/database/schemas');
+      const [otherAgent] = await serverDB
+        .insert(agents)
+        .values({ userId, title: 'Other Agent' })
+        .returning();
+      const [otherSession] = await serverDB
+        .insert(sessions)
+        .values({ userId, type: 'agent' })
+        .returning();
+      await serverDB.insert(agentsToSessions).values({
+        agentId: otherAgent.id,
+        sessionId: otherSession.id,
+        userId,
+      });
+
+      const [topic1] = await serverDB
+        .insert(topics)
+        .values({ title: 'Topic 1', sessionId: testSessionId, agentId: null, userId })
+        .returning();
+      const [topic2] = await serverDB
+        .insert(topics)
+        .values({ title: 'Topic 2', sessionId: otherSession.id, agentId: null, userId })
+        .returning();
+
+      const caller = topicRouter.createCaller(createTestContext(userId));
+      await caller.getTopics({ agentId: testAgentId });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      const [migrated1] = await serverDB.select().from(topics).where(eq(topics.id, topic1.id));
+      const [migrated2] = await serverDB.select().from(topics).where(eq(topics.id, topic2.id));
+      expect(migrated1.agentId).toBe(testAgentId);
+      expect(migrated2.agentId).toBeNull();
+    });
+  });
+
   describe('inbox agent queries', () => {
     let inboxAgentId: string;
 
@@ -474,6 +548,29 @@ describe('Topic Router Integration Tests', () => {
       expect(result.items).toHaveLength(2);
       expect(result.items.map((t) => t.title)).toContain('Legacy Inbox Topic');
       expect(result.items.map((t) => t.title)).toContain('New Inbox Topic');
+    });
+
+    it('should backfill agentId for legacy inbox topics on query', async () => {
+      const caller = topicRouter.createCaller(createTestContext(userId));
+
+      // Legacy inbox topic: all owner columns null
+      const [legacyTopic] = await serverDB
+        .insert(topics)
+        .values({
+          title: 'Legacy Inbox to Migrate',
+          sessionId: null,
+          groupId: null,
+          agentId: null,
+          userId,
+        })
+        .returning();
+
+      // Query with isInbox=true triggers the background backfill
+      await caller.getTopics({ agentId: inboxAgentId, isInbox: true });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      const [migrated] = await serverDB.select().from(topics).where(eq(topics.id, legacyTopic.id));
+      expect(migrated.agentId).toBe(inboxAgentId);
     });
 
     it('should not include legacy inbox topics when isInbox=false', async () => {

@@ -5,11 +5,13 @@ import {
 } from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
 import { eq, inArray } from 'drizzle-orm';
+import { after } from 'next/server';
 import { z } from 'zod';
 
 import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
 import { TopicShareModel } from '@/database/models/topicShare';
+import { AgentMigrationRepo } from '@/database/repositories/agentMigration';
 import { TopicImporterRepo } from '@/database/repositories/topicImporter';
 import { agents, chatGroups, chatGroupsAgents } from '@/database/schemas';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
@@ -24,6 +26,7 @@ const topicProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
 
   return opts.next({
     ctx: {
+      agentMigrationRepo: new AgentMigrationRepo(ctx.serverDB, ctx.userId),
       topicImporterRepo: new TopicImporterRepo(ctx.serverDB, ctx.userId),
       topicModel: new TopicModel(ctx.serverDB, ctx.userId),
       topicShareModel: new TopicShareModel(ctx.serverDB, ctx.userId),
@@ -286,6 +289,38 @@ export const topicRouter = router({
         isInbox,
         triggers,
       });
+
+      // Runtime migration: backfill agentId for legacy topics (sessionId-only)
+      // under this agent so they become queryable by agentId. The read paths no
+      // longer resolve sessionId, so this backfill is the bridge that keeps
+      // migrating straggler legacy rows during the transition window.
+      const runMigration = async () => {
+        if (!effectiveAgentId) return;
+
+        // Get the associated sessionId for migration
+        const resolved = await resolveContext(
+          { agentId: effectiveAgentId },
+          ctx.serverDB,
+          ctx.userId,
+        );
+
+        const migrationParams = isInbox
+          ? { agentId: effectiveAgentId, isInbox: true as const, sessionId: resolved.sessionId }
+          : resolved.sessionId
+            ? { agentId: effectiveAgentId, sessionId: resolved.sessionId }
+            : null;
+
+        if (migrationParams) {
+          try {
+            await ctx.agentMigrationRepo.migrateAgentId(migrationParams);
+          } catch (error) {
+            console.error('[AgentMigration] Failed to migrate agentId:', error);
+          }
+        }
+      };
+
+      // Use Next.js after() for non-blocking execution
+      after(runMigration);
 
       return { items: result.items, total: result.total };
     }),
