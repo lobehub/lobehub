@@ -16,13 +16,7 @@ describe('starter models', () => {
   });
 
   it('keeps the fallback home new model entries in the current product order', () => {
-    expect(DEFAULT_HOME_NEW_MODELS).toEqual([
-      {
-        model: 'MiniMax-M3',
-        provider: NEW_MINIMAX_PROVIDER,
-        title: 'MiniMax M3',
-        type: 'chat',
-      },
+    const sharedItems = [
       {
         model: 'claude-opus-4-8',
         provider: NEW_CHAT_PROVIDER,
@@ -39,6 +33,20 @@ describe('starter models', () => {
         title: 'Seedance 2.0',
         type: 'video',
       },
-    ]);
+    ];
+
+    expect(DEFAULT_HOME_NEW_MODELS).toEqual(
+      ENABLE_BUSINESS_FEATURES
+        ? [
+            {
+              model: 'MiniMax-M3',
+              provider: NEW_MINIMAX_PROVIDER,
+              title: 'MiniMax M3',
+              type: 'chat',
+            },
+            ...sharedItems,
+          ]
+        : sharedItems,
+    );
   });
 });

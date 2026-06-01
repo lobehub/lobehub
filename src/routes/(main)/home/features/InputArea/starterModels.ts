@@ -18,7 +18,7 @@ export const NEW_IMAGE_MODEL_NAME = 'GPT Image 2';
 export const NEW_VIDEO_MODEL = 'dreamina-seedance-2-0-260128';
 export const NEW_VIDEO_MODEL_NAME = 'Seedance 2.0';
 
-export const DEFAULT_HOME_NEW_MODELS = [
+const BUSINESS_HOME_NEW_MODELS = [
   {
     model: NEW_MINIMAX_MODEL,
     provider: NEW_MINIMAX_PROVIDER,
@@ -42,3 +42,26 @@ export const DEFAULT_HOME_NEW_MODELS = [
     type: 'video',
   },
 ] satisfies HomeNewModelItem[];
+
+const OSS_HOME_NEW_MODELS = [
+  {
+    model: NEW_CHAT_MODEL,
+    provider: NEW_CHAT_PROVIDER,
+    title: NEW_CHAT_MODEL_NAME,
+    type: 'chat',
+  },
+  {
+    model: NEW_IMAGE_MODEL,
+    title: NEW_IMAGE_MODEL_NAME,
+    type: 'image',
+  },
+  {
+    model: NEW_VIDEO_MODEL,
+    title: NEW_VIDEO_MODEL_NAME,
+    type: 'video',
+  },
+] satisfies HomeNewModelItem[];
+
+export const DEFAULT_HOME_NEW_MODELS = ENABLE_BUSINESS_FEATURES
+  ? BUSINESS_HOME_NEW_MODELS
+  : OSS_HOME_NEW_MODELS;
