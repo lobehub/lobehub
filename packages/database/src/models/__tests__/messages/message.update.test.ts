@@ -13,6 +13,7 @@ import {
   messageTranslates,
   messageTTS,
   sessions,
+  topics,
   users,
 } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
@@ -1431,6 +1432,69 @@ describe('MessageModel Update Tests', () => {
         '{"key":"updated"}',
       );
       expect(result.success).toBe(false);
+    });
+  });
+
+  describe('topic usage rollup', () => {
+    beforeEach(async () => {
+      await serverDB.insert(topics).values({ id: 'update-usage-topic', userId });
+    });
+
+    it('recomputes the topic rollup when the update carries metadata.usage', async () => {
+      await serverDB.insert(messages).values({
+        id: 'finalize-msg',
+        model: 'gpt-4o',
+        provider: 'openai',
+        role: 'assistant',
+        topicId: 'update-usage-topic',
+        userId,
+      });
+
+      // assistant finalize: the write that first carries token usage
+      await messageModel.update('finalize-msg', {
+        metadata: {
+          usage: { cost: 0.004, totalInputTokens: 70, totalOutputTokens: 30, totalTokens: 100 },
+        } as any,
+      });
+
+      const [topic] = await serverDB
+        .select()
+        .from(topics)
+        .where(eq(topics.id, 'update-usage-topic'));
+      expect(topic.totalTokens).toBe(100);
+      expect(topic.totalCost).toBeCloseTo(0.004, 6);
+      expect((topic.usage as any).llm.apiCalls).toBe(1);
+    });
+
+    it('does NOT recompute on a content-only update (no metadata.usage)', async () => {
+      // an already-finalized assistant message with usage
+      await serverDB.insert(messages).values({
+        id: 'done-msg',
+        metadata: { usage: { cost: 0.01, totalInputTokens: 10, totalTokens: 20 } },
+        model: 'gpt-4o',
+        provider: 'openai',
+        role: 'assistant',
+        topicId: 'update-usage-topic',
+        userId,
+      });
+      await messageModel.update('done-msg', {
+        metadata: { usage: { cost: 0.01, totalInputTokens: 10, totalTokens: 20 } } as any,
+      });
+      const [seeded] = await serverDB
+        .select()
+        .from(topics)
+        .where(eq(topics.id, 'update-usage-topic'));
+      expect(seeded.totalTokens).toBe(20);
+
+      // a streaming content-only update must not touch the rollup
+      await messageModel.update('done-msg', { content: 'streamed text' });
+
+      const [topic] = await serverDB
+        .select()
+        .from(topics)
+        .where(eq(topics.id, 'update-usage-topic'));
+      expect(topic.totalTokens).toBe(20);
+      expect(topic.totalCost).toBeCloseTo(0.01, 6);
     });
   });
 });
