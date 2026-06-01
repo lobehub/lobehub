@@ -13,6 +13,7 @@ import { topicSelectors } from '@/store/chat/selectors';
 
 import { useAgentTopicGroupMode } from '../hooks/useAgentTopicGroupMode';
 import ByProjectMode from './ByProjectMode';
+import ByStatusMode from './ByStatusMode';
 import ByTimeMode from './ByTimeMode';
 import FlatMode from './FlatMode';
 import SearchResult from './SearchResult';
@@ -50,6 +51,8 @@ const TopicListContent = memo(() => {
         <FlatMode />
       ) : topicGroupMode === 'byProject' ? (
         <ByProjectMode />
+      ) : topicGroupMode === 'byStatus' ? (
+        <ByStatusMode />
       ) : (
         <ByTimeMode />
       )}

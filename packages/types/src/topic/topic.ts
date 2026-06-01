@@ -11,7 +11,7 @@ export type TimeGroupId =
   | `${number}-${string}`
   | `${number}`;
 
-export type TopicGroupMode = 'byTime' | 'byProject' | 'flat';
+export type TopicGroupMode = 'byTime' | 'byProject' | 'flat' | 'byStatus';
 export type TopicSortBy = 'createdAt' | 'updatedAt';
 
 export interface GroupedTopic {

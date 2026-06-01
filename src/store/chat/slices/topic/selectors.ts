@@ -10,6 +10,7 @@ import {
 } from '@/types/topic';
 import {
   groupTopicsByProject,
+  groupTopicsByStatus,
   groupTopicsByTime,
   groupTopicsByUpdatedTime,
 } from '@/utils/client/topic';
@@ -118,14 +119,21 @@ const displayTopicsForSidebar =
   };
 
 const getGroupFn = (groupMode: TopicGroupMode, sortBy: TopicSortBy) => {
+  const field: 'createdAt' | 'updatedAt' = sortBy === 'createdAt' ? 'createdAt' : 'updatedAt';
   if (groupMode === 'byProject') {
-    const field: 'createdAt' | 'updatedAt' = sortBy === 'createdAt' ? 'createdAt' : 'updatedAt';
     return (topics: ChatTopic[]) =>
       groupTopicsByProject(topics, field).map((group) =>
         group.id === 'no-project'
           ? { ...group, title: t('groupTitle.byProject.noProject', { ns: 'topic' }) }
           : group,
       );
+  }
+  if (groupMode === 'byStatus') {
+    return (topics: ChatTopic[]) =>
+      groupTopicsByStatus(topics, field).map((group) => ({
+        ...group,
+        title: t(`groupTitle.byStatus.${group.id}` as any, { ns: 'topic' }),
+      }));
   }
   return sortBy === 'updatedAt' ? groupTopicsByUpdatedTime : groupTopicsByTime;
 };
