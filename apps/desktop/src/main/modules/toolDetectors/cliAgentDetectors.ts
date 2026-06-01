@@ -19,6 +19,11 @@ interface ValidatedDetectorOptions {
   validateKeywords: string[];
 }
 
+interface ResolvedCommand {
+  env?: NodeJS.ProcessEnv;
+  path: string;
+}
+
 const isWindows = () => platform() === 'win32';
 let shellPathPromise: Promise<string | undefined> | undefined;
 
@@ -104,26 +109,29 @@ const getCommandPathLines = async (
   }
 };
 
-const resolveCommandPath = async (command: string): Promise<string | undefined> => {
+const resolveCommandPath = async (command: string): Promise<ResolvedCommand | undefined> => {
   const trimmedCommand = command.trim();
   if (!trimmedCommand) return;
 
   if (path.isAbsolute(trimmedCommand) || trimmedCommand.includes(path.sep)) {
-    return trimmedCommand;
+    return { path: trimmedCommand };
   }
 
   const whichCommand = isWindows() ? 'where' : 'which';
   let lines = await getCommandPathLines(whichCommand, trimmedCommand);
+  let lookupEnv: NodeJS.ProcessEnv | undefined;
 
   if (!lines && !isWindows()) {
     const shellPath = await getCachedLoginShellPath();
     const lookupPath = mergePathValues(shellPath, process.env.PATH);
 
     if (lookupPath && lookupPath !== process.env.PATH) {
-      lines = await getCommandPathLines(whichCommand, trimmedCommand, {
+      const fallbackEnv = {
         ...process.env,
         PATH: lookupPath,
-      });
+      };
+      lines = await getCommandPathLines(whichCommand, trimmedCommand, fallbackEnv);
+      if (lines) lookupEnv = fallbackEnv;
     }
   }
 
@@ -133,9 +141,12 @@ const resolveCommandPath = async (command: string): Promise<string | undefined> 
   // a Unix shell wrapper alongside `codex.cmd` and `codex.ps1`). Picking
   // the first line can land us on something we can't execute, so prefer a
   // runnable extension and bail otherwise.
-  if (isWindows()) return pickWindowsRunnable(lines);
+  if (isWindows()) {
+    const runnablePath = pickWindowsRunnable(lines);
+    return runnablePath ? { path: runnablePath } : undefined;
+  }
 
-  return lines[0];
+  return { env: lookupEnv, path: lines[0] };
 };
 
 const detectValidatedCommand = async (
@@ -151,17 +162,21 @@ const detectValidatedCommand = async (
   // Resolve via where/which BEFORE invoking. On Windows this is what discovers
   // npm-installed shims like `claude.cmd` under %APPDATA%\npm — `execFile`
   // alone won't apply PATHEXT and can't run .cmd files directly.
-  const resolvedPath = await resolveCommandPath(trimmedCommand);
-  if (!resolvedPath) return { available: false };
+  const resolvedCommand = await resolveCommandPath(trimmedCommand);
+  if (!resolvedCommand) return { available: false };
+
+  const { env, path: resolvedPath } = resolvedCommand;
 
   try {
     const needsShell = isWindows() && /\.(?:cmd|bat)$/i.test(resolvedPath);
     const { stderr, stdout } = needsShell
       ? await execPromise(`"${resolvedPath}" ${validateFlag}`, {
+          env,
           timeout: 5000,
           windowsHide: true,
         })
       : await execFilePromise(resolvedPath, [validateFlag], {
+          env,
           timeout: 5000,
           windowsHide: true,
         });

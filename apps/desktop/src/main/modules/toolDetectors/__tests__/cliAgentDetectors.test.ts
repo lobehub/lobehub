@@ -212,6 +212,11 @@ describe('cliAgentDetectors', () => {
           },
         });
         expect(execFileMock.mock.calls[3]![0]).toBe('/Users/Hanam/.local/share/mise/shims/gemini');
+        expect(execFileMock.mock.calls[3]![2]).toMatchObject({
+          env: {
+            PATH: '/opt/homebrew/bin:/Users/Hanam/.local/share/mise/shims:/usr/bin:/bin',
+          },
+        });
       } finally {
         process.env.PATH = originalPath;
         process.env.SHELL = originalShell;
