@@ -285,6 +285,10 @@ export const agentRouter = router({
       return ctx.agentModel.queryAgents(input);
     }),
 
+  rankAgents: agentProcedure.input(z.number().max(50).optional()).query(async ({ ctx, input }) => {
+    return ctx.agentModel.rank(input);
+  }),
+
   /**
    * Remove an agent and its associated session
    */

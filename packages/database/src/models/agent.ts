@@ -1,6 +1,7 @@
 import { getAgentPersistConfig } from '@lobechat/builtin-agents';
 import { DEFAULT_INBOX_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
-import { and, desc, eq, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
+import type { AgentRankItem } from '@lobechat/types';
+import { and, count, desc, eq, gt, ilike, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
 import { merge } from '@/utils/merge';
@@ -15,6 +16,7 @@ import {
   files,
   knowledgeBases,
   sessions,
+  topics,
 } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 
@@ -26,6 +28,34 @@ export class AgentModel {
     this.userId = userId;
     this.db = db;
   }
+
+  /**
+   * Rank the user's agents by topic count (agent usage ranking). Counts topics
+   * directly via `topics.agentId`, so it is agent-native — no sessionId. Mirrors
+   * the recents filter: real agents plus the inbox, excluding other virtual agents.
+   */
+  rank = async (limit: number = 10): Promise<AgentRankItem[]> => {
+    return this.db
+      .select({
+        avatar: agents.avatar,
+        backgroundColor: agents.backgroundColor,
+        count: count(topics.id).as('count'),
+        id: agents.id,
+        title: agents.title,
+      })
+      .from(agents)
+      .leftJoin(topics, eq(topics.agentId, agents.id))
+      .where(
+        and(
+          eq(agents.userId, this.userId),
+          or(eq(agents.slug, INBOX_SESSION_ID), ne(agents.virtual, true)),
+        ),
+      )
+      .groupBy(agents.id)
+      .having(({ count }) => gt(count, 0))
+      .orderBy(desc(sql`count`))
+      .limit(limit);
+  };
 
   getAgentConfigById = async (id: string) => {
     const agent = await this.db.query.agents.findFirst({
