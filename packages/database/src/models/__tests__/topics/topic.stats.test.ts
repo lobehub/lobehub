@@ -54,7 +54,7 @@ describe('TopicModel - Stats', () => {
         expect(result).toBe(2);
       });
 
-      it('should not count legacy session-only topics by agentId', async () => {
+      it('should count legacy topics via agentsToSessions lookup', async () => {
         await serverDB.transaction(async (trx) => {
           await trx.insert(sessions).values([{ id: 'count-legacy-session', userId }]);
           await trx
@@ -69,12 +69,11 @@ describe('TopicModel - Stats', () => {
           ]);
         });
 
-        // Topics carrying only a legacy sessionId are no longer counted for the agent.
         const result = await topicModel.count({ agentId: 'count-legacy-agent' });
-        expect(result).toBe(0);
+        expect(result).toBe(2);
       });
 
-      it('should count only topics carrying the agentId, ignoring session-only ones', async () => {
+      it('should count both new and legacy topics', async () => {
         await serverDB.transaction(async (trx) => {
           await trx.insert(sessions).values([{ id: 'count-mixed-session', userId }]);
           await trx
@@ -90,7 +89,7 @@ describe('TopicModel - Stats', () => {
         });
 
         const result = await topicModel.count({ agentId: 'count-mixed-agent' });
-        expect(result).toBe(1);
+        expect(result).toBe(2);
       });
 
       it('should return 0 when agent has no topics', async () => {

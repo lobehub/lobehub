@@ -370,9 +370,12 @@ describe('TopicModel - Query', () => {
   });
 
   describe('query with agentId filter', () => {
-    it('should not match legacy session-only topics by agentId', async () => {
+    it('should filter legacy topics by agentId through agentsToSessions lookup', async () => {
       await serverDB.transaction(async (trx) => {
-        await trx.insert(sessions).values([{ id: 'session-for-agent', userId }]);
+        await trx.insert(sessions).values([
+          { id: 'session-for-agent', userId },
+          { id: 'session-other', userId },
+        ]);
         await trx.insert(agents).values([{ id: 'agent1', userId, title: 'Agent 1' }]);
         await trx
           .insert(agentsToSessions)
@@ -385,14 +388,20 @@ describe('TopicModel - Query', () => {
             agentId: null,
             updatedAt: new Date('2023-01-01'),
           },
+          {
+            id: 'topic-other-session',
+            userId,
+            sessionId: 'session-other',
+            agentId: null,
+            updatedAt: new Date('2023-01-02'),
+          },
         ]);
       });
 
-      // Topics carrying only a legacy sessionId are no longer adopted by the
-      // agent query; only `topics.agentId` matches.
       const result = await topicModel.query({ agentId: 'agent1' });
 
-      expect(result.items).toHaveLength(0);
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].id).toBe('topic-agent-session');
     });
 
     it('should filter new topics by agentId directly', async () => {
@@ -425,7 +434,7 @@ describe('TopicModel - Query', () => {
       expect(result.items[0].id).toBe('new-topic-1');
     });
 
-    it('should only return topics carrying the agentId, ignoring session-only ones', async () => {
+    it('should return both legacy and new topics when querying by agentId', async () => {
       await serverDB.transaction(async (trx) => {
         await trx.insert(sessions).values([{ id: 'mixed-session', userId }]);
         await trx.insert(agents).values([{ id: 'mixed-agent', userId, title: 'Mixed Agent' }]);
@@ -459,9 +468,12 @@ describe('TopicModel - Query', () => {
 
       const result = await topicModel.query({ agentId: 'mixed-agent' });
 
-      // `legacy-topic` (sessionId only, no agentId) is excluded.
-      expect(result.items).toHaveLength(2);
-      expect(result.items.map((t) => t.id).sort()).toEqual(['both-topic', 'new-topic']);
+      expect(result.items).toHaveLength(3);
+      expect(result.items.map((t) => t.id).sort()).toEqual([
+        'both-topic',
+        'legacy-topic',
+        'new-topic',
+      ]);
     });
 
     it('should not return duplicate topics when both agentId and sessionId match', async () => {
@@ -671,15 +683,21 @@ describe('TopicModel - Query', () => {
 
     it('should ignore containerId when agentId is provided', async () => {
       await serverDB.transaction(async (trx) => {
-        await trx.insert(sessions).values([{ id: 'container-only-session', userId }]);
+        await trx.insert(sessions).values([
+          { id: 'agent-only-session', userId },
+          { id: 'container-only-session', userId },
+        ]);
         await trx
           .insert(agents)
           .values([{ id: 'priority-agent', userId, title: 'Priority Agent' }]);
+        await trx
+          .insert(agentsToSessions)
+          .values([{ agentId: 'priority-agent', sessionId: 'agent-only-session', userId }]);
         await trx.insert(topics).values([
           {
             id: 'agent-topic',
             userId,
-            agentId: 'priority-agent',
+            sessionId: 'agent-only-session',
             updatedAt: new Date('2023-01-01'),
           },
           {
@@ -1112,7 +1130,9 @@ describe('TopicModel - Query', () => {
       expect(result.items[0].id).toBe('true-legacy-inbox');
     });
 
-    it('should adopt only agentId and fully-orphan topics, not session-linked ones, when isInbox is true', async () => {
+    it('should include topics with associated sessionId via agentsToSessions when isInbox is true', async () => {
+      // This tests the scenario where old users have inbox topics with sessionId
+      // but no agentId, linked via agentsToSessions relation
       await serverDB.transaction(async (trx) => {
         // Create inbox session and agent with relation
         await trx.insert(sessions).values([{ id: 'inbox-session', slug: 'inbox', userId }]);
@@ -1154,10 +1174,10 @@ describe('TopicModel - Query', () => {
 
       const result = await topicModel.query({ agentId: 'inbox-agent-linked', isInbox: true });
 
-      // `legacy-session-topic` is no longer adopted via the agentsToSessions
-      // lookup; only the agentId match and the fully-orphan fallback remain.
-      expect(result.items).toHaveLength(2);
+      // Should include all three: legacy with sessionId, new with agentId, orphan legacy
+      expect(result.items).toHaveLength(3);
       expect(result.items.map((t) => t.id).sort()).toEqual([
+        'legacy-session-topic',
         'new-agentid-topic',
         'orphan-legacy-topic',
       ]);
