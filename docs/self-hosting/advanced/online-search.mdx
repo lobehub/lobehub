@@ -160,6 +160,39 @@ BROWSERLESS_STEALTH_MODE=1
 
 ---
 
+## `BROWSERLESS_WAIT_UNTIL`
+
+Controls the Browserless page load event used by `gotoOptions.waitUntil` when crawling dynamic pages. This can be useful for modern frontend sites where waiting for full network idle is too slow and causes upstream timeouts.
+
+```env
+BROWSERLESS_WAIT_UNTIL=load
+```
+
+> 📌 Supported values:
+>
+> - `load`: Wait for the `load` event (default, recommended);
+> - `domcontentloaded`: Wait for the DOM to be parsed;
+> - `networkidle0`: Wait until there are no active network connections;
+> - `networkidle2`: Wait until there are at most 2 active network connections.
+
+> ✅ `load` is the default because it usually performs better on modern SPA and Next.js pages while still returning usable content.
+
+---
+
+## `CRAWLER_TIMEOUT`
+
+Controls the crawler request timeout in milliseconds for providers such as Browserless.
+
+```env
+CRAWLER_TIMEOUT=10000
+```
+
+> 📌 Default value: `10000`
+
+> ⚠️ If dynamic pages often time out before Browserless finishes rendering, increase this value together with tuning `BROWSERLESS_WAIT_UNTIL`.
+
+---
+
 ## `GOOGLE_PSE_ENGINE_ID`
 
 Configure the Search Engine ID for Google Programmable Search Engine (Google PSE), used to restrict the search scope. Must be used alongside `GOOGLE_PSE_API_KEY`.

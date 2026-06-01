@@ -155,6 +155,39 @@ BROWSERLESS_STEALTH_MODE=1
 
 ---
 
+## `BROWSERLESS_WAIT_UNTIL`
+
+控制 Browserless 抓取动态页面时使用的 `gotoOptions.waitUntil` 页面加载事件。对于现代前端站点，如果等待完整网络空闲过慢并导致上游超时，可以通过该配置进行调整。
+
+```env
+BROWSERLESS_WAIT_UNTIL=load
+```
+
+> 📌 支持的值：
+>
+> - `load`：等待 `load` 事件（默认，推荐）；
+> - `domcontentloaded`：等待 DOM 解析完成；
+> - `networkidle0`：等待网络连接数降为 0；
+> - `networkidle2`：等待网络连接数不超过 2。
+
+> ✅ 默认值为 `load`，因为它通常更适合现代 SPA 和 Next.js 页面，能在返回可用内容的同时减少超时问题。
+
+---
+
+## `CRAWLER_TIMEOUT`
+
+控制爬虫请求的超时时间，单位为毫秒，适用于 Browserless 等抓取提供商。
+
+```env
+CRAWLER_TIMEOUT=10000
+```
+
+> 📌 默认值：`10000`
+
+> ⚠️ 如果动态页面经常在 Browserless 完成渲染前超时，可以结合调整 `BROWSERLESS_WAIT_UNTIL` 一起增大该值。
+
+---
+
 ## `GOOGLE_PSE_ENGINE_ID`
 
 配置 Google Programmable Search Engine（Google PSE）的搜索引擎 ID，用于限定搜索范围。需配合 `GOOGLE_PSE_API_KEY` 一起使用。
