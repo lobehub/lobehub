@@ -41,7 +41,7 @@ vi.mock('@/utils/server/routeVariants', () => ({
   },
 }));
 
-const createRequest = (url: string): NextRequest => {
+const createRequest = (url: string, method = 'GET'): NextRequest => {
   const nextUrl = new URL(url);
 
   return {
@@ -51,7 +51,7 @@ const createRequest = (url: string): NextRequest => {
     headers: new Headers({
       host: nextUrl.host,
     }),
-    method: 'GET',
+    method,
     nextUrl,
     url,
   } as unknown as NextRequest;
@@ -99,6 +99,18 @@ describe('defineConfig middleware', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('location')).toBeNull();
     expect(authMock.getSession).not.toHaveBeenCalled();
+  });
+
+  it('does not canonicalize non-GET protected requests from other hosts', async () => {
+    const { middleware } = defineConfig();
+
+    const response = await middleware(createRequest('https://other.example.com/settings', 'POST'));
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe(
+      'https://base.example.com/signin?callbackUrl=https%3A%2F%2Fbase.example.com%2Fsettings',
+    );
+    expect(authMock.getSession).toHaveBeenCalledTimes(1);
   });
 
   it('allows canonical-host protected requests when the user is signed in', async () => {

@@ -21,6 +21,7 @@ const logBetterAuth = debug('middleware:better-auth');
 
 // Dev-only debug proxy route should bypass all middleware rewrites.
 const dangerousLocalDevProxyRoute = '/_dangerous_local_dev_proxy';
+const canonicalRedirectMethods = new Set(['GET', 'HEAD']);
 
 const getCanonicalAppRedirect = (request: NextRequest) => {
   if (!appEnv.APP_URL) return;
@@ -231,7 +232,7 @@ export function defineConfig() {
 
     logBetterAuth('Route protection status: %s, %s', req.url, isProtected ? 'protected' : 'public');
 
-    if (isProtected) {
+    if (isProtected && canonicalRedirectMethods.has(req.method)) {
       const canonicalRedirect = getCanonicalAppRedirect(req);
       if (canonicalRedirect) return canonicalRedirect;
     }
