@@ -234,7 +234,7 @@
   "exportType.allAgentWithMessage": "匯出所有助手和訊息",
   "exportType.globalSetting": "匯出全域設定",
   "feedback": "回饋與建議",
-  "feedback.emailContact": "您也可以通過 {{email}} 給我們發送電子郵件",
+  "feedback.emailContact": "您也可以通過 <email>{{email}}</email> 給我們發送電子郵件",
   "feedback.errors.fileTooLarge": "檔案超過 5MB",
   "feedback.errors.submitFailed": "提交失敗，請再試一次",
   "feedback.errors.teamNotFound": "設定錯誤",

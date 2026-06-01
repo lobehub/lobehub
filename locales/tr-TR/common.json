@@ -234,7 +234,7 @@
   "exportType.allAgentWithMessage": "Tüm Temsilcileri ve Mesajları Dışa Aktar",
   "exportType.globalSetting": "Genel Ayarları Dışa Aktar",
   "feedback": "Geri Bildirim",
-  "feedback.emailContact": "Bize ayrıca {{email}} adresinden e-posta gönderebilirsiniz",
+  "feedback.emailContact": "Bize ayrıca <email>{{email}}</email> adresinden e-posta gönderebilirsiniz",
   "feedback.errors.fileTooLarge": "Dosya boyutu 5MB'ı aşıyor",
   "feedback.errors.submitFailed": "Gönderim başarısız oldu. Lütfen tekrar deneyin.",
   "feedback.errors.teamNotFound": "Yapılandırma hatası",

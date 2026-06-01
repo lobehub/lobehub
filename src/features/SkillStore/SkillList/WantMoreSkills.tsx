@@ -5,16 +5,17 @@ import { Typography } from 'antd';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useFeedbackModal } from '@/hooks/useFeedbackModal';
+import { openFeedbackModal } from '@/components/FeedbackModal';
 
 const WantMoreSkills = memo(() => {
   const { t } = useTranslation('setting');
-  const { open: openFeedbackModal } = useFeedbackModal();
 
   const handleClick = () => {
     openFeedbackModal({
-      message: t('skillStore.wantMore.feedback.message'),
-      title: t('skillStore.wantMore.feedback.title'),
+      initialValues: {
+        message: t('skillStore.wantMore.feedback.message'),
+        title: t('skillStore.wantMore.feedback.title'),
+      },
     });
   };
 

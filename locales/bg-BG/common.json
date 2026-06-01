@@ -234,7 +234,7 @@
   "exportType.allAgentWithMessage": "Експортиране на всички агенти и съобщения",
   "exportType.globalSetting": "Експортиране на глобални настройки",
   "feedback": "Обратна връзка",
-  "feedback.emailContact": "Можете също да ни пишете на {{email}}",
+  "feedback.emailContact": "Можете също да ни пишете на <email>{{email}}</email>",
   "feedback.errors.fileTooLarge": "Файлът надвишава 5MB",
   "feedback.errors.submitFailed": "Изпращането не бе успешно. Опитайте отново.",
   "feedback.errors.teamNotFound": "Грешка в конфигурацията",

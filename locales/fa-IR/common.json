@@ -234,7 +234,7 @@
   "exportType.allAgentWithMessage": "خروجی تمام نمایندگان و پیام‌ها",
   "exportType.globalSetting": "خروجی تنظیمات کلی",
   "feedback": "بازخورد",
-  "feedback.emailContact": "همچنین می‌توانید به ما ایمیل بزنید به {{email}}",
+  "feedback.emailContact": "همچنین می‌توانید به ما ایمیل بزنید به <email>{{email}}</email>",
   "feedback.errors.fileTooLarge": "فایل بیش از ۵ مگابایت است",
   "feedback.errors.submitFailed": "ارسال ناموفق بود. دوباره تلاش کنید.",
   "feedback.errors.teamNotFound": "خطای پیکربندی",

@@ -234,7 +234,7 @@
   "exportType.allAgentWithMessage": "Exportar todos los agentes y mensajes",
   "exportType.globalSetting": "Exportar configuración global",
   "feedback": "Comentarios",
-  "feedback.emailContact": "También puedes enviarnos un correo electrónico a {{email}}",
+  "feedback.emailContact": "También puedes enviarnos un correo electrónico a <email>{{email}}</email>",
   "feedback.errors.fileTooLarge": "El archivo supera los 5 MB",
   "feedback.errors.submitFailed": "Error al enviar. Inténtalo de nuevo.",
   "feedback.errors.teamNotFound": "Error de configuración",

@@ -22,14 +22,14 @@ import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 
-import ChangelogModal from '@/components/ChangelogModal';
+import { openChangelogModal } from '@/components/ChangelogModal';
+import { openFeedbackModal } from '@/components/FeedbackModal';
 import HighlightNotification from '@/components/HighlightNotification';
 import { DOCUMENTS_REFER_URL, GITHUB } from '@/const/url';
 import Billboard from '@/features/Billboard';
 import { useBillboardMenuItems } from '@/features/Billboard/MenuItems';
 import { useActiveNavKey } from '@/features/NavPanel';
 import ThemeButton from '@/features/User/UserPanel/ThemeButton';
-import { useFeedbackModal } from '@/hooks/useFeedbackModal';
 import { useNavLayout } from '@/hooks/useNavLayout';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors/systemStatus';
@@ -79,9 +79,7 @@ const Footer = memo(() => {
       !!s.onboarding?.finishedAt,
       userGeneralSettingsSelectors.config(s).isDevMode,
     ]);
-  const [shouldLoadChangelog, setShouldLoadChangelog] = useState(false);
   const [isAgentOnboardingCardOpen, setIsAgentOnboardingCardOpen] = useState(false);
-  const [isChangelogModalOpen, setIsChangelogModalOpen] = useState(false);
   const [isProductHuntCardOpen, setIsProductHuntCardOpen] = useState(false);
 
   const [isAgentOnboardingPromoRead, isProductHuntNotificationRead, updateSystemStatus] =
@@ -169,20 +167,13 @@ const Footer = memo(() => {
     });
   }, [isWithinTimeWindow, shouldAutoShowProductHuntCard, trackPromotionEvent]);
 
-  const { open: openFeedbackModal } = useFeedbackModal();
-
-  const handleOpenChangelogModal = () => {
-    setShouldLoadChangelog(true);
-    setIsChangelogModalOpen(true);
-  };
-
-  const handleCloseChangelogModal = () => {
-    setIsChangelogModalOpen(false);
-  };
+  const handleOpenChangelogModal = useCallback(() => {
+    openChangelogModal();
+  }, []);
 
   const handleOpenFeedbackModal = useCallback(() => {
     openFeedbackModal();
-  }, [openFeedbackModal]);
+  }, []);
 
   const handleCloseAgentOnboardingCard = useCallback(() => {
     setIsAgentOnboardingCardOpen(false);
@@ -346,6 +337,7 @@ const Footer = memo(() => {
       footer.layout,
       footer.hideGitHub,
       footer.showEvalEntry,
+      handleOpenChangelogModal,
       handleOpenFeedbackModal,
       handleOpenProductHuntCard,
       isDevMode,
@@ -397,11 +389,6 @@ const Footer = memo(() => {
           )}
         </Flexbox>
       )}
-      <ChangelogModal
-        open={isChangelogModalOpen}
-        shouldLoad={shouldLoadChangelog}
-        onClose={handleCloseChangelogModal}
-      />
       {activePromotion && (
         <HighlightNotification
           open
