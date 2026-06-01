@@ -242,12 +242,6 @@ describe('anthropicHelpers', () => {
     });
 
     it('should pass MiniMax file references as Anthropic-compatible video URL sources', async () => {
-      vi.mocked(parseDataUri).mockReturnValueOnce({
-        mimeType: null,
-        base64: null,
-        type: 'url',
-      });
-
       const content = {
         type: 'video_url',
         video_url: { url: 'mm_file://file_123' },
@@ -255,6 +249,7 @@ describe('anthropicHelpers', () => {
 
       const result = await buildAnthropicBlock(content);
 
+      expect(parseDataUri).not.toHaveBeenCalled();
       expect(result).toEqual({
         source: {
           type: 'url',

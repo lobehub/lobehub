@@ -95,6 +95,16 @@ export const buildAnthropicBlock = async (
     case 'video_url': {
       // MiniMax M3's Anthropic-compatible API accepts video content blocks, while
       // the upstream Anthropic SDK types do not expose a video block param yet.
+      if (content.video_url.url.startsWith('mm_file://')) {
+        return {
+          source: {
+            type: 'url',
+            url: content.video_url.url,
+          },
+          type: 'video',
+        };
+      }
+
       const { mimeType, base64, type } = parseDataUri(content.video_url.url);
 
       if (type === 'base64') {
