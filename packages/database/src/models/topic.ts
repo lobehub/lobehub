@@ -34,6 +34,7 @@ import type { LobeChatDatabase } from '../type';
 import { sanitizeBm25Query } from '../utils/bm25';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
+import { recomputeTopicUsage } from './topicUsage';
 
 type OnboardingSessionMetadataPatch = Partial<NonNullable<ChatTopicMetadata['onboardingSession']>>;
 type TopicMetadataPatch = Omit<Partial<ChatTopicMetadata>, 'onboardingSession'> & {
@@ -888,6 +889,15 @@ export class TopicModel {
       .where(and(eq(topics.id, id), eq(topics.userId, this.userId)))
       .returning();
   };
+
+  /**
+   * Recompute this topic's denormalized usage/cost rollup from its assistant
+   * messages. The canonical aggregation lives in `recomputeTopicUsage`; the
+   * live path (MessageModel) calls it inline within its own transaction, while
+   * external callers use this wrapper. Runs in a transaction for consistency.
+   */
+  recomputeUsage = async (id: string) =>
+    this.db.transaction((trx) => recomputeTopicUsage(trx, this.userId, id));
 
   /**
    * Update topic metadata with merge logic

@@ -73,6 +73,7 @@ import type { LobeChatDatabase, Transaction } from '../type';
 import { sanitizeBm25Query } from '../utils/bm25';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
+import { recomputeTopicUsage } from './topicUsage';
 
 /**
  * Options for querying messages with relations
@@ -1940,6 +1941,19 @@ export class MessageModel {
                 () => this.touchTopicUpdatedAt(trx, [updated.topicId!]),
                 { topicCount: 1 },
               );
+
+              // When this write carries token usage (assistant finalize / hetero
+              // step), recompute the topic's denormalized usage rollup from its
+              // messages. Gated on the *incoming* payload so streaming
+              // content-only updates don't trigger needless recomputes.
+              if ((metadata as { usage?: unknown } | undefined)?.usage) {
+                await runTimedStage(
+                  timing,
+                  'db.message.update.topic.recomputeUsage',
+                  () => recomputeTopicUsage(trx, this.userId, updated.topicId!),
+                  { topicCount: 1 },
+                );
+              }
             }
           }),
         {
@@ -2303,6 +2317,12 @@ export class MessageModel {
       await tx
         .delete(messages)
         .where(and(eq(messages.userId, this.userId), inArray(messages.id, messageIdsToDelete)));
+
+      // 7. Keep the topic's usage rollup in sync (pure derived — a removed
+      // assistant message must drop out of the topic totals).
+      if (message[0].topicId) {
+        await recomputeTopicUsage(tx, this.userId, message[0].topicId);
+      }
     });
   };
 
@@ -2312,7 +2332,7 @@ export class MessageModel {
     return this.db.transaction(async (tx) => {
       // 1. Query all messages to be deleted with their parentId
       const toDelete = await tx
-        .select({ id: messages.id, parentId: messages.parentId })
+        .select({ id: messages.id, parentId: messages.parentId, topicId: messages.topicId })
         .from(messages)
         .where(and(eq(messages.userId, this.userId), inArray(messages.id, ids)));
 
@@ -2376,6 +2396,14 @@ export class MessageModel {
       await tx
         .delete(messages)
         .where(and(eq(messages.userId, this.userId), inArray(messages.id, ids)));
+
+      // 7. Recompute the usage rollup for every affected topic (pure derived).
+      const affectedTopicIds = [
+        ...new Set(toDelete.map((m) => m.topicId).filter(Boolean) as string[]),
+      ];
+      for (const topicId of affectedTopicIds) {
+        await recomputeTopicUsage(tx, this.userId, topicId);
+      }
     });
   };
 
