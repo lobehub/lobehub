@@ -198,7 +198,7 @@ describe('HeterogeneousPersistenceHandler — event branch coverage', () => {
   describe('step_complete', () => {
     it('phase=turn_metadata with usage writes assistant.metadata.usage and caches model/provider', async () => {
       const h = createHarness();
-      const usage = { inputTokens: 100, outputTokens: 50 };
+      const usage = { totalInputTokens: 100, totalOutputTokens: 50, totalTokens: 150 };
 
       await ingest(h, [
         buildEvent('step_complete', 0, {

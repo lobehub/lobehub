@@ -437,7 +437,7 @@ describe('HeterogeneousPersistenceHandler', () => {
 
       const evt = buildEvent('step_complete', 0, {
         phase: 'turn_metadata',
-        usage: { inputTokens: 1 },
+        usage: { totalInputTokens: 1, totalOutputTokens: 0, totalTokens: 1 },
       });
 
       // First attempt: handler throws.
@@ -451,7 +451,9 @@ describe('HeterogeneousPersistenceHandler', () => {
       await h.handler.ingest({ events: [evt], operationId: 'op-1', topicId: 'topic-1' });
 
       const asst = h.messages.get('asst-1')!;
-      expect(asst.metadata).toEqual({ usage: { inputTokens: 1 } });
+      expect(asst.metadata).toEqual({
+        usage: { totalInputTokens: 1, totalOutputTokens: 0, totalTokens: 1 },
+      });
     });
   });
 
@@ -704,7 +706,7 @@ describe('HeterogeneousPersistenceHandler', () => {
             model: 'claude-sonnet-4-6',
             phase: 'turn_metadata',
             provider: 'claude-code',
-            usage: { inputTokens: 10, outputTokens: 5 },
+            usage: { totalInputTokens: 10, totalOutputTokens: 5, totalTokens: 15 },
           }),
         ],
         operationId: 'op-1',
@@ -715,7 +717,7 @@ describe('HeterogeneousPersistenceHandler', () => {
       // carry model/provider so a replica picking up the next step boundary
       // can read them back from DB even if it never drained this event.
       expect(h.messageModel.update).toHaveBeenCalledWith('asst-init', {
-        metadata: { usage: { inputTokens: 10, outputTokens: 5 } },
+        metadata: { usage: { totalInputTokens: 10, totalOutputTokens: 5, totalTokens: 15 } },
         model: 'claude-sonnet-4-6',
         provider: 'claude-code',
       });
