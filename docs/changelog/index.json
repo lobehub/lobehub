@@ -4,8 +4,8 @@
   "community": [
     {
       "id": "2026-05-26-drag-and-drop-skills",
-      "date": "2026-05-26",
-      "versionRange": ["2.2.0"]
+      "date": "2026-05-31",
+      "versionRange": ["2.2.0", "2.2.1"]
     },
     {
       "image": "https://hub-apac-1.lobeobjects.space/billboard/covers/1778838542538-MDEMAEav.png",

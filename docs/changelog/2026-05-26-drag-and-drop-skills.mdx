@@ -1,38 +1,51 @@
 ---
-title: Drag-and-Drop Skills & Bots That Send Files
+title: Platform Agents, iMessage & Drag-Drop Skills
 description: >-
-  Drop skills straight into chat, drag whole folders as references, and send images, videos, voice, and files from bots — across every platform.
+  Run agents locally or on a remote device, chat through iMessage, and drop skills straight into the message box. v2.2.1 is here.
 tags:
+  - Platform Agents
+  - iMessage
   - Skills
-  - Bots
-  - Onboarding
   - Models
 ---
 
-# Drag-and-Drop Skills & Bots That Send Files
+# Platform Agents, iMessage & Drag-Drop Skills
 
-## What's new this week
+## Platform agents, local or remote
 
-The chat input got more direct. You can now drag a skill from the right panel and drop it into the message box as an action tag — no menu hunting. Typing `/` in the middle of a sentence also pops up a slash menu of every skill you have installed, from built-ins to ones from the Skill Market or your own agents.
+You can now create platform agents like **OpenClaw** and **Hermes** and choose, right from the composer, whether they run on your own machine or on a remote device. A new device switcher in the chat input lets you swap targets without leaving the conversation, and your registered devices are remembered so you can pick up where you left off.
+
+On desktop, the recent-directories list can be reordered by drag-and-drop, and devices auto-register with a stable ID — set it once, use it everywhere.
+
+## iMessage in LobeHub
+
+LobeHub now bridges to **iMessage** on desktop. Set up the BlueBubbles bridge from a clean connection card and start sending and receiving messages alongside your other bot channels.
+
+## Drag-and-drop skills & folders
+
+The chat input got more direct. Drag a skill from the right panel into the message box and it becomes an action tag — no menu hunting. Typing `/` mid-sentence pops up a slash menu of every skill you have installed, from built-ins to ones from the Skill Market or your own agents.
 
 On desktop, drag a whole folder into chat and it shows up as a `@localFile` reference instead of trying to upload every file inside it.
 
-Bots learned a new trick too. Discord, Telegram, Slack, Feishu, WeChat, LINE, and QQ can now exchange images, videos, voice messages, and files — not just text. Whatever the platform supports, your agent can send and receive.
-
 ## Other improvements
 
-- Multi-select delete in the agent documents explorer — clean up several files in one go
-- A friendlier first-time experience: a guided screen for creating your first agent, and new topics don't get created until you actually send a message
-- Follow-up suggestions now show up in general chats too, not only inside agent conversations
-- New models: Gemini 3.5 Flash, Qwen 3.7 Max
-- Desktop now previews `.cjs`, `.mjs`, and extension-less text files instead of treating them as binary
-- Topic list pagination is preserved when you create, delete, or move a topic
-- Settings pages cleaned up — clearer copy, simpler entries
-- Settings access from the main window works correctly on Windows and Linux again
+- **Bots that send files**: Discord, Telegram, Slack, Feishu, WeChat, LINE, and QQ can now exchange images, videos, voice, and files — not just text
+- **Page Agent sharing**: share an agent's working pages with one click
+- **Document highlights**: non-markdown documents render as read-only highlighted code; you can open a thread chat inside the document preview
+- **Tasks with attachments**: drop files and images directly into a task
+- **Export an agent**: download any agent's profile as a Markdown file
+- **New models**: Claude Opus 4.8, DeepSeek V4 Flash/Pro, Gemini 3.5 Flash, Qwen 3.7 Max, intern-s2-preview, step-3.7-flash
+- **Chat cost estimates** shown alongside replies
+- **Smoother first run**: guided agent creation, and new topics aren't created until you send your first message
+- **Multi-select delete** in the agent documents explorer
+- **Follow-up suggestions** in general chats, not just agent ones
 
-## Fixes
+## Fixes & polish
 
-- Bedrock structured output and Gemini diagnostics fixes
-- DeepSeek tool choice + payload handling sorted out
-- Image MIME types normalized so uploads don't get rejected by some providers
-- Streaming cancel and provider fallback behave more predictably
+- Input drafts persist when you switch tabs.
+- Action bar stays open while you hover the next message.
+- Copying a user message no longer leaves escaped Markdown.
+- Cmd +/−/0 shows a zoom HUD on desktop, and `~` paths expand correctly.
+- Empty replies retry instead of silently finishing; market OAuth re-login pops the right modal when a session expires.
+- Topic list pagination is preserved after creating, deleting, or moving topics.
+- File preview now covers `.cjs`, `.mjs`, and extension-less text files; Bedrock structured output and Gemini diagnostics fixes also landed.
