@@ -53,6 +53,79 @@ describe('TopicModel - Query', () => {
       expect(result.items[2].id).toBe('4');
     });
 
+    it('should order by status priority when sortBy is "status"', async () => {
+      await serverDB.insert(topics).values([
+        // favorite floats to the top regardless of its (lower-priority) status
+        {
+          favorite: true,
+          id: 'fav',
+          sessionId,
+          status: 'completed',
+          updatedAt: new Date('2023-01-01'),
+          userId,
+        },
+        // null status is treated as `active` (rank 2)
+        { id: 'active', sessionId, updatedAt: new Date('2023-09-01'), userId },
+        {
+          id: 'running-old',
+          sessionId,
+          status: 'running',
+          updatedAt: new Date('2023-02-01'),
+          userId,
+        },
+        {
+          id: 'running-new',
+          sessionId,
+          status: 'running',
+          updatedAt: new Date('2023-08-01'),
+          userId,
+        },
+        {
+          id: 'waiting',
+          sessionId,
+          status: 'waitingForHuman',
+          updatedAt: new Date('2023-03-01'),
+          userId,
+        },
+        {
+          id: 'completed',
+          sessionId,
+          status: 'completed',
+          updatedAt: new Date('2023-07-01'),
+          userId,
+        },
+      ]);
+
+      const result = await topicModel.query({ containerId: sessionId, sortBy: 'status' });
+
+      expect(result.items.map((t) => t.id)).toEqual([
+        'fav', // favorite, rank-independent
+        'waiting', // waitingForHuman = 0
+        'running-new', // running = 1, newer first within the bucket
+        'running-old',
+        'active', // null status → active = 2
+        'completed', // completed = 5
+      ]);
+    });
+
+    it('should keep updatedAt ordering by default (no sortBy)', async () => {
+      await serverDB.insert(topics).values([
+        {
+          id: 'waiting',
+          sessionId,
+          status: 'waitingForHuman',
+          updatedAt: new Date('2023-01-01'),
+          userId,
+        },
+        { id: 'active', sessionId, updatedAt: new Date('2023-05-01'), userId },
+      ]);
+
+      const result = await topicModel.query({ containerId: sessionId });
+
+      // Without status sort, most-recently-updated wins even if lower priority
+      expect(result.items.map((t) => t.id)).toEqual(['active', 'waiting']);
+    });
+
     it('should query topics with pagination', async () => {
       await serverDB.insert(topics).values([
         { id: '1', userId, updatedAt: new Date('2023-01-01') },

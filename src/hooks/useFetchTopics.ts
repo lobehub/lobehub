@@ -1,3 +1,5 @@
+import type { TopicQuerySortBy } from '@lobechat/types';
+
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -10,6 +12,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 export const useFetchTopics = (options?: {
   excludeStatuses?: string[];
   excludeTriggers?: string[];
+  sortBy?: TopicQuerySortBy;
 }) => {
   const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
   const [activeAgentId, activeGroupId, useFetchTopicsHook] = useChatStore((s) => [
@@ -32,6 +35,7 @@ export const useFetchTopics = (options?: {
     groupId: activeGroupId,
     isInbox: activeGroupId ? false : isInbox,
     pageSize: topicPageSize,
+    ...(options?.sortBy ? { sortBy: options.sortBy } : {}),
   });
 
   return {

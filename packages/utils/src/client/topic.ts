@@ -155,6 +155,10 @@ export const groupTopicsByProject = (
 // first, then running, then active; the remaining states fall below. Topics
 // without a status are treated as `active`. The group `id` is the raw status
 // value so the sidebar can resolve its title via `groupTitle.byStatus.<id>`.
+//
+// The server orders the query by the same priority (see `STATUS_SORT_RANK` in
+// `@lobechat/database` topic model) so the right page is fetched; this only
+// re-buckets that already-ordered page for display. Keep the two in sync.
 export const STATUS_GROUP_ORDER: ChatTopicStatus[] = [
   'waitingForHuman',
   'running',

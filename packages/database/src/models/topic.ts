@@ -2,6 +2,7 @@ import type {
   ChatTopicMetadata,
   ChatTopicStatus,
   DBMessageItem,
+  TopicQuerySortBy,
   TopicRankItem,
 } from '@lobechat/types';
 import type { TimingSink } from '@lobechat/utils';
@@ -83,6 +84,12 @@ interface QueryTopicParams {
    */
   isInbox?: boolean;
   pageSize?: number;
+  /**
+   * Server-side ordering. Defaults to `updatedAt`. `status` orders by status
+   * priority (see `STATUS_SORT_RANK`) so the sidebar "group by status" mode
+   * keeps high-priority topics on the first page.
+   */
+  sortBy?: TopicQuerySortBy;
   timing?: ModelTimingContext;
   /**
    * Include only topics matching the given trigger types (positive filter)
@@ -106,6 +113,27 @@ export interface ListTopicsForMemoryExtractorCursor {
   id: string;
 }
 
+// Status priority for the sidebar "group by status" ordering. Lower rank =
+// higher in the list. A NULL / unknown status falls through to `active` (2),
+// matching the client which treats a missing status as active. Keep this in
+// sync with `STATUS_GROUP_ORDER` in `@lobechat/utils` (client-side bucketing).
+const STATUS_SORT_RANK = sql`CASE ${topics.status}
+  WHEN 'waitingForHuman' THEN 0
+  WHEN 'running' THEN 1
+  WHEN 'active' THEN 2
+  WHEN 'paused' THEN 3
+  WHEN 'failed' THEN 4
+  WHEN 'completed' THEN 5
+  WHEN 'archived' THEN 6
+  ELSE 2 END`;
+
+// Favorites always float to the top; the rest are ordered by the requested
+// strategy. `status` adds the priority bucket before the recency tiebreaker.
+const buildTopicOrderBy = (sortBy?: TopicQuerySortBy): SQL[] =>
+  sortBy === 'status'
+    ? [desc(topics.favorite), asc(STATUS_SORT_RANK), desc(topics.updatedAt)]
+    : [desc(topics.favorite), desc(topics.updatedAt)];
+
 export class TopicModel {
   private userId: string;
   private db: LobeChatDatabase;
@@ -126,10 +154,12 @@ export class TopicModel {
     pageSize = 9999,
     groupId,
     isInbox,
+    sortBy,
     timing,
     triggers,
     withDetails = false,
   }: QueryTopicParams = {}) => {
+    const orderBy = buildTopicOrderBy(sortBy);
     const queryStartedAt = Date.now();
     logTiming(timing, 'db.topic.query:start', {
       current,
@@ -232,7 +262,7 @@ export class TopicModel {
               } as any)
               .from(topics)
               .where(whereCondition)
-              .orderBy(desc(topics.favorite), desc(topics.updatedAt))
+              .orderBy(...orderBy)
               .limit(pageSize)
               .offset(offset),
           { current, pageSize },
@@ -329,7 +359,7 @@ export class TopicModel {
               } as any)
               .from(topics)
               .where(agentWhere)
-              .orderBy(desc(topics.favorite), desc(topics.updatedAt))
+              .orderBy(...orderBy)
               .limit(pageSize)
               .offset(offset),
           { current, hasAssociatedSessionId: !!associatedSessionId, isInbox: !!isInbox, pageSize },
@@ -387,9 +417,7 @@ export class TopicModel {
             } as any)
             .from(topics)
             .where(whereCondition)
-            // In boolean sorting, false is considered "smaller" than true.
-            // So here we use desc to ensure that topics with favorite as true are in front.
-            .orderBy(desc(topics.favorite), desc(topics.updatedAt))
+            .orderBy(...orderBy)
             .limit(pageSize)
             .offset(offset),
         { current, pageSize },
