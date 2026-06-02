@@ -3,6 +3,7 @@ import { AGENT_SIGNAL_SOURCE_TYPES } from '@lobechat/agent-signal/source';
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { SelfIterationCompletionPayload } from '../services/selfIteration/completion';
 import { createCompletionPolicy } from './completionPolicy';
 
 interface CapturedHandler {
@@ -25,6 +26,13 @@ const installAndCapture = (middleware: ReturnType<typeof createCompletionPolicy>
   return sourceHandlers;
 };
 
+const selfIteration: SelfIterationCompletionPayload = {
+  artifacts: [],
+  marker: { kind: 'nightly-review', sourceId: 'src_1' },
+  mutations: [],
+  userId: 'user_1',
+};
+
 describe('createCompletionPolicy', () => {
   it('registers a single source handler on agent.execution.completed', () => {
     const handlers = installAndCapture(createCompletionPolicy());
@@ -39,20 +47,17 @@ describe('createCompletionPolicy', () => {
 
     await expect(
       handler.handle({
-        payload: {
-          agentId: BUILTIN_AGENT_SLUGS.nightlyReview,
-          operationId: 'op_1',
-        },
+        payload: { agentId: BUILTIN_AGENT_SLUGS.nightlyReview, operationId: 'op_1', selfIteration },
       }),
     ).resolves.toBeUndefined();
   });
 
-  it('ignores non-self-iteration agents even when a callback is provided', async () => {
+  it('ignores runs that carry no marker payload, regardless of agent', async () => {
     const onSelfIterationCompleted = vi.fn();
     const [handler] = installAndCapture(createCompletionPolicy({ onSelfIterationCompleted }));
 
     await handler.handle({
-      payload: { agentId: BUILTIN_AGENT_SLUGS.inbox, operationId: 'op_2' },
+      payload: { agentId: BUILTIN_AGENT_SLUGS.nightlyReview, operationId: 'op_2' },
     });
 
     expect(onSelfIterationCompleted).not.toHaveBeenCalled();
@@ -61,38 +66,33 @@ describe('createCompletionPolicy', () => {
   it.each([
     [BUILTIN_AGENT_SLUGS.nightlyReview],
     [BUILTIN_AGENT_SLUGS.selfReflection],
-    [BUILTIN_AGENT_SLUGS.selfFeedbackIntent],
-  ])('invokes the callback for %s runs and forwards the agentId', async (slug) => {
+    // A memory-writer runs as the user's own agent — not a self-iteration slug —
+    // and must still route purely on the marker payload.
+    ['agent_user_42'],
+  ])('invokes the callback for a marked %s run and forwards the payload', async (agentId) => {
     const onSelfIterationCompleted = vi.fn().mockResolvedValue(undefined);
     const [handler] = installAndCapture(createCompletionPolicy({ onSelfIterationCompleted }));
 
     await handler.handle({
-      payload: {
-        agentId: slug,
-        operationId: 'op_3',
-        topicId: 'topic_3',
-      },
+      payload: { agentId, operationId: 'op_3', selfIteration, topicId: 'topic_3' },
     });
 
     expect(onSelfIterationCompleted).toHaveBeenCalledWith({
-      agentId: slug,
+      agentId,
       operationId: 'op_3',
+      selfIteration,
       topicId: 'topic_3',
     });
   });
 
   it('swallows callback errors so the worker is not blocked', async () => {
-    const error = new Error('boom');
-    const onSelfIterationCompleted = vi.fn().mockRejectedValue(error);
+    const onSelfIterationCompleted = vi.fn().mockRejectedValue(new Error('boom'));
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const [handler] = installAndCapture(createCompletionPolicy({ onSelfIterationCompleted }));
 
     await expect(
       handler.handle({
-        payload: {
-          agentId: BUILTIN_AGENT_SLUGS.nightlyReview,
-          operationId: 'op_4',
-        },
+        payload: { agentId: BUILTIN_AGENT_SLUGS.nightlyReview, operationId: 'op_4', selfIteration },
       }),
     ).resolves.toBeUndefined();
 
@@ -104,8 +104,10 @@ describe('createCompletionPolicy', () => {
     const onSelfIterationCompleted = vi.fn();
     const [handler] = installAndCapture(createCompletionPolicy({ onSelfIterationCompleted }));
 
-    await handler.handle({ payload: { operationId: 'op_5' } });
-    await handler.handle({ payload: { agentId: BUILTIN_AGENT_SLUGS.nightlyReview } });
+    await handler.handle({ payload: { operationId: 'op_5', selfIteration } });
+    await handler.handle({
+      payload: { agentId: BUILTIN_AGENT_SLUGS.nightlyReview, selfIteration },
+    });
 
     expect(onSelfIterationCompleted).not.toHaveBeenCalled();
   });

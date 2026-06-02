@@ -1,11 +1,10 @@
 import type { AgentState } from '@lobechat/agent-runtime';
-import type { BuiltinAgentSlug } from '@lobechat/builtin-agents';
-import { SELF_ITERATION_AGENT_SLUGS } from '@lobechat/builtin-agents';
 
 import {
   type AgentSignalOperationMarker,
   readAgentSignalMarker,
 } from '@/server/services/agentSignal/operationMarker';
+import { resolveMemoryActionResultFromState } from '@/server/services/agentSignal/policies/analyzeIntent/actions/memoryActionResult';
 
 import {
   extractArtifacts,
@@ -34,12 +33,39 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
+ * Memory-writer runs use the generic memory builtin tool, whose results are NOT
+ * `kind`-tagged, so `extractMutations` finds nothing. Re-derive the durable
+ * outcome from the run's finalState (the same logic the synchronous runner used)
+ * and synthesize a `writeMemory` mutation so the receipt projector treats it like
+ * any other durable write. Only an applied write yields a mutation; skip / fail
+ * leave the run with no durable receipt.
+ */
+const extractMemoryMutations = (finalState: AgentState): ToolResultWithKind[] => {
+  const result = resolveMemoryActionResultFromState(finalState);
+  if (result.status !== 'applied') return [];
+
+  return [
+    {
+      apiName: 'writeMemory',
+      data: {
+        kind: 'mutation',
+        resourceId: result.target?.id ?? result.target?.memoryId,
+        status: 'applied',
+        summary: result.detail,
+      },
+      kind: 'mutation',
+    },
+  ];
+};
+
+/**
  * Extracts the compact self-iteration completion payload from a terminal agent
- * state, or `undefined` when the run is not a marked self-iteration run.
+ * state, or `undefined` when the run carried no agent-signal marker.
  *
- * Returns `undefined` (a safe no-op) unless the agent is a self-iteration slug
- * AND the operation carries an agent-signal marker — so completion stays inert
- * until the dispatch side stamps the marker (S3 / S4).
+ * Keyed on the operation marker (stamped at dispatch), NOT the agent slug — a
+ * memory-writer run executes as the user's own agent, so a slug check would miss
+ * it. Returns `undefined` (a safe no-op) for every unmarked run, keeping
+ * completion inert until a dispatcher opts in by stamping the marker.
  */
 export const extractSelfIterationCompletionPayload = (
   state: unknown,
@@ -48,9 +74,6 @@ export const extractSelfIterationCompletionPayload = (
   const metadata = isRecord(state.metadata) ? state.metadata : undefined;
   if (!metadata) return undefined;
 
-  const agentId = typeof metadata.agentId === 'string' ? metadata.agentId : undefined;
-  if (!agentId || !SELF_ITERATION_AGENT_SLUGS.has(agentId as BuiltinAgentSlug)) return undefined;
-
   const marker = readAgentSignalMarker(metadata);
   if (!marker) return undefined;
 
@@ -58,6 +81,10 @@ export const extractSelfIterationCompletionPayload = (
   if (!userId) return undefined;
 
   const finalState = state as unknown as AgentState;
+
+  if (marker.kind === 'memory') {
+    return { artifacts: [], marker, mutations: extractMemoryMutations(finalState), userId };
+  }
 
   return {
     artifacts: extractArtifacts(finalState),

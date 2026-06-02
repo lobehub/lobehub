@@ -117,6 +117,11 @@ export const buildSelfIterationReceipts = (
     userId,
   } satisfies Partial<AgentSignalReceipt>;
 
+  // A single memory write surfaces as just its action receipt — no aggregate
+  // "review summary" (that is for nightly-review / reflection runs that capture
+  // ideas across multiple actions).
+  const includeSummary = marker.kind !== 'memory';
+
   const summary: AgentSignalReceipt = {
     ...base,
     detail: `Captured ${artifacts.length} idea(s) and applied ${mutations.length} write(s).`,
@@ -173,5 +178,5 @@ export const buildSelfIterationReceipts = (
     ];
   });
 
-  return [summary, ...actionReceipts];
+  return includeSummary ? [summary, ...actionReceipts] : actionReceipts;
 };
