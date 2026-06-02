@@ -8,6 +8,7 @@
  */
 import type { ToolExecutionContext } from '../types';
 import { activatorRuntime } from './activator';
+import { agentBuilderRuntime } from './agentBuilder';
 import { agentDocumentsRuntime } from './agentDocuments';
 import { agentManagementRuntime } from './agentManagement';
 import { briefRuntime } from './brief';
@@ -48,6 +49,7 @@ const registerRuntimes = (runtimes: ServerRuntimeRegistration[]) => {
 
 // Register all server runtimes
 registerRuntimes([
+  agentBuilderRuntime,
   webBrowsingRuntime,
   cloudSandboxRuntime,
   calculatorRuntime,
