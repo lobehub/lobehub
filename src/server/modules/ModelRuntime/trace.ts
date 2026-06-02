@@ -2,6 +2,7 @@ import { INBOX_SESSION_ID, LOBE_CHAT_OBSERVATION_ID, LOBE_CHAT_TRACE_ID } from '
 import { type ChatStreamCallbacks, type ChatStreamPayload } from '@lobechat/model-runtime';
 import { type TracePayload } from '@lobechat/types';
 import { TraceTagMap } from '@lobechat/types';
+import type { CreateLangfuseGenerationBody } from 'langfuse-core';
 import { after } from 'next/server';
 
 import { TraceClient } from '@/libs/traces';
@@ -12,11 +13,59 @@ export interface AgentChatOptions {
   trace?: TracePayload;
 }
 
+type TraceModelParameters = NonNullable<CreateLangfuseGenerationBody['modelParameters']>;
+type TraceModelParameterValue = TraceModelParameters[string];
+
+// Langfuse modelParameters only accepts primitives and string arrays.
+// Keep structured runtime params observable by serializing them instead of dropping them.
+const serializeTraceModelParameter = (value: unknown): TraceModelParameterValue | undefined => {
+  if (value === undefined || value === null) return;
+
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => {
+      const serializedItem = serializeTraceModelParameter(item);
+
+      // Langfuse arrays are typed as string arrays, so nested values need a stable string form.
+      if (Array.isArray(serializedItem)) return JSON.stringify(serializedItem);
+
+      return String(serializedItem);
+    });
+  }
+
+  if (typeof value === 'bigint') return value.toString();
+
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+};
+
+const sanitizeTraceModelParameters = (parameters: Record<string, unknown>) => {
+  const sanitizedParameters: Record<string, TraceModelParameterValue> = {};
+
+  for (const [key, value] of Object.entries(parameters)) {
+    const serializedValue = serializeTraceModelParameter(value);
+
+    if (serializedValue !== undefined) {
+      sanitizedParameters[key] = serializedValue;
+    }
+  }
+
+  return sanitizedParameters;
+};
+
 export const createTraceOptions = (
   payload: ChatStreamPayload,
   { trace: tracePayload, provider }: AgentChatOptions,
 ) => {
   const { messages, model, tools, ...parameters } = payload;
+  const modelParameters = sanitizeTraceModelParameters(parameters);
+
   // create a trace to monitor the completion
   const traceClient = new TraceClient();
   const messageLength = messages.length;
@@ -38,7 +87,7 @@ export const createTraceOptions = (
     input: messages,
     metadata: { messageLength, model, provider },
     model,
-    modelParameters: parameters as any,
+    modelParameters,
     name: `Chat Completion (${provider})`,
     startTime: new Date(),
   });
