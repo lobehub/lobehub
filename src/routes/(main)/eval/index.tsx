@@ -3,14 +3,14 @@
 import { Button, Empty, Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { FlaskConical, Plus } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { useEvalStore } from '@/store/eval';
 
 import BenchmarkCard from './features/BenchmarkCard';
-import CreateBenchmarkModal from './features/CreateBenchmarkModal';
+import { createCreateBenchmarkModal } from './features/CreateBenchmarkModal';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
@@ -36,7 +36,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const EvalOverview = memo(() => {
   const { t } = useTranslation('eval');
-  const [createModalOpen, setCreateModalOpen] = useState(false);
   const benchmarkList = useEvalStore((s) => s.benchmarkList);
   const useFetchBenchmarks = useEvalStore((s) => s.useFetchBenchmarks);
   const { isLoading } = useFetchBenchmarks();
@@ -50,7 +49,7 @@ const EvalOverview = memo(() => {
           <p className={styles.subtitle}>{t('overview.subtitle')}</p>
         </Flexbox>
         {benchmarkList.length > 0 && (
-          <Button icon={Plus} type="primary" onClick={() => setCreateModalOpen(true)}>
+          <Button icon={Plus} type="primary" onClick={() => createCreateBenchmarkModal()}>
             {t('overview.createBenchmark')}
           </Button>
         )}
@@ -68,7 +67,7 @@ const EvalOverview = memo(() => {
               icon={Plus}
               style={{ marginTop: 16 }}
               type="primary"
-              onClick={() => setCreateModalOpen(true)}
+              onClick={() => createCreateBenchmarkModal()}
             >
               {t('overview.createBenchmark')}
             </Button>
@@ -99,8 +98,6 @@ const EvalOverview = memo(() => {
           ))}
         </div>
       )}
-
-      <CreateBenchmarkModal open={createModalOpen} onCancel={() => setCreateModalOpen(false)} />
     </Flexbox>
   );
 });

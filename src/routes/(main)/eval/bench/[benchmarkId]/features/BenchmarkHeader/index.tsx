@@ -18,13 +18,13 @@ import {
   User,
 } from 'lucide-react';
 import { type LucideIcon } from 'lucide-react';
-import { memo, useMemo, useState } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import { useEvalStore } from '@/store/eval';
 
-import BenchmarkEditModal from '../../../../features/BenchmarkEditModal';
+import { createBenchmarkEditModal } from '../../../../features/BenchmarkEditModal';
 import { formatDuration, formatDurationMinutes } from '../../../../utils';
 
 const RANK_COLORS = [cssVar.colorPrimary, cssVar.colorSuccess, cssVar.colorTextQuaternary];
@@ -101,12 +101,13 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
     const navigate = useNavigate();
     const deleteBenchmark = useEvalStore((s) => s.deleteBenchmark);
     const refreshBenchmarkDetail = useEvalStore((s) => s.refreshBenchmarkDetail);
-    const [editOpen, setEditOpen] = useState(false);
 
     const handleEditSuccess = async () => {
       await refreshBenchmarkDetail(benchmark.id);
       onBenchmarkUpdate?.(benchmark);
     };
+
+    const handleEdit = () => createBenchmarkEditModal({ benchmark, onSuccess: handleEditSuccess });
 
     const handleDelete = () => {
       confirmModal({
@@ -222,7 +223,7 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
             </Flexbox>
 
             <Flexbox horizontal gap={8}>
-              <Button icon={Edit} size="small" variant="outlined" onClick={() => setEditOpen(true)}>
+              <Button icon={Edit} size="small" variant="outlined" onClick={handleEdit}>
                 {t('common.edit')}
               </Button>
               <Dropdown menu={{ items: menuItems }} placement="bottomRight" trigger={['click']}>
@@ -495,13 +496,6 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
             </Flexbox>
           </div>
         </Flexbox>
-
-        <BenchmarkEditModal
-          benchmark={benchmark}
-          open={editOpen}
-          onCancel={() => setEditOpen(false)}
-          onSuccess={handleEditSuccess}
-        />
       </>
     );
   },

@@ -1,4 +1,5 @@
-import { createModal, Flexbox, Icon, useModalContext } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { createModal, useModalContext } from '@lobehub/ui/base-ui';
 import { BookUp2Icon } from 'lucide-react';
 import { memo, Suspense, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -55,8 +56,7 @@ ModalContent.displayName = 'AddFilesToKnowledgeBaseModalContent';
 export const useAddFilesToKnowledgeBaseModal = () => {
   const open = useCallback((params?: AddFilesToKnowledgeBaseModalProps) => {
     createModal({
-      afterClose: params?.onClose,
-      children: (
+      content: (
         <Suspense fallback={<div style={{ minHeight: 200 }} />}>
           <ModalContent
             fileIds={params?.fileIds || []}
@@ -67,6 +67,9 @@ export const useAddFilesToKnowledgeBaseModal = () => {
         </Suspense>
       ),
       footer: null,
+      onOpenChangeComplete: (open) => {
+        if (!open) params?.onClose?.();
+      },
       title: null,
     });
   }, []);

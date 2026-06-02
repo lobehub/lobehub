@@ -11,13 +11,13 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { agentEvalService } from '@/services/agentEval';
 import { runSelectors, useEvalStore } from '@/store/eval';
 
-import DatasetEditModal from '../../../../features/DatasetEditModal';
-import DatasetImportModal from '../../../../features/DatasetImportModal';
-import TestCaseCreateModal from '../../../../features/TestCaseCreateModal';
-import TestCaseEditModal from '../../../../features/TestCaseEditModal';
+import { createDatasetEditModal } from '../../../../features/DatasetEditModal';
+import { createDatasetImportModal } from '../../../../features/DatasetImportModal';
+import { createTestCaseCreateModal } from '../../../../features/TestCaseCreateModal';
+import { createTestCaseEditModal } from '../../../../features/TestCaseEditModal';
 import TestCasePreviewPanel from '../../features/DatasetsTab/TestCasePreviewPanel';
 import TestCaseTable from '../../features/DatasetsTab/TestCaseTable';
-import RunCreateModal from '../../features/RunCreateModal';
+import { createRunCreateModal } from '../../features/RunCreateModal';
 import EmptyState from '../../features/RunsTab/EmptyState';
 import RunCard from '../../features/RunsTab/RunCard';
 
@@ -31,11 +31,6 @@ const DatasetDetail = memo(() => {
   const [search, setSearch] = useState('');
   const [diffFilter, setDiffFilter] = useState<'all' | 'easy' | 'medium' | 'hard'>('all');
   const [previewCase, setPreviewCase] = useState<any | null>(null);
-  const [editOpen, setEditOpen] = useState(false);
-  const [editingCase, setEditingCase] = useState<any | null>(null);
-  const [importOpen, setImportOpen] = useState(false);
-  const [addCaseOpen, setAddCaseOpen] = useState(false);
-  const [createRunOpen, setCreateRunOpen] = useState(false);
 
   const useFetchDatasetDetail = useEvalStore((s) => s.useFetchDatasetDetail);
   const useFetchTestCases = useEvalStore((s) => s.useFetchTestCases);
@@ -182,7 +177,7 @@ const DatasetDetail = memo(() => {
                 icon={Pencil}
                 size="small"
                 variant="outlined"
-                onClick={() => setEditOpen(true)}
+                onClick={() => createDatasetEditModal({ dataset, onSuccess: handleRefresh })}
               >
                 {t('common.edit')}
               </Button>
@@ -216,16 +211,22 @@ const DatasetDetail = memo(() => {
                 selectedId={previewCase?.id}
                 testCases={filteredCases}
                 total={total}
-                onAddCase={() => setAddCaseOpen(true)}
                 onDelete={handleDeleteCase}
-                onEdit={setEditingCase}
-                onImport={() => setImportOpen(true)}
                 onPageChange={(page, pageSize) => setPagination({ current: page, pageSize })}
                 onPreview={setPreviewCase}
+                onAddCase={() =>
+                  createTestCaseCreateModal({ datasetId: datasetId!, onSuccess: handleRefresh })
+                }
                 onDiffFilterChange={(f) => {
                   setDiffFilter(f);
                   setPagination((prev) => ({ ...prev, current: 1 }));
                 }}
+                onEdit={(testCase) =>
+                  createTestCaseEditModal({ onSuccess: handleRefresh, testCase })
+                }
+                onImport={() =>
+                  createDatasetImportModal({ datasetId: datasetId!, onSuccess: handleRefresh })
+                }
                 onSearchChange={(v) => {
                   setSearch(v);
                   setPagination((prev) => ({ ...prev, current: 1 }));
@@ -240,7 +241,17 @@ const DatasetDetail = memo(() => {
               <Typography.Text strong>
                 {t('dataset.detail.relatedRuns', { count: sortedRuns.length })}
               </Typography.Text>
-              <Button icon={Plus} size="small" onClick={() => setCreateRunOpen(true)}>
+              <Button
+                icon={Plus}
+                size="small"
+                onClick={() =>
+                  createRunCreateModal({
+                    benchmarkId: benchmarkId!,
+                    datasetId: datasetId!,
+                    datasetName: dataset.name,
+                  })
+                }
+              >
                 {t('dataset.detail.addRun')}
               </Button>
             </Flexbox>
@@ -251,7 +262,15 @@ const DatasetDetail = memo(() => {
                 ))}
               </Flexbox>
             ) : (
-              <EmptyState onCreate={() => setCreateRunOpen(true)} />
+              <EmptyState
+                onCreate={() =>
+                  createRunCreateModal({
+                    benchmarkId: benchmarkId!,
+                    datasetId: datasetId!,
+                    datasetName: dataset.name,
+                  })
+                }
+              />
             )}
           </Flexbox>
         </Flexbox>
@@ -260,46 +279,6 @@ const DatasetDetail = memo(() => {
           <TestCasePreviewPanel testCase={previewCase} onClose={() => setPreviewCase(null)} />
         )}
       </Flexbox>
-
-      {editOpen && (
-        <DatasetEditModal
-          dataset={dataset}
-          open={editOpen}
-          onCancel={() => setEditOpen(false)}
-          onSuccess={handleRefresh}
-        />
-      )}
-
-      <DatasetImportModal
-        datasetId={datasetId!}
-        open={importOpen}
-        onClose={() => setImportOpen(false)}
-        onSuccess={handleRefresh}
-      />
-
-      <TestCaseCreateModal
-        datasetId={datasetId!}
-        open={addCaseOpen}
-        onClose={() => setAddCaseOpen(false)}
-        onSuccess={handleRefresh}
-      />
-
-      {editingCase && (
-        <TestCaseEditModal
-          open={!!editingCase}
-          testCase={editingCase}
-          onClose={() => setEditingCase(null)}
-          onSuccess={handleRefresh}
-        />
-      )}
-
-      <RunCreateModal
-        benchmarkId={benchmarkId!}
-        datasetId={datasetId!}
-        datasetName={dataset.name}
-        open={createRunOpen}
-        onClose={() => setCreateRunOpen(false)}
-      />
     </>
   );
 });

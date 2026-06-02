@@ -1,4 +1,5 @@
-import { createModal, Flexbox, useModalContext } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { createModal, useModalContext } from '@lobehub/ui/base-ui';
 import { memo, Suspense, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -36,7 +37,7 @@ export const useCreateNewModal = () => {
       const isEditMode = !!props?.id;
 
       createModal({
-        children: (
+        content: (
           <Suspense fallback={<div style={{ minHeight: 200 }} />}>
             <ModalContent
               id={props?.id}
@@ -45,10 +46,9 @@ export const useCreateNewModal = () => {
             />
           </Suspense>
         ),
-        width: 420,
-        focusTriggerAfterClose: true,
         footer: null,
         title: isEditMode ? t('createNew.edit.title') : t('createNew.title'),
+        width: 420,
       });
     },
     [t],
