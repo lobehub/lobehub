@@ -6,13 +6,13 @@ import {
   type UpdateAgentConfigParams,
   type UpdatePromptParams,
 } from '@lobechat/builtin-tool-agent-builder';
+import { builtinTools } from '@lobechat/builtin-tools';
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import { modelsResultsPrompt } from '@lobechat/prompts';
 
 import { AgentModel } from '@/database/models/agent';
-import { AiModelModel } from '@/database/models/aiModel';
-import { AiProviderModel } from '@/database/models/aiProvider';
 import { PluginModel } from '@/database/models/plugin';
+import { AiInfraRepos } from '@/database/repositories/aiInfra';
 import { DiscoverService } from '@/server/services/discover';
 
 import { type ToolExecutionContext, type ToolExecutionResult } from '../types';
@@ -33,8 +33,7 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
 
     const agentModel = new AgentModel(context.serverDB, context.userId);
     const pluginModel = new PluginModel(context.serverDB, context.userId);
-    const aiProviderModel = new AiProviderModel(context.serverDB, context.userId);
-    const aiModelModel = new AiModelModel(context.serverDB, context.userId);
+    const aiInfraRepos = new AiInfraRepos(context.serverDB, context.userId, {});
     const discoverService = new DiscoverService();
 
     return {
@@ -42,7 +41,7 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
         params: GetAvailableModelsParams,
       ): Promise<ToolExecutionResult> => {
         try {
-          const allProviders = await aiProviderModel.getAiProviderList();
+          const allProviders = await aiInfraRepos.getAiProviderList();
           const enabledProviders = allProviders.filter((p) => p.enabled);
 
           // LobeHub provider first, then by sort order
@@ -60,7 +59,12 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
           const providerResults: Array<{
             id: string;
             models: Array<{
-              abilities?: { files?: boolean; functionCall?: boolean; reasoning?: boolean; vision?: boolean };
+              abilities?: {
+                files?: boolean;
+                functionCall?: boolean;
+                reasoning?: boolean;
+                vision?: boolean;
+              };
               description?: string;
               id: string;
               name: string;
@@ -73,10 +77,10 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
           for (const provider of filteredProviders) {
             if (totalModels >= MAX_MODELS) break;
 
-            const allModels = await aiModelModel.getModelListByProviderId(provider.id);
-            const enabledChatModels = allModels.filter(
-              (m) => m.enabled && (!m.type || m.type === 'chat'),
-            );
+            const enabledChatModels = await aiInfraRepos.getAiProviderModelList(provider.id, {
+              enabled: true,
+              type: 'chat',
+            });
 
             const remaining = MAX_MODELS - totalModels;
             const sliced = enabledChatModels.slice(0, remaining);
@@ -109,9 +113,7 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
         }
       },
 
-      searchMarketTools: async (
-        params: SearchMarketToolsParams,
-      ): Promise<ToolExecutionResult> => {
+      searchMarketTools: async (params: SearchMarketToolsParams): Promise<ToolExecutionResult> => {
         try {
           const response = await discoverService.getMcpList({
             category: params.category,
@@ -168,11 +170,19 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
 
           let rawConfig: any = params.config;
           if (typeof rawConfig === 'string') {
-            try { rawConfig = JSON.parse(rawConfig); } catch { rawConfig = undefined; }
+            try {
+              rawConfig = JSON.parse(rawConfig);
+            } catch {
+              rawConfig = undefined;
+            }
           }
           let rawMeta: any = params.meta;
           if (typeof rawMeta === 'string') {
-            try { rawMeta = JSON.parse(rawMeta); } catch { rawMeta = undefined; }
+            try {
+              rawMeta = JSON.parse(rawMeta);
+            } catch {
+              rawMeta = undefined;
+            }
           }
 
           let finalConfig = rawConfig ? { ...rawConfig } : {};
@@ -184,11 +194,12 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
             const isEnabled = currentPlugins.includes(pluginId);
             const shouldEnable = enabled !== undefined ? enabled : !isEnabled;
 
-            const newPlugins = shouldEnable && !isEnabled
-              ? [...currentPlugins, pluginId]
-              : !shouldEnable && isEnabled
-                ? currentPlugins.filter((id: string) => id !== pluginId)
-                : currentPlugins;
+            const newPlugins =
+              shouldEnable && !isEnabled
+                ? [...currentPlugins, pluginId]
+                : !shouldEnable && isEnabled
+                  ? currentPlugins.filter((id: string) => id !== pluginId)
+                  : currentPlugins;
 
             finalConfig = { ...finalConfig, plugins: newPlugins };
             updatedParts.push(`plugin ${pluginId} ${shouldEnable ? 'enabled' : 'disabled'}`);
@@ -274,6 +285,28 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
         const { identifier, source } = params;
 
         if (source === 'official') {
+          if (builtinTools.some((t) => t.identifier === identifier)) {
+            // Builtin tools (lobe-web-browsing, lobe-image-generation, etc.) need no OAuth
+            try {
+              const agent = await agentModel.getAgentConfigById(agentId);
+              if (!agent) return { content: `Agent "${agentId}" not found.`, success: false };
+
+              const currentPlugins = (agent.plugins as string[] | null) || [];
+              if (!currentPlugins.includes(identifier)) {
+                await agentModel.updateConfig(agentId, {
+                  plugins: [...currentPlugins, identifier],
+                });
+              }
+              return {
+                content: `Successfully enabled "${identifier}" for agent "${agentId}"`,
+                state: { installed: true, pluginId: identifier, success: true },
+                success: true,
+              };
+            } catch (error) {
+              return handleError(error, 'Failed to enable builtin tool');
+            }
+          }
+
           // OAuth-based tools (Klavis, LobehubSkill) cannot be installed in background context
           return {
             content: `Installing official integrations that require OAuth (Klavis, LobehubSkill) is not supported in background execution. Please install "${identifier}" from the Agent Builder UI instead.`,
@@ -291,7 +324,20 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
 
           const existing = await pluginModel.findById(identifier);
           if (!existing) {
-            await pluginModel.create({ identifier, type: 'plugin' });
+            let manifest: any;
+            try {
+              manifest = await discoverService.getMcpManifest({ identifier });
+            } catch {
+              // proceed without manifest if fetch fails; tool will be unusable until manifest loads
+            }
+            await pluginModel.create({ identifier, manifest: manifest as any, type: 'plugin' });
+          } else if (!existing.manifest) {
+            try {
+              const manifest = await discoverService.getMcpManifest({ identifier });
+              await pluginModel.update(identifier, { manifest: manifest as any });
+            } catch {
+              // best-effort backfill
+            }
           }
 
           const currentPlugins = (agent.plugins as string[] | null) || [];
