@@ -1,6 +1,6 @@
 'use client';
 
-import { createModal, type ModalInstance } from '@lobehub/ui/base-ui';
+import { createModal, type ImperativeModalProps, type ModalInstance } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 
 import BatchResumeContent from './Content';
@@ -23,13 +23,13 @@ export const createBatchResumeModal = ({ onConfirm, runId }: CreateOptions): Mod
       selectedCount={selectedCount}
       onConfirm={async () => {
         confirming = true;
-        ref.instance?.update({ footer: renderFooter() });
+        ref.instance?.update({ footer: renderFooter() } as Partial<ImperativeModalProps>);
         try {
           await runConfirm();
           ref.instance?.close();
         } finally {
           confirming = false;
-          ref.instance?.update({ footer: renderFooter() });
+          ref.instance?.update({ footer: renderFooter() } as Partial<ImperativeModalProps>);
         }
       }}
     />
@@ -38,7 +38,7 @@ export const createBatchResumeModal = ({ onConfirm, runId }: CreateOptions): Mod
   const onSelectionChange = (count: number) => {
     if (count === selectedCount) return;
     selectedCount = count;
-    ref.instance?.update({ footer: renderFooter() });
+    ref.instance?.update({ footer: renderFooter() } as Partial<ImperativeModalProps>);
   };
 
   ref.instance = createModal({

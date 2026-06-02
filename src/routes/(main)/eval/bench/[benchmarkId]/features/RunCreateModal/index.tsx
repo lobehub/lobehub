@@ -1,6 +1,6 @@
 'use client';
 
-import { createModal, type ModalInstance } from '@lobehub/ui/base-ui';
+import { createModal, type ImperativeModalProps, type ModalInstance } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 
 import RunCreateContent, { type RunCreateContentProps } from './Content';
@@ -23,7 +23,7 @@ export const createRunCreateModal = (props: Props): ModalInstance => {
 
   const setLoading = (next: boolean) => {
     loading = next;
-    ref.instance?.update({ footer: renderFooter() });
+    ref.instance?.update({ footer: renderFooter() } as Partial<ImperativeModalProps>);
   };
 
   ref.instance = createModal({

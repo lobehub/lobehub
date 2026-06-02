@@ -2,7 +2,12 @@
 
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { Button, Flexbox, Icon } from '@lobehub/ui';
-import { createModal, ModalFooter, type ModalInstance } from '@lobehub/ui/base-ui';
+import {
+  createModal,
+  type ImperativeModalProps,
+  ModalFooter,
+  type ModalInstance,
+} from '@lobehub/ui/base-ui';
 import { t as i18nt } from 'i18next';
 import { AlertCircle, LogIn } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
@@ -125,7 +130,7 @@ export const useAuthRequiredModal = () => {
             instanceRef.current?.update?.({
               footer: renderFooter(),
               maskClosable: !next,
-            });
+            } as Partial<ImperativeModalProps>);
           }}
         />
       ),

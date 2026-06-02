@@ -18,7 +18,9 @@ export const createFormModal = ({
   const formId = `form-modal-${formIdSeed++}`;
   const ref: { instance?: ModalInstance } = {};
   const setLoading = (loading: boolean) => {
-    ref.instance?.update({ footer: renderFooter({ formId, loading }) });
+    ref.instance?.update({
+      footer: renderFooter({ formId, loading }),
+    } as Partial<ImperativeModalProps>);
   };
   ref.instance = createModal({
     ...rest,

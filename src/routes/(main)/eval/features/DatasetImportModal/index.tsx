@@ -1,6 +1,6 @@
 'use client';
 
-import { createModal, type ModalInstance } from '@lobehub/ui/base-ui';
+import { createModal, type ImperativeModalProps, type ModalInstance } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 
 import DatasetImportContent from './Content';
@@ -33,12 +33,12 @@ export const createDatasetImportModal = ({
         onPrev={prev}
         onImport={async () => {
           importing = true;
-          ref.instance?.update({ footer: renderFooter() });
+          ref.instance?.update({ footer: renderFooter() } as Partial<ImperativeModalProps>);
           try {
             await runImport();
           } finally {
             importing = false;
-            ref.instance?.update({ footer: renderFooter() });
+            ref.instance?.update({ footer: renderFooter() } as Partial<ImperativeModalProps>);
           }
         }}
       />
@@ -62,7 +62,7 @@ export const createDatasetImportModal = ({
           if (next.step === step && next.canImport === canImport) return;
           step = next.step;
           canImport = next.canImport;
-          ref.instance?.update({ footer: renderFooter() });
+          ref.instance?.update({ footer: renderFooter() } as Partial<ImperativeModalProps>);
         }}
       />
     ),
