@@ -357,7 +357,9 @@ const PreviewContent = ({
               </Typography.Text>
             ) : null}
             {preview ? (
-              <div style={{ pointerEvents: 'none', width: '100%' }}>{preview}</div>
+              <div aria-hidden style={{ opacity: 0.72, pointerEvents: 'none', width: '100%' }}>
+                {preview}
+              </div>
             ) : (
               <Typography.Text type={'secondary'}>{previewFallback}</Typography.Text>
             )}
@@ -372,7 +374,7 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
   const { t } = useTranslation('modelProvider');
   const { t: tChat } = useTranslation('chat');
 
-  // Preview controls use controlled mode with default values (no store access)
+  // Preview controls are read-only examples; the form only stores supported parameter keys.
   const previewControls = useMemo<Partial<Record<ExtendParamsType, ReactNode>>>(
     () => ({
       codexMaxReasoningEffort: <CodexMaxReasoningEffortSlider value="medium" />,
