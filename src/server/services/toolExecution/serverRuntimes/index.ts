@@ -21,6 +21,7 @@ import { localSystemRuntime } from './localSystem';
 import { memoryRuntime } from './memory';
 import { messageRuntime } from './message';
 import { notebookRuntime } from './notebook';
+import { personalPagesRuntime } from './personalPages';
 import { remoteDeviceRuntime } from './remoteDevice';
 import { selfFeedbackIntentRuntime } from './selfFeedbackIntent';
 import { skillManagementRuntime } from './skillManagement';
@@ -73,6 +74,7 @@ registerRuntimes([
   webOnboardingRuntime,
   lobeAgentRuntime,
   selfFeedbackIntentRuntime,
+  personalPagesRuntime,
 ]);
 
 // ==================== Registry API ====================

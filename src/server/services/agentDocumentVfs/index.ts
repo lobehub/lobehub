@@ -7,7 +7,7 @@ import {
 } from '@/database/models/agentDocuments';
 import { DOCUMENT_FOLDER_TYPE } from '@/database/schemas';
 
-import { createMarkdownEditorSnapshot } from '../agentDocuments/headlessEditor';
+import { createMarkdownEditorSnapshot } from '../document/headlessEditor';
 import { AgentDocumentVfsError } from './errors';
 import { createSkillMount } from './mounts/skills/createSkillMount';
 import {

@@ -27,7 +27,7 @@ vi.mock('@/server/services/document', () => ({
   DocumentService: vi.fn(() => mocks.documentService),
 }));
 
-vi.mock('@/server/services/agentDocuments/headlessEditor', () => ({
+vi.mock('@/server/services/document/headlessEditor', () => ({
   createMarkdownEditorSnapshot: vi.fn(async (content: string) => ({
     content,
     editorData: { root: { fakeNodeFor: content } },

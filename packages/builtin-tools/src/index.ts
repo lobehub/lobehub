@@ -19,6 +19,7 @@ import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { MessageManifest } from '@lobechat/builtin-tool-message';
 import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
+import { PersonalPagesManifest } from '@lobechat/builtin-tool-personal-pages';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import { selfFeedbackIntentManifest } from '@lobechat/builtin-tool-self-iteration';
 import { SkillMaintainerManifest } from '@lobechat/builtin-tool-skill-maintainer';
@@ -86,6 +87,7 @@ export const manualModeExcludeToolIds = [
 export const chatModeAllowedToolIds = [
   KnowledgeBaseManifest.identifier,
   MemoryManifest.identifier,
+  PersonalPagesManifest.identifier,
   WebBrowsingManifest.identifier,
 ];
 
@@ -197,6 +199,11 @@ export const builtinTools: LobeBuiltinTool[] = [
   {
     identifier: AgentDocumentsManifest.identifier,
     manifest: AgentDocumentsManifest,
+    type: 'builtin',
+  },
+  {
+    identifier: PersonalPagesManifest.identifier,
+    manifest: PersonalPagesManifest,
     type: 'builtin',
   },
   {

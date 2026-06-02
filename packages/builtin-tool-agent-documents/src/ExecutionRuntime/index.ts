@@ -1,3 +1,5 @@
+import type { DocumentRuntimeService } from '@lobechat/builtin-tool-document-core';
+import { DocumentRuntime } from '@lobechat/builtin-tool-document-core';
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
 import type {
@@ -130,8 +132,39 @@ export interface AgentDocumentsRuntimeService {
   ) => Promise<AgentDocumentRecord | undefined>;
 }
 
+interface AgentDocumentCoreScope {
+  agentId: string;
+  sourceType?: ListDocumentsArgs['sourceType'];
+  topicId?: string;
+}
+
 export class AgentDocumentsExecutionRuntime {
   constructor(private service: AgentDocumentsRuntimeService) {}
+
+  private buildCoreService({
+    agentId,
+    sourceType,
+    topicId,
+  }: AgentDocumentCoreScope): DocumentRuntimeService {
+    return {
+      createDocument: ({ content, title, ...trigger }) =>
+        topicId
+          ? this.service.createTopicDocument({ ...trigger, agentId, content, title, topicId })
+          : this.service.createDocument({ ...trigger, agentId, content, title }),
+      listDocuments: () =>
+        topicId
+          ? this.service.listTopicDocuments({ agentId, scope: 'currentTopic', sourceType, topicId })
+          : this.service.listDocuments({ agentId, scope: 'agent', sourceType }),
+      modifyNodes: ({ id, operations }) => this.service.modifyNodes({ agentId, id, operations }),
+      readDocument: ({ format, id }) => this.service.readDocument({ agentId, format, id }),
+      replaceContent: ({ content, id }) =>
+        this.service.replaceDocumentContent({ agentId, content, id }),
+    };
+  }
+
+  private coreFor(scope: AgentDocumentCoreScope) {
+    return new DocumentRuntime(this.buildCoreService(scope));
+  }
 
   private resolveAgentId(context?: AgentDocumentOperationContext) {
     if (!context?.agentId) return;
@@ -146,26 +179,6 @@ export class AgentDocumentsExecutionRuntime {
   private resolveTopicId(context?: AgentDocumentOperationContext) {
     if (!context?.topicId) return;
     return context.topicId;
-  }
-
-  private buildToolTriggerInput(
-    context?: AgentDocumentOperationContext,
-  ): AgentDocumentToolTriggerInput {
-    if (!context?.messageId || !context.toolCallId) return {};
-
-    const toolContext: AgentDocumentToolContext = {
-      messageId: context.messageId,
-      toolCallId: context.toolCallId,
-    };
-
-    if (context.operationId) toolContext.operationId = context.operationId;
-    if (context.taskId) toolContext.taskId = context.taskId;
-    if (context.topicId) toolContext.topicId = context.topicId;
-
-    return {
-      toolContext,
-      trigger: 'tool',
-    };
   }
 
   private buildCurrentPageDocumentWriteBlockedResult(apiName: string): BuiltinServerRuntimeOutput {
@@ -196,19 +209,6 @@ export class AgentDocumentsExecutionRuntime {
     return doc.documentId === currentDocumentId;
   }
 
-  private formatDocumentReadContent(
-    doc: AgentDocumentRecord,
-    format: 'xml' | 'markdown' | 'both' = 'xml',
-  ) {
-    const markdown = doc.content || '';
-    const xml = doc.litexml || '';
-
-    if (format === 'markdown') return markdown;
-    if (format === 'both') return JSON.stringify({ markdown, xml });
-
-    return xml || markdown;
-  }
-
   async listDocuments(
     args: ListDocumentsArgs,
     context?: AgentDocumentOperationContext,
@@ -231,22 +231,11 @@ export class AgentDocumentsExecutionRuntime {
       };
     }
 
-    const docs =
-      scope === 'currentTopic'
-        ? await this.service.listTopicDocuments({ agentId, scope, sourceType, topicId: topicId! })
-        : await this.service.listDocuments({ agentId, scope, sourceType });
-    const list = docs.map((d) => ({
-      ...(d.documentId ? { documentId: d.documentId } : {}),
-      filename: d.filename ?? d.title ?? '',
-      id: d.id,
-      title: d.title,
-    }));
-
-    return {
-      content: JSON.stringify(list),
-      state: { documents: list },
-      success: true,
-    };
+    return this.coreFor({
+      agentId,
+      sourceType,
+      ...(scope === 'currentTopic' ? { topicId } : {}),
+    }).listDocuments();
   }
 
   async createDocument(
@@ -270,23 +259,15 @@ export class AgentDocumentsExecutionRuntime {
       };
     }
 
-    const toolTriggerInput = this.buildToolTriggerInput(context);
-    const created =
-      scope === 'currentTopic'
-        ? await this.service.createTopicDocument({
-            ...args,
-            ...toolTriggerInput,
-            agentId,
-            topicId: topicId!,
-          })
-        : await this.service.createDocument({ ...args, ...toolTriggerInput, agentId });
-    if (!created) return { content: 'Failed to create agent document.', success: false };
-
-    return {
-      content: `Created document "${created.title || args.title}" (${created.id}).`,
-      state: { agentDocumentId: created.id, documentId: created.documentId },
-      success: true,
-    };
+    return this.coreFor({
+      agentId,
+      ...(scope === 'currentTopic' ? { topicId } : {}),
+    }).createDocument(args, {
+      failureContent: 'Failed to create agent document.',
+      successContent: (doc) => `Created document "${doc.title || args.title}" (${doc.id}).`,
+      successState: (doc) => ({ agentDocumentId: doc.id, documentId: doc.documentId }),
+      triggerContext: context,
+    });
   }
 
   async readDocument(
@@ -301,16 +282,10 @@ export class AgentDocumentsExecutionRuntime {
       };
     }
 
-    const doc = await this.service.readDocument({ ...args, agentId });
-    if (!doc) return { content: `Document not found: ${args.id}`, success: false };
-
-    const format = args.format ?? 'xml';
-
-    return {
-      content: this.formatDocumentReadContent(doc, format),
-      state: { content: doc.content, id: doc.id, title: doc.title, xml: doc.litexml },
-      success: true,
-    };
+    return this.coreFor({ agentId }).readDocument(
+      { format: args.format, id: args.id },
+      { notFoundContent: (id) => `Document not found: ${id}` },
+    );
   }
 
   async replaceDocumentContent(
@@ -332,14 +307,13 @@ export class AgentDocumentsExecutionRuntime {
       return this.buildCurrentPageDocumentWriteBlockedResult('replaceDocumentContent');
     }
 
-    const doc = await this.service.replaceDocumentContent({ ...args, agentId });
-    if (!doc) return { content: `Failed to update document ${args.id}.`, success: false };
-
-    return {
-      content: `Updated document ${args.id}.`,
-      state: { id: args.id, updated: true },
-      success: true,
-    };
+    return this.coreFor({ agentId }).replaceContent(
+      { content: args.content, id: args.id },
+      {
+        failureContent: (id) => `Failed to update document ${id}.`,
+        successContent: (id) => `Updated document ${id}.`,
+      },
+    );
   }
 
   async modifyNodes(
@@ -361,29 +335,14 @@ export class AgentDocumentsExecutionRuntime {
       return this.buildCurrentPageDocumentWriteBlockedResult('modifyNodes');
     }
 
-    const operations = Array.isArray(args.operations) ? args.operations : [];
-    if (operations.length === 0) {
-      return { content: 'No operations provided.', success: false };
-    }
-
-    const updated = await this.service.modifyNodes({ agentId, id: args.id, operations });
-    if (!updated) return { content: `Failed to modify document ${args.id}.`, success: false };
-
-    const results = operations.map((operation) => ({
-      action: operation.action,
-      success: true,
-    }));
-
-    return {
-      content: `Modified document ${args.id}. Applied ${results.length} operation(s).`,
-      state: {
-        id: args.id,
-        results,
-        successCount: results.length,
-        totalCount: results.length,
+    return this.coreFor({ agentId }).modifyNodes(
+      { id: args.id, operations: args.operations },
+      {
+        emptyOperationsContent: 'No operations provided.',
+        failureContent: (id) => `Failed to modify document ${id}.`,
+        successContent: (id, count) => `Modified document ${id}. Applied ${count} operation(s).`,
       },
-      success: true,
-    };
+    );
   }
 
   async removeDocument(

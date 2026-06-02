@@ -1,5 +1,5 @@
-import { createMarkdownEditorSnapshot } from '@/server/services/agentDocuments/headlessEditor';
 import { AgentDocumentVfsError } from '@/server/services/agentDocumentVfs/errors';
+import { createMarkdownEditorSnapshot } from '@/server/services/document/headlessEditor';
 
 import type {
   CreateSkillInput,

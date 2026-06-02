@@ -43,6 +43,10 @@ import { MemoryInspectors, MemoryManifest } from '@lobechat/builtin-tool-memory/
 import { MessageInspectors, MessageManifest } from '@lobechat/builtin-tool-message/client';
 import { PageAgentInspectors, PageAgentManifest } from '@lobechat/builtin-tool-page-agent/client';
 import {
+  PersonalPagesInspectors,
+  PersonalPagesManifest,
+} from '@lobechat/builtin-tool-personal-pages/client';
+import {
   SelfFeedbackIntentInspectors,
   selfFeedbackIntentManifest,
 } from '@lobechat/builtin-tool-self-iteration/client';
@@ -98,6 +102,7 @@ const BuiltinToolInspectors: Record<string, Record<string, BuiltinInspector>> = 
   [MemoryManifest.identifier]: MemoryInspectors as Record<string, BuiltinInspector>,
   [MessageManifest.identifier]: MessageInspectors as Record<string, BuiltinInspector>,
   [PageAgentManifest.identifier]: PageAgentInspectors as Record<string, BuiltinInspector>,
+  [PersonalPagesManifest.identifier]: PersonalPagesInspectors as Record<string, BuiltinInspector>,
   [LobeActivatorManifest.identifier]: LobeActivatorInspectors as Record<string, BuiltinInspector>,
   [selfFeedbackIntentManifest.identifier]: SelfFeedbackIntentInspectors as Record<
     string,

@@ -26,13 +26,13 @@ import { TopicDocumentModel } from '@/database/models/topicDocument';
 import { AgentDocumentVfsError } from '../agentDocumentVfs/errors';
 import { isManagedSkillDocument } from '../agentDocumentVfs/mounts/skills/providers/providerSkillsAgentDocumentUtils';
 import { DocumentService } from '../document';
-import { TOOL_RESULTS_DIR_NAME } from '../toolExecution/constants';
 import {
   type AgentDocumentLiteXMLOperation,
   applyLiteXMLOperations,
   createMarkdownEditorSnapshot,
   exportEditorDataSnapshot,
-} from './headlessEditor';
+} from '../document/headlessEditor';
+import { TOOL_RESULTS_DIR_NAME } from '../toolExecution/constants';
 
 const MAX_UNIQUE_FILENAME_ATTEMPTS = 1000;
 

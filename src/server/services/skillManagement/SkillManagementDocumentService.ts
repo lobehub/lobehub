@@ -3,9 +3,9 @@ import { sha256 } from 'js-sha256';
 
 import { AgentDocumentModel, PolicyLoad } from '@/database/models/agentDocuments';
 
-import type { AgentDocumentEditorSnapshot } from '../agentDocuments/headlessEditor';
-import { createMarkdownEditorSnapshot as createDefaultMarkdownEditorSnapshot } from '../agentDocuments/headlessEditor';
 import { DocumentService } from '../document';
+import type { AgentDocumentEditorSnapshot } from '../document/headlessEditor';
+import { createMarkdownEditorSnapshot as createDefaultMarkdownEditorSnapshot } from '../document/headlessEditor';
 import {
   AGENT_SKILL_TEMPLATE_ID,
   SKILL_BUNDLE_FILE_TYPE,

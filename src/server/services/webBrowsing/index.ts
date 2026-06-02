@@ -3,8 +3,8 @@ import { Md5 } from 'ts-md5';
 
 import { DocumentModel } from '@/database/models/document';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
-import { createMarkdownEditorSnapshot } from '@/server/services/agentDocuments/headlessEditor';
 import { DocumentService } from '@/server/services/document';
+import { createMarkdownEditorSnapshot } from '@/server/services/document/headlessEditor';
 
 export interface UpsertCrawledDocumentParams {
   content: string;

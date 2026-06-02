@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ProviderSkillsAgentDocument } from './ProviderSkillsAgentDocument';
 
-vi.mock('@/server/services/agentDocuments/headlessEditor', () => ({
+vi.mock('@/server/services/document/headlessEditor', () => ({
   createMarkdownEditorSnapshot: vi.fn(async (content: string) => ({
     content,
     editorData: { markdown: content },

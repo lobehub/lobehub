@@ -34,6 +34,10 @@ import {
 import { MemoryManifest, MemoryStreamings } from '@lobechat/builtin-tool-memory/client';
 import { MessageManifest, MessageStreamings } from '@lobechat/builtin-tool-message/client';
 import { PageAgentManifest, PageAgentStreamings } from '@lobechat/builtin-tool-page-agent/client';
+import {
+  PersonalPagesManifest,
+  PersonalPagesStreamings,
+} from '@lobechat/builtin-tool-personal-pages/client';
 import { type BuiltinStreaming } from '@lobechat/types';
 
 /**
@@ -66,6 +70,7 @@ const BuiltinToolStreamings: Record<string, Record<string, BuiltinStreaming>> = 
   [MemoryManifest.identifier]: MemoryStreamings as Record<string, BuiltinStreaming>,
   [MessageManifest.identifier]: MessageStreamings as Record<string, BuiltinStreaming>,
   [PageAgentManifest.identifier]: PageAgentStreamings as Record<string, BuiltinStreaming>,
+  [PersonalPagesManifest.identifier]: PersonalPagesStreamings as Record<string, BuiltinStreaming>,
 };
 
 export interface BuiltinStreamingRegistryEntry {

@@ -9,7 +9,7 @@ import {
   PolicyLoad,
 } from '@/database/models/agentDocuments';
 
-import type { AgentDocumentEditorSnapshot } from '../agentDocuments/headlessEditor';
+import type { AgentDocumentEditorSnapshot } from '../document/headlessEditor';
 import {
   AGENT_SKILL_TEMPLATE_ID,
   SKILL_BUNDLE_FILE_TYPE,

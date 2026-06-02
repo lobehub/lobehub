@@ -1,8 +1,8 @@
 import type { AgentDocument } from '@/database/models/agentDocuments';
 import { PolicyLoad } from '@/database/models/agentDocuments';
 import type { AgentDocumentSourceType } from '@/database/models/agentDocuments/types';
-import { exportEditorDataSnapshot } from '@/server/services/agentDocuments/headlessEditor';
 import { AgentDocumentVfsError } from '@/server/services/agentDocumentVfs/errors';
+import { exportEditorDataSnapshot } from '@/server/services/document/headlessEditor';
 import {
   AGENT_SKILL_TEMPLATE_ID,
   SKILL_BUNDLE_FILE_TYPE,

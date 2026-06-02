@@ -27,6 +27,10 @@ import {
 import { MemoryManifest, MemoryRenders } from '@lobechat/builtin-tool-memory/client';
 import { MessageManifest, MessageRenders } from '@lobechat/builtin-tool-message/client';
 import { PageAgentManifest, PageAgentRenders } from '@lobechat/builtin-tool-page-agent/client';
+import {
+  PersonalPagesManifest,
+  PersonalPagesRenders,
+} from '@lobechat/builtin-tool-personal-pages/client';
 import { SkillStoreManifest, SkillStoreRenders } from '@lobechat/builtin-tool-skill-store/client';
 import { SkillsManifest, SkillsRenders } from '@lobechat/builtin-tool-skills/client';
 import { TaskManifest, TaskRenders } from '@lobechat/builtin-tool-task/client';
@@ -70,6 +74,7 @@ const BuiltinToolsRenders: Record<string, Record<string, BuiltinRender>> = {
   [MessageManifest.identifier]: MessageRenders as Record<string, BuiltinRender>,
   [NotebookIdentifier]: NotebookRenders,
   [PageAgentManifest.identifier]: PageAgentRenders as Record<string, BuiltinRender>,
+  [PersonalPagesManifest.identifier]: PersonalPagesRenders as Record<string, BuiltinRender>,
   [SkillStoreManifest.identifier]: SkillStoreRenders as Record<string, BuiltinRender>,
   [SkillsManifest.identifier]: SkillsRenders as Record<string, BuiltinRender>,
   [TaskManifest.identifier]: TaskRenders as Record<string, BuiltinRender>,

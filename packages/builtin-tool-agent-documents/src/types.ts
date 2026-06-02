@@ -1,3 +1,5 @@
+import type { ModifyDocumentOperation } from '@lobechat/builtin-tool-document-core';
+
 export const AgentDocumentsIdentifier = 'lobe-agent-documents';
 
 export const AgentDocumentsApiName = {
@@ -46,32 +48,12 @@ export interface ReplaceDocumentContentState {
   updated: boolean;
 }
 
-export type ModifyDocumentInsertOperation =
-  | {
-      action: 'insert';
-      afterId: string;
-      litexml: string;
-    }
-  | {
-      action: 'insert';
-      beforeId: string;
-      litexml: string;
-    };
-
-export interface ModifyDocumentUpdateOperation {
-  action: 'modify';
-  litexml: string | string[];
-}
-
-export interface ModifyDocumentRemoveOperation {
-  action: 'remove';
-  id: string;
-}
-
-export type ModifyDocumentOperation =
-  | ModifyDocumentInsertOperation
-  | ModifyDocumentRemoveOperation
-  | ModifyDocumentUpdateOperation;
+export type {
+  ModifyDocumentInsertOperation,
+  ModifyDocumentOperation,
+  ModifyDocumentRemoveOperation,
+  ModifyDocumentUpdateOperation,
+} from '@lobechat/builtin-tool-document-core';
 
 export interface ModifyDocumentNodesArgs {
   id: string;
