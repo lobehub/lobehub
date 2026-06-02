@@ -96,7 +96,7 @@ import { formatErrorEventData } from './formatErrorEventData';
 import { classifyLLMError, type LLMErrorKind } from './llmErrorClassification';
 import {
   createConversationParentMissingError,
-  isParentMessageMissingError,
+  isMidOperationReferenceMissingError,
   isPersistFatal,
   markPersistFatal,
 } from './messagePersistErrors';
@@ -2189,7 +2189,7 @@ export const createRuntimeExecutors = (
           // Normalize BEFORE publishing so clients (which treat `error` stream
           // events as terminal and surface `event.data.error` directly) see the
           // typed business error, not the raw SQL / driver text.
-          const fatal = isParentMessageMissingError(error)
+          const fatal = isMidOperationReferenceMissingError(error)
             ? createConversationParentMissingError(payload.parentMessageId, error)
             : error instanceof Error
               ? error
@@ -2696,7 +2696,7 @@ export const createRuntimeExecutors = (
               // events as terminal and surface `event.data.error` directly, so
               // a raw SQL error here would leak driver text to the user before
               // the ConversationParentMissing throw is consumed. See .
-              const fatal = isParentMessageMissingError(error)
+              const fatal = isMidOperationReferenceMissingError(error)
                 ? createConversationParentMissingError(parentMessageId, error)
                 : error instanceof Error
                   ? error
@@ -3440,7 +3440,7 @@ export const createRuntimeExecutors = (
         );
         // Normalize BEFORE publishing so clients surface the typed business
         // error instead of the raw driver text (see review).
-        const fatal = isParentMessageMissingError(error)
+        const fatal = isMidOperationReferenceMissingError(error)
           ? createConversationParentMissingError(parentMessageId, error)
           : error instanceof Error
             ? error

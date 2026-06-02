@@ -2,42 +2,61 @@ import { describe, expect, it } from 'vitest';
 
 import {
   createConversationParentMissingError,
-  isParentMessageMissingError,
+  isMidOperationReferenceMissingError,
   isPersistFatal,
   markPersistFatal,
 } from '../messagePersistErrors';
 
-describe('isParentMessageMissingError', () => {
+describe('isMidOperationReferenceMissingError', () => {
   it('matches the drizzle + postgres-js error shape (FK via .cause)', () => {
     const error: any = new Error('Failed query: insert into messages ...');
     error.cause = { code: '23503', constraint: 'messages_parent_id_messages_id_fk' };
-    expect(isParentMessageMissingError(error)).toBe(true);
+    expect(isMidOperationReferenceMissingError(error)).toBe(true);
   });
 
   it('matches top-level code/constraint_name variants', () => {
     const error: any = new Error('x');
     error.code = '23503';
     error.constraint_name = 'messages_parent_id_messages_id_fk';
-    expect(isParentMessageMissingError(error)).toBe(true);
+    expect(isMidOperationReferenceMissingError(error)).toBe(true);
   });
 
-  it('does not match other FK violations (different constraint)', () => {
+  it.each([
+    'messages_parent_id_messages_id_fk',
+    'messages_quota_id_messages_id_fk',
+    'messages_topic_id_topics_id_fk',
+    'messages_agent_id_agents_id_fk',
+    'messages_session_id_sessions_id_fk',
+    'messages_thread_id_threads_id_fk',
+  ])('matches every mid-operation-deletable reference FK: %s', (constraint) => {
     const error: any = new Error('x');
-    error.cause = { code: '23503', constraint: 'messages_topic_id_topics_id_fk' };
-    expect(isParentMessageMissingError(error)).toBe(false);
+    error.cause = { code: '23503', constraint };
+    expect(isMidOperationReferenceMissingError(error)).toBe(true);
+  });
+
+  it('does not match FK violations on out-of-scope constraints', () => {
+    // user-account deletion / non-messages tables stay real failures
+    const userFk: any = new Error('x');
+    userFk.cause = { code: '23503', constraint: 'messages_user_id_users_id_fk' };
+    expect(isMidOperationReferenceMissingError(userFk)).toBe(false);
+
+    const otherTable: any = new Error('x');
+    otherTable.cause = { code: '23503', constraint: 'files_user_id_users_id_fk' };
+    expect(isMidOperationReferenceMissingError(otherTable)).toBe(false);
   });
 
   it('does not match non-FK pg errors', () => {
     const error: any = new Error('x');
     error.cause = { code: '23505', constraint: 'messages_parent_id_messages_id_fk' };
-    expect(isParentMessageMissingError(error)).toBe(false);
+    expect(isMidOperationReferenceMissingError(error)).toBe(false);
   });
 
-  it('handles null / non-object safely', () => {
-    expect(isParentMessageMissingError(null)).toBe(false);
-    expect(isParentMessageMissingError(undefined)).toBe(false);
-    expect(isParentMessageMissingError('string-error')).toBe(false);
-    expect(isParentMessageMissingError(42)).toBe(false);
+  it('handles null / non-object / missing-constraint safely', () => {
+    expect(isMidOperationReferenceMissingError(null)).toBe(false);
+    expect(isMidOperationReferenceMissingError(undefined)).toBe(false);
+    expect(isMidOperationReferenceMissingError('string-error')).toBe(false);
+    expect(isMidOperationReferenceMissingError(42)).toBe(false);
+    expect(isMidOperationReferenceMissingError({ code: '23503' })).toBe(false);
   });
 });
 
