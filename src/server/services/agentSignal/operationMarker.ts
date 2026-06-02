@@ -10,30 +10,11 @@
  * channel, this travels on the operation row itself.
  */
 
-export type AgentSignalOperationKind =
-  | 'memory'
-  | 'nightly-review'
-  | 'self-feedback-intent'
-  | 'self-reflection';
+import type { AgentSignalOperationKind, AgentSignalOperationMarker } from '@lobechat/types';
 
-export interface AgentSignalOperationMarker {
-  /** Assistant message a resulting receipt should anchor to. */
-  anchorMessageId?: string;
-  /** Discriminator the completion handler dispatches on. */
-  kind: AgentSignalOperationKind;
-  /** Local review date (YYYY-MM-DD) for nightly review brief/receipt writes. */
-  localDate?: string;
-  /** Review window end (ISO) — lets tools re-derive the evidence digest. */
-  reviewWindowEnd?: string;
-  /** Review window start (ISO). */
-  reviewWindowStart?: string;
-  /** Stable producer source id of the originating signal. */
-  sourceId?: string;
-  /** Topic the run is scoped to. */
-  topicId?: string;
-  /** User message that initiated the originating feedback. */
-  triggerMessageId?: string;
-}
+// The marker shape is defined in `@lobechat/types` (so `ExecAgentAppContext` can
+// carry it through `execAgent`); the runtime parser/validator helpers live here.
+export type { AgentSignalOperationKind, AgentSignalOperationMarker };
 
 const VALID_KINDS = new Set<AgentSignalOperationKind>([
   'memory',
