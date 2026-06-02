@@ -1,0 +1,120 @@
+---
+title: Claude Code
+description: 在 LobeHub 中委派 Anthropic Claude Code —— 通过桌面应用与 Claude Code CLI 对话，实时查看任务、待办、技能与工具调用，并跨轮次恢复会话。
+tags:
+  - LobeHub
+  - Claude Code
+  - 编程助理
+  - 桌面端
+  - CLI
+  - Anthropic
+---
+
+# Claude Code
+
+Claude Code 是 Anthropic 推出的编程助理，能在终端中读取、修改、运行代码。在 LobeHub 中，你可以通过桌面应用委派 Claude Code —— 保留熟悉的对话界面，让 Claude Code 在本地完成实际工作，并完整访问你的项目。
+
+发送一条提示，Claude Code 会读取文件、修改代码、运行命令，并把过程反馈给你。任务、待办、技能与工具调用会随着助理推进实时进入聊天；会话能跨轮次恢复，一项长任务可以分布在多条消息中持续推进。
+
+## 什么是 LobeHub 中的 Claude Code？
+
+它是 LobeHub 对话界面与本地 Claude Code CLI 之间的桥梁。LobeHub 在本地以子进程形式启动 `claude` 命令，把它的事件流接入聊天会话，并将 Claude Code 的输出 —— 增量消息、任务、待办、技能、子助理线程 —— 渲染为一等公民的聊天块。你用自然语言指挥助理，Claude Code 在本地用你的环境、凭据与项目上下文执行。
+
+## 使用条件
+
+- **LobeHub 桌面应用** —— Claude Code 助理只在桌面版可用，Web 端无法启动本地进程。
+- **已安装 Claude Code CLI** —— `claude` 命令需要在你的 `PATH` 中可用。
+- **已登录** —— 在 LobeHub 调用前，需在终端中先运行一次 `claude` 完成认证，需要 Anthropic 账号。
+
+## 安装 Claude Code CLI
+
+任选一种方式：
+
+**推荐（安装脚本）**
+
+```bash
+curl -fsSL https://claude.ai/install.sh | bash
+```
+
+**Homebrew（macOS）**
+
+```bash
+brew install --cask claude-code
+```
+
+安装完成后，在终端中运行一次 `claude` 完成登录。详情见 [Claude Code 安装指南](https://docs.anthropic.com/en/docs/claude-code/setup)。
+
+若 LobeHub 未能检测到 CLI，会弹出**安装 Claude Code CLI** 引导，并提供**打开系统工具**按钮 —— 安装完成后点击即可重新检测。
+
+## 在 LobeHub 中添加 Claude Code
+
+当 LobeHub 检测到本机已安装 Claude Code CLI，首页会出现一张标记为「编程助理」的**添加 Claude Code** 推荐卡片，点击即可一步创建 Claude Code 助理。
+
+你也可以手动创建：从**创建助理**菜单中选择 **Claude Code** 类型即可。
+
+每个助理彼此独立，可以分别绑定到不同的项目或工作流。
+
+## 工作目录
+
+每个 Claude Code 会话都绑定一个工作目录 —— 即 Claude Code 视为项目根的文件夹。在发出第一条消息前，先在聊天输入区域设置工作目录。会话进行中切换目录会触发**切换工作目录？**确认：聊天记录会保留，但旧会话的上下文无法恢复，将为该话题开启新的会话。
+
+如果切换目录后，已保存的 Claude Code 会话无法恢复，LobeHub 会提示：**「工作目录已更改。之前的 Claude Code 会话只能在原始目录下恢复，已开启新的对话。」**
+
+在工作目录内，Claude Code 以**完全访问**权限运行 —— 可对文件夹内任何文件进行读写。LobeHub 内部暂不支持切换权限模式。
+
+## 聊天中会渲染什么
+
+LobeHub 不会把 Claude Code 的工具调用渲染成原始 JSON，而是用专用区块呈现：
+
+**任务** —— Claude Code 使用任务管理器时，任务会渲染为实时进度卡片。可以看到条目在「待办 → 进行中 → 已完成」之间流转。
+
+**待办** —— `TodoWrite` 计划会渲染为进度卡片，展示完成数量与勾选状态。适合追踪多步骤工作。
+
+**技能** —— Claude Code 调用内置或用户安装的技能时，调用会呈现为 Skill 区块，展示输入、输出与产物。
+
+**工具调用** —— 文件读取、编辑、命令执行、网页抓取等工具使用都会在对话中拥有独立区块，并随 Claude Code 输出实时增量展示。
+
+**子助理** —— Claude Code 可以派生子助理处理并行或局部任务。它们的线程在会话中以独立线程呈现，不会污染主对话气泡。
+
+**询问** —— 当 Claude Code 需要在过程中向你提问时，会在聊天中内联呈现，让你无需离开对话即可回答。
+
+## 会话与恢复
+
+Claude Code 会话在同一话题中跨消息持续。LobeHub 会捕获底层 session ID 并在每次追问时复用，因此你可以随时回到长任务的任意进度点继续。
+
+下列情况下，会话无法恢复：
+
+- 自会话创建以来工作目录被更改
+- Claude Code CLI 返回恢复错误（会话已不存在、凭据过期等）
+
+任一情况发生时，LobeHub 都会自动开启一段新会话。
+
+## 它在哪里运行
+
+**执行设备**选择器让你决定 Claude Code 助理在哪里运行：
+
+- **本机** —— Claude Code 在桌面应用内作为本地进程运行，默认选项。
+- **云沙箱** —— Claude Code 在临时云沙箱中运行。当你不希望助理触碰本地文件时适用。
+- **远程设备** —— 驱动你通过 `lh connect` 接入的另一台机器。当项目位于另一台设备上时适用。
+
+## 限制
+
+- **仅桌面端** —— Claude Code 助理只在 LobeHub 桌面应用中可用，Web 端无法启动 CLI。
+- **每台机器一次登录** —— Claude Code 与全局 CLI 共享认证。终端里 `claude` 能用，LobeHub 里就能用。
+- **绑定工作目录** —— 会话不会跨文件夹或机器跟随你。
+- **仅支持完全访问** —— LobeHub 内部暂不支持切换权限模式。
+
+## 使用技巧
+
+- **先在终端中运行一次 `claude`** —— 登录在 CLI 层面完成，不在 LobeHub 里。
+- **第一条消息前先选好工作目录** —— 之后切换会开启新会话。
+- **一个项目用一个 Claude Code 助理** —— 每个助理绑定一个仓库，会话更整洁也更容易恢复。
+- **多关注任务卡片** —— Claude Code 使用任务管理器时，这张卡片是了解「已完成、进行中、待办」的最快方式。
+
+<Cards>
+  <Card href={'/zh/docs/usage/agent/codex'} title={'Codex'} />
+
+  <Card href={'/zh/docs/usage/agent/agent-team'} title={'群组'} />
+
+  <Card href={'/zh/docs/usage/agent/sandbox'} title={'云沙箱'} />
+</Cards>
