@@ -20,7 +20,7 @@ import {
   getTextOutputUnitRate,
 } from '@/utils/pricing';
 
-import ModelConfigModal from './ModelConfigModal';
+import { createModelConfigModal } from './ModelConfigModal';
 import { ProviderSettingsContext } from './ProviderSettingsContext';
 
 const styles = createStaticStyles(({ css, cx }) => {
@@ -80,7 +80,7 @@ const ModelItem = memo<ModelItemProps>(
     type,
   }) => {
     const { t } = useTranslation(['modelProvider', 'components', 'models', 'common']);
-    const { modelEditable } = use(ProviderSettingsContext);
+    const { modelEditable, showDeployName } = use(ProviderSettingsContext);
 
     const [activeAiProvider, isModelLoading, toggleModelEnabled, removeAiModel] = useAiInfraStore(
       (s) => [
@@ -92,7 +92,6 @@ const ModelItem = memo<ModelItemProps>(
     );
 
     const [checked, setChecked] = useState(enabled);
-    const [showConfig, setShowConfig] = useState(false);
 
     const formatPricing = (): string[] => {
       if (!pricing) return [];
@@ -195,7 +194,7 @@ const ModelItem = memo<ModelItemProps>(
             title={t('providerModels.item.config')}
             onClick={(e) => {
               e.stopPropagation();
-              setShowConfig(true);
+              createModelConfigModal({ id, showDeployName });
             }}
           />
           {source !== AiModelSourceEnum.Builtin && (
@@ -304,12 +303,7 @@ const ModelItem = memo<ModelItemProps>(
       </Flexbox>
     );
 
-    return (
-      <>
-        {dom}
-        {showConfig && <ModelConfigModal id={id} open={showConfig} setOpen={setShowConfig} />}
-      </>
-    );
+    return dom;
   },
 );
 
