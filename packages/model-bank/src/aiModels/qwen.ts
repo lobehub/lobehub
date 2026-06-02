@@ -1748,13 +1748,46 @@ const qwenChatModels: AIChatModelCard[] = [
       vision: true,
     },
     config: {
+      deploymentName: 'qwen3.7-plus', // Supports context caching
+    },
+    contextWindowTokens: 1_000_000,
+    description:
+      'Qwen3.7 Plus is a multimodal interactive hybrid agent model, building upon the Qwen3.7 series text capabilities to unify vision and language. It excels at GUI operation, visual coding, and complex agentic workflows.',
+    displayName: 'Qwen3.7 Plus',
+    enabled: true,
+    id: 'qwen3.7-plus',
+    maxOutput: 65_536,
+    organization: 'Qwen',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 2 * 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-06-01',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken', 'preserveThinking'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      video: true,
+      vision: true,
+    },
+    config: {
       deploymentName: 'qwen3.6-plus', // Supports context caching
     },
     contextWindowTokens: 1_000_000,
     description:
       'Qwen3.6 Plus supports text, image, and video input. It delivers a balanced performance across quality, speed, and cost. Its multimodal capabilities are significantly improved compared to the Qwen3 VL series.',
     displayName: 'Qwen3.6 Plus',
-    enabled: true,
     id: 'qwen3.6-plus',
     maxOutput: 65_536,
     organization: 'Qwen',
@@ -2046,7 +2079,7 @@ const qwenChatModels: AIChatModelCard[] = [
       search: true,
     },
     config: {
-      deploymentName: 'qwen3.7-max',
+      deploymentName: 'qwen3.7-max', // Supports context caching
     },
     contextWindowTokens: 1_000_000,
     description:
