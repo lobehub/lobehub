@@ -1,12 +1,13 @@
 import { Button, Center, Flexbox, Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { BrainIcon, LucideRefreshCcwDot, PlusIcon } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, use, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAiInfraStore } from '@/store/aiInfra';
 
-import CreateNewModelModal from './CreateNewModelModal';
+import { createCreateNewModelModal } from './CreateNewModelModal';
+import { ProviderSettingsContext } from './ProviderSettingsContext';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   circle: css`
@@ -50,7 +51,7 @@ const EmptyState = memo<{ provider: string }>(({ provider }) => {
   const [fetchRemoteModelList] = useAiInfraStore((s) => [s.fetchRemoteModelList]);
 
   const [fetchRemoteModelsLoading, setFetchRemoteModelsLoading] = useState(false);
-  const [showModal, setShowModal] = useState(false);
+  const { showDeployName } = use(ProviderSettingsContext);
 
   return (
     <Center className={styles.container} gap={24} paddingBlock={40}>
@@ -66,12 +67,11 @@ const EmptyState = memo<{ provider: string }>(({ provider }) => {
         <Button
           icon={PlusIcon}
           onClick={() => {
-            setShowModal(true);
+            createCreateNewModelModal({ showDeployName });
           }}
         >
           {t('providerModels.list.addNew')}
         </Button>
-        <CreateNewModelModal open={showModal} setOpen={setShowModal} />
         <Button
           icon={<Icon icon={LucideRefreshCcwDot} />}
           loading={fetchRemoteModelsLoading}

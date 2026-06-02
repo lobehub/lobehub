@@ -1,8 +1,8 @@
-import { Flexbox } from '@lobehub/ui';
-import { Popover, Select, Space, Switch, Tag, theme, Typography } from 'antd';
+import { Flexbox, Popover } from '@lobehub/ui';
+import { Select } from '@lobehub/ui/base-ui';
+import { Space, Switch, Tag, theme, Typography } from 'antd';
 import { type ExtendParamsType } from 'model-bank';
-import { type ReactNode } from 'react';
-import { memo, useMemo } from 'react';
+import { memo, type ReactNode, type SyntheticEvent, useMemo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import CodexMaxReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/CodexMaxReasoningEffortSlider';
@@ -316,39 +316,55 @@ const PreviewContent = ({
     ? { minWidth: previewWidth, width: previewWidth }
     : { minWidth: 240 };
 
+  const stop = (e: SyntheticEvent) => e.stopPropagation();
+
   return (
-    <Flexbox gap={12} style={containerStyle}>
-      <Typography.Text style={{ whiteSpace: 'normal' }} type={'secondary'}>
-        {hint}
-      </Typography.Text>
-      <Flexbox gap={12}>
-        <Flexbox
-          gap={8}
-          style={{
-            background: token.colorBgElevated,
-            border: `1px solid ${token.colorBorderSecondary}`,
-            borderRadius: 10,
-            padding: 12,
-            width: previewWidth,
-          }}
-        >
-          <Flexbox horizontal align={'center'} gap={8}>
-            <Typography.Text strong>{label}</Typography.Text>
-            {parameterTag ? <Tag color={'cyan'}>{parameterTag}</Tag> : null}
+    <div
+      onClick={stop}
+      onClickCapture={stop}
+      onKeyDown={stop}
+      onMouseDown={stop}
+      onMouseDownCapture={stop}
+      onMouseUp={stop}
+      onMouseUpCapture={stop}
+      onPointerDown={stop}
+      onPointerDownCapture={stop}
+      onPointerUp={stop}
+      onPointerUpCapture={stop}
+    >
+      <Flexbox gap={12} style={containerStyle}>
+        <Typography.Text style={{ whiteSpace: 'normal' }} type={'secondary'}>
+          {hint}
+        </Typography.Text>
+        <Flexbox gap={12}>
+          <Flexbox
+            gap={8}
+            style={{
+              background: token.colorBgElevated,
+              border: `1px solid ${token.colorBorderSecondary}`,
+              borderRadius: 10,
+              padding: 12,
+              width: previewWidth,
+            }}
+          >
+            <Flexbox horizontal align={'center'} gap={8}>
+              <Typography.Text strong>{label}</Typography.Text>
+              {parameterTag ? <Tag color={'cyan'}>{parameterTag}</Tag> : null}
+            </Flexbox>
+            {desc ? (
+              <Typography.Text style={{ fontSize: 12, whiteSpace: 'normal' }} type={'secondary'}>
+                {desc}
+              </Typography.Text>
+            ) : null}
+            {preview ? (
+              <div style={{ pointerEvents: 'none', width: '100%' }}>{preview}</div>
+            ) : (
+              <Typography.Text type={'secondary'}>{previewFallback}</Typography.Text>
+            )}
           </Flexbox>
-          {desc ? (
-            <Typography.Text style={{ fontSize: 12, whiteSpace: 'normal' }} type={'secondary'}>
-              {desc}
-            </Typography.Text>
-          ) : null}
-          {preview ? (
-            <div style={{ pointerEvents: 'none', width: '100%' }}>{preview}</div>
-          ) : (
-            <Typography.Text type={'secondary'}>{previewFallback}</Typography.Text>
-          )}
         </Flexbox>
       </Flexbox>
-    </Flexbox>
+    </div>
   );
 };
 
