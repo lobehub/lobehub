@@ -461,15 +461,27 @@ export const buildAnthropicTools = (
   if (!tools) return;
 
   return tools.map(
-    (tool, index): Anthropic.Tool => ({
-      cache_control:
-        options.enabledContextCaching && index === tools.length - 1
-          ? { type: 'ephemeral' }
-          : undefined,
-      description: tool.function.description,
-      input_schema: tool.function.parameters as Anthropic.Tool.InputSchema,
-      name: tool.function.name,
-    }),
+    (tool, index): Anthropic.Tool => {
+      const params = tool.function.parameters as Record<string, any> | undefined;
+      const safeParams =
+        params && typeof params === 'object' && params.type === 'object'
+          ? {
+              ...params,
+              properties: params.properties ?? {},
+              required: Array.isArray(params.required) ? params.required : [],
+            }
+          : params;
+
+      return {
+        cache_control:
+          options.enabledContextCaching && index === tools.length - 1
+            ? { type: 'ephemeral' }
+            : undefined,
+        description: tool.function.description,
+        input_schema: safeParams as Anthropic.Tool.InputSchema,
+        name: tool.function.name,
+      };
+    },
   );
 };
 

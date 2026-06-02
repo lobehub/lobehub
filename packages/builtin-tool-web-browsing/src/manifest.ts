@@ -11,6 +11,7 @@ export const WebBrowsingManifest: BuiltinToolManifest = {
         'a search service. Useful for when you need to answer questions about current events. Input should be a search query. Output is a JSON array of the query results',
       name: WebBrowsingApiName.search,
       parameters: {
+        additionalProperties: false,
         properties: {
           query: {
             description: 'The search query',
@@ -66,6 +67,7 @@ export const WebBrowsingManifest: BuiltinToolManifest = {
         'A crawler can visit page content. Output is a JSON object of title, content, url and website',
       name: WebBrowsingApiName.crawlSinglePage,
       parameters: {
+        additionalProperties: false,
         properties: {
           url: {
             description: 'The url need to be crawled',
@@ -81,6 +83,7 @@ export const WebBrowsingManifest: BuiltinToolManifest = {
         'A crawler can visit multi pages. If need to visit multi website, use this one. Output is an array of JSON object of title, content, url and website',
       name: WebBrowsingApiName.crawlMultiPages,
       parameters: {
+        additionalProperties: false,
         properties: {
           urls: {
             items: {
