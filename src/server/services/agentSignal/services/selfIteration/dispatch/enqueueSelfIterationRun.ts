@@ -81,8 +81,11 @@ export const enqueueSelfIterationRun = async (
   const { AiAgentService } = await import('@/server/services/aiAgent');
   const result = await new AiAgentService(input.db, input.userId).execAgent({
     appContext: {
-      // No agentId here — the run executes under the builtin `slug`; the
-      // reviewed user agent travels on `marker.agentId` for receipt attribution.
+      // No agentId here — the run executes under the builtin `slug` (which
+      // supplies its tools / systemRole / model). The reviewed user agent
+      // travels on `marker.agentId`; execAgent prefers it for the operation +
+      // tool-execution context so resource writes (skills) and receipts both
+      // attribute to the reviewed agent, not the builtin one.
       agentSignal: input.marker,
       scope: 'chat',
       ...(input.sourceMessageId ? { sourceMessageId: input.sourceMessageId } : {}),

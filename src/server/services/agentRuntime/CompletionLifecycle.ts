@@ -177,6 +177,18 @@ export class CompletionLifecycle {
   async emitSignalEvents(operationId: string, state: any, reason: string): Promise<SignalEvent[]> {
     try {
       const { metadata } = this.buildLifecycleEvent(operationId, state, reason);
+      const selfIteration =
+        reason === 'error' ? undefined : extractSelfIterationCompletionPayload(state);
+      if (reason !== 'error') {
+        log(
+          '[completion-lifecycle] emit agent.execution.completed op=%s userId=%s selfIteration=%s',
+          operationId,
+          metadata?.userId || this.userId,
+          selfIteration
+            ? `kind=${selfIteration.marker?.kind} mutations=${selfIteration.mutations?.length}`
+            : 'ABSENT',
+        );
+      }
       const completionSignalEmission =
         reason === 'error'
           ? await emitAgentSignalSourceEvent(
@@ -208,7 +220,7 @@ export class CompletionLifecycle {
                   // Self-iteration runs carry their finalState tool outcomes here
                   // (the one point finalState is in hand) so the completion policy
                   // can project receipts. Undefined for every other agent.
-                  selfIteration: extractSelfIterationCompletionPayload(state),
+                  selfIteration,
                   serializedContext: undefined,
                   steps: state?.stepCount || 0,
                   topicId: metadata?.topicId,
@@ -224,6 +236,13 @@ export class CompletionLifecycle {
               },
               { ignoreError: true },
             );
+
+      log(
+        '[completion-lifecycle] emission done op=%s reason=%s deduped=%s',
+        operationId,
+        reason,
+        (completionSignalEmission as { deduped?: boolean } | undefined)?.deduped ?? 'n/a',
+      );
 
       return toAgentSignalSnapshotEvents(completionSignalEmission);
     } catch (error) {

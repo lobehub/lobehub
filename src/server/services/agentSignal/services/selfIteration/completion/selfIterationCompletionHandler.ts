@@ -1,8 +1,11 @@
 import { AGENT_SIGNAL_SOURCE_TYPES } from '@lobechat/agent-signal/source';
+import debug from 'debug';
 
 import type { CompletionCallbackParams } from '../../../policies/completionPolicy';
 import { type AgentSignalReceiptStore, persistAgentSignalReceipts } from '../../receiptService';
 import { buildSelfIterationReceipts } from './buildSelfIterationReceipts';
+
+const log = debug('lobe-server:completion-lifecycle');
 
 export interface SelfIterationCompletionHandlerOptions {
   /** Receipt store override (defaults to the Redis store). Injected in tests. */
@@ -43,5 +46,16 @@ export const createSelfIterationCompletionHandler =
       userId,
     });
 
+    log(
+      '[completion-handler] projecting %d receipt(s) for op=%s kind=%s (artifacts=%d mutations=%d)',
+      receipts.length,
+      operationId,
+      marker.kind,
+      artifacts.length,
+      mutations.length,
+    );
+
     await persistAgentSignalReceipts(receipts, receiptStore ? { store: receiptStore } : {});
+
+    log('[completion-handler] persisted %d receipt(s) for op=%s', receipts.length, operationId);
   };

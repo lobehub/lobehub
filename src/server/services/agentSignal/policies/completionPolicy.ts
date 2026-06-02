@@ -1,7 +1,10 @@
 import { AGENT_SIGNAL_SOURCE_TYPES } from '@lobechat/agent-signal/source';
+import debug from 'debug';
 
 import { defineAgentSignalHandlers, defineSourceHandler } from '../runtime/middleware';
 import type { SelfIterationCompletionPayload } from '../services/selfIteration/completion';
+
+const log = debug('lobe-server:completion-lifecycle');
 
 /**
  * Handles `agent.execution.completed` source events emitted after every execAgent
@@ -48,11 +51,23 @@ export const createCompletionPolicy = (options: CreateCompletionPolicyOptions = 
       async (source) => {
         const { agentId, operationId, selfIteration, topicId } = source.payload;
 
+        log(
+          '[completion-policy] received agent.execution.completed agentId=%s op=%s selfIteration=%s',
+          agentId,
+          operationId,
+          selfIteration
+            ? `kind=${(selfIteration as SelfIterationCompletionPayload).marker?.kind} mutations=${(selfIteration as SelfIterationCompletionPayload).mutations?.length}`
+            : 'ABSENT',
+        );
+
         if (!agentId || !operationId) return;
         // Marker-driven: only runs that stamped a marker carry a selfIteration
         // payload. Unmarked runs have nothing to project.
         if (!selfIteration) return;
-        if (!options.onSelfIterationCompleted) return;
+        if (!options.onSelfIterationCompleted) {
+          log('[completion-policy] no onSelfIterationCompleted wired — skipping projection');
+          return;
+        }
 
         const params: CompletionCallbackParams = {
           agentId,
