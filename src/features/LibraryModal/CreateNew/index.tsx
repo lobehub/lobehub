@@ -1,4 +1,3 @@
-import { Flexbox } from '@lobehub/ui';
 import { createModal, useModalContext } from '@lobehub/ui/base-ui';
 import { memo, Suspense, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,11 +13,7 @@ interface ModalContentProps {
 const ModalContent = memo<ModalContentProps>(({ id, initialValues, onSuccess }) => {
   const { close } = useModalContext();
 
-  return (
-    <Flexbox paddingInline={8} style={{ paddingBottom: 8 }}>
-      <CreateForm id={id} initialValues={initialValues} onClose={close} onSuccess={onSuccess} />
-    </Flexbox>
-  );
+  return <CreateForm id={id} initialValues={initialValues} onClose={close} onSuccess={onSuccess} />;
 });
 
 ModalContent.displayName = 'KnowledgeBaseCreateModalContent';

@@ -1,17 +1,21 @@
 'use client';
 
-import { createModal, type ModalInstance } from '@lobehub/ui/base-ui';
+import { type ModalInstance } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 
-import RunEditContent, { type RunEditContentProps } from './Content';
+import { createFormModal } from '@/utils/createFormModal';
 
-export const createRunEditModal = (props: RunEditContentProps): ModalInstance =>
-  createModal({
-    content: <RunEditContent {...props} />,
-    footer: null,
-    styles: {
-      content: { padding: 0 },
-    },
+import RunEditContent, { type RunEditContentProps } from './Content';
+import RunEditFooter from './Footer';
+
+type Props = Omit<RunEditContentProps, 'formId' | 'onLoadingChange'>;
+
+export const createRunEditModal = (props: Props): ModalInstance =>
+  createFormModal({
+    renderContent: ({ formId, setLoading }) => (
+      <RunEditContent {...props} formId={formId} onLoadingChange={setLoading} />
+    ),
+    renderFooter: ({ formId, loading }) => <RunEditFooter formId={formId} loading={loading} />,
     title: t('run.edit.title', { ns: 'eval' }),
     width: 520,
   });

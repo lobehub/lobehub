@@ -2,7 +2,7 @@
 
 import { AGENT_PROFILE_URL, DEFAULT_INBOX_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
 import type { AgentEvalRunStatus, EvalRunInputConfig } from '@lobechat/types';
-import { Accordion, AccordionItem, ActionIcon, Avatar, Button, Flexbox } from '@lobehub/ui';
+import { Accordion, AccordionItem, ActionIcon, Avatar, Flexbox } from '@lobehub/ui';
 import { useModalContext } from '@lobehub/ui/base-ui';
 import { App, Form, Input, InputNumber, Select, Space } from 'antd';
 import { createStaticStyles } from 'antd-style';
@@ -39,6 +39,8 @@ interface AgentOption {
 }
 
 export interface RunEditContentProps {
+  formId: string;
+  onLoadingChange?: (loading: boolean) => void;
   run: {
     config?: { k?: number; maxSteps?: number; timeout?: number } | null;
     datasetId: string;
@@ -49,7 +51,7 @@ export interface RunEditContentProps {
   };
 }
 
-const RunEditContent: FC<RunEditContentProps> = ({ run }) => {
+const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run }) => {
   const { t } = useTranslation('eval');
   const { t: tChat } = useTranslation('chat');
   const { close } = useModalContext();
@@ -60,7 +62,6 @@ const RunEditContent: FC<RunEditContentProps> = ({ run }) => {
   const datasetList = useEvalStore((s) => s.datasetList);
   const [form] = Form.useForm();
   const kValue = Form.useWatch('k', form) ?? 1;
-  const [loading, setLoading] = useState(false);
 
   const [agents, setAgents] = useState<AgentOption[]>([]);
   const [loadingAgents, setLoadingAgents] = useState(false);
@@ -131,9 +132,8 @@ const RunEditContent: FC<RunEditContentProps> = ({ run }) => {
     window.open(AGENT_PROFILE_URL(agentId), `agent_${agentId}`, 'noopener,noreferrer');
   }, []);
 
-  const handleSubmit = async () => {
-    const values = await form.validateFields();
-    setLoading(true);
+  const handleFinish = async (values: any) => {
+    onLoadingChange?.(true);
     try {
       const config: EvalRunInputConfig = {};
       if (!isFinished) {
@@ -153,137 +153,129 @@ const RunEditContent: FC<RunEditContentProps> = ({ run }) => {
     } catch {
       message.error(t('run.edit.error'));
     } finally {
-      setLoading(false);
+      onLoadingChange?.(false);
     }
   };
 
   return (
-    <Flexbox gap={16} paddingBlock={16} paddingInline={24}>
-      <Form form={form} layout="vertical">
-        <Form.Item label={t('run.create.dataset')}>
-          <Space>
-            <span>{currentDataset?.name || run.datasetId}</span>
-            {currentDataset?.testCaseCount !== undefined && (
-              <span style={{ color: 'var(--ant-color-text-quaternary)', fontSize: 12 }}>
-                {t('run.create.caseCount', { count: currentDataset.testCaseCount })}
+    <Form form={form} layout="vertical" name={formId} onFinish={handleFinish}>
+      <Form.Item label={t('run.create.dataset')}>
+        <Space>
+          <span>{currentDataset?.name || run.datasetId}</span>
+          {currentDataset?.testCaseCount !== undefined && (
+            <span style={{ color: 'var(--ant-color-text-quaternary)', fontSize: 12 }}>
+              {t('run.create.caseCount', { count: currentDataset.testCaseCount })}
+            </span>
+          )}
+          {benchmarkId && (
+            <ActionIcon
+              icon={SquareArrowOutUpRight}
+              size="small"
+              title={t('dataset.detail.viewDetail')}
+              onClick={() => navigate(`/eval/bench/${benchmarkId}/datasets/${run.datasetId}`)}
+            />
+          )}
+        </Space>
+      </Form.Item>
+
+      <Form.Item label={t('run.create.name')} name="name">
+        <Input placeholder={t('run.create.name.placeholder')} variant="filled" />
+      </Form.Item>
+
+      {canChangeConfig && (
+        <Form.Item
+          label={t('run.create.agent')}
+          name="targetAgentId"
+          rules={[{ message: t('run.create.agent.required'), required: true }]}
+        >
+          <Select
+            allowClear
+            showSearch
+            className={styles.agentSelect}
+            loading={loadingAgents}
+            options={agentOptions}
+            placeholder={t('run.create.agent.placeholder')}
+            variant="filled"
+            filterOption={(input, option) =>
+              (option?.searchLabel as string)?.toLowerCase().includes(input.toLowerCase())
+            }
+            optionRender={(option) => (
+              <span
+                style={{
+                  alignItems: 'center',
+                  display: 'flex',
+                  gap: 8,
+                  justifyContent: 'space-between',
+                }}
+              >
+                {option.label}
+                <ActionIcon
+                  icon={SquareArrowOutUpRight}
+                  size="small"
+                  onClick={(e) => handleOpenAgent(option.value as string, e)}
+                />
               </span>
             )}
-            {benchmarkId && (
-              <ActionIcon
-                icon={SquareArrowOutUpRight}
-                size="small"
-                title={t('dataset.detail.viewDetail')}
-                onClick={() => navigate(`/eval/bench/${benchmarkId}/datasets/${run.datasetId}`)}
+          />
+        </Form.Item>
+      )}
+
+      <Accordion defaultExpandedKeys={[]}>
+        <AccordionItem
+          itemKey="advanced"
+          paddingBlock={6}
+          paddingInline={4}
+          title={t('run.create.advanced')}
+        >
+          <Flexbox gap={16} style={{ paddingTop: 8 }}>
+            <Form.Item
+              extra={<span className={styles.hint}>{t('run.config.k.hint', { k: kValue })}</span>}
+              label={t('run.config.k')}
+              name="k"
+              style={{ marginBottom: 0 }}
+            >
+              <InputNumber
+                disabled={isFinished}
+                max={10}
+                min={1}
+                step={1}
+                style={{ width: '100%' }}
+                variant="filled"
               />
-            )}
-          </Space>
-        </Form.Item>
-
-        <Form.Item label={t('run.create.name')} name="name">
-          <Input placeholder={t('run.create.name.placeholder')} variant="filled" />
-        </Form.Item>
-
-        {canChangeConfig && (
-          <Form.Item
-            label={t('run.create.agent')}
-            name="targetAgentId"
-            rules={[{ message: t('run.create.agent.required'), required: true }]}
-          >
-            <Select
-              allowClear
-              showSearch
-              className={styles.agentSelect}
-              loading={loadingAgents}
-              options={agentOptions}
-              placeholder={t('run.create.agent.placeholder')}
-              variant="filled"
-              filterOption={(input, option) =>
-                (option?.searchLabel as string)?.toLowerCase().includes(input.toLowerCase())
-              }
-              optionRender={(option) => (
-                <span
-                  style={{
-                    alignItems: 'center',
-                    display: 'flex',
-                    gap: 8,
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  {option.label}
-                  <ActionIcon
-                    icon={SquareArrowOutUpRight}
-                    size="small"
-                    onClick={(e) => handleOpenAgent(option.value as string, e)}
-                  />
-                </span>
-              )}
-            />
-          </Form.Item>
-        )}
-
-        <Accordion defaultExpandedKeys={[]}>
-          <AccordionItem
-            itemKey="advanced"
-            paddingBlock={6}
-            paddingInline={4}
-            title={t('run.create.advanced')}
-          >
-            <Flexbox gap={16} style={{ paddingTop: 8 }}>
-              <Form.Item
-                extra={<span className={styles.hint}>{t('run.config.k.hint', { k: kValue })}</span>}
-                label={t('run.config.k')}
-                name="k"
-                style={{ marginBottom: 0 }}
-              >
-                <InputNumber
-                  disabled={isFinished}
-                  max={10}
-                  min={1}
-                  step={1}
-                  style={{ width: '100%' }}
-                  variant="filled"
-                />
-              </Form.Item>
-              <Form.Item
-                extra={<span className={styles.hint}>{t('run.config.maxSteps.hint')}</span>}
-                label={t('run.config.maxSteps')}
-                name="maxSteps"
-                style={{ marginBottom: 0 }}
-              >
-                <InputNumber
-                  disabled={isFinished}
-                  max={1000}
-                  min={1}
-                  step={10}
-                  style={{ width: '100%' }}
-                  variant="filled"
-                />
-              </Form.Item>
-              <Form.Item
-                label={t('run.config.timeout')}
-                name="timeoutMinutes"
-                style={{ marginBottom: 0 }}
-              >
-                <InputNumber
-                  disabled={isFinished}
-                  max={MAX_TIMEOUT_MINUTES}
-                  min={1}
-                  style={{ width: '100%' }}
-                  suffix={t('run.config.timeout.unit')}
-                  variant="filled"
-                />
-              </Form.Item>
-            </Flexbox>
-          </AccordionItem>
-        </Accordion>
-      </Form>
-      <Flexbox horizontal gap={8} justify="flex-end">
-        <Button onClick={close}>{t('common.cancel')}</Button>
-        <Button loading={loading} type="primary" onClick={handleSubmit}>
-          {t('benchmark.edit.confirm')}
-        </Button>
-      </Flexbox>
-    </Flexbox>
+            </Form.Item>
+            <Form.Item
+              extra={<span className={styles.hint}>{t('run.config.maxSteps.hint')}</span>}
+              label={t('run.config.maxSteps')}
+              name="maxSteps"
+              style={{ marginBottom: 0 }}
+            >
+              <InputNumber
+                disabled={isFinished}
+                max={1000}
+                min={1}
+                step={10}
+                style={{ width: '100%' }}
+                variant="filled"
+              />
+            </Form.Item>
+            <Form.Item
+              label={t('run.config.timeout')}
+              name="timeoutMinutes"
+              style={{ marginBottom: 0 }}
+            >
+              <InputNumber
+                disabled={isFinished}
+                max={MAX_TIMEOUT_MINUTES}
+                min={1}
+                style={{ width: '100%' }}
+                suffix={t('run.config.timeout.unit')}
+                variant="filled"
+              />
+            </Form.Item>
+          </Flexbox>
+        </AccordionItem>
+      </Accordion>
+    </Form>
   );
 };
 

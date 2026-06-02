@@ -1,17 +1,23 @@
 'use client';
 
-import { createModal, type ModalInstance } from '@lobehub/ui/base-ui';
+import { type ModalInstance } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 
-import BenchmarkEditContent, { type BenchmarkEditContentProps } from './Content';
+import { createFormModal } from '@/utils/createFormModal';
 
-export const createBenchmarkEditModal = (props: BenchmarkEditContentProps): ModalInstance =>
-  createModal({
-    content: <BenchmarkEditContent {...props} />,
-    footer: null,
-    styles: {
-      content: { padding: 0 },
-    },
+import BenchmarkEditContent, { type BenchmarkEditContentProps } from './Content';
+import BenchmarkEditFooter from './Footer';
+
+type Props = Omit<BenchmarkEditContentProps, 'formId' | 'onLoadingChange'>;
+
+export const createBenchmarkEditModal = (props: Props): ModalInstance =>
+  createFormModal({
+    renderContent: ({ formId, setLoading }) => (
+      <BenchmarkEditContent {...props} formId={formId} onLoadingChange={setLoading} />
+    ),
+    renderFooter: ({ formId, loading }) => (
+      <BenchmarkEditFooter formId={formId} loading={loading} />
+    ),
     title: t('benchmark.edit.title', { ns: 'eval' }),
     width: 480,
   });

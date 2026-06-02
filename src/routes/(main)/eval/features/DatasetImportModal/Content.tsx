@@ -1,9 +1,7 @@
 'use client';
 
-import { Button, Flexbox } from '@lobehub/ui';
-import { useModalContext } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
-import { type FC, useCallback, useMemo, useState } from 'react';
+import { type FC, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { agentEvalService } from '@/services/agentEval';
@@ -24,23 +22,29 @@ type MappingTarget =
   | 'sortOrder';
 
 export interface DatasetImportContentProps {
+  close: () => void;
   datasetId: string;
+  onImportReady: (api: { canImport: () => boolean; runImport: () => Promise<void> }) => void;
+  onStateChange: (state: { canImport: boolean; step: 0 | 1 }) => void;
   onSuccess?: (datasetId: string) => void;
   presetId?: string;
+  setPrev: (fn: () => void) => void;
 }
 
 const DatasetImportContent: FC<DatasetImportContentProps> = ({
+  close,
   datasetId,
+  onImportReady,
+  onStateChange,
   onSuccess,
   presetId,
+  setPrev,
 }) => {
   const { t } = useTranslation('eval');
-  const { close } = useModalContext();
   const { message } = App.useApp();
 
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState<0 | 1>(0);
   const [uploading, setUploading] = useState(false);
-  const [importing, setImporting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<FileUploadState>();
 
   const [pathname, setPathname] = useState('');
@@ -55,6 +59,16 @@ const DatasetImportContent: FC<DatasetImportContentProps> = ({
   const [delimiter, setDelimiter] = useState('');
 
   const preset = useMemo(() => (presetId ? getPresetById(presetId) : undefined), [presetId]);
+
+  const hasInputMapping = Object.values(mapping).includes('input');
+
+  useEffect(() => {
+    onStateChange({ canImport: hasInputMapping, step });
+  }, [hasInputMapping, onStateChange, step]);
+
+  useEffect(() => {
+    setPrev(() => setStep(0));
+  }, [setPrev]);
 
   const handleFileSelect = useCallback(
     async (file: File) => {
@@ -123,11 +137,10 @@ const DatasetImportContent: FC<DatasetImportContentProps> = ({
     };
   }, [mapping, delimiter]);
 
-  const handleImport = useCallback(async () => {
+  const runImport = useCallback(async () => {
     const fieldMapping = buildFieldMapping();
     if (!fieldMapping) return;
 
-    setImporting(true);
     try {
       const result = await agentEvalService.importDataset({
         datasetId,
@@ -153,51 +166,39 @@ const DatasetImportContent: FC<DatasetImportContentProps> = ({
       setTimeout(() => {
         message.error(t('dataset.import.error'));
       }, 0);
-    } finally {
-      setImporting(false);
     }
   }, [buildFieldMapping, close, datasetId, filename, format, message, onSuccess, pathname, t]);
 
-  const hasInputMapping = Object.values(mapping).includes('input');
+  useEffect(() => {
+    onImportReady({
+      canImport: () => hasInputMapping,
+      runImport,
+    });
+  }, [hasInputMapping, onImportReady, runImport]);
 
   return (
-    <Flexbox gap={16} paddingBlock={16} paddingInline={24}>
-      <div>
-        {step === 0 && (
-          <UploadStep
-            loading={uploading}
-            preset={preset}
-            uploadProgress={uploadProgress}
-            onFileSelect={handleFileSelect}
-          />
-        )}
-
-        {step === 1 && (
-          <MappingStep
-            delimiter={delimiter}
-            headers={headers}
-            mapping={mapping}
-            preview={preview}
-            totalCount={totalCount}
-            onDelimiterChange={setDelimiter}
-            onMappingChange={setMapping}
-          />
-        )}
-      </div>
-      {step === 1 && (
-        <Flexbox horizontal gap={8} justify="flex-end">
-          <Button onClick={() => setStep(0)}>{t('dataset.import.prev')}</Button>
-          <Button
-            disabled={!hasInputMapping}
-            loading={importing}
-            type="primary"
-            onClick={handleImport}
-          >
-            {t('dataset.import.confirm')}
-          </Button>
-        </Flexbox>
+    <>
+      {step === 0 && (
+        <UploadStep
+          loading={uploading}
+          preset={preset}
+          uploadProgress={uploadProgress}
+          onFileSelect={handleFileSelect}
+        />
       )}
-    </Flexbox>
+
+      {step === 1 && (
+        <MappingStep
+          delimiter={delimiter}
+          headers={headers}
+          mapping={mapping}
+          preview={preview}
+          totalCount={totalCount}
+          onDelimiterChange={setDelimiter}
+          onMappingChange={setMapping}
+        />
+      )}
+    </>
   );
 };
 

@@ -1,17 +1,21 @@
 'use client';
 
-import { createModal, type ModalInstance } from '@lobehub/ui/base-ui';
+import { type ModalInstance } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 
-import TestCaseEditContent, { type TestCaseEditContentProps } from './Content';
+import { createFormModal } from '@/utils/createFormModal';
 
-export const createTestCaseEditModal = (props: TestCaseEditContentProps): ModalInstance =>
-  createModal({
-    content: <TestCaseEditContent {...props} />,
-    footer: null,
-    styles: {
-      content: { padding: 0 },
-    },
+import TestCaseEditContent, { type TestCaseEditContentProps } from './Content';
+import TestCaseEditFooter from './Footer';
+
+type Props = Omit<TestCaseEditContentProps, 'formId' | 'onLoadingChange'>;
+
+export const createTestCaseEditModal = (props: Props): ModalInstance =>
+  createFormModal({
+    renderContent: ({ formId, setLoading }) => (
+      <TestCaseEditContent {...props} formId={formId} onLoadingChange={setLoading} />
+    ),
+    renderFooter: ({ formId, loading }) => <TestCaseEditFooter formId={formId} loading={loading} />,
     title: t('testCase.edit.title', { ns: 'eval' }),
     width: 520,
   });

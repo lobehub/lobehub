@@ -1,17 +1,21 @@
 'use client';
 
-import { createModal, type ModalInstance } from '@lobehub/ui/base-ui';
+import { type ModalInstance } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 
+import { createFormModal } from '@/utils/createFormModal';
+
 import CreateBenchmarkContent from './Content';
+import CreateBenchmarkFooter from './Footer';
 
 export const createCreateBenchmarkModal = (): ModalInstance =>
-  createModal({
-    content: <CreateBenchmarkContent />,
-    footer: null,
-    styles: {
-      content: { padding: 0 },
-    },
+  createFormModal({
+    renderContent: ({ formId, setLoading }) => (
+      <CreateBenchmarkContent formId={formId} onLoadingChange={setLoading} />
+    ),
+    renderFooter: ({ formId, loading }) => (
+      <CreateBenchmarkFooter formId={formId} loading={loading} />
+    ),
     title: t('benchmark.create.title', { ns: 'eval' }),
     width: 480,
   });

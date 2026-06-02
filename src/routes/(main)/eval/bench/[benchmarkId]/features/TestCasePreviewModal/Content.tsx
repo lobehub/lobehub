@@ -69,7 +69,7 @@ const TestCasePreviewContent: FC<TestCasePreviewContentProps> = ({ testCase }) =
   if (!testCase) return null;
 
   return (
-    <Flexbox gap={16} paddingBlock={16} paddingInline={24}>
+    <Flexbox gap={16}>
       <Flexbox gap={4}>
         <p className={styles.previewLabel}>{t('testCase.preview.input')}</p>
         <div className={styles.previewBlock}>{testCase.content?.input}</div>

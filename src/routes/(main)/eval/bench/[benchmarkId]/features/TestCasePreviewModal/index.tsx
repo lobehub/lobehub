@@ -9,9 +9,6 @@ export const createTestCasePreviewModal = (props: TestCasePreviewContentProps): 
   createModal({
     content: <TestCasePreviewContent {...props} />,
     footer: null,
-    styles: {
-      content: { padding: 0 },
-    },
     title: t('testCase.preview.title', { ns: 'eval' }),
     width: 600,
   });

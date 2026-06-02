@@ -1,17 +1,21 @@
 'use client';
 
-import { createModal, type ModalInstance } from '@lobehub/ui/base-ui';
+import { type ModalInstance } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 
-import DatasetEditContent, { type DatasetEditContentProps } from './Content';
+import { createFormModal } from '@/utils/createFormModal';
 
-export const createDatasetEditModal = (props: DatasetEditContentProps): ModalInstance =>
-  createModal({
-    content: <DatasetEditContent {...props} />,
-    footer: null,
-    styles: {
-      content: { padding: 0 },
-    },
+import DatasetEditContent, { type DatasetEditContentProps } from './Content';
+import DatasetEditFooter from './Footer';
+
+type Props = Omit<DatasetEditContentProps, 'formId' | 'onLoadingChange'>;
+
+export const createDatasetEditModal = (props: Props): ModalInstance =>
+  createFormModal({
+    renderContent: ({ formId, setLoading }) => (
+      <DatasetEditContent {...props} formId={formId} onLoadingChange={setLoading} />
+    ),
+    renderFooter: ({ formId, loading }) => <DatasetEditFooter formId={formId} loading={loading} />,
     title: t('dataset.edit.title', { ns: 'eval' }),
     width: 480,
   });

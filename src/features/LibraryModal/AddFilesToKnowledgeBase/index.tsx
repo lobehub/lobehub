@@ -1,8 +1,8 @@
 import { Flexbox, Icon } from '@lobehub/ui';
 import { createModal, useModalContext } from '@lobehub/ui/base-ui';
+import { t as i18nt } from 'i18next';
 import { BookUp2Icon } from 'lucide-react';
 import { memo, Suspense, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
 
 import SelectForm from './SelectForm';
 
@@ -23,30 +23,15 @@ interface ModalContentProps {
 
 const ModalContent = memo<ModalContentProps>(
   ({ fileIds, knowledgeBaseId, resolveFileIds, selectedCount }) => {
-    const { t } = useTranslation('knowledgeBase');
     const { close } = useModalContext();
     return (
-      <>
-        <Flexbox
-          horizontal
-          gap={8}
-          paddingBlock={16}
-          paddingInline={16}
-          style={{ paddingBottom: 0 }}
-        >
-          <Icon icon={BookUp2Icon} />
-          {t('addToKnowledgeBase.title')}
-        </Flexbox>
-        <Flexbox padding={16} style={{ paddingTop: 0 }}>
-          <SelectForm
-            fileIds={fileIds}
-            knowledgeBaseId={knowledgeBaseId}
-            resolveFileIds={resolveFileIds}
-            selectedCount={selectedCount}
-            onClose={close}
-          />
-        </Flexbox>
-      </>
+      <SelectForm
+        fileIds={fileIds}
+        knowledgeBaseId={knowledgeBaseId}
+        resolveFileIds={resolveFileIds}
+        selectedCount={selectedCount}
+        onClose={close}
+      />
     );
   },
 );
@@ -70,7 +55,12 @@ export const useAddFilesToKnowledgeBaseModal = () => {
       onOpenChangeComplete: (open) => {
         if (!open) params?.onClose?.();
       },
-      title: null,
+      title: (
+        <Flexbox horizontal align="center" gap={8}>
+          <Icon icon={BookUp2Icon} />
+          {i18nt('addToKnowledgeBase.title', { ns: 'knowledgeBase' })}
+        </Flexbox>
+      ),
     });
   }, []);
 

@@ -16,9 +16,6 @@ export const createSkillStoreModal = () =>
       </MarketAuthProvider>
     ),
     footer: null,
-    styles: {
-      content: { overflow: 'hidden', padding: 0 },
-    },
     title: t('skillStore.title', { ns: 'setting' }),
     width: 'min(80%, 800px)',
   });

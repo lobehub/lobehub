@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { useModalContext } from '@lobehub/ui/base-ui';
-import { Badge, Button, Checkbox, Skeleton, Table, Tag, Tooltip, Typography } from 'antd';
+import { Badge, Checkbox, Skeleton, Table, Tag, Tooltip, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { type FC, memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,17 +17,21 @@ const StatusLabel = memo<{ status: string | null | undefined }>(({ status }) => 
 });
 
 export interface BatchResumeContentProps {
-  onConfirm: (targets: Array<{ testCaseId: string; threadId?: string }>) => Promise<void>;
+  onSelectionChange: (count: number) => void;
+  onSelectionReady: (api: { confirm: () => Promise<void>; selectedCount: () => number }) => void;
   runId: string;
+  submitter: (targets: Array<{ testCaseId: string; threadId?: string }>) => Promise<void>;
 }
 
-const BatchResumeContent: FC<BatchResumeContentProps> = ({ onConfirm, runId }) => {
+const BatchResumeContent: FC<BatchResumeContentProps> = ({
+  onSelectionChange,
+  onSelectionReady,
+  runId,
+  submitter,
+}) => {
   const { t } = useTranslation('eval');
-  const { t: tc } = useTranslation('common');
-  const { close } = useModalContext();
   const [cases, setCases] = useState<ResumableCase[]>([]);
   const [loading, setLoading] = useState(false);
-  const [confirming, setConfirming] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [pageSize, setPageSize] = useState(10);
 
@@ -43,6 +45,10 @@ const BatchResumeContent: FC<BatchResumeContentProps> = ({ onConfirm, runId }) =
       })
       .finally(() => setLoading(false));
   }, [runId]);
+
+  useEffect(() => {
+    onSelectionChange(selectedIds.length);
+  }, [onSelectionChange, selectedIds]);
 
   const resumableCases = useMemo(() => cases.filter((c) => c.canResume), [cases]);
   const allSelected = selectedIds.length === resumableCases.length && resumableCases.length > 0;
@@ -60,6 +66,22 @@ const BatchResumeContent: FC<BatchResumeContentProps> = ({ onConfirm, runId }) =
       checked ? [...prev, testCaseId] : prev.filter((id) => id !== testCaseId),
     );
   }, []);
+
+  const confirm = useCallback(async () => {
+    if (selectedIds.length === 0) return;
+    await submitter(
+      cases
+        .filter((item) => selectedIds.includes(item.testCaseId))
+        .map((item) => ({ testCaseId: item.testCaseId, threadId: item.threadId })),
+    );
+  }, [cases, selectedIds, submitter]);
+
+  useEffect(() => {
+    onSelectionReady({
+      confirm,
+      selectedCount: () => selectedIds.length,
+    });
+  }, [confirm, onSelectionReady, selectedIds]);
 
   const columns: ColumnsType<ResumableCase> = useMemo(
     () => [
@@ -126,53 +148,23 @@ const BatchResumeContent: FC<BatchResumeContentProps> = ({ onConfirm, runId }) =
     [t, selectedIds, allSelected, indeterminate, resumableCases, handleToggleRow, handleToggleAll],
   );
 
-  const handleConfirm = async () => {
-    if (selectedIds.length === 0) return;
-    setConfirming(true);
-    try {
-      await onConfirm(
-        cases
-          .filter((item) => selectedIds.includes(item.testCaseId))
-          .map((item) => ({ testCaseId: item.testCaseId, threadId: item.threadId })),
-      );
-      close();
-    } finally {
-      setConfirming(false);
-    }
-  };
-
-  return (
-    <Flexbox gap={16} paddingBlock={16} paddingInline={24}>
-      {loading ? (
-        <Skeleton active paragraph={{ rows: 4 }} />
-      ) : (
-        <Table
-          columns={columns}
-          dataSource={cases}
-          rowKey="testCaseId"
-          scroll={{ y: 400 }}
-          size="small"
-          style={{ minHeight: 300 }}
-          pagination={{
-            pageSize,
-            showSizeChanger: true,
-            size: 'small',
-            onShowSizeChange: (_, size) => setPageSize(size),
-          }}
-        />
-      )}
-      <Flexbox horizontal gap={8} justify="flex-end">
-        <Button onClick={close}>{tc('cancel')}</Button>
-        <Button
-          disabled={selectedIds.length === 0}
-          loading={confirming}
-          type="primary"
-          onClick={handleConfirm}
-        >
-          {t('run.actions.batchResume.modal.confirm')} ({selectedIds.length})
-        </Button>
-      </Flexbox>
-    </Flexbox>
+  return loading ? (
+    <Skeleton active paragraph={{ rows: 4 }} />
+  ) : (
+    <Table
+      columns={columns}
+      dataSource={cases}
+      rowKey="testCaseId"
+      scroll={{ y: 400 }}
+      size="small"
+      style={{ minHeight: 300 }}
+      pagination={{
+        pageSize,
+        showSizeChanger: true,
+        size: 'small',
+        onShowSizeChange: (_, size) => setPageSize(size),
+      }}
+    />
   );
 };
 
