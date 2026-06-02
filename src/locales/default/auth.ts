@@ -227,6 +227,7 @@ export default {
   'stats.empty.title': 'No Data',
   'stats.heatmapStats.currentStreak': 'Current Streak',
   'stats.heatmapStats.longestStreak': 'Longest Streak',
+  'stats.heatmapStats.longestTask': 'Longest Task',
   'stats.heatmapStats.peakTokens': 'Peak Daily Tokens',
   'stats.heatmapStats.totalTokens': 'Total Tokens',
   'stats.lastYearActivity': 'Activity in the past year',

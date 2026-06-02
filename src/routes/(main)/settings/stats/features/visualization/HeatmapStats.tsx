@@ -5,6 +5,8 @@ import { cssVar } from 'antd-style';
 import { Fragment, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useClientDataSWR } from '@/libs/swr';
+import { topicService } from '@/services/topic';
 import { formatShortenNumber } from '@/utils/format';
 
 interface HeatmapStatsProps {
@@ -13,12 +15,30 @@ interface HeatmapStatsProps {
 }
 
 /**
- * Token-dimension summary row for the activity heatmap. Everything is derived
- * from the heatmap `data` array (daily token totals over the past year), so no
- * extra request is needed.
+ * Render a wall-clock duration in seconds as a compact "1h 15m" / "15m 20s" /
+ * "45s" string. Returns '--' when there is nothing to show.
+ */
+const formatDuration = (seconds?: number) => {
+  if (!seconds || seconds < 1) return '--';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+};
+
+/**
+ * Token-dimension summary row for the activity heatmap. The cumulative / peak /
+ * streak figures are derived from the heatmap `data` array (no extra request);
+ * the longest-task duration comes from the agent operations' wall-clock time.
  */
 const HeatmapStats = memo<HeatmapStatsProps>(({ data, loading }) => {
   const { t } = useTranslation('auth');
+
+  const { data: maxTaskDuration } = useClientDataSWR('stats-max-task-duration', () =>
+    topicService.getMaxTaskDuration(),
+  );
 
   const stats = useMemo(() => {
     if (!data?.length) return { current: 0, cumulative: 0, longest: 0, peak: 0 };
@@ -55,6 +75,11 @@ const HeatmapStats = memo<HeatmapStatsProps>(({ data, loading }) => {
   const items = [
     { label: t('stats.heatmapStats.totalTokens'), value: formatShortenNumber(stats.cumulative) },
     { label: t('stats.heatmapStats.peakTokens'), value: formatShortenNumber(stats.peak) },
+    {
+      label: t('stats.heatmapStats.longestTask'),
+      loading: maxTaskDuration === undefined,
+      value: formatDuration(maxTaskDuration),
+    },
     { label: t('stats.heatmapStats.currentStreak'), value: days(stats.current) },
     { label: t('stats.heatmapStats.longestStreak'), value: days(stats.longest) },
   ];
@@ -67,7 +92,7 @@ const HeatmapStats = memo<HeatmapStatsProps>(({ data, loading }) => {
             {index > 0 && <Divider style={{ height: 32, margin: 0 }} type={'vertical'} />}
             <Flexbox align={'center'} flex={1} gap={4}>
               <div style={{ fontSize: 20, fontWeight: 'bold' }}>
-                {loading ? (
+                {loading || item.loading ? (
                   <Skeleton.Button active size={'small'} style={{ width: 56 }} />
                 ) : (
                   item.value

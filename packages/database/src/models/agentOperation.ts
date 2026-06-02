@@ -1,4 +1,6 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, gte, isNotNull, sql } from 'drizzle-orm';
+
+import { today } from '@/utils/time';
 
 import type {
   AgentOperationAppContext,
@@ -134,5 +136,34 @@ export class AgentOperationModel {
       .where(and(eq(agentOperations.id, operationId), eq(agentOperations.userId, this.userId)))
       .limit(1);
     return row ?? null;
+  }
+
+  /**
+   * Longest single operation (agent run) wall-clock execution time over the last
+   * year, in seconds. Wall clock (`completedAt - startedAt`) is the most faithful
+   * "task duration" — it spans the whole run including tool calls and waiting,
+   * not just LLM compute. Returns 0 when there are no completed operations.
+   */
+  async getMaxDurationSeconds(): Promise<number> {
+    const startDate = today().subtract(1, 'year').startOf('day').toDate();
+
+    const [row] = await this.db
+      .select({
+        seconds:
+          sql<number>`COALESCE(MAX(EXTRACT(EPOCH FROM (${agentOperations.completedAt} - ${agentOperations.startedAt}))), 0)`.mapWith(
+            Number,
+          ),
+      })
+      .from(agentOperations)
+      .where(
+        and(
+          eq(agentOperations.userId, this.userId),
+          isNotNull(agentOperations.startedAt),
+          isNotNull(agentOperations.completedAt),
+          gte(agentOperations.createdAt, startDate),
+        ),
+      );
+
+    return row?.seconds ?? 0;
   }
 }
