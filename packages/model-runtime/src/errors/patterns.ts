@@ -74,7 +74,6 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   {
     code: AgentRuntimeErrorType.ExceededContextWindow,
     match: sub('context window exceeds', { caseInsensitive: true }),
-    note: 'ollamacloud reports ECW as a 400 ProviderBizError "context window exceeds limit" (LOBE-9913)',
   },
   {
     code: AgentRuntimeErrorType.ExceededContextWindow,
