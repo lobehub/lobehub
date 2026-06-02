@@ -462,12 +462,16 @@ export default {
   'referral.table.status.suspected': 'Suspected Anomaly',
   'referral.table.title': 'Referral History',
   'sessionCard.title': 'Ready to leave the free plan? Upgrade to enjoy premium features.',
+  'summary.annualRenewal': 'Annual plan renewal: {{amount}} on {{date}}',
   'summary.desc':
     'This amount includes your subscription fee and any storage overage charges for this billing period.',
   'summary.dueBy': 'Due on {{date}}',
+  'summary.nextMonthlyPayment': 'Your Next Monthly Payment',
   'summary.nextPayment': 'Your Next Payment',
   'summary.paymentInformation': 'Billing Information',
   'summary.storageSettings': 'Storage pay-as-you-go',
+  'summary.storageMonthlyDesc':
+    'This amount covers storage overage for the current monthly billing period.',
   'summary.title': 'Billing Summary',
   'summary.usageThisMonth': 'View your usage this month.',
   'summary.viewBillingHistory': 'View Payment History',
