@@ -18,7 +18,9 @@ const AiHeatmaps = memo<
   Omit<HeatmapsProps, 'data' | 'ref'> & { inShare?: boolean; mobile?: boolean }
 >(({ inShare, mobile, ...rest }) => {
   const { t } = useTranslation('auth');
-  const [type, setType] = useState<HeatmapType>(HeatmapType.Messages);
+  const [type, setType] = useState<HeatmapType>(
+    inShare ? HeatmapType.Messages : HeatmapType.Tokens,
+  );
   const isTokens = type === HeatmapType.Tokens;
 
   const { data, isLoading } = useClientDataSWR(['stats-heatmaps', type].join('-'), async () =>
@@ -81,14 +83,14 @@ const AiHeatmaps = memo<
       variant={'outlined'}
       options={[
         {
-          icon: <Icon icon={MessageSquareIcon} />,
-          label: t('stats.messages'),
-          value: HeatmapType.Messages,
-        },
-        {
           icon: <Icon icon={CoinsIcon} />,
           label: t('stats.tokens'),
           value: HeatmapType.Tokens,
+        },
+        {
+          icon: <Icon icon={MessageSquareIcon} />,
+          label: t('stats.messages'),
+          value: HeatmapType.Messages,
         },
       ]}
       onChange={(v) => setType(v as HeatmapType)}
@@ -125,14 +127,10 @@ const AiHeatmaps = memo<
 
   return (
     <StatsFormGroup
+      afterTitle={typeSwitch}
+      extra={dayTags}
       fontSize={16}
       title={t('stats.lastYearActivity')}
-      extra={
-        <Flexbox horizontal gap={8}>
-          {typeSwitch}
-          {dayTags}
-        </Flexbox>
-      }
     >
       <Flexbox gap={16}>
         {isTokens && <HeatmapStats data={data} loading={isLoading || !data} />}
