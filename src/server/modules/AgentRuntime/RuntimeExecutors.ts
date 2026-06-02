@@ -119,7 +119,7 @@ const LLM_RETRY_BASE_DELAY_MS = 1000;
 const LLM_RETRY_MAX_DELAY_MS = 30_000;
 
 /**
- * Retry budget for empty completions (LOBE-9834), applied independently of
+ * Retry budget for empty completions, applied independently of
  * `resolveLLMMaxRetries`. The branded provider gets 0 general retries because
  * its own fallback chain already re-routes failed requests — but an
  * HTTP-200-but-empty turn never triggered that chain, so it must still be
@@ -130,13 +130,13 @@ const EMPTY_COMPLETION_MAX_RETRIES = 2;
 
 /**
  * Output-token count at or below this — combined with no content, reasoning,
- * tool calls, or images — marks a turn as an empty completion (LOBE-9834).
+ * tool calls, or images — marks a turn as an empty completion.
  * The observed failure case reported `out=1 token`.
  */
 const EMPTY_COMPLETION_MAX_OUTPUT_TOKENS = 1;
 
 /**
- * Detect the "empty completion" failure mode (LOBE-9834): the model returns a
+ * Detect the "empty completion" failure mode: the model returns a
  * turn with no text, no reasoning, no tool calls, no images, and ~0 output
  * tokens — typically after a stalled tool loop where it effectively gives up.
  * Callers throw `ModelEmptyError` on a hit so the LLM retry loop re-attempts
@@ -248,7 +248,7 @@ const resolveLLMMaxRetries = (provider: string) =>
  * error-type override, so it can only be resolved once the error exists (in the
  * catch) — unlike {@link resolveLLMMaxRetries}, which runs before the request.
  *
- * Empty completions (LOBE-9834) bypass the per-provider policy: the branded
+ * Empty completions bypass the per-provider policy: the branded
  * provider's 0-retry rule exists to avoid re-routing its own already-failed
  * requests, but an HTTP-200-but-empty turn never hit that fallback chain, so it
  * must still be re-issued. Folding this into `resolveLLMMaxRetries` would wrongly
@@ -1203,7 +1203,7 @@ export const createRuntimeExecutors = (
               await flushReasoningBuffer();
               clearAttemptBuffers();
 
-              // Empty-completion guard (LOBE-9834): if the model produced
+              // Empty-completion guard: if the model produced
               // nothing actionable — no content, reasoning, tool calls, images,
               // or output tokens — throw so the retry loop below re-attempts the
               // turn instead of finalizing to `done` with a blank assistant

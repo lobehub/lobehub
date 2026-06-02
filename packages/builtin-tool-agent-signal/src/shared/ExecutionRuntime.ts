@@ -2,7 +2,7 @@ import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
 import { AGENT_SIGNAL_TOOL_RESULT_KIND, type AgentSignalToolApiName } from './apiNames';
 
-/** Tool result discriminator (LOBE-9434 #5). */
+/** Tool result discriminator. */
 export type ToolResultKind = 'artifact' | 'mutation' | 'read';
 
 /**

@@ -87,7 +87,7 @@ describe('classifyLLMError', () => {
       expect(classifyLLMError({ errorType, message }).kind).toBe('retry');
     });
 
-    it('classifies a thrown ModelEmptyError instance as retry (LOBE-9834)', () => {
+    it('classifies a thrown ModelEmptyError instance as retry', () => {
       expect(classifyLLMError(new ModelEmptyError()).kind).toBe('retry');
     });
   });

@@ -120,7 +120,9 @@ export const AgentRuntimeErrorType = {
    * effectively gives up. Retryable: re-issuing the same request usually
    * yields a real response. Without this code the harness silently finalized
    * to `done` and persisted a blank assistant message (empty bubble). See
-   * LOBE-9834.
+   * This addresses the "empty completion" failure mode: after a stalled
+   * tool loop the model may give up and emit a blank turn with ~0 output
+   * tokens, no text, and no tool calls.
    */
   ModelEmptyCompletion: 'ModelEmptyCompletion',
   /**

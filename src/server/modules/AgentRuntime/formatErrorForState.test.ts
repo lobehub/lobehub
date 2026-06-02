@@ -54,7 +54,7 @@ describe('formatErrorForState', () => {
       });
     });
 
-    it('enriches a thrown ModelEmptyError into a readable retryable terminal error (LOBE-9834)', () => {
+    it('enriches a thrown ModelEmptyError into a readable retryable terminal error', () => {
       const result = formatErrorForState(new ModelEmptyError());
 
       // The `errorType` field must win over the generic Error → InternalServerError

@@ -45,7 +45,7 @@ export type AgentSignalToolApiName =
   | (typeof AGENT_SIGNAL_REFLECTION_TOOL_API_NAMES)[number];
 
 /**
- * Result discriminator per tool (LOBE-9434 #5). The shared ExecutionRuntime
+ * Result discriminator per tool. The shared ExecutionRuntime
  * stamps this onto every tool result so `extractFromFinalState` can partition
  * read / artifact / mutation outcomes from a persisted snapshot.
  */

@@ -32,7 +32,7 @@ const mockBuiltinModels = vi.hoisted(() => [
 vi.mock('@/server/modules/ModelRuntime', () => ({
   initModelRuntimeFromDB: vi.fn().mockResolvedValue({
     // Emit a minimal non-empty completion so the call_llm empty-completion
-    // guard (LOBE-9834) doesn't treat the default mock as a "gave up" turn and
+    // guard doesn't treat the default mock as a "gave up" turn and
     // throw ModelEmptyError. Tests that exercise real output override this.
     chat: vi.fn().mockImplementation(async (_payload: any, options: any) => {
       await options?.callback?.onText?.('done');
@@ -399,9 +399,9 @@ describe('RuntimeExecutors', () => {
       );
     });
 
-    it('retries empty completions on the branded provider then throws ModelEmptyError (LOBE-9834)', async () => {
+    it('retries empty completions on the branded provider then throws ModelEmptyError', async () => {
       // A "gave up" turn: no onText / onThinking / onToolsCalling and ~0 output
-      // tokens — mirrors the LOBE-9834 repro (provider=lobehub, `out=1 token`).
+      // tokens — mirrors the empty completion repro (provider=lobehub, `out=1 token`).
       // The branded provider has 0 general retries, but empty completions get a
       // dedicated budget so the request is still re-issued before failing.
       vi.useFakeTimers();

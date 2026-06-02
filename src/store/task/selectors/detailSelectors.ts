@@ -28,7 +28,7 @@ const activeTaskDescription = (s: TaskStoreState) => activeTaskDetail(s)?.descri
 
 const activeTaskAgentId = (s: TaskStoreState) => activeTaskDetail(s)?.agentId;
 
-// TODO [LOBE-6634]: Once the backend getTaskDetail returns model/provider, read from detail.model / detail.provider instead
+// TODO: Once the frontend store switches to reading from detail.model / detail.provider returned by the backend getTaskDetail procedure
 const activeTaskModel = (s: TaskStoreState) =>
   activeTaskDetail(s)?.config?.model as string | undefined;
 
