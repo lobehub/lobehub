@@ -8,9 +8,11 @@ import { useTranslation } from 'react-i18next';
 
 import { useClientDataSWR } from '@/libs/swr';
 import { messageService } from '@/services/message';
+import { formatIntergerNumber, formatShortenNumber } from '@/utils/format';
 
 import { HeatmapType } from '../../types';
 import StatsFormGroup from '../components/StatsFormGroup';
+import HeatmapStats from './HeatmapStats';
 
 const AiHeatmaps = memo<
   Omit<HeatmapsProps, 'data' | 'ref'> & { inShare?: boolean; mobile?: boolean }
@@ -32,8 +34,17 @@ const AiHeatmaps = memo<
       blockRadius={mobile ? 2 : undefined}
       blockSize={mobile ? 6 : 14}
       data={data || []}
+      hideTotalCount={isTokens}
       loading={isLoading || !data}
       maxLevel={4}
+      customTooltip={(activity) =>
+        t(isTokens ? 'heatmaps.tooltipTokens' : 'heatmaps.tooltip', {
+          count: isTokens
+            ? formatShortenNumber(activity.count)
+            : formatIntergerNumber(activity.count),
+          date: activity.date,
+        })
+      }
       labels={{
         legend: {
           less: t('heatmaps.legend.less'),
@@ -123,7 +134,10 @@ const AiHeatmaps = memo<
         </Flexbox>
       }
     >
-      {content}
+      <Flexbox gap={16}>
+        {isTokens && <HeatmapStats data={data} loading={isLoading || !data} />}
+        {content}
+      </Flexbox>
     </StatsFormGroup>
   );
 });
