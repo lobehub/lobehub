@@ -18,7 +18,7 @@ const minimaxChatModels: AIChatModelCard[] = [
     displayName: 'MiniMax M3',
     enabled: true,
     id: 'MiniMax-M3',
-    maxOutput: 131_072,
+    maxOutput: 524_288,
     pricing: {
       currency: 'CNY',
       units: [
@@ -26,7 +26,7 @@ const minimaxChatModels: AIChatModelCard[] = [
           name: 'textInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 2.1, upTo: 512_000 },
+            { rate: 4.2, upTo: 512_000 },
             { rate: 8.4, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -35,7 +35,7 @@ const minimaxChatModels: AIChatModelCard[] = [
           name: 'textOutput',
           strategy: 'tiered',
           tiers: [
-            { rate: 8.4, upTo: 512_000 },
+            { rate: 16.8, upTo: 512_000 },
             { rate: 33.6, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -44,7 +44,7 @@ const minimaxChatModels: AIChatModelCard[] = [
           name: 'textInput_cacheRead',
           strategy: 'tiered',
           tiers: [
-            { rate: 0.42, upTo: 512_000 },
+            { rate: 0.84, upTo: 512_000 },
             { rate: 1.68, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
