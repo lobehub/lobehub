@@ -17,6 +17,19 @@ describe('matchErrorPattern', () => {
     );
   });
 
+  it('classifies ollamacloud "context window exceeds limit" as ExceededContextWindow, not ProviderBizError (LOBE-9913)', () => {
+    // ollamacloud surfaces context-window overflow as a generic 400 that the
+    // upstream labels ProviderBizError. The ECW message pattern sits before the
+    // 400 / ProviderBizError catch-alls, so the message wins regardless.
+    expect(
+      matchErrorPattern({
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        message: '400 "invalid params, context window exceeds limit (ref: 0x123)"',
+        provider: 'ollamacloud',
+      })?.code,
+    ).toBe(AgentRuntimeErrorType.ExceededContextWindow);
+  });
+
   it('disambiguates 429-class rate limit from balance-class quota', () => {
     expect(matchErrorPattern({ message: 'rate_limit_exceeded' })?.code).toBe(
       AgentRuntimeErrorType.RateLimitExceeded,
