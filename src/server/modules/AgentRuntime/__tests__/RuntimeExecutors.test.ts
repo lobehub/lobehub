@@ -100,7 +100,10 @@ describe('RuntimeExecutors', () => {
     });
     mockFinalizeCompression.mockResolvedValue({ success: true });
     vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
-      chat: vi.fn().mockResolvedValue(new Response('done')),
+      chat: vi.fn().mockImplementation(async (_payload: any, options: any) => {
+        await options?.callback?.onText?.('done');
+        return new Response('done');
+      }),
     } as any);
 
     mockMessageModel = {
