@@ -106,7 +106,11 @@ export const buildSelfIterationReceipts = (
   } = input;
 
   const base = {
-    agentId,
+    // A self-iteration run executes under a builtin slug, so the operation's
+    // agentId is the builtin agent; attribute the receipt to the reviewed user
+    // agent carried on the marker. Memory runs (run as the user's own agent)
+    // leave marker.agentId unset and fall back to the run agentId.
+    agentId: marker.agentId ?? agentId,
     ...(marker.anchorMessageId ? { anchorMessageId: marker.anchorMessageId } : {}),
     createdAt,
     operationId,

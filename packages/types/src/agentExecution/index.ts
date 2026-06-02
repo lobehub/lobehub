@@ -16,6 +16,13 @@ export type AgentSignalOperationKind =
  * server-side in `operationMarker.ts`.
  */
 export interface AgentSignalOperationMarker {
+  /**
+   * The reviewed user agent a resulting receipt should be attributed to. Needed
+   * when the run executes under a builtin self-iteration slug (whose resolved
+   * operation agentId is the builtin agent, not the user's agent); the
+   * completion projector prefers this over the run's agentId.
+   */
+  agentId?: string;
   /** Assistant message a resulting receipt should anchor to. */
   anchorMessageId?: string;
   /** Discriminator the completion handler dispatches on. */
