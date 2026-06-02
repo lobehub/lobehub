@@ -9,6 +9,7 @@ import type {
 import type { ChatTopicBotContext, UserInterventionConfig } from '@lobechat/types';
 
 import { type ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
+import type { AgentSignalOperationMarker } from '@/server/services/agentSignal/operationMarker';
 import type { DeviceAccessReason } from '@/server/services/aiAgent/deviceAccessPolicy';
 
 import { type AgentHook } from './hooks/types';
@@ -151,6 +152,12 @@ export interface OperationCreationParams {
   agentConfig?: any;
   appContext: {
     agentId?: string;
+    /**
+     * Run-scoped Agent Signal marker. Stamped at dispatch for background
+     * self-iteration / memory runs; lands in `state.metadata.agentSignal` and is
+     * read on the completion path to project receipts.
+     */
+    agentSignal?: AgentSignalOperationMarker;
     defaultTaskAssigneeAgentId?: string;
     documentId?: string | null;
     groupId?: string | null;

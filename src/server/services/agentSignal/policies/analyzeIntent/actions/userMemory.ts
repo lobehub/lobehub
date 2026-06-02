@@ -27,6 +27,7 @@ import {
   type ServerAgentToolsContext,
 } from '@/server/modules/Mecha';
 import { AgentService } from '@/server/services/agent';
+import type { AgentSignalOperationMarker } from '@/server/services/agentSignal/operationMarker';
 
 import type { RuntimeProcessorContext } from '../../../runtime/context';
 import { defineActionHandler } from '../../../runtime/middleware';
@@ -156,6 +157,15 @@ export const runMemoryActionAgent = async (
     topicId?: string;
   },
   options: UserMemoryActionHandlerOptions,
+  /**
+   * When provided, the memory writer runs as an async (queued) execAgent run
+   * instead of a blocking `executeSync`: the operation is enqueued with the
+   * agent-signal marker stamped onto `appContext`, and the durable receipt is
+   * projected later on the completion path. Returns immediately with an
+   * `applied` (enqueued) status. Absent → the legacy synchronous path (still
+   * used by the self-iteration tool primitives until they migrate in S4).
+   */
+  dispatch?: { marker: AgentSignalOperationMarker },
 ): Promise<MemoryAgentActionResult> => {
   if (!input.agentId) {
     return {
@@ -221,17 +231,8 @@ export const runMemoryActionAgent = async (
   const manifestMap = toolsEngine.getEnabledPluginManifests([MemoryIdentifier]);
   const operationId = `agent-signal-memory-${nanoid()}`;
   const initialContext = createInitialContext(operationId);
-  const streamEventManager = new InMemoryStreamEventManager();
   const { AgentRuntimeService } =
     await import('@/server/services/agentRuntime/AgentRuntimeService');
-  const runtimeService = new AgentRuntimeService(options.db, options.userId, {
-    coordinatorOptions: {
-      stateManager: new InMemoryAgentStateManager(),
-      streamEventManager,
-    },
-    queueService: null,
-    streamEventManager,
-  });
 
   // Create a child thread under the triggering assistant message so that
   // memory-agent messages are isolated from the main topic conversation
@@ -254,17 +255,8 @@ export const runMemoryActionAgent = async (
     }
   }
 
-  await runtimeService.createOperation({
+  const createParams = {
     agentConfig: memoryRuntimeAgentConfig,
-    appContext: {
-      agentId: input.agentId,
-      scope: 'chat',
-      sourceMessageId: input.sourceMessageId,
-      threadId: threadId ?? null,
-      topicId: input.topicId ?? null,
-      trigger: RequestTrigger.AgentSignal,
-    },
-    autoStart: false,
     initialContext,
     initialMessages: [
       {
@@ -285,6 +277,46 @@ export const runMemoryActionAgent = async (
       tools: toolsResult.tools,
     },
     userId: options.userId,
+  };
+  const baseAppContext = {
+    agentId: input.agentId,
+    scope: 'chat',
+    sourceMessageId: input.sourceMessageId,
+    threadId: threadId ?? null,
+    topicId: input.topicId ?? null,
+    trigger: RequestTrigger.AgentSignal,
+  };
+
+  // Async (queued execAgent) path: enqueue the run with the marker stamped onto
+  // appContext (it lands in state.metadata.agentSignal), then return immediately.
+  // The durable receipt is projected on the completion path from the run's
+  // finalState — no blocking executeSync.
+  if (dispatch) {
+    const runtimeService = new AgentRuntimeService(options.db, options.userId);
+    await runtimeService.createOperation({
+      ...createParams,
+      appContext: { ...baseAppContext, agentSignal: dispatch.marker },
+      autoStart: true,
+      userInterventionConfig: { approvalMode: 'headless' },
+    });
+
+    return { detail: 'Memory write enqueued.', status: 'applied' };
+  }
+
+  // Legacy synchronous path (self-iteration tool primitives, until S4).
+  const streamEventManager = new InMemoryStreamEventManager();
+  const runtimeService = new AgentRuntimeService(options.db, options.userId, {
+    coordinatorOptions: {
+      stateManager: new InMemoryAgentStateManager(),
+      streamEventManager,
+    },
+    queueService: null,
+    streamEventManager,
+  });
+  await runtimeService.createOperation({
+    ...createParams,
+    appContext: baseAppContext,
+    autoStart: false,
     userInterventionConfig: { approvalMode: 'headless' },
   });
 
@@ -370,7 +402,16 @@ export const handleUserMemoryAction = async (
           : undefined,
       topicId: typeof action.payload.topicId === 'string' ? action.payload.topicId : undefined,
     };
-    const runner = options.memoryActionRunner ?? ((input) => runMemoryActionAgent(input, options));
+    // Stamp the run so the completion path can project the memory receipt (the
+    // memory write is now enqueued async, not resolved synchronously here).
+    const marker: AgentSignalOperationMarker = {
+      kind: 'memory',
+      ...(runnerInput.sourceMessageId ? { anchorMessageId: runnerInput.sourceMessageId } : {}),
+      sourceId: idempotencyKey ?? action.actionId,
+      ...(runnerInput.topicId ? { topicId: runnerInput.topicId } : {}),
+    };
+    const runner =
+      options.memoryActionRunner ?? ((input) => runMemoryActionAgent(input, options, { marker }));
     let memoryActionResult: MemoryAgentActionResult | undefined;
     const memoryService = createMemoryService({
       writeMemory: async () => {

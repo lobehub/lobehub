@@ -122,6 +122,56 @@ describe('S2 completion loop (policy → handler → projection → persist)', (
     expect(appended).toHaveLength(countAfterFirst);
   });
 
+  it('projects a single memory receipt (no summary) with target + anchor for a memory-kind run', async () => {
+    // A memory-writer run dispatched async by handleUserMemoryAction: it carries
+    // a `memory` marker (extractMemoryMutations synthesizes the writeMemory
+    // mutation from finalState). The receipt must still appear with the right
+    // target + anchor — the async replacement for the old synchronous projection.
+    const { appended, store } = makeInMemoryReceiptStore();
+    const [handler] = installAndCapture(
+      createCompletionPolicy({
+        onSelfIterationCompleted: createSelfIterationCompletionHandler({ receiptStore: store }),
+      }),
+    );
+
+    const memoryPayload: Record<string, unknown> = {
+      // A memory run executes as the user's own agent, not a builtin slug.
+      agentId: 'agent_user_1',
+      operationId: 'op_mem',
+      selfIteration: {
+        artifacts: [],
+        marker: {
+          anchorMessageId: 'assistant_msg_1',
+          kind: 'memory',
+          sourceId: 'source_1:action-memory-1',
+          triggerMessageId: 'user_msg_1',
+        },
+        mutations: [
+          {
+            apiName: 'writeMemory',
+            data: { resourceId: 'mem_1', status: 'applied', summary: 'Saved tone preference' },
+            kind: 'mutation',
+          },
+        ],
+        userId: 'user_1',
+      },
+      topicId: 'topic_1',
+    };
+
+    await handler.handle({ payload: memoryPayload });
+
+    // A single memory write surfaces as just its action receipt — no aggregate
+    // review summary (that is only for nightly-review / reflection runs).
+    expect(appended).toHaveLength(1);
+    const memory = appended[0];
+    expect(memory.kind).toBe('memory');
+    expect(memory.status).toBe('applied');
+    expect(memory.anchorMessageId).toBe('assistant_msg_1');
+    expect(memory.triggerMessageId).toBe('user_msg_1');
+    expect(memory.topicId).toBe('topic_1');
+    expect(memory.target).toMatchObject({ id: 'mem_1', type: 'memory' });
+  });
+
   it('no-ops when the completion carries no self-iteration payload (no marker stamped)', async () => {
     const { appended, store } = makeInMemoryReceiptStore();
     const [handler] = installAndCapture(

@@ -1,7 +1,6 @@
 // @vitest-environment node
 import type { BaseAction, ExecutorResult } from '@lobechat/agent-signal';
 import { createSource } from '@lobechat/agent-signal';
-import { LayersEnum } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AGENT_SIGNAL_POLICY_ACTION_TYPES } from '../../policies/types';
@@ -53,6 +52,9 @@ const result = (input: {
 });
 
 describe('projectAgentSignalReceipts', () => {
+  // Anchoring / trigger projection is kind-agnostic; it is exercised here via a
+  // skill action because memory receipts are no longer projected synchronously
+  // (they come from the async memory run's completion path).
   it('prefers anchorMessageId over assistantMessageId for receipt anchoring', () => {
     const anchoredSource = createSource({
       payload: {
@@ -72,12 +74,12 @@ describe('projectAgentSignalReceipts', () => {
       projectAgentSignalReceipts({
         actions: [
           action({
-            actionId: 'action-memory-1',
-            actionType: AGENT_SIGNAL_POLICY_ACTION_TYPES.userMemoryHandle,
+            actionId: 'action-skill-1',
+            actionType: AGENT_SIGNAL_POLICY_ACTION_TYPES.skillManagementHandle,
             payload: {},
           }),
         ],
-        results: [result({ actionId: 'action-memory-1', status: 'applied' })],
+        results: [result({ actionId: 'action-skill-1', status: 'applied' })],
         source: anchoredSource,
         userId: 'user-1',
       }),
@@ -89,12 +91,12 @@ describe('projectAgentSignalReceipts', () => {
       projectAgentSignalReceipts({
         actions: [
           action({
-            actionId: 'action-memory-1',
-            actionType: AGENT_SIGNAL_POLICY_ACTION_TYPES.userMemoryHandle,
+            actionId: 'action-skill-1',
+            actionType: AGENT_SIGNAL_POLICY_ACTION_TYPES.skillManagementHandle,
             payload: {},
           }),
         ],
-        results: [result({ actionId: 'action-memory-1', status: 'applied' })],
+        results: [result({ actionId: 'action-skill-1', status: 'applied' })],
         source,
         userId: 'user-1',
       }),
@@ -132,12 +134,12 @@ describe('projectAgentSignalReceipts', () => {
       projectAgentSignalReceipts({
         actions: [
           action({
-            actionId: 'action-memory-1',
-            actionType: AGENT_SIGNAL_POLICY_ACTION_TYPES.userMemoryHandle,
+            actionId: 'action-skill-1',
+            actionType: AGENT_SIGNAL_POLICY_ACTION_TYPES.skillManagementHandle,
             payload: {},
           }),
         ],
-        results: [result({ actionId: 'action-memory-1', status: 'applied' })],
+        results: [result({ actionId: 'action-skill-1', status: 'applied' })],
         source: projectSource,
         userId: 'user-1',
       });
@@ -146,7 +148,7 @@ describe('projectAgentSignalReceipts', () => {
     expect(project(legacyTriggerSource)).toMatchObject([{ triggerMessageId: 'message-legacy-1' }]);
   });
 
-  it('projects applied memory action results without unstructured feedback as target', () => {
+  it('does not project a memory action synchronously (the completion path owns it)', () => {
     expect(
       projectAgentSignalReceipts({
         actions: [
@@ -160,70 +162,7 @@ describe('projectAgentSignalReceipts', () => {
         source,
         userId: 'user-1',
       }),
-    ).toEqual([
-      {
-        agentId: 'agent-1',
-        anchorMessageId: 'assistant-1',
-        createdAt: 1_700_000,
-        detail: 'Saved this for future replies',
-        id: 'source-1:action-memory-1:memory',
-        kind: 'memory',
-        operationId: 'op-1',
-        sourceId: 'source-1',
-        sourceType: 'client.gateway.runtime_end',
-        status: 'applied',
-        title: 'Memory saved',
-        topicId: 'topic-1',
-        userId: 'user-1',
-      },
-    ]);
-  });
-
-  it('prefers the memory target title from action output over the feedback message', () => {
-    expect(
-      projectAgentSignalReceipts({
-        actions: [
-          action({
-            actionId: 'action-memory-1',
-            actionType: AGENT_SIGNAL_POLICY_ACTION_TYPES.userMemoryHandle,
-            payload: {
-              message:
-                '<speaker id="833816919" username="nivra2000" nickname="Aa T" />\nEvery section is too short. Can it be longer?',
-            },
-          }),
-        ],
-        results: [
-          result({
-            actionId: 'action-memory-1',
-            output: {
-              target: {
-                id: 'preference_1',
-                memoryId: 'mem_1',
-                memoryLayer: LayersEnum.Preference,
-                summary: 'The user prefers longer, more developed answer sections.',
-                title: 'Preference for detailed answer sections',
-                type: 'memory',
-              },
-            },
-            status: 'applied',
-          }),
-        ],
-        source,
-        userId: 'user-1',
-      }),
-    ).toMatchObject([
-      {
-        kind: 'memory',
-        target: {
-          id: 'preference_1',
-          memoryId: 'mem_1',
-          memoryLayer: LayersEnum.Preference,
-          summary: 'The user prefers longer, more developed answer sections.',
-          title: 'Preference for detailed answer sections',
-          type: 'memory',
-        },
-      },
-    ]);
+    ).toEqual([]);
   });
 
   it('projects applied skill-management results as updated skill receipts', () => {

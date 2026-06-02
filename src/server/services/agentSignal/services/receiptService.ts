@@ -294,15 +294,11 @@ const getReceiptTarget = (
 const toReceiptKind = (
   action: BaseAction,
 ): Pick<AgentSignalReceipt, 'detail' | 'kind' | 'status' | 'title'> | undefined => {
-  if (action.actionType === AGENT_SIGNAL_POLICY_ACTION_TYPES.userMemoryHandle) {
-    return {
-      detail: 'Saved this for future replies',
-      kind: 'memory',
-      status: 'applied',
-      title: 'Memory saved',
-    };
-  }
-
+  // Memory receipts are no longer projected synchronously here: the memory
+  // writer runs as an async execAgent run, so its receipt is projected on the
+  // completion path from the run's finalState (see selfIteration/completion).
+  // Projecting one here too would duplicate it — and with a premature, empty
+  // target, since at this point the write has only been enqueued.
   if (action.actionType === AGENT_SIGNAL_POLICY_ACTION_TYPES.skillManagementHandle) {
     return {
       detail: 'Improved how this assistant handles similar requests',
