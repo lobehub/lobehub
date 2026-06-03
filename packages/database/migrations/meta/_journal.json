@@ -739,22 +739,8 @@
     {
       "idx": 105,
       "version": "7",
-      "when": 1780495820747,
-      "tag": "0105_add_usage_to_messages",
-      "breakpoints": true
-    },
-    {
-      "idx": 106,
-      "version": "7",
-      "when": 1780496175376,
-      "tag": "0106_add_agent_share",
-      "breakpoints": true
-    },
-    {
-      "idx": 107,
-      "version": "7",
-      "when": 1780497085126,
-      "tag": "0107_add_workspace",
+      "when": 1780497229863,
+      "tag": "0105_add_usage_agent_share_workspace",
       "breakpoints": true
     }
   ],
