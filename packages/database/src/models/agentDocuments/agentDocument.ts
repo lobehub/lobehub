@@ -1,7 +1,19 @@
-import { and, asc, desc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  getTableColumns,
+  inArray,
+  isNotNull,
+  isNull,
+  like,
+  or,
+  sql,
+} from 'drizzle-orm';
 
 import type { DocumentItem, NewAgentDocument, NewDocument } from '../../schemas';
-import { agentDocuments, documents } from '../../schemas';
+import { AGENT_SKILL_TEMPLATE_ID, agentDocuments, documents } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
 import { deriveAgentDocumentFields } from './deriveFields';
 import { buildDocumentFilename } from './filename';
@@ -15,6 +27,7 @@ import {
 } from './policy';
 import type {
   AgentDocument,
+  AgentDocumentContextRow,
   AgentDocumentPolicy,
   AgentDocumentSourceType,
   AgentDocumentWithRules,
@@ -874,6 +887,70 @@ export class AgentDocumentModel {
 
     return results.map(({ settings, doc }) => {
       const item = this.toAgentDocument(settings, doc);
+      return {
+        ...item,
+        ...deriveAgentDocumentFields(item),
+        loadRules: parseLoadRules(item),
+      };
+    });
+  }
+
+  async findSkillDocsByAgent(agentId: string): Promise<AgentDocumentWithRules[]> {
+    const results = await this.db
+      .select({ doc: documents, settings: agentDocuments })
+      .from(agentDocuments)
+      .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
+      .where(
+        and(
+          eq(agentDocuments.userId, this.userId),
+          eq(agentDocuments.agentId, agentId),
+          isNull(agentDocuments.deletedAt),
+          or(
+            eq(agentDocuments.templateId, AGENT_SKILL_TEMPLATE_ID),
+            like(documents.fileType, 'skills/%'),
+          ),
+        ),
+      )
+      .orderBy(desc(agentDocuments.updatedAt));
+
+    return results.map(({ settings, doc }) => {
+      const item = this.toAgentDocument(settings, doc);
+      return {
+        ...item,
+        ...deriveAgentDocumentFields(item),
+        loadRules: parseLoadRules(item),
+      };
+    });
+  }
+
+  async findContextByAgent(agentId: string): Promise<AgentDocumentContextRow[]> {
+    const { content: _content, ...documentColumns } = getTableColumns(documents);
+    const results = await this.db
+      .select({
+        doc: {
+          ...documentColumns,
+          content: sql<string | null>`
+            CASE
+              WHEN ${agentDocuments.policyLoad} = ${PolicyLoad.ALWAYS} THEN ${documents.content}
+              ELSE ''
+            END
+          `.as('content'),
+        },
+        settings: agentDocuments,
+      })
+      .from(agentDocuments)
+      .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
+      .where(
+        and(
+          eq(agentDocuments.userId, this.userId),
+          eq(agentDocuments.agentId, agentId),
+          isNull(agentDocuments.deletedAt),
+        ),
+      )
+      .orderBy(desc(agentDocuments.updatedAt));
+
+    return results.map(({ settings, doc }) => {
+      const item = { ...this.toAgentDocument(settings, doc), contentCharCount: doc.totalCharCount };
       return {
         ...item,
         ...deriveAgentDocumentFields(item),

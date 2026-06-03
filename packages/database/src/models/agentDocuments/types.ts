@@ -81,6 +81,10 @@ export interface AgentDocumentWithRules extends AgentDocument, AgentDocumentDeri
   loadRules: DocumentLoadRules;
 }
 
+export interface AgentDocumentContextRow extends AgentDocumentWithRules {
+  contentCharCount?: number;
+}
+
 export interface ToolUpdateLoadRule {
   keywordMatchMode?: 'all' | 'any';
   keywords?: string[];

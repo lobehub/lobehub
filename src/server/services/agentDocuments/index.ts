@@ -3,15 +3,15 @@ import type {
   DOCUMENT_TEMPLATES,
   DocumentLoadRules,
   DocumentTemplateSet,
-  PolicyLoad,
 } from '@lobechat/agent-templates';
-import { DocumentLoadPosition, getDocumentTemplate } from '@lobechat/agent-templates';
+import { DocumentLoadPosition, getDocumentTemplate, PolicyLoad } from '@lobechat/agent-templates';
 import { buildAgentSkillIdentifier } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { DOCUMENT_FOLDER_TYPE } from '@lobechat/database/schemas';
 
 import type {
   AgentDocument,
+  AgentDocumentContextRow,
   AgentDocumentWithRules,
   ToolUpdateLoadRule,
 } from '@/database/models/agentDocuments';
@@ -274,6 +274,21 @@ export class AgentDocumentsService {
     return this.projectDocuments(excludeArchivedToolResults(docs));
   }
 
+  async getAgentContextDocuments(agentId: string): Promise<AgentDocumentContextRow[]> {
+    const docs = excludeArchivedToolResults(
+      await this.agentDocumentModel.findContextByAgent(agentId),
+    );
+
+    return Promise.all(
+      docs.map(async (doc) => {
+        if (doc.policyLoad !== PolicyLoad.ALWAYS) return doc;
+
+        const projected = await this.projectDocumentContent(doc);
+        return { ...projected, ...deriveAgentDocumentFields(projected) };
+      }),
+    );
+  }
+
   /**
    * Return this agent's skill-bundle documents in a shape ready for the
    * homogeneous skill runtime: identifier is prefixed
@@ -295,7 +310,7 @@ export class AgentDocumentsService {
       title: string | null;
     }>
   > {
-    const docs = await this.getAgentDocuments(agentId);
+    const docs = await this.agentDocumentModel.findSkillDocsByAgent(agentId);
 
     const childrenByParent = new Map<string, AgentDocumentWithRules[]>();
     for (const doc of docs) {

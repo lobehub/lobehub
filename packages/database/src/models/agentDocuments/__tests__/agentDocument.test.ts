@@ -4,7 +4,12 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import { agentDocuments, agents, documents, users } from '../../../schemas';
-import { DOCUMENT_FOLDER_TYPE } from '../../../schemas/file';
+import {
+  AGENT_SKILL_TEMPLATE_ID,
+  DOCUMENT_FOLDER_TYPE,
+  SKILL_BUNDLE_FILE_TYPE,
+  SKILL_INDEX_FILE_TYPE,
+} from '../../../schemas/file';
 import type { LobeChatDatabase } from '../../../type';
 import {
   AgentDocumentModel,
@@ -703,6 +708,52 @@ describe('AgentDocumentModel', () => {
       const byTemplate = await agentDocumentModel.findByTemplate(agentId, 'claw');
       expect(byTemplate).toHaveLength(2);
       expect(byTemplate.every((item) => item.templateId === 'claw')).toBe(true);
+    });
+
+    it('should return only skill-managed docs for skill registry assembly', async () => {
+      const bundle = await agentDocumentModel.create(agentId, 'bug-triage', 'bundle body', {
+        fileType: SKILL_BUNDLE_FILE_TYPE,
+        templateId: AGENT_SKILL_TEMPLATE_ID,
+      });
+      await agentDocumentModel.create(agentId, 'SKILL.md', 'skill body', {
+        fileType: SKILL_INDEX_FILE_TYPE,
+        parentId: bundle.documentId,
+        templateId: AGENT_SKILL_TEMPLATE_ID,
+      });
+      await agentDocumentModel.create(agentId, 'ordinary.md', 'ordinary body');
+      await agentDocumentModel.create(agentId, 'web-page', 'web body', {
+        fileType: 'article',
+        sourceType: 'web',
+      });
+
+      const result = await agentDocumentModel.findSkillDocsByAgent(agentId);
+
+      expect(result.map((item) => item.filename).sort()).toEqual(['SKILL.md', 'bug-triage']);
+      expect(result.every((item) => item.category === 'skill')).toBe(true);
+    });
+
+    it('should omit progressive document content for chat context hydration', async () => {
+      await agentDocumentModel.create(agentId, 'always.md', 'always body', {
+        policyLoad: PolicyLoad.ALWAYS,
+      });
+      await agentDocumentModel.create(agentId, 'progressive.md', 'progressive body', {
+        policyLoad: PolicyLoad.PROGRESSIVE,
+      });
+      await agentDocumentModel.create(agentId, 'web-page', 'web body', {
+        fileType: 'article',
+        policyLoad: PolicyLoad.PROGRESSIVE,
+        sourceType: 'web',
+      });
+
+      const result = await agentDocumentModel.findContextByAgent(agentId);
+      const byFilename = Object.fromEntries(result.map((item) => [item.filename, item]));
+
+      expect(byFilename['always.md']?.content).toBe('always body');
+      expect(byFilename['always.md']?.contentCharCount).toBe('always body'.length);
+      expect(byFilename['progressive.md']?.content).toBe('');
+      expect(byFilename['progressive.md']?.contentCharCount).toBe('progressive body'.length);
+      expect(byFilename['web-page']?.content).toBe('');
+      expect(byFilename['web-page']?.contentCharCount).toBe('web body'.length);
     });
   });
 

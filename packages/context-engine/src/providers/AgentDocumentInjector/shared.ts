@@ -28,6 +28,7 @@ export type AgentDocumentSourceType = 'agent' | 'agent-signal' | 'api' | 'file' 
 
 export interface AgentContextDocument {
   content?: string;
+  contentCharCount?: number;
   description?: string;
   filename: string;
   id?: string;
@@ -117,8 +118,8 @@ export function formatDocument(
  * Format the size of a document content as a short human-readable token string.
  * Empty content is rendered as "empty" so the LLM does not retry reading it.
  */
-function formatSize(content: string | undefined): string {
-  const len = content?.length ?? 0;
+function formatSize(doc: Pick<AgentContextDocument, 'content' | 'contentCharCount'>): string {
+  const len = doc.contentCharCount ?? doc.content?.length ?? 0;
   if (len === 0) return 'empty';
   if (len < 1000) return String(len);
   if (len < 10_000) return `${(len / 1000).toFixed(1)}k`;
@@ -171,7 +172,7 @@ function buildIndexTable(
   const now = context.currentTime ?? new Date();
   const rows = docs.map((d) => ({
     id: d.id ?? '',
-    size: formatSize(d.content),
+    size: formatSize(d),
     title: truncate(pickRowTitle(d), TITLE_MAX_WIDTH),
     updated: formatRelative(d.updatedAt, now),
   }));

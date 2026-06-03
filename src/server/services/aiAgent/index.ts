@@ -1195,8 +1195,7 @@ export class AiAgentService {
         ) ?? false;
 
       try {
-        const docs = await this.agentDocumentsService.getAgentDocuments(resolvedAgentId);
-        hasAgentDocuments = docs.length > 0;
+        hasAgentDocuments = await this.agentDocumentsService.hasDocuments(resolvedAgentId);
       } catch {
         // Agent documents check is non-critical
       }
