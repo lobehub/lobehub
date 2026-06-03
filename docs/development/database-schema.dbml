@@ -2288,6 +2288,74 @@ table user_memory_persona_documents {
   }
 }
 
+table workspace_audit_logs {
+  id text [pk, not null]
+  workspace_id text [not null]
+  user_id text
+  action text [not null]
+  resource_type text
+  resource_id text
+  metadata jsonb [default: `{}`]
+  ip_address text
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    workspace_id [name: 'workspace_audit_logs_workspace_id_idx']
+    action [name: 'workspace_audit_logs_action_idx']
+    created_at [name: 'workspace_audit_logs_created_at_idx']
+  }
+}
+
+table workspace_invitations {
+  id text [pk, not null]
+  workspace_id text [not null]
+  inviter_id text [not null]
+  email text
+  role text [not null, default: 'member']
+  token text [not null, unique]
+  status text [not null, default: 'pending']
+  expires_at "timestamp with time zone" [not null]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    workspace_id [name: 'workspace_invitations_workspace_id_idx']
+    email [name: 'workspace_invitations_email_idx']
+    token [name: 'workspace_invitations_token_idx']
+  }
+}
+
+table workspace_members {
+  workspace_id text [not null]
+  user_id text [not null]
+  role text [not null, default: 'member']
+  joined_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+  deleted_at "timestamp with time zone"
+
+  indexes {
+    (workspace_id, user_id) [pk]
+    user_id [name: 'workspace_members_user_id_idx']
+  }
+}
+
+table workspaces {
+  id text [pk, not null]
+  slug varchar(100) [not null]
+  name varchar(255) [not null]
+  description varchar(1000)
+  avatar text
+  primary_owner_id text [not null]
+  settings jsonb [default: `{}`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    slug [name: 'workspaces_slug_idx', unique]
+    primary_owner_id [name: 'workspaces_primary_owner_id_idx']
+  }
+}
+
 ref: agent_skills.user_id - users.id
 
 ref: agent_skills.zip_file_hash - global_files.hash_id
