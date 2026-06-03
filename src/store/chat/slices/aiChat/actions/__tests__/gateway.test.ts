@@ -2,6 +2,7 @@ import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { RequestTrigger } from '@lobechat/types';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type * as ConstVersion from '@/const/version';
 import { aiAgentService } from '@/services/aiAgent';
 
 import type { GatewayConnection } from '../gateway';
@@ -42,7 +43,7 @@ const mockGateway = vi.hoisted(() => ({ getDeviceInfo: vi.fn() }));
 const mockRuntime = vi.hoisted(() => ({ isLocal: false }));
 
 vi.mock('@/const/version', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/const/version')>();
+  const actual = await importOriginal<typeof ConstVersion>();
   return {
     ...actual,
     get isDesktop() {
