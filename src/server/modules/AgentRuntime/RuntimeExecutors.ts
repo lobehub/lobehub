@@ -574,7 +574,7 @@ export const createRuntimeExecutors = (
         if (agentId && ctx.serverDB && ctx.userId) {
           try {
             const agentDocService = new AgentDocumentsService(ctx.serverDB, ctx.userId);
-            const docs = await agentDocService.getAgentDocuments(agentId);
+            const docs = await agentDocService.getAgentContextDocuments(agentId);
             if (docs.length > 0) {
               agentDocuments = toAgentContextDocuments(docs);
               log('Resolved %d agent documents for agent %s', agentDocuments.length, agentId);

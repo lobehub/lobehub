@@ -11,6 +11,7 @@ import { DOCUMENT_FOLDER_TYPE } from '@lobechat/database/schemas';
 
 import type {
   AgentDocument,
+  AgentDocumentContextPayload,
   AgentDocumentContextRow,
   AgentDocumentWithRules,
   ToolUpdateLoadRule,
@@ -63,6 +64,10 @@ interface CreateAgentDocumentOptions {
 }
 
 type AgentDocumentWithLiteXML = AgentDocument & { litexml?: string };
+type ProjectableAgentDocument = Pick<
+  AgentDocument,
+  'content' | 'editorData' | 'fileType' | 'templateId'
+>;
 
 /**
  * Hide the auto-created `.tool-results/` archive (root folder + its children)
@@ -92,6 +97,26 @@ const excludeArchivedToolResults = <
   );
 };
 
+const toAgentDocumentContextPayload = (
+  doc: AgentDocumentContextRow,
+): AgentDocumentContextPayload => ({
+  content: doc.content,
+  contentCharCount: doc.contentCharCount,
+  description: doc.description,
+  filename: doc.filename,
+  id: doc.id,
+  isFolder: doc.isFolder,
+  loadRules: doc.loadRules,
+  policy: doc.policy,
+  policyLoad: doc.policyLoad,
+  policyLoadFormat: doc.policyLoadFormat,
+  policyLoadPosition: doc.policyLoadPosition,
+  sourceType: doc.sourceType,
+  templateId: doc.templateId,
+  title: doc.title,
+  updatedAt: doc.updatedAt,
+});
+
 /**
  * Service for managing agent documents with reusable template sets.
  * Document-level policy controls runtime behavior (context rendering/retrieval).
@@ -107,13 +132,11 @@ export class AgentDocumentsService {
     this.topicDocumentModel = new TopicDocumentModel(db, userId);
   }
 
-  private async projectDocumentContent<T extends AgentDocument | AgentDocumentWithRules>(
-    doc: T,
-  ): Promise<T>;
-  private async projectDocumentContent<T extends AgentDocument | AgentDocumentWithRules>(
+  private async projectDocumentContent<T extends ProjectableAgentDocument>(doc: T): Promise<T>;
+  private async projectDocumentContent<T extends ProjectableAgentDocument>(
     doc: T | undefined,
   ): Promise<T | undefined>;
-  private async projectDocumentContent<T extends AgentDocument | AgentDocumentWithRules>(
+  private async projectDocumentContent<T extends ProjectableAgentDocument>(
     doc: T | undefined,
   ): Promise<T | undefined> {
     if (!doc?.editorData) return doc;
@@ -274,12 +297,12 @@ export class AgentDocumentsService {
     return this.projectDocuments(excludeArchivedToolResults(docs));
   }
 
-  async getAgentContextDocuments(agentId: string): Promise<AgentDocumentContextRow[]> {
+  async getAgentContextDocuments(agentId: string): Promise<AgentDocumentContextPayload[]> {
     const docs = excludeArchivedToolResults(
       await this.agentDocumentModel.findContextByAgent(agentId),
     );
 
-    return Promise.all(
+    const projectedDocs = await Promise.all(
       docs.map(async (doc) => {
         if (doc.policyLoad !== PolicyLoad.ALWAYS) return doc;
 
@@ -287,6 +310,8 @@ export class AgentDocumentsService {
         return { ...projected, ...deriveAgentDocumentFields(projected) };
       }),
     );
+
+    return projectedDocs.map(toAgentDocumentContextPayload);
   }
 
   /**

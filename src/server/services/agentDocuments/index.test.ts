@@ -679,15 +679,47 @@ describe('AgentDocumentsService', () => {
         {
           content: 'raw content',
           contentCharCount: 11,
+          description: 'Always loaded',
           editorData: { root: { children: [] } },
+          fileType: 'text/markdown',
+          filename: 'always.md',
           id: 'always-doc',
+          isFolder: false,
+          loadRules: {},
+          metadata: { unused: true },
+          parentId: null,
+          policy: null,
           policyLoad: 'always',
+          policyLoadFormat: 'raw',
+          policyLoadPosition: 'before-system',
+          sourceType: 'file',
+          templateId: null,
+          title: 'Always',
+          updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+          userId: 'user-1',
         },
         {
           content: '',
           contentCharCount: 12_000,
+          description: null,
+          documentId: 'doc-2',
+          editorData: { root: { children: [{ text: 'unused' }] } },
+          fileType: 'text/markdown',
+          filename: 'progressive.md',
           id: 'progressive-doc',
+          isFolder: false,
+          loadRules: {},
+          metadata: { unused: true },
+          parentId: null,
+          policy: null,
           policyLoad: 'progressive',
+          policyLoadFormat: 'raw',
+          policyLoadPosition: 'before-system',
+          sourceType: 'file',
+          templateId: null,
+          title: 'Progressive',
+          updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+          userId: 'user-1',
         },
       ]);
 
@@ -699,6 +731,9 @@ describe('AgentDocumentsService', () => {
         { content: 'raw content', id: 'always-doc' },
         { content: '', contentCharCount: 12_000, id: 'progressive-doc' },
       ]);
+      expect(result[0]).not.toHaveProperty('editorData');
+      expect(result[0]).not.toHaveProperty('metadata');
+      expect(result[0]).not.toHaveProperty('userId');
     });
   });
 
