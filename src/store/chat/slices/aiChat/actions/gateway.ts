@@ -8,11 +8,12 @@ import type { ConversationContext, ExecAgentResult, MessageMetadata } from '@lob
 
 import { isDesktop } from '@/const/version';
 import { aiAgentService, type ResumeApprovalParam } from '@/services/aiAgent';
+import { gatewayConnectionService } from '@/services/electron/gatewayConnection';
 import { localFileService } from '@/services/electron/localFileService';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
 import { getAgentStoreState } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { consumePendingTopicRepos, getPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
 import { topicSelectors } from '@/store/chat/selectors';
 import type { ChatStore } from '@/store/chat/store';
@@ -48,6 +49,37 @@ const resolveProjectSkills = async (
       name: skill.name,
       path: skill.path,
     }));
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * When the agent runs against the local machine ("本机" / `executionTarget:
+ * 'local'`), resolve this desktop's own gateway deviceId so it can be passed as
+ * the run's `deviceId`. The server then presets `activeDeviceId` and injects
+ * `lobe-local-system` into the very first LLM payload — skipping the extra
+ * `activateDevice` round-trip the model is otherwise forced to make whenever
+ * more than one device is online (with a single device the server's heuristic
+ * already covered it).
+ *
+ * Desktop-only and best-effort: any failure falls back to the server-side
+ * device-resolution heuristics. We don't pre-check online status here — an
+ * offline id simply fails the server's `onlineDevices` guard and stays unrouted.
+ */
+const resolveLocalDeviceId = async (agentId?: string): Promise<string | undefined> => {
+  if (!isDesktop || !agentId) return undefined;
+
+  // Mirror HeteroDeviceSwitcher's effective-target fallback: on desktop an
+  // unset target means the local machine.
+  const executionTarget =
+    agentByIdSelectors.getAgencyConfigById(agentId)(getAgentStoreState())?.executionTarget ??
+    'local';
+  if (executionTarget !== 'local') return undefined;
+
+  try {
+    const info = await gatewayConnectionService.getDeviceInfo();
+    return info?.deviceId;
   } catch {
     return undefined;
   }
@@ -353,7 +385,10 @@ export class GatewayActionImpl {
       ? this.#get().getOperationAbortSignal(parentOperationId)
       : undefined;
 
-    const projectSkills = await resolveProjectSkills(this.#get);
+    const [projectSkills, localDeviceId] = await Promise.all([
+      resolveProjectSkills(this.#get),
+      resolveLocalDeviceId(context.agentId),
+    ]);
 
     const result = await aiAgentService.execAgentTask(
       {
@@ -369,6 +404,7 @@ export class GatewayActionImpl {
           threadId: context.threadId,
           topicId: context.topicId,
         },
+        deviceId: localDeviceId,
         fileIds,
         parentMessageId,
         projectSkills,
