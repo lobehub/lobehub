@@ -18,6 +18,7 @@ interface UseDocumentTreeOpsArgs {
 }
 
 const ROOT_PATH = './';
+const DEFAULT_DOCUMENT_EXTENSION = '.md';
 
 const joinPath = (parentPath: string, segment: string) =>
   parentPath === ROOT_PATH ? `${ROOT_PATH}${segment}` : `${parentPath}/${segment}`;
@@ -112,17 +113,20 @@ export const useDocumentTreeOps = ({
   // Picks a unique filename within the given parent. Used for client-side
   // dedup of "Untitled" rows because the path-based VFS mkdir is idempotent
   // (same name re-uses the existing folder), and writeByPath in always-new
-  // mode rejects collisions outright.
+  // mode rejects collisions outright. When an extension is provided, the
+  // numeric suffix is inserted before the extension so the file keeps its
+  // type (e.g. `Untitled document 2.md`).
   const pickUniqueFilename = useCallback(
-    (parentDocumentId: string | null, baseName: string): string => {
+    (parentDocumentId: string | null, baseStem: string, extension = ''): string => {
       const siblings = dataRef.current.filter((doc) => (doc.parentId ?? null) === parentDocumentId);
       const taken = new Set(siblings.map((doc) => doc.filename));
-      if (!taken.has(baseName)) return baseName;
+      const first = `${baseStem}${extension}`;
+      if (!taken.has(first)) return first;
       for (let i = 2; i < 1000; i += 1) {
-        const candidate = `${baseName} ${i}`;
+        const candidate = `${baseStem} ${i}${extension}`;
         if (!taken.has(candidate)) return candidate;
       }
-      return `${baseName} ${Date.now()}`;
+      return `${baseStem} ${Date.now()}${extension}`;
     },
     [],
   );
@@ -183,9 +187,13 @@ export const useDocumentTreeOps = ({
         return;
       }
 
-      const baseName = t('workingPanel.resources.tree.untitledDocument');
+      const baseStem = t('workingPanel.resources.tree.untitledDocument');
       const parentDocumentId = parentId ? (byRowId.get(parentId)?.documentId ?? null) : null;
-      const pendingFilename = pickUniqueFilename(parentDocumentId, baseName);
+      const pendingFilename = pickUniqueFilename(
+        parentDocumentId,
+        baseStem,
+        DEFAULT_DOCUMENT_EXTENSION,
+      );
 
       const pending = makePendingDocument({
         agentId,
@@ -200,11 +208,13 @@ export const useDocumentTreeOps = ({
         try {
           const result =
             parentPath === ROOT_PATH
-              ? // Server's createDocument auto-deduplicates filenames at the root.
+              ? // Pass the client-picked filename (with extension) as the title so
+                // the server keeps the `.md` suffix; server dedup remains a safety
+                // net for racing clients.
                 await agentDocumentService.createDocument({
                   agentId,
                   content: '',
-                  title: baseName,
+                  title: pendingFilename,
                 })
               : await agentDocumentService.writeByPath({
                   agentId,

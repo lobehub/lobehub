@@ -12,6 +12,7 @@ import type {
   ExplorerTreeNode,
 } from '@/features/ExplorerTree';
 import { ExplorerTree, FOLDER_ICON_CSS, getExplorerTreeStyleVars } from '@/features/ExplorerTree';
+import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
 import { useChatStore } from '@/store/chat';
 
 import DocumentExplorerToolbar from './DocumentExplorerToolbar';
@@ -21,6 +22,23 @@ import { isOrphanSkillBundleItem } from './types';
 import { canDropDocument } from './utils/canDrop';
 
 const SKILL_INDEX_FILENAME = 'SKILL.md';
+const FILE_TREE_HOST_TAG = 'file-tree-container';
+const RENAME_INPUT_SELECTOR = 'input[data-item-rename-input]';
+
+// pierre/trees auto-selects the full value when the rename input mounts. For
+// files with extensions (e.g. `Untitled document.md`), narrow the selection to
+// the stem so the user can type a new name without overwriting the suffix.
+const selectStemOfActiveRenameInput = (root: HTMLElement | null) => {
+  if (!root) return;
+  const host = root.querySelector(FILE_TREE_HOST_TAG);
+  const input = host?.shadowRoot?.querySelector<HTMLInputElement>(RENAME_INPUT_SELECTOR);
+  if (!input) return;
+  const value = input.value;
+  const dotIndex = value.lastIndexOf('.');
+  // Skip dotfiles and extension-less names — leave pierre's full-selection.
+  if (dotIndex <= 0) return;
+  input.setSelectionRange(0, dotIndex);
+};
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   tree: css`
@@ -53,6 +71,13 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
   const { t } = useTranslation(['chat', 'common']);
   const openDocument = useChatStore((s) => s.openDocument);
   const treeRef = useRef<ExplorerTreeHandle | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  // pierre/trees' inline rename input commits on every Enter keydown without
+  // checking IME state, so a Chinese-pinyin candidate confirmed via Enter would
+  // truncate to half a word. Track composition at the outer container so we can
+  // suppress Enter while composing — composition events bubble out of the
+  // shadow DOM (composed=true), so binding here is sufficient.
+  const { compositionProps, isComposingRef } = useIMECompositionEvent();
 
   const startInlineRename = useCallback((id: string) => {
     treeRef.current?.startRenaming(id);
@@ -113,7 +138,12 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
   const focusNewRowForRename = useCallback((pendingId: string) => {
     // Defer past the current task so React commits the inserted row and the
     // tree adapter rebuilds its id→path map before we trigger rename.
-    setTimeout(() => treeRef.current?.startRenaming(pendingId), 0);
+    setTimeout(() => {
+      treeRef.current?.startRenaming(pendingId);
+      // After pierre's input.select() runs in its own layout effect, narrow
+      // selection to the stem so the `.md` extension stays intact.
+      requestAnimationFrame(() => selectStemOfActiveRenameInput(containerRef.current));
+    }, 0);
   }, []);
 
   const handleCreateFolder = useCallback(
@@ -233,7 +263,19 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
   );
 
   return (
-    <div className={styles.tree} style={{ ...style, ...treeStyleVars }}>
+    <div
+      className={styles.tree}
+      ref={containerRef}
+      style={{ ...style, ...treeStyleVars }}
+      onCompositionEnd={compositionProps.onCompositionEnd}
+      onCompositionStart={compositionProps.onCompositionStart}
+      onKeyDownCapture={(event) => {
+        if (event.key !== 'Enter') return;
+        if (!isComposingRef.current && !event.nativeEvent.isComposing) return;
+        event.stopPropagation();
+        event.nativeEvent.stopImmediatePropagation();
+      }}
+    >
       <ExplorerTree<AgentDocumentItem>
         iconsColored
         canDrag={canDrag}
