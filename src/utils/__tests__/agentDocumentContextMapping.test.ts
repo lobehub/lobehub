@@ -80,6 +80,7 @@ describe('toAgentContextDocument', () => {
 
     expect(toAgentContextDocument(doc)).toEqual({
       content: 'body',
+      contentCharCount: 4,
       description: 'web-crawled article',
       filename: 'crawl.md',
       id: 'agent-doc-2',
