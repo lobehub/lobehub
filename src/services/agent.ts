@@ -3,6 +3,17 @@ import { type PartialDeep } from 'type-fest';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
+export const AVAILABLE_AGENTS_CONTEXT_LIMIT = 10;
+export const AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT = AVAILABLE_AGENTS_CONTEXT_LIMIT + 2;
+
+export interface AvailableAgentItem {
+  avatar: string | null;
+  backgroundColor: string | null;
+  description: string | null;
+  id: string;
+  title: string | null;
+}
+
 /**
  * Market agent model can be either a string or an object with model details
  */
@@ -211,7 +222,11 @@ class AgentService {
    * Query non-virtual agents with optional keyword filter.
    * Returns agents with minimal info (id, title, description, avatar, backgroundColor).
    */
-  queryAgents = async (params?: { keyword?: string; limit?: number; offset?: number }) => {
+  queryAgents = async (params?: {
+    keyword?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<AvailableAgentItem[]> => {
     return lambdaClient.agent.queryAgents.query(params);
   };
 

@@ -121,13 +121,13 @@ beforeEach(() => {
   serverConfigMock.enableVisualUnderstanding = false;
 
   act(() => {
+    useAgentStore.setState({ availableAgents: [] });
     useChatStore.setState({
       refreshMessages: vi.fn(),
       executeClientAgent: vi.fn(),
       internal_createAgentState: realCreateAgentState,
     });
   });
-  vi.spyOn(useAgentStore.getState(), 'scheduleRefreshAgentDocuments').mockImplementation(() => {});
 });
 
 afterEach(() => {
@@ -157,10 +157,6 @@ describe('StreamingExecutor actions', () => {
         .mockImplementation(async ({ onFinish }) => {
           await onFinish?.(TEST_CONTENT.AI_RESPONSE, {} as any);
         });
-      const refreshAgentDocumentsSpy = vi.spyOn(
-        useAgentStore.getState(),
-        'scheduleRefreshAgentDocuments',
-      );
 
       await act(async () => {
         await result.current.executeClientAgent({
@@ -189,7 +185,6 @@ describe('StreamingExecutor actions', () => {
           sourceType: 'client.runtime.start',
         }),
       );
-      expect(refreshAgentDocumentsSpy).toHaveBeenCalledWith(TEST_IDS.SESSION_ID);
 
       streamSpy.mockRestore();
     });

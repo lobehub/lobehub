@@ -4,6 +4,7 @@ import { type ReactNode } from 'react';
 import { memo, useCallback } from 'react';
 
 import { useFetchAgentDocuments } from '@/hooks/useFetchAgentDocuments';
+import { useFetchAvailableAgents } from '@/hooks/useFetchAvailableAgents';
 import { useFetchTopicMemories } from '@/hooks/useFetchMemoryForTopic';
 import { useFetchNotebookDocuments } from '@/hooks/useFetchNotebookDocuments';
 import { useChatStore } from '@/store/chat';
@@ -109,8 +110,11 @@ const ChatList = memo<ChatListProps>(
       topicId: canShowAgentSignalReceipts ? context.topicId : undefined,
     });
 
-    // Fetch notebook documents when topic is selected (skip for share pages)
+    const shouldFetchConversationContext = !isSharePage && !!context.agentId;
+
+    // Fetch conversation context data when a conversation is visible (skip for share pages)
     useFetchAgentDocuments(isSharePage ? undefined : activeAgentId);
+    useFetchAvailableAgents(shouldFetchConversationContext);
     useFetchNotebookDocuments(isSharePage ? undefined : context.topicId!);
     useFetchTopicMemories(enableUserMemories && !isSharePage ? context.topicId : undefined);
 
