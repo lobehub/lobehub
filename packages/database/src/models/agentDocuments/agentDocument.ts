@@ -924,7 +924,11 @@ export class AgentDocumentModel {
   }
 
   async findContextByAgent(agentId: string): Promise<AgentDocumentContextRow[]> {
-    const { content: _content, ...documentColumns } = getTableColumns(documents);
+    const {
+      content: _content,
+      editorData: _editorData,
+      ...documentColumns
+    } = getTableColumns(documents);
     const results = await this.db
       .select({
         doc: {
@@ -935,6 +939,12 @@ export class AgentDocumentModel {
               ELSE ''
             END
           `.as('content'),
+          editorData: sql<Record<string, any> | null>`
+            CASE
+              WHEN ${agentDocuments.policyLoad} = ${PolicyLoad.ALWAYS} THEN ${documents.editorData}
+              ELSE NULL
+            END
+          `.as('editor_data'),
         },
         settings: agentDocuments,
       })

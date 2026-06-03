@@ -734,9 +734,11 @@ describe('AgentDocumentModel', () => {
 
     it('should omit progressive document content for chat context hydration', async () => {
       await agentDocumentModel.create(agentId, 'always.md', 'always body', {
+        editorData: { root: { children: [{ text: 'always body' }] } },
         policyLoad: PolicyLoad.ALWAYS,
       });
       await agentDocumentModel.create(agentId, 'progressive.md', 'progressive body', {
+        editorData: { root: { children: [{ text: 'progressive body' }] } },
         policyLoad: PolicyLoad.PROGRESSIVE,
       });
       await agentDocumentModel.create(agentId, 'web-page', 'web body', {
@@ -750,8 +752,12 @@ describe('AgentDocumentModel', () => {
 
       expect(byFilename['always.md']?.content).toBe('always body');
       expect(byFilename['always.md']?.contentCharCount).toBe('always body'.length);
+      expect(byFilename['always.md']?.editorData).toEqual({
+        root: { children: [{ text: 'always body' }] },
+      });
       expect(byFilename['progressive.md']?.content).toBe('');
       expect(byFilename['progressive.md']?.contentCharCount).toBe('progressive body'.length);
+      expect(byFilename['progressive.md']?.editorData).toBeNull();
       expect(byFilename['web-page']?.content).toBe('');
       expect(byFilename['web-page']?.contentCharCount).toBe('web body'.length);
     });
