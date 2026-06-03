@@ -57,6 +57,7 @@ export const agentOperations = pgTable(
      * so this column is intentionally not a foreign key.
      */
     userId: text('user_id').notNull(),
+    workspaceId: text('workspace_id'),
 
     agentId: text('agent_id').references(() => agents.id, { onDelete: 'set null' }),
     topicId: text('topic_id').references(() => topics.id, { onDelete: 'set null' }),

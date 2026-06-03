@@ -16,6 +16,7 @@ export const asyncTasks = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id'),
     duration: integer('duration'),
     parentId: uuid('parent_id'),
     metadata: jsonb('metadata').notNull().default('{}'),

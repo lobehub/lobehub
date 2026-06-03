@@ -121,6 +121,8 @@ export const documents = pgTable(
 
     slug: varchar('slug', { length: 255 }).$defaultFn(() => randomSlug(3)),
 
+    workspaceId: text('workspace_id'),
+
     // Timestamps
     ...timestamps,
   },
@@ -180,6 +182,8 @@ export const files = pgTable(
       onDelete: 'set null',
     }),
 
+    workspaceId: text('workspace_id'),
+
     ...timestamps,
   },
   (table) => {
@@ -221,6 +225,8 @@ export const knowledgeBases = pgTable(
 
     settings: jsonb('settings'),
 
+    workspaceId: text('workspace_id'),
+
     ...timestamps,
   },
   (t) => [
@@ -248,6 +254,7 @@ export const knowledgeBaseFiles = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id'),
 
     createdAt: createdAt(),
   },

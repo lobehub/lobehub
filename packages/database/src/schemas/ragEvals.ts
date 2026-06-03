@@ -23,6 +23,7 @@ export const evalDatasets = pgTable(
       onDelete: 'cascade',
     }),
     userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    workspaceId: text('workspace_id'),
 
     ...timestamps,
   },
@@ -50,6 +51,7 @@ export const evalDatasetRecords = pgTable(
     metadata: jsonb('metadata'),
 
     userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    workspaceId: text('workspace_id'),
     ...timestamps,
   },
   (t) => [index('rag_eval_dataset_records_user_id_idx').on(t.userId)],
@@ -83,6 +85,7 @@ export const evalEvaluation = pgTable(
     embeddingModel: text('embedding_model'),
 
     userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    workspaceId: text('workspace_id'),
     ...timestamps,
   },
   (t) => [index('rag_eval_evaluations_user_id_idx').on(t.userId)],
@@ -123,6 +126,7 @@ export const evaluationRecords = pgTable(
       .notNull(),
 
     userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    workspaceId: text('workspace_id'),
     ...timestamps,
   },
   (t) => [index('rag_eval_evaluation_records_user_id_idx').on(t.userId)],

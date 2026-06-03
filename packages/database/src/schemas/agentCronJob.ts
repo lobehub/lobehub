@@ -29,6 +29,7 @@ export const agentCronJobs = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id'),
 
     // Task identification
     name: text('name'), // Optional task name like "Daily Report", "Data Monitoring"

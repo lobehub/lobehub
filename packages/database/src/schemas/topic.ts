@@ -69,6 +69,7 @@ export const topics = pgTable(
      */
     senderId: text('sender_id'),
 
+    workspaceId: text('workspace_id'),
     ...timestamps,
   },
   (t) => [
@@ -136,6 +137,7 @@ export const threads = pgTable(
       .notNull(),
 
     lastActiveAt: timestamptz('last_active_at').defaultNow(),
+    workspaceId: text('workspace_id'),
     ...timestamps,
   },
   (t) => [
@@ -170,6 +172,7 @@ export const topicDocuments = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id'),
 
     createdAt: createdAt(),
   },
@@ -201,6 +204,7 @@ export const topicShares = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id'),
 
     visibility: text('visibility').default('private').notNull(), // 'private' | 'link'
 

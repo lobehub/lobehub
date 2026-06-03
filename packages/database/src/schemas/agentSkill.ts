@@ -44,6 +44,7 @@ export const agentSkills = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id'),
 
     ...timestamps,
   },

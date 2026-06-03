@@ -42,6 +42,8 @@ export const aiProviders = pgTable(
       .$defaultFn(() => ({}))
       .$type<AiProviderConfig>(),
 
+    workspaceId: text('workspace_id'),
+
     ...timestamps,
   },
   (table) => [
@@ -76,6 +78,8 @@ export const aiModels = pgTable(
     source: varchar('source', { enum: ['remote', 'custom', 'builtin'], length: 20 }),
     releasedAt: varchar('released_at', { length: 10 }),
     settings: jsonb('settings').default({}).$type<AiModelSettings>(),
+
+    workspaceId: text('workspace_id'),
 
     ...timestamps,
   },

@@ -18,6 +18,7 @@ export const documentHistories = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id'),
 
     editorData: jsonb('editor_data').$type<Record<string, any>>().notNull(),
     saveSource: text('save_source', {

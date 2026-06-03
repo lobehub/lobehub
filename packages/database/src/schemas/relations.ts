@@ -34,6 +34,7 @@ export const agentsToSessions = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id'),
   },
   (t) => [
     primaryKey({ columns: [t.agentId, t.sessionId] }),
@@ -55,6 +56,7 @@ export const filesToSessions = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id'),
   },
   (t) => ({
     pk: primaryKey({ columns: [t.fileId, t.sessionId] }),
@@ -73,6 +75,7 @@ export const fileChunks = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id'),
   },
   (t) => ({
     pk: primaryKey({ columns: [t.fileId, t.chunkId] }),

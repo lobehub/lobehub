@@ -21,6 +21,7 @@ export const sessionGroups = pgTable(
       .notNull(),
 
     clientId: text('client_id'),
+    workspaceId: text('workspace_id'),
     ...timestamps,
   },
   (table) => ({
@@ -61,6 +62,7 @@ export const sessions = pgTable(
     groupId: text('group_id').references(() => sessionGroups.id, { onDelete: 'set null' }),
     clientId: text('client_id'),
     pinned: boolean('pinned').default(false),
+    workspaceId: text('workspace_id'),
 
     ...timestamps,
   },

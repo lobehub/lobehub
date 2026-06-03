@@ -46,6 +46,7 @@ export const messageGroups = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id'),
 
     // Support nested structure
     // @ts-ignore
@@ -146,6 +147,7 @@ export const messages = pgTable(
     messageGroupId: varchar255('message_group_id').references(() => messageGroups.id, {
       onDelete: 'cascade',
     }),
+    workspaceId: text('workspace_id'),
     ...timestamps,
   },
   (table) => [
@@ -190,6 +192,7 @@ export const messagePlugins = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id'),
   },
   (t) => [
     uniqueIndex('message_plugins_client_id_user_id_unique').on(t.clientId, t.userId),
@@ -211,6 +214,7 @@ export const messageTTS = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id'),
   },
   (t) => ({
     clientIdUnique: uniqueIndex('message_tts_client_id_user_id_unique').on(t.clientId, t.userId),
@@ -231,6 +235,7 @@ export const messageTranslates = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id'),
   },
   (t) => ({
     clientIdUnique: uniqueIndex('message_translates_client_id_user_id_unique').on(
@@ -255,6 +260,7 @@ export const messagesFiles = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id'),
   },
   (t) => ({
     pk: primaryKey({ columns: [t.fileId, t.messageId] }),
@@ -276,6 +282,7 @@ export const messageQueries = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id'),
     embeddingsId: uuid('embeddings_id').references(() => embeddings.id, { onDelete: 'set null' }),
   },
   (t) => ({
@@ -301,6 +308,7 @@ export const messageQueryChunks = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id'),
   },
   (t) => ({
     pk: primaryKey({ columns: [t.chunkId, t.messageId, t.queryId] }),
@@ -321,6 +329,7 @@ export const messageChunks = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id'),
   },
   (t) => ({
     pk: primaryKey({ columns: [t.chunkId, t.messageId] }),

@@ -17,6 +17,8 @@ export const documentShares = pgTable(
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
 
+    workspaceId: text('workspace_id'),
+
     visibility: text('visibility').default('private').notNull(),
     permission: text('permission').default('read').notNull(),
 

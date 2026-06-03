@@ -109,6 +109,7 @@ export const userConnectors = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id'),
 
     // ── Connector identity ────────────────────────────────────────────────
     /** Fixed slug for built-ins (e.g. "linear"); nanoid for custom ones */
@@ -208,6 +209,7 @@ export const userConnectorTools = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id'),
 
     // ── Tool definition (synced from MCP manifest) ────────────────────────
     toolName: varchar('tool_name', { length: 255 }).notNull(),

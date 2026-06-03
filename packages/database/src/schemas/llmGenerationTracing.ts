@@ -52,6 +52,7 @@ export const llmGenerationTracing = pgTable(
     userId: text('user_id').notNull(),
     agentId: text('agent_id'),
     topicId: text('topic_id'),
+    workspaceId: text('workspace_id'),
     /** Maps to RequestTrigger enum. */
     trigger: text('trigger'),
     /** Self-reference for chained generateObject calls (e.g. memory job → multiple calls). */

@@ -42,6 +42,7 @@ export const chatGroups = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id'),
 
     groupId: text('group_id').references(() => sessionGroups.id, { onDelete: 'set null' }),
 
@@ -75,6 +76,7 @@ export const chatGroupsAgents = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id'),
 
     /**
      * Whether this agent is active in the group

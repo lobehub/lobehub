@@ -17,6 +17,7 @@ export const roles = pgTable('rbac_roles', {
   isSystem: boolean('is_system').default(false).notNull(), // Whether it's a system role
   isActive: boolean('is_active').default(true).notNull(), // Whether it's active
   metadata: jsonb('metadata').default({}), // Role metadata
+  workspaceId: text('workspace_id'),
 
   ...timestamps,
 });
@@ -76,6 +77,7 @@ export const userRoles = pgTable(
     roleId: text('role_id')
       .references(() => roles.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id'),
 
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     expiresAt: timestamp('expires_at', { withTimezone: true }), // Support for temporary roles

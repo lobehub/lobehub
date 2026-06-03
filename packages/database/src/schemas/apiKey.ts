@@ -21,6 +21,7 @@ export const apiKeys = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(), // belongs to user, when user is deleted, the API key will be deleted
+    workspaceId: text('workspace_id'),
 
     ...timestamps,
   },

@@ -742,6 +742,13 @@
       "when": 1780497229863,
       "tag": "0105_add_usage_agent_share_workspace",
       "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "7",
+      "when": 1780508742730,
+      "tag": "0106_add_workspace_id_columns",
+      "breakpoints": true
     }
   ],
   "version": "6"
