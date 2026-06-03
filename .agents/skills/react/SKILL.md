@@ -55,7 +55,7 @@ For Modal specifically, see the dedicated **modal** skill — use the imperative
 
 ## State
 
-When a business component manages more than 3 pieces of state (`useState`/`useReducer`/derived state), extract the logic into a custom hook (e.g. `useXxx`). Keep the component focused on rendering — the hook holds state and handlers, so logic can be unit-tested without rendering the component.
+When a feature component manages more than 3 pieces of state (`useState`/`useReducer`/derived state), extract the logic into a custom hook (e.g. `useXxx`). Keep the component focused on rendering — the hook holds state and handlers, so logic can be unit-tested without rendering the component.
 
 ## Layout
 
