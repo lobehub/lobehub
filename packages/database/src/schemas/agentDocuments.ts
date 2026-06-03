@@ -13,6 +13,7 @@ import { createdAt, timestamptz, updatedAt } from './_helpers';
 import { agents } from './agent';
 import { documents } from './file';
 import { users } from './user';
+import { workspaces } from './workspace';
 
 /**
  * Agent document settings mapped to canonical documents rows.
@@ -55,6 +56,7 @@ export const agentDocuments = pgTable(
     userId: text('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
     agentId: text('agent_id')
       .notNull()
       .references(() => agents.id, { onDelete: 'cascade' }),
@@ -154,6 +156,7 @@ export const agentDocuments = pgTable(
   },
   (table) => [
     index('agent_documents_user_id_idx').on(table.userId),
+    index('agent_documents_workspace_id_idx').on(table.workspaceId),
     index('agent_documents_agent_id_idx').on(table.agentId),
     index('agent_documents_access_self_idx').on(table.accessSelf),
     index('agent_documents_access_shared_idx').on(table.accessShared),

@@ -20,6 +20,7 @@ import { chunks, documentChunks, unstructuredChunks } from './rag';
 import { sessionGroups, sessions } from './session';
 import { threads, topicDocuments, topics } from './topic';
 import { users } from './user';
+import { workspaces } from './workspace';
 
 export const agentsToSessions = pgTable(
   'agents_to_sessions',
@@ -33,12 +34,14 @@ export const agentsToSessions = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
   },
   (t) => [
     primaryKey({ columns: [t.agentId, t.sessionId] }),
     index('agents_to_sessions_session_id_idx').on(t.sessionId),
     index('agents_to_sessions_agent_id_idx').on(t.agentId),
     index('agents_to_sessions_user_id_idx').on(t.userId),
+    index('agents_to_sessions_workspace_id_idx').on(t.workspaceId),
   ],
 );
 
@@ -54,10 +57,12 @@ export const filesToSessions = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
   },
   (t) => ({
     pk: primaryKey({ columns: [t.fileId, t.sessionId] }),
     userIdIdx: index('files_to_sessions_user_id_idx').on(t.userId),
+    workspaceIdIdx: index('files_to_sessions_workspace_id_idx').on(t.workspaceId),
     fileIdIdx: index('files_to_sessions_file_id_idx').on(t.fileId),
     sessionIdIdx: index('files_to_sessions_session_id_idx').on(t.sessionId),
   }),
@@ -72,10 +77,12 @@ export const fileChunks = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
   },
   (t) => ({
     pk: primaryKey({ columns: [t.fileId, t.chunkId] }),
     userIdIdx: index('file_chunks_user_id_idx').on(t.userId),
+    workspaceIdIdx: index('file_chunks_workspace_id_idx').on(t.workspaceId),
     fileIdIdx: index('file_chunks_file_id_idx').on(t.fileId),
     chunkIdIdx: index('file_chunks_chunk_id_idx').on(t.chunkId),
   }),
