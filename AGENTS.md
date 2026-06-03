@@ -115,8 +115,12 @@ cd packages/database && bunx vitest run --silent='passed-only' '[file]'
 ```
 
 - Prefer `vi.spyOn` over `vi.mock`
-- Tests must pass type check: `bun run type-check`
-- After 2 failed fix attempts, stop and ask for help
+
+### Type Checking
+
+```bash
+bun run type-check
+```
 
 ### i18n
 
