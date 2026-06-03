@@ -126,7 +126,7 @@ cd packages/database && bunx vitest run --silent='passed-only' '[file]'
 
 ### Code Style
 
-- When a single file grows beyond \~800 lines, consider splitting it into multiple files (extract sub-components, hooks, helpers, or types). Smaller, focused files are easier for both humans and AI agents to read, navigate, and edit.
+- When a single file grows beyond \~800 lines, consider splitting it into multiple files (extract sub-components, hooks, helpers, or types). Smaller, focused files are more human- and agent-friendly.
 
 ### Code Review
 
