@@ -32,6 +32,10 @@ const styles = createStaticStyles(({ css }) => ({
        up with the menu items above. */
     width: 320px;
     min-height: 32px;
+
+    /* The footer wrapper adds padding-block: 8px top & bottom; the top keeps it separated
+       from the list, but the bottom leaves a dead gap against the popup edge — cancel it. */
+    margin-block-end: -8px;
     margin-inline: -12px;
     padding-inline: 12px;
     border: 0;

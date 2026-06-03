@@ -6,21 +6,20 @@ import {
 } from '@lobechat/const';
 import type { ItemType } from '@lobehub/ui';
 import { Avatar, Icon, Popover, SearchBar, stopPropagation, Tag, Tooltip } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { Switch } from '@lobehub/ui/base-ui';
 import { McpIcon, SkillsIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import {
   BadgeCheck,
-  Check,
   MoreHorizontal,
   Package,
   Pin,
   Settings,
   Store,
-  Trash2,
   Wrench,
   Zap,
+  ZapOff,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useCallback, useMemo, useState } from 'react';
@@ -64,8 +63,6 @@ const officialTag = (
     <Tag color={'success'} icon={<Icon icon={BadgeCheck} />} size={'small'} />
   </Tooltip>
 );
-
-type SkillPolicyMode = 'auto' | 'pinned';
 
 interface SkillDeleteConfig {
   displayName: string;
@@ -368,7 +365,6 @@ const styles = createStaticStyles(({ css }) => ({
 
     width: 24px;
     height: 24px;
-    margin-inline-start: auto;
     padding: 0;
     border: 0;
     border-radius: 6px;
@@ -448,16 +444,6 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   );
   const plugins = useAgentStore((s) => agentByIdSelectors.getAgentPluginsById(agentId)(s));
 
-  const updateSkillPolicy = useCallback(
-    async (id: string, mode: SkillPolicyMode) => {
-      const shouldPin = mode === 'pinned';
-      if (checkedSet.has(id) === shouldPin) return;
-
-      await togglePlugin(id, shouldPin);
-    },
-    [checkedSet, togglePlugin],
-  );
-
   const openSkillPolicyMenu = useCallback((id: string) => {
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event(CLOSE_TOOL_DETAIL_POPOVER_EVENT));
@@ -466,32 +452,8 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   }, []);
 
   const renderPolicyMenu = useCallback(
-    (id: string, deleteConfig?: SkillDeleteConfig, configureConfig?: SkillConfigureConfig) => {
-      const mode: SkillPolicyMode = checkedSet.has(id) ? 'pinned' : 'auto';
-      const renderCheck = (value: SkillPolicyMode) =>
-        mode === value ? (
-          <span className={cx(styles.policyCheck)}>
-            <Icon icon={Check} size={14} />
-          </span>
-        ) : (
-          <span className={cx(styles.policyCheck)} />
-        );
-
-      const renderPolicyItem = (value: SkillPolicyMode, icon: ReactNode) => (
-        <button
-          className={cx(styles.policyItem)}
-          type="button"
-          onClick={async (event) => {
-            event.stopPropagation();
-            setPolicyOpenId(null);
-            await updateSkillPolicy(id, value);
-          }}
-        >
-          <span className={cx(styles.policyItemIcon)}>{icon}</span>
-          <span className={cx(styles.policyText)}>{t(`tools.activation.${value}`)}</span>
-          {renderCheck(value)}
-        </button>
-      );
+    (id: string, configureConfig?: SkillConfigureConfig) => {
+      const isIncluded = checkedSet.has(id);
 
       const content = (
         <div
@@ -499,65 +461,42 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           onClick={(event) => event.stopPropagation()}
           onContextMenu={(event) => event.stopPropagation()}
         >
-          {renderPolicyItem(
-            'pinned',
-            <Icon
-              className={cx(mode === 'pinned' ? styles.iconPinned : styles.iconDefault)}
-              icon={Pin}
-              size={15}
-            />,
-          )}
-          {renderPolicyItem(
-            'auto',
-            <Icon
-              className={cx(mode === 'auto' ? styles.iconAuto : styles.iconDefault)}
-              icon={Zap}
-              size={15}
-            />,
-          )}
-          {(configureConfig || deleteConfig) && <div className={cx(styles.deleteDivider)} />}
+          <button
+            className={cx(styles.policyItem)}
+            type="button"
+            onClick={async (event) => {
+              event.stopPropagation();
+              setPolicyOpenId(null);
+              await togglePlugin(id, !isIncluded);
+            }}
+          >
+            <span className={cx(styles.policyItemIcon)}>
+              <Icon icon={isIncluded ? ZapOff : Zap} size={15} />
+            </span>
+            <span className={cx(styles.policyText)}>
+              {isIncluded
+                ? t('tools.activation.excludeFromAuto')
+                : t('tools.activation.includeInAuto')}
+            </span>
+          </button>
           {configureConfig && (
-            <button
-              className={cx(styles.policyItem)}
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                setPolicyOpenId(null);
-                configureConfig.onConfigure();
-              }}
-            >
-              <span className={cx(styles.policyItemIcon)}>
-                <Icon icon={Wrench} size={15} />
-              </span>
-              <span className={cx(styles.policyText)}>{t('tools.builtins.configure')}</span>
-            </button>
-          )}
-          {deleteConfig && (
-            <button
-              className={cx(styles.deleteButton)}
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                setPolicyOpenId(null);
-                confirmModal({
-                  content: t('tools.builtins.uninstallConfirm.desc', {
-                    name: deleteConfig.displayName,
-                  }),
-                  okButtonProps: { danger: true },
-                  onOk: async () => {
-                    await deleteConfig.onDelete();
-                  },
-                  title: t('tools.builtins.uninstallConfirm.title', {
-                    name: deleteConfig.displayName,
-                  }),
-                });
-              }}
-            >
-              <span className={cx(styles.policyItemIcon)}>
-                <Icon className={cx(styles.deleteIcon)} icon={Trash2} size={15} />
-              </span>
-              <span className={cx(styles.policyText)}>{t('tools.builtins.uninstall')}</span>
-            </button>
+            <>
+              <div className={cx(styles.deleteDivider)} />
+              <button
+                className={cx(styles.policyItem)}
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setPolicyOpenId(null);
+                  configureConfig.onConfigure();
+                }}
+              >
+                <span className={cx(styles.policyItemIcon)}>
+                  <Icon icon={Wrench} size={15} />
+                </span>
+                <span className={cx(styles.policyText)}>{t('tools.builtins.configure')}</span>
+              </button>
+            </>
           )}
         </div>
       );
@@ -605,7 +544,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
         </Popover>
       );
     },
-    [checkedSet, openSkillPolicyMenu, policyOpenId, t, updateSkillPolicy],
+    [checkedSet, openSkillPolicyMenu, policyOpenId, t, togglePlugin],
   );
 
   const renderToolLabel = useCallback(
@@ -631,22 +570,16 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           {extraTag}
           {badge && <span className={cx(styles.typeTag)}>{badge}</span>}
         </span>
-        <span className={cx(styles.toolActions)}>
-          {checkedSet.has(id) && <Icon className={cx(styles.pinIndicator)} icon={Pin} size={14} />}
-          <span data-open={policyOpenId === id || undefined} data-skill-actions="">
-            {action}
-          </span>
-        </span>
+        {action}
       </span>
     ),
-    [checkedSet, openSkillPolicyMenu, policyOpenId],
+    [openSkillPolicyMenu],
   );
 
   const createManagedSkillItem = useCallback(
     ({
       badge,
       configureConfig,
-      deleteConfig,
       extraTag,
       icon,
       id,
@@ -663,22 +596,34 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       popoverContent?: ReactNode;
       searchText?: string;
       title: ReactNode;
-    }): SkillMenuItem =>
-      ({
+    }): SkillMenuItem => {
+      // Manual mode: a trailing switch toggles whether the skill is used.
+      // Auto mode: hide the switch; expose Exclude-from-Auto / Configure via the hover-only 3-dot.
+      const action = isManualSkillMode ? (
+        <Switch
+          checked={checkedSet.has(id)}
+          size="small"
+          onClick={(_, event) => event.stopPropagation()}
+          onChange={async (next, event) => {
+            event?.stopPropagation?.();
+            await togglePlugin(id, next);
+          }}
+        />
+      ) : (
+        <span data-open={policyOpenId === id || undefined} data-skill-actions="">
+          {renderPolicyMenu(id, configureConfig)}
+        </span>
+      );
+
+      return {
         closeOnClick: false,
         key: id,
-        label: renderToolLabel(
-          id,
-          title,
-          renderPolicyMenu(id, deleteConfig, configureConfig),
-          badge,
-          icon,
-          extraTag,
-        ),
+        label: renderToolLabel(id, title, action, badge, icon, extraTag),
         popoverContent,
         searchText: searchText || String(title || id),
-      }) as SkillMenuItem,
-    [renderPolicyMenu, renderToolLabel],
+      } as SkillMenuItem;
+    },
+    [checkedSet, isManualSkillMode, policyOpenId, renderPolicyMenu, renderToolLabel, togglePlugin],
   );
 
   // Klavis-related state
@@ -1242,34 +1187,43 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           <Icon icon={Zap} size={12} />
           {allAutoItems.length}
         </span>
-        <Tooltip placement="top" title={t('plus.addSkills', { ns: 'chat' })}>
-          <button
-            aria-label={t('plus.addSkills', { ns: 'chat' })}
-            className={cx(styles.statsSettingsButton)}
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              closeDropdown?.();
-              createSkillStoreModal();
-            }}
-          >
-            <Icon icon={Store} size={14} />
-          </button>
-        </Tooltip>
-        <Tooltip placement="top" title={t('tools.plugins.management')}>
-          <button
-            aria-label={t('tools.plugins.management')}
-            className={cx(styles.statsSettingsButton)}
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              closeDropdown?.();
-              navigate('/settings/skill');
-            }}
-          >
-            <Icon icon={Settings} size={14} />
-          </button>
-        </Tooltip>
+        <span
+          style={{
+            alignItems: 'center',
+            display: 'inline-flex',
+            gap: 2,
+            marginInlineStart: 'auto',
+          }}
+        >
+          <Tooltip placement="top" title={t('plus.addSkills', { ns: 'chat' })}>
+            <button
+              aria-label={t('plus.addSkills', { ns: 'chat' })}
+              className={cx(styles.statsSettingsButton)}
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                closeDropdown?.();
+                createSkillStoreModal();
+              }}
+            >
+              <Icon icon={Store} size={14} />
+            </button>
+          </Tooltip>
+          <Tooltip placement="top" title={t('tools.plugins.management')}>
+            <button
+              aria-label={t('tools.plugins.management')}
+              className={cx(styles.statsSettingsButton)}
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                closeDropdown?.();
+                navigate('/settings/skill');
+              }}
+            >
+              <Icon icon={Settings} size={14} />
+            </button>
+          </Tooltip>
+        </span>
       </div>
     ) : undefined;
 

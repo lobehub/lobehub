@@ -398,7 +398,8 @@ const PlusAction = memo(() => {
     const uploadItems: ActionDropdownMenuItems = [
       {
         closeOnClick: false,
-        icon: FileUp,
+        // Match the 20px file/library icons below so the label lines up with those rows.
+        icon: <Icon icon={FileUp} size={20} />,
         key: 'upload-file-or-image',
         label: (
           <Upload
