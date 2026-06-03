@@ -386,7 +386,16 @@ export class AiAgentService {
     throwIfAborted(signal, 'Agent execution aborted before startup');
 
     // 1. Get agent configuration with default config merged (supports both id and slug)
-    const agentConfig = await this.agentService.getAgentConfig(identifier);
+    let agentConfig = await this.agentService.getAgentConfig(identifier);
+    // Builtin agents (inbox / page / task / self-iteration slugs) may be addressed
+    // purely by slug before a row exists — e.g. background self-iteration runs
+    // dispatched via execAgent({ slug }). Lazily materialize the virtual row from
+    // the builtin registry (mirrors the inbox/task `getBuiltinAgent` path) and
+    // re-resolve. No-op for ordinary agent ids (getBuiltinAgent returns null).
+    if (!agentConfig && (Object.values(BUILTIN_AGENT_SLUGS) as string[]).includes(identifier)) {
+      await this.agentModel.getBuiltinAgent(identifier);
+      agentConfig = await this.agentService.getAgentConfig(identifier);
+    }
     if (!agentConfig) {
       throw new Error(`Agent not found: ${identifier}`);
     }

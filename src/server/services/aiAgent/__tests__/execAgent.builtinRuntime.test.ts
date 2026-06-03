@@ -11,6 +11,7 @@ import { AiAgentService } from '../index';
 const {
   mockCreateOperation,
   mockGetAgentConfig,
+  mockGetBuiltinAgent,
   mockGetInfoForAIGeneration,
   mockIsAgentSignalEnabledForUser,
   mockMessageCreate,
@@ -20,6 +21,7 @@ const {
 } = vi.hoisted(() => ({
   mockCreateOperation: vi.fn(),
   mockGetAgentConfig: vi.fn(),
+  mockGetBuiltinAgent: vi.fn(),
   mockGetInfoForAIGeneration: vi.fn(),
   mockIsAgentSignalEnabledForUser: vi.fn(),
   mockMessageCreate: vi.fn(),
@@ -52,6 +54,7 @@ vi.mock('@/database/models/message', () => ({
 vi.mock('@/database/models/agent', () => ({
   AgentModel: vi.fn().mockImplementation(() => ({
     getAgentConfig: vi.fn(),
+    getBuiltinAgent: mockGetBuiltinAgent,
     queryAgents: vi.fn().mockResolvedValue([]),
   })),
 }));
@@ -199,7 +202,40 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
       operationId: 'op-123',
       success: true,
     });
+    mockGetBuiltinAgent.mockResolvedValue(null);
     service = new AiAgentService(mockDb, userId);
+  });
+
+  it('materializes a builtin agent addressed by slug when no row exists yet', async () => {
+    // Background self-iteration runs dispatch via execAgent({ slug }) before any
+    // persisted row exists. The first resolve (by slug) misses; execAgent must
+    // lazily materialize the virtual builtin row (getBuiltinAgent) and re-resolve
+    // — without it the run throws `Agent not found: self-reflection`.
+    mockGetAgentConfig.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      chatConfig: {},
+      id: 'agent-self-reflection',
+      model: 'gpt-4',
+      plugins: [],
+      provider: 'openai',
+      slug: 'self-reflection',
+      systemRole: '',
+    });
+    mockGetBuiltinAgent.mockResolvedValueOnce({ id: 'agent-self-reflection', slug: 'self-reflection' });
+
+    await service.execAgent({ prompt: 'reflect', slug: 'self-reflection' });
+
+    expect(mockGetBuiltinAgent).toHaveBeenCalledWith('self-reflection');
+    expect(mockCreateOperation).toHaveBeenCalledTimes(1);
+    expect(mockCreateOperation.mock.calls[0][0].agentConfig.slug).toBe('self-reflection');
+  });
+
+  it('throws for an unknown non-builtin identifier without materializing a row', async () => {
+    mockGetAgentConfig.mockResolvedValue(null);
+
+    await expect(service.execAgent({ agentId: 'does-not-exist', prompt: 'hi' })).rejects.toThrow(
+      'Agent not found: does-not-exist',
+    );
+    expect(mockGetBuiltinAgent).not.toHaveBeenCalled();
   });
 
   it('should merge runtime systemRole for inbox agent when DB systemRole is empty', async () => {
