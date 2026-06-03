@@ -216,6 +216,13 @@ class AgentService {
   };
 
   /**
+   * Count non-virtual agents with optional keyword filter, matching queryAgents conditions.
+   */
+  countAgents = async (params?: { keyword?: string }) => {
+    return lambdaClient.agent.countAgents.query(params);
+  };
+
+  /**
    * Pin or unpin an agent
    */
   updateAgentPinned = async (agentId: string, pinned: boolean) => {
