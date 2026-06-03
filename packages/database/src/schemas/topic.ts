@@ -40,7 +40,7 @@ export const topics = pgTable(
     description: text('description'),
     historySummary: text('history_summary'),
     metadata: jsonb('metadata').$type<ChatTopicMetadata | undefined>(),
-    trigger: text('trigger'), // 'cron' | 'chat' | 'api' | 'eval' - topic creation trigger source
+    trigger: text('trigger'), // 'cron' | 'chat' | 'api' | 'eval' | 'share' - topic creation trigger source
     mode: text('mode'), // 'temp' | 'test' | 'default' - topic usage scenario
     status: text('status', {
       enum: ['active', 'running', 'paused', 'waitingForHuman', 'failed', 'completed', 'archived'],
@@ -60,6 +60,15 @@ export const topics = pgTable(
     // Primary model / provider snapshot, promoted from metadata so it is indexable for GROUP BY.
     model: text('model'),
     provider: text('provider'),
+
+    /**
+     * Visitor identity for agent-share originated topics.
+     * Unauthenticated: browser-generated UUID stored in localStorage.
+     * After login: overwritten with the user's actual userId by the application layer.
+     * NULL for regular (non-share) conversations.
+     */
+    senderId: text('sender_id'),
+
     ...timestamps,
   },
   (t) => [
@@ -74,6 +83,7 @@ export const topics = pgTable(
     index('topics_model_idx').on(t.model),
     index('topics_provider_idx').on(t.provider),
     index('topics_user_id_completed_at_idx').on(t.userId, t.completedAt),
+    index('topics_sender_id_idx').on(t.senderId),
     index('topics_extract_status_gin_idx').using(
       'gin',
       sql`(metadata->'userMemoryExtractStatus') jsonb_path_ops`,

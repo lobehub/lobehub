@@ -742,6 +742,13 @@
       "when": 1780495820747,
       "tag": "0105_add_usage_to_messages",
       "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "7",
+      "when": 1780496175376,
+      "tag": "0106_add_agent_share",
+      "breakpoints": true
     }
   ],
   "version": "6"
