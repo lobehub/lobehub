@@ -19,7 +19,6 @@ import {
   Store,
   Wrench,
   Zap,
-  ZapOff,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useCallback, useMemo, useState } from 'react';
@@ -272,6 +271,11 @@ const styles = createStaticStyles(({ css }) => ({
     flex: 1;
     text-align: start;
   `,
+  excludedText: css`
+    flex: none;
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
+  `,
   searchBox: css`
     display: flex;
     align-items: center;
@@ -436,12 +440,9 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     (s) => chatConfigByIdSelectors.getSkillActivateModeById(agentId)(s) === 'manual',
   );
   const isAutoSkillMode = !isManualSkillMode;
-  const builtinList = useToolStore(
-    isManualSkillMode
-      ? builtinToolSelectors.metaListIncludingHidden
-      : builtinToolSelectors.metaList,
-    isEqual,
-  );
+  // Keep the skill list stable across auto/manual: always use the visible meta list so
+  // turning Auto off no longer surfaces extra hidden builtin tools (which made it denser).
+  const builtinList = useToolStore(builtinToolSelectors.metaList, isEqual);
   const plugins = useAgentStore((s) => agentByIdSelectors.getAgentPluginsById(agentId)(s));
 
   const openSkillPolicyMenu = useCallback((id: string) => {
@@ -453,50 +454,27 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
 
   const renderPolicyMenu = useCallback(
     (id: string, configureConfig?: SkillConfigureConfig) => {
-      const isIncluded = checkedSet.has(id);
-
       const content = (
         <div
           className={cx(styles.policyPanel)}
           onClick={(event) => event.stopPropagation()}
           onContextMenu={(event) => event.stopPropagation()}
         >
-          <button
-            className={cx(styles.policyItem)}
-            type="button"
-            onClick={async (event) => {
-              event.stopPropagation();
-              setPolicyOpenId(null);
-              await togglePlugin(id, !isIncluded);
-            }}
-          >
-            <span className={cx(styles.policyItemIcon)}>
-              <Icon icon={isIncluded ? ZapOff : Zap} size={15} />
-            </span>
-            <span className={cx(styles.policyText)}>
-              {isIncluded
-                ? t('tools.activation.excludeFromAuto')
-                : t('tools.activation.includeInAuto')}
-            </span>
-          </button>
           {configureConfig && (
-            <>
-              <div className={cx(styles.deleteDivider)} />
-              <button
-                className={cx(styles.policyItem)}
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setPolicyOpenId(null);
-                  configureConfig.onConfigure();
-                }}
-              >
-                <span className={cx(styles.policyItemIcon)}>
-                  <Icon icon={Wrench} size={15} />
-                </span>
-                <span className={cx(styles.policyText)}>{t('tools.builtins.configure')}</span>
-              </button>
-            </>
+            <button
+              className={cx(styles.policyItem)}
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                setPolicyOpenId(null);
+                configureConfig.onConfigure();
+              }}
+            >
+              <span className={cx(styles.policyItemIcon)}>
+                <Icon icon={Wrench} size={15} />
+              </span>
+              <span className={cx(styles.policyText)}>{t('tools.builtins.configure')}</span>
+            </button>
           )}
         </div>
       );
@@ -544,7 +522,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
         </Popover>
       );
     },
-    [checkedSet, openSkillPolicyMenu, policyOpenId, t, togglePlugin],
+    [openSkillPolicyMenu, policyOpenId, t],
   );
 
   const renderToolLabel = useCallback(
@@ -597,21 +575,29 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       searchText?: string;
       title: ReactNode;
     }): SkillMenuItem => {
-      // Manual mode: a trailing switch toggles whether the skill is used.
-      // Auto mode: hide the switch; expose Exclude-from-Auto / Configure via the hover-only 3-dot.
-      const action = isManualSkillMode ? (
-        <Switch
-          checked={checkedSet.has(id)}
-          size="small"
-          onClick={(_, event) => event.stopPropagation()}
-          onChange={async (next, event) => {
-            event?.stopPropagation?.();
-            await togglePlugin(id, next);
-          }}
-        />
-      ) : (
-        <span data-open={policyOpenId === id || undefined} data-skill-actions="">
-          {renderPolicyMenu(id, configureConfig)}
+      const isIncluded = checkedSet.has(id);
+      // Each skill has a trailing switch: ON = used (manual) / included in auto (the default).
+      // Turning it off excludes the skill; in auto mode an excluded skill shows an "Excluded"
+      // tag. Configure (when available) stays on a hover-only 3-dot.
+      const action = (
+        <span style={{ alignItems: 'center', display: 'inline-flex', gap: 8 }}>
+          {isAutoSkillMode && !isIncluded && (
+            <span className={cx(styles.excludedText)}>{t('tools.activation.excluded')}</span>
+          )}
+          <Switch
+            checked={isIncluded}
+            size="small"
+            onClick={(_, event) => event.stopPropagation()}
+            onChange={async (next, event) => {
+              event?.stopPropagation?.();
+              await togglePlugin(id, next);
+            }}
+          />
+          {configureConfig && (
+            <span data-open={policyOpenId === id || undefined} data-skill-actions="">
+              {renderPolicyMenu(id, configureConfig)}
+            </span>
+          )}
         </span>
       );
 
@@ -623,7 +609,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
         searchText: searchText || String(title || id),
       } as SkillMenuItem;
     },
-    [checkedSet, isManualSkillMode, policyOpenId, renderPolicyMenu, renderToolLabel, togglePlugin],
+    [checkedSet, isAutoSkillMode, policyOpenId, renderPolicyMenu, renderToolLabel, t, togglePlugin],
   );
 
   // Klavis-related state
