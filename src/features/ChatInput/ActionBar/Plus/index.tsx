@@ -16,7 +16,6 @@ import {
   PlusIcon,
   SearchCheck,
   Settings2Icon,
-  Store,
   TypeIcon,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -25,7 +24,6 @@ import { useTranslation } from 'react-i18next';
 
 import { message } from '@/components/AntdStaticMethods';
 import { openAttachKnowledgeModal } from '@/features/LibraryModal';
-import { createSkillStoreModal } from '@/features/SkillStore';
 import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
 import { useVisualMediaUploadAbility } from '@/hooks/useVisualMediaUploadAbility';
 import { useAgentStore } from '@/store/agent';
@@ -338,11 +336,6 @@ const PlusAction = memo(() => {
     [updateAgentChatConfig],
   );
 
-  const handleOpenTools = useCallback(() => {
-    setDropdownOpen(false);
-    createSkillStoreModal();
-  }, []);
-
   const handleToggleParams = useCallback(() => {
     setDropdownOpen(false);
     if (isParamsPanelActive) {
@@ -442,17 +435,7 @@ const PlusAction = memo(() => {
       isAgentModeEnabled && enableFC
         ? [
             {
-              children: [
-                {
-                  icon: Store,
-                  key: 'add-skills',
-                  label: t('plus.addSkills'),
-                  onClick: handleOpenTools,
-                },
-                ...(skillMenuItems.length > 0
-                  ? [{ type: 'divider' as const }, ...skillMenuItems]
-                  : []),
-              ],
+              children: skillMenuItems,
               footer: skillMarketFooter,
               header: skillMarketHeader,
               icon: SkillsIcon,
@@ -592,7 +575,6 @@ const PlusAction = memo(() => {
     editor,
     enableFC,
     enableKnowledgeBase,
-    handleOpenTools,
     handleSelectSearch,
     handleToggleMemory,
     handleToggleParams,

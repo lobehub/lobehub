@@ -8,18 +8,16 @@ import type { ItemType } from '@lobehub/ui';
 import { Avatar, Icon, Popover, SearchBar, stopPropagation, Tag, Tooltip } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { McpIcon, SkillsIcon } from '@lobehub/ui/icons';
-import { Switch } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import {
   BadgeCheck,
   Check,
-  ChevronDown,
-  ChevronRight,
   MoreHorizontal,
   Package,
   Pin,
   Settings,
+  Store,
   Trash2,
   Wrench,
   Zap,
@@ -30,6 +28,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import DevModal from '@/features/PluginDevModal';
+import { createSkillStoreModal } from '@/features/SkillStore';
 import { useCheckPluginsIsInstalled } from '@/hooks/useCheckPluginsIsInstalled';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { useAgentStore } from '@/store/agent';
@@ -306,6 +305,16 @@ const styles = createStaticStyles(({ css }) => ({
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
+  pinIndicator: css`
+    flex: none;
+    color: ${cssVar.colorTextQuaternary};
+  `,
+  toolActions: css`
+    display: inline-flex;
+    flex: none;
+    gap: 6px;
+    align-items: center;
+  `,
   toolRow: css`
     display: flex;
     gap: 16px;
@@ -314,6 +323,17 @@ const styles = createStaticStyles(({ css }) => ({
 
     width: 100%;
     min-width: 0;
+
+    /* Skill 3-dot menu shows only on row hover (or while its own menu is open). */
+    [data-skill-actions] {
+      opacity: 0;
+      transition: opacity 150ms ${cssVar.motionEaseOut};
+    }
+
+    &:hover [data-skill-actions],
+    [data-skill-actions][data-open] {
+      opacity: 1;
+    }
   `,
   typeTag: css`
     display: inline-flex;
@@ -382,8 +402,6 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   const agentId = useAgentId();
   const navigate = useNavigate();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
-  const [pinnedOpen, setPinnedOpen] = useState(true);
-  const [autoOpen, setAutoOpen] = useState(true);
   const [policyOpenId, setPolicyOpenId] = useState<string | null>(null);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [autoModeLoading, setAutoModeLoading] = useState(false);
@@ -613,10 +631,15 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           {extraTag}
           {badge && <span className={cx(styles.typeTag)}>{badge}</span>}
         </span>
-        {action}
+        <span className={cx(styles.toolActions)}>
+          {checkedSet.has(id) && <Icon className={cx(styles.pinIndicator)} icon={Pin} size={14} />}
+          <span data-open={policyOpenId === id || undefined} data-skill-actions="">
+            {action}
+          </span>
+        </span>
       </span>
     ),
-    [openSkillPolicyMenu],
+    [checkedSet, openSkillPolicyMenu, policyOpenId],
   );
 
   const createManagedSkillItem = useCallback(
@@ -1190,69 +1213,8 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   };
   const allPinnedItems = allSkillItems.filter((item) => checkedSet.has(String(item.key)));
   const allAutoItems = allSkillItems.filter((item) => !checkedSet.has(String(item.key)));
-  const pinnedItems = filterBySearch(allPinnedItems);
-  const autoItems = filterBySearch(allAutoItems);
-
-  const renderActivationGroupLabel = ({
-    autoSwitch,
-    icon,
-    open,
-    title,
-    onToggle,
-  }: {
-    autoSwitch?: boolean;
-    icon: ReactNode;
-    open: boolean;
-    title: string;
-    onToggle: () => void;
-  }) => (
-    <div
-      data-skill-activation-group
-      className={cx(styles.activationGroupHeader)}
-      role="button"
-      tabIndex={0}
-      onClick={(event) => {
-        event.stopPropagation();
-        onToggle();
-      }}
-    >
-      <div className={cx(styles.activationGroupTitleBlock)}>
-        {icon}
-        <span className={cx(styles.activationGroupTitleText)}>{title}</span>
-      </div>
-      <div className={cx(styles.activationGroupActions)}>
-        {autoSwitch && (
-          <span
-            className={cx(styles.switchWrap)}
-            onClick={(event) => {
-              event.stopPropagation();
-            }}
-          >
-            <Switch
-              checked={isAutoSkillMode}
-              loading={autoModeLoading}
-              size="small"
-              onClick={(_, event) => event.stopPropagation()}
-              onChange={async (checked, event) => {
-                event?.stopPropagation?.();
-                setAutoModeLoading(true);
-                try {
-                  await updateAgentChatConfig({
-                    skillActivateMode: checked ? 'auto' : 'manual',
-                  });
-                } finally {
-                  setAutoModeLoading(false);
-                }
-              }}
-            />
-          </span>
-        )}
-        <div className={cx(styles.activationGroupChevron)}>
-          <Icon icon={open ? ChevronDown : ChevronRight} size={13} />
-        </div>
-      </div>
-    </div>
-  );
+  // Flat list (no pinned/auto groups): pinned skills first, then the rest.
+  const flatSkillItems = filterBySearch([...allPinnedItems, ...allAutoItems]);
 
   const marketHeader = (
     <div className={cx(styles.searchBox)} onClick={stopPropagation} onKeyDown={stopPropagation}>
@@ -1280,6 +1242,20 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           <Icon icon={Zap} size={12} />
           {allAutoItems.length}
         </span>
+        <Tooltip placement="top" title={t('plus.addSkills', { ns: 'chat' })}>
+          <button
+            aria-label={t('plus.addSkills', { ns: 'chat' })}
+            className={cx(styles.statsSettingsButton)}
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              closeDropdown?.();
+              createSkillStoreModal();
+            }}
+          >
+            <Icon icon={Store} size={14} />
+          </button>
+        </Tooltip>
         <Tooltip placement="top" title={t('tools.plugins.management')}>
           <button
             aria-label={t('tools.plugins.management')}
@@ -1298,45 +1274,28 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     ) : undefined;
 
   const marketItems: ItemType[] = [
-    ...(pinnedItems.length > 0
-      ? [
-          {
-            children: pinnedOpen ? pinnedItems : [],
-            key: 'pinned',
-            label: renderActivationGroupLabel({
-              icon: <Icon icon={Pin} size={14} />,
-              open: pinnedOpen,
-              title: t('tools.activation.pinned'),
-              onToggle: () => setPinnedOpen((open) => !open),
-            }),
-            type: 'group' as const,
-          } as ItemType,
-        ]
+    // Dedicated "Auto" entry: a trailing switch controlling auto skill-activation mode.
+    {
+      checked: isAutoSkillMode,
+      disabled: autoModeLoading,
+      icon: <Icon icon={Zap} size={SKILL_ICON_SIZE} />,
+      key: 'skill-auto-mode',
+      label: t('tools.skillActivateMode.auto.title'),
+      onCheckedChange: async (next: boolean) => {
+        setAutoModeLoading(true);
+        try {
+          await updateAgentChatConfig({ skillActivateMode: next ? 'auto' : 'manual' });
+        } finally {
+          setAutoModeLoading(false);
+        }
+      },
+      type: 'switch',
+    } as unknown as ItemType,
+    ...(flatSkillItems.length > 0
+      ? [{ key: 'skill-list-divider', type: 'divider' as const } as ItemType]
       : []),
-    ...(pinnedItems.length > 0 && autoItems.length > 0
-      ? [
-          {
-            key: 'skill-activation-divider',
-            type: 'divider' as const,
-          } as ItemType,
-        ]
-      : []),
-    ...(autoItems.length > 0
-      ? [
-          {
-            children: autoOpen ? autoItems : [],
-            key: 'auto',
-            label: renderActivationGroupLabel({
-              autoSwitch: true,
-              icon: <Icon icon={Zap} size={14} />,
-              open: autoOpen,
-              title: t('tools.activation.auto'),
-              onToggle: () => setAutoOpen((open) => !open),
-            }),
-            type: 'group' as const,
-          } as ItemType,
-        ]
-      : []),
+    // Flat skill list (pinned first); each pinned row carries a trailing Pin icon.
+    ...flatSkillItems,
   ];
 
   // Items for the installed tab - only show installed plugins

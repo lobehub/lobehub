@@ -27,13 +27,13 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 8px;
     align-items: center;
 
-    /* Footer drives the Attachments submenu width to match the skill submenu (320px);
-       the negative inline margin cancels the slot footer's 12px padding, matching the
-       skill search field's edge alignment. (Menu-item rows can't set width —
-       SubmenuScrollStyle forces min-width: 0 for ellipsis.) */
+    /* width 320 + margin-inline -12 anchors the submenu to 320px (matching the skill
+       submenu) and lets the row span full width; padding-inline 12 lines its icon/text
+       up with the menu items above. */
     width: 320px;
     min-height: 32px;
     margin-inline: -12px;
+    padding-inline: 12px;
     border: 0;
     border-radius: 6px;
 
@@ -114,28 +114,11 @@ export const useControls = ({
     ),
   }));
 
+  // Flat list (no "Libraries" / "Files" group headers): libraries first, then files.
   const relatedGroups: ItemType[] = [
-    ...(libraryItems.length > 0
-      ? [
-          {
-            children: libraryItems,
-            key: 'relativeLibraries',
-            label: t('knowledgeBase.libraries'),
-            type: 'group' as const,
-          },
-        ]
-      : []),
+    ...libraryItems,
     ...(libraryItems.length > 0 && fileItems.length > 0 ? [{ type: 'divider' as const }] : []),
-    ...(fileItems.length > 0
-      ? [
-          {
-            children: fileItems,
-            key: 'relativeFiles',
-            label: t('knowledgeBase.files'),
-            type: 'group' as const,
-          },
-        ]
-      : []),
+    ...fileItems,
   ];
 
   const footer = (
