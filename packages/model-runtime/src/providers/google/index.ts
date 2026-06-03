@@ -207,9 +207,9 @@ export class LobeGoogleAI implements LobeRuntimeAI {
         imageConfig:
           modelsWithModalities.has(model) && imageAspectRatio && imageAspectRatio !== 'auto'
             ? {
-              aspectRatio: imageAspectRatio,
-              imageSize: imageResolution,
-            }
+                aspectRatio: imageAspectRatio,
+                imageSize: imageResolution,
+              }
             : undefined,
         maxOutputTokens: payload.max_tokens,
         responseModalities: modelsWithModalities.has(model) ? ['Text', 'Image'] : undefined,
