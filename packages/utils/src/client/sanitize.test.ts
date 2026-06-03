@@ -41,6 +41,7 @@ describe('sanitizeSVGContent', () => {
     const maliciousSvg = `
       <svg xmlns="http://www.w3.org/2000/svg">
         <circle cx="50" cy="50" r="40" fill="red" onclick="alert('click')" onload="alert('load')" />
+        <rect width="10" height="10" onMouseOver='alert("hover")' onfocus=alert(1) />
       </svg>
     `;
 
@@ -48,6 +49,8 @@ describe('sanitizeSVGContent', () => {
 
     expect(sanitized).not.toContain('onclick');
     expect(sanitized).not.toContain('onload');
+    expect(sanitized).not.toContain('onMouseOver');
+    expect(sanitized).not.toContain('onfocus');
     expect(sanitized).toContain('<circle');
     expect(sanitized).toContain('fill="red"');
   });
