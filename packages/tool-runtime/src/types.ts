@@ -82,6 +82,12 @@ export interface RunCommandParams {
 
 export interface GetCommandOutputParams {
   commandId: string;
+  /**
+   * Max time to wait for this observation before returning (does not kill the
+   * process). Forwarded to the service so callers polling a running command can
+   * honor a per-call/gateway budget instead of the service's default wait.
+   */
+  timeout?: number;
 }
 
 export interface KillCommandParams {

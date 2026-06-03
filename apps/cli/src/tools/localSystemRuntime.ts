@@ -174,8 +174,15 @@ export async function runLocalSystemTool(
     }
 
     case 'getCommandOutput': {
+      // Forward `timeout` (gateway per-call budget, injected into args by
+      // executeToolCall) so polling a running command honors it instead of the
+      // service's default wait. The runtime carries it through to getOutput.
       const p = args as GetCommandOutputParams;
-      return runtime.getCommandOutput({ commandId: p.shell_id, filter: p.filter } as never);
+      return runtime.getCommandOutput({
+        commandId: p.shell_id,
+        filter: p.filter,
+        timeout: p.timeout,
+      } as never);
     }
 
     case 'killCommand': {

@@ -3,6 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
+import { ShellProcessManager } from '@lobechat/local-file-shell';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { executeToolCall } from './index';
@@ -172,6 +173,18 @@ describe('executeToolCall', () => {
     // The runtime envelopes a failed lookup as success:true with the failure in state
     expect(result.success).toBe(true);
     expect((result.state as { success: boolean }).success).toBe(false);
+  });
+
+  it('should forward the gateway timeout to getCommandOutput polling', async () => {
+    const spy = vi
+      .spyOn(ShellProcessManager.prototype, 'getOutput')
+      .mockResolvedValue({ exit_code: 0, output: '', stderr: '', stdout: '', success: true });
+
+    // 3rd arg is the gateway per-call timeout; executeToolCall injects it into args
+    await executeToolCall('getCommandOutput', JSON.stringify({ shell_id: 'sid' }), 5000);
+
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ shell_id: 'sid', timeout: 5000 }));
+    spy.mockRestore();
   });
 
   it('should dispatch killCommand', async () => {
