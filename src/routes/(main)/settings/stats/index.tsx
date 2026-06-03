@@ -17,13 +17,13 @@ import {
   ShareButton,
   TotalAssistants,
   TotalMessages,
+  TotalTokens,
   TotalTopics,
-  TotalWords,
   Welcome,
 } from './features/overview';
 import { AssistantsRank, ModelsRank, TopicsRank } from './features/rankings';
 import { UsageCards, UsageTable, UsageTrends } from './features/usage';
-import { AiHeatmaps } from './features/visualization';
+import { AiHeatmaps, HeatmapStats } from './features/visualization';
 import { GroupBy } from './types';
 
 const StatsSetting = memo<{ mobile?: boolean }>(({ mobile }) => {
@@ -70,8 +70,9 @@ const StatsSetting = memo<{ mobile?: boolean }>(({ mobile }) => {
           <TotalAssistants mobile={mobile} />
           <TotalTopics mobile={mobile} />
           <TotalMessages mobile={mobile} />
-          <TotalWords />
+          <TotalTokens />
         </Grid>
+        <HeatmapStats />
         <Divider dashed />
         <AiHeatmaps mobile={mobile} />
         <Divider dashed />

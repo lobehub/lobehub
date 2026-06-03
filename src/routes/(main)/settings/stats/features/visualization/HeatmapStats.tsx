@@ -1,4 +1,3 @@
-import { type HeatmapsProps } from '@lobehub/charts';
 import { Block, Flexbox, Skeleton } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { cssVar } from 'antd-style';
@@ -6,13 +5,11 @@ import { Fragment, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useClientDataSWR } from '@/libs/swr';
+import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
 import { formatShortenNumber } from '@/utils/format';
 
-interface HeatmapStatsProps {
-  data?: HeatmapsProps['data'];
-  loading?: boolean;
-}
+import { HeatmapType } from '../../types';
 
 /**
  * Render a wall-clock duration in seconds as a compact "1h 15m" / "15m 20s" /
@@ -29,26 +26,32 @@ const formatDuration = (seconds?: number) => {
 };
 
 /**
- * Token-dimension summary row for the activity heatmap. The cumulative / peak /
- * streak figures are derived from the heatmap `data` array (no extra request);
- * the longest-task duration comes from the agent operations' wall-clock time.
+ * Token-dimension summary row for the activity heatmap. The peak / streak figures
+ * are derived from the daily token-heatmap series (same SWR key as the heatmap,
+ * so the request is deduped); the longest-task duration comes from the agent
+ * operations' wall-clock time. The cumulative token total lives in the overview
+ * cards above, so it is intentionally not repeated here.
  */
-const HeatmapStats = memo<HeatmapStatsProps>(({ data, loading }) => {
+const HeatmapStats = memo(() => {
   const { t } = useTranslation('auth');
+
+  const { data, isLoading } = useClientDataSWR(
+    ['stats-heatmaps', HeatmapType.Tokens].join('-'),
+    () => messageService.getTokenHeatmaps(),
+  );
+  const loading = isLoading || !data;
 
   const { data: maxTaskDuration } = useClientDataSWR('stats-max-task-duration', () =>
     topicService.getMaxTaskDuration(),
   );
 
   const stats = useMemo(() => {
-    if (!data?.length) return { current: 0, cumulative: 0, longest: 0, peak: 0 };
+    if (!data?.length) return { current: 0, longest: 0, peak: 0 };
 
-    let cumulative = 0;
     let peak = 0;
     let longest = 0;
     let run = 0;
     for (const item of data) {
-      cumulative += item.count;
       if (item.count > peak) peak = item.count;
       if (item.count > 0) {
         run += 1;
@@ -67,13 +70,12 @@ const HeatmapStats = memo<HeatmapStatsProps>(({ data, loading }) => {
       else break;
     }
 
-    return { current, cumulative, longest, peak };
+    return { current, longest, peak };
   }, [data]);
 
   const days = (n: number) => [n, t('stats.days')].join(' ');
 
   const items = [
-    { label: t('stats.heatmapStats.totalTokens'), value: formatShortenNumber(stats.cumulative) },
     { label: t('stats.heatmapStats.peakTokens'), value: formatShortenNumber(stats.peak) },
     {
       label: t('stats.heatmapStats.longestTask'),

@@ -12,7 +12,6 @@ import { formatIntergerNumber, formatShortenNumber } from '@/utils/format';
 
 import { HeatmapType } from '../../types';
 import StatsFormGroup from '../components/StatsFormGroup';
-import HeatmapStats from './HeatmapStats';
 
 const AiHeatmaps = memo<
   Omit<HeatmapsProps, 'data' | 'ref'> & { inShare?: boolean; mobile?: boolean }
@@ -132,10 +131,7 @@ const AiHeatmaps = memo<
       fontSize={16}
       title={t('stats.lastYearActivity')}
     >
-      <Flexbox gap={16}>
-        {isTokens && <HeatmapStats data={data} loading={isLoading || !data} />}
-        {content}
-      </Flexbox>
+      {content}
     </StatsFormGroup>
   );
 });
