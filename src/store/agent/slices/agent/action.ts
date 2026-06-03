@@ -33,6 +33,7 @@ import { setLocalAgentWorkingDirectory } from '../../utils/localAgentWorkingDire
 import type { AgentSliceState, LoadingState, SaveStatus } from './initialState';
 
 const FETCH_AGENT_CONFIG_KEY = 'FETCH_AGENT_CONFIG';
+const AGENT_DOCUMENT_REFRESH_DEBOUNCE_MS = 2000;
 type AgentMetaUpdate = Partial<
   Pick<
     AgentItem,
@@ -52,6 +53,8 @@ export const createAgentSlice = (set: Setter, get: () => AgentStore, _api?: unkn
 export class AgentSliceActionImpl {
   readonly #get: () => AgentStore;
   readonly #set: Setter;
+  readonly #agentDocumentRefreshSequence = new Map<string, number>();
+  readonly #agentDocumentRefreshTimers = new Map<string, ReturnType<typeof setTimeout>>();
   readonly #pendingAgentDocuments = new Map<string, Promise<AgentContextDocument[] | undefined>>();
 
   constructor(set: Setter, get: () => AgentStore, _api?: unknown) {
@@ -363,6 +366,64 @@ export class AgentSliceActionImpl {
     this.#pendingAgentDocuments.set(agentId, request);
 
     return request;
+  };
+
+  prefetchAgentDocuments = (agentId?: string | null): void => {
+    if (!agentId) return;
+
+    void this.#get()
+      .ensureAgentDocuments(agentId)
+      .catch((error) => {
+        console.error('[AgentStore] Failed to prefetch agent documents:', error);
+      });
+  };
+
+  refreshAgentDocuments = async (
+    agentId?: string | null,
+  ): Promise<AgentContextDocument[] | undefined> => {
+    if (!agentId) return undefined;
+
+    const pendingRequest = this.#pendingAgentDocuments.get(agentId);
+    if (pendingRequest) return pendingRequest;
+
+    const sequence = (this.#agentDocumentRefreshSequence.get(agentId) ?? 0) + 1;
+    this.#agentDocumentRefreshSequence.set(agentId, sequence);
+
+    const request = resolveAgentDocumentsContext({ agentId })
+      .then((documents) => {
+        if (documents && this.#agentDocumentRefreshSequence.get(agentId) === sequence) {
+          this.#syncAgentDocuments(agentId, documents);
+        }
+
+        return documents;
+      })
+      .finally(() => {
+        if (this.#pendingAgentDocuments.get(agentId) === request) {
+          this.#pendingAgentDocuments.delete(agentId);
+        }
+      });
+
+    this.#pendingAgentDocuments.set(agentId, request);
+
+    return request;
+  };
+
+  scheduleRefreshAgentDocuments = (agentId?: string | null): void => {
+    if (!agentId) return;
+
+    const currentTimer = this.#agentDocumentRefreshTimers.get(agentId);
+    if (currentTimer) clearTimeout(currentTimer);
+
+    const timer = setTimeout(() => {
+      this.#agentDocumentRefreshTimers.delete(agentId);
+      void this.#get()
+        .refreshAgentDocuments(agentId)
+        .catch((error) => {
+          console.error('[AgentStore] Failed to refresh agent documents:', error);
+        });
+    }, AGENT_DOCUMENT_REFRESH_DEBOUNCE_MS);
+
+    this.#agentDocumentRefreshTimers.set(agentId, timer);
   };
 
   internal_dispatchAgentMap = (id: string, config: PartialDeep<LobeAgentConfig>): void => {

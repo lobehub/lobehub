@@ -3,7 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { agentService } from '@/services/agent';
-import { agentDocumentService } from '@/services/agentDocument';
+import { agentDocumentService, resolveAgentDocumentsContext } from '@/services/agentDocument';
 import { type LobeAgentConfig } from '@/types/agent';
 import { withSWR } from '~test-utils';
 
@@ -29,6 +29,7 @@ vi.mock('@/services/agentDocument', () => ({
   agentDocumentService: {
     getDocuments: vi.fn(),
   },
+  resolveAgentDocumentsContext: vi.fn(),
 }));
 
 vi.mock('@/utils/agentDocumentContextMapping', () => ({
@@ -114,6 +115,79 @@ describe('AgentSlice Actions', () => {
           },
         ]);
       });
+    });
+  });
+
+  describe('agent document context cache', () => {
+    it('should prefetch agent documents into the context cache', async () => {
+      vi.mocked(resolveAgentDocumentsContext).mockResolvedValue([
+        {
+          content: 'prefetched setup',
+          filename: 'setup.md',
+          id: 'doc-1',
+          title: 'Setup',
+        } as any,
+      ]);
+
+      const { result } = renderHook(() => useAgentStore());
+
+      act(() => {
+        result.current.prefetchAgentDocuments('agent-1');
+      });
+
+      await waitFor(() => {
+        expect(result.current.agentDocumentsMap['agent-1']).toEqual([
+          {
+            content: 'prefetched setup',
+            filename: 'setup.md',
+            id: 'doc-1',
+            title: 'Setup',
+          },
+        ]);
+      });
+      expect(resolveAgentDocumentsContext).toHaveBeenCalledWith({ agentId: 'agent-1' });
+    });
+
+    it('should force refresh cached agent documents', async () => {
+      vi.mocked(resolveAgentDocumentsContext).mockResolvedValue([
+        {
+          content: 'fresh setup',
+          filename: 'setup.md',
+          id: 'doc-2',
+          title: 'Fresh Setup',
+        } as any,
+      ]);
+
+      const { result } = renderHook(() => useAgentStore());
+
+      act(() => {
+        useAgentStore.setState({
+          agentDocumentsMap: {
+            'agent-1': [
+              {
+                content: 'stale setup',
+                filename: 'setup.md',
+                id: 'doc-1',
+                title: 'Stale Setup',
+              },
+            ],
+          },
+        });
+      });
+
+      await act(async () => {
+        await result.current.refreshAgentDocuments('agent-1');
+      });
+
+      expect(result.current.agentDocumentsMap['agent-1']).toEqual([
+        {
+          content: 'fresh setup',
+          filename: 'setup.md',
+          id: 'doc-2',
+          title: 'Fresh Setup',
+        },
+      ]);
+      expect(resolveAgentDocumentsContext).toHaveBeenCalledWith({ agentId: 'agent-1' });
     });
   });
 

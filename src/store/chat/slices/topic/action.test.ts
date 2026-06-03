@@ -8,6 +8,7 @@ import { mutate } from '@/libs/swr';
 import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
+import { useAgentStore } from '@/store/agent';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
@@ -80,6 +81,8 @@ beforeEach(() => {
     },
     false,
   );
+  useAgentStore.setState({ agentDocumentsMap: {} });
+  vi.spyOn(useAgentStore.getState(), 'prefetchAgentDocuments').mockImplementation(() => {});
   useSessionStore.setState(
     {
       activeId: 'inbox',
@@ -805,6 +808,23 @@ describe('topic action', () => {
 
       expect(useChatStore.getState().activeTopicId).toBe(topicId);
       expect(refreshMessagesSpy).not.toHaveBeenCalled();
+    });
+
+    it('should prefetch active agent documents when switching topic', async () => {
+      const topicId = 'topic-id';
+      const activeAgentId = 'agent-1';
+      const { result } = renderHook(() => useChatStore());
+      const prefetchSpy = vi.spyOn(useAgentStore.getState(), 'prefetchAgentDocuments');
+
+      act(() => {
+        useChatStore.setState({ activeAgentId });
+      });
+
+      await act(async () => {
+        await result.current.switchTopic(topicId, { skipRefreshMessage: true });
+      });
+
+      expect(prefetchSpy).toHaveBeenCalledWith(activeAgentId);
     });
 
     it('should clear new key data when switching to null (main scope)', async () => {

@@ -14,6 +14,7 @@ import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
+import { getAgentStoreState } from '@/store/agent';
 import { type ChatStore } from '@/store/chat';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { useGlobalStore } from '@/store/global';
@@ -838,6 +839,7 @@ export class ChatTopicActionImpl {
 
     if (activeAgentId) {
       this.#get().clearUnreadCompletedTopic(activeAgentId, id ?? null);
+      getAgentStoreState().prefetchAgentDocuments(activeAgentId);
     }
 
     if (opts.skipRefreshMessage) return;

@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as toolEngineering from '@/helpers/toolEngineering';
 import { chatService } from '@/services/chat';
 import * as agentConfigResolver from '@/services/chat/mecha/agentConfigResolver';
+import { useAgentStore } from '@/store/agent';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
 
@@ -126,6 +127,7 @@ beforeEach(() => {
       internal_createAgentState: realCreateAgentState,
     });
   });
+  vi.spyOn(useAgentStore.getState(), 'scheduleRefreshAgentDocuments').mockImplementation(() => {});
 });
 
 afterEach(() => {
@@ -155,6 +157,10 @@ describe('StreamingExecutor actions', () => {
         .mockImplementation(async ({ onFinish }) => {
           await onFinish?.(TEST_CONTENT.AI_RESPONSE, {} as any);
         });
+      const refreshAgentDocumentsSpy = vi.spyOn(
+        useAgentStore.getState(),
+        'scheduleRefreshAgentDocuments',
+      );
 
       await act(async () => {
         await result.current.executeClientAgent({
@@ -183,6 +189,7 @@ describe('StreamingExecutor actions', () => {
           sourceType: 'client.runtime.start',
         }),
       );
+      expect(refreshAgentDocumentsSpy).toHaveBeenCalledWith(TEST_IDS.SESSION_ID);
 
       streamSpy.mockRestore();
     });

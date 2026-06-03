@@ -496,6 +496,17 @@ export class StreamingExecutorActionImpl {
 
     // Extract values from context
     const { agentId, topicId, threadId, subAgentId, groupId, scope } = context;
+    const agentDocumentRefreshIds = Array.from(
+      new Set(
+        [agentId, getAgentStoreState().activeAgentId].filter((id): id is string => Boolean(id)),
+      ),
+    );
+    const scheduleAgentDocumentsRefresh = () => {
+      const agentStore = getAgentStoreState();
+      for (const refreshAgentId of agentDocumentRefreshIds) {
+        agentStore.scheduleRefreshAgentDocuments(refreshAgentId);
+      }
+    };
 
     // Determine effectiveAgentId for agent config retrieval:
     // - subAgentId is used when present (behavior depends on scope)
@@ -876,6 +887,7 @@ export class StreamingExecutorActionImpl {
         }
 
         emitRuntimeCompleteSource();
+        scheduleAgentDocumentsRefresh();
 
         const execContext = { ...context };
         const mergedContent = merged.content;
@@ -941,6 +953,7 @@ export class StreamingExecutorActionImpl {
 
     log('[executeClientAgent] completed');
     emitRuntimeCompleteSource();
+    scheduleAgentDocumentsRefresh();
 
     // Desktop notification (if not in tools calling mode)
     if (isDesktop) {
