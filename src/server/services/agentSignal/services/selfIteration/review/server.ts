@@ -29,7 +29,8 @@ import type {
 import { createMemoryService } from '../tools/shared';
 import type { EvidenceRef } from '../types';
 import { Risk, Scope } from '../types';
-import { createBriefSelfReviewService, createServerSelfReviewBriefWriter } from './brief';
+import type { createServerSelfReviewBriefWriter } from './brief';
+import { createBriefSelfReviewService } from './brief';
 import type { SelfReviewBriefTextTranslator } from './briefText';
 import type {
   FeedbackActivityDigest,
