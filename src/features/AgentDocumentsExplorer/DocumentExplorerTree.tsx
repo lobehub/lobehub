@@ -74,6 +74,9 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
 
   const startInlineRename = useCallback((id: string) => {
     treeRef.current?.startRenaming(id);
+    // Match the new-file flow: leave the extension out of the selection so
+    // the user can retype only the stem.
+    requestAnimationFrame(() => selectStemOfActiveRenameInput(containerRef.current));
   }, []);
 
   const ops = useDocumentTreeOps({ agentId, data, mutate });
