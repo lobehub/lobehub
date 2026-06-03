@@ -606,21 +606,22 @@ export const contextEngineering = async ({
   }
 
   // Resolve topic references from messages containing <refer_topic> tags
-  const topicReferences = await resolveTopicReferences(
-    messages,
-    async (topicId: string) => {
-      const topic = topicSelectors.getTopicById(topicId)(getChatStoreState());
-      return topic ?? null;
-    },
-    async (topicId: string) => {
-      const { messageService } = await import('@/services/message');
-      const msgs = await messageService.getMessages({ agentId, groupId, topicId });
-      return msgs.map((m) => ({
-        content: typeof m.content === 'string' ? m.content : '',
-        role: m.role,
-      }));
-    },
-  );
+  const topicReferences =
+    (await resolveTopicReferences(
+      messages,
+      async (topicId: string) => {
+        const topic = topicSelectors.getTopicById(topicId)(getChatStoreState());
+        return topic ?? null;
+      },
+      async (topicId: string) => {
+        const { messageService } = await import('@/services/message');
+        const msgs = await messageService.getMessages({ agentId, groupId, topicId });
+        return msgs.map((m) => ({
+          content: typeof m.content === 'string' ? m.content : '',
+          role: m.role,
+        }));
+      },
+    )) ?? [];
 
   // Build onboarding context if this is the web-onboarding agent.
   // Single combined trpc call — server runs state/soul/persona DB queries in parallel.
