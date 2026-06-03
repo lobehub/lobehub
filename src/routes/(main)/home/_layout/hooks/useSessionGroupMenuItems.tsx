@@ -25,7 +25,7 @@ const styles = createStaticStyles(({ css }) => ({
  * Used in List/Group/Actions.tsx
  */
 export const useSessionGroupMenuItems = () => {
-  const { t } = useTranslation('chat');
+  const { t } = useTranslation(['chat', 'common']);
   const { message } = App.useApp();
   const groupTemplates = useGroupTemplates();
 
@@ -90,11 +90,14 @@ export const useSessionGroupMenuItems = () => {
         onClick: (info: any) => {
           info.domEvent?.stopPropagation();
           confirmModal({
+            cancelText: t('cancel', { ns: 'common' }),
+            content: t('sessionGroup.confirmRemoveGroupAlert'),
             okButtonProps: { danger: true },
+            okText: t('delete', { ns: 'common' }),
             onOk: async () => {
               await removeGroup(groupId);
             },
-            title: t('sessionGroup.confirmRemoveGroupAlert'),
+            title: t('delete', { ns: 'common' }),
           });
         },
       };

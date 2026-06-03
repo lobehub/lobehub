@@ -170,17 +170,20 @@ export const useFileItemDropdown = ({
                 domEvent.stopPropagation();
 
                 confirmModal({
+                  cancelText: t('cancel', { ns: 'common' }),
+                  content: t('FileManager.actions.confirmRemoveFromLibrary', {
+                    count: 1,
+                  }),
                   okButtonProps: {
                     danger: true,
                   },
+                  okText: t('FileManager.actions.removeFromLibrary'),
                   onOk: async () => {
                     await removeFilesFromKnowledgeBase(libraryId, [id]);
 
                     message.success(t('FileManager.actions.removeFromLibrarySuccess'));
                   },
-                  title: t('FileManager.actions.confirmRemoveFromLibrary', {
-                    count: 1,
-                  }),
+                  title: t('FileManager.actions.removeFromLibrary'),
                 });
               },
             },

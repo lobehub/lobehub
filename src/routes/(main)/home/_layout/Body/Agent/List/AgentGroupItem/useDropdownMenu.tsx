@@ -29,7 +29,7 @@ export const useGroupDropdownMenu = ({
   pinned,
   title,
 }: UseGroupDropdownMenuParams): (() => MenuProps['items']) => {
-  const { t } = useTranslation('chat');
+  const { t } = useTranslation(['chat', 'common']);
   const { message } = App.useApp();
 
   const openAgentInNewWindow = useGlobalStore((s) => s.openAgentInNewWindow);
@@ -94,12 +94,15 @@ export const useGroupDropdownMenu = ({
           onClick: ({ domEvent }: any) => {
             domEvent.stopPropagation();
             confirmModal({
+              cancelText: t('cancel', { ns: 'common' }),
+              content: t('confirmRemoveChatGroupItemAlert'),
               okButtonProps: { danger: true },
+              okText: t('delete', { ns: 'common' }),
               onOk: async () => {
                 await removeAgentGroup(id);
                 message.success(t('confirmRemoveGroupSuccess'));
               },
-              title: t('confirmRemoveChatGroupItemAlert'),
+              title: t('delete', { ns: 'common' }),
             });
           },
         },

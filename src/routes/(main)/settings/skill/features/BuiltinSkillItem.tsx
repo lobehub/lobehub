@@ -20,7 +20,7 @@ interface BuiltinSkillItemProps {
 }
 
 const BuiltinSkillItem = memo<BuiltinSkillItemProps>(({ identifier, title, avatar }) => {
-  const { t } = useTranslation(['setting', 'plugin']);
+  const { t } = useTranslation(['setting', 'plugin', 'common']);
 
   const [installBuiltinTool, uninstallBuiltinTool, isInstalled] = useToolStore((s) => [
     s.installBuiltinTool,
@@ -34,11 +34,14 @@ const BuiltinSkillItem = memo<BuiltinSkillItemProps>(({ identifier, title, avata
 
   const handleUninstall = () => {
     confirmModal({
+      cancelText: t('cancel', { ns: 'common' }),
+      content: t('store.actions.confirmUninstall', { ns: 'plugin' }),
       okButtonProps: { danger: true },
+      okText: t('store.actions.uninstall', { ns: 'plugin' }),
       onOk: async () => {
         await uninstallBuiltinTool(identifier);
       },
-      title: t('store.actions.confirmUninstall', { ns: 'plugin' }),
+      title: t('store.actions.uninstall', { ns: 'plugin' }),
     });
   };
 
