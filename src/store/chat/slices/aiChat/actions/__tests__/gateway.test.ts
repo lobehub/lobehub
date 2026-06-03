@@ -33,6 +33,36 @@ vi.mock('@/store/user', () => ({
   },
 }));
 
+// ─── Local-device activation (本机) test seams ───
+// Controlled per-test; default off so the rest of the suite runs as web (no
+// device resolution, no electron IPC).
+const mockEnv = vi.hoisted(() => ({ isDesktop: false }));
+const mockGateway = vi.hoisted(() => ({ getDeviceInfo: vi.fn() }));
+const mockAgency = vi.hoisted(() => ({
+  value: undefined as { executionTarget?: string } | undefined,
+}));
+
+vi.mock('@/const/version', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/const/version')>();
+  return {
+    ...actual,
+    get isDesktop() {
+      return mockEnv.isDesktop;
+    },
+  };
+});
+
+vi.mock('@/services/electron/gatewayConnection', () => ({
+  gatewayConnectionService: { getDeviceInfo: mockGateway.getDeviceInfo },
+}));
+
+vi.mock('@/store/agent', () => ({ getAgentStoreState: () => ({}) }));
+
+vi.mock('@/store/agent/selectors', () => ({
+  agentByIdSelectors: { getAgencyConfigById: () => () => mockAgency.value },
+  agentSelectors: { currentAgentWorkingDirectory: () => undefined },
+}));
+
 // ─── Mock Client Factory ───
 
 function createMockClient(): GatewayConnection['client'] & {
@@ -747,6 +777,109 @@ describe('GatewayActionImpl', () => {
       expect(interruptTaskSpy).toHaveBeenCalledWith({
         operationId: 'server-op-xyz',
         topicId: 'topic-1',
+      });
+    });
+
+    // When the desktop runs against 本机 (executionTarget 'local'), the client
+    // must forward this machine's own gateway deviceId so the server can preset
+    // activeDeviceId and inject lobe-local-system into the first LLM payload —
+    // skipping the activateDevice round-trip.
+    describe('local device activation (本机)', () => {
+      const successResult = {
+        agentId: 'agent-1',
+        assistantMessageId: 'ast-1',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        message: 'ok',
+        operationId: 'server-op-1',
+        status: 'created' as const,
+        success: true,
+        timestamp: new Date().toISOString(),
+        token: 'test-token',
+        topicId: 'topic-1',
+        userMessageId: 'usr-1',
+      };
+
+      afterEach(() => {
+        mockEnv.isDesktop = false;
+        mockAgency.value = undefined;
+        mockGateway.getDeviceInfo.mockReset();
+      });
+
+      const send = async () => {
+        const { action } = createExecuteTestAction();
+        vi.mocked(aiAgentService.execAgentTask).mockResolvedValue(successResult);
+        await action.executeGatewayAgent({
+          context: { agentId: 'agent-1', scope: 'main', threadId: null, topicId: 'topic-1' },
+          message: 'list files in cwd',
+        });
+      };
+
+      it('forwards this desktop deviceId when execution target is local', async () => {
+        mockEnv.isDesktop = true;
+        mockAgency.value = { executionTarget: 'local' };
+        mockGateway.getDeviceInfo.mockResolvedValue({ deviceId: 'device-local-1' });
+
+        await send();
+
+        expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
+          expect.objectContaining({ deviceId: 'device-local-1' }),
+          expect.anything(),
+        );
+      });
+
+      it('treats an unset target on desktop as local (matches the UI fallback)', async () => {
+        mockEnv.isDesktop = true;
+        mockAgency.value = undefined;
+        mockGateway.getDeviceInfo.mockResolvedValue({ deviceId: 'device-local-1' });
+
+        await send();
+
+        expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
+          expect.objectContaining({ deviceId: 'device-local-1' }),
+          expect.anything(),
+        );
+      });
+
+      it('does not resolve a deviceId for the sandbox target', async () => {
+        mockEnv.isDesktop = true;
+        mockAgency.value = { executionTarget: 'sandbox' };
+
+        await send();
+
+        expect(mockGateway.getDeviceInfo).not.toHaveBeenCalled();
+        expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
+          expect.objectContaining({ deviceId: undefined }),
+          expect.anything(),
+        );
+      });
+
+      it('does not resolve a deviceId for an explicit remote device target', async () => {
+        // 'device' is handled server-side via agentConfig.agencyConfig.boundDeviceId,
+        // so the client must not also send a deviceId here.
+        mockEnv.isDesktop = true;
+        mockAgency.value = { executionTarget: 'device' };
+
+        await send();
+
+        expect(mockGateway.getDeviceInfo).not.toHaveBeenCalled();
+        expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
+          expect.objectContaining({ deviceId: undefined }),
+          expect.anything(),
+        );
+      });
+
+      it('never resolves a deviceId off desktop, even for a local target', async () => {
+        mockEnv.isDesktop = false;
+        mockAgency.value = { executionTarget: 'local' };
+
+        await send();
+
+        expect(mockGateway.getDeviceInfo).not.toHaveBeenCalled();
+        expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
+          expect.objectContaining({ deviceId: undefined }),
+          expect.anything(),
+        );
       });
     });
   });
