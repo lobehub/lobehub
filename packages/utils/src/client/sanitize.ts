@@ -44,5 +44,16 @@ export const sanitizeSVGContent = (content: string): string => {
   // attribute + namespace handling, which is inconsistent across engines (jsdom vs happy-dom) and
   // DOMPurify versions — in some CI environments `on*` handlers on SVG-namespaced nodes are not
   // stripped at all. Scrub them from the serialized output so removal is deterministic everywhere.
-  return sanitized.replaceAll(EVENT_HANDLER_ATTR, '');
+  //
+  // Apply repeatedly until the string stabilizes: removing one handler can splice the surrounding
+  // text into a fresh `on…=` token (e.g. ` on onclick="x"click="y"` → ` onclick="y"`), which a
+  // single pass would miss.
+  let scrubbed = sanitized;
+  let previous: string;
+  do {
+    previous = scrubbed;
+    scrubbed = scrubbed.replaceAll(EVENT_HANDLER_ATTR, '');
+  } while (scrubbed !== previous);
+
+  return scrubbed;
 };

@@ -52,6 +52,16 @@ describe('sanitizeSVGContent', () => {
     expect(sanitized).toContain('fill="red"');
   });
 
+  it('should not leave a recombined event handler after stripping', () => {
+    // Removing the inner handler in a single pass would splice ` on` + `click="y"` back into a
+    // fresh ` onclick="y"`; the scrub must repeat until no handler remains.
+    const malicious = `<svg xmlns="http://www.w3.org/2000/svg"><circle on onclick="x"click="y" /></svg>`;
+
+    const sanitized = sanitizeSVGContent(malicious);
+
+    expect(sanitized).not.toMatch(/\son[a-z]+\s*=/i);
+  });
+
   it('should remove dangerous embed and object tags', () => {
     const maliciousSvg = `
       <svg xmlns="http://www.w3.org/2000/svg">
