@@ -14,6 +14,12 @@ export interface RecordOperationStartParams {
   appContext?: AgentOperationAppContext;
   chatGroupId?: string | null;
   maxSteps?: number;
+  /**
+   * Durable per-run metadata persisted on the operation row (jsonb). Carries the
+   * Agent Signal run marker so server-side tools can read it back from the row
+   * (`metadata.agentSignal`) at tool-call time.
+   */
+  metadata?: Record<string, unknown>;
   model?: string;
   modelRuntimeConfig?: Record<string, unknown>;
   operationId: string;
@@ -72,6 +78,7 @@ export class AgentOperationModel {
       chatGroupId: params.chatGroupId ?? null,
       id: params.operationId,
       maxSteps: params.maxSteps,
+      ...(params.metadata ? { metadata: params.metadata } : {}),
       model: params.model,
       modelRuntimeConfig: params.modelRuntimeConfig,
       parentOperationId: params.parentOperationId ?? null,
