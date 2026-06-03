@@ -1,8 +1,9 @@
-const { defineConfig } = require('@lobehub/i18n-cli');
 const fs = require('node:fs');
 const path = require('node:path');
 
-module.exports = defineConfig({
+/** @type {import('./scripts/i18nWorkflow/i18nWorkflow').WorkflowConfig} */
+const config = {
+  sourceDir: 'src/locales/default',
   entry: 'locales/en-US',
   entryLocale: 'en-US',
   output: 'locales',
@@ -50,4 +51,6 @@ module.exports = defineConfig({
       }
     },
   },
-});
+};
+
+module.exports = config;
