@@ -29,6 +29,10 @@ import type { AgentSliceState, LoadingState, SaveStatus } from './initialState';
 
 const FETCH_AGENT_CONFIG_KEY = 'FETCH_AGENT_CONFIG';
 const FETCH_AVAILABLE_AGENTS_KEY = 'FETCH_AVAILABLE_AGENTS';
+const FETCH_AVAILABLE_AGENTS_SWR_KEY = [
+  FETCH_AVAILABLE_AGENTS_KEY,
+  AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT,
+] as const;
 type AgentMetaUpdate = Partial<
   Pick<
     AgentItem,
@@ -76,6 +80,7 @@ export class AgentSliceActionImpl {
 
   createAgent = async (params: CreateAgentParams): Promise<CreateAgentResult> => {
     const result = await agentService.createAgent(params);
+    this.#get().invalidateAvailableAgents();
 
     // Track new agent creation analytics
     const analytics = getSingletonAnalyticsOptional();
@@ -334,9 +339,7 @@ export class AgentSliceActionImpl {
 
   useFetchAvailableAgents = (enabled: boolean): SWRResponse<AvailableAgentItem[]> => {
     return useClientDataSWRWithSync<AvailableAgentItem[]>(
-      enabled
-        ? ([FETCH_AVAILABLE_AGENTS_KEY, AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT] as const)
-        : null,
+      enabled ? FETCH_AVAILABLE_AGENTS_SWR_KEY : null,
       () => agentService.queryAgents({ limit: AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT }),
       {
         onData: (data) => {
@@ -345,6 +348,11 @@ export class AgentSliceActionImpl {
         revalidateOnFocus: false,
       },
     );
+  };
+
+  invalidateAvailableAgents = (): void => {
+    this.#set({ availableAgents: undefined }, false, 'invalidateAvailableAgents');
+    void mutate(FETCH_AVAILABLE_AGENTS_SWR_KEY);
   };
 
   ensureAgentDocuments = async (
@@ -407,6 +415,7 @@ export class AgentSliceActionImpl {
       // 3. Use returned data directly (no refetch needed!)
       if (result?.success && result.agent) {
         internal_dispatchAgentMap(id, result.agent);
+        this.#get().invalidateAvailableAgents();
       }
       updateSaveStatus('saved');
     } catch (error: any) {
@@ -437,6 +446,7 @@ export class AgentSliceActionImpl {
       // 3. Use returned data directly (no refetch needed!)
       if (result?.success && result.agent) {
         internal_dispatchAgentMap(id, result.agent);
+        this.#get().invalidateAvailableAgents();
       }
       updateSaveStatus('saved');
     } catch (error: any) {

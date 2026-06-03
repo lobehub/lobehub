@@ -16,6 +16,7 @@ vi.mock('zustand/traditional');
 vi.mock('@/services/agent', () => ({
   AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT: 12,
   agentService: {
+    createAgent: vi.fn(),
     getAgentConfigById: vi.fn(),
     getSessionConfig: vi.fn(),
     queryAgents: vi.fn(),
@@ -55,6 +56,7 @@ beforeEach(() => {
     activeAgentId: undefined,
     agentMap: {},
     builtinAgentIdMap: {},
+    availableAgents: undefined,
     updateAgentConfigSignal: undefined,
     agentDocumentsMap: {},
     updateAgentMetaSignal: undefined,
@@ -66,6 +68,33 @@ afterEach(() => {
 });
 
 describe('AgentSlice Actions', () => {
+  describe('createAgent', () => {
+    it('should invalidate cached available agents after creating an agent', async () => {
+      vi.mocked(agentService.createAgent).mockResolvedValue({ agentId: 'agent-2' });
+      const { result } = renderHook(() => useAgentStore());
+
+      act(() => {
+        useAgentStore.setState({
+          availableAgents: [
+            {
+              avatar: null,
+              backgroundColor: null,
+              description: 'stale',
+              id: 'agent-1',
+              title: 'Stale Agent',
+            },
+          ],
+        });
+      });
+
+      await act(async () => {
+        await result.current.createAgent({ config: { title: 'New Agent' } });
+      });
+
+      expect(result.current.availableAgents).toBeUndefined();
+    });
+  });
+
   describe('useFetchAgentDocuments', () => {
     it('should sync fetched agent documents into store cache', async () => {
       vi.mocked(resolveAgentDocumentsContext).mockResolvedValue([
@@ -129,6 +158,32 @@ describe('AgentSlice Actions', () => {
         ]);
       });
       expect(agentService.queryAgents).toHaveBeenCalledWith({ limit: 12 });
+    });
+  });
+
+  describe('invalidateAvailableAgents', () => {
+    it('should clear cached available agents', () => {
+      const { result } = renderHook(() => useAgentStore());
+
+      act(() => {
+        useAgentStore.setState({
+          availableAgents: [
+            {
+              avatar: null,
+              backgroundColor: null,
+              description: 'stale',
+              id: 'agent-1',
+              title: 'Stale Agent',
+            },
+          ],
+        });
+      });
+
+      act(() => {
+        result.current.invalidateAvailableAgents();
+      });
+
+      expect(result.current.availableAgents).toBeUndefined();
     });
   });
 
@@ -414,6 +469,15 @@ describe('AgentSlice Actions', () => {
         useAgentStore.setState({
           activeAgentId: 'agent-1',
           agentMap: { 'agent-1': { title: 'Old Title' } as any },
+          availableAgents: [
+            {
+              avatar: null,
+              backgroundColor: null,
+              description: 'Old Desc',
+              id: 'agent-1',
+              title: 'Old Title',
+            },
+          ],
         });
       });
 
@@ -425,6 +489,7 @@ describe('AgentSlice Actions', () => {
         description: 'New Desc',
         title: 'New Title',
       });
+      expect(result.current.availableAgents).toBeUndefined();
     });
 
     // Note: refreshSessions is no longer called after optimistic update
