@@ -5,7 +5,8 @@ export type AgentSignalOperationKind =
   | 'memory'
   | 'nightly-review'
   | 'self-feedback-intent'
-  | 'self-reflection';
+  | 'self-reflection'
+  | 'skill';
 
 /**
  * Run-scoped Agent Signal marker stamped onto a background agent operation at

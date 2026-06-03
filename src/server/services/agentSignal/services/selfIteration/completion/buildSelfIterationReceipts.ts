@@ -75,6 +75,7 @@ const SUMMARY_TITLE_BY_KIND: Record<AgentSignalOperationMarker['kind'], string> 
   'nightly-review': 'Nightly self-review completed',
   'self-feedback-intent': 'Self-feedback intent completed',
   'self-reflection': 'Self-reflection completed',
+  'skill': 'Skill write completed',
 };
 
 /**
@@ -121,10 +122,10 @@ export const buildSelfIterationReceipts = (
     userId,
   } satisfies Partial<AgentSignalReceipt>;
 
-  // A single memory write surfaces as just its action receipt — no aggregate
-  // "review summary" (that is for nightly-review / reflection runs that capture
-  // ideas across multiple actions).
-  const includeSummary = marker.kind !== 'memory';
+  // A single same-turn memory / skill write surfaces as just its action receipt
+  // — no aggregate "review summary" (that is for nightly-review / reflection runs
+  // that capture ideas across multiple actions).
+  const includeSummary = marker.kind !== 'memory' && marker.kind !== 'skill';
 
   const summary: AgentSignalReceipt = {
     ...base,

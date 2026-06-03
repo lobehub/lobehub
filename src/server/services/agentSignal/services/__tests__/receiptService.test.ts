@@ -52,102 +52,10 @@ const result = (input: {
 });
 
 describe('projectAgentSignalReceipts', () => {
-  // Anchoring / trigger projection is kind-agnostic; it is exercised here via a
-  // skill action because memory receipts are no longer projected synchronously
-  // (they come from the async memory run's completion path).
-  it('prefers anchorMessageId over assistantMessageId for receipt anchoring', () => {
-    const anchoredSource = createSource({
-      payload: {
-        agentId: 'agent-1',
-        anchorMessageId: 'assistant-anchor-1',
-        assistantMessageId: 'assistant-legacy-1',
-        topicId: 'topic-1',
-      },
-      scope: { topicId: 'topic-1', userId: 'user-1' },
-      scopeKey: 'topic:topic-1',
-      sourceId: 'source-anchor-1',
-      sourceType: 'client.runtime.complete',
-      timestamp: 1_700_000,
-    });
-
-    expect(
-      projectAgentSignalReceipts({
-        actions: [
-          action({
-            actionId: 'action-skill-1',
-            actionType: AGENT_SIGNAL_POLICY_ACTION_TYPES.skillManagementHandle,
-            payload: {},
-          }),
-        ],
-        results: [result({ actionId: 'action-skill-1', status: 'applied' })],
-        source: anchoredSource,
-        userId: 'user-1',
-      }),
-    ).toMatchObject([{ anchorMessageId: 'assistant-anchor-1' }]);
-  });
-
-  it('falls back to assistantMessageId for legacy receipt anchoring payloads', () => {
-    expect(
-      projectAgentSignalReceipts({
-        actions: [
-          action({
-            actionId: 'action-skill-1',
-            actionType: AGENT_SIGNAL_POLICY_ACTION_TYPES.skillManagementHandle,
-            payload: {},
-          }),
-        ],
-        results: [result({ actionId: 'action-skill-1', status: 'applied' })],
-        source,
-        userId: 'user-1',
-      }),
-    ).toMatchObject([{ anchorMessageId: 'assistant-1' }]);
-  });
-
-  it('projects triggerMessageId and falls back to messageId for legacy trigger payloads', () => {
-    const triggerSource = createSource({
-      payload: {
-        agentId: 'agent-1',
-        messageId: 'message-legacy-1',
-        topicId: 'topic-1',
-        triggerMessageId: 'message-trigger-1',
-      },
-      scope: { topicId: 'topic-1', userId: 'user-1' },
-      scopeKey: 'topic:topic-1',
-      sourceId: 'source-trigger-1',
-      sourceType: 'agent.user.message',
-      timestamp: 1_700_000,
-    });
-    const legacyTriggerSource = createSource({
-      payload: {
-        agentId: 'agent-1',
-        messageId: 'message-legacy-1',
-        topicId: 'topic-1',
-      },
-      scope: { topicId: 'topic-1', userId: 'user-1' },
-      scopeKey: 'topic:topic-1',
-      sourceId: 'source-trigger-2',
-      sourceType: 'agent.user.message',
-      timestamp: 1_700_000,
-    });
-
-    const project = (projectSource: typeof triggerSource) =>
-      projectAgentSignalReceipts({
-        actions: [
-          action({
-            actionId: 'action-skill-1',
-            actionType: AGENT_SIGNAL_POLICY_ACTION_TYPES.skillManagementHandle,
-            payload: {},
-          }),
-        ],
-        results: [result({ actionId: 'action-skill-1', status: 'applied' })],
-        source: projectSource,
-        userId: 'user-1',
-      });
-
-    expect(project(triggerSource)).toMatchObject([{ triggerMessageId: 'message-trigger-1' }]);
-    expect(project(legacyTriggerSource)).toMatchObject([{ triggerMessageId: 'message-legacy-1' }]);
-  });
-
+  // Same-turn feedback actions (memory + skill) no longer project receipts
+  // synchronously here — both run as async execAgent runs and project on their
+  // completion path (see buildSelfIterationReceipts). The kind-agnostic
+  // anchoring/trigger projection is therefore covered there, not via this path.
   it('does not project a memory action synchronously (the completion path owns it)', () => {
     expect(
       projectAgentSignalReceipts({
@@ -165,7 +73,10 @@ describe('projectAgentSignalReceipts', () => {
     ).toEqual([]);
   });
 
-  it('projects applied skill-management results as updated skill receipts', () => {
+  it('does not project a skill action synchronously (the completion path owns it)', () => {
+    // skillManagement now runs as an async execAgent run, so its skill receipt is
+    // projected on the run's completion path (see buildSelfIterationReceipts),
+    // not synchronously here — mirroring the memory writer.
     expect(
       projectAgentSignalReceipts({
         actions: [
@@ -179,51 +90,7 @@ describe('projectAgentSignalReceipts', () => {
         source,
         userId: 'user-1',
       }),
-    ).toMatchObject([{ kind: 'skill', status: 'updated', title: 'Skill updated' }]);
-  });
-
-  it('projects skill target snapshots from action results', () => {
-    expect(
-      projectAgentSignalReceipts({
-        actions: [
-          action({
-            actionId: 'action-skill-1',
-            actionType: AGENT_SIGNAL_POLICY_ACTION_TYPES.skillManagementHandle,
-            payload: {},
-          }),
-        ],
-        results: [
-          result({
-            actionId: 'action-skill-1',
-            output: {
-              target: {
-                agentDocumentId: 'index-agent-document-1',
-                documentId: 'index-document-1',
-                id: 'document-1',
-                summary: 'Review metadata before diff and produce a merge decision.',
-                title: 'GitHub PR review workflow',
-                type: 'skill',
-              },
-            },
-            status: 'applied',
-          }),
-        ],
-        source,
-        userId: 'user-1',
-      }),
-    ).toMatchObject([
-      {
-        kind: 'skill',
-        target: {
-          agentDocumentId: 'index-agent-document-1',
-          documentId: 'index-document-1',
-          id: 'document-1',
-          summary: 'Review metadata before diff and produce a merge decision.',
-          title: 'GitHub PR review workflow',
-          type: 'skill',
-        },
-      },
-    ]);
+    ).toEqual([]);
   });
 
   it('does not project skipped, failed, procedure, or missing-topic results', () => {

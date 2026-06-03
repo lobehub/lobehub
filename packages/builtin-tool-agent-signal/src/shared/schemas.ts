@@ -136,6 +136,15 @@ export const RESOURCE_TOOL_APIS: ToolApiSpec[] = [
   },
 ];
 
+/**
+ * Skill-only resource tools (skill reads + writes, no `writeMemory`). Derived
+ * from {@link RESOURCE_TOOL_APIS} so the skill-management mode exposes exactly
+ * the skill surface without duplicating schemas.
+ */
+export const SKILL_TOOL_APIS: ToolApiSpec[] = RESOURCE_TOOL_APIS.filter(
+  (api) => api.name !== 'writeMemory',
+);
+
 export const REVIEW_TOOL_APIS: ToolApiSpec[] = [
   {
     description: 'List active and historical self-review proposals in the reviewed agent scope.',

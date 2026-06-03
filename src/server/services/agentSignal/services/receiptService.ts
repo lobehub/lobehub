@@ -2,7 +2,6 @@ import type { AgentSignalSource, BaseAction, ExecutorResult } from '@lobechat/ag
 import { LayersEnum } from '@lobechat/types';
 
 import { AGENT_SIGNAL_DEFAULTS } from '../constants';
-import { AGENT_SIGNAL_POLICY_ACTION_TYPES } from '../policies/types';
 import { redisReceiptStore } from '../store/adapters/redis/receiptStore';
 import type {
   ActionPlan,
@@ -292,22 +291,14 @@ const getReceiptTarget = (
 };
 
 const toReceiptKind = (
-  action: BaseAction,
+  _action: BaseAction,
 ): Pick<AgentSignalReceipt, 'detail' | 'kind' | 'status' | 'title'> | undefined => {
-  // Memory receipts are no longer projected synchronously here: the memory
-  // writer runs as an async execAgent run, so its receipt is projected on the
-  // completion path from the run's finalState (see selfIteration/completion).
-  // Projecting one here too would duplicate it — and with a premature, empty
-  // target, since at this point the write has only been enqueued.
-  if (action.actionType === AGENT_SIGNAL_POLICY_ACTION_TYPES.skillManagementHandle) {
-    return {
-      detail: 'Improved how this assistant handles similar requests',
-      kind: 'skill',
-      status: 'updated',
-      title: 'Skill updated',
-    };
-  }
-
+  // Memory and skill receipts are no longer projected synchronously here: both
+  // the memory writer and the skill-management action now run as async execAgent
+  // runs, so their receipts are projected on the completion path from the run's
+  // finalState (see selfIteration/completion). Projecting one here too would
+  // duplicate it — and with a premature, empty target, since at this point the
+  // write has only been enqueued.
   return;
 };
 
