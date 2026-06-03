@@ -14,7 +14,10 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useAgentId } from '../../hooks/useAgentId';
 import CheckboxItem from '../components/CheckboxWithLoading';
 
-const labelMaxWidth = 'min(290px, 50vw)';
+// Cap so the widest library/file row (icon + label + checkbox + paddings) stays within the
+// submenu's 320px footer-driven width, keeping it level with the skill submenu instead of
+// growing past it.
+const labelMaxWidth = 'min(210px, 45vw)';
 
 const styles = createStaticStyles(({ css }) => ({
   viewMore: css`
