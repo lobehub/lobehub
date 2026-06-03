@@ -12,6 +12,205 @@ vi.mock('@/database/models/topic');
 vi.mock('@/server/services/file');
 
 describe('AiChatService', () => {
+  const getSqlText = (query: unknown) => {
+    const chunks = (query as { queryChunks?: unknown[] }).queryChunks ?? [];
+
+    return chunks
+      .map((chunk) => {
+        if (!chunk) return '';
+
+        const value = (chunk as { value?: string[] }).value;
+
+        return Array.isArray(value) ? value.join('') : '';
+      })
+      .join('');
+  };
+
+  const createPersistedMessage = (overrides: Record<string, unknown> = {}) => ({
+    agentId: null,
+    clientId: null,
+    content: '',
+    createdAt: '2024-01-01T00:00:00.000Z',
+    error: null,
+    favorite: false,
+    id: 'm1',
+    metadata: null,
+    model: null,
+    observationId: null,
+    parentId: null,
+    provider: null,
+    quotaId: null,
+    reasoning: null,
+    role: 'user',
+    search: null,
+    sessionId: 's1',
+    threadId: null,
+    tools: null,
+    topicId: 't1',
+    updatedAt: '2024-01-01T00:00:00.000Z',
+    userId: 'u1',
+    ...overrides,
+  });
+
+  it('createSimpleNewTopicTurn should persist the simple turn with one database call', async () => {
+    const execute = vi.fn().mockResolvedValue({
+      rows: [
+        {
+          assistantMessage: createPersistedMessage({
+            content: 'loading',
+            id: 'm-assistant',
+            model: 'gpt-4o',
+            parentId: 'm-user',
+            provider: 'openai',
+            role: 'assistant',
+          }),
+          resolvedSessionId: 's1',
+          topicId: 't1',
+          userMessage: createPersistedMessage({ content: 'hi', id: 'm-user' }),
+        },
+      ],
+    });
+    const serverDB = { execute } as unknown as LobeChatDatabase;
+
+    const service = new AiChatService(serverDB, 'u1');
+
+    const res = await service.createSimpleNewTopicTurn({
+      agentId: 'agent-1',
+      assistantMessage: {
+        content: 'loading',
+        metadata: {},
+        model: 'gpt-4o',
+        provider: 'openai',
+      },
+      sessionId: 's1',
+      topic: { title: 'T' },
+      userMessage: {
+        content: 'hi',
+        editorData: { type: 'doc' },
+        metadata: {},
+      },
+    });
+
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(getSqlText(execute.mock.calls[0][0])).toContain('::text IS NOT NULL');
+    expect(res.topicId).toBe('t1');
+    expect(res.resolvedSessionId).toBe('s1');
+    expect(res.userMessage).toEqual(
+      expect.objectContaining({
+        content: 'hi',
+        createdAt: new Date('2024-01-01T00:00:00.000Z'),
+        id: 'm-user',
+        role: 'user',
+      }),
+    );
+    expect(res.assistantMessage).toEqual(
+      expect.objectContaining({
+        createdAt: new Date('2024-01-01T00:00:00.000Z'),
+        id: 'm-assistant',
+        parentId: 'm-user',
+        role: 'assistant',
+      }),
+    );
+  });
+
+  it('createSimpleNewTopicTurn should throw when the database does not return created messages', async () => {
+    const execute = vi.fn().mockResolvedValue({ rows: [] });
+    const serverDB = { execute } as unknown as LobeChatDatabase;
+
+    const service = new AiChatService(serverDB, 'u1');
+
+    await expect(
+      service.createSimpleNewTopicTurn({
+        assistantMessage: { content: 'loading' },
+        topic: { title: 'T' },
+        userMessage: { content: 'hi' },
+      }),
+    ).rejects.toThrow('Failed to create simple new topic turn');
+  });
+
+  it('createSimpleExistingTopicTurn should persist the simple turn with one database call', async () => {
+    const execute = vi.fn().mockResolvedValue({
+      rows: [
+        {
+          assistantMessage: createPersistedMessage({
+            content: 'loading',
+            id: 'm-assistant',
+            model: 'gpt-4o',
+            parentId: 'm-user',
+            provider: 'openai',
+            role: 'assistant',
+          }),
+          resolvedSessionId: 's1',
+          topicId: 't1',
+          userMessage: createPersistedMessage({
+            content: 'hi',
+            id: 'm-user',
+            parentId: 'm-parent',
+          }),
+        },
+      ],
+    });
+    const serverDB = { execute } as unknown as LobeChatDatabase;
+
+    const service = new AiChatService(serverDB, 'u1');
+
+    const res = await service.createSimpleExistingTopicTurn({
+      agentId: 'agent-1',
+      assistantMessage: {
+        content: 'loading',
+        metadata: {},
+        model: 'gpt-4o',
+        provider: 'openai',
+      },
+      sessionId: 's1',
+      topicId: 't1',
+      userMessage: {
+        content: 'hi',
+        editorData: { type: 'doc' },
+        metadata: {},
+        parentId: 'm-parent',
+      },
+    });
+
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(getSqlText(execute.mock.calls[0][0])).toContain('updated_topic AS');
+    expect(getSqlText(execute.mock.calls[0][0])).toContain('SET "updated_at" = NOW()');
+    expect(res.topicId).toBe('t1');
+    expect(res.resolvedSessionId).toBe('s1');
+    expect(res.userMessage).toEqual(
+      expect.objectContaining({
+        content: 'hi',
+        createdAt: new Date('2024-01-01T00:00:00.000Z'),
+        id: 'm-user',
+        parentId: 'm-parent',
+        role: 'user',
+      }),
+    );
+    expect(res.assistantMessage).toEqual(
+      expect.objectContaining({
+        createdAt: new Date('2024-01-01T00:00:00.000Z'),
+        id: 'm-assistant',
+        parentId: 'm-user',
+        role: 'assistant',
+      }),
+    );
+  });
+
+  it('createSimpleExistingTopicTurn should throw when the database does not return created messages', async () => {
+    const execute = vi.fn().mockResolvedValue({ rows: [] });
+    const serverDB = { execute } as unknown as LobeChatDatabase;
+
+    const service = new AiChatService(serverDB, 'u1');
+
+    await expect(
+      service.createSimpleExistingTopicTurn({
+        assistantMessage: { content: 'loading' },
+        topicId: 't1',
+        userMessage: { content: 'hi' },
+      }),
+    ).rejects.toThrow('Failed to create simple existing topic turn');
+  });
+
   it('getMessagesAndTopics should fetch messages and topics concurrently', async () => {
     const serverDB = {} as unknown as LobeChatDatabase;
 

@@ -111,6 +111,10 @@ export interface SendMessageResult {
   userMessageId: string;
 }
 
+type SendMessageServerResponseMeta = SendMessageServerResponse & {
+  __isPartialMessages?: boolean;
+};
+
 /**
  * Actions managing the complete lifecycle of conversations including sending,
  * regenerating, and resending messages
@@ -152,6 +156,22 @@ const attachSendTimeMetadataToUserMessage = (
   });
 
   return changed ? nextMessages : messages;
+};
+
+const mergePartialPersistedMessages = (
+  currentMessages: UIChatMessage[],
+  persistedMessages: UIChatMessage[],
+  replacedMessageIds: string[],
+): UIChatMessage[] => {
+  const replacedIdSet = new Set(replacedMessageIds);
+  const persistedIdSet = new Set(persistedMessages.map((message) => message.id));
+
+  return [
+    ...currentMessages.filter(
+      (message) => !replacedIdSet.has(message.id) && !persistedIdSet.has(message.id),
+    ),
+    ...persistedMessages,
+  ];
 };
 
 export class ConversationLifecycleActionImpl {
@@ -555,9 +575,18 @@ export class ConversationLifecycleActionImpl {
         ...operationContext,
         topicId: heteroData.topicId ?? operationContext.topicId,
       };
+      const heteroResponseMeta = heteroData as SendMessageServerResponseMeta;
+      const heteroMessageKey = messageMapKey(heteroContext);
+      const heteroMessages = heteroResponseMeta.__isPartialMessages
+        ? mergePartialPersistedMessages(
+            this.#get().messagesMap[heteroMessageKey] || [],
+            heteroData.messages,
+            [tempId, tempAssistantId],
+          )
+        : heteroData.messages;
 
       // Replace optimistic messages with persisted ones
-      this.#get().replaceMessages(heteroData.messages, {
+      this.#get().replaceMessages(heteroMessages, {
         action: 'sendMessage/serverResponse',
         context: heteroContext,
       });
@@ -770,6 +799,7 @@ export class ConversationLifecycleActionImpl {
         },
         abortController,
       );
+      const responseMeta = data as SendMessageServerResponseMeta;
       // Use created topicId/threadId if available, otherwise use original from context
       let finalTopicId = data.topicId ?? operationContext.topicId;
       const finalThreadId = data.createdThreadId ?? operationContext.threadId;
@@ -806,6 +836,7 @@ export class ConversationLifecycleActionImpl {
           'sendMessage/createTopicPlaceholder',
         );
         this.#get().updateOperationMetadata(operationId, { createdTopicId: data.topicId });
+        void Promise.resolve(this.#get().refreshTopic()).catch(console.error);
       } else if (operationContext.topicId) {
         // Optimistically update topic's updatedAt so sidebar re-groups immediately
         this.#get().internal_dispatchTopic({
@@ -838,13 +869,21 @@ export class ConversationLifecycleActionImpl {
 
       // Create final context with updated topicId/threadId from server response
       const finalContext = { ...operationContext, topicId: finalTopicId, threadId: finalThreadId };
+      const persistedMessages = attachSendTimeMetadataToUserMessage(
+        data.messages,
+        data.userMessageId,
+        userMessageMetadata,
+      );
+      const finalMessageKey = messageMapKey(finalContext);
       data = {
         ...data,
-        messages: attachSendTimeMetadataToUserMessage(
-          data.messages,
-          data.userMessageId,
-          userMessageMetadata,
-        ),
+        messages: responseMeta.__isPartialMessages
+          ? mergePartialPersistedMessages(
+              this.#get().messagesMap[finalMessageKey] || [],
+              persistedMessages,
+              [tempId, tempAssistantId],
+            )
+          : persistedMessages,
       };
 
       this.#get().replaceMessages(data.messages, {
