@@ -2,7 +2,8 @@
 
 import type { FormGroupItemType, FormItemProps } from '@lobehub/ui';
 import { Flexbox, Form, Icon, InputNumber, Skeleton } from '@lobehub/ui';
-import { Switch } from 'antd';
+import { Switch } from '@lobehub/ui/base-ui';
+import { ConfigProvider } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { Loader2Icon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
@@ -107,12 +108,7 @@ const ModelAssignmentsForm = memo(() => {
 
     return {
       children: (
-        <Flexbox
-          align="center"
-          direction="horizontal"
-          gap={12}
-          style={{ width: 448 }}
-        >
+        <Flexbox align="center" direction="horizontal" gap={12} style={{ width: 448 }}>
           <ModelSelect
             showAbility={false}
             style={{ minWidth: 0, width: '100%' }}
@@ -139,17 +135,19 @@ const ModelAssignmentsForm = memo(() => {
             onChange={(props) => updateSystemAgentModel(key, props)}
           />
           {contextLimit && (
-            <InputNumber
-              min={1}
-              placeholder={t('serviceModel.contextLimit.placeholder')}
-              style={{ alignSelf: 'flex-end', width: 180 }}
-              value={value.contextLimit}
-              onChange={(contextLimit) =>
-                updateSystemAgentModel(key, {
-                  contextLimit: typeof contextLimit === 'number' ? contextLimit : undefined,
-                })
-              }
-            />
+            <ConfigProvider theme={{ token: { controlHeight: 32 } }}>
+              <InputNumber
+                min={1}
+                placeholder={t('serviceModel.contextLimit.placeholder')}
+                style={{ alignSelf: 'flex-end', width: 180 }}
+                value={value.contextLimit}
+                onChange={(contextLimit) =>
+                  updateSystemAgentModel(key, {
+                    contextLimit: typeof contextLimit === 'number' ? contextLimit : undefined,
+                  })
+                }
+              />
+            </ConfigProvider>
           )}
         </Flexbox>
       ),
@@ -164,21 +162,20 @@ const ModelAssignmentsForm = memo(() => {
 
     return {
       children: (
-        <Flexbox align="center" direction="horizontal" gap={12}>
+        <Flexbox direction="vertical" gap={8} style={{ width: 448 }}>
           <Switch
-            aria-label={t(`systemAgent.${key}.title`)}
             checked={value.enabled}
             loading={loadingKey === key}
+            style={{ alignSelf: 'flex-end' }}
+            title={t(`systemAgent.${key}.title`)}
             onChange={(enabled) => updateSystemAgentModel(key, { enabled })}
           />
-          <Flexbox style={{ width: 448 }}>
-            <ModelSelect
-              showAbility={false}
-              style={{ minWidth: 0, width: '100%' }}
-              value={value}
-              onChange={(props) => updateSystemAgentModel(key, props)}
-            />
-          </Flexbox>
+          <ModelSelect
+            showAbility={false}
+            style={{ minWidth: 0, width: '100%' }}
+            value={value}
+            onChange={(props) => updateSystemAgentModel(key, props)}
+          />
         </Flexbox>
       ),
       desc: t(`systemAgent.${key}.modelDesc`),
