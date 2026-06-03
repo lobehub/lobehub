@@ -14,7 +14,7 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useAgentId } from '../../hooks/useAgentId';
 import CheckboxItem from '../components/CheckboxWithLoading';
 
-const labelMaxWidth = 'min(400px, 56vw)';
+const labelMaxWidth = 'min(290px, 50vw)';
 
 const styles = createStaticStyles(({ css }) => ({
   viewMore: css`
@@ -24,9 +24,13 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 8px;
     align-items: center;
 
-    width: calc(100% + 8px);
+    /* Footer drives the Attachments submenu width to match the skill submenu (320px);
+       the negative inline margin cancels the slot footer's 12px padding, matching the
+       skill search field's edge alignment. (Menu-item rows can't set width —
+       SubmenuScrollStyle forces min-width: 0 for ellipsis.) */
+    width: 320px;
     min-height: 32px;
-    margin-inline-start: -4px;
+    margin-inline: -12px;
     border: 0;
     border-radius: 6px;
 

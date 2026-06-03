@@ -280,12 +280,13 @@ const styles = createStaticStyles(({ css }) => ({
     display: flex;
     align-items: center;
 
+    /* Width sets the skill submenu size (matched with the Attachments submenu); the
+       negative margins cancel the slot header's 8px/12px padding so the search field
+       sits close to the menu edge on every side. */
+    width: 320px;
     height: 36px;
-    margin-inline: -8px;
-    padding-inline: 4px;
-    border-radius: 10px;
-
-    background: ${cssVar.colorFillQuaternary};
+    margin-block: -8px;
+    margin-inline: -12px;
   `,
   toolLabel: css`
     display: flex;

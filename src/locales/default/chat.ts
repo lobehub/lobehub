@@ -469,6 +469,7 @@ export default {
   'plus.search.modelSearchDesc': 'May cause unexpected behavior when enabled, not recommended.',
   'plus.search.off': 'Off',
   'plus.search.offDesc': '',
+  'plus.addAttachments': 'Attachments',
   'plus.addSkills': 'Add Skills...',
   'plus.title': 'Add',
   'plus.tooltip': 'Add files, skills, and more context...',
