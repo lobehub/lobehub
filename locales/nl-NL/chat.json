@@ -851,7 +851,7 @@
   "upload.preview.status.pending": "Voorbereiden op upload...",
   "upload.preview.status.processing": "Bestand verwerken...",
   "upload.validation.unsupportedFileType": "Niet-ondersteund bestandstype: {{files}}. Ondersteunde afbeeldingen: JPG, PNG, GIF, WebP. Ondersteunde documenten zijn onder andere PDF, Word, Excel, PowerPoint, Markdown, tekst, CSV, JSON en codebestanden.",
-  "upload.validation.videoSizeExceeded": "De bestandsgrootte van de video mag niet groter zijn dan 20MB. Huidige grootte is {{actualSize}}.",
+  "upload.validation.videoSizeExceeded": "De bestandsgrootte van de video mag niet groter zijn dan 100MB. Huidige grootte is {{actualSize}}.",
   "viewMode.fullWidth": "Volledige breedte",
   "viewMode.normal": "Standaard",
   "viewMode.wideScreen": "Widescreen",

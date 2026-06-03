@@ -53,6 +53,16 @@ const GOOGLE_EXTERNAL_URL_SUPPORTED_TYPES = new Set([
   'image/jpeg',
   'image/png',
   'image/webp',
+  // Video file types
+  'video/3gpp',
+  'video/avi',
+  'video/mp4',
+  'video/mpeg',
+  'video/mpg',
+  'video/quicktime',
+  'video/webm',
+  'video/wmv',
+  'video/x-flv',
 ]);
 
 const normalizeExternalContentType = (contentType: string): string => {
@@ -61,6 +71,14 @@ const normalizeExternalContentType = (contentType: string): string => {
   if (contentType === 'image/jpg') return 'image/jpeg';
 
   return contentType;
+};
+
+const parseContentLength = (contentLength: string | null): number | null => {
+  const normalized = contentLength?.trim();
+  if (!normalized || !/^\d+$/.test(normalized)) return null;
+
+  const value = Number(normalized);
+  return Number.isSafeInteger(value) ? value : null;
 };
 
 /**
@@ -141,7 +159,7 @@ export const validateExternalUrl = async (url: string): Promise<ExternalUrlValid
       };
     }
 
-    const contentLength = Number.parseInt(res.headers.get('content-length') || '0', 10);
+    const contentLength = parseContentLength(res.headers.get('content-length'));
     const contentType = normalizeExternalContentType(
       (res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase(),
     );
@@ -149,10 +167,19 @@ export const validateExternalUrl = async (url: string): Promise<ExternalUrlValid
     // Check MIME type support
     if (!GOOGLE_EXTERNAL_URL_SUPPORTED_TYPES.has(contentType)) {
       return {
-        contentLength,
+        contentLength: contentLength || 0,
         contentType,
         isValid: false,
         reason: `Unsupported content type: ${contentType}`,
+      };
+    }
+
+    if (contentLength === null) {
+      return {
+        contentLength: 0,
+        contentType,
+        isValid: false,
+        reason: 'Missing or invalid Content-Length header',
       };
     }
 

@@ -56,6 +56,30 @@ const supportsExternalUrlFileData = (model?: string) => {
   return major >= 3;
 };
 
+const buildExternalUrlFileDataPart = async (
+  url: string,
+  options?: { model?: string },
+): Promise<Part | undefined> => {
+  if (!supportsExternalUrlFileData(options?.model) || !isPublicExternalUrl(url)) return undefined;
+
+  const validation = await validateExternalUrl(url);
+  if (validation.isValid) {
+    return {
+      fileData: {
+        fileUri: url,
+        mimeType: validation.contentType,
+      },
+      thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+    };
+  }
+
+  if (validation.isTooLarge) {
+    throw new RangeError(validation.reason || 'External URL file too large');
+  }
+
+  return undefined;
+};
+
 /**
  * Convert OpenAI content part to Google Part format
  *
@@ -101,24 +125,8 @@ export const buildGooglePart = async (
       if (type === 'url') {
         const url = content.image_url.url;
 
-        // Try to use External URL feature for public URLs to avoid re-uploading
-        // This allows Google to fetch the file directly, reducing transfer costs
-        if (supportsExternalUrlFileData(options?.model) && isPublicExternalUrl(url)) {
-          const validation = await validateExternalUrl(url);
-          if (validation.isValid) {
-            return {
-              fileData: {
-                fileUri: url,
-                mimeType: validation.contentType,
-              },
-              thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
-            };
-          }
-          if (validation.isTooLarge) {
-            throw new RangeError(validation.reason || 'External URL file too large');
-          }
-          // If validation fails, fall back to base64 conversion
-        }
+        const externalUrlPart = await buildExternalUrlFileDataPart(url, options);
+        if (externalUrlPart) return externalUrlPart;
 
         // Fallback: convert URL to base64 (for private/local URLs or failed validation)
         const { base64: urlBase64, mimeType: urlMimeType } = await imageUrlToBase64(url);
@@ -152,9 +160,8 @@ export const buildGooglePart = async (
       if (type === 'url') {
         const url = content.video_url.url;
 
-        // External URL validation currently only supports text/application/image MIME types.
-        // For video URLs this path would always fail and then fall back to base64,
-        // so we skip the extra HEAD round-trip here.
+        const externalUrlPart = await buildExternalUrlFileDataPart(url, options);
+        if (externalUrlPart) return externalUrlPart;
 
         // Fallback: convert URL to base64
         // Use imageUrlToBase64 for SSRF protection (works for any binary data including videos)

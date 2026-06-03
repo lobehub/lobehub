@@ -851,7 +851,7 @@
   "upload.preview.status.pending": "Vorbereitung zum Hochladen...",
   "upload.preview.status.processing": "Datei wird verarbeitet...",
   "upload.validation.unsupportedFileType": "Nicht unterstützter Dateityp: {{files}}. Unterstützte Bilder: JPG, PNG, GIF, WebP. Unterstützte Dokumente umfassen PDF, Word, Excel, PowerPoint, Markdown, Text, CSV, JSON und Code-Dateien.",
-  "upload.validation.videoSizeExceeded": "Die Videodatei darf 20 MB nicht überschreiten. Aktuelle Größe: {{actualSize}}.",
+  "upload.validation.videoSizeExceeded": "Die Videodatei darf 100 MB nicht überschreiten. Aktuelle Größe: {{actualSize}}.",
   "viewMode.fullWidth": "Volle Breite",
   "viewMode.normal": "Standard",
   "viewMode.wideScreen": "Breitbild",

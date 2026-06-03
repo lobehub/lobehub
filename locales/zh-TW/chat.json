@@ -851,7 +851,7 @@
   "upload.preview.status.pending": "準備上傳...",
   "upload.preview.status.processing": "檔案處理中...",
   "upload.validation.unsupportedFileType": "不支援的檔案類型：{{files}}。支援的圖片格式：JPG、PNG、GIF、WebP。支援的文件包括 PDF、Word、Excel、PowerPoint、Markdown、文字檔、CSV、JSON 和程式碼檔案。",
-  "upload.validation.videoSizeExceeded": "影片檔案大小不能超過 20MB，當前檔案大小為 {{actualSize}}",
+  "upload.validation.videoSizeExceeded": "影片檔案大小不能超過 100MB，當前檔案大小為 {{actualSize}}",
   "viewMode.fullWidth": "全寬顯示",
   "viewMode.normal": "一般",
   "viewMode.wideScreen": "寬螢幕",

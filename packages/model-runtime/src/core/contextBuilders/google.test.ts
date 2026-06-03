@@ -343,6 +343,46 @@ describe('google contextBuilders', () => {
       });
     });
 
+    it('should use fileData for external URL videos on gemini-3+', async () => {
+      const videoUrl = 'https://example.com/video.mp4';
+
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: null,
+        mimeType: null,
+        type: 'url',
+      });
+
+      vi.mocked(isPublicExternalUrl).mockReturnValueOnce(true);
+      vi.mocked(validateExternalUrl).mockResolvedValueOnce({
+        contentLength: 1024,
+        contentType: 'video/mp4',
+        isValid: true,
+      });
+
+      const imageToBase64Spy = vi
+        .spyOn(imageToBase64Module, 'imageUrlToBase64')
+        .mockResolvedValueOnce({
+          base64: 'mockVideoBase64Data',
+          mimeType: 'video/mp4',
+        });
+
+      const content: UserMessageContentPart = {
+        type: 'video_url',
+        video_url: { url: videoUrl },
+      };
+
+      const result = await buildGooglePart(content, { model: 'gemini-3-flash-preview' });
+
+      expect(result).toEqual({
+        fileData: {
+          fileUri: videoUrl,
+          mimeType: 'video/mp4',
+        },
+        thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+      });
+      expect(imageToBase64Spy).not.toHaveBeenCalled();
+    });
+
     it('should return undefined for unsupported SVG image (base64)', async () => {
       const svgBase64 =
         'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==';

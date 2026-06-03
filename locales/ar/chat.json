@@ -851,7 +851,7 @@
   "upload.preview.status.pending": "جارٍ التحضير للرفع...",
   "upload.preview.status.processing": "جارٍ معالجة الملف...",
   "upload.validation.unsupportedFileType": "نوع الملف غير مدعوم: {{files}}. الصور المدعومة: JPG، PNG، GIF، WebP. المستندات المدعومة تشمل PDF، Word، Excel، PowerPoint، Markdown، النص، CSV، JSON، وملفات التعليمات البرمجية.",
-  "upload.validation.videoSizeExceeded": "يجب ألا يتجاوز حجم ملف الفيديو 20 ميغابايت. الحجم الحالي هو {{actualSize}}.",
+  "upload.validation.videoSizeExceeded": "يجب ألا يتجاوز حجم ملف الفيديو 100 ميغابايت. الحجم الحالي هو {{actualSize}}.",
   "viewMode.fullWidth": "العرض الكامل",
   "viewMode.normal": "قياسي",
   "viewMode.wideScreen": "شاشة عريضة",
