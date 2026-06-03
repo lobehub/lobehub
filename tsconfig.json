@@ -17,7 +17,7 @@
     "incremental": true,
     "types": ["vitest/globals"],
     "paths": {
-      "@/database/*": ["./packages/database/src/*", "./src/database/*"],
+      "@/database/*": ["./packages/database/src/*"],
       "@/const/*": ["./packages/const/src/*", "./src/const/*"],
       "@/utils/*": ["./packages/utils/src/*", "./src/utils/*"],
       "@/types/*": ["./packages/types/src/*", "./src/types/*"],

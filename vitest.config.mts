@@ -26,7 +26,6 @@ const alias = {
   ),
   '@emoji-mart/data': resolve(__dirname, './tests/mocks/emojiMartData.ts'),
   '@emoji-mart/react': resolve(__dirname, './tests/mocks/emojiMartReact.tsx'),
-  '@/database/_deprecated': resolve(__dirname, './src/database/_deprecated'),
   '@/utils/client/switchLang': resolve(__dirname, './src/utils/client/switchLang'),
   '@/const/locale': resolve(__dirname, './src/const/locale'),
   // TODO: after refactor the errorResponse, we can remove it
@@ -110,7 +109,6 @@ export default defineConfig({
         // just ignore the migration code
         // we will use pglite in the future
         // so the coverage of this file is not important
-        'src/database/client/core/db.ts',
         'src/utils/fetch/fetchEventSource/*.ts',
       ],
       provider: 'v8',

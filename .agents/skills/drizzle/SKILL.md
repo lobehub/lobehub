@@ -9,13 +9,13 @@ user-invocable: false
 ## Configuration
 
 - Config: `drizzle.config.ts`
-- Schemas: `src/database/schemas/`
-- Migrations: `src/database/migrations/`
+- Schemas: `packages/database/src/schemas/`
+- Migrations: `packages/database/migrations/`
 - Dialect: `postgresql` with `strict: true`
 
 ## Helper Functions
 
-Location: `src/database/schemas/_helpers.ts`
+Location: `packages/database/src/schemas/_helpers.ts`
 
 - `timestamptz(name)`: Timestamp with timezone
 - `createdAt()`, `updatedAt()`, `accessedAt()`: Standard timestamp columns
