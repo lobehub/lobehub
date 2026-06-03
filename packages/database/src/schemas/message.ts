@@ -1,4 +1,10 @@
-import type { GroundingSearch, ModelReasoning, ToolIntervention } from '@lobechat/types';
+import type {
+  GroundingSearch,
+  ModelReasoning,
+  ModelUsage,
+  ToolIntervention,
+} from '@lobechat/types';
+import { sql } from 'drizzle-orm';
 import {
   boolean,
   index,
@@ -97,6 +103,12 @@ export const messages = pgTable(
     reasoning: jsonb('reasoning').$type<ModelReasoning>(),
     search: jsonb('search').$type<GroundingSearch>(),
     metadata: jsonb('metadata'),
+    /**
+     * Token usage + cost for this message, promoted out of `metadata.usage`
+     * into a dedicated column. `metadata.usage` stays the source of truth during
+     * the dual-write transition; new reads/aggregations should target this column.
+     */
+    usage: jsonb('usage').$type<ModelUsage>(),
 
     model: text('model'),
     provider: text('provider'),
@@ -149,6 +161,10 @@ export const messages = pgTable(
     index('messages_agent_id_idx').on(table.agentId),
     index('messages_group_id_idx').on(table.groupId),
     index('messages_message_group_id_idx').on(table.messageGroupId),
+    // Expression indexes on the promoted `usage` jsonb, so cost / total-token
+    // aggregations and range filters don't scan the full column.
+    index('messages_usage_cost_idx').on(sql`(("usage"->>'cost')::numeric)`),
+    index('messages_usage_total_tokens_idx').on(sql`(("usage"->>'totalTokens')::numeric)`),
   ],
 );
 

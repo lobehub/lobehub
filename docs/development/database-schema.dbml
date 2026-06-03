@@ -1052,6 +1052,7 @@ table messages {
   reasoning jsonb
   search jsonb
   metadata jsonb
+  usage jsonb
   model text
   provider text
   favorite boolean [default: false]
@@ -1086,6 +1087,8 @@ table messages {
     agent_id [name: 'messages_agent_id_idx']
     group_id [name: 'messages_group_id_idx']
     message_group_id [name: 'messages_message_group_id_idx']
+    () [name: 'messages_usage_cost_idx']
+    () [name: 'messages_usage_total_tokens_idx']
   }
 }
 
