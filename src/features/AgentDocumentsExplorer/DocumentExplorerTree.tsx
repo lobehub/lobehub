@@ -1,8 +1,8 @@
 import type { MenuProps } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { Trash2Icon } from 'lucide-react';
-import type { CompositionEvent as ReactCompositionEvent, CSSProperties } from 'react';
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import type { CSSProperties } from 'react';
+import { memo, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { KeyedMutator } from 'swr';
 
@@ -12,7 +12,6 @@ import type {
   ExplorerTreeNode,
 } from '@/features/ExplorerTree';
 import { ExplorerTree, FOLDER_ICON_CSS, getExplorerTreeStyleVars } from '@/features/ExplorerTree';
-import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
 import { useChatStore } from '@/store/chat';
 
 import DocumentExplorerToolbar from './DocumentExplorerToolbar';
@@ -72,71 +71,6 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
   const openDocument = useChatStore((s) => s.openDocument);
   const treeRef = useRef<ExplorerTreeHandle | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  // pierre/trees' inline rename input commits on every Enter keydown without
-  // checking IME state, so a Chinese-pinyin candidate confirmed via Enter would
-  // truncate to half a word. Track composition at the outer container so we can
-  // suppress Enter while composing — composition events bubble out of the
-  // shadow DOM (composed=true), so binding here is sufficient.
-  const { compositionProps, isComposingRef } = useIMECompositionEvent();
-  // `isComposingRef` flips back to false synchronously on compositionend, but
-  // some IMEs emit the final Enter keydown right after compositionend in the
-  // same task — `imeSessionRef` extends the guard until the next microtask so
-  // we don't miss those edge cases.
-  const imeSessionRef = useRef(false);
-  const imeClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const handleCompositionStart = useCallback(
-    (event: ReactCompositionEvent<HTMLDivElement>) => {
-      if (imeClearTimerRef.current) clearTimeout(imeClearTimerRef.current);
-      imeSessionRef.current = true;
-      compositionProps.onCompositionStart(event.nativeEvent);
-    },
-    [compositionProps],
-  );
-
-  const handleCompositionEnd = useCallback(
-    (event: ReactCompositionEvent<HTMLDivElement>) => {
-      compositionProps.onCompositionEnd(event.nativeEvent);
-      imeClearTimerRef.current = setTimeout(() => {
-        imeSessionRef.current = false;
-      }, 0);
-    },
-    [compositionProps],
-  );
-
-  // Native capture listener — beats React's synthetic-event ordering edge
-  // cases and lets us inspect `composedPath()` to confirm the keydown started
-  // inside pierre's shadow-DOM rename input before we swallow it.
-  useEffect(() => {
-    const root = containerRef.current;
-    if (!root) return;
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Enter') return;
-      const composing =
-        imeSessionRef.current ||
-        isComposingRef.current ||
-        event.isComposing ||
-        // Some IMEs report keyCode 229 instead of setting `isComposing`.
-        event.keyCode === 229;
-      if (!composing) return;
-      const inRenameInput = event
-        .composedPath()
-        .some(
-          (target): target is HTMLInputElement =>
-            target instanceof HTMLInputElement && target.matches(RENAME_INPUT_SELECTOR),
-        );
-      if (!inRenameInput) return;
-      event.stopPropagation();
-      event.stopImmediatePropagation();
-    };
-
-    root.addEventListener('keydown', handleKeyDown, true);
-    return () => {
-      root.removeEventListener('keydown', handleKeyDown, true);
-      if (imeClearTimerRef.current) clearTimeout(imeClearTimerRef.current);
-    };
-  }, [isComposingRef]);
 
   const startInlineRename = useCallback((id: string) => {
     treeRef.current?.startRenaming(id);
@@ -322,13 +256,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
   );
 
   return (
-    <div
-      className={styles.tree}
-      ref={containerRef}
-      style={{ ...style, ...treeStyleVars }}
-      onCompositionEnd={handleCompositionEnd}
-      onCompositionStart={handleCompositionStart}
-    >
+    <div className={styles.tree} ref={containerRef} style={{ ...style, ...treeStyleVars }}>
       <ExplorerTree<AgentDocumentItem>
         iconsColored
         canDrag={canDrag}
