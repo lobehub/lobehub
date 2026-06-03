@@ -1,22 +1,30 @@
 import { type HeatmapsProps } from '@lobehub/charts';
 import { Heatmaps } from '@lobehub/charts';
-import { Flexbox, Icon, Tag } from '@lobehub/ui';
+import { Flexbox, Icon, Segmented, Tag } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { FlameIcon } from 'lucide-react';
-import { memo } from 'react';
+import { CoinsIcon, FlameIcon, MessageSquareIcon } from 'lucide-react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useClientDataSWR } from '@/libs/swr';
 import { messageService } from '@/services/message';
+import { formatIntergerNumber, formatShortenNumber } from '@/utils/format';
 
+import { HeatmapType } from '../../types';
 import StatsFormGroup from '../components/StatsFormGroup';
+import HeatmapStats from './HeatmapStats';
 
 const AiHeatmaps = memo<
   Omit<HeatmapsProps, 'data' | 'ref'> & { inShare?: boolean; mobile?: boolean }
 >(({ inShare, mobile, ...rest }) => {
   const { t } = useTranslation('auth');
-  const { data, isLoading } = useClientDataSWR('stats-heatmaps', async () =>
-    messageService.getHeatmaps(),
+  const [type, setType] = useState<HeatmapType>(
+    inShare ? HeatmapType.Messages : HeatmapType.Tokens,
+  );
+  const isTokens = type === HeatmapType.Tokens;
+
+  const { data, isLoading } = useClientDataSWR(['stats-heatmaps', type].join('-'), async () =>
+    isTokens ? messageService.getTokenHeatmaps() : messageService.getHeatmaps(),
   );
 
   const days = data?.filter((item) => item.level > 0).length || '--';
@@ -28,8 +36,17 @@ const AiHeatmaps = memo<
       blockRadius={mobile ? 2 : undefined}
       blockSize={mobile ? 6 : 14}
       data={data || []}
+      hideTotalCount={isTokens}
       loading={isLoading || !data}
       maxLevel={4}
+      customTooltip={(activity) =>
+        t(isTokens ? 'heatmaps.tooltipTokens' : 'heatmaps.tooltip', {
+          count: isTokens
+            ? formatShortenNumber(activity.count)
+            : formatIntergerNumber(activity.count),
+          date: activity.date,
+        })
+      }
       labels={{
         legend: {
           less: t('heatmaps.legend.less'),
@@ -49,8 +66,8 @@ const AiHeatmaps = memo<
           t('heatmaps.months.nov'),
           t('heatmaps.months.dec'),
         ],
-        tooltip: t('heatmaps.tooltip'),
-        totalCount: t('heatmaps.totalCount'),
+        tooltip: isTokens ? t('heatmaps.tooltipTokens') : t('heatmaps.tooltip'),
+        totalCount: isTokens ? t('heatmaps.totalCountTokens') : t('heatmaps.totalCount'),
       }}
       style={{
         alignSelf: 'center',
@@ -59,7 +76,28 @@ const AiHeatmaps = memo<
     />
   );
 
-  const tags = (
+  const typeSwitch = (
+    <Segmented
+      size={'small'}
+      value={type}
+      variant={'outlined'}
+      options={[
+        {
+          icon: <Icon icon={CoinsIcon} />,
+          label: t('stats.tokens'),
+          value: HeatmapType.Tokens,
+        },
+        {
+          icon: <Icon icon={MessageSquareIcon} />,
+          label: t('stats.messages'),
+          value: HeatmapType.Messages,
+        },
+      ]}
+      onChange={(v) => setType(v as HeatmapType)}
+    />
+  );
+
+  const dayTags = (
     <Flexbox horizontal gap={8}>
       <Tag variant={'filled'}>{[days, t('stats.days')].join(' ')}</Tag>
       <Tag color={'success'} icon={<Icon icon={FlameIcon} />} variant={'filled'}>
@@ -80,7 +118,7 @@ const AiHeatmaps = memo<
           >
             {t('stats.lastYearActivity')}
           </div>
-          {tags}
+          {dayTags}
         </Flexbox>
         {content}
       </Flexbox>
@@ -88,8 +126,16 @@ const AiHeatmaps = memo<
   }
 
   return (
-    <StatsFormGroup extra={tags} fontSize={16} title={t('stats.lastYearActivity')}>
-      {content}
+    <StatsFormGroup
+      afterTitle={typeSwitch}
+      extra={dayTags}
+      fontSize={16}
+      title={t('stats.lastYearActivity')}
+    >
+      <Flexbox gap={16}>
+        {isTokens && <HeatmapStats data={data} loading={isLoading || !data} />}
+        {content}
+      </Flexbox>
     </StatsFormGroup>
   );
 });

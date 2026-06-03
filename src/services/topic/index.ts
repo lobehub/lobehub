@@ -74,6 +74,10 @@ export class TopicService {
     return lambdaClient.topic.rankTopics.query(limit);
   };
 
+  getMaxTaskDuration = async (): Promise<number> => {
+    return lambdaClient.topic.getMaxTaskDuration.query();
+  };
+
   getRecentTopics = async (limit?: number): Promise<RecentTopic[]> => {
     return lambdaClient.topic.recentTopics.query({ limit });
   };

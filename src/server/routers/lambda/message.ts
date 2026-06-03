@@ -179,6 +179,10 @@ export const messageRouter = router({
     return ctx.messageModel.getHeatmaps();
   }),
 
+  getTokenHeatmaps: messageProcedure.query(async ({ ctx }) => {
+    return ctx.messageModel.getTokenHeatmaps();
+  }),
+
   getMessages: publicProcedure
     .use(serverDatabase)
     .input(

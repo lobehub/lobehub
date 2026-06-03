@@ -507,6 +507,96 @@ describe('MessageModel Statistics Tests', () => {
     });
   });
 
+  describe('getTokenHeatmaps', () => {
+    it('should sum assistant metadata.usage.totalTokens per day and scale levels', async () => {
+      vi.useFakeTimers();
+      const fixedDate = new Date('2023-04-07T13:00:00Z');
+      vi.setSystemTime(fixedDate);
+
+      const today = dayjs(fixedDate);
+      const twoDaysAgoDate = today.subtract(2, 'day').format('YYYY-MM-DD');
+      const oneDayAgoDate = today.subtract(1, 'day').format('YYYY-MM-DD');
+      const todayDate = today.format('YYYY-MM-DD');
+
+      await serverDB.insert(messages).values([
+        // two days ago: 100 + 50 = 150 tokens
+        {
+          id: 'a1',
+          userId,
+          role: 'assistant',
+          metadata: { usage: { totalTokens: 100 } },
+          createdAt: today.subtract(2, 'day').toDate(),
+        },
+        {
+          id: 'a2',
+          userId,
+          role: 'assistant',
+          metadata: { usage: { totalTokens: 50 } },
+          createdAt: today.subtract(2, 'day').toDate(),
+        },
+        // a non-assistant message with usage on the same day must be ignored
+        {
+          id: 'u1',
+          userId,
+          role: 'user',
+          metadata: { usage: { totalTokens: 9999 } },
+          createdAt: today.subtract(2, 'day').toDate(),
+        },
+        // one day ago: 300 tokens (busiest day -> level 4)
+        {
+          id: 'a3',
+          userId,
+          role: 'assistant',
+          metadata: { usage: { totalTokens: 300 } },
+          createdAt: today.subtract(1, 'day').toDate(),
+        },
+        // today: assistant message without usage -> contributes 0
+        {
+          id: 'a4',
+          userId,
+          role: 'assistant',
+          metadata: {},
+          createdAt: today.toDate(),
+        },
+        // another user's tokens must be ignored
+        {
+          id: 'o1',
+          userId: otherUserId,
+          role: 'assistant',
+          metadata: { usage: { totalTokens: 8888 } },
+          createdAt: today.subtract(1, 'day').toDate(),
+        },
+      ]);
+
+      const result = await messageModel.getTokenHeatmaps();
+
+      expect(result.length).toBeGreaterThanOrEqual(366);
+      expect(result.length).toBeLessThan(368);
+
+      const twoDaysAgo = result.find((item) => item.date === twoDaysAgoDate);
+      expect(twoDaysAgo?.count).toBe(150);
+      // 150 / 300 * 4 = 2
+      expect(twoDaysAgo?.level).toBe(2);
+
+      const oneDayAgo = result.find((item) => item.date === oneDayAgoDate);
+      expect(oneDayAgo?.count).toBe(300);
+      expect(oneDayAgo?.level).toBe(4);
+
+      const todayData = result.find((item) => item.date === todayDate);
+      expect(todayData?.count).toBe(0);
+      expect(todayData?.level).toBe(0);
+
+      vi.useRealTimers();
+    });
+
+    it('should return all-zero data when there are no messages', async () => {
+      const result = await messageModel.getTokenHeatmaps();
+
+      expect(result.length).toBeGreaterThanOrEqual(366);
+      expect(result.every((item) => item.count === 0 && item.level === 0)).toBe(true);
+    });
+  });
+
   describe('rankModels', () => {
     it('should rank models by usage count', async () => {
       // Create test data

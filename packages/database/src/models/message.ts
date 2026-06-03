@@ -1555,6 +1555,80 @@ export class MessageModel {
     return heatmapData;
   };
 
+  /**
+   * Daily token-usage heatmap for the last year.
+   *
+   * Sums `metadata.usage.totalTokens` of assistant messages bucketed by the day
+   * each message was created — so tokens land on the day they were actually
+   * consumed (a long-running topic spreads across days instead of piling onto
+   * its creation date). `metadata.usage` is the source of truth for usage, so we
+   * aggregate it directly in SQL rather than pulling rows into JS. `level` is
+   * scaled relative to the busiest day so the heatmap stays readable regardless
+   * of absolute token volume.
+   */
+  getTokenHeatmaps = async (): Promise<HeatmapsProps['data']> => {
+    const startDate = today().subtract(1, 'year').startOf('day');
+    const endDate = today().endOf('day');
+
+    const result = await this.db
+      .select({
+        date: sql`DATE(${messages.createdAt})`.as('heatmaps_date'),
+        tokens:
+          sql<number>`COALESCE(SUM((${messages.metadata}->'usage'->>'totalTokens')::numeric), 0)`.mapWith(
+            Number,
+          ),
+      })
+      .from(messages)
+      .where(
+        genWhere([
+          eq(messages.userId, this.userId),
+          eq(messages.role, 'assistant'),
+          genRangeWhere(
+            [startDate.format('YYYY-MM-DD'), endDate.add(1, 'day').format('YYYY-MM-DD')],
+            messages.createdAt,
+            (date) => date.toDate(),
+          ),
+        ]),
+      )
+      .groupBy(sql`heatmaps_date`)
+      .orderBy(desc(sql`heatmaps_date`));
+
+    const dateTokenMap = new Map<string, number>();
+    let maxTokens = 0;
+    for (const item of result) {
+      if (item?.date) {
+        const dateStr = dayjs(item.date as string).format('YYYY-MM-DD');
+        const tokens = item.tokens || 0;
+        dateTokenMap.set(dateStr, tokens);
+        if (tokens > maxTokens) maxTokens = tokens;
+      }
+    }
+
+    const heatmapData: HeatmapsProps['data'] = [];
+    let currentDate = startDate.clone();
+
+    while (currentDate.isBefore(endDate) || currentDate.isSame(endDate, 'day')) {
+      const formattedDate = currentDate.format('YYYY-MM-DD');
+      const tokens = dateTokenMap.get(formattedDate) || 0;
+
+      // Scale to 1-4 relative to the busiest day; 0 tokens stays at level 0.
+      const level =
+        tokens > 0 && maxTokens > 0
+          ? Math.min(4, Math.max(1, Math.ceil((tokens / maxTokens) * 4)))
+          : 0;
+
+      heatmapData.push({
+        count: tokens,
+        date: formattedDate,
+        level,
+      });
+
+      currentDate = currentDate.add(1, 'day');
+    }
+
+    return heatmapData;
+  };
+
   hasMoreThanN = async (n: number): Promise<boolean> => {
     const result = await this.db
       .select({ id: messages.id })
