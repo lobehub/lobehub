@@ -3,9 +3,12 @@ import { describe, expect, it } from 'vitest';
 
 import { extractSelfIterationCompletionPayload } from '../extractCompletionPayload';
 
+// Real persisted shape: the agent runtime stores tool messages with only
+// content/role/tool_call_id — there is NO message-level apiName in live runs.
+// The tool runtime stamps apiName + kind INTO the content, so the extractor must
+// recover apiName from there.
 const toolMessage = (apiName: string, kind: string, data: Record<string, unknown>) => ({
-  apiName,
-  content: JSON.stringify({ kind, ...data }),
+  content: JSON.stringify({ apiName, kind, ...data }),
   role: 'tool',
   tool_call_id: `${apiName}_call`,
 });

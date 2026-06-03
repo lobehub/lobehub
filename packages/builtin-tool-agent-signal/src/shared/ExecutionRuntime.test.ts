@@ -32,7 +32,12 @@ describe('AgentSignalToolExecutionRuntime', () => {
 
     expect(writeMemory).toHaveBeenCalledWith({ content: 'x' }, { agentId: 'a', userId: 'u' });
     expect(result.success).toBe(true);
-    expect(result.state).toEqual({ kind: 'mutation', memoryId: 'mem_1', summary: 'stored' });
+    expect(result.state).toEqual({
+      apiName: 'writeMemory',
+      kind: 'mutation',
+      memoryId: 'mem_1',
+      summary: 'stored',
+    });
     expect(JSON.parse(result.content)).toEqual(result.state);
   });
 
@@ -48,7 +53,7 @@ describe('AgentSignalToolExecutionRuntime', () => {
 
     // Artifact recorders have no primitive — the runtime echoes the input.
     const idea = await (runtime.recordSelfReviewIdea as any)({ idea: 'do x' }, {});
-    expect(idea.state).toEqual({ kind: 'artifact', idea: 'do x' });
+    expect(idea.state).toEqual({ apiName: 'recordSelfReviewIdea', idea: 'do x', kind: 'artifact' });
   });
 
   it('surfaces primitive errors without throwing, preserving the kind', async () => {
@@ -64,7 +69,7 @@ describe('AgentSignalToolExecutionRuntime', () => {
     const result = await (runtime.writeMemory as any)({}, {});
     expect(result.success).toBe(false);
     expect(result.error?.message).toBe('db unavailable');
-    expect(result.state).toEqual({ kind: 'mutation' });
+    expect(result.state).toEqual({ apiName: 'writeMemory', kind: 'mutation' });
   });
 
   it('fails a mutation whose primitive is not implemented', async () => {

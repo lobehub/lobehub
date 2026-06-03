@@ -90,7 +90,11 @@ export class AgentSignalToolExecutionRuntime {
     try {
       const raw = kind === 'artifact' ? input : await this.invokePrimitive(apiName, input, context);
       const data = isRecord(raw) ? raw : { value: raw };
-      const state = { kind, ...data };
+      // Stamp both `apiName` and `kind` into the persisted result content. The
+      // agent runtime only persists tool messages with content/role/tool_call_id
+      // (no message-level apiName), so the completion-path extractor must recover
+      // apiName from the content — same channel as `kind`.
+      const state = { apiName, kind, ...data };
 
       return {
         content: JSON.stringify(state),
@@ -103,7 +107,7 @@ export class AgentSignalToolExecutionRuntime {
       return {
         content: `${apiName} failed: ${message}`,
         error: { message },
-        state: { kind },
+        state: { apiName, kind },
         success: false,
       };
     }
