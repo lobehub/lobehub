@@ -1,5 +1,5 @@
 {
-  "description": "Desensitized golden snapshot of one nightly-review self-iteration run. Used as a structural regression baseline by the execAgent migration (LOBE-9434). Assert structure, never byte-for-byte: the LLM output is non-deterministic.",
+  "description": "Desensitized golden snapshot of one nightly-review self-iteration run. Used as a structural regression baseline by the execAgent migration which converges all agent execution paths (chat, self-iteration, memoryWriter, skillManagement) onto a single execAgent entry point. Assert structure, never byte-for-byte: the LLM output is non-deterministic.",
   "finalState": {
     "messages": [
       {

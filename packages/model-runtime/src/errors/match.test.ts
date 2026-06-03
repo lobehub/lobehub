@@ -17,7 +17,7 @@ describe('matchErrorPattern', () => {
     );
   });
 
-  it('classifies ollamacloud "context window exceeds limit" as ExceededContextWindow, not ProviderBizError (LOBE-9913)', () => {
+  it('classifies ollamacloud "context window exceeds limit" as ExceededContextWindow, not ProviderBizError', () => {
     // ollamacloud surfaces context-window overflow as a generic 400 that the
     // upstream labels ProviderBizError. The ECW message pattern sits before the
     // 400 / ProviderBizError catch-alls, so the message wins regardless.
