@@ -21,16 +21,11 @@ const FORBID_EVENT_HANDLERS = [
 ];
 
 /**
- * Strip every `on*` event handler attribute, regardless of DOM engine.
- *
- * DOMPurify normally removes these via `FORBID_ATTR` / its profile allowlist, but that path
- * relies on the underlying DOM's attribute + namespace handling, which differs across engines
- * (jsdom vs happy-dom) and DOMPurify versions — in some environments `on*` handlers on
- * SVG-namespaced nodes slip through. This hook guarantees removal independent of that.
+ * Matches any `on*` event-handler attribute together with its value — ` onclick="…"`,
+ * ` onload='…'`, or unquoted ` onfoo=bar`. SVG has no safe attribute that starts with `on`,
+ * so stripping all of them is lossless for legitimate content.
  */
-const stripEventHandlers = (_node: Node, data: { attrName: string; keepAttr: boolean }) => {
-  if (data.attrName.startsWith('on')) data.keepAttr = false;
-};
+const EVENT_HANDLER_ATTR = /\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s/>]+)/gi;
 
 /**
  * Sanitizes SVG content to prevent XSS attacks while preserving safe SVG elements and attributes
@@ -38,16 +33,16 @@ const stripEventHandlers = (_node: Node, data: { attrName: string; keepAttr: boo
  * @returns Sanitized SVG content safe for rendering
  */
 export const sanitizeSVGContent = (content: string): string => {
-  DOMPurify.addHook('uponSanitizeAttribute', stripEventHandlers);
-  try {
-    return DOMPurify.sanitize(content, {
-      FORBID_ATTR: FORBID_EVENT_HANDLERS,
-      FORBID_TAGS: ['embed', 'link', 'object', 'script', 'style'],
-      KEEP_CONTENT: false,
-      USE_PROFILES: { svg: true, svgFilters: true },
-    });
-  } finally {
-    // Remove only the hook we just added so the shared DOMPurify singleton is left untouched.
-    DOMPurify.removeHook('uponSanitizeAttribute', stripEventHandlers);
-  }
+  const sanitized = DOMPurify.sanitize(content, {
+    FORBID_ATTR: FORBID_EVENT_HANDLERS,
+    FORBID_TAGS: ['embed', 'link', 'object', 'script', 'style'],
+    KEEP_CONTENT: false,
+    USE_PROFILES: { svg: true, svgFilters: true },
+  });
+
+  // Defense-in-depth: DOMPurify's attribute-level filtering runs through the underlying DOM's
+  // attribute + namespace handling, which is inconsistent across engines (jsdom vs happy-dom) and
+  // DOMPurify versions — in some CI environments `on*` handlers on SVG-namespaced nodes are not
+  // stripped at all. Scrub them from the serialized output so removal is deterministic everywhere.
+  return sanitized.replaceAll(EVENT_HANDLER_ATTR, '');
 };
