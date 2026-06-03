@@ -13,7 +13,7 @@ import { localFileService } from '@/services/electron/localFileService';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
 import { getAgentStoreState } from '@/store/agent';
-import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
+import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { consumePendingTopicRepos, getPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
 import { topicSelectors } from '@/store/chat/selectors';
 import type { ChatStore } from '@/store/chat/store';
@@ -55,13 +55,20 @@ const resolveProjectSkills = async (
 };
 
 /**
- * When the agent runs against the local machine ("本机" / `executionTarget:
- * 'local'`), resolve this desktop's own gateway deviceId so it can be passed as
- * the run's `deviceId`. The server then presets `activeDeviceId` and injects
- * `lobe-local-system` into the very first LLM payload — skipping the extra
- * `activateDevice` round-trip the model is otherwise forced to make whenever
- * more than one device is online (with a single device the server's heuristic
- * already covered it).
+ * When the agent runs against the local machine ("本机"), resolve this desktop's
+ * own gateway deviceId so it can be passed as the run's `deviceId`. The server
+ * then presets `activeDeviceId` and injects `lobe-local-system` into the very
+ * first LLM payload — skipping the extra `activateDevice` round-trip the model
+ * is otherwise forced to make whenever more than one device is online (with a
+ * single device the server's heuristic already covered it).
+ *
+ * Gated on the effective runtime mode (`isLocalSystemEnabledById`), NOT on
+ * `agencyConfig.executionTarget`: the latter is only written by the newer
+ * HeteroDeviceSwitcher, whereas the legacy ModeSelector writes just
+ * `runtimeMode`. Resolving a device whenever the target is unset would override
+ * an explicit `cloud` / `none` choice and wrongly route a cloud run to the
+ * local machine. `runtimeMode` is the single source of truth both selectors
+ * agree on (and what the server gates CloudSandbox on).
  *
  * Desktop-only and best-effort: any failure falls back to the server-side
  * device-resolution heuristics. We don't pre-check online status here — an
@@ -70,12 +77,8 @@ const resolveProjectSkills = async (
 const resolveLocalDeviceId = async (agentId?: string): Promise<string | undefined> => {
   if (!isDesktop || !agentId) return undefined;
 
-  // Mirror HeteroDeviceSwitcher's effective-target fallback: on desktop an
-  // unset target means the local machine.
-  const executionTarget =
-    agentByIdSelectors.getAgencyConfigById(agentId)(getAgentStoreState())?.executionTarget ??
-    'local';
-  if (executionTarget !== 'local') return undefined;
+  const isLocal = chatConfigByIdSelectors.isLocalSystemEnabledById(agentId)(getAgentStoreState());
+  if (!isLocal) return undefined;
 
   try {
     const info = await gatewayConnectionService.getDeviceInfo();
