@@ -36,6 +36,14 @@ import {
 
 const MAX_UNIQUE_FILENAME_ATTEMPTS = 1000;
 
+const appendFilenameSuffix = (filename: string, suffix: number): string => {
+  const dotIndex = filename.lastIndexOf('.');
+
+  if (dotIndex <= 0) return `${filename}-${suffix}`;
+
+  return `${filename.slice(0, dotIndex)}-${suffix}${filename.slice(dotIndex)}`;
+};
+
 interface UpsertDocumentParams {
   agentId: string;
   content: string;
@@ -189,7 +197,7 @@ export class AgentDocumentsService {
         );
       }
 
-      filename = `${baseFilename}-${suffix}`;
+      filename = appendFilenameSuffix(baseFilename, suffix);
       suffix += 1;
     }
 

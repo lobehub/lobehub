@@ -151,6 +151,37 @@ describe('AgentDocumentsService', () => {
       expect(result).toEqual({ id: 'new-doc', filename: 'note-2' });
     });
 
+    it('should append collision suffix before the filename extension', async () => {
+      mockModel.findByFilename
+        .mockResolvedValueOnce({ id: 'existing-doc' })
+        .mockResolvedValueOnce(undefined);
+      mockModel.create.mockResolvedValue({ id: 'new-doc', filename: 'Untitled document-2.md' });
+
+      const service = new AgentDocumentsService(db, userId);
+      const result = await service.createDocument('agent-1', 'Untitled document.md', 'content');
+
+      expect(mockModel.findByFilename).toHaveBeenNthCalledWith(
+        1,
+        'agent-1',
+        'Untitled document.md',
+      );
+      expect(mockModel.findByFilename).toHaveBeenNthCalledWith(
+        2,
+        'agent-1',
+        'Untitled document-2.md',
+      );
+      expect(mockModel.create).toHaveBeenCalledWith(
+        'agent-1',
+        'Untitled document-2.md',
+        'content',
+        {
+          editorData: { root: { children: [] } },
+          title: 'Untitled document.md',
+        },
+      );
+      expect(result).toEqual({ id: 'new-doc', filename: 'Untitled document-2.md' });
+    });
+
     it('should throw after too many filename collisions', async () => {
       mockModel.findByFilename.mockResolvedValue({ id: 'existing-doc' });
 
