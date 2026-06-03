@@ -829,18 +829,18 @@ describe('computeChatPricing', () => {
 
       const input1 = result1?.breakdown.find((item) => item.unit.name === 'textInput');
       expect(input1?.quantity).toBe(100_000);
-      expect(input1?.credits).toBe(29_495); // Math.ceil((100,000 * 2.1) / 7.12)
-      expect(input1?.segments).toEqual([{ quantity: 100_000, rate: 2.1, credits: 210_000 }]);
+      expect(input1?.credits).toBe(58_989); // Math.ceil((100,000 * 4.2) / 7.12)
+      expect(input1?.segments).toEqual([{ quantity: 100_000, rate: 4.2, credits: 420_000 }]);
 
       const cached1 = result1?.breakdown.find((item) => item.unit.name === 'textInput_cacheRead');
       expect(cached1?.quantity).toBe(20_000);
-      expect(cached1?.credits).toBe(1_180); // Math.ceil((20,000 * 0.42) / 7.12)
-      expect(cached1?.segments).toEqual([{ quantity: 20_000, rate: 0.42, credits: 8_400 }]);
+      expect(cached1?.credits).toBe(2_360); // Math.ceil((20,000 * 0.84) / 7.12)
+      expect(cached1?.segments).toEqual([{ quantity: 20_000, rate: 0.84, credits: 16_800 }]);
 
       const output1 = result1?.breakdown.find((item) => item.unit.name === 'textOutput');
       expect(output1?.quantity).toBe(10_000);
-      expect(output1?.credits).toBe(11_798); // Math.ceil((10,000 * 8.4) / 7.12)
-      expect(output1?.segments).toEqual([{ quantity: 10_000, rate: 8.4, credits: 84_000 }]);
+      expect(output1?.credits).toBe(23_596); // Math.ceil((10,000 * 16.8) / 7.12)
+      expect(output1?.segments).toEqual([{ quantity: 10_000, rate: 16.8, credits: 168_000 }]);
 
       // Higher tier test (> 512,000 tokens)
       const usage2: ModelTokensUsage = {
