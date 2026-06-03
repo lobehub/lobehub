@@ -1,6 +1,6 @@
 'use client';
 
-import { Flexbox, FormGroup, Grid, Icon, Segmented } from '@lobehub/ui';
+import { FormGroup, Grid, Icon, Segmented } from '@lobehub/ui';
 import { ProviderIcon } from '@lobehub/ui/icons';
 import { type DatePickerProps } from 'antd';
 import { DatePicker, Divider } from 'antd';
@@ -23,7 +23,7 @@ import {
 } from './features/overview';
 import { AssistantsRank, ModelsRank, TopicsRank } from './features/rankings';
 import { UsageCards, UsageTable, UsageTrends } from './features/usage';
-import { AiHeatmaps, HeatmapStats } from './features/visualization';
+import { AiHeatmaps } from './features/visualization';
 import { GroupBy } from './types';
 
 const StatsSetting = memo<{ mobile?: boolean }>(({ mobile }) => {
@@ -72,9 +72,6 @@ const StatsSetting = memo<{ mobile?: boolean }>(({ mobile }) => {
           <TotalMessages mobile={mobile} />
           <TotalTokens />
         </Grid>
-        <Flexbox style={{ paddingBlockStart: 12 }}>
-          <HeatmapStats />
-        </Flexbox>
         <Divider dashed />
         <AiHeatmaps mobile={mobile} />
         <Divider dashed />
