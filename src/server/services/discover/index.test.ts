@@ -303,8 +303,12 @@ describe('DiscoverService', () => {
       },
     };
 
-    (AssistantStore as any).mockImplementation(() => mockAssistantStore);
-    (PluginStore as any).mockImplementation(() => mockPluginStore);
+    (AssistantStore as any).mockImplementation(function () {
+      return mockAssistantStore;
+    });
+    (PluginStore as any).mockImplementation(function () {
+      return mockPluginStore;
+    });
 
     service = new DiscoverService();
     service.market = mockMarket;

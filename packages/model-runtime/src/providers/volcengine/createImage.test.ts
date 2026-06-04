@@ -11,11 +11,13 @@ vi.mock('debug', () => ({
 
 const mockGenerate = vi.fn();
 vi.mock('openai', () => ({
-  default: vi.fn().mockImplementation(() => ({
-    images: {
-      generate: mockGenerate,
-    },
-  })),
+  default: vi.fn().mockImplementation(function () {
+    return {
+      images: {
+        generate: mockGenerate,
+      },
+    };
+  }),
 }));
 
 describe('createVolcengineImage', () => {

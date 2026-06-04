@@ -53,9 +53,9 @@ describe('AgentDocumentVfsService', () => {
     for (const method of Object.values(mockSkillMount)) {
       method.mockReset();
     }
-    (AgentDocumentModel as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      () => mockAgentDocumentModel,
-    );
+    (AgentDocumentModel as unknown as ReturnType<typeof vi.fn>).mockImplementation(function () {
+      return mockAgentDocumentModel;
+    });
     (createSkillMount as unknown as ReturnType<typeof vi.fn>).mockReturnValue(mockSkillMount);
     mockAgentDocumentModel.listByParentAndFilename.mockImplementation(async (...args) => {
       const result = await mockAgentDocumentModel.findByParentAndFilename(...args);

@@ -63,7 +63,9 @@ describe('AgentService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Setup default UserModel mock
-    (UserModel as any).mockImplementation(() => mockUserModel);
+    (UserModel as any).mockImplementation(function () {
+      return mockUserModel;
+    });
     service = new AgentService(mockDb, mockUserId);
   });
 
@@ -74,7 +76,9 @@ describe('AgentService', () => {
         createInbox: vi.fn(),
       };
 
-      (SessionModel as any).mockImplementation(() => mockSessionModel);
+      (SessionModel as any).mockImplementation(function () {
+        return mockSessionModel;
+      });
       (parseAgentConfig as any).mockReturnValue(mockConfig);
 
       await service.createInbox();
@@ -89,7 +93,9 @@ describe('AgentService', () => {
         createInbox: vi.fn(),
       };
 
-      (SessionModel as any).mockImplementation(() => mockSessionModel);
+      (SessionModel as any).mockImplementation(function () {
+        return mockSessionModel;
+      });
       (parseAgentConfig as any).mockReturnValue(undefined);
 
       await service.createInbox();
@@ -106,7 +112,9 @@ describe('AgentService', () => {
         getBuiltinAgent: vi.fn().mockResolvedValue(null),
       };
 
-      (AgentModel as any).mockImplementation(() => mockAgentModel);
+      (AgentModel as any).mockImplementation(function () {
+        return mockAgentModel;
+      });
       (parseAgentConfig as any).mockReturnValue({});
 
       // Need to recreate service to use the new mock
@@ -128,7 +136,9 @@ describe('AgentService', () => {
         getBuiltinAgent: vi.fn().mockResolvedValue(mockAgent),
       };
 
-      (AgentModel as any).mockImplementation(() => mockAgentModel);
+      (AgentModel as any).mockImplementation(function () {
+        return mockAgentModel;
+      });
       (parseAgentConfig as any).mockReturnValue(serverDefaultConfig);
 
       const newService = new AgentService(mockDb, mockUserId);
@@ -163,7 +173,9 @@ describe('AgentService', () => {
         getBuiltinAgent: vi.fn().mockResolvedValue(mockAgent),
       };
 
-      (AgentModel as any).mockImplementation(() => mockAgentModel);
+      (AgentModel as any).mockImplementation(function () {
+        return mockAgentModel;
+      });
       (parseAgentConfig as any).mockReturnValue(serverDefaultConfig);
 
       const newService = new AgentService(mockDb, mockUserId);
@@ -185,7 +197,9 @@ describe('AgentService', () => {
         getBuiltinAgent: vi.fn().mockResolvedValue(mockAgent),
       };
 
-      (AgentModel as any).mockImplementation(() => mockAgentModel);
+      (AgentModel as any).mockImplementation(function () {
+        return mockAgentModel;
+      });
       (parseAgentConfig as any).mockReturnValue({});
 
       const newService = new AgentService(mockDb, mockUserId);
@@ -206,7 +220,9 @@ describe('AgentService', () => {
         getBuiltinAgent: vi.fn().mockResolvedValue(mockAgent),
       };
 
-      (AgentModel as any).mockImplementation(() => mockAgentModel);
+      (AgentModel as any).mockImplementation(function () {
+        return mockAgentModel;
+      });
       (parseAgentConfig as any).mockReturnValue({});
 
       const newService = new AgentService(mockDb, mockUserId);
@@ -223,7 +239,9 @@ describe('AgentService', () => {
         getAgentConfig: vi.fn().mockResolvedValue(null),
       };
 
-      (AgentModel as any).mockImplementation(() => mockAgentModel);
+      (AgentModel as any).mockImplementation(function () {
+        return mockAgentModel;
+      });
       (parseAgentConfig as any).mockReturnValue({});
 
       const newService = new AgentService(mockDb, mockUserId);
@@ -243,7 +261,9 @@ describe('AgentService', () => {
         getAgentConfig: vi.fn().mockResolvedValue(mockAgent),
       };
 
-      (AgentModel as any).mockImplementation(() => mockAgentModel);
+      (AgentModel as any).mockImplementation(function () {
+        return mockAgentModel;
+      });
       (parseAgentConfig as any).mockReturnValue({});
 
       const newService = new AgentService(mockDb, mockUserId);
@@ -265,7 +285,9 @@ describe('AgentService', () => {
         getAgentConfig: vi.fn().mockResolvedValue(mockAgent),
       };
 
-      (AgentModel as any).mockImplementation(() => mockAgentModel);
+      (AgentModel as any).mockImplementation(function () {
+        return mockAgentModel;
+      });
       (parseAgentConfig as any).mockReturnValue({});
 
       const newService = new AgentService(mockDb, mockUserId);
@@ -286,7 +308,9 @@ describe('AgentService', () => {
         getAgentConfig: vi.fn().mockResolvedValue(mockAgent),
       };
 
-      (AgentModel as any).mockImplementation(() => mockAgentModel);
+      (AgentModel as any).mockImplementation(function () {
+        return mockAgentModel;
+      });
       (parseAgentConfig as any).mockReturnValue(serverDefaultConfig);
 
       const newService = new AgentService(mockDb, mockUserId);
@@ -314,7 +338,9 @@ describe('AgentService', () => {
         getAgentConfig: vi.fn().mockResolvedValue(mockAgent),
       };
 
-      (AgentModel as any).mockImplementation(() => mockAgentModel);
+      (AgentModel as any).mockImplementation(function () {
+        return mockAgentModel;
+      });
       (parseAgentConfig as any).mockReturnValue({});
 
       const newService = new AgentService(mockDb, mockUserId);
@@ -337,7 +363,9 @@ describe('AgentService', () => {
         getAgentConfig: vi.fn().mockResolvedValue(mockAgent),
       };
 
-      (AgentModel as any).mockImplementation(() => mockAgentModel);
+      (AgentModel as any).mockImplementation(function () {
+        return mockAgentModel;
+      });
       (parseAgentConfig as any).mockReturnValue(serverDefaultConfig);
 
       const newService = new AgentService(mockDb, mockUserId);
@@ -358,7 +386,9 @@ describe('AgentService', () => {
         getAgentConfig: vi.fn().mockResolvedValue(mockAgent),
       };
 
-      (AgentModel as any).mockImplementation(() => mockAgentModel);
+      (AgentModel as any).mockImplementation(function () {
+        return mockAgentModel;
+      });
       (parseAgentConfig as any).mockReturnValue({});
       // Use mockResolvedValueOnce to avoid affecting subsequent tests
       mockUserModel.getUserSettingsDefaultAgentConfig.mockResolvedValueOnce({
@@ -380,7 +410,9 @@ describe('AgentService', () => {
         getAgentConfigById: vi.fn().mockResolvedValue(null),
       };
 
-      (AgentModel as any).mockImplementation(() => mockAgentModel);
+      (AgentModel as any).mockImplementation(function () {
+        return mockAgentModel;
+      });
       (parseAgentConfig as any).mockReturnValue({});
 
       const newService = new AgentService(mockDb, mockUserId);
@@ -400,7 +432,9 @@ describe('AgentService', () => {
         getAgentConfigById: vi.fn().mockResolvedValue(mockAgent),
       };
 
-      (AgentModel as any).mockImplementation(() => mockAgentModel);
+      (AgentModel as any).mockImplementation(function () {
+        return mockAgentModel;
+      });
       (parseAgentConfig as any).mockReturnValue(serverDefaultConfig);
 
       const newService = new AgentService(mockDb, mockUserId);
@@ -433,7 +467,9 @@ describe('AgentService', () => {
         getAgentConfigById: vi.fn().mockResolvedValue(mockAgent),
       };
 
-      (AgentModel as any).mockImplementation(() => mockAgentModel);
+      (AgentModel as any).mockImplementation(function () {
+        return mockAgentModel;
+      });
       (parseAgentConfig as any).mockReturnValue(serverDefaultConfig);
 
       const newService = new AgentService(mockDb, mockUserId);
@@ -468,7 +504,9 @@ describe('AgentService', () => {
           getAgentConfigById: vi.fn().mockResolvedValue(mockAgent),
         };
 
-        (AgentModel as any).mockImplementation(() => mockAgentModel);
+        (AgentModel as any).mockImplementation(function () {
+          return mockAgentModel;
+        });
         (parseAgentConfig as any).mockReturnValue({});
         vi.mocked(isRedisEnabled).mockReturnValue(true);
         vi.mocked(initializeRedisWithPrefix).mockResolvedValue(mockRedisClient as any);
@@ -493,7 +531,9 @@ describe('AgentService', () => {
           getAgentConfigById: vi.fn().mockResolvedValue(mockAgent),
         };
 
-        (AgentModel as any).mockImplementation(() => mockAgentModel);
+        (AgentModel as any).mockImplementation(function () {
+          return mockAgentModel;
+        });
         (parseAgentConfig as any).mockReturnValue({});
         vi.mocked(isRedisEnabled).mockReturnValue(false);
 
@@ -517,7 +557,9 @@ describe('AgentService', () => {
           getAgentConfigById: vi.fn().mockResolvedValue(mockAgent),
         };
 
-        (AgentModel as any).mockImplementation(() => mockAgentModel);
+        (AgentModel as any).mockImplementation(function () {
+          return mockAgentModel;
+        });
         (parseAgentConfig as any).mockReturnValue({});
         vi.mocked(isRedisEnabled).mockReturnValue(true);
         vi.mocked(initializeRedisWithPrefix).mockResolvedValue(mockRedisClient as any);
@@ -542,7 +584,9 @@ describe('AgentService', () => {
           getAgentConfigById: vi.fn().mockResolvedValue(mockAgent),
         };
 
-        (AgentModel as any).mockImplementation(() => mockAgentModel);
+        (AgentModel as any).mockImplementation(function () {
+          return mockAgentModel;
+        });
         (parseAgentConfig as any).mockReturnValue({});
         vi.mocked(isRedisEnabled).mockReturnValue(true);
         vi.mocked(initializeRedisWithPrefix).mockRejectedValue(
@@ -567,7 +611,9 @@ describe('AgentService', () => {
           getAgentConfigById: vi.fn().mockResolvedValue(mockAgent),
         };
 
-        (AgentModel as any).mockImplementation(() => mockAgentModel);
+        (AgentModel as any).mockImplementation(function () {
+          return mockAgentModel;
+        });
         (parseAgentConfig as any).mockReturnValue({});
         vi.mocked(isRedisEnabled).mockReturnValue(true);
         vi.mocked(initializeRedisWithPrefix).mockResolvedValue(mockRedisClient as any);

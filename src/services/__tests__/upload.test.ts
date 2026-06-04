@@ -59,7 +59,9 @@ describe('UploadService', () => {
           addEventListener: vi.fn(),
         },
       };
-      global.XMLHttpRequest = vi.fn(() => xhrMock) as any;
+      global.XMLHttpRequest = vi.fn(function () {
+        return xhrMock;
+      }) as any;
 
       // Mock createS3PreSignedUrl
       vi.mocked(lambdaClient.upload.createS3PreSignedUrl.mutate).mockResolvedValue(mockPreSignUrl);
@@ -114,7 +116,9 @@ describe('UploadService', () => {
           addEventListener: vi.fn(),
         },
       };
-      global.XMLHttpRequest = vi.fn(() => xhrMock) as any;
+      global.XMLHttpRequest = vi.fn(function () {
+        return xhrMock;
+      }) as any;
 
       // Mock createS3PreSignedUrl
       vi.mocked(lambdaClient.upload.createS3PreSignedUrl.mutate).mockResolvedValue(mockPreSignUrl);
@@ -197,7 +201,9 @@ describe('UploadService', () => {
           addEventListener: vi.fn(),
         },
       };
-      global.XMLHttpRequest = vi.fn(() => xhrMock) as any;
+      global.XMLHttpRequest = vi.fn(function () {
+        return xhrMock;
+      }) as any;
 
       // Mock createS3PreSignedUrl
       vi.mocked(lambdaClient.upload.createS3PreSignedUrl.mutate).mockResolvedValue(mockPreSignUrl);
@@ -237,7 +243,9 @@ describe('UploadService', () => {
           addEventListener: vi.fn(),
         },
       };
-      global.XMLHttpRequest = vi.fn(() => xhrMock) as any;
+      global.XMLHttpRequest = vi.fn(function () {
+        return xhrMock;
+      }) as any;
 
       // Mock createS3PreSignedUrl
       vi.mocked(lambdaClient.upload.createS3PreSignedUrl.mutate).mockResolvedValue(mockPreSignUrl);

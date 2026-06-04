@@ -32,37 +32,47 @@ vi.mock('@/libs/trusted-client', () => ({
 
 // Mock database and models
 vi.mock('@/database/models/message', () => ({
-  MessageModel: vi.fn().mockImplementation(() => ({
-    query: vi.fn().mockResolvedValue([]),
-  })),
+  MessageModel: vi.fn().mockImplementation(function () {
+    return {
+      query: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/agent', () => ({
-  AgentModel: vi.fn().mockImplementation(() => ({
-    getAgentConfigById: vi.fn(),
-  })),
+  AgentModel: vi.fn().mockImplementation(function () {
+    return {
+      getAgentConfigById: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/plugin', () => ({
-  PluginModel: vi.fn().mockImplementation(() => ({
-    query: vi.fn().mockResolvedValue([]),
-  })),
+  PluginModel: vi.fn().mockImplementation(function () {
+    return {
+      query: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 // Mock ModelRuntime to avoid server-side env access
 vi.mock('@/server/modules/ModelRuntime', () => ({
   initializeRuntimeOptions: vi.fn(),
-  ApiKeyManager: vi.fn().mockImplementation(() => ({
-    getApiKey: vi.fn(),
-    getAllApiKeys: vi.fn(),
-  })),
+  ApiKeyManager: vi.fn().mockImplementation(function () {
+    return {
+      getApiKey: vi.fn(),
+      getAllApiKeys: vi.fn(),
+    };
+  }),
 }));
 
 // Mock search service to avoid server-side env access
 vi.mock('@/server/services/search', () => ({
-  SearchService: vi.fn().mockImplementation(() => ({
-    search: vi.fn(),
-  })),
+  SearchService: vi.fn().mockImplementation(function () {
+    return {
+      search: vi.fn(),
+    };
+  }),
   searchService: {
     search: vi.fn(),
   },
@@ -97,16 +107,20 @@ vi.mock('@/server/modules/AgentRuntime', async (importOriginal) => {
 });
 
 vi.mock('@lobechat/agent-runtime', () => ({
-  AgentRuntime: vi.fn().mockImplementation((_agent, _options) => ({
-    step: vi.fn(),
-  })),
+  AgentRuntime: vi.fn().mockImplementation(function (_agent, _options) {
+    return {
+      step: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/queue', () => ({
-  QueueService: vi.fn().mockImplementation(() => ({
-    getImpl: vi.fn().mockReturnValue(null),
-    scheduleMessage: vi.fn(),
-  })),
+  QueueService: vi.fn().mockImplementation(function () {
+    return {
+      getImpl: vi.fn().mockReturnValue(null),
+      scheduleMessage: vi.fn(),
+    };
+  }),
 }));
 
 // Mock Mecha module
@@ -191,7 +205,7 @@ describe('AgentRuntimeService', () => {
     it('should initialize with default base URL', () => {
       delete process.env.AGENT_RUNTIME_BASE_URL;
       const newService = new AgentRuntimeService(mockDb, mockUserId);
-      expect((newService as any).baseURL).toBe('http://localhost:3210/api/agent');
+      expect((newService as any).baseURL).toBe('http://localhost:3000/api/agent');
     });
 
     it('should initialize with custom base URL from environment', () => {

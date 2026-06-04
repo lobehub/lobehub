@@ -61,10 +61,18 @@ describe('runScheduleTick', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockBriefModel.hasUnresolvedUrgentByTask.mockResolvedValue(false);
-    (TaskModel as any).mockImplementation(() => mockTaskModel);
-    (TaskTopicModel as any).mockImplementation(() => mockTaskTopicModel);
-    (BriefModel as any).mockImplementation(() => mockBriefModel);
-    (TaskRunnerService as any).mockImplementation(() => mockRunner);
+    (TaskModel as any).mockImplementation(function () {
+      return mockTaskModel;
+    });
+    (TaskTopicModel as any).mockImplementation(function () {
+      return mockTaskTopicModel;
+    });
+    (BriefModel as any).mockImplementation(function () {
+      return mockBriefModel;
+    });
+    (TaskRunnerService as any).mockImplementation(function () {
+      return mockRunner;
+    });
   });
 
   it('skips not-found tasks', async () => {

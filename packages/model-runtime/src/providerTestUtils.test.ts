@@ -1,10 +1,80 @@
 import OpenAI from 'openai';
-import { describe, it, vi } from 'vitest';
+import { describe, vi } from 'vitest';
 
 import { testProvider } from './providerTestUtils';
+import * as debugStreamModule from './utils/debugStream';
+import { desensitizeUrl } from './utils/desensitizeUrl';
+
+const createMockRuntimeChat =
+  (runtime: { baseURL: string; client: any }) =>
+  async (payload: any): Promise<Response> => {
+    try {
+      const stream = await runtime.client.chat.completions.create(
+        {
+          ...payload,
+          stream: true,
+          stream_options: {
+            include_usage: true,
+          },
+        },
+        { headers: { Accept: '*/*' } },
+      );
+
+      const responseStream = stream.tee ? stream : new ReadableStream();
+
+      if (process.env.TEST_DEBUG === '1' && responseStream.tee) {
+        const [prod, debug] = responseStream.tee();
+        const debugReadable =
+          debug instanceof ReadableStream
+            ? debug
+            : debug.toReadableStream?.() || new ReadableStream();
+
+        debugStreamModule.debugStream(debugReadable).catch(console.error);
+
+        return new Response(prod);
+      }
+
+      return new Response(responseStream);
+    } catch (error: any) {
+      const endpoint = runtime.baseURL.includes('api.abc')
+        ? desensitizeUrl(runtime.baseURL)
+        : runtime.baseURL;
+
+      if (error?.status === 401) {
+        throw {
+          endpoint,
+          error,
+          errorType: 'InvalidAPIKey',
+          provider: 'TestProvider',
+        };
+      }
+
+      if (error instanceof OpenAI.APIError) {
+        throw {
+          endpoint,
+          error: error.error,
+          errorType: 'TestBizError',
+          message: error.message,
+          provider: 'TestProvider',
+        };
+      }
+
+      throw {
+        endpoint,
+        error: {
+          cause: error?.cause,
+          message: error?.message,
+          name: error?.name,
+        },
+        errorType: 'AgentRuntimeError',
+        message: error?.message,
+        provider: 'TestProvider',
+      };
+    }
+  };
 
 describe('testProvider', () => {
-  it('should run provider tests correctly', () => {
+  describe('runs provider tests correctly', () => {
     class MockRuntime {
       baseURL: string;
       client: any;
@@ -24,11 +94,14 @@ describe('testProvider', () => {
               create: vi.fn().mockResolvedValue(new ReadableStream()),
             },
           },
+          responses: {
+            create: vi.fn().mockResolvedValue(new ReadableStream()),
+          },
         };
       }
 
       async chat(params: any) {
-        return this.client.chat.completions.create(params);
+        return createMockRuntimeChat(this)(params);
       }
     }
 
@@ -43,14 +116,14 @@ describe('testProvider', () => {
     });
   });
 
-  it('should handle OpenAI API errors correctly', async () => {
+  describe('handles OpenAI API errors correctly', () => {
     class MockRuntime {
       baseURL: string;
       client: any;
 
-      constructor({ apiKey }: { apiKey?: string }) {
+      constructor({ apiKey, baseURL = 'test' }: { apiKey?: string; baseURL?: string }) {
         if (!apiKey) throw { errorType: 'InvalidAPIKey' };
-        this.baseURL = 'test';
+        this.baseURL = baseURL;
         this.client = {
           chat: {
             completions: {
@@ -67,11 +140,14 @@ describe('testProvider', () => {
               ),
             },
           },
+          responses: {
+            create: vi.fn().mockResolvedValue(new ReadableStream()),
+          },
         };
       }
 
       async chat(params: any) {
-        return this.client.chat.completions.create(params);
+        return createMockRuntimeChat(this)(params);
       }
     }
 
@@ -86,14 +162,14 @@ describe('testProvider', () => {
     });
   });
 
-  it('should handle debug stream correctly', () => {
+  describe('handles debug stream correctly', () => {
     class MockRuntime {
       baseURL: string;
       client: any;
 
-      constructor({ apiKey }: { apiKey?: string }) {
+      constructor({ apiKey, baseURL = 'test' }: { apiKey?: string; baseURL?: string }) {
         if (!apiKey) throw { errorType: 'InvalidAPIKey' };
-        this.baseURL = 'test';
+        this.baseURL = baseURL;
         this.client = {
           chat: {
             completions: {
@@ -102,11 +178,14 @@ describe('testProvider', () => {
               }),
             },
           },
+          responses: {
+            create: vi.fn().mockResolvedValue(new ReadableStream()),
+          },
         };
       }
 
       async chat(params: any) {
-        return this.client.chat.completions.create(params);
+        return createMockRuntimeChat(this)(params);
       }
     }
 

@@ -19,7 +19,6 @@ export default defineConfig({
       '@/libs/model-runtime': resolve(__dirname, '../model-runtime/src'),
       '@/types': resolve(__dirname, '../types/src'),
       '@': resolve(__dirname, '../../src'),
-
     },
     coverage: {
       all: false,
@@ -36,11 +35,7 @@ export default defineConfig({
       TEST_SERVER_DB: '1',
     },
     environment: 'node',
-    poolOptions: {
-      forks: {
-        singleFork: true,
-      },
-    },
+    fileParallelism: false,
     setupFiles: './tests/setup-db.ts',
   },
 });

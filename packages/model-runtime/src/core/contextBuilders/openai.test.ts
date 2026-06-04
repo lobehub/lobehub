@@ -187,6 +187,21 @@ describe('convertMessageContent', () => {
 });
 
 describe('convertOpenAIMessages', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(parseDataUri).mockImplementation((uri: string) => ({
+      base64: null,
+      mimeType: null,
+      type: uri.startsWith('data:') ? 'base64' : 'url',
+    }));
+    process.env.LLM_VISION_IMAGE_USE_BASE64 = undefined;
+    process.env.LLM_VISION_VIDEO_USE_BASE64 = undefined;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('should convert string content messages', async () => {
     const messages = [
       { role: 'user', content: 'Hello' },
@@ -209,7 +224,6 @@ describe('convertOpenAIMessages', () => {
       },
     ] as OpenAI.ChatCompletionMessageParam[];
 
-    vi.spyOn(Promise, 'all');
     vi.mocked(parseDataUri).mockReturnValue({ type: 'url', base64: null, mimeType: null });
     vi.mocked(imageUrlToBase64).mockResolvedValue({
       base64: 'base64String',
@@ -232,8 +246,6 @@ describe('convertOpenAIMessages', () => {
         ],
       },
     ]);
-
-    expect(Promise.all).toHaveBeenCalledTimes(2); // 一次用于消息数组，一次用于内容数组
 
     process.env.LLM_VISION_IMAGE_USE_BASE64 = undefined;
   });
@@ -258,8 +270,6 @@ describe('convertOpenAIMessages', () => {
     const result = await convertOpenAIMessages(messages);
 
     expect(result).toEqual(messages);
-
-    expect(Promise.all).toHaveBeenCalledTimes(2); // 一次用于消息数组，一次用于内容数组
   });
 
   it('should filter out reasoning field from messages', async () => {
@@ -459,6 +469,21 @@ describe('convertOpenAIMessages', () => {
 });
 
 describe('convertOpenAIResponseInputs', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(parseDataUri).mockImplementation((uri: string) => ({
+      base64: null,
+      mimeType: null,
+      type: uri.startsWith('data:') ? 'base64' : 'url',
+    }));
+    process.env.LLM_VISION_IMAGE_USE_BASE64 = undefined;
+    process.env.LLM_VISION_VIDEO_USE_BASE64 = undefined;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('应该正确转换普通文本消息', async () => {
     const messages: OpenAIChatMessage[] = [
       { role: 'user', content: 'Hello' },

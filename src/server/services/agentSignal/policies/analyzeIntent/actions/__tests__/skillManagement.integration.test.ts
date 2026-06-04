@@ -14,11 +14,13 @@ import {
 import { runSkillManagementAction } from '../skillManagement';
 
 vi.mock('@/server/services/skill/resource', () => ({
-  SkillResourceService: vi.fn().mockImplementation(() => ({
-    listResources: vi.fn().mockResolvedValue([]),
-    readResource: vi.fn().mockRejectedValue(new Error('Resource not found')),
-    storeResources: vi.fn().mockResolvedValue({}),
-  })),
+  SkillResourceService: vi.fn().mockImplementation(function () {
+    return {
+      listResources: vi.fn().mockResolvedValue([]),
+      readResource: vi.fn().mockRejectedValue(new Error('Resource not found')),
+      storeResources: vi.fn().mockResolvedValue({}),
+    };
+  }),
 }));
 
 describe('runSkillManagementAction integration', () => {
