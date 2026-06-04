@@ -539,6 +539,7 @@ export class MarketService {
           // Static label map — avoids importing LOBEHUB_SKILL_PROVIDERS which
           // pulls in react-icons (client-side only). Keep in sync with lobehubSkill.ts.
           const PROVIDER_LABELS: Record<string, string> = {
+            canva: 'Canva',
             github: 'GitHub',
             linear: 'Linear',
             microsoft: 'Outlook Calendar',

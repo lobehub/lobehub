@@ -35,6 +35,7 @@ Sandbox mode: {{sandbox_enabled}}
 
 <oauth_providers>
 LobeHub provides built-in OAuth integrations for the following services:
+- **canva**: Canva design and visual communication. Connect to create and update designs, manage assets, export files, and collaborate through comments.
 - **github**: GitHub repository and code management. Connect to access repositories, create issues, manage pull requests.
 - **linear**: Linear issue tracking and project management. Connect to create/manage issues, track projects.
 - **microsoft**: Microsoft Outlook Calendar. Connect to view/create calendar events, manage meetings.

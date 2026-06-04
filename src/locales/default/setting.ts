@@ -1465,6 +1465,10 @@ When I am ___, I need ___
 
   'tools.lobehubSkill.error': 'Error',
   // LobeHub Skill Providers i18n
+  'tools.lobehubSkill.providers.canva.description':
+    'Canva is an online design and visual communication platform for creating presentations, social posts, brand assets, and other visual content.',
+  'tools.lobehubSkill.providers.canva.readme':
+    'Connect to Canva to create and update designs, upload and organize assets, manage brand kits and folders, export files, and collaborate through comments with your AI assistant.',
   'tools.lobehubSkill.providers.github.description':
     'GitHub is a platform for version control and collaboration, enabling developers to host, review, and manage code repositories.',
   'tools.lobehubSkill.providers.github.readme':

@@ -50,6 +50,18 @@ export const LOBEHUB_SKILL_PROVIDERS: LobehubSkillProviderType[] = [
     authorUrl: 'https://lobehub.com',
     defaultVisible: true,
     description:
+      'Canva is an online design and visual communication platform for creating presentations, social posts, brand assets, and other visual content.',
+    icon: 'https://www.canva.com/favicon.ico',
+    id: 'canva',
+    label: 'Canva',
+    readme:
+      'Connect to Canva to create and update designs, upload and organize assets, manage brand kits and folders, export files, and collaborate through comments with your AI assistant.',
+  },
+  {
+    author: 'LobeHub',
+    authorUrl: 'https://lobehub.com',
+    defaultVisible: true,
+    description:
       'GitHub is a platform for version control and collaboration, enabling developers to host, review, and manage code repositories.',
     icon: SiGithub,
     id: 'github',

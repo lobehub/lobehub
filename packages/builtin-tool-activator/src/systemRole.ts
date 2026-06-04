@@ -60,7 +60,7 @@ export const systemPrompt = `You have access to a Tools Activator that allows yo
 - Task requires environment variables (e.g., \`OPENAI_API_KEY\`, \`GITHUB_TOKEN\`)
 - User wants to store or manage sensitive information securely
 - Sandbox code execution requires credentials/secrets to be injected
-- User asks to connect to services like GitHub, Linear, Microsoft, Notion, Twitter, etc.
+- User asks to connect to services like Canva, GitHub, Linear, Microsoft, Notion, Twitter, etc.
 - User wants to use, open, connect, or interact with a third-party integration service
   (e.g., Notion, Slack, Google Drive, Gmail, Airtable, Jira, Figma, HubSpot,
    Salesforce, Dropbox, ClickUp, Confluence, Supabase, WhatsApp, YouTube,
@@ -73,7 +73,7 @@ export const systemPrompt = `You have access to a Tools Activator that allows yo
 2. Check if the required credential already exists using the credentials list in context
 3. If credential exists → use \`getPlaintextCred\` or \`injectCredsToSandbox\` (for sandbox execution)
 4. If credential doesn't exist:
-   - For LobeHub OAuth services (GitHub, Linear, Microsoft, Notion, Twitter) → use \`initiateOAuthConnect\`
+   - For LobeHub OAuth services (Canva, GitHub, Linear, Microsoft, Notion, Twitter) → use \`initiateOAuthConnect\`
    - For Klavis-managed services (Slack, Google Drive, Airtable, Jira, etc.)
      → use \`connectKlavisService\` after activating \`lobe-creds\`. The full list of
      available Klavis services is shown in \`<klavis_integrations>\` inside the

@@ -1173,6 +1173,8 @@
   "tools.lobehubSkill.disconnectConfirm.title": "Disconnect {{name}}?",
   "tools.lobehubSkill.disconnected": "Disconnected",
   "tools.lobehubSkill.error": "Error",
+  "tools.lobehubSkill.providers.canva.description": "Canva is an online design and visual communication platform for creating presentations, social posts, brand assets, and other visual content.",
+  "tools.lobehubSkill.providers.canva.readme": "Connect to Canva to create and update designs, upload and organize assets, manage brand kits and folders, export files, and collaborate through comments with your AI assistant.",
   "tools.lobehubSkill.providers.github.description": "GitHub is a platform for version control and collaboration, enabling developers to host, review, and manage code repositories.",
   "tools.lobehubSkill.providers.github.readme": "Connect to GitHub to access your repositories, create and manage issues, review pull requests, and collaborate on code—all through natural conversation with your AI assistant.",
   "tools.lobehubSkill.providers.linear.description": "Linear is a modern issue tracking and project management tool designed for high-performance teams to build better software faster",

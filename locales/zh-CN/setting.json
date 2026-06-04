@@ -1174,6 +1174,8 @@
   "tools.lobehubSkill.disconnectConfirm.title": "断开 {{name}} 的连接？",
   "tools.lobehubSkill.disconnected": "已断开连接",
   "tools.lobehubSkill.error": "错误",
+  "tools.lobehubSkill.providers.canva.description": "Canva 是一个在线设计与视觉沟通平台，可用于创建演示文稿、社交媒体内容、品牌素材等视觉内容。",
+  "tools.lobehubSkill.providers.canva.readme": "连接 Canva 后，AI 助手可帮您创建和更新设计、上传并整理素材、管理品牌套件与文件夹、导出文件，并通过评论协作。",
   "tools.lobehubSkill.providers.github.description": "GitHub 是一个面向版本控制和协作的平台，开发者可以在此托管、审查并管理代码仓库。",
   "tools.lobehubSkill.providers.github.readme": "连接 GitHub 以访问您的代码仓库，创建并管理 Issue、审查 Pull Request，并通过与 AI 助手的自然对话协作开发。",
   "tools.lobehubSkill.providers.linear.description": "Linear 是一款现代化的问题跟踪和项目管理工具，专为高效团队打造，助力更快构建更优软件。",

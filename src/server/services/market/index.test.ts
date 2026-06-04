@@ -414,6 +414,23 @@ describe('MarketService', () => {
       });
     });
 
+    it('should use the static Canva provider label for manifests', async () => {
+      const service = new MarketService();
+      (service as any).market.connect.listConnections = vi.fn().mockResolvedValue({
+        connections: [{ icon: 'canva-icon', providerId: 'canva', providerName: 'Design Team' }],
+      });
+      (service as any).market.skills.listTools = vi.fn().mockResolvedValue({
+        tools: [{ description: 'Search designs', inputSchema: {}, name: 'canva-search-designs' }],
+      });
+
+      const manifests = await service.getLobehubSkillManifests();
+      expect(manifests).toHaveLength(1);
+      expect(manifests[0].meta).toMatchObject({
+        description: 'LobeHub Skill: Canva',
+        title: 'Canva',
+      });
+    });
+
     it('should skip connections where listTools returns empty', async () => {
       const service = new MarketService();
       (service as any).market.connect.listConnections = vi.fn().mockResolvedValue({
