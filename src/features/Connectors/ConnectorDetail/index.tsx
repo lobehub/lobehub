@@ -87,33 +87,25 @@ const ConnectorDetail = memo<ConnectorDetailProps>(({ connectorId }) => {
         </div>
       </div>
 
-      {/* Tool permissions */}
+      {/* Tool permission editor */}
       {hasTools ? (
-        <>
-          <div style={{ fontWeight: 500, marginBottom: 4 }}>
-            {t('connector.toolPermissions', 'Tool permissions')}
-          </div>
-          <div style={{ color: 'var(--lobe-colors-neutral-500)', fontSize: 12, marginBottom: 12 }}>
-            {t('connector.toolPermissionsDesc', 'Choose when AI is allowed to use these tools.')}
-          </div>
-          <div style={{ flex: 1, overflowY: 'auto' }}>
-            <ToolPermissionGroup
-              label={t('connector.readOnlyTools', 'Read-only tools')}
-              tools={readTools}
-              onBatchPermission={handleBatchPermission}
-              onPermissionChange={updateToolPermission}
-            />
-            <ToolPermissionGroup
-              label={t('connector.writeTools', 'Write/delete tools')}
-              tools={writeTools}
-              onBatchPermission={handleBatchPermission}
-              onPermissionChange={updateToolPermission}
-            />
-          </div>
-        </>
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          <ToolPermissionGroup
+            label={t('connector.readOnlyTools', 'Read-only tools')}
+            tools={readTools}
+            onBatchPermission={handleBatchPermission}
+            onPermissionChange={updateToolPermission}
+          />
+          <ToolPermissionGroup
+            label={t('connector.writeTools', 'Write/delete tools')}
+            tools={writeTools}
+            onBatchPermission={handleBatchPermission}
+            onPermissionChange={updateToolPermission}
+          />
+        </div>
       ) : (
         <div style={{ color: 'var(--lobe-colors-neutral-500)', fontSize: 14 }}>
-          {t('connector.noTools', 'No tool permissions to configure for this skill.')}
+          {t('connector.noTools', 'No tool permissions to configure.')}
         </div>
       )}
     </div>

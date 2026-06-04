@@ -360,7 +360,7 @@ const SkillList = memo<SkillListProps>(({ onSelect, selectedIdentifier }) => {
         isSelected={selectedIdentifier === skill.id}
         key={skill.id}
         skill={skill}
-        onSelect={onSelect ? () => onSelect(skill.id, 'plugin') : undefined}
+        onSelect={onSelect ? () => onSelect(skill.id, 'agent-skill') : undefined}
       />
     ));
 
@@ -370,7 +370,7 @@ const SkillList = memo<SkillListProps>(({ onSelect, selectedIdentifier }) => {
         isSelected={selectedIdentifier === skill.id}
         key={skill.id}
         skill={skill}
-        onSelect={onSelect ? () => onSelect(skill.id, 'plugin') : undefined}
+        onSelect={onSelect ? () => onSelect(skill.id, 'agent-skill') : undefined}
       />
     ));
 
