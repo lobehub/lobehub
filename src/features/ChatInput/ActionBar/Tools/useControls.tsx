@@ -5,7 +5,7 @@ import {
   RecommendedSkillType,
 } from '@lobechat/const';
 import type { ItemType } from '@lobehub/ui';
-import { Avatar, Icon, Popover, SearchBar, stopPropagation, Tag, Tooltip } from '@lobehub/ui';
+import { Avatar, Icon, Popover, Tag, Tooltip } from '@lobehub/ui';
 import { Switch } from '@lobehub/ui/base-ui';
 import { McpIcon, SkillsIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
@@ -272,18 +272,6 @@ const styles = createStaticStyles(({ css }) => ({
     flex: 1;
     text-align: start;
   `,
-  searchBox: css`
-    display: flex;
-    align-items: center;
-
-    /* Width sets the skill submenu size (matched with the Attachments submenu); the
-       negative inline margin cancels the slot header's 12px padding so the search field
-       sits near the menu edge; the top margin tightens the gap above it. */
-    width: 320px;
-    height: 36px;
-    margin-block-start: -8px;
-    margin-inline: -12px;
-  `,
   autoModeRow: css`
     cursor: pointer;
 
@@ -291,7 +279,12 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 6px;
     align-items: center;
 
+    /* Width sets the skill submenu size (matched with the Attachments submenu); the
+       negative margins cancel the slot header's padding (12px inline, 8px block) so the
+       row spans edge-to-edge with no gap above or below it. */
+    width: 320px;
     min-height: 36px;
+    margin-block: -8px;
     margin-inline: -12px;
     padding-inline: 12px;
     border-radius: 6px;
@@ -334,6 +327,19 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 6px;
     align-items: center;
   `,
+  actionSlot: css`
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: flex-end;
+
+    /* Reserve an identical footprint for the trailing control in both activation modes:
+       Auto-OFF shows a 28×16 switch, Auto-ON a 24×24 (hover-revealed) 3-dot button. Fixing
+       the slot to the larger width/height keeps both the row height AND the flex label's
+       available width constant, so toggling Auto never shifts or re-truncates the list. */
+    width: 28px;
+    height: 24px;
+  `,
   toolRow: css`
     display: flex;
     gap: 16px;
@@ -342,6 +348,10 @@ const styles = createStaticStyles(({ css }) => ({
 
     width: 100%;
     min-width: 0;
+
+    /* Floor the row height so it never collapses below the trailing control's slot
+       (the actionSlot is what equalizes the two activation modes). */
+    min-height: 24px;
 
     /* Skill 3-dot menu shows only on row hover (or while its own menu is open). */
     [data-skill-actions] {
@@ -421,7 +431,6 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   const navigate = useNavigate();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
   const [policyOpenId, setPolicyOpenId] = useState<string | null>(null);
-  const [searchKeyword, setSearchKeyword] = useState('');
   const [autoModeLoading, setAutoModeLoading] = useState(false);
   const list = useToolStore(pluginSelectors.installedPluginMetaList, isEqual);
   const [
@@ -621,18 +630,26 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     }): SkillMenuItem => {
       // Auto OFF (manual): a trailing switch toggles whether the skill is used.
       // Auto ON: a hover-only 3-dot menu with an "Exclude from Auto" switch (+ Configure).
+      // Both share `actionSlot` so they occupy the same box — toggling Auto keeps the row
+      // height and label width identical.
       const action = isManualSkillMode ? (
-        <Switch
-          checked={checkedSet.has(id)}
-          size="small"
-          onClick={(_, event) => event.stopPropagation()}
-          onChange={async (next, event) => {
-            event?.stopPropagation?.();
-            await togglePlugin(id, next);
-          }}
-        />
+        <span className={cx(styles.actionSlot)}>
+          <Switch
+            checked={checkedSet.has(id)}
+            size="small"
+            onClick={(_, event) => event.stopPropagation()}
+            onChange={async (next, event) => {
+              event?.stopPropagation?.();
+              await togglePlugin(id, next);
+            }}
+          />
+        </span>
       ) : (
-        <span data-open={policyOpenId === id || undefined} data-skill-actions="">
+        <span
+          className={cx(styles.actionSlot)}
+          data-open={policyOpenId === id || undefined}
+          data-skill-actions=""
+        >
           {renderPolicyMenu(id, configureConfig)}
         </span>
       );
@@ -1160,7 +1177,6 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     ...customPlugins.map(mapPluginToItem),
   ];
 
-  const normalizedSearchKeyword = searchKeyword.trim().toLowerCase();
   const allSkillItems = [
     ...lobehubGroupChildren,
     ...communityGroupChildren,
@@ -1169,19 +1185,10 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     (item): item is SkillMenuItem =>
       Boolean(item) && (item as { type?: string }).type !== 'divider',
   );
-  const filterBySearch = (items: SkillMenuItem[]) => {
-    if (!normalizedSearchKeyword) return items;
-
-    return items.filter((item) =>
-      String(item.searchText || item.key || '')
-        .toLowerCase()
-        .includes(normalizedSearchKeyword),
-    );
-  };
   const allPinnedItems = allSkillItems.filter((item) => checkedSet.has(String(item.key)));
   const allAutoItems = allSkillItems.filter((item) => !checkedSet.has(String(item.key)));
   // Flat list (no pinned/auto groups): pinned skills first, then the rest.
-  const flatSkillItems = filterBySearch([...allPinnedItems, ...allAutoItems]);
+  const flatSkillItems = [...allPinnedItems, ...allAutoItems];
 
   const toggleAutoSkillMode = async (next: boolean) => {
     if (autoModeLoading) return;
@@ -1193,42 +1200,28 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     }
   };
 
-  // Header is pinned (doesn't scroll), so the search bar + Auto toggle stay stuck to the top.
+  // Header is pinned (doesn't scroll), so the Auto toggle stays stuck to the top.
   const marketHeader = (
-    <>
-      <div className={cx(styles.searchBox)} onClick={stopPropagation} onKeyDown={stopPropagation}>
-        <SearchBar
-          allowClear
-          placeholder={t('tools.search')}
-          size="small"
-          style={{ flex: 1 }}
-          value={searchKeyword}
-          variant="borderless"
-          onChange={(event) => setSearchKeyword(event.target.value)}
-          onKeyDown={stopPropagation}
-        />
-      </div>
-      <div
-        className={cx(styles.autoModeRow)}
-        onClick={(event) => {
-          event.stopPropagation();
-          void toggleAutoSkillMode(!isAutoSkillMode);
+    <div
+      className={cx(styles.autoModeRow)}
+      onClick={(event) => {
+        event.stopPropagation();
+        void toggleAutoSkillMode(!isAutoSkillMode);
+      }}
+    >
+      <Icon icon={Zap} size={SKILL_ICON_SIZE} />
+      <span className={cx(styles.autoModeLabel)}>{t('tools.skillActivateMode.auto.title')}</span>
+      <Switch
+        checked={isAutoSkillMode}
+        loading={autoModeLoading}
+        size="small"
+        onClick={(_, event) => event.stopPropagation()}
+        onChange={(next, event) => {
+          event?.stopPropagation?.();
+          void toggleAutoSkillMode(next);
         }}
-      >
-        <Icon icon={Zap} size={SKILL_ICON_SIZE} />
-        <span className={cx(styles.autoModeLabel)}>{t('tools.skillActivateMode.auto.title')}</span>
-        <Switch
-          checked={isAutoSkillMode}
-          loading={autoModeLoading}
-          size="small"
-          onClick={(_, event) => event.stopPropagation()}
-          onChange={(next, event) => {
-            event?.stopPropagation?.();
-            void toggleAutoSkillMode(next);
-          }}
-        />
-      </div>
-    </>
+      />
+    </div>
   );
 
   const marketFooter =
