@@ -7,6 +7,7 @@ import { lazy, memo, Suspense, useEffect, useState } from 'react';
 
 import { ConnectorDetail } from '@/features/Connectors';
 import { useToolStore } from '@/store/tool';
+import { lobehubSkillStoreSelectors } from '@/store/tool/selectors';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 
 const AgentSkillDetail = lazy(() => import('@/features/AgentSkillDetail'));
@@ -15,6 +16,7 @@ export type ToolDetailType =
   | 'agent-skill'
   | 'builtin'
   | 'builtin-skill'
+  | 'lobehub-connector'
   | 'mcp-connector'
   | 'plugin';
 
@@ -64,8 +66,12 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type }) => {
 
   const syncBuiltinTool = useToolStore((s) => s.syncBuiltinTool);
   const syncPluginTools = useToolStore((s) => s.syncPluginTools);
+  const syncToolsFromClient = useToolStore((s) => s.syncToolsFromClient);
   const fetchConnectors = useToolStore((s) => s.fetchConnectors);
   const connector = useToolStore(connectorSelectors.connectorByIdentifier(identifier));
+
+  // For lobehub-connector: get the server's tool list from the store
+  const lobehubServer = useToolStore(lobehubSkillStoreSelectors.getServerByIdentifier(identifier));
 
   // For builtin-skill: look up from store
   const builtinSkill = useToolStore(
@@ -73,7 +79,11 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type }) => {
     isEqual,
   );
 
-  const isConnectorType = type === 'builtin' || type === 'plugin' || type === 'mcp-connector';
+  const isConnectorType =
+    type === 'builtin' ||
+    type === 'plugin' ||
+    type === 'mcp-connector' ||
+    type === 'lobehub-connector';
 
   useEffect(() => {
     if (!isConnectorType) return;
@@ -84,6 +94,23 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type }) => {
       try {
         if (type === 'builtin') {
           await syncBuiltinTool(identifier);
+        } else if (type === 'lobehub-connector') {
+          // Use tools from the lobehub skill server (already fetched via OAuth flow)
+          const tools = (lobehubServer?.tools ?? []).map((t) => ({
+            description: t.description,
+            inputSchema: t.inputSchema as Record<string, unknown>,
+            toolName: t.name,
+          }));
+          if (tools.length === 0) {
+            setNoManifest(true);
+          } else {
+            await syncToolsFromClient({
+              identifier,
+              name: lobehubServer?.name || identifier,
+              sourceType: 'marketplace',
+              tools,
+            });
+          }
         } else if (type === 'plugin') {
           await syncPluginTools(identifier);
         } else {

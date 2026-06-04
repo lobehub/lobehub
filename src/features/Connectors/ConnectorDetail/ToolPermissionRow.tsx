@@ -29,7 +29,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   btnActive: css`
-    color: ${cssVar.colorText};
+    color: ${cssVar.colorPrimary};
+    background: ${cssVar.colorPrimaryBg};
+
+    &:hover {
+      color: ${cssVar.colorPrimary};
+      background: ${cssVar.colorPrimaryBgHover};
+    }
   `,
   row: css`
     display: flex;

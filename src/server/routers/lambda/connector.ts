@@ -193,6 +193,48 @@ export const connectorRouter = router({
     }),
 
   /**
+   * Sync tools from a client-provided list (for Lobehub OAuth skills, Klavis, etc.
+   * that already have their tool list available on the client side).
+   * Idempotent — safe to call whenever the detail panel opens.
+   */
+  syncToolsFromClient: connectorProcedure
+    .input(
+      z.object({
+        identifier: z.string().min(1),
+        name: z.string().min(1),
+        sourceType: z.enum([
+          ConnectorSourceType.builtin,
+          ConnectorSourceType.custom,
+          ConnectorSourceType.marketplace,
+        ]),
+        tools: z.array(
+          z.object({
+            description: z.string().optional(),
+            inputSchema: z.record(z.unknown()).optional(),
+            toolName: z.string(),
+          }),
+        ),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const connectorId = await upsertConnectorEntry(ctx.connectorModel, {
+        identifier: input.identifier,
+        name: input.name,
+        sourceType: input.sourceType,
+      });
+
+      const syncInputs = input.tools.map((t) => ({
+        crudType: inferCrudType(t.toolName),
+        description: t.description,
+        inputSchema: t.inputSchema,
+        toolName: t.toolName,
+      }));
+
+      await ctx.connectorToolModel.upsertMany(connectorId, syncInputs);
+      return { connectorId, toolCount: syncInputs.length };
+    }),
+
+  /**
    * Bootstrap a connector entry for a builtin tool (lobe-creds, lobe-local-system, etc.)
    * by reading its manifest from @lobechat/builtin-tools.
    * Idempotent — safe to call on every open of the detail panel.

@@ -66,6 +66,22 @@ export class ConnectorActionImpl {
   };
 
   /**
+   * Sync tools from a client-provided list (for Lobehub OAuth skills / Klavis
+   * that already have their tool list available on the client side).
+   * Idempotent — safe to call whenever the detail panel opens.
+   */
+  syncToolsFromClient = async (params: {
+    identifier: string;
+    name: string;
+    sourceType: 'builtin' | 'custom' | 'marketplace';
+    tools: Array<{ description?: string; inputSchema?: Record<string, unknown>; toolName: string }>;
+  }): Promise<string> => {
+    const result = await lambdaClient.connector.syncToolsFromClient.mutate(params);
+    await this.fetchConnectors();
+    return result.connectorId;
+  };
+
+  /**
    * Bootstrap connector entry for a builtin tool (reads manifest server-side).
    * Idempotent — safe to call whenever the detail panel opens.
    * Returns the connectorId.

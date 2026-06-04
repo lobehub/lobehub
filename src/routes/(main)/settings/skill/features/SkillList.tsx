@@ -484,7 +484,9 @@ const SkillList = memo<SkillListProps>(
                     key={item.provider.id}
                     provider={item.provider}
                     server={getLobehubSkillServerByProvider(item.provider.id)}
-                    onSelect={onSelect ? () => onSelect(item.provider.id, 'plugin') : undefined}
+                    onSelect={
+                      onSelect ? () => onSelect(item.provider.id, 'lobehub-connector') : undefined
+                    }
                   />
                 );
               }
@@ -516,7 +518,9 @@ const SkillList = memo<SkillListProps>(
                       key={item.provider.id}
                       provider={item.provider}
                       server={getLobehubSkillServerByProvider(item.provider.id)}
-                      onSelect={onSelect ? () => onSelect(item.provider.id, 'plugin') : undefined}
+                      onSelect={
+                        onSelect ? () => onSelect(item.provider.id, 'lobehub-connector') : undefined
+                      }
                     />
                   );
                 }
