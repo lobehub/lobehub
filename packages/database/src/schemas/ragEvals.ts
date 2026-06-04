@@ -28,7 +28,10 @@ export const evalDatasets = pgTable(
 
     ...timestamps,
   },
-  (t) => [index('rag_eval_datasets_user_id_idx').on(t.userId)],
+  (t) => [
+    index('rag_eval_datasets_user_id_idx').on(t.userId),
+    index('rag_eval_datasets_workspace_id_idx').on(t.workspaceId),
+  ],
 );
 
 export type NewEvalDatasetsItem = typeof evalDatasets.$inferInsert;
@@ -55,7 +58,10 @@ export const evalDatasetRecords = pgTable(
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
     ...timestamps,
   },
-  (t) => [index('rag_eval_dataset_records_user_id_idx').on(t.userId)],
+  (t) => [
+    index('rag_eval_dataset_records_user_id_idx').on(t.userId),
+    index('rag_eval_dataset_records_workspace_id_idx').on(t.workspaceId),
+  ],
 );
 
 export type NewEvalDatasetRecordsItem = typeof evalDatasetRecords.$inferInsert;
@@ -89,7 +95,10 @@ export const evalEvaluation = pgTable(
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
     ...timestamps,
   },
-  (t) => [index('rag_eval_evaluations_user_id_idx').on(t.userId)],
+  (t) => [
+    index('rag_eval_evaluations_user_id_idx').on(t.userId),
+    index('rag_eval_evaluations_workspace_id_idx').on(t.workspaceId),
+  ],
 );
 
 export type NewEvalEvaluationItem = typeof evalEvaluation.$inferInsert;
@@ -130,7 +139,10 @@ export const evaluationRecords = pgTable(
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
     ...timestamps,
   },
-  (t) => [index('rag_eval_evaluation_records_user_id_idx').on(t.userId)],
+  (t) => [
+    index('rag_eval_evaluation_records_user_id_idx').on(t.userId),
+    index('rag_eval_evaluation_records_workspace_id_idx').on(t.workspaceId),
+  ],
 );
 
 export type NewEvaluationRecordsItem = typeof evaluationRecords.$inferInsert;

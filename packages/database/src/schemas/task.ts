@@ -1,4 +1,5 @@
 import type { BriefArtifacts, BriefMetadata } from '@lobechat/types';
+import { isNotNull } from 'drizzle-orm';
 import {
   foreignKey,
   index,
@@ -109,6 +110,10 @@ export const tasks = pgTable(
     index('tasks_priority_idx').on(t.priority),
     index('tasks_automation_mode_idx').on(t.automationMode),
     index('tasks_heartbeat_idx').on(t.status, t.lastHeartbeatAt),
+    index('tasks_workspace_id_idx').on(t.workspaceId),
+    uniqueIndex('tasks_identifier_workspace_id_unique')
+      .on(t.workspaceId, t.identifier)
+      .where(isNotNull(t.workspaceId)),
   ],
 );
 
@@ -143,6 +148,7 @@ export const taskDependencies = pgTable(
     index('task_deps_task_id_idx').on(t.taskId),
     index('task_deps_depends_on_id_idx').on(t.dependsOnId),
     index('task_deps_user_id_idx').on(t.userId),
+    index('task_dependencies_workspace_id_idx').on(t.workspaceId),
   ],
 );
 
@@ -176,6 +182,7 @@ export const taskDocuments = pgTable(
     index('task_docs_task_id_idx').on(t.taskId),
     index('task_docs_document_id_idx').on(t.documentId),
     index('task_docs_user_id_idx').on(t.userId),
+    index('task_documents_workspace_id_idx').on(t.workspaceId),
   ],
 );
 
@@ -221,6 +228,7 @@ export const taskTopics = pgTable(
     index('task_topics_topic_id_idx').on(t.topicId),
     index('task_topics_user_id_idx').on(t.userId),
     index('task_topics_status_idx').on(t.taskId, t.status),
+    index('task_topics_workspace_id_idx').on(t.workspaceId),
   ],
 );
 
@@ -275,6 +283,7 @@ export const briefs = pgTable(
     index('briefs_priority_idx').on(t.priority),
     index('briefs_unresolved_idx').on(t.userId, t.resolvedAt),
     index('briefs_trigger_idx').on(t.trigger),
+    index('briefs_workspace_id_idx').on(t.workspaceId),
   ],
 );
 
@@ -319,6 +328,7 @@ export const taskComments = pgTable(
     index('task_comments_agent_id_idx').on(t.authorAgentId),
     index('task_comments_brief_id_idx').on(t.briefId),
     index('task_comments_topic_id_idx').on(t.topicId),
+    index('task_comments_workspace_id_idx').on(t.workspaceId),
   ],
 );
 

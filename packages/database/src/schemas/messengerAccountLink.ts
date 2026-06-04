@@ -79,6 +79,7 @@ export const messengerAccountLinks = pgTable(
       t.tenantId,
     ),
     index('messenger_account_links_active_agent_idx').on(t.activeAgentId),
+    index('messenger_account_links_workspace_id_idx').on(t.workspaceId),
   ],
 );
 

@@ -90,6 +90,7 @@ export const topics = pgTable(
       'gin',
       sql`(metadata->'userMemoryExtractStatus') jsonb_path_ops`,
     ),
+    index('topics_workspace_id_idx').on(t.workspaceId),
   ],
 );
 
@@ -149,6 +150,7 @@ export const threads = pgTable(
     index('threads_agent_id_idx').on(t.agentId),
     index('threads_group_id_idx').on(t.groupId),
     index('threads_parent_thread_id_idx').on(t.parentThreadId),
+    index('threads_workspace_id_idx').on(t.workspaceId),
   ],
 );
 
@@ -182,6 +184,7 @@ export const topicDocuments = pgTable(
     index('topic_documents_user_id_idx').on(t.userId),
     index('topic_documents_topic_id_idx').on(t.topicId),
     index('topic_documents_document_id_idx').on(t.documentId),
+    index('topic_documents_workspace_id_idx').on(t.workspaceId),
   ],
 );
 
@@ -216,6 +219,7 @@ export const topicShares = pgTable(
   (t) => [
     uniqueIndex('topic_shares_topic_id_unique').on(t.topicId),
     index('topic_shares_user_id_idx').on(t.userId),
+    index('topic_shares_workspace_id_idx').on(t.workspaceId),
   ],
 );
 

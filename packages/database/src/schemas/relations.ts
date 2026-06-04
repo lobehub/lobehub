@@ -42,6 +42,7 @@ export const agentsToSessions = pgTable(
     index('agents_to_sessions_session_id_idx').on(t.sessionId),
     index('agents_to_sessions_agent_id_idx').on(t.agentId),
     index('agents_to_sessions_user_id_idx').on(t.userId),
+    index('agents_to_sessions_workspace_id_idx').on(t.workspaceId),
   ],
 );
 
@@ -64,6 +65,7 @@ export const filesToSessions = pgTable(
     userIdIdx: index('files_to_sessions_user_id_idx').on(t.userId),
     fileIdIdx: index('files_to_sessions_file_id_idx').on(t.fileId),
     sessionIdIdx: index('files_to_sessions_session_id_idx').on(t.sessionId),
+    workspaceIdIdx: index('files_to_sessions_workspace_id_idx').on(t.workspaceId),
   }),
 );
 
@@ -83,6 +85,7 @@ export const fileChunks = pgTable(
     userIdIdx: index('file_chunks_user_id_idx').on(t.userId),
     fileIdIdx: index('file_chunks_file_id_idx').on(t.fileId),
     chunkIdIdx: index('file_chunks_chunk_id_idx').on(t.chunkId),
+    workspaceIdIdx: index('file_chunks_workspace_id_idx').on(t.workspaceId),
   }),
 );
 export type NewFileChunkItem = typeof fileChunks.$inferInsert;

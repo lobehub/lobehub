@@ -59,6 +59,7 @@ export const devices = pgTable(
     /** One row per (user, machine); register() upserts on this target */
     uniqueIndex('devices_user_id_device_id_unique').on(t.userId, t.deviceId),
     index('devices_user_id_idx').on(t.userId),
+    index('devices_workspace_id_idx').on(t.workspaceId),
   ],
 );
 

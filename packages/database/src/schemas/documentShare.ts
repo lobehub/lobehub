@@ -30,6 +30,7 @@ export const documentShares = pgTable(
   (t) => [
     uniqueIndex('document_shares_document_id_unique').on(t.documentId),
     index('document_shares_user_id_idx').on(t.userId),
+    index('document_shares_workspace_id_idx').on(t.workspaceId),
   ],
 );
 

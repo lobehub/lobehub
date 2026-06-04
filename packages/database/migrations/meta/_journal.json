@@ -756,6 +756,13 @@
       "when": 1780557205766,
       "tag": "0107_add_workspace_id_fk",
       "breakpoints": true
+    },
+    {
+      "idx": 108,
+      "version": "7",
+      "when": 1780563957134,
+      "tag": "0108_add_workspace_id_indexes",
+      "breakpoints": true
     }
   ],
   "version": "6"

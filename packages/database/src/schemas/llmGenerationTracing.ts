@@ -111,6 +111,7 @@ export const llmGenerationTracing = pgTable(
     index('llm_generation_tracing_validation_failed_idx').on(t.validationFailed),
     index('llm_generation_tracing_feedback_signal_idx').on(t.feedbackSignal),
     index('llm_generation_tracing_created_at_idx').on(t.createdAt),
+    index('llm_generation_tracing_workspace_id_idx').on(t.workspaceId),
   ],
 );
 

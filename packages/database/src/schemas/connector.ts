@@ -154,6 +154,7 @@ export const userConnectors = pgTable(
     index('user_connectors_user_id_idx').on(t.userId),
     /** Scanned by background token-refresh worker */
     index('user_connectors_token_expires_at_idx').on(t.tokenExpiresAt),
+    index('user_connectors_workspace_id_idx').on(t.workspaceId),
   ],
 );
 
@@ -275,6 +276,7 @@ export const userConnectorTools = pgTable(
     uniqueIndex('user_connector_tools_connector_tool_unique').on(t.userConnectorId, t.toolName),
     index('user_connector_tools_user_id_idx').on(t.userId),
     index('user_connector_tools_connector_id_idx').on(t.userConnectorId),
+    index('user_connector_tools_workspace_id_idx').on(t.workspaceId),
   ],
 );
 
@@ -299,6 +301,7 @@ export const userInstalledPlugins = pgTable(
   },
   (self) => ({
     id: primaryKey({ columns: [self.userId, self.identifier] }),
+    workspaceIdIdx: index('user_installed_plugins_workspace_id_idx').on(self.workspaceId),
   }),
 );
 

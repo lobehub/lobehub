@@ -26,7 +26,10 @@ export const apiKeys = pgTable(
 
     ...timestamps,
   },
-  (t) => [index('api_keys_user_id_idx').on(t.userId)],
+  (t) => [
+    index('api_keys_user_id_idx').on(t.userId),
+    index('api_keys_workspace_id_idx').on(t.workspaceId),
+  ],
 );
 
 export const insertApiKeySchema = createInsertSchema(apiKeys);

@@ -35,6 +35,7 @@ export const chunks = pgTable(
   (t) => [
     uniqueIndex('chunks_client_id_user_id_unique').on(t.clientId, t.userId),
     index('chunks_user_id_idx').on(t.userId),
+    index('chunks_workspace_id_idx').on(t.workspaceId),
   ],
 );
 
@@ -66,6 +67,7 @@ export const unstructuredChunks = pgTable(
     userIdIdx: index('unstructured_chunks_user_id_idx').on(t.userId),
     compositeIdIdx: index('unstructured_chunks_composite_id_idx').on(t.compositeId),
     fileIdIdx: index('unstructured_chunks_file_id_idx').on(t.fileId),
+    workspaceIdIdx: index('unstructured_chunks_workspace_id_idx').on(t.workspaceId),
   }),
 );
 
@@ -89,6 +91,7 @@ export const embeddings = pgTable(
     // improve delete embeddings query
     index('embeddings_chunk_id_idx').on(t.chunkId),
     index('embeddings_user_id_idx').on(t.userId),
+    index('embeddings_workspace_id_idx').on(t.workspaceId),
   ],
 );
 
@@ -124,6 +127,7 @@ export const documentChunks = pgTable(
     index('document_chunks_document_id_idx').on(t.documentId),
     index('document_chunks_chunk_id_idx').on(t.chunkId),
     index('document_chunks_user_id_idx').on(t.userId),
+    index('document_chunks_workspace_id_idx').on(t.workspaceId),
   ],
 );
 

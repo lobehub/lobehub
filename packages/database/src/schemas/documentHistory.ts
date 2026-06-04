@@ -31,6 +31,7 @@ export const documentHistories = pgTable(
     index('document_histories_document_id_idx').on(table.documentId),
     index('document_histories_user_id_idx').on(table.userId),
     index('document_histories_saved_at_idx').on(table.savedAt),
+    index('document_histories_workspace_id_idx').on(table.workspaceId),
   ],
 );
 

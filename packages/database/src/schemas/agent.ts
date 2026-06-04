@@ -4,6 +4,7 @@ import type {
   LobeAgentTTSConfig,
 } from '@lobechat/types';
 import { AgentChatConfigSchema } from '@lobechat/types';
+import { isNotNull } from 'drizzle-orm';
 import {
   boolean,
   index,
@@ -82,6 +83,10 @@ export const agents = pgTable(
     index('agents_title_idx').on(t.title),
     index('agents_description_idx').on(t.description),
     index('agents_session_group_id_idx').on(t.sessionGroupId),
+    index('agents_workspace_id_idx').on(t.workspaceId),
+    uniqueIndex('agents_slug_workspace_id_unique')
+      .on(t.workspaceId, t.slug)
+      .where(isNotNull(t.workspaceId)),
   ],
 );
 
@@ -117,6 +122,7 @@ export const agentsKnowledgeBases = pgTable(
     index('agents_knowledge_bases_agent_id_idx').on(t.agentId),
     index('agents_knowledge_bases_knowledge_base_id_idx').on(t.knowledgeBaseId),
     index('agents_knowledge_bases_user_id_idx').on(t.userId),
+    index('agents_knowledge_bases_workspace_id_idx').on(t.workspaceId),
   ],
 );
 
@@ -142,5 +148,6 @@ export const agentsFiles = pgTable(
     index('agents_files_agent_id_idx').on(t.agentId),
     index('agents_files_file_id_idx').on(t.fileId),
     index('agents_files_user_id_idx').on(t.userId),
+    index('agents_files_workspace_id_idx').on(t.workspaceId),
   ],
 );

@@ -82,6 +82,7 @@ export const messageGroups = pgTable(
     index('message_groups_type_idx').on(t.type),
     index('message_groups_parent_group_id_idx').on(t.parentGroupId),
     index('message_groups_parent_message_id_idx').on(t.parentMessageId),
+    index('message_groups_workspace_id_idx').on(t.workspaceId),
   ],
 );
 
@@ -168,6 +169,7 @@ export const messages = pgTable(
     // aggregations and range filters don't scan the full column.
     index('messages_usage_cost_idx').on(sql`(("usage"->>'cost')::numeric)`),
     index('messages_usage_total_tokens_idx').on(sql`(("usage"->>'totalTokens')::numeric)`),
+    index('messages_workspace_id_idx').on(table.workspaceId),
   ],
 );
 
@@ -199,6 +201,7 @@ export const messagePlugins = pgTable(
     uniqueIndex('message_plugins_client_id_user_id_unique').on(t.clientId, t.userId),
     index('message_plugins_user_id_idx').on(t.userId),
     index('message_plugins_tool_call_id_idx').on(t.toolCallId),
+    index('message_plugins_workspace_id_idx').on(t.workspaceId),
   ],
 );
 
@@ -220,6 +223,7 @@ export const messageTTS = pgTable(
   (t) => ({
     clientIdUnique: uniqueIndex('message_tts_client_id_user_id_unique').on(t.clientId, t.userId),
     userIdIdx: index('message_tts_user_id_idx').on(t.userId),
+    workspaceIdIdx: index('message_tts_workspace_id_idx').on(t.workspaceId),
   }),
 );
 
@@ -244,6 +248,7 @@ export const messageTranslates = pgTable(
       t.userId,
     ),
     userIdIdx: index('message_translates_user_id_idx').on(t.userId),
+    workspaceIdIdx: index('message_translates_workspace_id_idx').on(t.workspaceId),
   }),
 );
 
@@ -267,6 +272,7 @@ export const messagesFiles = pgTable(
     pk: primaryKey({ columns: [t.fileId, t.messageId] }),
     userIdIdx: index('messages_files_user_id_idx').on(t.userId),
     messageIdIdx: index('messages_files_message_id_idx').on(t.messageId),
+    workspaceIdIdx: index('messages_files_workspace_id_idx').on(t.workspaceId),
   }),
 );
 
@@ -294,6 +300,7 @@ export const messageQueries = pgTable(
     userIdIdx: index('message_queries_user_id_idx').on(t.userId),
     messageIdIdx: index('message_queries_message_id_idx').on(t.messageId),
     embeddingsIdIdx: index('message_queries_embeddings_id_idx').on(t.embeddingsId),
+    workspaceIdIdx: index('message_queries_workspace_id_idx').on(t.workspaceId),
   }),
 );
 
@@ -316,6 +323,7 @@ export const messageQueryChunks = pgTable(
     userIdIdx: index('message_query_chunks_user_id_idx').on(t.userId),
     messageIdIdx: index('message_query_chunks_message_id_idx').on(t.messageId),
     queryIdIdx: index('message_query_chunks_query_id_idx').on(t.queryId),
+    workspaceIdIdx: index('message_query_chunks_workspace_id_idx').on(t.workspaceId),
   }),
 );
 export type NewMessageFileChunk = typeof messageQueryChunks.$inferInsert;
@@ -336,5 +344,6 @@ export const messageChunks = pgTable(
     pk: primaryKey({ columns: [t.chunkId, t.messageId] }),
     userIdIdx: index('message_chunks_user_id_idx').on(t.userId),
     messageIdIdx: index('message_chunks_message_id_idx').on(t.messageId),
+    workspaceIdIdx: index('message_chunks_workspace_id_idx').on(t.workspaceId),
   }),
 );

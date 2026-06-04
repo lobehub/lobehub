@@ -55,6 +55,7 @@ export const chatGroups = pgTable(
     uniqueIndex('chat_groups_client_id_user_id_unique').on(t.clientId, t.userId),
     index('chat_groups_user_id_idx').on(t.userId),
     index('chat_groups_group_id_idx').on(t.groupId),
+    index('chat_groups_workspace_id_idx').on(t.workspaceId),
   ],
 );
 
@@ -99,6 +100,7 @@ export const chatGroupsAgents = pgTable(
   (t) => ({
     pk: primaryKey({ columns: [t.chatGroupId, t.agentId] }),
     userIdIdx: index('chat_groups_agents_user_id_idx').on(t.userId),
+    workspaceIdIdx: index('chat_groups_agents_workspace_id_idx').on(t.workspaceId),
   }),
 );
 

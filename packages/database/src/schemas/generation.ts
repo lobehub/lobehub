@@ -37,7 +37,10 @@ export const generationTopics = pgTable(
 
     ...timestamps,
   },
-  (t) => [index('generation_topics_user_id_idx').on(t.userId)],
+  (t) => [
+    index('generation_topics_user_id_idx').on(t.userId),
+    index('generation_topics_workspace_id_idx').on(t.workspaceId),
+  ],
 );
 
 export const insertGenerationTopicSchema = createInsertSchema(generationTopics);
@@ -91,6 +94,7 @@ export const generationBatches = pgTable(
   (t) => [
     index('generation_batches_user_id_idx').on(t.userId),
     index('generation_batches_topic_id_idx').on(t.generationTopicId),
+    index('generation_batches_workspace_id_idx').on(t.workspaceId),
   ],
 );
 
@@ -142,6 +146,7 @@ export const generations = pgTable(
     index('generations_user_id_idx').on(t.userId),
     index('generations_batch_id_idx').on(t.generationBatchId),
     index('generations_file_id_idx').on(t.fileId),
+    index('generations_workspace_id_idx').on(t.workspaceId),
   ],
 );
 

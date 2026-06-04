@@ -58,6 +58,7 @@ export const agentBotProviders = pgTable(
     index('agent_bot_providers_platform_idx').on(t.platform),
     index('agent_bot_providers_agent_id_idx').on(t.agentId),
     index('agent_bot_providers_user_id_idx').on(t.userId),
+    index('agent_bot_providers_workspace_id_idx').on(t.workspaceId),
   ],
 );
 
