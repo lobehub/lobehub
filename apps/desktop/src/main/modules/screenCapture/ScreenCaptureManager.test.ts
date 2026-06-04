@@ -37,7 +37,9 @@ const {
 
   return {
     mockBrowserWindow,
-    MockBrowserWindow: vi.fn(() => mockBrowserWindow),
+    MockBrowserWindow: vi.fn(function () {
+      return mockBrowserWindow;
+    }),
     mockCaptureRect: vi.fn(),
     mockCaptureWindow: vi.fn(),
     mockDialogShowMessageBox: vi.fn(async () => ({ response: 0 })),

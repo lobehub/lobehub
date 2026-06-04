@@ -18,7 +18,9 @@ const { mockStoreInstance, mockMakeSureDirExist, MockStore } = vi.hoisted(() => 
     set: vi.fn(),
   };
 
-  const MockStore = vi.fn().mockImplementation(() => mockStoreInstance);
+  const MockStore = vi.fn().mockImplementation(function () {
+    return mockStoreInstance;
+  });
 
   return {
     MockStore,

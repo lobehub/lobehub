@@ -125,7 +125,7 @@ describe('AuthCtr', () => {
 
     // Mock global fetch
     mockFetch = vi.fn();
-    global.fetch = mockFetch;
+    global.fetch = mockFetch as typeof fetch;
 
     // Mock BrowserWindow with send spy
     mockWindow = {

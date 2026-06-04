@@ -24,8 +24,12 @@ vi.mock('undici', () => ({
   fetch: vi.fn(),
   getGlobalDispatcher: vi.fn(),
   setGlobalDispatcher: vi.fn(),
-  Agent: vi.fn(),
-  ProxyAgent: vi.fn(),
+  Agent: vi.fn(function () {
+    return {};
+  }),
+  ProxyAgent: vi.fn(function () {
+    return {};
+  }),
 }));
 
 // Mock defaultProxySettings
@@ -66,8 +70,12 @@ describe('NetworkProxyCtr', () => {
     networkProxyCtr = new NetworkProxyCtr(mockApp);
 
     // Set default return values for undici mocks
-    vi.mocked(mockUndici.Agent).mockReturnValue({});
-    vi.mocked(mockUndici.ProxyAgent).mockReturnValue({});
+    vi.mocked(mockUndici.Agent).mockImplementation(function () {
+      return {};
+    });
+    vi.mocked(mockUndici.ProxyAgent).mockImplementation(function () {
+      return {};
+    });
     vi.mocked(mockUndici.getGlobalDispatcher).mockReturnValue({
       destroy: vi.fn().mockResolvedValue(undefined),
     });

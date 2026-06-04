@@ -61,7 +61,9 @@ describe('TrayManager', () => {
     } as unknown as App;
 
     // Mock Tray constructor
-    vi.mocked(Tray).mockImplementation(() => mockTray);
+    vi.mocked(Tray).mockImplementation(function () {
+      return mockTray;
+    });
 
     trayManager = new TrayManager(mockApp);
   });

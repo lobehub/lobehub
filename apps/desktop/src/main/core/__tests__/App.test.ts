@@ -101,72 +101,92 @@ vi.mock('@/const/dir', () => ({
 }));
 
 vi.mock('@lobechat/electron-server-ipc', () => ({
-  ElectronIPCServer: vi.fn().mockImplementation(() => ({
-    start: vi.fn().mockResolvedValue(undefined),
-  })),
+  ElectronIPCServer: vi.fn().mockImplementation(function () {
+    return {
+      start: vi.fn().mockResolvedValue(undefined),
+    };
+  }),
 }));
 
 // Mock all infrastructure managers
 vi.mock('../infrastructure/I18nManager', () => ({
-  I18nManager: vi.fn().mockImplementation(() => ({
-    init: vi.fn().mockResolvedValue(undefined),
-  })),
+  I18nManager: vi.fn().mockImplementation(function () {
+    return {
+      init: vi.fn().mockResolvedValue(undefined),
+    };
+  }),
 }));
 
 vi.mock('../infrastructure/StoreManager', () => ({
-  StoreManager: vi.fn().mockImplementation(() => ({
-    get: vi.fn((_key, defaultValue) => {
-      if (_key === 'storagePath') return '/mock/storage/path';
-      return defaultValue;
-    }),
-    set: vi.fn(),
-  })),
+  StoreManager: vi.fn().mockImplementation(function () {
+    return {
+      get: vi.fn((_key, defaultValue) => {
+        if (_key === 'storagePath') return '/mock/storage/path';
+        return defaultValue;
+      }),
+      set: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('../infrastructure/StaticFileServerManager', () => ({
-  StaticFileServerManager: vi.fn().mockImplementation(() => ({
-    initialize: vi.fn().mockResolvedValue(undefined),
-    destroy: vi.fn(),
-  })),
+  StaticFileServerManager: vi.fn().mockImplementation(function () {
+    return {
+      initialize: vi.fn().mockResolvedValue(undefined),
+      destroy: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('../infrastructure/UpdaterManager', () => ({
-  UpdaterManager: vi.fn().mockImplementation(() => ({
-    initialize: vi.fn().mockResolvedValue(undefined),
-  })),
+  UpdaterManager: vi.fn().mockImplementation(function () {
+    return {
+      initialize: vi.fn().mockResolvedValue(undefined),
+    };
+  }),
 }));
 
 vi.mock('../infrastructure/ProtocolManager', () => ({
-  ProtocolManager: vi.fn().mockImplementation(() => ({
-    initialize: vi.fn(),
-    processPendingUrls: vi.fn().mockResolvedValue(undefined),
-  })),
+  ProtocolManager: vi.fn().mockImplementation(function () {
+    return {
+      initialize: vi.fn(),
+      processPendingUrls: vi.fn().mockResolvedValue(undefined),
+    };
+  }),
 }));
 
 vi.mock('../browser/BrowserManager', () => ({
-  BrowserManager: vi.fn().mockImplementation(() => ({
-    initializeBrowsers: vi.fn(),
-    getIdentifierByWebContents: vi.fn(),
-  })),
+  BrowserManager: vi.fn().mockImplementation(function () {
+    return {
+      initializeBrowsers: vi.fn(),
+      getIdentifierByWebContents: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('../ui/MenuManager', () => ({
-  MenuManager: vi.fn().mockImplementation(() => ({
-    initialize: vi.fn(),
-  })),
+  MenuManager: vi.fn().mockImplementation(function () {
+    return {
+      initialize: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('../ui/ShortcutManager', () => ({
-  ShortcutManager: vi.fn().mockImplementation(() => ({
-    initialize: vi.fn(),
-  })),
+  ShortcutManager: vi.fn().mockImplementation(function () {
+    return {
+      initialize: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('../ui/TrayManager', () => ({
-  TrayManager: vi.fn().mockImplementation(() => ({
-    initializeTrays: vi.fn(),
-    destroyAll: vi.fn(),
-  })),
+  TrayManager: vi.fn().mockImplementation(function () {
+    return {
+      initializeTrays: vi.fn(),
+      destroyAll: vi.fn(),
+    };
+  }),
 }));
 
 // Mock controllers and services

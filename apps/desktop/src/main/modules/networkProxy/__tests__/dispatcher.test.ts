@@ -15,8 +15,12 @@ vi.mock('@/utils/logger', () => ({
 
 // Mock undici
 vi.mock('undici', () => ({
-  Agent: vi.fn(),
-  ProxyAgent: vi.fn(),
+  Agent: vi.fn(function () {
+    return {};
+  }),
+  ProxyAgent: vi.fn(function () {
+    return {};
+  }),
   getGlobalDispatcher: vi.fn(),
   setGlobalDispatcher: vi.fn(),
 }));
@@ -63,8 +67,12 @@ describe('ProxyDispatcherManager', () => {
     };
 
     mockGetGlobalDispatcher.mockReturnValue(mockDispatcher);
-    mockAgent.mockReturnValue({ destroy: vi.fn().mockResolvedValue(undefined) });
-    mockProxyAgent.mockReturnValue({ destroy: vi.fn().mockResolvedValue(undefined) });
+    mockAgent.mockImplementation(function () {
+      return { destroy: vi.fn().mockResolvedValue(undefined) };
+    });
+    mockProxyAgent.mockImplementation(function () {
+      return { destroy: vi.fn().mockResolvedValue(undefined) };
+    });
     mockSocksDispatcher.mockReturnValue({ destroy: vi.fn().mockResolvedValue(undefined) });
 
     // Setup ProxyUrlBuilder mock to return properly formatted URLs
@@ -165,7 +173,7 @@ describe('ProxyDispatcherManager', () => {
 
     describe('error handling', () => {
       it('should throw error when ProxyAgent creation fails', () => {
-        mockProxyAgent.mockImplementationOnce(() => {
+        mockProxyAgent.mockImplementationOnce(function () {
           throw new Error('ProxyAgent creation failed');
         });
 
@@ -185,7 +193,7 @@ describe('ProxyDispatcherManager', () => {
       });
 
       it('should throw error with unknown error type', () => {
-        mockProxyAgent.mockImplementationOnce(() => {
+        mockProxyAgent.mockImplementationOnce(function () {
           throw 'String error';
         });
 
@@ -352,9 +360,13 @@ describe('ProxyDispatcherManager', () => {
       });
 
       it('should handle errors in queued operations', async () => {
-        mockProxyAgent.mockReturnValueOnce({ destroy: vi.fn() }).mockImplementationOnce(() => {
-          throw new Error('Agent creation failed');
-        });
+        mockProxyAgent
+          .mockImplementationOnce(function () {
+            return { destroy: vi.fn() };
+          })
+          .mockImplementationOnce(function () {
+            throw new Error('Agent creation failed');
+          });
 
         const config1: NetworkProxySettings = {
           ...validConfig,
@@ -376,7 +388,7 @@ describe('ProxyDispatcherManager', () => {
 
     describe('error handling', () => {
       it('should propagate error when agent creation fails', async () => {
-        mockProxyAgent.mockImplementationOnce(() => {
+        mockProxyAgent.mockImplementationOnce(function () {
           throw new Error('Agent creation failed');
         });
 

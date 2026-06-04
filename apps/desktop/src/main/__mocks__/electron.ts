@@ -13,7 +13,7 @@
  */
 import { vi } from 'vitest';
 
-export const app = {
+export const app: Record<string, unknown> = {
   getAppPath: vi.fn(() => '/mock/app'),
   getLocale: vi.fn(() => 'en-US'),
   getName: vi.fn(() => 'LobeHub'),
@@ -27,34 +27,48 @@ export const app = {
   whenReady: vi.fn(() => Promise.resolve()),
 };
 
-export const BrowserWindow = Object.assign(vi.fn(), {
+export const BrowserWindow: unknown = Object.assign(vi.fn(), {
   getAllWindows: vi.fn(() => []),
   getFocusedWindow: vi.fn(() => null),
 });
 
-export const Menu = {
+export const Menu: Record<string, unknown> = {
   buildFromTemplate: vi.fn(() => ({})),
   setApplicationMenu: vi.fn(),
 };
 
-export const ipcMain = { handle: vi.fn(), on: vi.fn(), removeHandler: vi.fn() };
+export const ipcMain: Record<string, unknown> = {
+  handle: vi.fn(),
+  on: vi.fn(),
+  removeHandler: vi.fn(),
+};
 
 export const shell = {
   openExternal: vi.fn(() => Promise.resolve()),
   openPath: vi.fn(() => Promise.resolve('')),
 };
 
-export const dialog = { showMessageBox: vi.fn(), showOpenDialog: vi.fn() };
+export const dialog: Record<string, unknown> = { showMessageBox: vi.fn(), showOpenDialog: vi.fn() };
 
-export const nativeTheme = { on: vi.fn(), shouldUseDarkColors: false, themeSource: 'system' };
+export const nativeTheme: Record<string, unknown> = {
+  on: vi.fn(),
+  shouldUseDarkColors: false,
+  themeSource: 'system',
+};
 
-export const protocol = { handle: vi.fn(), registerSchemesAsPrivileged: vi.fn() };
+export const protocol: Record<string, unknown> = {
+  handle: vi.fn(),
+  registerSchemesAsPrivileged: vi.fn(),
+};
 
-export const clipboard = { readText: vi.fn(() => ''), writeText: vi.fn() };
+export const clipboard: Record<string, unknown> = { readText: vi.fn(() => ''), writeText: vi.fn() };
 
-export const nativeImage = { createEmpty: vi.fn(), createFromPath: vi.fn() };
+export const nativeImage: Record<string, unknown> = {
+  createEmpty: vi.fn(),
+  createFromPath: vi.fn(),
+};
 
-export default {
+const electronMock: Record<string, unknown> = {
   app,
   BrowserWindow,
   clipboard,
@@ -66,3 +80,5 @@ export default {
   protocol,
   shell,
 };
+
+export default electronMock;

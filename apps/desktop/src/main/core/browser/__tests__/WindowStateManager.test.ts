@@ -163,15 +163,15 @@ describe('WindowStateManager', () => {
 
   describe('createCloseHandler', () => {
     let mockBrowserWindow: any;
-    let onCleanup: ReturnType<typeof vi.fn>;
-    let onHide: ReturnType<typeof vi.fn>;
+    let onCleanup: ReturnType<typeof vi.fn<() => void>>;
+    let onHide: ReturnType<typeof vi.fn<() => void>>;
 
     beforeEach(() => {
       mockBrowserWindow = {
         getBounds: vi.fn().mockReturnValue({ height: 600, width: 800, x: 0, y: 0 }),
       };
-      onCleanup = vi.fn();
-      onHide = vi.fn();
+      onCleanup = vi.fn<() => void>();
+      onHide = vi.fn<() => void>();
     });
 
     describe('when app is quitting', () => {

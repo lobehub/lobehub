@@ -7,11 +7,13 @@ import FileSearchService from '../fileSearchSrv';
 
 // Mock the fileSearch module
 vi.mock('@lobechat/local-file-shell', () => {
-  const MockFileSearchImpl = vi.fn().mockImplementation(() => ({
-    search: vi.fn(),
-    checkSearchServiceStatus: vi.fn(),
-    updateSearchIndex: vi.fn(),
-  }));
+  const MockFileSearchImpl = vi.fn().mockImplementation(function () {
+    return {
+      search: vi.fn(),
+      checkSearchServiceStatus: vi.fn(),
+      updateSearchIndex: vi.fn(),
+    };
+  });
 
   return {
     BaseFileSearch: vi.fn(),
