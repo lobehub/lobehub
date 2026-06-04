@@ -152,6 +152,8 @@ describe('AgentDocument VFS Router Integration Tests', () => {
     });
 
     const nodes = await caller.listDocumentsByPath({ agentId, path: './' });
+    if (!nodes) throw new Error('Expected root document listing');
+
     const draftNodes = nodes.filter((node) => node.name === 'draft');
     const read = await caller.readDocumentByPath({ agentId, path: './draft' });
 
@@ -170,6 +172,8 @@ describe('AgentDocument VFS Router Integration Tests', () => {
     });
 
     const nodes = await caller.listDocumentsByPath({ agentId, path: './' });
+    if (!nodes) throw new Error('Expected root document listing');
+
     const read = await caller.readDocumentByPath({ agentId, path: './draft' });
 
     expect(updated).toEqual(expect.objectContaining({ name: 'draft', path: './draft' }));
