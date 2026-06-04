@@ -284,23 +284,26 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(
         className={styles.container}
         gap={16}
         justify="space-between"
-        style={
-          isSelected ? { background: 'var(--ant-color-primary-bg)', borderRadius: 8 } : undefined
-        }
+        style={{
+          ...(isSelected ? { background: 'var(--ant-color-primary-bg)', borderRadius: 8 } : {}),
+          ...(onSelect ? { cursor: 'pointer' } : {}),
+        }}
+        onClick={onSelect}
       >
         <Flexbox horizontal align="center" gap={16} style={{ flex: 1, overflow: 'hidden' }}>
           <Flexbox
             horizontal
             align="center"
             gap={16}
-            style={{ cursor: 'pointer' }}
+            style={{ cursor: onSelect ? undefined : 'pointer' }}
             onClick={
-              onSelect ??
-              (() =>
-                createKlavisSkillDetailModal({
-                  identifier: serverType.identifier,
-                  serverName: serverType.serverName,
-                }))
+              onSelect
+                ? undefined
+                : () =>
+                    createKlavisSkillDetailModal({
+                      identifier: serverType.identifier,
+                      serverName: serverType.serverName,
+                    })
             }
           >
             <div className={`${styles.icon} ${!isConnected ? styles.disconnectedIcon : ''}`}>
@@ -317,10 +320,12 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(
             </Flexbox>
           </Flexbox>
         </Flexbox>
-        <Flexbox horizontal align="center" gap={12}>
-          {isConnected && renderStatus()}
-          {renderAction()}
-        </Flexbox>
+        {!onSelect && (
+          <Flexbox horizontal align="center" gap={12}>
+            {isConnected && renderStatus()}
+            {renderAction()}
+          </Flexbox>
+        )}
       </Flexbox>
     );
   },

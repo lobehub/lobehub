@@ -269,17 +269,23 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
         className={styles.container}
         gap={16}
         justify="space-between"
-        style={
-          isSelected ? { background: 'var(--ant-color-primary-bg)', borderRadius: 8 } : undefined
-        }
+        style={{
+          ...(isSelected ? { background: 'var(--ant-color-primary-bg)', borderRadius: 8 } : {}),
+          ...(onSelect ? { cursor: 'pointer' } : {}),
+        }}
+        onClick={onSelect}
       >
         <Flexbox horizontal align="center" gap={16} style={{ flex: 1, overflow: 'hidden' }}>
           <Flexbox
             horizontal
             align="center"
             gap={16}
-            style={{ cursor: 'pointer' }}
-            onClick={onSelect ?? (() => createLobehubSkillDetailModal({ identifier: provider.id }))}
+            style={{ cursor: onSelect ? undefined : 'pointer' }}
+            onClick={
+              onSelect
+                ? undefined
+                : () => createLobehubSkillDetailModal({ identifier: provider.id })
+            }
           >
             <div className={`${styles.icon} ${!isConnected ? styles.disconnectedIcon : ''}`}>
               {renderIcon()}
@@ -295,10 +301,12 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
             </Flexbox>
           </Flexbox>
         </Flexbox>
-        <Flexbox horizontal align="center" gap={12}>
-          {isConnected && renderStatus()}
-          {renderAction()}
-        </Flexbox>
+        {!onSelect && (
+          <Flexbox horizontal align="center" gap={12}>
+            {isConnected && renderStatus()}
+            {renderAction()}
+          </Flexbox>
+        )}
       </Flexbox>
     );
   },

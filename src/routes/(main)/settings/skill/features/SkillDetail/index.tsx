@@ -64,7 +64,7 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type }) => {
   if (error) {
     return (
       <div style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 14, padding: 24 }}>
-        {error}
+        This skill does not expose configurable tool permissions.
       </div>
     );
   }

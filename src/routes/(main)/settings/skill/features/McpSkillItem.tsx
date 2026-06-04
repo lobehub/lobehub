@@ -47,9 +47,11 @@ const McpSkillItem = memo<McpSkillItemProps>(
           className={styles.container}
           gap={16}
           justify="space-between"
-          style={
-            isSelected ? { background: 'var(--ant-color-primary-bg)', borderRadius: 8 } : undefined
-          }
+          style={{
+            ...(isSelected ? { background: 'var(--ant-color-primary-bg)', borderRadius: 8 } : {}),
+            ...(onSelect ? { cursor: 'pointer' } : {}),
+          }}
+          onClick={onSelect}
         >
           <Flexbox horizontal align="center" gap={12} style={{ flex: 1, overflow: 'hidden' }}>
             <div className={styles.icon}>
@@ -60,7 +62,10 @@ const McpSkillItem = memo<McpSkillItemProps>(
               )}
             </div>
             <Flexbox horizontal align="center" gap={8} style={{ overflow: 'hidden' }}>
-              <span className={styles.title} onClick={onSelect ?? (() => setDetailOpen(true))}>
+              <span
+                className={styles.title}
+                onClick={onSelect ? undefined : () => setDetailOpen(true)}
+              >
                 {title}
               </span>
               {isCustomPlugin ? (
@@ -71,7 +76,7 @@ const McpSkillItem = memo<McpSkillItemProps>(
               <SkillSourceTag source={isCustomPlugin ? 'user' : 'market'} />
             </Flexbox>
           </Flexbox>
-          <Actions identifier={identifier} isMCP={isMCP} type={type} />
+          {!onSelect && <Actions identifier={identifier} isMCP={isMCP} type={type} />}
         </Flexbox>
         {isCommunityMCP && (
           <Modal

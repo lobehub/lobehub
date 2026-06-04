@@ -34,10 +34,12 @@ const isBuiltinSkill = (skill: BuiltinSkill | SkillListItem): skill is BuiltinSk
   !('id' in skill);
 
 interface AgentSkillItemProps {
+  isSelected?: boolean;
+  onSelect?: () => void;
   skill: BuiltinSkill | SkillListItem;
 }
 
-const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
+const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect }) => {
   const { t } = useTranslation('setting');
   const { t: tc } = useTranslation('common');
   const { t: tp } = useTranslation('plugin');
@@ -207,14 +209,19 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
         className={styles.container}
         gap={16}
         justify="space-between"
+        style={{
+          ...(isSelected ? { background: 'var(--ant-color-primary-bg)', borderRadius: 8 } : {}),
+          ...(onSelect ? { cursor: 'pointer' } : {}),
+        }}
+        onClick={onSelect}
       >
         <Flexbox horizontal align="center" gap={16} style={{ flex: 1, overflow: 'hidden' }}>
           <Flexbox
             horizontal
             align="center"
             gap={16}
-            style={{ cursor: 'pointer' }}
-            onClick={handleOpenDetail}
+            style={{ cursor: onSelect ? undefined : 'pointer' }}
+            onClick={onSelect ? undefined : handleOpenDetail}
           >
             <div className={`${styles.icon} ${showDisconnected ? styles.disconnectedIcon : ''}`}>
               {avatar ? <Avatar avatar={avatar} size={32} /> : <Icon icon={SkillsIcon} size={28} />}
@@ -233,12 +240,14 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
             </Flexbox>
           </Flexbox>
         </Flexbox>
-        <Flexbox horizontal align="center" gap={12} onClick={stopPropagation}>
-          {isBuiltin && isBuiltinInstalled && renderStatus()}
-          {renderActions()}
-        </Flexbox>
+        {!onSelect && (
+          <Flexbox horizontal align="center" gap={12} onClick={stopPropagation}>
+            {isBuiltin && isBuiltinInstalled && renderStatus()}
+            {renderActions()}
+          </Flexbox>
+        )}
       </Flexbox>
-      {renderDetailModal()}
+      {!onSelect && renderDetailModal()}
     </>
   );
 });

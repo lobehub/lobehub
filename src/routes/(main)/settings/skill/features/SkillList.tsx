@@ -307,7 +307,14 @@ const SkillList = memo<SkillListProps>(({ onSelect, selectedIdentifier }) => {
     integrations.map((item) => {
       if (item.type === 'builtinAgent') {
         return (
-          <AgentSkillItem key={item.builtinAgentSkill.identifier} skill={item.builtinAgentSkill} />
+          <AgentSkillItem
+            isSelected={selectedIdentifier === item.builtinAgentSkill.identifier}
+            key={item.builtinAgentSkill.identifier}
+            skill={item.builtinAgentSkill}
+            onSelect={
+              onSelect ? () => onSelect(item.builtinAgentSkill.identifier, 'builtin') : undefined
+            }
+          />
         );
       }
       if (item.type === 'builtin') {
@@ -348,10 +355,24 @@ const SkillList = memo<SkillListProps>(({ onSelect, selectedIdentifier }) => {
     });
 
   const renderMarketAgentSkills = () =>
-    marketAgentSkills.map((skill) => <AgentSkillItem key={skill.id} skill={skill} />);
+    marketAgentSkills.map((skill) => (
+      <AgentSkillItem
+        isSelected={selectedIdentifier === skill.id}
+        key={skill.id}
+        skill={skill}
+        onSelect={onSelect ? () => onSelect(skill.id, 'plugin') : undefined}
+      />
+    ));
 
   const renderUserAgentSkills = () =>
-    userAgentSkills.map((skill) => <AgentSkillItem key={skill.id} skill={skill} />);
+    userAgentSkills.map((skill) => (
+      <AgentSkillItem
+        isSelected={selectedIdentifier === skill.id}
+        key={skill.id}
+        skill={skill}
+        onSelect={onSelect ? () => onSelect(skill.id, 'plugin') : undefined}
+      />
+    ));
 
   const renderCommunityMCPs = () =>
     communityMCPs.map((plugin) => (

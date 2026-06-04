@@ -97,17 +97,19 @@ const BuiltinSkillItem = memo<BuiltinSkillItemProps>(
         className={styles.container}
         gap={16}
         justify="space-between"
-        style={
-          isSelected ? { background: 'var(--ant-color-primary-bg)', borderRadius: 8 } : undefined
-        }
+        style={{
+          ...(isSelected ? { background: 'var(--ant-color-primary-bg)', borderRadius: 8 } : {}),
+          ...(onSelect ? { cursor: 'pointer' } : {}),
+        }}
+        onClick={onSelect}
       >
         <Flexbox horizontal align="center" gap={16} style={{ flex: 1, overflow: 'hidden' }}>
           <Flexbox
             horizontal
             align="center"
             gap={16}
-            style={{ cursor: 'pointer' }}
-            onClick={onSelect ?? (() => createBuiltinSkillDetailModal({ identifier }))}
+            style={{ cursor: onSelect ? undefined : 'pointer' }}
+            onClick={onSelect ? undefined : () => createBuiltinSkillDetailModal({ identifier })}
           >
             <div className={`${styles.icon} ${!isInstalled ? styles.disconnectedIcon : ''}`}>
               <Avatar avatar={avatar} size={32} />
@@ -123,10 +125,12 @@ const BuiltinSkillItem = memo<BuiltinSkillItemProps>(
             </Flexbox>
           </Flexbox>
         </Flexbox>
-        <Flexbox horizontal align="center" gap={12} onClick={stopPropagation}>
-          {isInstalled && renderStatus()}
-          {renderActions()}
-        </Flexbox>
+        {!onSelect && (
+          <Flexbox horizontal align="center" gap={12} onClick={stopPropagation}>
+            {isInstalled && renderStatus()}
+            {renderActions()}
+          </Flexbox>
+        )}
       </Flexbox>
     );
   },
