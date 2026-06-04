@@ -1,6 +1,12 @@
+import { createRequire } from 'node:module';
+
 import { act } from 'react-dom/test-utils';
 import { beforeEach } from 'vitest';
-import { createWithEqualityFn as actualCreate } from 'zustand/traditional';
+import type * as ZustandTraditional from 'zustand/traditional';
+
+const require = createRequire(import.meta.url);
+const { createWithEqualityFn: actualCreate } =
+  require('zustand/traditional') as typeof ZustandTraditional;
 
 // a variable to hold reset functions for all stores declared in the app
 const storeResetFns = new Set<() => void>();

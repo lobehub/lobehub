@@ -58,13 +58,27 @@ describe('fileRouter.parseFileToChunks — NoSuchKey + internal:// branches', ()
     documentServiceMock = { parseFile: vi.fn() };
     chunkModelMock = { bulkCreate: vi.fn(), bulkCreateUnstructuredChunks: vi.fn() };
 
-    vi.mocked(AsyncTaskModel).mockImplementation(() => asyncTaskModelMock);
-    vi.mocked(FileModel).mockImplementation(() => fileModelMock);
-    vi.mocked(FileService).mockImplementation(() => fileServiceMock);
-    vi.mocked(ChunkService).mockImplementation(() => chunkServiceMock);
-    vi.mocked(DocumentService).mockImplementation(() => documentServiceMock);
-    vi.mocked(ChunkModel).mockImplementation(() => chunkModelMock);
-    vi.mocked(EmbeddingModel).mockImplementation(() => ({}) as any);
+    vi.mocked(AsyncTaskModel).mockImplementation(function () {
+      return asyncTaskModelMock;
+    });
+    vi.mocked(FileModel).mockImplementation(function () {
+      return fileModelMock;
+    });
+    vi.mocked(FileService).mockImplementation(function () {
+      return fileServiceMock;
+    });
+    vi.mocked(ChunkService).mockImplementation(function () {
+      return chunkServiceMock;
+    });
+    vi.mocked(DocumentService).mockImplementation(function () {
+      return documentServiceMock;
+    });
+    vi.mocked(ChunkModel).mockImplementation(function () {
+      return chunkModelMock;
+    });
+    vi.mocked(EmbeddingModel).mockImplementation(function () {
+      return {};
+    });
 
     mockCtx = { serverDB: {}, userId };
   });

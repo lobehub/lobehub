@@ -29,9 +29,11 @@ vi.mock('@/database/models/agentDocuments', async (importOriginal) => {
 });
 
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn().mockImplementation(() => ({
-    findById: agentDocumentMocks.findTopicById,
-  })),
+  TopicModel: vi.fn().mockImplementation(function () {
+    return {
+      findById: agentDocumentMocks.findTopicById,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/topicDocument', () => ({
@@ -76,9 +78,9 @@ describe('agentDocumentRouter tool outcomes', () => {
       createDocument: vi.fn().mockResolvedValue(createdDocument),
       createForTopic: vi.fn().mockResolvedValue(createdDocument),
     };
-    vi.mocked(AgentDocumentsService).mockImplementation(
-      () => serviceImpl as unknown as AgentDocumentsService,
-    );
+    vi.mocked(AgentDocumentsService).mockImplementation(function () {
+      return serviceImpl as unknown as AgentDocumentsService;
+    });
   });
 
   it('emits success outcome for attributed createDocument', async () => {

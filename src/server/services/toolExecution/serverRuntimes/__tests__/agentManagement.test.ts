@@ -9,20 +9,26 @@ const { mockCountAgents, mockGetAssistantList, mockQueryAgents } = vi.hoisted(()
 }));
 
 vi.mock('@/database/models/agent', () => ({
-  AgentModel: vi.fn(() => ({
-    countAgents: mockCountAgents,
-    queryAgents: mockQueryAgents,
-  })),
+  AgentModel: vi.fn(function () {
+    return {
+      countAgents: mockCountAgents,
+      queryAgents: mockQueryAgents,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/plugin', () => ({
-  PluginModel: vi.fn(() => ({})),
+  PluginModel: vi.fn(function () {
+    return {};
+  }),
 }));
 
 vi.mock('@/server/services/discover', () => ({
-  DiscoverService: vi.fn(() => ({
-    getAssistantList: mockGetAssistantList,
-  })),
+  DiscoverService: vi.fn(function () {
+    return {
+      getAssistantList: mockGetAssistantList,
+    };
+  }),
 }));
 
 const createRuntime = () =>

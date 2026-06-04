@@ -11,9 +11,11 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/database/models/userMemory', () => ({
-  UserMemoryModel: vi.fn().mockImplementation(() => ({
-    searchMemory: mocks.searchMemory,
-  })),
+  UserMemoryModel: vi.fn().mockImplementation(function () {
+    return {
+      searchMemory: mocks.searchMemory,
+    };
+  }),
 }));
 
 vi.mock('@/database/schemas', () => ({

@@ -40,19 +40,21 @@ vi.mock('@/libs/redis', () => ({
 
 // 模拟 S3 类
 vi.mock('@/server/modules/S3', () => ({
-  FileS3: vi.fn().mockImplementation(() => ({
-    createPreSignedUrlForPreview: vi
-      .fn()
-      .mockResolvedValue('https://presigned.example.com/test.jpg'),
-    getFileContent: vi.fn().mockResolvedValue('file content'),
-    getFileByteArray: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
-    getFileMetadata: vi.fn().mockResolvedValue({ contentLength: 1024, contentType: 'image/png' }),
-    deleteFile: vi.fn().mockResolvedValue({}),
-    deleteFiles: vi.fn().mockResolvedValue({}),
-    createPreSignedUrl: vi.fn().mockResolvedValue('https://upload.example.com/test.jpg'),
-    uploadContent: vi.fn().mockResolvedValue({}),
-    uploadMedia: vi.fn().mockResolvedValue({}),
-  })),
+  FileS3: vi.fn().mockImplementation(function () {
+    return {
+      createPreSignedUrlForPreview: vi
+        .fn()
+        .mockResolvedValue('https://presigned.example.com/test.jpg'),
+      getFileContent: vi.fn().mockResolvedValue('file content'),
+      getFileByteArray: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
+      getFileMetadata: vi.fn().mockResolvedValue({ contentLength: 1024, contentType: 'image/png' }),
+      deleteFile: vi.fn().mockResolvedValue({}),
+      deleteFiles: vi.fn().mockResolvedValue({}),
+      createPreSignedUrl: vi.fn().mockResolvedValue('https://upload.example.com/test.jpg'),
+      uploadContent: vi.fn().mockResolvedValue({}),
+      uploadMedia: vi.fn().mockResolvedValue({}),
+    };
+  }),
 }));
 
 // Mock db

@@ -12,9 +12,11 @@ import { cleanupDB, serverDB, setupEvalChain, userId } from './_setup';
 const mockExecAgent = vi.fn();
 
 vi.mock('@/server/services/aiAgent', () => ({
-  AiAgentService: vi.fn().mockImplementation(() => ({
-    execAgent: mockExecAgent,
-  })),
+  AiAgentService: vi.fn().mockImplementation(function () {
+    return {
+      execAgent: mockExecAgent,
+    };
+  }),
 }));
 
 vi.mock('@/server/workflows/agentEvalRun', async (importOriginal) => {
@@ -35,9 +37,11 @@ vi.mock('@/envs/app', () => ({
 }));
 
 vi.mock('@/server/services/agentRuntime/AgentRuntimeService', () => ({
-  AgentRuntimeService: vi.fn().mockImplementation(() => ({
-    interruptOperation: vi.fn().mockResolvedValue(true),
-  })),
+  AgentRuntimeService: vi.fn().mockImplementation(function () {
+    return {
+      interruptOperation: vi.fn().mockResolvedValue(true),
+    };
+  }),
 }));
 
 const markTopicTimeout = async (params: { runId: string; testCaseId: string; topicId: string }) => {

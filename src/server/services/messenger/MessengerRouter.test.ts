@@ -72,7 +72,9 @@ const mockChatBot = {
   },
 };
 vi.mock('chat', () => ({
-  Chat: vi.fn().mockImplementation(() => mockChatBot),
+  Chat: vi.fn().mockImplementation(function () {
+    return mockChatBot;
+  }),
   ConsoleLogger: vi.fn(),
 }));
 vi.mock('@chat-adapter/state-ioredis', () => ({
@@ -139,20 +141,24 @@ const mockSlackBinder = {
   sendDmText: vi.fn(),
 };
 vi.mock('./platforms/slack/binder', () => ({
-  MessengerSlackBinder: vi.fn().mockImplementation(() => mockSlackBinder),
+  MessengerSlackBinder: vi.fn().mockImplementation(function () {
+    return mockSlackBinder;
+  }),
 }));
 
 vi.mock('./platforms/telegram/binder', () => ({
-  MessengerTelegramBinder: vi.fn().mockImplementation(() => ({
-    createClient: () => ({
-      createAdapter: () => ({}),
-      extractChatId: (id: string) => id,
-    }),
-    handleUnlinkedMessage: vi.fn(),
-    notifyLinkSuccess: vi.fn(),
-    registerWebhook: vi.fn(),
-    sendDmText: vi.fn(),
-  })),
+  MessengerTelegramBinder: vi.fn().mockImplementation(function () {
+    return {
+      createClient: () => ({
+        createAdapter: () => ({}),
+        extractChatId: (id: string) => id,
+      }),
+      handleUnlinkedMessage: vi.fn(),
+      notifyLinkSuccess: vi.fn(),
+      registerWebhook: vi.fn(),
+      sendDmText: vi.fn(),
+    };
+  }),
 }));
 
 const buildSlackRequest = (body: string, headers: Record<string, string> = {}): Request =>

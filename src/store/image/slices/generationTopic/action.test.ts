@@ -2,18 +2,21 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { mutate } from '@/libs/swr';
 import { chatService } from '@/services/chat';
 import { generationTopicService } from '@/services/generationTopic';
 import { useImageStore } from '@/store/image';
 import { type ImageGenerationTopic } from '@/types/generation';
+
+import { GenerationTopicActionImpl } from './action';
+
+const mockMutate = vi.hoisted(() => vi.fn());
 
 // Mock @/libs/swr mutate
 vi.mock('@/libs/swr', async () => {
   const actual = await vi.importActual('@/libs/swr');
   return {
     ...actual,
-    mutate: vi.fn(),
+    mutate: mockMutate,
   };
 });
 
@@ -444,28 +447,12 @@ describe('GenerationTopicAction', () => {
   });
 
   describe('refreshGenerationTopics', () => {
-    beforeEach(() => {
-      vi.mock('swr', async () => {
-        const actual = await vi.importActual('swr');
-        return {
-          ...(actual as any),
-          mutate: vi.fn(),
-        };
-      });
-    });
-
-    afterEach(() => {
-      vi.resetAllMocks();
-    });
-
     it('should call mutate to refresh topics', async () => {
-      const { result } = renderHook(() => useImageStore());
+      const action = new GenerationTopicActionImpl(vi.fn() as any, vi.fn() as any);
 
-      await act(async () => {
-        await result.current.refreshGenerationTopics();
-      });
+      await action.refreshGenerationTopics();
 
-      expect(mutate).toHaveBeenCalledWith(['fetchGenerationTopics']);
+      expect(mockMutate).toHaveBeenCalledWith(['fetchGenerationTopics']);
     });
   });
 

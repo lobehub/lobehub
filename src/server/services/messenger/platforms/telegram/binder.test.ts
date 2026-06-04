@@ -48,16 +48,15 @@ beforeEach(() => {
   editMessageWithCallbackKeyboard = vi.fn().mockResolvedValue(undefined);
   answerCallbackQuery = vi.fn().mockResolvedValue(undefined);
 
-  vi.mocked(TelegramApi).mockImplementation(
-    () =>
-      ({
-        answerCallbackQuery,
-        editMessageWithCallbackKeyboard,
-        sendMessage,
-        sendMessageWithCallbackKeyboard,
-        sendMessageWithUrlButton,
-      }) as any,
-  );
+  vi.mocked(TelegramApi).mockImplementation(function () {
+    return {
+      answerCallbackQuery,
+      editMessageWithCallbackKeyboard,
+      sendMessage,
+      sendMessageWithCallbackKeyboard,
+      sendMessageWithUrlButton,
+    } as any;
+  });
 
   vi.mocked(getMessengerTelegramConfig).mockResolvedValue(VALID_CONFIG as any);
   vi.mocked(issueLinkToken).mockResolvedValue('rand-tg-1');
@@ -79,7 +78,9 @@ describe('MessengerTelegramBinder.createClient', () => {
   it('builds a TelegramClient with the env-backed credentials', async () => {
     const fakeClient = { id: 'client' };
     const createClient = vi.fn().mockReturnValue(fakeClient);
-    vi.mocked(TelegramClientFactory).mockImplementation(() => ({ createClient }) as any);
+    vi.mocked(TelegramClientFactory).mockImplementation(function () {
+      return { createClient } as any;
+    });
 
     const binder = new MessengerTelegramBinder();
     const client = await binder.createClient();
@@ -100,7 +101,9 @@ describe('MessengerTelegramBinder.createClient', () => {
       botToken: 'tg',
     } as any);
     const createClient = vi.fn();
-    vi.mocked(TelegramClientFactory).mockImplementation(() => ({ createClient }) as any);
+    vi.mocked(TelegramClientFactory).mockImplementation(function () {
+      return { createClient } as any;
+    });
 
     await new MessengerTelegramBinder().createClient();
     expect(createClient.mock.calls[0][0].credentials.secretToken).toBe('');

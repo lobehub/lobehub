@@ -25,19 +25,25 @@ vi.mock('@/database/core/db-adaptor', () => ({
 // Mock AgentRuntimeService
 const mockGetOperationStatus = vi.fn();
 vi.mock('@/server/services/agentRuntime', () => ({
-  AgentRuntimeService: vi.fn().mockImplementation(() => ({
-    getOperationStatus: mockGetOperationStatus,
-  })),
+  AgentRuntimeService: vi.fn().mockImplementation(function () {
+    return {
+      getOperationStatus: mockGetOperationStatus,
+    };
+  }),
 }));
 
 // Mock AiAgentService
 vi.mock('@/server/services/aiAgent', () => ({
-  AiAgentService: vi.fn().mockImplementation(() => ({})),
+  AiAgentService: vi.fn().mockImplementation(function () {
+    return {};
+  }),
 }));
 
 // Mock AiChatService
 vi.mock('@/server/services/aiChat', () => ({
-  AiChatService: vi.fn().mockImplementation(() => ({})),
+  AiChatService: vi.fn().mockImplementation(function () {
+    return {};
+  }),
 }));
 
 describe('aiAgentRouter.getSubAgentTaskStatus', () => {

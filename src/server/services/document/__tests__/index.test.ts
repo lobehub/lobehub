@@ -119,10 +119,18 @@ describe('DocumentService', () => {
       downloadFileToLocal: vi.fn(),
     };
 
-    vi.mocked(DocumentModel).mockImplementation(() => mockDocumentModel);
-    vi.mocked(DocumentHistoryService).mockImplementation(() => mockDocumentHistoryService);
-    vi.mocked(FileModel).mockImplementation(() => mockFileModel);
-    vi.mocked(FileService).mockImplementation(() => mockFileService);
+    vi.mocked(DocumentModel).mockImplementation(function () {
+      return mockDocumentModel;
+    });
+    vi.mocked(DocumentHistoryService).mockImplementation(function () {
+      return mockDocumentHistoryService;
+    });
+    vi.mocked(FileModel).mockImplementation(function () {
+      return mockFileModel;
+    });
+    vi.mocked(FileService).mockImplementation(function () {
+      return mockFileService;
+    });
 
     service = new DocumentService(mockDb, userId);
   });

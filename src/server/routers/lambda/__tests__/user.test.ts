@@ -62,12 +62,11 @@ describe('userRouter', () => {
   describe('getUserRegistrationDuration', () => {
     it('should return registration duration', async () => {
       const mockDuration = { duration: 100, createdAt: '2023-01-01', updatedAt: '2023-01-02' };
-      vi.mocked(UserModel).mockImplementation(
-        () =>
-          ({
-            getUserRegistrationDuration: vi.fn().mockResolvedValue(mockDuration),
-          }) as any,
-      );
+      vi.mocked(UserModel).mockImplementation(function () {
+        return {
+          getUserRegistrationDuration: vi.fn().mockResolvedValue(mockDuration),
+        } as any;
+      });
 
       const result = await userRouter.createCaller({ ...mockCtx }).getUserRegistrationDuration();
 
@@ -86,12 +85,11 @@ describe('userRouter', () => {
           type: 'oauth',
         },
       ];
-      vi.mocked(UserModel).mockImplementation(
-        () =>
-          ({
-            getUserSSOProviders: vi.fn().mockResolvedValue(mockProviders),
-          }) as any,
-      );
+      vi.mocked(UserModel).mockImplementation(function () {
+        return {
+          getUserSSOProviders: vi.fn().mockResolvedValue(mockProviders),
+        } as any;
+      });
 
       const result = await userRouter.createCaller({ ...mockCtx }).getUserSSOProviders();
 
@@ -109,28 +107,25 @@ describe('userRouter', () => {
         userId: mockUserId,
       };
 
-      vi.mocked(UserModel).mockImplementation(
-        () =>
-          ({
-            advanceLastActiveAt: vi.fn().mockResolvedValue(undefined),
-            getUserState: vi.fn().mockResolvedValue(mockState),
-            updateUser: vi.fn().mockResolvedValue({ rowCount: 1 }),
-          }) as any,
-      );
+      vi.mocked(UserModel).mockImplementation(function () {
+        return {
+          advanceLastActiveAt: vi.fn().mockResolvedValue(undefined),
+          getUserState: vi.fn().mockResolvedValue(mockState),
+          updateUser: vi.fn().mockResolvedValue({ rowCount: 1 }),
+        } as any;
+      });
 
-      vi.mocked(MessageModel).mockImplementation(
-        () =>
-          ({
-            countUpTo: vi.fn().mockResolvedValue(5),
-          }) as any,
-      );
+      vi.mocked(MessageModel).mockImplementation(function () {
+        return {
+          countUpTo: vi.fn().mockResolvedValue(5),
+        } as any;
+      });
 
-      vi.mocked(SessionModel).mockImplementation(
-        () =>
-          ({
-            hasMoreThanN: vi.fn().mockResolvedValue(true),
-          }) as any,
-      );
+      vi.mocked(SessionModel).mockImplementation(function () {
+        return {
+          hasMoreThanN: vi.fn().mockResolvedValue(true),
+        } as any;
+      });
 
       const result = await userRouter.createCaller({ ...mockCtx }).getUserState();
 
@@ -159,25 +154,22 @@ describe('userRouter', () => {
         userId: mockUserId,
       };
 
-      vi.mocked(UserModel).mockImplementation(
-        () =>
-          ({
-            advanceLastActiveAt,
-            getUserState: vi.fn().mockResolvedValue(mockState),
-          }) as any,
-      );
-      vi.mocked(MessageModel).mockImplementation(
-        () =>
-          ({
-            countUpTo: vi.fn().mockResolvedValue(0),
-          }) as any,
-      );
-      vi.mocked(SessionModel).mockImplementation(
-        () =>
-          ({
-            hasMoreThanN: vi.fn().mockResolvedValue(false),
-          }) as any,
-      );
+      vi.mocked(UserModel).mockImplementation(function () {
+        return {
+          advanceLastActiveAt,
+          getUserState: vi.fn().mockResolvedValue(mockState),
+        } as any;
+      });
+      vi.mocked(MessageModel).mockImplementation(function () {
+        return {
+          countUpTo: vi.fn().mockResolvedValue(0),
+        } as any;
+      });
+      vi.mocked(SessionModel).mockImplementation(function () {
+        return {
+          hasMoreThanN: vi.fn().mockResolvedValue(false),
+        } as any;
+      });
 
       await userRouter.createCaller({ ...mockCtx }).getUserState();
       await flushAfterTasks();
@@ -200,25 +192,22 @@ describe('userRouter', () => {
         userId: mockUserId,
       };
 
-      vi.mocked(UserModel).mockImplementation(
-        () =>
-          ({
-            advanceLastActiveAt,
-            getUserState: vi.fn().mockResolvedValue(mockState),
-          }) as any,
-      );
-      vi.mocked(MessageModel).mockImplementation(
-        () =>
-          ({
-            countUpTo: vi.fn().mockResolvedValue(0),
-          }) as any,
-      );
-      vi.mocked(SessionModel).mockImplementation(
-        () =>
-          ({
-            hasMoreThanN: vi.fn().mockResolvedValue(false),
-          }) as any,
-      );
+      vi.mocked(UserModel).mockImplementation(function () {
+        return {
+          advanceLastActiveAt,
+          getUserState: vi.fn().mockResolvedValue(mockState),
+        } as any;
+      });
+      vi.mocked(MessageModel).mockImplementation(function () {
+        return {
+          countUpTo: vi.fn().mockResolvedValue(0),
+        } as any;
+      });
+      vi.mocked(SessionModel).mockImplementation(function () {
+        return {
+          hasMoreThanN: vi.fn().mockResolvedValue(false),
+        } as any;
+      });
 
       await userRouter.createCaller({ ...mockCtx }).getUserState();
       await flushAfterTasks();
@@ -230,12 +219,11 @@ describe('userRouter', () => {
 
   describe('makeUserOnboarded', () => {
     it('should update user onboarded status', async () => {
-      vi.mocked(UserModel).mockImplementation(
-        () =>
-          ({
-            updateUser: vi.fn().mockResolvedValue({ rowCount: 1 }),
-          }) as any,
-      );
+      vi.mocked(UserModel).mockImplementation(function () {
+        return {
+          updateUser: vi.fn().mockResolvedValue({ rowCount: 1 }),
+        } as any;
+      });
 
       await userRouter.createCaller({ ...mockCtx }).makeUserOnboarded();
 
@@ -256,12 +244,11 @@ describe('userRouter', () => {
       };
 
       vi.mocked(KeyVaultsGateKeeper.initWithEnvKey).mockResolvedValue(mockGateKeeper as any);
-      vi.mocked(UserModel).mockImplementation(
-        () =>
-          ({
-            updateSetting: vi.fn().mockResolvedValue({ rowCount: 1 }),
-          }) as any,
-      );
+      vi.mocked(UserModel).mockImplementation(function () {
+        return {
+          updateSetting: vi.fn().mockResolvedValue({ rowCount: 1 }),
+        } as any;
+      });
 
       await userRouter.createCaller({ ...mockCtx }).updateSettings(mockSettings);
 
@@ -273,12 +260,11 @@ describe('userRouter', () => {
         general: { language: 'en-US' },
       };
 
-      vi.mocked(UserModel).mockImplementation(
-        () =>
-          ({
-            updateSetting: vi.fn().mockResolvedValue({ rowCount: 1 }),
-          }) as any,
-      );
+      vi.mocked(UserModel).mockImplementation(function () {
+        return {
+          updateSetting: vi.fn().mockResolvedValue({ rowCount: 1 }),
+        } as any;
+      });
 
       await userRouter.createCaller({ ...mockCtx }).updateSettings(mockSettings);
 
@@ -288,12 +274,11 @@ describe('userRouter', () => {
     it('should allow legacy system agent model-only fields', async () => {
       const updateSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
 
-      vi.mocked(UserModel).mockImplementation(
-        () =>
-          ({
-            updateSetting,
-          }) as any,
-      );
+      vi.mocked(UserModel).mockImplementation(function () {
+        return {
+          updateSetting,
+        } as any;
+      });
 
       await userRouter.createCaller({ ...mockCtx }).updateSettings({
         systemAgent: {
@@ -315,12 +300,11 @@ describe('userRouter', () => {
     it('should allow legacy scalar system agent fields', async () => {
       const updateSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
 
-      vi.mocked(UserModel).mockImplementation(
-        () =>
-          ({
-            updateSetting,
-          }) as any,
-      );
+      vi.mocked(UserModel).mockImplementation(function () {
+        return {
+          updateSetting,
+        } as any;
+      });
 
       await userRouter.createCaller({ ...mockCtx }).updateSettings({
         systemAgent: {

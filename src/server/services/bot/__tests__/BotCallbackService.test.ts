@@ -28,27 +28,31 @@ const mockReplaceReaction = vi.hoisted(() =>
 
 // Mock PlatformClient's getMessenger
 const mockGetMessenger = vi.hoisted(() =>
-  vi.fn().mockImplementation(() => ({
-    createMessage: mockCreateMessage,
-    editMessage: mockEditMessage,
-    removeReaction: mockRemoveReaction,
-    replaceReaction: mockReplaceReaction,
-    triggerTyping: mockTriggerTyping,
-    updateThreadName: mockUpdateThreadName,
-  })),
+  vi.fn().mockImplementation(function () {
+    return {
+      createMessage: mockCreateMessage,
+      editMessage: mockEditMessage,
+      removeReaction: mockRemoveReaction,
+      replaceReaction: mockReplaceReaction,
+      triggerTyping: mockTriggerTyping,
+      updateThreadName: mockUpdateThreadName,
+    };
+  }),
 );
 
 const mockCreateBot = vi.hoisted(() =>
-  vi.fn().mockImplementation(() => ({
-    applicationId: 'mock-app',
-    createAdapter: () => ({}),
-    extractChatId: (id: string) => id,
-    getMessenger: mockGetMessenger,
-    parseMessageId: (id: string) => id,
-    id: 'mock',
-    start: vi.fn(),
-    stop: vi.fn(),
-  })),
+  vi.fn().mockImplementation(function () {
+    return {
+      applicationId: 'mock-app',
+      createAdapter: () => ({}),
+      extractChatId: (id: string) => id,
+      getMessenger: mockGetMessenger,
+      parseMessageId: (id: string) => id,
+      id: 'mock',
+      start: vi.fn(),
+      stop: vi.fn(),
+    };
+  }),
 );
 
 // Mocks for messenger-originated callbacks (synthetic applicationIds like
@@ -56,7 +60,9 @@ const mockCreateBot = vi.hoisted(() =>
 // store + binder, bypassing `agent_bot_providers` entirely.
 const mockMessengerStoreResolveByKey = vi.hoisted(() => vi.fn());
 const mockMessengerGetInstallationStore = vi.hoisted(() =>
-  vi.fn().mockImplementation(() => ({ resolveByKey: mockMessengerStoreResolveByKey })),
+  vi.fn().mockImplementation(function () {
+    return { resolveByKey: mockMessengerStoreResolveByKey };
+  }),
 );
 const mockMessengerBinderCreateClient = vi.hoisted(() =>
   vi.fn().mockImplementation(async () => ({
@@ -68,7 +74,9 @@ const mockMessengerBinderCreateClient = vi.hoisted(() =>
   })),
 );
 const mockMessengerCreateBinder = vi.hoisted(() =>
-  vi.fn().mockImplementation(() => ({ createClient: mockMessengerBinderCreateClient })),
+  vi.fn().mockImplementation(function () {
+    return { createClient: mockMessengerBinderCreateClient };
+  }),
 );
 
 // ==================== vi.mock ====================
@@ -80,10 +88,12 @@ vi.mock('@/database/models/agentBotProvider', () => ({
 }));
 
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn().mockImplementation(() => ({
-    findById: mockFindById,
-    update: mockTopicUpdate,
-  })),
+  TopicModel: vi.fn().mockImplementation(function () {
+    return {
+      findById: mockFindById,
+      update: mockTopicUpdate,
+    };
+  }),
 }));
 
 vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
@@ -112,9 +122,11 @@ vi.mock('@/server/services/gateway/MessageGatewayClient', () => ({
 }));
 
 vi.mock('@/server/services/systemAgent', () => ({
-  SystemAgentService: vi.fn().mockImplementation(() => ({
-    generateTopicTitle: mockGenerateTopicTitle,
-  })),
+  SystemAgentService: vi.fn().mockImplementation(function () {
+    return {
+      generateTopicTitle: mockGenerateTopicTitle,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/messenger/installations', () => ({
@@ -217,14 +229,16 @@ describe('BotCallbackService', () => {
     });
 
     // Default: getMessenger returns the main messenger mock
-    mockGetMessenger.mockImplementation(() => ({
-      createMessage: mockCreateMessage,
-      editMessage: mockEditMessage,
-      removeReaction: mockRemoveReaction,
-      replaceReaction: mockReplaceReaction,
-      triggerTyping: mockTriggerTyping,
-      updateThreadName: mockUpdateThreadName,
-    }));
+    mockGetMessenger.mockImplementation(function () {
+      return {
+        createMessage: mockCreateMessage,
+        editMessage: mockEditMessage,
+        removeReaction: mockRemoveReaction,
+        replaceReaction: mockReplaceReaction,
+        triggerTyping: mockTriggerTyping,
+        updateThreadName: mockUpdateThreadName,
+      };
+    });
 
     // Default messenger install store + binder responses for messenger-* runs.
     mockMessengerStoreResolveByKey.mockResolvedValue({
@@ -235,9 +249,11 @@ describe('BotCallbackService', () => {
       platform: 'telegram',
       tenantId: '',
     });
-    mockMessengerGetInstallationStore.mockImplementation(() => ({
-      resolveByKey: mockMessengerStoreResolveByKey,
-    }));
+    mockMessengerGetInstallationStore.mockImplementation(function () {
+      return {
+        resolveByKey: mockMessengerStoreResolveByKey,
+      };
+    });
     mockMessengerBinderCreateClient.mockImplementation(async () => ({
       applicationId: 'mock-messenger-app',
       createAdapter: () => ({}),
@@ -245,9 +261,11 @@ describe('BotCallbackService', () => {
       getMessenger: mockGetMessenger,
       parseMessageId: (id: string) => id,
     }));
-    mockMessengerCreateBinder.mockImplementation(() => ({
-      createClient: mockMessengerBinderCreateClient,
-    }));
+    mockMessengerCreateBinder.mockImplementation(function () {
+      return {
+        createClient: mockMessengerBinderCreateClient,
+      };
+    });
   });
 
   // ==================== Platform detection ====================

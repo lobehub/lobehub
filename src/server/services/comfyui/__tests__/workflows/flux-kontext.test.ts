@@ -17,7 +17,9 @@ vi.mock('../utils/weightDType', () => ({
   selectOptimalWeightDtype: vi.fn(() => 'default'),
 }));
 vi.mock('@lobechat/utils', () => ({
-  generateUniqueSeeds: vi.fn(() => ({ seed: 123456, noiseSeed: 654321 })),
+  generateUniqueSeeds: vi.fn(function () {
+    return { seed: 123456, noiseSeed: 654321 };
+  }),
 }));
 vi.mock('../utils/workflowUtils', () => ({
   getWorkflowFilenamePrefix: vi.fn(() => 'kontext'),

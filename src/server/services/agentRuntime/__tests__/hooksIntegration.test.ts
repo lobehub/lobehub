@@ -18,18 +18,22 @@ import type { AgentHookEvent } from '../hooks/types';
 // ── Mocks ──────────────────────────────────────────
 vi.mock('@/envs/app', () => ({ appEnv: { APP_URL: 'http://localhost:3010' } }));
 vi.mock('@/database/models/message', () => ({
-  MessageModel: vi.fn().mockImplementation(() => ({})),
+  MessageModel: vi.fn().mockImplementation(function () {
+    return {};
+  }),
 }));
 vi.mock('@/server/modules/AgentRuntime', () => ({
-  AgentRuntimeCoordinator: vi.fn().mockImplementation(() => ({
-    createAgentOperation: vi.fn(),
-    getOperationMetadata: vi.fn(),
-    loadAgentState: vi.fn(),
-    releaseStepLock: vi.fn().mockResolvedValue(undefined),
-    saveAgentState: vi.fn(),
-    saveStepResult: vi.fn(),
-    tryClaimStep: vi.fn().mockResolvedValue(true),
-  })),
+  AgentRuntimeCoordinator: vi.fn().mockImplementation(function () {
+    return {
+      createAgentOperation: vi.fn(),
+      getOperationMetadata: vi.fn(),
+      loadAgentState: vi.fn(),
+      releaseStepLock: vi.fn().mockResolvedValue(undefined),
+      saveAgentState: vi.fn(),
+      saveStepResult: vi.fn(),
+      tryClaimStep: vi.fn().mockResolvedValue(true),
+    };
+  }),
   createStreamEventManager: vi.fn(() => ({
     cleanupOperation: vi.fn(),
     publishAgentRuntimeEnd: vi.fn(),
@@ -42,20 +46,26 @@ vi.mock('@/server/modules/AgentRuntime/RuntimeExecutors', () => ({
 }));
 vi.mock('@/server/services/mcp', () => ({ mcpService: {} }));
 vi.mock('@/server/services/queue', () => ({
-  QueueService: vi.fn().mockImplementation(() => ({
-    getImpl: vi.fn(() => ({})),
-    scheduleMessage: vi.fn(),
-  })),
+  QueueService: vi.fn().mockImplementation(function () {
+    return {
+      getImpl: vi.fn(() => ({})),
+      scheduleMessage: vi.fn(),
+    };
+  }),
 }));
 vi.mock('@/server/services/queue/impls', () => ({
   LocalQueueServiceImpl: class {},
   isQueueAgentRuntimeEnabled: vi.fn().mockReturnValue(false),
 }));
 vi.mock('@/server/services/toolExecution', () => ({
-  ToolExecutionService: vi.fn().mockImplementation(() => ({})),
+  ToolExecutionService: vi.fn().mockImplementation(function () {
+    return {};
+  }),
 }));
 vi.mock('@/server/services/toolExecution/builtin', () => ({
-  BuiltinToolsExecutor: vi.fn().mockImplementation(() => ({})),
+  BuiltinToolsExecutor: vi.fn().mockImplementation(function () {
+    return {};
+  }),
 }));
 vi.mock('@lobechat/builtin-tools/dynamicInterventionAudits', () => ({
   dynamicInterventionAudits: [],

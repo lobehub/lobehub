@@ -6,9 +6,11 @@ import type { PushDeliveryContext, PushTicketRecord } from '../types';
 const mockListByUserId = vi.fn();
 
 vi.mock('@/database/models/pushToken', () => ({
-  PushTokenModel: vi.fn(() => ({
-    listByUserId: mockListByUserId,
-  })),
+  PushTokenModel: vi.fn(function () {
+    return {
+      listByUserId: mockListByUserId,
+    };
+  }),
 }));
 
 vi.mock('@/database/server', () => ({ serverDB: {} }));

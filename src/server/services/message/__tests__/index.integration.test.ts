@@ -21,9 +21,11 @@ import { MessageService } from '../index';
 
 // Mock FileService to avoid S3 environment variable requirements
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({
-    getFullFileUrl: vi.fn().mockImplementation((path: string) => (path ? `/files${path}` : null)),
-  })),
+  FileService: vi.fn().mockImplementation(function () {
+    return {
+      getFullFileUrl: vi.fn().mockImplementation((path: string) => (path ? `/files${path}` : null)),
+    };
+  }),
 }));
 
 const serverDB: LobeChatDatabase = await getTestDB();

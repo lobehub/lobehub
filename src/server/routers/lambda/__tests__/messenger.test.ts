@@ -69,18 +69,22 @@ vi.mock('@/server/services/messenger', () => ({
     listSerializedPlatforms: vi.fn().mockReturnValue([]),
   },
   MessengerSlackBinder: vi.fn(),
-  MessengerTelegramBinder: vi.fn().mockImplementation(() => ({
-    notifyLinkSuccess: mockNotifyTelegramLinkSuccess,
-  })),
+  MessengerTelegramBinder: vi.fn().mockImplementation(function () {
+    return {
+      notifyLinkSuccess: mockNotifyTelegramLinkSuccess,
+    };
+  }),
   peekConsumedLinkToken: mockPeekConsumedLinkToken,
   peekLinkToken: mockPeekLinkToken,
 }));
 
 vi.mock('@/server/services/bot/platforms/slack/api', () => ({
   SLACK_API_BASE: 'https://slack.com/api',
-  SlackApi: vi.fn().mockImplementation(() => ({
-    authTest: mockSlackAuthTest,
-  })),
+  SlackApi: vi.fn().mockImplementation(function () {
+    return {
+      authTest: mockSlackAuthTest,
+    };
+  }),
 }));
 
 const createCaller = createCallerFactory(messengerRouter);

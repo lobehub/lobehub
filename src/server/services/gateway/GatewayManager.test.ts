@@ -77,7 +77,9 @@ describe('GatewayManager', () => {
 
     vi.mocked(getServerDB).mockResolvedValue(mockDb as any);
     vi.mocked(KeyVaultsGateKeeper.initWithEnvKey).mockResolvedValue(mockGateKeeper as any);
-    vi.mocked(AgentBotProviderModel).mockImplementation(() => mockAgentBotProviderModel);
+    vi.mocked(AgentBotProviderModel).mockImplementation(function () {
+      return mockAgentBotProviderModel;
+    });
     mockFindEnabledByPlatform.mockResolvedValue([]);
 
     // Clean up global singleton between tests

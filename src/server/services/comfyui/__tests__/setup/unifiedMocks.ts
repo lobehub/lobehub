@@ -2,28 +2,38 @@
 import { vi } from 'vitest';
 
 // Create mock PromptBuilder class first
-const MockPromptBuilder = vi.fn().mockImplementation((workflow: any) => ({
-  input: vi.fn().mockReturnThis(),
-  setInputNode: vi.fn().mockReturnThis(),
-  setOutputNode: vi.fn().mockReturnThis(),
-  workflow, // Expose the workflow for testing
-}));
+const MockPromptBuilder = vi.fn().mockImplementation(function (workflow: any) {
+  return {
+    input: vi.fn().mockReturnThis(),
+    setInputNode: vi.fn().mockReturnThis(),
+    setOutputNode: vi.fn().mockReturnThis(),
+    workflow, // Expose the workflow for testing
+  };
+});
 
 // Module-level mock for @saintno/comfyui-sdk
 vi.mock('@saintno/comfyui-sdk', () => ({
-  CallWrapper: vi.fn().mockImplementation(() => ({
-    call: vi.fn(),
-    execute: vi.fn(),
-  })),
-  ComfyApi: vi.fn().mockImplementation((baseURL: string, clientId?: string, options?: any) => ({
-    baseURL,
-    clientId,
-    connect: vi.fn(),
-    disconnect: vi.fn(),
-    getObjectInfo: vi.fn().mockResolvedValue({}),
-    init: vi.fn(),
-    options,
-  })),
+  CallWrapper: vi.fn().mockImplementation(function () {
+    return {
+      call: vi.fn(),
+      execute: vi.fn(),
+    };
+  }),
+  ComfyApi: vi.fn().mockImplementation(function (
+    baseURL: string,
+    clientId?: string,
+    options?: any,
+  ) {
+    return {
+      baseURL,
+      clientId,
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+      getObjectInfo: vi.fn().mockResolvedValue({}),
+      init: vi.fn(),
+      options,
+    };
+  }),
   PromptBuilder: MockPromptBuilder,
   seed: vi.fn(() => 42),
 }));

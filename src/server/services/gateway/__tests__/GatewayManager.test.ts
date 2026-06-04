@@ -14,9 +14,11 @@ vi.mock('@/database/core/db-adaptor', () => ({
 }));
 
 vi.mock('@/database/models/agentBotProvider', () => {
-  const MockModel = vi.fn().mockImplementation(() => ({
-    findEnabledByApplicationId: mockFindEnabledByApplicationId,
-  }));
+  const MockModel = vi.fn().mockImplementation(function () {
+    return {
+      findEnabledByApplicationId: mockFindEnabledByApplicationId,
+    };
+  });
   (MockModel as any).findEnabledByPlatform = mockFindEnabledByPlatform;
   return { AgentBotProviderModel: MockModel };
 });

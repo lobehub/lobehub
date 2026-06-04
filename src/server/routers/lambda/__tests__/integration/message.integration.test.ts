@@ -10,11 +10,13 @@ import { cleanupTestUser, createTestContext, createTestUser } from './setup';
 
 // Mock FileService to avoid S3 initialization issues in tests
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({
-    getFullFileUrl: vi.fn().mockResolvedValue('mock-url'),
-    deleteFile: vi.fn().mockResolvedValue(undefined),
-    deleteFiles: vi.fn().mockResolvedValue(undefined),
-  })),
+  FileService: vi.fn().mockImplementation(function () {
+    return {
+      getFullFileUrl: vi.fn().mockResolvedValue('mock-url'),
+      deleteFile: vi.fn().mockResolvedValue(undefined),
+      deleteFiles: vi.fn().mockResolvedValue(undefined),
+    };
+  }),
 }));
 
 // We need to mock getServerDB to return our test database instance

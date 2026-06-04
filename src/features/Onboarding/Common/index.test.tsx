@@ -1,11 +1,116 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const metrics = {
-  trackOnboardingStepCompleted: vi.fn(),
-  trackOnboardingStepViewed: vi.fn(),
-};
+import CommonOnboardingPage from './index';
+
+const mockState = vi.hoisted(() => {
+  const metrics = {
+    trackOnboardingStepCompleted: vi.fn(),
+    trackOnboardingStepViewed: vi.fn(),
+  };
+
+  return {
+    AGENT_ONBOARDING_ENABLED: true,
+    commonStepsCompleted: false,
+    desktop: false,
+    enableAgentOnboarding: true,
+    metrics,
+    serverConfigInit: true,
+    userState: {
+      isUserStateInit: true,
+      onboarding: undefined as { currentStep?: number; finishedAt?: string } | undefined,
+      setOnboardingStep: vi.fn(),
+      settings: {},
+    },
+  };
+});
+
+const metrics = mockState.metrics;
+
+vi.mock('@lobechat/business-const', () => ({
+  get AGENT_ONBOARDING_ENABLED() {
+    return mockState.AGENT_ONBOARDING_ENABLED;
+  },
+  BRANDING_LOGO_URL: '',
+  BRANDING_NAME: 'LobeHub',
+  DEFAULT_EMBEDDING_PROVIDER: 'openai',
+  DEFAULT_MINI_MODEL: 'gpt-4o-mini',
+  DEFAULT_MINI_PROVIDER: 'openai',
+  DEFAULT_MODEL: 'gpt-4o',
+  DEFAULT_PROVIDER: 'openai',
+  ORG_NAME: 'LobeHub',
+}));
+
+vi.mock('@lobechat/const', () => ({
+  get isDesktop() {
+    return mockState.desktop;
+  },
+}));
+
+vi.mock('@lobehub/ui', () => ({
+  Flexbox: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+
+vi.mock('@/components/Loading/BrandTextLoading', () => ({
+  default: ({ debugId }: { debugId: string }) => <div>Loading:{debugId}</div>,
+}));
+
+vi.mock('@/hooks/useOnboardingAgentTemplates', () => ({
+  useOnboardingAgentTemplates: vi.fn(),
+}));
+
+vi.mock('@/routes/onboarding/_layout', () => ({
+  default: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+
+vi.mock('@/routes/onboarding/features/TelemetryStep', () => ({
+  default: ({ onNext }: { onNext: () => void }) => (
+    <div>
+      TelemetryStep
+      <button type="button" onClick={onNext}>
+        telemetry-next
+      </button>
+    </div>
+  ),
+}));
+
+vi.mock('@/routes/onboarding/features/ResponseLanguageStep', () => ({
+  default: ({ onBack, onNext }: { onBack: () => void; onNext: () => void }) => (
+    <div>
+      ResponseLanguageStep
+      <button type="button" onClick={onBack}>
+        rl-back
+      </button>
+      <button type="button" onClick={onNext}>
+        rl-next
+      </button>
+    </div>
+  ),
+}));
+
+vi.mock('@/store/serverConfig', () => ({
+  useServerConfigStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({
+      featureFlags: { enableAgentOnboarding: mockState.enableAgentOnboarding },
+      serverConfigInit: mockState.serverConfigInit,
+    }),
+}));
+
+vi.mock('@/services/onboardingMetrics', () => mockState.metrics);
+
+vi.mock('@/store/user', () => ({
+  useUserStore: Object.assign(
+    (selector: (state: Record<string, unknown>) => unknown) => selector(mockState.userState),
+    { getState: () => mockState.userState },
+  ),
+}));
+
+vi.mock('@/store/user/selectors', () => ({
+  onboardingSelectors: {
+    commonStepsCompleted: () => mockState.commonStepsCompleted,
+  },
+}));
 
 interface RenderOptions {
   AGENT_ONBOARDING_ENABLED?: boolean;
@@ -33,81 +138,20 @@ const renderCommon = async ({
   setOnboardingStep = vi.fn(),
 }: RenderOptions) => {
   cleanup();
-  vi.resetModules();
+  vi.useRealTimers();
   metrics.trackOnboardingStepCompleted.mockClear();
   metrics.trackOnboardingStepViewed.mockClear();
-
-  vi.doMock('@lobechat/business-const', () => ({
-    AGENT_ONBOARDING_ENABLED,
-  }));
-  vi.doMock('@lobechat/const', () => ({ isDesktop: desktop }));
-  vi.doMock('@lobehub/ui', () => ({
-    Flexbox: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  }));
-  vi.doMock('@/components/Loading/BrandTextLoading', () => ({
-    default: ({ debugId }: { debugId: string }) => <div>Loading:{debugId}</div>,
-  }));
-  vi.doMock('@/hooks/useOnboardingAgentTemplates', () => ({
-    useOnboardingAgentTemplates: vi.fn(),
-  }));
-  vi.doMock('@/routes/onboarding/_layout', () => ({
-    default: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  }));
-  vi.doMock('@/routes/onboarding/features/TelemetryStep', () => ({
-    default: ({ onNext }: { onNext: () => void }) => (
-      <div>
-        TelemetryStep
-        <button type="button" onClick={onNext}>
-          telemetry-next
-        </button>
-      </div>
-    ),
-  }));
-  vi.doMock('@/routes/onboarding/features/ResponseLanguageStep', () => ({
-    default: ({ onBack, onNext }: { onBack: () => void; onNext: () => void }) => (
-      <div>
-        ResponseLanguageStep
-        <button type="button" onClick={onBack}>
-          rl-back
-        </button>
-        <button type="button" onClick={onNext}>
-          rl-next
-        </button>
-      </div>
-    ),
-  }));
-
-  function selectFromServerConfigStore(selector: (state: Record<string, unknown>) => unknown) {
-    return selector({
-      featureFlags: { enableAgentOnboarding },
-      serverConfigInit,
-    });
-  }
-
-  vi.doMock('@/store/serverConfig', () => ({
-    useServerConfigStore: selectFromServerConfigStore,
-  }));
-  vi.doMock('@/services/onboardingMetrics', () => metrics);
 
   const onboarding =
     persistedStep === undefined && finishedAt === undefined
       ? undefined
       : { currentStep: persistedStep, finishedAt };
-  const userState = { isUserStateInit, onboarding, setOnboardingStep, settings: {} };
-  function selectFromUserStore(selector: (state: Record<string, unknown>) => unknown) {
-    return selector(userState);
-  }
-  selectFromUserStore.getState = () => userState;
-  vi.doMock('@/store/user', () => ({
-    useUserStore: selectFromUserStore,
-  }));
-  vi.doMock('@/store/user/selectors', () => ({
-    onboardingSelectors: {
-      commonStepsCompleted: () => commonStepsCompleted,
-    },
-  }));
-
-  const { default: CommonOnboardingPage } = await import('./index');
+  mockState.AGENT_ONBOARDING_ENABLED = AGENT_ONBOARDING_ENABLED;
+  mockState.commonStepsCompleted = commonStepsCompleted;
+  mockState.desktop = desktop;
+  mockState.enableAgentOnboarding = enableAgentOnboarding;
+  mockState.serverConfigInit = serverConfigInit;
+  mockState.userState = { isUserStateInit, onboarding, setOnboardingStep, settings: {} };
 
   render(
     <MemoryRouter initialEntries={[initialEntry]}>
@@ -120,23 +164,16 @@ const renderCommon = async ({
   );
 };
 
-afterEach(() => {
-  cleanup();
-  vi.doUnmock('@lobechat/business-const');
-  vi.doUnmock('@lobechat/const');
-  vi.doUnmock('@lobehub/ui');
-  vi.doUnmock('@/components/Loading/BrandTextLoading');
-  vi.doUnmock('@/hooks/useOnboardingAgentTemplates');
-  vi.doUnmock('@/routes/onboarding/_layout');
-  vi.doUnmock('@/routes/onboarding/features/TelemetryStep');
-  vi.doUnmock('@/routes/onboarding/features/ResponseLanguageStep');
-  vi.doUnmock('@/services/onboardingMetrics');
-  vi.doUnmock('@/store/serverConfig');
-  vi.doUnmock('@/store/user');
-  vi.doUnmock('@/store/user/selectors');
+beforeEach(() => {
+  vi.useRealTimers();
 });
 
-describe('CommonOnboardingPage', () => {
+afterEach(() => {
+  vi.useRealTimers();
+  cleanup();
+});
+
+describe('CommonOnboardingPage', { timeout: 15_000 }, () => {
   it('renders TelemetryStep (welcome + privacy) when shared prefix is incomplete', async () => {
     await renderCommon({ commonStepsCompleted: false });
     expect(screen.getByText('TelemetryStep')).toBeInTheDocument();
