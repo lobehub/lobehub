@@ -2,12 +2,16 @@
 
 import { Button, Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
+import isEqual from 'fast-deep-equal';
 import { PlusIcon, Store } from 'lucide-react';
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { AddConnectorModal } from '@/features/Connectors';
 import NavHeader from '@/features/NavHeader';
 import { createSkillStoreModal } from '@/features/SkillStore';
+import { useToolStore } from '@/store/tool';
+import { builtinToolSelectors } from '@/store/tool/selectors';
 
 import SkillDetail, { type ToolDetailType } from './features/SkillDetail';
 import SkillList from './features/SkillList';
@@ -21,15 +25,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   detail: css`
     overflow-y: auto;
     flex: 1;
-  `,
-  empty: css`
-    display: flex;
-    flex: 1;
-    align-items: center;
-    justify-content: center;
-
-    font-size: 14px;
-    color: ${cssVar.colorTextTertiary};
   `,
   left: css`
     overflow-y: auto;
@@ -58,6 +53,33 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 const Page = memo(() => {
   const { t } = useTranslation('setting');
   const [selected, setSelected] = useState<SelectedTool | null>(null);
+  const [showAddConnector, setShowAddConnector] = useState(false);
+
+  // Data sources for auto-select
+  const builtinTools = useToolStore((s) => s.builtinTools, isEqual);
+  const builtinSkills = useToolStore((s) => s.builtinSkills, isEqual);
+  const installedBuiltinIds = useToolStore(
+    (s) => builtinToolSelectors.installedAllMetaList(s).map((t) => t.identifier),
+    isEqual,
+  );
+
+  // Auto-select the first visible item on load
+  useEffect(() => {
+    if (selected) return;
+    // 1. First installed builtin tool
+    const firstTool = builtinTools.find(
+      (t) => !t.hidden && installedBuiltinIds.includes(t.identifier),
+    );
+    if (firstTool) {
+      setSelected({ identifier: firstTool.identifier, type: 'builtin' });
+      return;
+    }
+    // 2. First builtin skill
+    const firstSkill = builtinSkills[0];
+    if (firstSkill) {
+      setSelected({ identifier: firstSkill.identifier, type: 'builtin-skill' });
+    }
+  }, [builtinTools, builtinSkills, installedBuiltinIds, selected]);
 
   const handleOpenStore = useCallback(() => {
     createSkillStoreModal();
@@ -76,7 +98,13 @@ const Page = memo(() => {
           <div className={styles.leftHeader}>
             <span style={{ fontWeight: 600 }}>{t('tab.skill')}</span>
             <div style={{ display: 'flex', gap: 6 }}>
-              <Button icon={<Icon icon={PlusIcon} />} size="small" onClick={handleOpenStore} />
+              {/* + opens "Add custom MCP connector" modal */}
+              <Button
+                icon={<Icon icon={PlusIcon} />}
+                size="small"
+                onClick={() => setShowAddConnector(true)}
+              />
+              {/* Skill store for built-in / community skills */}
               <Button icon={<Icon icon={Store} />} size="small" onClick={handleOpenStore}>
                 {t('skillStore.button')}
               </Button>
@@ -88,16 +116,14 @@ const Page = memo(() => {
         </div>
 
         {/* Right: tool detail + permissions */}
-        {selected ? (
+        {selected && (
           <div className={styles.detail}>
             <SkillDetail identifier={selected.identifier} type={selected.type} />
           </div>
-        ) : (
-          <div className={styles.empty}>
-            {t('skillDetail.selectHint', 'Select a skill to configure its tool permissions')}
-          </div>
         )}
       </div>
+
+      <AddConnectorModal open={showAddConnector} onClose={() => setShowAddConnector(false)} />
     </>
   );
 });
