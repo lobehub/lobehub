@@ -277,12 +277,34 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     /* Width sets the skill submenu size (matched with the Attachments submenu); the
-       negative margins cancel the slot header's 8px/12px padding so the search field
-       sits close to the menu edge on every side. */
+       negative inline margin cancels the slot header's 12px padding so the search field
+       sits near the menu edge; the top margin tightens the gap above it. */
     width: 320px;
     height: 36px;
-    margin-block: -8px;
+    margin-block-start: -8px;
     margin-inline: -12px;
+  `,
+  autoModeRow: css`
+    cursor: pointer;
+
+    display: flex;
+    gap: 6px;
+    align-items: center;
+
+    min-height: 36px;
+    margin-inline: -12px;
+    padding-inline: 12px;
+    border-radius: 6px;
+
+    transition: background 150ms ${cssVar.motionEaseOut};
+
+    &:hover {
+      background: ${cssVar.colorFillTertiary};
+    }
+  `,
+  autoModeLabel: css`
+    flex: 1;
+    font-size: 14px;
   `,
   toolLabel: css`
     display: flex;
@@ -1161,19 +1183,52 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   // Flat list (no pinned/auto groups): pinned skills first, then the rest.
   const flatSkillItems = filterBySearch([...allPinnedItems, ...allAutoItems]);
 
+  const toggleAutoSkillMode = async (next: boolean) => {
+    if (autoModeLoading) return;
+    setAutoModeLoading(true);
+    try {
+      await updateAgentChatConfig({ skillActivateMode: next ? 'auto' : 'manual' });
+    } finally {
+      setAutoModeLoading(false);
+    }
+  };
+
+  // Header is pinned (doesn't scroll), so the search bar + Auto toggle stay stuck to the top.
   const marketHeader = (
-    <div className={cx(styles.searchBox)} onClick={stopPropagation} onKeyDown={stopPropagation}>
-      <SearchBar
-        allowClear
-        placeholder={t('tools.search')}
-        size="small"
-        style={{ flex: 1 }}
-        value={searchKeyword}
-        variant="borderless"
-        onChange={(event) => setSearchKeyword(event.target.value)}
-        onKeyDown={stopPropagation}
-      />
-    </div>
+    <>
+      <div className={cx(styles.searchBox)} onClick={stopPropagation} onKeyDown={stopPropagation}>
+        <SearchBar
+          allowClear
+          placeholder={t('tools.search')}
+          size="small"
+          style={{ flex: 1 }}
+          value={searchKeyword}
+          variant="borderless"
+          onChange={(event) => setSearchKeyword(event.target.value)}
+          onKeyDown={stopPropagation}
+        />
+      </div>
+      <div
+        className={cx(styles.autoModeRow)}
+        onClick={(event) => {
+          event.stopPropagation();
+          void toggleAutoSkillMode(!isAutoSkillMode);
+        }}
+      >
+        <Icon icon={Zap} size={SKILL_ICON_SIZE} />
+        <span className={cx(styles.autoModeLabel)}>{t('tools.skillActivateMode.auto.title')}</span>
+        <Switch
+          checked={isAutoSkillMode}
+          loading={autoModeLoading}
+          size="small"
+          onClick={(_, event) => event.stopPropagation()}
+          onChange={(next, event) => {
+            event?.stopPropagation?.();
+            void toggleAutoSkillMode(next);
+          }}
+        />
+      </div>
+    </>
   );
 
   const marketFooter =
@@ -1227,30 +1282,8 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       </div>
     ) : undefined;
 
-  const marketItems: ItemType[] = [
-    // Dedicated "Auto" entry: a trailing switch controlling auto skill-activation mode.
-    {
-      checked: isAutoSkillMode,
-      disabled: autoModeLoading,
-      icon: <Icon icon={Zap} size={SKILL_ICON_SIZE} />,
-      key: 'skill-auto-mode',
-      label: t('tools.skillActivateMode.auto.title'),
-      onCheckedChange: async (next: boolean) => {
-        setAutoModeLoading(true);
-        try {
-          await updateAgentChatConfig({ skillActivateMode: next ? 'auto' : 'manual' });
-        } finally {
-          setAutoModeLoading(false);
-        }
-      },
-      type: 'switch',
-    } as unknown as ItemType,
-    ...(flatSkillItems.length > 0
-      ? [{ key: 'skill-list-divider', type: 'divider' as const } as ItemType]
-      : []),
-    // Flat skill list (pinned first); each pinned row carries a trailing Pin icon.
-    ...flatSkillItems,
-  ];
+  // The Auto toggle now lives in the pinned header; the list is just the skills.
+  const marketItems: ItemType[] = flatSkillItems;
 
   // Items for the installed tab - only show installed plugins
   const installedPluginItems: ItemType[] = useMemo(() => {
