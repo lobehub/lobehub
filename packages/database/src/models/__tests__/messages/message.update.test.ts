@@ -1497,4 +1497,50 @@ describe('MessageModel Update Tests', () => {
       expect(topic.totalCost).toBeCloseTo(0.01, 6);
     });
   });
+
+  describe('usage column promotion', () => {
+    it('promotes metadata.usage into the dedicated usage column', async () => {
+      await serverDB.insert(messages).values({
+        id: 'promote-msg',
+        role: 'assistant',
+        userId,
+      });
+
+      const usage = { cost: 0.004, totalInputTokens: 70, totalOutputTokens: 30, totalTokens: 100 };
+      await messageModel.update('promote-msg', { metadata: { usage } as any });
+
+      const [row] = await serverDB.select().from(messages).where(eq(messages.id, 'promote-msg'));
+      expect(row.usage).toEqual(usage);
+      // metadata.usage stays written for backward-compatible reads
+      expect((row.metadata as any).usage).toEqual(usage);
+    });
+
+    it('prefers a top-level usage over metadata.usage', async () => {
+      await serverDB.insert(messages).values({
+        id: 'prefer-msg',
+        role: 'assistant',
+        userId,
+      });
+
+      const topLevel = { cost: 0.01, totalTokens: 200 };
+      await messageModel.update('prefer-msg', {
+        metadata: { usage: { cost: 0.004, totalTokens: 100 } } as any,
+        usage: topLevel as any,
+      });
+
+      const [row] = await serverDB.select().from(messages).where(eq(messages.id, 'prefer-msg'));
+      expect(row.usage).toEqual(topLevel);
+    });
+
+    it('updateMetadata syncs usage into the usage column', async () => {
+      await serverDB.insert(messages).values({ id: 'meta-msg', role: 'assistant', userId });
+
+      const usage = { cost: 0.002, totalTokens: 60 };
+      await messageModel.updateMetadata('meta-msg', { usage });
+
+      const [row] = await serverDB.select().from(messages).where(eq(messages.id, 'meta-msg'));
+      expect(row.usage).toEqual(usage);
+      expect((row.metadata as any).usage).toEqual(usage);
+    });
+  });
 });
