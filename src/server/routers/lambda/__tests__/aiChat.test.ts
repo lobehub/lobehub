@@ -27,7 +27,11 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
 
 describe('aiChatRouter', () => {
   const mockCtx = { userId: 'u1' };
-  const mockMessageModel = (mockCreateMessage: ReturnType<typeof vi.fn>) => {
+  const mockMessageModel = (
+    mockCreateMessage: ReturnType<
+      typeof vi.fn<(message: CreateMessageParams) => Promise<{ id: string }>>
+    >,
+  ) => {
     const mockCreateUserAndAssistantMessages = vi.fn(
       async (
         {
@@ -49,13 +53,12 @@ describe('aiChatRouter', () => {
       },
     );
 
-    vi.mocked(MessageModel).mockImplementation(
-      () =>
-        ({
-          create: mockCreateMessage,
-          createUserAndAssistantMessages: mockCreateUserAndAssistantMessages,
-        }) as any,
-    );
+    vi.mocked(MessageModel).mockImplementation(function () {
+      return {
+        create: mockCreateMessage,
+        createUserAndAssistantMessages: mockCreateUserAndAssistantMessages,
+      } as any;
+    });
 
     return mockCreateUserAndAssistantMessages;
   };
@@ -71,9 +74,13 @@ describe('aiChatRouter', () => {
       topics: { items: [{}], total: 1 },
     });
 
-    vi.mocked(TopicModel).mockImplementation(() => ({ create: mockCreateTopic }) as any);
+    vi.mocked(TopicModel).mockImplementation(function () {
+      return { create: mockCreateTopic } as any;
+    });
     const mockCreateUserAndAssistantMessages = mockMessageModel(mockCreateMessage);
-    vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
+    vi.mocked(AiChatService).mockImplementation(function () {
+      return { getMessagesAndTopics: mockGet } as any;
+    });
 
     const caller = aiChatRouter.createCaller(mockCtx as any);
 
@@ -146,7 +153,9 @@ describe('aiChatRouter', () => {
     const mockGet = vi.fn().mockResolvedValue({ messages: [], topics: undefined });
 
     const mockCreateUserAndAssistantMessages = mockMessageModel(mockCreateMessage);
-    vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
+    vi.mocked(AiChatService).mockImplementation(function () {
+      return { getMessagesAndTopics: mockGet } as any;
+    });
 
     const caller = aiChatRouter.createCaller(mockCtx as any);
 
@@ -181,7 +190,9 @@ describe('aiChatRouter', () => {
     const mockGet = vi.fn().mockResolvedValue({ messages: [], topics: undefined });
 
     mockMessageModel(mockCreateMessage);
-    vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
+    vi.mocked(AiChatService).mockImplementation(function () {
+      return { getMessagesAndTopics: mockGet } as any;
+    });
 
     const caller = aiChatRouter.createCaller(mockCtx as any);
 
@@ -226,7 +237,9 @@ describe('aiChatRouter', () => {
     const mockGet = vi.fn().mockResolvedValue({ messages: [], topics: undefined });
 
     mockMessageModel(mockCreateMessage);
-    vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
+    vi.mocked(AiChatService).mockImplementation(function () {
+      return { getMessagesAndTopics: mockGet } as any;
+    });
 
     const caller = aiChatRouter.createCaller(mockCtx as any);
 
@@ -331,9 +344,13 @@ describe('aiChatRouter', () => {
       .mockResolvedValueOnce({ id: 'm-assistant' });
     const mockGet = vi.fn().mockResolvedValue({ messages: [], topics: undefined });
 
-    vi.mocked(ThreadModel).mockImplementation(() => ({ create: mockCreateThread }) as any);
+    vi.mocked(ThreadModel).mockImplementation(function () {
+      return { create: mockCreateThread } as any;
+    });
     mockMessageModel(mockCreateMessage);
-    vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
+    vi.mocked(AiChatService).mockImplementation(function () {
+      return { getMessagesAndTopics: mockGet } as any;
+    });
 
     const caller = aiChatRouter.createCaller(mockCtx as any);
 
@@ -394,10 +411,16 @@ describe('aiChatRouter', () => {
       .mockResolvedValueOnce({ id: 'm-assistant' });
     const mockGet = vi.fn().mockResolvedValue({ messages: [], topics: [{ id: 't-new' }] });
 
-    vi.mocked(TopicModel).mockImplementation(() => ({ create: mockCreateTopic }) as any);
-    vi.mocked(ThreadModel).mockImplementation(() => ({ create: mockCreateThread }) as any);
+    vi.mocked(TopicModel).mockImplementation(function () {
+      return { create: mockCreateTopic } as any;
+    });
+    vi.mocked(ThreadModel).mockImplementation(function () {
+      return { create: mockCreateThread } as any;
+    });
     mockMessageModel(mockCreateMessage);
-    vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
+    vi.mocked(AiChatService).mockImplementation(function () {
+      return { getMessagesAndTopics: mockGet } as any;
+    });
 
     const caller = aiChatRouter.createCaller(mockCtx as any);
 
@@ -453,7 +476,9 @@ describe('aiChatRouter', () => {
     const mockGet = vi.fn().mockResolvedValue({ messages: [], topics: undefined });
 
     mockMessageModel(mockCreateMessage);
-    vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
+    vi.mocked(AiChatService).mockImplementation(function () {
+      return { getMessagesAndTopics: mockGet } as any;
+    });
 
     const caller = aiChatRouter.createCaller(mockCtx as any);
 
@@ -476,9 +501,13 @@ describe('aiChatRouter', () => {
         .mockResolvedValueOnce({ id: 'm-assistant' });
       const mockGet = vi.fn().mockResolvedValue({ messages: [], topics: [{}] });
 
-      vi.mocked(TopicModel).mockImplementation(() => ({ create: mockCreateTopic }) as any);
+      vi.mocked(TopicModel).mockImplementation(function () {
+        return { create: mockCreateTopic } as any;
+      });
       mockMessageModel(mockCreateMessage);
-      vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
+      vi.mocked(AiChatService).mockImplementation(function () {
+        return { getMessagesAndTopics: mockGet } as any;
+      });
 
       const caller = aiChatRouter.createCaller(mockCtx as any);
 
@@ -508,9 +537,13 @@ describe('aiChatRouter', () => {
         .mockResolvedValueOnce({ id: 'm-assistant' });
       const mockGet = vi.fn().mockResolvedValue({ messages: [], topics: [{}] });
 
-      vi.mocked(TopicModel).mockImplementation(() => ({ create: mockCreateTopic }) as any);
+      vi.mocked(TopicModel).mockImplementation(function () {
+        return { create: mockCreateTopic } as any;
+      });
       mockMessageModel(mockCreateMessage);
-      vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
+      vi.mocked(AiChatService).mockImplementation(function () {
+        return { getMessagesAndTopics: mockGet } as any;
+      });
 
       const caller = aiChatRouter.createCaller(mockCtx as any);
 
@@ -540,7 +573,9 @@ describe('aiChatRouter', () => {
       const mockGet = vi.fn().mockResolvedValue({ messages: [], topics: undefined });
 
       mockMessageModel(mockCreateMessage);
-      vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
+      vi.mocked(AiChatService).mockImplementation(function () {
+        return { getMessagesAndTopics: mockGet } as any;
+      });
 
       const caller = aiChatRouter.createCaller(mockCtx as any);
 
@@ -588,7 +623,9 @@ describe('aiChatRouter', () => {
       const mockGet = vi.fn().mockResolvedValue({ messages: [], topics: undefined });
 
       mockMessageModel(mockCreateMessage);
-      vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
+      vi.mocked(AiChatService).mockImplementation(function () {
+        return { getMessagesAndTopics: mockGet } as any;
+      });
 
       const caller = aiChatRouter.createCaller(mockCtx as any);
 
@@ -620,7 +657,9 @@ describe('aiChatRouter', () => {
       const mockGet = vi.fn().mockResolvedValue({ messages: [], topics: undefined });
 
       mockMessageModel(mockCreateMessage);
-      vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
+      vi.mocked(AiChatService).mockImplementation(function () {
+        return { getMessagesAndTopics: mockGet } as any;
+      });
 
       const caller = aiChatRouter.createCaller(mockCtx as any);
 
@@ -672,7 +711,9 @@ describe('aiChatRouter', () => {
       const mockGet = vi.fn().mockResolvedValue({ messages: [], topics: undefined });
 
       mockMessageModel(mockCreateMessage);
-      vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
+      vi.mocked(AiChatService).mockImplementation(function () {
+        return { getMessagesAndTopics: mockGet } as any;
+      });
 
       const caller = aiChatRouter.createCaller(mockCtx as any);
 
@@ -726,12 +767,16 @@ describe('aiChatRouter', () => {
       const mockGet = vi.fn().mockResolvedValue({ messages: [], topics: [{}] });
       const mockTouchUpdatedAt = vi.fn().mockResolvedValue(undefined);
 
-      vi.mocked(TopicModel).mockImplementation(() => ({ create: mockCreateTopic }) as any);
+      vi.mocked(TopicModel).mockImplementation(function () {
+        return { create: mockCreateTopic } as any;
+      });
       mockMessageModel(mockCreateMessage);
-      vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
-      vi.mocked(AgentModel).mockImplementation(
-        () => ({ touchUpdatedAt: mockTouchUpdatedAt }) as any,
-      );
+      vi.mocked(AiChatService).mockImplementation(function () {
+        return { getMessagesAndTopics: mockGet } as any;
+      });
+      vi.mocked(AgentModel).mockImplementation(function () {
+        return { touchUpdatedAt: mockTouchUpdatedAt } as any;
+      });
 
       const caller = aiChatRouter.createCaller(mockCtx as any);
 
@@ -762,12 +807,16 @@ describe('aiChatRouter', () => {
       const mockGet = vi.fn().mockResolvedValue({ messages: [], topics: [{}] });
       const mockTouchUpdatedAt = vi.fn().mockResolvedValue(undefined);
 
-      vi.mocked(TopicModel).mockImplementation(() => ({ create: mockCreateTopic }) as any);
+      vi.mocked(TopicModel).mockImplementation(function () {
+        return { create: mockCreateTopic } as any;
+      });
       mockMessageModel(mockCreateMessage);
-      vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
-      vi.mocked(AgentModel).mockImplementation(
-        () => ({ touchUpdatedAt: mockTouchUpdatedAt }) as any,
-      );
+      vi.mocked(AiChatService).mockImplementation(function () {
+        return { getMessagesAndTopics: mockGet } as any;
+      });
+      vi.mocked(AgentModel).mockImplementation(function () {
+        return { touchUpdatedAt: mockTouchUpdatedAt } as any;
+      });
 
       const caller = aiChatRouter.createCaller(mockCtx as any);
 
@@ -798,14 +847,16 @@ describe('aiChatRouter', () => {
       const mockTouchUpdatedAt = vi.fn().mockRejectedValue(touchError);
 
       try {
-        vi.mocked(TopicModel).mockImplementation(() => ({ create: mockCreateTopic }) as any);
+        vi.mocked(TopicModel).mockImplementation(function () {
+          return { create: mockCreateTopic } as any;
+        });
         mockMessageModel(mockCreateMessage);
-        vi.mocked(AiChatService).mockImplementation(
-          () => ({ getMessagesAndTopics: mockGet }) as any,
-        );
-        vi.mocked(AgentModel).mockImplementation(
-          () => ({ touchUpdatedAt: mockTouchUpdatedAt }) as any,
-        );
+        vi.mocked(AiChatService).mockImplementation(function () {
+          return { getMessagesAndTopics: mockGet } as any;
+        });
+        vi.mocked(AgentModel).mockImplementation(function () {
+          return { touchUpdatedAt: mockTouchUpdatedAt } as any;
+        });
 
         const caller = aiChatRouter.createCaller(mockCtx as any);
 
@@ -842,12 +893,16 @@ describe('aiChatRouter', () => {
       });
       const mockTouchUpdatedAt = vi.fn(() => touchUpdatedAtPromise);
 
-      vi.mocked(TopicModel).mockImplementation(() => ({ create: mockCreateTopic }) as any);
+      vi.mocked(TopicModel).mockImplementation(function () {
+        return { create: mockCreateTopic } as any;
+      });
       const mockCreateUserAndAssistantMessages = mockMessageModel(mockCreateMessage);
-      vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
-      vi.mocked(AgentModel).mockImplementation(
-        () => ({ touchUpdatedAt: mockTouchUpdatedAt }) as any,
-      );
+      vi.mocked(AiChatService).mockImplementation(function () {
+        return { getMessagesAndTopics: mockGet } as any;
+      });
+      vi.mocked(AgentModel).mockImplementation(function () {
+        return { touchUpdatedAt: mockTouchUpdatedAt } as any;
+      });
 
       const caller = aiChatRouter.createCaller(mockCtx as any);
 
@@ -880,12 +935,16 @@ describe('aiChatRouter', () => {
       const mockGet = vi.fn().mockResolvedValue({ messages: [], topics: [{}] });
       const mockTouchUpdatedAt = vi.fn().mockResolvedValue(undefined);
 
-      vi.mocked(TopicModel).mockImplementation(() => ({ create: mockCreateTopic }) as any);
+      vi.mocked(TopicModel).mockImplementation(function () {
+        return { create: mockCreateTopic } as any;
+      });
       mockMessageModel(mockCreateMessage);
-      vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
-      vi.mocked(AgentModel).mockImplementation(
-        () => ({ touchUpdatedAt: mockTouchUpdatedAt }) as any,
-      );
+      vi.mocked(AiChatService).mockImplementation(function () {
+        return { getMessagesAndTopics: mockGet } as any;
+      });
+      vi.mocked(AgentModel).mockImplementation(function () {
+        return { touchUpdatedAt: mockTouchUpdatedAt } as any;
+      });
 
       const caller = aiChatRouter.createCaller(mockCtx as any);
 
@@ -910,10 +969,12 @@ describe('aiChatRouter', () => {
       const mockTouchUpdatedAt = vi.fn().mockResolvedValue(undefined);
 
       mockMessageModel(mockCreateMessage);
-      vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
-      vi.mocked(AgentModel).mockImplementation(
-        () => ({ touchUpdatedAt: mockTouchUpdatedAt }) as any,
-      );
+      vi.mocked(AiChatService).mockImplementation(function () {
+        return { getMessagesAndTopics: mockGet } as any;
+      });
+      vi.mocked(AgentModel).mockImplementation(function () {
+        return { touchUpdatedAt: mockTouchUpdatedAt } as any;
+      });
 
       const caller = aiChatRouter.createCaller(mockCtx as any);
 

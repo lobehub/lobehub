@@ -101,7 +101,6 @@ export default defineConfig({
   test: {
     alias,
     coverage: {
-      all: false,
       exclude: [
         // https://github.com/lobehub/lobe-chat/pull/7265
         ...coverageConfigDefaults.exclude,

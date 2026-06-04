@@ -6,6 +6,11 @@ import debug from 'debug';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import AssistantTurnSettledWatcher from './AssistantTurnSettledWatcher';
+import type { ConversationHooks } from './types/hooks';
+
+type AssistantTurnSettledHook = NonNullable<ConversationHooks['onAssistantTurnSettled']>;
+
+const createSettledHook = () => vi.fn<AssistantTurnSettledHook>();
 
 const { mockState, mockChatState } = vi.hoisted(() => ({
   mockChatState: {
@@ -75,7 +80,7 @@ const seedOperations = (messageId: string, ops: SeedOp[]) => {
 
 const armAndSettle = (
   rerender: (ui: React.ReactElement) => void,
-  hook: ReturnType<typeof vi.fn>,
+  hook: AssistantTurnSettledHook,
 ) => {
   mockState.hooks.onAssistantTurnSettled = hook;
   mockState.displayMessages = [
@@ -100,7 +105,7 @@ describe('AssistantTurnSettledWatcher', () => {
   });
 
   it('fires with reason "completed" when latest terminal op is sendMessage/completed', async () => {
-    const hook = vi.fn();
+    const hook = createSettledHook();
     seedOperations('assistant-1', [{ status: 'completed', type: 'sendMessage' }]);
 
     const { rerender } = render(<AssistantTurnSettledWatcher />);
@@ -113,7 +118,7 @@ describe('AssistantTurnSettledWatcher', () => {
   });
 
   it('fires with reason "regenerated" when latest terminal op type is regenerate', async () => {
-    const hook = vi.fn();
+    const hook = createSettledHook();
     seedOperations('assistant-1', [{ status: 'completed', type: 'regenerate' }]);
 
     const { rerender } = render(<AssistantTurnSettledWatcher />);
@@ -125,7 +130,7 @@ describe('AssistantTurnSettledWatcher', () => {
   });
 
   it('fires with reason "continued" when latest terminal op type is continue', async () => {
-    const hook = vi.fn();
+    const hook = createSettledHook();
     seedOperations('assistant-1', [{ status: 'completed', type: 'continue' }]);
 
     const { rerender } = render(<AssistantTurnSettledWatcher />);
@@ -137,7 +142,7 @@ describe('AssistantTurnSettledWatcher', () => {
   });
 
   it('fires with reason "stopped" when latest terminal op is cancelled, even on regenerate', async () => {
-    const hook = vi.fn();
+    const hook = createSettledHook();
     seedOperations('assistant-1', [{ status: 'cancelled', type: 'regenerate' }]);
 
     const { rerender } = render(<AssistantTurnSettledWatcher />);
@@ -149,7 +154,7 @@ describe('AssistantTurnSettledWatcher', () => {
   });
 
   it('derives "regenerated" when parent regenerate completes after child callLLM also completes (parent/child ordering)', async () => {
-    const hook = vi.fn();
+    const hook = createSettledHook();
     seedOperations('assistant-1', [
       { endTime: 1000, status: 'completed', type: 'regenerate' },
       {
@@ -169,7 +174,7 @@ describe('AssistantTurnSettledWatcher', () => {
   });
 
   it('derives "continued" when parent continue completes after child callLLM also completes', async () => {
-    const hook = vi.fn();
+    const hook = createSettledHook();
     seedOperations('assistant-1', [
       { endTime: 1000, status: 'completed', type: 'continue' },
       {
@@ -189,7 +194,7 @@ describe('AssistantTurnSettledWatcher', () => {
   });
 
   it('derives "stopped" when parent regenerate is cancelled with cancelled child callLLM finishing later', async () => {
-    const hook = vi.fn();
+    const hook = createSettledHook();
     seedOperations('assistant-1', [
       {
         cancelReason: 'User cancelled',
@@ -214,7 +219,7 @@ describe('AssistantTurnSettledWatcher', () => {
   });
 
   it('defers settlement while pending intervention exists, fires once it clears', async () => {
-    const hook = vi.fn();
+    const hook = createSettledHook();
     seedOperations('assistant-1', [{ status: 'completed', type: 'sendMessage' }]);
 
     const { rerender } = render(<AssistantTurnSettledWatcher />);
@@ -250,7 +255,7 @@ describe('AssistantTurnSettledWatcher', () => {
   });
 
   it('does not double-fire for the same message id across rerenders', async () => {
-    const hook = vi.fn();
+    const hook = createSettledHook();
     seedOperations('assistant-1', [{ status: 'completed', type: 'sendMessage' }]);
 
     const { rerender } = render(<AssistantTurnSettledWatcher />);
@@ -266,7 +271,7 @@ describe('AssistantTurnSettledWatcher', () => {
   });
 
   it('falls back to reason "completed" and logs when no terminal op exists', async () => {
-    const hook = vi.fn();
+    const hook = createSettledHook();
     const logSpy = vi.spyOn(debug, 'log').mockImplementation(() => {});
     debug.enable('lobe-render:features:Conversation');
 

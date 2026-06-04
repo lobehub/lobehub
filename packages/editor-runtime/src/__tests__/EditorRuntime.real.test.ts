@@ -17,8 +17,8 @@ import removeThenAddFixture from './fixtures/remove-then-add.json';
 describe('EditorRuntime - Real Cases', () => {
   let runtime: EditorRuntime;
   let editor: IEditor;
-  let mockTitleSetter: ReturnType<typeof vi.fn>;
-  let mockTitleGetter: ReturnType<typeof vi.fn>;
+  let mockTitleSetter: ReturnType<typeof vi.fn<(title: string) => void>>;
+  let mockTitleGetter: ReturnType<typeof vi.fn<() => string>>;
 
   beforeEach(() => {
     editor = new Kernel() as unknown as IEditor;
@@ -28,8 +28,8 @@ describe('EditorRuntime - Real Cases', () => {
     runtime = new EditorRuntime();
     runtime.setEditor(editor);
 
-    mockTitleSetter = vi.fn();
-    mockTitleGetter = vi.fn().mockReturnValue('Test Title');
+    mockTitleSetter = vi.fn<(title: string) => void>();
+    mockTitleGetter = vi.fn<() => string>().mockReturnValue('Test Title');
     runtime.setTitleHandlers(mockTitleSetter, mockTitleGetter);
   });
 
