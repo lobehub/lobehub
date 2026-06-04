@@ -183,7 +183,9 @@ schema changes are more likely to surface as TypeScript errors.
 
 Expression-level `sql<T>` is fine inside a Drizzle builder for PostgreSQL features
 that do not have a dedicated helper, such as JSON path extraction, casts, aggregate
-expressions, `CASE`, `NOW()`, advisory locks, or `FOR UPDATE`.
+expressions, `CASE`, `NOW()`, or advisory locks. Row locks are query clauses, not
+expressions; use the select builder's `.for('update')` instead of raw
+`FOR UPDATE` SQL fragments.
 
 When refactoring raw SQL:
 
@@ -227,6 +229,12 @@ const rows = await trx
     ),
   )
   .groupBy(messages.provider, messages.model);
+```
+
+Example: use the select lock builder for row locks:
+
+```typescript
+const [user] = await trx.select().from(users).where(eq(users.id, userId)).for('update');
 ```
 
 Example: keep a recursive CTE raw when replacing it would add depth-based DB
