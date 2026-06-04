@@ -1530,6 +1530,27 @@ describe('MessageModel Update Tests', () => {
 
       const [row] = await serverDB.select().from(messages).where(eq(messages.id, 'prefer-msg'));
       expect(row.usage).toEqual(topLevel);
+      // metadata.usage is kept consistent with the column
+      expect((row.metadata as any).usage).toEqual(topLevel);
+    });
+
+    it('dual-writes metadata.usage when usage arrives as a top-level param only', async () => {
+      await serverDB.insert(messages).values({
+        id: 'top-only-msg',
+        metadata: { tps: 1 }, // pre-existing non-usage metadata must be preserved
+        role: 'assistant',
+        userId,
+      });
+
+      const usage = { cost: 0.006, totalTokens: 150 };
+      // no metadata payload — only the top-level usage
+      await messageModel.update('top-only-msg', { usage: usage as any });
+
+      const [row] = await serverDB.select().from(messages).where(eq(messages.id, 'top-only-msg'));
+      expect(row.usage).toEqual(usage);
+      // legacy readers / rollback paths still see metadata.usage
+      expect((row.metadata as any).usage).toEqual(usage);
+      expect((row.metadata as any).tps).toBe(1);
     });
 
     it('updateMetadata syncs usage into the usage column', async () => {

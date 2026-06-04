@@ -1976,6 +1976,14 @@ export class MessageModel {
     // (Gateway / hetero-agent executors) keep populating the column without
     // changes. `metadata.usage` is still written for backward-compatible reads.
     const usageToWrite = usage ?? (metadata as { usage?: ModelUsage } | undefined)?.usage;
+    // Keep `metadata.usage` dual-written even when usage arrives as a top-level
+    // param (with no metadata payload) — legacy readers / rollback paths still
+    // consume it during the transition. Folding the resolved usage into the
+    // patch also keeps it consistent with the column when both are sent.
+    const metadataPatch =
+      metadata || usageToWrite
+        ? { ...metadata, ...(usageToWrite && { usage: usageToWrite }) }
+        : undefined;
     try {
       await runTimedStage(
         timing,
@@ -1999,9 +2007,10 @@ export class MessageModel {
               );
             }
 
-            // 2. Handle metadata merge if provided
+            // 2. Handle metadata merge if there's a metadata payload or a
+            // top-level usage to fold back into `metadata.usage`.
             let mergedMetadata: Record<string, any> | undefined;
-            if (metadata) {
+            if (metadataPatch) {
               const [existingMessage] = await runTimedStage(
                 timing,
                 'db.message.update.metadata.select',
@@ -2011,7 +2020,7 @@ export class MessageModel {
                     .from(messages)
                     .where(and(eq(messages.id, id), eq(messages.userId, this.userId))),
               );
-              mergedMetadata = merge(existingMessage?.metadata || {}, metadata);
+              mergedMetadata = merge(existingMessage?.metadata || {}, metadataPatch);
             }
 
             const [updated] = await runTimedStage(
@@ -2027,7 +2036,7 @@ export class MessageModel {
                   })
                   .where(and(eq(messages.id, id), eq(messages.userId, this.userId)))
                   .returning({ topicId: messages.topicId }),
-              { hasMetadata: !!metadata, valueKeys: Object.keys(message) },
+              { hasMetadata: !!metadataPatch, valueKeys: Object.keys(message) },
             );
 
             // Touch topic's updatedAt when updating a message
@@ -2055,7 +2064,7 @@ export class MessageModel {
           }),
         {
           hasImageList: !!imageList?.length,
-          hasMetadata: !!metadata,
+          hasMetadata: !!metadataPatch,
           valueKeys: Object.keys(message),
         },
       );
