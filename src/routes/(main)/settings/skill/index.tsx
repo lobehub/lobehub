@@ -17,7 +17,7 @@ export interface SelectedTool {
   type: ToolDetailType;
 }
 
-const useStyles = createStaticStyles(({ css, cssVar }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   detail: css`
     overflow-y: auto;
     flex: 1;
@@ -57,7 +57,6 @@ const useStyles = createStaticStyles(({ css, cssVar }) => ({
 
 const Page = memo(() => {
   const { t } = useTranslation('setting');
-  const { styles } = useStyles();
   const [selected, setSelected] = useState<SelectedTool | null>(null);
 
   const handleOpenStore = useCallback(() => {
