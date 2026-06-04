@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { AGENT_DOCUMENT_FILE_TYPE } from '@lobechat/const';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentModel } from '@/database/models/agent';
@@ -152,6 +153,20 @@ describe('AgentDocumentsService', () => {
         title: 'note',
       });
       expect(result).toEqual({ id: 'new-doc', filename: 'note-2' });
+    });
+
+    it('should preserve an explicit filename extension', async () => {
+      mockModel.findByFilename.mockResolvedValueOnce(undefined);
+      mockModel.create.mockResolvedValue({ id: 'new-doc', filename: 'notes.txt' });
+
+      const service = new AgentDocumentsService(db, userId);
+      await service.createDocument('agent-1', 'notes.txt', 'content');
+
+      expect(mockModel.findByFilename).toHaveBeenCalledWith('agent-1', 'notes.txt');
+      expect(mockModel.create).toHaveBeenCalledWith('agent-1', 'notes.txt', 'content', {
+        editorData: { root: { children: [] } },
+        title: 'notes.txt',
+      });
     });
 
     it('should append collision suffix before the filename extension', async () => {
@@ -599,6 +614,7 @@ describe('AgentDocumentsService', () => {
         agentId: 'agent-1',
         content: 'content',
         documentId: 'documents-1',
+        filename: 'Old title.md',
         id: 'agent-doc-1',
         title: 'Old title',
       });
@@ -620,6 +636,35 @@ describe('AgentDocumentsService', () => {
       expect(
         mockDocumentService.trySaveCurrentDocumentHistory.mock.invocationCallOrder[0],
       ).toBeLessThan(mockModel.rename.mock.invocationCallOrder[0]);
+      expect(mockModel.rename).toHaveBeenCalledWith('agent-doc-1', 'New title', {
+        filename: 'New title',
+      });
+    });
+
+    it('should preserve explicit extensions when renaming a document', async () => {
+      mockModel.findById.mockResolvedValue({
+        agentId: 'agent-1',
+        content: 'content',
+        documentId: 'documents-1',
+        filename: 'Old title.md',
+        fileType: AGENT_DOCUMENT_FILE_TYPE,
+        id: 'agent-doc-1',
+        title: 'Old title',
+      });
+      mockModel.rename.mockResolvedValue({
+        agentId: 'agent-1',
+        content: 'content',
+        documentId: 'documents-1',
+        id: 'agent-doc-1',
+        title: 'notes.txt',
+      });
+
+      const service = new AgentDocumentsService(db, userId);
+      await service.renameDocumentById('agent-doc-1', 'notes.txt', 'agent-1');
+
+      expect(mockModel.rename).toHaveBeenCalledWith('agent-doc-1', 'notes.txt', {
+        filename: 'notes.txt',
+      });
     });
 
     it('should reject renaming skill-managed documents', async () => {

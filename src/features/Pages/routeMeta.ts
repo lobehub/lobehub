@@ -1,3 +1,4 @@
+import { CUSTOM_DOCUMENT_FILE_TYPE } from '@lobechat/const';
 import { t } from 'i18next';
 import { FilePenIcon } from 'lucide-react';
 
@@ -7,7 +8,7 @@ import { listSelectors } from '@/store/page/slices/list/selectors';
 import { DocumentSourceType, type LobeDocument } from '@/types/document';
 import { getIdFromIdentifier } from '@/utils/identifier';
 
-const EDITOR_PAGE_FILE_TYPE = 'custom/document';
+const EDITOR_PAGE_FILE_TYPE = CUSTOM_DOCUMENT_FILE_TYPE;
 
 export const pageRouteMeta = routeMeta({
   createNewTab: () => ({

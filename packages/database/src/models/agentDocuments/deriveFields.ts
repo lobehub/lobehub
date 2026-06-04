@@ -1,4 +1,11 @@
 import {
+  AGENT_DOCUMENT_CATEGORY,
+  AGENT_DOCUMENT_SKILL_CATEGORY,
+  AGENT_DOCUMENT_WEB_CATEGORY,
+  WEB_DOCUMENT_SOURCE_TYPE,
+} from '@lobechat/const';
+
+import {
   AGENT_SKILL_TEMPLATE_ID,
   DOCUMENT_FOLDER_TYPE,
   SKILL_BUNDLE_FILE_TYPE,
@@ -12,9 +19,9 @@ const isManagedSkill = (doc: DeriveInput): boolean =>
   doc.templateId === AGENT_SKILL_TEMPLATE_ID || doc.fileType?.startsWith('skills/');
 
 const deriveCategory = (doc: DeriveInput): AgentDocumentCategory => {
-  if (isManagedSkill(doc)) return 'skill';
-  if (doc.sourceType === 'web') return 'web';
-  return 'document';
+  if (isManagedSkill(doc)) return AGENT_DOCUMENT_SKILL_CATEGORY;
+  if (doc.sourceType === WEB_DOCUMENT_SOURCE_TYPE) return AGENT_DOCUMENT_WEB_CATEGORY;
+  return AGENT_DOCUMENT_CATEGORY;
 };
 
 export const deriveAgentDocumentFields = (doc: DeriveInput): AgentDocumentDerivedFields => {

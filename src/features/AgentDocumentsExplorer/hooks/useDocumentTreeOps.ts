@@ -18,7 +18,6 @@ interface UseDocumentTreeOpsArgs {
 }
 
 const ROOT_PATH = './';
-const DEFAULT_DOCUMENT_EXTENSION = '.md';
 
 const joinPath = (parentPath: string, segment: string) =>
   parentPath === ROOT_PATH ? `${ROOT_PATH}${segment}` : `${parentPath}/${segment}`;
@@ -189,11 +188,7 @@ export const useDocumentTreeOps = ({
 
       const baseStem = t('workingPanel.resources.tree.untitledDocument');
       const parentDocumentId = parentId ? (byRowId.get(parentId)?.documentId ?? null) : null;
-      const pendingFilename = pickUniqueFilename(
-        parentDocumentId,
-        baseStem,
-        DEFAULT_DOCUMENT_EXTENSION,
-      );
+      const pendingFilename = pickUniqueFilename(parentDocumentId, baseStem);
 
       const pending = makePendingDocument({
         agentId,
@@ -208,10 +203,7 @@ export const useDocumentTreeOps = ({
         try {
           const result =
             parentPath === ROOT_PATH
-              ? // Pass the client-picked filename (with extension) as the title so
-                // the server keeps the `.md` suffix; server dedup remains a safety
-                // net for racing clients.
-                await agentDocumentService.createDocument({
+              ? await agentDocumentService.createDocument({
                   agentId,
                   content: '',
                   title: pendingFilename,

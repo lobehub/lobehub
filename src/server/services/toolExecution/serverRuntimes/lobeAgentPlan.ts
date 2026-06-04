@@ -1,10 +1,9 @@
 import { type PlanDocument, type PlanRuntimeService } from '@lobechat/builtin-tool-lobe-agent';
+import { AGENT_PLAN_FILE_TYPE } from '@lobechat/const';
 import { type LobeChatDatabase } from '@lobechat/database';
 
 import { DocumentModel } from '@/database/models/document';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
-
-const PLAN_FILE_TYPE = 'agent/plan';
 
 /**
  * Build a server-side `PlanRuntimeService` backed by the application database.
@@ -49,7 +48,7 @@ export const createServerPlanRuntimeService = (
       const doc = await documentModel.create({
         content,
         description,
-        fileType: PLAN_FILE_TYPE,
+        fileType: AGENT_PLAN_FILE_TYPE,
         source: `lobe-agent:${topicId}`,
         sourceType: 'api',
         title: goal,
@@ -64,12 +63,12 @@ export const createServerPlanRuntimeService = (
 
     findPlanById: async (id) => {
       const doc = await documentModel.findById(id);
-      if (!doc || doc.fileType !== PLAN_FILE_TYPE) return null;
+      if (!doc || doc.fileType !== AGENT_PLAN_FILE_TYPE) return null;
       return toPlanDocument(doc);
     },
 
     findPlanByTopic: async (topicId) => {
-      const docs = await topicDocumentModel.findByTopicId(topicId, { type: PLAN_FILE_TYPE });
+      const docs = await topicDocumentModel.findByTopicId(topicId, { type: AGENT_PLAN_FILE_TYPE });
       const first = docs[0];
       return first ? toPlanDocument(first) : null;
     },

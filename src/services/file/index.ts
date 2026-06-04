@@ -1,3 +1,5 @@
+import { CUSTOM_DOCUMENT_FILE_TYPE, DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
+
 import { lambdaClient } from '@/libs/trpc/client';
 import {
   type CheckFileHashResult,
@@ -90,7 +92,7 @@ export class FileService {
         editorData: doc.editorData,
         embeddingError: null,
         embeddingStatus: null,
-        fileType: doc.fileType || 'custom/document',
+        fileType: doc.fileType || CUSTOM_DOCUMENT_FILE_TYPE,
         finishEmbedding: false,
         id: doc.id,
         metadata: doc.metadata,
@@ -98,7 +100,7 @@ export class FileService {
         parentId: doc.parentId,
         size: doc.totalCharCount || 0,
         slug: doc.slug,
-        sourceType: 'document',
+        sourceType: DERIVED_DOCUMENT_SOURCE_TYPE,
         updatedAt: doc.updatedAt ? new Date(doc.updatedAt) : new Date(),
         url: doc.source || '',
       } as FileListItem;

@@ -730,12 +730,21 @@ export class AgentDocumentsService {
       );
     }
 
-    const title = newTitle.trim();
-    if (title && title !== doc.title) {
+    const trimmedTitle = newTitle.trim();
+    if (doc.fileType === DOCUMENT_FOLDER_TYPE || !trimmedTitle) {
+      if (trimmedTitle && trimmedTitle !== doc.title) {
+        await this.documentService.trySaveCurrentDocumentHistory(doc.documentId, 'llm_call');
+      }
+
+      return this.agentDocumentModel.rename(documentId, trimmedTitle);
+    }
+
+    const filename = buildDocumentFilename(trimmedTitle);
+    if (trimmedTitle !== doc.title || filename !== doc.filename) {
       await this.documentService.trySaveCurrentDocumentHistory(doc.documentId, 'llm_call');
     }
 
-    return this.agentDocumentModel.rename(documentId, newTitle);
+    return this.agentDocumentModel.rename(documentId, trimmedTitle, { filename });
   }
 
   async copyDocumentById(documentId: string, newTitle?: string, expectedAgentId?: string) {

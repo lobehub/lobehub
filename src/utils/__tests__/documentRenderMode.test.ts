@@ -1,3 +1,8 @@
+import {
+  AGENT_DOCUMENT_CATEGORY,
+  AGENT_DOCUMENT_FILE_TYPE,
+  AGENT_DOCUMENT_SOURCE_TYPE,
+} from '@lobechat/const';
 import { describe, expect, it } from 'vitest';
 
 import { getDocumentRenderMode } from '../documentRenderMode';
@@ -18,6 +23,41 @@ describe('getDocumentRenderMode', () => {
   it('returns editor when filename ends with .mdx', () => {
     expect(getDocumentRenderMode({ filename: 'note.mdx', title: 'note' })).toEqual({
       mode: 'editor',
+    });
+  });
+
+  it('returns editor for agent document metadata even when filename has no extension', () => {
+    expect(
+      getDocumentRenderMode({
+        fileType: AGENT_DOCUMENT_FILE_TYPE,
+        filename: 'workflow-note',
+        sourceType: AGENT_DOCUMENT_SOURCE_TYPE,
+        title: 'workflow-note',
+      }),
+    ).toEqual({ mode: 'editor' });
+  });
+
+  it('returns editor for derived document category', () => {
+    expect(
+      getDocumentRenderMode({
+        category: AGENT_DOCUMENT_CATEGORY,
+        filename: 'draft',
+        title: 'draft',
+      }),
+    ).toEqual({ mode: 'editor' });
+  });
+
+  it('returns highlight for agent document metadata with explicit code filename', () => {
+    expect(
+      getDocumentRenderMode({
+        fileType: AGENT_DOCUMENT_FILE_TYPE,
+        filename: 'config.json',
+        sourceType: AGENT_DOCUMENT_SOURCE_TYPE,
+        title: 'config',
+      }),
+    ).toEqual({
+      language: 'json',
+      mode: 'highlight',
     });
   });
 

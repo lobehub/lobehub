@@ -1,4 +1,10 @@
 import { DocumentLoadFormat, DocumentLoadRule, PolicyLoad } from '@lobechat/agent-templates';
+import {
+  AGENT_DOCUMENT_CATEGORY,
+  AGENT_DOCUMENT_SOURCE_TYPE,
+  CUSTOM_FOLDER_FILE_TYPE,
+  WEB_DOCUMENT_SOURCE_TYPE,
+} from '@lobechat/const';
 import { describe, expect, it } from 'vitest';
 
 import type { AgentDocumentWithRules } from '@/database/models/agentDocuments';
@@ -14,7 +20,7 @@ const buildDoc = (overrides: Partial<AgentDocumentWithRules> = {}): AgentDocumen
     accessSelf: 31,
     accessShared: 0,
     agentId: 'agent-1',
-    category: 'document',
+    category: AGENT_DOCUMENT_CATEGORY,
     content: 'body',
     createdAt: new Date('2026-05-01T00:00:00.000Z'),
     deleteReason: null,
@@ -39,7 +45,7 @@ const buildDoc = (overrides: Partial<AgentDocumentWithRules> = {}): AgentDocumen
     policyLoadPosition: 'before-first-user',
     policyLoadRule: 'always',
     source: 'https://example.com/post',
-    sourceType: 'web',
+    sourceType: WEB_DOCUMENT_SOURCE_TYPE,
     templateId: null,
     title: 'Doc title',
     updatedAt: new Date('2026-05-21T00:00:00.000Z'),
@@ -53,8 +59,12 @@ describe('toAgentContextDocument', () => {
   // every chat that went through RuntimeExecutors. Keep this lock tight so any
   // future field addition that forgets one side trips here.
   it('propagates sourceType so the progressive web-doc filter can fire', () => {
-    expect(toAgentContextDocument(buildDoc({ sourceType: 'web' })).sourceType).toBe('web');
-    expect(toAgentContextDocument(buildDoc({ sourceType: 'agent' })).sourceType).toBe('agent');
+    expect(
+      toAgentContextDocument(buildDoc({ sourceType: WEB_DOCUMENT_SOURCE_TYPE })).sourceType,
+    ).toBe(WEB_DOCUMENT_SOURCE_TYPE);
+    expect(
+      toAgentContextDocument(buildDoc({ sourceType: AGENT_DOCUMENT_SOURCE_TYPE })).sourceType,
+    ).toBe(AGENT_DOCUMENT_SOURCE_TYPE);
     expect(toAgentContextDocument(buildDoc({ sourceType: 'file' })).sourceType).toBe('file');
   });
 
@@ -134,15 +144,19 @@ describe('toAgentContextDocument', () => {
 describe('toAgentContextDocuments', () => {
   it('preserves order and maps each row through toAgentContextDocument', () => {
     const rows = [
-      buildDoc({ id: 'a', sourceType: 'web' }),
-      buildDoc({ id: 'b', sourceType: 'agent' }),
+      buildDoc({ id: 'a', sourceType: WEB_DOCUMENT_SOURCE_TYPE }),
+      buildDoc({ id: 'b', sourceType: AGENT_DOCUMENT_SOURCE_TYPE }),
       buildDoc({ id: 'c', sourceType: 'file' }),
     ];
 
     const result = toAgentContextDocuments(rows);
 
     expect(result.map((d) => d.id)).toEqual(['a', 'b', 'c']);
-    expect(result.map((d) => d.sourceType)).toEqual(['web', 'agent', 'file']);
+    expect(result.map((d) => d.sourceType)).toEqual([
+      WEB_DOCUMENT_SOURCE_TYPE,
+      AGENT_DOCUMENT_SOURCE_TYPE,
+      'file',
+    ]);
   });
 
   // Regression: — folder VFS nodes (plain folders + skill bundles)
@@ -152,7 +166,7 @@ describe('toAgentContextDocuments', () => {
   it('drops folder rows (plain folders and skill bundles) from context', () => {
     const rows = [
       buildDoc({ id: 'doc', isFolder: false }),
-      buildDoc({ id: 'folder', isFolder: true, fileType: 'custom/folder' }),
+      buildDoc({ id: 'folder', isFolder: true, fileType: CUSTOM_FOLDER_FILE_TYPE }),
       buildDoc({ id: 'bundle', isFolder: true, isSkillBundle: true, fileType: 'skills/bundle' }),
     ];
 

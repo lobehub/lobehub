@@ -12,7 +12,11 @@ import { GroupAgentBuilderIdentifier } from '@lobechat/builtin-tool-group-agent-
 import { LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { WebOnboardingIdentifier } from '@lobechat/builtin-tool-web-onboarding';
-import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
+import {
+  AGENT_PLAN_FILE_TYPE,
+  KLAVIS_SERVER_TYPES,
+  LOBEHUB_SKILL_PROVIDERS,
+} from '@lobechat/const';
 import type {
   AgentBuilderContext,
   AgentContextDocument,
@@ -332,7 +336,7 @@ export const contextEngineering = async ({
       // Fetch plan document for the current topic
       const planResult = await notebookService.listDocuments({
         topicId,
-        type: 'agent/plan',
+        type: AGENT_PLAN_FILE_TYPE,
       });
 
       if (planResult.data.length > 0) {

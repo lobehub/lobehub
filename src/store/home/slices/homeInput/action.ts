@@ -1,4 +1,5 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
+import { CUSTOM_DOCUMENT_FILE_TYPE } from '@lobechat/const';
 
 import { chatGroupService } from '@/services/chatGroup';
 import { documentService } from '@/services/document';
@@ -225,7 +226,7 @@ export class HomeInputActionImpl {
       // 2. Create new Document
       const newDoc = await documentService.createDocument({
         editorData: '{}',
-        fileType: 'custom/document',
+        fileType: CUSTOM_DOCUMENT_FILE_TYPE,
         title: markdownToTxt(message ?? '').slice(0, 50) || 'Untitled',
       });
 

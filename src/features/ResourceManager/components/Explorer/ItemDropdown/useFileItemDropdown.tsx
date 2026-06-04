@@ -1,3 +1,4 @@
+import { CUSTOM_FOLDER_FILE_TYPE, DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
 import { copyToClipboard, createRawModal, Icon } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
@@ -73,7 +74,7 @@ export const useFileItemDropdown = ({
   const libraries = useKnowledgeBaseListContext();
 
   const isInLibrary = !!libraryId;
-  const isFolder = fileType === 'custom/folder';
+  const isFolder = fileType === CUSTOM_FOLDER_FILE_TYPE;
   // PDF and Office files should not be treated as pages
   const lowerFilename = filename?.toLowerCase();
   const isPDF = fileType?.toLowerCase() === 'pdf' || lowerFilename?.endsWith('.pdf');
@@ -86,7 +87,9 @@ export const useFileItemDropdown = ({
     lowerFilename?.endsWith('.pptx') ||
     lowerFilename?.endsWith('.odt');
   const isPage =
-    !isPDF && !isOfficeFile && (sourceType === 'document' || fileType === PAGE_FILE_TYPE);
+    !isPDF &&
+    !isOfficeFile &&
+    (sourceType === DERIVED_DOCUMENT_SOURCE_TYPE || fileType === PAGE_FILE_TYPE);
 
   const menuItems = useCallback(() => {
     // Filter out current knowledge base and create submenu items

@@ -1,3 +1,4 @@
+import { AGENT_DOCUMENT_FILE_TYPE, AGENT_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
 import { and, asc, desc, eq, inArray, isNotNull, isNull, like, or, sql } from 'drizzle-orm';
 
 import type { DocumentItem, NewAgentDocument, NewDocument } from '../../schemas';
@@ -290,7 +291,7 @@ export class AgentDocumentModel {
     const {
       createdAt,
       editorData,
-      fileType = 'agent/document',
+      fileType = AGENT_DOCUMENT_FILE_TYPE,
       loadPosition,
       loadRules,
       metadata,
@@ -298,7 +299,7 @@ export class AgentDocumentModel {
       policy,
       policyLoad,
       source,
-      sourceType = 'agent',
+      sourceType = AGENT_DOCUMENT_SOURCE_TYPE,
       templateId,
       title: providedTitle,
       updatedAt,
@@ -635,14 +636,18 @@ export class AgentDocumentModel {
    * - The renamed agent document, or `undefined` when the binding is not visible.
    *
    */
-  async rename(documentId: string, newTitle: string): Promise<AgentDocument | undefined> {
+  async rename(
+    documentId: string,
+    newTitle: string,
+    options?: { filename?: string },
+  ): Promise<AgentDocument | undefined> {
     const existing = await this.findById(documentId);
     if (!existing) return undefined;
 
     const title = newTitle.trim();
     if (!title) return existing;
 
-    const filename = buildDocumentFilename(title);
+    const filename = options?.filename?.trim() || buildDocumentFilename(title);
     const source = `agent-document://${existing.agentId}/${encodeURIComponent(filename)}`;
 
     await this.db.transaction(async (trx) => {

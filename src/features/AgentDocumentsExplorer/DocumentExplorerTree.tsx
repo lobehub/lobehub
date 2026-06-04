@@ -1,3 +1,4 @@
+import { AGENT_DOCUMENT_CATEGORY } from '@lobechat/const';
 import type { MenuProps } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { Trash2Icon } from 'lucide-react';
@@ -185,12 +186,14 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
   );
 
   const canDrag = useCallback(
-    (node: ExplorerTreeNode<AgentDocumentItem>) => !!node.data && node.data.category === 'document',
+    (node: ExplorerTreeNode<AgentDocumentItem>) =>
+      !!node.data && node.data.category === AGENT_DOCUMENT_CATEGORY,
     [],
   );
 
   const canRename = useCallback(
-    (node: ExplorerTreeNode<AgentDocumentItem>) => !!node.data && node.data.category === 'document',
+    (node: ExplorerTreeNode<AgentDocumentItem>) =>
+      !!node.data && node.data.category === AGENT_DOCUMENT_CATEGORY,
     [],
   );
 
