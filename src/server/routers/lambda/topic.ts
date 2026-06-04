@@ -613,6 +613,9 @@ export const topicRouter = router({
         metadata: z.object({
           boundDeviceId: z.string().optional(),
           heteroSessionId: z.string().optional(),
+          claudeCodeHistoryLastEventId: z.string().optional(),
+          claudeCodeHistorySourcePath: z.string().optional(),
+          claudeCodeHistorySyncedAt: z.string().optional(),
           model: z.string().optional(),
           onboardingFeedback: z
             .object({

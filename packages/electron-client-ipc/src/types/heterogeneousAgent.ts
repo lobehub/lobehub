@@ -47,3 +47,36 @@ export interface HeterogeneousAgentSessionError {
   stderr?: string;
   workingDirectory?: string;
 }
+
+export interface ClaudeCodeHistoryToolUse {
+  arguments: string;
+  id: string;
+  name: string;
+}
+
+export interface ClaudeCodeHistoryMessage {
+  content: string;
+  lineNumber: number;
+  messageId?: string;
+  parentUuid?: string;
+  reasoning?: string;
+  role: 'user' | 'assistant' | 'tool';
+  sourceEventId: string;
+  timestamp?: string;
+  toolCallId?: string;
+  toolResultForId?: string;
+  tools?: ClaudeCodeHistoryToolUse[];
+  uuid?: string;
+}
+
+export interface GetClaudeCodeSessionHistoryParams {
+  sessionId: string;
+  workingDirectory: string;
+}
+
+export interface ClaudeCodeSessionHistoryResult {
+  messages: ClaudeCodeHistoryMessage[];
+  sessionFile?: string;
+  sessionId: string;
+  status: 'found' | 'missing' | 'invalid_request';
+}

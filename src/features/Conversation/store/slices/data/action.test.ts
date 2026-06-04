@@ -698,6 +698,44 @@ describe('DataSlice', () => {
       expect((secondCallKey as any[])[1].threadId).toBe('thread-2');
     });
 
+    it('keeps locally synced messages when an older fetch result arrives', async () => {
+      const fetchedMessages: UIChatMessage[] = [
+        {
+          id: 'msg-1',
+          content: 'Fetched message',
+          role: 'user',
+          createdAt: 1000,
+          updatedAt: 1000,
+        },
+      ];
+      const localSyncedMessage = {
+        id: 'msg-2',
+        content: 'Synced Claude Code message',
+        role: 'assistant',
+        createdAt: 2000,
+        updatedAt: 2000,
+      } as UIChatMessage;
+      vi.mocked(messageService.getMessages).mockResolvedValue(fetchedMessages);
+
+      const store = createStore({
+        context: { agentId: 'test-session', topicId: 'test-topic', threadId: null },
+      });
+      store.getState().replaceMessages([localSyncedMessage]);
+
+      store.getState().useFetchMessages({
+        agentId: 'test-session',
+        topicId: 'test-topic',
+        threadId: null,
+      });
+
+      await waitFor(() => {
+        expect(store.getState().dbMessages.map((message) => message.id)).toEqual([
+          'msg-1',
+          'msg-2',
+        ]);
+      });
+    });
+
     it('should use same SWR key structure with Object containing sessionId, topicId, threadId', () => {
       const store = createStore({
         context: { agentId: 'test-session', topicId: 'test-topic', threadId: 'test-thread' },
@@ -716,8 +754,8 @@ describe('DataSlice', () => {
       expect(swrKey[0]).toBe('CONVERSATION_FETCH_MESSAGES');
       expect(swrKey[1]).toEqual({
         agentId: 'test-session',
-        topicId: 'test-topic',
         threadId: 'test-thread',
+        topicId: 'test-topic',
       });
     });
 

@@ -167,11 +167,22 @@ export const MessageSignalSchema = z.object({
   type: z.enum(['tool-stdout', 'tool-callback', 'task-completion']),
 });
 
+const ClaudeCodeHistoryMessageMetadataSchema = z.object({
+  lineNumber: z.number(),
+  messageId: z.string().optional(),
+  sessionId: z.string(),
+  sourceEventId: z.string(),
+  sourcePath: z.string(),
+  toolUseId: z.string().optional(),
+});
+
 export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSchema).extend({
   collapsed: z.boolean().optional(),
   inspectExpanded: z.boolean().optional(),
+  importedFrom: z.enum(['claude-code-history']).optional(),
   isMultimodal: z.boolean().optional(),
   isSupervisor: z.boolean().optional(),
+  claudeCode: ClaudeCodeHistoryMessageMetadataSchema.optional(),
   localSystemToolSnapshots: z.array(LocalSystemToolSnapshotSchema).optional(),
   pageSelections: z.array(PageSelectionSchema).optional(),
   // Canonical nested shape — flat fields above are deprecated. Must be listed
@@ -214,6 +225,15 @@ export interface ModelPerformance {
   ttft?: number;
 }
 
+export interface ClaudeCodeHistoryMessageMetadata {
+  lineNumber: number;
+  messageId?: string;
+  sessionId: string;
+  sourceEventId: string;
+  sourcePath: string;
+  toolUseId?: string;
+}
+
 export interface MessageMetadata {
   // ───────────────────────────────────────────────────────────────
   // Token usage + performance fields — DEPRECATED flat shape.
@@ -225,6 +245,7 @@ export interface MessageMetadata {
   acceptedPredictionTokens?: number;
   activeBranchIndex?: number;
   activeColumn?: boolean;
+  claudeCode?: ClaudeCodeHistoryMessageMetadata;
   /**
    * Message collapse state
    * true: collapsed, false/undefined: expanded
@@ -236,6 +257,7 @@ export interface MessageMetadata {
   /** @deprecated use `metadata.performance` instead */
   duration?: number;
   finishType?: string;
+  importedFrom?: 'claude-code-history';
   /** @deprecated use `metadata.usage` instead */
   inputAudioTokens?: number;
   /** @deprecated use `metadata.usage` instead */

@@ -1,3 +1,5 @@
+import type { GetClaudeCodeSessionHistoryParams } from '@lobechat/electron-client-ipc';
+
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
 /**
@@ -38,6 +40,10 @@ class HeterogeneousAgentService {
 
   async getSessionInfo(sessionId: string) {
     return this.ipc.heterogeneousAgent.getSessionInfo({ sessionId });
+  }
+
+  async getClaudeCodeSessionHistory(params: GetClaudeCodeSessionHistoryParams) {
+    return this.ipc.heterogeneousAgent.getClaudeCodeSessionHistory(params);
   }
 
   /**

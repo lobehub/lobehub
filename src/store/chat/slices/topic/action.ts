@@ -1,7 +1,17 @@
 // Note: To make the code more logic and readable, we just disable the auto sort key eslint rule
 // DON'T REMOVE THE FIRST LINE
+import { isDesktop } from '@lobechat/const';
+import type {
+  ClaudeCodeHistoryMessage,
+  ClaudeCodeSessionHistoryResult,
+} from '@lobechat/electron-client-ipc';
 import { chainSummaryTitle } from '@lobechat/prompts';
-import { type ChatTopicMetadata, type MessageMapScope, type UIChatMessage } from '@lobechat/types';
+import {
+  type ChatToolPayload,
+  type ChatTopicMetadata,
+  type MessageMapScope,
+  type UIChatMessage,
+} from '@lobechat/types';
 import { TraceNameMap } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
@@ -10,10 +20,14 @@ import useSWR from 'swr';
 
 import { message } from '@/components/AntdStaticMethods';
 import { LOADING_FLAT } from '@/const/message';
+import { conversationFetchMessagesKey } from '@/features/Conversation/store/slices/data/fetchKey';
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { chatService } from '@/services/chat';
+import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
+import { getAgentStoreState } from '@/store/agent';
+import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { type ChatStore } from '@/store/chat';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { useGlobalStore } from '@/store/global';
@@ -49,6 +63,8 @@ type CronTopicsGroupWithJobInfo = {
 /**
  * Options for switchTopic action
  */
+export type ClaudeCodeHistorySyncResult = 'skipped' | 'synced' | 'upToDate';
+
 export interface SwitchTopicOptions {
   /**
    * Clear the _new key data even when switching to an existing topic
@@ -72,6 +88,108 @@ type Setter = StoreSetter<ChatStore>;
 export const chatTopic = (set: Setter, get: () => ChatStore, _api?: unknown) =>
   new ChatTopicActionImpl(set, get, _api);
 
+const buildImportedMetadata = (
+  message: ClaudeCodeHistoryMessage,
+  history: ClaudeCodeSessionHistoryResult,
+) => ({
+  claudeCode: {
+    lineNumber: message.lineNumber,
+    messageId: message.messageId,
+    sessionId: history.sessionId,
+    sourceEventId: message.sourceEventId,
+    sourcePath: history.sessionFile ?? '',
+    toolUseId: message.toolCallId,
+  },
+  importedFrom: 'claude-code-history' as const,
+});
+
+const parseHistoryDate = (timestamp?: string): Date | undefined => {
+  if (!timestamp) return;
+  const date = new Date(timestamp);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+};
+
+const normalizeHistoryText = (content?: string | null): string =>
+  (content ?? '').replaceAll(/\s+/g, ' ').trim();
+
+const getToolPayloadForResult = (
+  toolCallId: string | undefined,
+  historyMessages: ClaudeCodeHistoryMessage[],
+) => {
+  if (!toolCallId) return { apiName: 'tool_result', arguments: '' };
+
+  for (const message of historyMessages) {
+    const tool = message.tools?.find((tool) => tool.id === toolCallId);
+    if (tool) return { apiName: tool.name, arguments: tool.arguments };
+  }
+
+  return { apiName: toolCallId, arguments: '' };
+};
+
+const getExistingDedupeKeys = (message: UIChatMessage): string[] => {
+  const keys: string[] = [];
+  const sourceEventId = message.metadata?.claudeCode?.sourceEventId;
+  if (sourceEventId) keys.push(`source:${sourceEventId}`);
+
+  if (message.role === 'tool' && message.tool_call_id) keys.push(`tool:${message.tool_call_id}`);
+
+  if (message.role === 'assistant' && message.tools?.length) {
+    keys.push(`assistant-tools:${message.tools.map((tool) => tool.id).join('|')}`);
+  }
+
+  const text = normalizeHistoryText(message.content);
+  if (text) keys.push(`${message.role}:text:${text}`);
+
+  return keys;
+};
+
+const getHistoryDedupeKeys = (message: ClaudeCodeHistoryMessage): string[] => {
+  const keys: string[] = [];
+  if (message.sourceEventId) keys.push(`source:${message.sourceEventId}`);
+
+  if (message.role === 'tool' && message.toolCallId) keys.push(`tool:${message.toolCallId}`);
+
+  if (message.role === 'assistant' && message.tools?.length) {
+    keys.push(`assistant-tools:${message.tools.map((tool) => tool.id).join('|')}`);
+  }
+
+  const text = normalizeHistoryText(message.content);
+  if (text) keys.push(`${message.role}:text:${text}`);
+
+  return keys;
+};
+
+const buildExistingDedupeIndex = (messages: UIChatMessage[]) => {
+  const index = new Map<string, UIChatMessage[]>();
+
+  for (const message of messages) {
+    for (const key of getExistingDedupeKeys(message)) {
+      index.set(key, [...(index.get(key) ?? []), message]);
+    }
+  }
+
+  return index;
+};
+
+const takeExistingByDedupeKeys = (
+  existingByDedupeKey: Map<string, UIChatMessage[]>,
+  consumedExistingIds: Set<string>,
+  keys: string[],
+): UIChatMessage | undefined => {
+  for (const key of keys) {
+    const matches = existingByDedupeKey.get(key);
+    if (!matches) continue;
+
+    while (matches.length > 0) {
+      const existing = matches.shift();
+      if (existing && !consumedExistingIds.has(existing.id)) {
+        consumedExistingIds.add(existing.id);
+        return existing;
+      }
+    }
+  }
+};
+
 export class ChatTopicActionImpl {
   readonly #get: () => ChatStore;
   readonly #set: Setter;
@@ -81,6 +199,7 @@ export class ChatTopicActionImpl {
   // started and our continuation is stale — drop it rather than let it
   // clobber the newer topic (see ).
   #switchTopicEpoch = 0;
+  #claudeCodeHistorySyncEpoch = 0;
 
   constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
     void _api;
@@ -313,6 +432,200 @@ export class ChatTopicActionImpl {
 
   updateTopicTitle = async (id: string, title: string): Promise<void> => {
     await this.#get().internal_updateTopic(id, { title });
+  };
+
+  syncClaudeCodeHistory = async (topicId: string): Promise<ClaudeCodeHistorySyncResult> => {
+    if (!isDesktop) return 'skipped';
+
+    const epoch = ++this.#claudeCodeHistorySyncEpoch;
+    await Promise.resolve();
+    if (epoch !== this.#claudeCodeHistorySyncEpoch) return 'skipped';
+
+    const { activeAgentId, activeTopicId } = this.#get();
+    if (!activeAgentId || activeTopicId !== topicId) return 'skipped';
+
+    const topic = topicSelectors.getTopicById(topicId)(this.#get());
+    const sessionId = topic?.metadata?.heteroSessionId;
+    if (!topic || !sessionId) return 'skipped';
+
+    const agentState = getAgentStoreState();
+    const workingDirectory =
+      topic.metadata?.workingDirectory ??
+      agentByIdSelectors.getAgentWorkingDirectoryById(activeAgentId)(agentState);
+    if (!workingDirectory) return 'skipped';
+
+    const provider =
+      agentSelectors.getAgentConfigById(activeAgentId)(agentState)?.agencyConfig
+        ?.heterogeneousProvider;
+    if (provider?.type !== 'claude-code') return 'skipped';
+
+    let history: ClaudeCodeSessionHistoryResult;
+    try {
+      history = await heterogeneousAgentService.getClaudeCodeSessionHistory({
+        sessionId,
+        workingDirectory,
+      });
+    } catch (error) {
+      console.error('[ClaudeCodeHistorySync] Failed to read session history:', error);
+      return 'skipped';
+    }
+
+    if (epoch !== this.#claudeCodeHistorySyncEpoch || this.#get().activeTopicId !== topicId) {
+      return 'skipped';
+    }
+    if (
+      history.status === 'missing' ||
+      (history.status === 'found' && history.messages.length === 0)
+    ) {
+      return 'skipped';
+    }
+    if (history.status !== 'found') {
+      return 'upToDate';
+    }
+
+    const existingMessages = await messageService.getMessages({ agentId: activeAgentId, topicId });
+    const existingByDedupeKey = buildExistingDedupeIndex(existingMessages);
+    const consumedExistingIds = new Set<string>();
+
+    const missing = history.messages.filter((message) => {
+      return !takeExistingByDedupeKeys(
+        existingByDedupeKey,
+        consumedExistingIds,
+        getHistoryDedupeKeys(message),
+      );
+    });
+    const context = { agentId: activeAgentId, scope: 'main' as const, threadId: null, topicId };
+    if (missing.length === 0) {
+      await mutate(conversationFetchMessagesKey(context), existingMessages, { revalidate: false });
+      this.#get().replaceMessages(existingMessages, {
+        action: n('syncClaudeCodeHistory/replaceUpToDateMessages'),
+        context,
+      });
+
+      return 'upToDate';
+    }
+
+    const dbIdByHistoryKey = new Map<string, string>();
+    const existingForMappingByDedupeKey = buildExistingDedupeIndex(existingMessages);
+    const consumedMappingExistingIds = new Set<string>();
+    const toolResultMsgIdByCallId = new Map<string, string>();
+    const importedAssistantTools = new Map<
+      string,
+      NonNullable<ClaudeCodeHistoryMessage['tools']>
+    >();
+    for (const existing of existingMessages) {
+      const source = existing.metadata?.claudeCode;
+      if (source?.messageId) dbIdByHistoryKey.set(source.messageId, existing.id);
+      if (existing.role === 'tool' && existing.tool_call_id) {
+        toolResultMsgIdByCallId.set(existing.tool_call_id, existing.id);
+      }
+    }
+    for (const historyMessage of history.messages) {
+      const existing = takeExistingByDedupeKeys(
+        existingForMappingByDedupeKey,
+        consumedMappingExistingIds,
+        getHistoryDedupeKeys(historyMessage),
+      );
+      if (!existing) continue;
+      if (historyMessage.uuid) dbIdByHistoryKey.set(historyMessage.uuid, existing.id);
+      if (historyMessage.messageId) dbIdByHistoryKey.set(historyMessage.messageId, existing.id);
+    }
+    let parentId = existingMessages.at(-1)?.id;
+
+    for (const message of missing) {
+      if (epoch !== this.#claudeCodeHistorySyncEpoch) return 'skipped';
+
+      const explicitParentId = message.parentUuid
+        ? (dbIdByHistoryKey.get(message.parentUuid) ?? parentId)
+        : parentId;
+      const createdAt = parseHistoryDate(message.timestamp);
+      const metadata = buildImportedMetadata(message, history);
+      const toolPayload = getToolPayloadForResult(message.toolCallId, history.messages);
+
+      const tools: ChatToolPayload[] | undefined =
+        message.role === 'assistant' && message.tools?.length
+          ? message.tools.map((tool) => ({
+              apiName: tool.name,
+              arguments: tool.arguments,
+              id: tool.id,
+              identifier: 'claude-code',
+              result_msg_id: toolResultMsgIdByCallId.get(tool.id),
+              type: 'default' as ChatToolPayload['type'],
+            }))
+          : undefined;
+
+      const result = await messageService.createMessage({
+        agentId: activeAgentId,
+        content: message.content,
+        ...(createdAt ? { createdAt } : undefined),
+        metadata,
+        parentId: explicitParentId,
+        ...(message.reasoning ? { reasoning: { content: message.reasoning } } : undefined),
+        ...(tools ? { tools } : undefined),
+        ...(message.role === 'tool'
+          ? {
+              plugin: {
+                apiName: toolPayload.apiName,
+                arguments: toolPayload.arguments,
+                identifier: 'claude-code',
+                type: 'default' as ChatToolPayload['type'],
+              },
+              tool_call_id: message.toolCallId,
+            }
+          : undefined),
+        provider: 'claude-code',
+        role: message.role,
+        topicId,
+      });
+
+      if (message.uuid) dbIdByHistoryKey.set(message.uuid, result.id);
+      if (message.messageId) dbIdByHistoryKey.set(message.messageId, result.id);
+      if (message.role === 'assistant' && message.tools?.length) {
+        importedAssistantTools.set(result.id, message.tools);
+      }
+      if (message.role === 'tool' && message.toolCallId) {
+        toolResultMsgIdByCallId.set(message.toolCallId, result.id);
+      }
+      parentId = result.id;
+    }
+
+    for (const [assistantMessageId, tools] of importedAssistantTools) {
+      const payloads: ChatToolPayload[] = tools.map((tool) => ({
+        apiName: tool.name,
+        arguments: tool.arguments,
+        id: tool.id,
+        identifier: 'claude-code',
+        result_msg_id: toolResultMsgIdByCallId.get(tool.id),
+        type: 'default' as ChatToolPayload['type'],
+      }));
+      await messageService.updateMessage(
+        assistantMessageId,
+        { tools: payloads },
+        { agentId: activeAgentId, topicId },
+      );
+    }
+
+    await this.updateTopicMetadata(topicId, {
+      claudeCodeHistoryLastEventId: history.messages.at(-1)?.sourceEventId,
+      claudeCodeHistorySourcePath: history.sessionFile,
+      claudeCodeHistorySyncedAt: new Date().toISOString(),
+    });
+    if (epoch !== this.#claudeCodeHistorySyncEpoch || this.#get().activeTopicId !== topicId) {
+      return 'skipped';
+    }
+
+    const latestMessages = await messageService.getMessages({ agentId: activeAgentId, topicId });
+    if (epoch !== this.#claudeCodeHistorySyncEpoch || this.#get().activeTopicId !== topicId) {
+      return 'skipped';
+    }
+
+    await mutate(conversationFetchMessagesKey(context), latestMessages, { revalidate: false });
+    this.#get().replaceMessages(latestMessages, {
+      action: n('syncClaudeCodeHistory/replaceMessages'),
+      context,
+    });
+
+    return 'synced';
   };
 
   /**
@@ -831,7 +1144,7 @@ export class ChatTopicActionImpl {
     }
 
     this.#set(
-      { activeTopicId: !id ? (null as any) : id, activeThreadId: undefined },
+      { activeTopicId: id || (null as any), activeThreadId: undefined },
       false,
       n('toggleTopic'),
     );

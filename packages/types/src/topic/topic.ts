@@ -108,6 +108,9 @@ export interface OnboardingSessionSnapshot {
 export interface ChatTopicMetadata {
   bot?: ChatTopicBotContext;
   boundDeviceId?: string;
+  claudeCodeHistoryLastEventId?: string;
+  claudeCodeHistorySourcePath?: string;
+  claudeCodeHistorySyncedAt?: string;
   cronJobId?: string;
   /**
    * Scoped pointer to the currently active assistant message for a running

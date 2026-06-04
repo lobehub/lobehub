@@ -5,20 +5,23 @@ import type { UploadFileItem } from '../../files';
 import type { MessageSemanticSearchChunk } from '../../rag';
 import type { ChatMessageError } from '../common/base';
 import { ChatMessageErrorSchema } from '../common/base';
+import type { MessageMetadata } from '../common/metadata';
+import { MessageMetadataSchema } from '../common/metadata';
 // Import for local use
 import type { PageSelection } from '../common/pageSelection';
-import type { ChatPluginPayload } from '../common/tools';
-import { ToolInterventionSchema } from '../common/tools';
+import type { ChatPluginPayload, ChatToolPayload } from '../common/tools';
+import { ChatToolPayloadSchema, ToolInterventionSchema } from '../common/tools';
 import type { UIChatMessage } from './chat';
 import { SemanticSearchChunkSchema } from './rag';
 
 export type CreateMessageRoleType = 'user' | 'assistant' | 'tool' | 'task' | 'supervisor';
 
 export interface CreateMessageParams extends Partial<
-  Omit<UIChatMessage, 'content' | 'role' | 'topicId' | 'chunksList'>
+  Omit<UIChatMessage, 'chunksList' | 'content' | 'createdAt' | 'role' | 'topicId'>
 > {
   agentId?: string;
   content: string;
+  createdAt?: Date | number | string;
   error?: ChatMessageError | null;
   fileChunks?: MessageSemanticSearchChunk[];
   files?: string[];
@@ -43,6 +46,7 @@ export interface CreateMessageParams extends Partial<
 export interface CreateNewMessageParams {
   agentId: string;
   content: string;
+  createdAt?: Date | number | string;
   // ========== Error handling ==========
   error?: ChatMessageError | null;
 
@@ -51,9 +55,10 @@ export interface CreateNewMessageParams {
   files?: string[];
 
   groupId?: string;
+  metadata?: MessageMetadata;
+
   // ========== Model info ==========
   model?: string;
-
   // ========== Grouping ==========
   parentId?: string;
   plugin?: ChatPluginPayload;
@@ -67,6 +72,7 @@ export interface CreateNewMessageParams {
 
   // ========== Tool related ==========
   tool_call_id?: string;
+  tools?: ChatToolPayload[];
 
   // ========== Context ==========
   topicId?: string;
@@ -172,6 +178,12 @@ export const CreateNewMessageParamsSchema = z
     // Required fields
     role: UIMessageRoleTypeSchema,
     content: z.string(),
+    createdAt: z
+      .preprocess((value) => {
+        if (typeof value === 'string' || typeof value === 'number') return new Date(value);
+        return value;
+      }, z.date())
+      .optional(),
     // agentId is required, but can be resolved from sessionId in the router
     agentId: z.string().optional(),
     /**
@@ -181,6 +193,7 @@ export const CreateNewMessageParamsSchema = z
     // Tool related
     tool_call_id: z.string().optional(),
     plugin: ChatPluginPayloadSchema.optional(),
+    tools: z.array(ChatToolPayloadSchema).optional(),
     // Grouping
     parentId: z.string().optional(),
     groupId: z.string().nullable().optional(),
@@ -191,6 +204,7 @@ export const CreateNewMessageParamsSchema = z
     // Model info
     model: z.string().nullable().optional(),
     provider: z.string().nullable().optional(),
+    metadata: MessageMetadataSchema.optional(),
     // Content
     files: z.array(z.string()).optional(),
     // Error handling
