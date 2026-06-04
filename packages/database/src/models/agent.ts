@@ -673,6 +673,9 @@ export class AgentModel {
     // `onConflictDoNothing`, the loser hits the `agents_slug_user_id_unique`
     // constraint; with it, the loser's `.returning()` is empty and we re-read
     // the row that won.
+    // `agents_slug_user_id_unique` is a partial index (WHERE workspace_id IS
+    // NULL) since migration 0109, so the conflict target must carry the same
+    // predicate; builtin agents are always workspace-less (workspace_id NULL).
     const result = await this.db
       .insert(agents)
       .values({
@@ -682,7 +685,10 @@ export class AgentModel {
         userId: this.userId,
         virtual: true,
       })
-      .onConflictDoNothing({ target: [agents.slug, agents.userId] })
+      .onConflictDoNothing({
+        target: [agents.slug, agents.userId],
+        where: isNull(agents.workspaceId),
+      })
       .returning();
 
     if (result[0]) return result[0];
