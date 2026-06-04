@@ -268,6 +268,10 @@ describe('GatewayHttpClient', () => {
           signal,
         }),
       );
+      // Builtin calls are tagged so the device routes on `type`, not payload shape.
+      const init = vi.mocked(fetch).mock.calls[0][1];
+      const body = JSON.parse((init as RequestInit).body as string);
+      expect(body.toolCall.type).toBe('tool');
     });
 
     it('should use default gateway timeout plus HTTP caller padding when timeout is absent', async () => {
@@ -324,11 +328,12 @@ describe('GatewayHttpClient', () => {
         success: true,
       });
 
-      // Rides the same endpoint as executeToolCall; the device routes on
-      // the presence of `toolCall.params`.
+      // Rides the same endpoint as executeToolCall; the device routes on the
+      // explicit `toolCall.type` discriminator, not on the shape of the payload.
       const [url, init] = vi.mocked(fetch).mock.calls[0];
       expect(url).toBe('https://gateway.test.com/api/device/tool-call');
       const body = JSON.parse((init as RequestInit).body as string);
+      expect(body.toolCall.type).toBe('mcp');
       expect(body.toolCall.identifier).toBe('kimi-datasource');
       expect(body.toolCall.params.command).toBe('npx');
       expect(body.toolCall.params.env).toEqual({ TOKEN: 'secret' });

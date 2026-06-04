@@ -1,4 +1,9 @@
-import type { DeviceSystemInfo, GatewayDevice, GatewayMcpStdioParams } from './types';
+import type {
+  DeviceSystemInfo,
+  GatewayDevice,
+  GatewayMcpStdioParams,
+  GatewayToolCallType,
+} from './types';
 
 const DEFAULT_GATEWAY_TOOL_CALL_TIMEOUT_MS = 30_000;
 const HTTP_CALL_TIMEOUT_PADDING_MS = 30_000;
@@ -58,7 +63,7 @@ export class GatewayHttpClient {
     params: { deviceId?: string; timeout?: number; userId: string },
     toolCall: { apiName: string; arguments: string; identifier: string },
   ): Promise<DeviceToolCallResult> {
-    return this.postToolCall(params, toolCall);
+    return this.postToolCall(params, { ...toolCall, type: 'tool' });
   }
 
   /**
@@ -80,7 +85,7 @@ export class GatewayHttpClient {
     userId: string;
   }): Promise<DeviceToolCallResult> {
     const { deviceId, timeout, userId, ...toolCall } = mcpCall;
-    return this.postToolCall({ deviceId, timeout, userId }, toolCall);
+    return this.postToolCall({ deviceId, timeout, userId }, { ...toolCall, type: 'mcp' });
   }
 
   private async postToolCall(
@@ -90,6 +95,7 @@ export class GatewayHttpClient {
       arguments: string;
       identifier: string;
       params?: GatewayMcpStdioParams;
+      type?: GatewayToolCallType;
     },
   ): Promise<DeviceToolCallResult> {
     const timeout =

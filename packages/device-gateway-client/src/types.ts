@@ -103,6 +103,17 @@ export interface GatewayMcpStdioParams {
   type: 'stdio';
 }
 
+/**
+ * How the device should execute a tunneled tool call. Explicit so routing never
+ * depends on structural sniffing (e.g. "does `params` exist?") — the gateway
+ * relays every call over one `tool-call` channel, so the discriminator must be
+ * a dedicated field, not the shape of the payload.
+ *
+ * `'tool'` is the generic builtin/local-system call; `'mcp'` is a tunneled
+ * stdio MCP call. Open to future kinds (e.g. `'skill'`).
+ */
+export type GatewayToolCallType = 'tool' | 'mcp';
+
 export interface ToolCallRequestMessage {
   /** Operation that triggered the call, propagated by the gateway for tracing. */
   operationId?: string;
@@ -113,12 +124,14 @@ export interface ToolCallRequestMessage {
     apiName: string;
     arguments: string;
     identifier: string;
-    /**
-     * Present only for tunneled stdio MCP calls. When set, the device routes
-     * the call to its local MCP client (spawning the stdio server) instead of
-     * the builtin local-system tool switch.
-     */
+    /** Stdio MCP connection params — present only when `type === 'mcp'`. */
     params?: GatewayMcpStdioParams;
+    /**
+     * Routing discriminator. `'mcp'` → the device's local MCP client (spawns
+     * the stdio server); `'tool'` (or omitted, for back-compat with older
+     * servers) → the builtin local-system tool switch.
+     */
+    type?: GatewayToolCallType;
   };
   type: 'tool_call_request';
 }
