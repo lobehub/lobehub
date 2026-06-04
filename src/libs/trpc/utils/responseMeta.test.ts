@@ -8,6 +8,8 @@ import { describe, expect, it } from 'vitest';
 
 import { createResponseMeta } from './responseMeta';
 
+type TRPCErrorWithHttpStatus = TRPCError & { httpStatus?: number };
+
 describe('createResponseMeta', () => {
   it('should return undefined headers when no errors and no resHeaders', () => {
     const result = createResponseMeta({ ctx: undefined, errors: [] });
@@ -81,6 +83,37 @@ describe('createResponseMeta', () => {
     });
 
     expect(result.headers).toBeUndefined();
+  });
+
+  it('should NOT set AUTH_REQUIRED_HEADER for runtime provider auth errors', () => {
+    const error = new TRPCError({
+      code: TRPC_ERROR_CODE_UNAUTHORIZED,
+      message: 'InvalidProviderAPIKey',
+    }) as TRPCErrorWithHttpStatus;
+    error.httpStatus = 401;
+
+    const result = createResponseMeta({
+      ctx: undefined,
+      errors: [error],
+    });
+
+    expect(result.status).toBe(401);
+    expect(result.headers?.get(AUTH_REQUIRED_HEADER)).toBeNull();
+  });
+
+  it('should preserve runtime custom HTTP status', () => {
+    const error = new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'ProviderBizError',
+    }) as TRPCErrorWithHttpStatus;
+    error.httpStatus = 471;
+
+    const result = createResponseMeta({
+      ctx: undefined,
+      errors: [error],
+    });
+
+    expect(result.status).toBe(471);
   });
 
   it('should handle multiple errors where one is UNAUTHORIZED', () => {

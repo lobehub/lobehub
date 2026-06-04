@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto';
 
+import { getErrorCodeSpec } from '@lobechat/model-runtime';
 import type { CreateMessageParams, SendMessageServerResponse } from '@lobechat/types';
 import { AiSendMessageServerSchema, RequestTrigger, StructureOutputSchema } from '@lobechat/types';
 import { createTimingHelpers, createTimingRequestId } from '@lobechat/utils';
+import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { z } from 'zod';
 
@@ -23,6 +25,101 @@ const log = debug('lobe-lambda-router:ai-chat');
 const { createPrefixedTimingContext, logTiming, runTimedStage } = createTimingHelpers(
   'lobe-server:chat:lobehub:timing',
 );
+
+type TRPCErrorCode = ConstructorParameters<typeof TRPCError>[0]['code'];
+type TRPCErrorWithHttpStatus = TRPCError & { httpStatus?: number };
+
+const getRuntimeErrorType = (error: unknown): string | undefined => {
+  if (!error || typeof error !== 'object') return;
+
+  const errorType = (error as { errorType?: unknown }).errorType;
+  return typeof errorType === 'string' ? errorType : undefined;
+};
+
+const getTRPCErrorCodeFromStatus = (status: number): TRPCErrorCode => {
+  switch (status) {
+    case 400: {
+      return 'BAD_REQUEST';
+    }
+    case 401: {
+      return 'UNAUTHORIZED';
+    }
+    case 402: {
+      return 'PAYMENT_REQUIRED';
+    }
+    case 403: {
+      return 'FORBIDDEN';
+    }
+    case 404: {
+      return 'NOT_FOUND';
+    }
+    case 405: {
+      return 'METHOD_NOT_SUPPORTED';
+    }
+    case 408: {
+      return 'TIMEOUT';
+    }
+    case 409: {
+      return 'CONFLICT';
+    }
+    case 412: {
+      return 'PRECONDITION_FAILED';
+    }
+    case 413: {
+      return 'PAYLOAD_TOO_LARGE';
+    }
+    case 415: {
+      return 'UNSUPPORTED_MEDIA_TYPE';
+    }
+    case 422: {
+      return 'UNPROCESSABLE_CONTENT';
+    }
+    case 428: {
+      return 'PRECONDITION_REQUIRED';
+    }
+    case 429: {
+      return 'TOO_MANY_REQUESTS';
+    }
+    case 499: {
+      return 'CLIENT_CLOSED_REQUEST';
+    }
+    case 500: {
+      return 'INTERNAL_SERVER_ERROR';
+    }
+    case 501: {
+      return 'NOT_IMPLEMENTED';
+    }
+    case 502: {
+      return 'BAD_GATEWAY';
+    }
+    case 503: {
+      return 'SERVICE_UNAVAILABLE';
+    }
+    case 504: {
+      return 'GATEWAY_TIMEOUT';
+    }
+  }
+
+  if (status >= 500) return 'INTERNAL_SERVER_ERROR';
+  if (status >= 400) return 'BAD_REQUEST';
+
+  return 'INTERNAL_SERVER_ERROR';
+};
+
+const createRuntimeTRPCError = (error: unknown): TRPCErrorWithHttpStatus | undefined => {
+  const errorType = getRuntimeErrorType(error);
+  const spec = getErrorCodeSpec(errorType);
+  if (!errorType || !spec) return;
+
+  const trpcError = new TRPCError({
+    cause: error,
+    code: getTRPCErrorCodeFromStatus(spec.httpStatus),
+    message: errorType,
+  }) as TRPCErrorWithHttpStatus;
+  trpcError.httpStatus = spec.httpStatus;
+
+  return trpcError;
+};
 
 const aiChatProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -57,19 +154,27 @@ export const aiChatRouter = router({
     // routing) and the tracing registry have a fallback when the caller
     // forgets to set one. `tracing` carries the structured tracing config
     // (scenario / promptVersion / schemaName / inputHint / ...).
-    const data = await ctx.aiGenerationService.generateObject(
-      {
-        messages: input.messages,
-        model: input.model,
-        provider: input.provider,
-        schema: input.schema,
-        tools: input.tools,
-      },
-      {
-        metadata: { trigger: RequestTrigger.Chat, ...input.metadata },
-        tracing: { ...input.tracing, tracingId },
-      },
-    );
+    let data: unknown;
+    try {
+      data = await ctx.aiGenerationService.generateObject(
+        {
+          messages: input.messages,
+          model: input.model,
+          provider: input.provider,
+          schema: input.schema,
+          tools: input.tools,
+        },
+        {
+          metadata: { trigger: RequestTrigger.Chat, ...input.metadata },
+          tracing: { ...input.tracing, tracingId },
+        },
+      );
+    } catch (error) {
+      const runtimeTRPCError = createRuntimeTRPCError(error);
+      if (runtimeTRPCError) throw runtimeTRPCError;
+
+      throw error;
+    }
 
     log('generateObject completed, result: %O', data);
     return { data, tracingId };
