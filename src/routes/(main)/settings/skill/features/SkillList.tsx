@@ -328,17 +328,21 @@ const SkillList = memo<SkillListProps>(({ onSelect, selectedIdentifier }) => {
       if (item.type === 'lobehub') {
         return (
           <LobehubSkillItem
+            isSelected={selectedIdentifier === item.provider.id}
             key={item.provider.id}
             provider={item.provider}
             server={getLobehubSkillServerByProvider(item.provider.id)}
+            onSelect={onSelect ? () => onSelect(item.provider.id, 'plugin') : undefined}
           />
         );
       }
       return (
         <KlavisSkillItem
+          isSelected={selectedIdentifier === item.serverType.identifier}
           key={item.serverType.identifier}
           server={getKlavisServerByIdentifier(item.serverType.identifier)}
           serverType={item.serverType}
+          onSelect={onSelect ? () => onSelect(item.serverType.identifier, 'plugin') : undefined}
         />
       );
     });
