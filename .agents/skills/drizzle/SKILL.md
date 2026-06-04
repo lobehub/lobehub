@@ -202,6 +202,58 @@ Recursive CTEs are a special case: current Drizzle usage in this repo does not h
 a clean `WITH RECURSIVE` builder pattern. Keep recursive CTE raw SQL when replacing
 it would add extra database roundtrips or materially worsen performance.
 
+Example: convert an aggregate query when Drizzle can preserve one roundtrip:
+
+```typescript
+// ✅ Good: builder owns table and column references; sql<T> stays expression-level.
+const rows = await trx
+  .select({
+    model: messages.model,
+    provider: messages.provider,
+    totalCost: sql<string | null>`sum((${messages.metadata}->'usage'->>'cost')::numeric)`.as(
+      'totalCost',
+    ),
+    totalTokens: sql<
+      string | null
+    >`sum((${messages.metadata}->'usage'->>'totalTokens')::numeric)`.as('totalTokens'),
+  })
+  .from(messages)
+  .where(
+    and(
+      eq(messages.topicId, topicId),
+      eq(messages.userId, userId),
+      eq(messages.role, 'assistant'),
+      sql`${messages.metadata} ? 'usage'`,
+    ),
+  )
+  .groupBy(messages.provider, messages.model);
+```
+
+Example: keep a recursive CTE raw when replacing it would add depth-based DB
+roundtrips:
+
+```typescript
+interface TaskTreeRow {
+  id: string;
+  parent_task_id: string | null;
+}
+
+const { rows } = await db.execute<TaskTreeRow>(sql`
+  WITH RECURSIVE task_tree AS (
+    SELECT ${tasks.id}, ${tasks.parentTaskId}
+    FROM ${tasks}
+    WHERE ${tasks.id} = ${rootTaskId}
+      AND ${tasks.createdByUserId} = ${userId}
+    UNION ALL
+    SELECT ${tasks.id}, ${tasks.parentTaskId}
+    FROM ${tasks}
+    JOIN task_tree ON ${tasks.parentTaskId} = task_tree.id
+    WHERE ${tasks.createdByUserId} = ${userId}
+  )
+  SELECT * FROM task_tree
+`);
+```
+
 ### One-to-Many (Separate Queries)
 
 When you need a parent record with its children, use two queries instead of relational `with:`:
