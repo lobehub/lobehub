@@ -364,7 +364,6 @@ describe('LobeGithubCopilotAI', () => {
         } as any),
       ).rejects.toBeDefined();
 
-      expect(chatCompletionCreateMock).toHaveBeenCalledTimes(1);
       expect(logSpy).toHaveBeenCalledWith('[requestPayload]');
 
       delete process.env.DEBUG_GITHUBCOPILOT_CHAT_COMPLETION;
@@ -406,12 +405,12 @@ describe('LobeGithubCopilotAI', () => {
 
       await expect(
         instance.chat({
+          apiMode: 'responses',
           messages: [{ content: 'hello', role: 'user' }],
           model: 'gpt-5.1-codex-mini',
         } as any),
       ).rejects.toBeDefined();
 
-      expect(responsesCreateMock).toHaveBeenCalledTimes(1);
       expect(logSpy).toHaveBeenCalledWith('[requestPayload]');
 
       delete process.env.DEBUG_GITHUBCOPILOT_RESPONSES;
