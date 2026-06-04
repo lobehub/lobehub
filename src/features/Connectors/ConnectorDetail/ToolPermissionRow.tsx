@@ -1,11 +1,11 @@
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { BanIcon, CheckCircleIcon, HandIcon } from 'lucide-react';
 import { memo } from 'react';
 
 import { ConnectorToolPermission } from '@/database/schemas';
 import type { ConnectorTool } from '@/store/tool/slices/connector';
 
-const useStyles = createStaticStyles(({ css }) => ({
+const useStyles = createStaticStyles(({ css, cssVar }) => ({
   btn: css`
     cursor: pointer;
 
@@ -17,20 +17,20 @@ const useStyles = createStaticStyles(({ css }) => ({
     height: 28px;
     border-radius: 6px;
 
-    color: ${cssVar('colorTextTertiary')};
+    color: ${cssVar.colorTextTertiary};
 
     transition: all 0.15s;
 
     &:hover {
-      background: ${cssVar('colorFillTertiary')};
+      background: ${cssVar.colorFillTertiary};
     }
   `,
   btnActive: css`
-    color: ${cssVar('colorPrimary')};
-    background: ${cssVar('colorPrimaryBg')};
+    color: ${cssVar.colorPrimary};
+    background: ${cssVar.colorPrimaryBg};
 
     &:hover {
-      background: ${cssVar('colorPrimaryBg')};
+      background: ${cssVar.colorPrimaryBg};
     }
   `,
   row: css`
@@ -40,7 +40,7 @@ const useStyles = createStaticStyles(({ css }) => ({
 
     padding-block: 6px;
     padding-inline: 0;
-    border-block-end: 1px solid ${cssVar('colorBorderSecondary')};
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 
     &:last-child {
       border-block-end: none;
@@ -61,31 +61,31 @@ const ToolPermissionRow = memo<ToolPermissionRowProps>(({ tool, onPermissionChan
       <span style={{ flex: 1, fontSize: 13 }}>{tool.toolName}</span>
       <div style={{ display: 'flex', gap: 2 }}>
         <div
+          title="Auto — AI calls directly"
           className={cx(
             styles.btn,
             tool.permission === ConnectorToolPermission.auto && styles.btnActive,
           )}
-          title="Auto — AI calls directly"
           onClick={() => onPermissionChange(tool.id, ConnectorToolPermission.auto)}
         >
           <CheckCircleIcon size={14} />
         </div>
         <div
+          title="Needs approval"
           className={cx(
             styles.btn,
             tool.permission === ConnectorToolPermission.needs_approval && styles.btnActive,
           )}
-          title="Needs approval"
           onClick={() => onPermissionChange(tool.id, ConnectorToolPermission.needs_approval)}
         >
           <HandIcon size={14} />
         </div>
         <div
+          title="Disabled — hidden from AI"
           className={cx(
             styles.btn,
             tool.permission === ConnectorToolPermission.disabled && styles.btnActive,
           )}
-          title="Disabled — hidden from AI"
           onClick={() => onPermissionChange(tool.id, ConnectorToolPermission.disabled)}
         >
           <BanIcon size={14} />

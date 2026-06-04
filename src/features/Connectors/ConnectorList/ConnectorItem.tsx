@@ -1,12 +1,12 @@
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { LinkIcon } from 'lucide-react';
 import { memo } from 'react';
 
 import type { ConnectorWithTools } from '@/store/tool/slices/connector';
 
-const useStyles = createStaticStyles(({ css }) => ({
+const useStyles = createStaticStyles(({ css, cssVar }) => ({
   active: css`
-    background: ${cssVar('colorFillSecondary')};
+    background: ${cssVar.colorFillSecondary};
   `,
   item: css`
     cursor: pointer;
@@ -22,7 +22,7 @@ const useStyles = createStaticStyles(({ css }) => ({
     border-radius: 6px;
 
     &:hover {
-      background: ${cssVar('colorFillTertiary')};
+      background: ${cssVar.colorFillTertiary};
     }
   `,
 }));
