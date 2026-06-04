@@ -110,6 +110,8 @@ export const createI18nNext = (lang?: string) => {
         keySeparator: false,
 
         lng: initialLang,
+        // Silence the Locize promotional console.info printed on init (i18next >= 25)
+        showSupportNotice: false,
       });
 
       if (initialLang !== DEFAULT_LANG) {
