@@ -31,6 +31,7 @@ import { changelogRouter } from './changelog';
 import { chunkRouter } from './chunk';
 import { comfyuiRouter } from './comfyui';
 import { configRouter } from './config';
+import { connectorRouter } from './connector';
 import { deviceRouter } from './device';
 import { documentRouter } from './document';
 import { exporterRouter } from './exporter';
@@ -92,6 +93,7 @@ export const lambdaRouter = router({
   chunk: chunkRouter,
   comfyui: comfyuiRouter,
   config: configRouter,
+  connector: connectorRouter,
   device: deviceRouter,
   document: documentRouter,
   exporter: exporterRouter,
