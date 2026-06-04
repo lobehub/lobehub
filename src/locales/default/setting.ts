@@ -1501,7 +1501,6 @@ When I am ___, I need ___
   'tools.search': 'Search skills...',
   'tools.activation.auto': 'Auto',
   'tools.activation.auto.desc': 'Smart',
-  'tools.activation.excludeFromAuto': 'Exclude from Auto',
   'tools.activation.pinned': 'Pinned',
   'tools.activation.pinned.desc': 'Always On',
   'tools.skillActivateMode.auto.desc':
