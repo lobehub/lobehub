@@ -1,9 +1,10 @@
 import { Button } from 'antd';
 import { RefreshCwIcon } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { ConnectorToolPermission } from '@/database/schemas';
+import { ConnectorSourceType } from '@/database/schemas';
 import { useToolStore } from '@/store/tool';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 
@@ -23,10 +24,34 @@ const ConnectorDetail = memo<ConnectorDetailProps>(({ connectorId }) => {
   const syncing = useToolStore(connectorSelectors.isSyncing(connectorId));
 
   const syncConnectorTools = useToolStore((s) => s.syncConnectorTools);
+  const syncBuiltinTool = useToolStore((s) => s.syncBuiltinTool);
+  const syncPluginTools = useToolStore((s) => s.syncPluginTools);
   const disconnectConnector = useToolStore((s) => s.disconnectConnector);
   const updateToolPermission = useToolStore((s) => s.updateToolPermission);
 
+  const isMcpConnector = connector?.sourceType === ConnectorSourceType.custom;
+
+  const handleSync = useCallback(async () => {
+    if (!connector) return;
+    if (connector.sourceType === ConnectorSourceType.builtin) {
+      await syncBuiltinTool(connector.identifier);
+    } else if (connector.sourceType === ConnectorSourceType.marketplace) {
+      await syncPluginTools(connector.identifier);
+    } else {
+      await syncConnectorTools(connectorId);
+    }
+  }, [connector, connectorId, syncBuiltinTool, syncPluginTools, syncConnectorTools]);
+
   if (!connector) return null;
+
+  const syncLabel =
+    connector?.sourceType === ConnectorSourceType.builtin
+      ? t('connector.reset', 'Reset')
+      : connector?.sourceType === ConnectorSourceType.marketplace
+        ? t('connector.refresh', 'Refresh')
+        : t('connector.sync', 'Sync');
+
+  const hasTools = readTools.length > 0 || writeTools.length > 0;
 
   const handleBatchPermission = async (toolIds: string[], permission: ConnectorToolPermission) => {
     await Promise.all(toolIds.map((id) => updateToolPermission(id, permission)));
@@ -50,38 +75,47 @@ const ConnectorDetail = memo<ConnectorDetailProps>(({ connectorId }) => {
             icon={<RefreshCwIcon size={14} />}
             loading={syncing}
             size="small"
-            onClick={() => syncConnectorTools(connectorId)}
+            onClick={handleSync}
           >
-            {t('connector.sync', 'Sync')}
+            {syncLabel}
           </Button>
-          <Button danger size="small" onClick={() => disconnectConnector(connectorId)}>
-            {t('connector.disconnect', 'Disconnect')}
-          </Button>
+          {isMcpConnector && (
+            <Button danger size="small" onClick={() => disconnectConnector(connectorId)}>
+              {t('connector.disconnect', 'Disconnect')}
+            </Button>
+          )}
         </div>
       </div>
 
       {/* Tool permissions */}
-      <div style={{ fontWeight: 500, marginBottom: 4 }}>
-        {t('connector.toolPermissions', 'Tool permissions')}
-      </div>
-      <div style={{ color: 'var(--lobe-colors-neutral-500)', fontSize: 12, marginBottom: 12 }}>
-        {t('connector.toolPermissionsDesc', 'Choose when AI is allowed to use these tools.')}
-      </div>
-
-      <div style={{ flex: 1, overflowY: 'auto' }}>
-        <ToolPermissionGroup
-          label={t('connector.readOnlyTools', 'Read-only tools')}
-          tools={readTools}
-          onBatchPermission={handleBatchPermission}
-          onPermissionChange={updateToolPermission}
-        />
-        <ToolPermissionGroup
-          label={t('connector.writeTools', 'Write/delete tools')}
-          tools={writeTools}
-          onBatchPermission={handleBatchPermission}
-          onPermissionChange={updateToolPermission}
-        />
-      </div>
+      {hasTools ? (
+        <>
+          <div style={{ fontWeight: 500, marginBottom: 4 }}>
+            {t('connector.toolPermissions', 'Tool permissions')}
+          </div>
+          <div style={{ color: 'var(--lobe-colors-neutral-500)', fontSize: 12, marginBottom: 12 }}>
+            {t('connector.toolPermissionsDesc', 'Choose when AI is allowed to use these tools.')}
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            <ToolPermissionGroup
+              label={t('connector.readOnlyTools', 'Read-only tools')}
+              tools={readTools}
+              onBatchPermission={handleBatchPermission}
+              onPermissionChange={updateToolPermission}
+            />
+            <ToolPermissionGroup
+              label={t('connector.writeTools', 'Write/delete tools')}
+              tools={writeTools}
+              onBatchPermission={handleBatchPermission}
+              onPermissionChange={updateToolPermission}
+            />
+          </div>
+        </>
+      ) : (
+        <div style={{ color: 'var(--lobe-colors-neutral-500)', fontSize: 14 }}>
+          {t('connector.noTools', 'No tool permissions to configure for this skill.')}
+        </div>
+      )}
     </div>
   );
 });
