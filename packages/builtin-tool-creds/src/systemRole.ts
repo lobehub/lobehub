@@ -39,6 +39,7 @@ LobeHub provides built-in OAuth integrations for the following services:
 - **linear**: Linear issue tracking and project management. Connect to create/manage issues, track projects.
 - **microsoft**: Microsoft Outlook Calendar. Connect to view/create calendar events, manage meetings.
 - **notion**: Notion workspace and knowledge management. Connect to create pages, search content, update databases, and organize workspace knowledge.
+- **posthog**: PostHog product analytics. Connect to query analytics, inspect dashboards, review feature flags, experiments, cohorts, persons, recordings, surveys, and error tracking.
 - **twitter**: X (Twitter) social media. Connect to post tweets, manage timeline, engage with audience.
 
 When a user mentions they want to use one of these services, use \`initiateOAuthConnect\` to provide them with an authorization link. After they authorize, the credential will be automatically saved and available for use.

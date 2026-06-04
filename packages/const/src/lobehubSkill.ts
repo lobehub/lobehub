@@ -97,6 +97,18 @@ export const LOBEHUB_SKILL_PROVIDERS: LobehubSkillProviderType[] = [
     authorUrl: 'https://lobehub.com',
     defaultVisible: true,
     description:
+      'PostHog is an open-source product analytics platform for tracking user behavior, analyzing funnels, managing feature flags, and debugging product issues.',
+    icon: 'https://posthog.com/favicon.ico',
+    id: 'posthog',
+    readme:
+      'Connect to PostHog to query analytics, inspect dashboards and insights, review feature flags, experiments, cohorts, persons, session recordings, surveys, and error tracking with your AI assistant.',
+    label: 'PostHog',
+  },
+  {
+    author: 'LobeHub',
+    authorUrl: 'https://lobehub.com',
+    defaultVisible: true,
+    description:
       'X (Twitter) is a social media platform for sharing real-time updates, news, and engaging with your audience through posts, replies, and direct messages.',
     icon: SiX,
     id: 'twitter',

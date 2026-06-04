@@ -27,7 +27,7 @@ export const CredsManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Initiate OAuth connection flow for a LobeHub Skill provider (e.g., GitHub, Linear, Microsoft Outlook, Notion, Twitter/X). Returns an authorization URL that the user must click to authorize. After authorization, the credential will be automatically saved.',
+        'Initiate OAuth connection flow for a LobeHub Skill provider (e.g., GitHub, Linear, Microsoft Outlook, Notion, PostHog, Twitter/X). Returns an authorization URL that the user must click to authorize. After authorization, the credential will be automatically saved.',
       name: CredsApiName.initiateOAuthConnect,
       parameters: {
         additionalProperties: false,

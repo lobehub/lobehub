@@ -543,6 +543,7 @@ export class MarketService {
             linear: 'Linear',
             microsoft: 'Outlook Calendar',
             notion: 'Notion',
+            posthog: 'PostHog',
             twitter: 'X (Twitter)',
             vercel: 'Vercel',
           };

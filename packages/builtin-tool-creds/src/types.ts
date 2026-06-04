@@ -33,6 +33,7 @@ export const LOBEHUB_OAUTH_PROVIDER_IDS = [
   'linear',
   'microsoft',
   'notion',
+  'posthog',
   'twitter',
 ] as const;
 
@@ -44,7 +45,7 @@ export type LobehubOAuthProviderId = (typeof LOBEHUB_OAUTH_PROVIDER_IDS)[number]
 
 export interface InitiateOAuthConnectParams {
   /**
-   * The OAuth provider ID (e.g., 'linear', 'microsoft', 'notion', 'twitter')
+   * The OAuth provider ID (e.g., 'linear', 'microsoft', 'notion', 'posthog', 'twitter')
    */
   provider: LobehubOAuthProviderId;
 }

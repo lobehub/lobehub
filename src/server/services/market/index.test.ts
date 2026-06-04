@@ -414,6 +414,23 @@ describe('MarketService', () => {
       });
     });
 
+    it('should use the static PostHog provider label for manifests', async () => {
+      const service = new MarketService();
+      (service as any).market.connect.listConnections = vi.fn().mockResolvedValue({
+        connections: [{ icon: 'posthog-icon', providerId: 'posthog', providerName: 'Product' }],
+      });
+      (service as any).market.skills.listTools = vi.fn().mockResolvedValue({
+        tools: [{ description: 'Query insights', inputSchema: {}, name: 'posthog-query' }],
+      });
+
+      const manifests = await service.getLobehubSkillManifests();
+      expect(manifests).toHaveLength(1);
+      expect(manifests[0].meta).toMatchObject({
+        description: 'LobeHub Skill: PostHog',
+        title: 'PostHog',
+      });
+    });
+
     it('should skip connections where listTools returns empty', async () => {
       const service = new MarketService();
       (service as any).market.connect.listConnections = vi.fn().mockResolvedValue({
