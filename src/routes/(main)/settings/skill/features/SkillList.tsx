@@ -312,7 +312,9 @@ const SkillList = memo<SkillListProps>(({ onSelect, selectedIdentifier }) => {
             key={item.builtinAgentSkill.identifier}
             skill={item.builtinAgentSkill}
             onSelect={
-              onSelect ? () => onSelect(item.builtinAgentSkill.identifier, 'builtin') : undefined
+              onSelect
+                ? () => onSelect(item.builtinAgentSkill.identifier, 'builtin-skill')
+                : undefined
             }
           />
         );

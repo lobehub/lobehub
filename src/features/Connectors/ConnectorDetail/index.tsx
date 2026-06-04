@@ -69,7 +69,14 @@ const ConnectorDetail = memo<ConnectorDetailProps>(({ connectorId }) => {
           marginBottom: 16,
         }}
       >
-        <span style={{ fontSize: 16, fontWeight: 600 }}>{connector.name}</span>
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 600 }}>{connector.name}</div>
+          {connector.metadata?.description && (
+            <div style={{ color: 'var(--lobe-colors-neutral-500)', fontSize: 13, marginTop: 2 }}>
+              {connector.metadata.description as string}
+            </div>
+          )}
+        </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <Button
             icon={<RefreshCwIcon size={14} />}

@@ -1,6 +1,8 @@
 'use client';
 
-import { Skeleton } from '@lobehub/ui';
+import { Avatar, Skeleton } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
+import isEqual from 'fast-deep-equal';
 import { lazy, memo, Suspense, useEffect, useState } from 'react';
 
 import { ConnectorDetail } from '@/features/Connectors';
@@ -9,13 +11,53 @@ import { connectorSelectors } from '@/store/tool/slices/connector';
 
 const AgentSkillDetail = lazy(() => import('@/features/AgentSkillDetail'));
 
-export type ToolDetailType = 'agent-skill' | 'builtin' | 'mcp-connector' | 'plugin';
+export type ToolDetailType =
+  | 'agent-skill'
+  | 'builtin'
+  | 'builtin-skill'
+  | 'mcp-connector'
+  | 'plugin';
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  description: css`
+    margin-block-start: 8px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: ${cssVar.colorTextSecondary};
+  `,
+  header: css`
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+
+    padding-block: 20px 16px;
+    padding-inline: 24px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+  `,
+  name: css`
+    font-size: 16px;
+    font-weight: 600;
+    color: ${cssVar.colorText};
+  `,
+  noPermissions: css`
+    padding: 24px;
+    font-size: 14px;
+    color: ${cssVar.colorTextTertiary};
+  `,
+}));
 
 interface SkillDetailProps {
   identifier: string;
   type: ToolDetailType;
 }
 
+/**
+ * Right panel for the Settings > Skill master-detail layout.
+ *
+ * - 'agent-skill': renders AgentSkillDetail inline (user/market agent skills with UUID id)
+ * - 'builtin-skill': renders BuiltinSkill description panel (Artifacts, Task, etc.)
+ * - 'builtin'/'plugin'/'mcp-connector': syncs connector entry, renders permission editor
+ */
 const SkillDetail = memo<SkillDetailProps>(({ identifier, type }) => {
   const [syncing, setSyncing] = useState(false);
   const [noManifest, setNoManifest] = useState(false);
@@ -25,10 +67,16 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type }) => {
   const fetchConnectors = useToolStore((s) => s.fetchConnectors);
   const connector = useToolStore(connectorSelectors.connectorByIdentifier(identifier));
 
-  const isAgentSkill = type === 'agent-skill';
+  // For builtin-skill: look up from store
+  const builtinSkill = useToolStore(
+    (s) => s.builtinSkills?.find((sk) => sk.identifier === identifier),
+    isEqual,
+  );
+
+  const isConnectorType = type === 'builtin' || type === 'plugin' || type === 'mcp-connector';
 
   useEffect(() => {
-    if (isAgentSkill) return; // agent skills don't need connector sync
+    if (!isConnectorType) return;
 
     setNoManifest(false);
     const ensureConnector = async () => {
@@ -50,10 +98,11 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type }) => {
 
     ensureConnector();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [identifier, type, isAgentSkill]);
+  }, [identifier, type, isConnectorType]);
 
-  // Agent skill: render detail inline instead of connector permissions
-  if (isAgentSkill) {
+  // ── Render by type ──────────────────────────────────────────────────────────
+
+  if (type === 'agent-skill') {
     return (
       <div style={{ flex: 1, overflow: 'auto' }}>
         <Suspense
@@ -69,6 +118,26 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type }) => {
     );
   }
 
+  if (type === 'builtin-skill') {
+    return (
+      <div style={{ flex: 1, overflow: 'auto' }}>
+        <div className={styles.header}>
+          {builtinSkill?.avatar && <Avatar avatar={builtinSkill.avatar} size={40} />}
+          <div>
+            <div className={styles.name}>{builtinSkill?.name || identifier}</div>
+            {builtinSkill?.description && (
+              <div className={styles.description}>{builtinSkill.description}</div>
+            )}
+          </div>
+        </div>
+        <div className={styles.noPermissions}>
+          This is a prompt-based skill. It does not expose individual tool permissions.
+        </div>
+      </div>
+    );
+  }
+
+  // Connector types: builtin tool / plugin / mcp-connector
   if (syncing) {
     return (
       <div style={{ padding: 24 }}>
@@ -79,11 +148,9 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type }) => {
 
   if (noManifest || !connector) {
     return (
-      <div style={{ padding: 24 }}>
+      <div className={styles.noPermissions}>
         <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>{identifier}</div>
-        <div style={{ color: 'var(--lobe-colors-neutral-500)', fontSize: 14 }}>
-          This skill does not expose configurable tool permissions.
-        </div>
+        This skill does not expose configurable tool permissions.
       </div>
     );
   }

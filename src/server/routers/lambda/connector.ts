@@ -211,6 +211,8 @@ export const connectorRouter = router({
       }
 
       const connectorId = await upsertConnectorEntry(ctx.connectorModel, {
+        avatar: tool.manifest.meta?.avatar,
+        description: tool.manifest.meta?.description,
         identifier: input.identifier,
         name: tool.manifest.meta?.title || input.identifier,
         sourceType: ConnectorSourceType.builtin,
@@ -246,6 +248,8 @@ export const connectorRouter = router({
       }
 
       const connectorId = await upsertConnectorEntry(ctx.connectorModel, {
+        avatar: plugin.manifest.meta?.avatar,
+        description: plugin.manifest.meta?.description,
         identifier: input.identifier,
         name: plugin.manifest.meta?.title || input.identifier,
         sourceType: ConnectorSourceType.marketplace,
@@ -267,17 +271,32 @@ export const connectorRouter = router({
 
 // ── Private helpers ───────────────────────────────────────────────────────────
 
-/** Create connector entry if not exists, return connectorId */
+/** Create connector entry if not exists (or update metadata), return connectorId */
 async function upsertConnectorEntry(
   connectorModel: ConnectorModel,
-  params: { identifier: string; name: string; sourceType: string },
+  params: {
+    avatar?: string;
+    description?: string;
+    identifier: string;
+    name: string;
+    sourceType: string;
+  },
 ): Promise<string> {
+  const metadata: Record<string, unknown> = {};
+  if (params.description) metadata.description = params.description;
+  if (params.avatar) metadata.avatar = params.avatar;
+
   const existing = await connectorModel.queryByIdentifiers([params.identifier]);
-  if (existing.length > 0) return existing[0].id;
+  if (existing.length > 0) {
+    // Update metadata with latest description/avatar from manifest
+    await connectorModel.update(existing[0].id, { metadata });
+    return existing[0].id;
+  }
 
   const created = await connectorModel.create({
     identifier: params.identifier,
     isEnabled: true,
+    metadata,
     name: params.name,
     sourceType: params.sourceType as any,
     status: ConnectorStatus.connected,
