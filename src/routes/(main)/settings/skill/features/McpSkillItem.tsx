@@ -56,9 +56,9 @@ const McpSkillItem = memo<McpSkillItemProps>(
           <Flexbox horizontal align="center" gap={8} style={{ flex: 1, overflow: 'hidden' }}>
             <div className={styles.icon}>
               {avatar && avatar !== 'MCP_AVATAR' ? (
-                <Avatar avatar={avatar} shape={'square'} size={22} />
+                <Avatar avatar={avatar} shape={'square'} size={16} />
               ) : (
-                <Icon icon={McpIcon} size={18} />
+                <Icon icon={McpIcon} size={16} />
               )}
             </div>
             <span

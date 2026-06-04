@@ -14,7 +14,7 @@ import { useToolStore } from '@/store/tool';
 import { builtinToolSelectors } from '@/store/tool/selectors';
 
 import SkillDetail, { type ToolDetailType } from './features/SkillDetail';
-import SkillList from './features/SkillList';
+import SkillList, { type SkillViewMode } from './features/SkillList';
 
 export interface SelectedTool {
   identifier: string;
@@ -28,6 +28,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   left: css`
     overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+
     width: 300px;
     min-width: 260px;
     border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
@@ -38,7 +41,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
     justify-content: space-between;
 
-    padding-block: 12px;
+    padding-block: 10px;
     padding-inline: 16px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
@@ -48,38 +51,70 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     flex: 1;
     height: 100%;
   `,
+  tab: css`
+    cursor: pointer;
+
+    padding-block: 4px;
+    padding-inline: 10px;
+    border-radius: 6px;
+
+    font-size: 13px;
+    font-weight: 500;
+    color: ${cssVar.colorTextSecondary};
+
+    transition: all 0.15s;
+
+    &:hover {
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFillSecondary};
+    }
+  `,
+  tabActive: css`
+    color: ${cssVar.colorText};
+    background: ${cssVar.colorFillSecondary};
+  `,
+  tabs: css`
+    display: flex;
+    gap: 2px;
+    align-items: center;
+  `,
 }));
 
 const Page = memo(() => {
   const { t } = useTranslation('setting');
   const [selected, setSelected] = useState<SelectedTool | null>(null);
   const [showAddConnector, setShowAddConnector] = useState(false);
+  const [viewMode, setViewMode] = useState<SkillViewMode>('connector');
 
   // Data sources for auto-select
   const builtinTools = useToolStore((s) => s.builtinTools, isEqual);
   const builtinSkills = useToolStore((s) => s.builtinSkills, isEqual);
   const installedBuiltinIds = useToolStore(
-    (s) => builtinToolSelectors.installedAllMetaList(s).map((t) => t.identifier),
+    (s) => builtinToolSelectors.installedAllMetaList(s).map((tool) => tool.identifier),
     isEqual,
   );
 
-  // Auto-select the first visible item on load
+  // Auto-select first item when view changes or on load
+  useEffect(() => {
+    setSelected(null);
+  }, [viewMode]);
+
   useEffect(() => {
     if (selected) return;
-    // 1. First installed builtin tool
-    const firstTool = builtinTools.find(
-      (t) => !t.hidden && installedBuiltinIds.includes(t.identifier),
-    );
-    if (firstTool) {
-      setSelected({ identifier: firstTool.identifier, type: 'builtin' });
-      return;
+    if (viewMode === 'connector') {
+      const firstTool = builtinTools.find(
+        (tool) => !tool.hidden && installedBuiltinIds.includes(tool.identifier),
+      );
+      if (firstTool) {
+        setSelected({ identifier: firstTool.identifier, type: 'builtin' });
+      }
+    } else {
+      const firstSkill = builtinSkills[0];
+      if (firstSkill) {
+        setSelected({ identifier: firstSkill.identifier, type: 'builtin-skill' });
+      }
     }
-    // 2. First builtin skill
-    const firstSkill = builtinSkills[0];
-    if (firstSkill) {
-      setSelected({ identifier: firstSkill.identifier, type: 'builtin-skill' });
-    }
-  }, [builtinTools, builtinSkills, installedBuiltinIds, selected]);
+  }, [builtinTools, builtinSkills, installedBuiltinIds, selected, viewMode]);
 
   const handleOpenStore = useCallback(() => {
     createSkillStoreModal();
@@ -93,25 +128,43 @@ const Page = memo(() => {
     <>
       <NavHeader />
       <div className={styles.root}>
-        {/* Left: unified skill list */}
+        {/* Left panel */}
         <div className={styles.left}>
           <div className={styles.leftHeader}>
-            <span style={{ fontWeight: 600 }}>{t('tab.skill')}</span>
+            {/* Connector / Skill tab switcher */}
+            <div className={styles.tabs}>
+              <span
+                className={`${styles.tab} ${viewMode === 'connector' ? styles.tabActive : ''}`}
+                onClick={() => setViewMode('connector')}
+              >
+                {t('skillView.connectors', 'Connectors')}
+              </span>
+              <span
+                className={`${styles.tab} ${viewMode === 'skill' ? styles.tabActive : ''}`}
+                onClick={() => setViewMode('skill')}
+              >
+                {t('skillView.skills', 'Skills')}
+              </span>
+            </div>
+
             <div style={{ display: 'flex', gap: 6 }}>
-              {/* + opens "Add custom MCP connector" modal */}
-              <Button
-                icon={<Icon icon={PlusIcon} />}
-                size="small"
-                onClick={() => setShowAddConnector(true)}
-              />
-              {/* Skill store for built-in / community skills */}
-              <Button icon={<Icon icon={Store} />} size="small" onClick={handleOpenStore}>
-                {t('skillStore.button')}
-              </Button>
+              {viewMode === 'connector' && (
+                <Button
+                  icon={<Icon icon={PlusIcon} />}
+                  size="small"
+                  onClick={() => setShowAddConnector(true)}
+                />
+              )}
+              <Button icon={<Icon icon={Store} />} size="small" onClick={handleOpenStore} />
             </div>
           </div>
-          <div style={{ padding: '4px 8px' }}>
-            <SkillList selectedIdentifier={selected?.identifier} onSelect={handleSelect} />
+
+          <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px' }}>
+            <SkillList
+              selectedIdentifier={selected?.identifier}
+              viewMode={viewMode}
+              onSelect={handleSelect}
+            />
           </div>
         </div>
 

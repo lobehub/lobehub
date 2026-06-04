@@ -94,7 +94,14 @@ const ConnectorDetail = memo<ConnectorDetailProps>(({ connectorId }) => {
         </div>
       </div>
 
-      {/* Tool permission editor */}
+      {/* Tool permissions section */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Tool permissions</div>
+        <div style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 13 }}>
+          Choose when AI is allowed to use these tools.
+        </div>
+      </div>
+
       {hasTools ? (
         <div style={{ flex: 1, overflowY: 'auto' }}>
           <ToolPermissionGroup

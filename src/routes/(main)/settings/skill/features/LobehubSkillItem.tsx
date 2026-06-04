@@ -187,9 +187,9 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
     const renderIcon = () => {
       const { icon, label } = provider;
       if (typeof icon === 'string') {
-        return <Avatar alt={label} avatar={icon} size={22} />;
+        return <Avatar alt={label} avatar={icon} size={16} />;
       }
-      return <Icon fill={cssVar.colorText} icon={icon} size={22} />;
+      return <Icon fill={cssVar.colorText} icon={icon} size={16} />;
     };
 
     const renderStatus = () => {

@@ -6,8 +6,8 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorSuccess};
   `,
   container: css`
-    padding-block: 3px;
-    padding-inline: 0;
+    padding-block: 6px;
+    padding-inline: 4px;
   `,
   disconnected: css`
     font-size: 12px;
@@ -23,7 +23,6 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 12px;
     color: ${cssVar.colorError};
   `,
-  /* No background — just the avatar/icon itself, matching reference design */
   icon: css`
     overflow: hidden;
     display: flex;
@@ -31,9 +30,9 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
     justify-content: center;
 
-    width: 24px;
-    height: 24px;
-    border-radius: 6px;
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
   `,
   pending: css`
     font-size: 12px;
@@ -41,8 +40,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   title: css`
     cursor: pointer;
-    font-size: 13px;
-    font-weight: 500;
+    font-size: 14px;
     color: ${cssVar.colorText};
 
     &:hover {

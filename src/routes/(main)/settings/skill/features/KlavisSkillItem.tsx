@@ -182,9 +182,9 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(
     const renderIcon = () => {
       const { icon, label } = serverType;
       if (typeof icon === 'string') {
-        return <Avatar alt={label} avatar={icon} size={22} />;
+        return <Avatar alt={label} avatar={icon} size={16} />;
       }
-      return <Icon fill={cssVar.colorText} icon={icon} size={22} />;
+      return <Icon fill={cssVar.colorText} icon={icon} size={16} />;
     };
 
     const renderStatus = () => {

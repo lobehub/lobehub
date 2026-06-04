@@ -1,5 +1,7 @@
 import { DropdownMenu } from '@lobehub/ui/base-ui';
-import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
+import { Button } from 'antd';
+import { createStaticStyles } from 'antd-style';
+import { ChevronDownIcon, ChevronRightIcon, MoreHorizontalIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -7,6 +9,48 @@ import { ConnectorToolPermission } from '@/database/schemas';
 import type { ConnectorTool } from '@/store/tool/slices/connector';
 
 import ToolPermissionRow from './ToolPermissionRow';
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  badge: css`
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    padding-block: 1px;
+    padding-inline: 6px;
+    border-radius: 4px;
+
+    font-size: 12px;
+    color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorFillSecondary};
+  `,
+  groupHeader: css`
+    cursor: pointer;
+    user-select: none;
+
+    display: flex;
+    gap: 8px;
+    align-items: center;
+
+    padding-block: 10px;
+    padding-inline: 0;
+
+    &:hover span {
+      color: ${cssVar.colorText};
+    }
+  `,
+  groupLabel: css`
+    display: flex;
+    flex: 1;
+    gap: 6px;
+    align-items: center;
+
+    font-size: 13px;
+    font-weight: 500;
+    color: ${cssVar.colorText};
+  `,
+}));
 
 interface ToolPermissionGroupProps {
   label: string;
@@ -22,7 +66,7 @@ const ToolPermissionGroup = memo<ToolPermissionGroupProps>(
 
     if (tools.length === 0) return null;
 
-    const toolIds = tools.map((t) => t.id);
+    const toolIds = tools.map((tool) => tool.id);
 
     const batchItems = [
       {
@@ -44,35 +88,23 @@ const ToolPermissionGroup = memo<ToolPermissionGroupProps>(
 
     return (
       <div>
-        <div
-          style={{
-            alignItems: 'center',
-            display: 'flex',
-            gap: 8,
-            padding: '8px 0',
-          }}
-        >
-          <div
-            style={{ alignItems: 'center', cursor: 'pointer', display: 'flex', flex: 1, gap: 6 }}
-            onClick={() => setExpanded((e) => !e)}
-          >
+        <div className={styles.groupHeader} onClick={() => setExpanded((e) => !e)}>
+          <div className={styles.groupLabel}>
             {expanded ? <ChevronDownIcon size={14} /> : <ChevronRightIcon size={14} />}
-            <span style={{ fontWeight: 500 }}>{label}</span>
-            <span style={{ color: 'var(--lobe-colors-neutral-500)', fontSize: 12 }}>
-              {tools.length}
-            </span>
+            {label}
+            <span className={styles.badge}>{tools.length}</span>
           </div>
 
           <DropdownMenu items={batchItems}>
-            <span
-              style={{
-                color: 'var(--lobe-colors-neutral-500)',
-                cursor: 'pointer',
-                fontSize: 12,
-              }}
+            <Button
+              size="small"
+              style={{ fontSize: 12, height: 26 }}
+              onClick={(e) => e.stopPropagation()}
             >
-              {t('connector.permission.custom', 'Custom')} ▾
-            </span>
+              <MoreHorizontalIcon size={12} />
+              {t('connector.permission.custom', 'Custom')}
+              <ChevronDownIcon size={12} />
+            </Button>
           </DropdownMenu>
         </div>
 

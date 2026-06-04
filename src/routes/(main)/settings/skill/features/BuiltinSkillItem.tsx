@@ -112,7 +112,7 @@ const BuiltinSkillItem = memo<BuiltinSkillItemProps>(
             onClick={onSelect ? undefined : () => createBuiltinSkillDetailModal({ identifier })}
           >
             <div className={`${styles.icon} ${!isInstalled ? styles.disconnectedIcon : ''}`}>
-              <Avatar avatar={avatar} size={22} />
+              <Avatar avatar={avatar} size={16} />
             </div>
             <span className={`${styles.title} ${!isInstalled ? styles.disconnectedTitle : ''}`}>
               {title}

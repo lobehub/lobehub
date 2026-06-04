@@ -1,5 +1,5 @@
 import { createStaticStyles } from 'antd-style';
-import { BanIcon, CheckCircleIcon, HandIcon } from 'lucide-react';
+import { BanIcon, CheckIcon, HandIcon } from 'lucide-react';
 import { memo } from 'react';
 
 import { ConnectorToolPermission } from '@/database/schemas';
@@ -17,33 +17,34 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     height: 28px;
     border-radius: 6px;
 
-    color: ${cssVar.colorTextTertiary};
+    color: ${cssVar.colorTextQuaternary};
 
-    transition: all 0.15s;
+    transition:
+      color 0.15s,
+      background 0.15s;
 
     &:hover {
-      background: ${cssVar.colorFillTertiary};
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFillSecondary};
     }
   `,
   btnActive: css`
-    color: ${cssVar.colorPrimary};
-    background: ${cssVar.colorPrimaryBg};
-
-    &:hover {
-      background: ${cssVar.colorPrimaryBg};
-    }
+    color: ${cssVar.colorText};
   `,
   row: css`
     display: flex;
-    gap: 8px;
     align-items: center;
 
-    padding-block: 6px;
-    padding-inline: 0;
+    padding-block: 10px;
+    padding-inline: 12px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 
     &:last-child {
       border-block-end: none;
+    }
+
+    &:hover {
+      background: ${cssVar.colorFillQuaternary};
     }
   `,
 }));
@@ -59,28 +60,30 @@ const ToolPermissionRow = memo<ToolPermissionRowProps>(({ tool, onPermissionChan
 
   return (
     <div className={styles.row}>
-      <span style={{ flex: 1, fontSize: 13 }}>{tool.toolName}</span>
+      <span style={{ flex: 1, fontFamily: 'var(--font-mono, monospace)', fontSize: 13 }}>
+        {tool.toolName}
+      </span>
       <div style={{ display: 'flex', gap: 2 }}>
         <div
           className={btnClass(ConnectorToolPermission.auto)}
           title="Auto — AI calls directly"
           onClick={() => onPermissionChange(tool.id, ConnectorToolPermission.auto)}
         >
-          <CheckCircleIcon size={14} />
+          <CheckIcon size={15} />
         </div>
         <div
           className={btnClass(ConnectorToolPermission.needs_approval)}
           title="Needs approval"
           onClick={() => onPermissionChange(tool.id, ConnectorToolPermission.needs_approval)}
         >
-          <HandIcon size={14} />
+          <HandIcon size={15} />
         </div>
         <div
           className={btnClass(ConnectorToolPermission.disabled)}
           title="Disabled — hidden from AI"
           onClick={() => onPermissionChange(tool.id, ConnectorToolPermission.disabled)}
         >
-          <BanIcon size={14} />
+          <BanIcon size={15} />
         </div>
       </div>
     </div>

@@ -215,7 +215,7 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect 
             onClick={onSelect ? undefined : handleOpenDetail}
           >
             <div className={`${styles.icon} ${showDisconnected ? styles.disconnectedIcon : ''}`}>
-              {avatar ? <Avatar avatar={avatar} size={22} /> : <Icon icon={SkillsIcon} size={18} />}
+              {avatar ? <Avatar avatar={avatar} size={16} /> : <Icon icon={SkillsIcon} size={16} />}
             </div>
             <span className={`${styles.title} ${showDisconnected ? styles.disconnectedTitle : ''}`}>
               {title}
