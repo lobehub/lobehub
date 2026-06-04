@@ -5,7 +5,7 @@ import { memo } from 'react';
 import { ConnectorToolPermission } from '@/database/schemas';
 import type { ConnectorTool } from '@/store/tool/slices/connector';
 
-const useStyles = createStaticStyles(({ css, cssVar }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   btn: css`
     cursor: pointer;
 
@@ -54,38 +54,30 @@ interface ToolPermissionRowProps {
 }
 
 const ToolPermissionRow = memo<ToolPermissionRowProps>(({ tool, onPermissionChange }) => {
-  const { styles, cx } = useStyles();
+  const btnClass = (permission: ConnectorToolPermission) =>
+    tool.permission === permission ? `${styles.btn} ${styles.btnActive}` : styles.btn;
 
   return (
     <div className={styles.row}>
       <span style={{ flex: 1, fontSize: 13 }}>{tool.toolName}</span>
       <div style={{ display: 'flex', gap: 2 }}>
         <div
+          className={btnClass(ConnectorToolPermission.auto)}
           title="Auto — AI calls directly"
-          className={cx(
-            styles.btn,
-            tool.permission === ConnectorToolPermission.auto && styles.btnActive,
-          )}
           onClick={() => onPermissionChange(tool.id, ConnectorToolPermission.auto)}
         >
           <CheckCircleIcon size={14} />
         </div>
         <div
+          className={btnClass(ConnectorToolPermission.needs_approval)}
           title="Needs approval"
-          className={cx(
-            styles.btn,
-            tool.permission === ConnectorToolPermission.needs_approval && styles.btnActive,
-          )}
           onClick={() => onPermissionChange(tool.id, ConnectorToolPermission.needs_approval)}
         >
           <HandIcon size={14} />
         </div>
         <div
+          className={btnClass(ConnectorToolPermission.disabled)}
           title="Disabled — hidden from AI"
-          className={cx(
-            styles.btn,
-            tool.permission === ConnectorToolPermission.disabled && styles.btnActive,
-          )}
           onClick={() => onPermissionChange(tool.id, ConnectorToolPermission.disabled)}
         >
           <BanIcon size={14} />
