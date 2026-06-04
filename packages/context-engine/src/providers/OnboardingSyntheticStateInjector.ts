@@ -35,6 +35,10 @@ export class OnboardingSyntheticStateInjector extends BaseProcessor {
   }
 
   protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
+    if (this.config.onboardingContext?.finished) {
+      log('Onboarding completed, skipping synthetic state injection');
+      return this.markAsExecuted(context);
+    }
     if (!this.config.enabled || !this.config.onboardingContext?.phaseGuidance) {
       log('Disabled or no phaseGuidance, skipping');
       return this.markAsExecuted(context);

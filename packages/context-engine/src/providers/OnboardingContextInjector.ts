@@ -6,6 +6,8 @@ import type { PipelineContext, ProcessorOptions } from '../types';
 const log = debug('context-engine:provider:OnboardingContextInjector');
 
 export interface OnboardingContext {
+  /** Whether onboarding has been completed — when true, all injectors must skip */
+  finished?: boolean;
   /** User messages observed after discovery began */
   discoveryUserMessageCount?: number;
   /** User persona document content (markdown) */
