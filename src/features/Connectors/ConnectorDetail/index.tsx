@@ -69,14 +69,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(({ connectorId }) => {
           marginBottom: 16,
         }}
       >
-        <div>
-          <div style={{ fontSize: 16, fontWeight: 600 }}>{connector.name}</div>
-          {connector.metadata?.description && (
-            <div style={{ color: 'var(--lobe-colors-neutral-500)', fontSize: 13, marginTop: 2 }}>
-              {connector.metadata.description as string}
-            </div>
-          )}
-        </div>
+        <div style={{ fontSize: 16, fontWeight: 600 }}>{connector.name}</div>
         <div style={{ display: 'flex', gap: 8 }}>
           <Button
             icon={<RefreshCwIcon size={14} />}
@@ -94,13 +87,19 @@ const ConnectorDetail = memo<ConnectorDetailProps>(({ connectorId }) => {
         </div>
       </div>
 
-      {/* Tool permissions section */}
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Tool permissions</div>
-        <div style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 13 }}>
-          Choose when AI is allowed to use these tools.
+      {/* Description */}
+      {connector.metadata?.description && (
+        <div
+          style={{
+            color: 'var(--ant-color-text-secondary)',
+            fontSize: 13,
+            lineHeight: 1.6,
+            marginBottom: 16,
+          }}
+        >
+          {connector.metadata.description as string}
         </div>
-      </div>
+      )}
 
       {hasTools ? (
         <div style={{ flex: 1, overflowY: 'auto' }}>
