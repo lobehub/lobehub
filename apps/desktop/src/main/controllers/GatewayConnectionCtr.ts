@@ -3,7 +3,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import type { AgentRunRequestMessage } from '@lobechat/device-gateway-client';
+import type {
+  AgentRunRequestMessage,
+  GatewayMcpStdioParams,
+} from '@lobechat/device-gateway-client';
 import type {
   EditLocalFileParams,
   GatewayConnectionStatus,
@@ -28,6 +31,7 @@ import ImessageBridgeService from '@/services/imessageBridgeSrv';
 import HeterogeneousAgentCtr from './HeterogeneousAgentCtr';
 import { ControllerModule, IpcMethod } from './index';
 import LocalFileCtr from './LocalFileCtr';
+import McpCtr from './McpCtr';
 import RemoteServerConfigCtr from './RemoteServerConfigCtr';
 import ShellCommandCtr from './ShellCommandCtr';
 
@@ -170,6 +174,10 @@ export default class GatewayConnectionCtr extends ControllerModule {
     return this.app.getController(HeterogeneousAgentCtr);
   }
 
+  private get mcpCtr() {
+    return this.app.getController(McpCtr);
+  }
+
   // ─── Lifecycle ───
 
   afterAppReady() {
@@ -183,6 +191,9 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
     // Wire up tool call handler
     srv.setToolCallHandler((apiName, args) => this.executeToolCall(apiName, args));
+
+    // Wire up MCP call handler (tunneled stdio MCP calls from the cloud server)
+    srv.setMcpCallHandler((mcpCall) => this.executeMcpCall(mcpCall));
 
     // Wire up message API handler
     srv.setMessageApiHandler((platform, apiName, payload) =>
@@ -459,9 +470,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
       }
 
       case 'getAgentProfile': {
-        const result = await this.getAgentProfile(
-          args as { agentId?: string; platform: string },
-        );
+        const result = await this.getAgentProfile(args as { agentId?: string; platform: string });
         return { content: JSON.stringify(result), state: result, success: true };
       }
 
@@ -493,6 +502,32 @@ export default class GatewayConnectionCtr extends ControllerModule {
         );
       }
     }
+  }
+
+  /**
+   * Execute a stdio MCP tool call tunneled from the cloud server. The server
+   * can't spawn the user's local MCP binary, so it forwards the connection
+   * params (command/args/env); we run the call through the local MCP client,
+   * which spawns the stdio server on this machine.
+   */
+  private async executeMcpCall(mcpCall: {
+    apiName: string;
+    arguments: string;
+    identifier: string;
+    params: GatewayMcpStdioParams;
+  }): Promise<BuiltinServerRuntimeOutput> {
+    const { apiName, arguments: args, params: stdioParams } = mcpCall;
+
+    return this.mcpCtr.runStdioMcpTool({
+      args,
+      env: stdioParams.env,
+      params: {
+        args: stdioParams.args,
+        command: stdioParams.command,
+        name: stdioParams.name,
+      },
+      toolName: apiName,
+    });
   }
 
   private async executeMessageApi(

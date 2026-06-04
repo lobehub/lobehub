@@ -9,6 +9,7 @@ import ImessageBridgeService from '@/services/imessageBridgeSrv';
 import GatewayConnectionCtr from '../GatewayConnectionCtr';
 import HeterogeneousAgentCtr from '../HeterogeneousAgentCtr';
 import LocalFileCtr from '../LocalFileCtr';
+import McpCtr from '../McpCtr';
 import RemoteServerConfigCtr from '../RemoteServerConfigCtr';
 import ShellCommandCtr from '../ShellCommandCtr';
 
@@ -69,6 +70,26 @@ const { ipcMainHandleMock, MockGatewayClient } = vi.hoisted(() => {
       });
     }
 
+    simulateMcpCallRequest(
+      apiName: string,
+      args: object,
+      params: object,
+      requestId = 'mcp-req-1',
+      identifier = 'kimi-datasource',
+    ) {
+      this.emit('tool_call_request', {
+        requestId,
+        toolCall: {
+          apiName,
+          arguments: JSON.stringify(args),
+          identifier,
+          params,
+          type: 'mcp',
+        },
+        type: 'tool_call_request',
+      });
+    }
+
     simulateMessageApiRequest(
       platform: string,
       apiName: string,
@@ -123,6 +144,7 @@ const { ipcMainHandleMock, MockGatewayClient } = vi.hoisted(() => {
 
 vi.mock('electron', () => ({
   app: {
+    getAppPath: vi.fn(() => '/mock/app'),
     getPath: vi.fn((name: string) => `/mock/${name}`),
   },
   ipcMain: { handle: ipcMainHandleMock },
@@ -229,6 +251,10 @@ const mockImessageBridgeSrv = {
   handleGatewayMessageApi: vi.fn().mockResolvedValue({ ok: true }),
 } as unknown as ImessageBridgeService;
 
+const mockMcpCtr = {
+  runStdioMcpTool: vi.fn().mockResolvedValue({ content: 'mcp result', state: {}, success: true }),
+} as unknown as McpCtr;
+
 const mockRemoteServerConfigCtr = {
   getAccessToken: vi.fn().mockResolvedValue('mock-access-token'),
   getRemoteServerUrl: vi.fn().mockResolvedValue('https://server.example.com'),
@@ -247,6 +273,7 @@ const mockApp = {
     if (Cls === LocalFileCtr) return mockLocalFileCtr;
     if (Cls === ShellCommandCtr) return mockShellCommandCtr;
     if (Cls === HeterogeneousAgentCtr) return mockHeterogeneousAgentCtr;
+    if (Cls === McpCtr) return mockMcpCtr;
     return null;
   }),
   getService: vi.fn((Cls) => {
@@ -604,6 +631,89 @@ describe('GatewayConnectionCtr', () => {
           error: errorMsg,
           success: false,
         },
+      });
+    });
+
+    it('should route tunneled stdio MCP calls to McpCtr.runStdioMcpTool', async () => {
+      const client = await connectAndOpen();
+
+      client.simulateMcpCallRequest(
+        'getStock',
+        { symbol: 'AAPL' },
+        { args: ['stock-mcp'], command: 'npx', env: { TOKEN: 'secret' }, name: 'kimi-datasource' },
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      // The builtin local-system switch is keyed on apiName and would reject
+      // 'getStock'; the `type: 'mcp'` discriminator routes to the MCP client.
+      expect(mockMcpCtr.runStdioMcpTool).toHaveBeenCalledWith({
+        args: '{"symbol":"AAPL"}',
+        env: { TOKEN: 'secret' },
+        params: { args: ['stock-mcp'], command: 'npx', name: 'kimi-datasource' },
+        toolName: 'getStock',
+      });
+    });
+
+    it('should NOT route to MCP when params are present but type is not mcp', async () => {
+      // Regression: routing must follow the explicit `type` discriminator, not
+      // the mere presence of `params`. A builtin call that happens to carry a
+      // `params` field must still go to the builtin switch.
+      const client = await connectAndOpen();
+
+      client.emit('tool_call_request', {
+        requestId: 'tool-with-params',
+        toolCall: {
+          apiName: 'readFile',
+          arguments: JSON.stringify({ path: '/a.txt' }),
+          identifier: 'lobe-local-system',
+          params: { args: [], command: 'npx', name: 'x' },
+          type: 'tool',
+        },
+        type: 'tool_call_request',
+      });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockMcpCtr.runStdioMcpTool).not.toHaveBeenCalled();
+      expect(mockLocalFileCtr.readFile).toHaveBeenCalled();
+    });
+
+    it('should send tool_call_response envelope for a successful MCP call', async () => {
+      vi.mocked(mockMcpCtr.runStdioMcpTool).mockResolvedValueOnce({
+        content: 'stock: 100',
+        state: { rows: 1 },
+        success: true,
+      });
+      const client = await connectAndOpen();
+
+      client.simulateMcpCallRequest(
+        'getStock',
+        {},
+        { args: [], command: 'npx', name: 'kimi-datasource' },
+        'mcp-ok',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(client.sendToolCallResponse).toHaveBeenCalledWith({
+        requestId: 'mcp-ok',
+        result: { content: 'stock: 100', state: { rows: 1 }, success: true },
+      });
+    });
+
+    it('should send error response when the MCP call throws', async () => {
+      vi.mocked(mockMcpCtr.runStdioMcpTool).mockRejectedValueOnce(new Error('spawn ENOENT'));
+      const client = await connectAndOpen();
+
+      client.simulateMcpCallRequest(
+        'getStock',
+        {},
+        { args: [], command: 'missing-bin', name: 'kimi-datasource' },
+        'mcp-err',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(client.sendToolCallResponse).toHaveBeenCalledWith({
+        requestId: 'mcp-err',
+        result: { content: 'spawn ENOENT', error: 'spawn ENOENT', success: false },
       });
     });
   });
