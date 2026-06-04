@@ -1,5 +1,5 @@
 import type { SkillManifest, SkillResourceMeta } from '@lobechat/types';
-import { isNotNull, relations } from 'drizzle-orm';
+import { isNotNull, isNull, relations } from 'drizzle-orm';
 import { index, jsonb, pgTable, text, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
 
 import { idGenerator } from '../utils/idGenerator';
@@ -50,7 +50,7 @@ export const agentSkills = pgTable(
     ...timestamps,
   },
   (t) => [
-    uniqueIndex('agent_skills_user_name_idx').on(t.userId, t.name),
+    uniqueIndex('agent_skills_user_name_idx').on(t.userId, t.name).where(isNull(t.workspaceId)),
     index('agent_skills_identifier_idx').on(t.identifier),
     index('agent_skills_user_id_idx').on(t.userId),
     index('agent_skills_source_idx').on(t.source),

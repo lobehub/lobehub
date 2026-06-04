@@ -1,5 +1,5 @@
 import type { BriefArtifacts, BriefMetadata } from '@lobechat/types';
-import { isNotNull } from 'drizzle-orm';
+import { isNotNull, isNull } from 'drizzle-orm';
 import {
   foreignKey,
   index,
@@ -100,7 +100,9 @@ export const tasks = pgTable(
       foreignColumns: [t.id],
       name: 'tasks_parent_task_id_tasks_id_fk',
     }).onDelete('set null'),
-    uniqueIndex('tasks_identifier_idx').on(t.identifier, t.createdByUserId),
+    uniqueIndex('tasks_identifier_idx')
+      .on(t.identifier, t.createdByUserId)
+      .where(isNull(t.workspaceId)),
     index('tasks_created_by_user_id_idx').on(t.createdByUserId),
     index('tasks_created_by_agent_id_idx').on(t.createdByAgentId),
     index('tasks_assignee_user_id_idx').on(t.assigneeUserId),

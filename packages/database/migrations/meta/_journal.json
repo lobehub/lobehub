@@ -763,6 +763,13 @@
       "when": 1780563957134,
       "tag": "0108_add_workspace_id_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 109,
+      "version": "7",
+      "when": 1780571940776,
+      "tag": "0109_migrate_unique_constraints",
+      "breakpoints": true
     }
   ],
   "version": "6"

@@ -7,7 +7,7 @@ import type {
   EvalTestCaseContent,
   EvalTestCaseMetadata,
 } from '@lobechat/types';
-import { isNotNull } from 'drizzle-orm';
+import { isNotNull, isNull } from 'drizzle-orm';
 import {
   boolean,
   foreignKey,
@@ -77,7 +77,9 @@ export const agentEvalBenchmarks = pgTable(
     ...timestamps,
   },
   (t) => [
-    uniqueIndex('agent_eval_benchmarks_identifier_user_id_unique').on(t.identifier, t.userId),
+    uniqueIndex('agent_eval_benchmarks_identifier_user_id_unique')
+      .on(t.identifier, t.userId)
+      .where(isNull(t.workspaceId)),
     index('agent_eval_benchmarks_is_system_idx').on(t.isSystem),
     index('agent_eval_benchmarks_user_id_idx').on(t.userId),
     index('agent_eval_benchmarks_workspace_id_idx').on(t.workspaceId),
@@ -183,7 +185,9 @@ export const agentEvalDatasets = pgTable(
     ...timestamps,
   },
   (t) => [
-    uniqueIndex('agent_eval_datasets_identifier_user_id_unique').on(t.identifier, t.userId),
+    uniqueIndex('agent_eval_datasets_identifier_user_id_unique')
+      .on(t.identifier, t.userId)
+      .where(isNull(t.workspaceId)),
     index('agent_eval_datasets_benchmark_id_idx').on(t.benchmarkId),
     index('agent_eval_datasets_source_experiment_id_idx').on(t.sourceExperimentId),
     index('agent_eval_datasets_user_id_idx').on(t.userId),
