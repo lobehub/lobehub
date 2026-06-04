@@ -34,22 +34,19 @@ interface GetMessagesAndTopicsParams {
   topicPageSize?: number;
 }
 
-interface SimpleNewTopicTurnMessage extends DBMessageItem {
+interface SimpleTurnMessage extends DBMessageItem {
   editorData?: CreateMessageParams['editorData'];
   groupId?: string | null;
   targetId?: string | null;
   usage?: CreateMessageParams['usage'] | null;
 }
 
-interface PersistedMessagePayload extends Omit<
-  SimpleNewTopicTurnMessage,
-  'createdAt' | 'updatedAt'
-> {
+interface PersistedMessagePayload extends Omit<SimpleTurnMessage, 'createdAt' | 'updatedAt'> {
   createdAt: Date | string;
   updatedAt: Date | string;
 }
 
-interface SimpleNewTopicTurnRow extends Record<string, unknown> {
+interface SimpleTurnRow extends Record<string, unknown> {
   assistantMessage: PersistedMessagePayload;
   resolvedSessionId: string | null;
   topicId: string;
@@ -69,10 +66,10 @@ interface CreateSimpleNewTopicTurnParams {
 }
 
 interface CreateSimpleNewTopicTurnResult {
-  assistantMessage: SimpleNewTopicTurnMessage;
+  assistantMessage: SimpleTurnMessage;
   resolvedSessionId: string | null;
   topicId: string;
-  userMessage: SimpleNewTopicTurnMessage;
+  userMessage: SimpleTurnMessage;
 }
 
 interface CreateSimpleExistingTopicTurnParams {
@@ -88,10 +85,10 @@ interface CreateSimpleExistingTopicTurnParams {
 }
 
 interface CreateSimpleExistingTopicTurnResult {
-  assistantMessage: SimpleNewTopicTurnMessage;
+  assistantMessage: SimpleTurnMessage;
   resolvedSessionId: string | null;
   topicId: string;
-  userMessage: SimpleNewTopicTurnMessage;
+  userMessage: SimpleTurnMessage;
 }
 
 const stringifyJsonParam = (value: unknown) =>
@@ -101,7 +98,7 @@ const toMessageItem = ({
   createdAt,
   updatedAt,
   ...message
-}: PersistedMessagePayload): SimpleNewTopicTurnMessage => ({
+}: PersistedMessagePayload): SimpleTurnMessage => ({
   ...message,
   createdAt: createdAt instanceof Date ? createdAt : new Date(createdAt),
   updatedAt: updatedAt instanceof Date ? updatedAt : new Date(updatedAt),
@@ -148,7 +145,7 @@ export class AiChatService {
     const assistantMetadata = stringifyJsonParam(assistantMessage.metadata);
     const topicMetadata = stringifyJsonParam(topic.metadata);
 
-    const result = await this.serverDB.execute<SimpleNewTopicTurnRow>(sql`
+    const result = await this.serverDB.execute<SimpleTurnRow>(sql`
           WITH resolved_context AS (
             SELECT COALESCE(
               ${normalizedSessionId},
@@ -212,7 +209,10 @@ export class AiChatService {
               "payload"."provider",
               "payload"."parent_id",
               ${this.userId},
-              "resolved_context"."session_id",
+              CASE
+                WHEN ${normalizedGroupId}::text IS NOT NULL THEN NULL
+                ELSE "resolved_context"."session_id"
+              END,
               "created_topic"."id",
               ${normalizedAgentId},
               ${normalizedGroupId},
@@ -377,7 +377,7 @@ export class AiChatService {
     const userEditorData = stringifyJsonParam(userMessage.editorData);
     const assistantMetadata = stringifyJsonParam(assistantMessage.metadata);
 
-    const result = await this.serverDB.execute<SimpleNewTopicTurnRow>(sql`
+    const result = await this.serverDB.execute<SimpleTurnRow>(sql`
           WITH existing_topic AS (
             SELECT "id", "session_id"
             FROM ${topics}
@@ -437,7 +437,10 @@ export class AiChatService {
               "payload"."provider",
               "payload"."parent_id",
               ${this.userId},
-              "resolved_context"."session_id",
+              CASE
+                WHEN ${normalizedGroupId}::text IS NOT NULL THEN NULL
+                ELSE "resolved_context"."session_id"
+              END,
               "updated_topic"."id",
               ${normalizedThreadId}::text,
               ${normalizedAgentId},

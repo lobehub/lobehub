@@ -26,6 +26,15 @@ describe('AiChatService', () => {
       .join('');
   };
 
+  const expectGroupSessionNormalization = (query: unknown) => {
+    const sqlText = getSqlText(query).replaceAll(/\s+/g, ' ');
+
+    expect(sqlText).toContain('CASE');
+    expect(sqlText).toContain(
+      '::text IS NOT NULL THEN NULL ELSE "resolved_context"."session_id" END',
+    );
+  };
+
   const createPersistedMessage = (overrides: Record<string, unknown> = {}) => ({
     agentId: null,
     clientId: null,
@@ -128,6 +137,44 @@ describe('AiChatService', () => {
     ).rejects.toThrow('Failed to create simple new topic turn');
   });
 
+  it('createSimpleNewTopicTurn should keep group messages detached from session rows', async () => {
+    const execute = vi.fn().mockResolvedValue({
+      rows: [
+        {
+          assistantMessage: createPersistedMessage({
+            groupId: 'group-1',
+            id: 'm-assistant',
+            parentId: 'm-user',
+            role: 'assistant',
+            sessionId: null,
+          }),
+          resolvedSessionId: 's1',
+          topicId: 't1',
+          userMessage: createPersistedMessage({
+            groupId: 'group-1',
+            id: 'm-user',
+            sessionId: null,
+          }),
+        },
+      ],
+    });
+    const serverDB = { execute } as unknown as LobeChatDatabase;
+
+    const service = new AiChatService(serverDB, 'u1');
+
+    const res = await service.createSimpleNewTopicTurn({
+      assistantMessage: { content: 'loading' },
+      groupId: 'group-1',
+      sessionId: 's1',
+      topic: { title: 'T' },
+      userMessage: { content: 'hi' },
+    });
+
+    expectGroupSessionNormalization(execute.mock.calls[0][0]);
+    expect(res.userMessage.sessionId).toBeNull();
+    expect(res.assistantMessage.sessionId).toBeNull();
+  });
+
   it('createSimpleExistingTopicTurn should persist the simple turn with one database call', async () => {
     const execute = vi.fn().mockResolvedValue({
       rows: [
@@ -209,6 +256,44 @@ describe('AiChatService', () => {
         userMessage: { content: 'hi' },
       }),
     ).rejects.toThrow('Failed to create simple existing topic turn');
+  });
+
+  it('createSimpleExistingTopicTurn should keep group messages detached from session rows', async () => {
+    const execute = vi.fn().mockResolvedValue({
+      rows: [
+        {
+          assistantMessage: createPersistedMessage({
+            groupId: 'group-1',
+            id: 'm-assistant',
+            parentId: 'm-user',
+            role: 'assistant',
+            sessionId: null,
+          }),
+          resolvedSessionId: 's1',
+          topicId: 't1',
+          userMessage: createPersistedMessage({
+            groupId: 'group-1',
+            id: 'm-user',
+            sessionId: null,
+          }),
+        },
+      ],
+    });
+    const serverDB = { execute } as unknown as LobeChatDatabase;
+
+    const service = new AiChatService(serverDB, 'u1');
+
+    const res = await service.createSimpleExistingTopicTurn({
+      assistantMessage: { content: 'loading' },
+      groupId: 'group-1',
+      sessionId: 's1',
+      topicId: 't1',
+      userMessage: { content: 'hi' },
+    });
+
+    expectGroupSessionNormalization(execute.mock.calls[0][0]);
+    expect(res.userMessage.sessionId).toBeNull();
+    expect(res.assistantMessage.sessionId).toBeNull();
   });
 
   it('getMessagesAndTopics should fetch messages and topics concurrently', async () => {
