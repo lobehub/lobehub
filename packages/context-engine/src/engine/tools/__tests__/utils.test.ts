@@ -83,14 +83,18 @@ describe('utils', () => {
       });
     });
 
-    it('should preserve existing required array', () => {
-      const parameters = {
+    it('should preserve existing required array values', () => {
+      const result = normalizeToolParameters({
         type: 'object',
         properties: { q: { type: 'string' } },
         required: ['q'],
-      };
+      });
 
-      expect(normalizeToolParameters(parameters)).toEqual(parameters);
+      expect(result).toEqual({
+        type: 'object',
+        properties: { q: { type: 'string' } },
+        required: ['q'],
+      });
     });
 
     it('should overwrite non-array required with []', () => {
@@ -107,6 +111,99 @@ describe('utils', () => {
       });
     });
 
+    it('should handle null/undefined properties by converting to empty object', () => {
+      const resultNull = normalizeToolParameters({
+        type: 'object',
+        properties: null as any,
+      });
+      expect(resultNull).toEqual({
+        type: 'object',
+        properties: {},
+        required: [],
+      });
+
+      const resultUndefined = normalizeToolParameters({
+        type: 'object',
+      });
+      expect(resultUndefined).toEqual({
+        type: 'object',
+        properties: {},
+        required: [],
+      });
+    });
+
+    it('should handle non-object properties by converting to empty object', () => {
+      const result = normalizeToolParameters({
+        type: 'object',
+        properties: 'invalid' as any,
+      });
+      expect(result).toEqual({
+        type: 'object',
+        properties: {},
+        required: [],
+      });
+    });
+
+    it('should handle array properties by converting to empty object', () => {
+      const result = normalizeToolParameters({
+        type: 'object',
+        properties: [] as any,
+      });
+      expect(result).toEqual({
+        type: 'object',
+        properties: {},
+        required: [],
+      });
+    });
+
+    it('should filter required fields that do not exist in properties', () => {
+      const result = normalizeToolParameters({
+        type: 'object',
+        properties: { a: { type: 'string' } },
+        required: ['a', 'nonexistent'],
+      });
+
+      expect(result).toEqual({
+        type: 'object',
+        properties: { a: { type: 'string' } },
+        required: ['a'],
+      });
+    });
+
+    it('should keep all required fields that exist in properties', () => {
+      const result = normalizeToolParameters({
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          age: { type: 'number' },
+        },
+        required: ['name', 'age'],
+      });
+
+      expect(result).toEqual({
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          age: { type: 'number' },
+        },
+        required: ['name', 'age'],
+      });
+    });
+
+    it('should filter required to empty when no properties match', () => {
+      const result = normalizeToolParameters({
+        type: 'object',
+        properties: {},
+        required: ['missing'],
+      });
+
+      expect(result).toEqual({
+        type: 'object',
+        properties: {},
+        required: [],
+      });
+    });
+
     it('should leave non-object schemas untouched', () => {
       const stringSchema = { type: 'string' };
       expect(normalizeToolParameters(stringSchema)).toBe(stringSchema);
@@ -114,6 +211,10 @@ describe('utils', () => {
 
     it('should pass through undefined', () => {
       expect(normalizeToolParameters(undefined)).toBeUndefined();
+    });
+
+    it('should pass through null parameter', () => {
+      expect(normalizeToolParameters(null as any)).toBeNull();
     });
   });
 });
