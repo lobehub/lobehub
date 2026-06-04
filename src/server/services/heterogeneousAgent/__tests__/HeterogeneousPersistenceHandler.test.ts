@@ -928,6 +928,71 @@ describe('HeterogeneousPersistenceHandler', () => {
       const thread = h.threads.get(threadId)!;
       expect(thread.status).toBeDefined();
     });
+
+    it('rolls subagent tool count + tokens + model onto thread.metadata on finalize', async () => {
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const subagentCtx = {
+        parentToolCallId: 'tc-spawn-1',
+        spawnMetadata: { prompt: 'p', subagentType: 'Explore' },
+        subagentMessageId: 'sub-1',
+      };
+
+      await h.handler.ingest({
+        events: [
+          buildEvent('stream_chunk', 0, {
+            chunkType: 'text',
+            content: 'working',
+            subagent: subagentCtx,
+          }),
+          buildEvent('stream_chunk', 1, {
+            chunkType: 'tools_calling',
+            subagent: subagentCtx,
+            toolsCalling: [
+              {
+                apiName: 'Bash',
+                arguments: '{}',
+                id: 'tc-child',
+                identifier: 'bash',
+                type: 'default',
+              },
+            ],
+          }),
+          // Subagent turn_metadata carries the authoritative per-turn usage + model.
+          buildEvent('step_complete', 2, {
+            model: 'claude-opus-4-8',
+            phase: 'turn_metadata',
+            provider: 'claude-code',
+            subagent: subagentCtx,
+            usage: { totalInputTokens: 10, totalOutputTokens: 5, totalTokens: 15 },
+          }),
+          buildEvent('tool_result', 3, { content: 'final', toolCallId: 'tc-spawn-1' }),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const threadId = [...h.threads.keys()][0];
+      const thread = h.threads.get(threadId)!;
+      // Rollup totals come off run-tracked state, NOT a re-read of the terminal
+      // assistant (which carries no usage), so the LAST turn's value survives.
+      expect(thread.metadata?.totalToolCalls).toBe(1);
+      expect(thread.metadata?.totalTokens).toBe(15);
+      expect(thread.metadata?.model).toBe('claude-opus-4-8');
+      // Create-time peer fields survive the metadata merge.
+      expect(thread.metadata?.sourceToolCallId).toBe('tc-spawn-1');
+      expect(thread.metadata?.subagentType).toBe('Explore');
+
+      // The in-thread assistant got model written for the live tooltip.
+      const threadAssts = [...h.messages.values()].filter(
+        (m) => m.threadId === threadId && m.role === 'assistant',
+      );
+      expect(threadAssts.some((m) => m.model === 'claude-opus-4-8')).toBe(true);
+    });
   });
 
   describe('terminal events and finish()', () => {

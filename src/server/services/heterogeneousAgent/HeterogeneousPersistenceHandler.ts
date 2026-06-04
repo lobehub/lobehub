@@ -137,8 +137,19 @@ interface SubagentRunState {
   currentAssistantMsgId: string;
   currentSubagentMessageId: string;
   lastChainParentId: string;
+  /**
+   * Last non-zero per-turn `usage.totalTokens`. CC's per-turn `message.usage`
+   * already carries the cumulative context, so the LAST turn's value (not a
+   * sum) is the meaningful total. Tracked here so `finalizeSubagentRun` rolls
+   * the right number onto `thread.metadata.totalTokens` — the terminal
+   * assistant created at finalize carries no usage, so reading it back would
+   * always yield `undefined`.
+   */
+  lastTurnTokens?: number;
   lifetimeToolCallIds: Set<string>;
   state: ToolPersistenceState;
+  /** Model the subagent ran on, pinned from the first turn_metadata; rolled onto `thread.metadata.model`. */
+  subagentModel?: string;
   threadId: string;
 }
 
@@ -707,16 +718,24 @@ export class HeterogeneousPersistenceHandler {
 
     if (subagentCtx) {
       // Subagent-tagged usage: write to the subagent's in-thread assistant.
-      // The finalize step reads the last assistant's `metadata.usage` back
-      // to roll up totals onto `thread.metadata`, so no running sum on the
-      // run is needed. Do NOT touch `state.lastModel` / `state.lastProvider`
-      // — those carry main-agent step boundary state and would contaminate
-      // the next main-agent assistant create.
+      // Track the last non-zero turn total + pin the model on the run so
+      // `finalizeSubagentRun` can roll them onto `thread.metadata` (the
+      // terminal assistant it creates carries no usage, so reading it back
+      // would lose the total). Do NOT touch `state.lastModel` /
+      // `state.lastProvider` — those carry main-agent step boundary state and
+      // would contaminate the next main-agent assistant create. The subagent's
+      // own model/provider DO get written onto the in-thread assistant so the
+      // chip tooltip can name the model.
       if (!usage) return;
       const run = state.subagentRuns.get(subagentCtx.parentToolCallId);
       if (!run) return;
+      const turnTokens = usage.totalTokens;
+      if (typeof turnTokens === 'number' && turnTokens > 0) run.lastTurnTokens = turnTokens;
+      if (model && !run.subagentModel) run.subagentModel = model;
       await this.deps.messageModel.update(run.currentAssistantMsgId, {
         metadata: { usage },
+        ...(model && { model }),
+        ...(provider && { provider }),
       });
       return;
     }
@@ -1256,13 +1275,14 @@ export class HeterogeneousPersistenceHandler {
 
     // Roll up subagent stats onto `thread.metadata` so historical viewers can
     // surface counts without re-walking the message list. Tool count comes
-    // from `lifetimeToolCallIds` (dedup'd across turns). `totalTokens` reads
-    // the LAST subagent assistant's `metadata.usage.totalTokens` — CC's
-    // per-turn `message.usage` already includes the full prior context, so
-    // summing across turns would double-count overlap; the final turn's
-    // value is what the user expects to see (same convention as the main
-    // agent message footer). `duration` is derived off the `startedAt` set
-    // in `ensureSubagentRun`.
+    // from `lifetimeToolCallIds` (dedup'd across turns). `totalTokens` /
+    // `model` come off the run's tracked last-non-zero turn value + pinned
+    // model rather than re-reading `currentAssistantMsgId` — which at this
+    // point is the terminal assistant created above, carrying no usage.
+    // CC's per-turn `message.usage` already includes the full prior context,
+    // so the final turn's value (not a sum) is what the user expects to see
+    // (same convention as the main agent message footer). `duration` is
+    // derived off the `startedAt` set in `ensureSubagentRun`.
     //
     // Read-merge-write the metadata in one update() so peer fields set at
     // create time (`sourceToolCallId` / `subagentType` / `startedAt`) stay
@@ -1271,9 +1291,7 @@ export class HeterogeneousPersistenceHandler {
     const startedAtIso = existingThread?.metadata?.startedAt;
     const completedAt = new Date().toISOString();
     const duration = startedAtIso ? Date.now() - new Date(startedAtIso).getTime() : undefined;
-    const lastAsst = await this.deps.messageModel.findById(run.currentAssistantMsgId);
-    const lastAsstMeta = lastAsst?.metadata as { usage?: { totalTokens?: number } } | null;
-    const totalTokens = lastAsstMeta?.usage?.totalTokens;
+    const totalTokens = run.lastTurnTokens;
 
     await this.deps.threadModel.update(run.threadId, {
       metadata: {
@@ -1282,6 +1300,7 @@ export class HeterogeneousPersistenceHandler {
         duration,
         totalToolCalls: run.lifetimeToolCallIds.size,
         ...(totalTokens !== undefined && { totalTokens }),
+        ...(run.subagentModel && { model: run.subagentModel }),
       },
       status: ThreadStatus.Active,
     });

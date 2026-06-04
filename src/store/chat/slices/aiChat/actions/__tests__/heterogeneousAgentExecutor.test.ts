@@ -41,9 +41,11 @@ vi.mock('@/services/message', () => ({
 
 // threadService — subagent Thread creation (CC `Task` tool_use)
 const mockCreateThread = vi.fn();
+const mockUpdateThread = vi.fn();
 vi.mock('@/services/thread', () => ({
   threadService: {
     createThread: (...args: unknown[]) => mockCreateThread(...args),
+    updateThread: (...args: unknown[]) => mockUpdateThread(...args),
   },
 }));
 
@@ -2424,6 +2426,84 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         ([id, val]: any) => id !== 'ast-initial' && val.content === 'final summary text',
       );
       expect(finalizeWrite).toBeDefined();
+    });
+
+    it('rolls subagent tool count + tokens + model onto thread.metadata on finalize', async () => {
+      // Cold-load / historical view reads the chip metrics off `thread.metadata`
+      // (the child messages aren't hydrated). Finalize must roll up the lifetime
+      // tool count, the LAST non-zero turn's totalTokens, and the pinned model —
+      // plus preserve the create-time peer fields the metadata write replaces.
+      await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Task', {
+          description: 'x',
+          prompt: 'go',
+          subagent_type: 'Explore',
+        }),
+        ccSubagentToolUse('msg_sub_1', 'toolu_task', 'toolu_child', 'Bash', { command: 'ls' }),
+        ccSubagentToolResult('toolu_child', 'toolu_task', 'file list'),
+        // Subagent summary turn carrying the authoritative per-turn usage + model.
+        {
+          message: {
+            content: [{ text: 'summary', type: 'text' }],
+            id: 'msg_sub_2',
+            model: 'claude-opus-4-8',
+            role: 'assistant',
+            usage: { input_tokens: 1000, output_tokens: 200 },
+          },
+          parent_tool_use_id: 'toolu_task',
+          type: 'assistant',
+        },
+        ccSubagentSpawnResult('toolu_task', 'final answer'),
+        ccResult(),
+      ]);
+
+      const threadId = mockCreateThread.mock.calls[0][0].id;
+      const rollup = mockUpdateThread.mock.calls.find(([id]: any) => id === threadId);
+      expect(rollup).toBeDefined();
+
+      const { metadata, status } = rollup![1];
+      expect(metadata.totalToolCalls).toBe(1);
+      expect(metadata.totalTokens).toBe(1200);
+      expect(metadata.model).toBe('claude-opus-4-8');
+      // Create-time peer fields survive the metadata replace.
+      expect(metadata.sourceToolCallId).toBe('toolu_task');
+      expect(metadata.subagentType).toBe('Explore');
+      expect(metadata.startedAt).toBeDefined();
+      expect(metadata.completedAt).toBeDefined();
+      expect(status).toBeDefined();
+    });
+
+    it('writes the subagent model onto the in-thread assistant for the live tooltip', async () => {
+      // The chip tooltip derives the model from the child assistant's `model`
+      // field live (before finalize). The turn_metadata branch must persist it.
+      await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Task', {
+          description: 'x',
+          prompt: 'go',
+          subagent_type: 'Explore',
+        }),
+        {
+          message: {
+            content: [{ text: 'summary', type: 'text' }],
+            id: 'msg_sub',
+            model: 'claude-opus-4-8',
+            role: 'assistant',
+            usage: { input_tokens: 1000, output_tokens: 200 },
+          },
+          parent_tool_use_id: 'toolu_task',
+          type: 'assistant',
+        },
+        ccSubagentSpawnResult('toolu_task', 'final answer'),
+        ccResult(),
+      ]);
+
+      const modelWrite = mockUpdateMessage.mock.calls.find(
+        ([, val]: any) => val.model === 'claude-opus-4-8' && val.metadata?.usage,
+      );
+      expect(modelWrite).toBeDefined();
+      expect(modelWrite![1].provider).toBe('claude-code');
     });
 
     it('retains subagent buffers + pinned target when the finalize flush fails', async () => {

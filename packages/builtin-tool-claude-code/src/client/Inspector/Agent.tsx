@@ -123,9 +123,14 @@ const useSubagentMetrics = (toolCallId: string | undefined): SubagentMetrics | n
     const totalTokens = persistedTokens ?? lastAsstTokens;
     if (persistedToolCalls !== undefined) toolCalls = persistedToolCalls;
 
+    // Live runs pin the model off the child assistant messages; on cold-load
+    // those aren't hydrated yet, so fall back to the finalize-time rollup on
+    // `thread.metadata` so the tooltip still names the model.
+    const resolvedModel = model ?? thread.metadata?.model;
+
     return {
-      hasAny: toolCalls > 0 || totalTokens > 0 || !!model,
-      model,
+      hasAny: toolCalls > 0 || totalTokens > 0 || !!resolvedModel,
+      model: resolvedModel,
       toolCalls,
       totalTokens,
     };
