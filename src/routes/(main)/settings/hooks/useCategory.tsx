@@ -16,6 +16,7 @@ import {
   KeyboardIcon,
   KeyIcon,
   KeyRound,
+  LinkIcon,
   Map,
   MessageCircleIcon,
   MonitorSmartphoneIcon,
@@ -160,6 +161,11 @@ export const useCategory = () => {
         icon: SkillsIcon,
         key: SettingsTabs.Skill,
         label: t('tab.skill'),
+      },
+      {
+        icon: LinkIcon,
+        key: SettingsTabs.Connector,
+        label: t('tab.connector', 'Connectors'),
       },
       {
         icon: BrainCircuit,

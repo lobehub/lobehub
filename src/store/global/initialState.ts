@@ -50,6 +50,7 @@ export enum SettingsTabs {
   ChatAppearance = 'chat-appearance',
   /** @deprecated Use Appearance instead */
   Common = 'common',
+  Connector = 'connector',
   Credits = 'credits',
   Creds = 'creds',
   Devices = 'devices',
