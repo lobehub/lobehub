@@ -250,7 +250,7 @@ const ChatInput = memo<ChatInputProps>(
         if (disableQueue && isInputLoading) return;
 
         // Get content before clearing
-        const message = getMarkdownContent();
+        const message = unescapeMarkdown(getMarkdownContent());
         if (!message.trim() && currentFileList.length === 0 && currentContextList.length === 0)
           return;
 
