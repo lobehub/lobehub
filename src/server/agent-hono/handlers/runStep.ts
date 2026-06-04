@@ -34,6 +34,7 @@ export async function runStep(c: Context): Promise<Response> {
       approvedToolCall,
       rejectionReason,
       rejectAndContinue,
+      resumeAsyncTool,
       toolMessageId,
     } = body;
 
@@ -63,6 +64,7 @@ export async function runStep(c: Context): Promise<Response> {
       operationId,
       rejectAndContinue,
       rejectionReason,
+      resumeAsyncTool,
       stepIndex,
       toolMessageId,
     });

@@ -15,6 +15,37 @@ export interface ToolExecutionMemoryEmbeddingRuntime {
   provider: string;
 }
 
+export interface ServerSubAgentRunParams {
+  /** Target agent id; defaults to the parent agent when omitted. */
+  agentId?: string;
+  /** Short label shown in the UI (sub-agent thread title). */
+  description: string;
+  /** Detailed instruction/prompt for the sub-agent run. */
+  instruction: string;
+  /** Optional per-run timeout in milliseconds. */
+  timeout?: number;
+}
+
+export interface ServerSubAgentRunResult {
+  /** The spawned child operation id. */
+  subOperationId?: string;
+  /** The isolation thread holding the sub-agent's full message trace. */
+  threadId: string;
+}
+
+/**
+ * Server-side sub-agent runner injected per tool call by the agent runtime.
+ *
+ * Unlike the client runner (which blocks until the sub-agent finishes), the
+ * server runner only kicks off the child operation asynchronously: it creates
+ * the pending placeholder tool message that anchors the isolation thread, forks
+ * the child op, and returns immediately. The real result is delivered later by
+ * the completion bridge, which backfills the placeholder and resumes the parent.
+ */
+export interface ServerSubAgentRunner {
+  run: (params: ServerSubAgentRunParams) => Promise<ServerSubAgentRunResult>;
+}
+
 export interface ToolExecutionContext {
   /** Target device ID for device proxy tool calls */
   activeDeviceId?: string;
@@ -56,6 +87,13 @@ export interface ToolExecutionContext {
   serverDB?: LobeChatDatabase;
   /** Skip low-level result truncation so the AgentRuntime boundary can archive full content first. */
   skipResultTruncation?: boolean;
+  /**
+   * Server-side sub-agent runner, injected per tool call by the agent runtime
+   * (closes over the current tool payload + parent message). The `callSubAgent`
+   * server tool calls `subAgent.run(...)` to fork a child op and returns a
+   * `deferred` result; the completion bridge backfills + resumes the parent.
+   */
+  subAgent?: ServerSubAgentRunner;
   /** Task ID when executing within the Task system */
   taskId?: string;
   /** Current thread ID for thread-scoped conversations */

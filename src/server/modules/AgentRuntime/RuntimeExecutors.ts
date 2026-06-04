@@ -85,6 +85,7 @@ import { FileService } from '@/server/services/file';
 import { MessageService } from '@/server/services/message';
 import { OnboardingService } from '@/server/services/onboarding';
 import {
+  type ServerSubAgentRunner,
   type ToolExecutionResultResponse,
   type ToolExecutionService,
 } from '@/server/services/toolExecution';
@@ -233,6 +234,68 @@ const buildPostProcessUrl = (ctx: Pick<RuntimeExecutorContext, 'serverDB' | 'use
   }
   return (path: string | null, file: { id?: string | null }) =>
     fileService!.getFileAccessUrl({ id: file.id, url: path });
+};
+
+/**
+ * Build the per-tool-call server sub-agent runner injected into the tool
+ * execution context. Closes over the current tool payload + parent message so
+ * the `callSubAgent` server tool can fork a child op without re-deriving the
+ * message anchor (which it cannot do correctly from its own context).
+ *
+ * The runner creates the pending placeholder tool message that anchors the
+ * isolation thread (so the UI shows a loading state and the completion bridge
+ * has a message to backfill), then kicks off the child op asynchronously and
+ * returns immediately. Returns `undefined` when sub-agent execution is not
+ * available (no `execSubAgentTask` callback, or missing agent/topic context).
+ */
+const buildServerSubAgentRunner = (
+  ctx: RuntimeExecutorContext,
+  state: AgentState,
+  chatToolPayload: ChatToolPayload,
+  parentMessageId: string,
+): ServerSubAgentRunner | undefined => {
+  const execSubAgentTask = ctx.execSubAgentTask;
+  if (!execSubAgentTask) return undefined;
+
+  const agentId = state.metadata?.agentId;
+  const topicId = ctx.topicId ?? state.metadata?.topicId;
+  if (!agentId || !topicId) return undefined;
+
+  return {
+    run: async ({ agentId: targetAgentId, description, instruction, timeout }) => {
+      // 1. Create the pending placeholder tool message (mirrors the normal
+      //    tool-message shape in call_tool) that anchors the isolation thread
+      //    and renders a loading state until the bridge backfills it.
+      const placeholder = await ctx.messageModel.create({
+        agentId,
+        content: '',
+        parentId: parentMessageId,
+        plugin: chatToolPayload as any,
+        pluginState: { status: 'pending' },
+        role: 'tool',
+        threadId: state.metadata?.threadId,
+        tool_call_id: chatToolPayload.id,
+        topicId,
+      });
+
+      // 2. Fork the child op anchored to the placeholder. `resumeParentOnComplete`
+      //    tells execSubAgentTask to register the completion bridge that
+      //    backfills this tool message and resumes the parent op.
+      const result = (await execSubAgentTask({
+        agentId: targetAgentId ?? agentId,
+        groupId: state.metadata?.groupId ?? undefined,
+        instruction,
+        parentMessageId: placeholder.id,
+        parentOperationId: ctx.operationId,
+        resumeParentOnComplete: true,
+        timeout,
+        title: description,
+        topicId,
+      })) as { operationId?: string; threadId?: string } | undefined;
+
+      return { subOperationId: result?.operationId, threadId: result?.threadId ?? '' };
+    },
+  };
 };
 
 const shouldRetryLLM = (kind: LLMErrorKind, attempt: number, maxRetries: number) =>
@@ -2079,6 +2142,12 @@ export const createRuntimeExecutors = (
                 scope: state.metadata?.scope,
                 serverDB: ctx.serverDB,
                 skipResultTruncation: true,
+                subAgent: buildServerSubAgentRunner(
+                  ctx,
+                  state,
+                  chatToolPayload,
+                  payload.parentMessageId,
+                ),
                 taskId: state.metadata?.taskId,
                 threadId: state.metadata?.threadId,
                 toolCallId: chatToolPayload.id,
@@ -2642,6 +2711,12 @@ export const createRuntimeExecutors = (
                     scope: state.metadata?.scope,
                     serverDB: ctx.serverDB,
                     skipResultTruncation: true,
+                    subAgent: buildServerSubAgentRunner(
+                      ctx,
+                      state,
+                      chatToolPayload,
+                      payload.parentMessageId,
+                    ),
                     taskId: state.metadata?.taskId,
                     threadId: state.metadata?.threadId,
                     toolCallId: chatToolPayload.id,

@@ -2499,8 +2499,16 @@ export class AiAgentService {
    * 3. Store operationId in Thread metadata
    */
   async execSubAgentTask(params: ExecSubAgentTaskParams): Promise<ExecSubAgentTaskResult> {
-    const { groupId, topicId, parentMessageId, agentId, instruction, title, parentOperationId } =
-      params;
+    const {
+      groupId,
+      topicId,
+      parentMessageId,
+      agentId,
+      instruction,
+      title,
+      parentOperationId,
+      resumeParentOnComplete,
+    } = params;
 
     log(
       'execSubAgentTask: agentId=%s, groupId=%s, topicId=%s, instruction=%s',
@@ -2547,6 +2555,17 @@ export class AiAgentService {
 
     // 3. Create hooks for updating Thread metadata and task message
     const threadHooks = this.createThreadHooks(thread.id, startedAt, parentMessageId);
+    // For the deferred-tool path, also register the completion bridge that
+    // backfills the parent's placeholder tool message and resumes the parked
+    // parent op once the whole batch is done. Registered last so its
+    // tool-message backfill (content + pluginState) is the final write.
+    const hooks =
+      resumeParentOnComplete && parentOperationId
+        ? [
+            ...threadHooks,
+            this.createSubAgentBridgeHook(parentOperationId, parentMessageId, thread.id),
+          ]
+        : threadHooks;
 
     // Inherit parent op's trigger so sub-agent rows stay attributable to the
     // original entry point (chat / bot / cli / eval / …). Lookup is best-effort
@@ -2570,7 +2589,7 @@ export class AiAgentService {
       agentId,
       appContext: { groupId, threadId: thread.id, topicId },
       autoStart: true,
-      hooks: threadHooks,
+      hooks,
       parentOperationId,
       prompt: instruction,
       trigger: inheritedTrigger,
@@ -2886,6 +2905,74 @@ export class AiAgentService {
         type: 'onComplete' as const,
       },
     ];
+  }
+
+  /**
+   * Completion bridge for the server `callSubAgent` deferred-tool path.
+   *
+   * Fires on the sub-op's completion (success or failure). It:
+   *   1. Backfills the parent's placeholder tool message with the sub-agent's
+   *      final answer (success) or an error note (failure), plus pluginState so
+   *      the UI render can resolve the isolation thread.
+   *   2. Asks the runtime to resume the parent: barrier-check that every pending
+   *      tool in this turn is now fulfilled, atomically claim the resume (CAS),
+   *      and schedule the next parent step. Concurrent sibling completions that
+   *      lose the CAS are no-ops.
+   */
+  private createSubAgentBridgeHook(
+    parentOperationId: string,
+    toolMessageId: string,
+    threadId: string,
+  ): AgentHook {
+    return {
+      handler: async (event) => {
+        const finalState = event.finalState;
+        const failed = event.reason === 'error' || event.reason === 'interrupted';
+
+        // 1. Backfill the placeholder tool message with the result
+        try {
+          const lastAssistant = finalState?.messages
+            ?.slice()
+            .reverse()
+            .find((m: { content?: string; role: string }) => m.role === 'assistant');
+
+          const content = failed
+            ? `Sub-agent did not complete (${event.reason}).`
+            : lastAssistant?.content || 'Sub-agent completed without a textual answer.';
+
+          await this.messageModel.updateToolMessage(toolMessageId, {
+            content,
+            pluginError: failed ? formatErrorForMetadata(finalState?.error) : undefined,
+            pluginState: {
+              model: finalState?.modelRuntimeConfig?.model,
+              status: failed ? 'error' : 'completed',
+              threadId,
+              totalToolCalls: finalState?.session?.toolCalls,
+              totalTokens: this.calculateTotalTokens(finalState?.usage),
+            },
+          });
+        } catch (error) {
+          console.error(
+            'Sub-agent bridge: failed to backfill tool message %s: %O',
+            toolMessageId,
+            error,
+          );
+        }
+
+        // 2. Barrier + CAS + resume the parent op
+        try {
+          await this.agentRuntimeService.tryResumeParentFromAsyncTool({ parentOperationId });
+        } catch (error) {
+          console.error(
+            'Sub-agent bridge: failed to resume parent %s: %O',
+            parentOperationId,
+            error,
+          );
+        }
+      },
+      id: 'sub-agent-bridge',
+      type: 'onComplete' as const,
+    };
   }
 
   /**

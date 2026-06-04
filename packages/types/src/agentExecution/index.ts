@@ -288,6 +288,14 @@ export interface ExecSubAgentTaskParams {
   parentMessageId: string;
   /** Parent operation ID for dispatching callAgent hooks */
   parentOperationId?: string;
+  /**
+   * When true, register the completion bridge that backfills the parent's
+   * placeholder tool message with this sub-agent's result and resumes the
+   * parked parent op (`waiting_for_async_tool` → running). Used by the server
+   * `callSubAgent` deferred-tool path; left false for the legacy fire-and-forget
+   * task dispatch.
+   */
+  resumeParentOnComplete?: boolean;
   /** Timeout in milliseconds (optional) */
   timeout?: number;
   /** Task title (shown in UI, used as thread title) */

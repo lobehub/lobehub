@@ -12,6 +12,7 @@ import {
 } from '@lobechat/agent-runtime';
 import type { ISnapshotStore } from '@lobechat/agent-tracing';
 import { dynamicInterventionAudits } from '@lobechat/builtin-tools/dynamicInterventionAudits';
+import { parse } from '@lobechat/conversation-flow';
 import { getModelPropertyWithFallback } from '@lobechat/model-runtime';
 import {
   context as otelContext,
@@ -24,10 +25,15 @@ import {
   invokeAgentSpanName,
   tracer as agentRuntimeTracer,
 } from '@lobechat/observability-otel/modules/agent-runtime';
-import { type ExecSubAgentTaskParams, type UIChatMessage } from '@lobechat/types';
+import {
+  type ChatToolPayload,
+  type ExecSubAgentTaskParams,
+  type UIChatMessage,
+} from '@lobechat/types';
 import debug from 'debug';
 import urlJoin from 'url-join';
 
+import { AgentOperationModel } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
 import { type LobeChatDatabase } from '@/database/type';
 import { appEnv } from '@/envs/app';
@@ -41,6 +47,7 @@ import {
 import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
 import { emitAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { toAgentSignalTraceEvents } from '@/server/services/agentSignal/observability/traceEvents';
+import { FileService } from '@/server/services/file';
 import { mcpService } from '@/server/services/mcp';
 import { MessageService } from '@/server/services/message';
 import { QueueService } from '@/server/services/queue';
@@ -219,8 +226,12 @@ export class AgentRuntimeService {
     const impl = this.queueService.getImpl();
     if (impl instanceof LocalQueueServiceImpl) {
       log('Setting up local execution callback');
-      impl.setExecutionCallback(async (operationId, stepIndex, context) => {
-        await this.executeStep({ context, operationId, stepIndex });
+      impl.setExecutionCallback(async (operationId, stepIndex, context, payload) => {
+        // Mirror the QStash path where payload fields (approvedToolCall,
+        // toolMessageId, resumeAsyncTool, …) ride the request body into
+        // executeStep. Without this spread, local/in-memory resumes silently
+        // lose their intervention/resume signal.
+        await this.executeStep({ context, operationId, stepIndex, ...payload });
       });
     }
   }
@@ -506,6 +517,7 @@ export class AgentRuntimeService {
       approvedToolCall,
       rejectionReason,
       rejectAndContinue,
+      resumeAsyncTool,
       toolMessageId,
       externalRetryCount = 0,
     } = params;
@@ -719,6 +731,30 @@ export class AgentRuntimeService {
           });
           currentState = interventionResult.newState;
           currentContext = interventionResult.nextContext;
+        }
+
+        // Resume from a parked async-tool wait (server sub-agent completion
+        // bridge). Every deferred tool has delivered its result by now, so clear
+        // the pending set, refresh messages from the DB (to pick up the tool
+        // results written out-of-band), and re-enter the LLM with them.
+        if (resumeAsyncTool && currentState.status === 'waiting_for_async_tool') {
+          const refreshed = await this.refreshMessagesFromDB(currentState);
+          currentState = structuredClone(currentState);
+          currentState.messages = refreshed;
+          currentState.pendingToolsCalling = [];
+          currentState.status = 'running';
+          currentState.interruption = undefined;
+          currentState.lastModified = new Date().toISOString();
+          currentContext = {
+            payload: { parentMessageId: refreshed.at(-1)?.id },
+            phase: 'user_input',
+          } as AgentRuntimeContext;
+          log(
+            '[%s][%d] Resuming from async tool with %d messages',
+            operationId,
+            stepIndex,
+            refreshed.length,
+          );
         }
 
         // Pre-step computation: extract device context from DB messages
@@ -1449,6 +1485,116 @@ export class AgentRuntimeService {
       log('Failed to process human intervention for operation %s: %O', operationId, error);
       throw error;
     }
+  }
+
+  /**
+   * Completion-bridge entry point for async sub-agent tools.
+   *
+   * Called once per sub-op completion (the bridge already backfilled that
+   * sub-op's tool message). Implements the K=N barrier + single-fire resume:
+   *
+   *   1. The parent must still be parked (`waiting_for_async_tool`).
+   *   2. Every tool in this turn's `pendingToolsCalling` must be fulfilled —
+   *      the true gate, since the LLM can only continue once every tool_result
+   *      message row is present (covers mixed sub-agent + client-tool batches).
+   *   3. Atomically claim the resume via a status CAS; only the winner proceeds.
+   *   4. Schedule the parent's next step (`resumeAsyncTool`), which re-enters
+   *      the LLM with the refreshed tool results.
+   *
+   * Returns true only for the CAS winner that scheduled the resume.
+   */
+  async tryResumeParentFromAsyncTool(params: { parentOperationId: string }): Promise<boolean> {
+    const { parentOperationId } = params;
+
+    const state = await this.coordinator.loadAgentState(parentOperationId);
+    if (!state || state.status !== 'waiting_for_async_tool') return false;
+
+    const pending = (state.pendingToolsCalling ?? []) as ChatToolPayload[];
+    if (pending.length === 0) return false;
+
+    // Barrier: every pending tool must have a fulfilled tool_result message.
+    const allFulfilled = await this.allPendingToolsFulfilled(pending);
+    if (!allFulfilled) {
+      log('[%s] async-tool barrier not yet satisfied, holding', parentOperationId);
+      return false;
+    }
+
+    // Single-fire guard: only one concurrent completion flips the op.
+    const won = await new AgentOperationModel(this.serverDB, this.userId).tryResumeFromAsyncTool(
+      parentOperationId,
+    );
+    if (!won) {
+      log('[%s] lost async-tool resume CAS, no-op', parentOperationId);
+      return false;
+    }
+
+    log('[%s] won async-tool resume CAS, scheduling step %d', parentOperationId, state.stepCount);
+
+    if (this.queueService) {
+      await this.queueService.scheduleMessage({
+        context: undefined,
+        delay: 100,
+        endpoint: `${this.baseURL}/run`,
+        operationId: parentOperationId,
+        payload: { resumeAsyncTool: true },
+        priority: 'high',
+        stepIndex: state.stepCount,
+      });
+    } else {
+      log('[%s] queue service disabled, skipping async-tool resume schedule', parentOperationId);
+    }
+
+    return true;
+  }
+
+  /**
+   * Whether every pending tool call has a fulfilled tool_result message — i.e.
+   * a tool message exists for its `tool_call_id` with non-empty content or a
+   * terminal pluginState. Looks up by `tool_call_id` (plugin id === message id).
+   */
+  private async allPendingToolsFulfilled(pending: ChatToolPayload[]): Promise<boolean> {
+    for (const tc of pending) {
+      const plugin = await this.serverDB.query.messagePlugins.findFirst({
+        where: (mp, { eq }) => eq(mp.toolCallId, tc.id),
+      });
+      if (!plugin) return false;
+
+      const message = await this.messageModel.findById(plugin.id);
+      const pluginState = plugin.state as { status?: string } | null;
+      const fulfilled =
+        (!!message?.content && message.content.length > 0) ||
+        pluginState?.status === 'completed' ||
+        pluginState?.status === 'error';
+      if (!fulfilled) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Reload the conversation messages from the database and flatten them for the
+   * runtime. Used when resuming a parked op so the next LLM step sees tool
+   * results written out-of-band (e.g. by a sub-agent completion bridge).
+   */
+  private async refreshMessagesFromDB(state: AgentState): Promise<AgentState['messages']> {
+    let postProcessUrl: ((path: string | null) => Promise<string>) | undefined;
+    try {
+      const fileService = new FileService(this.serverDB, this.userId);
+      postProcessUrl = (path: string | null) => fileService.getFullFileUrl(path);
+    } catch {
+      postProcessUrl = undefined;
+    }
+
+    const dbMessages = await this.messageModel.query(
+      {
+        agentId: state.metadata?.agentId,
+        threadId: state.metadata?.threadId,
+        topicId: state.metadata?.topicId,
+      },
+      { postProcessUrl },
+    );
+
+    const { flatList } = parse(dbMessages);
+    return flatList as AgentState['messages'];
   }
 
   /**
