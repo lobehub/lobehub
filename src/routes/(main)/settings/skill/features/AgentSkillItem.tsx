@@ -1,16 +1,7 @@
 'use client';
 
 import { type BuiltinSkill, type SkillListItem } from '@lobechat/types';
-import {
-  Avatar,
-  Button,
-  DropdownMenu,
-  Flexbox,
-  Icon,
-  Modal,
-  stopPropagation,
-  Tag,
-} from '@lobehub/ui';
+import { Avatar, Button, DropdownMenu, Flexbox, Icon, Modal, stopPropagation } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { Space } from 'antd';
@@ -210,38 +201,32 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect 
         gap={16}
         justify="space-between"
         style={{
-          ...(isSelected ? { background: 'var(--ant-color-primary-bg)', borderRadius: 8 } : {}),
+          ...(isSelected ? { background: 'var(--ant-color-primary-bg)', borderRadius: 6 } : {}),
           ...(onSelect ? { cursor: 'pointer' } : {}),
         }}
         onClick={onSelect}
       >
-        <Flexbox horizontal align="center" gap={16} style={{ flex: 1, overflow: 'hidden' }}>
+        <Flexbox horizontal align="center" gap={8} style={{ flex: 1, overflow: 'hidden' }}>
           <Flexbox
             horizontal
             align="center"
-            gap={16}
+            gap={8}
             style={{ cursor: onSelect ? undefined : 'pointer' }}
             onClick={onSelect ? undefined : handleOpenDetail}
           >
             <div className={`${styles.icon} ${showDisconnected ? styles.disconnectedIcon : ''}`}>
-              {avatar ? <Avatar avatar={avatar} size={32} /> : <Icon icon={SkillsIcon} size={28} />}
+              {avatar ? <Avatar avatar={avatar} size={22} /> : <Icon icon={SkillsIcon} size={18} />}
             </div>
-            <Flexbox gap={4} style={{ overflow: 'hidden' }}>
-              <Flexbox horizontal align="center" gap={8}>
-                <span
-                  className={`${styles.title} ${showDisconnected ? styles.disconnectedTitle : ''}`}
-                >
-                  {title}
-                </span>
-                {!isBuiltin && <Tag icon={<Icon icon={SkillsIcon} />} size={'small'} />}
-                <SkillSourceTag source={skill.source} />
-              </Flexbox>
-              {showDisconnected && renderStatus()}
-            </Flexbox>
+            <span className={`${styles.title} ${showDisconnected ? styles.disconnectedTitle : ''}`}>
+              {title}
+            </span>
           </Flexbox>
+          {showDisconnected && renderStatus()}
         </Flexbox>
-        {!onSelect && (
-          <Flexbox horizontal align="center" gap={12} onClick={stopPropagation}>
+        {onSelect ? (
+          <SkillSourceTag source={skill.source} />
+        ) : (
+          <Flexbox horizontal align="center" gap={8} onClick={stopPropagation}>
             {isBuiltin && isBuiltinInstalled && renderStatus()}
             {renderActions()}
           </Flexbox>

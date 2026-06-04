@@ -15,8 +15,9 @@ import { Center, Empty } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
+import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import type React from 'react';
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AddSkillButton from '@/features/SkillStore/SkillList/AddSkillButton';
@@ -57,7 +58,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     text-align: center;
   `,
   sectionHeader: css`
-    padding-block: 8px 4px;
+    cursor: pointer;
+    user-select: none;
+
+    display: flex;
+    gap: 4px;
+    align-items: center;
+
+    padding-block: 8px 2px;
     padding-inline: 0;
 
     font-size: 11px;
@@ -65,6 +73,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextTertiary};
     text-transform: uppercase;
     letter-spacing: 0.5px;
+
+    &:hover {
+      color: ${cssVar.colorText};
+    }
   `,
 }));
 
@@ -75,6 +87,7 @@ interface SkillListProps {
 
 const SkillList = memo<SkillListProps>(({ onSelect, selectedIdentifier }) => {
   const { t } = useTranslation('setting');
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
   const isKlavisEnabled = useServerConfigStore(serverConfigSelectors.enableKlavis);
@@ -370,12 +383,27 @@ const SkillList = memo<SkillListProps>(({ onSelect, selectedIdentifier }) => {
     (i) => i.type === 'lobehub' || i.type === 'klavis',
   );
 
-  const renderSection = (label: string, children: React.ReactNode) => (
-    <>
-      <div className={styles.sectionHeader}>{label}</div>
-      {children}
-    </>
-  );
+  const toggleSection = (key: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const renderSection = (key: string, label: string, children: React.ReactNode) => {
+    const isCollapsed = collapsed.has(key);
+    return (
+      <>
+        <div className={styles.sectionHeader} onClick={() => toggleSection(key)}>
+          {isCollapsed ? <ChevronRightIcon size={10} /> : <ChevronDownIcon size={10} />}
+          {label}
+        </div>
+        {!isCollapsed && children}
+      </>
+    );
+  };
 
   const hasBuiltinTools = builtinToolItems.length > 0;
   const hasBuiltinSkills = builtinSkillItems.length > 0;
@@ -387,6 +415,7 @@ const SkillList = memo<SkillListProps>(({ onSelect, selectedIdentifier }) => {
     <div className={styles.container}>
       {hasBuiltinTools &&
         renderSection(
+          'builtinTools',
           t('skillGroup.builtinTools', 'LobeHub 内置 Tools'),
           builtinToolItems.map((item) => {
             if (item.type !== 'builtin') return null;
@@ -410,6 +439,7 @@ const SkillList = memo<SkillListProps>(({ onSelect, selectedIdentifier }) => {
 
       {hasBuiltinSkills &&
         renderSection(
+          'builtinSkills',
           t('skillGroup.builtinSkills', '内置 Skill'),
           builtinSkillItems.map((item) => {
             if (item.type !== 'builtinAgent') return null;
@@ -430,6 +460,7 @@ const SkillList = memo<SkillListProps>(({ onSelect, selectedIdentifier }) => {
 
       {hasCommunitySkills &&
         renderSection(
+          'communitySkills',
           t('skillGroup.communitySkills', '社区 Skill'),
           <>
             {communitySkillItems.map((item) => {
@@ -461,10 +492,15 @@ const SkillList = memo<SkillListProps>(({ onSelect, selectedIdentifier }) => {
         )}
 
       {hasCommunityTools &&
-        renderSection(t('skillGroup.communityTools', '社区 Tools'), renderCommunityMCPs())}
+        renderSection(
+          'communityTools',
+          t('skillGroup.communityTools', '社区 Tools'),
+          renderCommunityMCPs(),
+        )}
 
       {hasCustom &&
         renderSection(
+          'custom',
           t('skillGroup.custom', '自定义'),
           <>
             {renderCustomMCPs()}

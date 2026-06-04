@@ -45,38 +45,41 @@ const McpSkillItem = memo<McpSkillItemProps>(
           horizontal
           align="center"
           className={styles.container}
-          gap={16}
+          gap={8}
           justify="space-between"
           style={{
-            ...(isSelected ? { background: 'var(--ant-color-primary-bg)', borderRadius: 8 } : {}),
+            ...(isSelected ? { background: 'var(--ant-color-primary-bg)', borderRadius: 6 } : {}),
             ...(onSelect ? { cursor: 'pointer' } : {}),
           }}
           onClick={onSelect}
         >
-          <Flexbox horizontal align="center" gap={12} style={{ flex: 1, overflow: 'hidden' }}>
+          <Flexbox horizontal align="center" gap={8} style={{ flex: 1, overflow: 'hidden' }}>
             <div className={styles.icon}>
               {avatar && avatar !== 'MCP_AVATAR' ? (
-                <Avatar avatar={avatar} shape={'square'} size={32} />
+                <Avatar avatar={avatar} shape={'square'} size={22} />
               ) : (
-                <Icon icon={McpIcon} size={28} />
+                <Icon icon={McpIcon} size={18} />
               )}
             </div>
-            <Flexbox horizontal align="center" gap={8} style={{ overflow: 'hidden' }}>
-              <span
-                className={styles.title}
-                onClick={onSelect ? undefined : () => setDetailOpen(true)}
-              >
-                {title}
-              </span>
+            <span
+              className={styles.title}
+              onClick={onSelect ? undefined : () => setDetailOpen(true)}
+            >
+              {title}
+            </span>
+          </Flexbox>
+          {onSelect ? (
+            <SkillSourceTag source={isCustomPlugin ? 'user' : 'market'} />
+          ) : (
+            <Flexbox horizontal align="center" gap={4}>
               {isCustomPlugin ? (
                 <MCPTag showText={false} />
               ) : (
                 <PluginTag author={author} isMCP={isMCP} type={type} />
               )}
-              <SkillSourceTag source={isCustomPlugin ? 'user' : 'market'} />
+              <Actions identifier={identifier} isMCP={isMCP} type={type} />
             </Flexbox>
-          </Flexbox>
-          {!onSelect && <Actions identifier={identifier} isMCP={isMCP} type={type} />}
+          )}
         </Flexbox>
         {isCommunityMCP && (
           <Modal

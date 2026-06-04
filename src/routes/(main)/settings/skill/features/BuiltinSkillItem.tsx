@@ -95,38 +95,35 @@ const BuiltinSkillItem = memo<BuiltinSkillItemProps>(
         horizontal
         align="center"
         className={styles.container}
-        gap={16}
+        gap={8}
         justify="space-between"
         style={{
-          ...(isSelected ? { background: 'var(--ant-color-primary-bg)', borderRadius: 8 } : {}),
+          ...(isSelected ? { background: 'var(--ant-color-primary-bg)', borderRadius: 6 } : {}),
           ...(onSelect ? { cursor: 'pointer' } : {}),
         }}
         onClick={onSelect}
       >
-        <Flexbox horizontal align="center" gap={16} style={{ flex: 1, overflow: 'hidden' }}>
+        <Flexbox horizontal align="center" gap={8} style={{ flex: 1, overflow: 'hidden' }}>
           <Flexbox
             horizontal
             align="center"
-            gap={16}
+            gap={8}
             style={{ cursor: onSelect ? undefined : 'pointer' }}
             onClick={onSelect ? undefined : () => createBuiltinSkillDetailModal({ identifier })}
           >
             <div className={`${styles.icon} ${!isInstalled ? styles.disconnectedIcon : ''}`}>
-              <Avatar avatar={avatar} size={32} />
+              <Avatar avatar={avatar} size={22} />
             </div>
-            <Flexbox gap={4} style={{ overflow: 'hidden' }}>
-              <Flexbox horizontal align="center" gap={8}>
-                <span className={`${styles.title} ${!isInstalled ? styles.disconnectedTitle : ''}`}>
-                  {title}
-                </span>
-                <SkillSourceTag source="builtin" />
-              </Flexbox>
-              {!isInstalled && renderStatus()}
-            </Flexbox>
+            <span className={`${styles.title} ${!isInstalled ? styles.disconnectedTitle : ''}`}>
+              {title}
+            </span>
           </Flexbox>
+          {!isInstalled && renderStatus()}
         </Flexbox>
-        {!onSelect && (
-          <Flexbox horizontal align="center" gap={12} onClick={stopPropagation}>
+        {onSelect ? (
+          <SkillSourceTag source="builtin" />
+        ) : (
+          <Flexbox horizontal align="center" gap={8} onClick={stopPropagation}>
             {isInstalled && renderStatus()}
             {renderActions()}
           </Flexbox>

@@ -182,9 +182,9 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(
     const renderIcon = () => {
       const { icon, label } = serverType;
       if (typeof icon === 'string') {
-        return <Avatar alt={label} avatar={icon} size={32} />;
+        return <Avatar alt={label} avatar={icon} size={22} />;
       }
-      return <Icon fill={cssVar.colorText} icon={icon} size={32} />;
+      return <Icon fill={cssVar.colorText} icon={icon} size={22} />;
     };
 
     const renderStatus = () => {
@@ -282,19 +282,19 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(
         horizontal
         align="center"
         className={styles.container}
-        gap={16}
+        gap={8}
         justify="space-between"
         style={{
-          ...(isSelected ? { background: 'var(--ant-color-primary-bg)', borderRadius: 8 } : {}),
+          ...(isSelected ? { background: 'var(--ant-color-primary-bg)', borderRadius: 6 } : {}),
           ...(onSelect ? { cursor: 'pointer' } : {}),
         }}
         onClick={onSelect}
       >
-        <Flexbox horizontal align="center" gap={16} style={{ flex: 1, overflow: 'hidden' }}>
+        <Flexbox horizontal align="center" gap={8} style={{ flex: 1, overflow: 'hidden' }}>
           <Flexbox
             horizontal
             align="center"
-            gap={16}
+            gap={8}
             style={{ cursor: onSelect ? undefined : 'pointer' }}
             onClick={
               onSelect
@@ -309,19 +309,16 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(
             <div className={`${styles.icon} ${!isConnected ? styles.disconnectedIcon : ''}`}>
               {renderIcon()}
             </div>
-            <Flexbox gap={4} style={{ overflow: 'hidden' }}>
-              <Flexbox horizontal align="center" gap={8}>
-                <span className={`${styles.title} ${!isConnected ? styles.disconnectedTitle : ''}`}>
-                  {serverType.label}
-                </span>
-                <SkillSourceTag source="builtin" />
-              </Flexbox>
-              {!isConnected && renderStatus()}
-            </Flexbox>
+            <span className={`${styles.title} ${!isConnected ? styles.disconnectedTitle : ''}`}>
+              {serverType.label}
+            </span>
           </Flexbox>
+          {!isConnected && renderStatus()}
         </Flexbox>
-        {!onSelect && (
-          <Flexbox horizontal align="center" gap={12}>
+        {onSelect ? (
+          <SkillSourceTag source="builtin" />
+        ) : (
+          <Flexbox horizontal align="center" gap={8}>
             {isConnected && renderStatus()}
             {renderAction()}
           </Flexbox>
