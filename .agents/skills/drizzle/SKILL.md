@@ -174,6 +174,34 @@ const rows = await this.db
   .groupBy(agentEvalDatasets.id);
 ```
 
+### Raw SQL and Advanced Queries
+
+Prefer Drizzle builders whenever the query can be expressed clearly with `select`,
+`insert().select()`, `update().from()`, joins, CTEs, `groupBy`, and typed selected
+columns. This keeps table and column references tied to schema definitions, so
+schema changes are more likely to surface as TypeScript errors.
+
+Expression-level `sql<T>` is fine inside a Drizzle builder for PostgreSQL features
+that do not have a dedicated helper, such as JSON path extraction, casts, aggregate
+expressions, `CASE`, `NOW()`, advisory locks, or `FOR UPDATE`.
+
+When refactoring raw SQL:
+
+- Preserve the original query shape for latency-sensitive paths. If raw SQL is one
+  database roundtrip, do not replace it with multiple depth-based queries just to
+  remove `execute`.
+- Use `$with(...)` plus `insert().select()` / `update().from()` for multi-step
+  single-roundtrip writes when Drizzle can express the data flow.
+- Avoid generic `execute<MyRow>(sql...)` as the main safety mechanism. It types the
+  returned rows, but it does not keep selected columns in sync with schema changes.
+- If the only clean implementation is a PostgreSQL feature that Drizzle cannot
+  express well, keep the raw SQL and tighten it instead: use schema references in
+  interpolations, explicit user scope, a narrow row interface, and regression tests.
+
+Recursive CTEs are a special case: current Drizzle usage in this repo does not have
+a clean `WITH RECURSIVE` builder pattern. Keep recursive CTE raw SQL when replacing
+it would add extra database roundtrips or materially worsen performance.
+
 ### One-to-Many (Separate Queries)
 
 When you need a parent record with its children, use two queries instead of relational `with:`:
