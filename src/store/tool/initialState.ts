@@ -6,6 +6,10 @@ import { type AgentSkillsState, initialAgentSkillsState } from './slices/agentSk
 import { type BuiltinToolState, initialBuiltinToolState } from './slices/builtin/initialState';
 import { type ConnectorState, initialConnectorState } from './slices/connector/initialState';
 import {
+  type ComposioStoreState,
+  initialComposioStoreState,
+} from './slices/composioStore/initialState';
+import {
   type CustomPluginState,
   initialCustomPluginState,
 } from './slices/customPlugin/initialState';
@@ -22,6 +26,7 @@ export type ToolStoreState = ConnectorState &
   CustomPluginState &
   BuiltinToolState &
   MCPStoreState &
+  ComposioStoreState &
   KlavisStoreState &
   LobehubSkillStoreState &
   AgentSkillsState &
@@ -33,6 +38,7 @@ export const initialState: ToolStoreState = {
   ...initialCustomPluginState,
   ...initialBuiltinToolState,
   ...initialMCPStoreState,
+  ...initialComposioStoreState,
   ...initialKlavisStoreState,
   ...initialLobehubSkillStoreState,
   ...initialAgentSkillsState,

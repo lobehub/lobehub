@@ -14,7 +14,7 @@
  * Services must be injected via constructor for runtime-agnostic usage
  * (e.g., server-side services vs client-side services).
  */
-import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
+import { COMPOSIO_APP_TYPES, KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
 import { marketToolsResultsPrompt, modelsResultsPrompt } from '@lobechat/prompts';
 import type { BuiltinToolResult } from '@lobechat/types';
 
@@ -24,10 +24,12 @@ import { getAiInfraStoreState } from '@/store/aiInfra';
 import { getToolStoreState } from '@/store/tool';
 import {
   builtinToolSelectors,
+  composioStoreSelectors,
   klavisStoreSelectors,
   lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
+import { ComposioServerStatus } from '@/store/tool/slices/composioStore/types';
 import { KlavisServerStatus } from '@/store/tool/slices/klavisStore/types';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 import { getUserStoreState } from '@/store/user';
@@ -678,6 +680,22 @@ export class AgentManagerRuntime {
       const toolState = getToolStoreState();
 
       if (source === 'official') {
+        // Check if it's a Composio tool
+        const isComposioEnabled =
+          typeof window !== 'undefined' &&
+          window.global_serverConfigStore?.getState()?.serverConfig?.enableComposio;
+
+        if (isComposioEnabled) {
+          const composioServer = composioStoreSelectors
+            .getServers(toolState)
+            .find((s) => s.identifier === identifier);
+          const composioAppInfo = COMPOSIO_APP_TYPES.find((t) => t.identifier === identifier);
+
+          if (composioAppInfo) {
+            return this.handleComposioInstall(agentId, identifier, composioAppInfo, composioServer);
+          }
+        }
+
         // Check if it's a Klavis tool
         const isKlavisEnabled =
           typeof window !== 'undefined' &&
@@ -775,6 +793,133 @@ export class AgentManagerRuntime {
     if (config) {
       getAgentStoreState().internal_dispatchAgentMap(agentId, config);
     }
+  }
+
+  private async handleComposioInstall(
+    agentId: string,
+    identifier: string,
+    composioAppInfo: (typeof COMPOSIO_APP_TYPES)[0],
+    composioServer: any,
+  ): Promise<BuiltinToolResult> {
+    if (composioServer) {
+      if (composioServer.status === ComposioServerStatus.ACTIVE) {
+        await this.enablePluginForAgent(agentId, identifier);
+        return {
+          content: `Successfully enabled Composio tool: ${composioAppInfo.label}`,
+          state: {
+            installed: true,
+            isComposio: true,
+            pluginId: identifier,
+            pluginName: composioAppInfo.label,
+            serverStatus: 'connected',
+            success: true,
+          } as InstallPluginState,
+          success: true,
+        };
+      } else if (composioServer.status === ComposioServerStatus.PENDING_AUTH) {
+        if (composioServer.redirectUrl) {
+          const authResult = await this.openOAuthWindowAndWait(
+            composioServer.redirectUrl,
+            identifier,
+          );
+          if (authResult.success) {
+            await this.enablePluginForAgent(agentId, identifier);
+            return {
+              content: `Successfully connected and enabled Composio tool: ${composioAppInfo.label}`,
+              state: {
+                installed: true,
+                isComposio: true,
+                pluginId: identifier,
+                pluginName: composioAppInfo.label,
+                serverStatus: 'connected',
+                success: true,
+              } as InstallPluginState,
+              success: true,
+            };
+          }
+        }
+        return {
+          content: `OAuth authorization was cancelled or failed for Composio tool: ${composioAppInfo.label}. Please try again.`,
+          state: {
+            installed: false,
+            isComposio: true,
+            pluginId: identifier,
+            pluginName: composioAppInfo.label,
+            serverStatus: 'pending_auth',
+            success: false,
+          } as InstallPluginState,
+          success: false,
+        };
+      }
+    }
+
+    // Server doesn't exist, create it
+    const userId = userProfileSelectors.userId(getUserStoreState());
+    if (!userId) {
+      return {
+        content: `Cannot connect Composio tool: User not logged in.`,
+        error: { message: 'User not logged in', type: 'AuthRequired' },
+        state: { installed: false, pluginId: identifier, success: false } as InstallPluginState,
+        success: false,
+      };
+    }
+
+    const newServer = await getToolStoreState().createComposioConnection({
+      appSlug: composioAppInfo.appSlug,
+      authConfigId: '',
+      identifier,
+      label: composioAppInfo.label,
+    });
+
+    if (newServer) {
+      await this.enablePluginForAgent(agentId, identifier);
+
+      if (newServer.status === ComposioServerStatus.ACTIVE) {
+        await getToolStoreState().refreshComposioConnectionStatus(newServer.identifier);
+        return {
+          content: `Successfully connected and enabled Composio tool: ${composioAppInfo.label}`,
+          state: {
+            installed: true,
+            isComposio: true,
+            pluginId: identifier,
+            pluginName: composioAppInfo.label,
+            serverStatus: 'connected',
+            success: true,
+          } as InstallPluginState,
+          success: true,
+        };
+      } else if (newServer.redirectUrl) {
+        const authResult = await this.openOAuthWindowAndWait(
+          newServer.redirectUrl,
+          newServer.identifier,
+        );
+        if (authResult.success) {
+          return {
+            content: `Successfully connected and enabled Composio tool: ${composioAppInfo.label}`,
+            state: {
+              installed: true,
+              isComposio: true,
+              pluginId: identifier,
+              pluginName: composioAppInfo.label,
+              serverStatus: 'connected',
+              success: true,
+            } as InstallPluginState,
+            success: true,
+          };
+        }
+      }
+    }
+
+    return {
+      content: `Failed to connect Composio tool: ${composioAppInfo.label}`,
+      error: { message: 'Failed to create Composio connection', type: 'ComposioError' },
+      state: {
+        installed: false,
+        pluginId: identifier,
+        success: false,
+      } as InstallPluginState,
+      success: false,
+    };
   }
 
   private async handleKlavisInstall(

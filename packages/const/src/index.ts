@@ -1,5 +1,6 @@
 export * from './agentDocument';
 export * from './bot';
+export * from './composio';
 export * from './currency';
 export * from './desktop';
 export * from './desktopGlobalShortcuts';

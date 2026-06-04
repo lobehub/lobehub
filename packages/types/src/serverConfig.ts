@@ -62,6 +62,7 @@ export interface GlobalServerConfig {
   defaultAgent?: PartialDeep<UserDefaultAgent>;
   disableEmailPassword?: boolean;
   enableBusinessFeatures?: boolean;
+  enableComposio?: boolean;
   /**
    * @deprecated
    */

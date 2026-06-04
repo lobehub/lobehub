@@ -13,6 +13,16 @@ export interface CustomPluginMetadata {
 export interface CustomPluginParams {
   apiMode?: 'openapi' | 'simple';
   avatar?: string;
+  /**
+   * Composio integration parameters
+   */
+  composio?: {
+    appSlug: string;
+    authConfigId: string;
+    connectedAccountId: string;
+    redirectUrl?: string;
+    status: string;
+  };
   description?: string;
   enableSettings?: boolean;
   /**
