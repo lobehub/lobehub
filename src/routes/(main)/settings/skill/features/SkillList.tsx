@@ -13,9 +13,9 @@ import {
 import { type BuiltinSkill, type LobeBuiltinTool } from '@lobechat/types';
 import { Center, Empty } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { Divider } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
+import type React from 'react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -45,7 +45,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 2px;
   `,
   description: css`
     margin-block-end: 8px;
@@ -55,6 +55,16 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding: 24px;
     color: ${cssVar.colorTextTertiary};
     text-align: center;
+  `,
+  sectionHeader: css`
+    padding-block: 8px 4px;
+    padding-inline: 0;
+
+    font-size: 11px;
+    font-weight: 500;
+    color: ${cssVar.colorTextTertiary};
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
   `,
 }));
 
@@ -303,59 +313,6 @@ const SkillList = memo<SkillListProps>(({ onSelect, selectedIdentifier }) => {
     );
   }
 
-  const renderIntegrations = () =>
-    integrations.map((item) => {
-      if (item.type === 'builtinAgent') {
-        return (
-          <AgentSkillItem
-            isSelected={selectedIdentifier === item.builtinAgentSkill.identifier}
-            key={item.builtinAgentSkill.identifier}
-            skill={item.builtinAgentSkill}
-            onSelect={
-              onSelect
-                ? () => onSelect(item.builtinAgentSkill.identifier, 'builtin-skill')
-                : undefined
-            }
-          />
-        );
-      }
-      if (item.type === 'builtin') {
-        const localizedTitle = t(`tools.builtins.${item.builtinTool.identifier}.title`, {
-          defaultValue: item.builtinTool.manifest.meta?.title || item.builtinTool.identifier,
-        });
-        return (
-          <BuiltinSkillItem
-            avatar={item.builtinTool.manifest.meta?.avatar}
-            identifier={item.builtinTool.identifier}
-            isSelected={selectedIdentifier === item.builtinTool.identifier}
-            key={item.builtinTool.identifier}
-            title={localizedTitle}
-            onSelect={onSelect ? () => onSelect(item.builtinTool.identifier, 'builtin') : undefined}
-          />
-        );
-      }
-      if (item.type === 'lobehub') {
-        return (
-          <LobehubSkillItem
-            isSelected={selectedIdentifier === item.provider.id}
-            key={item.provider.id}
-            provider={item.provider}
-            server={getLobehubSkillServerByProvider(item.provider.id)}
-            onSelect={onSelect ? () => onSelect(item.provider.id, 'plugin') : undefined}
-          />
-        );
-      }
-      return (
-        <KlavisSkillItem
-          isSelected={selectedIdentifier === item.serverType.identifier}
-          key={item.serverType.identifier}
-          server={getKlavisServerByIdentifier(item.serverType.identifier)}
-          serverType={item.serverType}
-          onSelect={onSelect ? () => onSelect(item.serverType.identifier, 'plugin') : undefined}
-        />
-      );
-    });
-
   const renderMarketAgentSkills = () =>
     marketAgentSkills.map((skill) => (
       <AgentSkillItem
@@ -406,21 +363,115 @@ const SkillList = memo<SkillListProps>(({ onSelect, selectedIdentifier }) => {
       />
     ));
 
-  const hasIntegrationsSection = integrations.length > 0;
-  const hasCommunitySection = communityMCPs.length > 0 || marketAgentSkills.length > 0;
-  const hasCustomSection = userAgentSkills.length > 0 || customMCPs.length > 0;
+  // Split integrations into builtin tools vs builtin skills
+  const builtinToolItems = integrations.filter((i) => i.type === 'builtin');
+  const builtinSkillItems = integrations.filter((i) => i.type === 'builtinAgent');
+  const communitySkillItems = integrations.filter(
+    (i) => i.type === 'lobehub' || i.type === 'klavis',
+  );
+
+  const renderSection = (label: string, children: React.ReactNode) => (
+    <>
+      <div className={styles.sectionHeader}>{label}</div>
+      {children}
+    </>
+  );
+
+  const hasBuiltinTools = builtinToolItems.length > 0;
+  const hasBuiltinSkills = builtinSkillItems.length > 0;
+  const hasCommunitySkills = communitySkillItems.length > 0 || marketAgentSkills.length > 0;
+  const hasCommunityTools = communityMCPs.length > 0;
+  const hasCustom = userAgentSkills.length > 0 || customMCPs.length > 0;
 
   return (
     <div className={styles.container}>
-      {integrations.length > 0 && renderIntegrations()}
-      {hasIntegrationsSection && hasCommunitySection && <Divider style={{ margin: 0 }} />}
-      {marketAgentSkills.length > 0 && renderMarketAgentSkills()}
-      {communityMCPs.length > 0 && renderCommunityMCPs()}
-      {(hasIntegrationsSection || hasCommunitySection) && hasCustomSection && (
-        <Divider style={{ margin: 0 }} />
-      )}
-      {userAgentSkills.length > 0 && renderUserAgentSkills()}
-      {customMCPs.length > 0 && renderCustomMCPs()}
+      {hasBuiltinTools &&
+        renderSection(
+          t('skillGroup.builtinTools', 'LobeHub 内置 Tools'),
+          builtinToolItems.map((item) => {
+            if (item.type !== 'builtin') return null;
+            const localizedTitle = t(`tools.builtins.${item.builtinTool.identifier}.title`, {
+              defaultValue: item.builtinTool.manifest.meta?.title || item.builtinTool.identifier,
+            });
+            return (
+              <BuiltinSkillItem
+                avatar={item.builtinTool.manifest.meta?.avatar}
+                identifier={item.builtinTool.identifier}
+                isSelected={selectedIdentifier === item.builtinTool.identifier}
+                key={item.builtinTool.identifier}
+                title={localizedTitle}
+                onSelect={
+                  onSelect ? () => onSelect(item.builtinTool.identifier, 'builtin') : undefined
+                }
+              />
+            );
+          }),
+        )}
+
+      {hasBuiltinSkills &&
+        renderSection(
+          t('skillGroup.builtinSkills', '内置 Skill'),
+          builtinSkillItems.map((item) => {
+            if (item.type !== 'builtinAgent') return null;
+            return (
+              <AgentSkillItem
+                isSelected={selectedIdentifier === item.builtinAgentSkill.identifier}
+                key={item.builtinAgentSkill.identifier}
+                skill={item.builtinAgentSkill}
+                onSelect={
+                  onSelect
+                    ? () => onSelect(item.builtinAgentSkill.identifier, 'builtin-skill')
+                    : undefined
+                }
+              />
+            );
+          }),
+        )}
+
+      {hasCommunitySkills &&
+        renderSection(
+          t('skillGroup.communitySkills', '社区 Skill'),
+          <>
+            {communitySkillItems.map((item) => {
+              if (item.type === 'lobehub') {
+                return (
+                  <LobehubSkillItem
+                    isSelected={selectedIdentifier === item.provider.id}
+                    key={item.provider.id}
+                    provider={item.provider}
+                    server={getLobehubSkillServerByProvider(item.provider.id)}
+                    onSelect={onSelect ? () => onSelect(item.provider.id, 'plugin') : undefined}
+                  />
+                );
+              }
+              return (
+                <KlavisSkillItem
+                  isSelected={selectedIdentifier === item.serverType.identifier}
+                  key={item.serverType.identifier}
+                  server={getKlavisServerByIdentifier(item.serverType.identifier)}
+                  serverType={item.serverType}
+                  onSelect={
+                    onSelect ? () => onSelect(item.serverType.identifier, 'plugin') : undefined
+                  }
+                />
+              );
+            })}
+            {renderMarketAgentSkills()}
+          </>,
+        )}
+
+      {hasCommunityTools &&
+        renderSection(t('skillGroup.communityTools', '社区 Tools'), renderCommunityMCPs())}
+
+      {hasCustom &&
+        renderSection(
+          t('skillGroup.custom', '自定义'),
+          <>
+            {renderCustomMCPs()}
+            {renderUserAgentSkills()}
+          </>,
+        )}
+
       <div style={{ marginTop: 8 }}>
         <AddSkillButton />
       </div>

@@ -6,7 +6,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorSuccess};
   `,
   container: css`
-    padding-block: 12px;
+    padding-block: 6px;
     padding-inline: 0;
   `,
   disconnected: css`
@@ -29,9 +29,9 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
     justify-content: center;
 
-    width: 48px;
-    height: 48px;
-    border-radius: 12px;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
 
     background: ${cssVar.colorFillTertiary};
   `,

@@ -1,6 +1,6 @@
 'use client';
 
-import { Avatar, Skeleton } from '@lobehub/ui';
+import { Avatar, Markdown, Skeleton } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { lazy, memo, Suspense, useEffect, useState } from 'react';
@@ -130,9 +130,11 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type }) => {
             )}
           </div>
         </div>
-        <div className={styles.noPermissions}>
-          This is a prompt-based skill. It does not expose individual tool permissions.
-        </div>
+        {builtinSkill?.content && (
+          <div style={{ padding: '16px 24px' }}>
+            <Markdown variant="chat">{builtinSkill.content}</Markdown>
+          </div>
+        )}
       </div>
     );
   }
