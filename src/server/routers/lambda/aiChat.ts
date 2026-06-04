@@ -186,6 +186,9 @@ export const aiChatRouter = router({
       ): Promise<Awaited<T>> => {
         return runTimedStage(timingContext, `lambda.aiChat.${stage}`, task, metadata);
       };
+      const logFastPathMessagesAndTopics = (metadata: Record<string, unknown>) => {
+        logTiming(timingContext, 'lambda.aiChat.messagesAndTopics.fastResponse:done', metadata);
+      };
       logTiming(timingContext, 'lambda.aiChat.sendMessageInServer:start', {
         hasNewThread: !!input.newThread,
         hasNewTopic: !!input.newTopic,
@@ -237,6 +240,12 @@ export const aiChatRouter = router({
           toCreatedUIChatMessage(result.assistantMessage as CreatedMessageItem),
         ];
 
+        logFastPathMessagesAndTopics({
+          isCreateNewTopic: true,
+          messageCount: messages.length,
+          reason: 'simple-new-topic-turn',
+          topicCount: 0,
+        });
         logTiming(timingContext, 'lambda.aiChat.sendMessageInServer:done', {
           isCreateNewTopic: true,
           messageCount: messages.length,
@@ -289,6 +298,12 @@ export const aiChatRouter = router({
           toCreatedUIChatMessage(result.assistantMessage as CreatedMessageItem),
         ];
 
+        logFastPathMessagesAndTopics({
+          isCreateNewTopic: false,
+          messageCount: messages.length,
+          reason: 'simple-existing-topic-turn',
+          topicCount: 0,
+        });
         logTiming(timingContext, 'lambda.aiChat.sendMessageInServer:done', {
           isCreateNewTopic: false,
           messageCount: messages.length,
