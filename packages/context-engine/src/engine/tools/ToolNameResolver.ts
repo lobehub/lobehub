@@ -32,7 +32,7 @@ export class ToolNameResolver {
    * generated name stays provider-safe while `resolve()` can still recover the
    * original value from the manifest.
    *
-   * Example: `custom_mcp____中文API____mcp` is rejected, so the API segment
+   * Example: `custom_mcp____中文API____mcp` (a segment with Chinese/non-ASCII chars) is rejected, so the API segment
    * becomes `MD5HASH_xxx` on the wire.
    */
   private normalizeComponent(name: string): string {

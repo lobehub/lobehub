@@ -1767,7 +1767,7 @@ export const executeHeterogeneousAgent = async (
       // — otherwise the handler reads `assistant.tools[]` while a parallel
       // `persistToolBatch` is still mid-flight and `replaceMessages` clobbers
       // the in-memory cumulative tools[] with a shorter snapshot. That's the
-      // "7 → 6 次技能调用" rollback users see on parallel CC tool batches.
+      // "7 → 6 skill calls" rollback users see on parallel CC tool batches.
       //
       // Other forwards (text / reasoning / tools_calling dispatches) stay
       // synchronous so live streaming UX isn't gated on DB round-trips.
