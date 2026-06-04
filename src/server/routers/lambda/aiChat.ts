@@ -25,9 +25,8 @@ import { FileService } from '@/server/services/file';
 import { archiveToolResultIfNeeded } from '@/server/services/toolExecution/archiveToolResult';
 
 const log = debug('lobe-lambda-router:ai-chat');
-const { createPrefixedTimingContext, logTiming, runTimedStage } = createTimingHelpers(
-  'lobe-server:chat:lobehub:timing',
-);
+const { createPrefixedTimingContext, logTiming, markStageDone, runTimedStage } =
+  createTimingHelpers('lobe-server:chat:lobehub:timing');
 
 type SendMessageServerResponseWithPartial = SendMessageServerResponse & {
   __isPartialMessages?: boolean;
@@ -187,7 +186,7 @@ export const aiChatRouter = router({
         return runTimedStage(timingContext, `lambda.aiChat.${stage}`, task, metadata);
       };
       const logFastPathMessagesAndTopics = (metadata: Record<string, unknown>) => {
-        logTiming(timingContext, 'lambda.aiChat.messagesAndTopics.fastResponse:done', metadata);
+        markStageDone(timingContext, 'lambda.aiChat.messagesAndTopics.fastResponse', metadata);
       };
       logTiming(timingContext, 'lambda.aiChat.sendMessageInServer:start', {
         hasNewThread: !!input.newThread,
