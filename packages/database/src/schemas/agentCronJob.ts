@@ -5,6 +5,7 @@ import { timestamps } from './_helpers';
 import { agents } from './agent';
 import { chatGroups } from './chatGroup';
 import { users } from './user';
+import { workspaces } from './workspace';
 
 interface ExecutionConditions {
   activeDays?: number[];
@@ -29,7 +30,7 @@ export const agentCronJobs = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
-    workspaceId: text('workspace_id'),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     // Task identification
     name: text('name'), // Optional task name like "Daily Report", "Data Monitoring"

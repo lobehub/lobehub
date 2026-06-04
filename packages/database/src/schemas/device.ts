@@ -2,6 +2,7 @@ import { index, jsonb, pgTable, text, uniqueIndex, uuid, varchar } from 'drizzle
 
 import { timestamps, timestamptz } from './_helpers';
 import { users } from './user';
+import { workspaces } from './workspace';
 
 /**
  * A working directory the device has used. Structured (rather than a bare path
@@ -31,7 +32,7 @@ export const devices = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
-    workspaceId: text('workspace_id'),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     /** Machine-derived id (sha256 truncated to 32 chars; 64 leaves room for fallback randomUUID) */
     deviceId: varchar('device_id', { length: 64 }).notNull(),

@@ -13,6 +13,7 @@ import type { AiModelSettings } from 'model-bank';
 
 import { timestamps } from './_helpers';
 import { users } from './user';
+import { workspaces } from './workspace';
 
 export const aiProviders = pgTable(
   'ai_providers',
@@ -42,7 +43,7 @@ export const aiProviders = pgTable(
       .$defaultFn(() => ({}))
       .$type<AiProviderConfig>(),
 
-    workspaceId: text('workspace_id'),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     ...timestamps,
   },
@@ -79,7 +80,7 @@ export const aiModels = pgTable(
     releasedAt: varchar('released_at', { length: 10 }),
     settings: jsonb('settings').default({}).$type<AiModelSettings>(),
 
-    workspaceId: text('workspace_id'),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     ...timestamps,
   },

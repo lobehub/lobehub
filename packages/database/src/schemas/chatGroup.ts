@@ -15,6 +15,7 @@ import { timestamps } from './_helpers';
 import { agents } from './agent';
 import { sessionGroups } from './session';
 import { users } from './user';
+import { workspaces } from './workspace';
 
 /**
  * Chat groups table for multi-agent conversations
@@ -42,7 +43,7 @@ export const chatGroups = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
-    workspaceId: text('workspace_id'),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     groupId: text('group_id').references(() => sessionGroups.id, { onDelete: 'set null' }),
 
@@ -76,7 +77,7 @@ export const chatGroupsAgents = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
-    workspaceId: text('workspace_id'),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     /**
      * Whether this agent is active in the group

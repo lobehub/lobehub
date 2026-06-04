@@ -4,6 +4,7 @@ import { createInsertSchema } from 'drizzle-zod';
 import { timestamps } from './_helpers';
 import { agents } from './agent';
 import { users } from './user';
+import { workspaces } from './workspace';
 
 /**
  * Maps a LobeHub user to a single IM account per platform (e.g. one Telegram
@@ -24,7 +25,7 @@ export const messengerAccountLinks = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
-    workspaceId: text('workspace_id'),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     platform: varchar('platform', { length: 50 }).notNull(),
 

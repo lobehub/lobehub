@@ -749,6 +749,13 @@
       "when": 1780508742730,
       "tag": "0106_add_workspace_id_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "7",
+      "when": 1780557205766,
+      "tag": "0107_add_workspace_id_fk",
+      "breakpoints": true
     }
   ],
   "version": "6"

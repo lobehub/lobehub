@@ -11,6 +11,7 @@ import {
 } from 'drizzle-orm/pg-core';
 
 import { timestamptz } from './_helpers';
+import { workspaces } from './workspace';
 
 export type LlmGenerationErrorCode =
   | 'timeout'
@@ -52,7 +53,7 @@ export const llmGenerationTracing = pgTable(
     userId: text('user_id').notNull(),
     agentId: text('agent_id'),
     topicId: text('topic_id'),
-    workspaceId: text('workspace_id'),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
     /** Maps to RequestTrigger enum. */
     trigger: text('trigger'),
     /** Self-reference for chained generateObject calls (e.g. memory job → multiple calls). */

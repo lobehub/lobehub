@@ -3,6 +3,7 @@ import { boolean, index, jsonb, pgTable, primaryKey, text, timestamp } from 'dri
 import { createNanoId } from '../utils/idGenerator';
 import { timestamps } from './_helpers';
 import { users } from './user';
+import { workspaces } from './workspace';
 
 // Roles table
 export const roles = pgTable('rbac_roles', {
@@ -17,7 +18,7 @@ export const roles = pgTable('rbac_roles', {
   isSystem: boolean('is_system').default(false).notNull(), // Whether it's a system role
   isActive: boolean('is_active').default(true).notNull(), // Whether it's active
   metadata: jsonb('metadata').default({}), // Role metadata
-  workspaceId: text('workspace_id'),
+  workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
   ...timestamps,
 });
@@ -77,7 +78,7 @@ export const userRoles = pgTable(
     roleId: text('role_id')
       .references(() => roles.id, { onDelete: 'cascade' })
       .notNull(),
-    workspaceId: text('workspace_id'),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     expiresAt: timestamp('expires_at', { withTimezone: true }), // Support for temporary roles

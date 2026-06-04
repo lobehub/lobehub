@@ -14,6 +14,7 @@ import {
 import { createdAt, timestamps } from './_helpers';
 import { documents, files } from './file';
 import { users } from './user';
+import { workspaces } from './workspace';
 
 export const chunks = pgTable(
   'chunks',
@@ -27,7 +28,7 @@ export const chunks = pgTable(
 
     clientId: text('client_id'),
     userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
-    workspaceId: text('workspace_id'),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     ...timestamps,
   },
@@ -54,7 +55,7 @@ export const unstructuredChunks = pgTable(
     compositeId: uuid('composite_id').references(() => chunks.id, { onDelete: 'cascade' }),
     clientId: text('client_id'),
     userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
-    workspaceId: text('workspace_id'),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
     fileId: varchar('file_id').references(() => files.id, { onDelete: 'cascade' }),
   },
   (t) => ({
@@ -81,7 +82,7 @@ export const embeddings = pgTable(
     model: text('model'),
     clientId: text('client_id'),
     userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
-    workspaceId: text('workspace_id'),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
   },
   (t) => [
     uniqueIndex('embeddings_client_id_user_id_unique').on(t.clientId, t.userId),
@@ -114,7 +115,7 @@ export const documentChunks = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
-    workspaceId: text('workspace_id'),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     createdAt: createdAt(),
   },

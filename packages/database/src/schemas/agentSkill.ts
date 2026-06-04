@@ -6,6 +6,7 @@ import { idGenerator } from '../utils/idGenerator';
 import { timestamps } from './_helpers';
 import { globalFiles } from './file';
 import { users } from './user';
+import { workspaces } from './workspace';
 
 export const agentSkills = pgTable(
   'agent_skills',
@@ -44,7 +45,7 @@ export const agentSkills = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
-    workspaceId: text('workspace_id'),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     ...timestamps,
   },
