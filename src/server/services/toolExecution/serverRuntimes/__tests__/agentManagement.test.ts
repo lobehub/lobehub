@@ -155,5 +155,32 @@ describe('agentManagementRuntime', () => {
       expect(result.content).toContain('call searchAgent with offset=1 and source="user"');
       expect(result.state).toMatchObject({ hasMore: true, totalCount: 42 });
     });
+
+    it('falls back to item count when marketplace omits totalCount', async () => {
+      mockGetAssistantList.mockResolvedValue({
+        items: [
+          { identifier: 'market-agent-1', title: 'Market Agent' },
+          { identifier: 'market-agent-2', title: 'Another Agent' },
+        ],
+        totalCount: undefined,
+      });
+
+      const runtime = createRuntime();
+      const result = await runtime.searchAgent({ source: 'market' });
+
+      expect(result.success).toBe(true);
+      expect(result.state).toMatchObject({ totalCount: 2 });
+    });
+
+    it('handles search failure', async () => {
+      mockQueryAgents.mockRejectedValue(new Error('DB unavailable'));
+      mockCountAgents.mockResolvedValue(0);
+
+      const runtime = createRuntime();
+      const result = await runtime.searchAgent({ source: 'user' });
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('Failed to search agents');
+    });
   });
 });

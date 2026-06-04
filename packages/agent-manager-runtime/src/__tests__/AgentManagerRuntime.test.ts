@@ -405,6 +405,31 @@ describe('AgentManagerRuntime', () => {
       expect(result.success).toBe(true);
       expect(result.content).toContain('No agents at offset 200; only 37 agents match');
     });
+
+    it('should fall back to item count when marketplace omits totalCount', async () => {
+      vi.mocked(mockDiscoverService.getAssistantList).mockResolvedValue({
+        items: [
+          { identifier: 'market-agent-1', title: 'Market Agent' } as any,
+          { identifier: 'market-agent-2', title: 'Another Agent' } as any,
+        ],
+        totalCount: undefined,
+      } as any);
+
+      const result = await runtime.searchAgents({ source: 'market' });
+
+      expect(result.success).toBe(true);
+      expect(result.state?.totalCount).toBe(2);
+    });
+
+    it('should handle search failure', async () => {
+      vi.mocked(mockAgentService.queryAgents).mockRejectedValue(new Error('DB unavailable'));
+      vi.mocked(mockAgentService.countAgents).mockResolvedValue(0);
+
+      const result = await runtime.searchAgents({ source: 'user' });
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('Failed to search agents');
+    });
   });
 
   describe('getAvailableModels', () => {
