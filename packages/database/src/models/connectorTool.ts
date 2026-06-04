@@ -11,6 +11,8 @@ import type { LobeChatDatabase } from '../type';
 
 export interface SyncToolInput {
   crudType: ToolCRUDType;
+  /** Default permission for newly-inserted rows. Existing rows keep their setting. */
+  defaultPermission?: ConnectorToolPermission;
   description?: string;
   displayName?: string;
   inputSchema?: Record<string, unknown>;
@@ -46,7 +48,7 @@ export class ConnectorToolModel {
       inputSchema: t.inputSchema ?? null,
       isWorkArtifact: false,
       outputSchema: t.outputSchema ?? null,
-      permission: Permission.auto,
+      permission: t.defaultPermission ?? Permission.auto,
       renderConfig: t.renderConfig ?? null,
       toolName: t.toolName,
       userConnectorId,

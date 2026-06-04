@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
+import { PluginModel } from '@/database/models/plugin';
 import type { ConnectorCredentials } from '@/database/schemas';
 import {
   ConnectorMcpConnectionType,
@@ -22,6 +23,7 @@ const connectorProcedure = authedProcedure.use(serverDatabase).use(async (opts) 
     ctx: {
       connectorModel: new ConnectorModel(ctx.serverDB, ctx.userId),
       connectorToolModel: new ConnectorToolModel(ctx.serverDB, ctx.userId),
+      pluginModel: new PluginModel(ctx.serverDB, ctx.userId),
     },
   });
 });
@@ -189,9 +191,107 @@ export const connectorRouter = router({
     .mutation(async ({ input, ctx }) => {
       await ctx.connectorToolModel.updatePermission(input.toolId, input.permission);
     }),
+
+  /**
+   * Bootstrap a connector entry for a builtin tool (lobe-creds, lobe-local-system, etc.)
+   * by reading its manifest from @lobechat/builtin-tools.
+   * Idempotent — safe to call on every open of the detail panel.
+   */
+  syncBuiltinTool: connectorProcedure
+    .input(z.object({ identifier: z.string().min(1) }))
+    .mutation(async ({ input, ctx }) => {
+      const { builtinTools } = await import('@lobechat/builtin-tools');
+      const tool = builtinTools.find((t) => t.identifier === input.identifier);
+
+      if (!tool) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: `Builtin tool '${input.identifier}' not found`,
+        });
+      }
+
+      const connectorId = await upsertConnectorEntry(ctx.connectorModel, {
+        identifier: input.identifier,
+        name: tool.manifest.meta?.title || input.identifier,
+        sourceType: ConnectorSourceType.builtin,
+      });
+
+      const syncInputs = tool.manifest.api.map((api) => ({
+        crudType: inferCrudType(api.name),
+        defaultPermission: resolveDefaultPermission(api.humanIntervention),
+        description: api.description,
+        inputSchema: api.parameters as Record<string, unknown>,
+        toolName: api.name,
+      }));
+
+      await ctx.connectorToolModel.upsertMany(connectorId, syncInputs);
+      return { connectorId, toolCount: syncInputs.length };
+    }),
+
+  /**
+   * Bootstrap a connector entry for an installed marketplace plugin.
+   * Reads tool list from user_installed_plugins.manifest.api.
+   * Idempotent — safe to call on every open of the detail panel.
+   */
+  syncPluginTools: connectorProcedure
+    .input(z.object({ identifier: z.string().min(1) }))
+    .mutation(async ({ input, ctx }) => {
+      const plugin = await ctx.pluginModel.findById(input.identifier);
+
+      if (!plugin || !plugin.manifest) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: `Plugin '${input.identifier}' not found or has no manifest`,
+        });
+      }
+
+      const connectorId = await upsertConnectorEntry(ctx.connectorModel, {
+        identifier: input.identifier,
+        name: plugin.manifest.meta?.title || input.identifier,
+        sourceType: ConnectorSourceType.marketplace,
+      });
+
+      const apiList = plugin.manifest.api ?? [];
+      const syncInputs = apiList.map((api: any) => ({
+        crudType: inferCrudType(api.name),
+        defaultPermission: resolveDefaultPermission(api.humanIntervention),
+        description: api.description,
+        inputSchema: api.parameters as Record<string, unknown>,
+        toolName: api.name,
+      }));
+
+      await ctx.connectorToolModel.upsertMany(connectorId, syncInputs);
+      return { connectorId, toolCount: syncInputs.length };
+    }),
 });
 
 // ── Private helpers ───────────────────────────────────────────────────────────
+
+/** Create connector entry if not exists, return connectorId */
+async function upsertConnectorEntry(
+  connectorModel: ConnectorModel,
+  params: { identifier: string; name: string; sourceType: string },
+): Promise<string> {
+  const existing = await connectorModel.queryByIdentifiers([params.identifier]);
+  if (existing.length > 0) return existing[0].id;
+
+  const created = await connectorModel.create({
+    identifier: params.identifier,
+    isEnabled: true,
+    name: params.name,
+    sourceType: params.sourceType as any,
+    status: ConnectorStatus.connected,
+  });
+  return created.id;
+}
+
+/** Map builtin manifest humanIntervention → default ConnectorToolPermission */
+function resolveDefaultPermission(humanIntervention: unknown): ConnectorToolPermission {
+  if (humanIntervention === 'required' || humanIntervention === 'always') {
+    return ConnectorToolPermission.needs_approval;
+  }
+  return ConnectorToolPermission.auto;
+}
 
 function buildAuthFromCredentials(
   credentials: ConnectorCredentials | null,

@@ -65,6 +65,28 @@ export class ConnectorActionImpl {
     await this.fetchConnectors();
   };
 
+  /**
+   * Bootstrap connector entry for a builtin tool (reads manifest server-side).
+   * Idempotent — safe to call whenever the detail panel opens.
+   * Returns the connectorId.
+   */
+  syncBuiltinTool = async (identifier: string): Promise<string> => {
+    const result = await lambdaClient.connector.syncBuiltinTool.mutate({ identifier });
+    await this.fetchConnectors();
+    return result.connectorId;
+  };
+
+  /**
+   * Bootstrap connector entry for an installed marketplace plugin.
+   * Idempotent — safe to call whenever the detail panel opens.
+   * Returns the connectorId.
+   */
+  syncPluginTools = async (identifier: string): Promise<string> => {
+    const result = await lambdaClient.connector.syncPluginTools.mutate({ identifier });
+    await this.fetchConnectors();
+    return result.connectorId;
+  };
+
   updateToolPermission = async (
     toolId: string,
     permission: ConnectorToolPermission,

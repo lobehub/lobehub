@@ -22,13 +22,15 @@ interface McpSkillItemProps {
   author?: string;
   avatar?: string;
   identifier: string;
+  isSelected?: boolean;
+  onSelect?: () => void;
   runtimeType?: string;
   title: string;
   type: LobeToolType;
 }
 
 const McpSkillItem = memo<McpSkillItemProps>(
-  ({ identifier, title, avatar, type, runtimeType, author }) => {
+  ({ identifier, title, avatar, type, runtimeType, author, isSelected, onSelect }) => {
     const { t } = useTranslation('plugin');
     const isMCP = runtimeType === 'mcp';
     const isCustomPlugin = type === 'customPlugin';
@@ -45,6 +47,9 @@ const McpSkillItem = memo<McpSkillItemProps>(
           className={styles.container}
           gap={16}
           justify="space-between"
+          style={
+            isSelected ? { background: 'var(--ant-color-primary-bg)', borderRadius: 8 } : undefined
+          }
         >
           <Flexbox horizontal align="center" gap={12} style={{ flex: 1, overflow: 'hidden' }}>
             <div className={styles.icon}>
@@ -55,7 +60,7 @@ const McpSkillItem = memo<McpSkillItemProps>(
               )}
             </div>
             <Flexbox horizontal align="center" gap={8} style={{ overflow: 'hidden' }}>
-              <span className={styles.title} onClick={() => setDetailOpen(true)}>
+              <span className={styles.title} onClick={onSelect ?? (() => setDetailOpen(true))}>
                 {title}
               </span>
               {isCustomPlugin ? (

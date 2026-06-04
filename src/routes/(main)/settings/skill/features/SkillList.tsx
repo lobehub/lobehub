@@ -39,6 +39,7 @@ import BuiltinSkillItem from './BuiltinSkillItem';
 import KlavisSkillItem from './KlavisSkillItem';
 import LobehubSkillItem from './LobehubSkillItem';
 import McpSkillItem from './McpSkillItem';
+import type { ToolDetailType } from './SkillDetail';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
@@ -57,7 +58,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const SkillList = memo(() => {
+interface SkillListProps {
+  onSelect?: (identifier: string, type: ToolDetailType) => void;
+  selectedIdentifier?: string;
+}
+
+const SkillList = memo<SkillListProps>(({ onSelect, selectedIdentifier }) => {
   const { t } = useTranslation('setting');
 
   const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
@@ -312,8 +318,10 @@ const SkillList = memo(() => {
           <BuiltinSkillItem
             avatar={item.builtinTool.manifest.meta?.avatar}
             identifier={item.builtinTool.identifier}
+            isSelected={selectedIdentifier === item.builtinTool.identifier}
             key={item.builtinTool.identifier}
             title={localizedTitle}
+            onSelect={onSelect ? () => onSelect(item.builtinTool.identifier, 'builtin') : undefined}
           />
         );
       }
@@ -347,10 +355,12 @@ const SkillList = memo(() => {
         author={plugin.author}
         avatar={plugin.avatar}
         identifier={plugin.identifier}
+        isSelected={selectedIdentifier === plugin.identifier}
         key={plugin.identifier}
         runtimeType={plugin.runtimeType}
         title={plugin.title || plugin.identifier}
         type={plugin.type as LobeToolType}
+        onSelect={onSelect ? () => onSelect(plugin.identifier, 'plugin') : undefined}
       />
     ));
 
@@ -360,10 +370,12 @@ const SkillList = memo(() => {
         author={plugin.author}
         avatar={plugin.avatar}
         identifier={plugin.identifier}
+        isSelected={selectedIdentifier === plugin.identifier}
         key={plugin.identifier}
         runtimeType={plugin.runtimeType}
         title={plugin.title || plugin.identifier}
         type={plugin.type as LobeToolType}
+        onSelect={onSelect ? () => onSelect(plugin.identifier, 'mcp-connector') : undefined}
       />
     ));
 
