@@ -1,11 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import type {
-  CreateMessageParams,
-  DBMessageItem,
-  SendMessageServerResponse,
-  UIChatMessage,
-} from '@lobechat/types';
+import type { CreateMessageParams, SendMessageServerResponse } from '@lobechat/types';
 import { AiSendMessageServerSchema, RequestTrigger, StructureOutputSchema } from '@lobechat/types';
 import { createTimingHelpers, createTimingRequestId } from '@lobechat/utils';
 import debug from 'debug';
@@ -25,100 +20,9 @@ import { FileService } from '@/server/services/file';
 import { archiveToolResultIfNeeded } from '@/server/services/toolExecution/archiveToolResult';
 
 const log = debug('lobe-lambda-router:ai-chat');
-const { createPrefixedTimingContext, logTiming, markStageDone, runTimedStage } =
-  createTimingHelpers('lobe-server:chat:lobehub:timing');
-
-type SendMessageServerResponseWithPartial = SendMessageServerResponse & {
-  __isPartialMessages?: boolean;
-};
-
-type CreatedMessageItem = DBMessageItem & {
-  editorData?: Record<string, any> | null;
-  groupId?: string | null;
-  targetId?: string | null;
-  usage?: UIChatMessage['usage'] | null;
-};
-
-const toCreatedUIChatMessage = ({
-  agentId,
-  content,
-  createdAt,
-  editorData,
-  error,
-  groupId,
-  id,
-  metadata,
-  model,
-  observationId,
-  parentId,
-  provider,
-  quotaId,
-  reasoning,
-  role,
-  search,
-  sessionId,
-  targetId,
-  threadId,
-  tools,
-  topicId,
-  traceId,
-  updatedAt,
-  usage,
-}: CreatedMessageItem): UIChatMessage => ({
-  agentId: agentId ?? undefined,
-  content: content ?? '',
-  createdAt: createdAt instanceof Date ? createdAt.getTime() : Date.now(),
-  editorData,
-  error,
-  extra: { model: model ?? undefined, provider: provider ?? undefined },
-  groupId: groupId ?? undefined,
-  id,
-  metadata,
-  model,
-  observationId: observationId ?? undefined,
-  parentId: parentId ?? undefined,
-  provider,
-  quotaId: quotaId ?? undefined,
-  reasoning,
-  role: role as UIChatMessage['role'],
-  search,
-  sessionId: sessionId ?? undefined,
-  targetId: targetId ?? undefined,
-  threadId,
-  tools,
-  topicId: topicId ?? undefined,
-  traceId: traceId ?? undefined,
-  updatedAt: updatedAt instanceof Date ? updatedAt.getTime() : Date.now(),
-  usage: usage ?? undefined,
-});
-
-const canUseCreatedMessagesFastPath = (input: z.infer<typeof AiSendMessageServerSchema>) =>
-  !!input.newTopic &&
-  !input.topicId &&
-  !input.newTopic.topicMessageIds?.length &&
-  !input.newThread &&
-  !input.preloadMessages?.length &&
-  !input.newUserMessage.files?.length;
-
-const canUseExistingTopicFastPath = (input: z.infer<typeof AiSendMessageServerSchema>) =>
-  !!input.topicId &&
-  !input.newTopic &&
-  !input.newThread &&
-  !input.threadId &&
-  !input.preloadMessages?.length &&
-  !input.newUserMessage.files?.length;
-
-const getUserMessageMetadata = (
-  newUserMessage: z.infer<typeof AiSendMessageServerSchema>['newUserMessage'],
-) =>
-  newUserMessage.metadata || newUserMessage.pageSelections?.length
-    ? {
-        ...newUserMessage.metadata,
-        ...(newUserMessage.pageSelections?.length
-          ? { pageSelections: newUserMessage.pageSelections }
-          : undefined),
-      }
-    : undefined;
+const { createPrefixedTimingContext, logTiming, runTimedStage } = createTimingHelpers(
+  'lobe-server:chat:lobehub:timing',
+);
 
 const aiChatProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -178,16 +82,6 @@ export const aiChatRouter = router({
         input.newAssistantMessage.provider === 'lobehub'
           ? { requestId: createTimingRequestId(), startedAt: Date.now() }
           : undefined;
-      const runServerPersistStage = async <T>(
-        stage: string,
-        task: () => T | Promise<T>,
-        metadata: Record<string, unknown> = {},
-      ): Promise<Awaited<T>> => {
-        return runTimedStage(timingContext, `lambda.aiChat.${stage}`, task, metadata);
-      };
-      const logFastPathMessagesAndTopics = (metadata: Record<string, unknown>) => {
-        markStageDone(timingContext, 'lambda.aiChat.messagesAndTopics.fastResponse', metadata);
-      };
       logTiming(timingContext, 'lambda.aiChat.sendMessageInServer:start', {
         hasNewThread: !!input.newThread,
         hasNewTopic: !!input.newTopic,
@@ -202,129 +96,11 @@ export const aiChatRouter = router({
         input.newTopic,
         input.newThread,
       );
-
-      if (canUseCreatedMessagesFastPath(input)) {
-        const result = await runServerPersistStage(
-          'simpleNewTopicTurn.create',
-          () =>
-            ctx.aiChatService.createSimpleNewTopicTurn({
-              agentId: input.agentId,
-              assistantMessage: {
-                content: LOADING_FLAT,
-                metadata: input.newAssistantMessage.metadata,
-                model: input.newAssistantMessage.model,
-                provider: input.newAssistantMessage.provider,
-              },
-              groupId: input.groupId,
-              sessionId: input.sessionId,
-              topic: {
-                metadata: input.newTopic!.metadata,
-                title: input.newTopic!.title,
-                trigger: input.newTopic!.trigger,
-              },
-              userMessage: {
-                content: input.newUserMessage.content,
-                editorData: input.newUserMessage.editorData,
-                metadata: getUserMessageMetadata(input.newUserMessage),
-              },
-            }),
-          {
-            hasAgentId: !!input.agentId,
-            hasGroupId: !!input.groupId,
-            hasSessionId: !!input.sessionId,
-          },
-        );
-        const messages = [
-          toCreatedUIChatMessage(result.userMessage as CreatedMessageItem),
-          toCreatedUIChatMessage(result.assistantMessage as CreatedMessageItem),
-        ];
-
-        logFastPathMessagesAndTopics({
-          isCreateNewTopic: true,
-          messageCount: messages.length,
-          reason: 'simple-new-topic-turn',
-          topicCount: 0,
-        });
-        logTiming(timingContext, 'lambda.aiChat.sendMessageInServer:done', {
-          isCreateNewTopic: true,
-          messageCount: messages.length,
-          topicCount: 0,
-        });
-
-        const response: SendMessageServerResponseWithPartial = {
-          assistantMessageId: result.assistantMessage.id,
-          isCreateNewTopic: true,
-          messages,
-          topicId: result.topicId,
-          userMessageId: result.userMessage.id,
-        };
-
-        return response;
-      }
-
-      if (canUseExistingTopicFastPath(input)) {
-        const result = await runServerPersistStage(
-          'simpleExistingTopicTurn.create',
-          () =>
-            ctx.aiChatService.createSimpleExistingTopicTurn({
-              agentId: input.agentId,
-              assistantMessage: {
-                content: LOADING_FLAT,
-                metadata: input.newAssistantMessage.metadata,
-                model: input.newAssistantMessage.model,
-                provider: input.newAssistantMessage.provider,
-              },
-              groupId: input.groupId,
-              sessionId: input.sessionId,
-              topicId: input.topicId!,
-              userMessage: {
-                content: input.newUserMessage.content,
-                editorData: input.newUserMessage.editorData,
-                metadata: getUserMessageMetadata(input.newUserMessage),
-                parentId: input.newUserMessage.parentId,
-              },
-            }),
-          {
-            hasAgentId: !!input.agentId,
-            hasGroupId: !!input.groupId,
-            hasParentId: !!input.newUserMessage.parentId,
-            hasSessionId: !!input.sessionId,
-            topicId: input.topicId,
-          },
-        );
-        const messages = [
-          toCreatedUIChatMessage(result.userMessage as CreatedMessageItem),
-          toCreatedUIChatMessage(result.assistantMessage as CreatedMessageItem),
-        ];
-
-        logFastPathMessagesAndTopics({
-          isCreateNewTopic: false,
-          messageCount: messages.length,
-          reason: 'simple-existing-topic-turn',
-          topicCount: 0,
-        });
-        logTiming(timingContext, 'lambda.aiChat.sendMessageInServer:done', {
-          isCreateNewTopic: false,
-          messageCount: messages.length,
-          topicCount: 0,
-        });
-
-        const response: SendMessageServerResponseWithPartial = {
-          __isPartialMessages: true,
-          assistantMessageId: result.assistantMessage.id,
-          isCreateNewTopic: false,
-          messages,
-          topicId: result.topicId,
-          userMessageId: result.userMessage.id,
-        };
-
-        return response;
-      }
-
       let sessionId = input.sessionId;
       if (!sessionId) {
-        const context = await runServerPersistStage(
-          'resolveContext',
+        const context = await runTimedStage(
+          timingContext,
+          'lambda.aiChat.resolveContext',
           () => resolveContext(input, ctx.serverDB, ctx.userId),
           { hasAgentId: !!input.agentId },
         );
@@ -336,12 +112,14 @@ export const aiChatRouter = router({
       let createdThreadId: string | undefined;
 
       let isCreateNewTopic = false;
+      let agentTouchUpdatedAtTask: Promise<void> | undefined;
 
       // create topic if there should be a new topic
       if (input.newTopic) {
         log('creating new topic with title: %s', input.newTopic.title);
-        const topicItem = await runServerPersistStage(
-          'topic.create',
+        const topicItem = await runTimedStage(
+          timingContext,
+          'lambda.aiChat.topic.create',
           () => {
             const payload = {
               agentId: input.agentId,
@@ -371,8 +149,9 @@ export const aiChatRouter = router({
 
         // update agent's updatedAt to reflect new activity
         if (input.agentId) {
-          void runServerPersistStage(
-            'agent.touchUpdatedAt',
+          agentTouchUpdatedAtTask = runTimedStage(
+            timingContext,
+            'lambda.aiChat.agent.touchUpdatedAt',
             async () => {
               await ctx.agentModel.touchUpdatedAt(input.agentId!);
             },
@@ -391,8 +170,9 @@ export const aiChatRouter = router({
           input.newThread.sourceMessageId,
           input.newThread.type,
         );
-        const threadItem = await runServerPersistStage(
-          'thread.create',
+        const threadItem = await runTimedStage(
+          timingContext,
+          'lambda.aiChat.thread.create',
           () =>
             ctx.threadModel.create({
               parentThreadId: input.newThread!.parentThreadId,
@@ -415,8 +195,9 @@ export const aiChatRouter = router({
       if (input.preloadMessages?.length) {
         log('creating %d preload messages before user message', input.preloadMessages.length);
 
-        parentId = await runServerPersistStage(
-          'preloadMessages.create',
+        parentId = await runTimedStage(
+          timingContext,
+          'lambda.aiChat.preloadMessages.create',
           async () => {
             let latestParentId = parentId;
             for (const preloadMessage of input.preloadMessages!) {
@@ -454,10 +235,19 @@ export const aiChatRouter = router({
       log('creating user message with content length: %d', input.newUserMessage.content.length);
 
       // Build user message metadata with pageSelections if present
-      const userMessageMetadata = getUserMessageMetadata(input.newUserMessage);
+      const userMessageMetadata =
+        input.newUserMessage.metadata || input.newUserMessage.pageSelections?.length
+          ? {
+              ...input.newUserMessage.metadata,
+              ...(input.newUserMessage.pageSelections?.length
+                ? { pageSelections: input.newUserMessage.pageSelections }
+                : undefined),
+            }
+          : undefined;
 
-      const createMessagePairPromise = runServerPersistStage(
-        'messages.createUserAndAssistant',
+      const createMessagePairPromise = runTimedStage(
+        timingContext,
+        'lambda.aiChat.messages.createUserAndAssistant',
         () => {
           const userMessage = {
             agentId: input.agentId,
@@ -504,7 +294,9 @@ export const aiChatRouter = router({
         },
       );
       const { assistantMessage: assistantMessageItem, userMessage: userMessageItem } =
-        await createMessagePairPromise;
+        agentTouchUpdatedAtTask
+          ? (await Promise.all([createMessagePairPromise, agentTouchUpdatedAtTask]))[0]
+          : await createMessagePairPromise;
 
       const messageId = userMessageItem.id;
       log('user message created with id: %s', messageId);
@@ -513,8 +305,9 @@ export const aiChatRouter = router({
 
       // retrieve latest messages and topic with
       log('retrieving messages and topics');
-      const { messages, topics } = await runServerPersistStage(
-        'messagesAndTopics.query',
+      const { messages, topics } = await runTimedStage(
+        timingContext,
+        'lambda.aiChat.messagesAndTopics.query',
         () =>
           ctx.aiChatService.getMessagesAndTopics({
             agentId: input.agentId,
@@ -542,17 +335,15 @@ export const aiChatRouter = router({
         topicCount: topics?.items?.length ?? 0,
       });
 
-      const response: SendMessageServerResponseWithPartial = {
+      return {
         assistantMessageId: assistantMessageItem.id,
         createdThreadId,
         isCreateNewTopic,
         messages,
         topicId,
-        topics: topics as SendMessageServerResponse['topics'],
+        topics,
         userMessageId: messageId,
-      };
-
-      return response;
+      } as SendMessageServerResponse;
     }),
 
   archiveToolResult: aiChatProcedure

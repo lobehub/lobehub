@@ -27,56 +27,6 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
 
 describe('aiChatRouter', () => {
   const mockCtx = { userId: 'u1' };
-  const createMessageItem = (overrides: Record<string, any>) => ({
-    agentId: null,
-    clientId: null,
-    content: '',
-    createdAt: new Date('2024-01-01T00:00:00.000Z'),
-    error: null,
-    favorite: false,
-    id: 'm1',
-    metadata: null,
-    model: null,
-    observationId: null,
-    parentId: null,
-    provider: null,
-    quotaId: null,
-    reasoning: null,
-    role: 'user',
-    search: null,
-    sessionId: 's1',
-    threadId: null,
-    tools: null,
-    topicId: 't1',
-    traceId: null,
-    updatedAt: new Date('2024-01-01T00:00:00.000Z'),
-    userId: 'u1',
-    ...overrides,
-  });
-  const createSimpleNewTopicTurnResult = (overrides: Record<string, any> = {}) => {
-    const { assistantMessage, userMessage, ...resultOverrides } = overrides;
-
-    return {
-      assistantMessage: createMessageItem({
-        content: 'loading',
-        id: 'm-assistant',
-        model: 'gpt-4o',
-        parentId: 'm-user',
-        provider: 'openai',
-        role: 'assistant',
-        ...assistantMessage,
-      }),
-      resolvedSessionId: 's1',
-      topicId: 't1',
-      userMessage: createMessageItem({
-        content: 'hi',
-        id: 'm-user',
-        role: 'user',
-        ...userMessage,
-      }),
-      ...resultOverrides,
-    };
-  };
   const mockMessageModel = (mockCreateMessage: ReturnType<typeof vi.fn>) => {
     const mockCreateUserAndAssistantMessages = vi.fn(
       async (
@@ -188,85 +138,15 @@ describe('aiChatRouter', () => {
     expect(res.topics?.total).toBe(1);
   });
 
-  it('should skip messages and topics query for simple new topic payload', async () => {
-    const mockCreateTopic = vi.fn().mockResolvedValue({ id: 't1' });
-    const mockCreateMessage = vi.fn();
-    const mockCreateSimpleNewTopicTurn = vi
-      .fn()
-      .mockResolvedValue(createSimpleNewTopicTurnResult());
-    const mockGet = vi.fn();
-
-    vi.mocked(TopicModel).mockImplementation(() => ({ create: mockCreateTopic }) as any);
-    const mockCreateUserAndAssistantMessages = mockMessageModel(mockCreateMessage);
-    vi.mocked(AiChatService).mockImplementation(
-      () =>
-        ({
-          createSimpleNewTopicTurn: mockCreateSimpleNewTopicTurn,
-          getMessagesAndTopics: mockGet,
-        }) as any,
-    );
-
-    const caller = aiChatRouter.createCaller(mockCtx as any);
-
-    const res = await caller.sendMessageInServer({
-      newAssistantMessage: { model: 'gpt-4o', provider: 'openai' },
-      newTopic: { title: 'T' },
-      newUserMessage: { content: 'hi' },
-      sessionId: 's1',
-    } as any);
-
-    expect(mockCreateSimpleNewTopicTurn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        assistantMessage: expect.objectContaining({
-          model: 'gpt-4o',
-          provider: 'openai',
-        }),
-        sessionId: 's1',
-        topic: expect.objectContaining({ title: 'T' }),
-        userMessage: expect.objectContaining({ content: 'hi' }),
-      }),
-    );
-    expect(mockCreateTopic).not.toHaveBeenCalled();
-    expect(mockCreateUserAndAssistantMessages).not.toHaveBeenCalled();
-    expect(mockGet).not.toHaveBeenCalled();
-    expect(res.messages).toEqual([
-      expect.objectContaining({
-        content: 'hi',
-        createdAt: new Date('2024-01-01T00:00:00.000Z').getTime(),
-        id: 'm-user',
-        role: 'user',
-        topicId: 't1',
-      }),
-      expect.objectContaining({
-        extra: { model: 'gpt-4o', provider: 'openai' },
-        id: 'm-assistant',
-        parentId: 'm-user',
-        role: 'assistant',
-        topicId: 't1',
-      }),
-    ]);
-    expect(res.topics).toBeUndefined();
-  });
-
   it('should reuse existing topic when topicId provided', async () => {
-    const mockCreateMessage = vi.fn();
-    const mockCreateSimpleExistingTopicTurn = vi.fn().mockResolvedValue(
-      createSimpleNewTopicTurnResult({
-        assistantMessage: { topicId: 't-exist' },
-        topicId: 't-exist',
-        userMessage: { topicId: 't-exist' },
-      }),
-    );
-    const mockGet = vi.fn();
+    const mockCreateMessage = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'm-user' })
+      .mockResolvedValueOnce({ id: 'm-assistant' });
+    const mockGet = vi.fn().mockResolvedValue({ messages: [], topics: undefined });
 
     const mockCreateUserAndAssistantMessages = mockMessageModel(mockCreateMessage);
-    vi.mocked(AiChatService).mockImplementation(
-      () =>
-        ({
-          createSimpleExistingTopicTurn: mockCreateSimpleExistingTopicTurn,
-          getMessagesAndTopics: mockGet,
-        }) as any,
-    );
+    vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
 
     const caller = aiChatRouter.createCaller(mockCtx as any);
 
@@ -277,32 +157,18 @@ describe('aiChatRouter', () => {
       topicId: 't-exist',
     } as any);
 
-    expect(mockCreateSimpleExistingTopicTurn).toHaveBeenCalledWith(
+    expect(mockCreateMessage).toHaveBeenCalled();
+    expect(mockCreateUserAndAssistantMessages).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ touchTopicUpdatedAt: true }),
+    );
+    expect(mockGet).toHaveBeenCalledWith(
       expect.objectContaining({
-        assistantMessage: expect.objectContaining({
-          model: 'gpt-4o',
-          provider: 'openai',
-        }),
+        includeTopic: false,
         sessionId: 's1',
         topicId: 't-exist',
-        userMessage: expect.objectContaining({ content: 'hi' }),
       }),
     );
-    expect(mockCreateUserAndAssistantMessages).not.toHaveBeenCalled();
-    expect(mockGet).not.toHaveBeenCalled();
-    expect(res.messages).toEqual([
-      expect.objectContaining({
-        id: 'm-user',
-        role: 'user',
-        topicId: 't-exist',
-      }),
-      expect.objectContaining({
-        id: 'm-assistant',
-        parentId: 'm-user',
-        role: 'assistant',
-        topicId: 't-exist',
-      }),
-    ]);
     expect(res.isCreateNewTopic).toBe(false);
     expect(res.topicId).toBe('t-exist');
   });
@@ -595,7 +461,6 @@ describe('aiChatRouter', () => {
       newAssistantMessage: { model: 'gpt-4o', provider: 'openai' },
       newUserMessage: { content: 'hi' },
       sessionId: 's1',
-      threadId: 'thread-existing',
       topicId: 't1',
     } as any);
 
@@ -603,23 +468,17 @@ describe('aiChatRouter', () => {
   });
 
   describe('groupId support', () => {
-    it('should pass groupId to simple new topic service when both newTopic and groupId exist', async () => {
+    it('should pass groupId to topic creation when both newTopic and groupId exist', async () => {
       const mockCreateTopic = vi.fn().mockResolvedValue({ id: 't1' });
-      const mockCreateMessage = vi.fn();
-      const mockCreateSimpleNewTopicTurn = vi
+      const mockCreateMessage = vi
         .fn()
-        .mockResolvedValue(createSimpleNewTopicTurnResult());
-      const mockGet = vi.fn();
+        .mockResolvedValueOnce({ id: 'm-user' })
+        .mockResolvedValueOnce({ id: 'm-assistant' });
+      const mockGet = vi.fn().mockResolvedValue({ messages: [], topics: [{}] });
 
       vi.mocked(TopicModel).mockImplementation(() => ({ create: mockCreateTopic }) as any);
-      const mockCreateUserAndAssistantMessages = mockMessageModel(mockCreateMessage);
-      vi.mocked(AiChatService).mockImplementation(
-        () =>
-          ({
-            createSimpleNewTopicTurn: mockCreateSimpleNewTopicTurn,
-            getMessagesAndTopics: mockGet,
-          }) as any,
-      );
+      mockMessageModel(mockCreateMessage);
+      vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
 
       const caller = aiChatRouter.createCaller(mockCtx as any);
 
@@ -631,34 +490,27 @@ describe('aiChatRouter', () => {
         sessionId: 's1',
       } as any);
 
-      expect(mockCreateSimpleNewTopicTurn).toHaveBeenCalledWith(
+      // Verify groupId is passed to topic creation
+      expect(mockCreateTopic).toHaveBeenCalledWith(
         expect.objectContaining({
           groupId: 'group-123',
           sessionId: 's1',
-          topic: expect.objectContaining({ title: 'New Topic' }),
+          title: 'New Topic',
         }),
       );
-      expect(mockCreateTopic).not.toHaveBeenCalled();
-      expect(mockCreateUserAndAssistantMessages).not.toHaveBeenCalled();
     });
 
-    it('should pass undefined groupId to simple new topic service when groupId is not provided', async () => {
+    it('should set groupId to null when newTopic exists but groupId is not provided', async () => {
       const mockCreateTopic = vi.fn().mockResolvedValue({ id: 't1' });
-      const mockCreateMessage = vi.fn();
-      const mockCreateSimpleNewTopicTurn = vi
+      const mockCreateMessage = vi
         .fn()
-        .mockResolvedValue(createSimpleNewTopicTurnResult());
-      const mockGet = vi.fn();
+        .mockResolvedValueOnce({ id: 'm-user' })
+        .mockResolvedValueOnce({ id: 'm-assistant' });
+      const mockGet = vi.fn().mockResolvedValue({ messages: [], topics: [{}] });
 
       vi.mocked(TopicModel).mockImplementation(() => ({ create: mockCreateTopic }) as any);
-      const mockCreateUserAndAssistantMessages = mockMessageModel(mockCreateMessage);
-      vi.mocked(AiChatService).mockImplementation(
-        () =>
-          ({
-            createSimpleNewTopicTurn: mockCreateSimpleNewTopicTurn,
-            getMessagesAndTopics: mockGet,
-          }) as any,
-      );
+      mockMessageModel(mockCreateMessage);
+      vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
 
       const caller = aiChatRouter.createCaller(mockCtx as any);
 
@@ -670,15 +522,14 @@ describe('aiChatRouter', () => {
         sessionId: 's1',
       } as any);
 
-      expect(mockCreateSimpleNewTopicTurn).toHaveBeenCalledWith(
+      // Verify groupId is undefined (which will be treated as null in the database)
+      expect(mockCreateTopic).toHaveBeenCalledWith(
         expect.objectContaining({
           groupId: undefined,
           sessionId: 's1',
-          topic: expect.objectContaining({ title: 'New Topic' }),
+          title: 'New Topic',
         }),
       );
-      expect(mockCreateTopic).not.toHaveBeenCalled();
-      expect(mockCreateUserAndAssistantMessages).not.toHaveBeenCalled();
     });
 
     it('should pass groupId to both user and assistant message creation', async () => {
@@ -699,7 +550,6 @@ describe('aiChatRouter', () => {
         newAssistantMessage: { model: 'gpt-4o', provider: 'openai' },
         newUserMessage: { content: 'Analyze weather data' },
         sessionId: 's1',
-        threadId: 'thread-123',
         topicId: 't1',
       } as any);
 
@@ -748,7 +598,6 @@ describe('aiChatRouter', () => {
         newAssistantMessage: { model: 'gpt-4o', provider: 'openai' },
         newUserMessage: { content: 'hi' },
         sessionId: 's1',
-        threadId: 'thread-123',
         topicId: 't1',
       } as any);
 
@@ -781,7 +630,6 @@ describe('aiChatRouter', () => {
         newAssistantMessage: { model: 'gpt-4o', provider: 'openai' },
         newUserMessage: { content: 'hi' },
         sessionId: 's1',
-        threadId: 'thread-123',
         topicId: 't1',
       } as any);
 
@@ -833,7 +681,6 @@ describe('aiChatRouter', () => {
         newAssistantMessage: { model: 'gpt-4o', provider: 'openai' },
         newUserMessage: { content: 'hi' },
         sessionId: 's1',
-        threadId: 'thread-123',
         topicId: 't1',
       } as any);
 
@@ -870,24 +717,18 @@ describe('aiChatRouter', () => {
       );
     });
 
-    it('should pass agentId to simple new topic service when provided', async () => {
+    it('should pass agentId to topic creation when provided', async () => {
       const mockCreateTopic = vi.fn().mockResolvedValue({ id: 't1' });
-      const mockCreateMessage = vi.fn();
-      const mockCreateSimpleNewTopicTurn = vi
+      const mockCreateMessage = vi
         .fn()
-        .mockResolvedValue(createSimpleNewTopicTurnResult());
-      const mockGet = vi.fn();
+        .mockResolvedValueOnce({ id: 'm-user' })
+        .mockResolvedValueOnce({ id: 'm-assistant' });
+      const mockGet = vi.fn().mockResolvedValue({ messages: [], topics: [{}] });
       const mockTouchUpdatedAt = vi.fn().mockResolvedValue(undefined);
 
       vi.mocked(TopicModel).mockImplementation(() => ({ create: mockCreateTopic }) as any);
-      const mockCreateUserAndAssistantMessages = mockMessageModel(mockCreateMessage);
-      vi.mocked(AiChatService).mockImplementation(
-        () =>
-          ({
-            createSimpleNewTopicTurn: mockCreateSimpleNewTopicTurn,
-            getMessagesAndTopics: mockGet,
-          }) as any,
-      );
+      mockMessageModel(mockCreateMessage);
+      vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
       vi.mocked(AgentModel).mockImplementation(
         () => ({ touchUpdatedAt: mockTouchUpdatedAt }) as any,
       );
@@ -902,16 +743,14 @@ describe('aiChatRouter', () => {
         sessionId: 's1',
       } as any);
 
-      expect(mockCreateSimpleNewTopicTurn).toHaveBeenCalledWith(
+      // Verify agentId is passed to topic creation
+      expect(mockCreateTopic).toHaveBeenCalledWith(
         expect.objectContaining({
           agentId: 'agent-1',
           sessionId: 's1',
-          topic: expect.objectContaining({ title: 'New Topic' }),
+          title: 'New Topic',
         }),
       );
-      expect(mockCreateTopic).not.toHaveBeenCalled();
-      expect(mockCreateUserAndAssistantMessages).not.toHaveBeenCalled();
-      expect(mockTouchUpdatedAt).not.toHaveBeenCalled();
     });
 
     it('should touch agent updatedAt when creating new topic with agentId', async () => {
@@ -935,7 +774,7 @@ describe('aiChatRouter', () => {
       await caller.sendMessageInServer({
         agentId: 'agent-1',
         newAssistantMessage: { model: 'gpt-4o', provider: 'openai' },
-        newTopic: { title: 'New Topic', topicMessageIds: ['seed'] },
+        newTopic: { title: 'New Topic' },
         newUserMessage: { content: 'hi' },
         sessionId: 's1',
       } as any);
@@ -973,7 +812,7 @@ describe('aiChatRouter', () => {
         const res = await caller.sendMessageInServer({
           agentId: 'agent-1',
           newAssistantMessage: { model: 'gpt-4o', provider: 'openai' },
-          newTopic: { title: 'New Topic', topicMessageIds: ['seed'] },
+          newTopic: { title: 'New Topic' },
           newUserMessage: { content: 'hi' },
           sessionId: 's1',
         } as any);
@@ -981,7 +820,6 @@ describe('aiChatRouter', () => {
         expect(res.userMessageId).toBe('m-user');
         expect(res.assistantMessageId).toBe('m-assistant');
         expect(mockTouchUpdatedAt).toHaveBeenCalledWith('agent-1');
-        await flushAsyncTasks();
         expect(consoleErrorSpy).toHaveBeenCalledWith(
           '[aiChat] Failed to touch agent updatedAt:',
           touchError,
@@ -991,7 +829,7 @@ describe('aiChatRouter', () => {
       }
     });
 
-    it('should return the message response while agent updatedAt touch is still pending', async () => {
+    it('should create messages while agent updatedAt touch is still pending', async () => {
       const mockCreateTopic = vi.fn().mockResolvedValue({ id: 't1' });
       const mockCreateMessage = vi
         .fn()
@@ -1016,7 +854,7 @@ describe('aiChatRouter', () => {
       const request = caller.sendMessageInServer({
         agentId: 'agent-1',
         newAssistantMessage: { model: 'gpt-4o', provider: 'openai' },
-        newTopic: { title: 'New Topic', topicMessageIds: ['seed'] },
+        newTopic: { title: 'New Topic' },
         newUserMessage: { content: 'hi' },
         sessionId: 's1',
       } as any);
@@ -1026,12 +864,6 @@ describe('aiChatRouter', () => {
       try {
         expect(mockTouchUpdatedAt).toHaveBeenCalledWith('agent-1');
         expect(mockCreateUserAndAssistantMessages).toHaveBeenCalledTimes(1);
-        await expect(
-          Promise.race([
-            request.then(() => 'resolved' as const),
-            flushAsyncTasks().then(() => 'blocked' as const),
-          ]),
-        ).resolves.toBe('resolved');
       } finally {
         resolveTouchUpdatedAt();
       }
@@ -1060,7 +892,7 @@ describe('aiChatRouter', () => {
       await caller.sendMessageInServer({
         // no agentId provided
         newAssistantMessage: { model: 'gpt-4o', provider: 'openai' },
-        newTopic: { title: 'New Topic', topicMessageIds: ['seed'] },
+        newTopic: { title: 'New Topic' },
         newUserMessage: { content: 'hi' },
         sessionId: 's1',
       } as any);
@@ -1070,25 +902,15 @@ describe('aiChatRouter', () => {
     });
 
     it('should not touch agent updatedAt when using existing topic', async () => {
-      const mockCreateMessage = vi.fn();
-      const mockCreateSimpleExistingTopicTurn = vi.fn().mockResolvedValue(
-        createSimpleNewTopicTurnResult({
-          assistantMessage: { topicId: 't-exist' },
-          topicId: 't-exist',
-          userMessage: { topicId: 't-exist' },
-        }),
-      );
-      const mockGet = vi.fn();
+      const mockCreateMessage = vi
+        .fn()
+        .mockResolvedValueOnce({ id: 'm-user' })
+        .mockResolvedValueOnce({ id: 'm-assistant' });
+      const mockGet = vi.fn().mockResolvedValue({ messages: [], topics: undefined });
       const mockTouchUpdatedAt = vi.fn().mockResolvedValue(undefined);
 
-      const mockCreateUserAndAssistantMessages = mockMessageModel(mockCreateMessage);
-      vi.mocked(AiChatService).mockImplementation(
-        () =>
-          ({
-            createSimpleExistingTopicTurn: mockCreateSimpleExistingTopicTurn,
-            getMessagesAndTopics: mockGet,
-          }) as any,
-      );
+      mockMessageModel(mockCreateMessage);
+      vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
       vi.mocked(AgentModel).mockImplementation(
         () => ({ touchUpdatedAt: mockTouchUpdatedAt }) as any,
       );
@@ -1104,9 +926,6 @@ describe('aiChatRouter', () => {
       } as any);
 
       // Verify touchUpdatedAt was NOT called since no new topic was created
-      expect(mockCreateSimpleExistingTopicTurn).toHaveBeenCalled();
-      expect(mockCreateUserAndAssistantMessages).not.toHaveBeenCalled();
-      expect(mockGet).not.toHaveBeenCalled();
       expect(mockTouchUpdatedAt).not.toHaveBeenCalled();
     });
   });
