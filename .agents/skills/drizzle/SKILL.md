@@ -215,9 +215,6 @@ const rows = await trx
     totalCost: sql<string | null>`sum((${messages.metadata}->'usage'->>'cost')::numeric)`.as(
       'totalCost',
     ),
-    totalTokens: sql<
-      string | null
-    >`sum((${messages.metadata}->'usage'->>'totalTokens')::numeric)`.as('totalTokens'),
   })
   .from(messages)
   .where(
@@ -246,6 +243,9 @@ interface TaskTreeRow {
   parent_task_id: string | null;
 }
 
+// execute<T> is acceptable here only because Drizzle has no clean WITH RECURSIVE
+// builder; a builder rewrite would add depth-based roundtrips. Keep schema refs in
+// the interpolations and scope every leg to the user.
 const { rows } = await db.execute<TaskTreeRow>(sql`
   WITH RECURSIVE task_tree AS (
     SELECT ${tasks.id}, ${tasks.parentTaskId}
