@@ -403,6 +403,15 @@ export class AiAgentService {
     // Use actual agent ID from config for subsequent operations
     const resolvedAgentId = agentConfig.id;
 
+    // Persistence-attribution agent id. Background Agent Signal runs (memory /
+    // skill / self-reflection) execute under a builtin slug, so `resolvedAgentId`
+    // is the builtin agent — but the run's persisted messages, like its operation
+    // row (createOperation appContext.agentId) and receipts, must attribute to the
+    // reviewed *user* agent carried on `marker.agentId`. Ordinary runs (no marker)
+    // fall back to the executing agent. Tools / systemRole / skills / agent
+    // documents stay keyed on `resolvedAgentId`.
+    const persistAgentId = appContext?.agentSignal?.agentId ?? resolvedAgentId;
+
     // Apply per-call model/provider overrides (e.g. from task.config)
     if (modelOverride) agentConfig.model = modelOverride;
     if (providerOverride) agentConfig.provider = providerOverride;
@@ -1852,7 +1861,7 @@ export class AiAgentService {
     const userMessageRecord = effectiveResume
       ? undefined
       : await this.messageModel.create({
-          agentId: resolvedAgentId,
+          agentId: persistAgentId,
           content: prompt,
           files: fileIds,
           metadata: requestTriggerMetadata,
@@ -1898,7 +1907,7 @@ export class AiAgentService {
     // 14. Create assistant message placeholder in database
     // Include threadId if provided (for SubAgent task execution in isolated Thread)
     const assistantMessageRecord = await this.messageModel.create({
-      agentId: resolvedAgentId,
+      agentId: persistAgentId,
       content: LOADING_FLAT,
       model,
       parentId: parentMessageId ?? userMessageRecord?.id,

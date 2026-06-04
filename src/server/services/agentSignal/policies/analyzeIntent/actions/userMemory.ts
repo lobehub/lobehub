@@ -392,14 +392,21 @@ export const handleUserMemoryAction = async (
         typeof action.payload.sourceHints === 'object' && action.payload.sourceHints
           ? action.payload.sourceHints
           : undefined,
-      // The assistant message that completed the turn — used to anchor the
-      // memory-agent child thread under that message instead of the main topic.
-      // Populated by planUserMemory via extractAssistantMessageIdFromSourceId;
-      // absent for non-clientRuntimeComplete sources where no assistant boundary exists.
+      // The message to anchor the memory-agent child thread under, so its
+      // messages stay isolated from the main topic instead of being flattened
+      // into it. Prefer the assistant message that completed the turn (set by
+      // planUserMemory via extractAssistantMessageIdFromSourceId — only present
+      // for clientRuntimeComplete sources whose id is
+      // `${assistantMessageId}:completion:${parentMessageId}`). Other sources
+      // carry no assistant boundary, so fall back to the triggering user
+      // message id; without this fallback no thread is created and the run
+      // leaks into the active conversation.
       sourceMessageId:
         typeof action.payload.assistantMessageId === 'string'
           ? action.payload.assistantMessageId
-          : undefined,
+          : typeof action.payload.messageId === 'string'
+            ? action.payload.messageId
+            : undefined,
       topicId: typeof action.payload.topicId === 'string' ? action.payload.topicId : undefined,
     };
     // Stamp the run so the completion path can project the memory receipt (the
