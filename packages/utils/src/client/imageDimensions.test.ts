@@ -33,7 +33,9 @@ beforeEach(() => {
     src: '',
   };
 
-  mockImage = vi.fn().mockImplementation(() => mockImageInstance);
+  mockImage = vi.fn().mockImplementation(function () {
+    return mockImageInstance;
+  });
   vi.stubGlobal('Image', mockImage);
 
   // Mock URL methods using vi.spyOn (preserves other URL functionality)

@@ -13,6 +13,6 @@ export default defineConfig({
       ],
       reporter: ['text', 'json', 'lcov', 'text-summary'],
     },
-    environment: 'happy-dom',
+    environment: 'node',
   },
 });

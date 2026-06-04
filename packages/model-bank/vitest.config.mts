@@ -6,6 +6,6 @@ export default defineConfig({
       all: false,
       reporter: ['text', 'json', 'lcov', 'text-summary'],
     },
-    environment: 'happy-dom',
+    environment: 'node',
   },
 });

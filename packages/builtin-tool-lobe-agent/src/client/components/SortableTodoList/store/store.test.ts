@@ -1,4 +1,3 @@
-import { act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { TodoItem } from '../../../../types';
@@ -9,6 +8,8 @@ import { ADD_ITEM_ID } from './types';
 // Helper to create TodoItem array from text strings
 const toTodoItems = (...texts: string[]): TodoItem[] =>
   texts.map((text) => ({ status: 'todo', text }));
+
+const act = <T>(callback: () => T): T => callback();
 
 describe('TodoListStore', () => {
   beforeEach(() => {

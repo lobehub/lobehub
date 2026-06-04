@@ -34,6 +34,7 @@ describe('LobeGithubCopilotAI', () => {
 
       await expect(
         instance.chat({
+          apiMode: 'responses',
           messages: [{ content: 'hello', role: 'user' }],
           model: 'gpt-5.1-codex-mini',
         } as any),

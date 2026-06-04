@@ -12,12 +12,14 @@ describe('Python interpreter', () => {
   });
 
   it('should be defined if is in browser', async () => {
-    const MockWorker = vi.fn().mockImplementation(() => ({
-      postMessage: vi.fn(),
-      terminate: vi.fn(),
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    }));
+    const MockWorker = vi.fn().mockImplementation(function () {
+      return {
+        addEventListener: vi.fn(),
+        postMessage: vi.fn(),
+        removeEventListener: vi.fn(),
+        terminate: vi.fn(),
+      };
+    });
 
     vi.stubGlobal('Worker', MockWorker);
 
