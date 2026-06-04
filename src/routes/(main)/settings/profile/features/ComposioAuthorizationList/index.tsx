@@ -1,24 +1,24 @@
-import { KLAVIS_SERVER_TYPES } from '@lobechat/const';
+import { COMPOSIO_APP_TYPES } from '@lobechat/const';
 import { Avatar, Flexbox, Tag } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useToolStore } from '@/store/tool';
-import { type KlavisServer } from '@/store/tool/slices/klavisStore';
+import { type ComposioServer } from '@/store/tool/slices/composioStore';
 
 interface KlavisAuthItemProps {
-  server: KlavisServer;
+  server: ComposioServer;
 }
 
 const KlavisAuthItem = memo<KlavisAuthItemProps>(({ server }) => {
   const { t } = useTranslation('auth');
   const [isRevoking, setIsRevoking] = useState(false);
 
-  const removeKlavisServer = useToolStore((s) => s.removeKlavisServer);
+  const removeComposioConnection = useToolStore((s) => s.removeComposioConnection);
 
   // Get server type configuration (icons, etc.)
-  const serverType = KLAVIS_SERVER_TYPES.find((item) => item.identifier === server.identifier);
+  const serverType = COMPOSIO_APP_TYPES.find((item) => item.identifier === server.identifier);
 
   // Handle deauthorization
   const handleRevoke = useCallback(() => {
@@ -28,7 +28,7 @@ const KlavisAuthItem = memo<KlavisAuthItemProps>(({ server }) => {
       onOk: async () => {
         setIsRevoking(true);
         try {
-          await removeKlavisServer(server.identifier);
+          await removeComposioConnection(server.identifier);
         } finally {
           setIsRevoking(false);
         }
@@ -37,7 +37,7 @@ const KlavisAuthItem = memo<KlavisAuthItemProps>(({ server }) => {
         name: serverType?.label || server.serverName,
       }),
     });
-  }, [removeKlavisServer, server.identifier, server.serverName, serverType?.label, t]);
+  }, [removeComposioConnection, server.identifier, server.serverName, serverType?.label, t]);
 
   // Render icon
   const renderIcon = () => {
@@ -61,11 +61,11 @@ const KlavisAuthItem = memo<KlavisAuthItemProps>(({ server }) => {
   );
 });
 
-interface KlavisAuthorizationListProps {
-  servers: KlavisServer[];
+interface ComposioAuthorizationListProps {
+  servers: ComposioServer[];
 }
 
-export const KlavisAuthorizationList = memo<KlavisAuthorizationListProps>(({ servers }) => {
+export const ComposioAuthorizationList = memo<ComposioAuthorizationListProps>(({ servers }) => {
   return (
     <Flexbox horizontal gap={8} wrap="wrap">
       {servers.map((server) => (
@@ -75,4 +75,4 @@ export const KlavisAuthorizationList = memo<KlavisAuthorizationListProps>(({ ser
   );
 });
 
-export default KlavisAuthorizationList;
+export default ComposioAuthorizationList;

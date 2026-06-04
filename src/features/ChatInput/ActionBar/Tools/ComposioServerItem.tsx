@@ -6,8 +6,8 @@ import { useTranslation } from 'react-i18next';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useToolStore } from '@/store/tool';
-import { type KlavisServer } from '@/store/tool/slices/klavisStore';
-import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
+import { type ComposioServer } from '@/store/tool/slices/composioStore';
+import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
@@ -15,7 +15,7 @@ import { userProfileSelectors } from '@/store/user/selectors';
 const POLL_INTERVAL_MS = 1000; // Poll once per second
 const POLL_TIMEOUT_MS = 15_000; // 15-second timeout
 
-interface KlavisServerItemProps {
+interface ComposioServerItemProps {
   /**
    * Optional agent ID to use instead of currentAgentConfig
    * Used in group profile to specify which member's plugins to toggle
@@ -26,14 +26,14 @@ interface KlavisServerItemProps {
    */
   identifier: string;
   label: string;
-  server?: KlavisServer;
+  server?: ComposioServer;
   /**
    * Server name used to call Klavis API (e.g., 'Google Calendar')
    */
   serverName: string;
 }
 
-const KlavisServerItem = memo<KlavisServerItemProps>(
+const ComposioServerItem = memo<ComposioServerItemProps>(
   ({ identifier, label, server, serverName, agentId }) => {
     const { t } = useTranslation('setting');
     const [isConnecting, setIsConnecting] = useState(false);
@@ -46,8 +46,8 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
     const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const userId = useUserStore(userProfileSelectors.userId);
-    const createKlavisServer = useToolStore((s) => s.createKlavisServer);
-    const refreshKlavisServerTools = useToolStore((s) => s.refreshKlavisServerTools);
+    const createComposioConnection = useToolStore((s) => s.createComposioConnection);
+    const refreshComposioConnectionStatus = useToolStore((s) => s.refreshComposioConnectionStatus);
 
     // Get effective agent ID (agentId prop or current active agent)
     const activeAgentId = useAgentStore((s) => s.activeAgentId);
@@ -80,7 +80,7 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
 
     // Stop all listeners when server status becomes CONNECTED
     useEffect(() => {
-      if (server?.status === KlavisServerStatus.CONNECTED && isWaitingAuth) {
+      if (server?.status === ComposioServerStatus.ACTIVE && isWaitingAuth) {
         cleanup();
       }
     }, [server?.status, isWaitingAuth, cleanup, t]);
@@ -96,7 +96,7 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
         // Poll once per second
         pollIntervalRef.current = setInterval(async () => {
           try {
-            await refreshKlavisServerTools(serverName);
+            await refreshComposioConnectionStatus(serverName);
           } catch (error) {
             console.info('[Klavis] Polling check (expected during auth):', error);
           }
@@ -111,7 +111,7 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
           setIsWaitingAuth(false);
         }, POLL_TIMEOUT_MS);
       },
-      [refreshKlavisServerTools, t],
+      [refreshComposioConnectionStatus, t],
     );
 
     /**
@@ -145,14 +145,14 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
           }
         }, 500);
       },
-      [refreshKlavisServerTools, startFallbackPolling],
+      [refreshComposioConnectionStatus, startFallbackPolling],
     );
 
     /**
      * Open OAuth window
      */
     const openOAuthWindow = useCallback(
-      (oauthUrl: string, serverName: string) => {
+      (redirectUrl: string, serverName: string) => {
         // Clean up previous state
         cleanup();
         setIsWaitingAuth(true);
@@ -202,7 +202,7 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
 
       setIsConnecting(true);
       try {
-        const newServer = await createKlavisServer({
+        const newServer = await createComposioConnection({
           identifier,
           serverName,
           userId,
@@ -214,11 +214,11 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
           await togglePlugin(newPluginId);
 
           // If already authenticated, refresh tool list directly, skip OAuth
-          if (newServer.isAuthenticated) {
-            await refreshKlavisServerTools(newServer.identifier);
-          } else if (newServer.oauthUrl) {
+          if (newServer.status === 'ACTIVE') {
+            await refreshComposioConnectionStatus(newServer.identifier);
+          } else if (newServer.redirectUrl) {
             // Need OAuth, open OAuth window and monitor close
-            openOAuthWindow(newServer.oauthUrl, newServer.identifier);
+            openOAuthWindow(newServer.redirectUrl, newServer.identifier);
           }
         }
       } catch (error) {
@@ -267,7 +267,7 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
 
       // Show different controls based on status
       switch (server.status) {
-        case KlavisServerStatus.CONNECTED: {
+        case ComposioServerStatus.ACTIVE: {
           // Toggling state
           if (isToggling) {
             return <Icon spin icon={Loader2} />;
@@ -282,7 +282,7 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
             />
           );
         }
-        case KlavisServerStatus.PENDING_AUTH: {
+        case ComposioServerStatus.PENDING_AUTH: {
           // Waiting for authentication
           if (isWaitingAuth) {
             return (
@@ -300,8 +300,8 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
               onClick={(e) => {
                 e.stopPropagation();
                 // Click to reopen OAuth window
-                if (server.oauthUrl) {
-                  openOAuthWindow(server.oauthUrl, server.identifier);
+                if (server.redirectUrl) {
+                  openOAuthWindow(server.redirectUrl, server.identifier);
                 }
               }}
             >
@@ -310,7 +310,7 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
             </Flexbox>
           );
         }
-        case KlavisServerStatus.ERROR: {
+        case ComposioServerStatus.ERROR: {
           return (
             <span style={{ color: 'red', fontSize: 12 }}>
               {t('tools.klavis.error', { defaultValue: 'Error' })}
@@ -332,7 +332,7 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
         onClick={(e) => {
           e.stopPropagation();
           // If connected, clicking the row toggles state
-          if (server?.status === KlavisServerStatus.CONNECTED) {
+          if (server?.status === ComposioServerStatus.ACTIVE) {
             handleToggle();
           }
         }}
@@ -346,4 +346,4 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
   },
 );
 
-export default KlavisServerItem;
+export default ComposioServerItem;

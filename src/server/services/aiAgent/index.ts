@@ -80,12 +80,12 @@ import {
   resolveAgentSelfIterationCapability,
 } from '@/server/services/agentSignal/featureGate';
 import { shouldSuppressSignal } from '@/server/services/agentSignal/suppressSignal';
+import { ComposioService } from '@/server/services/composio';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
 import { resolveAttachmentsByFileIds } from '@/server/services/file/resolveAttachments';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
 import type { ConversationHistoryEntry } from '@/server/services/heterogeneousAgent/cloudHeteroContext';
-import { KlavisService } from '@/server/services/klavis';
 import { MarketService } from '@/server/services/market';
 import { deviceGateway } from '@/server/services/toolExecution/deviceGateway';
 import { markdownToTxt } from '@/utils/markdownToTxt';
@@ -268,7 +268,7 @@ export class AiAgentService {
   private readonly topicModel: TopicModel;
   private readonly agentRuntimeService: AgentRuntimeService;
   private readonly marketService: MarketService;
-  private readonly klavisService: KlavisService;
+  private readonly composioService: ComposioService;
 
   constructor(
     db: LobeChatDatabase,
@@ -292,7 +292,7 @@ export class AiAgentService {
       execSubAgentTask: this.execSubAgentTask.bind(this),
     });
     this.marketService = new MarketService({ userInfo: { userId } });
-    this.klavisService = new KlavisService({ db, userId });
+    this.composioService = new ComposioService({ db, userId });
   }
 
   private async resolveOperationTaskId(
@@ -1305,7 +1305,7 @@ export class AiAgentService {
 
       // 5d. Fetch Klavis tool manifests from database
       try {
-        klavisManifests = await this.klavisService.getKlavisManifests();
+        klavisManifests = await this.composioService.getComposioManifests();
       } catch (error) {
         log('execAgent: failed to fetch klavis manifests: %O', error);
       }
@@ -1571,7 +1571,7 @@ export class AiAgentService {
       }
       for (const manifest of klavisManifests) {
         if (!isManifestIngestAllowed(manifest.identifier)) continue;
-        toolSourceMap[manifest.identifier] = 'klavis';
+        toolSourceMap[manifest.identifier] = 'composio';
       }
 
       // Mark tools that must run on the user's machine (local-system, stdio
@@ -1837,7 +1837,7 @@ export class AiAgentService {
           description: manifest.meta?.description,
           identifier: manifest.identifier,
           name: manifest.meta?.title || manifest.identifier,
-          type: 'klavis' as const,
+          type: 'composio' as const,
         })),
       ];
 

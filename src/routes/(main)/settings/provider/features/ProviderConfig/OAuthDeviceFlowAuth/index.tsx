@@ -140,7 +140,7 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
       { providerId },
       { refetchOnWindowFocus: true },
     );
-    const isAuthenticated = authStatus?.isAuthenticated ?? false;
+    const isAuthenticated = authStatus?.status === 'ACTIVE';
     const username = authStatus?.username;
     const avatarUrl = authStatus?.avatarUrl;
 

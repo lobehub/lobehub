@@ -154,7 +154,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
       { providerId: id },
       { enabled: isOAuthProvider, refetchOnWindowFocus: true },
     );
-    const isOAuthAuthenticated = oauthStatus?.isAuthenticated ?? false;
+    const isOAuthAuthenticated = oauthStatus?.status === 'ACTIVE';
 
     const [
       data,

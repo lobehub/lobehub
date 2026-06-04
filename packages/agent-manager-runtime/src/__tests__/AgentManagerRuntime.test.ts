@@ -85,7 +85,7 @@ vi.mock('@/store/tool/selectors', () => ({
   builtinToolSelectors: {
     metaList: vi.fn(() => [{ identifier: 'lobe-web-browsing', meta: { title: 'Web Browsing' } }]),
   },
-  klavisStoreSelectors: {
+  composioStoreSelectors: {
     getServers: vi.fn(() => []),
   },
   lobehubSkillStoreSelectors: {

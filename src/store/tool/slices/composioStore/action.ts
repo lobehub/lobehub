@@ -90,7 +90,7 @@ export class ComposioStoreActionImpl {
   createComposioConnection = async (
     params: CreateComposioServerParams,
   ): Promise<ComposioServer | undefined> => {
-    const { appSlug, authConfigId, identifier, label } = params;
+    const { appSlug, identifier, label } = params;
 
     this.#set(
       produce((draft: ComposioStoreState) => {
@@ -103,7 +103,6 @@ export class ComposioStoreActionImpl {
     try {
       const response = await lambdaClient.composio.createConnection.mutate({
         appSlug,
-        authConfigId,
         identifier,
         label,
       });

@@ -1,5 +1,5 @@
 import {
-  KLAVIS_SERVER_TYPES,
+  COMPOSIO_APP_TYPES,
   LOBEHUB_SKILL_PROVIDERS,
   RECOMMENDED_SKILLS,
   RecommendedSkillType,
@@ -41,17 +41,17 @@ import { useToolStore } from '@/store/tool';
 import {
   agentSkillsSelectors,
   builtinToolSelectors,
-  klavisStoreSelectors,
+  composioStoreSelectors,
   lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
-import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
+import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
-import KlavisServerItem from './KlavisServerItem';
-import KlavisSkillIcon from './KlavisSkillIcon';
+import ComposioServerItem from './ComposioServerItem';
+import ComposioSkillIcon from './ComposioSkillIcon';
 import LobehubSkillIcon from './LobehubSkillIcon';
 import LobehubSkillServerItem from './LobehubSkillServerItem';
 import MarketAgentSkillPopoverContent from './MarketAgentSkillPopoverContent';
@@ -401,14 +401,14 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   const list = useToolStore(pluginSelectors.installedPluginMetaList, isEqual);
   const [
     uninstallPlugin,
-    removeKlavisServer,
+    removeComposioConnection,
     deleteAgentSkill,
     installCustomPlugin,
     updateNewCustomPlugin,
     uninstallBuiltinTool,
   ] = useToolStore((s) => [
     s.uninstallCustomPlugin,
-    s.removeKlavisServer,
+    s.removeComposioConnection,
     s.deleteAgentSkill,
     s.installCustomPlugin,
     s.updateNewCustomPlugin,
@@ -678,8 +678,8 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   );
 
   // Klavis-related state
-  const allKlavisServers = useToolStore(klavisStoreSelectors.getServers, isEqual);
-  const isKlavisEnabledInEnv = useServerConfigStore(serverConfigSelectors.enableKlavis);
+  const allKlavisServers = useToolStore(composioStoreSelectors.getServers, isEqual);
+  const isKlavisEnabledInEnv = useServerConfigStore(serverConfigSelectors.enableComposio);
 
   // LobeHub Skill related state
   const allLobehubSkillServers = useToolStore(lobehubSkillStoreSelectors.getServers, isEqual);
@@ -691,12 +691,12 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   const userAgentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
 
   const [
-    useFetchUserKlavisServers,
+    useFetchUserComposioConnections,
     useFetchLobehubSkillConnections,
     useFetchUninstalledBuiltinTools,
     useFetchAgentSkills,
   ] = useToolStore((s) => [
-    s.useFetchUserKlavisServers,
+    s.useFetchUserComposioConnections,
     s.useFetchLobehubSkillConnections,
     s.useFetchUninstalledBuiltinTools,
     s.useFetchAgentSkills,
@@ -708,7 +708,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   useCheckPluginsIsInstalled(plugins);
 
   // Load user's Klavis integrations via SWR (from database)
-  useFetchUserKlavisServers(isKlavisEnabledInEnv);
+  useFetchUserComposioConnections(isKlavisEnabledInEnv);
 
   // Load user's LobeHub Skill connections via SWR
   useFetchLobehubSkillConnections(isLobehubSkillEnabled);
@@ -722,9 +722,9 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   );
 
   // Get all Klavis server type identifier sets (used for filtering builtinList)
-  // Using KLAVIS_SERVER_TYPES instead of connected servers here, because we want to filter out all possible Klavis types
+  // Using COMPOSIO_APP_TYPES instead of connected servers here, because we want to filter out all possible Klavis types
   const allKlavisTypeIdentifiers = useMemo(
-    () => new Set(KLAVIS_SERVER_TYPES.map((type) => type.identifier)),
+    () => new Set(COMPOSIO_APP_TYPES.map((type) => type.identifier)),
     [],
   );
   // Get all skill identifier sets (used for filtering builtinList)
@@ -749,7 +749,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   const recommendedKlavisIds = useMemo(
     () =>
       new Set(
-        RECOMMENDED_SKILLS.filter((s) => s.type === RecommendedSkillType.Klavis).map((s) => s.id),
+        RECOMMENDED_SKILLS.filter((s) => s.type === RecommendedSkillType.Composio).map((s) => s.id),
       ),
     [],
   );
@@ -779,17 +779,17 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   const klavisServerItems = useMemo(
     () =>
       isKlavisEnabledInEnv
-        ? KLAVIS_SERVER_TYPES.filter(
+        ? COMPOSIO_APP_TYPES.filter(
             (type) =>
               installedKlavisIds.has(type.identifier) || recommendedKlavisIds.has(type.identifier),
           ).map((type) => {
             const server = getServerByName(type.identifier);
             const icon = (
-              <KlavisSkillIcon icon={type.icon} label={type.label} size={SKILL_ICON_SIZE} />
+              <ComposioSkillIcon icon={type.icon} label={type.label} size={SKILL_ICON_SIZE} />
             );
             const popoverContent = (
               <ToolItemDetailPopover
-                icon={<KlavisSkillIcon icon={type.icon} label={type.label} size={36} />}
+                icon={<ComposioSkillIcon icon={type.icon} label={type.label} size={36} />}
                 identifier={type.identifier}
                 sourceLabel={type.author}
                 title={type.label}
@@ -799,12 +799,12 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
               />
             );
 
-            if (server?.status === KlavisServerStatus.CONNECTED) {
+            if (server?.status === ComposioServerStatus.ACTIVE) {
               return createManagedSkillItem({
                 badge: <Icon icon={McpIcon} size={12} />,
                 deleteConfig: {
                   displayName: type.label,
-                  onDelete: () => removeKlavisServer(server.identifier),
+                  onDelete: () => removeComposioConnection(server.identifier),
                 },
                 extraTag: type.author === 'LobeHub' ? officialTag : undefined,
                 icon,
@@ -819,7 +819,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
               icon,
               key: type.identifier,
               label: (
-                <KlavisServerItem
+                <ComposioServerItem
                   agentId={agentId}
                   identifier={type.identifier}
                   label={type.label}
@@ -840,7 +840,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       t,
       createManagedSkillItem,
       getServerByName,
-      removeKlavisServer,
+      removeComposioConnection,
     ],
   );
 

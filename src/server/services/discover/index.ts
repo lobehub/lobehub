@@ -1,10 +1,10 @@
 import {
+  COMPOSIO_APP_TYPES,
   CURRENT_VERSION,
   DEFAULT_DISCOVER_ASSISTANT_ITEM,
   DEFAULT_DISCOVER_PLUGIN_ITEM,
   DEFAULT_DISCOVER_PROVIDER_ITEM,
   isDesktop,
-  KLAVIS_SERVER_TYPES,
 } from '@lobechat/const';
 import {
   type AgentStatus,
@@ -1161,7 +1161,7 @@ export class DiscoverService {
     }
 
     // Step 4: Try to find in Klavis server types (builtin tools that require env config)
-    const klavisTool = KLAVIS_SERVER_TYPES.find((tool) => tool.identifier === identifier);
+    const klavisTool = COMPOSIO_APP_TYPES.find((tool) => tool.identifier === identifier);
     if (klavisTool) {
       log('getPluginDetail: found Klavis tool for identifier=%s', identifier);
 
@@ -1179,7 +1179,7 @@ export class DiscoverService {
         related: [],
         schemaVersion: 1,
         source: 'builtin',
-        tags: ['klavis', 'mcp'],
+        tags: ['composio', 'mcp'],
         title: klavisTool.label,
       };
       log('getPluginDetail: returning Klavis tool plugin');

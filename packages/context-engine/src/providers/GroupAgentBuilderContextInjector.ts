@@ -42,8 +42,8 @@ export interface GroupOfficialToolItem {
   installed?: boolean;
   /** Tool display name */
   name: string;
-  /** Tool type: 'builtin' for built-in tools, 'klavis' for LobeHub Mcp servers, 'lobehub-skill' for LobeHub Skill providers */
-  type: 'builtin' | 'klavis' | 'lobehub-skill';
+  /** Tool type: 'builtin' for built-in tools, 'composio' for LobeHub Mcp servers, 'lobehub-skill' for LobeHub Skill providers */
+  type: 'builtin' | 'composio' | 'lobehub-skill';
 }
 
 /**
@@ -189,7 +189,7 @@ const defaultFormatGroupContext = (context: GroupAgentBuilderContext): string =>
   // Add official tools section
   if (context.officialTools && context.officialTools.length > 0) {
     const builtinTools = context.officialTools.filter((t) => t.type === 'builtin');
-    const klavisTools = context.officialTools.filter((t) => t.type === 'klavis');
+    const klavisTools = context.officialTools.filter((t) => t.type === 'composio');
     const lobehubSkillTools = context.officialTools.filter((t) => t.type === 'lobehub-skill');
 
     const toolsSections: string[] = [];

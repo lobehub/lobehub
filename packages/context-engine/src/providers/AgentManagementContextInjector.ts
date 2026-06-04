@@ -66,8 +66,8 @@ export interface AvailablePluginInfo {
   identifier: string;
   /** Plugin display name */
   name: string;
-  /** Plugin type: 'builtin' for built-in tools, 'klavis' for Klavis servers, 'lobehub-skill' for LobehubSkill providers */
-  type: 'builtin' | 'klavis' | 'lobehub-skill';
+  /** Plugin type: 'builtin' for built-in tools, 'composio' for Klavis servers, 'lobehub-skill' for LobehubSkill providers */
+  type: 'builtin' | 'composio' | 'lobehub-skill';
 }
 
 /**
@@ -163,7 +163,7 @@ const defaultFormatContext = (context: AgentManagementContext): string => {
   // Add available plugins section
   if (context.availablePlugins && context.availablePlugins.length > 0) {
     const builtinPlugins = context.availablePlugins.filter((p) => p.type === 'builtin');
-    const klavisPlugins = context.availablePlugins.filter((p) => p.type === 'klavis');
+    const klavisPlugins = context.availablePlugins.filter((p) => p.type === 'composio');
     const lobehubSkillPlugins = context.availablePlugins.filter((p) => p.type === 'lobehub-skill');
 
     const pluginsSections: string[] = [];

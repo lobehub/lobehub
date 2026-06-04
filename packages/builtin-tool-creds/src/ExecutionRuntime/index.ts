@@ -1,8 +1,8 @@
-import { getKlavisServerByServerIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
+import { getComposioAppByIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
 import type {
-  ConnectKlavisServiceParams,
+  ConnectComposioServiceParams,
   InitiateOAuthConnectParams,
   InjectCredsToSandboxParams,
   SaveCredsParams,
@@ -93,12 +93,12 @@ export class CredsExecutionRuntime {
    * In server-side context, Klavis OAuth requires browser interaction,
    * so we return a message guiding the user to connect via the UI.
    */
-  async connectKlavisService(
-    args: ConnectKlavisServiceParams,
+  async connectComposioService(
+    args: ConnectComposioServiceParams,
   ): Promise<BuiltinServerRuntimeOutput> {
     const { service } = args;
 
-    const serverType = getKlavisServerByServerIdentifier(service);
+    const serverType = getComposioAppByIdentifier(service);
     if (!serverType) {
       return {
         content: `Unknown Klavis service: "${service}". Check the available Klavis services list in the credentials context.`,

@@ -75,7 +75,7 @@ export const systemPrompt = `You have access to a Tools Activator that allows yo
 4. If credential doesn't exist:
    - For LobeHub OAuth services (GitHub, Linear, Microsoft, Notion, Twitter) → use \`initiateOAuthConnect\`
    - For Klavis-managed services (Slack, Google Drive, Airtable, Jira, etc.)
-     → use \`connectKlavisService\` after activating \`lobe-creds\`. The full list of
+     → use \`connectComposioService\` after activating \`lobe-creds\`. The full list of
      available Klavis services is shown in \`<klavis_integrations>\` inside the
      lobe-creds system prompt.
    - For API keys/tokens → guide user to save with \`saveCreds\`

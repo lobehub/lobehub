@@ -30,7 +30,7 @@ const mocks = vi.hoisted(() => ({
     removeAgent: vi.fn(),
   },
   marketAuth: {
-    isAuthenticated: true,
+    status: 'ACTIVE',
     isLoading: false,
     signIn: vi.fn(),
   },

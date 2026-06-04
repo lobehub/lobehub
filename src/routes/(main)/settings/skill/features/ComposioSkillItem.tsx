@@ -1,6 +1,6 @@
 'use client';
 
-import { type KlavisServerType } from '@lobechat/const';
+import { type ComposioAppType } from '@lobechat/const';
 import { Avatar, Button as LobeButton, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { Button } from 'antd';
@@ -9,26 +9,23 @@ import { Loader2, MoreHorizontalIcon, SquareArrowOutUpRight, Unplug } from 'luci
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { createKlavisSkillDetailModal } from '@/features/SkillStore/SkillDetail';
 import { useToolStore } from '@/store/tool';
-import { type KlavisServer } from '@/store/tool/slices/klavisStore';
-import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
-import { useUserStore } from '@/store/user';
-import { userProfileSelectors } from '@/store/user/selectors';
+import { type ComposioServer } from '@/store/tool/slices/composioStore';
+import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
 
 import { styles } from './style';
 
 const POLL_INTERVAL_MS = 1000;
 const POLL_TIMEOUT_MS = 15_000;
 
-interface KlavisSkillItemProps {
+interface ComposioSkillItemProps {
   isSelected?: boolean;
   onSelect?: () => void;
-  server?: KlavisServer;
-  serverType: KlavisServerType;
+  server?: ComposioServer;
+  serverType: ComposioAppType;
 }
 
-const KlavisSkillItem = memo<KlavisSkillItemProps>(
+const ComposioSkillItem = memo<ComposioSkillItemProps>(
   ({ serverType, server, isSelected, onSelect }) => {
     const { t } = useTranslation('setting');
     const [isConnecting, setIsConnecting] = useState(false);
@@ -39,10 +36,9 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(
     const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const userId = useUserStore(userProfileSelectors.userId);
-    const createKlavisServer = useToolStore((s) => s.createKlavisServer);
-    const refreshKlavisServerTools = useToolStore((s) => s.refreshKlavisServerTools);
-    const removeKlavisServer = useToolStore((s) => s.removeKlavisServer);
+    const createComposioConnection = useToolStore((s) => s.createComposioConnection);
+    const refreshComposioConnectionStatus = useToolStore((s) => s.refreshComposioConnectionStatus);
+    const removeComposioConnection = useToolStore((s) => s.removeComposioConnection);
 
     const cleanup = useCallback(() => {
       if (windowCheckIntervalRef.current) {
@@ -68,20 +64,20 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(
     }, [cleanup]);
 
     useEffect(() => {
-      if (server?.status === KlavisServerStatus.CONNECTED && isWaitingAuth) {
+      if (server?.status === ComposioServerStatus.ACTIVE && isWaitingAuth) {
         cleanup();
       }
     }, [server?.status, isWaitingAuth, cleanup]);
 
     const startFallbackPolling = useCallback(
-      (serverName: string) => {
+      (identifier: string) => {
         if (pollIntervalRef.current) return;
 
         pollIntervalRef.current = setInterval(async () => {
           try {
-            await refreshKlavisServerTools(serverName);
+            await refreshComposioConnectionStatus(identifier);
           } catch (error) {
-            console.info('[Klavis] Polling check (expected during auth):', error);
+            console.info('[Composio] Polling check (expected during auth):', error);
           }
         }, POLL_INTERVAL_MS);
 
@@ -93,11 +89,11 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(
           setIsWaitingAuth(false);
         }, POLL_TIMEOUT_MS);
       },
-      [refreshKlavisServerTools],
+      [refreshComposioConnectionStatus],
     );
 
     const startWindowMonitor = useCallback(
-      (oauthWindow: Window, serverName: string) => {
+      (oauthWindow: Window, identifier: string) => {
         windowCheckIntervalRef.current = setInterval(async () => {
           try {
             if (oauthWindow.closed) {
@@ -106,59 +102,57 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(
                 windowCheckIntervalRef.current = null;
               }
               oauthWindowRef.current = null;
-              // Start polling after window closes
-              startFallbackPolling(serverName);
+              startFallbackPolling(identifier);
             }
           } catch {
-            console.info('[Klavis] COOP blocked window.closed access, falling back to polling');
+            console.info('[Composio] COOP blocked window.closed access, falling back to polling');
             if (windowCheckIntervalRef.current) {
               clearInterval(windowCheckIntervalRef.current);
               windowCheckIntervalRef.current = null;
             }
-            startFallbackPolling(serverName);
+            startFallbackPolling(identifier);
           }
         }, 500);
       },
-      [refreshKlavisServerTools, startFallbackPolling],
+      [startFallbackPolling],
     );
 
     const openOAuthWindow = useCallback(
-      (oauthUrl: string, serverName: string) => {
+      (redirectUrl: string, identifier: string) => {
         cleanup();
         setIsWaitingAuth(true);
 
-        const oauthWindow = window.open(oauthUrl, '_blank', 'width=600,height=700');
+        const oauthWindow = window.open(redirectUrl, '_blank', 'width=600,height=700');
         if (oauthWindow) {
           oauthWindowRef.current = oauthWindow;
-          startWindowMonitor(oauthWindow, serverName);
+          startWindowMonitor(oauthWindow, identifier);
         } else {
-          startFallbackPolling(serverName);
+          startFallbackPolling(identifier);
         }
       },
       [cleanup, startWindowMonitor, startFallbackPolling],
     );
 
     const handleConnect = async () => {
-      if (!userId) return;
       if (server) return;
 
       setIsConnecting(true);
       try {
-        const newServer = await createKlavisServer({
+        const newServer = await createComposioConnection({
+          appSlug: serverType.appSlug,
           identifier: serverType.identifier,
-          serverName: serverType.serverName,
-          userId,
+          label: serverType.label,
         });
 
         if (newServer) {
-          if (newServer.isAuthenticated) {
-            await refreshKlavisServerTools(newServer.identifier);
-          } else if (newServer.oauthUrl) {
-            openOAuthWindow(newServer.oauthUrl, newServer.identifier);
+          if (newServer.status === ComposioServerStatus.ACTIVE) {
+            await refreshComposioConnectionStatus(newServer.identifier);
+          } else if (newServer.redirectUrl) {
+            openOAuthWindow(newServer.redirectUrl, newServer.identifier);
           }
         }
       } catch (error) {
-        console.error('[Klavis] Failed to connect server:', error);
+        console.error('[Composio] Failed to connect server:', error);
       } finally {
         setIsConnecting(false);
       }
@@ -172,7 +166,7 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(
         okButtonProps: { danger: true },
         okText: t('tools.lobehubSkill.disconnect'),
         onOk: async () => {
-          await removeKlavisServer(server.identifier);
+          await removeComposioConnection(server.identifier);
         },
         title: t('tools.lobehubSkill.disconnectConfirm.title', { name: serverType.label }),
       });
@@ -196,13 +190,13 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(
       }
 
       switch (server.status) {
-        case KlavisServerStatus.CONNECTED: {
+        case ComposioServerStatus.ACTIVE: {
           return <span className={styles.connected}>{t('tools.klavis.connected')}</span>;
         }
-        case KlavisServerStatus.PENDING_AUTH: {
+        case ComposioServerStatus.PENDING_AUTH: {
           return <span className={styles.pending}>{t('tools.klavis.authRequired')}</span>;
         }
-        case KlavisServerStatus.ERROR: {
+        case ComposioServerStatus.ERROR: {
           return <span className={styles.error}>{t('tools.klavis.error')}</span>;
         }
         default: {
@@ -236,14 +230,14 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(
         );
       }
 
-      if (server.status === KlavisServerStatus.PENDING_AUTH) {
+      if (server.status === ComposioServerStatus.PENDING_AUTH) {
         return (
           <Button
             icon={<Icon icon={SquareArrowOutUpRight} />}
             type="default"
             onClick={() => {
-              if (server.oauthUrl) {
-                openOAuthWindow(server.oauthUrl, server.identifier);
+              if (server.redirectUrl) {
+                openOAuthWindow(server.redirectUrl, server.identifier);
               }
             }}
           >
@@ -252,7 +246,7 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(
         );
       }
 
-      if (server.status === KlavisServerStatus.CONNECTED) {
+      if (server.status === ComposioServerStatus.ACTIVE) {
         return (
           <DropdownMenu
             placement="bottomRight"
@@ -274,7 +268,7 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(
       return null;
     };
 
-    const isConnected = server?.status === KlavisServerStatus.CONNECTED;
+    const isConnected = server?.status === ComposioServerStatus.ACTIVE;
 
     return (
       <Flexbox
@@ -295,15 +289,6 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(
             align="center"
             gap={8}
             style={{ cursor: onSelect ? undefined : 'pointer' }}
-            onClick={
-              onSelect
-                ? undefined
-                : () =>
-                    createKlavisSkillDetailModal({
-                      identifier: serverType.identifier,
-                      serverName: serverType.serverName,
-                    })
-            }
           >
             <div className={`${styles.icon} ${!isConnected ? styles.disconnectedIcon : ''}`}>
               {renderIcon()}
@@ -325,6 +310,6 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(
   },
 );
 
-KlavisSkillItem.displayName = 'KlavisSkillItem';
+ComposioSkillItem.displayName = 'ComposioSkillItem';
 
-export default KlavisSkillItem;
+export default ComposioSkillItem;

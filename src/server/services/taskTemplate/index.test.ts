@@ -213,19 +213,19 @@ describe('isTemplateSkillSourceEligible', () => {
 
   it('drops templates whose source is not in enabledSkillSources', () => {
     const t = makeTemplate({ requiresSkills: [{ provider: 'notion', source: 'lobehub' }] });
-    expect(isTemplateSkillSourceEligible(t, new Set(['klavis']))).toBe(false);
+    expect(isTemplateSkillSourceEligible(t, new Set(['composio']))).toBe(false);
   });
 
   it('requires every source for multi-skill templates', () => {
     const t = makeTemplate({
       requiresSkills: [
         { provider: 'notion', source: 'lobehub' },
-        { provider: 'google-calendar', source: 'klavis' },
+        { provider: 'google-calendar', source: 'composio' },
       ],
     });
     expect(isTemplateSkillSourceEligible(t, new Set(['lobehub']))).toBe(false);
-    expect(isTemplateSkillSourceEligible(t, new Set(['klavis']))).toBe(false);
-    expect(isTemplateSkillSourceEligible(t, new Set(['lobehub', 'klavis']))).toBe(true);
+    expect(isTemplateSkillSourceEligible(t, new Set(['composio']))).toBe(false);
+    expect(isTemplateSkillSourceEligible(t, new Set(['lobehub', 'composio']))).toBe(true);
   });
 
   it('treats empty requiresSkills array same as undefined (always eligible)', () => {

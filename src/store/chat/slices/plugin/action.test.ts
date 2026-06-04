@@ -1420,7 +1420,7 @@ describe('ChatPluginAction', () => {
         // Mock useToolStore to return a server
         vi.spyOn(useToolStore, 'getState').mockReturnValue({
           servers: [{ identifier: 'test-plugin', serverUrl: 'http://test.com' }],
-          callKlavisTool: vi.fn().mockResolvedValue({
+          callComposioTool: vi.fn().mockResolvedValue({
             success: true,
             data: mockResult,
           }),

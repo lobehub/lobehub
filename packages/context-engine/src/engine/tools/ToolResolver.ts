@@ -102,7 +102,7 @@ export class ToolResolver {
       enabledToolIds.push(activation.id);
 
       // Only set source if not already present — the operation-level sourceMap
-      // may already have the correct routing source (e.g., 'lobehubSkill', 'klavis')
+      // may already have the correct routing source (e.g., 'lobehubSkill', 'composio')
       // and the activation source ('discovery') should not overwrite it.
       if (activation.source && !sourceMap[activation.id]) {
         sourceMap[activation.id] = this.mapSource(activation.source);

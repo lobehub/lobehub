@@ -1,8 +1,8 @@
 import { builtinTools } from '@lobechat/builtin-tools';
 import {
+  COMPOSIO_APP_TYPES,
+  type ComposioAppType,
   getLobehubSkillProviderById,
-  KLAVIS_SERVER_TYPES,
-  type KlavisServerType,
   type LobehubSkillProviderType,
 } from '@lobechat/const';
 import { type DiscoverPluginDetail, type PluginSource } from '@lobechat/types';
@@ -20,7 +20,7 @@ import { useDiscoverStore } from '@/store/discover';
  * For string type icon, use Image component to render
  * For IconType type icon, use Icon component to render with theme fill color
  */
-const BuiltinToolIcon = memo<Pick<KlavisServerType | LobehubSkillProviderType, 'icon' | 'label'>>(
+const BuiltinToolIcon = memo<Pick<ComposioAppType | LobehubSkillProviderType, 'icon' | 'label'>>(
   ({ icon, label }) => {
     if (typeof icon === 'string') {
       return <Image alt={label} height={40} src={icon} style={{ flex: 'none' }} width={40} />;
@@ -80,7 +80,7 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
 
   // Try to get Klavis tool info if API returns no data
   const klavisTool = useMemo(() => {
-    return KLAVIS_SERVER_TYPES.find((tool) => tool.identifier === identifier);
+    return COMPOSIO_APP_TYPES.find((tool) => tool.identifier === identifier);
   }, [identifier]);
 
   // Try to get LobehubSkill info if API returns no data
@@ -111,7 +111,7 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
         related: [],
         schemaVersion: 1,
         source: 'builtin' as const,
-        tags: ['klavis', 'mcp'],
+        tags: ['composio', 'mcp'],
         title: klavisTool.label,
       };
     }

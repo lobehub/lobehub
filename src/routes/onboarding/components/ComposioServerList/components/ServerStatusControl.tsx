@@ -4,13 +4,13 @@ import { CheckIcon, CircleX, Loader2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type KlavisServer } from '@/store/tool/slices/klavisStore';
-import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
+import { type ComposioServer } from '@/store/tool/slices/composioStore';
+import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
 
 interface ServerStatusControlProps {
   isConnecting: boolean;
   isWaitingAuth: boolean;
-  server?: KlavisServer;
+  server?: ComposioServer;
 }
 
 const ServerStatusControl = memo<ServerStatusControlProps>(
@@ -29,15 +29,15 @@ const ServerStatusControl = memo<ServerStatusControlProps>(
 
     // Server status indicators
     switch (server.status) {
-      case KlavisServerStatus.CONNECTED: {
+      case ComposioServerStatus.ACTIVE: {
         return <Icon color={cssVar.colorSuccess} icon={CheckIcon} />;
       }
 
-      case KlavisServerStatus.PENDING_AUTH: {
+      case ComposioServerStatus.PENDING_AUTH: {
         return null;
       }
 
-      case KlavisServerStatus.ERROR: {
+      case ComposioServerStatus.ERROR: {
         return (
           <Icon
             color={cssVar.colorError}

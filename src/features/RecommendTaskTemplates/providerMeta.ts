@@ -3,7 +3,7 @@ import type {
   TaskTemplateSkillRequirement,
   TaskTemplateSkillSource,
 } from '@lobechat/const';
-import { getKlavisServerByServerIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
+import { getComposioAppByIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
 
 export interface SkillProviderMeta {
   icon: LobehubSkillProviderType['icon'];
@@ -20,9 +20,9 @@ export const getProviderMeta = (
     if (!p) return undefined;
     return { icon: p.icon, label: p.label, provider: spec.provider, source: 'lobehub' };
   }
-  const p = getKlavisServerByServerIdentifier(spec.provider);
+  const p = getComposioAppByIdentifier(spec.provider);
   if (!p) return undefined;
-  return { icon: p.icon, label: p.label, provider: spec.provider, source: 'klavis' };
+  return { icon: p.icon, label: p.label, provider: spec.provider, source: 'composio' };
 };
 
 export const findNextUnconnectedSpec = (

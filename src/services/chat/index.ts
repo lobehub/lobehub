@@ -1,6 +1,6 @@
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import {
-  KLAVIS_SERVER_TYPES,
+  COMPOSIO_APP_TYPES,
   LOBEHUB_SKILL_PROVIDERS,
   REQUEST_AGENT_ID_HEADER,
   REQUEST_TOPIC_ID_HEADER,
@@ -34,7 +34,7 @@ import { getChatStoreState } from '@/store/chat';
 import { getToolStoreState } from '@/store/tool';
 import {
   builtinToolSelectors,
-  klavisStoreSelectors,
+  composioStoreSelectors,
   lobehubSkillStoreSelectors,
 } from '@/store/tool/selectors';
 import { getUserStoreState, useUserStore } from '@/store/user';
@@ -210,7 +210,7 @@ class ChatService {
 
       // Get builtin tools (excluding Klavis tools)
       const builtinTools = builtinToolSelectors.metaList(toolState);
-      const klavisIdentifiers = new Set(KLAVIS_SERVER_TYPES.map((t) => t.identifier));
+      const klavisIdentifiers = new Set(COMPOSIO_APP_TYPES.map((t) => t.identifier));
 
       for (const tool of builtinTools) {
         // Skip Klavis tools in builtin list (they'll be shown separately)
@@ -229,12 +229,12 @@ class ChatService {
       // Get Klavis tools (if enabled)
       const isKlavisEnabled =
         typeof window !== 'undefined' &&
-        window.global_serverConfigStore?.getState()?.serverConfig?.enableKlavis;
+        window.global_serverConfigStore?.getState()?.serverConfig?.enableComposio;
 
       if (isKlavisEnabled) {
-        const allKlavisServers = klavisStoreSelectors.getServers(toolState);
+        const allKlavisServers = composioStoreSelectors.getServers(toolState);
 
-        for (const klavisType of KLAVIS_SERVER_TYPES) {
+        for (const klavisType of COMPOSIO_APP_TYPES) {
           const server = allKlavisServers.find((s) => s.identifier === klavisType.identifier);
 
           officialTools.push({
@@ -243,7 +243,7 @@ class ChatService {
             identifier: klavisType.identifier,
             installed: !!server,
             name: klavisType.label,
-            type: 'klavis',
+            type: 'composio',
           });
         }
       }

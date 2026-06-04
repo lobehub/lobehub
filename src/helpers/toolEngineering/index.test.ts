@@ -104,8 +104,8 @@ vi.mock('@/store/tool/selectors', () => ({
     getInstalledPluginById: (id: string) => mockGetInstalledPluginById(id),
     installedPluginManifestList: () => mockInstalledPluginManifestList(),
   },
-  klavisStoreSelectors: {
-    klavisAsLobeTools: () => [],
+  composioStoreSelectors: {
+    composioAsLobeTools: () => [],
   },
   lobehubSkillStoreSelectors: {
     lobehubSkillAsLobeTools: () => [],

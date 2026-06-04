@@ -100,7 +100,7 @@ When sandbox mode is enabled and you need to run code that requires credentials:
 <klavis_guidelines>
 - **Klavis integrations** are OAuth connections managed by the Klavis platform for third-party services (e.g., Gmail, Google Calendar, Slack).
 - For **connected** Klavis services: Use the corresponding tools directly. Do NOT ask users for API keys, tokens, or credentials — the authorization is already handled by Klavis.
-- For **available but not connected** services: Use \`connectKlavisService\` to initiate the OAuth connection flow via Klavis.
+- For **available but not connected** services: Use \`connectComposioService\` to initiate the OAuth connection flow via Klavis.
 - Klavis credentials **CANNOT** be injected via \`injectCredsToSandbox\` — they are tool-only authorizations managed externally by Klavis.
 - If a user asks about a service that matches a connected Klavis integration, always prefer using the Klavis tools over asking the user for manual credentials.
 </klavis_guidelines>

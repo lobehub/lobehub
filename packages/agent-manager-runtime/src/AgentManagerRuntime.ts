@@ -14,7 +14,7 @@
  * Services must be injected via constructor for runtime-agnostic usage
  * (e.g., server-side services vs client-side services).
  */
-import { COMPOSIO_APP_TYPES, KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
+import { COMPOSIO_APP_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
 import { marketToolsResultsPrompt, modelsResultsPrompt } from '@lobechat/prompts';
 import type { BuiltinToolResult } from '@lobechat/types';
 
@@ -25,12 +25,10 @@ import { getToolStoreState } from '@/store/tool';
 import {
   builtinToolSelectors,
   composioStoreSelectors,
-  klavisStoreSelectors,
   lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
 import { ComposioServerStatus } from '@/store/tool/slices/composioStore/types';
-import { KlavisServerStatus } from '@/store/tool/slices/klavisStore/types';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 import { getUserStoreState } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -696,22 +694,6 @@ export class AgentManagerRuntime {
           }
         }
 
-        // Check if it's a Klavis tool
-        const isKlavisEnabled =
-          typeof window !== 'undefined' &&
-          window.global_serverConfigStore?.getState()?.serverConfig?.enableKlavis;
-
-        if (isKlavisEnabled) {
-          const klavisServer = klavisStoreSelectors
-            .getServers(toolState)
-            .find((s) => s.identifier === identifier);
-          const klavisTypeInfo = KLAVIS_SERVER_TYPES.find((t) => t.identifier === identifier);
-
-          if (klavisTypeInfo) {
-            return this.handleKlavisInstall(agentId, identifier, klavisTypeInfo, klavisServer);
-          }
-        }
-
         // Check if it's a LobehubSkill provider
         const isLobehubSkillEnabled =
           typeof window !== 'undefined' &&
@@ -866,7 +848,6 @@ export class AgentManagerRuntime {
 
     const newServer = await getToolStoreState().createComposioConnection({
       appSlug: composioAppInfo.appSlug,
-      authConfigId: '',
       identifier,
       label: composioAppInfo.label,
     });
@@ -913,133 +894,6 @@ export class AgentManagerRuntime {
     return {
       content: `Failed to connect Composio tool: ${composioAppInfo.label}`,
       error: { message: 'Failed to create Composio connection', type: 'ComposioError' },
-      state: {
-        installed: false,
-        pluginId: identifier,
-        success: false,
-      } as InstallPluginState,
-      success: false,
-    };
-  }
-
-  private async handleKlavisInstall(
-    agentId: string,
-    identifier: string,
-    klavisTypeInfo: (typeof KLAVIS_SERVER_TYPES)[0],
-    klavisServer: any,
-  ): Promise<BuiltinToolResult> {
-    if (klavisServer) {
-      if (klavisServer.status === KlavisServerStatus.CONNECTED) {
-        await this.enablePluginForAgent(agentId, identifier);
-        return {
-          content: `Successfully enabled Klavis tool: ${klavisTypeInfo.label}`,
-          state: {
-            installed: true,
-            isKlavis: true,
-            pluginId: identifier,
-            pluginName: klavisTypeInfo.label,
-            serverStatus: 'connected',
-            success: true,
-          } as InstallPluginState,
-          success: true,
-        };
-      } else if (klavisServer.status === KlavisServerStatus.PENDING_AUTH) {
-        if (klavisServer.oauthUrl) {
-          const authResult = await this.openOAuthWindowAndWait(klavisServer.oauthUrl, identifier);
-          if (authResult.success) {
-            await this.enablePluginForAgent(agentId, identifier);
-            return {
-              content: `Successfully connected and enabled Klavis tool: ${klavisTypeInfo.label}`,
-              state: {
-                installed: true,
-                isKlavis: true,
-                pluginId: identifier,
-                pluginName: klavisTypeInfo.label,
-                serverStatus: 'connected',
-                success: true,
-              } as InstallPluginState,
-              success: true,
-            };
-          }
-        }
-        return {
-          content: `OAuth authorization was cancelled or failed for Klavis tool: ${klavisTypeInfo.label}. Please try again.`,
-          state: {
-            installed: false,
-            isKlavis: true,
-            pluginId: identifier,
-            pluginName: klavisTypeInfo.label,
-            serverStatus: 'pending_auth',
-            success: false,
-          } as InstallPluginState,
-          success: false,
-        };
-      }
-    }
-
-    // Server doesn't exist, create it
-    const userId = userProfileSelectors.userId(getUserStoreState());
-    if (!userId) {
-      return {
-        content: `Cannot connect Klavis tool: User not logged in.`,
-        error: { message: 'User not logged in', type: 'AuthRequired' },
-        state: {
-          installed: false,
-          pluginId: identifier,
-          success: false,
-        } as InstallPluginState,
-        success: false,
-      };
-    }
-
-    const newServer = await getToolStoreState().createKlavisServer({
-      identifier,
-      serverName: klavisTypeInfo.serverName,
-      userId,
-    });
-
-    if (newServer) {
-      await this.enablePluginForAgent(agentId, identifier);
-
-      if (newServer.isAuthenticated) {
-        await getToolStoreState().refreshKlavisServerTools(newServer.identifier);
-        return {
-          content: `Successfully connected and enabled Klavis tool: ${klavisTypeInfo.label}`,
-          state: {
-            installed: true,
-            isKlavis: true,
-            pluginId: identifier,
-            pluginName: klavisTypeInfo.label,
-            serverStatus: 'connected',
-            success: true,
-          } as InstallPluginState,
-          success: true,
-        };
-      } else if (newServer.oauthUrl) {
-        const authResult = await this.openOAuthWindowAndWait(
-          newServer.oauthUrl,
-          newServer.identifier,
-        );
-        if (authResult.success) {
-          return {
-            content: `Successfully connected and enabled Klavis tool: ${klavisTypeInfo.label}`,
-            state: {
-              installed: true,
-              isKlavis: true,
-              pluginId: identifier,
-              pluginName: klavisTypeInfo.label,
-              serverStatus: 'connected',
-              success: true,
-            } as InstallPluginState,
-            success: true,
-          };
-        }
-      }
-    }
-
-    return {
-      content: `Failed to connect Klavis tool: ${klavisTypeInfo.label}`,
-      error: { message: 'Failed to create Klavis server', type: 'KlavisError' },
       state: {
         installed: false,
         pluginId: identifier,
@@ -1197,17 +1051,17 @@ export class AgentManagerRuntime {
   }
 
   private openOAuthWindowAndWait(
-    oauthUrl: string,
+    redirectUrl: string,
     identifier: string,
   ): Promise<{ cancelled: boolean; success: boolean }> {
     const checkAuthStatus = async (): Promise<boolean> => {
       try {
-        await getToolStoreState().refreshKlavisServerTools(identifier);
+        await getToolStoreState().refreshComposioConnectionStatus(identifier);
         const freshToolStore = getToolStoreState();
-        const server = klavisStoreSelectors
+        const server = composioStoreSelectors
           .getServers(freshToolStore)
           .find((s) => s.identifier === identifier);
-        return server?.status === KlavisServerStatus.CONNECTED;
+        return server?.status === ComposioServerStatus.ACTIVE;
       } catch {
         return false;
       }
@@ -1270,7 +1124,7 @@ export class AgentManagerRuntime {
   }
 
   private openLobehubSkillOAuthWindowAndWait(
-    oauthUrl: string,
+    redirectUrl: string,
     provider: string,
   ): Promise<{ cancelled: boolean; success: boolean }> {
     const checkAuthStatus = async (): Promise<boolean> => {

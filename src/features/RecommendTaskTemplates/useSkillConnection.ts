@@ -1,11 +1,11 @@
 import type { TaskTemplateSkillRequirement } from '@lobechat/const';
-import { KLAVIS_SERVER_TYPES } from '@lobechat/const';
+import { COMPOSIO_APP_TYPES } from '@lobechat/const';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { LOBEHUB_SKILL_AUTH_SUCCESS_MESSAGE } from '@/const/skillConnection';
 import { useToolStore } from '@/store/tool';
-import { klavisStoreSelectors } from '@/store/tool/slices/klavisStore/selectors';
-import { KlavisServerStatus } from '@/store/tool/slices/klavisStore/types';
+import { composioStoreSelectors } from '@/store/tool/slices/composioStore/selectors';
+import { ComposioServerStatus } from '@/store/tool/slices/composioStore/types';
 import { lobehubSkillStoreSelectors } from '@/store/tool/slices/lobehubSkillStore/selectors';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 import { useUserStore } from '@/store/user';
@@ -51,7 +51,7 @@ export interface UseSkillConnectionResult {
  */
 export const useIsSkillConnected = () => {
   const lobehubServers = useToolStore(lobehubSkillStoreSelectors.getServers);
-  const klavisServers = useToolStore(klavisStoreSelectors.getServers);
+  const klavisServers = useToolStore(composioStoreSelectors.getServers);
 
   return useCallback(
     (spec: TaskTemplateSkillRequirement): boolean => {
@@ -61,7 +61,7 @@ export const useIsSkillConnected = () => {
         );
       }
       return klavisServers.some(
-        (s) => s.identifier === spec.provider && s.status === KlavisServerStatus.CONNECTED,
+        (s) => s.identifier === spec.provider && s.status === ComposioServerStatus.ACTIVE,
       );
     },
     [lobehubServers, klavisServers],
@@ -73,8 +73,8 @@ export const useSkillConnection = (
 ): UseSkillConnectionResult => {
   const getLobehubAuth = useToolStore((s) => s.getLobehubSkillAuthorizeUrl);
   const checkLobehubStatus = useToolStore((s) => s.checkLobehubSkillStatus);
-  const createKlavisServer = useToolStore((s) => s.createKlavisServer);
-  const refreshKlavisServerTools = useToolStore((s) => s.refreshKlavisServerTools);
+  const createComposioConnection = useToolStore((s) => s.createComposioConnection);
+  const refreshComposioConnectionStatus = useToolStore((s) => s.refreshComposioConnectionStatus);
 
   const isConnectedFor = useIsSkillConnected();
 
@@ -134,7 +134,7 @@ export const useSkillConnection = (
           if (target.source === 'lobehub') {
             await checkLobehubStatus(target.provider);
           } else {
-            await refreshKlavisServerTools(target.provider);
+            await refreshComposioConnectionStatus(target.provider);
           }
         } catch {
           // Polling failure is expected until auth completes — suppress noise.
@@ -149,7 +149,7 @@ export const useSkillConnection = (
         setIsWaitingAuth(false);
       }, POLL_TIMEOUT_MS);
     },
-    [checkLobehubStatus, refreshKlavisServerTools],
+    [checkLobehubStatus, refreshComposioConnectionStatus],
   );
 
   const startWindowMonitor = useCallback(
@@ -177,7 +177,7 @@ export const useSkillConnection = (
             if (target.source === 'lobehub') {
               await checkLobehubStatus(target.provider);
             } else {
-              await refreshKlavisServerTools(target.provider);
+              await refreshComposioConnectionStatus(target.provider);
             }
           } catch {
             // Status check failure isn't actionable; release waiting state regardless.
@@ -203,7 +203,7 @@ export const useSkillConnection = (
         setIsWaitingAuth(false);
       }, OAUTH_OVERALL_TIMEOUT_MS);
     },
-    [checkLobehubStatus, refreshKlavisServerTools, startFallbackPolling],
+    [checkLobehubStatus, refreshComposioConnectionStatus, startFallbackPolling],
   );
 
   const openOAuthWindow = useCallback(
@@ -260,18 +260,18 @@ export const useSkillConnection = (
 
       const userId = useUserStore.getState().user?.id;
       if (!userId) throw new Error('Sign-in required');
-      const klavisType = KLAVIS_SERVER_TYPES.find((t) => t.identifier === next.provider);
+      const klavisType = COMPOSIO_APP_TYPES.find((t) => t.identifier === next.provider);
       if (!klavisType) throw new Error(`Unknown Klavis provider: ${next.provider}`);
-      const newServer = await createKlavisServer({
+      const newServer = await createComposioConnection({
         identifier: next.provider,
         serverName: klavisType.serverName,
         userId,
       });
       if (!newServer) throw new Error('Failed to create Klavis server');
-      if (newServer.isAuthenticated) {
-        await refreshKlavisServerTools(newServer.identifier);
-      } else if (newServer.oauthUrl) {
-        openOAuthWindow(newServer.oauthUrl, next);
+      if (newServer.status === 'ACTIVE') {
+        await refreshComposioConnectionStatus(newServer.identifier);
+      } else if (newServer.redirectUrl) {
+        openOAuthWindow(newServer.redirectUrl, next);
       } else {
         throw new Error('Klavis server is missing an OAuth URL');
       }
@@ -286,8 +286,8 @@ export const useSkillConnection = (
     nextUnconnected,
     isWaitingAuth,
     getLobehubAuth,
-    createKlavisServer,
-    refreshKlavisServerTools,
+    createComposioConnection,
+    refreshComposioConnectionStatus,
     openOAuthWindow,
   ]);
 

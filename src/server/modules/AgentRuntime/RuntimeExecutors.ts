@@ -14,14 +14,14 @@ import {
 } from '@lobechat/agent-runtime';
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import {
+  type ComposioServiceSummary,
   type CredSummary,
+  generateComposioServicesList,
   generateCredsList,
-  generateKlavisServicesList,
-  type KlavisServiceSummary,
 } from '@lobechat/builtin-tool-creds';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
-import { KLAVIS_SERVER_TYPES } from '@lobechat/const';
+import { COMPOSIO_APP_TYPES } from '@lobechat/const';
 import {
   type AgentContextDocument,
   type BotPlatformContext,
@@ -66,7 +66,7 @@ import {
 import { sanitizeToolCallArguments, serializePartsForStorage } from '@lobechat/utils';
 import debug from 'debug';
 
-import { klavisEnv } from '@/config/klavis';
+import { composioEnv } from '@/config/composio';
 import { type MessageModel, MessageModel as MessageModelClass } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
@@ -828,39 +828,38 @@ export const createRuntimeExecutors = (
           }
         }
 
-        // {{KLAVIS_SERVICES_LIST}} — used by lobe-creds system role (Klavis integrations section).
-        // Mirrors client-side: klavisStoreSelectors.getServers() filtered by connection status.
-        let klavisServicesListStr = '';
-        if (ctx.serverDB && ctx.userId && !!klavisEnv.KLAVIS_API_KEY) {
+        // {{COMPOSIO_SERVICES_LIST}} — used by lobe-creds system role (Composio integrations section).
+        let composioServicesListStr = '';
+        if (ctx.serverDB && ctx.userId && !!composioEnv.COMPOSIO_API_KEY) {
           try {
             const { PluginModel } = await import('@/database/models/plugin');
             const pluginModel = new PluginModel(ctx.serverDB, ctx.userId);
             const allPlugins = await pluginModel.query();
-            const validKlavisIds = new Set(KLAVIS_SERVER_TYPES.map((t) => t.identifier));
+            const validComposioIds = new Set(COMPOSIO_APP_TYPES.map((t) => t.identifier));
             const connectedIds = new Set(
               allPlugins
                 .filter(
                   (p) =>
-                    validKlavisIds.has(p.identifier) &&
-                    (p.customParams as any)?.klavis?.isAuthenticated === true,
+                    validComposioIds.has(p.identifier) &&
+                    (p.customParams as any)?.composio?.status === 'ACTIVE',
                 )
                 .map((p) => p.identifier),
             );
-            const connected: KlavisServiceSummary[] = KLAVIS_SERVER_TYPES.filter((t) =>
+            const connected: ComposioServiceSummary[] = COMPOSIO_APP_TYPES.filter((t) =>
               connectedIds.has(t.identifier),
             ).map((t) => ({ identifier: t.identifier, name: t.label }));
-            const available: KlavisServiceSummary[] = KLAVIS_SERVER_TYPES.filter(
+            const available: ComposioServiceSummary[] = COMPOSIO_APP_TYPES.filter(
               (t) => !connectedIds.has(t.identifier),
             ).map((t) => ({ identifier: t.identifier, name: t.label }));
-            klavisServicesListStr = generateKlavisServicesList(connected, available);
+            composioServicesListStr = generateComposioServicesList(connected, available);
             log(
-              'Fetched Klavis services for {{KLAVIS_SERVICES_LIST}}: connected=%d, available=%d',
+              'Fetched Composio services for {{COMPOSIO_SERVICES_LIST}}: connected=%d, available=%d',
               connected.length,
               available.length,
             );
           } catch (error) {
             log(
-              'Failed to fetch Klavis services for {{KLAVIS_SERVICES_LIST}} substitution: %O',
+              'Failed to fetch Composio services for {{COMPOSIO_SERVICES_LIST}} substitution: %O',
               error,
             );
           }
@@ -878,7 +877,7 @@ export const createRuntimeExecutors = (
             // Creds tool variables
             sandbox_enabled: sandboxEnabled,
             CREDS_LIST: credsListStr,
-            KLAVIS_SERVICES_LIST: klavisServicesListStr,
+            COMPOSIO_SERVICES_LIST: composioServicesListStr,
             // Memory tool variables
             memory_effort: memoryEffort,
           },

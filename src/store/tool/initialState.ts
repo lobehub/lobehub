@@ -13,7 +13,6 @@ import {
   type CustomPluginState,
   initialCustomPluginState,
 } from './slices/customPlugin/initialState';
-import { initialKlavisStoreState, type KlavisStoreState } from './slices/klavisStore/initialState';
 import {
   initialLobehubSkillStoreState,
   type LobehubSkillStoreState,
@@ -27,7 +26,6 @@ export type ToolStoreState = ConnectorState &
   BuiltinToolState &
   MCPStoreState &
   ComposioStoreState &
-  KlavisStoreState &
   LobehubSkillStoreState &
   AgentSkillsState &
   AgentDocumentSkillsState;
@@ -39,7 +37,6 @@ export const initialState: ToolStoreState = {
   ...initialBuiltinToolState,
   ...initialMCPStoreState,
   ...initialComposioStoreState,
-  ...initialKlavisStoreState,
   ...initialLobehubSkillStoreState,
   ...initialAgentSkillsState,
   ...initialAgentDocumentSkillsState,

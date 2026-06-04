@@ -5,12 +5,12 @@ import {
   taskTemplates,
 } from '@lobechat/const';
 
-import { klavisEnv } from '@/config/klavis';
+import { composioEnv } from '@/config/composio';
 import { appEnv } from '@/envs/app';
 
 export const ENABLED_SKILL_SOURCES: ReadonlySet<TaskTemplateSkillSource> = (() => {
   const sources = new Set<TaskTemplateSkillSource>();
-  if (klavisEnv.KLAVIS_API_KEY) sources.add('klavis');
+  if (composioEnv.COMPOSIO_API_KEY) sources.add('composio');
   if (appEnv.MARKET_TRUSTED_CLIENT_ID && appEnv.MARKET_TRUSTED_CLIENT_SECRET) {
     sources.add('lobehub');
   }

@@ -1,18 +1,18 @@
-import { getKlavisServerByServerIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
+import { getComposioAppByIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
 import type { BuiltinToolContext, BuiltinToolResult } from '@lobechat/types';
 import { BaseExecutor } from '@lobechat/types';
 import debug from 'debug';
 
 import { lambdaClient, toolsClient } from '@/libs/trpc/client';
 import { getToolStoreState, useToolStore } from '@/store/tool';
-import { klavisStoreSelectors } from '@/store/tool/selectors';
-import { KlavisServerStatus } from '@/store/tool/slices/klavisStore/types';
+import { composioStoreSelectors } from '@/store/tool/selectors';
+import { ComposioServerStatus } from '@/store/tool/slices/composioStore/types';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 
 import { CredsIdentifier } from '../manifest';
 import type {
-  ConnectKlavisServiceParams,
+  ConnectComposioServiceParams,
   InitiateOAuthConnectParams,
   InjectCredsToSandboxParams,
   SaveCredsParams,
@@ -26,22 +26,22 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
   protected readonly apiEnum = CredsApiName;
 
   /**
-   * Connect a Klavis integration service via OAuth
-   * Creates a Klavis server instance and initiates the OAuth flow
+   * Connect a Composio integration service via OAuth
+   * Creates a Composio connection and initiates the OAuth flow
    */
-  connectKlavisService = async (
-    params: ConnectKlavisServiceParams,
+  connectComposioService = async (
+    params: ConnectComposioServiceParams,
     _ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     try {
       const { service } = params;
 
       // Validate service identifier
-      const serverType = getKlavisServerByServerIdentifier(service);
-      if (!serverType) {
+      const appType = getComposioAppByIdentifier(service);
+      if (!appType) {
         return {
           error: {
-            message: `Unknown Klavis service: "${service}". Check the available Klavis services list in the credentials context.`,
+            message: `Unknown Composio service: "${service}". Check the available Composio services list in the credentials context.`,
             type: 'UnknownService',
           },
           success: false,
@@ -50,85 +50,73 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
 
       // Check if already connected via store
       const toolState = getToolStoreState();
-      const existingServer = klavisStoreSelectors.getServerByIdentifier(service)(toolState);
-      if (existingServer?.status === KlavisServerStatus.CONNECTED) {
+      const existingServer = composioStoreSelectors.getServerByIdentifier(service)(toolState);
+      if (existingServer?.status === ComposioServerStatus.ACTIVE) {
         return {
-          content: `Already connected to ${serverType.label}. You can use ${serverType.label} tools directly.`,
+          content: `Already connected to ${appType.label}. You can use ${appType.label} tools directly.`,
           state: {
             connected: true,
             identifier: service,
-            serviceName: serverType.label,
+            serviceName: appType.label,
           },
           success: true,
         };
       }
 
-      // Get userId
-      const userId = userProfileSelectors.userId(useUserStore.getState());
-      if (!userId) {
-        return {
-          error: {
-            message: 'User is not authenticated',
-            type: 'MissingUserId',
-          },
-          success: false,
-        };
-      }
+      log('[CredsExecutor] connectComposioService - creating connection for:', service);
 
-      log('[CredsExecutor] connectKlavisService - creating server for:', service);
-
-      // Create Klavis server instance
-      const server = await useToolStore.getState().createKlavisServer({
-        identifier: serverType.identifier,
-        serverName: serverType.serverName,
-        userId,
+      // Create Composio connection (authConfigId managed server-side)
+      const server = await useToolStore.getState().createComposioConnection({
+        appSlug: appType.appSlug,
+        identifier: appType.identifier,
+        label: appType.label,
       });
 
       if (!server) {
         return {
           error: {
-            message: `Failed to create Klavis server instance for ${serverType.label}`,
+            message: `Failed to create Composio connection for ${appType.label}`,
             type: 'CreateServerFailed',
           },
           success: false,
         };
       }
 
-      // If already authenticated (no OAuth needed)
-      if (server.isAuthenticated) {
+      // If already active (no OAuth needed)
+      if (server.status === ComposioServerStatus.ACTIVE) {
         return {
-          content: `Successfully connected to ${serverType.label}! You can now use ${serverType.label} tools.`,
+          content: `Successfully connected to ${appType.label}! You can now use ${appType.label} tools.`,
           state: {
             connected: true,
             identifier: service,
-            serviceName: serverType.label,
+            serviceName: appType.label,
           },
           success: true,
         };
       }
 
       // OAuth needed — open popup and poll for completion
-      if (server.oauthUrl) {
-        const result = await this.openKlavisOAuthAndWait(server.oauthUrl, server.identifier);
+      if (server.redirectUrl) {
+        const result = await this.openComposioOAuthAndWait(server.redirectUrl, server.identifier);
 
         if (result.success) {
           return {
-            content: `Successfully connected to ${serverType.label}! You can now use ${serverType.label} tools.`,
+            content: `Successfully connected to ${appType.label}! You can now use ${appType.label} tools.`,
             state: {
               connected: true,
               identifier: service,
-              serviceName: serverType.label,
+              serviceName: appType.label,
             },
             success: true,
           };
         }
 
         return {
-          content: `Authorization was cancelled or timed out for ${serverType.label}. You can try again later.`,
+          content: `Authorization was cancelled or timed out for ${appType.label}. You can try again later.`,
           state: {
             connected: false,
             identifier: service,
-            serviceName: serverType.label,
+            serviceName: appType.label,
           },
           success: true,
         };
@@ -136,17 +124,17 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
 
       return {
         error: {
-          message: 'Unexpected server state: no oauthUrl and not authenticated',
+          message: 'Unexpected server state: no redirectUrl and not active',
           type: 'UnexpectedState',
         },
         success: false,
       };
     } catch (error) {
-      log('[CredsExecutor] connectKlavisService - error:', error);
+      log('[CredsExecutor] connectComposioService - error:', error);
       return {
         error: {
-          message: error instanceof Error ? error.message : 'Failed to connect Klavis service',
-          type: 'ConnectKlavisFailed',
+          message: error instanceof Error ? error.message : 'Failed to connect Composio service',
+          type: 'ConnectComposioFailed',
         },
         success: false,
       };
@@ -310,11 +298,10 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
   };
 
   /**
-   * Open Klavis OAuth popup and poll for authorization completion
-   * Unlike Market OAuth which uses postMessage, Klavis OAuth uses polling
+   * Open Composio OAuth popup and poll for authorization completion
    */
-  private openKlavisOAuthAndWait = (
-    oauthUrl: string,
+  private openComposioOAuthAndWait = (
+    redirectUrl: string,
     identifier: string,
   ): Promise<{ success: boolean }> => {
     return new Promise((resolve) => {
@@ -333,10 +320,10 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
 
       const checkConnected = async (): Promise<boolean> => {
         try {
-          await useToolStore.getState().refreshKlavisServerTools(identifier);
+          await useToolStore.getState().refreshComposioConnectionStatus(identifier);
           const toolState = getToolStoreState();
-          const server = klavisStoreSelectors.getServerByIdentifier(identifier)(toolState);
-          return server?.status === KlavisServerStatus.CONNECTED;
+          const server = composioStoreSelectors.getServerByIdentifier(identifier)(toolState);
+          return server?.status === ComposioServerStatus.ACTIVE;
         } catch {
           return false;
         }

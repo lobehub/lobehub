@@ -38,7 +38,7 @@ describe('resolveTemplateIcon', () => {
     const spec = resolveTemplateIcon(
       make({
         interests: ['coding'],
-        requiresSkills: [{ provider: 'gmail', source: 'klavis' }],
+        requiresSkills: [{ provider: 'gmail', source: 'composio' }],
       }),
       interestMap,
     );

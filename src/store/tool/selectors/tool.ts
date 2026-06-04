@@ -1,5 +1,5 @@
 import { getBuiltinRenderDisplayControl } from '@lobechat/builtin-tools/displayControls';
-import { getKlavisServerByServerIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
+import { getComposioAppByIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
 import { type RenderDisplayControl, type ToolManifest } from '@lobechat/types';
 
 import {
@@ -11,7 +11,7 @@ import { type LobeToolMeta } from '@/types/tool/tool';
 
 import { type ToolStoreState } from '../initialState';
 import { builtinToolSelectors } from '../slices/builtin/selectors';
-import { KlavisServerStatus } from '../slices/klavisStore';
+import { ComposioServerStatus } from '../slices/composioStore';
 import { lobehubSkillStoreSelectors } from '../slices/lobehubSkillStore';
 import { LobehubSkillStatus } from '../slices/lobehubSkillStore/types';
 import { pluginSelectors } from '../slices/plugin/selectors';
@@ -118,7 +118,7 @@ export interface AvailableToolForDiscovery {
  * Sources:
  * 1. Builtin tools (from s.builtinTools) — exclude non-discoverable, skills, platform-unavailable
  * 2. User-installed plugins (from s.installedPlugins) — exclude Klavis/LobeHub Skill/agent skill overlap
- * 3. Klavis MCP servers (connected) — description from KLAVIS_SERVER_TYPES
+ * 3. Klavis MCP servers (connected) — description from COMPOSIO_APP_TYPES
  * 4. LobeHub Skill servers (connected) — description from LOBEHUB_SKILL_PROVIDERS
  */
 const availableToolsForDiscovery = (s: ToolStoreState): AvailableToolForDiscovery[] => {
@@ -158,9 +158,9 @@ const availableToolsForDiscovery = (s: ToolStoreState): AvailableToolForDiscover
 
   // 3. Klavis MCP servers (connected only)
   const klavisItems = (s.servers || [])
-    .filter((server) => server.status === KlavisServerStatus.CONNECTED && server.tools?.length)
+    .filter((server) => server.status === ComposioServerStatus.ACTIVE && server.tools?.length)
     .map((server) => {
-      const config = getKlavisServerByServerIdentifier(server.identifier);
+      const config = getComposioAppByIdentifier(server.identifier);
       return {
         description: config?.description || '',
         identifier: server.identifier,

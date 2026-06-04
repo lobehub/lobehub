@@ -4,17 +4,17 @@ import { Grid, ScrollShadow } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 
-import { KLAVIS_SERVER_TYPES } from '@/const/index';
+import { COMPOSIO_APP_TYPES } from '@/const/index';
 import { useToolStore } from '@/store/tool';
-import { klavisStoreSelectors } from '@/store/tool/slices/klavisStore';
+import { composioStoreSelectors } from '@/store/tool/slices/composioStore';
 
-import KlavisServerItem from './components/KlavisServerItem';
+import ComposioServerItem from './components/ComposioServerItem';
 
-const KlavisServerList = memo(() => {
-  const allKlavisServers = useToolStore(klavisStoreSelectors.getServers, isEqual);
-  const useFetchUserKlavisServers = useToolStore((s) => s.useFetchUserKlavisServers);
+const ComposioServerList = memo(() => {
+  const allKlavisServers = useToolStore(composioStoreSelectors.getServers, isEqual);
+  const useFetchUserComposioConnections = useToolStore((s) => s.useFetchUserComposioConnections);
 
-  useFetchUserKlavisServers(true);
+  useFetchUserComposioConnections(true);
 
   const getServerByIdentifier = (identifier: string) => {
     return allKlavisServers.find((server) => server.identifier === identifier);
@@ -23,14 +23,14 @@ const KlavisServerList = memo(() => {
   return (
     <ScrollShadow height={'33vh'} offset={8} size={12}>
       <Grid gap={8} maxItemWidth={120} rows={2}>
-        {KLAVIS_SERVER_TYPES.map((type) => (
-          <KlavisServerItem
+        {COMPOSIO_APP_TYPES.map((type) => (
+          <ComposioServerItem
+            appSlug={type.appSlug}
             icon={type.icon}
             identifier={type.identifier}
             key={type.identifier}
             label={type.label}
             server={getServerByIdentifier(type.identifier)}
-            serverName={type.serverName}
           />
         ))}
       </Grid>
@@ -38,6 +38,6 @@ const KlavisServerList = memo(() => {
   );
 });
 
-KlavisServerList.displayName = 'KlavisServerList';
+ComposioServerList.displayName = 'ComposioServerList';
 
-export default KlavisServerList;
+export default ComposioServerList;

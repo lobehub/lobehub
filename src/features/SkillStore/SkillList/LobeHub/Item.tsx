@@ -3,7 +3,7 @@
 import { ActionIcon, Block, DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import type { Klavis } from 'klavis';
+import type { Klavis } from 'composio';
 import { Loader2, MoreVerticalIcon, Plus, Unplug } from 'lucide-react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,7 +19,7 @@ interface ItemProps {
   label: string;
   onOpenDetail?: () => void;
   serverName?: Klavis.McpServerName;
-  type: 'klavis' | 'lobehub';
+  type: 'composio' | 'lobehub';
 }
 
 const Item = memo<ItemProps>(
@@ -34,7 +34,8 @@ const Item = memo<ItemProps>(
     });
 
     // Get localized description
-    const i18nPrefix = type === 'klavis' ? 'tools.klavis.servers' : 'tools.lobehubSkill.providers';
+    const i18nPrefix =
+      type === 'composio' ? 'tools.klavis.servers' : 'tools.lobehubSkill.providers';
     // @ts-ignore
     const localizedDescription = t(`${i18nPrefix}.${identifier}.description`, {
       defaultValue: description,

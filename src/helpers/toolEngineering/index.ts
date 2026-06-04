@@ -16,7 +16,7 @@ import { getAgentStoreState } from '@/store/agent';
 import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
 import { getToolStoreState } from '@/store/tool';
 import {
-  klavisStoreSelectors,
+  composioStoreSelectors,
   lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
@@ -90,7 +90,7 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
   const builtinManifests = toolStoreState.builtinTools.map((tool) => tool.manifest as ToolManifest);
 
   // Get Klavis tool manifests
-  const klavisTools = klavisStoreSelectors.klavisAsLobeTools(toolStoreState);
+  const klavisTools = composioStoreSelectors.composioAsLobeTools(toolStoreState);
   const klavisManifests = klavisTools.map((tool) => tool.manifest as ToolManifest).filter(Boolean);
 
   // Get LobeHub Skill tool manifests
@@ -104,7 +104,7 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
   const allManifests = [
     ...dropInvalidManifests(pluginManifests, 'installedPlugins'),
     ...dropInvalidManifests(builtinManifests, 'builtinTools'),
-    ...dropInvalidManifests(klavisManifests, 'klavis'),
+    ...dropInvalidManifests(klavisManifests, 'composio'),
     ...dropInvalidManifests(lobehubSkillManifests, 'lobehubSkills'),
     ...dropInvalidManifests(additionalManifests, 'additionalManifests'),
   ];

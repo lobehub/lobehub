@@ -31,7 +31,7 @@ export interface CustomPluginParams {
   klavis?: {
     instanceId: string;
     isAuthenticated: boolean;
-    oauthUrl?: string;
+    redirectUrl?: string;
     serverName: string;
     serverUrl: string;
   };

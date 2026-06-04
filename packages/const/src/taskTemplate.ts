@@ -31,12 +31,12 @@ export interface TaskTemplate {
 }
 
 export interface TaskTemplateSkillRequirement {
-  /** Short identifier from `LOBEHUB_SKILL_PROVIDERS[i].id` or `KLAVIS_SERVER_TYPES[i].identifier`. */
+  /** Short identifier from `LOBEHUB_SKILL_PROVIDERS[i].id` or `COMPOSIO_APP_TYPES[i].identifier`. */
   provider: string;
   source: TaskTemplateSkillSource;
 }
 
-export type TaskTemplateSkillSource = 'klavis' | 'lobehub';
+export type TaskTemplateSkillSource = 'composio' | 'lobehub';
 
 export type TaskTemplateCategory =
   | 'content-creation'
@@ -103,7 +103,7 @@ export const taskTemplates: TaskTemplate[] = [
     category: 'content-creation',
     cronPattern: '0 9 * * 1',
     interests: ['writing', 'creator'],
-    requiresSkills: [{ provider: 'youtube', source: 'klavis' }],
+    requiresSkills: [{ provider: 'youtube', source: 'composio' }],
   },
   {
     id: 'competitor-creator-tracking',
@@ -186,7 +186,7 @@ export const taskTemplates: TaskTemplate[] = [
     category: 'design',
     cronPattern: '0 17 * * 5',
     interests: ['design'],
-    requiresSkills: [{ provider: 'figma', source: 'klavis' }],
+    requiresSkills: [{ provider: 'figma', source: 'composio' }],
   },
   {
     id: 'aigc-prompt-inspiration',
@@ -296,21 +296,21 @@ export const taskTemplates: TaskTemplate[] = [
     category: 'marketing',
     cronPattern: '0 10 * * 1',
     interests: ['marketing'],
-    requiresSkills: [{ provider: 'gmail', source: 'klavis' }],
+    requiresSkills: [{ provider: 'gmail', source: 'composio' }],
   },
   {
     id: 'kol-collab-calendar',
     category: 'marketing',
     cronPattern: '0 9 * * 1',
     interests: ['marketing'],
-    requiresSkills: [{ provider: 'airtable', source: 'klavis' }],
+    requiresSkills: [{ provider: 'airtable', source: 'composio' }],
   },
   {
     id: 'hubspot-funnel-daily',
     category: 'marketing',
     cronPattern: '0 9 * * *',
     interests: ['marketing', 'sales'],
-    requiresSkills: [{ provider: 'hubspot', source: 'klavis' }],
+    requiresSkills: [{ provider: 'hubspot', source: 'composio' }],
   },
 
   // product
@@ -351,7 +351,7 @@ export const taskTemplates: TaskTemplate[] = [
     category: 'product',
     cronPattern: '0 9 * * 1',
     interests: ['product'],
-    requiresSkills: [{ provider: 'google-calendar', source: 'klavis' }],
+    requiresSkills: [{ provider: 'google-calendar', source: 'composio' }],
   },
   {
     id: 'prd-review-reminder',
@@ -367,21 +367,21 @@ export const taskTemplates: TaskTemplate[] = [
     category: 'sales-customer',
     cronPattern: '0 9 * * *',
     interests: ['sales'],
-    requiresSkills: [{ provider: 'hubspot', source: 'klavis' }],
+    requiresSkills: [{ provider: 'hubspot', source: 'composio' }],
   },
   {
     id: 'renewal-risk-weekly',
     category: 'sales-customer',
     cronPattern: '0 9 * * 1',
     interests: ['sales'],
-    requiresSkills: [{ provider: 'hubspot', source: 'klavis' }],
+    requiresSkills: [{ provider: 'hubspot', source: 'composio' }],
   },
   {
     id: 'deal-pipeline-weekly',
     category: 'sales-customer',
     cronPattern: '0 16 * * 5',
     interests: ['sales'],
-    requiresSkills: [{ provider: 'hubspot', source: 'klavis' }],
+    requiresSkills: [{ provider: 'hubspot', source: 'composio' }],
   },
   {
     id: 'key-account-radar',
@@ -394,7 +394,7 @@ export const taskTemplates: TaskTemplate[] = [
     category: 'sales-customer',
     cronPattern: '0 9 * * *',
     interests: ['sales'],
-    requiresSkills: [{ provider: 'zendesk', source: 'klavis' }],
+    requiresSkills: [{ provider: 'zendesk', source: 'composio' }],
   },
 
   // operations
@@ -403,21 +403,21 @@ export const taskTemplates: TaskTemplate[] = [
     category: 'operations',
     cronPattern: '0 8 * * *',
     interests: ['operations'],
-    requiresSkills: [{ provider: 'google-calendar', source: 'klavis' }],
+    requiresSkills: [{ provider: 'google-calendar', source: 'composio' }],
   },
   {
     id: 'meeting-brief',
     category: 'operations',
     cronPattern: '30 8 * * *',
     interests: ['operations'],
-    requiresSkills: [{ provider: 'google-calendar', source: 'klavis' }],
+    requiresSkills: [{ provider: 'google-calendar', source: 'composio' }],
   },
   {
     id: 'calendar-conflict-check',
     category: 'operations',
     cronPattern: '30 7 * * *',
     interests: ['operations'],
-    requiresSkills: [{ provider: 'google-calendar', source: 'klavis' }],
+    requiresSkills: [{ provider: 'google-calendar', source: 'composio' }],
   },
   {
     id: 'friday-wrap-list',
@@ -433,7 +433,7 @@ export const taskTemplates: TaskTemplate[] = [
     category: 'hr',
     cronPattern: '0 9 * * *',
     interests: ['hr'],
-    requiresSkills: [{ provider: 'airtable', source: 'klavis' }],
+    requiresSkills: [{ provider: 'airtable', source: 'composio' }],
   },
   {
     id: 'onboarding-buddy-weekly',
@@ -447,7 +447,7 @@ export const taskTemplates: TaskTemplate[] = [
     category: 'hr',
     cronPattern: '0 9 * * 1',
     interests: ['hr'],
-    requiresSkills: [{ provider: 'google-calendar', source: 'klavis' }],
+    requiresSkills: [{ provider: 'google-calendar', source: 'composio' }],
   },
 
   // finance-legal
@@ -468,7 +468,7 @@ export const taskTemplates: TaskTemplate[] = [
     category: 'finance-legal',
     cronPattern: '0 9 * * 1',
     interests: ['finance-legal'],
-    requiresSkills: [{ provider: 'airtable', source: 'klavis' }],
+    requiresSkills: [{ provider: 'airtable', source: 'composio' }],
   },
   {
     id: 'contract-expiry-weekly',
@@ -488,7 +488,7 @@ export const taskTemplates: TaskTemplate[] = [
     category: 'finance-legal',
     cronPattern: '0 10 * * *',
     interests: ['finance-legal'],
-    requiresSkills: [{ provider: 'gmail', source: 'klavis' }],
+    requiresSkills: [{ provider: 'gmail', source: 'composio' }],
   },
 
   // creator
@@ -517,7 +517,7 @@ export const taskTemplates: TaskTemplate[] = [
     category: 'creator',
     cronPattern: '0 9 * * 1',
     interests: ['creator'],
-    requiresSkills: [{ provider: 'youtube', source: 'klavis' }],
+    requiresSkills: [{ provider: 'youtube', source: 'composio' }],
   },
   {
     id: 'monetization-opportunity-weekly',
@@ -558,14 +558,14 @@ export const taskTemplates: TaskTemplate[] = [
     category: 'parenting',
     cronPattern: '0 20 * * 0',
     interests: ['parenting', 'finance-legal'],
-    requiresSkills: [{ provider: 'google-sheets', source: 'klavis' }],
+    requiresSkills: [{ provider: 'google-sheets', source: 'composio' }],
   },
   {
     id: 'family-task-schedule',
     category: 'parenting',
     cronPattern: '0 8 * * 1',
     interests: ['parenting'],
-    optionalSkills: [{ provider: 'google-calendar', source: 'klavis' }],
+    optionalSkills: [{ provider: 'google-calendar', source: 'composio' }],
   },
 
   // health
@@ -588,7 +588,7 @@ export const taskTemplates: TaskTemplate[] = [
     category: 'hobbies',
     cronPattern: '0 20 * * 0',
     interests: ['hobbies'],
-    requiresSkills: [{ provider: 'gmail', source: 'klavis' }],
+    requiresSkills: [{ provider: 'gmail', source: 'composio' }],
   },
   {
     id: 'series-update-weekly',
@@ -633,7 +633,7 @@ export const taskTemplates: TaskTemplate[] = [
     category: 'personal-life',
     cronPattern: '0 7 * * *',
     interests: ['personal'],
-    optionalSkills: [{ provider: 'google-calendar', source: 'klavis' }],
+    optionalSkills: [{ provider: 'google-calendar', source: 'composio' }],
   },
   {
     id: 'bedtime-gratitude',

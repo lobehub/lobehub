@@ -20,8 +20,8 @@ const mockGlobalConfigDependencies = (enableBusinessFeatures: boolean) => {
     ENABLE_BUSINESS_FEATURES: enableBusinessFeatures,
   }));
 
-  vi.doMock('@/config/klavis', () => ({
-    klavisEnv: {},
+  vi.doMock('@/config/composio', () => ({
+    composioEnv: {},
   }));
 
   vi.doMock('@/const/version', () => ({

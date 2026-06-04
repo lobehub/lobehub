@@ -25,7 +25,7 @@ const isEmojiOrText = (str: string): boolean => {
 };
 
 interface HeaderProps {
-  type: 'builtin' | 'klavis' | 'lobehub';
+  type: 'builtin' | 'composio' | 'lobehub';
 }
 
 const Header = memo<HeaderProps>(({ type }) => {

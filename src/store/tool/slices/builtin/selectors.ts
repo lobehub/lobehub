@@ -12,7 +12,7 @@ import {
 
 import { type ToolStoreState } from '../../initialState';
 import { agentSkillsSelectors } from '../agentSkills/selectors';
-import { KlavisServerStatus } from '../klavisStore';
+import { ComposioServerStatus } from '../composioStore';
 
 export interface LobeToolMetaWithAvailability extends LobeToolMeta {
   /**
@@ -54,7 +54,7 @@ const toSkillMetaWithAvailability = (s: BuiltinSkill): LobeToolMetaWithAvailabil
 
 const getKlavisMetas = (s: ToolStoreState): LobeToolMeta[] =>
   (s.servers || [])
-    .filter((server) => server.status === KlavisServerStatus.CONNECTED && server.tools?.length)
+    .filter((server) => server.status === ComposioServerStatus.ACTIVE && server.tools?.length)
     .map((server) => ({
       author: 'Klavis',
       // Use identifier as storage identifier (e.g., 'google-calendar')
@@ -62,7 +62,7 @@ const getKlavisMetas = (s: ToolStoreState): LobeToolMeta[] =>
       meta: {
         avatar: '☁️',
         description: `LobeHub Mcp Server: ${server.serverName}`,
-        tags: ['klavis', 'mcp'],
+        tags: ['composio', 'mcp'],
         // title still uses serverName to display friendly name
         title: server.serverName,
       },

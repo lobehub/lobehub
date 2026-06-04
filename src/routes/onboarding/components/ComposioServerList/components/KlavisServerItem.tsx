@@ -4,38 +4,39 @@ import { Block, Flexbox, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { memo } from 'react';
 
-import { type KlavisServerType } from '@/const/index';
-import { type KlavisServer } from '@/store/tool/slices/klavisStore';
-import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
+import { type ComposioAppType } from '@/const/index';
+import { type ComposioServer } from '@/store/tool/slices/composioStore';
+import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
 
 import { useKlavisOAuth } from '../hooks/useKlavisOAuth';
 import { useKlavisServerActions } from '../hooks/useKlavisServerActions';
 import ServerIcon from './ServerIcon';
 import ServerStatusControl from './ServerStatusControl';
 
-interface KlavisServerItemProps {
-  icon: KlavisServerType['icon'];
+interface ComposioServerItemProps {
+  appSlug: string;
+  icon: ComposioAppType['icon'];
   identifier: string;
   label: string;
-  server?: KlavisServer;
-  serverName: string;
+  server?: ComposioServer;
 }
 
-const KlavisServerItem = memo<KlavisServerItemProps>(
-  ({ identifier, label, server, serverName, icon }) => {
+const ComposioServerItem = memo<ComposioServerItemProps>(
+  ({ identifier, label, server, appSlug, icon }) => {
     const { isWaitingAuth, openOAuthWindow } = useKlavisOAuth({
       serverStatus: server?.status,
     });
 
     const { isConnecting, handleConnect } = useKlavisServerActions({
+      appSlug,
       identifier,
+      label,
       onAuthRequired: openOAuthWindow,
       server,
-      serverName,
     });
 
-    const isConnected = server?.status === KlavisServerStatus.CONNECTED;
-    const isPendingAuth = server?.status === KlavisServerStatus.PENDING_AUTH;
+    const isConnected = server?.status === ComposioServerStatus.ACTIVE;
+    const isPendingAuth = server?.status === ComposioServerStatus.PENDING_AUTH;
     const isClickable = !isConnected;
 
     const handleItemClick = () => {
@@ -43,8 +44,8 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
 
       if (!server) {
         handleConnect();
-      } else if (isPendingAuth && server.oauthUrl) {
-        openOAuthWindow(server.oauthUrl, server.identifier);
+      } else if (isPendingAuth && server.redirectUrl) {
+        openOAuthWindow(server.redirectUrl, server.identifier);
       }
     };
 
@@ -90,6 +91,6 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
   },
 );
 
-KlavisServerItem.displayName = 'KlavisServerItem';
+ComposioServerItem.displayName = 'ComposioServerItem';
 
-export default KlavisServerItem;
+export default ComposioServerItem;

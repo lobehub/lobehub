@@ -186,15 +186,11 @@ export interface InstallPluginState {
   /**
    * Whether the plugin is a Klavis tool that needs OAuth connection
    */
-  isKlavis?: boolean;
+  isComposio?: boolean;
   /**
    * Whether the plugin is a LobehubSkill provider that needs OAuth connection
    */
   isLobehubSkill?: boolean;
-  /**
-   * Klavis OAuth URL if authorization is needed
-   */
-  oauthUrl?: string;
   /**
    * Plugin identifier
    */
@@ -203,6 +199,10 @@ export interface InstallPluginState {
    * Plugin display name
    */
   pluginName?: string;
+  /**
+   * Klavis OAuth URL if authorization is needed
+   */
+  redirectUrl?: string;
   /**
    * Klavis server name (for Klavis tools)
    */

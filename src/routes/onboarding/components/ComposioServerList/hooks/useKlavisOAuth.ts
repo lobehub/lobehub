@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useToolStore } from '@/store/tool';
-import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
+import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
 
 const POLL_INTERVAL_MS = 1000;
 const POLL_TIMEOUT_MS = 15_000;
 const WINDOW_CLOSED_POLL_TIMEOUT_MS = 4000; // Shorter timeout when window is closed
 
 interface UseKlavisOAuthProps {
-  serverStatus?: KlavisServerStatus;
+  serverStatus?: ComposioServerStatus;
 }
 
 export const useKlavisOAuth = ({ serverStatus }: UseKlavisOAuthProps) => {
@@ -19,7 +19,7 @@ export const useKlavisOAuth = ({ serverStatus }: UseKlavisOAuthProps) => {
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const refreshKlavisServerTools = useToolStore((s) => s.refreshKlavisServerTools);
+  const refreshComposioConnectionStatus = useToolStore((s) => s.refreshComposioConnectionStatus);
 
   const cleanup = useCallback(() => {
     if (windowCheckIntervalRef.current) {
@@ -45,7 +45,7 @@ export const useKlavisOAuth = ({ serverStatus }: UseKlavisOAuthProps) => {
   }, [cleanup]);
 
   useEffect(() => {
-    if (serverStatus === KlavisServerStatus.CONNECTED && isWaitingAuth) {
+    if (serverStatus === ComposioServerStatus.ACTIVE && isWaitingAuth) {
       cleanup();
     }
   }, [serverStatus, isWaitingAuth, cleanup]);
@@ -56,7 +56,7 @@ export const useKlavisOAuth = ({ serverStatus }: UseKlavisOAuthProps) => {
 
       pollIntervalRef.current = setInterval(async () => {
         try {
-          await refreshKlavisServerTools(serverName);
+          await refreshComposioConnectionStatus(serverName);
         } catch (error) {
           console.info('[Klavis] Polling check (expected during auth):', error);
         }
@@ -70,7 +70,7 @@ export const useKlavisOAuth = ({ serverStatus }: UseKlavisOAuthProps) => {
         setIsWaitingAuth(false);
       }, timeoutMs);
     },
-    [refreshKlavisServerTools],
+    [refreshComposioConnectionStatus],
   );
 
   const startWindowMonitor = useCallback(
@@ -104,11 +104,11 @@ export const useKlavisOAuth = ({ serverStatus }: UseKlavisOAuthProps) => {
   );
 
   const openOAuthWindow = useCallback(
-    (oauthUrl: string, serverName: string) => {
+    (redirectUrl: string, serverName: string) => {
       cleanup();
       setIsWaitingAuth(true);
 
-      const oauthWindow = window.open(oauthUrl, '_blank', 'width=600,height=700');
+      const oauthWindow = window.open(redirectUrl, '_blank', 'width=600,height=700');
       if (oauthWindow) {
         oauthWindowRef.current = oauthWindow;
         startWindowMonitor(oauthWindow, serverName);

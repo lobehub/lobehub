@@ -228,7 +228,7 @@ export const useSocialConnect = ({
 
   // Open OAuth popup window
   const openOAuthWindow = useCallback(
-    (oauthUrl: string) => {
+    (redirectUrl: string) => {
       cleanup();
       authCompletedRef.current = false;
       setIsWaitingAuth(true);

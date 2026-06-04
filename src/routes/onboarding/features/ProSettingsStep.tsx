@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import LobeMessage from '@/routes/onboarding/components/LobeMessage';
 
-import KlavisServerList from '../components/KlavisServerList';
+import ComposioServerList from '../components/ComposioServerList';
 
 interface ProSettingsStepProps {
   onBack: () => void;
@@ -39,7 +39,7 @@ const ProSettingsStep = memo<ProSettingsStepProps>(({ onBack, onNext }) => {
     <Flexbox gap={16}>
       <LobeMessage sentences={[t('proSettings.connectors.title')]} />
 
-      <KlavisServerList />
+      <ComposioServerList />
 
       <Flexbox horizontal align={'center'} justify={'space-between'} style={{ marginTop: 16 }}>
         <Button

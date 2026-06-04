@@ -1,6 +1,6 @@
 'use client';
 
-import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
+import { COMPOSIO_APP_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
 import { type ItemType } from '@lobehub/ui';
 import { Avatar, Button, Flexbox, Icon } from '@lobehub/ui';
 import { McpIcon, SkillsIcon } from '@lobehub/ui/icons';
@@ -11,10 +11,10 @@ import React, { memo, Suspense, useCallback, useEffect, useMemo, useRef, useStat
 import { useTranslation } from 'react-i18next';
 
 import ActionDropdown from '@/features/ChatInput/ActionBar/components/ActionDropdown';
-import KlavisServerItem from '@/features/ChatInput/ActionBar/Tools/KlavisServerItem';
-import KlavisSkillIcon, {
+import ComposioServerItem from '@/features/ChatInput/ActionBar/Tools/ComposioServerItem';
+import ComposioSkillIcon, {
   SKILL_ICON_SIZE,
-} from '@/features/ChatInput/ActionBar/Tools/KlavisSkillIcon';
+} from '@/features/ChatInput/ActionBar/Tools/ComposioSkillIcon';
 import LobehubSkillIcon from '@/features/ChatInput/ActionBar/Tools/LobehubSkillIcon';
 import LobehubSkillServerItem from '@/features/ChatInput/ActionBar/Tools/LobehubSkillServerItem';
 import MarketAgentSkillPopoverContent from '@/features/ChatInput/ActionBar/Tools/MarketAgentSkillPopoverContent';
@@ -32,7 +32,7 @@ import { useToolStore } from '@/store/tool';
 import {
   agentSkillsSelectors,
   builtinToolSelectors,
-  klavisStoreSelectors,
+  composioStoreSelectors,
   lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
@@ -96,8 +96,8 @@ const AgentTool = memo<AgentToolProps>(
     );
 
     // Klavis-related state
-    const allKlavisServers = useToolStore(klavisStoreSelectors.getServers, isEqual);
-    const isKlavisEnabledInEnv = useServerConfigStore(serverConfigSelectors.enableKlavis);
+    const allKlavisServers = useToolStore(composioStoreSelectors.getServers, isEqual);
+    const isKlavisEnabledInEnv = useServerConfigStore(serverConfigSelectors.enableComposio);
 
     // LobeHub Skill-related state
     const allLobehubSkillServers = useToolStore(lobehubSkillStoreSelectors.getServers, isEqual);
@@ -120,12 +120,12 @@ const AgentTool = memo<AgentToolProps>(
 
     // Fetch plugins
     const [
-      useFetchUserKlavisServers,
+      useFetchUserComposioConnections,
       useFetchLobehubSkillConnections,
       useFetchUninstalledBuiltinTools,
       useFetchAgentSkills,
     ] = useToolStore((s) => [
-      s.useFetchUserKlavisServers,
+      s.useFetchUserComposioConnections,
       s.useFetchLobehubSkillConnections,
       s.useFetchUninstalledBuiltinTools,
       s.useFetchAgentSkills,
@@ -136,7 +136,7 @@ const AgentTool = memo<AgentToolProps>(
     useCheckPluginsIsInstalled(plugins);
 
     // Load user's Klavis integrations via SWR (from database)
-    useFetchUserKlavisServers(isKlavisEnabledInEnv);
+    useFetchUserComposioConnections(isKlavisEnabledInEnv);
 
     // Load user's LobeHub Skill connections via SWR
     useFetchLobehubSkillConnections(isLobehubSkillEnabled);
@@ -209,7 +209,7 @@ const AgentTool = memo<AgentToolProps>(
 
     // Get all Klavis server type identifiers (used to filter builtinList)
     const allKlavisTypeIdentifiers = useMemo(
-      () => new Set(KLAVIS_SERVER_TYPES.map((type) => type.identifier)),
+      () => new Set(COMPOSIO_APP_TYPES.map((type) => type.identifier)),
       [],
     );
 
@@ -258,11 +258,13 @@ const AgentTool = memo<AgentToolProps>(
     const klavisServerItems = useMemo(
       () =>
         isKlavisEnabledInEnv
-          ? KLAVIS_SERVER_TYPES.map((type) => ({
-              icon: <KlavisSkillIcon icon={type.icon} label={type.label} size={SKILL_ICON_SIZE} />,
+          ? COMPOSIO_APP_TYPES.map((type) => ({
+              icon: (
+                <ComposioSkillIcon icon={type.icon} label={type.label} size={SKILL_ICON_SIZE} />
+              ),
               key: type.identifier,
               label: (
-                <KlavisServerItem
+                <ComposioServerItem
                   agentId={effectiveAgentId}
                   identifier={type.identifier}
                   label={type.label}
@@ -272,7 +274,7 @@ const AgentTool = memo<AgentToolProps>(
               ),
               popoverContent: (
                 <ToolItemDetailPopover
-                  icon={<KlavisSkillIcon icon={type.icon} label={type.label} size={36} />}
+                  icon={<ComposioSkillIcon icon={type.icon} label={type.label} size={36} />}
                   identifier={type.identifier}
                   sourceLabel={type.author}
                   title={type.label}

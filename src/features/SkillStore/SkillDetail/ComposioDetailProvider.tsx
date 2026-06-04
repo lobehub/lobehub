@@ -1,34 +1,34 @@
 'use client';
 
-import { getKlavisServerByServerIdentifier } from '@lobechat/const';
-import { type Klavis } from 'klavis';
+import { getComposioAppByIdentifier } from '@lobechat/const';
+import { type Klavis } from 'composio';
 import { type ReactNode } from 'react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useToolStore } from '@/store/tool';
-import { klavisStoreSelectors } from '@/store/tool/selectors';
-import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
+import { composioStoreSelectors } from '@/store/tool/selectors';
+import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
 
 import { type DetailContextValue } from './DetailContext';
 import { DetailContext } from './DetailContext';
 
-interface KlavisDetailProviderProps {
+interface ComposioDetailProviderProps {
   children: ReactNode;
   identifier: string;
   serverName: Klavis.McpServerName;
 }
 
-export const KlavisDetailProvider = ({
+export const ComposioDetailProvider = ({
   children,
   identifier,
   serverName,
-}: KlavisDetailProviderProps) => {
+}: ComposioDetailProviderProps) => {
   const { t } = useTranslation(['setting']);
 
-  const config = useMemo(() => getKlavisServerByServerIdentifier(identifier), [identifier]);
+  const config = useMemo(() => getComposioAppByIdentifier(identifier), [identifier]);
 
-  const klavisServers = useToolStore(klavisStoreSelectors.getServers);
+  const klavisServers = useToolStore(composioStoreSelectors.getServers);
 
   const serverState = useMemo(
     () => klavisServers.find((s) => s.identifier === identifier),
@@ -36,12 +36,12 @@ export const KlavisDetailProvider = ({
   );
 
   const isConnected = useMemo(
-    () => serverState?.status === KlavisServerStatus.CONNECTED,
+    () => serverState?.status === ComposioServerStatus.ACTIVE,
     [serverState],
   );
 
-  const useFetchServerTools = useToolStore((s) => s.useFetchServerTools);
-  const { data: tools = [], isLoading: toolsLoading } = useFetchServerTools(serverName);
+  const useFetchAppTools = useToolStore((s) => s.useFetchAppTools);
+  const { data: tools = [], isLoading: toolsLoading } = useFetchAppTools(serverName);
 
   if (!config) return null;
 

@@ -49,7 +49,7 @@ export const oauthDeviceFlowRouter = router({
       );
 
       if (!providerDetail?.keyVaults) {
-        return { isAuthenticated: false };
+        return { status: 'PENDING' };
       }
 
       const keyVaults = providerDetail.keyVaults as Record<string, any>;
@@ -59,12 +59,12 @@ export const oauthDeviceFlowRouter = router({
         return {
           avatarUrl: keyVaults.githubAvatarUrl as string | undefined,
           expiresAt: keyVaults.oauthTokenExpiresAt || keyVaults.bearerTokenExpiresAt,
-          isAuthenticated: true,
+          status: 'ACTIVE',
           username: keyVaults.githubUsername as string | undefined,
         };
       }
 
-      return { isAuthenticated: false };
+      return { status: 'PENDING' };
     }),
 
   /**

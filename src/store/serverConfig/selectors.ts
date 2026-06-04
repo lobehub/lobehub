@@ -7,7 +7,7 @@ export const serverConfigSelectors = {
   enableBusinessFeatures: (s: ServerConfigStore) => s.serverConfig.enableBusinessFeatures || false,
   enableEmailVerification: (s: ServerConfigStore) =>
     s.serverConfig.enableEmailVerification || false,
-  enableKlavis: (s: ServerConfigStore) => s.serverConfig.enableKlavis || false,
+  enableComposio: (s: ServerConfigStore) => s.serverConfig.enableComposio || false,
   enableLobehubSkill: (s: ServerConfigStore) => s.serverConfig.enableLobehubSkill || false,
   enableMagicLink: (s: ServerConfigStore) => s.serverConfig.enableMagicLink || false,
   enableMarketTrustedClient: (s: ServerConfigStore) =>

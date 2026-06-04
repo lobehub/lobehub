@@ -41,7 +41,7 @@ const InputArea = () => {
   );
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
-  const isKlavisEnabled = useServerConfigStore(serverConfigSelectors.enableKlavis);
+  const isKlavisEnabled = useServerConfigStore(serverConfigSelectors.enableComposio);
   const serverConfigInit = useServerConfigStore((s) => s.serverConfigInit);
   const isSkillBannerDismissed = useGlobalStore(
     systemStatusSelectors.isBannerDismissed(SKILL_INSTALL_BANNER_ID),

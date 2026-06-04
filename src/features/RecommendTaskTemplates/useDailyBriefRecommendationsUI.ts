@@ -113,9 +113,9 @@ export function useDailyBriefRecommendationsUI(
     }
     return sources;
   }, [templates]);
-  const useFetchUserKlavisServers = useToolStore((s) => s.useFetchUserKlavisServers);
+  const useFetchUserComposioConnections = useToolStore((s) => s.useFetchUserComposioConnections);
   const useFetchLobehubSkillConnections = useToolStore((s) => s.useFetchLobehubSkillConnections);
-  useFetchUserKlavisServers(requiredSources.has('klavis'));
+  useFetchUserComposioConnections(requiredSources.has('composio'));
   useFetchLobehubSkillConnections(requiredSources.has('lobehub'));
 
   if (!swrEnabled) return { mode: 'hidden' };

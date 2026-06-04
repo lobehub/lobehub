@@ -30,7 +30,6 @@ export interface ComposioServer {
 
 export interface CreateComposioServerParams {
   appSlug: string;
-  authConfigId: string;
   identifier: string;
   label: string;
 }

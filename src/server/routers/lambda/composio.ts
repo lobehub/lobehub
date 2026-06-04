@@ -20,16 +20,26 @@ export const composioRouter = router({
     .input(
       z.object({
         appSlug: z.string(),
-        authConfigId: z.string(),
         identifier: z.string(),
         label: z.string(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const { appSlug, authConfigId, identifier, label } = input;
+      const { appSlug, identifier, label } = input;
       const { userId } = ctx;
 
-      const callbackUrl = `${process.env.NEXTAUTH_URL || ''}/api/composio/oauth/callback`;
+      const callbackUrl = `${process.env.APP_URL || process.env.NEXTAUTH_URL || ''}/api/composio/oauth/callback`;
+
+      // Auto-fetch or create auth config for this app (server-managed, not client-provided)
+      const authConfigs = await (ctx.composioClient.authConfigs as any).list();
+      let authConfig = authConfigs?.items?.find((c: any) => c.toolkit?.slug === appSlug);
+      if (!authConfig) {
+        authConfig = await (ctx.composioClient.authConfigs as any).create(appSlug, {
+          name: appSlug,
+          type: 'use_composio_managed_auth',
+        });
+      }
+      const authConfigId: string = authConfig.id;
 
       const connReq = await (ctx.composioClient.connectedAccounts as any).initiate(
         userId,

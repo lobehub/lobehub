@@ -1,14 +1,14 @@
 'use client';
 
-import { type KlavisServerType, type LobehubSkillProviderType } from '@lobechat/const';
-import { type Klavis } from 'klavis';
+import { type ComposioAppType, type LobehubSkillProviderType } from '@lobechat/const';
+import { type Klavis } from 'composio';
 import type React from 'react';
 import { createContext, use } from 'react';
 
 export interface DetailContextValue {
   author: string;
   authorUrl?: string;
-  config: KlavisServerType | LobehubSkillProviderType;
+  config: ComposioAppType | LobehubSkillProviderType;
   description: string;
   icon: string | React.ComponentType<any>;
   identifier: string;

@@ -2,7 +2,6 @@ import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { ModelProvider } from 'model-bank';
 
 import { composioEnv } from '@/config/composio';
-import { klavisEnv } from '@/config/klavis';
 import { isDesktop } from '@/const/version';
 import { appEnv, getAppConfig } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
@@ -106,7 +105,7 @@ export const getServerGlobalConfig = async () => {
     enableBusinessFeatures: ENABLE_BUSINESS_FEATURES,
     enableEmailVerification: authEnv.AUTH_EMAIL_VERIFICATION,
     enableComposio: !!composioEnv.COMPOSIO_API_KEY,
-    enableKlavis: !!klavisEnv.KLAVIS_API_KEY,
+
     enableLobehubSkill: !!(appEnv.MARKET_TRUSTED_CLIENT_SECRET && appEnv.MARKET_TRUSTED_CLIENT_ID),
     enableMagicLink: authEnv.AUTH_ENABLE_MAGIC_LINK,
     enableMarketTrustedClient: !!(

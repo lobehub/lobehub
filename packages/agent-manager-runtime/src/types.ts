@@ -236,11 +236,11 @@ export interface InstallPluginState {
   awaitingApproval?: boolean;
   error?: string;
   installed: boolean;
-  isKlavis?: boolean;
+  isComposio?: boolean;
   isLobehubSkill?: boolean;
-  oauthUrl?: string;
   pluginId: string;
   pluginName?: string;
+  redirectUrl?: string;
   serverName?: string;
   serverStatus?: 'connected' | 'pending_auth' | 'error' | 'not_connected';
   success: boolean;

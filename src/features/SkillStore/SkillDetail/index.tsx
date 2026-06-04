@@ -1,12 +1,12 @@
 'use client';
 
 import { createModal } from '@lobehub/ui/base-ui';
+import { type Klavis } from 'composio';
 import { t } from 'i18next';
-import { type Klavis } from 'klavis';
 
 import { BuiltinAgentSkillDetailContent } from './BuiltinAgentSkillDetailContent';
 import { BuiltinSkillDetailContent } from './BuiltinSkillDetailContent';
-import { KlavisSkillDetailContent } from './KlavisSkillDetailContent';
+import { ComposioSkillDetailContent } from './ComposioSkillDetailContent';
 import { LobehubSkillDetailContent } from './LobehubSkillDetailContent';
 
 export interface CreateBuiltinAgentSkillDetailModalOptions {
@@ -47,7 +47,7 @@ export const createKlavisSkillDetailModal = ({
   serverName,
 }: CreateKlavisSkillDetailModalOptions) =>
   createModal({
-    content: <KlavisSkillDetailContent identifier={identifier} serverName={serverName} />,
+    content: <ComposioSkillDetailContent identifier={identifier} serverName={serverName} />,
     footer: null,
     title: t('dev.title.skillDetails', { ns: 'plugin' }),
     width: 800,
