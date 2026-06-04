@@ -1,10 +1,12 @@
 'use client';
 
+import { EDITOR_DEBOUNCE_TIME, EDITOR_MAX_WAIT } from '@lobechat/const';
 import { ActionIcon, Button, Flexbox, Text, TextArea } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
+import { debounce } from 'es-toolkit/compat';
 import { CheckIcon, PencilIcon, XIcon } from 'lucide-react';
 import type { ChangeEvent } from 'react';
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import CodeEditorPane from '@/components/CodeEditorPane';
@@ -209,30 +211,89 @@ const HighlightEditor = memo<HighlightEditorProps>(({ content, documentId, langu
   const [buffer, setBuffer] = useState<string | undefined>(undefined);
   const editingValue = buffer ?? content;
 
-  const handleChange = useCallback(
-    (next: string) => {
-      setBuffer(next === content ? undefined : next);
-    },
-    [content],
-  );
+  const bufferRef = useRef(buffer);
+  const documentIdRef = useRef(documentId);
+  const onSavedRef = useRef(onSaved);
+  bufferRef.current = buffer;
+  documentIdRef.current = documentId;
+  onSavedRef.current = onSaved;
 
-  const handleSave = useCallback(async () => {
-    if (buffer === undefined) return;
-    const toWrite = buffer;
+  const writeBuffer = useCallback(async (source: 'manual' | 'autosave') => {
+    const toWrite = bufferRef.current;
+    if (toWrite === undefined) return;
     try {
       await documentService.updateDocument({
         content: toWrite,
-        id: documentId,
-        saveSource: 'manual',
+        id: documentIdRef.current,
+        saveSource: source,
       });
       // Update SWR cache before clearing the buffer so the editor's value prop
       // never falls back to stale content, which would otherwise reset the cursor.
-      onSaved(toWrite);
-      setBuffer(undefined);
-    } catch {
-      /* swallow */
+      onSavedRef.current(toWrite);
+      if (bufferRef.current === toWrite) setBuffer(undefined);
+    } catch (error) {
+      console.error('[HighlightEditor] save failed:', error);
     }
-  }, [buffer, documentId, onSaved]);
+  }, []);
+
+  const debouncedAutoSave = useMemo(
+    () =>
+      debounce(() => writeBuffer('autosave'), EDITOR_DEBOUNCE_TIME, {
+        leading: false,
+        maxWait: EDITOR_MAX_WAIT,
+        trailing: true,
+      }),
+    [writeBuffer],
+  );
+
+  const handleChange = useCallback(
+    (next: string) => {
+      const isDirty = next !== content;
+      setBuffer(isDirty ? next : undefined);
+      if (isDirty) debouncedAutoSave();
+      else debouncedAutoSave.cancel();
+    },
+    [content, debouncedAutoSave],
+  );
+
+  const handleSave = useCallback(async () => {
+    debouncedAutoSave.cancel();
+    await writeBuffer('manual');
+  }, [debouncedAutoSave, writeBuffer]);
+
+  const isMountedRef = useRef(false);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      debouncedAutoSave.cancel();
+      const pendingContent = bufferRef.current;
+      if (pendingContent === undefined) return;
+      const pendingDocumentId = documentIdRef.current;
+      // Defer the fire-and-forget save to a microtask so that StrictMode's synchronous
+      // unmount/remount in development does not trigger a save. If the component is
+      // immediately remounted, isMountedRef flips back to true before this runs.
+      queueMicrotask(() => {
+        if (isMountedRef.current) return;
+        void documentService.updateDocument({
+          content: pendingContent,
+          id: pendingDocumentId,
+          saveSource: 'autosave',
+        });
+      });
+    };
+  }, [debouncedAutoSave]);
+
+  useEffect(() => {
+    const handler = (event: BeforeUnloadEvent) => {
+      if (bufferRef.current === undefined) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, []);
 
   return (
     <CodeEditorPane
