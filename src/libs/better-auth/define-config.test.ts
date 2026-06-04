@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   betterAuth: vi.fn((options) => options),
+  businessEmailHarmonyOptions: { allowNormalizedSignin: false },
+  emailHarmony: vi.fn((options) => ({ id: 'email-harmony', options })),
 }));
 
 vi.mock('@better-auth/expo', () => ({
@@ -10,10 +12,6 @@ vi.mock('@better-auth/expo', () => ({
 
 vi.mock('@better-auth/passkey', () => ({
   passkey: vi.fn(() => ({ id: 'passkey' })),
-}));
-
-vi.mock('@lobechat/business-const', () => ({
-  ENABLE_BUSINESS_FEATURES: false,
 }));
 
 vi.mock('@lobechat/database', () => ({
@@ -50,11 +48,7 @@ vi.mock('better-auth/plugins', () => ({
 }));
 
 vi.mock('better-auth-harmony', () => ({
-  emailHarmony: vi.fn(() => ({ id: 'email-harmony' })),
-}));
-
-vi.mock('better-auth-harmony/email', () => ({
-  validateEmail: vi.fn(),
+  emailHarmony: mocks.emailHarmony,
 }));
 
 vi.mock('undici', () => ({
@@ -63,7 +57,7 @@ vi.mock('undici', () => ({
 }));
 
 vi.mock('@/business/server/better-auth', () => ({
-  businessEmailValidator: vi.fn(),
+  businessEmailHarmonyOptions: mocks.businessEmailHarmonyOptions,
 }));
 
 vi.mock('@/envs/app', () => ({
@@ -131,5 +125,13 @@ describe('defineConfig', () => {
         }),
       }),
     );
+  });
+
+  it('should delegate emailHarmony options to the business slot', async () => {
+    const { defineConfig } = await import('./define-config');
+
+    defineConfig({ plugins: [] });
+
+    expect(mocks.emailHarmony).toHaveBeenCalledWith(mocks.businessEmailHarmonyOptions);
   });
 });
