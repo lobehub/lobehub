@@ -1014,7 +1014,7 @@
   "tab.usage": "Usage",
   "tools.activation.auto": "Auto",
   "tools.activation.auto.desc": "Smart",
-  "tools.activation.excluded": "Excluded",
+  "tools.activation.excludeFromAuto": "Exclude from Auto",
   "tools.activation.pinned": "Pinned",
   "tools.activation.pinned.desc": "Always On",
   "tools.add": "Add Skill",
