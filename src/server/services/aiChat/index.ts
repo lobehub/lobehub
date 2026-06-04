@@ -2,7 +2,7 @@ import type { LobeChatDatabase } from '@lobechat/database';
 import { idGenerator } from '@lobechat/database';
 import type { CreateMessageParams, DBMessageItem } from '@lobechat/types';
 import { createTimingHelpers } from '@lobechat/utils';
-import { sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 
 import { MessageModel } from '@/database/models/message';
 import type { CreateTopicParams } from '@/database/models/topic';
@@ -41,16 +41,11 @@ interface SimpleTurnMessage extends DBMessageItem {
   usage?: CreateMessageParams['usage'] | null;
 }
 
-interface PersistedMessagePayload extends Omit<SimpleTurnMessage, 'createdAt' | 'updatedAt'> {
+interface SimpleTurnMessageRow extends Omit<SimpleTurnMessage, 'createdAt' | 'updatedAt'> {
   createdAt: Date | string;
-  updatedAt: Date | string;
-}
-
-interface SimpleTurnRow extends Record<string, unknown> {
-  assistantMessage: PersistedMessagePayload;
   resolvedSessionId: string | null;
-  topicId: string;
-  userMessage: PersistedMessagePayload;
+  resolvedTopicId: string;
+  updatedAt: Date | string;
 }
 
 interface CreateSimpleNewTopicTurnParams {
@@ -96,13 +91,26 @@ const stringifyJsonParam = (value: unknown) =>
 
 const toMessageItem = ({
   createdAt,
+  resolvedSessionId: _resolvedSessionId,
+  resolvedTopicId: _resolvedTopicId,
   updatedAt,
   ...message
-}: PersistedMessagePayload): SimpleTurnMessage => ({
+}: SimpleTurnMessageRow): SimpleTurnMessage => ({
   ...message,
   createdAt: createdAt instanceof Date ? createdAt : new Date(createdAt),
   updatedAt: updatedAt instanceof Date ? updatedAt : new Date(updatedAt),
 });
+
+const getCreatedTurnMessages = (
+  rows: SimpleTurnMessageRow[],
+  userMessageId: string,
+  assistantMessageId: string,
+) => {
+  const userMessage = rows.find((row) => row.id === userMessageId);
+  const assistantMessage = rows.find((row) => row.id === assistantMessageId);
+
+  return { assistantMessage, userMessage };
+};
 
 export class AiChatService {
   private userId: string;
@@ -145,212 +153,236 @@ export class AiChatService {
     const assistantMetadata = stringifyJsonParam(assistantMessage.metadata);
     const topicMetadata = stringifyJsonParam(topic.metadata);
 
-    const result = await this.serverDB.execute<SimpleTurnRow>(sql`
-          WITH resolved_context AS (
-            SELECT COALESCE(
-              ${normalizedSessionId},
-              (
-                SELECT "session_id"
-                FROM ${agentsToSessions}
-                WHERE "agent_id" = ${normalizedAgentId}
-                  AND "user_id" = ${this.userId}
-                LIMIT 1
-              )
-            )::text AS "session_id"
-          ),
-          created_topic AS (
-            INSERT INTO ${topics} (
-              "id",
-              "title",
-              "session_id",
-              "agent_id",
-              "group_id",
-              "user_id",
-              "metadata",
-              "trigger"
-            )
-            SELECT
-              ${topicId},
-              ${topicTitle},
-              "resolved_context"."session_id",
-              ${normalizedAgentId},
-              ${normalizedGroupId},
-              ${this.userId},
-              ${topicMetadata}::jsonb,
-              ${topicTrigger}
-            FROM "resolved_context"
-            RETURNING "id"
-          ),
-          created_messages AS (
-            INSERT INTO ${messages} (
-              "id",
-              "role",
-              "content",
-              "editor_data",
-              "metadata",
-              "model",
-              "provider",
-              "parent_id",
-              "user_id",
-              "session_id",
-              "topic_id",
-              "agent_id",
-              "group_id",
-              "created_at",
-              "updated_at"
-            )
-            SELECT
-              "payload"."id",
-              "payload"."role",
-              "payload"."content",
-              "payload"."editor_data",
-              "payload"."metadata",
-              "payload"."model",
-              "payload"."provider",
-              "payload"."parent_id",
-              ${this.userId},
-              CASE
-                WHEN ${normalizedGroupId}::text IS NOT NULL THEN NULL
-                ELSE "resolved_context"."session_id"
-              END,
-              "created_topic"."id",
-              ${normalizedAgentId},
-              ${normalizedGroupId},
-              "payload"."created_at",
-              "payload"."updated_at"
-            FROM "created_topic"
-            CROSS JOIN "resolved_context"
-            CROSS JOIN (
-              VALUES
-                (
-                  ${userMessageId}::text,
-                  'user'::varchar,
-                  ${sanitizeNullBytes(userMessage.content)}::text,
-                  ${userEditorData}::jsonb,
-                  ${userMetadata}::jsonb,
-                  NULL::text,
-                  NULL::text,
-                  NULL::text,
-                  ${userCreatedAt}::timestamptz,
-                  ${userCreatedAt}::timestamptz
-                ),
-                (
-                  ${assistantMessageId}::text,
-                  'assistant'::varchar,
-                  ${sanitizeNullBytes(assistantMessage.content)}::text,
-                  NULL::jsonb,
-                  ${assistantMetadata}::jsonb,
-                  ${assistantMessage.model ?? null}::text,
-                  ${assistantMessage.provider ?? null}::text,
-                  ${userMessageId}::text,
-                  ${assistantCreatedAt}::timestamptz,
-                  ${assistantCreatedAt}::timestamptz
-                )
-            ) AS "payload" (
-              "id",
-              "role",
-              "content",
-              "editor_data",
-              "metadata",
-              "model",
-              "provider",
-              "parent_id",
-              "created_at",
-              "updated_at"
-            )
-            RETURNING *
-          ),
-          touched_agent AS (
-            UPDATE ${agents}
-            SET "updated_at" = NOW()
-            WHERE ${touchAgentUpdatedAt}
-              AND ${normalizedAgentId}::text IS NOT NULL
-              AND "id" = ${normalizedAgentId}
-              AND "user_id" = ${this.userId}
-            RETURNING "id"
+    const resolvedContext = this.serverDB.$with('resolved_context', {
+      resolvedSessionId: sql<string | null>`"resolvedSessionId"`.as('resolvedSessionId'),
+    }).as(sql`
+        SELECT COALESCE(
+          ${normalizedSessionId}::text,
+          (
+            SELECT ${agentsToSessions.sessionId}
+            FROM ${agentsToSessions}
+            WHERE ${agentsToSessions.agentId} = ${normalizedAgentId}
+              AND ${agentsToSessions.userId} = ${this.userId}
+            LIMIT 1
           )
-          SELECT
-            (SELECT "session_id" FROM "resolved_context") AS "resolvedSessionId",
-            (SELECT "id" FROM "created_topic") AS "topicId",
-            (SELECT COUNT(*) FROM "touched_agent") AS "touchedAgentCount",
-            (
-              SELECT jsonb_build_object(
-                'agentId', "agent_id",
-                'clientId', "client_id",
-                'content', "content",
-                'createdAt', "created_at",
-                'editorData', "editor_data",
-                'error', "error",
-                'favorite', "favorite",
-                'groupId', "group_id",
-                'id', "id",
-                'metadata', "metadata",
-                'model', "model",
-                'observationId', "observation_id",
-                'parentId', "parent_id",
-                'provider', "provider",
-                'quotaId', "quota_id",
-                'reasoning', "reasoning",
-                'role', "role",
-                'search', "search",
-                'sessionId', "session_id",
-                'targetId', "target_id",
-                'threadId', "thread_id",
-                'tools', "tools",
-                'topicId', "topic_id",
-                'traceId', "trace_id",
-                'updatedAt', "updated_at",
-                'usage', "usage",
-                'userId', "user_id"
-              )
-              FROM "created_messages"
-              WHERE "id" = ${userMessageId}
-            ) AS "userMessage",
-            (
-              SELECT jsonb_build_object(
-                'agentId', "agent_id",
-                'clientId', "client_id",
-                'content', "content",
-                'createdAt', "created_at",
-                'editorData', "editor_data",
-                'error', "error",
-                'favorite', "favorite",
-                'groupId', "group_id",
-                'id', "id",
-                'metadata', "metadata",
-                'model', "model",
-                'observationId', "observation_id",
-                'parentId', "parent_id",
-                'provider', "provider",
-                'quotaId', "quota_id",
-                'reasoning', "reasoning",
-                'role', "role",
-                'search', "search",
-                'sessionId', "session_id",
-                'targetId', "target_id",
-                'threadId', "thread_id",
-                'tools', "tools",
-                'topicId', "topic_id",
-                'traceId', "trace_id",
-                'updatedAt', "updated_at",
-                'usage', "usage",
-                'userId', "user_id"
-              )
-              FROM "created_messages"
-              WHERE "id" = ${assistantMessageId}
-            ) AS "assistantMessage"
-        `);
-    const [row] = result.rows;
+        )::text AS "resolvedSessionId"
+      `);
 
-    if (!row?.userMessage || !row.assistantMessage) {
+    const createdTopic = this.serverDB.$with('created_topic').as(
+      this.serverDB
+        .insert(topics)
+        .select((qb) =>
+          qb
+            .select({
+              id: sql<string>`${topicId}::text`.as('id'),
+              title: sql<string | null>`${topicTitle}::text`.as('title'),
+              favorite: sql<boolean>`false`.as('favorite'),
+              sessionId: resolvedContext.resolvedSessionId,
+              content: sql<string | null>`NULL::text`.as('content'),
+              editorData: sql<unknown | null>`NULL::jsonb`.as('editorData'),
+              agentId: sql<string | null>`${normalizedAgentId}::text`.as('agentId'),
+              groupId: sql<string | null>`${normalizedGroupId}::text`.as('groupId'),
+              userId: sql<string>`${this.userId}::text`.as('userId'),
+              clientId: sql<string | null>`NULL::text`.as('clientId'),
+              description: sql<string | null>`NULL::text`.as('description'),
+              historySummary: sql<string | null>`NULL::text`.as('historySummary'),
+              metadata: sql<CreateTopicParams['metadata'] | null>`${topicMetadata}::jsonb`.as(
+                'metadata',
+              ),
+              trigger: sql<CreateTopicParams['trigger'] | null>`${topicTrigger}::text`.as(
+                'trigger',
+              ),
+              mode: sql<string | null>`NULL::text`.as('mode'),
+              status: sql<string | null>`NULL::text`.as('status'),
+              completedAt: sql<Date | null>`NULL::timestamp with time zone`.as('completedAt'),
+              totalCost: sql<number | null>`NULL::numeric`.as('totalCost'),
+              totalInputTokens: sql<number | null>`NULL::integer`.as('totalInputTokens'),
+              totalOutputTokens: sql<number | null>`NULL::integer`.as('totalOutputTokens'),
+              totalTokens: sql<number | null>`NULL::integer`.as('totalTokens'),
+              cost: sql<Record<string, unknown> | null>`NULL::jsonb`.as('cost'),
+              usage: sql<Record<string, unknown> | null>`NULL::jsonb`.as('usage'),
+              model: sql<string | null>`NULL::text`.as('model'),
+              provider: sql<string | null>`NULL::text`.as('provider'),
+              senderId: sql<string | null>`NULL::text`.as('senderId'),
+              accessedAt: sql<Date>`NOW()`.as('accessedAt'),
+              createdAt: sql<Date>`NOW()`.as('createdAt'),
+              updatedAt: sql<Date>`NOW()`.as('updatedAt'),
+            })
+            .from(resolvedContext),
+        )
+        .returning({ topicId: topics.id }),
+    );
+
+    const messagePayload = this.serverDB.$with('message_payload', {
+      payloadContent: sql<string>`"payloadContent"`.as('payloadContent'),
+      payloadCreatedAt: sql<Date>`"payloadCreatedAt"`.as('payloadCreatedAt'),
+      payloadEditorData: sql<CreateMessageParams['editorData'] | null>`"payloadEditorData"`.as(
+        'payloadEditorData',
+      ),
+      payloadId: sql<string>`"payloadId"`.as('payloadId'),
+      payloadMetadata: sql<CreateMessageParams['metadata'] | null>`"payloadMetadata"`.as(
+        'payloadMetadata',
+      ),
+      payloadModel: sql<string | null>`"payloadModel"`.as('payloadModel'),
+      payloadParentId: sql<string | null>`"payloadParentId"`.as('payloadParentId'),
+      payloadProvider: sql<string | null>`"payloadProvider"`.as('payloadProvider'),
+      payloadRole: sql<string>`"payloadRole"`.as('payloadRole'),
+      payloadUpdatedAt: sql<Date>`"payloadUpdatedAt"`.as('payloadUpdatedAt'),
+    }).as(sql`
+        SELECT *
+        FROM (
+          VALUES
+            (
+              ${userMessageId}::text,
+              'user'::varchar,
+              ${sanitizeNullBytes(userMessage.content)}::text,
+              ${userEditorData}::jsonb,
+              ${userMetadata}::jsonb,
+              NULL::text,
+              NULL::text,
+              NULL::text,
+              ${userCreatedAt}::timestamp with time zone,
+              ${userCreatedAt}::timestamp with time zone
+            ),
+            (
+              ${assistantMessageId}::text,
+              'assistant'::varchar,
+              ${sanitizeNullBytes(assistantMessage.content)}::text,
+              NULL::jsonb,
+              ${assistantMetadata}::jsonb,
+              ${assistantMessage.model ?? null}::text,
+              ${assistantMessage.provider ?? null}::text,
+              ${userMessageId}::text,
+              ${assistantCreatedAt}::timestamp with time zone,
+              ${assistantCreatedAt}::timestamp with time zone
+            )
+        ) AS "payload" (
+          "payloadId",
+          "payloadRole",
+          "payloadContent",
+          "payloadEditorData",
+          "payloadMetadata",
+          "payloadModel",
+          "payloadProvider",
+          "payloadParentId",
+          "payloadCreatedAt",
+          "payloadUpdatedAt"
+        )
+      `);
+
+    const createdMessages = this.serverDB.$with('created_messages').as(
+      this.serverDB
+        .insert(messages)
+        .select((qb) =>
+          qb
+            .select({
+              id: messagePayload.payloadId,
+              role: messagePayload.payloadRole,
+              content: messagePayload.payloadContent,
+              editorData: messagePayload.payloadEditorData,
+              summary: sql<string | null>`NULL::text`.as('summary'),
+              reasoning: sql<unknown | null>`NULL::jsonb`.as('reasoning'),
+              search: sql<unknown | null>`NULL::jsonb`.as('search'),
+              metadata: messagePayload.payloadMetadata,
+              usage: sql<CreateMessageParams['usage'] | null>`NULL::jsonb`.as('usage'),
+              model: messagePayload.payloadModel,
+              provider: messagePayload.payloadProvider,
+              favorite: sql<boolean>`false`.as('favorite'),
+              error: sql<unknown | null>`NULL::jsonb`.as('error'),
+              tools: sql<unknown | null>`NULL::jsonb`.as('tools'),
+              traceId: sql<string | null>`NULL::text`.as('traceId'),
+              observationId: sql<string | null>`NULL::text`.as('observationId'),
+              clientId: sql<string | null>`NULL::text`.as('clientId'),
+              userId: sql<string>`${this.userId}::text`.as('userId'),
+              sessionId: sql<string | null>`
+                CASE
+                  WHEN ${normalizedGroupId}::text IS NOT NULL THEN NULL
+                  ELSE ${resolvedContext.resolvedSessionId}
+                END
+              `.as('sessionId'),
+              topicId: createdTopic.topicId,
+              threadId: sql<string | null>`NULL::text`.as('threadId'),
+              parentId: messagePayload.payloadParentId,
+              quotaId: sql<string | null>`NULL::text`.as('quotaId'),
+              agentId: sql<string | null>`${normalizedAgentId}::text`.as('agentId'),
+              groupId: sql<string | null>`${normalizedGroupId}::text`.as('groupId'),
+              targetId: sql<string | null>`NULL::text`.as('targetId'),
+              messageGroupId: sql<string | null>`NULL::text`.as('messageGroupId'),
+              accessedAt: sql<Date>`NOW()`.as('accessedAt'),
+              createdAt: messagePayload.payloadCreatedAt,
+              updatedAt: messagePayload.payloadUpdatedAt,
+            })
+            .from(messagePayload)
+            .crossJoin(resolvedContext)
+            .crossJoin(createdTopic),
+        )
+        .returning(),
+    );
+
+    const touchedAgent = this.serverDB.$with('touched_agent').as(
+      this.serverDB
+        .update(agents)
+        // accessedAt has $onUpdate; keep it unchanged to preserve the previous raw SQL behavior.
+        .set({ accessedAt: agents.accessedAt, updatedAt: sql`NOW()` })
+        .where(
+          sql`${touchAgentUpdatedAt} AND ${normalizedAgentId}::text IS NOT NULL AND ${agents.id} = ${normalizedAgentId} AND ${agents.userId} = ${this.userId}`,
+        )
+        .returning({ id: agents.id }),
+    );
+
+    const rows = await this.serverDB
+      .with(resolvedContext, createdTopic, messagePayload, createdMessages, touchedAgent)
+      .select({
+        agentId: createdMessages.agentId,
+        clientId: createdMessages.clientId,
+        content: sql<SimpleTurnMessage['content']>`${createdMessages.content}`.as('content'),
+        createdAt: createdMessages.createdAt,
+        editorData: sql<SimpleTurnMessage['editorData']>`${createdMessages.editorData}`.as(
+          'editorData',
+        ),
+        error: sql<SimpleTurnMessage['error']>`${createdMessages.error}`.as('error'),
+        favorite: createdMessages.favorite,
+        groupId: createdMessages.groupId,
+        id: createdMessages.id,
+        metadata: sql<SimpleTurnMessage['metadata']>`${createdMessages.metadata}`.as('metadata'),
+        model: createdMessages.model,
+        observationId: createdMessages.observationId,
+        parentId: createdMessages.parentId,
+        provider: createdMessages.provider,
+        quotaId: createdMessages.quotaId,
+        reasoning: sql<SimpleTurnMessage['reasoning']>`${createdMessages.reasoning}`.as(
+          'reasoning',
+        ),
+        role: sql<SimpleTurnMessage['role']>`${createdMessages.role}`.as('role'),
+        search: sql<SimpleTurnMessage['search']>`${createdMessages.search}`.as('search'),
+        sessionId: createdMessages.sessionId,
+        targetId: createdMessages.targetId,
+        threadId: createdMessages.threadId,
+        tools: sql<SimpleTurnMessage['tools']>`${createdMessages.tools}`.as('tools'),
+        topicId: createdMessages.topicId,
+        traceId: createdMessages.traceId,
+        updatedAt: createdMessages.updatedAt,
+        usage: sql<SimpleTurnMessage['usage']>`${createdMessages.usage}`.as('usage'),
+        userId: createdMessages.userId,
+        resolvedSessionId: resolvedContext.resolvedSessionId,
+        resolvedTopicId: createdTopic.topicId,
+      })
+      .from(createdMessages)
+      .crossJoin(resolvedContext)
+      .crossJoin(createdTopic);
+
+    const { assistantMessage: assistantMessageRow, userMessage: userMessageRow } =
+      getCreatedTurnMessages(rows, userMessageId, assistantMessageId);
+
+    if (!userMessageRow || !assistantMessageRow) {
       throw new Error('Failed to create simple new topic turn');
     }
 
     return {
-      assistantMessage: toMessageItem(row.assistantMessage),
-      resolvedSessionId: row.resolvedSessionId,
-      topicId: row.topicId,
-      userMessage: toMessageItem(row.userMessage),
+      assistantMessage: toMessageItem(assistantMessageRow),
+      resolvedSessionId: userMessageRow.resolvedSessionId,
+      topicId: userMessageRow.resolvedTopicId,
+      userMessage: toMessageItem(userMessageRow),
     };
   }
 
@@ -377,199 +409,207 @@ export class AiChatService {
     const userEditorData = stringifyJsonParam(userMessage.editorData);
     const assistantMetadata = stringifyJsonParam(assistantMessage.metadata);
 
-    const result = await this.serverDB.execute<SimpleTurnRow>(sql`
-          WITH existing_topic AS (
-            SELECT "id", "session_id"
-            FROM ${topics}
-            WHERE "id" = ${topicId}
-              AND "user_id" = ${this.userId}
-            LIMIT 1
-          ),
-          resolved_context AS (
-            SELECT
-              "existing_topic"."id" AS "topic_id",
+    const existingTopic = this.serverDB.$with('existing_topic').as(
+      this.serverDB
+        .select({
+          existingSessionId: topics.sessionId,
+          existingTopicId: topics.id,
+        })
+        .from(topics)
+        .where(and(eq(topics.id, topicId), eq(topics.userId, this.userId)))
+        .limit(1),
+    );
+
+    const resolvedContext = this.serverDB.$with('resolved_context').as(
+      this.serverDB
+        .select({
+          resolvedSessionId: sql<string | null>`
               COALESCE(
                 ${normalizedSessionId}::text,
-                "existing_topic"."session_id",
+                ${existingTopic.existingSessionId},
                 (
-                  SELECT "session_id"
+                  SELECT ${agentsToSessions.sessionId}
                   FROM ${agentsToSessions}
-                  WHERE "agent_id" = ${normalizedAgentId}
-                    AND "user_id" = ${this.userId}
+                  WHERE ${agentsToSessions.agentId} = ${normalizedAgentId}
+                    AND ${agentsToSessions.userId} = ${this.userId}
                   LIMIT 1
                 )
-              )::text AS "session_id"
-            FROM "existing_topic"
-          ),
-          updated_topic AS (
-            UPDATE ${topics}
-            SET "updated_at" = NOW()
-            WHERE "id" = (SELECT "topic_id" FROM "resolved_context")
-              AND "user_id" = ${this.userId}
-            RETURNING "id"
-          ),
-          created_messages AS (
-            INSERT INTO ${messages} (
-              "id",
-              "role",
-              "content",
-              "editor_data",
-              "metadata",
-              "model",
-              "provider",
-              "parent_id",
-              "user_id",
-              "session_id",
-              "topic_id",
-              "thread_id",
-              "agent_id",
-              "group_id",
-              "created_at",
-              "updated_at"
-            )
-            SELECT
-              "payload"."id",
-              "payload"."role",
-              "payload"."content",
-              "payload"."editor_data",
-              "payload"."metadata",
-              "payload"."model",
-              "payload"."provider",
-              "payload"."parent_id",
-              ${this.userId},
-              CASE
-                WHEN ${normalizedGroupId}::text IS NOT NULL THEN NULL
-                ELSE "resolved_context"."session_id"
-              END,
-              "updated_topic"."id",
-              ${normalizedThreadId}::text,
-              ${normalizedAgentId},
-              ${normalizedGroupId},
-              "payload"."created_at",
-              "payload"."updated_at"
-            FROM "resolved_context"
-            CROSS JOIN "updated_topic"
-            CROSS JOIN (
-              VALUES
-                (
-                  ${userMessageId}::text,
-                  'user'::varchar,
-                  ${sanitizeNullBytes(userMessage.content)}::text,
-                  ${userEditorData}::jsonb,
-                  ${userMetadata}::jsonb,
-                  NULL::text,
-                  NULL::text,
-                  ${userParentId}::text,
-                  ${userCreatedAt}::timestamptz,
-                  ${userCreatedAt}::timestamptz
-                ),
-                (
-                  ${assistantMessageId}::text,
-                  'assistant'::varchar,
-                  ${sanitizeNullBytes(assistantMessage.content)}::text,
-                  NULL::jsonb,
-                  ${assistantMetadata}::jsonb,
-                  ${assistantMessage.model ?? null}::text,
-                  ${assistantMessage.provider ?? null}::text,
-                  ${userMessageId}::text,
-                  ${assistantCreatedAt}::timestamptz,
-                  ${assistantCreatedAt}::timestamptz
-                )
-            ) AS "payload" (
-              "id",
-              "role",
-              "content",
-              "editor_data",
-              "metadata",
-              "model",
-              "provider",
-              "parent_id",
-              "created_at",
-              "updated_at"
-            )
-            RETURNING *
-          )
-          SELECT
-            (SELECT "session_id" FROM "resolved_context") AS "resolvedSessionId",
-            (SELECT "id" FROM "updated_topic") AS "topicId",
-            (
-              SELECT jsonb_build_object(
-                'agentId', "agent_id",
-                'clientId', "client_id",
-                'content', "content",
-                'createdAt', "created_at",
-                'editorData', "editor_data",
-                'error', "error",
-                'favorite', "favorite",
-                'groupId', "group_id",
-                'id', "id",
-                'metadata', "metadata",
-                'model', "model",
-                'observationId', "observation_id",
-                'parentId', "parent_id",
-                'provider', "provider",
-                'quotaId', "quota_id",
-                'reasoning', "reasoning",
-                'role', "role",
-                'search', "search",
-                'sessionId', "session_id",
-                'targetId', "target_id",
-                'threadId', "thread_id",
-                'tools', "tools",
-                'topicId', "topic_id",
-                'traceId', "trace_id",
-                'updatedAt', "updated_at",
-                'usage', "usage",
-                'userId', "user_id"
-              )
-              FROM "created_messages"
-              WHERE "id" = ${userMessageId}
-            ) AS "userMessage",
-            (
-              SELECT jsonb_build_object(
-                'agentId', "agent_id",
-                'clientId', "client_id",
-                'content', "content",
-                'createdAt', "created_at",
-                'editorData', "editor_data",
-                'error', "error",
-                'favorite', "favorite",
-                'groupId', "group_id",
-                'id', "id",
-                'metadata', "metadata",
-                'model', "model",
-                'observationId', "observation_id",
-                'parentId', "parent_id",
-                'provider', "provider",
-                'quotaId', "quota_id",
-                'reasoning', "reasoning",
-                'role', "role",
-                'search', "search",
-                'sessionId', "session_id",
-                'targetId', "target_id",
-                'threadId', "thread_id",
-                'tools', "tools",
-                'topicId', "topic_id",
-                'traceId', "trace_id",
-                'updatedAt', "updated_at",
-                'usage', "usage",
-                'userId', "user_id"
-              )
-              FROM "created_messages"
-              WHERE "id" = ${assistantMessageId}
-            ) AS "assistantMessage"
-        `);
-    const [row] = result.rows;
+              )::text
+            `.as('resolvedSessionId'),
+          resolvedTopicId: existingTopic.existingTopicId,
+        })
+        .from(existingTopic),
+    );
 
-    if (!row?.topicId || !row.userMessage || !row.assistantMessage) {
+    const updatedTopic = this.serverDB.$with('updated_topic').as(
+      this.serverDB
+        .update(topics)
+        // accessedAt has $onUpdate; keep it unchanged to preserve the previous raw SQL behavior.
+        .set({ accessedAt: topics.accessedAt, updatedAt: sql`NOW()` })
+        .from(resolvedContext)
+        .where(and(eq(topics.id, resolvedContext.resolvedTopicId), eq(topics.userId, this.userId)))
+        .returning({ topicId: topics.id }),
+    );
+
+    const messagePayload = this.serverDB.$with('message_payload', {
+      payloadContent: sql<string>`"payloadContent"`.as('payloadContent'),
+      payloadCreatedAt: sql<Date>`"payloadCreatedAt"`.as('payloadCreatedAt'),
+      payloadEditorData: sql<CreateMessageParams['editorData'] | null>`"payloadEditorData"`.as(
+        'payloadEditorData',
+      ),
+      payloadId: sql<string>`"payloadId"`.as('payloadId'),
+      payloadMetadata: sql<CreateMessageParams['metadata'] | null>`"payloadMetadata"`.as(
+        'payloadMetadata',
+      ),
+      payloadModel: sql<string | null>`"payloadModel"`.as('payloadModel'),
+      payloadParentId: sql<string | null>`"payloadParentId"`.as('payloadParentId'),
+      payloadProvider: sql<string | null>`"payloadProvider"`.as('payloadProvider'),
+      payloadRole: sql<string>`"payloadRole"`.as('payloadRole'),
+      payloadUpdatedAt: sql<Date>`"payloadUpdatedAt"`.as('payloadUpdatedAt'),
+    }).as(sql`
+        SELECT *
+        FROM (
+          VALUES
+            (
+              ${userMessageId}::text,
+              'user'::varchar,
+              ${sanitizeNullBytes(userMessage.content)}::text,
+              ${userEditorData}::jsonb,
+              ${userMetadata}::jsonb,
+              NULL::text,
+              NULL::text,
+              ${userParentId}::text,
+              ${userCreatedAt}::timestamp with time zone,
+              ${userCreatedAt}::timestamp with time zone
+            ),
+            (
+              ${assistantMessageId}::text,
+              'assistant'::varchar,
+              ${sanitizeNullBytes(assistantMessage.content)}::text,
+              NULL::jsonb,
+              ${assistantMetadata}::jsonb,
+              ${assistantMessage.model ?? null}::text,
+              ${assistantMessage.provider ?? null}::text,
+              ${userMessageId}::text,
+              ${assistantCreatedAt}::timestamp with time zone,
+              ${assistantCreatedAt}::timestamp with time zone
+            )
+        ) AS "payload" (
+          "payloadId",
+          "payloadRole",
+          "payloadContent",
+          "payloadEditorData",
+          "payloadMetadata",
+          "payloadModel",
+          "payloadProvider",
+          "payloadParentId",
+          "payloadCreatedAt",
+          "payloadUpdatedAt"
+        )
+      `);
+
+    const createdMessages = this.serverDB.$with('created_messages').as(
+      this.serverDB
+        .insert(messages)
+        .select((qb) =>
+          qb
+            .select({
+              id: messagePayload.payloadId,
+              role: messagePayload.payloadRole,
+              content: messagePayload.payloadContent,
+              editorData: messagePayload.payloadEditorData,
+              summary: sql<string | null>`NULL::text`.as('summary'),
+              reasoning: sql<unknown | null>`NULL::jsonb`.as('reasoning'),
+              search: sql<unknown | null>`NULL::jsonb`.as('search'),
+              metadata: messagePayload.payloadMetadata,
+              usage: sql<CreateMessageParams['usage'] | null>`NULL::jsonb`.as('usage'),
+              model: messagePayload.payloadModel,
+              provider: messagePayload.payloadProvider,
+              favorite: sql<boolean>`false`.as('favorite'),
+              error: sql<unknown | null>`NULL::jsonb`.as('error'),
+              tools: sql<unknown | null>`NULL::jsonb`.as('tools'),
+              traceId: sql<string | null>`NULL::text`.as('traceId'),
+              observationId: sql<string | null>`NULL::text`.as('observationId'),
+              clientId: sql<string | null>`NULL::text`.as('clientId'),
+              userId: sql<string>`${this.userId}::text`.as('userId'),
+              sessionId: sql<string | null>`
+                CASE
+                  WHEN ${normalizedGroupId}::text IS NOT NULL THEN NULL
+                  ELSE ${resolvedContext.resolvedSessionId}
+                END
+              `.as('sessionId'),
+              topicId: updatedTopic.topicId,
+              threadId: sql<string | null>`${normalizedThreadId}::text`.as('threadId'),
+              parentId: messagePayload.payloadParentId,
+              quotaId: sql<string | null>`NULL::text`.as('quotaId'),
+              agentId: sql<string | null>`${normalizedAgentId}::text`.as('agentId'),
+              groupId: sql<string | null>`${normalizedGroupId}::text`.as('groupId'),
+              targetId: sql<string | null>`NULL::text`.as('targetId'),
+              messageGroupId: sql<string | null>`NULL::text`.as('messageGroupId'),
+              accessedAt: sql<Date>`NOW()`.as('accessedAt'),
+              createdAt: messagePayload.payloadCreatedAt,
+              updatedAt: messagePayload.payloadUpdatedAt,
+            })
+            .from(messagePayload)
+            .crossJoin(resolvedContext)
+            .crossJoin(updatedTopic),
+        )
+        .returning(),
+    );
+
+    const rows = await this.serverDB
+      .with(existingTopic, resolvedContext, updatedTopic, messagePayload, createdMessages)
+      .select({
+        agentId: createdMessages.agentId,
+        clientId: createdMessages.clientId,
+        content: sql<SimpleTurnMessage['content']>`${createdMessages.content}`.as('content'),
+        createdAt: createdMessages.createdAt,
+        editorData: sql<SimpleTurnMessage['editorData']>`${createdMessages.editorData}`.as(
+          'editorData',
+        ),
+        error: sql<SimpleTurnMessage['error']>`${createdMessages.error}`.as('error'),
+        favorite: createdMessages.favorite,
+        groupId: createdMessages.groupId,
+        id: createdMessages.id,
+        metadata: sql<SimpleTurnMessage['metadata']>`${createdMessages.metadata}`.as('metadata'),
+        model: createdMessages.model,
+        observationId: createdMessages.observationId,
+        parentId: createdMessages.parentId,
+        provider: createdMessages.provider,
+        quotaId: createdMessages.quotaId,
+        reasoning: sql<SimpleTurnMessage['reasoning']>`${createdMessages.reasoning}`.as(
+          'reasoning',
+        ),
+        role: sql<SimpleTurnMessage['role']>`${createdMessages.role}`.as('role'),
+        search: sql<SimpleTurnMessage['search']>`${createdMessages.search}`.as('search'),
+        sessionId: createdMessages.sessionId,
+        targetId: createdMessages.targetId,
+        threadId: createdMessages.threadId,
+        tools: sql<SimpleTurnMessage['tools']>`${createdMessages.tools}`.as('tools'),
+        topicId: createdMessages.topicId,
+        traceId: createdMessages.traceId,
+        updatedAt: createdMessages.updatedAt,
+        usage: sql<SimpleTurnMessage['usage']>`${createdMessages.usage}`.as('usage'),
+        userId: createdMessages.userId,
+        resolvedSessionId: resolvedContext.resolvedSessionId,
+        resolvedTopicId: updatedTopic.topicId,
+      })
+      .from(createdMessages)
+      .crossJoin(resolvedContext)
+      .crossJoin(updatedTopic);
+
+    const { assistantMessage: assistantMessageRow, userMessage: userMessageRow } =
+      getCreatedTurnMessages(rows, userMessageId, assistantMessageId);
+
+    if (!userMessageRow || !assistantMessageRow) {
       throw new Error('Failed to create simple existing topic turn');
     }
 
     return {
-      assistantMessage: toMessageItem(row.assistantMessage),
-      resolvedSessionId: row.resolvedSessionId,
-      topicId: row.topicId,
-      userMessage: toMessageItem(row.userMessage),
+      assistantMessage: toMessageItem(assistantMessageRow),
+      resolvedSessionId: userMessageRow.resolvedSessionId,
+      topicId: userMessageRow.resolvedTopicId,
+      userMessage: toMessageItem(userMessageRow),
     };
   }
 

@@ -1,8 +1,21 @@
+// @vitest-environment node
 import type { LobeChatDatabase } from '@lobechat/database';
-import { describe, expect, it, vi } from 'vitest';
+import { getTestDB } from '@lobechat/database/test-utils';
+import { eq } from 'drizzle-orm';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
+import {
+  agents,
+  agentsToSessions,
+  chatGroups,
+  messages,
+  sessions,
+  threads,
+  topics,
+  users,
+} from '@/database/schemas';
 import { FileService } from '@/server/services/file';
 
 import { AiChatService } from '.';
@@ -11,87 +24,51 @@ vi.mock('@/database/models/message');
 vi.mock('@/database/models/topic');
 vi.mock('@/server/services/file');
 
+const userId = 'ai-chat-service-test-user';
+const sessionId = 'ai-chat-service-session';
+const agentId = 'ai-chat-service-agent';
+const groupId = 'ai-chat-service-group';
+const existingTopicId = 'ai-chat-service-topic';
+const threadId = 'ai-chat-service-thread';
+
+const serverDB: LobeChatDatabase = await getTestDB();
+
 describe('AiChatService', () => {
-  const getSqlText = (query: unknown) => {
-    const chunks = (query as { queryChunks?: unknown[] }).queryChunks ?? [];
-
-    return chunks
-      .map((chunk) => {
-        if (!chunk) return '';
-
-        const value = (chunk as { value?: string[] }).value;
-
-        return Array.isArray(value) ? value.join('') : '';
-      })
-      .join('');
+  const seedBase = async () => {
+    await serverDB.insert(users).values({ id: userId });
+    await serverDB.insert(sessions).values({ id: sessionId, title: 'Session', userId });
+    await serverDB.insert(agents).values({ id: agentId, title: 'Agent', userId });
+    await serverDB.insert(agentsToSessions).values({ agentId, sessionId, userId });
   };
 
-  const expectGroupSessionNormalization = (query: unknown) => {
-    const sqlText = getSqlText(query).replaceAll(/\s+/g, ' ');
-
-    expect(sqlText).toContain('CASE');
-    expect(sqlText).toContain(
-      '::text IS NOT NULL THEN NULL ELSE "resolved_context"."session_id" END',
-    );
+  const seedGroup = async () => {
+    await serverDB.insert(chatGroups).values({ id: groupId, title: 'Group', userId });
   };
 
-  const createPersistedMessage = (overrides: Record<string, unknown> = {}) => ({
-    agentId: null,
-    clientId: null,
-    content: '',
-    createdAt: '2024-01-01T00:00:00.000Z',
-    error: null,
-    favorite: false,
-    id: 'm1',
-    metadata: null,
-    model: null,
-    observationId: null,
-    parentId: null,
-    provider: null,
-    quotaId: null,
-    reasoning: null,
-    role: 'user',
-    search: null,
-    sessionId: 's1',
-    threadId: null,
-    tools: null,
-    topicId: 't1',
-    updatedAt: '2024-01-01T00:00:00.000Z',
-    userId: 'u1',
-    ...overrides,
+  const getMessagesByTopicId = async (topicId: string) => {
+    const rows = await serverDB.select().from(messages).where(eq(messages.topicId, topicId));
+
+    return rows.toSorted((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  };
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    await serverDB.delete(users);
   });
 
-  it('createSimpleNewTopicTurn should persist the simple turn with one database call', async () => {
-    const execute = vi.fn().mockResolvedValue({
-      rows: [
-        {
-          assistantMessage: createPersistedMessage({
-            content: 'loading',
-            id: 'm-assistant',
-            model: 'gpt-4o',
-            parentId: 'm-user',
-            provider: 'openai',
-            role: 'assistant',
-          }),
-          resolvedSessionId: 's1',
-          topicId: 't1',
-          userMessage: createPersistedMessage({ content: 'hi', id: 'm-user' }),
-        },
-      ],
-    });
-    const serverDB = { execute } as unknown as LobeChatDatabase;
+  it('createSimpleNewTopicTurn should persist the simple turn through the Drizzle CTE', async () => {
+    await seedBase();
 
-    const service = new AiChatService(serverDB, 'u1');
+    const service = new AiChatService(serverDB, userId);
 
     const res = await service.createSimpleNewTopicTurn({
-      agentId: 'agent-1',
+      agentId,
       assistantMessage: {
         content: 'loading',
         metadata: {},
         model: 'gpt-4o',
         provider: 'openai',
       },
-      sessionId: 's1',
       topic: { title: 'T' },
       userMessage: {
         content: 'hi',
@@ -100,117 +77,103 @@ describe('AiChatService', () => {
       },
     });
 
-    expect(execute).toHaveBeenCalledTimes(1);
-    expect(getSqlText(execute.mock.calls[0][0])).toContain('::text IS NOT NULL');
-    expect(res.topicId).toBe('t1');
-    expect(res.resolvedSessionId).toBe('s1');
+    const [createdTopic] = await serverDB.select().from(topics).where(eq(topics.id, res.topicId));
+    const createdMessages = await getMessagesByTopicId(res.topicId);
+    const [updatedAgent] = await serverDB.select().from(agents).where(eq(agents.id, agentId));
+
+    expect(res.topicId).toMatch(/^tpc_/);
+    expect(res.resolvedSessionId).toBe(sessionId);
+    expect(createdTopic).toEqual(
+      expect.objectContaining({
+        agentId,
+        sessionId,
+        title: 'T',
+        userId,
+      }),
+    );
+    expect(createdMessages).toHaveLength(2);
     expect(res.userMessage).toEqual(
       expect.objectContaining({
         content: 'hi',
-        createdAt: new Date('2024-01-01T00:00:00.000Z'),
-        id: 'm-user',
+        editorData: { type: 'doc' },
+        sessionId,
         role: 'user',
+        topicId: res.topicId,
+        userId,
       }),
     );
     expect(res.assistantMessage).toEqual(
       expect.objectContaining({
-        createdAt: new Date('2024-01-01T00:00:00.000Z'),
-        id: 'm-assistant',
-        parentId: 'm-user',
+        content: 'loading',
+        model: 'gpt-4o',
+        parentId: res.userMessage.id,
+        provider: 'openai',
         role: 'assistant',
+        sessionId,
       }),
     );
-  });
-
-  it('createSimpleNewTopicTurn should throw when the database does not return created messages', async () => {
-    const execute = vi.fn().mockResolvedValue({ rows: [] });
-    const serverDB = { execute } as unknown as LobeChatDatabase;
-
-    const service = new AiChatService(serverDB, 'u1');
-
-    await expect(
-      service.createSimpleNewTopicTurn({
-        assistantMessage: { content: 'loading' },
-        topic: { title: 'T' },
-        userMessage: { content: 'hi' },
-      }),
-    ).rejects.toThrow('Failed to create simple new topic turn');
+    expect(createdMessages.map((message) => message.id)).toEqual([
+      res.userMessage.id,
+      res.assistantMessage.id,
+    ]);
+    expect(updatedAgent.updatedAt.getTime()).toBeGreaterThan(updatedAgent.createdAt.getTime());
   });
 
   it('createSimpleNewTopicTurn should keep group messages detached from session rows', async () => {
-    const execute = vi.fn().mockResolvedValue({
-      rows: [
-        {
-          assistantMessage: createPersistedMessage({
-            groupId: 'group-1',
-            id: 'm-assistant',
-            parentId: 'm-user',
-            role: 'assistant',
-            sessionId: null,
-          }),
-          resolvedSessionId: 's1',
-          topicId: 't1',
-          userMessage: createPersistedMessage({
-            groupId: 'group-1',
-            id: 'm-user',
-            sessionId: null,
-          }),
-        },
-      ],
-    });
-    const serverDB = { execute } as unknown as LobeChatDatabase;
+    await seedBase();
+    await seedGroup();
 
-    const service = new AiChatService(serverDB, 'u1');
+    const service = new AiChatService(serverDB, userId);
 
     const res = await service.createSimpleNewTopicTurn({
+      agentId,
       assistantMessage: { content: 'loading' },
-      groupId: 'group-1',
-      sessionId: 's1',
+      groupId,
       topic: { title: 'T' },
       userMessage: { content: 'hi' },
     });
 
-    expectGroupSessionNormalization(execute.mock.calls[0][0]);
+    const createdMessages = await getMessagesByTopicId(res.topicId);
+
+    expect(res.resolvedSessionId).toBe(sessionId);
     expect(res.userMessage.sessionId).toBeNull();
     expect(res.assistantMessage.sessionId).toBeNull();
+    expect(createdMessages).toHaveLength(2);
+    expect(createdMessages).toEqual([
+      expect.objectContaining({ groupId, id: res.userMessage.id, sessionId: null }),
+      expect.objectContaining({ groupId, id: res.assistantMessage.id, sessionId: null }),
+    ]);
   });
 
-  it('createSimpleExistingTopicTurn should persist the simple turn with one database call', async () => {
-    const execute = vi.fn().mockResolvedValue({
-      rows: [
-        {
-          assistantMessage: createPersistedMessage({
-            content: 'loading',
-            id: 'm-assistant',
-            model: 'gpt-4o',
-            parentId: 'm-user',
-            provider: 'openai',
-            role: 'assistant',
-          }),
-          resolvedSessionId: 's1',
-          topicId: 't1',
-          userMessage: createPersistedMessage({
-            content: 'hi',
-            id: 'm-user',
-            parentId: 'm-parent',
-          }),
-        },
-      ],
+  it('createSimpleExistingTopicTurn should persist the simple turn through the Drizzle CTE', async () => {
+    await seedBase();
+    await serverDB.insert(topics).values({
+      agentId,
+      id: existingTopicId,
+      sessionId,
+      title: 'Existing Topic',
+      userId,
     });
-    const serverDB = { execute } as unknown as LobeChatDatabase;
+    await serverDB.insert(messages).values({
+      content: 'parent',
+      id: 'm-parent',
+      role: 'user',
+      sessionId,
+      topicId: existingTopicId,
+      userId,
+    });
 
-    const service = new AiChatService(serverDB, 'u1');
+    const service = new AiChatService(serverDB, userId);
 
     const res = await service.createSimpleExistingTopicTurn({
-      agentId: 'agent-1',
+      agentId,
       assistantMessage: {
         content: 'loading',
         metadata: {},
         model: 'gpt-4o',
         provider: 'openai',
       },
-      sessionId: 's1',
-      topicId: 't1',
+      topicId: existingTopicId,
       userMessage: {
         content: 'hi',
         editorData: { type: 'doc' },
@@ -219,35 +182,43 @@ describe('AiChatService', () => {
       },
     });
 
-    expect(execute).toHaveBeenCalledTimes(1);
-    expect(getSqlText(execute.mock.calls[0][0])).toContain('updated_topic AS');
-    expect(getSqlText(execute.mock.calls[0][0])).toContain('SET "updated_at" = NOW()');
-    expect(res.topicId).toBe('t1');
-    expect(res.resolvedSessionId).toBe('s1');
+    const createdMessages = (await getMessagesByTopicId(existingTopicId)).filter(
+      (message) => message.id !== 'm-parent',
+    );
+    const [updatedTopic] = await serverDB
+      .select()
+      .from(topics)
+      .where(eq(topics.id, existingTopicId));
+
+    expect(res.topicId).toBe(existingTopicId);
+    expect(res.resolvedSessionId).toBe(sessionId);
+    expect(updatedTopic.updatedAt.getTime()).toBeGreaterThan(updatedTopic.createdAt.getTime());
+    expect(createdMessages).toHaveLength(2);
     expect(res.userMessage).toEqual(
       expect.objectContaining({
         content: 'hi',
-        createdAt: new Date('2024-01-01T00:00:00.000Z'),
-        id: 'm-user',
         parentId: 'm-parent',
         role: 'user',
+        sessionId,
+        topicId: existingTopicId,
       }),
     );
     expect(res.assistantMessage).toEqual(
       expect.objectContaining({
-        createdAt: new Date('2024-01-01T00:00:00.000Z'),
-        id: 'm-assistant',
-        parentId: 'm-user',
+        content: 'loading',
+        model: 'gpt-4o',
+        parentId: res.userMessage.id,
+        provider: 'openai',
         role: 'assistant',
+        sessionId,
       }),
     );
   });
 
-  it('createSimpleExistingTopicTurn should throw when the database does not return created messages', async () => {
-    const execute = vi.fn().mockResolvedValue({ rows: [] });
-    const serverDB = { execute } as unknown as LobeChatDatabase;
+  it('createSimpleExistingTopicTurn should throw when the topic does not exist for the user', async () => {
+    await seedBase();
 
-    const service = new AiChatService(serverDB, 'u1');
+    const service = new AiChatService(serverDB, userId);
 
     await expect(
       service.createSimpleExistingTopicTurn({
@@ -258,42 +229,75 @@ describe('AiChatService', () => {
     ).rejects.toThrow('Failed to create simple existing topic turn');
   });
 
-  it('createSimpleExistingTopicTurn should keep group messages detached from session rows', async () => {
-    const execute = vi.fn().mockResolvedValue({
-      rows: [
-        {
-          assistantMessage: createPersistedMessage({
-            groupId: 'group-1',
-            id: 'm-assistant',
-            parentId: 'm-user',
-            role: 'assistant',
-            sessionId: null,
-          }),
-          resolvedSessionId: 's1',
-          topicId: 't1',
-          userMessage: createPersistedMessage({
-            groupId: 'group-1',
-            id: 'm-user',
-            sessionId: null,
-          }),
-        },
-      ],
+  it('createSimpleExistingTopicTurn should persist the thread id on both messages', async () => {
+    await seedBase();
+    await serverDB.insert(topics).values({
+      agentId,
+      id: existingTopicId,
+      sessionId,
+      title: 'Existing Topic',
+      userId,
     });
-    const serverDB = { execute } as unknown as LobeChatDatabase;
+    await serverDB.insert(threads).values({
+      id: threadId,
+      title: 'Thread',
+      topicId: existingTopicId,
+      type: 'continuation',
+      userId,
+    });
 
-    const service = new AiChatService(serverDB, 'u1');
+    const service = new AiChatService(serverDB, userId);
 
     const res = await service.createSimpleExistingTopicTurn({
+      agentId,
       assistantMessage: { content: 'loading' },
-      groupId: 'group-1',
-      sessionId: 's1',
-      topicId: 't1',
+      threadId,
+      topicId: existingTopicId,
       userMessage: { content: 'hi' },
     });
 
-    expectGroupSessionNormalization(execute.mock.calls[0][0]);
+    const createdMessages = await getMessagesByTopicId(existingTopicId);
+
+    expect(res.userMessage.threadId).toBe(threadId);
+    expect(res.assistantMessage.threadId).toBe(threadId);
+    expect(createdMessages).toEqual([
+      expect.objectContaining({ id: res.userMessage.id, threadId }),
+      expect.objectContaining({ id: res.assistantMessage.id, threadId }),
+    ]);
+  });
+
+  it('createSimpleExistingTopicTurn should keep group messages detached from session rows', async () => {
+    await seedBase();
+    await seedGroup();
+    await serverDB.insert(topics).values({
+      agentId,
+      groupId,
+      id: existingTopicId,
+      sessionId,
+      title: 'Existing Topic',
+      userId,
+    });
+
+    const service = new AiChatService(serverDB, userId);
+
+    const res = await service.createSimpleExistingTopicTurn({
+      agentId,
+      assistantMessage: { content: 'loading' },
+      groupId,
+      topicId: existingTopicId,
+      userMessage: { content: 'hi' },
+    });
+
+    const createdMessages = await getMessagesByTopicId(existingTopicId);
+
+    expect(res.resolvedSessionId).toBe(sessionId);
     expect(res.userMessage.sessionId).toBeNull();
     expect(res.assistantMessage.sessionId).toBeNull();
+    expect(createdMessages).toHaveLength(2);
+    expect(createdMessages).toEqual([
+      expect.objectContaining({ groupId, id: res.userMessage.id, sessionId: null }),
+      expect.objectContaining({ groupId, id: res.assistantMessage.id, sessionId: null }),
+    ]);
   });
 
   it('getMessagesAndTopics should fetch messages and topics concurrently', async () => {
