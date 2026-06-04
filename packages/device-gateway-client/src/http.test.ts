@@ -291,6 +291,72 @@ describe('GatewayHttpClient', () => {
     });
   });
 
+  describe('executeMcpCall', () => {
+    it('should tunnel the call over the tool-call relay with stdio params', async () => {
+      mockFetch({
+        json: vi.fn().mockResolvedValue({
+          content: 'stock data',
+          state: { rows: 3 },
+          success: true,
+        }),
+        ok: true,
+      });
+
+      const result = await client.executeMcpCall({
+        apiName: 'getStock',
+        arguments: '{"symbol":"AAPL"}',
+        deviceId: 'device-1',
+        identifier: 'kimi-datasource',
+        params: {
+          args: ['stock-mcp'],
+          command: 'npx',
+          env: { TOKEN: 'secret' },
+          name: 'kimi-datasource',
+          type: 'stdio',
+        },
+        userId: 'user-1',
+      });
+
+      expect(result).toEqual({
+        content: 'stock data',
+        error: undefined,
+        state: { rows: 3 },
+        success: true,
+      });
+
+      // Rides the same endpoint as executeToolCall; the device routes on
+      // the presence of `toolCall.params`.
+      const [url, init] = vi.mocked(fetch).mock.calls[0];
+      expect(url).toBe('https://gateway.test.com/api/device/tool-call');
+      const body = JSON.parse((init as RequestInit).body as string);
+      expect(body.toolCall.identifier).toBe('kimi-datasource');
+      expect(body.toolCall.params.command).toBe('npx');
+      expect(body.toolCall.params.env).toEqual({ TOKEN: 'secret' });
+      // Routing fields are lifted out of the call descriptor, not tunneled.
+      expect(body.toolCall.deviceId).toBeUndefined();
+      expect(body.deviceId).toBe('device-1');
+    });
+
+    it('should surface non-ok responses as a failed result', async () => {
+      mockFetch({
+        ok: false,
+        status: 503,
+        text: vi.fn().mockResolvedValue('DEVICE_OFFLINE'),
+      });
+
+      const result = await client.executeMcpCall({
+        apiName: 'getStock',
+        arguments: '{}',
+        identifier: 'kimi-datasource',
+        params: { args: [], command: 'npx', name: 'kimi-datasource', type: 'stdio' },
+        userId: 'user-1',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('DEVICE_OFFLINE');
+    });
+  });
+
   describe('executeMessageApi', () => {
     it('should return message API result on success', async () => {
       mockFetch({

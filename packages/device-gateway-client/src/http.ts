@@ -1,4 +1,4 @@
-import type { DeviceSystemInfo, GatewayDevice } from './types';
+import type { DeviceSystemInfo, GatewayDevice, GatewayMcpStdioParams } from './types';
 
 const DEFAULT_GATEWAY_TOOL_CALL_TIMEOUT_MS = 30_000;
 const HTTP_CALL_TIMEOUT_PADDING_MS = 30_000;
@@ -57,6 +57,40 @@ export class GatewayHttpClient {
   async executeToolCall(
     params: { deviceId?: string; timeout?: number; userId: string },
     toolCall: { apiName: string; arguments: string; identifier: string },
+  ): Promise<DeviceToolCallResult> {
+    return this.postToolCall(params, toolCall);
+  }
+
+  /**
+   * Tunnel a stdio MCP tool call to the device. Rides the same
+   * `/api/device/tool-call` relay as {@link executeToolCall} — the gateway
+   * forwards `toolCall` opaquely — but carries `params` (the stdio connection
+   * params) so the device routes it to its local MCP client (spawning the
+   * stdio server) rather than the builtin local-system tool switch. The cloud
+   * server can't spawn the user's binary, so execution must happen on the
+   * device.
+   */
+  async executeMcpCall(mcpCall: {
+    apiName: string;
+    arguments: string;
+    deviceId?: string;
+    identifier: string;
+    params: GatewayMcpStdioParams;
+    timeout?: number;
+    userId: string;
+  }): Promise<DeviceToolCallResult> {
+    const { deviceId, timeout, userId, ...toolCall } = mcpCall;
+    return this.postToolCall({ deviceId, timeout, userId }, toolCall);
+  }
+
+  private async postToolCall(
+    params: { deviceId?: string; timeout?: number; userId: string },
+    toolCall: {
+      apiName: string;
+      arguments: string;
+      identifier: string;
+      params?: GatewayMcpStdioParams;
+    },
   ): Promise<DeviceToolCallResult> {
     const timeout =
       typeof params.timeout === 'number' && Number.isFinite(params.timeout)

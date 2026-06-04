@@ -90,6 +90,19 @@ export interface AuthExpiredMessage {
   type: 'auth_expired';
 }
 
+/**
+ * Stdio MCP connection params forwarded to the device for a tunneled MCP tool
+ * call. The cloud server can't spawn the user's local MCP binary, so the
+ * command/args/env travel to the device, which spawns and calls it locally.
+ */
+export interface GatewayMcpStdioParams {
+  args: string[];
+  command: string;
+  env?: Record<string, string>;
+  name: string;
+  type: 'stdio';
+}
+
 export interface ToolCallRequestMessage {
   /** Operation that triggered the call, propagated by the gateway for tracing. */
   operationId?: string;
@@ -100,6 +113,12 @@ export interface ToolCallRequestMessage {
     apiName: string;
     arguments: string;
     identifier: string;
+    /**
+     * Present only for tunneled stdio MCP calls. When set, the device routes
+     * the call to its local MCP client (spawning the stdio server) instead of
+     * the builtin local-system tool switch.
+     */
+    params?: GatewayMcpStdioParams;
   };
   type: 'tool_call_request';
 }

@@ -2,7 +2,7 @@ import { type ChatToolPayload } from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
 import debug from 'debug';
 
-import { type CloudMCPParams, type ToolCallContent } from '@/libs/mcp';
+import { type CloudMCPParams, type StdioMCPParams, type ToolCallContent } from '@/libs/mcp';
 import { contentBlocksToString } from '@/server/services/mcp/contentProcessor';
 import {
   DEFAULT_TOOL_RESULT_MAX_LENGTH,
@@ -12,6 +12,7 @@ import {
 import { DiscoverService } from '../discover';
 import { type MCPService } from '../mcp';
 import { type BuiltinToolsExecutor } from './builtin';
+import { deviceProxy } from './deviceProxy';
 import { classifyToolError } from './errorClassification';
 import {
   type ToolExecutionContext,
@@ -191,7 +192,21 @@ export class ToolExecutionService {
         return await this.executeCloudMCPTool(payload, context, mcpParams);
       }
 
-      // For stdio/http/sse types, use standard MCP service
+      // Stdio MCP can't run on the cloud server — the binary lives on the
+      // user's machine. When a device gateway is configured and a device is
+      // active, tunnel the call to that device, which spawns the stdio server
+      // locally. Standalone Electron (no gateway) falls through to the
+      // in-process MCP service below, where spawning is on the user's machine.
+      if (
+        mcpParams.type === 'stdio' &&
+        deviceProxy.isConfigured &&
+        context.activeDeviceId &&
+        context.userId
+      ) {
+        return await this.executeMcpViaDevice(payload, context, mcpParams);
+      }
+
+      // For stdio (in-process) / http/sse types, use standard MCP service
       const result = await this.mcpService.callTool({
         argsStr: args,
         clientParams: mcpParams,
@@ -216,6 +231,62 @@ export class ToolExecutionService {
         success: false,
       };
     }
+  }
+
+  /**
+   * Execute a stdio MCP tool call on the user's device via the device gateway.
+   * Forwards the stdio connection params (command/args/env) so the device can
+   * spawn the local MCP server and run the call — something the cloud server
+   * cannot do. Callers must ensure `activeDeviceId` and `userId` are set.
+   */
+  private async executeMcpViaDevice(
+    payload: ChatToolPayload,
+    context: ToolExecutionContext,
+    mcpParams: StdioMCPParams,
+  ): Promise<ToolExecutionResult> {
+    const { identifier, apiName, arguments: args } = payload;
+
+    log(
+      'Executing stdio MCP tool via device: %s:%s (device=%s)',
+      identifier,
+      apiName,
+      context.activeDeviceId,
+    );
+
+    const result = await deviceProxy.executeMcpCall(
+      {
+        apiName,
+        arguments: args,
+        deviceId: context.activeDeviceId!,
+        identifier,
+        params: {
+          args: mcpParams.args ?? [],
+          command: mcpParams.command,
+          env: mcpParams.env,
+          name: mcpParams.name,
+          type: 'stdio',
+        },
+        userId: context.userId!,
+      },
+      context.executionTimeoutMs,
+    );
+
+    if (!result.success) {
+      return {
+        content: result.content,
+        error: {
+          code: 'MCP_DEVICE_EXECUTION_ERROR',
+          message: result.error || result.content,
+        },
+        success: false,
+      };
+    }
+
+    return {
+      content: result.content,
+      state: (result.state as Record<string, any>) ?? undefined,
+      success: true,
+    };
   }
 
   private async executeCloudMCPTool(
