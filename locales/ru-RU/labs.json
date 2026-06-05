@@ -15,7 +15,5 @@
   "features.imessage.title": "Канал iMessage",
   "features.inputMarkdown.desc": "Отображение Markdown в поле ввода в реальном времени (жирный текст, блоки кода, таблицы и т. д.).",
   "features.inputMarkdown.title": "Отображение Markdown при вводе",
-  "features.platformAgent.desc": "Показывать пункт \"Добавить платформенного агента\" в меню создания. Платформенные агенты (например, OpenClaw, Hermes) работают на подключенном устройстве и взаимодействуют через lh connect.",
-  "features.platformAgent.title": "Создание платформенного агента",
   "title": "Лаборатория"
 }
