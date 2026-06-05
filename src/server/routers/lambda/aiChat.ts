@@ -31,8 +31,7 @@ type TRPCErrorCode = ConstructorParameters<typeof TRPCError>[0]['code'];
 type TRPCStatusCode = Parameters<typeof getStatusKeyFromCode>[0];
 
 const getRuntimeErrorType = (error: unknown): string | undefined => {
-  if (!error) return;
-  if (typeof error !== 'object') return;
+  if (!error || typeof error !== 'object') return;
 
   const errorType = (error as { errorType?: unknown }).errorType;
   return typeof errorType === 'string' ? errorType : undefined;
@@ -40,8 +39,7 @@ const getRuntimeErrorType = (error: unknown): string | undefined => {
 
 const getTRPCErrorCodeFromStatus = (status: number): TRPCErrorCode => {
   const code = getStatusKeyFromCode(status as TRPCStatusCode) as TRPCErrorCode;
-  if (status === 500) return code;
-  if (code !== 'INTERNAL_SERVER_ERROR') return code;
+  if (code !== 'INTERNAL_SERVER_ERROR' || status === 500) return code;
 
   if (status >= 500) return 'INTERNAL_SERVER_ERROR';
   if (status >= 400) return 'BAD_REQUEST';
@@ -52,8 +50,7 @@ const getTRPCErrorCodeFromStatus = (status: number): TRPCErrorCode => {
 const createRuntimeTRPCError = (error: unknown): TRPCError | undefined => {
   const errorType = getRuntimeErrorType(error);
   const spec = getErrorCodeSpec(errorType);
-  if (!errorType) return;
-  if (!spec) return;
+  if (!errorType || !spec) return;
 
   return new TRPCError({
     cause: error,
