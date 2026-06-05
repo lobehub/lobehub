@@ -126,7 +126,7 @@ bun run type-check
 
 - Add keys to a namespace file under `src/locales/default/` (e.g. `agent.ts`, `auth.ts`)
 - For dev preview: translate `locales/zh-CN/` and `locales/en-US/`
-- `pnpm i18n` is slow; run it manually when locale keys need updating (e.g. before opening a PR).
+- `pnpm i18n` is slow; run it manually only when locale keys need updating (value-only edits don't require it).
 
 ### Code Style
 
