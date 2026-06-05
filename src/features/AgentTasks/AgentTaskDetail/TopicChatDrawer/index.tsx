@@ -94,7 +94,7 @@ const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(({ agentId, topicId }
           <Flexbox flex={1} style={{ minHeight: 0, overflow: 'hidden' }}>
             <ChatList disableActionsBar itemContent={itemContent} />
           </Flexbox>
-          <Flexbox padding={12} style={{ flexShrink: 0 }}>
+          <Flexbox paddingBlock={'0 12px'} paddingInline={12} style={{ flexShrink: 0 }}>
             <FeedbackInput />
           </Flexbox>
         </Flexbox>
