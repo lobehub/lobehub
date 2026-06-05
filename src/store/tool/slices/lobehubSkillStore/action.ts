@@ -316,6 +316,7 @@ export class LobehubSkillStoreActionImpl {
           }
         },
         revalidateOnFocus: false,
+        shouldRetryOnError: false,
       },
     );
   };
