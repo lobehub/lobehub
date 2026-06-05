@@ -1,3 +1,4 @@
+import { Tooltip } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { BanIcon, CheckIcon, HandIcon } from 'lucide-react';
 import { memo } from 'react';
@@ -37,11 +38,26 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       background: ${cssVar.colorPrimaryBgHover};
     }
   `,
+  description: css`
+    overflow: hidden;
+
+    font-size: 11px;
+    line-height: 1.4;
+    color: ${cssVar.colorTextTertiary};
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+  nameCell: css`
+    overflow: hidden;
+    flex: 1;
+    min-width: 0;
+  `,
   row: css`
     display: flex;
+    gap: 8px;
     align-items: center;
 
-    padding-block: 10px;
+    padding-block: 8px;
     padding-inline: 12px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 
@@ -52,6 +68,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     &:hover {
       background: ${cssVar.colorFillQuaternary};
     }
+  `,
+  toolName: css`
+    overflow: hidden;
+
+    font-family: var(--font-mono, monospace);
+    font-size: 13px;
+    color: ${cssVar.colorText};
+    text-overflow: ellipsis;
+    white-space: nowrap;
   `,
 }));
 
@@ -66,10 +91,15 @@ const ToolPermissionRow = memo<ToolPermissionRowProps>(({ tool, onPermissionChan
 
   return (
     <div className={styles.row}>
-      <span style={{ flex: 1, fontFamily: 'var(--font-mono, monospace)', fontSize: 13 }}>
-        {tool.toolName}
-      </span>
-      <div style={{ display: 'flex', gap: 2 }}>
+      <div className={styles.nameCell}>
+        <div className={styles.toolName}>{tool.toolName}</div>
+        {tool.description && (
+          <Tooltip mouseEnterDelay={0.5} title={tool.description}>
+            <div className={styles.description}>{tool.description}</div>
+          </Tooltip>
+        )}
+      </div>
+      <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
         <div
           className={btnClass(ConnectorToolPermission.auto)}
           title="Auto — AI calls directly"

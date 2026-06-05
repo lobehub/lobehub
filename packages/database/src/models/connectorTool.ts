@@ -1,4 +1,4 @@
-import { and, eq, inArray, ne } from 'drizzle-orm';
+import { and, eq, inArray, ne, sql } from 'drizzle-orm';
 
 import type {
   ConnectorToolPermission,
@@ -62,12 +62,14 @@ export class ConnectorToolModel {
         // unique index: (userConnectorId, toolName)
         target: [userConnectorTools.userConnectorId, userConnectorTools.toolName],
         set: {
-          crudType: userConnectorTools.crudType,
-          description: userConnectorTools.description,
-          displayName: userConnectorTools.displayName,
-          inputSchema: userConnectorTools.inputSchema,
-          outputSchema: userConnectorTools.outputSchema,
-          renderConfig: userConnectorTools.renderConfig,
+          // Use sql`excluded.*` to reference the incoming row's values, not the existing row.
+          // Using table.column in set would generate a no-op self-reference in some Drizzle versions.
+          crudType: sql`excluded.crud_type`,
+          description: sql`excluded.description`,
+          displayName: sql`excluded.display_name`,
+          inputSchema: sql`excluded.input_schema`,
+          outputSchema: sql`excluded.output_schema`,
+          renderConfig: sql`excluded.render_config`,
           updatedAt: new Date(),
           // permission / isWorkArtifact / workArtifactConfig / limitConfig NOT updated
         },
