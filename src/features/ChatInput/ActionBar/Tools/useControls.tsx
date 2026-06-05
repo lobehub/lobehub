@@ -330,14 +330,6 @@ const styles = createStaticStyles(({ css }) => ({
 
     background: ${cssVar.colorFillQuaternary};
   `,
-  statsFooter: css`
-    display: flex;
-    gap: 14px;
-    align-items: center;
-
-    margin-inline: -8px;
-    padding-inline: 8px;
-  `,
   addSkillRow: css`
     cursor: pointer;
 
@@ -345,13 +337,12 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 8px;
     align-items: center;
 
-    /* Break out of the footer's 12px inline padding so the row spans the full
-       popup width and its hover background lines up with the menu items above;
-       padding-inline: 12px then re-aligns the icon/text to the same column. */
-    width: calc(100% + 24px);
+    /* width: 320px + margin-inline: -12px anchors the submenu to 320px so it
+       matches the attachment submenu, and lets the row break out of the footer's
+       12px inline padding to span full width; padding-inline: 12px then re-aligns
+       the icon/text to the same column as the menu rows above. */
+    width: 320px;
     min-height: 32px;
-    margin-block-start: 4px;
-    margin-block-end: -8px;
     margin-inline: -12px;
     padding-inline: 12px;
     border: 0;
@@ -367,48 +358,18 @@ const styles = createStaticStyles(({ css }) => ({
     &:hover {
       background: ${cssVar.colorFillTertiary};
     }
+
+    /* The footer adds 8px block padding; cancel it on the last action row so the
+       bottom row sits flush against the popup edge instead of leaving a gap. */
+    &:last-child {
+      margin-block-end: -8px;
+    }
   `,
   addSkillLabel: css`
     flex: 1;
     text-align: start;
   `,
   addSkillArrow: css`
-    color: ${cssVar.colorTextTertiary};
-  `,
-  statsSettingsButton: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 24px;
-    height: 24px;
-    padding: 0;
-    border: 0;
-    border-radius: 6px;
-
-    color: ${cssVar.colorTextTertiary};
-
-    background: transparent;
-
-    transition:
-      color 0.2s,
-      background 0.2s;
-
-    &:hover {
-      color: ${cssVar.colorTextSecondary};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  statsItem: css`
-    display: inline-flex;
-    gap: 5px;
-    align-items: center;
-
-    font-size: 12px;
-    line-height: 18px;
     color: ${cssVar.colorTextTertiary};
   `,
 }));
@@ -1304,12 +1265,14 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
 
   const renderActivationGroupLabel = ({
     autoSwitch,
+    count,
     icon,
     open,
     title,
     onToggle,
   }: {
     autoSwitch?: boolean;
+    count?: number;
     icon: ReactNode;
     open: boolean;
     title: string;
@@ -1328,6 +1291,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       <div className={cx(styles.activationGroupTitleBlock)}>
         {icon}
         <span className={cx(styles.activationGroupTitleText)}>{title}</span>
+        {typeof count === 'number' && <span className={cx(styles.count)}>{count}</span>}
       </div>
       <div className={cx(styles.activationGroupActions)}>
         {autoSwitch && (
@@ -1366,6 +1330,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   const marketHeader = (
     <SearchBar
       allowClear
+      className="lobe-skill-submenu-search"
       placeholder={t('tools.search')}
       size="small"
       style={{ width: '100%' }}
@@ -1380,31 +1345,6 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   const marketFooter =
     allSkillItems.length > 0 || fixedItems.length > 0 ? (
       <>
-        <div className={cx(styles.statsFooter)}>
-          <span className={cx(styles.statsItem)}>
-            <Icon icon={Pin} size={12} />
-            {allPinnedItems.length + fixedItems.length}
-          </span>
-          <span className={cx(styles.statsItem)}>
-            <Icon icon={Zap} size={12} />
-            {allAutoItems.length}
-          </span>
-          <Tooltip placement="top" title={t('tools.plugins.management')}>
-            <button
-              aria-label={t('tools.plugins.management')}
-              className={cx(styles.statsSettingsButton)}
-              style={{ marginInlineStart: 'auto' }}
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                closeDropdown?.();
-                navigate('/settings/skill');
-              }}
-            >
-              <Icon icon={Settings} size={14} />
-            </button>
-          </Tooltip>
-        </div>
         <button
           aria-label={t('plus.addSkills', { ns: 'chat' })}
           className={cx(styles.addSkillRow)}
@@ -1419,6 +1359,20 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           <span className={cx(styles.addSkillLabel)}>{t('plus.addSkills', { ns: 'chat' })}</span>
           <Icon className={cx(styles.addSkillArrow)} icon={ChevronRight} size={16} />
         </button>
+        <button
+          aria-label={t('tools.plugins.management')}
+          className={cx(styles.addSkillRow)}
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            closeDropdown?.();
+            navigate('/settings/skill');
+          }}
+        >
+          <Icon icon={Settings} size={SKILL_ICON_SIZE} />
+          <span className={cx(styles.addSkillLabel)}>{t('tools.plugins.management')}</span>
+          <Icon className={cx(styles.addSkillArrow)} icon={ChevronRight} size={16} />
+        </button>
       </>
     ) : undefined;
 
@@ -1429,6 +1383,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
             children: pinnedOpen ? pinnedItems : [],
             key: 'pinned',
             label: renderActivationGroupLabel({
+              count: allPinnedItems.length,
               icon: <Icon icon={Pin} size={14} />,
               open: pinnedOpen,
               title: t('tools.activation.pinned'),
@@ -1453,6 +1408,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
             key: 'auto',
             label: renderActivationGroupLabel({
               autoSwitch: true,
+              count: allAutoItems.length,
               icon: <Icon icon={Zap} size={14} />,
               open: autoOpen,
               title: t('tools.activation.auto'),
