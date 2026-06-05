@@ -4,7 +4,7 @@ import { memo } from 'react';
 
 import type { ConnectorWithTools } from '@/store/tool/slices/connector';
 
-const useStyles = createStaticStyles(({ css, cssVar }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   active: css`
     background: ${cssVar.colorFillSecondary};
   `,
@@ -34,10 +34,10 @@ interface ConnectorItemProps {
 }
 
 const ConnectorItem = memo<ConnectorItemProps>(({ connector, active, onClick }) => {
-  const { styles, cx } = useStyles();
+  const itemClass = active ? `${styles.item} ${styles.active}` : styles.item;
 
   return (
-    <div className={cx(styles.item, active && styles.active)} onClick={onClick}>
+    <div className={itemClass} onClick={onClick}>
       <LinkIcon size={14} />
       <span style={{ flex: 1, fontSize: 14 }}>{connector.name}</span>
     </div>
