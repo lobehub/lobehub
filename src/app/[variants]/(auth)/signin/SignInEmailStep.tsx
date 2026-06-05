@@ -111,7 +111,7 @@ export const SignInEmailStep = ({
                 color="var(--ant-color-info)"
                 count={t('betterAuth.signin.lastUsed')}
                 key={provider}
-                styles={{ root: { display: 'block' } }}
+                styles={{ root: { display: 'block', width: '100%' } }}
               >
                 {button}
               </Badge>
