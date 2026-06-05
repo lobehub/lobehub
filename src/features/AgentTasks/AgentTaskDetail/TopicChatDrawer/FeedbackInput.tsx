@@ -54,6 +54,14 @@ const FeedbackInput = memo(() => {
     const hasFiles = getAttachmentFileIdsFromEditor(editor).length > 0;
     if (!markdown && !hasFiles) return;
 
+    // Clear / collapse synchronously BEFORE await so the input feels
+    // responsive — sendMessage's optimistic-update pipeline keeps a copy
+    // of the captured markdown / editorData for rendering.
+    editor?.cleanDocument?.();
+    setHasContent(false);
+    setHasAttachments(false);
+    setExpanded(false);
+
     setSubmitting(true);
     try {
       // sendMessage is bound to this drawer's ConversationProvider context
@@ -61,10 +69,6 @@ const FeedbackInput = memo(() => {
       // topic's conversation. Files attached inline in the editor travel as
       // part of editorData / markdown — no separate files array needed.
       await sendMessage({ editorData, message: markdown });
-      editor?.cleanDocument?.();
-      setHasContent(false);
-      setHasAttachments(false);
-      setExpanded(false);
     } finally {
       setSubmitting(false);
     }
