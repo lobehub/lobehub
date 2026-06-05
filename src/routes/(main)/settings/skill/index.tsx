@@ -3,11 +3,10 @@
 import { Button, Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { PlusIcon, Store } from 'lucide-react';
+import { Store } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { AddConnectorModal } from '@/features/Connectors';
 import NavHeader from '@/features/NavHeader';
 import { createSkillStoreModal } from '@/features/SkillStore';
 import { useToolStore } from '@/store/tool';
@@ -83,7 +82,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 const Page = memo(() => {
   const { t } = useTranslation('setting');
   const [selected, setSelected] = useState<SelectedTool | null>(null);
-  const [showAddConnector, setShowAddConnector] = useState(false);
   const [viewMode, setViewMode] = useState<SkillViewMode>('connector');
 
   // Data sources for auto-select
@@ -148,13 +146,6 @@ const Page = memo(() => {
             </div>
 
             <div style={{ display: 'flex', gap: 6 }}>
-              {viewMode === 'connector' && (
-                <Button
-                  icon={<Icon icon={PlusIcon} />}
-                  size="small"
-                  onClick={() => setShowAddConnector(true)}
-                />
-              )}
               <Button icon={<Icon icon={Store} />} size="small" onClick={handleOpenStore} />
             </div>
           </div>
@@ -175,8 +166,6 @@ const Page = memo(() => {
           </div>
         )}
       </div>
-
-      <AddConnectorModal open={showAddConnector} onClose={() => setShowAddConnector(false)} />
     </>
   );
 });
