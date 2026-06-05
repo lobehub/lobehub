@@ -23,7 +23,7 @@ export default {
     'Render Markdown in the input area in real time (bold text, code blocks, tables, etc.).',
   'features.inputMarkdown.title': 'Input Markdown Rendering',
   'features.platformAgent.desc':
-    'Show the "Add Platform Agent" entry in the create menu. Platform agents (e.g. OpenClaw, Hermes) run on a connected device and communicate back via lh connect.',
-  'features.platformAgent.title': 'Platform Agent Creation',
+    'Show the "Connect Agent" entry in the create menu. Connected agents (e.g. OpenClaw, Hermes) run on your own devices and communicate back via lh connect.',
+  'features.platformAgent.title': 'Connect Agent',
   'title': 'Labs',
 };

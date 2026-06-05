@@ -369,27 +369,27 @@ export default {
   'newAgent': 'Create Agent',
   'newClaudeCodeAgent': 'Add Claude Code',
   'newCodexAgent': 'Add Codex',
-  'newPlatformAgent': 'Add Platform Agent',
+  'newPlatformAgent': 'Connect Agent',
   'newGroupChat': 'Create Group',
 
-  // Platform agent: per-platform descriptions shown in step 0 of the creation modal
+  // Connect agent: per-agent descriptions shown in step 0 of the connect modal
   'platformAgent.create.desc.openclaw': 'Connect to OpenClaw running on one of your devices',
   'platformAgent.create.desc.hermes': 'Connect to Hermes running on one of your devices',
   'platformAgent.create.desc.amp': 'Connect to Amp running on one of your devices',
   'platformAgent.create.desc.opencode': 'Connect to OpenCode running on one of your devices',
 
-  // Platform agent: shared device status label (used in Select option labels)
+  // Connect agent: shared device status label (used in Select option labels)
   'platformAgent.device.online': 'Online',
 
-  // Platform agent creation modal (openclaw / hermes)
-  'platformAgent.create.title': 'Add Platform Agent',
-  'platformAgent.create.step1': 'Select Platform',
+  // Connect agent modal (openclaw / hermes)
+  'platformAgent.create.title': 'Connect Agent',
+  'platformAgent.create.step1': 'Select Agent',
   'platformAgent.create.step2': 'Select Device',
   'platformAgent.create.step3': 'Configure Agent',
   'platformAgent.create.next': 'Next',
   'platformAgent.create.back': 'Back',
-  'platformAgent.create.create': 'Create Agent',
-  'platformAgent.create.creating': 'Creating...',
+  'platformAgent.create.create': 'Connect',
+  'platformAgent.create.creating': 'Connecting...',
   'platformAgent.create.namePlaceholder': 'e.g. My OpenClaw Agent',
   'platformAgent.create.descriptionPlaceholder': 'Brief description (optional)',
   'platformAgent.create.fetchingProfile': 'Fetching profile...',
@@ -410,7 +410,7 @@ export default {
   'platformAgent.create.upgradeCmd': 'npm install -g @lobehub/cli',
   'platformAgent.create.comingSoon': 'Coming Soon',
 
-  // Platform agent device guard banner
+  // Connect agent device guard banner
   'platformAgent.deviceGuard.deviceOffline.title': 'Device not connected',
   'platformAgent.deviceGuard.deviceOffline.desc':
     'The bound device is not connected. Run `lh connect` on that machine then refresh.',

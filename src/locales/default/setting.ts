@@ -241,9 +241,9 @@ export default {
   // Heterogeneous agent — Desktop tab
   'heterogeneousStatus.desktop.tabLabel': 'Desktop',
 
-  // Remote platform agent profile config panel (openclaw / hermes)
-  'platformAgentConfig.title': 'Platform Configuration',
-  'platformAgentConfig.platform.label': 'Platform',
+  // Connected agent profile config panel (openclaw / hermes)
+  'platformAgentConfig.title': 'Connection',
+  'platformAgentConfig.platform.label': 'Connected to',
   'platformAgentConfig.device.label': 'Bound Device',
   'platformAgentConfig.device.none': 'None',
   'platformAgentConfig.device.online': 'Online',
