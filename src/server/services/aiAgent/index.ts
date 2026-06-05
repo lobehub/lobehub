@@ -1221,6 +1221,54 @@ export class AiAgentService {
       }
       log('execAgent: got %d klavis manifests', klavisManifests.length);
 
+      // 5d-1. Patch Lobehub/Klavis manifests with connector tool permissions.
+      // This enables needs_approval (→ humanIntervention: 'required') and disabled
+      // (→ blocking description) for skills that are managed via the connector system.
+      // The humanIntervention system already handles headless auto-rejection for qstash.
+      if (lobehubSkillManifests.length > 0 || klavisManifests.length > 0) {
+        try {
+          const { patchManifestWithPermissions } =
+            await import('@/libs/mcp/connectorPermissionCheck');
+          const { ConnectorToolModel } = await import('@/database/models/connectorTool');
+          const allIdentifiers = [
+            ...lobehubSkillManifests.map((m) => m.identifier),
+            ...klavisManifests.map((m) => m.identifier),
+          ];
+          const connectorEntries =
+            allIdentifiers.length > 0
+              ? await this.connectorModel.queryByIdentifiers(allIdentifiers)
+              : [];
+
+          if (connectorEntries.length > 0) {
+            const toolModel = new ConnectorToolModel(this.db, this.userId);
+            const connectorToolsMap = new Map<string, Map<string, string>>();
+            await Promise.all(
+              connectorEntries.map(async (c) => {
+                const tools = await toolModel.queryByConnector(c.id);
+                const perms = new Map(tools.map((t) => [t.toolName, t.permission]));
+                connectorToolsMap.set(c.identifier, perms);
+              }),
+            );
+
+            lobehubSkillManifests = lobehubSkillManifests.map((m) => {
+              const perms = connectorToolsMap.get(m.identifier);
+              return perms && perms.size > 0
+                ? (patchManifestWithPermissions(m as any, perms as any) as any)
+                : m;
+            });
+
+            klavisManifests = klavisManifests.map((m) => {
+              const perms = connectorToolsMap.get(m.identifier);
+              return perms && perms.size > 0
+                ? (patchManifestWithPermissions(m as any, perms as any) as any)
+                : m;
+            });
+          }
+        } catch (err) {
+          log('execAgent: failed to patch manifests with connector permissions: %O', err);
+        }
+      }
+
       await throwIfExecutionAborted('tool discovery');
 
       // 5e. Create tools using Server AgentToolsEngine

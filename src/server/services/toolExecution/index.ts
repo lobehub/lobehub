@@ -2,7 +2,12 @@ import { type ChatToolPayload } from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
 import debug from 'debug';
 
+import { ConnectorToolPermission } from '@/database/schemas';
 import { type CloudMCPParams, type StdioMCPParams, type ToolCallContent } from '@/libs/mcp';
+import {
+  buildBlockedToolResponse,
+  getConnectorToolPermission,
+} from '@/libs/mcp/connectorPermissionCheck';
 import { contentBlocksToString } from '@/server/services/mcp/contentProcessor';
 import {
   DEFAULT_TOOL_RESULT_MAX_LENGTH,
@@ -74,6 +79,27 @@ export class ToolExecutionService {
     const { identifier, apiName, type } = payload;
 
     log('Executing tool: %s:%s (type: %s)', identifier, apiName, type);
+
+    // ── Connector tool permission gate (covers ALL paths + qstash) ────────
+    // Check before any execution so that disabled tools are blocked universally:
+    // Lobehub market skills, Klavis, MCP connectors, and execAgent/qstash alike.
+    // needs_approval is handled via humanIntervention in the manifest; we only
+    // hard-block 'disabled' here (and needs_approval in headless/qstash context
+    // since the manifest's humanIntervention auto-rejects them there already).
+    if (context.serverDB && context.userId && identifier && apiName) {
+      const permission = await getConnectorToolPermission(
+        context.serverDB,
+        context.userId,
+        identifier,
+        apiName,
+      );
+      if (permission === ConnectorToolPermission.disabled) {
+        log('Tool %s:%s is disabled by user — blocking execution', identifier, apiName);
+        const blocked = buildBlockedToolResponse(apiName);
+        return { ...blocked, executionTime: 0 };
+      }
+    }
+    // ── End permission gate ───────────────────────────────────────────────
 
     const startTime = Date.now();
     try {
