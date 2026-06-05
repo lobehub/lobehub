@@ -261,6 +261,41 @@ export class CompletionLifecycle {
   }
 
   /**
+   * Insert a `role='verify'` message that renders the Agent Run delivery-checker
+   * card (plan + results, read off `metadata.verifyOperationId`). Only created
+   * when the run actually has a verify plan. Self-guarded — failures never affect
+   * the run; the card is purely additive UI.
+   */
+  private async createVerifyMessage(
+    operationId: string,
+    assistantMessageId: string | undefined,
+    userId: string,
+  ): Promise<void> {
+    try {
+      if (!assistantMessageId) return;
+      const operationModel = new AgentOperationModel(this.serverDB, userId);
+      const state = await operationModel.getVerifyState(operationId);
+      if (!state?.verifyPlan?.length) return;
+
+      const op = await operationModel.findById(operationId);
+      if (!op?.topicId) return;
+
+      const messageModel = new MessageModel(this.serverDB, userId);
+      await messageModel.create({
+        agentId: op.agentId ?? undefined,
+        content: '',
+        metadata: { verifyOperationId: operationId },
+        parentId: assistantMessageId,
+        role: 'verify',
+        threadId: op.threadId ?? undefined,
+        topicId: op.topicId,
+      });
+    } catch (error) {
+      log('createVerifyMessage failed for op %s (non-fatal): %O', operationId, error);
+    }
+  }
+
+  /**
    * Dispatch `onComplete` (and `onError` for `reason='error'`) hooks via
    * the global `hookDispatcher`. On the error path, also writes the error
    * back onto the assistant message row so the frontend can render it.
@@ -300,6 +335,13 @@ export class CompletionLifecycle {
           goal,
           operationId,
         });
+        // Surface the delivery-checker card in the conversation (a role='verify'
+        // message that renders the run's plan + results). Self-guarded.
+        void this.createVerifyMessage(
+          operationId,
+          metadata?.assistantMessageId,
+          metadata?.userId || this.userId,
+        );
       }
 
       if (reason === 'error') {
