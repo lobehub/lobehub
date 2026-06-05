@@ -9,7 +9,6 @@ import { PRIVACY_URL, TERMS_URL } from '@/const/url';
 const linkStyle: CSSProperties = {
   color: 'inherit',
   cursor: 'pointer',
-  textDecoration: 'underline',
 };
 
 const AuthFooterLinks = memo(() => {
