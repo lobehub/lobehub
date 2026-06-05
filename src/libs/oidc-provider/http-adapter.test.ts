@@ -57,6 +57,47 @@ describe('OIDC HTTP adapter', () => {
       await expect(readStream(nodeRequest as unknown as Readable)).resolves.toBe(body);
     });
 
+    it('keeps token endpoint form parameters parseable by oidc-provider', async () => {
+      const body = new URLSearchParams({
+        client_id: 'lobehub-desktop',
+        code: 'test-code',
+        code_verifier: 'test-verifier',
+        grant_type: 'authorization_code',
+        redirect_uri: 'https://example.com/oidc/callback/desktop',
+      }).toString();
+      const request = new Request('https://example.com/oidc/token', {
+        body,
+        headers: {
+          'content-length': String(Buffer.byteLength(body)),
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        method: 'POST',
+      }) as unknown as NextRequest;
+
+      const { createNodeRequest } = await import('./http-adapter');
+      const { urlencoded } = (await import('oidc-provider/lib/shared/selective_body.js')) as {
+        urlencoded: (ctx: any, next: () => Promise<void>) => Promise<void>;
+      };
+      const nodeRequest = await createNodeRequest(request);
+      const ctx = {
+        charset: 'utf-8',
+        is: (contentType: string) => contentType === 'application/x-www-form-urlencoded',
+        oidc: {},
+        req: nodeRequest,
+        request: { length: Buffer.byteLength(body) },
+      };
+
+      await urlencoded(ctx, async () => {});
+
+      expect(ctx.oidc.body).toMatchObject({
+        client_id: 'lobehub-desktop',
+        code: 'test-code',
+        code_verifier: 'test-verifier',
+        grant_type: 'authorization_code',
+        redirect_uri: 'https://example.com/oidc/callback/desktop',
+      });
+    });
+
     it('does not consume an explicitly empty request body', async () => {
       const arrayBuffer = vi.fn();
       const request = {
