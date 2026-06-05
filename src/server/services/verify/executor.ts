@@ -62,10 +62,10 @@ const verdictToStatus = (verdict: VerifyVerdict): VerifyCheckResultStatus =>
   verdict === 'passed' ? 'passed' : 'failed';
 
 const toToulmin = (v: SingleVerdict): ToulminVerdict => ({
-  counterEvidence: v.counterEvidence,
-  evidence: v.evidence,
-  limitation: v.limitation,
-  reasoning: v.reasoning,
+  counterEvidence: v.counterEvidence ?? undefined,
+  evidence: v.evidence ?? undefined,
+  limitation: v.limitation ?? undefined,
+  reasoning: v.reasoning ?? undefined,
 });
 
 export class VerifyExecutorService {
@@ -205,11 +205,19 @@ export class VerifyExecutorService {
       },
       {
         tracing: {
-          promptVersion: VERIFY_JUDGE_PROMPT_VERSION,
-          scenario: TRACING_SCENARIOS.VerifyJudge,
-          schemaName: BATCH_VERDICT_JSON_SCHEMA.name,
-          tracingId,
-        } satisfies TracingOptions,
+          ...({
+            promptVersion: VERIFY_JUDGE_PROMPT_VERSION,
+            scenario: TRACING_SCENARIOS.VerifyJudge,
+            schemaName: BATCH_VERDICT_JSON_SCHEMA.name,
+            tracingId,
+          } satisfies TracingOptions),
+          // Backfill the tracing FK only after the (async, best-effort) tracing
+          // row is persisted — verdicts are written with a null link below.
+          onPersisted: this.backfillTracing(
+            params.operationId,
+            items.map((i) => i.id),
+          ),
+        },
       },
     );
 
@@ -222,7 +230,11 @@ export class VerifyExecutorService {
     const validIds = new Set(items.map((i) => i.id));
     for (const v of parsed.data.verdicts) {
       if (!validIds.has(v.checkItemId)) continue;
-      await this.writeVerdict(params.operationId, v.checkItemId, v, tracingId);
+      await this.writeVerdict({
+        checkItemId: v.checkItemId,
+        operationId: params.operationId,
+        verdict: v,
+      });
     }
   }
 
@@ -249,11 +261,14 @@ export class VerifyExecutorService {
       },
       {
         tracing: {
-          promptVersion: VERIFY_JUDGE_PROMPT_VERSION,
-          scenario: TRACING_SCENARIOS.VerifyJudge,
-          schemaName: SINGLE_VERDICT_JSON_SCHEMA.name,
-          tracingId,
-        } satisfies TracingOptions,
+          ...({
+            promptVersion: VERIFY_JUDGE_PROMPT_VERSION,
+            scenario: TRACING_SCENARIOS.VerifyJudge,
+            schemaName: SINGLE_VERDICT_JSON_SCHEMA.name,
+            tracingId,
+          } satisfies TracingOptions),
+          onPersisted: this.backfillTracing(params.operationId, [item.id]),
+        },
       },
     );
 
@@ -262,15 +277,22 @@ export class VerifyExecutorService {
       log('single judge output invalid: %O', parsed.error.flatten());
       return;
     }
-    await this.writeVerdict(params.operationId, item.id, parsed.data, tracingId);
+    await this.writeVerdict({
+      checkItemId: item.id,
+      operationId: params.operationId,
+      verdict: parsed.data,
+    });
   }
 
-  private async writeVerdict(
-    operationId: string,
-    checkItemId: string,
-    verdict: SingleVerdict,
-    tracingId: string,
-  ): Promise<void> {
+  private async writeVerdict(params: {
+    checkItemId: string;
+    operationId: string;
+    verdict: SingleVerdict;
+  }): Promise<void> {
+    const { operationId, checkItemId, verdict } = params;
+    // `verifier_tracing_id` is intentionally left null here — the tracing row is
+    // written asynchronously (best-effort, after the response), so linking it now
+    // would violate the FK. It is backfilled by `backfillTracing` once the row exists.
     await this.resultModel.updateByCheckItem(operationId, checkItemId, {
       completedAt: new Date(),
       confidence: verdict.confidence,
@@ -278,7 +300,24 @@ export class VerifyExecutorService {
       suggestion: verdict.suggestion ?? null,
       toulmin: toToulmin(verdict),
       verdict: verdict.verdict,
-      verifierTracingId: tracingId,
     });
+  }
+
+  /**
+   * Build the `onPersisted` callback handed to the tracing layer. It fires in the
+   * tracing hook's deferred (post-response) continuation once the
+   * `llm_generation_tracing` row is committed — only then is it safe to set the
+   * FK link. Receives the persisted tracing id (or null if tracing was disabled
+   * or the record failed), so a missing tracing row simply leaves the link null.
+   */
+  private backfillTracing(operationId: string, checkItemIds: string[]) {
+    return async (tracingId: string | null): Promise<void> => {
+      if (!tracingId) return;
+      try {
+        await this.resultModel.backfillTracingId(operationId, checkItemIds, tracingId);
+      } catch (error) {
+        log('tracing-id backfill failed for op %s (non-fatal): %O', operationId, error);
+      }
+    };
   }
 }

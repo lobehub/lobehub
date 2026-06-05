@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 
 import type { NewVerifyCheckResult, VerifyCheckResultItem } from '../schemas/verify';
 import { verifyCheckResults } from '../schemas/verify';
@@ -76,6 +76,28 @@ export class VerifyCheckResultModel {
           eq(verifyCheckResults.operationId, operationId),
           eq(verifyCheckResults.checkItemId, checkItemId),
           eq(verifyCheckResults.userId, this.userId),
+        ),
+      );
+  };
+
+  /**
+   * Late-bind the LLM tracing row onto already-written verdicts. The verdict is
+   * persisted synchronously with `verifier_tracing_id = null`; the tracing row
+   * lands asynchronously (best-effort, after the response), so the FK link is
+   * backfilled only once that row exists. Idempotent — only fills `NULL`s and is
+   * scoped to the items judged in this call (a batch shares one tracing id).
+   */
+  backfillTracingId = async (operationId: string, checkItemIds: string[], tracingId: string) => {
+    if (checkItemIds.length === 0) return;
+    return this.db
+      .update(verifyCheckResults)
+      .set({ verifierTracingId: tracingId })
+      .where(
+        and(
+          eq(verifyCheckResults.operationId, operationId),
+          eq(verifyCheckResults.userId, this.userId),
+          inArray(verifyCheckResults.checkItemId, checkItemIds),
+          isNull(verifyCheckResults.verifierTracingId),
         ),
       );
   };

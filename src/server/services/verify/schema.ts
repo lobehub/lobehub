@@ -60,11 +60,14 @@ const verdictEnum = ['passed', 'failed', 'uncertain'] as const;
 
 const toulminVerdictFields = {
   confidence: z.number().min(0).max(1),
-  counterEvidence: z.string().optional(),
-  evidence: z.string().optional(),
-  limitation: z.string().optional(),
-  reasoning: z.string().optional(),
-  suggestion: z.string().optional(),
+  // `.nullish()` (null | undefined), not `.optional()`: the judge JSON schema is
+  // non-strict and lists these as optional, so the provider returns them as
+  // explicit `null` (not omitted). `.optional()` rejects null → whole parse fails.
+  counterEvidence: z.string().nullish(),
+  evidence: z.string().nullish(),
+  limitation: z.string().nullish(),
+  reasoning: z.string().nullish(),
+  suggestion: z.string().nullish(),
   verdict: z.enum(verdictEnum),
 };
 
