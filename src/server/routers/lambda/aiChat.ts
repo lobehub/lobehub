@@ -5,6 +5,7 @@ import type { CreateMessageParams, SendMessageServerResponse } from '@lobechat/t
 import { AiSendMessageServerSchema, RequestTrigger, StructureOutputSchema } from '@lobechat/types';
 import { createTimingHelpers, createTimingRequestId } from '@lobechat/utils';
 import { TRPCError } from '@trpc/server';
+import { getStatusKeyFromCode } from '@trpc/server/unstable-core-do-not-import';
 import debug from 'debug';
 import { z } from 'zod';
 
@@ -28,6 +29,7 @@ const { createPrefixedTimingContext, logTiming, runTimedStage } = createTimingHe
 
 type TRPCErrorCode = ConstructorParameters<typeof TRPCError>[0]['code'];
 type TRPCErrorWithHttpStatus = TRPCError & { httpStatus?: number };
+type TRPCStatusCode = Parameters<typeof getStatusKeyFromCode>[0];
 
 const getRuntimeErrorType = (error: unknown): string | undefined => {
   if (!error || typeof error !== 'object') return;
@@ -37,70 +39,9 @@ const getRuntimeErrorType = (error: unknown): string | undefined => {
 };
 
 const getTRPCErrorCodeFromStatus = (status: number): TRPCErrorCode => {
-  switch (status) {
-    case 400: {
-      return 'BAD_REQUEST';
-    }
-    case 401: {
-      return 'UNAUTHORIZED';
-    }
-    case 402: {
-      return 'PAYMENT_REQUIRED';
-    }
-    case 403: {
-      return 'FORBIDDEN';
-    }
-    case 404: {
-      return 'NOT_FOUND';
-    }
-    case 405: {
-      return 'METHOD_NOT_SUPPORTED';
-    }
-    case 408: {
-      return 'TIMEOUT';
-    }
-    case 409: {
-      return 'CONFLICT';
-    }
-    case 412: {
-      return 'PRECONDITION_FAILED';
-    }
-    case 413: {
-      return 'PAYLOAD_TOO_LARGE';
-    }
-    case 415: {
-      return 'UNSUPPORTED_MEDIA_TYPE';
-    }
-    case 422: {
-      return 'UNPROCESSABLE_CONTENT';
-    }
-    case 428: {
-      return 'PRECONDITION_REQUIRED';
-    }
-    case 429: {
-      return 'TOO_MANY_REQUESTS';
-    }
-    case 499: {
-      return 'CLIENT_CLOSED_REQUEST';
-    }
-    case 500: {
-      return 'INTERNAL_SERVER_ERROR';
-    }
-    case 501: {
-      return 'NOT_IMPLEMENTED';
-    }
-    case 502: {
-      return 'BAD_GATEWAY';
-    }
-    case 503: {
-      return 'SERVICE_UNAVAILABLE';
-    }
-    case 504: {
-      return 'GATEWAY_TIMEOUT';
-    }
-  }
+  const code = getStatusKeyFromCode(status as TRPCStatusCode) as TRPCErrorCode;
+  if (code !== 'INTERNAL_SERVER_ERROR' || status === 500) return code;
 
-  if (status >= 500) return 'INTERNAL_SERVER_ERROR';
   if (status >= 400) return 'BAD_REQUEST';
 
   return 'INTERNAL_SERVER_ERROR';
