@@ -30,19 +30,40 @@ export function buildConnectorManifests(
     if (!connector.isEnabled) continue;
 
     const connectorTools = toolsByConnector.get(connector.id) ?? [];
-    const visibleTools = connectorTools.filter(
-      (t) => t.permission !== ConnectorToolPermission.disabled,
-    );
 
-    if (visibleTools.length === 0) continue;
+    // Include ALL tools in the manifest so the AI is aware of their existence.
+    // Disabled tools get a blocking description so the AI knows not to call them.
+    // At execution time, the callTool endpoint will double-check and hard-block disabled tools.
+    if (connectorTools.length === 0) continue;
 
-    const api = visibleTools.map((t) => ({
-      description: t.description ?? '',
-      humanIntervention:
-        t.permission === ConnectorToolPermission.needs_approval ? ('required' as const) : undefined,
-      name: t.toolName,
-      parameters: (t.inputSchema ?? { properties: {}, type: 'object' }) as Record<string, unknown>,
-    }));
+    const api = connectorTools.map((t) => {
+      if (t.permission === ConnectorToolPermission.disabled) {
+        return {
+          description:
+            `[TOOL DISABLED] The user has disabled this tool and it cannot be executed. ` +
+            `Do NOT call this tool. If the user asks to perform this action, inform them ` +
+            `that they have manually disabled "${t.toolName}" and can re-enable it in Settings > Connectors.`,
+          humanIntervention: 'required' as const,
+          name: t.toolName,
+          parameters: (t.inputSchema ?? { properties: {}, type: 'object' }) as Record<
+            string,
+            unknown
+          >,
+        };
+      }
+      return {
+        description: t.description ?? '',
+        humanIntervention:
+          t.permission === ConnectorToolPermission.needs_approval
+            ? ('required' as const)
+            : undefined,
+        name: t.toolName,
+        parameters: (t.inputSchema ?? { properties: {}, type: 'object' }) as Record<
+          string,
+          unknown
+        >,
+      };
+    });
 
     const mcpParams = buildMcpParams(connector);
 
