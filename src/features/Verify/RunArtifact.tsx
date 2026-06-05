@@ -1,9 +1,8 @@
-import { Icon } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
 import { Check, Info, PackageCheck, RefreshCw, Shield, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import { useVerifyResults, useVerifyState } from './hooks';
 import { countResults, type DockPhase, phaseFromStatus } from './utils';
@@ -137,7 +136,7 @@ const RunArtifact = memo<RunArtifactProps>(({ operationId, round = 1 }) => {
           </Flexbox>
           <div className={styles.title}>{t(titleKey as any)}</div>
           <div className={styles.sub}>
-            {t(meta.subKey as any, { passed: counts.passed, total: counts.total })}
+            {t(meta.subKey as any, { passed: counts.passed, total: counts.total } as any)}
           </div>
         </Flexbox>
         <Flexbox

@@ -1,4 +1,4 @@
-import { ActionIcon, Button, Icon, Input } from '@lobehub/ui';
+import { ActionIcon, Button, Flexbox, Icon, Input, TextArea } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
 import {
   Check,
@@ -16,7 +16,6 @@ import {
 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import type { VerifyCheckItem, VerifyCheckResultItem } from '@/database/schemas/verify';
 import { verifyService } from '@/services/verify';
@@ -145,7 +144,7 @@ const CheckerDock = memo<CheckerDockProps>(({ operationId }) => {
 
   if (phase === 'idle' || plan.length === 0) return null;
 
-  const colorOf = (key: string) => (theme as Record<string, string>)[key];
+  const colorOf = (key: string) => (theme as unknown as Record<string, string>)[key];
 
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -280,7 +279,7 @@ const CheckerDock = memo<CheckerDockProps>(({ operationId }) => {
         <>
           <div className={styles.inputPanel}>
             <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>{t('input.label')}</div>
-            <Input.TextArea
+            <TextArea
               placeholder={t('input.placeholder')}
               rows={2}
               value={inputText}
