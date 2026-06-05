@@ -43,18 +43,18 @@ export const highlightTextStyles = createStaticStyles(({ css, cssVar }) => {
 
     min-width: 0;
     margin-inline-start: 4px;
-    padding-block-end: 1px;
+    padding-block-end: 2px;
 
     color: ${cssVar.colorText};
     text-overflow: ellipsis;
 
-    background: linear-gradient(to top, ${highlightColor} 40%, transparent 40%);
+    background: linear-gradient(to top, color-mix(in srgb, ${highlightColor} 60%, transparent) 40%, transparent 40%);
   `;
 
   return {
     gold: highlightBase(cssVar.gold4),
     info: highlightBase(cssVar.colorInfoBg),
-    primary: highlightBase(cssVar.colorPrimaryBgHover),
+    primary: highlightBase(cssVar.colorPrimaryBg),
     warning: highlightBase(cssVar.colorWarningBg),
   };
 });

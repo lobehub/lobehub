@@ -57,8 +57,8 @@ export const BuiltinDetailProvider = ({ children, identifier }: BuiltinDetailPro
   });
 
   const value: DetailContextValue = {
-    author: 'LobeHub',
-    authorUrl: 'https://lobehub.com',
+    author: 'nexumChat',
+    authorUrl: 'https://nexumchat.com',
     config: null as any, // Builtin tools don't have provider config
     description: meta?.description || '',
     icon: meta?.avatar || '',

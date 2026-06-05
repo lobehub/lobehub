@@ -63,7 +63,7 @@ const SKILL_ICON_SIZE = 18;
 const CLOSE_TOOL_DETAIL_POPOVER_EVENT = 'lobe-chat-tool-detail-popover-close';
 
 const officialTag = (
-  <Tooltip placement={'top'} title={'LobeHub'}>
+  <Tooltip placement={'top'} title={'nexumChat'}>
     <Tag color={'success'} icon={<Icon icon={BadgeCheck} />} size={'small'} />
   </Tooltip>
 );
@@ -662,7 +662,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   const allKlavisServers = useToolStore(klavisStoreSelectors.getServers, isEqual);
   const isKlavisEnabledInEnv = useServerConfigStore(serverConfigSelectors.enableKlavis);
 
-  // LobeHub Skill related state
+  // nexumChat Skill related state
   const allLobehubSkillServers = useToolStore(lobehubSkillStoreSelectors.getServers, isEqual);
   const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
 
@@ -691,7 +691,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   // Load user's Klavis integrations via SWR (from database)
   useFetchUserKlavisServers(isKlavisEnabledInEnv);
 
-  // Load user's LobeHub Skill connections via SWR
+  // Load user's nexumChat Skill connections via SWR
   useFetchLobehubSkillConnections(isLobehubSkillEnabled);
 
   // Get connected server by identifier
@@ -787,7 +787,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
                   displayName: type.label,
                   onDelete: () => removeKlavisServer(server.identifier),
                 },
-                extraTag: type.author === 'LobeHub' ? officialTag : undefined,
+                extraTag: type.author === 'nexumChat' ? officialTag : undefined,
                 icon,
                 id: server.identifier,
                 popoverContent,
@@ -825,7 +825,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     ],
   );
 
-  // LobeHub Skill Provider list items - only show installed or recommended
+  // nexumChat Skill Provider list items - only show installed or recommended
   const lobehubSkillItems = useMemo(
     () =>
       isLobehubSkillEnabled
@@ -856,7 +856,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
             if (server?.status === LobehubSkillStatus.CONNECTED || server?.isConnected) {
               return createManagedSkillItem({
                 badge: <Icon icon={McpIcon} size={12} />,
-                extraTag: provider.author === 'LobeHub' ? officialTag : undefined,
+                extraTag: provider.author === 'nexumChat' ? officialTag : undefined,
                 icon,
                 id: server.identifier,
                 popoverContent,
@@ -891,7 +891,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     ],
   );
 
-  // Builtin tool list items (excluding Klavis and LobeHub Skill)
+  // Builtin tool list items (excluding Klavis and nexumChat Skill)
   const builtinItems = useMemo(
     () =>
       filteredBuiltinList.map((item) => {
@@ -943,7 +943,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     [filteredBuiltinList, t, createManagedSkillItem, uninstallBuiltinTool],
   );
 
-  // Builtin Agent Skills list items (grouped under LobeHub)
+  // Builtin Agent Skills list items (grouped under nexumChat)
   const builtinAgentSkillItems = useMemo(
     () =>
       installedBuiltinSkills.map((skill) => {
@@ -1054,14 +1054,14 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     [userAgentSkills, t, createManagedSkillItem, deleteAgentSkill],
   );
 
-  // Skills list items (including LobeHub Skill and Klavis)
-  // Connected items listed first, deduplicated by key (LobeHub takes priority)
+  // Skills list items (including nexumChat Skill and Klavis)
+  // Connected items listed first, deduplicated by key (nexumChat takes priority)
   const skillItems = useMemo(() => {
-    // Deduplicate by key - LobeHub items take priority over Klavis
+    // Deduplicate by key - nexumChat items take priority over Klavis
     const seenKeys = new Set<string>();
     const allItems: typeof lobehubSkillItems = [];
 
-    // Add LobeHub items first (they take priority)
+    // Add nexumChat items first (they take priority)
     for (const item of lobehubSkillItems) {
       if (!seenKeys.has(item.key as string)) {
         seenKeys.add(item.key as string);
@@ -1137,7 +1137,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
         <Tag color={'warning'} icon={<Icon icon={Package} />} size={'small'}>
           {t('store.customPlugin', { ns: 'plugin' })}
         </Tag>
-      ) : item.author === 'LobeHub' ? (
+      ) : item.author === 'nexumChat' ? (
         officialTag
       ) : undefined,
       icon,
@@ -1148,13 +1148,13 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     });
   };
 
-  // Build LobeHub group children (including Builtin Agent Skills, builtin tools, and LobeHub Skill/Klavis)
+  // Build nexumChat group children (including Builtin Agent Skills, builtin tools, and nexumChat Skill/Klavis)
   const lobehubGroupChildren: ItemType[] = [
     // 1. Builtin Agent Skills
     ...builtinAgentSkillItems,
     // 2. Builtin tools
     ...builtinItems,
-    // 3. LobeHub Skill and Klavis (as builtin skills)
+    // 3. nexumChat Skill and Klavis (as builtin skills)
     ...skillItems,
   ];
 
@@ -1417,12 +1417,12 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       checked.includes(item.key as string),
     );
 
-    // Connected LobeHub Skill Providers
+    // Connected nexumChat Skill Providers
     const connectedLobehubSkillItems = lobehubSkillItems.filter((item) =>
       checked.includes(item.key as string),
     );
 
-    // Merge enabled LobeHub Skill and Klavis (as builtin skills)
+    // Merge enabled nexumChat Skill and Klavis (as builtin skills)
     const enabledSkillItems = [...connectedLobehubSkillItems, ...connectedKlavisItems];
 
     // Enabled Builtin Agent Skills
@@ -1471,7 +1471,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
         ),
       }));
 
-    // Build builtin tools group children (including Builtin Agent Skills, builtin tools, and LobeHub Skill/Klavis)
+    // Build builtin tools group children (including Builtin Agent Skills, builtin tools, and nexumChat Skill/Klavis)
     const allBuiltinItems: ItemType[] = [
       // 1. Builtin Agent Skills
       ...enabledBuiltinAgentSkillItems,
@@ -1481,7 +1481,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       ...(enabledBuiltinItems.length > 0 && enabledSkillItems.length > 0
         ? [{ key: 'installed-divider-builtin-skill', type: 'divider' as const }]
         : []),
-      // 4. LobeHub Skill and Klavis
+      // 4. nexumChat Skill and Klavis
       ...enabledSkillItems,
     ];
 

@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>nexumChat design system example</title>
+  <link rel="stylesheet" href="../tokens/nexumChat.css" />
+  <style>
+    body { min-height: 100vh; background: var(--color-bg); background-image: var(--gradient-brand-soft); }
+    .shell { display:grid; grid-template-columns:280px 1fr 320px; min-height:100vh; }
+    aside, main, section { padding: var(--space-300); }
+    .brand { font-size:20px; font-weight:700; letter-spacing:-.02em; margin-bottom: var(--space-300); }
+    .nav { display:flex; flex-direction:column; gap: var(--space-075); }
+    .nav a { color: var(--color-text-muted); text-decoration:none; padding:10px 12px; border-radius: var(--radius-lg); }
+    .nav a.active { color: var(--color-text); background: var(--color-surface-2); box-shadow: inset 2px 0 0 var(--color-primary); }
+    .chat { max-width: 880px; margin: 0 auto; display:flex; flex-direction:column; gap: var(--space-300); min-height:100%; justify-content:center; }
+    .composer { padding: var(--space-200); border-radius: var(--radius-2xl); }
+    textarea { width:100%; min-height:80px; background:transparent; color:var(--color-text); border:0; resize:none; font:inherit; outline:0; }
+    .actions { display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--color-border-subtle); padding-top: var(--space-150); }
+    @media (max-width: 1024px) { .shell { grid-template-columns:72px 1fr; } section { display:none; } }
+    @media (max-width: 768px) { .shell { grid-template-columns:1fr; } aside { display:none; } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="nc-glass">
+      <div class="brand">nexum<span class="nc-gradient-text">Chat</span></div>
+      <nav class="nav">
+        <a class="active" href="#">Chats</a><a href="#">Agents</a><a href="#">Plugins</a><a href="#">Knowledge</a><a href="#">Workflows</a><a href="#">Settings</a>
+      </nav>
+    </aside>
+    <main>
+      <div class="chat">
+        <div>
+          <h1>Welcome to <span class="nc-gradient-text">nexumChat</span></h1>
+          <p style="color:var(--color-text-muted)">Your multi-model orchestration workspace.</p>
+        </div>
+        <div class="composer nc-glass">
+          <textarea placeholder="Ask anything. Use any model."></textarea>
+          <div class="actions"><span style="color:var(--color-text-subtle)">Claude 3.5 · GPT-4o · Local</span><button class="nc-button nc-button-primary">Send</button></div>
+        </div>
+      </div>
+    </main>
+    <section class="nc-glass">
+      <h3>Inspector</h3>
+      <p style="color:var(--color-text-muted)">Models, tools, memory, files, and workflow context appear here.</p>
+    </section>
+  </div>
+</body>
+</html>

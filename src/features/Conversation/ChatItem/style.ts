@@ -10,7 +10,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => {
       div[role='menubar'] {
         pointer-events: none;
         opacity: 0;
-        transition: opacity 200ms ${cssVar.motionEaseOut};
+        transition: opacity 150ms ${cssVar.motionEaseOut};
       }
 
       time {
@@ -41,15 +41,13 @@ export const styles = createStaticStyles(({ css, cssVar }) => {
       position: absolute;
       inset-block-end: 0;
       inset-inline-start: -4px;
-      inset-inline-end: unset;
 
       width: 16px;
       height: 16px;
-      border-radius: 50%;
-
-      color: ${cssVar.colorBgLayout};
+      border-radius: 8px;
 
       background: ${cssVar.colorPrimary};
+      box-shadow: 0 0 8px color-mix(in srgb, ${cssVar.colorPrimary} 40%, transparent);
     `,
   };
 });

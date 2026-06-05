@@ -195,7 +195,7 @@ export function generateRFCProtocolUrl(params: {
  *     identifier: 'edgeone-mcp',
  *     name: 'EdgeOne MCP',
  *     author: 'Higress Team',
- *     description: 'EdgeOne API integration for LobeChat',
+ *     description: 'EdgeOne API integration for nexumChat',
  *     version: '1.0.0',
  *     config: {
  *       type: 'stdio',

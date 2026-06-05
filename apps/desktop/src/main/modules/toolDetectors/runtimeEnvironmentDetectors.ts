@@ -96,11 +96,11 @@ export const uvDetector: IToolDetector = createCommandDetector('uv', {
 });
 
 /**
- * LobeHub CLI detector
- * Tries lobehub, lobe, lh in order; validates via --help output containing "LobeHub"
+ * nexumChat CLI detector
+ * Tries lobehub, lobe, lh in order; validates via --help output containing "nexumChat"
  */
 export const lobehubDetector: IToolDetector = {
-  description: 'LobeHub CLI - manage and connect to LobeHub services',
+  description: 'nexumChat CLI - manage and connect to nexumChat services',
   async detect(): Promise<ToolStatus> {
     const commands = ['lobehub', 'lobe', 'lh'];
     const whichCmd = platform() === 'win32' ? 'where' : 'which';
@@ -110,9 +110,9 @@ export const lobehubDetector: IToolDetector = {
         const { stdout: pathOut } = await execPromise(`${whichCmd} ${cmd}`, { timeout: 3000 });
         const toolPath = pathOut.trim().split('\n')[0];
 
-        // Validate it's actually LobeHub CLI by checking help output
+        // Validate it's actually nexumChat CLI by checking help output
         const { stdout: helpOut } = await execPromise(`${cmd} --help`, { timeout: 3000 });
-        if (!helpOut.includes('LobeHub')) continue;
+        if (!helpOut.includes('nexumChat')) continue;
 
         const { stdout: versionOut } = await execPromise(`${cmd} --version`, { timeout: 3000 });
         const version = versionOut.trim().split('\n')[0];

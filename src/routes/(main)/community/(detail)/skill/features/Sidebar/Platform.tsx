@@ -154,7 +154,7 @@ const Platform = memo<PlatformProps>(
       switch (active) {
         case PlatformType.LobeHub: {
           return {
-            platform: 'LobeHub',
+            platform: 'nexumChat',
             steps: t('skills.details.sidebar.platform.steps.lobehub'),
           };
         }

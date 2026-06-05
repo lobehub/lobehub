@@ -21,7 +21,7 @@ export class GitHub {
   private readonly userAgent: string;
 
   constructor(options?: { userAgent?: string }) {
-    this.userAgent = options?.userAgent || 'LobeHub';
+    this.userAgent = options?.userAgent || 'nexumChat';
   }
 
   /**

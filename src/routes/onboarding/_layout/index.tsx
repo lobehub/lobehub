@@ -13,7 +13,6 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { ProductLogo } from '@/components/Branding';
 import LangButton from '@/features/User/UserPanel/LangButton';
 import ThemeButton from '@/features/User/UserPanel/ThemeButton';
-import { useIsDark } from '@/hooks/useIsDark';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
@@ -21,7 +20,6 @@ import { useUserStore } from '@/store/user';
 import { styles } from './style';
 
 const OnBoardingContainer: FC<PropsWithChildren> = ({ children }) => {
-  const isDarkMode = useIsDark();
   const isMobile = useIsMobile();
   const theme = useTheme();
   const { t } = useTranslation('onboarding');
@@ -64,13 +62,7 @@ const OnBoardingContainer: FC<PropsWithChildren> = ({ children }) => {
       <Flexbox
         height={'100%'}
         width={'100%'}
-        className={cx(
-          isMobile
-            ? styles.innerContainerMobile
-            : isDarkMode
-              ? styles.innerContainerDark
-              : styles.innerContainerLight,
-        )}
+        className={cx(isMobile ? styles.innerContainerMobile : styles.innerContainer)}
       >
         <Flexbox
           horizontal

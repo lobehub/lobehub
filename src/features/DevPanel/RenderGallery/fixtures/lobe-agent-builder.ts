@@ -38,7 +38,7 @@ export default defineFixtures({
         query: 'browser',
         tools: [
           {
-            author: 'LobeHub',
+            author: 'nexumChat',
             description: 'Search and crawl web pages with configurable engines.',
             icon: '🌐',
             identifier: 'lobe-web-browsing',
@@ -47,7 +47,7 @@ export default defineFixtures({
             tags: ['search', 'crawl'],
           },
           {
-            author: 'LobeHub',
+            author: 'nexumChat',
             description: 'Run code and inspect local files inside a sandbox.',
             icon: '🧪',
             identifier: 'lobe-cloud-sandbox',

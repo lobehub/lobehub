@@ -10,8 +10,8 @@ const StyleRegistry = ({ children }: PropsWithChildren) => {
       <style
         dangerouslySetInnerHTML={{
           __html: `
-              html body {background: #f8f8f8;}
-              html[data-theme="dark"] body { background-color: #000; }
+              html body { background: #f5f5f5; }
+              html[data-theme="dark"] body { background: #0d0d0d; }
             `,
         }}
       />

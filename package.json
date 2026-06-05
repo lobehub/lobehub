@@ -1,7 +1,7 @@
 {
   "name": "@lobehub/lobehub",
   "version": "2.2.1",
-  "description": "LobeHub - an open-source,comprehensive AI Agent framework that supports speech synthesis, multimodal, and extensible Function Call plugin system. Supports one-click free deployment of your private ChatGPT/LLM web application.",
+  "description": "nexumChat - a multi-model AI orchestration workspace. Connect any model, orchestrate everything. Built for power users who bring their own API keys and local models.",
   "keywords": [
     "framework",
     "chatbot",
@@ -14,16 +14,16 @@
     "tts",
     "stt"
   ],
-  "homepage": "https://github.com/lobehub/lobehub",
+  "homepage": "https://github.com/nexumchat/nexumchat",
   "bugs": {
-    "url": "https://github.com/lobehub/lobehub/issues/new/choose"
+    "url": "https://github.com/nexumchat/nexumchat/issues/new/choose"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/lobehub/lobehub.git"
+    "url": "https://github.com/nexumchat/nexumchat.git"
   },
   "license": "MIT",
-  "author": "LobeHub <i@lobehub.com>",
+  "author": "nexumChat <hello@nexumchat.com>",
   "sideEffects": [
     "./src/initialize.ts"
   ],

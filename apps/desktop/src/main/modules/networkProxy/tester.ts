@@ -42,7 +42,7 @@ export class ProxyConnectionTester {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-      const headers: Record<string, string> = { 'User-Agent': 'LobeChat-Desktop/1.0.0' };
+      const headers: Record<string, string> = { 'User-Agent': 'nexumChat-Desktop/1.0.0' };
       appendVercelCookie(headers);
       const response = await fetch(url, { headers, signal: controller.signal });
 
@@ -111,7 +111,7 @@ export class ProxyConnectionTester {
       setGlobalDispatcher(agent);
 
       try {
-        const testHeaders: Record<string, string> = { 'User-Agent': 'LobeChat-Desktop/1.0.0' };
+        const testHeaders: Record<string, string> = { 'User-Agent': 'nexumChat-Desktop/1.0.0' };
         appendVercelCookie(testHeaders);
         const response = await fetch(testUrl, {
           dispatcher: agent,

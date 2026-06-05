@@ -12,13 +12,13 @@ const dialog = {
   'error.message': 'An error occurred',
   'error.title': 'Error',
   'fullDiskAccess.message':
-    'LobeHub needs Full Disk Access to read files and enable knowledge base features. Please grant access in System Settings.',
+    'nexumChat needs Full Disk Access to read files and enable knowledge base features. Please grant access in System Settings.',
   'fullDiskAccess.openSettings': 'Open Settings',
   'fullDiskAccess.skip': 'Later',
   'fullDiskAccess.title': 'Full Disk Access Required',
   'screenCaptureAccess.cancel': 'Later',
   'screenCaptureAccess.detail':
-    'Open System Settings, enable Screen Recording for LobeHub, then try Quick Composer again.',
+    'Open System Settings, enable Screen Recording for nexumChat, then try Quick Composer again.',
   'screenCaptureAccess.message':
     'Quick Composer needs Screen Recording permission before it can capture screenshots.',
   'screenCaptureAccess.openSettings': 'Open Settings',
