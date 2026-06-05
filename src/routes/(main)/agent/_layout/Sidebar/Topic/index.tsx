@@ -13,6 +13,7 @@ import { topicSelectors } from '@/store/chat/selectors';
 import Actions from './Actions';
 import Filter from './Filter';
 import List from './List';
+import ToggleGroups from './ToggleGroups';
 import { useTopicActionsDropdownMenu } from './useDropdownMenu';
 
 interface TopicProps {
@@ -32,6 +33,7 @@ const Topic = memo<TopicProps>(({ itemKey }) => {
       paddingInline={'8px 4px'}
       action={
         <Flexbox horizontal align="center" gap={2}>
+          <ToggleGroups />
           <Filter />
           <Actions />
         </Flexbox>
