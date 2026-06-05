@@ -554,8 +554,17 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
+      "@google/genai",
       "@lobehub/editor",
-      "ffmpeg-static"
+      "@vercel/speed-insights",
+      "core-js",
+      "electron",
+      "es5-ext",
+      "esbuild",
+      "msgpackr-extract",
+      "protobufjs",
+      "sharp",
+      "unrs-resolver"
     ],
     "overrides": {
       "@react-pdf/image": "3.0.4",

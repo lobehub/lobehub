@@ -431,7 +431,7 @@ export class App {
     if (!isDev) return;
 
     logger.debug('Setting up dev branding');
-    app.setName('lobehub-desktop-dev');
+    app.setName('nexumchat-desktop-dev');
     if (electronIs.macOS()) {
       app.dock!.setIcon(path.join(buildDir, 'icon-dev.png'));
     }

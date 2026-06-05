@@ -137,31 +137,79 @@ bun run type-check
 Before reviewing a PR / diff / branch change, read the **review-checklist** skill (`.agents/skills/review-checklist/SKILL.md`) — it lists the recurring mistakes specific to this codebase.
 
 <!-- gortex:communities:start -->
+
 <!-- gortex:skills:start -->
+
 ## Community Skills
 
-| Area | Description | Skill |
-|------|-------------|-------|
-| Src Transformation 60 Dirs | 462 symbols | `/gortex-src-transformation-60-dirs` |
-| Src Models 17 Dirs | 277 symbols | `/gortex-src-models-17-dirs` |
-| Platforms Telegram 61 Dirs | 266 symbols | `/gortex-platforms-telegram-61-dirs` |
-| Providers Tests 7 Dirs | 241 symbols | `/gortex-providers-tests-7-dirs` |
-| Libs Redis 14 Dirs | 222 symbols | `/gortex-libs-redis-14-dirs` |
-| Modules Agentruntime 8 Dirs | 210 symbols | `/gortex-modules-agentruntime-8-dirs` |
-| Src Commands 3 Dirs | 197 symbols | `/gortex-src-commands-3-dirs` |
-| Chat Adapter Feishu Src 3 Dirs | 177 symbols | `/gortex-chat-adapter-feishu-src-3-dirs` |
-| Services Bot Registerhandlers | 173 symbols | `/gortex-services-bot-registerhandlers` |
-| Types Src 30 Dirs | 159 symbols | `/gortex-types-src-30-dirs` |
-| Modules Agentruntime 5 Dirs | 159 symbols | `/gortex-modules-agentruntime-5-dirs` |
-| Platforms Telegram Call | 154 symbols | `/gortex-platforms-telegram-call` |
+| Area                             | Description | Skill                                      |
+| -------------------------------- | ----------- | ------------------------------------------ |
+| Src Transformation 60 Dirs       | 462 symbols | `/gortex-src-transformation-60-dirs`       |
+| Platforms Telegram 60 Dirs       | 263 symbols | `/gortex-platforms-telegram-60-dirs`       |
+| Providers Tests 7 Dirs           | 241 symbols | `/gortex-providers-tests-7-dirs`           |
+| Libs Redis 14 Dirs               | 222 symbols | `/gortex-libs-redis-14-dirs`               |
+| Src Commands 3 Dirs              | 207 symbols | `/gortex-src-commands-3-dirs`              |
+| Services Agentruntime 8 Dirs     | 202 symbols | `/gortex-services-agentruntime-8-dirs`     |
+| Models Agentdocuments 6 Dirs     | 185 symbols | `/gortex-models-agentdocuments-6-dirs`     |
+| Chat Adapter Feishu Src 3 Dirs   | 177 symbols | `/gortex-chat-adapter-feishu-src-3-dirs`   |
+| Types Src 29 Dirs                | 156 symbols | `/gortex-types-src-29-dirs`                |
 | Services Agentdocumentvfs 3 Dirs | 153 symbols | `/gortex-services-agentdocumentvfs-3-dirs` |
-| Src Spawn 9 Dirs | 149 symbols | `/gortex-src-spawn-9-dirs` |
-| Src Models 10 Dirs Usermemoryquerymodel | 145 symbols | `/gortex-src-models-10-dirs-usermemoryquerymodel` |
-| Server Services Call | 138 symbols | `/gortex-server-services-call` |
-| Src Utils 4 Dirs | 125 symbols | `/gortex-src-utils-4-dirs` |
-| Core Infrastructure 9 Dirs | 122 symbols | `/gortex-core-infrastructure-9-dirs` |
-| Global Selectors 2 Dirs | 122 symbols | `/gortex-global-selectors-2-dirs` |
-| Services Skillmanagement 2 Dirs | 121 symbols | `/gortex-services-skillmanagement-2-dirs` |
+| Platforms Telegram Call          | 153 symbols | `/gortex-platforms-telegram-call`          |
+| Services Bot Registerhandlers    | 149 symbols | `/gortex-services-bot-registerhandlers`    |
+| Src Spawn 9 Dirs                 | 149 symbols | `/gortex-src-spawn-9-dirs`                 |
+| Src Models 10 Dirs               | 145 symbols | `/gortex-src-models-10-dirs`               |
+| Modules Agentruntime 5 Dirs      | 143 symbols | `/gortex-modules-agentruntime-5-dirs`      |
+| Server Services Call             | 138 symbols | `/gortex-server-services-call`             |
+| Src Utils 4 Dirs                 | 125 symbols | `/gortex-src-utils-4-dirs`                 |
+| Core Infrastructure 9 Dirs       | 122 symbols | `/gortex-core-infrastructure-9-dirs`       |
+| Server Services Renameskill      | 120 symbols | `/gortex-server-services-renameskill`      |
+| Services Agentdocuments 6 Dirs   | 117 symbols | `/gortex-services-agentdocuments-6-dirs`   |
+
 <!-- gortex:skills:end -->
 
 <!-- gortex:communities:end -->
+
+<!-- gitnexus:start -->
+
+# GitNexus — Code Intelligence
+
+This project is indexed by GitNexus as **lobehub-canary** (105267 symbols, 176097 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+
+> If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
+
+## Always Do
+
+- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `gitnexus_impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
+- **MUST run `gitnexus_detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows.
+- **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
+- When exploring unfamiliar code, use `gitnexus_query({query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
+- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `gitnexus_context({name: "symbolName"})`.
+
+## Never Do
+
+- NEVER edit a function, class, or method without first running `gitnexus_impact` on it.
+- NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
+- NEVER rename symbols with find-and-replace — use `gitnexus_rename` which understands the call graph.
+- NEVER commit changes without running `gitnexus_detect_changes()` to check affected scope.
+
+## Resources
+
+| Resource                                        | Use for                                  |
+| ----------------------------------------------- | ---------------------------------------- |
+| `gitnexus://repo/lobehub-canary/context`        | Codebase overview, check index freshness |
+| `gitnexus://repo/lobehub-canary/clusters`       | All functional areas                     |
+| `gitnexus://repo/lobehub-canary/processes`      | All execution flows                      |
+| `gitnexus://repo/lobehub-canary/process/{name}` | Step-by-step execution trace             |
+
+## CLI
+
+| Task                                         | Read this skill file                                        |
+| -------------------------------------------- | ----------------------------------------------------------- |
+| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md`       |
+| Blast radius / "What breaks if I change X?"  | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
+| Trace bugs / "Why is X failing?"             | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md`       |
+| Rename / extract / split / refactor          | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md`     |
+| Tools, resources, schema reference           | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md`           |
+| Index, status, clean, wiki CLI commands      | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md`             |
+
+<!-- gitnexus:end -->

@@ -1,5 +1,5 @@
 {
-  "name": "lobehub-desktop-dev",
+  "name": "nexumchat-desktop-dev",
   "version": "0.0.0",
   "private": true,
   "description": "nexumChat Desktop Application",
@@ -42,6 +42,7 @@
     "update-server": "sh scripts/update-test/run-test.sh"
   },
   "dependencies": {
+    "@base-ui/react": "^1.5.0",
     "@lobehub/fluent-emoji": "^4.1.0",
     "@napi-rs/canvas": "^0.1.70",
     "electron-log": "^5.4.3",
@@ -73,10 +74,12 @@
     "@typescript/native-preview": "7.0.0-dev.20251210.1",
     "@vanilla-extract/css": "^1.17.4",
     "@vanilla-extract/vite-plugin": "^5.1.0",
+    "@vitejs/plugin-react": "^6.0.2",
     "consola": "^3.4.2",
     "cookie": "^1.1.1",
     "cross-env": "^10.1.0",
     "diff": "^8.0.4",
+    "dotenv": "^17.4.2",
     "electron": "41.3.0",
     "electron-builder": "^26.8.1",
     "electron-devtools-installer": "4.0.0",

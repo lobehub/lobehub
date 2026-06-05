@@ -65,9 +65,9 @@ const getPublishConfig = () => {
   console.info(`📦 ${channelPath} channel: No UPDATE_SERVER_URL, falling back to GitHub provider`);
   return [
     {
-      owner: 'lobehub',
+      owner: 'nexumchat',
       provider: 'github',
-      repo: 'lobehub',
+      repo: 'lobe-chat',
     },
   ];
 };
@@ -85,9 +85,9 @@ if (!hasAppleCertificate) {
 
 // 根据版本类型确定协议 scheme
 const getProtocolScheme = () => {
-  if (isCanary) return 'lobehub-canary';
-  if (isNightly) return 'lobehub-nightly';
-  return 'lobehub';
+  if (isCanary) return 'nexumchat-canary';
+  if (isNightly) return 'nexumchat-nightly';
+  return 'nexumchat';
 };
 
 const protocolScheme = getProtocolScheme();
@@ -213,7 +213,7 @@ const config = {
       console.info(`⏭️  Skipping Assets.car (not found or copy failed)`);
     }
   },
-  appId: 'com.lobehub.lobehub-desktop',
+  appId: 'com.nexumchat.nexumchat-desktop',
   appImage: {
     artifactName: '${productName}-${version}.${ext}',
   },
@@ -273,7 +273,7 @@ const config = {
       CFBundleIconName: 'AppIcon',
       CFBundleURLTypes: [
         {
-          CFBundleURLName: 'LobeHub Protocol',
+          CFBundleURLName: 'nexumChat Protocol',
           CFBundleURLSchemes: [protocolScheme],
         },
       ],
@@ -311,7 +311,7 @@ const config = {
   },
   protocols: [
     {
-      name: 'LobeHub Protocol',
+      name: 'nexumChat Protocol',
       schemes: [protocolScheme],
     },
   ],
@@ -330,7 +330,7 @@ const config = {
   ],
 
   win: {
-    executableName: 'LobeHub',
+    executableName: 'nexumChat',
   },
 };
 

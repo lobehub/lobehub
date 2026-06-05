@@ -417,9 +417,9 @@ export class UpdaterManager {
       );
 
       autoUpdater.setFeedURL({
-        owner: 'lobehub',
+        owner: 'nexumchat',
         provider: 'github',
-        repo: 'lobehub',
+        repo: 'lobe-chat',
       });
 
       autoUpdater.allowPrerelease = this.currentChannel !== 'stable';

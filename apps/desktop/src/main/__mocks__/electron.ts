@@ -16,7 +16,7 @@ import { vi } from 'vitest';
 export const app = {
   getAppPath: vi.fn(() => '/mock/app'),
   getLocale: vi.fn(() => 'en-US'),
-  getName: vi.fn(() => 'LobeHub'),
+  getName: vi.fn(() => 'nexumChat'),
   getPath: vi.fn((name: string) => `/mock/${name}`),
   getVersion: vi.fn(() => '0.0.0-test'),
   isPackaged: false,

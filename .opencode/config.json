@@ -1,0 +1,13 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "gortex": {
+      "command": ["gortex", "mcp", "--index", ".", "--watch"],
+      "enabled": true,
+      "environment": {
+        "GORTEX_INDEX_WORKERS": "8"
+      },
+      "type": "local"
+    }
+  }
+}

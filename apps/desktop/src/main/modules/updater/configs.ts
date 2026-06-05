@@ -14,7 +14,7 @@ export const UPDATE_CHANNEL: UpdateChannel =
   rawChannel === 'canary' || rawChannel === 'beta' ? 'canary' : 'stable';
 
 // S3 base URL for all channels
-// e.g., https://releases.lobehub.com
+// e.g., https://releases.nexumchat.com
 // Each channel resolves to {base}/{channel}/
 export const UPDATE_SERVER_URL = getDesktopEnv().UPDATE_SERVER_URL;
 

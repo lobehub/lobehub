@@ -204,13 +204,13 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
         submenu: [
           {
             click: async () => {
-              await shell.openExternal('https://lobehub.com');
+              await shell.openExternal('https://nexumchat.com');
             },
             label: t('help.visitWebsite'),
           },
           {
             click: async () => {
-              await shell.openExternal('https://github.com/lobehub/lobe-chat');
+              await shell.openExternal('https://github.com/nexumchat/lobe-chat');
             },
             label: t('help.githubRepo'),
           },

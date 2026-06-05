@@ -81,14 +81,14 @@ export const getDesktopEnv = memoize(() =>
       NODE_ENV: z.enum(['development', 'production', 'test']).optional(),
 
       // cloud server url (can be overridden for selfhost/dev)
-      OFFICIAL_CLOUD_SERVER: z.string().optional().default('https://app.lobehub.com'),
+      OFFICIAL_CLOUD_SERVER: z.string().optional().default('https://app.nexumchat.com'),
 
       // updater
       // process.env.xxx will replace in build stage
       UPDATE_CHANNEL: z.string().optional().default(process.env.UPDATE_CHANNEL),
 
       // Custom update server URL (for stable channel)
-      // e.g., https://releases.lobehub.com/stable or https://your-bucket.s3.amazonaws.com/releases
+      // e.g., https://releases.nexumchat.com/stable or https://your-bucket.s3.amazonaws.com/releases
       UPDATE_SERVER_URL: z.string().optional().default(process.env.UPDATE_SERVER_URL),
 
       // Vercel JWT for bypassing deployment protection (dev only)

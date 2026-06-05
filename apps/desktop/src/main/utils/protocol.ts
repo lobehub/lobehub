@@ -10,16 +10,16 @@ export const getProtocolScheme = (): string => {
   const appPath = app.getPath('exe');
 
   // Determine by bundle identifier
-  if (bundleId?.toLowerCase().includes('nightly')) return 'lobehub-nightly';
-  if (bundleId?.toLowerCase().includes('beta')) return 'lobehub-beta';
-  if (bundleId?.includes('dev')) return 'lobehub-dev';
+  if (bundleId?.toLowerCase().includes('nightly')) return 'nexumchat-nightly';
+  if (bundleId?.toLowerCase().includes('beta')) return 'nexumchat-beta';
+  if (bundleId?.includes('dev')) return 'nexumchat-dev';
 
   // Determine by executable file path
-  if (appPath?.toLowerCase().includes('nightly')) return 'lobehub-nightly';
-  if (appPath?.toLowerCase().includes('beta')) return 'lobehub-beta';
-  if (appPath?.includes('dev')) return 'lobehub-dev';
+  if (appPath?.toLowerCase().includes('nightly')) return 'nexumchat-nightly';
+  if (appPath?.toLowerCase().includes('beta')) return 'nexumchat-beta';
+  if (appPath?.includes('dev')) return 'nexumchat-dev';
 
-  return 'lobehub';
+  return 'nexumchat';
 };
 
 export const getVersionInfo = (): { channel: AppChannel; protocolScheme: string } => {
@@ -81,14 +81,14 @@ function validateMcpSchema(schema: any): schema is McpSchema {
 }
 
 /**
- * Parse lobehub:// protocol URL (supports multi-version protocols)
+ * Parse nexumchat:// protocol URL (supports multi-version protocols)
  *
  * Supported URL formats:
- * - lobehub://plugin/install?id=figma&schema=xxx&marketId=lobehub
- * - lobehub://plugin/configure?id=xxx&...
- * - lobehub-bet://plugin/install?id=figma&schema=xxx&marketId=lobehub
- * - lobehub-nightly://plugin/install?id=figma&schema=xxx&marketId=lobehub
- * - lobehub-dev://plugin/install?id=figma&schema=xxx&marketId=lobehub
+ * - nexumchat://plugin/install?id=figma&schema=xxx&marketId=nexumchat
+ * - nexumchat://plugin/configure?id=xxx&...
+ * - nexumchat-beta://plugin/install?id=figma&schema=xxx&marketId=nexumchat
+ * - nexumchat-nightly://plugin/install?id=figma&schema=xxx&marketId=nexumchat
+ * - nexumchat-dev://plugin/install?id=figma&schema=xxx&marketId=nexumchat
  *
  * @param url Protocol URL
  * @returns Parse result, including basic structure and all query parameters
@@ -98,7 +98,12 @@ export const parseProtocolUrl = (url: string): ProtocolUrlParsed | null => {
     const parsedUrl = new URL(url);
 
     // Support multiple protocol schemes
-    const validProtocols = ['lobehub:', 'lobehub-dev:', 'lobehub-nightly:', 'lobehub-beta:'];
+    const validProtocols = [
+      'nexumchat:',
+      'nexumchat-dev:',
+      'nexumchat-nightly:',
+      'nexumchat-beta:',
+    ];
     if (!validProtocols.includes(parsedUrl.protocol)) {
       return null;
     }
@@ -147,10 +152,10 @@ export function generateRFCProtocolUrl(params: {
   marketId?: string;
   /** MCP Schema object */
   schema: McpSchema;
-  /** Protocol scheme (default: lobehub) */
+  /** Protocol scheme (default: nexumchat) */
   scheme?: string;
 }): string {
-  const { id, schema, marketId, scheme = 'lobehub' } = params;
+  const { id, schema, marketId, scheme = 'nexumchat' } = params;
 
   // Validate schema.identifier matches id
   if (schema.identifier !== id) {
@@ -205,6 +210,6 @@ export function generateRFCProtocolUrl(params: {
  *   },
  *   marketId: 'higress'
  * });
- * // Result: lobehub://plugin/install?id=edgeone-mcp&schema=%7B%22identifier%22%3A...&marketId=higress
+ * // Result: nexumchat://plugin/install?id=edgeone-mcp&schema=%7B%22identifier%22%3A...&marketId=higress
  * ```
  */

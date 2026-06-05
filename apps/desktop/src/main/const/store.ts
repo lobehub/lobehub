@@ -11,7 +11,7 @@ import type { ElectronMainStore } from '@/types/store';
 /**
  * Storage name
  */
-export const STORE_NAME = 'lobehub-settings';
+export const STORE_NAME = 'nexumchat-settings';
 
 export const defaultProxySettings: NetworkProxySettings = {
   enableProxy: false,
@@ -33,7 +33,7 @@ export const STORE_DEFAULTS: ElectronMainStore = {
   gatewayDeviceId: '',
   gatewayDeviceName: '',
   gatewayEnabled: true,
-  gatewayUrl: 'https://device-gateway.lobehub.com',
+  gatewayUrl: 'https://device-gateway.nexumchat.com',
   heteroTracingEnabled: false,
   imessageBridgeConfigs: [],
   locale: 'auto',

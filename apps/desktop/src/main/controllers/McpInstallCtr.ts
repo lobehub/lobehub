@@ -78,7 +78,7 @@ export default class McpInstallController extends ControllerModule {
 
       // Map protocol source
 
-      const isOfficialMarket = marketId === 'lobehub';
+      const isOfficialMarket = marketId === 'nexumchat';
 
       // For official marketplace, schema is optional; for third-party marketplace, schema is required
       if (!isOfficialMarket && !schemaParam) {
