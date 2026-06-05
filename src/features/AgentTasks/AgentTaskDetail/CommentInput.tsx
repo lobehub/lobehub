@@ -72,7 +72,7 @@ const CommentInput = memo<{ taskId: string }>(({ taskId }) => {
             editor={editor}
             floatingToolbar={false}
             placeholder={t('taskDetail.commentPlaceholder')}
-            style={{ minHeight: 24, paddingBlock: 0 }}
+            style={{ fontSize: 14, minHeight: 24, paddingBlock: 0 }}
             onContentChange={handleContentChange}
             onPressEnter={({ event }) => {
               if (shouldSendOnEnter(event)) {

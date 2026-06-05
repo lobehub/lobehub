@@ -72,13 +72,7 @@ const FeedbackInput = memo(() => {
 
   if (!expanded) {
     return (
-      <Button
-        block
-        icon={MessageCirclePlus}
-        size={'large'}
-        type={'default'}
-        onClick={() => setExpanded(true)}
-      >
+      <Button block icon={MessageCirclePlus} variant={'filled'} onClick={() => setExpanded(true)}>
         {t('taskDetail.sendFollowUp')}
       </Button>
     );
