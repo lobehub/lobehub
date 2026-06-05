@@ -11,7 +11,7 @@ import { ConnectorToolPermission } from '@/database/schemas';
  * Permission mapping:
  * - 'auto'           → humanIntervention: undefined (AI calls freely)
  * - 'needs_approval' → humanIntervention: 'required' (human must confirm)
- * - 'disabled'       → tool excluded from manifest (AI cannot see it)
+ * - 'disabled'       → tool included with blocking description; AI knows it exists but is told it cannot be called
  */
 export function buildConnectorManifests(
   connectors: DecryptedConnector[],

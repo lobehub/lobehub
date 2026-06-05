@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { ConnectorToolPermission } from '@/database/schemas';
 import { getKlavisClient } from '@/libs/klavis';
@@ -29,6 +30,8 @@ export const klavisRouter = router({
   callTool: klavisProcedure
     .input(
       z.object({
+        /** Klavis server identifier (e.g. 'gmail', 'google-calendar') for precise permission lookup */
+        identifier: z.string().optional(),
         serverUrl: z.string(),
         toolArgs: z.record(z.unknown()).optional(),
         toolName: z.string(),
@@ -36,11 +39,26 @@ export const klavisRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       // ── Connector tool permission gate ────────────────────────────────────
-      // Look up the tool directly by toolName so hyphenated identifiers like
-      // "google-calendar" are handled correctly (splitting on "_" would truncate them).
+      // Use identifier + toolName when available for a precise lookup (avoids
+      // same-name collisions across connectors). Falls back to toolName-only
+      // if identifier is absent (legacy callers).
       if (ctx.userId && ctx.serverDB) {
         const connectorToolModel = new ConnectorToolModel(ctx.serverDB, ctx.userId);
-        const connectorTool = await connectorToolModel.findByToolName(input.toolName);
+        let connectorTool:
+          | Awaited<ReturnType<typeof connectorToolModel.findByToolName>>
+          | undefined;
+
+        if (input.identifier) {
+          const connectorModel = new ConnectorModel(ctx.serverDB, ctx.userId);
+          const [connector] = await connectorModel.queryByIdentifiers([input.identifier]);
+          if (connector) {
+            const tools = await connectorToolModel.queryByConnector(connector.id);
+            connectorTool = tools.find((t) => t.toolName === input.toolName);
+          }
+        } else {
+          connectorTool = await connectorToolModel.findByToolName(input.toolName);
+        }
+
         if (connectorTool?.permission === ConnectorToolPermission.disabled) {
           const message =
             `The tool "${input.toolName}" has been disabled by the user and cannot be executed. ` +
