@@ -1,5 +1,3 @@
-import { ConnectorToolPermission } from '@/database/schemas';
-
 import type { ToolStore } from '../../store';
 import type { ConnectorTool, ConnectorWithTools } from './types';
 
@@ -35,13 +33,11 @@ const connectorToolsGrouped =
     const connector = s.connectors.find((c) => c.id === connectorId);
     if (!connector) return { readTools: [], writeTools: [] };
 
-    const visibleTools = connector.tools.filter(
-      (t) => t.permission !== ConnectorToolPermission.disabled,
-    );
-
+    // Show ALL tools in the settings UI (including disabled ones so users can re-enable them).
+    // Disabled tools are filtered out at runtime in buildConnectorManifests / queryByConnectorIds.
     return {
-      readTools: visibleTools.filter((t) => t.crudType === 'read'),
-      writeTools: visibleTools.filter((t) => t.crudType !== 'read'),
+      readTools: connector.tools.filter((t) => t.crudType === 'read'),
+      writeTools: connector.tools.filter((t) => t.crudType !== 'read'),
     };
   };
 
