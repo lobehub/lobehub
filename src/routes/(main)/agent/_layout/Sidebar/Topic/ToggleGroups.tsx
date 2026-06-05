@@ -35,8 +35,9 @@ const ToggleGroups = memo(() => {
   const expandedKeys = topicGroupKeys ?? groupIds;
   const isAllCollapsed = expandedKeys.length === 0;
 
-  // toggling makes no sense when there is at most one group (e.g. flat mode)
-  if (groupIds.length < 2) return null;
+  // flat mode renders FlatMode (no accordion), so the toggle has nothing to affect;
+  // also hide when there is at most one group, where toggling is meaningless
+  if (topicGroupMode === 'flat' || groupIds.length < 2) return null;
 
   return (
     <ActionIcon
