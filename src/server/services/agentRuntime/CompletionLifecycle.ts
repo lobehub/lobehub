@@ -11,6 +11,7 @@ import { buildFinalSnapshotKey } from '@/server/modules/AgentTracing';
 import { emitAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { toAgentSignalTraceEvents } from '@/server/services/agentSignal/observability/traceEvents';
 import { extractSelfIterationCompletionPayload } from '@/server/services/agentSignal/services/selfIteration/completion';
+import { runVerifyOnCompletion } from '@/server/services/verify';
 
 import { hookDispatcher } from './hooks';
 
@@ -284,6 +285,22 @@ export class CompletionLifecycle {
       if (isAsyncToolPark) return;
 
       await hookDispatcher.dispatch(operationId, 'onComplete', event, metadata._hooks);
+
+      // Delivery checker: on a successful completion, run the confirmed verify
+      // plan against the deliverable. Fire-and-forget and self-guarded — a run
+      // without an opted-in plan is a no-op, and failures never affect the run.
+      if (reason === 'done') {
+        const messages: any[] = Array.isArray(state?.messages) ? state.messages : [];
+        const firstUserMessage = messages.find((m) => m?.role === 'user');
+        const goal = firstUserMessage
+          ? (extractTextFromMessageContent(firstUserMessage.content) ?? '')
+          : '';
+        void runVerifyOnCompletion(this.serverDB, metadata?.userId || this.userId, {
+          deliverable: event.lastAssistantContent ?? '',
+          goal,
+          operationId,
+        });
+      }
 
       if (reason === 'error') {
         await hookDispatcher.dispatch(operationId, 'onError', event, metadata._hooks);

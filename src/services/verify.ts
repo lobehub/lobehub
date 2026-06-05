@@ -1,0 +1,72 @@
+import type { VerifyStatus } from '@/database/models/agentOperation';
+import type {
+  VerifyCheckItem,
+  VerifyCheckResultItem,
+  VerifyCriterionItem,
+  VerifyRubricItem,
+  VerifyUserDecision,
+} from '@/database/schemas/verify';
+import { lambdaClient } from '@/libs/trpc/client';
+
+export interface VerifyStateResponse {
+  verifyPlan: VerifyCheckItem[] | null;
+  verifyPlanConfirmedAt: Date | null;
+  verifyStatus: VerifyStatus | null;
+}
+
+export interface GenerateDraftPlanInput {
+  context?: string;
+  enableAiGeneration?: boolean;
+  goal: string;
+  maxAiCriteria?: number;
+  modelConfig?: { model: string; provider: string };
+  operationId: string;
+  verifyCriteriaIds?: string[];
+  verifyRubricId?: string | null;
+}
+
+/** Client wrapper around the `verify` lambda router. */
+export class VerifyService {
+  // ---- per-run plan ----
+  getVerifyState = (operationId: string): Promise<VerifyStateResponse | null> =>
+    lambdaClient.verify.getVerifyState.query({
+      operationId,
+    }) as Promise<VerifyStateResponse | null>;
+
+  generateDraftPlan = (input: GenerateDraftPlanInput): Promise<VerifyCheckItem[]> =>
+    lambdaClient.verify.generateDraftPlan.mutate(input) as Promise<VerifyCheckItem[]>;
+
+  updateDraftItems = (operationId: string, items: VerifyCheckItem[]): Promise<unknown> =>
+    lambdaClient.verify.updateDraftItems.mutate({ items, operationId });
+
+  confirmPlan = (operationId: string): Promise<unknown> =>
+    lambdaClient.verify.confirmPlan.mutate({ operationId });
+
+  skipPlan = (operationId: string): Promise<unknown> =>
+    lambdaClient.verify.skipPlan.mutate({ operationId });
+
+  // ---- results / execution ----
+  listResults = (operationId: string): Promise<VerifyCheckResultItem[]> =>
+    lambdaClient.verify.listResults.query({ operationId }) as Promise<VerifyCheckResultItem[]>;
+
+  executeVerify = (input: {
+    batchLlm?: boolean;
+    deliverable: string;
+    goal: string;
+    modelConfig: { model: string; provider: string };
+    operationId: string;
+  }): Promise<VerifyCheckResultItem[]> =>
+    lambdaClient.verify.executeVerify.mutate(input) as Promise<VerifyCheckResultItem[]>;
+
+  submitDecision = (resultId: string, decision: VerifyUserDecision): Promise<unknown> =>
+    lambdaClient.verify.submitDecision.mutate({ decision, resultId });
+
+  // ---- criteria / rubric management ----
+  listCriteria = (): Promise<VerifyCriterionItem[]> =>
+    lambdaClient.verify.listCriteria.query() as Promise<VerifyCriterionItem[]>;
+
+  listRubrics = (): Promise<VerifyRubricItem[]> =>
+    lambdaClient.verify.listRubrics.query() as Promise<VerifyRubricItem[]>;
+}
+
+export const verifyService = new VerifyService();

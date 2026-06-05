@@ -1,0 +1,284 @@
+import { createHash, randomUUID } from 'node:crypto';
+
+import { TRACING_SCENARIOS } from '@lobechat/const';
+import type { TracingOptions } from '@lobechat/llm-generation-tracing';
+import debug from 'debug';
+
+import { AgentOperationModel } from '@/database/models/agentOperation';
+import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
+import type {
+  NewVerifyCheckResult,
+  ToulminVerdict,
+  VerifyCheckItem,
+  VerifyCheckResultStatus,
+  VerifyVerdict,
+} from '@/database/schemas/verify';
+import type { LobeChatDatabase } from '@/database/type';
+import { AiGenerationService } from '@/server/services/aiGeneration';
+
+import { buildJudgePrompt, VERIFY_JUDGE_PROMPT_VERSION } from './prompts';
+import {
+  BATCH_VERDICT_JSON_SCHEMA,
+  BatchVerdictSchema,
+  SINGLE_VERDICT_JSON_SCHEMA,
+  type SingleVerdict,
+  SingleVerdictSchema,
+} from './schema';
+import { VerifyStatusService } from './statusService';
+
+const log = debug('lobe-server:verify-executor');
+
+/**
+ * Spawns a sub agent_operations to actively investigate one criterion. Injected
+ * by the runtime layer (Phase 7) because it needs full runtime context; when
+ * absent the agent item is left for later / marked skipped.
+ */
+export interface AgentVerifierSpawner {
+  (args: {
+    checkItem: VerifyCheckItem;
+    goal: string;
+    operationId: string;
+  }): Promise<{ verifierOperationId: string } | null>;
+}
+
+export interface ExecuteVerifyParams {
+  agentSpawner?: AgentVerifierSpawner;
+  /** Judge all LLM items in one batched generateObject (default true). */
+  batchLlm?: boolean;
+  /** The run's final output / artifacts, judged against the criteria. */
+  deliverable: string;
+  goal: string;
+  modelConfig: { model: string; provider: string };
+  operationId: string;
+}
+
+const hashConfig = (config: Record<string, unknown>): string =>
+  createHash('sha256')
+    .update(JSON.stringify(config ?? {}))
+    .digest('hex')
+    .slice(0, 16);
+
+const verdictToStatus = (verdict: VerifyVerdict): VerifyCheckResultStatus =>
+  verdict === 'passed' ? 'passed' : 'failed';
+
+const toToulmin = (v: SingleVerdict): ToulminVerdict => ({
+  counterEvidence: v.counterEvidence,
+  evidence: v.evidence,
+  limitation: v.limitation,
+  reasoning: v.reasoning,
+});
+
+export class VerifyExecutorService {
+  private readonly db: LobeChatDatabase;
+  private readonly userId: string;
+  private readonly operationModel: AgentOperationModel;
+  private readonly resultModel: VerifyCheckResultModel;
+  private readonly statusService: VerifyStatusService;
+
+  constructor(db: LobeChatDatabase, userId: string) {
+    this.db = db;
+    this.userId = userId;
+    this.operationModel = new AgentOperationModel(db, userId);
+    this.resultModel = new VerifyCheckResultModel(db, userId);
+    this.statusService = new VerifyStatusService(db, userId);
+  }
+
+  /**
+   * Run the confirmed check plan for an operation. LLM items are judged inline;
+   * program items are placeholders (v1); agent items are spawned via the injected
+   * spawner (results land asynchronously). Recomputes the rollup at the end.
+   */
+  async execute(params: ExecuteVerifyParams): Promise<void> {
+    const state = await this.operationModel.getVerifyState(params.operationId);
+    if (!state?.verifyPlan?.length) {
+      log('execute: no plan for op %s, skipping', params.operationId);
+      return;
+    }
+    if (!state.verifyPlanConfirmedAt) {
+      log('execute: plan for op %s not confirmed, skipping', params.operationId);
+      return;
+    }
+
+    const items = state.verifyPlan as VerifyCheckItem[];
+
+    // Idempotently create the pending result rows (skip ones already present).
+    const existing = await this.resultModel.listByOperation(params.operationId);
+    const existingIds = new Set(existing.map((r) => r.checkItemId));
+    const toCreate: Omit<NewVerifyCheckResult, 'userId'>[] = items
+      .filter((i) => !existingIds.has(i.id))
+      .map((item) => ({
+        checkItemId: item.id,
+        checkItemIndex: item.index,
+        checkItemTitle: item.title,
+        operationId: params.operationId,
+        required: item.required,
+        status: 'pending' as const,
+        verifierConfigHash: hashConfig(item.verifierConfig),
+        verifierType: item.verifierType,
+      }));
+    if (toCreate.length > 0) await this.resultModel.createMany(toCreate);
+
+    await this.statusService.markVerifying(params.operationId);
+
+    const llmItems = items.filter((i) => i.verifierType === 'llm');
+    const agentItems = items.filter((i) => i.verifierType === 'agent');
+    const programItems = items.filter((i) => i.verifierType === 'program');
+
+    // --- program: v1 placeholder (no shell environment) ---
+    for (const item of programItems) {
+      await this.resultModel.updateByCheckItem(params.operationId, item.id, {
+        completedAt: new Date(),
+        status: 'skipped',
+        toulmin: { limitation: 'Program verifier is not executed in v1.' },
+      });
+    }
+
+    // --- llm: Toulmin judge (batch by default) ---
+    if (llmItems.length > 0) {
+      try {
+        if (params.batchLlm ?? true) {
+          await this.judgeBatch(params, llmItems);
+        } else {
+          for (const item of llmItems) await this.judgeSingle(params, item);
+        }
+      } catch (error) {
+        log('llm judge failed for op %s: %O', params.operationId, error);
+        // Leave failed-to-judge items pending; rollup will report `verifying`.
+      }
+    }
+
+    // --- agent: spawn sub-operation (async result) or skip ---
+    for (const item of agentItems) {
+      if (!params.agentSpawner) {
+        await this.resultModel.updateByCheckItem(params.operationId, item.id, {
+          completedAt: new Date(),
+          status: 'skipped',
+          toulmin: { limitation: 'Agent verifier requires runtime context; not run here.' },
+        });
+        continue;
+      }
+      try {
+        const spawned = await params.agentSpawner({
+          checkItem: item,
+          goal: params.goal,
+          operationId: params.operationId,
+        });
+        await this.resultModel.updateByCheckItem(params.operationId, item.id, {
+          startedAt: new Date(),
+          status: 'running',
+          verifierOperationId: spawned?.verifierOperationId ?? null,
+        });
+      } catch (error) {
+        log('agent verifier spawn failed for item %s: %O', item.id, error);
+        await this.resultModel.updateByCheckItem(params.operationId, item.id, {
+          completedAt: new Date(),
+          status: 'failed',
+          toulmin: { limitation: 'Agent verifier failed to start.' },
+          verdict: 'uncertain',
+        });
+      }
+    }
+
+    await this.statusService.recompute(params.operationId);
+  }
+
+  private async judgeBatch(params: ExecuteVerifyParams, items: VerifyCheckItem[]): Promise<void> {
+    // Batch: N verdicts share ONE tracing row (N:1).
+    const tracingId = randomUUID();
+    const { system, user } = buildJudgePrompt({
+      deliverable: params.deliverable,
+      goal: params.goal,
+      items: items.map((i) => ({ id: i.id, title: i.title, verifierConfig: i.verifierConfig })),
+      mode: 'batch',
+    });
+
+    const ai = new AiGenerationService(this.db, this.userId);
+    const raw = await ai.generateObject(
+      {
+        messages: [
+          { content: system, role: 'system' as const },
+          { content: user, role: 'user' as const },
+        ],
+        model: params.modelConfig.model,
+        provider: params.modelConfig.provider,
+        schema: BATCH_VERDICT_JSON_SCHEMA,
+      },
+      {
+        tracing: {
+          promptVersion: VERIFY_JUDGE_PROMPT_VERSION,
+          scenario: TRACING_SCENARIOS.VerifyJudge,
+          schemaName: BATCH_VERDICT_JSON_SCHEMA.name,
+          tracingId,
+        } satisfies TracingOptions,
+      },
+    );
+
+    const parsed = BatchVerdictSchema.safeParse(raw);
+    if (!parsed.success) {
+      log('batch judge output invalid: %O', parsed.error.flatten());
+      return;
+    }
+
+    const validIds = new Set(items.map((i) => i.id));
+    for (const v of parsed.data.verdicts) {
+      if (!validIds.has(v.checkItemId)) continue;
+      await this.writeVerdict(params.operationId, v.checkItemId, v, tracingId);
+    }
+  }
+
+  private async judgeSingle(params: ExecuteVerifyParams, item: VerifyCheckItem): Promise<void> {
+    // Per-criterion: each result gets its own tracing row (1:1).
+    const tracingId = randomUUID();
+    const { system, user } = buildJudgePrompt({
+      deliverable: params.deliverable,
+      goal: params.goal,
+      items: [{ id: item.id, title: item.title, verifierConfig: item.verifierConfig }],
+      mode: 'single',
+    });
+
+    const ai = new AiGenerationService(this.db, this.userId);
+    const raw = await ai.generateObject(
+      {
+        messages: [
+          { content: system, role: 'system' as const },
+          { content: user, role: 'user' as const },
+        ],
+        model: params.modelConfig.model,
+        provider: params.modelConfig.provider,
+        schema: SINGLE_VERDICT_JSON_SCHEMA,
+      },
+      {
+        tracing: {
+          promptVersion: VERIFY_JUDGE_PROMPT_VERSION,
+          scenario: TRACING_SCENARIOS.VerifyJudge,
+          schemaName: SINGLE_VERDICT_JSON_SCHEMA.name,
+          tracingId,
+        } satisfies TracingOptions,
+      },
+    );
+
+    const parsed = SingleVerdictSchema.safeParse(raw);
+    if (!parsed.success) {
+      log('single judge output invalid: %O', parsed.error.flatten());
+      return;
+    }
+    await this.writeVerdict(params.operationId, item.id, parsed.data, tracingId);
+  }
+
+  private async writeVerdict(
+    operationId: string,
+    checkItemId: string,
+    verdict: SingleVerdict,
+    tracingId: string,
+  ): Promise<void> {
+    await this.resultModel.updateByCheckItem(operationId, checkItemId, {
+      completedAt: new Date(),
+      confidence: verdict.confidence,
+      status: verdictToStatus(verdict.verdict),
+      suggestion: verdict.suggestion ?? null,
+      toulmin: toToulmin(verdict),
+      verdict: verdict.verdict,
+      verifierTracingId: tracingId,
+    });
+  }
+}
