@@ -40,7 +40,7 @@ export const BuiltinAgentSkillDetailProvider = ({
 
   const value: DetailContextValue = {
     author: 'nexumChat',
-    authorUrl: 'https://lobehub.com',
+    authorUrl: 'https://nexumchat.com',
     config: null as any,
     description: skill.description,
     icon: skill.avatar || '',
