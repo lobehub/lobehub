@@ -63,6 +63,11 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
    * When enabled, old messages will be compressed into summaries when token threshold is reached
    */
   enableContextCompression?: boolean;
+  /**
+   * Custom system prompt for context compression
+   * When set, overrides the default compression system prompt
+   */
+  compressionSystemPrompt?: string;
   enableFollowUpChips?: boolean;
   /**
    * Enable historical message count
@@ -202,6 +207,7 @@ export const AgentChatConfigSchema = z
     codexMaxReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
     deepseekV4ReasoningEffort: z.enum(['none', 'high', 'max']).optional(),
     compressionModelId: z.string().optional(),
+    compressionSystemPrompt: z.string().optional(),
     disableContextCaching: z.boolean().optional(),
     effort: z.enum(['low', 'medium', 'high', 'max']).optional(),
     enableAdaptiveThinking: z.boolean().optional(),

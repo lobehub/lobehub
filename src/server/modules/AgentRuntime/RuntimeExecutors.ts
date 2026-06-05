@@ -1683,7 +1683,12 @@ export const createRuntimeExecutors = (
         };
       }
 
-      const compressionPayload = chainCompressContext(compressionResult.messagesToSummarize);
+      const customCompressionPrompt =
+        (state.metadata?.agentConfig as any)?.chatConfig?.compressionSystemPrompt;
+      const compressionPayload = chainCompressContext(
+        compressionResult.messagesToSummarize,
+        customCompressionPrompt,
+      );
       const compressionRuntime = await initModelRuntimeFromDB(
         ctx.serverDB,
         ctx.userId,

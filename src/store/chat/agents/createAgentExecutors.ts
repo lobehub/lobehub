@@ -2110,7 +2110,10 @@ export const createAgentExecutors = (context: {
         );
 
         // 4. Build compression prompt and generate summary with streaming UI updates
-        const compressionPayload = chainCompressContext(messagesToSummarize);
+        const compressionPayload = chainCompressContext(
+          messagesToSummarize,
+          context.agentConfig.chatConfig?.compressionSystemPrompt,
+        );
         let summaryContent = '';
 
         // Start generateSummary operation attached to the compressed group message

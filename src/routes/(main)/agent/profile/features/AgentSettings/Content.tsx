@@ -4,7 +4,7 @@ import { Avatar, Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { type ItemType } from 'antd/es/menu/interface';
 import { useTheme } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { ActivityIcon, MessageSquareHeartIcon } from 'lucide-react';
+import { ActivityIcon, GitCompareArrowsIcon, MessageSquareHeartIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallow } from 'zustand/shallow';
@@ -33,6 +33,7 @@ const Content = memo(() => {
     () =>
       [
         !isInbox ? ChatSettingsTabs.Opening : null,
+        ChatSettingsTabs.Compression,
         enableAgentSelfIteration ? ChatSettingsTabs.SelfIteration : null,
       ].filter(Boolean) as ChatSettingsTabs[],
     [isInbox, enableAgentSelfIteration],
@@ -64,6 +65,13 @@ const Content = memo(() => {
                 icon: <Icon icon={MessageSquareHeartIcon} />,
                 key: ChatSettingsTabs.Opening,
                 label: t('agentTab.opening'),
+              };
+            }
+            case ChatSettingsTabs.Compression: {
+              return {
+                icon: <Icon icon={GitCompareArrowsIcon} />,
+                key: ChatSettingsTabs.Compression,
+                label: t('agentTab.compression'),
               };
             }
             case ChatSettingsTabs.SelfIteration: {

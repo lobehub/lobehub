@@ -10,10 +10,13 @@ import {
  * Chain for compressing conversation context into a summary
  * Used when conversation history exceeds token threshold
  */
-export const chainCompressContext = (messages: UIChatMessage[]): Partial<ChatStreamPayload> => ({
+export const chainCompressContext = (
+  messages: UIChatMessage[],
+  customSystemPrompt?: string,
+): Partial<ChatStreamPayload> => ({
   messages: [
     {
-      content: compressContextSystemPrompt,
+      content: customSystemPrompt || compressContextSystemPrompt,
       role: 'system',
     },
     {

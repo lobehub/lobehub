@@ -1337,8 +1337,12 @@ export class ConversationLifecycleActionImpl {
       this.#get().associateMessageWithOperation(messageGroupId, operationId);
 
       // 2. Generate summary via LLM
-      const { model, provider } = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
-      const compressionPayload = chainCompressContext(messagesToSummarize);
+      const { model, provider, chatConfig } =
+        agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
+      const compressionPayload = chainCompressContext(
+        messagesToSummarize,
+        chatConfig?.compressionSystemPrompt,
+      );
       let summaryContent = '';
 
       await chatService.fetchPresetTaskResult({

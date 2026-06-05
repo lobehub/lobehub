@@ -22,6 +22,7 @@ export enum SidebarTabKey {
 }
 
 export enum ChatSettingsTabs {
+  Compression = 'compression',
   Opening = 'opening',
   Plugin = 'plugin',
   Prompt = 'prompt',

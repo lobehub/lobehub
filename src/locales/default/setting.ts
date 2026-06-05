@@ -177,6 +177,7 @@ export default {
   'agentSkillModal.url.title': 'Import from URL',
   'agentSkillModal.url.urlPlaceholder': 'https://example.com/path/to/SKILL.md',
   'agentSkillTag': 'Agent Skill',
+  'agentTab.compression': 'Context Compression',
   'agentTab.opening': 'Opening Settings',
   'agentTab.plugin': 'Skill Settings',
   'agentTab.prompt': 'Agent Profile',
@@ -653,6 +654,12 @@ export default {
   'settingAppearance.primaryColor.desc': 'Custom theme color',
   'settingAppearance.primaryColor.title': 'Theme Color',
   'settingAppearance.title': 'Application Appearance',
+  'settingCompression.systemPrompt.desc':
+    'Override the default system prompt used when compressing context. Leave empty to use the built-in prompt.',
+  'settingCompression.systemPrompt.placeholder':
+    'Enter a custom system prompt for context compression...',
+  'settingCompression.systemPrompt.title': 'Custom Compression System Prompt',
+  'settingCompression.title': 'Context Compression Prompt',
   'settingChat.chatStyleType.title': 'Chat Window Style',
   'settingChat.chatStyleType.type.chat': 'Conversation Mode',
   'settingChat.chatStyleType.type.docs': 'Page Mode',
