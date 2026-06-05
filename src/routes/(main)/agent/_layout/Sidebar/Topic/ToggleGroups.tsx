@@ -1,6 +1,6 @@
 import { ActionIcon } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
-import { Expand, Shrink } from 'lucide-react';
+import { Maximize2, Minimize2 } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -41,7 +41,7 @@ const ToggleGroups = memo(() => {
 
   return (
     <ActionIcon
-      icon={isAllCollapsed ? Expand : Shrink}
+      icon={isAllCollapsed ? Maximize2 : Minimize2}
       size={'small'}
       title={isAllCollapsed ? t('sidebar.expandAll') : t('sidebar.collapseAll')}
       onClick={() => updateSystemStatus({ expandTopicGroupKeys: isAllCollapsed ? groupIds : [] })}
