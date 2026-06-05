@@ -100,7 +100,7 @@ export class ConnectorModel {
     gateKeeper?: GateKeeper,
   ): Promise<void> => {
     const credentials =
-      patch.credentials !== undefined
+      patch.credentials !== undefined && patch.credentials !== null
         ? await encryptCredentials(patch.credentials, gateKeeper)
         : undefined;
 

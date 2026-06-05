@@ -1,11 +1,11 @@
-import type { LobeToolManifest } from '@lobechat/types';
+import type { ToolManifest } from '@lobechat/types';
 
 import type { DecryptedConnector } from '@/database/models/connector';
 import type { UserConnectorToolItem } from '@/database/schemas';
 import { ConnectorToolPermission } from '@/database/schemas';
 
 /**
- * Convert connector DB rows into LobeToolManifest entries suitable for
+ * Convert connector DB rows into ToolManifest entries suitable for
  * injection into the server AgentToolsEngine as additionalManifests.
  *
  * Permission mapping:
@@ -16,7 +16,7 @@ import { ConnectorToolPermission } from '@/database/schemas';
 export function buildConnectorManifests(
   connectors: DecryptedConnector[],
   tools: UserConnectorToolItem[],
-): LobeToolManifest[] {
+): ToolManifest[] {
   const toolsByConnector = new Map<string, UserConnectorToolItem[]>();
   for (const tool of tools) {
     const list = toolsByConnector.get(tool.userConnectorId) ?? [];
@@ -24,7 +24,7 @@ export function buildConnectorManifests(
     toolsByConnector.set(tool.userConnectorId, list);
   }
 
-  const manifests: LobeToolManifest[] = [];
+  const manifests: ToolManifest[] = [];
 
   for (const connector of connectors) {
     if (!connector.isEnabled) continue;

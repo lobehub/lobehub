@@ -106,7 +106,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(({ connectorId }) => {
             marginBottom: 16,
           }}
         >
-          {connector.metadata.description as string}
+          {String(connector.metadata.description)}
         </div>
       )}
 

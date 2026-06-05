@@ -136,4 +136,4 @@ export class ConnectorActionImpl {
   };
 }
 
-export type ConnectorAction = ReturnType<typeof createConnectorSlice>;
+export type ConnectorAction = Pick<ConnectorActionImpl, keyof ConnectorActionImpl>;

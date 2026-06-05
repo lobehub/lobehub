@@ -52,7 +52,8 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose }) => {
   return (
     <Modal
       cancelText={t('connector.add.cancel', 'Cancel')}
-      okButtonProps={{ disabled: !name.trim() || !url.trim(), loading: creating }}
+      confirmLoading={creating}
+      okButtonProps={{ disabled: !name.trim() || !url.trim() }}
       okText={t('connector.add.confirm', 'Add')}
       open={open}
       title={t('connector.add.title', 'Add custom connector')}

@@ -27,7 +27,9 @@ export async function getConnectorToolPermission(
 
     const toolModel = new ConnectorToolModel(db, userId);
     const tools = await toolModel.queryByConnector(connector.id);
-    return tools.find((t) => t.toolName === toolName)?.permission ?? null;
+    return (
+      (tools.find((t) => t.toolName === toolName)?.permission as ConnectorToolPermission) ?? null
+    );
   } catch {
     return null; // never block execution due to DB error
   }
