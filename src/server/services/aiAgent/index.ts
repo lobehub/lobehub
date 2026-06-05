@@ -1174,21 +1174,29 @@ export class AiAgentService {
       // 5a-1. Resolve connectors — connector identifier takes priority over plugin
       const connectors =
         agentPlugins.length > 0 ? await this.connectorModel.queryByIdentifiers(agentPlugins) : [];
-      const connectorIdentifierSet = new Set(connectors.map((c) => c.identifier));
 
-      // Filter out plugin entries that are now handled by connectors
+      // Only connectors WITH a real MCP endpoint (mcpServerUrl or stdio) can replace plugins in the
+      // manifest. Connectors WITHOUT an endpoint (e.g. Lobehub/Klavis OAuth skills synced via
+      // syncToolsFromClient) must continue using their original plugin executor path — otherwise
+      // after humanIntervention approval the runtime tries to call mcpServerUrl='' and returns empty.
+      const connectorsMcp = connectors.filter(
+        (c) => c.mcpServerUrl || c.mcpConnectionType === 'stdio',
+      );
+      const connectorIdentifierSet = new Set(connectorsMcp.map((c) => c.identifier));
+
+      // Filter out plugin entries that are now handled by real MCP connectors
       const pluginsWithoutConnectors = installedPlugins.filter(
         (p) => !connectorIdentifierSet.has(p.identifier),
       );
 
-      // Fetch tools for enabled connectors (non-disabled only, via queryByConnectorIds)
-      const enabledConnectors = connectors.filter((c) => c.isEnabled);
+      // Fetch tools for enabled real-MCP connectors (non-disabled only, via queryByConnectorIds)
+      const enabledConnectorsMcp = connectorsMcp.filter((c) => c.isEnabled);
       const connectorTools =
-        enabledConnectors.length > 0
-          ? await this.connectorToolModel.queryByConnectorIds(enabledConnectors.map((c) => c.id))
+        enabledConnectorsMcp.length > 0
+          ? await this.connectorToolModel.queryByConnectorIds(enabledConnectorsMcp.map((c) => c.id))
           : [];
 
-      const connectorManifests = buildConnectorManifests(connectors, connectorTools);
+      const connectorManifests = buildConnectorManifests(connectorsMcp, connectorTools);
       log('execAgent: got %d connector manifests', connectorManifests.length);
 
       // 5b. Get model abilities from model-bank for function calling support check
@@ -1449,7 +1457,7 @@ export class AiAgentService {
             toolExecutorMap[plugin.identifier] = 'client';
           }
         }
-        for (const connector of connectors) {
+        for (const connector of connectorsMcp) {
           if (connector.mcpConnectionType === 'stdio' && manifestMap.has(connector.identifier)) {
             toolExecutorMap[connector.identifier] = 'client';
           }
