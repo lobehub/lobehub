@@ -2,7 +2,7 @@
 
 import { builtinTools } from '@lobechat/builtin-tools';
 import { DEFAULT_INBOX_AVATAR } from '@lobechat/const';
-import type { BuiltinToolManifest, LobeChatPluginApi } from '@lobechat/types';
+import type { BuiltinToolManifest, nexumChatPluginApi } from '@lobechat/types';
 
 import type { ToolRenderFixture } from '../lifecycleMode';
 import { buildSchemaSample, humanize, single, type ToolsetFixtureModule } from './_helpers';
@@ -31,7 +31,7 @@ import lobeWebOnboarding from './lobe-web-onboarding';
 export type { ToolRenderFixture, ToolRenderFixtureVariant } from '../lifecycleMode';
 
 export interface ToolRenderMeta {
-  api?: LobeChatPluginApi;
+  api?: nexumChatPluginApi;
   apiName: string;
   description?: string;
   identifier: string;
@@ -117,7 +117,7 @@ const manifestByIdentifier = new Map<string, BuiltinToolManifest>(
 export const getToolRenderFixture = (
   identifier: string,
   apiName: string,
-  api?: LobeChatPluginApi,
+  api?: nexumChatPluginApi,
 ): ToolRenderFixture => {
   const fixture = fixtureRegistry.get(`${identifier}:${apiName}`);
   if (fixture) return fixture;

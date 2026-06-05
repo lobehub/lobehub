@@ -34,7 +34,7 @@ const getBuiltinToolsOnly = (s: ToolStoreState): LobeToolMeta[] => {
   return s.builtinTools
     .filter((item) => !item.hidden)
     .map((t) => ({
-      author: 'LobeHub',
+      author: 'nexumChat',
       identifier: t.identifier,
       meta: t.manifest.meta,
       type: 'builtin' as const,

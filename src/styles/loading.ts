@@ -2,7 +2,7 @@ import { createStaticStyles, css, keyframes } from 'antd-style';
 
 export const dotLoading = css`
   &::after {
-    content: '\\2026'; /* ascii code for the ellipsis character */
+    content: '\\2026';
 
     overflow: hidden;
     display: inline-block;
@@ -29,11 +29,11 @@ export const dotLoading = css`
 
 const shine = keyframes`
   0% {
-    background-position: 100%;
+    background-position: 200%;
   }
 
   100% {
-    background-position: -100%;
+    background-position: -200%;
   }
 `;
 
@@ -45,17 +45,17 @@ export const elapsedTimeStyles = createStaticStyles(({ css, cssVar }) => ({
 
 export const shinyTextStyles = createStaticStyles(({ css, cssVar }) => ({
   shinyText: css`
-    color: color-mix(in srgb, ${cssVar.colorText} 45%, transparent);
+    color: color-mix(in srgb, ${cssVar.colorText} 40%, transparent);
 
     background: linear-gradient(
-      120deg,
-      color-mix(in srgb, ${cssVar.colorTextBase} 0%, transparent) 40%,
-      ${cssVar.colorTextSecondary} 50%,
-      color-mix(in srgb, ${cssVar.colorTextBase} 0%, transparent) 60%
+      100deg,
+      color-mix(in srgb, ${cssVar.colorTextBase} 0%, transparent) 45%,
+      ${cssVar.colorTextQuaternary} 50%,
+      color-mix(in srgb, ${cssVar.colorTextBase} 0%, transparent) 55%
     );
     background-clip: text;
     background-size: 200% 100%;
 
-    animation: ${shine} 1.5s linear infinite;
+    animation: ${shine} 2s linear infinite;
   `,
 }));

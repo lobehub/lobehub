@@ -56,7 +56,7 @@ const LocalForm = memo<{ form: FormInstance; mode?: 'edit' | 'create' }>(({ form
       name: ['manifest', 'meta', 'description'],
     },
     {
-      children: <Input placeholder={'LobeHub'} />,
+      children: <Input placeholder={'nexumChat'} />,
       desc: t('dev.meta.author.desc'),
       label: t('dev.meta.author.label'),
       name: ['manifest', 'author'],

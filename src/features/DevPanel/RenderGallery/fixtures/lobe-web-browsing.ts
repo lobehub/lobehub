@@ -14,9 +14,9 @@ export default defineFixtures({
           {
             crawler: 'firecrawl',
             data: {
-              content: 'LobeHub ships desktop and web experiences for AI collaboration.',
+              content: 'nexumChat ships desktop and web experiences for AI collaboration.',
               description: 'Product homepage',
-              title: 'LobeHub',
+              title: 'nexumChat',
               url: 'https://lobehub.com',
             },
             originalUrl: 'https://lobehub.com',
@@ -26,7 +26,7 @@ export default defineFixtures({
             data: {
               content: 'Developer documentation for routing, tooling, and local testing.',
               description: 'Docs homepage',
-              title: 'LobeHub Docs',
+              title: 'nexumChat Docs',
               url: 'https://docs.lobehub.com',
             },
             originalUrl: 'https://docs.lobehub.com',
@@ -43,7 +43,7 @@ export default defineFixtures({
             data: {
               content: 'Recent product updates and engineering notes.',
               description: 'Blog landing page',
-              title: 'LobeHub Blog',
+              title: 'nexumChat Blog',
               url: 'https://lobehub.com/blog',
             },
             originalUrl: 'https://lobehub.com/blog',
@@ -54,12 +54,12 @@ export default defineFixtures({
     search: variants([
       {
         args: {
-          query: 'LobeHub devtools preview route',
+          query: 'nexumChat devtools preview route',
           searchEngines: ['google', 'bing'],
         },
         label: 'With results',
         pluginState: {
-          query: 'LobeHub devtools preview route',
+          query: 'nexumChat devtools preview route',
           results: [
             {
               content: 'Documentation and implementation notes about local preview tooling.',

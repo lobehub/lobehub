@@ -3,30 +3,25 @@ import { createStaticStyles } from 'antd-style';
 import { isDesktop } from '@/const/version';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
-  // Inner container
   innerContainer: css`
     position: relative;
 
     overflow: hidden;
 
-    border: 1px solid var(--container-border-color, ${cssVar.colorBorder});
-    border-radius: var(--container-border-radius, ${cssVar.borderRadius});
-    border-end-end-radius: var(
-      --container-border-bottom-right-radius,
-      var(--container-border-radius, ${cssVar.borderRadius})
-    );
+    border-radius: var(--container-border-radius, 10px);
 
     background: ${cssVar.colorBgContainer};
+    box-shadow: 0 0 0 1px ${cssVar.colorBorderSecondary};
   `,
 
-  // Outer container
   outerContainer: css`
     position: relative;
 
     overflow: hidden;
 
-    padding-block-start: var(--container-padding-top, 8px);
-    padding-inline-start: var(--container-padding-left, 8px);
+    padding: ${isDesktop ? '0' : '4px'};
+    padding-block-start: ${isDesktop ? '0' : '4px'};
+    padding-inline-start: var(--container-padding-left, ${isDesktop ? '0' : '4px'});
 
     background: ${isDesktop ? 'transparent' : cssVar.colorBgLayout};
   `,

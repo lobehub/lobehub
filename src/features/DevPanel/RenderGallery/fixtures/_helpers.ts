@@ -1,6 +1,6 @@
 'use client';
 
-import type { LobeChatPluginApi } from '@lobechat/types';
+import type { nexumChatPluginApi } from '@lobechat/types';
 
 import type { ToolRenderFixture, ToolRenderFixtureVariant } from '../lifecycleMode';
 
@@ -32,7 +32,7 @@ export const variants = (
 
 export interface ToolsetFixtureModule {
   /** Optional per-API descriptions when the live manifest doesn't carry them. */
-  apiList?: Array<Pick<LobeChatPluginApi, 'description' | 'name'>>;
+  apiList?: Array<Pick<nexumChatPluginApi, 'description' | 'name'>>;
   /** Map of `apiName -> ToolRenderFixture` for this toolset. */
   fixtures: Record<string, ToolRenderFixture>;
   /** Toolset identifier exactly as registered in the builtin tool registry. */

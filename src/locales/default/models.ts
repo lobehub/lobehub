@@ -8,7 +8,7 @@ LOBE_DEFAULT_MODEL_LIST.forEach((model) => {
   locales[`${model.id}.description`] = model.description;
 });
 
-// #region LobeHub online model descriptions
+// #region nexumChat online model descriptions
 const lobeHubOnlineModelLocales = {
   'grok-4.20-beta-0309-reasoning.description':
     'Intelligent, blazing-fast model that reasons before responding',

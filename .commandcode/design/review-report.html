@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Design Review — LobeHub</title>
+<style>
+  :root {
+    --bg: #0d0d0d;
+    --surface: #1a1a1a;
+    --border: #2a2a2a;
+    --text: #e0e0e0;
+    --text-secondary: #888;
+    --accent: #ff6b35;
+    --success: #4caf50;
+    --warning: #ff9800;
+    --danger: #f44336;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    line-height: 1.6;
+    padding: 48px 24px;
+    max-width: 760px;
+    margin: 0 auto;
+  }
+  h1 { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
+  .meta { color: var(--text-secondary); font-size: 13px; margin-bottom: 32px; }
+  .score-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 64px; height: 64px; border-radius: 50%;
+    border: 3px solid var(--warning); color: var(--warning);
+    font-size: 28px; font-weight: 700; margin-bottom: 24px;
+  }
+  h2 { font-size: 18px; font-weight: 600; margin-top: 36px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  h3 { font-size: 15px; font-weight: 600; margin-top: 24px; margin-bottom: 8px; }
+  p { font-size: 14px; color: var(--text-secondary); margin-bottom: 12px; }
+  .table-wrap { overflow-x: auto; margin: 16px 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+  th { color: var(--text); font-weight: 600; background: var(--surface); }
+  td { color: var(--text-secondary); }
+  .score-cell { font-weight: 700; text-align: center; }
+  .score-high { color: var(--success); }
+  .score-mid { color: var(--warning); }
+  .score-low { color: var(--danger); }
+  .issue { margin-bottom: 20px; padding: 16px; background: var(--surface); border-radius: 8px; border-left: 3px solid var(--accent); }
+  .issue h3 { margin-top: 0; font-size: 14px; }
+  .issue p { margin-bottom: 0; font-size: 13px; }
+  .rec { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .rec:last-child { border-bottom: none; }
+  .rec-num { font-size: 12px; font-weight: 700; color: var(--accent); min-width: 20px; }
+  .rec-mode { font-size: 12px; font-weight: 600; background: var(--surface); padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
+  .rec-target { font-size: 13px; color: var(--text-secondary); }
+  blockquote {
+    border-left: 2px solid var(--border);
+    padding-left: 16px;
+    margin: 16px 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-style: italic;
+  }
+  ul { font-size: 13px; color: var(--text-secondary); padding-left: 20px; margin-bottom: 12px; }
+  li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Design Review</h1>
+<div class="meta">LobeHub — June 5, 2026 — Product Register — Full app shell</div>
+
+<div class="score-badge">28<span style="font-size:14px;font-weight:400">/50</span></div>
+
+<h2>First Impression</h2>
+<p><strong>Score: 5/10</strong></p>
+<p>The redesign is competent but anonymous. The box-shadow container frame and muted base backgrounds (<code>#f5f5f5</code> / <code>#0d0d0d</code>) are professional but say nothing about LobeHub specifically. If you swapped the logo for Slack's, nothing would look wrong — that's the problem. The surface reads "well-built web app," not "Chief Agent Operator."</p>
+
+<h2>Hierarchy</h2>
+<p><strong>Score: 7/10</strong></p>
+<p>The composition serves the Operate pattern well: NavPanel sidebar → framed container → content. Chat messages have a clear scanning rhythm. The onboarding flow has a logical progression.</p>
+<p><strong>Weakness:</strong> The home page flattening to solid <code>colorBgContainer</code> removed the gradient that previously differentiated the content area from the browser chrome. On desktop, the content area and window background merge into a single visual plane.</p>
+<p><strong>Miss:</strong> The container frame uses <code>box-shadow: 0 0 0 1px</code> as a border replacement, which reads as "border, but rendered differently" rather than a deliberate precision edge.</p>
+
+<h2>Color Voice</h2>
+<p><strong>Score: 4/10</strong></p>
+<p>The project has no authored color identity. Every surface passes through antd-style tokens with no curation. The out-of-box experience inherits whatever antd provides as its default primary color. Users can customize via theme swatches, but the first-visit impression has zero point of view.</p>
+<p>The brief says "no generic SaaS palette" — yet the default experience is exactly that, because no defaults have been set.</p>
+
+<h2>Type Voice</h2>
+<p><strong>Score: 6/10</strong></p>
+<p>System fonts are correct for product UI. But there is no type scale — font sizes are chosen ad-hoc (<code>28px</code> headings, <code>14px</code> titles, <code>12px</code> hints) with no governed relationship between them. The highlight underline blending in <code>text.ts</code> is a good micro-decision, but it's isolated.</p>
+
+<h2>Interaction Feel</h2>
+<p><strong>Score: 6/10</strong></p>
+<p>The tightened ChatItem hover (150ms), scrollbar fade-in, and loading indicator glow are deliberate improvements. Controls feel more responsive.</p>
+<p><strong>Gaps:</strong> Modal masks still use the old glass-blur treatment — inconsistent with the new container language. No authored focus ring system. Missing explicit disabled and error state styling. <code>will-change: opacity</code> was removed from the body, risking rendering artifacts.</p>
+
+<h2>Smell Check</h2>
+<ol>
+<li><strong>Token pass-through identity</strong> — the entire visual system is antd tokens with a <code>lobe-vars</code> prefix. The product looks like the library, not like itself.</li>
+<li><strong>Shadow-as-border</strong> — using <code>box-shadow: 0 0 0 1px</code> for the container frame is technically sound but a generic reflex. It says "hairline border," not "precision operator console."</li>
+<li><strong>Missing authored defaults</strong> — the theme system supports custom colors but ships with antd stock defaults. The brief explicitly rejects generic SaaS palettes, yet the default experience is exactly that.</li>
+</ol>
+
+<h2>Scoring Summary</h2>
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr><th>Lens</th><th>Score</th><th>Notes</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>First impression</td><td class="score-cell score-low">5</td><td>Professional but anonymous. No memorable point of view.</td></tr>
+    <tr><td>Hierarchy</td><td class="score-cell score-mid">7</td><td>Sound layout structure. Flat content plane loses depth cue.</td></tr>
+    <tr><td>Color voice</td><td class="score-cell score-low">4</td><td>Pure token pass-through. No authored color identity.</td></tr>
+    <tr><td>Type voice</td><td class="score-cell score-mid">6</td><td>System fonts are correct. No type scale.</td></tr>
+    <tr><td>Interaction feel</td><td class="score-cell score-mid">6</td><td>Responsive controls. Inconsistent surface language.</td></tr>
+    <tr style="font-weight:700; color: var(--text);"><td>Total</td><td class="score-cell" style="color:var(--warning)">28/50</td><td></td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Top Issues</h2>
+
+<div class="issue">
+  <h3>1. No color identity</h3>
+  <p>The system inherits antd defaults without asserting a product voice. Establish a default primary/neutral palette that carries the "Chief Agent Operator" authority. Highest impact — color is the fastest signal.</p>
+</div>
+
+<div class="issue">
+  <h3>2. Flat depth model</h3>
+  <p>Content and background planes merge on the home page. Needs at least one depth cue to differentiate the working surface from the window.</p>
+</div>
+
+<div class="issue">
+  <h3>3. No type scale</h3>
+  <p>Ad-hoc font sizes across components create visual inconsistency. A 4–5 step modular scale would cost nothing and tighten the entire surface.</p>
+</div>
+
+<div class="issue">
+  <h3>4. Inconsistent surface language</h3>
+  <p>Modal masks still use old glass-blur treatment. The container frame and modal overlay should belong to the same world.</p>
+</div>
+
+<div class="issue">
+  <h3>5. Missing interaction states</h3>
+  <p>Focus rings, disabled states, and error recovery UI are addressable gaps.</p>
+</div>
+
+<h2>Recommendations</h2>
+
+<div class="rec"><span class="rec-num">1</span><span class="rec-mode">recolor</span><span class="rec-target">Establish authored default primary + neutral palette. Set color voice.</span></div>
+<div class="rec"><span class="rec-num">2</span><span class="rec-mode">surface</span><span class="rec-target">Harden modal masks, add focus ring system, complete state coverage.</span></div>
+<div class="rec"><span class="rec-num">3</span><span class="rec-mode">typeset</span><span class="rec-target">Define governed type scale. Replace ad-hoc font sizes with scale steps.</span></div>
+<div class="rec"><span class="rec-num">4</span><span class="rec-mode">relayout</span><span class="rec-target">Re-differentiate background plane from content plane on home page.</span></div>
+<div class="rec"><span class="rec-num">5</span><span class="rec-mode">refine</span><span class="rec-target">Polish the box-shadow frame into a deliberate edge language.</span></div>
+
+</body>
+</html>

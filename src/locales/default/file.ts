@@ -68,7 +68,7 @@ export default {
   'networkError':
     'Failed to retrieve libraries. Please check your network connection and try again.',
   'notSupportGuide.desc':
-    'The current deployment mode does not support file management. Switch to <1>server database deployment mode</1>, or use <3>LobeHub Cloud</3>.',
+    'The current deployment mode does not support file management. Switch to <1>server database deployment mode</1>, or use <3>nexumChat Cloud</3>.',
   'notSupportGuide.features.allKind.desc':
     'Supports mainstream file types, including common page formats like Word, PPT, Excel, PDF, TXT, as well as popular code files like JS and Python.',
   'notSupportGuide.features.allKind.title': 'Multiple File Type Parsing',

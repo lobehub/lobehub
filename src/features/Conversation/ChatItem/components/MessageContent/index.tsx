@@ -25,8 +25,8 @@ export const styles = createStaticStyles(({ css, cssVar }) => {
     bubble: css`
       padding-block: 8px;
       padding-inline: 12px;
-      border-radius: ${cssVar.borderRadiusLG};
-      background-color: ${cssVar.colorFillTertiary};
+      border-radius: 8px;
+      background-color: color-mix(in srgb, ${cssVar.colorFillSecondary} 60%, transparent);
     `,
     disabled: css`
       user-select: ${'none'};

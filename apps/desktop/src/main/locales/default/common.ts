@@ -17,7 +17,7 @@ const common = {
   'actions.search': 'Search',
   'actions.submit': 'Submit',
   'app.description': 'Where Agents Collaborate',
-  'app.name': 'LobeHub',
+  'app.name': 'nexumChat',
   'status.error': 'Error',
   'status.info': 'Information',
   'status.loading': 'Loading',

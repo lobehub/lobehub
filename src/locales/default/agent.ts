@@ -13,7 +13,7 @@ export default {
   'channel.copied': 'Copied to clipboard',
   'channel.comingSoon': 'Coming Soon',
   'channel.comingSoonDesc':
-    'We are working on bringing this integration to LobeHub. Stay tuned for updates.',
+    'We are working on bringing this integration to nexumChat. Stay tuned for updates.',
   'channel.comingSoonTitle': '{{name}} integration is coming soon',
   'channel.copy': 'Copy',
   'channel.deleteAllChannels': 'Remove All Channels',
@@ -33,7 +33,7 @@ export default {
     'Connect this assistant to Discord server for channel chat and direct messages.',
   'channel.documentation': 'Documentation',
   'channel.messengerPromo.action': 'Try Messenger',
-  'channel.messengerPromo.desc': 'No bot setup. Chat with LobeHub on Slack, Discord, Telegram.',
+  'channel.messengerPromo.desc': 'No bot setup. Chat with nexumChat on Slack, Discord, Telegram.',
   'channel.messengerPromo.dismiss': 'Dismiss',
   'channel.messengerPromo.title': 'Skip the setup',
   'channel.exportConfig': 'Export Configuration',
@@ -58,25 +58,25 @@ export default {
   'channel.feishu.webhookMigrationDesc':
     'WebSocket mode provides real-time event delivery without needing a public callback URL. To migrate, switch the Connection Mode to WebSocket in Advanced Settings. No additional configuration is needed on the Feishu/Lark Open Platform.',
   'channel.imessage.description':
-    'Connect this assistant to iMessage through the local LobeHub Desktop BlueBubbles bridge.',
+    'Connect this assistant to iMessage through the local nexumChat Desktop BlueBubbles bridge.',
   'channel.imessage.applicationIdHint':
     'A stable identifier shared by the cloud channel and the Desktop bridge.',
   'channel.imessage.applicationIdPlaceholder': 'e.g. home-mac-mini',
   'channel.imessage.blueBubblesPassword': 'BlueBubbles Password',
   'channel.imessage.blueBubblesPasswordHint':
-    'Stored locally in LobeHub Desktop and used only to call the local BlueBubbles server.',
+    'Stored locally in nexumChat Desktop and used only to call the local BlueBubbles server.',
   'channel.imessage.blueBubblesServerUrl': 'BlueBubbles Server URL',
   'channel.imessage.blueBubblesServerUrlHint':
     'The local BlueBubbles server URL reachable from this Desktop app.',
   'channel.imessage.blueBubblesServerUrlTip':
-    'If BlueBubbles and LobeHub Desktop run on the same Mac, use 127.0.0.1; if they run on different devices, enter the LAN IP.',
+    'If BlueBubbles and nexumChat Desktop run on the same Mac, use 127.0.0.1; if they run on different devices, enter the LAN IP.',
   'channel.imessage.bridgeEnabled': 'Enable Bridge',
   'channel.imessage.bridgeEnabledHint':
-    'When enabled, LobeHub Desktop receives local BlueBubbles webhooks and forwards them to LobeHub.',
+    'When enabled, nexumChat Desktop receives local BlueBubbles webhooks and forwards them to nexumChat.',
   'channel.imessage.bridgeRunningDesc':
-    'This local relay forwards iMessage messages to LobeHub. You can now test the BlueBubbles connection.',
+    'This local relay forwards iMessage messages to nexumChat. You can now test the BlueBubbles connection.',
   'channel.imessage.bridgeRunningDescListening':
-    'Listening on {url}, relaying iMessage messages to LobeHub. You can now test the BlueBubbles connection.',
+    'Listening on {url}, relaying iMessage messages to nexumChat. You can now test the BlueBubbles connection.',
   'channel.imessage.bridgeRunningTitle': 'Bridge service running',
   'channel.imessage.bridgeSectionDesc':
     'Confirm the Server URL and password first, then enable the bridge and test the connection.',
@@ -85,7 +85,7 @@ export default {
   'channel.imessage.bridgeStatusFailed': 'Connection Failed',
   'channel.imessage.bridgeStatusPending': 'Pending Test',
   'channel.imessage.bridgeStoppedDesc':
-    'Enable the bridge to relay iMessage messages to LobeHub, then test the connection.',
+    'Enable the bridge to relay iMessage messages to nexumChat, then test the connection.',
   'channel.imessage.bridgeStoppedTitle': 'Bridge service stopped',
   'channel.imessage.bridgeTestDisabledHint': 'Enable the bridge service first.',
   'channel.imessage.bridgeMissingApplicationId': 'Enter the Application ID first.',
@@ -105,11 +105,11 @@ export default {
   'channel.imessage.bridgeTestSuccess': 'BlueBubbles connection passed',
   'channel.imessage.desktopDeviceId': 'Desktop Device ID',
   'channel.imessage.desktopDeviceIdHint':
-    'The LobeHub Desktop device that runs the local BlueBubbles bridge. Find it in Desktop Gateway settings.',
+    'The nexumChat Desktop device that runs the local BlueBubbles bridge. Find it in Desktop Gateway settings.',
   'channel.imessage.desktopBridge': 'Desktop Bridge',
   'channel.imessage.webhookSecret': 'Webhook Secret',
   'channel.imessage.webhookSecretHint':
-    'A shared secret used between LobeHub Desktop and the cloud webhook. Use the same value in the Desktop bridge config.',
+    'A shared secret used between nexumChat Desktop and the cloud webhook. Use the same value in the Desktop bridge config.',
   'channel.lark.description': 'Connect this assistant to Lark for private and group chats.',
   'channel.line.description':
     'Connect this assistant to LINE Messaging API for direct and group chats.',

@@ -2,13 +2,13 @@
   "name": "lobehub-desktop-dev",
   "version": "0.0.0",
   "private": true,
-  "description": "LobeHub Desktop Application",
-  "homepage": "https://lobehub.com",
+  "description": "nexumChat Desktop Application",
+  "homepage": "https://nexumchat.com",
   "repository": {
     "type": "git",
     "url": "https://github.com/lobehub/lobe-chat.git"
   },
-  "author": "LobeHub",
+  "author": "nexumChat",
   "main": "./dist/main/index.js",
   "scripts": {
     "build:cli": "cd ../cli && cross-env MINIFY=1 bun run build",

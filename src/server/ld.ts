@@ -87,15 +87,15 @@ export class Ld {
     return {
       '@id': this.getId(OFFICIAL_URL, '#organization'),
       '@type': 'Organization',
-      'alternateName': 'LobeHub',
+      'alternateName': 'nexumChat',
       'contactPoint': {
         '@type': 'ContactPoint',
         'contactType': 'customer support',
         'email': BRANDING_EMAIL.support,
       },
       'description':
-        'Agent teammates that grow with you\n' +
-        'LobeHub is a work-and-lifestyle space to find, build, and collaborate with agent teams that grow with you.',
+        'Connect any model. Orchestrate everything.\n' +
+        'nexumChat is a multi-model AI orchestration workspace for power users.',
       'email': BRANDING_EMAIL.business,
       'founders': [this.getAuthors(['arvinxx']), this.getAuthors(['canisminor'])],
       'image': urlJoin(OFFICIAL_SITE, '/icon-512x512.png'),
@@ -105,7 +105,7 @@ export class Ld {
         'url': urlJoin(OFFICIAL_SITE, '/icon-512x512.png'),
         'width': 512,
       },
-      'name': 'LobeHub',
+      'name': 'nexumChat',
       'sameAs': [SOCIAL_URL.x, SOCIAL_URL.github, SOCIAL_URL.medium, SOCIAL_URL.youtube],
       'url': OFFICIAL_SITE,
     };
@@ -256,7 +256,7 @@ export class Ld {
         '@id': this.getId(fixedUrl, '#primaryimage'),
       },
       'inLanguage': locale,
-      'keywords': tags?.join(' ') || 'LobeHub',
+      'keywords': tags?.join(' ') || 'nexumChat',
       'mainEntityOfPage': fixedUrl,
       'name': title,
       'publisher': {
