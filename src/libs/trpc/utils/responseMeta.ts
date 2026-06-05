@@ -10,13 +10,11 @@ interface ResponseMetaParams {
   errors: TRPCError[];
 }
 
-type TRPCErrorWithHttpStatus = TRPCError & { httpStatus?: number };
+const isRuntimeError = (error: TRPCError) => {
+  const cause = error.cause;
+  if (!cause || typeof cause !== 'object') return false;
 
-const getRuntimeHttpStatus = (error: TRPCError): number | undefined => {
-  const status = (error as TRPCErrorWithHttpStatus).httpStatus;
-  if (typeof status !== 'number' || !Number.isInteger(status)) return;
-  if (status < 400 || status > 599) return;
-  return status;
+  return typeof (cause as { errorType?: unknown }).errorType === 'string';
 };
 
 /**
@@ -32,7 +30,6 @@ const getRuntimeHttpStatus = (error: TRPCError): number | undefined => {
  */
 export function createResponseMeta({ ctx, errors }: ResponseMetaParams): {
   headers: Headers | undefined;
-  status?: number;
 } {
   const resHeaders =
     ctx && typeof ctx === 'object' && 'resHeaders' in ctx
@@ -47,17 +44,15 @@ export function createResponseMeta({ ctx, errors }: ResponseMetaParams): {
     (error) =>
       error.code === TRPC_ERROR_CODE_UNAUTHORIZED &&
       error.message !== MARKET_AUTH_REQUIRED_MESSAGE &&
-      !getRuntimeHttpStatus(error),
+      !isRuntimeError(error),
   );
   if (hasUnauthorizedError) {
     headers.set(AUTH_REQUIRED_HEADER, 'true');
   }
 
-  const runtimeHttpStatus = errors.map(getRuntimeHttpStatus).find((status) => status !== undefined);
-
   // Only return headers if there's content or auth error
-  if (hasUnauthorizedError || resHeaders || runtimeHttpStatus) {
-    return { headers, status: runtimeHttpStatus };
+  if (hasUnauthorizedError || resHeaders) {
+    return { headers };
   }
 
   return { headers: undefined };

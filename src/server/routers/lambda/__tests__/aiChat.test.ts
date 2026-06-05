@@ -999,7 +999,6 @@ describe('aiChatRouter', () => {
         expect(error).toMatchObject({
           cause: runtimeError,
           code: 'UNAUTHORIZED',
-          httpStatus: 401,
           message: AgentRuntimeErrorType.InvalidProviderAPIKey,
         });
       }
@@ -1028,7 +1027,6 @@ describe('aiChatRouter', () => {
         expect(error).toMatchObject({
           cause: runtimeError,
           code: 'TOO_MANY_REQUESTS',
-          httpStatus: 429,
           message: AgentRuntimeErrorType.RateLimitExceeded,
         });
       }

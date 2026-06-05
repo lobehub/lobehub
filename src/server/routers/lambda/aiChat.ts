@@ -28,7 +28,6 @@ const { createPrefixedTimingContext, logTiming, runTimedStage } = createTimingHe
 );
 
 type TRPCErrorCode = ConstructorParameters<typeof TRPCError>[0]['code'];
-type TRPCErrorWithHttpStatus = TRPCError & { httpStatus?: number };
 type TRPCStatusCode = Parameters<typeof getStatusKeyFromCode>[0];
 
 const getRuntimeErrorType = (error: unknown): string | undefined => {
@@ -42,24 +41,22 @@ const getTRPCErrorCodeFromStatus = (status: number): TRPCErrorCode => {
   const code = getStatusKeyFromCode(status as TRPCStatusCode) as TRPCErrorCode;
   if (code !== 'INTERNAL_SERVER_ERROR' || status === 500) return code;
 
+  if (status >= 500) return 'INTERNAL_SERVER_ERROR';
   if (status >= 400) return 'BAD_REQUEST';
 
   return 'INTERNAL_SERVER_ERROR';
 };
 
-const createRuntimeTRPCError = (error: unknown): TRPCErrorWithHttpStatus | undefined => {
+const createRuntimeTRPCError = (error: unknown): TRPCError | undefined => {
   const errorType = getRuntimeErrorType(error);
   const spec = getErrorCodeSpec(errorType);
   if (!errorType || !spec) return;
 
-  const trpcError = new TRPCError({
+  return new TRPCError({
     cause: error,
     code: getTRPCErrorCodeFromStatus(spec.httpStatus),
     message: errorType,
-  }) as TRPCErrorWithHttpStatus;
-  trpcError.httpStatus = spec.httpStatus;
-
-  return trpcError;
+  });
 };
 
 const aiChatProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
