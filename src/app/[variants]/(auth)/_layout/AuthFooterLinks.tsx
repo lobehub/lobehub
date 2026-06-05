@@ -18,7 +18,7 @@ const AuthFooterLinks = memo(() => {
       <a href={TERMS_URL} style={linkStyle}>
         {t('footer.terms')}
       </a>
-      {' · '}
+      <span style={{ marginInline: 8 }}>·</span>
       <a href={PRIVACY_URL} style={linkStyle}>
         {t('footer.privacy')}
       </a>
