@@ -154,6 +154,7 @@ export default {
   'builtins.lobe-agent.apiName.createPlan': 'Create plan',
   'builtins.lobe-agent.apiName.createPlan.result': 'Create plan: <goal>{{goal}}</goal>',
   'builtins.lobe-agent.apiName.createTodos': 'Create todos',
+  'builtins.lobe-agent.apiName.generateVerifyPlan': 'Generate delivery checks',
   'builtins.lobe-agent.apiName.updatePlan': 'Update plan',
   'builtins.lobe-agent.apiName.updatePlan.completed': 'Completed',
   'builtins.lobe-agent.apiName.updatePlan.modified': 'Modified',

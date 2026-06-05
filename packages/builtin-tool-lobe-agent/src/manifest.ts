@@ -96,6 +96,33 @@ export const LobeAgentManifest: BuiltinToolManifest = {
       },
     },
 
+    // ==================== Verify (delivery checker) ====================
+    {
+      description:
+        "Generate the delivery-checker plan for the current Agent Run. Call this BEFORE doing substantive work, once you understand the task: it instantiates the run's set of checks (from a reusable rubric and/or ad-hoc criteria) that the deliverable must satisfy before it is delivered. Provide the user's task as `goal`. The plan is reviewed/confirmed by the user and re-run automatically when the operation completes — you do not run the checks yourself.",
+      name: LobeAgentApiName.generateVerifyPlan,
+      parameters: {
+        properties: {
+          criteriaIds: {
+            description: 'Optional ad-hoc criterion ids to include in addition to the rubric.',
+            items: { type: 'string' },
+            type: 'array',
+          },
+          goal: {
+            description:
+              "The user's task the deliverable must satisfy — what the checks judge against.",
+            type: 'string',
+          },
+          rubricId: {
+            description: 'Optional reusable rubric id to instantiate into the plan.',
+            type: 'string',
+          },
+        },
+        required: ['goal'],
+        type: 'object',
+      },
+    },
+
     // ==================== Quick Todo ====================
     {
       description: 'Create new todo items. Pass an array of text strings.',

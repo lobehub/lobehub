@@ -7,11 +7,35 @@ export const LobeAgentApiName = {
   clearTodos: 'clearTodos',
   createPlan: 'createPlan',
   createTodos: 'createTodos',
+  generateVerifyPlan: 'generateVerifyPlan',
   updatePlan: 'updatePlan',
   updateTodos: 'updateTodos',
 } as const;
 
 export type LobeAgentApiNameType = (typeof LobeAgentApiName)[keyof typeof LobeAgentApiName];
+
+// ==================== Verify (delivery checker) ====================
+
+/**
+ * Generate the delivery-checker plan for the current Agent Run. The agent calls
+ * this before doing substantive work so the run has an explicit set of checks
+ * to satisfy before delivery. The plan is instantiated (server-side) from a
+ * reusable rubric and/or ad-hoc criteria onto the current operation.
+ */
+export interface GenerateVerifyPlanParams {
+  /** Ad-hoc criterion ids to include in addition to the rubric. References `verify_criteria.id`. */
+  criteriaIds?: string[];
+  /** The user's task this run must satisfy — what the checks are judged against. */
+  goal: string;
+  /** Reusable rubric (criteria template) to instantiate. References `verify_rubrics.id`. */
+  rubricId?: string;
+}
+
+/** State persisted on the generateVerifyPlan tool message (drives the Inspector chip). */
+export interface GenerateVerifyPlanState {
+  /** Number of check items in the generated plan. */
+  itemCount: number;
+}
 
 export interface AnalyzeVisualMediaParams {
   question: string;

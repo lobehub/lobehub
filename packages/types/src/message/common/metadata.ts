@@ -185,6 +185,9 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   subAgentId: z.string().optional(),
   toolExecutionTimeMs: z.number().optional(),
   trigger: z.nativeEnum(RequestTrigger).optional(),
+  // role='verify' card: which Agent Run (agent_operations.id) it renders.
+  verifyOperationId: z.string().optional(),
+  verifyRound: z.number().optional(),
   // @deprecated token usage moved to the top-level `usage` column. Still listed
   // so zod doesn't strip `metadata.usage` from legacy writes during migration.
   usage: ModelUsageSchema.optional(),

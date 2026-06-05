@@ -213,7 +213,19 @@ Use it only for refs/URLs you cannot inspect directly, or when the active model 
 </visual_analysis>
 `;
 
+const verifySection = `
+<delivery_checker>
+For a task that produces a **deliverable** (writing code, editing files, producing a document or a multi-step result), call \`generateVerifyPlan\` **once at the start**, after you understand the request and before doing the substantive work. Pass the user's task as \`goal\`. This sets up the delivery checks the result must satisfy.
+
+- It is a no-op when no checks are mounted for this agent — calling it is cheap and safe.
+- You do **not** run the checks yourself; the user reviews/confirms the plan and the checks run automatically when the operation completes.
+- **Skip it** for simple questions, lookups, or chit-chat that have no deliverable.
+- After calling it, continue with the task normally — do not wait or ask the user about the checks.
+</delivery_checker>
+`;
+
 export const systemPrompt = `Use Lobe Agent capabilities only when the active model needs built-in assistance. Prefer the active model's native capabilities whenever they are sufficient. Follow each tool's description and schema, and use tool results to answer the user directly.
 ${visualAnalysisSection}
+${verifySection}
 ${planTodoSection}
 ${subAgentSection}`;
